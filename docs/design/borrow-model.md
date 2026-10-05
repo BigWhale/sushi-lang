@@ -44,9 +44,9 @@ does not pass the value.
 | what crosses | 16-byte descriptor | 16-byte descriptor | pointer | pointer |
 | who frees | caller | **callee** | caller | caller |
 | callee may read | yes | yes | yes | yes |
-| callee may write through it | no — CE2422 | yes (its own copy) | no — CE2408 | **yes, caller sees it** |
-| callee may keep it | no — CE2411 | **yes** | no — CE2411 | no — CE2411 |
-| caller may use it after | yes | no — CE2405 | yes | yes |
+| callee may write through it | no — [CE2422](../error-catalog.md#ce2422) | yes (its own copy) | no — [CE2408](../error-catalog.md#ce2408) | **yes, caller sees it** |
+| callee may keep it | no — [CE2411](../error-catalog.md#ce2411) | **yes** | no — [CE2411](../error-catalog.md#ce2411) | no — [CE2411](../error-catalog.md#ce2411) |
+| caller may use it after | yes | no — [CE2405](../error-catalog.md#ce2405) | yes | yes |
 | how many at once | many | one | many | one, exclusive |
 
 `peek` and `poke` have the meaning that `docs/design/borrowing.md` gives them. A borrow
@@ -74,8 +74,8 @@ The symmetry gives two things:
 A mismatch between the two ends is a diagnostic, not a coercion:
 
 - a `nom` marker at a borrow parameter, or a missing `nom` marker at a `nom` parameter, is
-  **CE2427**;
-- a missing or wrong `peek` / `poke` marker is **CE2006** — a reference
+  **[CE2427](../error-catalog.md#ce2427)**;
+- a missing or wrong `peek` / `poke` marker is **[CE2006](../error-catalog.md#ce2006)** — a reference
   parameter has a `ReferenceType`, so the mismatch is an argument type mismatch.
 
 `poke T` coerces to `peek T` at a call site, and nowhere else (section 7).
@@ -121,7 +121,7 @@ frees. The damage appears later, and somewhere else.
 | built-in method (`realise`, `get`, `contains`, `expect`, ...) | borrow | only in its family's table (`or_err(nom e)`) |
 | struct or enum constructor | **consume** — a field takes ownership | not written |
 | container insert (`List.push`, `HashMap.insert`, `Own.alloc`) | **consume** | not written |
-| FFI extern | not applicable — **CE2428** on `nom` | no |
+| FFI extern | not applicable — **[CE2428](../error-catalog.md#ce2428)** on `nom` | no |
 
 The last three rows are the ones that are not function calls in the surface language, and
 each has its own rule:
@@ -135,11 +135,11 @@ each has its own rule:
   declares a mode (the signature rows of `or_err` and `map_err`), the container slots
   (`push`, `insert`, `Own.alloc`), and a borrow for every other parameter. The typecheck
   pass stamps the modes on the call, and `apply_mode` checks each marker by the rule of a
-  user method: `m.realise(nom 3)` is **CE2427**. A container slot takes its argument with
+  user method: `m.realise(nom 3)` is **[CE2427](../error-catalog.md#ce2427)**. A container slot takes its argument with
   or without `nom`, as the table row above says.
 - **FFI is outside the mode system.** A C callee never receives a Sushi value. The compiler
   marshals the string into a fresh `char*` that the caller owns and frees. `nom` on an
-  extern parameter has no meaning, and is **CE2428**.
+  extern parameter has no meaning, and is **[CE2428](../error-catalog.md#ce2428)**.
 
 ## 6. Where the mode lives
 
@@ -184,10 +184,10 @@ deriving it in several.
   indirection defeats the rule, for `peek` and `poke` and for `nom` alike. The `poke` to `peek` coercion is a property of the call-site position,
   not of the type pair, so it does not travel into a stored function type. `types_compatible`
   compares `FunctionType.modes` for this, in one place, rather than asking each parameter.
-- **A perk declares the mode, and the implementation must match it.** This is CE4004, which
+- **A perk declares the mode, and the implementation must match it.** This is [CE4004](../error-catalog.md#ce4004), which
   is already the rule for `peek self` and `poke self`.
 - **You may return, store and capture a `nom` parameter.** The callee owns it. A borrow
-  parameter in any of those positions is CE2411, and the escape is `.clone()`.
+  parameter in any of those positions is [CE2411](../error-catalog.md#ce2411), and the escape is `.clone()`.
 - **Generic parameters are uniform.** `fn f@(T)(T x)` borrows for every instantiation. A
   pass-through such as `fn identity@(T)(T x) T` needs `nom T x`. There is no per-
   instantiation mode, because the mode is declared and not inferred.
@@ -221,36 +221,36 @@ The mode codes:
 
 | code | what |
 |---|---|
-| **CE2427** | the argument's mode marker does not match the parameter's declared mode |
-| **CE2428** | `nom` in a position with no consume semantics — an FFI extern parameter |
-| **CE2435** | a use after a CONSUMING RECEIVER, naming the method that took the value |
+| **[CE2427](../error-catalog.md#ce2427)** | the argument's mode marker does not match the parameter's declared mode |
+| **[CE2428](../error-catalog.md#ce2428)** | `nom` in a position with no consume semantics — an FFI extern parameter |
+| **[CE2435](../error-catalog.md#ce2435)** | a use after a CONSUMING RECEIVER, naming the method that took the value |
 
-**CE2435 against CE2405.** A `nom` argument is a real move and its marker is visible at
-the call site, so it reads CE2405. A receiver's mode is DECLARATION-only — `f.close()`
+**[CE2435](../error-catalog.md#ce2435) against [CE2405](../error-catalog.md#ce2405).** A `nom` argument is a real move and its marker is visible at
+the call site, so it reads [CE2405](../error-catalog.md#ce2405). A receiver's mode is DECLARATION-only — `f.close()`
 carries no marker at all — so the diagnostic has to carry what the syntax cannot, and it
 names the method. One code covers every consuming receiver: `close()` releases a
 descriptor and hands nothing on, while `into_inner()` hands the value onward, and the
 method name is what tells a reader which happened.
 
 A `const` receiver is refused for both marked kinds, and each reads its own code. The
-`poke` write lands in read-only storage: that is CE2400. The `nom` take has no owner to
+`poke` write lands in read-only storage: that is [CE2400](../error-catalog.md#ce2400). The `nom` take has no owner to
 take from, and unit-level storage is never moved out of whichever keyword declares it:
-that is CE2436, and `stdout.close()` is the case it catches. A `peek self`
+that is [CE2436](../error-catalog.md#ce2436), and `stdout.close()` is the case it catches. A `peek self`
 receiver only reads, so it is legal on a constant. The two marked kinds differ on
-a TEMPORARY: a `poke self` needs an address the caller keeps, so a call result is CE2404,
+a TEMPORARY: a `poke self` needs an address the caller keeps, so a call result is [CE2404](../error-catalog.md#ce2404),
 while a `nom self` takes ownership and a temporary is owned by construction.
 
 The codes that the modes shape:
 
-- **CE2405** (use after move) fires from a call argument only when the parameter is `nom`.
+- **[CE2405](../error-catalog.md#ce2405)** (use after move) fires from a call argument only when the parameter is `nom`.
   A borrow parameter does not move its argument, so a stdlib call site never reports it.
-- **CE2410** (cannot move `main`'s argv view): passing `args` to an unmarked parameter is
+- **[CE2410](../error-catalog.md#ce2410)** (cannot move `main`'s argv view): passing `args` to an unmarked parameter is
   legal; passing it to a `nom` parameter is the error.
-- **CE2422** (cannot write through a borrow parameter) is the rule for a borrow parameter
+- **[CE2422](../error-catalog.md#ce2422)** (cannot write through a borrow parameter) is the rule for a borrow parameter
   of any callable, not only of a method.
 
-The borrow codes CE2411, CE2408, CE2421, CE2414, CE2426, CE2412, CE2401, CE2403 and CE2407
-apply as `borrowing.md` §5 states them. CE2429 (the unbound chained receiver) is one of the
+The borrow codes [CE2411](../error-catalog.md#ce2411), [CE2408](../error-catalog.md#ce2408), [CE2421](../error-catalog.md#ce2421), [CE2414](../error-catalog.md#ce2414), [CE2426](../error-catalog.md#ce2426), [CE2412](../error-catalog.md#ce2412), [CE2401](../error-catalog.md#ce2401), [CE2403](../error-catalog.md#ce2403) and [CE2407](../error-catalog.md#ce2407)
+apply as `borrowing.md` §5 states them. [CE2429](../error-catalog.md#ce2429) (the unbound chained receiver) is one of the
 read-only kinds (`borrowing.md` §5).
 
 ## 10. What this makes possible
@@ -277,7 +277,7 @@ way:
 
 | pattern | what the binding is | who frees | write through it | rebind the name |
 |---|---|---|---|---|
-| `Ok(x)` | a SHALLOW copy of the payload | the scrutinee's owner | no -- CE2414 | no -- CE2414 |
+| `Ok(x)` | a SHALLOW copy of the payload | the scrutinee's owner | no -- [CE2414](../error-catalog.md#ce2414) | no -- [CE2414](../error-catalog.md#ce2414) |
 | `Ok(poke x)` | a pointer into the payload's storage | the scrutinee's owner | yes | yes |
 | `Ok(nom x)` | the value, now the arm's | **the arm** | yes | yes |
 
@@ -288,14 +288,14 @@ The differences from the call boundary are two, and both come from the same fact
 has no declaration side to agree with.
 
 - **The mode is written once, at the binding.** There is nothing to mark at the other end,
-  so CE2427's both-ends rule has no pattern twin.
+  so [CE2427](../error-catalog.md#ce2427)'s both-ends rule has no pattern twin.
 - **Whether the mode is legal is a property of the SCRUTINEE.** A `nom` binding needs the
   match to own what it matches. A temporary is owned by construction; a place expression is
   not, and `match nom r:` is how the local is handed over -- one more consuming position,
-  `ConsumingUse.MATCH_SCRUTINEE`, so `r` afterwards is CE2405 exactly as after `f(nom r)`.
-  A `nom` binding under a plain `match r:` is CE2432.
+  `ConsumingUse.MATCH_SCRUTINEE`, so `r` afterwards is [CE2405](../error-catalog.md#ce2405) exactly as after `f(nom r)`.
+  A `nom` binding under a plain `match r:` is [CE2432](../error-catalog.md#ce2432).
 
-An arm takes the variant WHOLE (CE2433): what suppresses the match's free is the whole
+An arm takes the variant WHOLE ([CE2433](../error-catalog.md#ce2433)): what suppresses the match's free is the whole
 scrutinee, not one payload slot, so a payload left borrowed beside a taken one would be
 freed by nobody. A per-slot take needs a drop flag per payload and is a later change.
 
@@ -307,15 +307,15 @@ slot for the whole statement, so the temporary has an address.
 member or index chain off one (`match b.s:`, `match xs[1]:`, `match c.b.s:`). The address
 exists -- the reference `let` reads it.
 The rules are the reference `let`'s, at the binding: the owner is the ROOT of the place
-(`walk_place`), frozen for the arm (CE2412); one `poke` binding of an owner at a time
-(CE2403) and no `peek` beside a `poke` (CE2407), where the bindings of ONE pattern are
+(`walk_place`), frozen for the arm ([CE2412](../error-catalog.md#ce2412)); one `poke` binding of an owner at a time
+([CE2403](../error-catalog.md#ce2403)) and no `peek` beside a `poke` ([CE2407](../error-catalog.md#ce2407)), where the bindings of ONE pattern are
 exempt because they point into disjoint payload slots; a `poke` through a `peek` root is
-CE2408. CE2404 stays for a borrowed scrutinee that is not a place: a get-out behind a
+[CE2408](../error-catalog.md#ce2408). [CE2404](../error-catalog.md#ce2404) stays for a borrowed scrutinee that is not a place: a get-out behind a
 `??` (`match l.get(0).or_err(nom e)??:`), for example.
 
 A `poke` binding also needs a scrutinee with STORAGE, and a `const` has none: it is folded
 into read-only memory, so the pointer has nothing to point at and a write through the
-binding lands there. That is CE2400, the same answer a `poke self` call on a constant
+binding lands there. That is [CE2400](../error-catalog.md#ce2400), the same answer a `poke self` call on a constant
 reads, and `semantics/constant_borrow.py` is where every position asks it. A `peek`
 and a bare binding READ the payload, and reading a constant is legal -- through a place
 rooted in a constant too (`match B.s:`, `match TS[0]:`): the root decides whether a `poke`
@@ -342,15 +342,15 @@ Four conditions, each of them load-bearing:
 | condition | why |
 |---|---|
 | the marker is written | an unmarked field read is a borrow |
-| ONE step off a bare NAME | there is a local to spend, and no intermediate field is read through. `nom a.b.c` is CE2411 |
-| the name is a local this function OWNS | a `peek`/`poke` parameter, a `let`-borrow or a match binding names storage the caller keeps, so a take out of one is CE2411 |
+| ONE step off a bare NAME | there is a local to spend, and no intermediate field is read through. `nom a.b.c` is [CE2411](../error-catalog.md#ce2411) |
+| the name is a local this function OWNS | a `peek`/`poke` parameter, a `let`-borrow or a match binding names storage the caller keeps, so a take out of one is [CE2411](../error-catalog.md#ce2411) |
 | the field OWNS something | a field that owns nothing has nothing to hand over, so the marker is an ordinary copy there and the receiver is untouched |
 
-**A take spends the WHOLE receiver.** This is CE2433's all-or-nothing rule read on a
+**A take spends the WHOLE receiver.** This is [CE2433](../error-catalog.md#ce2433)'s all-or-nothing rule read on a
 struct instead of a variant: what suppresses the receiver's own free is the whole value
 and not one field, so a field left behind would be freed by nobody. The remaining owning
 fields are destroyed at the take, in declaration order, and a later mention of the
-receiver is CE2405 -- a real move, with the marker visible on the page.
+receiver is [CE2405](../error-catalog.md#ce2405) -- a real move, with the marker visible on the page.
 
 **`drop()` does not run.** A destructor is written for a value that goes away whole, and
 here one field survives it, so a `drop()` that flushed into the taken handle or closed it
@@ -358,7 +358,7 @@ would be told it still owns what the caller is taking. The method performing the
 does the finishing work itself, which is exactly what `into_inner()` spells above.
 
 Like the pattern boundary, the mode is written once: there is no declaration side to
-agree with, so CE2427's both-ends rule has no field-take twin either.
+agree with, so [CE2427](../error-catalog.md#ce2427)'s both-ends rule has no field-take twin either.
 
 ## 10d. The fourth boundary: `??` over a place
 
@@ -373,7 +373,7 @@ was unwrapped from.
 | `r` is | `r??` is | who frees the payload | `r` afterwards |
 |---|---|---|---|
 | a temporary (`make()??`) | fresh | the position that takes it | -- |
-| a local this function OWNS | fresh, and the `??` SPENDS `r` | the position that takes it | CE2405 |
+| a local this function OWNS | fresh, and the `??` SPENDS `r` | the position that takes it | [CE2405](../error-catalog.md#ce2405) |
 | a borrow (a parameter, a `match` or `foreach` binding, a `let`-borrow) | a read through `r`'s owner | `r`'s owner | usable |
 
 **The class is the wrapper's, not the payload's.** A `Result@(i32, Fail)` whose `Fail`
@@ -386,13 +386,13 @@ BEFORE the propagation path's cleanup is emitted; the seam is `backend/ownership
 
 **A borrowed wrapper is read through, not refused.** `let string s = r??` over a
 parameter binds a borrow -- `s` reads `r`'s payload and frees nothing -- and consuming the
-read (`return Result.Ok(r??)`) is CE2411 exactly as `c.get(0).or_err(nom e)??` is. The escape is the
+read (`return Result.Ok(r??)`) is [CE2411](../error-catalog.md#ce2411) exactly as `c.get(0).or_err(nom e)??` is. The escape is the
 usual one, `.clone()`.
 
 **The error of a borrowed wrapper is refused when it owns (#1171).** On the propagation path
 the error leaves the function in the returned `Err`, and `r`'s owner still frees it. So
 `r??` over a borrowed `Result` whose ERROR type owns heap is the consuming use of a borrow,
-CE2411, with the help `r.clone()??`. The compiler inserts no deep copy. The same rule holds
+[CE2411](../error-catalog.md#ce2411), with the help `r.clone()??`. The compiler inserts no deep copy. The same rule holds
 for a declared conversion (`??` into another error type takes the error `nom self`), for a
 read through an owner (`h.r??`), and it is the rule of `r.map_err(f)` and `e as T` on a
 borrowed owning value. A borrowed `Result` whose error type is plain (every stdlib error
@@ -415,29 +415,29 @@ its element by the rule of `let x = v` read on the whole value
 | `v` is | each binder | who frees the element | `v` afterwards |
 |---|---|---|---|
 | a temporary (`make()`) | OWNS its element | the binder | -- |
-| a local this function OWNS | OWNS its element, and the destructure SPENDS `v` | the binder | CE2405 |
-| a borrow (a parameter, a field, a binding) | BORROWS its element; consuming it is CE2411, and a change of the owner while it lives is CE2412 | `v`'s owner | usable |
+| a local this function OWNS | OWNS its element, and the destructure SPENDS `v` | the binder | [CE2405](../error-catalog.md#ce2405) |
+| a borrow (a parameter, a field, a binding) | BORROWS its element; consuming it is [CE2411](../error-catalog.md#ce2411), and a change of the owner while it lives is [CE2412](../error-catalog.md#ce2412) | `v`'s owner | usable |
 
 A `_` element of an owned value is destroyed at the destructure, as a discarded payload of a
-whole-variant take is. A destructure element takes no mode (CE6107, decision D1 of the tuple
+whole-variant take is. A destructure element takes no mode ([CE6107](../error-catalog.md#ce6107), decision D1 of the tuple
 design): the class of the whole decides.
 
 **Ruling 4 of the tuple design, stated here once.** A bare binder of a `let` destructure
 OWNS its element (when the value is owned), and a bare binding of a `match` pattern BORROWS
 its payload (section 10b). The two rules are different on purpose. A destructure takes the
 whole value apart, so no part is left behind in a half-moved value, and that solves the
-CE2411 problem of reading two owned halves out of one composite. A `match` reads a value
+[CE2411](../error-catalog.md#ce2411) problem of reading two owned halves out of one composite. A `match` reads a value
 that its scrutinee keeps, and taking a payload is the marked spelling, `nom`. A tuple
 pattern in a `match` (phase 3 of the tuple design) takes the section 10b modes: bare,
 `poke`, `nom`.
 
 ## 11. Not designed
 
-- **A `nom` binding inside `Own(...)`** (CE2434). Taking the pointee out would leave the
+- **A `nom` binding inside `Own(...)`** ([CE2434](../error-catalog.md#ce2434)). Taking the pointee out would leave the
   heap cell with nothing to free it.
 - **A consuming variadic** (`nom ...T`). It is rejected.
 - **Lifetimes.** Nothing relates a borrow to the value it names, so a borrow still cannot
-  be returned or stored (CE2415, CE2416, CE2417, CE2419).
+  be returned or stored ([CE2415](../error-catalog.md#ce2415), [CE2416](../error-catalog.md#ce2416), [CE2417](../error-catalog.md#ce2417), [CE2419](../error-catalog.md#ce2419)).
 - **Mode inference at a call site.** The marker is written, never deduced. A deduced marker
   would put the visibility of a consume back inside the callee, which is the property this
   ruling exists to give.

@@ -35,7 +35,7 @@ at the call site. Thus a coloured line and a plain line are written once. This a
 the constraint of R43 true by construction: remove the escapes from a coloured report, and
 you get the plain report.
 
-A constant is unit-level storage and is never moved out of (CE2436). Thus `make_opts`
+A constant is unit-level storage and is never moved out of ([CE2436](../error-catalog.md#ce2436)). Thus `make_opts`
 clones each escape constant into the struct.
 
 ## 4. The manifest is read in place
@@ -158,7 +158,7 @@ above the first member, so one `pending` flag covers the owner and its members.
   again, and never parses it from the source slice. `perk` is a reserved word, so the tool
   cannot bind the name of the contract to a variable called `perk`.
 - **Foreign extensions** are the types that the library adds methods to and does not
-  declare: the consumer half of CW3003. A library that extends only what it declares has
+  declare: the consumer half of [CW3003](../error-catalog.md#cw3003). A library that extends only what it declares has
   no key, and the section prints nothing.
 - **Re-exports.** One record for each `public use`, printed as the statement that made it:
   a unit target is in quotes, and a stdlib or library target is in angle brackets. A library

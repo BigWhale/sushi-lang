@@ -13,7 +13,7 @@ and enum. An implementation is the override.
 
 `compare` answers a negative number, zero or a positive number. The three perks sit beside
 `Drop` and `Hashable`. They are public and importless, and a declaration of one of the
-names is CE4001.
+names is [CE4001](../error-catalog.md#ce4001).
 
 The model is the derived hash (`docs/design/method-resolution.md`, ruling #696): the
 compiler derives the method from what the type holds, and `extend T with <Perk>` replaces
@@ -31,7 +31,7 @@ stands for the implementing type, and only `register_predefined_perks` builds it
 implementation matcher (`passes/types/perks.py`) substitutes the target for the placeholder.
 So an implementation writes its own type: `extend Point with Eq: fn eq(Point other) bool:`.
 A generic target writes its own instantiation: `extend Box@(T) with Eq:` with
-`fn eq(Box@(T) other) bool`. A mismatch is CE4004, and its help prints the contract with the
+`fn eq(Box@(T) other) bool`. A mismatch is [CE4004](../error-catalog.md#ce4004), and its help prints the contract with the
 target filled in.
 
 The other options were a user-visible `Self` (a new language feature with no other use) and a
@@ -70,7 +70,7 @@ as numbers, `[72, 105]`; `.to_string()` gives the text.
 The HashMap probe had an equality of its own. It could not see an `Eq` implementation, so
 an override would have changed `==` and left the map alone. Now `==`, `contains`,
 `index_of`, a field of a derived equality and the map probe all go through one emitter
-(`emit_value_eq`). CE2055 reads the same rule.
+(`emit_value_eq`). [CE2055](../error-catalog.md#ce2055) reads the same rule.
 
 ### 5. Float fields use a total rule
 
@@ -88,7 +88,7 @@ changes `f64.hash()` and `f32.hash()` for a NaN.
 
 ### 6. A bool has no order at the top level, and orders as a field
 
-A bare `a < b` on two bools is almost always a typo for `!=` or a missing `and`, so CE2514
+A bare `a < b` on two bools is almost always a typo for `!=` or a missing `and`, so [CE2514](../error-catalog.md#ce2514)
 stays. Inside a derived order the same refusal would make a struct with a bool field
 unorderable for no good reason, so a bool field orders `false` before `true`. The same split
 holds for the constraint: `bool` satisfies `Eq` and `Display`, and does not satisfy `Ord`.
@@ -135,11 +135,11 @@ other side, so `m == Maybe.None` is legal. They are not PRINTED at the top level
 has to handle them: `match`, `.realise(default)` or `??`. A type that holds one prints it.
 
 The diagnostics follow. A top-level `Maybe`, or an array whose element has no string form,
-in `print` or `println` is CE2115. A top-level `Result` stays CE2037. In a hole, every one of
-them is CE2035, and the error has a note that names the field or the element when it is the
-cause. CE2115 closes a gap: the typecheck pass
-asked nothing but CE2037, and such a value reached the backend and became the internal error
-CE0017.
+in `print` or `println` is [CE2115](../error-catalog.md#ce2115). A top-level `Result` stays [CE2037](../error-catalog.md#ce2037). In a hole, every one of
+them is [CE2035](../error-catalog.md#ce2035), and the error has a note that names the field or the element when it is the
+cause. [CE2115](../error-catalog.md#ce2115) closes a gap: the typecheck pass
+asked nothing but [CE2037](../error-catalog.md#ce2037), and such a value reached the backend and became the internal error
+[CE0017](../error-catalog.md#ce0017).
 
 ### 9. Out-of-line functions, and recursion
 
@@ -158,17 +158,17 @@ pieces would copy the whole prefix at every step.
 
 ### 10. Constants are out of scope
 
-A constant initializer cannot compare a struct or an enum (CE0110) or interpolate one (CE0108).
+A constant initializer cannot compare a struct or an enum ([CE0110](../error-catalog.md#ce0110)) or interpolate one ([CE0108](../error-catalog.md#ce0108)).
 The evaluator (`semantics/const_eval.py`) folds primitives, and the derived contracts are
 run-time functions. A second copy of the derived format in Python would drift from the
 backend, and the evaluator cannot run an implementation. A struct or enum constant is still
 compared and printed at run time, in a function body.
 
-### 11. One home for a method name: CE4015
+### 11. One home for a method name: [CE4015](../error-catalog.md#ce4015)
 
 Two perks that give one type the same method name leave a call of the name naming neither
-one, and the two bodies take one symbol. That is CE4015, relational, with a note at the
-first perk. The rule existed for a perk against an extension method (CE4007), and this is
+one, and the two bodies take one symbol. That is [CE4015](../error-catalog.md#ce4015), relational, with a note at the
+first perk. The rule existed for a perk against an extension method ([CE4007](../error-catalog.md#ce4007)), and this is
 the perk against perk half.
 
 A DERIVED method is not a home. A type may implement a user perk that provides `compare`

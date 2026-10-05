@@ -104,8 +104,8 @@ Output:
 `fn(i32, i32) -> i32 | DivError` says the function can fail with a `DivError`. Inside `run`, the
 `op(x, y)??` propagates that error out, and the caller turns it into a default with `.realise(-1)`.
 Omit the `| E` and the function type is bare: the call gives the value, and `??` on it is
-**CE2507**, exactly as for a normal `fn`. A bare type and a type with a channel do not
-convert: `fn(i32) -> i32` and `fn(i32) -> i32 | E` are different types (**CE2002**).
+**[CE2507](../error-catalog.md#ce2507)**, exactly as for a normal `fn`. A bare type and a type with a channel do not
+convert: `fn(i32) -> i32` and `fn(i32) -> i32 | E` are different types (**[CE2002](../error-catalog.md#ce2002)**).
 
 The functions in this chapter are bare because they are total: `add_one` cannot fail. A
 bare function is the exception. Write a channel for a function that can fail, now or later.
@@ -151,12 +151,12 @@ This works in every position that states the function type: a typed `let`, a reb
 argument to a `fn(...)` parameter, a `return` from a function that returns a function type, a
 struct field and an enum payload. A position with no function type (for example, an argument
 to a generic parameter `T`) cannot choose the instantiation, and the reference is
-**CE2093**.
+**[CE2093](../error-catalog.md#ce2093)**.
 
 ## What else the compiler checks
 
-- A wrong-shaped call through a function value (wrong arity or argument type) → **CE2092**.
-- Assigning a function value to an incompatible function-typed variable → **CE2002**. Function
+- A wrong-shaped call through a function value (wrong arity or argument type) → **[CE2092](../error-catalog.md#ce2092)**.
+- Assigning a function value to an incompatible function-typed variable → **[CE2002](../error-catalog.md#ce2002)**. Function
   types are *invariant*: arity, every parameter and its mode, the return type, and the error type
   must match exactly. `fn(nom string) -> i32` and `fn(string) -> i32` are different types.
 
@@ -176,9 +176,9 @@ identifier.
   You can also call through any expression that yields a function value (`table.get(0).or_err(nom StdError.Error)??(x)`).
 - Reference a **generic function** as a value in any position that states the function type
   (`let fn(i32) -> i32 g = identity`, `apply(identity, 42)`); a position with no function
-  type is **CE2093**.
+  type is **[CE2093](../error-catalog.md#ce2093)**.
 - The **error channel is part of the function type** and propagates through `??`.
-- A call-through mismatch is **CE2092**, and an assignment mismatch is **CE2002**.
+- A call-through mismatch is **[CE2092](../error-catalog.md#ce2092)**, and an assignment mismatch is **[CE2002](../error-catalog.md#ce2002)**.
 
 That's functions-as-data. Next, [Chapter 18 (Closures)](18-closures.md) adds the capturing lambda
 literal. For the complete reference on this chapter's material, see the

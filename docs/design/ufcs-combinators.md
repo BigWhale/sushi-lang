@@ -44,7 +44,7 @@ call. It also removes a built-in privilege: the built-in methods return
 
 The default is the bare return. Only a method that declares `| E` gets the Result
 ABI, `??` in the body, and the channel at the call. A bare-return extension refuses `??`
-(CE0131) and the Result constructors (CE2091).
+([CE0131](../error-catalog.md#ce0131)) and the Result constructors ([CE2091](../error-catalog.md#ce2091)).
 
 This ruling holds for every callable. A free function, a
 lambda and a function type have a channel only when they write `| E` (or an explicit
@@ -53,15 +53,15 @@ lambda and a function type have a channel only when they write `| E` (or an expl
 ### 2. Name claim: accepted
 
 A stdlib extension is an ordinary extension. The resolution ladder — built-in > perk >
-extension, CE0101 between extensions — is untouched. A user extension named `map` on
-another type coexists; a second `map` on the SAME target is the ordinary CE0101.
+extension, [CE0101](../error-catalog.md#ce0101) between extensions — is untouched. A user extension named `map` on
+another type coexists; a second `map` on the SAME target is the ordinary [CE0101](../error-catalog.md#ce0101).
 
 ### 3. Arrays: the element position binds
 
 A bare undeclared name in the element position of an array target binds a type
 parameter: `extend T[]` applies to every element type. A declared or built-in name is
 concrete: `extend i32[]`, `extend Crate[]`. Anything else in that position — a generic
-instantiation, a nested array — is CE2101. A nested array as the element of a dynamic
+instantiation, a nested array — is [CE2101](../error-catalog.md#ce2101). A nested array as the element of a dynamic
 array target (`extend T[][]`, `extend i32[][]`, `extend i32[3][]`) is refused because
 `extend T[]` already covers it: `T` binds the inner array type, `i32[]` for an `i32[][]`
 receiver and `i32[3]` for an `i32[3][]` one.
@@ -78,20 +78,20 @@ the wrapper stay legal; `??` on a bare method is an error:
 
 | chain | verdict |
 |---|---|
-| `b.is_true().is_false()` | CE2515 — the channel is unhandled |
+| `b.is_true().is_false()` | [CE2515](../error-catalog.md#ce2515) — the channel is unhandled |
 | `b.is_true()??.is_false()` | compiles |
 | `b.is_false().is_true()` | compiles — bare chains freely |
-| `b.is_false()??.is_true()` | CE2507 — `??` on a bare bool |
+| `b.is_false()??.is_true()` | [CE2507](../error-catalog.md#ce2507) — `??` on a bare bool |
 | `b.is_true().realise(false).is_false()` | compiles — `.realise` answers from the wrapper |
 
-CE2515 is a RESOLUTION FALLBACK, not a receiver-kind ban. Resolution runs first: a
-method found on the Result/Maybe enum itself is legal. CE2515 fires only when the
+[CE2515](../error-catalog.md#ce2515) is a RESOLUTION FALLBACK, not a receiver-kind ban. Resolution runs first: a
+method found on the Result/Maybe enum itself is legal. [CE2515](../error-catalog.md#ce2515) fires only when the
 method is missing there but present on the payload type — which is what tells an
 unhandled channel from a typo. The diagnostic is relational (it names the missing
 method and the call that returned the wrapper) and its help spells the fix. It covers a
 `Result` AND a `Maybe` receiver, each found by type identity and never by the names of its
 variants: a `Maybe@(T)` is also more than the bare `T`, so `xs.find(p).len()` is the same
-CE2515. For a `Result` the help spells `??`; for a `Maybe` it spells `.or_err(nom e)??`,
+[CE2515](../error-catalog.md#ce2515). For a `Result` the help spells `??`; for a `Maybe` it spells `.or_err(nom e)??`,
 because `??` takes a `Result` only (section 7).
 
 ### 6. Return form in a channel body: both constructors are spelled
@@ -101,11 +101,11 @@ channel body has the free function's rule and the free function's code:
 
 - the success is `return Result.Ok(x)`, and a `~` success is `return Result.Ok(~)`;
 - the failure is `return Result.Err(e)`;
-- a bare `return x` (and a bare `return ~`) in a channel body is CE2030, the code a free
+- a bare `return x` (and a bare `return ~`) in a channel body is [CE2030](../error-catalog.md#ce2030), the code a free
   function hears for the same fault.
 
-A BARE body (no `| E`) returns the value itself and refuses both constructors (CE2091).
-`main` is bare, so a `??` in it is CE0131.
+A BARE body (no `| E`) returns the value itself and refuses both constructors ([CE2091](../error-catalog.md#ce2091)).
+`main` is bare, so a `??` in it is [CE0131](../error-catalog.md#ce0131).
 
 The reason: a silent wrap is a value the source did not write. A channel method and a
 free function that answer the same Result would then spell it two ways.
@@ -117,7 +117,7 @@ This section first said that `??` on a `Maybe` converts absence into a payload-f
 was built from no value, so the caller read an error that the program never made, and the
 answer changed with `--opt`. Maybe is data and Result is the channel, as before, but the
 conversion from one to the other is now written at the site: `m.or_err(nom e)??`. `??` on
-a `Maybe` is CE2507, and its help names `or_err`. `or_err` and `map_err` are built-in
+a `Maybe` is [CE2507](../error-catalog.md#ce2507), and its help names `or_err`. `or_err` and `map_err` are built-in
 methods with a method-level type parameter (`error-conversion.md` sections 4, 5 and 8.3).
 
 ## Identity and the symbol
@@ -174,13 +174,13 @@ monomorphized, resolved and derived at resolution time, and again for the copies
 bodies in the drain.
 
 Inference is call-site-only: there is no `@(...)` slot on a method call. Two shapes
-cannot be solved, and the help of CE2063 names the one that applies. The bare-param
+cannot be solved, and the help of [CE2063](../error-catalog.md#ce2063) names the one that applies. The bare-param
 lambda (`|x| ...` has no type of its own): annotate the parameter, or pass a named
 function. A method-level parameter that no parameter type holds: no argument can solve
 it. Each argument type is resolved recursively before the solve, so an annotated
 `|P p|`, a `|P[2] a|` or a named `fn tenx(P p) i32` over a struct or an enum `P` solves
 as `|i32 x|` does (#1135). A method-level name that repeats a receiver-target parameter
-is CE2064.
+is [CE2064](../error-catalog.md#ce2064).
 
 ## Program-wide extension visibility (the stated asymmetry)
 
@@ -196,12 +196,12 @@ Every unhandled-Result position has a gate:
 
 | position | gate |
 |---|---|
-| assignment (`let i32 x = f()`) | CE2505 |
-| chaining (`xs.map(f).filter(p)`) | CE2515 |
-| an `if` condition | CE2516 |
-| an argument | CE2006 |
-| a discarded statement | CW2001 |
-| `??` on a bare method | CE2507 |
+| assignment (`let i32 x = f()`) | [CE2505](../error-catalog.md#ce2505) |
+| chaining (`xs.map(f).filter(p)`) | [CE2515](../error-catalog.md#ce2515) |
+| an `if` condition | [CE2516](../error-catalog.md#ce2516) |
+| an argument | [CE2006](../error-catalog.md#ce2006) |
+| a discarded statement | [CW2001](../error-catalog.md#cw2001) |
+| `??` on a bare method | [CE2507](../error-catalog.md#ce2507) |
 
 ## Scope, and what is parked
 
@@ -214,7 +214,7 @@ each kept element, and `fold` clones `init` once, so an owning accumulator works
   does: a function without `| E` is bare (`docs/design/error-channel.md`).
 - **(b) The perk-method channel — SHIPPED.** A perk method declares `| E` exactly as an
   extension method does. The contract and the implementation
-  declare it in the same shape and must agree, and CE0133 is the relational
+  declare it in the same shape and must agree, and [CE0133](../error-catalog.md#ce0133) is the relational
   diagnostic that says so: the primary at the implementation, a note at the contract
   method. `_validate_method_body` reads the channel, and the backend emits every perk
   method through the extension path.

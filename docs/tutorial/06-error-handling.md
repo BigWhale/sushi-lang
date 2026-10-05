@@ -41,7 +41,7 @@ Two details to absorb:
 - The signature `fn halve(i32 n) i32 | StdError` means "returns an `i32`, or fails with a
   `StdError`". The call gives `Result@(i32, StdError)`. The body spells both constructors:
   `return Result.Ok(...)` and `return Result.Err(...)`. A plain `return n / 2` in this body
-  is **CE2030**. (Recap from Chapter 4.)
+  is **[CE2030](../error-catalog.md#ce2030)**. (Recap from Chapter 4.)
 - `StdError` is a built-in error type. `StdError.Error` is its catch-all variant — fine for
   "something went wrong" when you don't need detail. It is not a default: a function that
   writes no `| E` has no channel at all.
@@ -50,8 +50,8 @@ Two details to absorb:
 
 A function without `| E` is **bare**. It cannot fail: the body returns the value
 (`return x`), and the call gives the value itself. In a bare body, `return Result.Ok(...)`
-is **CE2091** and `??` is **CE0131**. On the call of a bare function, `??` is **CE2507** and
-`.realise(...)` is **CE2008**, because the value is not a `Result`.
+is **[CE2091](../error-catalog.md#ce2091)** and `??` is **[CE0131](../error-catalog.md#ce0131)**. On the call of a bare function, `??` is **[CE2507](../error-catalog.md#ce2507)** and
+`.realise(...)` is **[CE2008](../error-catalog.md#ce2008)**, because the value is not a `Result`.
 
 Use the bare form seldom. Use it only when the function is total over its inputs and will
 stay so (a checksum, a pure arithmetic or string helper, a path join), and a channel would
@@ -75,7 +75,7 @@ Declare an error type with the keyword `error`, and name it in the `T | MyError`
 Now callers can `match` on the specific variant. The body of an `error` declaration is the
 body of an `enum`: variants and payloads. The `E` of a `Result` must be an error type, in
 both spellings (`T | E` and `Result@(T, E)`): a plain `enum`, a struct or `i32` there is
-the error `CE2084`, and for a plain `enum` the help says to write `error` in place of
+the error [`CE2084`](../error-catalog.md#ce2084), and for a plain `enum` the help says to write `error` in place of
 `enum`.
 
 ```sushi
@@ -97,7 +97,7 @@ you covered them all.
 !!! note "Don't mix `|` with an explicit `Result`"
     Use *either* the short form `fn f() T | MyError` *or* the fully explicit
     `fn f() Result@(T, MyError)` — never both at once. Writing
-    `fn f() Result@(T, E1) | E2` is a contradiction and the compiler rejects it (CE2085).
+    `fn f() Result@(T, E1) | E2` is a contradiction and the compiler rejects it ([CE2085](../error-catalog.md#ce2085)).
 
 ## The `??` propagation operator
 
@@ -129,7 +129,7 @@ error types must match, or the program declares a conversion between them (see
 [Converting between error types](#converting-between-error-types)). `??` converts nothing
 on its own.
 
-`??` takes a `Result` and nothing else. On any other value it is **CE2507**.
+`??` takes a `Result` and nothing else. On any other value it is **[CE2507](../error-catalog.md#ce2507)**.
 
 !!! note "`??` is RAII-safe and zero-cost"
     When `??` bails out early, Sushi still runs the cleanup for anything you'd allocated so
@@ -191,7 +191,7 @@ and can search it again.
 ### From a `Maybe` to an error: `or_err`
 
 A `Maybe` says that a value is absent, but not why. It holds no error value, so `??` on a
-`Maybe` is **CE2507**. `.or_err(nom e)` writes the error value: it turns `Maybe.Some(value)`
+`Maybe` is **[CE2507](../error-catalog.md#ce2507)**. `.or_err(nom e)` writes the error value: it turns `Maybe.Some(value)`
 into `Result.Ok(value)` and `Maybe.None()` into `Result.Err(e)`. Then `??` propagates it.
 An array's `.get(i)` returns a `Maybe`, so `.get(i).or_err(nom e)??` is a short way to say
 "stop with this error if there is no element here":
@@ -228,14 +228,14 @@ refused: AppError.TooFast
 ```
 
 `parse_digit` fails with a `ParseError`, and `warp_factor` answers `AppError`. Without the
-`extend ParseError as AppError:` block, the `??` in `warp_factor` is **CE2511**, and the
+`extend ParseError as AppError:` block, the `??` in `warp_factor` is **[CE2511](../error-catalog.md#ce2511)**, and the
 help names the declaration to write. The body is an ordinary function body: `self` is the
 `ParseError`, and it returns the `AppError`.
 
 - `e as AppError` calls the same conversion on one value.
 - A conversion is one step. `A as B` and `B as C` do not give `A` to `C`.
 - Only the unit that declares the target type may declare a conversion into it
-  (**CE2519**). The stdlib declares `FileError as IoError` and `NetError as IoError`, so a
+  (**[CE2519](../error-catalog.md#ce2519)**). The stdlib declares `FileError as IoError` and `NetError as IoError`, so a
   function that answers `IoError` can `??` a call that answers `FileError`.
 - For one call, `.map_err(f)` converts with no declaration:
   `parse_digit(s).map_err(|nom ParseError e| AppError.Parse(e))??`.
@@ -244,8 +244,8 @@ help names the declaration to write. The body is an ordinary function body: `sel
 
 Here's the one rule that trips up newcomers. `main` is a bare function: it returns the
 program's exit code directly (`return 0`), and it cannot have an error channel (`| E` on
-`main` is **CE0106**). So `??` in `main` has nowhere to propagate *to*, and the compiler
-refuses it with **CE0131**. `main` handles each error at the boundary instead, and chooses
+`main` is **[CE0106](../error-catalog.md#ce0106)**). So `??` in `main` has nowhere to propagate *to*, and the compiler
+refuses it with **[CE0131](../error-catalog.md#ce0131)**. `main` handles each error at the boundary instead, and chooses
 the exit code.
 
 There are three patterns for `main`:
@@ -304,7 +304,7 @@ error: write the channel and return `Result.Err(...)`. If no, it is a bug: `asse
 
 - A function that can fail writes an error channel, `fn f() T | E:`. The call gives
   `Result@(T, E)`, and the body returns `Result.Ok(value)` or `Result.Err(error)`. The error
-  type is declared with `error` (`CE2084` for any other type).
+  type is declared with `error` ([`CE2084`](../error-catalog.md#ce2084) for any other type).
 - A function without `| E` is bare: it returns the value, and the call gives the value.
   There is no default error type. Use the bare form only for a total function.
 - `??` unwraps `Ok` or propagates `Err` from the enclosing function — RAII-safe, zero-cost,
@@ -315,9 +315,9 @@ error: write the channel and return `Result.Err(...)`. If no, it is a bug: `asse
 - `.realise(default)` unwraps with a fallback; `if (result.is_ok()):` splits Ok from Err.
 - `Maybe@(T)` (`Maybe.Some` / `Maybe.None`) models presence vs. absence — Sushi's `null`
   replacement — with `.is_some()`, `.is_none()`, `.realise()`, and `.expect()`.
-- `main` is bare and returns the exit code. `??` in `main` is **CE0131**; handle errors
+- `main` is bare and returns the exit code. `??` in `main` is **[CE0131](../error-catalog.md#ce0131)**; handle errors
   there with `match`, `.realise()`, or `if (result.is_ok()):` instead.
-- `assert(cond, message)` stops the program with **RE2026** when an invariant is false.
+- `assert(cond, message)` stops the program with **[RE2026](../error-catalog.md#re2026)** when an invariant is false.
   It is for a bug; the channel is for an error that a caller can handle.
 
 Next we put values in bulk. On to [Arrays](07-arrays.md).

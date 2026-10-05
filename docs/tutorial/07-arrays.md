@@ -41,7 +41,7 @@ A few things to notice:
 - `new()` makes an *empty* dynamic array, ready to have elements pushed onto it. An empty
   array has no element to show its element type, so `new()` takes the type from its
   position: here, the declared type `string[]` of the `let`. A `new()` in a position with no
-  type, such as `println(new().len())`, is the error `CE2111`.
+  type, such as `println(new().len())`, is the error [`CE2111`](../error-catalog.md#ce2111).
 - `.len()` reports how many elements an array currently holds, and works on both kinds.
 
 !!! note "Why `from(...)` for dynamic arrays?"
@@ -55,7 +55,7 @@ There are two ways to pull a value out of an array, and they make different prom
 
 The first is **direct indexing** with square brackets, `arr[i]`. It's the syntax you know
 from every other language, and it's fast. The catch: if `i` is out of bounds, the program
-stops at runtime with error **RE2020**. There's no quiet garbage value, no buffer
+stops at runtime with error **[RE2020](../error-catalog.md#re2020)**. There's no quiet garbage value, no buffer
 overread — Sushi checks the bounds and refuses to read past the end. It's "unsafe" only in
 the sense that an out-of-range index ends the program.
 
@@ -101,13 +101,13 @@ Index 1 is now Trillian, and index 3 is still Trillian.
 ```
 
 The index is bounds-checked exactly like a read, so `crew[42] := "Slartibartfast"` stops
-the program with **RE2020** rather than writing past the end. Writing in a loop, as the
+the program with **[RE2020](../error-catalog.md#re2020)** rather than writing past the end. Writing in a loop, as the
 `squares` example does, is the everyday way to fill an array with computed values.
 
 The last two lines are worth a second look. `crew[3]` reads Trillian's name *out of* the
 array, but the array still owns that name and will still free it. If you could store the
 same name in `crew[1]` as well, two slots would own one value, and the cleanup would free
-it twice. So the compiler rejects the bare `crew[1] := crew[3]` with **CE2411**, and
+it twice. So the compiler rejects the bare `crew[1] := crew[3]` with **[CE2411](../error-catalog.md#ce2411)**, and
 `.clone()` is how you say "give me an independent copy". You met this idea as *ownership*;
 [Chapter 12](12-memory-management.md) covers it properly.
 
@@ -115,7 +115,7 @@ it twice. So the compiler rejects the bare `crew[1] := crew[3]` with **CE2411**,
     `i32[5]` means "always exactly five integers". It does not mean the five integers never
     change. You can write any element you like; you just cannot make it a sixth. The
     exception is an array **constant** (`const i32[3] PRIMES = [2, 3, 5]`): the compiler
-    keeps it in read-only memory, and a write to one of its elements is the error `CE2096`.
+    keeps it in read-only memory, and a write to one of its elements is the error [`CE2096`](../error-catalog.md#ce2096).
 
 ## Growing and iterating
 
@@ -184,7 +184,7 @@ After clear: 0
 ```
 
 A fixed array cannot change its length, so `.insert()`, `.remove()`, `.push()` and
-`.pop()` on a `T[N]` are the error **CE2023**. The full list of array methods is in the
+`.pop()` on a `T[N]` are the error **[CE2023](../error-catalog.md#ce2023)**. The full list of array methods is in the
 [Arrays](../stdlib/collections/arrays.md) reference.
 
 ## Repeated values, ranges and slices
@@ -269,7 +269,7 @@ ragged rows: 3, first row: 1 7
 - Dynamic arrays (`T[]`) grow at runtime; build them with `from([...])` or start empty with
   `new()`.
 - `.len()` reports the current length.
-- `arr[i]` is fast but crashes (RE2020) on a bad index; `arr.get(i)` is safe and returns
+- `arr[i]` is fast but crashes ([RE2020](../error-catalog.md#re2020)) on a bad index; `arr.get(i)` is safe and returns
   `Maybe@(T)`. An index is an `i32`.
 - `arr[i] := value` writes one element, on both kinds of array. A fixed array's *length* is
   fixed; its contents are not.

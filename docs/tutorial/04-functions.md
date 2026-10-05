@@ -64,7 +64,7 @@ function without `| E` has no channel and cannot fail.
 
 `main` is bare: it returns the exit code directly (`return 0`), and it cannot have an
 error channel. So `main` cannot use `??`, the operator that passes an error on to the
-caller (`??` in a bare body is **CE0131**). `main` handles each `Result` itself. (`??` is
+caller (`??` in a bare body is **[CE0131](../error-catalog.md#ce0131)**). `main` handles each `Result` itself. (`??` is
 the normal tool in a function with a channel, as you will see in
 [Chapter 6](06-error-handling.md).)
 
@@ -73,7 +73,7 @@ Two everyday techniques work well in `main`:
 - `if (result.is_ok()):` asks whether the call succeeded — the `if` branch runs on
   success, the `else` branch on failure. Inside the success branch,
   `result.realise(default)` pulls out the value. A condition is a bool, so the bare
-  `if (result):` is refused with **CE2516**.
+  `if (result):` is refused with **[CE2516](../error-catalog.md#ce2516)**.
 - `.realise(default)` unwraps a success directly, substituting `default` if it was an
   error.
 
@@ -95,7 +95,7 @@ call succeeds, so `if (good.is_ok()):` runs its success branch. The second fails
 division failed. At no point could we have forgotten the failure case.
 
 The call of a bare function is not a `Result`. `add(40, 2)` gives an `i32`, so `??` on it
-is **CE2507** and `.realise(0)` on it is **CE2008**.
+is **[CE2507](../error-catalog.md#ce2507)** and `.realise(0)` on it is **[CE2008](../error-catalog.md#ce2008)**.
 
 ## Parameter modes
 
@@ -128,7 +128,7 @@ Boarding: Ford
 
 `count` borrows `crew`, so `main` can use `crew` after the call. `add_one` changes the
 caller's `jumps` through `poke`. `board` takes `crew` with `nom`: after `board(nom crew)`,
-a use of `crew` in `main` is the error `CE2405` ("cannot borrow moved variable"). For most
+a use of `crew` in `main` is the error [`CE2405`](../error-catalog.md#ce2405) ("cannot borrow moved variable"). For most
 parameters, the default borrow is correct. [Chapter 12](12-memory-management.md) explains
 ownership in full.
 

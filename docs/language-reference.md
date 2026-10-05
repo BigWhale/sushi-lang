@@ -42,10 +42,10 @@ fn main() i32:
     return 0
 ```
 
-`main` returns an integer type (`CE0106`) and takes one parameter, `string[] args`, or no
+`main` returns an integer type ([`CE0106`](error-catalog.md#ce0106)) and takes one parameter, `string[] args`, or no
 parameter at all. The type and the name are both part of the rule: `fn main(string[] argv)`,
-`fn main(i32 x)` and `fn main(string[] args, i32 x)` are `CE0138`. `args` holds the program
-name and then each command-line argument, and it is a borrowed view (`CE2410` refuses a move).
+`fn main(i32 x)` and `fn main(string[] args, i32 x)` are [`CE0138`](error-catalog.md#ce0138). `args` holds the program
+name and then each command-line argument, and it is a borrowed view ([`CE2410`](error-catalog.md#ce2410) refuses a move).
 
 ### Lines and Continuation
 
@@ -72,7 +72,7 @@ fn main() i32:
 ```
 
 Without the outer parentheses the second line starts a new statement, and the parse
-fails with CE6001.
+fails with [CE6001](error-catalog.md#ce6001).
 
 ## Types
 
@@ -143,7 +143,7 @@ let f64 big = 1_0.2_5e1_0     # and in all three parts at once
 **Common features**:
 - Every literal format supports underscore separators for readability, decimal and
   float included. One underscore, and it must have a digit on each side — so `1__0`,
-  `1_`, `0x_FF` and `3._14` are rejected (**CE6006**), each naming the fix
+  `1_`, `0x_FF` and `3._14` are rejected (**[CE6006](error-catalog.md#ce6006)**), each naming the fix
 - Prefixes are case insensitive (`0xFF` == `0xff`, `0B1111` == `0b1111`)
 - A literal is **context-typed**: it takes its type from context (annotation,
   argument, field, operand). With no numeric context it defaults to `i32`.
@@ -153,8 +153,8 @@ expected type and range-checked at compile time, so no cast is needed to write a
 literal of a non-`i32` type. A decimal literal uses value ranges (signed/unsigned per
 type); a hex/binary/octal literal uses the target's bit-pattern width (so `0xFF` is a
 valid `i8` — the pattern `-1`); an `f32` rejects overflow to infinity (precision loss
-on `f64`->`f32` is silently rounded). An out-of-range literal is `CE2073`, and an
-operation whose *result* leaves the type is `CE2077` (see [Overflow](#overflow)). This is
+on `f64`->`f32` is silently rounded). An out-of-range literal is [`CE2073`](error-catalog.md#ce2073), and an
+operation whose *result* leaves the type is [`CE2077`](error-catalog.md#ce2077) (see [Overflow](#overflow)). This is
 literal *typing*, not value coercion — converting an already-typed value still needs
 `as` (see [Type Conversion](#type-conversion)).
 
@@ -171,7 +171,7 @@ let u8  all   = ~0                         # 255: the complement of a u8 zero
 let i8  small = 200                        # CE2073: out of range for i8
 ```
 
-**No-context default** (`CE2070`): a literal with no numeric context defaults to
+**No-context default** ([`CE2070`](error-catalog.md#ce2070)): a literal with no numeric context defaults to
 `i32`, and a bare decimal above the signed range (or a radix literal above the
 32-bit pattern) is a compile error. A literal cast directly with `as` is exempt and
 materializes at the target width:
@@ -198,7 +198,7 @@ let u32 unsigned = x as u32 # signed to unsigned
 - Float-to-integer truncates toward zero
 - No implicit conversions
 - No casting to/from strings or arrays
-- Every other pair is `CE2014`
+- Every other pair is [`CE2014`](error-catalog.md#ce2014)
 
 ### Array Types
 
@@ -219,7 +219,7 @@ of its position -- a `let`, a struct field, a `Result.Ok` payload, a parameter, 
 `.realise()` default, an extension's bare `return`. So `make().realise(from([]))` and
 `return from([])` in an `extend S empty() u8[]` both mean `u8[]`. A position with no type
 -- a method receiver, an index base, a `println` argument -- gives no element type, and
-the empty literal there is `CE2111`. Declare the array first (`let i32[] xs = from([])`)
+the empty literal there is [`CE2111`](error-catalog.md#ce2111). Declare the array first (`let i32[] xs = from([])`)
 and use the name.
 
 **Nested arrays:** an array element can be an array. The suffixes read from LEFT TO RIGHT:
@@ -252,7 +252,7 @@ fn main() i32:
 A function type describes a first-class function value (a bare function pointer). The return
 type is mandatory. The optional `| E` gives the function type an error channel. Without it,
 the function type is bare. The channel is part of the type, so the two forms do not convert
-(`CE2002`).
+([`CE2002`](error-catalog.md#ce2002)).
 
 ```sushi
 fn(i32) -> i32 | MathError     # takes i32, a call returns Result@(i32, MathError)
@@ -285,11 +285,11 @@ Function types are invariant (arity, parameters, return, and error type must mat
 A plain top-level function is referenceable as above; a **closure** — a capturing lambda literal
 (`|i32 x| x + n`) — is also a `fn(...)`-typed value and shares the same call syntax. A **generic**
 function is referenceable when the expected function type is explicit (`let fn(i32) -> i32 g =
-identity`); otherwise it is `CE2093`.
+identity`); otherwise it is [`CE2093`](error-catalog.md#ce2093).
 
 A function of another unit is a function value too: bare through a flat import (`plain`),
 and behind the dot of an aliased one (`l.plain`). A private function of another unit is
-`CE3005`, and a bare name that two imports offer is `CE3012`. A bare name names the unit's
+[`CE3005`](error-catalog.md#ce3005), and a bare name that two imports offer is [`CE3012`](error-catalog.md#ce3012). A bare name names the unit's
 own function before an imported function of the same name.
 
 You can also call through any expression that evaluates to a function value, not just a bare name —
@@ -327,8 +327,8 @@ side first and then assigns from left to right, so it is a swap. See
 [Destructuring Rebind](#destructuring-rebind).
 
 A name that is a **view of another value's storage** cannot be rebound. A `match` or
-`foreach` binding is **CE2414**, a `let` bound from a field read, an index or a container
-get-out is **CE2426**, and a `peek` reference is **CE2408** — in each case the store would
+`foreach` binding is **[CE2414](error-catalog.md#ce2414)**, a `let` bound from a field read, an index or a container
+get-out is **[CE2426](error-catalog.md#ce2426)**, and a `peek` reference is **[CE2408](error-catalog.md#ce2408)** — in each case the store would
 free a value the owner still holds. A name with storage of its own is unaffected: a local,
 a parameter (a borrow parameter included) and a unit variable are all rebindable.
 
@@ -354,9 +354,9 @@ A `let` may bind a **reference** into storage another variable owns, with the mo
 declaration: `let poke T x = <place>` writes through, `let peek T x = <place>` reads
 through. The place is a local, a field or element of one, a unit variable, or an
 `Own@(T)`'s payload (`o.get()`); it is written bare, and a call result or a `??` is a
-temporary with no address to bind (**CE2404**). The binding is block-scoped, and while it
+temporary with no address to bind (**[CE2404](error-catalog.md#ce2404)**). The binding is block-scoped, and while it
 lives the owner is frozen: mutating, rebinding or moving the owner and then using the
-binding is **CE2412**.
+binding is **[CE2412](error-catalog.md#ce2412)**.
 
 ```sushi
 struct Holder:
@@ -372,11 +372,11 @@ fn main() i32:
     return 0
 ```
 
-One `poke` binding of an owner at a time (**CE2403**); a `peek` beside a live `poke`, or
-the reverse, is **CE2407**; a write through a `peek` binding is **CE2408**; a `poke`
-binding out of a `peek` parameter is **CE2408** too. Consuming the binding stays
-**CE2411** -- it names storage the owner still frees -- and `.clone()` is the escape. A
-constant is read-only storage: `let peek` reads it, and `let poke` is **CE2400**. A unit
+One `poke` binding of an owner at a time (**[CE2403](error-catalog.md#ce2403)**); a `peek` beside a live `poke`, or
+the reverse, is **[CE2407](error-catalog.md#ce2407)**; a write through a `peek` binding is **[CE2408](error-catalog.md#ce2408)**; a `poke`
+binding out of a `peek` parameter is **[CE2408](error-catalog.md#ce2408)** too. Consuming the binding stays
+**[CE2411](error-catalog.md#ce2411)** -- it names storage the owner still frees -- and `.clone()` is the escape. A
+constant is read-only storage: `let peek` reads it, and `let poke` is **[CE2400](error-catalog.md#ce2400)**. A unit
 variable takes both.
 
 ### Scope
@@ -435,9 +435,9 @@ three forms:
 | `fn f() Result@(T, E)` | `Result@(T, E)`, not wrapped again |
 | `fn f() T` | `T`: the function is BARE |
 
-The explicit form already names the error type, so `fn f() Result@(T, E) | E` is `CE2085`.
+The explicit form already names the error type, so `fn f() Result@(T, E) | E` is [`CE2085`](error-catalog.md#ce2085).
 The error type `E` is an ERROR TYPE: an enum declared with `error`, or a predefined one
-such as `StdError`. Any other type is `CE2084` (see
+such as `StdError`. Any other type is [`CE2084`](error-catalog.md#ce2084) (see
 [Error Types and Conversions](#error-types-and-conversions)). There is no default error
 type: `fn f() T` is bare and returns `T`.
 
@@ -469,27 +469,27 @@ fn main() i32:
 ```
 
 A body with a channel returns `Result.Ok(value)` or `Result.Err(error)`, and nothing wraps a
-bare value: a bare `return value` is `CE2030`. A BARE body returns the value itself:
-`return Result.Ok(...)` there is `CE2091`, and `??` there is `CE0131`. `MathError` has its
+bare value: a bare `return value` is [`CE2030`](error-catalog.md#ce2030). A BARE body returns the value itself:
+`return Result.Ok(...)` there is [`CE2091`](error-catalog.md#ce2091), and `??` there is [`CE0131`](error-catalog.md#ce0131). `MathError` has its
 home in `<math>`, and `StdError` is global.
 
 The caller takes the value out of the `Result` in one of three ways: `??` returns the error
 from the calling function at once, `.realise(default)` gives the default for an error, and
 `match` reads each arm. `??` needs the same error type in the caller, or a declared
 conversion from the callee's error type into it. `??` takes a `Result@(T, E)` and nothing
-else: on a `Maybe@(T)` it is `CE2507`, and `m.or_err(nom e)??` writes the error value. The
-call of a bare function returns the value, so `??` on it is `CE2507` and `.realise` on it
-is `CE2008`.
+else: on a `Maybe@(T)` it is [`CE2507`](error-catalog.md#ce2507), and `m.or_err(nom e)??` writes the error value. The
+call of a bare function returns the value, so `??` on it is [`CE2507`](error-catalog.md#ce2507) and `.realise` on it
+is [`CE2008`](error-catalog.md#ce2008).
 
-`main` is bare. It returns the exit code (`return 0`), and a `| E` on it is `CE0106`. A `??`
-in `main` is `CE0131`; use `match` or `.realise()` there. The full guide is
+`main` is bare. It returns the exit code (`return 0`), and a `| E` on it is [`CE0106`](error-catalog.md#ce0106). A `??`
+in `main` is [`CE0131`](error-catalog.md#ce0131); use `match` or `.realise()` there. The full guide is
 [Error Handling](error-handling.md).
 
 The body must return on every code path. A `~` function with a channel ends with
 `return Result.Ok(~)`; a bare `~` function can reach its end. Any other body that can
-reach its end is `CE0107`.
+reach its end is [`CE0107`](error-catalog.md#ce0107).
 
-A statement that can never run is an error too, `CE0140`: a statement after a `return`,
+A statement that can never run is an error too, [`CE0140`](error-catalog.md#ce0140): a statement after a `return`,
 after an `if` with an `else` whose every arm returns, after a `match` whose every arm
 returns, or after a `break` or a `continue` in the same block. It is reported once per
 block, at the first dead statement, with a note at the statement that ends the path.
@@ -502,7 +502,7 @@ mode is written at the declaration and at the call site alike:
 | declaration | call site | who frees | notes |
 |---|---|---|---|
 | `string x` | `f(s)` | caller | the default; the argument stays usable |
-| `nom string x` | `f(nom s)` | **callee** | a later use of the argument is `CE2405` |
+| `nom string x` | `f(nom s)` | **callee** | a later use of the argument is [`CE2405`](error-catalog.md#ce2405) |
 | `peek string x` | `f(peek s)` | caller | by pointer, read only; many at once |
 | `poke string x` | `f(poke s)` | caller | by pointer, read/write; one, exclusive |
 
@@ -545,7 +545,7 @@ The rule and its reasoning are [docs/design/borrow-model.md](design/borrow-model
 Two numeric operands of one operator must have the same type. Sushi converts no
 numeric type on its own, so the operands say what the result is: `+ - * / %`, the
 comparisons `== != < <= > >=`, and the bitwise `& | ^` all refuse a mixed pair
-with **CE2510**.
+with **[CE2510](error-catalog.md#ce2510)**.
 
 <!-- docs-sweep: error CE2510 -->
 ```sushi
@@ -580,7 +580,7 @@ fn main() i32:
 
 A count is also limited by the width of the value it shifts, because a count at or
 above that width moves every bit out of the type. A count the compiler can read --
-a literal, a constant, an expression of them -- is **CE2512**:
+a literal, a constant, an expression of them -- is **[CE2512](error-catalog.md#ce2512)**:
 
 <!-- docs-sweep: error CE2512 -->
 ```sushi
@@ -633,8 +633,8 @@ constant.
 
 Every operand is a number, unary minus included: an integer or a float and nothing else.
 A `bool`, a `string`, a struct, an enum, an array or an unhandled `Result@(T, E)` /
-`Maybe@(T)` is **CE2518**, and two numeric types of different widths are CE2510. There is
-no concatenation operator, so `+` with a `string` operand is CE2509 and the escape is
+`Maybe@(T)` is **[CE2518](error-catalog.md#ce2518)**, and two numeric types of different widths are [CE2510](error-catalog.md#ce2510). There is
+no concatenation operator, so `+` with a `string` operand is [CE2509](error-catalog.md#ce2509) and the escape is
 interpolation. Add the fields of a struct one at a time, use `match` to read an enum, and
 take the value out of a wrapper with `??`, `.realise(default)` or `match`.
 
@@ -648,7 +648,7 @@ fn main() i32:
 ```
 
 **A divisor the compiler can read must not be zero.** A literal zero, a constant that
-holds one and a fold that gives one are each **CE0112**, in a body exactly as in a
+holds one and a fold that gives one are each **[CE0112](error-catalog.md#ce0112)**, in a body exactly as in a
 constant. A computed divisor is ordinary code and is left alone.
 
 <!-- docs-sweep: error CE0112 -->
@@ -662,7 +662,7 @@ fn main() i32:
 ### Overflow
 
 An expression whose value the compiler reads is computed at the **declared width**, and an
-operation whose result the type cannot hold is a compile error (**CE2077**). That covers a
+operation whose result the type cannot hold is a compile error (**[CE2077](error-catalog.md#ce2077)**). That covers a
 constant and a fold of literals in a body — one expression has one meaning:
 
 <!-- docs-sweep: error CE2077 -->
@@ -705,8 +705,8 @@ fn main() i32:
 - `>` - Greater than
 - `>=` - Greater than or equal
 
-Both operands must be of one type: a mixed pair is CE2513, and two numeric types of
-different widths are CE2510. A type with no such comparison is CE2514.
+Both operands must be of one type: a mixed pair is [CE2513](error-catalog.md#ce2513), and two numeric types of
+different widths are [CE2510](error-catalog.md#ce2510). A type with no such comparison is [CE2514](error-catalog.md#ce2514).
 
 **At the top level**, equality (`==`, `!=`) accepts the numeric types, `bool`, `string`, and
 every struct and enum. An order (`<`, `<=`, `>`, `>=`) accepts the numeric types, `string`,
@@ -793,7 +793,7 @@ forms for all logical operators.
 
 Every operand of every one of them is a **bool**, because an operand is a condition and
 a condition takes nothing else. An integer, a string, a float, a struct, an enum or an
-array there is CE2005, and a `Result@(T, E)` or a `Maybe@(T)` is CE2516. `not 5` does
+array there is [CE2005](error-catalog.md#ce2005), and a `Result@(T, E)` or a `Maybe@(T)` is [CE2516](error-catalog.md#ce2516). `not 5` does
 not answer `0`: there is no truthiness to read, so write the question — `not (n == 0)`,
 or `n == 0`.
 
@@ -809,7 +809,7 @@ or `n == 0`.
 
 Every operand of every one of them must be an **integer**. A float has no bits to
 combine: its bits are reached through `f64.to_bits()` / `f32.to_bits()`, which hand
-over a `u64` / `u32`, and `from_bits()` goes back. A float operand is **CE2004**.
+over a `u64` / `u32`, and `from_bits()` goes back. A float operand is **[CE2004](error-catalog.md#ce2004)**.
 
 <!-- docs-sweep: error CE2004 -->
 ```sushi
@@ -854,11 +854,11 @@ let string combined = "{a}{b}"   # "foobar"
 Two primitives give a string's bytes in place, with no copy (#1091):
 
 - **`s[i]`** answers the `u8` at byte offset `i`. The index is an `i32`, and it is
-  bounds-checked like `arr[i]`: an offset past `size` is `RE2020`. It is a read and never
-  a write: `s[i] := v` is `CE2113`, because a string is immutable.
+  bounds-checked like `arr[i]`: an offset past `size` is [`RE2020`](error-catalog.md#re2020). It is a read and never
+  a write: `s[i] := v` is [`CE2113`](error-catalog.md#ce2113), because a string is immutable.
 - **`string.from_bytes(nom b)`** is a static that TAKES a `u8[]`: the array's buffer
   becomes the string's data, its `len` becomes the string's size, and no byte is copied.
-  The array is spent, so a later use of `b` is `CE2405`. The bytes are not checked for
+  The array is spent, so a later use of `b` is [`CE2405`](error-catalog.md#ce2405). The bytes are not checked for
   UTF-8.
 
 ```sushi
@@ -871,7 +871,7 @@ fn main() i32:
     return 0
 ```
 
-An index on anything else than an array or a string is `CE2114`. `s.to_bytes()` and
+An index on anything else than an array or a string is [`CE2114`](error-catalog.md#ce2114). `s.to_bytes()` and
 `u8[].to_string()` stay for the cases that want a copy.
 
 ### Other
@@ -885,8 +885,8 @@ An index on anything else than an array or a string is `CE2114`. `s.to_bytes()` 
 ### If-Elif-Else
 
 Parentheses required around conditions. A condition is a `bool` and nothing else: a
-`Result@(T, E)` or a `Maybe@(T)` is CE2516 (test one with `.is_ok()` / `.is_some()`),
-and every other type is CE2005 — an integer carries no truth value, so write the
+`Result@(T, E)` or a `Maybe@(T)` is [CE2516](error-catalog.md#ce2516) (test one with `.is_ok()` / `.is_some()`),
+and every other type is [CE2005](error-catalog.md#ce2005) — an integer carries no truth value, so write the
 question (`n != 0`). The same rule covers a `while` condition, an `assert` condition,
 both operands of `and`, `or` and `xor`, and the operand of `not`, so `not 5` is refused
 exactly as `if (5)` is.
@@ -928,11 +928,11 @@ foreach(i32 element in array.iter()):
 The item position takes any written type: a built-in, a struct or an enum this program
 declares, a generic instantiation (`Maybe@(i32)`), a qualified name (`geo.Vec`), and a
 reference form (`poke Point p`), which is the long spelling of `poke p`. A type that
-the iterator's element does not match is **CE2034**.
+the iterator's element does not match is **[CE2034](error-catalog.md#ce2034)**.
 
 **`_` discards the item.** A loop that only repeats its body writes `_` as the binder, as
 a `match` pattern does. `_` binds nothing and the body cannot name it, so it is never
-CW1001 (unused variable). A NAMED binder that the body never reads is still CW1001.
+[CW1001](error-catalog.md#cw1001) (unused variable). A NAMED binder that the body never reads is still [CW1001](error-catalog.md#cw1001).
 
 ```sushi
 fn main() i32:
@@ -953,7 +953,7 @@ perk to name, so a struct becomes walkable by gaining one method.
 
 **A range is not a value.** It has two positions: a `foreach` iterable and an element of
 an array literal (`from([0..n])`). A range anywhere else -- a function, method or
-constructor argument, a `return`, a `let` initializer, an operand -- is `CE2122`. Spell it
+constructor argument, a `return`, a `let` initializer, an operand -- is [`CE2122`](error-catalog.md#ce2122). Spell it
 into an array to keep it.
 
 <!-- docs-sweep: skip (a fragment: the narrative owns the struct) -->
@@ -994,14 +994,14 @@ fn main() i32:
 ```
 
 A `??` binder over an item that is not a `Result` has nothing to unwrap and is
-**CE2517**. An iterable that is neither an iterator nor a type with `next()` is
-**CE2033**. A reference binding (`foreach(poke r in ...)`) takes no `??` marker: it points
+**[CE2517](error-catalog.md#ce2517)**. An iterable that is neither an iterator nor a type with `next()` is
+**[CE2033](error-catalog.md#ce2033)**. A reference binding (`foreach(poke r in ...)`) takes no `??` marker: it points
 INTO storage, and there is nothing to unwrap there.
 
 `foreach` CONSUMES its iterable, and a protocol iterator is destroyed when the loop ends --
 by `break` and by `return` as well as at the end of the input. A protocol iterator held in a
-local is MOVED into the loop: a later mention of the local is **CE2405**, and a borrowed one
-that owns a resource (a parameter, a field) is **CE2411** -- walk a `.clone()` of it. A
+local is MOVED into the loop: a later mention of the local is **[CE2405](error-catalog.md#ce2405)**, and a borrowed one
+that owns a resource (a parameter, a field) is **[CE2411](error-catalog.md#ce2411)** -- walk a `.clone()` of it. A
 protocol iterator that owns nothing is copied, and the loop walks the copy.
 
 **A tuple item destructures.** `foreach((k, v) in pairs.iter()):` splits each item into
@@ -1016,7 +1016,7 @@ loop head, why the protocol is not a perk, and why a line iterator's stop is sti
 
 `assert(cond)` and `assert(cond, message)` state an invariant: a state that a correct
 program never reaches. When the condition is `true`, the program continues. When it is
-`false`, the program stops with the runtime error **RE2026** and exit code 1.
+`false`, the program stops with the runtime error **[RE2026](error-catalog.md#re2026)** and exit code 1.
 
 ```sushi
 fn mean(i32[] xs) i32:
@@ -1040,8 +1040,8 @@ Runtime Error RE2026: assertion failed at ./stats.sushi:2:5: mean() of an empty 
 ```
 
 - **The condition is a `bool`**, as in every condition position: a `Result` or a `Maybe`
-  is CE2516, and every other type is CE2005.
-- **The message is a `string`** (CE2116): a literal, an interpolation or a call. The
+  is [CE2516](error-catalog.md#ce2516), and every other type is [CE2005](error-catalog.md#ce2005).
+- **The message is a `string`** ([CE2116](error-catalog.md#ce2116)): a literal, an interpolation or a call. The
   program builds it ONLY when the condition is false, so a passing assert costs one test
   and no allocation.
 - **The position** is the `assert` keyword. The file is named as a compile-time
@@ -1051,7 +1051,7 @@ Runtime Error RE2026: assertion failed at ./stats.sushi:2:5: mean() of an empty 
 - **An assert is always on.** No flag turns it off, and its condition always runs, side
   effects included.
 - **`assert(false)` does not end the path.** A function that returns a value still needs
-  its `return` (CE0107), and a statement after it is not dead code.
+  its `return` ([CE0107](error-catalog.md#ce0107)), and a statement after it is not dead code.
 - **It is a statement**, so it stands wherever a statement does: a block, a one-line
   `match` arm, a lambda body, a generic body. `assert` is a reserved word.
 - **A failure is a defect, not data.** No error channel catches it. A failure that the
@@ -1066,8 +1066,8 @@ See [Standard Library](standard-library.md) for complete array API.
 **An index, a count and a range bound are `i32`.** That covers `arr[i]`, a repeat count, a
 range bound, and the index or count argument of a built-in method: `get`, `insert` and
 `remove` on `T[]` and `List@(T)`; `truncate`, `s`, `ss` and `extend_range` on an array;
-`reserve` and `List.with_capacity` on `List@(T)` only. A bare literal takes `i32`. A typed value of another integer type is `CE2121`, which names the position (`an array
-index is i32, got i64`; `CE2006` as a method argument), and it needs `as i32`: nothing widens, and a float is refused.
+`reserve` and `List.with_capacity` on `List@(T)` only. A bare literal takes `i32`. A typed value of another integer type is [`CE2121`](error-catalog.md#ce2121), which names the position (`an array
+index is i32, got i64`; [`CE2006`](error-catalog.md#ce2006) as a method argument), and it needs `as i32`: nothing widens, and a float is refused.
 
 ### Fixed Arrays
 
@@ -1114,7 +1114,7 @@ The constant must be declared in the **same unit**. A size is read while that un
 AST is built, before any pass holds a program-wide constant table, so a constant in
 another unit is reachable as a value but not as a size.
 
-A size that cannot count elements is **CE2099**: a name that is no integer constant
+A size that cannot count elements is **[CE2099](error-catalog.md#ce2099)**: a name that is no integer constant
 of this unit, a constant that is not an integer, or a zero. A zero-length array does
 not exist in Sushi.
 
@@ -1165,7 +1165,7 @@ fn main() i32:
     return 0
 ```
 
-A count the compiler CAN read and that is not a count is **CE2017** -- a zero, a
+A count the compiler CAN read and that is not a count is **[CE2017](error-catalog.md#ce2017)** -- a zero, a
 negative, or, in a fixed array or a constant, a value it cannot read:
 
 <!-- docs-sweep: error CE2017 -->
@@ -1219,7 +1219,7 @@ fn main() i32:
 A range yields **i32**, exactly as `foreach(i in 0..5)` does, so `let i64[] a =
 from([0..5])` is a type mismatch. It obeys the same position rule as a repeat: a bound in
 a `from()` literal may be any i32 expression, and a fixed array or a constant needs one
-the compiler can read. A bound it cannot read there is **CE2019**, and so is a readable
+the compiler can read. A bound it cannot read there is **[CE2019](error-catalog.md#ce2019)**, and so is a readable
 range that yields nothing:
 
 <!-- docs-sweep: error CE2019 -->
@@ -1231,10 +1231,10 @@ fn main() i32:
 ```
 
 A range cannot carry a repeat count. `value; count` repeats ONE value, and a range is
-already a sequence, so `[0..2; 3]` is **CE2020**.
+already a sequence, so `[0..2; 3]` is **[CE2020](error-catalog.md#ce2020)**.
 
-What CE2011 compares is the **expanded** count, so a run of 144 is 144 slots. When a
-literal has a run, CE2011 lists every run with the span it fills, because the compiler
+What [CE2011](error-catalog.md#ce2011) compares is the **expanded** count, so a run of 144 is 144 slots. When a
+literal has a run, [CE2011](error-catalog.md#ce2011) lists every run with the span it fills, because the compiler
 cannot know which of two runs is the short one -- either could be:
 
 ```
@@ -1262,7 +1262,7 @@ A dynamic array changes at any index, too. `.insert(i, v)` answers `Result@(~, S
 nothing. `.remove(i)` answers `Maybe@(T)` and hands the element's ownership to the caller;
 an index out of range is `Maybe.None()`. Both are the `List@(T)` contract. The element of an
 `insert` is consumed, as a `push` consumes it. On a `T[N]`, `.push()`, `.pop()`, `.insert()`
-and `.remove()` are **CE2023**, because a fixed array cannot change its length.
+and `.remove()` are **[CE2023](error-catalog.md#ce2023)**, because a fixed array cannot change its length.
 
 ```sushi
 let i32[] xs = from([1, 3])
@@ -1303,20 +1303,20 @@ let i32[] names = from([1, 2])
 names[1] := 99
 ```
 
-The index is bounds-checked like a read (**RE2020** at run time; **CE2012** for an index the
-compiler can read -- a literal, a named constant, or an expression of them -- past the end of a fixed array, **CE2056** for a negative one). An owning element that the write replaces is freed
+The index is bounds-checked like a read (**[RE2020](error-catalog.md#re2020)** at run time; **[CE2012](error-catalog.md#ce2012)** for an index the
+compiler can read -- a literal, a named constant, or an expression of them -- past the end of a fixed array, **[CE2056](error-catalog.md#ce2056)** for a negative one). An owning element that the write replaces is freed
 first. The assignment takes ownership of the value, so an owned source is moved (later use
-is **CE2405**) and a value read out of a container needs `.clone()` (**CE2411**).
+is **[CE2405](error-catalog.md#ce2405)**) and a value read out of a container needs `.clone()` (**[CE2411](error-catalog.md#ce2411)**).
 
 On a nested array, a chained index is a place too. `grid[i][j] := v` writes into the inner
 array in place, and a method on `grid[i]` (`grid[i].push(v)`) changes that inner array, not
 a copy of it. Each index in the chain is bounds-checked.
 
 The write must be able to reach the owner. It is rejected through a `peek` parameter
-(**CE2408**), a `match`/`foreach` binding (**CE2414**), a method receiver without
-`poke self` (**CE2421**), an unmarked parameter (**CE2422**), a `let` binding that borrows
-from an owner (**CE2426**), an unbound chained receiver such as `o.get().items`
-(**CE2429**), and a constant (**CE2096**).
+(**[CE2408](error-catalog.md#ce2408)**), a `match`/`foreach` binding (**[CE2414](error-catalog.md#ce2414)**), a method receiver without
+`poke self` (**[CE2421](error-catalog.md#ce2421)**), an unmarked parameter (**[CE2422](error-catalog.md#ce2422)**), a `let` binding that borrows
+from an owner (**[CE2426](error-catalog.md#ce2426)**), an unbound chained receiver such as `o.get().items`
+(**[CE2429](error-catalog.md#ce2429)**), and a constant (**[CE2096](error-catalog.md#ce2096)**).
 
 ## Structs
 
@@ -1359,7 +1359,7 @@ let Person p2 = Person(age: 42, active: true, name: "Arthur")  # Order doesn't m
 - Named parameters are resolved at compile-time (zero-cost abstraction)
 - A name in an argument list names a FIELD, so a struct construction is the only place
   that takes one. A function call, a method call and an enum variant construction read
-  their arguments by position, and a name written there is `CE6104`
+  their arguments by position, and a name written there is [`CE6104`](error-catalog.md#ce6104)
 
 ### Field Access
 
@@ -1413,8 +1413,8 @@ fn main() i32:
   `| E` channel), a struct field, an enum payload, a type argument
   (`List@((string, i32))`, `HashMap@((i32, i32), string)`), an array element
   (`(i32, i32)[]`, `(i32, i32)[4]`), a function type and a lambda parameter.
-- A tuple type names no binding: `(i32 quot, i32 rem)` is **CE6105**. A record with names
-  is a struct. An element takes no mode either: `(peek i32, i32)` is **CE6107**.
+- A tuple type names no binding: `(i32 quot, i32 rem)` is **[CE6105](error-catalog.md#ce6105)**. A record with names
+  is a struct. An element takes no mode either: `(peek i32, i32)` is **[CE6107](error-catalog.md#ce6107)**.
 - A literal is two or more expressions in parentheses. Each element is a consuming
   position, as an argument of a struct construction is.
 - A statement that has its own parentheses keeps them: `println(1, 2)` is a parse error,
@@ -1436,10 +1436,10 @@ fn main() i32:
 ```
 
 The element access follows the struct field rules: a read is a borrow (consuming it is
-**CE2411**), a write consumes its value and destroys the old element, and `nom t.0` is a
+**[CE2411](error-catalog.md#ce2411)**), a write consumes its value and destroys the old element, and `nom t.0` is a
 field take that spends all of `t` (see [Ownership Operations](#ownership-operations)). An
-index past the last element is **CE2106**, and a number with an underscore, an exponent or
-a leading zero (`t.0_1`, `t.1e3`, `t.01`) is **CE6106**.
+index past the last element is **[CE2106](error-catalog.md#ce2106)**, and a number with an underscore, an exponent or
+a leading zero (`t.0_1`, `t.1e3`, `t.01`) is **[CE6106](error-catalog.md#ce6106)**.
 
 ### Destructuring
 
@@ -1458,16 +1458,16 @@ fn main() i32:
 
 - An element is a typed binder (`i32 q`), a bare binder (`q`, which takes the element
   type), a `_`, or a nested destructure. A typed binder of the wrong type is the type
-  mismatch of a `let` (**CE2002**).
-- The destructure names as many elements as the tuple has (**CE2120**), and only a tuple
-  destructures (**CE2117**). An unhandled `Result` is **CE2505**: take the value with
+  mismatch of a `let` (**[CE2002](error-catalog.md#ce2002)**).
+- The destructure names as many elements as the tuple has (**[CE2120](error-catalog.md#ce2120)**), and only a tuple
+  destructures (**[CE2117](error-catalog.md#ce2117)**). An unhandled `Result` is **[CE2505](error-catalog.md#ce2505)**: take the value with
   `??`, `.realise(default)` or `match` first.
-- A destructure element takes no mode: `let (peek i32 a, b) = t` is **CE6107**.
+- A destructure element takes no mode: `let (peek i32 a, b) = t` is **[CE6107](error-catalog.md#ce6107)**.
 - **Ownership.** Each binder OWNS its element when the value is owned: a temporary, or an
-  owned local, which the destructure spends whole (a later use of it is **CE2405**). Each
+  owned local, which the destructure spends whole (a later use of it is **[CE2405](error-catalog.md#ce2405)**). Each
   binder BORROWS its element when the value is a borrow: a parameter, a field, or a
-  binding. Consuming such a binder is **CE2411**, and a change of the owner while it lives
-  is **CE2412**. A `_` element of an owned value is destroyed at the destructure. This is
+  binding. Consuming such a binder is **[CE2411](error-catalog.md#ce2411)**, and a change of the owner while it lives
+  is **[CE2412](error-catalog.md#ce2412)**. A `_` element of an owned value is destroyed at the destructure. This is
   the one rule of [ruling 4](design/borrow-model.md#10e-the-fifth-boundary-a-tuple-destructure-binder): a
   bare binder of a destructure owns, and a bare binding of a `match` pattern borrows.
 
@@ -1491,10 +1491,10 @@ fn main() i32:
 ```
 
 The loop is a `let` destructure of the item at the top of the body, so every rule of
-[Destructuring](#destructuring) applies: the elements, the count (**CE2120**), a tuple item
-(**CE2117**), a typed binder (**CE2002**), and no mode on an element (**CE6107**). A
+[Destructuring](#destructuring) applies: the elements, the count (**[CE2120](error-catalog.md#ce2120)**), a tuple item
+(**[CE2117](error-catalog.md#ce2117)**), a typed binder (**[CE2002](error-catalog.md#ce2002)**), and no mode on an element (**[CE6107](error-catalog.md#ce6107)**). A
 binder's ownership follows from the item. The items of `.iter()` are borrowed, so each
-binder borrows its element and consuming one is **CE2411**. A `next()` protocol iterator
+binder borrows its element and consuming one is **[CE2411](error-catalog.md#ce2411)**. A `next()` protocol iterator
 hands out owned items, so each binder owns its element and the body may hand it away. The
 binders of an owned item are destroyed at the end of each iteration, at a `break` and at a
 `return`.
@@ -1520,23 +1520,23 @@ fn main() i32:
 ```
 
 - The right side is any tuple value: a literal, a call (`(q, r) := divmod(7, 2)`), a
-  local or a parameter. A value that is not a tuple is **CE2117**, an unhandled `Result`
-  is **CE2505**, and a count that is not the tuple's count is **CE2120**.
+  local or a parameter. A value that is not a tuple is **[CE2117](error-catalog.md#ce2117)**, an unhandled `Result`
+  is **[CE2505](error-catalog.md#ce2505)**, and a count that is not the tuple's count is **[CE2120](error-catalog.md#ce2120)**.
 - Each target is a place that a plain `:=` takes: a name, a field, an array element, a
   tuple element (`t.0`) or a unit variable. Each target is a rebind or a field write by
   the rule of `x := v`, so it destroys the old value and gives its type to a literal
   element: `(small, big) := (200, 5000000000)` types `200` as the `u8` of `small`. A value
-  of the wrong type is **CE2002**, and a read-only target is the error of a plain `:=`
-  (for example **CE2408** for a `peek` parameter).
+  of the wrong type is **[CE2002](error-catalog.md#ce2002)**, and a read-only target is the error of a plain `:=`
+  (for example **[CE2408](error-catalog.md#ce2408)** for a `peek` parameter).
 - Nested targets follow the destructure shape: `((a, b), c) := ((1, 2), 3)`.
-- The same place twice in the target, nested targets included, is **CE6109**:
+- The same place twice in the target, nested targets included, is **[CE6109](error-catalog.md#ce6109)**:
   `(a, a) := (1, 2)` would replace the first value with the second.
 - **The order** (ruling 13): the whole right side is evaluated first, then each target is
   assigned from left to right. So `(a, b) := (b, a)` is a swap, and `(i, xs[i]) := (1, 9)`
   assigns `i` first, so `xs[i]` reads the new `i`.
 - **Ownership.** The right side is taken as a `let` destructure takes it: a temporary is
-  owned, an owned local is spent whole (a later use is **CE2405**), and a borrow cannot
-  give up an owning element (**CE2411**, once for each element). So an owning swap
+  owned, an owned local is spent whole (a later use is **[CE2405](error-catalog.md#ce2405)**), and a borrow cannot
+  give up an owning element (**[CE2411](error-catalog.md#ce2411)**, once for each element). So an owning swap
   `(s, t) := (t, s)` moves each value to its new name and destroys nothing.
 
 ### Comparison, Hashing and Display
@@ -1546,7 +1546,7 @@ struct does from its fields:
 
 - `==` and `!=` compare element by element, and `<`, `<=`, `>`, `>=` are LEXICOGRAPHIC:
   the first element that differs decides. Two tuples of different element types do not
-  compare (**CE2513**).
+  compare (**[CE2513](error-catalog.md#ce2513)**).
 - `hash()` reads the elements in order, so a tuple of hashable elements is a `HashMap` key.
 - A tuple prints as `(1, "a")`: the elements in order, a held string quoted.
 - `.clone()` is deep, and it is refused when an element declares a resource.
@@ -1609,12 +1609,12 @@ fn main() i32:
 ### What a Tuple Is Not
 
 - There is no tuple constant and no tuple unit variable (see [Constants](#constants)).
-- A tuple has no C layout, so it is not a type of an FFI signature (**CE5003**).
+- A tuple has no C layout, so it is not a type of an FFI signature (**[CE5003](error-catalog.md#ce5003)**).
 - A tuple type is not an extension target and not a perk-implementation target
-  (**CE2110**). Write a struct and extend it, or a free function that takes the tuple.
-- A tuple does not bloom into a variadic argument list (`f(t...)` is **CE2006**), and
+  (**[CE2110](error-catalog.md#ce2110)**). Write a struct and extend it, or a free function that takes the tuple.
+- A tuple does not bloom into a variadic argument list (`f(t...)` is **[CE2006](error-catalog.md#ce2006)**), and
   `expand` walks a type pack and never a tuple.
-- A cast does not build a tuple (`x as (i32, i32)` is **CE2014**).
+- A cast does not build a tuple (`x as (i32, i32)` is **[CE2014](error-catalog.md#ce2014)**).
 
 ## Enums
 
@@ -1649,7 +1649,7 @@ let Status s3 = Status.Error("Failed")
 
 A variant with no payload may also be written without the parentheses: `Status.Idle` is
 `Status.Idle()`. The two spellings are one construction, and the same checks apply to
-both -- an undeclared variant is CE2045, and the value takes the type of its position.
+both -- an undeclared variant is [CE2045](error-catalog.md#ce2045), and the value takes the type of its position.
 That holds for a generic enum too: `let Maybe@(string) m = Maybe.None` constructs a
 `Maybe@(string)`, and the binding owns it exactly as `Maybe.None()` would.
 
@@ -1705,7 +1705,7 @@ The seven predefined error types are `StdError`, `IoError`, `FileError`, `NetErr
 **The `E` of every `Result@(T, E)` is an error type**, in both spellings (`T | E` is
 `Result@(T, E)`) and in every position: a signature of a function, a method, a perk, a
 lambda and a function type, and also a `let`, a field, a payload, a parameter and a
-generic argument. Any other type is `CE2084`, and the message says what the type is. For
+generic argument. Any other type is [`CE2084`](error-catalog.md#ce2084), and the message says what the type is. For
 a plain enum, the help says to declare it with `error`. A type parameter in the `E`
 position is judged at each instance, with a note at the template.
 
@@ -1726,7 +1726,7 @@ paths `<io/error>` and `<net/error>` keep the word.
 
 ### What `??` Takes
 
-`??` takes a `Result@(T, E)` and nothing else. Any other operand is `CE2507`: a
+`??` takes a `Result@(T, E)` and nothing else. Any other operand is [`CE2507`](error-catalog.md#ce2507): a
 `Maybe@(T)`, and a user enum with `Ok`/`Err` variants (`??` reads the type, not the names
 of its variants). A `Maybe` holds no error value, so the program writes one with
 `or_err`:
@@ -1750,10 +1750,10 @@ fn main() i32:
 `m.or_err(nom e)` is a built-in method of `Maybe@(T)` and answers `Result@(T, E)`:
 `Some(v)` becomes `Ok(v)`, and `None` becomes `Err(e)`. The argument is `nom`, because the
 error value moves into the `Err`. The receiver is `nom self`: a named `Maybe` that owns
-something is spent by the call (`CE2435`). A BORROWED `Maybe` (a get-out such as
+something is spent by the call ([`CE2435`](error-catalog.md#ce2435)). A BORROWED `Maybe` (a get-out such as
 `xs.get(0)`, a parameter, a pattern binding) is read through, as `??` reads a borrowed
 `Result`. When its payload owns something, the call is legal only as the operand of
-`??` (`CE2522`); elsewhere, take an owned copy first: `xs.get(0).clone().or_err(nom e)`.
+`??` ([`CE2522`](error-catalog.md#ce2522)); elsewhere, take an owned copy first: `xs.get(0).clone().or_err(nom e)`.
 
 ### Conversions
 
@@ -1792,26 +1792,26 @@ fn main() i32:
 ```
 
 - **`??`** calls the conversion when the error type of its operand differs from the
-  channel of the enclosing body. With no declaration, the `??` is `CE2511`, and the help
+  channel of the enclosing body. With no declaration, the `??` is [`CE2511`](error-catalog.md#ce2511), and the help
   names the declaration to write.
 - **`e as T`** calls the conversion explicitly. With no declaration, the cast is
-  `CE2014`. `as` consumes its operand by position, with no marker: for a borrowed error
-  that owns something, the form is `e.clone() as T` (`CE2411`).
+  [`CE2014`](error-catalog.md#ce2014). `as` consumes its operand by position, with no marker: for a borrowed error
+  that owns something, the form is `e.clone() as T` ([`CE2411`](error-catalog.md#ce2411)).
 - **One step.** `A as B` and `B as C` do not give `A` to `C`. The lookup is an exact match
   on the pair.
-- **Who may declare it.** Only the unit that declares the TARGET type (`CE2519`). For a
+- **Who may declare it.** Only the unit that declares the TARGET type ([`CE2519`](error-catalog.md#ce2519)). For a
   predefined type that unit is its home module, so `FileError as IoError` lives in
   `<io/error>`, and no unit may declare a conversion into `StdError`. A program declares its
   own error type and converts into it.
-- **Which types.** The source and the target are non-generic error types (`CE2520`). A
-  conversion from a type into itself is `CE2521`. Two declarations of one pair are
-  `CE0101`.
+- **Which types.** The source and the target are non-generic error types ([`CE2520`](error-catalog.md#ce2520)). A
+  conversion from a type into itself is [`CE2521`](error-catalog.md#ce2521). Two declarations of one pair are
+  [`CE0101`](error-catalog.md#ce0101).
 - **The body is bare.** A `| E` on a conversion is a parse error, and a `??` in the body
-  is `CE0131`. The body consumes `self`.
+  is [`CE0131`](error-catalog.md#ce0131). The body consumes `self`.
 - **Visibility.** A conversion is found by its pair of types, not by a name, so an import
   neither brings nor hides it. It is as visible as its target type.
 - A conversion is not a constant expression: `as` into an error type in a `const` is
-  `CE0108`.
+  [`CE0108`](error-catalog.md#ce0108).
 
 ### `map_err`
 
@@ -1842,8 +1842,8 @@ fn main() i32:
 The function takes the error `nom` (`fn(nom E) -> F`), so a lambda writes `|nom LowError e|`.
 A lambda parameter cannot have an owning type, so for an error that owns a `string` the
 argument is a named function. The receiver is `nom self`: a named `Result` that owns
-something is spent, and a borrowed one is `CE2411` (the form is `r.clone().map_err(f)`).
-`F` must be an error type (`CE2084`).
+something is spent, and a borrowed one is [`CE2411`](error-catalog.md#ce2411) (the form is `r.clone().map_err(f)`).
+`F` must be an error type ([`CE2084`](error-catalog.md#ce2084)).
 
 The guide is [Error Handling](error-handling.md), and the design record is
 [Error types and error conversion](design/error-conversion.md).
@@ -1885,11 +1885,11 @@ A `let` needs the block form: a local declared on the arrow has no line to read 
 
 A pattern may hold another pattern in a payload position. `open()` answers
 `Result@(File, IoError)`, so the inner pattern names an `IoError` variant; a pattern of
-another enum there is `CE2107`. A payload position takes an enum pattern, an integer
+another enum there is [`CE2107`](error-catalog.md#ce2107). A payload position takes an enum pattern, an integer
 literal (`Maybe.Some(0)`), a tuple pattern (`Maybe.Some((a, b))`), an `Own(...)`
 pattern, a binding or a `_`. A nested pattern over a payload that is not an enum is
-**CE2108**, a literal over a payload that is not an integer is **CE2119**, and a tuple
-pattern over a payload that is not a tuple is **CE2117**. The compiler checks a nested
+**[CE2108](error-catalog.md#ce2108)**, a literal over a payload that is not an integer is **[CE2119](error-catalog.md#ce2119)**, and a tuple
+pattern over a payload that is not a tuple is **[CE2117](error-catalog.md#ce2117)**. The compiler checks a nested
 pattern for exhaustiveness as it checks an outer one (see [Exhaustiveness](#exhaustiveness)).
 
 ```sushi
@@ -1913,7 +1913,7 @@ form is the common case.
 
 | pattern | the binding is | write through it | rebind the name | may be given away |
 |---|---|---|---|---|
-| `Ok(x)` | a read-only view | no (CE2414) | no (CE2414) | no (CE2411) |
+| `Ok(x)` | a read-only view | no ([CE2414](error-catalog.md#ce2414)) | no ([CE2414](error-catalog.md#ce2414)) | no ([CE2411](error-catalog.md#ce2411)) |
 | `Ok(poke x)` | a pointer into the scrutinee's payload | yes, and it reaches the owner | yes, and it reaches the owner | no |
 | `Ok(nom x)` | the value itself, now the arm's | yes | yes | yes |
 
@@ -1925,8 +1925,8 @@ its owner until the match says `nom`, and then the local is consumed exactly as
 | scrutinee | the match |
 |---|---|
 | `match open("out.log", FileMode.Write()):` | OWNS a temporary; `nom` bindings are legal |
-| `match r:` | BORROWS the local; a `nom` binding is CE2432 |
-| `match nom r:` | CONSUMES the local; `nom` bindings are legal, and a later `r` is CE2405 |
+| `match r:` | BORROWS the local; a `nom` binding is [CE2432](error-catalog.md#ce2432) |
+| `match nom r:` | CONSUMES the local; `nom` bindings are legal, and a later `r` is [CE2405](error-catalog.md#ce2405) |
 
 <!-- docs-sweep: skip (a fragment: `report` is the narrative's, and neither match returns) -->
 ```sushi
@@ -1947,14 +1947,14 @@ match open("out.log", FileMode.Write()):
 ```
 
 An arm takes the variant WHOLE: if any binding in it is `nom`, every other owning payload
-of that variant must be `nom` too (CE2433). `nom` is not valid inside an `Own(...)`
-pattern (CE2434), and a `peek`/`poke` binding still needs a scrutinee with storage -- a
-read through a live owner has none (CE2404).
+of that variant must be `nom` too ([CE2433](error-catalog.md#ce2433)). `nom` is not valid inside an `Own(...)`
+pattern ([CE2434](error-catalog.md#ce2434)), and a `peek`/`poke` binding still needs a scrutinee with storage -- a
+read through a live owner has none ([CE2404](error-catalog.md#ce2404)).
 
 A `peek`/`poke` binding is legal at the top of an arm: a payload of the arm's enum
 pattern, or an element of the arm's tuple pattern (also in a tuple pattern inside it).
 Inside a pattern that is nested in an enum payload, and in the payload of an enum pattern
-inside a tuple pattern, it is **CE2424**. A bare binding and a `nom` binding are legal at
+inside a tuple pattern, it is **[CE2424](error-catalog.md#ce2424)**. A bare binding and a `nom` binding are legal at
 every depth.
 
 ### Exhaustiveness
@@ -1962,7 +1962,7 @@ every depth.
 One checker reads every match: an enum match, a nested enum match, an integer match and a
 tuple match. It gives two answers.
 
-**Every value must match an arm.** A match that does not cover a value is **CE2040**. For
+**Every value must match an arm.** A match that does not cover a value is **[CE2040](error-catalog.md#ce2040)**. For
 a plain enum match, the message lists the names of the missing variants. When an arm tests
 inside a payload or a tuple, the message lists the missing patterns in source syntax:
 
@@ -1986,10 +1986,10 @@ match maybe_color:
 
 An integer has no end of values, so an integer position is covered only by a `_` or a
 binding. A literal position covers one value. An integer match with no `_` arm is
-**CE2074**. In a tuple, the missing pattern shows `_` for such a position: `(_, _)`.
+**[CE2074](error-catalog.md#ce2074)**. In a tuple, the missing pattern shows `_` for such a position: `(_, _)`.
 
 **Every arm must match a value.** An arm is unreachable when the arms above it match every
-value that it matches. That is **CE2118**, an error, with a note at each arm that covers
+value that it matches. That is **[CE2118](error-catalog.md#ce2118)**, an error, with a note at each arm that covers
 it. The arms can cover an arm together:
 
 ```sushi
@@ -2003,24 +2003,24 @@ match pair:
 
 Remove the arm, or move it above the arms that cover it. Three older rules come first,
 and each is the one diagnostic for its arm: a second arm for the same enum pattern is
-**CE2041**; a `_` arm that is not the last arm is **CE2041**, and the arms after it get
-no second error; a second literal arm for the same integer value is **CE2075**.
+**[CE2041](error-catalog.md#ce2041)**; a `_` arm that is not the last arm is **[CE2041](error-catalog.md#ce2041)**, and the arms after it get
+no second error; a second literal arm for the same integer value is **[CE2075](error-catalog.md#ce2075)**.
 
 Because the checker reads nested patterns, a match that compiles has an arm for every
-value. The run-time check **RE2023** stays as a backstop, and no program reaches it.
+value. The run-time check **[RE2023](error-catalog.md#re2023)** stays as a backstop, and no program reaches it.
 
 ### Integer Matching
 
 A match on an integer scrutinee dispatches on literal arms. Each literal takes
 the scrutinee's type under the usual context-typing rule (a non-decimal literal
-is a bit pattern; out of range is CE2073). Two arms with the same value are one
-duplicate arm (CE2075), whatever their radix. Because integer values cannot be
-enumerated, the match must end with a `_` arm (CE2074). Literal arms and enum
-pattern arms never mix in one match (CE2076).
+is a bit pattern; out of range is [CE2073](error-catalog.md#ce2073)). Two arms with the same value are one
+duplicate arm ([CE2075](error-catalog.md#ce2075)), whatever their radix. Because integer values cannot be
+enumerated, the match must end with a `_` arm ([CE2074](error-catalog.md#ce2074)). Literal arms and enum
+pattern arms never mix in one match ([CE2076](error-catalog.md#ce2076)).
 
 An integer literal is also legal inside a pattern: in an enum payload
 (`Maybe.Some(0) ->`) and in a tuple element (`(0, n) ->`). It takes the type of its
-position by the same rule. A position that is not an integer takes no literal (**CE2119**).
+position by the same rule. A position that is not an integer takes no literal (**[CE2119](error-catalog.md#ce2119)**).
 
 ```sushi
 fn tag_name(u8 t) string:
@@ -2069,18 +2069,18 @@ fn main() i32:
     return 0
 ```
 
-- A tuple pattern names as many items as the tuple has elements (**CE2120**), and only a
-  tuple takes a tuple pattern (**CE2117**). An enum pattern arm and a literal arm do not
-  fit a tuple scrutinee (**CE2076**).
+- A tuple pattern names as many items as the tuple has elements (**[CE2120](error-catalog.md#ce2120)**), and only a
+  tuple takes a tuple pattern (**[CE2117](error-catalog.md#ce2117)**). An enum pattern arm and a literal arm do not
+  fit a tuple scrutinee (**[CE2076](error-catalog.md#ce2076)**).
 - A bare binding BORROWS its element, as a payload binding does (ruling 4 of the tuple
   design). `poke` points into the element, and `nom` takes it. The rules of
   [Binding Modes](#binding-modes) apply: `nom` needs a scrutinee that the match owns, and an
-  arm that takes one owning element of a scrutinee takes all of them (**CE2433**).
+  arm that takes one owning element of a scrutinee takes all of them (**[CE2433](error-catalog.md#ce2433)**).
 - **A tuple literal as the scrutinee builds no tuple** (ruling 3). `match (a, b):` reads
   each element once, from left to right, and matches it in place, with the rules of a
   named scrutinee. After the match, `a` and `b` are still usable, and a `poke` binding
   writes through to them. `match nom (a, b):` hands each element to the match, so a `nom`
-  binding is legal and a later use of an owning element is **CE2405**. Each element is
+  binding is legal and a later use of an owning element is **[CE2405](error-catalog.md#ce2405)**. Each element is
   its own scrutinee: an arm can take `a` and leave `b`, and the match destroys `b` at its
   end.
 
@@ -2128,12 +2128,12 @@ parameter is a borrow and a borrow cannot be returned.
 `Slot@(i32)`). At a call, the compiler infers the type arguments of a generic function
 from the arguments. When no argument names a type parameter, write the type arguments
 after the name: `empty@(i32)()`. Explicit type arguments are all or nothing: a wrong
-count is `CE2062`. They are legal only on a direct call to a named free function; on a
-method call or any other callee they are `CE6102`. A call that gives the compiler no
-way to find a type argument is `CE2060`.
+count is [`CE2062`](error-catalog.md#ce2062). They are legal only on a direct call to a named free function; on a
+method call or any other callee they are [`CE6102`](error-catalog.md#ce6102). A call that gives the compiler no
+way to find a type argument is [`CE2060`](error-catalog.md#ce2060).
 
 **Constraints.** `@(T: Perk)` limits `T` to the types that implement the perk (see
-[Perks](#perks)). A type argument that does not implement it is `CE4006`. A constraint
+[Perks](#perks)). A type argument that does not implement it is [`CE4006`](error-catalog.md#ce4006). A constraint
 is legal on a function, a struct, an enum and an extension target.
 
 The full guide, with every inference rule and limit, is [Generics](generics.md).
@@ -2162,37 +2162,37 @@ fn main() i32:
 **The receiver mode.** The receiver is a parameter, and it takes the parameter modes. A
 bare `self` is a read-only borrow, `peek self` is a read-only pointer, `poke self` writes
 through to the caller's value, and `nom self` consumes the receiver. A write through a
-receiver that is not `poke self` is `CE2421`.
+receiver that is not `poke self` is [`CE2421`](error-catalog.md#ce2421).
 
 **The bare return.** A method with no `| E` is bare, as a function with no `| E` is. It
 returns its value bare: `return value`, and a `~` method may end with no `return`.
-`return Result.Ok(...)` there is `CE2091`, and `??` there is `CE0131`, because the method
+`return Result.Ok(...)` there is [`CE2091`](error-catalog.md#ce2091), and `??` there is [`CE0131`](error-catalog.md#ce0131), because the method
 has no error channel to return an error through.
 
 **The error channel.** A method may declare `| E` after its return type. Its call then
 gives a `Result@(T, E)`, `??` is legal in the body, and the body spells both constructors
 as a free function does: `return Result.Ok(x)` and `return Result.Err(e)`. A bare
-`return x` there is `CE2030`. A chain of calls stops at a method with an unhandled
-channel (`CE2515`); write `??` after the call.
+`return x` there is [`CE2030`](error-catalog.md#ce2030). A chain of calls stops at a method with an unhandled
+channel ([`CE2515`](error-catalog.md#ce2515)); write `??` after the call.
 
 **Method type parameters.** A method may declare its own type parameters after its name:
 `extend List@(T) mapv@(U)(fn(T) -> U f) List@(U) | StdError:`. The compiler finds them from
-the arguments (`CE2063` when it cannot), and a method call has no slot for explicit type
+the arguments ([`CE2063`](error-catalog.md#ce2063) when it cannot), and a method call has no slot for explicit type
 arguments.
 
 **The target.** The target is a struct, an enum, a primitive, a built-in generic
 (`List@(T)`) or a generic type of the program:
 
 - `extend Box@(T)` applies to every instantiation, and `extend Box@(i32)` only to
-  `Box@(i32)`. A target that mixes the two, `extend Pair@(i32, U)`, is `CE2098`.
+  `Box@(i32)`. A target that mixes the two, `extend Pair@(i32, U)`, is [`CE2098`](error-catalog.md#ce2098).
 - An array target binds its element: `extend T[]` applies to every array, and
-  `extend i32[]` only to `i32[]`. Anything else in the element position is `CE2101`,
+  `extend i32[]` only to `i32[]`. Anything else in the element position is [`CE2101`](error-catalog.md#ce2101),
   a nested array (`extend T[][]`, `extend i32[3][]`) included. `extend T[]` covers a nested
   receiver: `T` is `i32[]` for an `i32[][]`.
-- A function type is not a target (`CE2110`).
+- A function type is not a target ([`CE2110`](error-catalog.md#ce2110)).
 
 A built-in method wins over an extension method: an extension method with the name of a
-built-in method of its target is `CE2097`. The design record is
+built-in method of its target is [`CE2097`](error-catalog.md#ce2097). The design record is
 `docs/design/ufcs-combinators.md`, and the resolution order is
 `docs/design/method-resolution.md`.
 
@@ -2228,15 +2228,15 @@ the error channel exactly as on an instance method; and the declaration carries 
 visibility marker, because a static is as visible as its target type.
 
 `new` is a legal static name — `extend Box static new(i32 n) Box:` — which a free
-function cannot have (`CE6001`).
+function cannot have ([`CE6001`](error-catalog.md#ce6001)).
 
 A static has **no `self`**, and the two places that could name one are one refusal:
 a receiver mode in the signature (`extend Vec static at(poke self)`) and a mention of
-`self` in the body are both `CE0134`. A `static` inside a perk implementation is
-`CE4014`: a perk has no `Self`, so a contract cannot hold a constructor.
+`self` in the body are both [`CE0134`](error-catalog.md#ce0134). A `static` inside a perk implementation is
+[`CE4014`](error-catalog.md#ce4014): a perk has no `Self`, so a contract cannot hold a constructor.
 
 The target may be a struct, an enum, a primitive (`extend f64 static of_int(i32 v)
-f64:`) or a generic type; an ARRAY target is `CE2104`, because an array type has no
+f64:`) or a generic type; an ARRAY target is [`CE2104`](error-catalog.md#ce2104), because an array type has no
 spelling in an expression position and the declaration could never be called. On a
 generic target there is no receiver to read the type argument from. The compiler reads
 it from an argument whose parameter names the type parameter, or else from the declared
@@ -2260,16 +2260,16 @@ fn main() i32:
 ```
 
 A generic static whose parameters do not name the type parameter, in a position that
-declares no type, is `CE2060`: nothing says which instantiation the call means. Bind the
+declares no type, is [`CE2060`](error-catalog.md#ce2060): nothing says which instantiation the call means. Bind the
 result to an annotated name, or name the type parameter in a parameter.
 
 A name has one home, so a static beside an instance method of the same name on one type
-is `CE0101`, and a static spelling a VARIANT of the enum it extends is `CE2103`. A type
-whose dot holds no such member is `CE2102`, and a VALUE whose type declares no such field
-is `CE2106` -- which is also what a method read without its parentheses answers, because a
+is [`CE0101`](error-catalog.md#ce0101), and a static spelling a VARIANT of the enum it extends is [`CE2103`](error-catalog.md#ce2103). A type
+whose dot holds no such member is [`CE2102`](error-catalog.md#ce2102), and a VALUE whose type declares no such field
+is [`CE2106`](error-catalog.md#ce2106) -- which is also what a method read without its parentheses answers, because a
 bound-method value is deferred.
 
-An ENUM value declares no field at all, so every name behind its dot is `CE2106` too. That
+An ENUM value declares no field at all, so every name behind its dot is [`CE2106`](error-catalog.md#ce2106) too. That
 covers `Result@(T, E)` and `Maybe@(T)`, which are ordinary enums: `pts.get(0).x` is
 refused, and the value is taken first with `??`, `.realise(default)` or `match`. There is
 no implicit unwrap, and a payload is read by a pattern.
@@ -2306,30 +2306,30 @@ fn main() i32:
 An implementation method follows the rules of an extension method: a bare return, or an
 error channel. The rules of the contract:
 
-- The implementation gives every method of the perk (`CE4005`), with the signature of the
-  contract (`CE4004`). A second implementation of one perk for one type is `CE4002`.
+- The implementation gives every method of the perk ([`CE4005`](error-catalog.md#ce4005)), with the signature of the
+  contract ([`CE4004`](error-catalog.md#ce4004)). A second implementation of one perk for one type is [`CE4002`](error-catalog.md#ce4002).
 - A name has one home on a type: a perk method beside an extension method of the same name
-  is `CE4007`.
-- A type argument that does not implement a constraint is `CE4006`.
+  is [`CE4007`](error-catalog.md#ce4007).
+- A type argument that does not implement a constraint is [`CE4006`](error-catalog.md#ce4006).
 - A target may be a template: `extend Box@(T) with P` covers every `Box@(...)`, and
   `extend T[] with P` covers every dynamic array (`T` is the element type, and an `i32[][]`
   receiver has `T = i32[]`). There is no specialization: a template and a concrete target
-  of the same perk on one base are `CE4002`, in either order. `extend T[][] with P` is
-  `CE2101`.
+  of the same perk on one base are [`CE4002`](error-catalog.md#ce4002), in either order. `extend T[][] with P` is
+  [`CE2101`](error-catalog.md#ce2101).
 - The perk must be in the scope of the unit, in an implementation, a constraint and a pack
   constraint alike: declared there, brought by the unit's own `use`, or re-exported by a
   `public use` chain. An aliased import gives `extend Dog with p.Named` and
-  `@(T: p.Named)`. A perk out of scope is `CE4003`, with the import in the help; a plain
+  `@(T: p.Named)`. A perk out of scope is [`CE4003`](error-catalog.md#ce4003), with the import in the help; a plain
   `use` in another unit does not bring it. The predefined perks are in every scope.
 - A perk has no type parameters, no inheritance, no default implementations and no `Self`
   type. A perk that declares `@(...)`, and an implementation method that declares its own
-  type parameters, are both `CE4010`. A `static` in a perk implementation is `CE4014`: with
+  type parameters, are both [`CE4010`](error-catalog.md#ce4010). A `static` in a perk implementation is [`CE4014`](error-catalog.md#ce4014): with
   no `Self`, a contract cannot hold a constructor.
 
 A **perk method** takes the error channel, and the perk states it in the contract:
 `fn read(poke u8[] into) i32 | IoError`. Every implementation repeats the channel
 exactly. A channel that one side declares and the other does not, and two channels over
-different error types, are both `CE0133`, which points at the contract and the
+different error types, are both [`CE0133`](error-catalog.md#ce0133), which points at the contract and the
 implementation together.
 
 The guide is [Perks](perks.md).
@@ -2337,7 +2337,7 @@ The guide is [Perks](perks.md).
 ### Predefined Perks: `Drop`, `Hashable`, `Eq`, `Ord` and `Display`
 
 The compiler declares five perks. Every unit can name them with no import, and a
-declaration of any of the five names is `CE4001`.
+declaration of any of the five names is [`CE4001`](error-catalog.md#ce4001).
 
 | Perk | Contract | Read by |
 |------|----------|---------|
@@ -2352,17 +2352,17 @@ declaration of any of the five names is `CE4001`.
 **`Self` is a placeholder in the contract only.** A user perk still cannot write `Self`. An
 implementation of a predefined perk writes its own type where the contract says `Self`:
 `fn eq(Point other) bool`. A generic target writes its own instantiation:
-`extend Box@(T) with Eq:` with `fn eq(Box@(T) other) bool`. A mismatch is `CE4004`, and its
+`extend Box@(T) with Eq:` with `fn eq(Box@(T) other) bool`. A mismatch is [`CE4004`](error-catalog.md#ce4004), and its
 help prints the contract with the target filled in.
 
 **`Drop`** says that a type owns a resource that no field shows,
 for example a file descriptor. A type that implements it MOVES like a `string`. When the
 value goes out of scope, `drop()` runs first, and then the owning fields are destroyed.
 At the end of a scope, the values are destroyed in the reverse order of their declaration.
-Only the unit that declares the type may implement `Drop` for it (`CE4012`). No unit
+Only the unit that declares the type may implement `Drop` for it ([`CE4012`](error-catalog.md#ce4012)). No unit
 declares a primitive, a `string`, an array, `List`, `HashMap`, `Own`, `Maybe`, `Result` or
-a predefined error type, so `Drop` on one of them is `CE4016`. A channel on `drop()` is
-`CE0133`. A generic target is legal: `extend Sink@(T) with Drop`.
+a predefined error type, so `Drop` on one of them is [`CE4016`](error-catalog.md#ce4016). A channel on `drop()` is
+[`CE0133`](error-catalog.md#ce0133). A generic target is legal: `extend Sink@(T) with Drop`.
 
 **`Hashable`** is the constraint for a type that has a hash. Every type
 with a derived hash implements it with no declaration. `extend T with Hashable` replaces
@@ -2378,16 +2378,16 @@ an implementation is the only way to give it one.
 
 A constraint `@(T: Eq)`, `@(T: Ord)` or `@(T: Display)` is satisfied by the same top-level
 rule as the operator. So `bool` satisfies `Eq` and does not satisfy `Ord`. Any other type is
-`CE4006`.
+[`CE4006`](error-catalog.md#ce4006).
 
 #### Methods of the contracts
 
 - `a.eq(b)` and `a.compare(b)` exist on every struct and enum, and on every primitive
-  (`bool` included). A wrong argument type is `CE2006`.
+  (`bool` included). A wrong argument type is [`CE2006`](error-catalog.md#ce2006).
 - `x.to_str()` exists on every struct and enum. The primitives already had `to_str`.
 - An explicit call reads an implementation when one exists. The operator reads the same one.
 
-Two perks cannot give one type the same method name: that is `CE4015`, with a note at the
+Two perks cannot give one type the same method name: that is [`CE4015`](error-catalog.md#ce4015), with a note at the
 first one. A derived method is not a home. A type may implement a user perk that provides
 `compare`. An explicit `a.compare(b)` then reads the implementation, and `<` still reads
 `Ord`.
@@ -2441,7 +2441,7 @@ composite that holds one of them. A string bound directly from a literal owns no
 memory and copies. Every other type copies. These operations change ownership:
 
 - **`.clone()`** is the only deep copy, and the compiler inserts no copy of its own. On a
-  type that implements `Drop`, or holds one, it is `CE2431`, because the copy would be a
+  type that implements `Drop`, or holds one, it is [`CE2431`](error-catalog.md#ce2431), because the copy would be a
   second handle. A `File` and a `TcpListener` have `.share()` for that: a second owner of
   the same open file description.
 - **`Own@(T)`** is a heap cell: `Own.alloc(v)` makes one, and `.get()` reads the payload.
@@ -2449,16 +2449,16 @@ memory and copies. Every other type copies. These operations change ownership:
 - **A marked field take**, `nom s.out`, in a `let` initializer or a `return`, takes one
   owning field out of a local that the function owns. The take spends the whole receiver:
   the other owning fields are destroyed at the take, `drop()` does not run, and a later
-  use of the local is `CE2405`. A take through a borrow, and `nom a.b.c`, are `CE2411`.
+  use of the local is [`CE2405`](error-catalog.md#ce2405). A take through a borrow, and `nom a.b.c`, are [`CE2411`](error-catalog.md#ce2411).
 - **`??` over a named wrapper** spends the wrapper when the `Result` owns something in
-  either arm: after `let string got = r??`, a use of `r` is `CE2405`.
+  either arm: after `let string got = r??`, a use of `r` is [`CE2405`](error-catalog.md#ce2405).
 - **`m.or_err(nom e)`** and **`r.map_err(f)`** take their receiver `nom self`: a named
-  `Maybe` or `Result` that owns something is spent by the call (`CE2435`). A borrowed
+  `Maybe` or `Result` that owns something is spent by the call ([`CE2435`](error-catalog.md#ce2435)). A borrowed
   `Maybe` is read through by `or_err` under `??`; a borrowed `Result` that owns something
-  is `CE2411` for `map_err`.
+  is [`CE2411`](error-catalog.md#ce2411) for `map_err`.
 - **`e as T`** consumes `e` by position, with no marker: a declared conversion takes it,
   and an identity cast (`e` is a `T`) moves it to the new owner. A borrowed value that
-  owns something is `CE2411`, and the form is `e.clone() as T`. A plain value is a copy.
+  owns something is [`CE2411`](error-catalog.md#ce2411), and the form is `e.clone() as T`. A plain value is a copy.
 
 The guides are [Memory Management](memory-management.md) and
 [the borrow model](design/borrow-model.md).
@@ -2483,7 +2483,7 @@ fn main() i32:
 ```
 
 A lambda captures a plain value by copy and an owning value by move. A capture of a
-borrow (`peek` or `poke`) is `CE2094`. A lambda given to a generic function writes the
+borrow (`peek` or `poke`) is [`CE2094`](error-catalog.md#ce2094). A lambda given to a generic function writes the
 types of its parameters (`|i32 x|`), because the compiler cannot infer them there. The
 guides are [Closures](closures.md) and [First-Class Functions](first-class-functions.md).
 
@@ -2517,7 +2517,7 @@ fn main() i32:
 ```
 
 The native parameter comes last. `arr...` forwards a bare array variable and moves it. A
-variadic parameter in a perk method or an extension method is `CE0115`. A pack cannot be
+variadic parameter in a perk method or an extension method is [`CE0115`](error-catalog.md#ce0115). A pack cannot be
 forwarded or indexed. The guide is [Variadic Functions](variadics.md).
 
 ## Foreign Functions
@@ -2535,8 +2535,8 @@ fn main() i32:
 
 A foreign function returns the raw C value, not a `Result`. `ptr` is an opaque foreign
 pointer, and the compiler keeps it inside the foreign boundary (the `CE5xxx` codes). A
-block with no `because "..."` is the warning `CW5001`. `nom` on a foreign parameter is
-`CE2428`. A variadic C function is declared with `...`, and a fixed declaration of it
+block with no `because "..."` is the warning [`CW5001`](error-catalog.md#cw5001). `nom` on a foreign parameter is
+[`CE2428`](error-catalog.md#ce2428). A variadic C function is declared with `...`, and a fixed declaration of it
 reads garbage on some platforms.
 
 The block also declares what the foreign boundary needs and nothing more: a nullable
@@ -2572,7 +2572,7 @@ fn main() i32:
 `use "path"` imports another unit of the program, `use <module>` a standard-library
 module, and `use <lib/name>` a library. **Every import stands above the first
 declaration**, after the unit's own doc block if it has one; a `use` below a declaration
-is `CE3014`.
+is [`CE3014`](error-catalog.md#ce3014).
 
 An import may carry an `as NAME` clause. The clause decides WHERE the imported names
 land, and nothing else:
@@ -2610,8 +2610,8 @@ public fn deep_value() i32:     use "deep"               use "mid"
                                                              let i32 a = deep_value()
 ```
 
-`top` adds `use "deep"`. The refusal is the ordinary "no such name" -- `CE2008` for a
-call, `CE2001` for a type, `CE1001` for a bare read -- with a help line naming the import
+`top` adds `use "deep"`. The refusal is the ordinary "no such name" -- [`CE2008`](error-catalog.md#ce2008) for a
+call, [`CE2001`](error-catalog.md#ce2001) for a type, [`CE1001`](error-catalog.md#ce1001) for a bare read -- with a help line naming the import
 that would bring it.
 
 **To name a type, import the unit that declares it.** A public signature may name a type
@@ -2651,19 +2651,19 @@ gives `sh.Vec` and `sh.area` alike. The rules:
 - Only the PUBLIC names travel. A unit cannot hand on what it may not name.
 - A re-exported name is a candidate exactly as a flat import's is: this unit's own
   declaration wins over it, two re-exports offering different declarations of one name
-  are `CE3012` at the use, and the same declaration reached down two paths is one
+  are [`CE3012`](error-catalog.md#ce3012) at the use, and the same declaration reached down two paths is one
   candidate.
-- `public use` takes no `as` (`CE3016`): a re-export is of names, not of a namespace.
-- A `public use` that hands on nothing public warns (`CW3005`).
+- `public use` takes no `as` ([`CE3016`](error-catalog.md#ce3016)): a re-export is of names, not of a namespace.
+- A `public use` that hands on nothing public warns ([`CW3005`](error-catalog.md#cw3005)).
 - Every kind of `.slib` carries a `public use`: a source library ships the statement as
   text, a binary or hybrid one ships a manifest record of it.
 - A library's `use <lib/b>` LOADS `b` in the consumer's build, plain or public, because
   the library's body calls it: loading is transitive. VISIBILITY is not: a `public use
   <lib/b>` gives the consumer `b`'s public names, as if the consumer wrote `use <lib/b>`,
-  and a plain `use <lib/b>` gives none, so a bare name of `b` at the consumer is `CE2008`.
-  If `b` is not on `SUSHI_LIB_PATH`, the consumer gets `CE3502` with a note that names
+  and a plain `use <lib/b>` gives none, so a bare name of `b` at the consumer is [`CE2008`](error-catalog.md#ce2008).
+  If `b` is not on `SUSHI_LIB_PATH`, the consumer gets [`CE3502`](error-catalog.md#ce3502) with a note that names
   the `use`. One library reached by two paths is one library; two versions of one library
-  in the graph are `CE3519`.
+  in the graph are [`CE3519`](error-catalog.md#ce3519).
 
 The standard library uses it: `use <io/fs>` alone brings `IoError`, `FileError` and
 `SeekFrom`, because `<io/fs>` re-exports `<io/contracts>` and that re-exports `<io/error>`.
@@ -2706,10 +2706,10 @@ fn run() i32:
 ```
 
 **One position cannot be qualified.** A fixed array's size is read while the unit's own
-AST is built and an alias is bound long after that, so `i32[my_math.SIZE]` is `CE2099`.
+AST is built and an alias is bound long after that, so `i32[my_math.SIZE]` is [`CE2099`](error-catalog.md#ce2099).
 
-A qualifier naming no namespace, or a name the namespace does not hold, is `CE2001` in a
-type position, with a help line drawn from what the namespace holds, and `CE2008` in a
+A qualifier naming no namespace, or a name the namespace does not hold, is [`CE2001`](error-catalog.md#ce2001) in a
+type position, with a help line drawn from what the namespace holds, and [`CE2008`](error-catalog.md#ce2008) in a
 call.
 
 **A generic struct is constructed through an alias as it is under a flat import.**
@@ -2718,15 +2718,15 @@ with no declared type the arguments give them (see [Generics](generics.md)).
 
 **Two units may export one name.** That is not an error by itself; it is an error only
 where the unqualified name is written and nothing says which one is meant, and then it is
-`CE3012` at the use, with a note at each candidate. The unit's OWN declaration always
+[`CE3012`](error-catalog.md#ce3012) at the use, with a note at each candidate. The unit's OWN declaration always
 wins, so it never becomes ambiguous, and a flat `use <math>` does not take `sin` away
 from a unit that declares its own.
 
 **In one unit, one name has one declaration, whatever its kind.** A `fn`, a `const`, a
 `var`, a `struct`, an `enum` and a `perk` share one set of names. The second declaration
-of a name in source order is `CE1005`, with a note at the first, and the first keeps the
-name. Two declarations of one kind keep that kind's code (`CE0004`, `CE2046`, `CE4001`,
-`CE0101`, `CE0105`), and a struct beside an enum is `CE0006`. Across units the name may
+of a name in source order is [`CE1005`](error-catalog.md#ce1005), with a note at the first, and the first keeps the
+name. Two declarations of one kind keep that kind's code ([`CE0004`](error-catalog.md#ce0004), [`CE2046`](error-catalog.md#ce2046), [`CE4001`](error-catalog.md#ce4001),
+[`CE0101`](error-catalog.md#ce0101), [`CE0105`](error-catalog.md#ce0105)), and a struct beside an enum is [`CE0006`](error-catalog.md#ce0006). Across units the name may
 be used again: a unit's own `fn box` takes the call `box()` when a flat import brings a
 struct `box`, and the struct is reached behind an alias, `sh.box(2)`. Two TYPES of one
 name in two units stay refused, because a type is one per program.
@@ -2749,17 +2749,17 @@ its scope, exactly as one shadows an FFI namespace.
 that imports the aliasing unit does not see it.
 
 **One name holds one namespace.** A second binding of the name -- another alias, an
-`unsafe external` namespace, or one of the unit's own declarations -- is `CE3013`. Two
+`unsafe external` namespace, or one of the unit's own declarations -- is [`CE3013`](error-catalog.md#ce3013). Two
 aliases for one import are legal and both work.
 
 **An empty namespace warns.** An import that brings no name a qualified form can reach
 makes its `as` clause useless: `use <collections/strings> as s` adds methods on `string`
-and declares no name, so it is `CW3004`, a warning. The import still does its work. A module
+and declares no name, so it is [`CW3004`](error-catalog.md#cw3004), a warning. The import still does its work. A module
 that declares names binds them as usual: behind `use <io/fs> as io`, `io.open(...)`,
 `io.FileMode.Write()` and `io.File` all work.
 
 A namespace holds a unit's declarations **whatever their visibility**, so naming a
-private one through the dot is `CE3005` -- "not yours", never "no such name".
+private one through the dot is [`CE3005`](error-catalog.md#ce3005) -- "not yours", never "no such name".
 
 The full design is `docs/design/unit-namespaces.md`.
 
@@ -2767,7 +2767,7 @@ The full design is `docs/design/unit-namespaces.md`.
 
 **Private is the default.** Six declarations carry the marker -- `fn`, `const`, `var`,
 `struct`, `enum` and `perk` -- and each is private to the unit that declares it unless it says
-`public`. Naming another unit's private declaration is `CE3005`. A generic function is no
+`public`. Naming another unit's private declaration is [`CE3005`](error-catalog.md#ce3005). A generic function is no
 exception.
 
 ```sushi
@@ -2798,15 +2798,15 @@ variant would make a total `match` unwritable across a unit boundary.
 An **extension** and a **perk implementation** carry no marker either. Each is exactly as
 visible as the type it is attached to, so `extend Point doubled()` is public because
 `Point` is, and `extend Cursor step()` is unreachable elsewhere because `Cursor` is not.
-Writing `public` on an implementation method is `CE6103`.
+Writing `public` on an implementation method is [`CE6103`](error-catalog.md#ce6103).
 
 A **private perk** hides the CONTRACT, not the method. Another unit may not implement it
 (`extend X with Loud`) and may not constrain a type parameter with it (`@(T: Loud)`) --
-both are `CE4011` -- but a method it provides stays callable on any type you publish,
+both are [`CE4011`](error-catalog.md#ce4011) -- but a method it provides stays callable on any type you publish,
 because method resolution is keyed on the receiver and blind to the caller.
 
 **A public thing may not hand out a private one.** A public signature that names a private
-type is `CE3009`, and a public constraint that names a private perk is `CE3010`. The rule
+type is [`CE3009`](error-catalog.md#ce3009), and a public constraint that names a private perk is [`CE3010`](error-catalog.md#ce3010). The rule
 covers a return, an error arm, a parameter, a constant's type, a public struct's field and
 a public enum's variant payload -- privacy on a type is worth nothing if a signature hands
 the type out anyway.
@@ -2844,8 +2844,8 @@ DOC_BLOCK: /##:[^\n]*?:##|##:[\s\S]*?\n[ \t]*:##/
 ```
 
 The closer is line-initial, or the block is a one-liner. Blocks do not nest. An unmatched `##:`
-is `CE6011`, a `:##` with no opener is `CE6012`, and a line-initial `##:` inside a block is
-`CE6013`.
+is [`CE6011`](error-catalog.md#ce6011), a `:##` with no opener is [`CE6012`](error-catalog.md#ce6012), and a line-initial `##:` inside a block is
+[`CE6013`](error-catalog.md#ce6013).
 
 A block stands in one of three positions:
 
@@ -2861,7 +2861,7 @@ attachment. The text is dedented and not reflowed.
 A tag is a Markdown list item: `- Parameter <name>:`, `- Returns:`, `- Errors:` or `- Example:`.
 Everything else is prose, and the first paragraph is the summary. An `- Example:` introduces a
 fenced code block, which `python tests/docs_sweep.py` compiles and runs; a tag with no fence
-after it is `CE7007`, and a fence the block's own `:##` truncates is `CE7008`.
+after it is [`CE7007`](error-catalog.md#ce7007), and a fence the block's own `:##` truncates is [`CE7008`](error-catalog.md#ce7008).
 
 See [Documentation Blocks](documentation-blocks.md) for the positions, the tag vocabulary and
 every diagnostic.
@@ -2869,7 +2869,7 @@ every diagnostic.
 ## Keywords
 
 These words are reserved. A variable, a function or a type cannot take one of them as
-its name (`CE6001`):
+its name ([`CE6001`](error-catalog.md#ce6001)):
 
 - Declarations: `fn`, `let`, `const`, `var`, `struct`, `enum`, `error`, `perk`, `extend`,
   `with`, `static`, `public`, `use`
@@ -2988,12 +2988,12 @@ fn main() i32:
 **What is refused:**
 
 - A type that holds a function value, a `ptr` or a `HashMap@(K, V)` has no string form, and
-  neither has an array of one. A hole is `CE2035`, and `print` and `println` are `CE2115`.
+  neither has an array of one. A hole is [`CE2035`](error-catalog.md#ce2035), and `print` and `println` are [`CE2115`](error-catalog.md#ce2115).
   A note names the field or the element.
 - A `HashMap@(K, V)` itself is refused: its iteration order is not specified, so its
   printed form could change from one run to the next.
-- A top-level `Result` stays `CE2037` in `print` and `println`, and is `CE2035` in a hole.
-- A top-level `Maybe` is `CE2115` in `print` and `println`, and `CE2035` in a hole. Handle
+- A top-level `Result` stays [`CE2037`](error-catalog.md#ce2037) in `print` and `println`, and is [`CE2035`](error-catalog.md#ce2035) in a hole.
+- A top-level `Maybe` is [`CE2115`](error-catalog.md#ce2115) in `print` and `println`, and [`CE2035`](error-catalog.md#ce2035) in a hole. Handle
   the value first (`match`, `.realise(default)`, or `.or_err(nom e)??`). A type that HOLDS a `Maybe` or a
   `Result` prints them.
 - Only the printed positions take a top-level array: `==`, `<`, `.to_str()` and a
@@ -3018,9 +3018,9 @@ Single-quote strings work naturally in nested contexts where double quotes would
 
 A double-quoted string cannot stand inside an interpolation hole at all: the lexer knows
 nothing about holes, so the inner quote closes the outer literal and the parse fails. The
-error is CE6001 or CE6002, and its help names the two escapes -- single quotes inside the
+error is [CE6001](error-catalog.md#ce6001) or [CE6002](error-catalog.md#ce6002), and its help names the two escapes -- single quotes inside the
 hole, or bind the expression to a local first. When the literal starts with the hole
-(`"{t.pad_left(3, "*")}"`), the error is CE2026 (unterminated interpolation), with no
+(`"{t.pad_left(3, "*")}"`), the error is [CE2026](error-catalog.md#ce2026) (unterminated interpolation), with no
 help line.
 
 ## Constants
@@ -3054,12 +3054,12 @@ const bool IS_VALID = (100 > 50) and true # true
 - **Logical**: `and`, `or`, `xor`, `not` (boolean type only)
 - **Comparison**: `==`, `!=` (numeric, `bool`, `string`); `<`, `<=`, `>`, `>=` (numeric,
   `string` -- by bytes). Both operands must be of one type. A comparison of a struct or an
-  enum in a constant initializer is `CE0110`: the derived `Eq` and `Ord` run only on
+  enum in a constant initializer is [`CE0110`](error-catalog.md#ce0110): the derived `Eq` and `Ord` run only on
   run-time values. The same comparison in a function body is legal
 - **Type casts**: `as` (between compatible types)
 
 A constant always holds a value its type can hold: it is computed at the declared width,
-and an operation whose result leaves the type is **CE2077**. See
+and an operation whose result leaves the type is **[CE2077](error-catalog.md#ce2077)**. See
 [Overflow](#overflow) for the two operator groups and for the `as` escape.
 
 ### Interpolation in a Constant
@@ -3067,7 +3067,7 @@ and an operation whose result leaves the type is **CE2077**. See
 A string constant can interpolate, and a hole takes any constant expression. Each hole
 prints exactly as the same expression prints at run time -- an integer at its declared
 width, a float as `%g` -- so a constant and a body never disagree about a value's text. A struct
-or an enum in a hole is `CE0108`, because `Display` runs only on a run-time value:
+or an enum in a hole is [`CE0108`](error-catalog.md#ce0108), because `Display` runs only on a run-time value:
 
 ```sushi
 const i32 ANSWER = 42
@@ -3169,10 +3169,10 @@ fn main() i32:
 
 **Restrictions:**
 - Array must be fixed-size (`T[N]`) at every depth. A dynamic array anywhere in the type
-  (`i32[]`, `i32[2][]`, `i32[][2]`) is **CE2015**
+  (`i32[]`, `i32[2][]`, `i32[][2]`) is **[CE2015](error-catalog.md#ce2015)**
 - All elements must be compile-time constant expressions
 - **Immutable**: `.fill()`, `.reverse()` and `PRIMES[0] := 9` all write to their receiver, so each
-  of them on a constant is **CE2096**. The constant lives in read-only memory; copy it into a local
+  of them on a constant is **[CE2096](error-catalog.md#ce2096)**. The constant lives in read-only memory; copy it into a local
   and mutate that. (A local shadowing the constant is freely mutable.)
 
 ### Struct Constants
@@ -3214,9 +3214,9 @@ const Segment ALSO_BAD = Segment(Point(pick(), 2), 3)   # CE0108, one level down
 ```
 
 A struct constant lives in read-only memory like every other constant. Writing a field
-is **CE2096** and calling a `poke self` method on one is **CE2400**, because read-only
+is **[CE2096](error-catalog.md#ce2096)** and calling a `poke self` method on one is **[CE2400](error-catalog.md#ce2400)**, because read-only
 storage cannot take a write. A `nom self` method TAKES the receiver, and unit-level
-storage is never moved out of. On a type that owns a resource, that is **CE2436** -- the
+storage is never moved out of. On a type that owns a resource, that is **[CE2436](error-catalog.md#ce2436)** -- the
 same code a `var` reads. On a plain type such as `Handle`, the method takes a copy, and
 the call is legal. A `peek self` method reads the constant, and it is legal:
 
@@ -3261,8 +3261,8 @@ fn main() i32:
 ```
 
 A variant the enum does not declare, a payload count that does not fit and a payload of
-the wrong type read the codes a body gets -- **CE2045**, **CE2050** and **CE2049** -- and
-a function call in a payload is **CE0108**, as it is in a struct field. A `Result@(T, E)`
+the wrong type read the codes a body gets -- **[CE2045](error-catalog.md#ce2045)**, **[CE2050](error-catalog.md#ce2050)** and **[CE2049](error-catalog.md#ce2049)** -- and
+a function call in a payload is **[CE0108](error-catalog.md#ce0108)**, as it is in a struct field. A `Result@(T, E)`
 is an interned enum like `Maybe@(T)`, so `const Result@(i32, E) V = Result.Ok(42)` is a
 constant by the same rule. A generic struct follows the same rule as a generic enum: `const Pair@(i32, bool) P = Pair(3, true)` builds
 the instance the declaration names. A unit variable of an enum type takes the same
@@ -3276,13 +3276,13 @@ enum variant whose every argument is a constant. Referring to another
 constant is allowed and the order of declaration does not matter, so a constant may name one
 declared further down the file. Indexing an array constant with a constant index works too,
 and every bound is checked while compiling -- a constant cannot trap. Past the end is
-**CE2012** and a negative index is **CE2056**, the codes an index in a body gets.
+**[CE2012](error-catalog.md#ce2012)** and a negative index is **[CE2056](error-catalog.md#ce2056)**, the codes an index in a body gets.
 
 The other constant may belong to another unit. A flat `use "shapes"` brings its public
 constants bare, and `use "shapes" as sh` puts them behind the dot, in the declared type
 and in the initializer alike: `const sh.Shape SMALL = sh.UNIT`, `const i32 D = sh.SIZE * 2`,
 `const sh.Point O = sh.Point(0, 0)`, `const sh.Shape T = sh.Shape.Circle(2)`. A private
-constant is **CE3005** here as in a body. The other unit's initializer is read in ITS
+constant is **[CE3005](error-catalog.md#ce3005)** here as in a body. The other unit's initializer is read in ITS
 scope: a name inside it means what it meant where it was written. A standard-library
 constant is a constant too -- with `use <math>`, `const f64 HALF = PI / 2.0` folds -- and
 a unit's own declaration of the same name wins over it.
@@ -3302,7 +3302,7 @@ Constants cannot use:
 - A compile-time loop, so a generated table has to be spelled out element by element
 
 There is no tuple constant, by design: a tuple literal is not a constant expression, so
-`const (i32, i32) ORIGIN = (0, 0)` is **CE0108**. A value that a program keeps for its
+`const (i32, i32) ORIGIN = (0, 0)` is **[CE0108](error-catalog.md#ce0108)**. A value that a program keeps for its
 whole run and that has parts with a meaning is a struct constant. This is a decision of the
 tuple design ([ruling 11](design/tuples.md#9-rulings)), not a limitation that a later
 change removes.
@@ -3314,7 +3314,7 @@ const i32 Y = some_local      # CE1001: the name is not a constant
 const i32[] DYNAMIC = from([1, 2])  # CE2015: dynamic arrays forbidden
 ```
 
-`+` on two strings is **CE2509** in a constant exactly as it is in a body: Sushi has no
+`+` on two strings is **[CE2509](error-catalog.md#ce2509)** in a constant exactly as it is in a body: Sushi has no
 concatenation operator anywhere, interpolation is the way to combine strings.
 
 Integer `/` and `%` in a constant mean what they mean in a body: division truncates toward
@@ -3345,8 +3345,8 @@ fn main() i32:
 
 A unit variable is **private by default** and `public var` makes it visible to another
 unit, exactly as for `fn`, `const`, `struct`, `enum` and `perk`. Reading, rebinding or
-borrowing another unit's private variable is **CE3005**. A public variable may not hand
-out a private type (**CE3009**). Behind an alias it is written
+borrowing another unit's private variable is **[CE3005](error-catalog.md#ce3005)**. A public variable may not hand
+out a private type (**[CE3009](error-catalog.md#ce3009)**). Behind an alias it is written
 `t.count` like a constant, and `t.count := 3` and `poke t.count` reach the storage.
 
 The console handles are the built-in example: `stdin`, `stdout` and `stderr` are
@@ -3358,8 +3358,8 @@ a `poke self` contract method.
 The initializer is a **constant expression**: a literal, another constant, operators,
 `as`, an interpolation, or a struct built from constants -- everything a `const` accepts.
 Nothing runs before `main`, so there is no initialization order to define, and a
-variable cannot name another variable in its initializer (**CE0108**); a constant cannot
-name a variable at all (**CE0108**).
+variable cannot name another variable in its initializer (**[CE0108](error-catalog.md#ce0108)**); a constant cannot
+name a variable at all (**[CE0108](error-catalog.md#ce0108)**).
 
 One addition over a constant: an **empty container** is a legal initializer, because it
 allocates nothing.
@@ -3375,24 +3375,24 @@ fn remember(nom string s) ~:
 ```
 
 `HashMap.new()` mallocs its buckets and is refused, and so is a `from([1, 2])` with
-elements (**CE0108** either way).
+elements (**[CE0108](error-catalog.md#ce0108)** either way).
 
 There is no tuple unit variable, by design: its initializer would be a tuple literal, which
-is not a constant expression, so `var (i32, i32) cursor = (0, 0)` is **CE0108**, the rule
+is not a constant expression, so `var (i32, i32) cursor = (0, 0)` is **[CE0108](error-catalog.md#ce0108)**, the rule
 of a [tuple constant](#restrictions).
 
 ### Borrowing, rebinding, and what is refused
 
 A unit variable is borrowable like a local: `peek counter` and `poke counter` hand its
-address to a function, one `poke` at a time (**CE2403**), and `foreach(poke r in
+address to a function, one `poke` at a time (**[CE2403](error-catalog.md#ce2403)**), and `foreach(poke r in
 table.iter())` points into its elements. A `let` bound from a read out of it borrows and
 freezes it, exactly as it would a local: after `let string first = words[0]` on a
-`var string[] words`, a `words.push(...)` while `first` lives is **CE2412**.
+`var string[] words`, a `words.push(...)` while `first` lives is **[CE2412](error-catalog.md#ce2412)**.
 
 Unit-level storage is **never moved out of**, and a `const` reads the same rule as a
 `var`. Each is one object the program keeps for its whole run, so a `nom` argument, a
 `let` bound straight from it, a `return` of it and a `nom self` method such as `close()`
-are all **CE2436** when the type owns a resource. Take an independent value with
+are all **[CE2436](error-catalog.md#ce2436)** when the type owns a resource. Take an independent value with
 `.clone()`. A plain value copies out freely, and a rebind is the one way to change what a
 variable holds: the old value is dropped, the new one is stored.
 
@@ -3411,7 +3411,7 @@ Nothing destroys a unit variable at exit. The process ends and the operating sys
 reclaims the pages; a variable that holds heap at that moment is not freed first.
 
 A fixed array's size needs an integer CONSTANT: a variable has a run-time value,
-so `i32[N]` with `var i32 N = 3` is **CE2099**.
+so `i32[N]` with `var i32 N = 3` is **[CE2099](error-catalog.md#ce2099)**.
 
 ---
 

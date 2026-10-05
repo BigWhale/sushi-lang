@@ -92,7 +92,7 @@ def current_platform_name() -> str:
 ```
 
 Used by `compiler/pipeline.py` (`_check_library_platform`) to reject a binary or hybrid
-`.slib` built for a different platform at load time (CE3504): its bitcode is
+`.slib` built for a different platform at load time ([CE3504](../error-catalog.md#ce3504)): its bitcode is
 platform-specific, so a Darwin-built library does not link on a Linux host, and the
 reverse. A source library (`--lib-kind source`, the default) carries no machine code,
 so the check skips it and a source library loads on every platform.
@@ -210,7 +210,7 @@ the bundled file for the host:
 | macOS on Apple Silicon | `src_sushi/_platform/darwin_arm64.sushi` |
 | Linux on x86_64 | `src_sushi/_platform/linux_x86_64.sushi` |
 
-Any other host is `CE3021`. A file exists only for a platform that a CI job tests, so
+Any other host is [`CE3021`](../error-catalog.md#ce3021). A file exists only for a platform that a CI job tests, so
 that its values are checked against that platform's C library. macOS on x86_64 and
 Linux on aarch64 have no file.
 
@@ -500,7 +500,7 @@ Two things would need to change before cross-compilation could work:
 - `sushi_stdlib/build.py` generates IR that reflects the *host* platform regardless of
   the `--platform` flag (see Step 4 above) — it is not a cross-compiler today.
 - A binary or hybrid `.slib` is platform-tagged, and a library of that kind built on one
-  platform is rejected (**CE3504**) when loaded on another (`compiler/pipeline.py`,
+  platform is rejected (**[CE3504](../error-catalog.md#ce3504)**) when loaded on another (`compiler/pipeline.py`,
   `_check_library_platform`). A source `.slib` (the default kind) is not checked and
   loads on every platform.
 

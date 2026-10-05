@@ -44,10 +44,10 @@ every type position. Semantics defines **three**:
   `|peek i32 x|` that satisfies it;
 - a **`let` binding** — `let poke T x = <place>` / `let peek T x = <place>`: a block-scoped borrow binding, mechanism 3b below.
 
-Every other position is a registered rejection at the declaration: CE2415
-(struct field), CE2416 (enum payload), CE2417 (return type), CE2418 (nested reference),
-CE2419 (generic type argument), CE2420 (extension or perk-impl target), CE5003 (FFI
-signature), CE0114 (variadic element). One walk — `contains_reference` in
+Every other position is a registered rejection at the declaration: [CE2415](../error-catalog.md#ce2415)
+(struct field), [CE2416](../error-catalog.md#ce2416) (enum payload), [CE2417](../error-catalog.md#ce2417) (return type), [CE2418](../error-catalog.md#ce2418) (nested reference),
+[CE2419](../error-catalog.md#ce2419) (generic type argument), [CE2420](../error-catalog.md#ce2420) (extension or perk-impl target), [CE5003](../error-catalog.md#ce5003) (FFI
+signature), [CE0114](../error-catalog.md#ce0114) (variadic element). One walk — `contains_reference` in
 `semantics/type_predicates.py` — backs the five CE24xx codes. Its carve-out for
 `FunctionType.param_types` is load-bearing: it keeps the second supported position legal
 wherever a function type appears. The position table and the reason for each rejection are
@@ -60,11 +60,11 @@ One surface vocabulary, seven mechanisms (and 3b, a variant of 3). Each has its 
 | # | mechanism | spelling | extent | write through it | consume it |
 |---|---|---|---|---|---|
 | 1 | call-site borrow | `f(peek x)`, `f(poke y)` | one statement | the callee's mode decides | the argument is not consumed |
-| 2 | reference parameter | `fn f(poke T x)` | the function body | `peek`: **CE2408**; `poke`: in place | **CE2411** |
-| 3 | `let` binding of a read | `let T v = c.get(0).or_err(nom e)??` | the enclosing block | not gated (§8) | **CE2411** |
-| 4 | pattern value binding | `E.V(p)`, `foreach(n in ...)` | the arm or the loop body | **CE2414** | **CE2411** |
-| 5 | pattern reference binding | `foreach(poke r in xs.iter())`, `Own(poke x)`, `E.V(poke p)` | the arm or the loop body | `poke`: in place; `peek`: **CE2408** | **CE2411** |
-| 6 | method parameter, `self` included | `extend T m(H h)` | the method body | **CE2421** (receiver), **CE2422** (by value) | **CE2411** |
+| 2 | reference parameter | `fn f(poke T x)` | the function body | `peek`: **[CE2408](../error-catalog.md#ce2408)**; `poke`: in place | **[CE2411](../error-catalog.md#ce2411)** |
+| 3 | `let` binding of a read | `let T v = c.get(0).or_err(nom e)??` | the enclosing block | not gated (§8) | **[CE2411](../error-catalog.md#ce2411)** |
+| 4 | pattern value binding | `E.V(p)`, `foreach(n in ...)` | the arm or the loop body | **[CE2414](../error-catalog.md#ce2414)** | **[CE2411](../error-catalog.md#ce2411)** |
+| 5 | pattern reference binding | `foreach(poke r in xs.iter())`, `Own(poke x)`, `E.V(poke p)` | the arm or the loop body | `poke`: in place; `peek`: **[CE2408](../error-catalog.md#ce2408)** | **[CE2411](../error-catalog.md#ce2411)** |
+| 6 | method parameter, `self` included | `extend T m(H h)` | the method body | **[CE2421](../error-catalog.md#ce2421)** (receiver), **[CE2422](../error-catalog.md#ce2422)** (by value) | **[CE2411](../error-catalog.md#ce2411)** |
 | 7 | pattern TAKING binding | `E.V(nom p)` | the arm | in place -- the arm owns it | yes: it is the owner |
 
 Row 7 is the only one that is not a borrow at all. It is listed here because
@@ -73,11 +73,11 @@ out.
 
 **1 — the call-site borrow** is tracked by counters that are cleared at the end of every
 statement. Therefore the exclusivity rules have jurisdiction inside one statement only: a
-second `poke` is CE2403, and a mixed pair is CE2407. A `poke` of a `poke` parameter —
+second `poke` is [CE2403](../error-catalog.md#ce2403), and a mixed pair is [CE2407](../error-catalog.md#ce2407). A `poke` of a `poke` parameter —
 forwarding it whole (`inner(poke cur)`) or by field (`set_port(poke cfg.port)`) — is
 legal and silent: the borrow ends with the statement, and the callee can neither store
 the reference nor write outside its declared mode. A move and a borrow of one owner in one statement is
-CE2401, in either argument order. Two statements are two borrows, and are unaffected.
+[CE2401](../error-catalog.md#ce2401), in either argument order. Two statements are two borrows, and are unaffected.
 
 **2 — the reference parameter** is the position the subsystem is built for. It carries its
 full `ReferenceType` in the borrow state, which is what makes the write gate answerable
@@ -87,25 +87,25 @@ full `ReferenceType` in the borrow state, which is what makes the write gate ans
 **3 — the `let` binding of a read** inherits BORROWED provenance: a field read
 (`h.inner`), an index (`rows[i]`) and a container get-out (`c.get(0)`, under `.or_err(nom e)??` too, and `own.get()`) all
 borrow. The owner is frozen until the end of the block that declares the binding
-(**CE2412**).
+(**[CE2412](../error-catalog.md#ce2412)**).
 
 **3b — the reference-typed `let`** binds a POINTER into a place the owner keeps:
 `let poke T x = <place>` writes through, `let peek T x = <place>` reads through. The place
 is a name, a member or index chain off one, or an `Own@(T).get()` (the payload's cell);
-a temporary is **CE2404**, and a `poke` of a constant is **CE2400** while a `peek` of one
+a temporary is **[CE2404](../error-catalog.md#ce2404)**, and a `poke` of a constant is **[CE2400](../error-catalog.md#ce2400)** while a `peek` of one
 reads its `.rodata`. The state carries the full
-`ReferenceType`, so the write gates answer by construction (CE2408 through a `peek`
-binding or out of a `peek` owner; CE2411 on a consuming use), the owner is frozen exactly
+`ReferenceType`, so the write gates answer by construction ([CE2408](../error-catalog.md#ce2408) through a `peek`
+binding or out of a `peek` owner; [CE2411](../error-catalog.md#ce2411) on a consuming use), the owner is frozen exactly
 as in mechanism 3, and the binding is released at block exit. Two rules are its own:
-one `poke` binding of an owner at a time (**CE2403**), and a `peek` beside a live `poke`,
-or the reverse, is **CE2407** — the two codes `acquire_borrow` gives an argument list,
+one `poke` binding of an owner at a time (**[CE2403](../error-catalog.md#ce2403)**), and a `peek` beside a live `poke`,
+or the reverse, is **[CE2407](../error-catalog.md#ce2407)** — the two codes `acquire_borrow` gives an argument list,
 here at the binding instead of the statement. `bind_let_reference` in
 `passes/borrow/bindings.py` is the one seam.
 
 **4 — the pattern value binding** is compiled as a copy of the payload, so a write through
 it could never reach the owner. The copy is SHALLOW: it holds the owner's descriptor and
 points at the owner's heap, which is why a rebind of the binding itself (`n := 99`) is
-**CE2414** as well: the store frees what sits in the slot, and what sits in the slot is a
+**[CE2414](../error-catalog.md#ce2414)** as well: the store frees what sits in the slot, and what sits in the slot is a
 value the scrutinee still owns. The three escapes are the binding's own
 modes plus the copy: `poke` to write through to the owner, `nom` to take the payload where
 the match owns its scrutinee, `.clone()` for a value of your own — and note that a plain
@@ -117,14 +117,14 @@ scope of its own — an arm binding does not replace an outer local of the same 
 every rule above applies by construction. The match half rests on the enum payload layout
 `{i32 tag, [K x i64] data}`, whose naturally aligned payload offsets come from one
 authority (`TypeSizing.payload_field_offsets`). Four fences: an iterable whose items have
-no address is **CE2423** (a range, `HashMap.entries()`); a reference binding in a NESTED
-match pattern is **CE2424** (extraction walks through temporary copies there); under a match
+no address is **[CE2423](../error-catalog.md#ce2423)** (a range, `HashMap.entries()`); a reference binding in a NESTED
+match pattern is **[CE2424](../error-catalog.md#ce2424)** (extraction walks through temporary copies there); under a match
 that only borrows its scrutinee, the scrutinee must be a PLACE -- a name, or a member or index
 chain off one (`match b.s:`, `match xs[1]:`) -- and a borrowed scrutinee that is not a place
-(`match l.get(0).or_err(nom e)??:`) is **CE2404**; and a `poke` binding out of a `peek` owner is CE2408,
-out of a constant CE2400. A place binding follows the reference `let`'s rules (mechanism 3b):
-the root of the place is frozen for the arm (CE2412), one `poke` binding of an owner at a
-time (CE2403), no `peek` beside a `poke` (CE2407). A scrutinee the match OWNS (a temporary)
+(`match l.get(0).or_err(nom e)??:`) is **[CE2404](../error-catalog.md#ce2404)**; and a `poke` binding out of a `peek` owner is [CE2408](../error-catalog.md#ce2408),
+out of a constant [CE2400](../error-catalog.md#ce2400). A place binding follows the reference `let`'s rules (mechanism 3b):
+the root of the place is frozen for the arm ([CE2412](../error-catalog.md#ce2412)), one `poke` binding of an owner at a
+time ([CE2403](../error-catalog.md#ce2403)), no `peek` beside a `poke` ([CE2407](../error-catalog.md#ce2407)). A scrutinee the match OWNS (a temporary)
 is parked in a slot for the whole statement, so a binding into it has storage to aim at.
 `borrow-model.md` §10b is the rule.
 
@@ -134,9 +134,9 @@ through `register_owning_value`, the complete registry router. What stops the se
 is the SCRUTINEE'S drop flag, cleared at the head of the taking arm, so whether the match
 still owns its value at the end is a run-time fact -- exactly the drop-flag mechanism
 that a conditional move of an ordinary local uses. Three fences: the match must OWN its scrutinee
-(**CE2432**, and `match nom r:` is how a local is handed over); an arm takes the variant
-whole (**CE2433**); and `Own(nom x)` is refused because the heap cell would leak
-(**CE2434**). `docs/design/borrow-model.md` section 10b is the normative half.
+(**[CE2432](../error-catalog.md#ce2432)**, and `match nom r:` is how a local is handed over); an arm takes the variant
+whole (**[CE2433](../error-catalog.md#ce2433)**); and `Own(nom x)` is refused because the heap cell would leak
+(**[CE2434](../error-catalog.md#ce2434)**). `docs/design/borrow-model.md` section 10b is the normative half.
 
 **6 — the method parameter.** Every parameter of an extension or perk method is a borrow,
 `self` included, and the caller keeps ownership. There is no `string`
@@ -150,15 +150,15 @@ extend Counter bump(poke self) ~:
 
 The receiver then arrives by pointer, so the write reaches the caller's value. `peek self`
 states the read-only default. A perk declares the mode in its signature, and the
-implementation must match it (**CE4004**). A receiver parameter anywhere else is
-**CE2425**. The full ruling is in `ownership-conventions.md` §8.6.
+implementation must match it (**[CE4004](../error-catalog.md#ce4004)**). A receiver parameter anywhere else is
+**[CE2425](../error-catalog.md#ce2425)**. The full ruling is in `ownership-conventions.md` §8.6.
 
 ## 4. Coercion
 
 `poke T` coerces to `peek T` at a **call site** — a safe downgrade of a borrow that is
 passed once. The coercion is a property of the position, not of the type pair, so it does
 NOT apply to a stored function type: `fn(peek T)` and `fn(poke T)` are different types
-in both directions (CE2002). Without that invariance, one indirection defeats the write
+in both directions ([CE2002](../error-catalog.md#ce2002)). Without that invariance, one indirection defeats the write
 gate. The single coercion site is `semantics/passes/types/compatibility.py`;
 `tests/references/call_site_marks/test_borrow_coercion_matrix.sushi` and its two rejection companions pin
 every position where the coercion does and does not apply.
@@ -171,19 +171,19 @@ indexed assignment, which routes through the same gate:
 
 | kind | code | escape |
 |---|---|---|
-| `match` / `foreach` value binding | CE2414 | bind it `poke` to write through, or `nom` to take it; otherwise `.clone()`, mutate, store back (`.share()` for a resource) |
-| `peek` reference | CE2408 | declare the parameter `poke` |
-| method receiver | CE2421 | `poke self` |
-| by-value parameter (function or method) | CE2422 | declare the parameter `poke T` |
-| `let`-borrow binding | CE2426 | write to the owner; or `.clone()`, mutate, store back |
-| unbound chained borrow (`o.get().items`) | CE2429 | `.clone()`, mutate, rebuild the owner (`o := Own.alloc(h)`); or a nested `Own(poke ...)` binding where the `Own` sits in an enum |
+| `match` / `foreach` value binding | [CE2414](../error-catalog.md#ce2414) | bind it `poke` to write through, or `nom` to take it; otherwise `.clone()`, mutate, store back (`.share()` for a resource) |
+| `peek` reference | [CE2408](../error-catalog.md#ce2408) | declare the parameter `poke` |
+| method receiver | [CE2421](../error-catalog.md#ce2421) | `poke self` |
+| by-value parameter (function or method) | [CE2422](../error-catalog.md#ce2422) | declare the parameter `poke T` |
+| `let`-borrow binding | [CE2426](../error-catalog.md#ce2426) | write to the owner; or `.clone()`, mutate, store back |
+| unbound chained borrow (`o.get().items`) | [CE2429](../error-catalog.md#ce2429) | `.clone()`, mutate, rebuild the owner (`o := Own.alloc(h)`); or a nested `Own(poke ...)` binding where the `Own` sits in an enum |
 
 A **rebind of the NAME** (`v := ...`) is the gate's other position, and it splits the table. A name with storage of ITS OWN may be rebound — the store lands in that storage and
 reaches exactly what it names — so a by-value parameter and a by-value receiver stay
 rebindable; `test_rebind_borrow_param.sushi` pins this. A name
 that is a VIEW of another value's storage may not, because the store frees a value the
-owner still holds: the `match`/`foreach` binding (CE2414), the `let`-borrow (CE2426) and
-the `peek` reference (CE2408). The position is one field on the row —
+owner still holds: the `match`/`foreach` binding ([CE2414](../error-catalog.md#ce2414)), the `let`-borrow ([CE2426](../error-catalog.md#ce2426)) and
+the `peek` reference ([CE2408](../error-catalog.md#ce2408)). The position is one field on the row —
 `ReadOnlyReceiver.refuses_a_rebind` — and a `rebind=True` argument to the gate, rather than
 a check beside it.
 
@@ -211,15 +211,15 @@ span is the second location of the relational diagnostic. Three consequences:
 - A FRESH temporary is rejected too (`make().items.push(9)`): the statement discards the
   value, so the write is dead either way. Swift rejects the same shape. One rule, no
   fresh/borrowed split.
-- The `poke`-borrow shape of this kind is CE2404, "expression has no stable address", so
+- The `poke`-borrow shape of this kind is [CE2404](../error-catalog.md#ce2404), "expression has no stable address", so
   the kind covers the mutating method, the field assignment and the indexed assignment.
 
 **A borrow cannot be consumed.** The ownership table's `(BORROWED, MOVE)` cell rejects, and
 that is the whole implementation: `type_class_of` derefs a reference to its referent, so
-all fifteen consuming positions answer the same way with no per-sink work. The code is CE2411
+all fifteen consuming positions answer the same way with no per-sink work. The code is [CE2411](../error-catalog.md#ce2411)
 and the escape is `.clone()`, which is total over types.
 
-**An owner is frozen while a borrow of it lives.** CE2412, reported NLL-style: the owner is
+**An owner is frozen while a borrow of it lives.** [CE2412](../error-catalog.md#ce2412), reported NLL-style: the owner is
 invalidated at the change, and the error is reported at the next read of the borrow.
 
 ## 6. Where reference-ness lives in the compiler
@@ -234,7 +234,7 @@ invalidated at the change, and the error is reported at the next read of the bor
   entry point (`_check_callable`), so a relational diagnostic renders its second location in
   a method body like anywhere else.
 - **The ownership seam** needs no reference arm: the rejection happens in the borrow pass, before
-  codegen. An unstamped consuming use in the backend is CE0129, which is fatal on purpose.
+  codegen. An unstamped consuming use in the backend is [CE0129](../error-catalog.md#ce0129), which is fatal on purpose.
 - **The backend** keys every deref on the semantic type the scope manager holds for the name
   (`codegen.memory.find_semantic_type`), one entry per scope.
 
@@ -244,8 +244,8 @@ Each gate turns the next occurrence of its bug class into a red test:
 
 | gate | what it pins |
 |---|---|
-| `test_borrow_dispatch_is_total.py` | an arm for every `Expr` node (CE0125) |
-| `test_scope_dispatch_is_total.py` | the same for the scope pass (CE0130) |
+| `test_borrow_dispatch_is_total.py` | an arm for every `Expr` node ([CE0125](../error-catalog.md#ce0125)) |
+| `test_scope_dispatch_is_total.py` | the same for the scope pass ([CE0130](../error-catalog.md#ce0130)) |
 | `test_peek_write_gate_is_total.py` | its case table covers every method in `MUTATING_METHODS` (the table is `METHOD_EFFECTS`, `semantics/method_effects.py`; it compiles nothing) |
 | `test_readonly_receiver_matrix.py` | every kind of the read-only table has its code |
 | `test_borrow_flag_lifecycle.py` | every `BorrowState` flag x flow event |
@@ -259,15 +259,15 @@ Each gate turns the next occurrence of its bug class into a red test:
 Mechanism 3 — a `let` binding of a read — is the kind that shows the two rules are
 complementary rather than alternatives:
 
-- **May I change the OWNER while the binding lives?** CE2412, answered NLL-style.
-- **May I write THROUGH the binding?** CE2426, the §5 gate's fifth row.
+- **May I change the OWNER while the binding lives?** [CE2412](../error-catalog.md#ce2412), answered NLL-style.
+- **May I write THROUGH the binding?** [CE2426](../error-catalog.md#ce2426), the §5 gate's fifth row.
 
 The row keys on `is_let_borrow`, not on `borrows_from is not None`. An owner with no
 `BorrowState` — a temporary, as in `let List@(i32) v = make()??.items` — records no owner name, and
-a `borrows_from` test would hand that case to CE2414, which tells the author
+a `borrows_from` test would hand that case to [CE2414](../error-catalog.md#ce2414), which tells the author
 their `let` is a match binding. The temporary's buffer is just as real.
 
-The sixth kind (CE2429) has only ONE of the two questions. A write THROUGH the chain is
+The sixth kind ([CE2429](../error-catalog.md#ce2429)) has only ONE of the two questions. A write THROUGH the chain is
 the §5 gate's answer; there is no owner-side question, because the chain names no binding
 the owner could invalidate — the temporary copy is freed at scope exit like any other
 unbound owning temporary.
@@ -278,10 +278,10 @@ Each of these is a rejection, and each is lifted separately when its feature is
 designed:
 
 - **Lifetimes.** Nothing relates a borrow to the value it names, which is why a borrow
-  cannot be returned (CE2417) or stored in data (CE2415, CE2416, CE2419).
-- **A reference binding in a nested match pattern** (CE2424). A TAKING binding is legal
+  cannot be returned ([CE2417](../error-catalog.md#ce2417)) or stored in data ([CE2415](../error-catalog.md#ce2415), [CE2416](../error-catalog.md#ce2416), [CE2419](../error-catalog.md#ce2419)).
+- **A reference binding in a nested match pattern** ([CE2424](../error-catalog.md#ce2424)). A TAKING binding is legal
   there: nothing points into the scrutinee, so the temporary-copy hazard does not apply.
-- **A `nom` binding inside `Own(...)`** (CE2434), and a per-slot take of one payload out of
-  a variant (CE2433).
+- **A `nom` binding inside `Own(...)`** ([CE2434](../error-catalog.md#ce2434)), and a per-slot take of one payload out of
+  a variant ([CE2433](../error-catalog.md#ce2433)).
 - **A scrutinee-side spelling** for a mutable binding (Rust's `match &mut x`). Sushi marks
   the binding instead.

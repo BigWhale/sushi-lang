@@ -12,7 +12,7 @@ tuple, and ONE pattern-matrix exhaustiveness checker for every match (section 5b
 
 A function returns exactly one value. Before tuples, a function that returns two values
 needed a named struct for the pair. A field read is a borrow, so the two halves of that
-struct could not both come out owned: consuming `s.a` is **CE2411**, and `nom s.a` spends
+struct could not both come out owned: consuming `s.a` is **[CE2411](../error-catalog.md#ce2411)**, and `nom s.a` spends
 the whole struct (borrow-model.md S10c). A tuple is an anonymous, fixed-size,
 heterogeneous product type that a function can return, a value can store, and a `let` can
 DESTRUCTURE into owned parts.
@@ -57,20 +57,20 @@ What is not in the surface, by design:
 
 - **No tuple constant and no tuple unit variable** (ruling 11). A `var` takes a constant
   initializer, so the second rule follows from the first. A tuple literal is not a
-  compile-time constant expression (**CE0108**). This is a design decision, not a known
+  compile-time constant expression (**[CE0108](../error-catalog.md#ce0108)**). This is a design decision, not a known
   limitation.
-- **No named elements** (ruling 9). `(i32 quot, i32 rem)` in a type position is **CE6105**.
+- **No named elements** (ruling 9). `(i32 quot, i32 rem)` in a type position is **[CE6105](../error-catalog.md#ce6105)**.
 - **No one-element tuple and no empty tuple.** `(x)` is grouping, `(x,)` is a parse error,
   and `~` is already the unit type and the unit value.
 - **No index by a value** (ruling 10). The element type depends on the index, so the index
   is a literal, `.0`, and it starts at 0. `t[i]` is not a tuple access.
 - **No written `Tuple@(i32, string)`.** The one spelling is `(i32, string)`.
-- **No tuple in an FFI signature.** A tuple has no C layout (**CE5003**).
-- **No tuple bloom and no `expand` over a tuple** (ruling 15): `f(t...)` is **CE2006**,
-  `expand(x in t)` is **CE0119**. A value pack is not a tuple (ruling 14).
+- **No tuple in an FFI signature.** A tuple has no C layout (**[CE5003](../error-catalog.md#ce5003)**).
+- **No tuple bloom and no `expand` over a tuple** (ruling 15): `f(t...)` is **[CE2006](../error-catalog.md#ce2006)**,
+  `expand(x in t)` is **[CE0119](../error-catalog.md#ce0119)**. A value pack is not a tuple (ruling 14).
 - **No mode on a destructure element** (decision D1): `let (peek i32 a, b) = t` is
-  **CE6107**.
-- **No extension and no perk implementation on a tuple type** (ruling 5): **CE2110**, the
+  **[CE6107](../error-catalog.md#ce6107)**.
+- **No extension and no perk implementation on a tuple type** (ruling 5): **[CE2110](../error-catalog.md#ce2110)**, the
   rule of a function type.
 
 ## 3. The grammar
@@ -83,13 +83,13 @@ file of the corpus parses to the tree it had before.
   `let ( NAME ,`. So `tuple_list` takes `type NAME?` or `_` for each element, and the token
   after the `)` decides: `=` (or `in`) is a destructure, a NAME is a typed binding. The AST
   builder judges each element by its position (`ast_builder/types/tuples.py`): a type
-  position takes types alone (**CE6105**), a destructure position takes a bare name, a typed
+  position takes types alone (**[CE6105](../error-catalog.md#ce6105)**), a destructure position takes a bare name, a typed
   name, a `_` or a nested destructure.
 - **`t.0.1` lexes as `t` `.` FLOAT(`0.1`).** The FLOAT terminal takes `0.1` before INT can.
   `member_access` takes `"." INT` (`tuple_index`) and `"." FLOAT` (`tuple_index_pair`), and
   the builder splits a FLOAT into two steps. A FLOAT after a dot is valid nowhere else, so
   this adds no conflict. A number with an underscore, an exponent or a leading zero is
-  **CE6106**.
+  **[CE6106](../error-catalog.md#ce6106)**.
 - **`(expr)` and `(expr, expr)`.** The comma decides, with a shift. `(fn(i32) -> i32)[]` is
   still grouping.
 - **A statement with its own parentheses.** `println(1, 2)` stays a parse error; write
@@ -124,7 +124,7 @@ with `generic_base = "$Tuple"`, `generic_args = (i32, string)` and the fields `0
   template (`TypeSubstitutor`), the typecheck pass (`intern_declared_wrapper`), and the late
   intern seam. A tuple literal is interned by the typecheck pass from its element types.
 - A tuple has no declaration record, so it is public by absence. The leak fence and the
-  `ptr` quarantine read its elements, so `public fn f() (Secret, i32)` is **CE3009** for a
+  `ptr` quarantine read its elements, so `public fn f() (Secret, i32)` is **[CE3009](../error-catalog.md#ce3009)** for a
   private `Secret`.
 
 Why a struct: identity stays nominal (two equal element lists give one interned name), and
@@ -155,12 +155,12 @@ total and deep, and it is refused when an element declares a resource (the escap
 | Operation | Rule | The same rule as |
 |---|---|---|
 | `(a, b)` literal | each element is a consuming position (by position) | a struct construction |
-| `t.0` read | a borrow; consuming it is **CE2411** | a struct field read |
+| `t.0` read | a borrow; consuming it is **[CE2411](../error-catalog.md#ce2411)** | a struct field read |
 | `t.0 := v` | consumes `v`, destroys the old element | a struct field write |
 | `nom t.0` | a field take: spends all of `t`, destroys the other owning elements | borrow-model.md S10c |
 | `let (a, b) = <temporary>` | each binder owns its element | a `nom` binding of a temporary |
-| `let (a, b) = t` (an owned local) | spends `t` whole (a later use is **CE2405**), then splits it | `let x = t` |
-| `let (a, b) = p` (a parameter, a field, a binding) | each binder is a borrow; consuming one is **CE2411**, and a change of the owner while a binder lives is **CE2412** | `let x = s.f` |
+| `let (a, b) = t` (an owned local) | spends `t` whole (a later use is **[CE2405](../error-catalog.md#ce2405)**), then splits it | `let x = t` |
+| `let (a, b) = p` (a parameter, a field, a binding) | each binder is a borrow; consuming one is **[CE2411](../error-catalog.md#ce2411)**, and a change of the owner while a binder lives is **[CE2412](../error-catalog.md#ce2412)** | `let x = s.f` |
 | `let (_, b) = <temporary>` | the `_` element is destroyed at the destructure | a discarded `_` in a whole-variant take |
 | scope exit | the elements are destroyed in field order, first to last | the fields of a struct |
 
@@ -171,7 +171,7 @@ whole takes the provenance of its value by the rule of `let x = v`. Then the tar
 it:
 
 - The scope pass declares each binder. The typecheck pass types each binder (a typed binder
-  takes the type mismatch of a `let`, **CE2002**; a bare binder takes the element type) and
+  takes the type mismatch of a `let`, **[CE2002](../error-catalog.md#ce2002)**; a bare binder takes the element type) and
   hands a typed binder's type to the element of a tuple literal first, so
   `let (u8 a, i32 b) = (7, 1)` types the literal `7` as a `u8`.
 - The borrow pass (`_split_destructure`) gives each binder the class of the whole: an owned
@@ -219,7 +219,7 @@ b := #rb1
   read-only target, a constant, an external variable, a string byte).
 - The right side is taken by the rule of the `let` destructure: a temporary is owned, an
   owned local is spent whole, and a borrow gives borrowing binders. A rebind from a
-  borrowing binder of an owning type is the consuming use of a borrow (**CE2411**), once
+  borrowing binder of an owning type is the consuming use of a borrow (**[CE2411](../error-catalog.md#ce2411)**), once
   for each element, as `a := p.0` would be.
 - An owning swap `(s, t) := (t, s)` moves `t` and `s` into the literal, the binders own
   the two values, and each rebind moves a binder into a name that was moved out of. A
@@ -230,11 +230,11 @@ b := #rb1
   `stamp_rebind_places`) before it checks the `Let`. The binder then hands that type to the
   element of a tuple literal, as a written binder type does, so
   `(small, big) := (200, 5000000000)` types `200` as a `u8`, and a value of the wrong
-  type is **CE2002** at its place.
+  type is **[CE2002](../error-catalog.md#ce2002)** at its place.
 - **The diagnostics name the element, not the hidden binder.** The borrow pass gives each
   hidden binder a written name, the spelling of its element (`p.0`), so a message reads
   `cannot consume 'p.0'`.
-- **One place twice** is **CE6109**, judged in the builder on the written places (a
+- **One place twice** is **[CE6109](../error-catalog.md#ce6109)**, judged in the builder on the written places (a
   name, a field chain, a tuple element, an index that is a literal or a name), with a note
   at the first one. Two different places of one value are legal: `(p.x, p.y)` and
   `(i, xs[i])`.
@@ -253,17 +253,17 @@ position takes only a binding or `_`, because only an enum, an integer, a tuple 
 
 **Decision D3.** An integer literal is legal in every pattern position: a literal arm, a
 tuple element and an enum payload (`Maybe.Some(0) ->`). Over a position that is not an
-integer it is **CE2119**; out of range for the position's type it is **CE2073**.
+integer it is **[CE2119](../error-catalog.md#ce2119)**; out of range for the position's type it is **[CE2073](../error-catalog.md#ce2073)**.
 
 **The modes (ruling 4).** A pattern binding takes the S10b modes of borrow-model.md, in a
 tuple pattern as in a payload: bare borrows, `poke` points into the element, `nom` takes
 it. A tuple pattern is not a `let` destructure: a bare binder of a destructure owns, and a
-bare binding of a pattern borrows. `nom` needs a scrutinee that the match owns (**CE2432**
+bare binding of a pattern borrows. `nom` needs a scrutinee that the match owns (**[CE2432](../error-catalog.md#ce2432)**
 otherwise), and an arm that takes one owning position of a scrutinee takes all of them
-(**CE2433**). A `poke` binding is legal at the top of an arm: a payload of the arm's enum
+(**[CE2433](../error-catalog.md#ce2433)**). A `poke` binding is legal at the top of an arm: a payload of the arm's enum
 pattern, or an element of the arm's tuple pattern at any tuple depth. In a pattern nested
 in an enum payload, and in the payload of an enum pattern inside a tuple pattern, it stays
-**CE2424**.
+**[CE2424](../error-catalog.md#ce2424)**.
 
 **Ruling 3: the tuple-literal scrutinee.** `match (a, b):` builds no tuple. Each element is
 a ROOT of its own: the typecheck pass types the literal as a tuple, so the patterns are
@@ -272,7 +272,7 @@ checked against `(A, B)`, but the borrow pass and the backend read the elements 
 left to right, and it takes the rules of a named scrutinee: a name or a place is borrowed
 (a `poke` binding writes through to it), a temporary is owned. `match nom (a, b):` consumes
 each element (`ConsumingUse.MATCH_SCRUTINEE`), so a later use of an owning element is
-**CE2405**. The all-or-nothing rule of CE2433 holds per root, so an arm can take `a` and
+**[CE2405](../error-catalog.md#ce2405)**. The all-or-nothing rule of [CE2433](../error-catalog.md#ce2433) holds per root, so an arm can take `a` and
 leave `b`; the match then destroys `b` at its end.
 
 **The backend.** `emit_match` keeps the switch on the tag for an enum scrutinee. A tuple
@@ -284,7 +284,7 @@ elements, payloads and `Own(...)` cells), and a failed test goes to the next can
 after every test passed does the arm clear the drop flag of a root it takes from, and make
 its bindings. So a failed test takes nothing and binds nothing. A `poke` binding computes
 its pointer into the root's own storage: a field of a tuple, a payload offset of an enum.
-After the last candidate arm is the run-time error **RE2023**, the backstop that
+After the last candidate arm is the run-time error **[RE2023](../error-catalog.md#re2023)**, the backstop that
 exhaustiveness makes unreachable.
 
 **Ruling 17: one checker.** `passes/types/exhaustiveness.py` is the usefulness algorithm
@@ -296,23 +296,23 @@ column has no end of values: a literal is a constructor, and only a `WILD` cover
 rest. The same checker reads an enum match, a nested enum match, an integer match and a
 tuple match. It gives two answers:
 
-- **The missing patterns.** A value vector that no row matches is a witness. CE2040 lists
+- **The missing patterns.** A value vector that no row matches is a witness. [CE2040](../error-catalog.md#ce2040) lists
   the witnesses in source syntax (`(Color.Red, _)`, `Maybe.Some(Color.Green)`), at most 16.
   A plain enum match, where no arm tests inside a payload, keeps the list of variant names.
-  An integer scrutinee keeps its own code, **CE2074**.
+  An integer scrutinee keeps its own code, **[CE2074](../error-catalog.md#ce2074)**.
 - **The dead arms (ruling 18).** An arm that is not useful against the arms above it is
-  **CE2118**, an error. Its notes name the arms above it that share a value with it; those
+  **[CE2118](../error-catalog.md#ce2118)**, an error. Its notes name the arms above it that share a value with it; those
   arms cover it together, because an arm that shares no value with it covers none of its
   values.
 
 Where an older rule names the fault, it is the one diagnostic for the arm: a second arm for
-the same enum pattern is **CE2041**, a `_` arm that is not last is **CE2041** (and the arms
-after it get no CE2118), and a second literal arm for the same value is **CE2075**. An arm
+the same enum pattern is **[CE2041](../error-catalog.md#ce2041)**, a `_` arm that is not last is **[CE2041](../error-catalog.md#ce2041)** (and the arms
+after it get no [CE2118](../error-catalog.md#ce2118)), and a second literal arm for the same value is **[CE2075](../error-catalog.md#ce2075)**. An arm
 with an error in its pattern stops the checker for that match: its coverage is not known,
 and a second report would only repeat the first fault.
 
 Before ruling 17 the checker compared only the outer variant names, so a nested match that
-did not cover a value compiled and stopped at run time with RE2023. It is a compile error
+did not cover a value compiled and stopped at run time with [RE2023](../error-catalog.md#re2023). It is a compile error
 now.
 
 ## 6. Derived contracts
@@ -321,7 +321,7 @@ Free under the struct representation, because the derive pass treats a tuple as 
 `==` and `!=` compare element by element; `<` and the other orders are LEXICOGRAPHIC by
 element; `hash()` reads the elements in order; `Display` prints `(1, "a")`. A tuple is a
 `HashMap` key when every element has a hash and an `Eq`. Two tuples of different element
-types are a mixed comparison (**CE2513**), as two structs are.
+types are a mixed comparison (**[CE2513](../error-catalog.md#ce2513)**), as two structs are.
 
 ## 7. Generics
 
@@ -337,26 +337,26 @@ types are a mixed comparison (**CE2513**), as two structs are.
 
 | Fault | Code |
 |---|---|
-| A name or a `_` inside a tuple TYPE; a named element | CE6105 |
-| `t.1e3`, `t.0_1`, `t.01` | CE6106 |
-| A mode on a tuple element: a destructure element (D1) or a tuple type element | CE6107 |
-| A tuple pattern names a count that is not the tuple's count | CE2120 |
-| A tuple pattern over a value that is not a tuple | CE2117 |
-| An integer literal pattern over a value that is not an integer | CE2119 |
-| A match that does not cover a value | CE2040 (CE2074 for an integer scrutinee) |
-| A match arm that the arms above it cover | CE2118 |
-| `t.N` past the last element | CE2106, with the type rendered as `(i32, string)` |
-| A destructure count that is not the tuple's count (a `let`, a `foreach`, a rebind) | CE2120 |
-| A destructure of a value that is not a tuple (a `let`, a `foreach`, a rebind) | CE2117 |
-| The same place twice in the target of a destructuring rebind | CE6109 |
-| A destructure of an unhandled `Result` | CE2505 |
-| A typed binder whose type is not the element type | CE2002 |
-| A `const` or a `var` of a tuple (ruling 11) | CE0108 |
-| A tuple in an FFI signature | CE5003 |
-| An extension or a perk implementation on a tuple type (ruling 5) | CE2110 |
-| `f(t...)` (ruling 15) | CE2006 |
-| `expand(x in t)` (ruling 15) | CE0119 |
-| `x as (i32, i32)` | CE2014 |
+| A name or a `_` inside a tuple TYPE; a named element | [CE6105](../error-catalog.md#ce6105) |
+| `t.1e3`, `t.0_1`, `t.01` | [CE6106](../error-catalog.md#ce6106) |
+| A mode on a tuple element: a destructure element (D1) or a tuple type element | [CE6107](../error-catalog.md#ce6107) |
+| A tuple pattern names a count that is not the tuple's count | [CE2120](../error-catalog.md#ce2120) |
+| A tuple pattern over a value that is not a tuple | [CE2117](../error-catalog.md#ce2117) |
+| An integer literal pattern over a value that is not an integer | [CE2119](../error-catalog.md#ce2119) |
+| A match that does not cover a value | [CE2040](../error-catalog.md#ce2040) ([CE2074](../error-catalog.md#ce2074) for an integer scrutinee) |
+| A match arm that the arms above it cover | [CE2118](../error-catalog.md#ce2118) |
+| `t.N` past the last element | [CE2106](../error-catalog.md#ce2106), with the type rendered as `(i32, string)` |
+| A destructure count that is not the tuple's count (a `let`, a `foreach`, a rebind) | [CE2120](../error-catalog.md#ce2120) |
+| A destructure of a value that is not a tuple (a `let`, a `foreach`, a rebind) | [CE2117](../error-catalog.md#ce2117) |
+| The same place twice in the target of a destructuring rebind | [CE6109](../error-catalog.md#ce6109) |
+| A destructure of an unhandled `Result` | [CE2505](../error-catalog.md#ce2505) |
+| A typed binder whose type is not the element type | [CE2002](../error-catalog.md#ce2002) |
+| A `const` or a `var` of a tuple (ruling 11) | [CE0108](../error-catalog.md#ce0108) |
+| A tuple in an FFI signature | [CE5003](../error-catalog.md#ce5003) |
+| An extension or a perk implementation on a tuple type (ruling 5) | [CE2110](../error-catalog.md#ce2110) |
+| `f(t...)` (ruling 15) | [CE2006](../error-catalog.md#ce2006) |
+| `expand(x in t)` (ruling 15) | [CE0119](../error-catalog.md#ce0119) |
+| `x as (i32, i32)` | [CE2014](../error-catalog.md#ce2014) |
 
 ## 9. Rulings
 

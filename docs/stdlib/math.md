@@ -35,7 +35,7 @@ exponentials compile to LLVM intrinsics. `tan`, `asin`, `acos`, `atan`, `atan2`,
 - `TAU` — 6.283185307179586 (`f64`)
 
 The three are names `use <math>` brings, like the functions: a unit that did not import
-the module has no `PI` (CE1001), `use <math> as m` puts them behind the dot (`m.PI`), and
+the module has no `PI` ([CE1001](../error-catalog.md#ce1001)), `use <math> as m` puts them behind the dot (`m.PI`), and
 a unit's own `const f64 E`, a local `PI` or a `var TAU` wins over the module's. A `const`
 initializer folds them like any other constant.
 
@@ -59,9 +59,9 @@ fn main() i32:
 - `abs(T value) -> T` — absolute value. `T` must be a **signed integer** (`i8`, `i16`,
   `i32`, `i64`) or a **float** (`f32`, `f64`).
 - `min(T a, T b) -> T` — smaller of two values. `T` may be any numeric type. Two typed
-  arguments must have the same type (CE2006). A literal argument takes the type of the
+  arguments must have the same type ([CE2006](../error-catalog.md#ce2006)). A literal argument takes the type of the
   other argument, so `max(b, 1)` with `b: u32` compares two `u32` values. A literal that
-  does not fit that type is CE2073.
+  does not fit that type is [CE2073](../error-catalog.md#ce2073).
 - `max(T a, T b) -> T` — larger of two values. Same typing rules as `min`.
 
 ## Integer Division: divmod
@@ -70,7 +70,7 @@ fn main() i32:
 
 The quotient and the remainder in one call: `(a / b, a % b)`, exactly as the two operators
 give them, so the quotient truncates toward zero and the remainder has the sign of `a`. `T`
-is any **integer** type (`i8` to `i64`, `u8` to `u64`); a float is CE2006. The typing rules
+is any **integer** type (`i8` to `i64`, `u8` to `u64`); a float is [CE2006](../error-catalog.md#ce2006). The typing rules
 of `min` apply: two typed arguments have one type, and a literal takes the type of the other
 argument.
 
@@ -256,7 +256,7 @@ Floating-point operations follow the IEEE 754 standard:
 - **NaN propagation:** operations with NaN inputs produce NaN
 - **Infinity:** a division by a computed zero produces infinity (`let f64 z = 0.0` then
   `1.0 / z`), and `sqrt(-1.0)` produces NaN. A divisor that the compiler can read and
-  that holds zero, such as `1.0 / 0.0`, is CE0112
+  that holds zero, such as `1.0 / 0.0`, is [CE0112](../error-catalog.md#ce0112)
 - **Rounding:** round to nearest, ties to even (except `round()`, which rounds away from zero)
 
 ## Example: Computing Distance

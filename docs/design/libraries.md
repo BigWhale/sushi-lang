@@ -29,7 +29,7 @@ puts them in the unit table as ordinary units. Source libraries use the same mec
 **Binary distribution stays available as an opt-in** (`--lib-kind binary`), and keeps
 the per-declaration behaviour: concrete bodies as bitcode, generics as
 source slices. §5 specifies it. A binary `.slib` is platform-bound and is rejected on
-a foreign platform (CE3504); a source `.slib` is not.
+a foreign platform ([CE3504](../error-catalog.md#ce3504)); a source `.slib` is not.
 
 Note that a binary `.slib` does **not** hide a library's generics. Their
 source text is in the manifest, because that is the only way a generic can cross a
@@ -48,7 +48,7 @@ platform-bound as an object file.
 `sushi_lang/backend/library_format.py` defines `LibraryFormat`, a flat binary
 container — no LLVM in it, no linking logic, just framing. The fixed header is 52 bytes.
 A signature without `| E` is bare (`docs/design/error-channel.md`), and the bitcode of a
-version-5 library follows that ABI. A file of any other version is refused (CE3509), so
+version-5 library follows that ABI. A file of any other version is refused ([CE3509](../error-catalog.md#ce3509)), so
 no function is called with the wrong ABI:
 
 ```
@@ -74,24 +74,24 @@ either one.
 Integrity is checked strictly in order, one code per failure mode, all in
 `sushi_lang/internals/errors/library.py`:
 
-- **CE3508** — bad magic (not a `.slib` at all)
-- **CE3509** — version mismatch. The reader accepts `VERSION == 5` only. There is no
+- **[CE3508](../error-catalog.md#ce3508)** — bad magic (not a `.slib` at all)
+- **[CE3509](../error-catalog.md#ce3509)** — version mismatch. The reader accepts `VERSION == 5` only. There is no
   backward-compat shim and none is needed: Sushi has no users in the wild, so an
   older `.slib` is rejected, not upgraded.
-- **CE3510** / **CE3506** / **CE3511** — the metadata, source or bitcode section is
+- **[CE3510](../error-catalog.md#ce3510)** / **[CE3506](../error-catalog.md#ce3506)** / **[CE3511](../error-catalog.md#ce3511)** — the metadata, source or bitcode section is
   truncated (`f.read(n)` returned fewer bytes than the length prefix promised). One
   code per section rather than one shared code: the text names which section is short,
   which is what tells a reader where the file was cut.
-- **CE3512** — the metadata is not valid MessagePack, or it does not have the shape
+- **[CE3512](../error-catalog.md#ce3512)** — the metadata is not valid MessagePack, or it does not have the shape
   that `MANIFEST_SCHEMA` (`backend/library_format.py`) states: a field is missing or has
-  the wrong type. A template source that does not parse is also CE3512, and it names the
+  the wrong type. A template source that does not parse is also [CE3512](../error-catalog.md#ce3512), and it names the
   library file, not the consumer's `use` line
-- **CE3513** — total file size exceeds the 1 GiB sanity limit
-- **CE3515** — the operating system refuses to open or to read the file (a missing file,
+- **[CE3513](../error-catalog.md#ce3513)** — total file size exceeds the 1 GiB sanity limit
+- **[CE3515](../error-catalog.md#ce3515)** — the operating system refuses to open or to read the file (a missing file,
   a directory, no read permission, an I/O failure)
 
 `--lib-info` also refuses a file whose name does not end in `.slib`, before it opens the
-file (**CE3516**).
+file (**[CE3516](../error-catalog.md#ce3516)**).
 
 ### Compression
 
@@ -186,11 +186,11 @@ Three rules make this sound:
   (`docs/design/unit-namespaces.md` section 6.2), and `build_dependency_graph` records
   the edge a `use <lib/...>` creates, so a source library's units come first without a
   hand-patch. Seeding them ahead of the loop the way `LibraryRegistration.seed_perks`
-  does for a binary library would register the same perk twice (CE4001), because this
+  does for a binary library would register the same perk twice ([CE4001](../error-catalog.md#ce4001)), because this
   one also arrives in a real unit.
 - **A consumer definition SHADOWS a library one.** Same rule the binary path
   documents in §7, enforced for functions, generics and perk impls by
-  `passes/collect/`. A shadowed PUBLIC function gives CW3002; a shadowed private one
+  `passes/collect/`. A shadowed PUBLIC function gives [CW3002](../error-catalog.md#cw3002); a shadowed private one
   says nothing. Without it, `--lib-kind` would change program semantics instead of
   just distribution. A shadowed perk impl is also dropped from its unit's AST: both
   bodies are ordinary Sushi in ordinary units, so leaving it defines the method symbol
@@ -208,10 +208,10 @@ Three consequences follow, and they are the point of the design:
 
 1. **No export closure.** A private helper is reachable because it is compiled, not
    because the producer predicted that an exported generic would need it.
-2. **CE5007 cannot fire.** That code exists because export-closure private symbols
+2. **[CE5007](../error-catalog.md#ce5007) cannot fire.** That code exists because export-closure private symbols
    share the consumer's namespace, so shadowing one would change what the library's
    own shipped bodies call. Namespaced units remove the shared namespace.
-3. **CE3504 cannot fire.** Nothing in a source library is platform-bound.
+3. **[CE3504](../error-catalog.md#ce3504) cannot fire.** Nothing in a source library is platform-bound.
 
 `_check_library_platform` is conditional on `kind != "source"`. That single
 condition is the whole cross-platform fix.
@@ -231,7 +231,7 @@ This is the one real cost of the design, and it needs deliberate handling.
 
 On the binary path, `LibraryRegistration` collects every template snippet against a
 **throwaway `Reporter`**, so a snippet's diagnostics never leak into the consumer's own
-compile. A snippet that does not parse stops the build with CE3512, which names the
+compile. A snippet that does not parse stops the build with [CE3512](../error-catalog.md#ce3512), which names the
 library file. That trick cannot serve a source library. When the
 whole library is source, an error inside it must be shown, and it must be
 attributable.
@@ -273,9 +273,9 @@ check at `--lib`; this is the position of C++ and Zig, where a template body is 
 at its instantiation. The consequence is that a template's warning reaches nobody when
 the author never instantiates it: the consumer drops it by the rule above.
 
-### 4.5 Why CE5007 does not fire on the source path
+### 4.5 Why [CE5007](../error-catalog.md#ce5007) does not fire on the source path
 
-The binary path needs CE5007 because an export-closure private shares the consumer's
+The binary path needs [CE5007](../error-catalog.md#ce5007) because an export-closure private shares the consumer's
 flat namespace, so a consumer symbol of the same name would silently change what the
 library's own shipped bodies call. Namespaced units remove the shared namespace, and
 the instance-goes-home rule above removes the need to ship privates at all, so the
@@ -303,7 +303,7 @@ A source library is portable as **text**. It is not automatically portable in
 **behaviour**.
 
 FFI is the case that matters. `stat` differs between macOS and Linux, and the `open`
-flags differ. FFI stays a private unit detail (CE5002, CE5008 keep `ptr` out of every
+flags differ. FFI stays a private unit detail ([CE5002](../error-catalog.md#ce5002), [CE5008](../error-catalog.md#ce5008) keep `ptr` out of every
 public signature), so the FFI travels inside the library and must compile on the
 consumer's platform. Sushi has no conditional compilation today: no `cfg`, no build
 tags, no per-platform source files.
@@ -325,7 +325,7 @@ consumer.
 
 That distinction — concrete ships as machine code and links, generic ships as source
 and monomorphizes locally — is the whole binary system. The export closure, perk-impl
-shipping, the two link paths and CE5007 are all consequences of making it sound: a
+shipping, the two link paths and [CE5007](../error-catalog.md#ce5007) are all consequences of making it sound: a
 generic template's body can reference things the consumer has never seen (a private
 helper, a private constant, a perk the library itself implements), and those
 references have to resolve to *the library's* symbols, not to a same-named consumer
@@ -368,7 +368,7 @@ and the bitcode link line take it. A re-exported LIBRARY follows the same rule (
 `_resolve_library_imports` loads it as if the consumer wrote the import -- from a source
 library's re-parsed statement and from a compiled library's `kind: "library"` record --
 and the link line takes it (`reexported_libraries`). A library that is not on the path is
-CE3502 with a note that names the `public use`.
+[CE3502](../error-catalog.md#ce3502) with a note that names the `public use`.
 
 The `templates` section carries its own `"version"` (`TEMPLATES_SCHEMA_VERSION`,
 `8`, in `backend/library_format.py`), which is independent of the container version.
@@ -394,7 +394,7 @@ The section holds:
 - `has_channel` (required) on every function, helper and method record. A signature
    without `| E` is bare, and there is no default error type, so the flag states the
    channel. A binary or hybrid library with a different schema version is refused
-   (CE3512); a source library recompiles from its units and reads none of this.
+   ([CE3512](../error-catalog.md#ce3512)); a source library recompiles from its units and reads none of this.
 
 ### 5.1 Concrete functions
 
@@ -408,16 +408,16 @@ the spelled channel is the Err arm, an explicit `Result@(T, E)` return is not wr
 again, and a signature with neither is bare: the call yields the value. Two checks gate the
 record, both raising and aborting the `.slib` write (no partial artifact):
 
-- **CE0116** — a native `...T` variadic function cannot appear here. The registry
+- **[CE0116](../error-catalog.md#ce0116)** — a native `...T` variadic function cannot appear here. The registry
   gives the reason as a serialization gap: the variadic flag is not written into the
   library format. (A type-pack `...Ts` function is unaffected — it carries
   `type_params` and is filtered into `generic_functions` before this check is reached;
   the discriminator is `is_pack` vs `is_variadic`, not the shared `...` spelling.)
   This check does not apply on the source path, where the declaration ships whole.
-- **CE5002** — a public function whose signature (param or return, recursively
+- **[CE5002](../error-catalog.md#ce5002)** — a public function whose signature (param or return, recursively
   including inside `Result`/`Maybe`) exposes a foreign `ptr` cannot appear in a public
   API at all. FFI is a private unit detail (`contains_foreign_ptr`, shared with the
-  in-program unit-boundary check that raises CE5008).
+  in-program unit-boundary check that raises [CE5008](../error-catalog.md#ce5008)).
 
 At the consumer, `LibraryRegistry._parse_functions` turns each record back into a
 `FuncSig` (`sushi_lang/semantics/library_registry.py`), and codegen
@@ -449,7 +449,7 @@ At the consumer, `LibraryRegistration._register_generic_functions` /
 `source` through `parse_to_ast`, run ONE **throwaway** `CollectorPass`, shared by every
 snippet of the analysis, against a throwaway `Reporter` (so
 a template snippet can never leak a diagnostic into the consumer's own compile; a
-snippet that does not parse is CE3512 against the library file), pull the resulting
+snippet that does not parse is [CE3512](../error-catalog.md#ce3512) against the library file), pull the resulting
 `GenericFuncDef`/generic type out, and register it into the consumer's own generic
 table under its original name — indistinguishable, from that point on, from a generic
 the consumer wrote itself. **Local definitions win silently**: a template is
@@ -517,7 +517,7 @@ called from `LLVMDriver.compile_to_bitcode` right after the module is generated)
 nothing inside the library module itself calls it (an unreferenced `linkonce_odr`
 definition can be dropped as dead code; `weak_odr` cannot). At the consumer,
 `LibraryRegistration._register_perk_impls` rebuilds an `ExtendWithDef` via `deserialize_perk_impl`
-and registers it in the perk-impl table for constraint checking (CE4006) and dispatch;
+and registers it in the perk-impl table for constraint checking ([CE4006](../error-catalog.md#ce4006)) and dispatch;
 codegen's `_declare_library_perk_impl_methods` declares (never defines) the method —
 the definition resolves from the library object/bitcode at link time.
 
@@ -527,31 +527,31 @@ Precedence, all silent (mirrors every other library-registration helper):
 2. Across multiple libraries shipping the same impl, the first one registered wins.
 3. If a local **extension method** on the target type already uses one of the impl's
    method names, the library impl is skipped entirely — registering it would recreate
-   the exact dispatch ambiguity **CE4007** exists to prevent, but *erroring* here would
+   the exact dispatch ambiguity **[CE4007](../error-catalog.md#ce4007)** exists to prevent, but *erroring* here would
    make adding an impl to a library a breaking change for every consumer that happens
    to have a same-named extension method. If the consumer genuinely needs the perk, it
-   writes its own `extend`, which raises the normal in-program CE4007 with a real span.
+   writes its own `extend`, which raises the normal in-program [CE4007](../error-catalog.md#ce4007) with a real span.
 
 A `Drop` record is what makes a library handle own its resource at the consumer
 (#1118): the registered implementation puts the type in the consumer's Drop set, so
-`owns_resource` answers True (the type moves, and a use after a `nom` is CE2405), and
+`owns_resource` answers True (the type moves, and a use after a `nom` is [CE2405](../error-catalog.md#ce2405)), and
 scope exit calls the library's compiled `drop()`, linked from the bitcode. A generic
 `extend Sink@(T) with Drop` ships in `generic_perk_impls`, and the consumer cuts its own
 copy, as for any template. The orphan rule holds across the boundary: a consumer `Drop`
-on a type that a binary library declares, concrete or generic, is CE4012. The collect
+on a type that a binary library declares, concrete or generic, is [CE4012](../error-catalog.md#ce4012). The collect
 pass cannot see that, because a public library type has a visibility record with no
 declaring unit, so `LibraryRegistration._reject_foreign_drops` reads the rule after the
 library's types and implementations are registered. Rule 1 of the precedence list thus
 does not apply to `Drop`.
 
 A perk-impl record that fails to re-parse is not fatal to the consumer's build: it is
-skipped with **CW3506** (a warning, not an error) — "methods it provides will be
+skipped with **[CW3506](../error-catalog.md#cw3506)** (a warning, not an error) — "methods it provides will be
 unavailable unless the consumer supplies its own."
 
 Only perk *implementations* ship this way; perk *definitions* (the method-signature
 contract) ship separately and unconditionally for every perk named in an exported
 generic's constraints, via `LibraryRegistration.seed_perks`, which runs **before** the consumer's
-own units are collected (perk-impl collection validates against CE4003, so a consumer
+own units are collected (perk-impl collection validates against [CE4003](../error-catalog.md#ce4003), so a consumer
 implementing a library-shipped perk needs the contract present at collection time, not
 after).
 
@@ -573,7 +573,7 @@ Three private kinds ship, each a different way:
   (name/params/return_type, no source) — its body is already in the bitcode; codegen
   promotes it from `internal` to `external` linkage via the `exported_private_functions`
   set threaded into `compile_to_bitcode` (computed *before* bitcode compilation, since
-  the closure walk itself can raise CE5006 and there is no point compiling bitcode for
+  the closure walk itself can raise [CE5006](../error-catalog.md#ce5006) and there is no point compiling bitcode for
   a library that is about to fail to export).
 - **private generic function** → rides the *same* `generic_functions` list as public
   generics (§5.2), flagged `"private": True`.
@@ -587,12 +587,12 @@ Three private kinds ship, each a different way:
   transitive references. A PRIVATE type that a shipped body names ships in the closure
   as source.
 
-Only two reference shapes abort the export with **CE5006**, attributed to the
+Only two reference shapes abort the export with **[CE5006](../error-catalog.md#ce5006)**, attributed to the
 exported generic at the root of the dependency chain (not the private helper itself —
 the generic is what the consumer sees fail): a reference into an `unsafe external`
 namespace (foreign bindings cannot be re-declared at a consumer that never saw the
 `unsafe external` block), and a private helper whose signature exposes a foreign `ptr`
-(same rationale as CE5002).
+(same rationale as [CE5002](../error-catalog.md#ce5002)).
 
 `closure_summary` (`{private_functions: [name...], private_generic_functions:
 [name...], constants: [name...]}`, sorted) is not consumed by any code path — it exists
@@ -602,7 +602,7 @@ library author can see what their public API is quietly dragging along.
 **The closure is for the library's own bodies, and the CALL SITE is what says so**.
 A shipped private has to be resolvable at the consumer, because a monomorphized
 template body lands there and still calls what it called at home; consumer code that
-names the same symbol is `CE3005`. The two are told apart by whose body the call is in,
+names the same symbol is [`CE3005`](../error-catalog.md#ce3005). The two are told apart by whose body the call is in,
 never by the symbol: `FuncDef.is_library_template` marks an instance of a `.slib`
 template (stamped in `register_synthesized_function`, and carried onto a lambda lifted
 out of such a body), the typecheck pass reads it as `in_library_body`, and the gate in
@@ -614,21 +614,21 @@ shipped body that reads a private constant reads it through the exemption.
 **A private the closure does not ship is named, not hidden**. The walk starts at
 the public *generics*, so a private that only a concrete public function calls -- or one
 nothing public calls -- ships nowhere and reaches the consumer's tables not at all. The
-consumer must still answer `CE3005` for it, as the source path does, and not
+consumer must still answer [`CE3005`](../error-catalog.md#ce3005) for it, as the source path does, and not
 `CE2008: undefined function`. The manifest's `not_exported` key gives that answer: `_extract_not_exported` lists the name and the kind of every
 private of the library's OWN units that the closure did not ship, `LibraryRegistry` reads it
-into `SymbolTables.library_not_exported`, and the `CE2008` site in
+into `SymbolTables.library_not_exported`, and the [`CE2008`](../error-catalog.md#ce2008) site in
 `passes/types/calls/user_defined.py` asks it before it emits, routing the answer through the
-one CE3005 gate with the library in place of a unit.
+one [CE3005](../error-catalog.md#ce3005) gate with the library in place of a unit.
 
 The two lists are one piece of bookkeeping: a private is named in the closure, WITH a
 signature, or in `not_exported`, with nothing but its kind. Which is why a `not_exported`
 name is registered in no function table -- there is no signature to register, the callee
 stays unresolved so the borrow pass judges no argument against an invented mode, and
-`CE5007` must not fire for a symbol that ships nowhere and so can clash with nothing.
+[`CE5007`](../error-catalog.md#ce5007) must not fire for a symbol that ships nowhere and so can clash with nothing.
 
 **None of this machinery exists on the source path** (§4.2), which is the largest
-structural difference between the two. Both paths print the same `CE3005`: a source
+structural difference between the two. Both paths print the same [`CE3005`](../error-catalog.md#ce3005): a source
 library's units are ordinary units at the consumer, so its private resolves and the same
 gate refuses it, naming the injected unit where the binary path names the library.
 
@@ -659,7 +659,7 @@ matter:
 
 `tests/unit/test_lib_param_modes.py` is the gate: it builds a library declaring one
 function per mode, asserts what the manifest records, asserts what the consumer reads
-back, and asserts that an unsupported container version is rejected with CE3509 rather
+back, and asserts that an unsupported container version is rejected with [CE3509](../error-catalog.md#ce3509) rather
 than guessed at.
 
 On the source path this question does not arise at the manifest level: the declaration
@@ -669,7 +669,7 @@ A `nom self` receiver is a receiver mode like `peek self` and `poke self`: a met
 record carries it in `self_mode`.
 
 **Not at the boundary:** a consuming variadic — a public v1 `...T` cannot ship in a binary
-library (CE0116, §5.1).
+library ([CE0116](../error-catalog.md#ce0116), §5.1).
 
 ### 5.7 Two link paths
 
@@ -718,7 +718,7 @@ as the consumer's own units are.
   (`isinstance(impl.target_type, GenericTypeRef)` in `library_manifest.py`). They ship as
   TEMPLATES instead (`_generic_perk_impl_templates`), and the
   consumer instantiates them like any other template.
-- **v1 native `...T` variadics** as public functions — CE0116, §5.1.
+- **v1 native `...T` variadics** as public functions — [CE0116](../error-catalog.md#ce0116), §5.1.
 - **The NAMES of a plain `use` of another library** — if library A's source does a plain
   `use <lib/b>`, the consumer's build loads B (A's `dependencies` record says so), and a
   consumer of A still needs its own `use <lib/b>` to write a name of B. A `public use
@@ -755,7 +755,7 @@ records carry them, both in `templates`, and every kind writes both.
   `scope_unit`, so its names resolve in the scope of the library unit (#1120). A
   generic perk implementation of a library is the same: its methods carry both marks.
 
-One method name on one type from two libraries is CE0101 for every kind, with a note that
+One method name on one type from two libraries is [CE0101](../error-catalog.md#ce0101) for every kind, with a note that
 names each library (`_reject_library_extension_clash`). The two bodies are two
 definitions of one symbol, and before #1120 the second record was skipped with no
 diagnostic, so which body ran depended on the build mode.
@@ -771,7 +771,7 @@ type, and no shipped body names it.
 A consumer extension on a binary library's CONCRETE type is filed again after the
 library's types register (`_refile_consumer_extensions`), because the collect pass ran
 before they were in the tables. A method name that the consumer and the library both
-declare on one type is CE0101, the answer that a source library gives.
+declare on one type is [CE0101](../error-catalog.md#ce0101), the answer that a source library gives.
 
 ## 6. Versions and compatibility
 
@@ -787,9 +787,9 @@ Source of the value, in order:
    exists. The compiler does not look in a parent directory
 2. otherwise the explicit `--lib-version X.Y.Z` flag
 
-Neither present is **CE3505** at build time. A `nori.toml` that exists must be valid: a
-file that nori's manifest reader refuses stops the build with **CE3517**, and a file
-that cannot be opened or read stops it with **CE3518**. This keeps the packager as the source of
+Neither present is **[CE3505](../error-catalog.md#ce3505)** at build time. A `nori.toml` that exists must be valid: a
+file that nori's manifest reader refuses stops the build with **[CE3517](../error-catalog.md#ce3517)**, and a file
+that cannot be opened or read stops it with **[CE3518](../error-catalog.md#ce3518)**. This keeps the packager as the source of
 truth for a real package, without forcing a manifest on a bare `./sushic --lib` build.
 
 ### 6.2 `requires_compiler`
@@ -806,7 +806,7 @@ which accepts every `0.11.z` and rejects `0.12.0`.
 **Pre-1.0 semver makes the minor the breaking unit**, which matches how Sushi's 0.x
 releases already behave.
 
-A mismatch is a **hard error, CE3503**, raised in the library load loop in
+A mismatch is a **hard error, [CE3503](../error-catalog.md#ce3503)**, raised in the library load loop in
 `compiler/pipeline.py` beside the platform check. The text names the library, its
 `requires_compiler`, and the running compiler.
 
@@ -834,28 +834,28 @@ Rules marked **binary** apply only when `kind != "source"`.
 
 | Situation | Rule | Why |
 |---|---|---|
-| Consumer FUNCTION name == public library function | local wins, and **CW3002** says so, for every library kind | the two are separate symbols, because each carries the unit that declared it: the consumer's call binds to its own and the library's body to its own. Legal, and rarely intended, so it warns. Both public is legal too and warns the same way. A binary or hybrid library warns from its manifest, in the `libraries` step, for a public function and a public template alike (#1103). `docs/design/visibility.md` §9.1 |
-| Consumer TYPE name == public library type (**source**) | **CE0004** / **CE2046**, hard error | type identity is nominal, so one name is one shape; the consumer cannot have its own. The library's units are compilation units here, so the collect pass answers at the declaration and a note points at the library's |
-| Consumer TYPE name == public library type (**binary**) | **CE3011**, hard error | the same rule, and the same answer a source library's PRIVATE type gets, for the same reason: the consumer cannot SEE the declaration that holds the name, so the head line names the library instead of pointing a note at a file the consumer does not have. The `libraries` step refuses it, where the manifest meets the collected tables. The consumer keeps its own type in its tables |
-| Consumer TYPE name == library-PRIVATE type or private generic template (**source** and **binary**) | **CE3011**, hard error, and the analysis stops after it | type identity is nominal, so one name is one shape even where the consumer cannot see the library's declaration. Renaming is the only move, and `docs/design/type-identity.md` phase 2 is what would lift it |
-| Consumer FUNCTION name == library-PRIVATE function (**source**) | legal, and silent | each declaration carries the unit that declared it, so the two coexist and each body calls its own (`docs/design/unit-namespaces.md` sections 6 and 9). A GENERIC function is the same shape, and a CONSTANT takes the same answer; a library's PUBLIC constant stays **CE0105**, because the consumer can see and read that name |
-| Consumer name == **export-closure private** symbol (**binary**) | **CE5007**, hard error | the library's own monomorphized bodies call that private symbol by name; silently shadowing it would change what the library's shipped code does. The source path needs no twin for a function, because a source library's units are compiled and each keeps its own scope. The closure ships ONE RECORD PER UNIT -- two library units may each ship a private `helper` -- and each source-shipped template carries a `bindings` map from every free name its body resolved to the producer's link symbol, so a template can never bind to another unit's body |
+| Consumer FUNCTION name == public library function | local wins, and **[CW3002](../error-catalog.md#cw3002)** says so, for every library kind | the two are separate symbols, because each carries the unit that declared it: the consumer's call binds to its own and the library's body to its own. Legal, and rarely intended, so it warns. Both public is legal too and warns the same way. A binary or hybrid library warns from its manifest, in the `libraries` step, for a public function and a public template alike (#1103). `docs/design/visibility.md` §9.1 |
+| Consumer TYPE name == public library type (**source**) | **[CE0004](../error-catalog.md#ce0004)** / **[CE2046](../error-catalog.md#ce2046)**, hard error | type identity is nominal, so one name is one shape; the consumer cannot have its own. The library's units are compilation units here, so the collect pass answers at the declaration and a note points at the library's |
+| Consumer TYPE name == public library type (**binary**) | **[CE3011](../error-catalog.md#ce3011)**, hard error | the same rule, and the same answer a source library's PRIVATE type gets, for the same reason: the consumer cannot SEE the declaration that holds the name, so the head line names the library instead of pointing a note at a file the consumer does not have. The `libraries` step refuses it, where the manifest meets the collected tables. The consumer keeps its own type in its tables |
+| Consumer TYPE name == library-PRIVATE type or private generic template (**source** and **binary**) | **[CE3011](../error-catalog.md#ce3011)**, hard error, and the analysis stops after it | type identity is nominal, so one name is one shape even where the consumer cannot see the library's declaration. Renaming is the only move, and `docs/design/type-identity.md` phase 2 is what would lift it |
+| Consumer FUNCTION name == library-PRIVATE function (**source**) | legal, and silent | each declaration carries the unit that declared it, so the two coexist and each body calls its own (`docs/design/unit-namespaces.md` sections 6 and 9). A GENERIC function is the same shape, and a CONSTANT takes the same answer; a library's PUBLIC constant stays **[CE0105](../error-catalog.md#ce0105)**, because the consumer can see and read that name |
+| Consumer name == **export-closure private** symbol (**binary**) | **[CE5007](../error-catalog.md#ce5007)**, hard error | the library's own monomorphized bodies call that private symbol by name; silently shadowing it would change what the library's shipped code does. The source path needs no twin for a function, because a source library's units are compiled and each keeps its own scope. The closure ships ONE RECORD PER UNIT -- two library units may each ship a private `helper` -- and each source-shipped template carries a `bindings` map from every free name its body resolved to the producer's link symbol, so a template can never bind to another unit's body |
 | Consumer perk-impl `(type, perk)` == library-shipped perk-impl (**binary**) | local wins, silent, both semantically and at link time (§5.4, §5.7) | a consumer providing its own impl is expected, not an error |
-| Consumer extension method name == library perk-impl method name (**binary**) | library impl skipped entirely (no error) | avoids recreating CE4007 as a breaking change on every library update |
-| Consumer extension method == library extension method on one target (**binary**) | **CE0101**, hard error, with a note that names the library (§5.9) | the two bodies are one symbol, and a source library gives the same answer |
-| Exported generic references an `unsafe external` namespace | **CE5006** | FFI bindings cannot be re-declared at a consumer that never saw the block. Fires on EVERY kind: `_extract_templates` runs the export-closure walk before the kind branch in `compiler/pipeline.py`. Arguably wrong on the source path, where the `unsafe external` block ships inside its own unit — see §9 |
-| Exported generic (transitively) references a `ptr`-exposing private signature | **CE5006** | same rationale as CE5002 — `ptr` is unit-confined. Every kind, as above |
-| Public function/private-closure helper exposes `ptr` in its own signature | **CE5002** | `ptr` cannot appear in any public library signature |
-| Public `fn` (non-library, ordinary unit boundary) exposes `ptr` | **CE5008** | the general unit-boundary form of the same rule; CE5002 is its library-specific sibling |
-| A template snippet fails to re-parse (**binary**) | perk-impl: **CW3506** (skip); generic fn/type/constant: **CE3512**, and the build stops | never let a malformed shipped snippet crash or pollute the consumer's own build, and never report it at the consumer's `use` line |
+| Consumer extension method name == library perk-impl method name (**binary**) | library impl skipped entirely (no error) | avoids recreating [CE4007](../error-catalog.md#ce4007) as a breaking change on every library update |
+| Consumer extension method == library extension method on one target (**binary**) | **[CE0101](../error-catalog.md#ce0101)**, hard error, with a note that names the library (§5.9) | the two bodies are one symbol, and a source library gives the same answer |
+| Exported generic references an `unsafe external` namespace | **[CE5006](../error-catalog.md#ce5006)** | FFI bindings cannot be re-declared at a consumer that never saw the block. Fires on EVERY kind: `_extract_templates` runs the export-closure walk before the kind branch in `compiler/pipeline.py`. Arguably wrong on the source path, where the `unsafe external` block ships inside its own unit — see §9 |
+| Exported generic (transitively) references a `ptr`-exposing private signature | **[CE5006](../error-catalog.md#ce5006)** | same rationale as [CE5002](../error-catalog.md#ce5002) — `ptr` is unit-confined. Every kind, as above |
+| Public function/private-closure helper exposes `ptr` in its own signature | **[CE5002](../error-catalog.md#ce5002)** | `ptr` cannot appear in any public library signature |
+| Public `fn` (non-library, ordinary unit boundary) exposes `ptr` | **[CE5008](../error-catalog.md#ce5008)** | the general unit-boundary form of the same rule; [CE5002](../error-catalog.md#ce5002) is its library-specific sibling |
+| A template snippet fails to re-parse (**binary**) | perk-impl: **[CW3506](../error-catalog.md#cw3506)** (skip); generic fn/type/constant: **[CE3512](../error-catalog.md#ce3512)**, and the build stops | never let a malformed shipped snippet crash or pollute the consumer's own build, and never report it at the consumer's `use` line |
 | A **source** library unit fails to compile | the real diagnostic, plus a `note` naming the library and the `use` that pulled it in (§4.4) | the consumer must never see a bare error about code they did not write |
-| Public native `...T` variadic function | **CE0116** | the variadic flag is not serialized into the library format. Fires on EVERY kind: the check lives in `_extract_public_functions`, which builds the index for every kind — see §9 |
-| Platform mismatch (**binary**) | **CE3504** | bitcode is platform-specific; caught early with a clear message instead of an incomprehensible late `cc`/LLVM failure. Never raised for a source library |
-| An `unsafe external "C"` link-name == a symbol this build defines | **CE5013** | one module, so a declaration and a definition of one name unify: the declaration would enter the program's own body with its own signature, unchecked, and could reach a library-PRIVATE body from consumer code. Every kind: the rule reads the func table, the constant table and the library registry, so it runs after the `libraries` step. A GENERATED stdlib symbol is in none of those, so the stdlib build writes a manifest of what it defines beside its bitcode, and a reserved set in `semantics/externs_manifest.py` covers the ones the backend emits inline |
-| Container version is not 5 | **CE3509** | no backward-compat shim; there are no users in the wild |
-| `requires_compiler` not satisfied | **CE3503** | see §6.2; the escape is `--ignore-compiler-version` |
-| No `library_version` available at build time | **CE3505** | see §6.1 |
-| Call site's `nom` marker disagrees with the shipped signature | **CE2427** | the same rule as within a unit: a consume is visible at both ends or at neither (§5.6) |
+| Public native `...T` variadic function | **[CE0116](../error-catalog.md#ce0116)** | the variadic flag is not serialized into the library format. Fires on EVERY kind: the check lives in `_extract_public_functions`, which builds the index for every kind — see §9 |
+| Platform mismatch (**binary**) | **[CE3504](../error-catalog.md#ce3504)** | bitcode is platform-specific; caught early with a clear message instead of an incomprehensible late `cc`/LLVM failure. Never raised for a source library |
+| An `unsafe external "C"` link-name == a symbol this build defines | **[CE5013](../error-catalog.md#ce5013)** | one module, so a declaration and a definition of one name unify: the declaration would enter the program's own body with its own signature, unchecked, and could reach a library-PRIVATE body from consumer code. Every kind: the rule reads the func table, the constant table and the library registry, so it runs after the `libraries` step. A GENERATED stdlib symbol is in none of those, so the stdlib build writes a manifest of what it defines beside its bitcode, and a reserved set in `semantics/externs_manifest.py` covers the ones the backend emits inline |
+| Container version is not 5 | **[CE3509](../error-catalog.md#ce3509)** | no backward-compat shim; there are no users in the wild |
+| `requires_compiler` not satisfied | **[CE3503](../error-catalog.md#ce3503)** | see §6.2; the escape is `--ignore-compiler-version` |
+| No `library_version` available at build time | **[CE3505](../error-catalog.md#ce3505)** | see §6.1 |
+| Call site's `nom` marker disagrees with the shipped signature | **[CE2427](../error-catalog.md#ce2427)** | the same rule as within a unit: a consume is visible at both ends or at neither (§5.6) |
 
 ## 8. Reading the code: file → responsibility
 
@@ -869,14 +869,14 @@ Rules marked **binary** apply only when `kind != "source"`.
 | `sushi_lang/compiler/pipeline.py` | Library resolution and the gates: `_check_library_platform` (binary only), `_check_library_compiler_version`, and the shared source-unit injector that both the bundled source stdlib and source libraries use. Also chooses monolithic vs incremental and drives per-unit caching. |
 | `sushi_lang/semantics/library_registry.py` | `LibraryRegistry` — **binary path only**. Pre-parses a raw manifest dict into typed `FuncSig`/`StructType`/`EnumType` objects once, shared by the semantic analyzer and codegen. |
 | `sushi_lang/semantics/library_templates.py` | **Binary path only.** The re-parse-based codec: `serialize_generic_function/struct/enum`, `serialize_perk`, `serialize_/deserialize_perk_impl`, `serialize_extension`, `serialize_generic_/deserialize_extension` (the consumer re-parses every other record through `LibraryRegistration._collect_snippet`), `slice_decl_source` (the line-span slicing algorithm), `impl_method_symbol` (perk-impl symbol mangling, kept in lockstep with `backend/functions/helpers.py`). |
-| `sushi_lang/semantics/library_registration.py` | **Binary path only.** Consumer-side registration, one `LibraryRegistration` per analysis: `seed_perks` (ahead of the collect loop), `register` (`_register_types` for structs and enums, `_register_functions`, `_register_private_functions`, `_register_not_exported`, `_register_constants`, `_register_private_types`, `_register_perk_impls`, `_register_generic_perk_impls`, `_reject_foreign_drops`, `_register_extensions`, `_register_generic_extensions`, `_register_generic_functions`, `_register_generic_types`), and the two readers `signatures` and `kept_constant_names`. Every re-parsed record goes through the one `_collect_snippet`. This is where CE5007 fires and where local-wins is implemented for every category except perk impls. `semantics/semantic_analyzer.py` only decides WHEN the step runs. |
+| `sushi_lang/semantics/library_registration.py` | **Binary path only.** Consumer-side registration, one `LibraryRegistration` per analysis: `seed_perks` (ahead of the collect loop), `register` (`_register_types` for structs and enums, `_register_functions`, `_register_private_functions`, `_register_not_exported`, `_register_constants`, `_register_private_types`, `_register_perk_impls`, `_register_generic_perk_impls`, `_reject_foreign_drops`, `_register_extensions`, `_register_generic_extensions`, `_register_generic_functions`, `_register_generic_types`), and the two readers `signatures` and `kept_constant_names`. Every re-parsed record goes through the one `_collect_snippet`. This is where [CE5007](../error-catalog.md#ce5007) fires and where local-wins is implemented for every category except perk impls. `semantics/semantic_analyzer.py` only decides WHEN the step runs. |
 | `sushi_lang/backend/driver.py` | `LLVMDriver.compile_to_bitcode` (producer: sets `weak_odr` on perk impls, promotes export-closure private fns to `external`), `compile_multi_unit` (drives `TwoPhaseLinker` when libraries are present), `compile_library_to_object` (incremental path: one `.o` per library). |
 | `sushi_lang/backend/codegen_llvm.py` | `_declare_library_functions`, `_declare_library_perk_impl_methods`, `library_extensions` (consumer: declares, never defines, library symbols). |
 | `sushi_lang/backend/module_linker.py` | `TwoPhaseLinker` — the monolithic-path in-memory IR merge (reachability + priority-ordered symbol resolution). Not library-specific — the main module and stdlib bitcode go through it too. |
 | `sushi_lang/backend/symbol_resolver.py` | `SymbolResolver._choose_definition` — the `MAIN > LIBRARY > STDLIB > RUNTIME` priority table used only by `TwoPhaseLinker`. |
 | `sushi_lang/compiler/fingerprint.py` | `compute_lib_fingerprint` — content hash of a `.slib`, used to cache its compiled object and to invalidate consumers. |
 | `sushi_lang/internals/errors/library.py` | CE35xx: the container/link/version family. |
-| `sushi_lang/internals/errors/ffi.py` | CE50xx: CE5002/CE5006/CE5007/CE5008 — the export-safety family, in the "ffi" module because `ptr` confinement is one reason a symbol cannot ship. |
+| `sushi_lang/internals/errors/ffi.py` | CE50xx: [CE5002](../error-catalog.md#ce5002)/[CE5006](../error-catalog.md#ce5006)/[CE5007](../error-catalog.md#ce5007)/[CE5008](../error-catalog.md#ce5008) — the export-safety family, in the "ffi" module because `ptr` confinement is one reason a symbol cannot ship. |
 
 ## 9. Producer checks on every kind
 
@@ -888,38 +888,38 @@ The manifest producer runs for every kind, so some of its checks reach a
 generics are in the source section as whole units. It is also the reason `--lib-info` can
 list a source library's generic functions at all, so it earns its place; §3 says so.
 
-**CE5006 and CE0116 fire on the source path.** Both checks live in the manifest producer --
-CE5006 in the export-closure walk `_extract_templates` drives, CE0116 in
+**[CE5006](../error-catalog.md#ce5006) and [CE0116](../error-catalog.md#ce0116) fire on the source path.** Both checks live in the manifest producer --
+[CE5006](../error-catalog.md#ce5006) in the export-closure walk `_extract_templates` drives, [CE0116](../error-catalog.md#ce0116) in
 `_extract_public_functions` -- and the producer builds the index for every kind. So a source
 library that exports a generic touching an `unsafe external` namespace is rejected, and so is
 one that exports a public `...T` variadic.
 
-For CE0116 that is right for a reason that has nothing to do with kind: the index cannot
+For [CE0116](../error-catalog.md#ce0116) that is right for a reason that has nothing to do with kind: the index cannot
 describe a native variadic signature, and the index ships in every kind.
 
-For CE5006 it is questionable. The rule exists because a binary library ships a *slice* of
+For [CE5006](../error-catalog.md#ce5006) it is questionable. The rule exists because a binary library ships a *slice* of
 its source and the consumer never sees the `unsafe external` block. A source library ships
 the whole unit, block included, so the consumer can compile the call. Whether to make the
-CE5006 walk conditional on `kind != "source"` is an open question, not a decided one: it
+[CE5006](../error-catalog.md#ce5006) walk conditional on `kind != "source"` is an open question, not a decided one: it
 would let an FFI-touching generic export, and §4.7 is the reason to be careful -- the library
 would compile at a consumer on the author's platform and fail on any other, which is exactly
-the failure conditional compilation is supposed to describe. Leaving CE5006 as it is keeps
+the failure conditional compilation is supposed to describe. Leaving [CE5006](../error-catalog.md#ce5006) as it is keeps
 the honest answer ("this cannot be portable yet") until there is a way to say so.
 
 **A rejected library build writes nothing.** The three rejection sites in
 `sushi_lang/backend/library_manifest.py` emit their diagnostic into the reporter and
 return, and control flow belongs to `pipeline.py`, which gates on `reporter.has_errors`
 the way it does before codegen. There are two gates, and the placement is the contract:
-the first sits after the export closure and BEFORE the bitcode compilation, so a CE5006
+the first sits after the export closure and BEFORE the bitcode compilation, so a [CE5006](../error-catalog.md#ce5006)
 rejection costs nothing; the second sits after `generate()`, which extracts the public API
 first and returns without writing once the reporter holds an error. A rejected build
 therefore leaves no `.slib` behind, prints no success line and prints one diagnostic per
 fault. `_reject` inside the export-closure walk returns, and each caller returns
 explicitly after it.
 
-And the producer's **CE5002 is unreachable from a CLI build**: the typecheck pass's public-fn
-`ptr` fence (`passes/types/signatures.py`, CE5008) tests the identical condition and exits
-earlier. The site is kept as the backstop for a direct producer call, so a missing CE5002
+And the producer's **[CE5002](../error-catalog.md#ce5002) is unreachable from a CLI build**: the typecheck pass's public-fn
+`ptr` fence (`passes/types/signatures.py`, [CE5008](../error-catalog.md#ce5008)) tests the identical condition and exits
+earlier. The site is kept as the backstop for a direct producer call, so a missing [CE5002](../error-catalog.md#ce5002)
 is not a regression.
 
 ## Rejected alternatives
@@ -939,6 +939,6 @@ than a fat file if binary delivery is ever wanted, and it needs no format change
 all. Parked, not rejected: it is a repository feature, not a language feature.
 
 **Binary libraries restricted to concrete functions only.** Would have deleted
-`library_templates.py`, the export closure, CE5007 and the `weak_odr` perk-impl path.
+`library_templates.py`, the export closure, [CE5007](../error-catalog.md#ce5007) and the `weak_odr` perk-impl path.
 Rejected: binary libraries would lose generics entirely, which is too high a price for
 an internal simplification.

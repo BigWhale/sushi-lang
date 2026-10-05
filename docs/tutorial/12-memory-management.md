@@ -64,9 +64,9 @@ is declared last, so it is destroyed first.
 
 Some rules for `Drop`:
 
-- Only the unit that declares the type can implement `Drop` for it (`CE4012`).
+- Only the unit that declares the type can implement `Drop` for it ([`CE4012`](../error-catalog.md#ce4012)).
 - A type that implements `Drop` **owns a resource**, so it moves (see the next section).
-- `.clone()` on such a type is an error (`CE2431`), because the copy is a second handle
+- `.clone()` on such a type is an error ([`CE2431`](../error-catalog.md#ce2431)), because the copy is a second handle
   to one resource. A handle type that can share its resource gives a method for it: `File`
   and `TcpListener` have `.share()`.
 
@@ -101,7 +101,7 @@ Why the difference? A dynamic array owns a heap buffer. If `dest := source` only
 the pointer, two variables would own one buffer, and at the end of the scope RAII would
 free it two times. A **move** transfers the ownership and marks the source as gone. So
 there is always one owner and one free. A use of a moved variable is an error:
-**CE2405: cannot borrow moved variable**. The compiler finds the use-after-free before the
+**[CE2405](../error-catalog.md#ce2405): cannot borrow moved variable**. The compiler finds the use-after-free before the
 program runs. If you need two independent values, ask for a copy with `.clone()`.
 
 The compiler never adds a deep copy. `.clone()` is the only deep copy.
@@ -140,10 +140,10 @@ fn main() i32:
 
 The marker is at **both** ends, or at neither. When you read `f(s)`, you know that `s` is
 usable after the call. When you read `f(nom s)`, you know that it is not. You do not have to
-open `f`. A marker at one end only is **CE2427**.
+open `f`. A marker at one end only is **[CE2427](../error-catalog.md#ce2427)**.
 
 An unmarked parameter is a **read-only** borrow. A write through it is an error: `l.push(3)`
-on a `List@(i32) l` parameter is **CE2422**. A primitive parameter can get a new value
+on a `List@(i32) l` parameter is **[CE2422](../error-catalog.md#ce2422)**. A primitive parameter can get a new value
 (`x := 5`), but the change stays in the callee.
 
 When a callee needs its own value and the caller must keep its value, use `.clone()`:
@@ -151,7 +151,7 @@ When a callee needs its own value and the caller must keep its value, use `.clon
 
 (One special case: the `string[] args` of `main` is a borrowed view of the process
 arguments, not an array on the heap. You can give it to an ordinary borrow parameter. To
-give it to a `nom` parameter is **CE2410**.)
+give it to a `nom` parameter is **[CE2410](../error-catalog.md#ce2410)**.)
 
 ## References: borrowing by pointer
 
@@ -202,11 +202,11 @@ q.y is 9
 `r` points into `p`, so `r.x := 42` changes `p`. The binding lives to the end of its
 block. While it lives, these rules apply:
 
-- The owner is frozen: `p.x := 3` while `r` lives is **CE2412**.
-- Only one `poke` binding of a value can live at a time (**CE2403**), and a `peek` and a
-  `poke` of one value cannot live together (**CE2407**).
-- A write through a `peek` binding is **CE2408**.
-- A binding needs a place: `let poke T x = make()` (a temporary) is **CE2404**.
+- The owner is frozen: `p.x := 3` while `r` lives is **[CE2412](../error-catalog.md#ce2412)**.
+- Only one `poke` binding of a value can live at a time (**[CE2403](../error-catalog.md#ce2403)**), and a `peek` and a
+  `poke` of one value cannot live together (**[CE2407](../error-catalog.md#ce2407)**).
+- A write through a `peek` binding is **[CE2408](../error-catalog.md#ce2408)**.
+- A binding needs a place: `let poke T x = make()` (a temporary) is **[CE2404](../error-catalog.md#ce2404)**.
 
 ## Pattern bindings have a mode
 
@@ -220,8 +220,8 @@ A binding in a `match` arm has a mode too:
 
 To take a payload, the `match` must **own** its scrutinee. A temporary (for example, the
 result of a call) is owned. For a local variable, write `match nom x:`. This gives the
-variable to the match, and a later use of `x` is **CE2405**. A `nom` binding under a plain
-`match x:` is **CE2432**.
+variable to the match, and a later use of `x` is **[CE2405](../error-catalog.md#ce2405)**. A `nom` binding under a plain
+`match x:` is **[CE2432](../error-catalog.md#ce2432)**.
 
 ```sushi
 --8<-- "docs/tutorial/examples/12-memory-management/pattern-modes.sushi"
@@ -266,9 +266,9 @@ fn main() i32:
     return 0
 ```
 
-The compiler refuses it with **CE2403: 'num' already has an active poke borrow (only one
+The compiler refuses it with **[CE2403](../error-catalog.md#ce2403): 'num' already has an active poke borrow (only one
 exclusive borrow allowed)**, and it shows where the first borrow started. A `peek` and a
-`poke` of the same value gives the related **CE2407**. To correct the program, give each
+`poke` of the same value gives the related **[CE2407](../error-catalog.md#ce2407)**. To correct the program, give each
 exclusive borrow its own variable.
 
 ## Own@(T): explicit heap allocation
@@ -310,19 +310,19 @@ allocation early. For a recursive structure, use a struct field of type
 - **RAII** frees resources at scope exit, in reverse declaration order. There is no
   collector and no manual `free`.
 - The **`Drop`** perk gives a type its own release step. `.clone()` on such a type is
-  **CE2431**.
+  **[CE2431](../error-catalog.md#ce2431)**.
 - A parameter **borrows** unless it says `nom`, so a call does not consume the argument.
-  Write `nom` at the declaration and at the call site (**CE2427** if not).
+  Write `nom` at the declaration and at the call site (**[CE2427](../error-catalog.md#ce2427)** if not).
 - Primitives and literal-bound strings **copy** on assignment. Every owning type (a heap
   string, an array, a container, a `Drop` type, a struct that holds one) **moves**, and a
-  use after the move is **CE2405**. Use `.clone()` for an independent copy.
+  use after the move is **[CE2405](../error-catalog.md#ce2405)**. Use `.clone()` for an independent copy.
 - **References** lend without owning: `peek` is read-only and shared, `poke` is
   read-write and exclusive, and `poke` coerces down to `peek`. `let peek` and `let poke`
   bind a reference in a block.
 - A **pattern binding** borrows, points into (`poke`) or takes (`nom`) the payload.
   `match nom x:` gives a local to the match.
 - The **borrow checker** enforces these rules at compile time (for example, two `poke`
-  borrows of one value is **CE2403**; `peek` with `poke` is **CE2407**).
+  borrows of one value is **[CE2403](../error-catalog.md#ce2403)**; `peek` with `poke` is **[CE2407](../error-catalog.md#ce2407)**).
 - **Own@(T)** is explicit heap allocation for recursive types: `.alloc()`, `.get()`,
   `.destroy()`. RAII usually frees it for you.
 

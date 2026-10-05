@@ -57,7 +57,7 @@ strings. And `has_towel`, a `bool`, printed as the word `true`: a boolean displa
     `:=` is **reassignment**: the same variable, a new value, the same type. A `let` in a
     *nested* block can use a name that an outer block already declares. This is
     **shadowing**: the inner `let` makes a *separate* variable, and the outer variable does
-    not change. The compiler gives the warning `CW1002` for each shadow. When you want to
+    not change. The compiler gives the warning [`CW1002`](../error-catalog.md#cw1002) for each shadow. When you want to
     change a variable, use `:=`.
 
 ## The primitive types
@@ -105,7 +105,7 @@ A literal gets its type from its context. In `let u32 flags = 0xDEAD_BEEF`, the 
 `u32` gives the literal the type `u32`, so no cast is necessary. A parameter, a struct field
 and the other operand of an operator also give a literal its type. When there is no
 context, an integer literal is an `i32` and a float literal is an `f64`. A literal that the
-type cannot hold is an error: `let u8 b = 256` gives `CE2073` ("literal 256 out of range for
+type cannot hold is an error: `let u8 b = 256` gives [`CE2073`](../error-catalog.md#ce2073) ("literal 256 out of range for
 u8").
 
 !!! note "One underscore, between two digits"
@@ -203,7 +203,7 @@ shows how to make them `public`.
 ## What you learned
 
 - Declare variables with `let Type name = value`; reassign them in place with `:=`. A
-  `let` in a nested block that reuses an outer name *shadows* it (`CW1002`).
+  `let` in a nested block that reuses an outer name *shadows* it ([`CW1002`](../error-catalog.md#cw1002)).
 - Primitive types are explicit about size and signedness: `i8`..`i64`, `u8`..`u64`, `f32`,
   `f64`, `bool`, `string`. A bare integer literal defaults to `i32`.
 - Integer literals come in decimal, `0x` hex, `0b` binary, and `0o` octal; every base

@@ -22,7 +22,7 @@ Section 1 and the "Before" examples of section 6 describe the language before th
 |---|---|---|
 | **E1** | An error type is declared with the keyword `error`. It is an enum with an `is_error` flag, not a new type kind | 2.1, 2.2 |
 | **E2** | An error type is ordinary data in every position | 2.3 |
-| **E3** | The `E` of every `Result@(T, E)` in the program is an error type. CE2084 carries the rule, and CE2086 is retired | 2.4 |
+| **E3** | The `E` of every `Result@(T, E)` in the program is an error type. [CE2084](../error-catalog.md#ce2084) carries the rule, and CE2086 is retired | 2.4 |
 | **E4** | E3 is judged at every written type and at each generic instance, not at the `Result` interning seam | 2.5 |
 | **C1** | A conversion is a declaration: `extend <Source> as <Target>:` with a block body | 3.1 |
 | **C2** | `e as <Target>` is the explicit use of a conversion. `as` consumes its operand by position, unmarked | 3.2 |
@@ -37,7 +37,7 @@ Section 1 and the "Before" examples of section 6 describe the language before th
 | **C11** | A conversion has no leak check | 3.8 |
 | **C12** | No unit may declare a conversion into `StdError`, because `StdError` has no home module | 3.5 |
 | **C13** | An identity cast `x as T` on a value of type `T` stays legal and does nothing to the value. It consumes its operand by position, as every `as` does (C2): a value that owns a resource is spent | 3.2 |
-| **C14** | A conversion body that casts a value of its own source into its own target calls itself, and is refused (CE2523). A cast of another pair in the body is legal | 3.4 |
+| **C14** | A conversion body that casts a value of its own source into its own target calls itself, and is refused ([CE2523](../error-catalog.md#ce2523)). A cast of another pair in the body is legal | 3.4 |
 
 ---
 
@@ -45,7 +45,7 @@ Section 1 and the "Before" examples of section 6 describe the language before th
 
 ### 1.1 "Enum" is a substitute for "error"
 
-The `E` of `T | E` and of `Result@(T, E)` must be an enum (#668). CE2084 refuses a
+The `E` of `T | E` and of `Result@(T, E)` must be an enum (#668). [CE2084](../error-catalog.md#ce2084) refuses a
 struct, a primitive, an array and a function type. CE2086 refuses `Maybe` and `Result`.
 The rule is wrong in two directions:
 
@@ -56,7 +56,7 @@ The rule is wrong in two directions:
 
 ### 1.2 `??` needs one error type
 
-`??` propagates only when the two error types are the same type. Otherwise it is CE2511,
+`??` propagates only when the two error types are the same type. Otherwise it is [CE2511](../error-catalog.md#ce2511),
 and its doc text ends with "Error type conversion is not supported yet." A function that
 calls two modules with two error types cannot use `??` on both. Each call to the other
 module is a `match`, and `match` is a statement, so each such call nests one level
@@ -74,7 +74,7 @@ changes with `--opt`.
 ### 1.4 `??` reads the shape of its operand
 
 `??` accepts any enum with `Ok`/`Err` variants or `Some`/`None` variants, not only
-`Result` and `Maybe` (`_unwrapped_arms`, `passes/types/expressions.py`; the CE2507 text
+`Result` and `Maybe` (`_unwrapped_arms`, `passes/types/expressions.py`; the [CE2507](../error-catalog.md#ce2507) text
 says "result-like enum"). A user `enum Outcome: Ok(i32), Err(E)` propagates through
 `??`. The `Err` payload of such an enum is not a `Result`, so no rule on error types
 reaches it, and a user enum with `Some`/`None` has the fault of 1.3.
@@ -136,7 +136,7 @@ value of an error channel, and only an error fits into an error channel.
   contract, a perk implementation, a lambda and a function type (`fn(i32) -> i32 | E`),
   and also a `let`, a field, a payload, a parameter and a generic argument.
 - One code refuses every other type: a plain enum, a struct, a primitive, an array, a
-  function type, `Maybe` and `Result`. CE2084 carries the rule with new wording: its
+  function type, `Maybe` and `Result`. [CE2084](../error-catalog.md#ce2084) carries the rule with new wording: its
   meaning stays "`E` is not an error type", and only the predicate changes. CE2086 is
   retired, and with it the list of refused names.
 - The rule changes at once. No release accepts both a plain enum and an error type as
@@ -207,7 +207,7 @@ At a `??` on a `Result@(T, E_in)`, in a body whose channel is `E_out`:
 1. If `E_in` is `E_out`, the error propagates unchanged.
 2. If the conversion `E_in as E_out` is declared, `??` calls it on the error and
    propagates the result.
-3. Otherwise the `??` is CE2511. The help names the declaration to write.
+3. Otherwise the `??` is [CE2511](../error-catalog.md#ce2511). The help names the declaration to write.
 
 Sushi still converts nothing on its own. A conversion runs only at a written `??` or a
 written `as`, and only through a declaration that the program wrote.
@@ -227,7 +227,7 @@ duplicate-function error.
 A conversion that casts a value of its own source into its own target calls itself
 (C14; ruled 2026-10-04). `self` is always a value of the source, so `self as B` in the
 body of `extend A as B:` never ends, and a cast of another `A` value only moves work to a
-call that the body can write directly. The cast is CE2523, with a note at the
+call that the body can write directly. The cast is [CE2523](../error-catalog.md#ce2523), with a note at the
 declaration. A cast of another pair in the body is legal. A recursion through another
 function is not detected, as for every function.
 
@@ -267,7 +267,7 @@ for each instance only, so the conversion is looked up when the instance is chec
 - The body consumes `self`. The receiver mode is `nom`, and it is not written. `??`
   spends the error in any case, so a borrow would force a deep copy of the payload.
 - The body is bare. A `| E` on a conversion is refused, because a conversion that can
-  fail would need a second channel at every `??`. A `??` in the body is CE0131, as in
+  fail would need a second channel at every `??`. A `??` in the body is [CE0131](../error-catalog.md#ce0131), as in
   every bare body.
 - An error type that owns a resource (a `string` payload) moves into the conversion. The
   conversion destroys what it does not put in the target.
@@ -292,12 +292,12 @@ source is a leak, and the leak check already refuses that function.
 
 ## 4. What `??` takes
 
-`??` takes a `Result@(T, E)`, by type identity, and nothing else. CE2507 refuses every
+`??` takes a `Result@(T, E)`, by type identity, and nothing else. [CE2507](../error-catalog.md#ce2507) refuses every
 other operand:
 
-- **A `Maybe`.** A `??` in a bare body is CE0131 as before, so `??` never applies to a
-  `Maybe`. The CE2507 help names `or_err`. The `??` check asks for the channel before it
-  asks for the operand, so a bare body gets CE0131 alone.
+- **A `Maybe`.** A `??` in a bare body is [CE0131](../error-catalog.md#ce0131) as before, so `??` never applies to a
+  `Maybe`. The [CE2507](../error-catalog.md#ce2507) help names `or_err`. The `??` check asks for the channel before it
+  asks for the operand, so a bare body gets [CE0131](../error-catalog.md#ce0131) alone.
 - **A user enum shaped like a `Result` or a `Maybe`** (1.4). Its `Err` payload is out of
   reach of E3, and its `None` has the fault of #1168. The type identity of Sushi is
   nominal, so `??` reads the type and not its variant names.
@@ -363,7 +363,7 @@ combinators of `ufcs-combinators.md`.
 - The receiver is `nom self`, because the `Ok` value and the error both move into the new
   `Result`. A named `Result` is spent. A BORROWED `Result` whose payload owns a resource
   (a parameter, a binding, a get-out) is not read through, because the error moves into
-  `f`: the call is the consuming use of a borrow (CE2411), and the help names
+  `f`: the call is the consuming use of a borrow ([CE2411](../error-catalog.md#ce2411)), and the help names
   `r.clone().map_err(f)` (ruled 2026-10-04).
 - Two existing limits apply. A bare lambda parameter is not inferred, so the parameter
   type is written. A lambda parameter cannot have an owning type, so for an error type
@@ -465,22 +465,22 @@ fn notify(string host, string msg) ~ | AppError:
 
 | Fault | Diagnostic |
 |---|---|
-| The `E` of a `Result`, in either spelling and any position, is not an error type | CE2084, with new wording. The message says what the type is. For a plain enum, the help says to declare it with `error`. CE2086 is retired |
+| The `E` of a `Result`, in either spelling and any position, is not an error type | [CE2084](../error-catalog.md#ce2084), with new wording. The message says what the type is. For a plain enum, the help says to declare it with `error`. CE2086 is retired |
 | A generic instance puts a non-error type in the `E` position | The same code at the instance, with a note at the template |
-| `??` with two error types and no declaration | CE2511. The help names `extend <E_in> as <E_out>`. "Not supported yet" is removed from its doc text |
+| `??` with two error types and no declaration | [CE2511](../error-catalog.md#ce2511). The help names `extend <E_in> as <E_out>`. "Not supported yet" is removed from its doc text |
 | `e as T` between two error types with no declaration | The invalid-cast error. The help names the declaration |
 | `e as T` on a borrowed error that owns a resource | The consuming-use-of-a-borrow error. The help names `e.clone() as T` |
 | `r??` on a borrowed `Result` whose error type owns a resource, with or without a conversion (#1171) | The consuming-use-of-a-borrow error. The help names `r.clone()??` |
-| A conversion outside the unit of its target type | CE2519, with a note at the target's declaration |
-| A generic or non-error source or target | CE2520 |
-| An identity conversion | CE2521 |
-| A cast of the conversion's own pair in its own body (C14) | CE2523, with a note at the declaration |
+| A conversion outside the unit of its target type | [CE2519](../error-catalog.md#ce2519), with a note at the target's declaration |
+| A generic or non-error source or target | [CE2520](../error-catalog.md#ce2520) |
+| An identity conversion | [CE2521](../error-catalog.md#ce2521) |
+| A cast of the conversion's own pair in its own body (C14) | [CE2523](../error-catalog.md#ce2523), with a note at the declaration |
 | Two declarations of one pair | The duplicate-function error, with a note at the first declaration |
 | A `\| E` on a conversion | A parse error. The grammar of 8.2 has no place for it, and no code is added |
-| `??` on a `Maybe` | CE2507, with new wording ("`??` takes a `Result@(T, E)`"). The help names `or_err(nom e)` |
-| `??` on a user enum shaped like a `Result` or a `Maybe` | CE2507. The help says to answer a `Result@(T, E)` |
-| `as` with a conversion in a `const` initializer | The not-a-constant-expression error (CE0108) |
-| A read-through `or_err` (a borrowed `Maybe` whose payload owns a resource) outside `??` (section 4) | CE2522 |
+| `??` on a `Maybe` | [CE2507](../error-catalog.md#ce2507), with new wording ("`??` takes a `Result@(T, E)`"). The help names `or_err(nom e)` |
+| `??` on a user enum shaped like a `Result` or a `Maybe` | [CE2507](../error-catalog.md#ce2507). The help says to answer a `Result@(T, E)` |
+| `as` with a conversion in a `const` initializer | The not-a-constant-expression error ([CE0108](../error-catalog.md#ce0108)) |
+| A read-through `or_err` (a borrowed `Maybe` whose payload owns a resource) outside `??` (section 4) | [CE2522](../error-catalog.md#ce2522) |
 
 The new codes are in `internals/errors/result.py`, the module that owns their range.
 
@@ -501,9 +501,9 @@ The new codes are in `internals/errors/result.py`, the module that owns their ra
   instance carries it. The table of predefined enums (`semantics/predefined_types.py`)
   sets it on the seven predefined error types.
 - **E3.** One predicate, "is an error type". It is called from `validate_error_channel`
-  (`passes/types/signatures.py`), where CE2084 and CE2086 were emitted before this work, from the
+  (`passes/types/signatures.py`), where [CE2084](../error-catalog.md#ce2084) and CE2086 were emitted before this work, from the
   written-type walk (`validate_type_name`, `passes/types/utils.py`), and from the
-  monomorphizer where it validates type arguments. Every call emits CE2084. CE2086 is
+  monomorphizer where it validates type arguments. Every call emits [CE2084](../error-catalog.md#ce2084). CE2086 is
   removed from `internals/errors/types.py`. `signature_result_arms` also serves the
   backend and emits nothing.
 - **Libraries.** The `enum` row of a binary or hybrid manifest gets an `is_error` field,
@@ -599,7 +599,7 @@ follows every rule of section 3.
 
 | Form | Prior art | Why not |
 |---|---|---|
-| A predefined perk `From@(E)` | Rust `From`, applied by `?` | It needs a perk with a type parameter (CE4010), a static in a perk (CE4014), and more than one implementation of one perk on one type: three language changes |
+| A predefined perk `From@(E)` | Rust `From`, applied by `?` | It needs a perk with a type parameter ([CE4010](../error-catalog.md#ce4010)), a static in a perk ([CE4014](../error-catalog.md#ce4014)), and more than one implementation of one perk on one type: three language changes |
 | Structural error unions | Zig error sets, Roc tag unions, OCaml polymorphic variants | Type identity is nominal (`type-identity.md`), and Zig errors carry no payload |
 | One dynamic error type | Rust `anyhow`, Go `error`, Swift `any Error`, exceptions | Sushi has no dynamic perk object, and a top type loses the exhaustive `match` |
 | Explicit mapping only | Go, Gleam, Swift typed throws, C++ `std::expected` | It is the cost of 1.2. `map_err` (section 5) keeps it for a single site |
@@ -618,7 +618,7 @@ spell.
 
 | Choice | Why not |
 |---|---|
-| A new code for E3, and CE2084 and CE2086 both retired | CE2084 already means "`E` is not an error type". Only its predicate changes, and its fixtures keep their code |
+| A new code for E3, and [CE2084](../error-catalog.md#ce2084) and CE2086 both retired | [CE2084](../error-catalog.md#ce2084) already means "`E` is not an error type". Only its predicate changes, and its fixtures keep their code |
 | `as` with a `nom` marker (`nom e as T`) | `??` spends the error with no marker, and a constructor consumes its argument by position. `as` is one more position of that kind |
 | `as` that borrows its operand | One body cannot have two receiver modes. The conversion consumes `self` for `??`, so `as` consumes too |
 | A leak check on a conversion | A conversion with a private source never runs outside its unit, so the check would refuse nothing that matters |

@@ -32,7 +32,7 @@ public struct TcpListener:
 
 **A socket owns its descriptor.** `TcpStream` and `TcpListener` implement the `Drop` perk, so each one MOVES to exactly one owner and closes itself when that owner leaves scope. There is nothing to remember and nothing to leak.
 
-> **One binding owns a socket, and the compiler enforces it.** Handing a stream to a `nom` parameter transfers it, and reading the old binding afterwards is `CE2405`. A socket has no `.clone()` — a deep copy would copy the descriptor number and leave two values that both close it, which is `CE2431`. The operation that means a second handle is `share()`, and a listener has it.
+> **One binding owns a socket, and the compiler enforces it.** Handing a stream to a `nom` parameter transfers it, and reading the old binding afterwards is [`CE2405`](../../error-catalog.md#ce2405). A socket has no `.clone()` — a deep copy would copy the descriptor number and leave two values that both close it, which is [`CE2431`](../../error-catalog.md#ce2431). The operation that means a second handle is `share()`, and a listener has it.
 
 ```sushi
 use <net/tcp>
@@ -47,7 +47,7 @@ fn main() i32:
     return 0          # server closes here
 ```
 
-`close()` is for the caller who has to **see** that the close failed: a destructor has nowhere to put a `Result`, so a failure at drop is lost. It declares `nom self` and CONSUMES the handle, so the descriptor is released exactly once and the scope exit that follows has nothing to close. A use after a close — a second `close()`, a `read`, a `local_port()` — is **CE2435** while compiling, rather than an `EBADF` at run time.
+`close()` is for the caller who has to **see** that the close failed: a destructor has nowhere to put a `Result`, so a failure at drop is lost. It declares `nom self` and CONSUMES the handle, so the descriptor is released exactly once and the scope exit that follows has nothing to close. A use after a close — a second `close()`, a `read`, a `local_port()` — is **[CE2435](../../error-catalog.md#ce2435)** while compiling, rather than an `EBADF` at run time.
 
 ## Constructors
 
@@ -89,7 +89,7 @@ fn main() i32:
 
 A second listener over the SAME socket: `dup(2)`. Whichever handle calls `accept()` first takes the waiting connection, which is the shared-listener pattern — several workers accepting on one port — and the reason a listener gets `share()` while it implements no contract. Closing either handle leaves the other accepting, and each one closes its own descriptor on drop.
 
-The receiver is a plain borrow, so `let TcpListener twin = l.share()??` leaves `l` usable, and closing `twin` spends only `twin`. A socket has no `.clone()` (`CE2431`); this is the operation that means a second handle, and its name says so.
+The receiver is a plain borrow, so `let TcpListener twin = l.share()??` leaves `l` usable, and closing `twin` spends only `twin`. A socket has no `.clone()` ([`CE2431`](../../error-catalog.md#ce2431)); this is the operation that means a second handle, and its name says so.
 
 ```sushi
 use <net/tcp>
@@ -177,9 +177,9 @@ answered is open; a placeholder such as `TcpListener(-1)` is not.
 
 ### `s.close(nom self) ~ | NetError` and `l.close(nom self) ~ | NetError`
 
-Close, and CONSUME the handle. A use after the close is **CE2435**, which is what makes a second close unreachable rather than merely harmless.
+Close, and CONSUME the handle. A use after the close is **[CE2435](../../error-catalog.md#ce2435)**, which is what makes a second close unreachable rather than merely harmless.
 
-Neither is required. A socket closes itself when its owner leaves scope; `close()` is for the caller who must see a failure the destructor would swallow. A socket held in a struct FIELD cannot be closed explicitly — a field read is a borrow, and consuming one is **CE2411**.
+Neither is required. A socket closes itself when its owner leaves scope; `close()` is for the caller who must see a failure the destructor would swallow. A socket held in a struct FIELD cannot be closed explicitly — a field read is a borrow, and consuming one is **[CE2411](../../error-catalog.md#ce2411)**.
 
 ## Limitations
 

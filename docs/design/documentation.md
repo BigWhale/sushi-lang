@@ -9,7 +9,7 @@ The user-facing reference for what is built is `docs/documentation-blocks.md`.
 | Phase | Content | State |
 |---|---|---|
 | 1 | This document | BUILT |
-| 2 | Grammar, AST, attachment rules, the `docs` pass, CE6011/CE6012/CE6013 and CE70xx | BUILT |
+| 2 | Grammar, AST, attachment rules, the `docs` pass, [CE6011](../error-catalog.md#ce6011)/[CE6012](../error-catalog.md#ce6012)/[CE6013](../error-catalog.md#ce6013) and CE70xx | BUILT |
 | 3 | `.slib` manifest carriage; `slib-info` prints a plain dump | BUILT |
 | 4 | `- Example:` blocks compile and run in the toolchain | BUILT |
 | 5 | `--warn-missing-docs` completeness lints | BUILT |
@@ -122,12 +122,12 @@ exactly the failure this feature exists to remove. Without the line-initial rule
 also ends inside a string literal: `let string s = "a :## b"` terminates it.
 
 The two rules close the gap between them, and which code fires depends on what follows.
-An opener with no qualifying closer anywhere after it is **CE6011** — which is what the
+An opener with no qualifying closer anywhere after it is **[CE6011](../error-catalog.md#ce6011)** — which is what the
 example above reports, because the later block closes on its own opening line and so
 cannot close this one. An opener that does reach a line-initial closer further down has
 swallowed the blocks in between, and their openers are still sitting in its interior: that is
-**CE6013**, the signal GCC's `-Wcomment` gives for a `/*` inside a block comment. Neither
-code works alone. CE6011 by itself can only ever reach the last unclosed opener in a file.
+**[CE6013](../error-catalog.md#ce6013)**, the signal GCC's `-Wcomment` gives for a `/*` inside a block comment. Neither
+code works alone. [CE6011](../error-catalog.md#ce6011) by itself can only ever reach the last unclosed opener in a file.
 
 The unmatched opener and the unmatched closer are separate codes rather than one, because the
 asymmetric delimiters let the compiler say which mistake was made. A symmetric delimiter —
@@ -153,7 +153,7 @@ plausibly have meant, so there is nothing to guess at.
 
 The grammar stays permissive and the builder rejects the bad position, the same way the
 compiler handles a nested `fn` — the grammar reaches `function_def` from statement
-position, and `ast_builder/statements/parser.py` rejects it with CE6101. A parse error
+position, and `ast_builder/statements/parser.py` rejects it with [CE6101](../error-catalog.md#ce6101). A parse error
 would only be able to say "unexpected token"; a builder check says which rule was broken.
 
 ### Attachment
@@ -210,7 +210,7 @@ second parser, and an unrendered block still reads as a sensible list.
 | `- Errors:` | 2 | when and why the error arm is taken |
 | `- Example:` | 4 | introduces a fenced code block |
 | `- Deprecated:` | reserved | not parsed yet |
-| `- Traps:` | reserved | runtime traps such as RE2020; not parsed yet |
+| `- Traps:` | reserved | runtime traps such as [RE2020](../error-catalog.md#re2020); not parsed yet |
 
 Everything that is not a recognised tag is prose. The first paragraph is the **summary**,
 and is what a one-line listing shows.
@@ -222,7 +222,7 @@ same way a second `- Parameter` for one name is.
 
 The tag names the thing the function **declares**, so it is a parameter. An argument is
 what a caller passes. The language already uses this vocabulary throughout — the
-`parameters` grammar rule, the `Param` class, `semantics/param_modes.py`, and CE2427
+`parameters` grammar rule, the `Param` class, `semantics/param_modes.py`, and [CE2427](../error-catalog.md#ce2427)
 "the `nom` marker is written at both ends" — and a doc tag should not be the one place
 that says something else.
 
@@ -271,7 +271,7 @@ one.
 `DOC_OPEN` and `DOC_CLOSE` are the whole diagnostic path, and Lark removes a terminal that no
 rule references. Measured, with the two of them unreferenced: an unclosed `##:` falls through
 to `%ignore COMMENT` and is discarded, and a stray `:##` raises `UnexpectedCharacters` on the
-colon — CE6002, pointing at a character, rather than CE6012 pointing at a delimiter. Neither
+colon — [CE6002](../error-catalog.md#ce6002), pointing at a character, rather than [CE6012](../error-catalog.md#ce6012) pointing at a delimiter. Neither
 code can fire at all.
 
 **They are kept by `%ignore`, and a lexer callback raises the diagnostic.** `%ignore` counts
@@ -302,7 +302,7 @@ mapping for the two terminals.
 
 ### The third delimiter error comes from the same place
 
-CE6013 — a line-initial `##:` inside a block — is interior to a `DOC_BLOCK` token, so no
+[CE6013](../error-catalog.md#ce6013) — a line-initial `##:` inside a block — is interior to a `DOC_BLOCK` token, so no
 terminal can match it and no rule can reach it. It is found by scanning the matched token,
 from a third `lexer_callbacks` entry on `DOC_BLOCK` itself.
 
@@ -383,7 +383,7 @@ free — not by a rule anyone has to enforce, but because nothing looks at it.
 The opening `##:` is a different matter. The `_NEWLINE` that precedes a block ends with the block's own leading indent, and
 `handle_NL` measures the indent after the *last* newline in the token. The opener's column is
 therefore measured like any statement's, and a block that does not line up with the code
-around it is a CE6004 indent error rather than a doc diagnostic. Interior lines are free; the
+around it is a [CE6004](../error-catalog.md#ce6004) indent error rather than a doc diagnostic. Interior lines are free; the
 first line is not.
 
 That still favours delimiters over a line sigil, but only a little. Under
@@ -441,13 +441,13 @@ class DocBlock:
 Two fields carry a decision the pass cannot make for itself.
 
 `DocTag.word` holds the keyword exactly as the author typed it. A near miss reaches the
-pass as `kind == "unknown"`, and CE7004 has to name what was written, so `name` cannot
+pass as `kind == "unknown"`, and [CE7004](../error-catalog.md#ce7004) has to name what was written, so `name` cannot
 carry it -- on an `unknown` tag `name` is not a parameter name and reusing it would say
 something false.
 
 `DocBlock.orphan_reason` says WHY a block reached `orphan_docs`. The two ways of
-documenting nothing are separate rules with separate codes -- CW7001 for a block that
-attaches to nothing, CE7005 for one that stands in a body it is not the first item of --
+documenting nothing are separate rules with separate codes -- [CW7001](../error-catalog.md#cw7001) for a block that
+attaches to nothing, [CE7005](../error-catalog.md#ce7005) for one that stands in a body it is not the first item of --
 and the builder is the only place that still knows which happened. Comparing spans in the
 pass to recover it would be the same fact derived twice.
 
@@ -539,23 +539,23 @@ undocumented symbol in every library it imports.
 
 | Condition | Code | Kind |
 |---|---|---|
-| `- Parameter` names a parameter this callable does not declare | CE7001 | error |
-| two `- Parameter` tags for the same name | CE7002 | error |
-| a second `- Returns:` or `- Errors:` | CE7003 | error |
-| an unrecognised tag keyword, `- Paramter:` | CE7004 | error |
-| a doc block in a body that is not the first item | CE7005 | error |
-| a declaration with a block above it and a block first in its body | CE7006 | error |
-| a doc block that documents nothing | CW7001 | warning |
+| `- Parameter` names a parameter this callable does not declare | [CE7001](../error-catalog.md#ce7001) | error |
+| two `- Parameter` tags for the same name | [CE7002](../error-catalog.md#ce7002) | error |
+| a second `- Returns:` or `- Errors:` | [CE7003](../error-catalog.md#ce7003) | error |
+| an unrecognised tag keyword, `- Paramter:` | [CE7004](../error-catalog.md#ce7004) | error |
+| a doc block in a body that is not the first item | [CE7005](../error-catalog.md#ce7005) | error |
+| a declaration with a block above it and a block first in its body | [CE7006](../error-catalog.md#ce7006) | error |
+| a doc block that documents nothing | [CW7001](../error-catalog.md#cw7001) | warning |
 
-CE7001 through CE7004 are tag errors and CE7005 and CE7006 are position errors, which is why
-they are numbered in those two runs. CE7001, CE7002, CE7003 and CE7006 are relational: a
+[CE7001](../error-catalog.md#ce7001) through [CE7004](../error-catalog.md#ce7004) are tag errors and [CE7005](../error-catalog.md#ce7005) and [CE7006](../error-catalog.md#ce7006) are position errors, which is why
+they are numbered in those two runs. [CE7001](../error-catalog.md#ce7001), [CE7002](../error-catalog.md#ce7002), [CE7003](../error-catalog.md#ce7003) and [CE7006](../error-catalog.md#ce7006) are relational: a
 caret on the tag or the block, and a `note` with its own `file:line:col` on the declaration,
 on the first tag, or on the other block.
 
 **The two repeat cases are separate codes, because they are separate rules.** `- Parameter`
-is keyed by the name it carries — many of them are legal, one per parameter — so CE7002 says
+is keyed by the name it carries — many of them are legal, one per parameter — so [CE7002](../error-catalog.md#ce7002) says
 which parameter was documented twice, and its note points at the first tag for that name.
-`- Returns:` and `- Errors:` are singletons by §3, keyed by the tag alone, so CE7003 says the
+`- Returns:` and `- Errors:` are singletons by §3, keyed by the tag alone, so [CE7003](../error-catalog.md#ce7003) says the
 tag may appear once. The two mistakes read differently and are fixed differently: one is a
 copied-and-not-renamed tag, the other is a tag written twice.
 
@@ -570,7 +570,7 @@ separates them has to catch `- Paramter:` without claiming `- Note that this is 
 
 A list item shaped `- <Word>[ <name>]:` is a **tag candidate**. A candidate whose word is a
 known keyword is a tag. A candidate whose word is within edit distance 2 of a keyword is
-CE7004, with a `help` line naming the tag that was meant. Everything else is prose.
+[CE7004](../error-catalog.md#ce7004), with a `help` line naming the tag that was meant. Everything else is prose.
 
 ```
 - Parameter a: ...     tag
@@ -598,14 +598,14 @@ first hole a reader meets (R32).
 
 | Condition | Code |
 |---|---|
-| a declaration with no doc block | CW7002 |
-| a documented callable with a parameter that no `- Parameter` tag names | CW7003 |
-| a documented callable that returns a value, with no `- Returns:` | CW7004 |
-| a documented function that declares `\| E`, with no `- Errors:` | CW7005 |
-| a unit with no doc block | CW7006 |
+| a declaration with no doc block | [CW7002](../error-catalog.md#cw7002) |
+| a documented callable with a parameter that no `- Parameter` tag names | [CW7003](../error-catalog.md#cw7003) |
+| a documented callable that returns a value, with no `- Returns:` | [CW7004](../error-catalog.md#cw7004) |
+| a documented function that declares `\| E`, with no `- Errors:` | [CW7005](../error-catalog.md#cw7005) |
+| a unit with no doc block | [CW7006](../error-catalog.md#cw7006) |
 
 The codes go in `internals/errors/warnings.py`, which holds every warning whatever its
-family, with `Category.DOCS`, CW7001 included.
+family, with `Category.DOCS`, [CW7001](../error-catalog.md#cw7001) included.
 
 **Every declaration is asked, public and private** (R29). The `public` marker is not the
 test, and the reason is the ruling itself: an internal API is documented surface as much as
@@ -613,21 +613,21 @@ an exported one. A struct field and an enum variant are each asked on their own,
 prints each under its owner (R31).
 
 **Two exemptions** (R30). `fn main()` is nobody's API, and a library cannot declare one at
-all (CE3501). An `unsafe external` block and the declarations inside it carry
+all ([CE3501](../error-catalog.md#ce3501)). An `unsafe external` block and the declarations inside it carry
 `because "..."`, which acknowledges the contract that matters at that seam. Nothing else is
 exempt, and one predicate is the only place either one is named.
 
-**A block lint presupposes a block** (R33). CW7003, CW7004 and CW7005 fire only on a
+**A block lint presupposes a block** (R33). [CW7003](../error-catalog.md#cw7003), [CW7004](../error-catalog.md#cw7004) and [CW7005](../error-catalog.md#cw7005) fire only on a
 declaration that ALREADY carries a block. Without the rule every undocumented function
-would collect CW7002 AND CW7004 for one omission, and the whole tree would report 1130
+would collect [CW7002](../error-catalog.md#cw7002) AND [CW7004](../error-catalog.md#cw7004) for one omission, and the whole tree would report 1130
 undocumented parameters and 3319 missing `- Returns:` instead of 8 and 15. A block that is
-absent is CW7002 and nothing else.
+absent is [CW7002](../error-catalog.md#cw7002) and nothing else.
 
 **The caret.** Every declaration kind carries a span narrow enough to point at:
 `name_span` for a constant, struct, enum, perk, perk method, extern declaration, function
 and extension; `perk_name_span` for a perk implementation; `namespace_span` for an external
-block; `loc` for a struct field, an enum variant, and for the parameter CW7003 is about.
-CW7006 has no declaration to point at, so it is reported on the unit with no caret. It is
+block; `loc` for a struct field, an enum variant, and for the parameter [CW7003](../error-catalog.md#cw7003) is about.
+[CW7006](../error-catalog.md#cw7006) has no declaration to point at, so it is reported on the unit with no caret. It is
 the one lint about something that is not there.
 
 The flag is a long `--flag`, matching every flag in `sushi_lang/compiler/cli.py` but `-o`.
@@ -635,7 +635,7 @@ A `-W` tier system was considered and set aside: it is a whole CLI surface to de
 it would have to decide which existing `CWxxxx` warnings move behind a tier. That is a
 separate piece of work, and this feature does not need it.
 
-The other way to silence a warning is a source opt-out, not a CLI gate: CW5001 is silenced
+The other way to silence a warning is a source opt-out, not a CLI gate: [CW5001](../error-catalog.md#cw5001) is silenced
 by writing `because "..."` on the declaration.
 
 ### Phase 5 rulings
@@ -686,19 +686,19 @@ pass diagnostic under `src_sushi/`.
 
 ### The three syntax errors
 
-CE6011, CE6012 and CE6013, in `sushi_lang/internals/errors/syntax.py`, which owns the CE6xxx
+[CE6011](../error-catalog.md#ce6011), [CE6012](../error-catalog.md#ce6012) and [CE6013](../error-catalog.md#ce6013), in `sushi_lang/internals/errors/syntax.py`, which owns the CE6xxx
 range.
 
-- **CE6011** — a doc block is opened and never closed. The location is the opening `##:`,
+- **[CE6011](../error-catalog.md#ce6011)** — a doc block is opened and never closed. The location is the opening `##:`,
   not the end of the file, because the opener is where the author can fix it.
-- **CE6012** — a `:##` with no opening `##:`.
-- **CE6013** — a line-initial `##:` inside a doc block. The location is the inner opener,
+- **[CE6012](../error-catalog.md#ce6012)** — a `:##` with no opening `##:`.
+- **[CE6013](../error-catalog.md#ce6013)** — a line-initial `##:` inside a doc block. The location is the inner opener,
   with a `note` on the outer one. The block that is actually broken is the outer one, and the
   note is what says so, which makes this a relational diagnostic. Rendering it with a single
   location would be a regression.
 
-All three are raised from `lexer_callbacks`, as §4 sets out: CE6011 and CE6012 from the two
-`%ignore`d delimiter terminals, CE6013 from a scan of the matched `DOC_BLOCK` token. One
+All three are raised from `lexer_callbacks`, as §4 sets out: [CE6011](../error-catalog.md#ce6011) and [CE6012](../error-catalog.md#ce6012) from the two
+`%ignore`d delimiter terminals, [CE6013](../error-catalog.md#ce6013) from a scan of the matched `DOC_BLOCK` token. One
 place, at lex time, before the builder has an opinion.
 
 ### The doc family
@@ -724,8 +724,8 @@ a `CW` code.
 registered code. Why a code exists belongs in its `doc` field in
 `internals/errors/docs.py`; what changed belongs in the `CHANGELOG` and the git log.
 
-The always-on codes of the feature are CE6011, CE6012 and CE6013 in `syntax.py`, CE7001 to
-CE7008 in `docs.py`, and CW7001 in `warnings.py`. Every one of them is emitted, because
+The always-on codes of the feature are [CE6011](../error-catalog.md#ce6011), [CE6012](../error-catalog.md#ce6012) and [CE6013](../error-catalog.md#ce6013) in `syntax.py`, [CE7001](../error-catalog.md#ce7001) to
+[CE7008](../error-catalog.md#ce7008) in `docs.py`, and [CW7001](../error-catalog.md#cw7001) in `warnings.py`. Every one of them is emitted, because
 `test_unreferenced_codes_match_the_allowlist` is an exact-match ratchet: a code registered
 and never emitted fails the suite. Nothing may be reserved.
 
@@ -909,7 +909,7 @@ make it true:
 - A **perk** reaches the manifest only when an exported generic's constraint names it, and a
   **perk implementation** only when its perk was already seen. A documented perk that no
   generic references is not in the file at all.
-- **Externals are never serialized.** The external namespaces are read to drive the CE5006
+- **Externals are never serialized.** The external namespaces are read to drive the [CE5006](../error-catalog.md#ce5006)
   rejection and nothing else, and `dependencies` is a list of bare strings with nowhere to
   hang a key.
 - **Generic declarations are excluded from `public_functions`, `structs` and `enums`** by
@@ -1262,7 +1262,7 @@ so the record carries the channel. Every function, helper and method record stat
 required `has_channel`, and the record carries `error_type` only when the declaration writes
 `| E` (`docs/design/error-channel.md`). So `fn improbability(i32 factor) i32 | DriveError`
 prints with its `| DriveError`. A library whose templates schema is not 8, or whose
-container version is not 5, is refused (CE3512, CE3509).
+container version is not 5, is refused ([CE3512](../error-catalog.md#ce3512), [CE3509](../error-catalog.md#ce3509)).
 
 **R50 — the doc blocks are opt-in, behind `--docs`.** Ruled by David on 2026-08-26.
 Measured on a realistic library -- 40 documented functions, 8 structs, 16 fields -- the
@@ -1324,7 +1324,7 @@ illustration. `pymdownx.superfences` is in `mkdocs.yml` and renders both.
 one implementation of the rule (`closes_fence`).
 
 A doc block cannot contain a doc block, so this is a problem for `.md` pages only: a `##:`
-inside a block is CE6013 whether it is indented or not.
+inside a block is [CE6013](../error-catalog.md#ce6013) whether it is indented or not.
 
 ### The runner
 
@@ -1408,7 +1408,7 @@ does not run anything. A renderer takes the FIRST word of an info string as the 
 so the extra words are harmless to it.
 
 **R17 — two codes, both always on.** `- Example:` with no fenced block after it is
-CE7007. A fence inside a doc block that never closes is CE7008. Both are in
+[CE7007](../error-catalog.md#ce7007). A fence inside a doc block that never closes is [CE7008](../error-catalog.md#ce7008). Both are in
 `internals/errors/docs.py`.
 
 They are always on rather than a policy lint, because each one is a claim that
@@ -1451,7 +1451,7 @@ fn main() i32:
 ```
 
 The helper writes `| StdError` because a snippet can hold a `??`, and a `??` needs a
-channel to propagate into. `main` is bare, so a `??` directly inside it is CE0131, and the
+channel to propagate into. `main` is bare, so a `??` directly inside it is [CE0131](../error-catalog.md#ce0131), and the
 snippet cannot go into `main` itself. An example whose `??` fails exits 1. The name carries the block index, so it cannot collide with
 a symbol in the imported unit.
 
@@ -1461,12 +1461,12 @@ above it. That is the wrapping rule above.
 **R20 — `use` lines are hoisted, and the injected import is not repeated.** A `use` inside
 a function body does not parse, so every line that matches `^use ` moves to the top of the
 generated file, in the order written. The unit import is injected only when the snippet does
-not already import that unit, because a duplicate `use` is CW3001. `println` needs no
+not already import that unit, because a duplicate `use` is [CW3001](../error-catalog.md#cw3001). `println` needs no
 import at all, so the wrapper injects no stdio.
 
 **R21 — two skips, each with its reason printed.** An example is SKIPped, not failed, when
 the collector can see that it cannot be compiled from outside: the declaration is private
-(measured CE3005), or the unit declares `main` (measured CE0101). The collector knows both
+(measured [CE3005](../error-catalog.md#ce3005)), or the unit declares `main` (measured [CE0101](../error-catalog.md#ce0101)). The collector knows both
 facts because it parses (R22). A skip prints its reason and is counted, the way the
 Markdown collector prints a marked skip, so the hole stays visible.
 
@@ -1477,7 +1477,7 @@ own `main` for free. The walk is public API: `documented` in `semantics/passes/d
 
 A file with no `##:` in it is never parsed, so the walk costs about a second over the
 whole tree and the unparsed count means something: it is the files that carry a block and
-do not parse. There are three, and all three are the CE6011, CE6012 and CE6013 fixtures,
+do not parse. There are three, and all three are the [CE6011](../error-catalog.md#ce6011), [CE6012](../error-catalog.md#ce6012) and [CE6013](../error-catalog.md#ce6013) fixtures,
 which fail on purpose. The 33 other files in the tree that do not parse hold no block and
 are not read.
 
@@ -1490,7 +1490,7 @@ reader who did not ask for prose.
 
 **R24 — a bundled stdlib module is a library unit as far as the `docs` pass is concerned.**
 The pass skips a unit that has a provenance, so `_inject_source_stdlib_units` sets one, the
-same way `_inject_library_source` does. Without it, a `CW7001` in `collections/iter.sushi`
+same way `_inject_library_source` does. Without it, a [`CW7001`](../error-catalog.md#cw7001) in `collections/iter.sushi`
 would be reported in every program that imports the module. A user is never told about a
 stdlib doc typo.
 
@@ -1527,7 +1527,7 @@ declare one. One file cannot both exit 0 as a test and show the sweep four outco
   It asserts the other half, in CI: four legal fence spellings raise no CE70xx, and the
   deliberately broken Sushi in its `error` fence never reaches the build. The sweep reports
   its four examples as skips, which is R21 working.
-- **two `test_err_` files**, one for CE7007 and one for CE7008, because each has to exit 2
+- **two `test_err_` files**, one for [CE7007](../error-catalog.md#ce7007) and one for [CE7008](../error-catalog.md#ce7008), because each has to exit 2
   on its own.
 
 An example that cannot compile is a legitimate fixture and not a gap: `error` and `skip`
@@ -1557,7 +1557,7 @@ the same wall PEP 224 hit.
 
 **A `##` line sigil, the Rust and Nim model.** The closest call in this document, and the
 case for it is strong. A line cannot be
-unterminated, so it has no runaway and CE6011, CE6012 and CE6013 all stop existing. It
+unterminated, so it has no runaway and [CE6011](../error-catalog.md#ce6011), [CE6012](../error-catalog.md#ce6012) and [CE6013](../error-catalog.md#ce6013) all stop existing. It
 renders correctly in any editor that highlights `#` as a line comment, where a delimited
 block renders its interior as code. And the indentation objection is real but small: the delimited form still measures the opening `##:` column (§4), so the difference is
 one constrained line against all of them, not an exemption. Nor does Sushi need Rust's second
@@ -1602,7 +1602,7 @@ Every phase below is built. Each paragraph names what the phase covers.
 
 **Phase 2 — the language.** The three terminals, the `_NEWLINE` lookahead, the seven
 rules, the `DOC_BLOCK` peel in `parse_block`, `DocBlock` and `DocTag`, the doc parser and
-the attachment function, the `docs` pass with its always-on checks, CE6011, CE6012, CE6013
+the attachment function, the `docs` pass with its always-on checks, [CE6011](../error-catalog.md#ce6011), [CE6012](../error-catalog.md#ce6012), [CE6013](../error-catalog.md#ce6013)
 and the CE70xx module. It also covers the user documentation of the doc block.
 
 **Phase 3 — the library.** The `doc` key on the concrete manifest records, the generic and

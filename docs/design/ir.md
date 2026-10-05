@@ -72,10 +72,10 @@ is deleted when the pass that writes it moves to SHIR and its side table.
 IR**. The rule runs once in the `borrow` pass to check it, and again at emission to act
 on it.
 
-`_provenance_of()` reads `source.ownership_provenance`. A missing value is CE0129:
+`_provenance_of()` reads `source.ownership_provenance`. A missing value is [CE0129](../error-catalog.md#ce0129):
 fatal, with a deliberate no-fallback rule.
 
-CE0129 is not a bug. It is the correct response to a missing note in a design that
+[CE0129](../error-catalog.md#ce0129) is not a bug. It is the correct response to a missing note in a design that
 passes notes. An IR removes the whole category, because the decision becomes an
 instruction.
 
@@ -191,7 +191,7 @@ design choice, and each was verified in the tree.
 ### 4.1 Parameter modes are CONVENTIONS, not types
 
 This decides which IR to model on. Sushi declares a mode at both ends of a call
-(CE2427). Swift SIL declares conventions. Rust derives everything from the type and has
+([CE2427](../error-catalog.md#ce2427)). Swift SIL declares conventions. Rust derives everything from the type and has
 no convention concept at all.
 
 | Sushi | Swift SIL | Rust |
@@ -229,13 +229,13 @@ if not validator.perk_impl_table.implements(type_name, perk_name):
 nothing.
 
 This is C++ template semantics, not Rust generic semantics, and it is the fact that
-settles Q1. It also explains CE2061, which is registered as `Category.INTERNAL`: a
+settles Q1. It also explains [CE2061](../error-catalog.md#ce2061), which is registered as `Category.INTERNAL`: a
 monomorphized function that is missing is a compiler-internal failure, because nothing
 verified the generic body on its own.
 
 ### 4.4 An iterator is not a value
 
-`let Iterator@(i32) it = arr.iter()` fails with CE2001: `Iterator` is not a nameable
+`let Iterator@(i32) it = arr.iter()` fails with [CE2001](../error-catalog.md#ce2001): `Iterator` is not a nameable
 type. An iterator exists only as the iterable of a `foreach`. So `typecheck` always
 sees the source expression that produced it, and the static `LoopKind` pick of 7.7 is
 safe. This is a language fact worth guarding: the day an iterator becomes bindable,
@@ -244,7 +244,7 @@ safe. This is a language fact worth guarding: the day an iterator becomes bindab
 ### 4.5 `expand` dies in `monomorphize`
 
 `monomorphize/unroll.py` rewrites every `Expand` into ordinary statements, and
-`passes/types/visitor.py` rejects a survivor as CE0119. SHIR is built after
+`passes/types/visitor.py` rejects a survivor as [CE0119](../error-catalog.md#ce0119). SHIR is built after
 `monomorphize`, so SHIR needs no `Expand` node.
 
 ### 4.6 A rebind frees the OLD value, in a fixed order
@@ -309,7 +309,7 @@ Only these may be asked of the AST once the migration completes:
 1. **"What did the user write here?"** — declarations, and bodies before lowering.
 2. **"Where in the file is it?"** — `loc: Span`, on every node, for every diagnostic.
 3. **"What was next to what?"** — lexical adjacency. The `docs` pass needs this and
-   only the AST can answer it. CW7001 says *"a blank line or a comment between the two
+   only the AST can answer it. [CW7001](../error-catalog.md#cw7001) says *"a blank line or a comment between the two
    breaks the attachment"*. No IR can answer that, at any level, ever. This question
    alone makes the AST permanent.
 4. **"What does this unit declare?"** — the declaration table the whole-program passes
@@ -449,7 +449,7 @@ reason a stamp went wrong:
 | a field per fact, on whichever class first needed it | one table |
 | declared on one class, written onto its siblings (1.2) | one declared value type |
 | any pass may write | one pass writes it |
-| a missing entry is CE0129, at emit time | completeness is checked when `typecheck` ends |
+| a missing entry is [CE0129](../error-catalog.md#ce0129), at emit time | completeness is checked when `typecheck` ends |
 
 This is exactly Rust's shape: HIR plus `TypeckResults`, consumed together by MIR
 building — method resolutions and field indices live inside `TypeckResults` there too.
@@ -500,7 +500,7 @@ behind an alias, `f64.from_bits(b)` — which has no receiver EXPRESSION at all.
 
 `marker` is the WRITTEN call-site mode (`nom s`, `poke n`), or `None`. The RESOLVED
 convention is `typecheck`'s: an unmarked argument in a consuming position (constructor,
-container insert, array element) resolves to `Owned` with no marker, and CE2427 is
+container insert, array element) resolves to `Owned` with no marker, and [CE2427](../error-catalog.md#ce2427) is
 checked by comparing `marker` against the declared parameter.
 
 Named struct construction is all-or-nothing, so lowering reorders
@@ -527,7 +527,7 @@ dispatcher). A bloom `arr...` forwards the array operand itself, as a `Move`.
 | `Break` / `Continue` | — |
 
 There is no `Expand` node (4.5): `monomorphize` unrolls every pack expansion before
-SHIR is built, and `typecheck` already rejects a survivor as CE0119.
+SHIR is built, and `typecheck` already rejects a survivor as [CE0119](../error-catalog.md#ce0119).
 
 `is_init` carries the one semantic difference between `Let` and `Rebind`: a rebind
 RE-INITIALIZES, which clears a moved flag.
@@ -592,7 +592,7 @@ Arm = (pattern: Pattern, body: ShirBlock)
 ```
 
 A payload binding is required and `_` discards (it lowers to `Wildcard`). An INTEGER
-scrutinee uses `Literal` arms; the kinds never mix (CE2076), and that is checked on
+scrutinee uses `Literal` arms; the kinds never mix ([CE2076](../error-catalog.md#ce2076)), and that is checked on
 SHIR. `Own` mirrors the AST's `OwnPattern`; it is nested-only today, and the binding carries its own `by` mode.
 
 ### 7.9 What each pass reads and writes
@@ -727,7 +727,7 @@ Operand  = Copy(Place)     # the value is PLAIN, or the source is a borrow
 
 **The `Copy` / `Move` distinction is the point.** `classify()` runs once, during
 lowering, and writes its answer into the operand. Nothing re-derives it. 1.3 disappears
-and CE0129 has nothing left to guard.
+and [CE0129](../error-catalog.md#ce0129) has nothing left to guard.
 
 `Downcast` exists because a `match` arm and a `??` both read an enum payload, and
 reading one is only valid under a known variant. The worked example in 8.11 is what
@@ -769,7 +769,7 @@ SlirCallee = Direct(symbol: str)      # free fn, method, extern, intrinsic -- al
 `DropIfSet` replaces the string-keyed drop-flag table of 1.4. The flag is an ordinary
 SLIR local of type `bool`. It is visible, testable and optimizable.
 
-`BeginBorrow` / `EndBorrow` make a borrow REGION explicit. CE2412 — mutating an owner
+`BeginBorrow` / `EndBorrow` make a borrow REGION explicit. [CE2412](../error-catalog.md#ce2412) — mutating an owner
 while a `let`-borrow is alive — is a question about a region, and today the backend
 re-derives it. Writing the region down is the same argument as `Copy` / `Move`: the
 pass that proved it records it, and nothing works it out twice.
@@ -804,7 +804,7 @@ Unreachable
 ```
 
 `Trap` carries operands because the registry text is a printf format string and some
-traps print values — RE2020 prints the index and the length
+traps print values — [RE2020](../error-catalog.md#re2020) prints the index and the length
 (`emit_runtime_error_with_values`).
 
 ### 8.9 SHIR to SLIR, construct by construct
@@ -985,7 +985,7 @@ Sushi's generics are templates, not bounded generics.
 
 A polymorphic SHIR needs definition-site checking. Definition-site checking needs a
 constraint language strong enough to describe everything a body does, and Sushi's perks
-have **no type parameters (CE4010), no inheritance and no default implementations**.
+have **no type parameters ([CE4010](../error-catalog.md#ce4010)), no inheritance and no default implementations**.
 The constraint language is too weak today.
 
 That makes a polymorphic SHIR a **language change**, not a refactor, and it does not

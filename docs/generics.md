@@ -134,11 +134,11 @@ A generic enum constructor takes its type from the position that holds it: a `le
 a `match` scrutinee), the arguments give the type. `Maybe.Some(42)` is a `Maybe@(i32)`. A
 constructor whose arguments do not give every type parameter, such as `Maybe.None()` or
 `Tree.Empty()`, needs a declared type. If no position gives one, the compiler reports
-`CE2112`.
+[`CE2112`](error-catalog.md#ce2112).
 
 A generic STRUCT constructor follows the same rule: `Feed(from([1, 2]), 7)` is a
 `Feed@(i32)` when `Feed@(T)` has a `T[]` field, also with no declared type, and a declared
-type wins where one exists. Arguments that give one type parameter two types are `CE2065`
+type wins where one exists. Arguments that give one type parameter two types are [`CE2065`](error-catalog.md#ce2065)
 at the constructor:
 
 ```sushi
@@ -235,12 +235,12 @@ fn main() i32:
     `identity` writes no `| E`, so it is bare and its call returns the value: no `??` and
     no `.realise()`. A generic function that can fail writes `| E`, and then its call
     returns a `Result` (see [Errors Through Generics](#errors-through-generics)). `main` is
-    bare, so a `??` there is `CE0131`; use `.realise(default)` or `match` in `main`.
+    bare, so a `??` there is [`CE0131`](error-catalog.md#ce0131); use `.realise(default)` or `match` in `main`.
 
 !!! note "Why `nom`"
     `identity` gives its argument back to the caller, so the parameter declares `nom` and the
     call site writes `nom` too. A parameter borrows by default, and a function cannot return
-    a borrow (`CE2411`). The mode is part of the signature, so it is the same for every
+    a borrow ([`CE2411`](error-catalog.md#ce2411)). The mode is part of the signature, so it is the same for every
     instantiation: `nom T` also where `T` is an `i32` that owns nothing. See
     [docs/design/borrow-model.md](design/borrow-model.md).
 
@@ -310,7 +310,7 @@ fn main() i32:
 
 A lambda argument must declare its parameter types (`|i32 n| ...`). A bare-parameter lambda
 (`|n| ...`) gets its type from the type parameter that the compiler must infer, so the
-compiler cannot solve it (`CE2060`).
+compiler cannot solve it ([`CE2060`](error-catalog.md#ce2060)).
 
 The variable that receives the result still needs its own type annotation, as every `let`
 does.
@@ -337,9 +337,9 @@ fn main() i32:
 
 The rules:
 
-- Write all the type arguments or none. A wrong count is `CE2062`.
+- Write all the type arguments or none. A wrong count is [`CE2062`](error-catalog.md#ce2062).
 - Only a direct call to a named free function takes a type-argument list. A method call has
-  no `@(...)` slot (`CE6102`), so a method-level type parameter must come from the arguments.
+  no `@(...)` slot ([`CE6102`](error-catalog.md#ce6102)), so a method-level type parameter must come from the arguments.
 - The `let` annotation does not give a type parameter to the call. If only the return type
   names `T`, write the type arguments.
 
@@ -370,11 +370,11 @@ fn main() i32:
 ```
 
 The parameter modes are part of a function type. `identity@(T)(nom T x)` has the type
-`fn(nom i32) -> i32` at `i32`, and it does not fit a `fn(i32) -> i32` parameter (`CE2006`).
+`fn(nom i32) -> i32` at `i32`, and it does not fit a `fn(i32) -> i32` parameter ([`CE2006`](error-catalog.md#ce2006)).
 
 A generic function value is refused where nothing solves its type. For example,
 `map(xs, identity)` asks the value itself to give the `U` of `map`, so the compiler reports
-`CE2060` and `CE2093`. Bind the value to a typed local first:
+[`CE2060`](error-catalog.md#ce2060) and [`CE2093`](error-catalog.md#ce2093). Bind the value to a typed local first:
 
 ```sushi
 let fn(i32) -> i32 id = same
@@ -444,7 +444,7 @@ fn main() i32:
 ### Constraints on Structs and Enums
 
 A generic struct or enum can constrain its type parameters too. The compiler checks the
-constraint at each written type, for example at `Keyed@(HashMap@(i32, i32))` (`CE4006`):
+constraint at each written type, for example at `Keyed@(HashMap@(i32, i32))` ([`CE4006`](error-catalog.md#ce4006)):
 
 ```sushi
 struct Keyed@(K: Hashable):
@@ -581,8 +581,8 @@ fn main() i32:
 ```
 
 A template and a concrete target for the same method name overlap, and the compiler refuses
-them (`CE0101`). A partially concrete target such as `extend Pair@(i32, U)` is refused too
-(`CE2098`). See the Extension Methods section of the
+them ([`CE0101`](error-catalog.md#ce0101)). A partially concrete target such as `extend Pair@(i32, U)` is refused too
+([`CE2098`](error-catalog.md#ce2098)). See the Extension Methods section of the
 [language guide](language-guide.md#extension-methods) for the full rule.
 
 ### Receiver Modes and Statics
@@ -591,7 +591,7 @@ The receiver `self` is a borrow by default. Write `poke self` for a method that 
 receiver. A **static** method has no receiver and you call it on the type name. On a generic
 target, the static gets its type argument from the position that holds the result: the
 `let` annotation, the parameter type, or an argument whose type names `T`. A static in a
-position that gives no type is `CE2060`:
+position that gives no type is [`CE2060`](error-catalog.md#ce2060):
 
 ```sushi
 struct Stack@(T):
@@ -621,8 +621,8 @@ fn main() i32:
 
 An extension method can declare its own type parameters after its name. The compiler infers
 them from the arguments, because a method call has no `@(...)` slot. A lambda argument must
-declare its parameter types (a bare `|x| ...` is `CE2063`). A method-level parameter cannot
-reuse a name of the target (`CE2064`):
+declare its parameter types (a bare `|x| ...` is [`CE2063`](error-catalog.md#ce2063)). A method-level parameter cannot
+reuse a name of the target ([`CE2064`](error-catalog.md#ce2064)):
 
 ```sushi
 struct Box@(T):
@@ -644,7 +644,7 @@ form. See [iter](stdlib/collections/iter.md).
 ### Array Targets
 
 `extend T[]` extends every dynamic array and binds the element type to `T`. `extend i32[]`
-extends one element type. A static on an array target is `CE2104`, because an array type has
+extends one element type. A static on an array target is [`CE2104`](error-catalog.md#ce2104), because an array type has
 no spelling in an expression:
 
 ```sushi
@@ -666,7 +666,7 @@ fn main() i32:
 ```
 
 The body returns `self.get(1).clone()`, because `self.get(1)` is a borrow and a `string`
-element owns heap. A body that gives a borrowed element away is `CE2411`.
+element owns heap. A body that gives a borrowed element away is [`CE2411`](error-catalog.md#ce2411).
 
 ### Perk Implementations on Generic Types
 
@@ -696,7 +696,7 @@ fn main() i32:
 ```
 
 The compiler checks the header of a template implementation one time, on the written
-template. `fn f(T x)` against a contract `fn f(i32 x)` is `CE4004`, also when every instance
+template. `fn f(T x)` against a contract `fn f(i32 x)` is [`CE4004`](error-catalog.md#ce4004), also when every instance
 uses `T = i32`. To implement a perk for one instance, write the concrete target:
 `extend Box@(i32) with Show`. See [Perks](perks.md#a-generic-type-may-implement-a-perk).
 
@@ -888,7 +888,7 @@ fn main() i32:
 
 The compiler checks a generic body one time for each instance, not against its constraints.
 So a body can call a method that only some type arguments have. The example below compiles
-for a `string`. A call `size(4)` gives `CE2008` (`undefined function 'i32.len'`) at the
+for a `string`. A call `size(4)` gives [`CE2008`](error-catalog.md#ce2008) (`undefined function 'i32.len'`) at the
 instance:
 
 ```sushi
@@ -998,7 +998,7 @@ fn make_pair@(T, U)(nom T first, nom U second) Pair@(T, U):
 
 A body that calls `.hash()` on a `T` works for every `T` that has one, but the compiler finds
 a wrong type argument only at the instance. `@(T: Hashable)` puts the requirement in the
-signature, and the caller gets `CE4006` at the call.
+signature, and the caller gets [`CE4006`](error-catalog.md#ce4006) at the call.
 
 ### 4. Test Multiple Instantiations
 
@@ -1012,24 +1012,24 @@ let Box@(bool) b3 = Box(value: true)
 
 | Limit | Diagnostic |
 |---|---|
-| A perk cannot have type parameters (`perk Conv@(T):`) | `CE4010` |
-| A perk method cannot declare its own type parameters: in the perk declaration the parser refuses `fn make@(U)`, and in an implementation the compiler refuses `fn show@(U)` | `CE6001` (perk), `CE4010` (implementation) |
-| A perk has no inheritance, no default implementation, no `Self` and no static method | `CE4014` for a static |
-| A bare-parameter lambda to a generic cannot be inferred; declare its parameter types (`\|i32 x\| ...`) | `CE2060` (function), `CE2063` (method-level parameter) |
-| A method call has no explicit `@(...)` slot | `CE6102` |
-| Explicit type arguments are all or nothing | `CE2062` |
-| A `T` that only the return type names is not inferred from the `let` annotation; write the type arguments | `CE2060` |
-| A generic static in a position that declares no type | `CE2060` |
-| A generic function value where nothing solves its type (`map(xs, identity)`) | `CE2060`, `CE2093` |
-| No pack forwarding (`g(pack...)`) and no pack indexing; a value pack is not a tuple, so neither `(args...)` nor a tuple bloom exists | `CE2060` |
-| No variadic parameter in a perk method or an extension method | `CE0115` |
-| A native `...T` function cannot be exported through a `.slib` (a pack can) | `CE0116` |
-| A partially concrete target (`extend Pair@(i32, U)`) | `CE2098` |
-| A template and a concrete target for one method name | `CE0101` |
-| A static on an array target | `CE2104` |
-| A function type or a tuple type as an extension or perk-implementation target | `CE2110` |
-| A nested array as an array extension target (`extend T[][]`, `extend i32[3][]`); `extend T[]` covers the nested receiver | `CE2101` |
-| A template body is checked for each instance, not against its constraints | the diagnostic of the instance, for example `CE2008` |
+| A perk cannot have type parameters (`perk Conv@(T):`) | [`CE4010`](error-catalog.md#ce4010) |
+| A perk method cannot declare its own type parameters: in the perk declaration the parser refuses `fn make@(U)`, and in an implementation the compiler refuses `fn show@(U)` | [`CE6001`](error-catalog.md#ce6001) (perk), [`CE4010`](error-catalog.md#ce4010) (implementation) |
+| A perk has no inheritance, no default implementation, no `Self` and no static method | [`CE4014`](error-catalog.md#ce4014) for a static |
+| A bare-parameter lambda to a generic cannot be inferred; declare its parameter types (`\|i32 x\| ...`) | [`CE2060`](error-catalog.md#ce2060) (function), [`CE2063`](error-catalog.md#ce2063) (method-level parameter) |
+| A method call has no explicit `@(...)` slot | [`CE6102`](error-catalog.md#ce6102) |
+| Explicit type arguments are all or nothing | [`CE2062`](error-catalog.md#ce2062) |
+| A `T` that only the return type names is not inferred from the `let` annotation; write the type arguments | [`CE2060`](error-catalog.md#ce2060) |
+| A generic static in a position that declares no type | [`CE2060`](error-catalog.md#ce2060) |
+| A generic function value where nothing solves its type (`map(xs, identity)`) | [`CE2060`](error-catalog.md#ce2060), [`CE2093`](error-catalog.md#ce2093) |
+| No pack forwarding (`g(pack...)`) and no pack indexing; a value pack is not a tuple, so neither `(args...)` nor a tuple bloom exists | [`CE2060`](error-catalog.md#ce2060) |
+| No variadic parameter in a perk method or an extension method | [`CE0115`](error-catalog.md#ce0115) |
+| A native `...T` function cannot be exported through a `.slib` (a pack can) | [`CE0116`](error-catalog.md#ce0116) |
+| A partially concrete target (`extend Pair@(i32, U)`) | [`CE2098`](error-catalog.md#ce2098) |
+| A template and a concrete target for one method name | [`CE0101`](error-catalog.md#ce0101) |
+| A static on an array target | [`CE2104`](error-catalog.md#ce2104) |
+| A function type or a tuple type as an extension or perk-implementation target | [`CE2110`](error-catalog.md#ce2110) |
+| A nested array as an array extension target (`extend T[][]`, `extend i32[3][]`); `extend T[]` covers the nested receiver | [`CE2101`](error-catalog.md#ce2101) |
+| A template body is checked for each instance, not against its constraints | the diagnostic of the instance, for example [`CE2008`](error-catalog.md#ce2008) |
 
 ---
 

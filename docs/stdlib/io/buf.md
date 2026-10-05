@@ -35,7 +35,7 @@ it, closes it when the buffer is destroyed, and `into_inner()` is how a caller g
 back. Neither can fail, so each answers the buffered type with no channel. `R` and `W`
 come from the handle argument, so `BufReader.new(nom f, 8192).lines()` needs no
 annotation. A type that is not a `Reader` is refused at the type: the struct
-is declared `BufReader@(R: Reader)`, and `BufWriter@(W: Writer)` likewise (CE4006).
+is declared `BufReader@(R: Reader)`, and `BufWriter@(W: Writer)` likewise ([CE4006](../../error-catalog.md#ce4006)).
 
 ```sushi
 use <io/fs>
@@ -139,7 +139,7 @@ fn main() i32:
 
 Turns the reader into a line iterator, TAKING the reader. The iterator owns the reader and
 the reader owns the handle, so one drop closes the descriptor. A later mention of the
-reader is **CE2435**.
+reader is **[CE2435](../../error-catalog.md#ce2435)**.
 
 `Lines@(R)` carries `next()`, which answers `Maybe@(Result@(string, IoError))` -- and that
 makes it walkable by `foreach`, with no `Iterator` type and no perk in sight
@@ -258,7 +258,7 @@ Forgetting `finish()` does not lose the bytes. It loses the answer to "did they 
 
 `BufReader@(R)` implements `Reader` and `BufWriter@(W)` implements `Writer`. A buffered
 read MOVES the cursor, so its receiver is `poke self`, and a perk implementation must match
-its contract's receiver exactly (**CE4004**). That works because every contract method
+its contract's receiver exactly (**[CE4004](../../error-catalog.md#ce4004)**). That works because every contract method
 takes `poke self`, and the console handles are unit variables (`public var File stdout`),
 so `stdout.write(...)` has an address to write through. A generic over a contract takes
 its handle `poke`:

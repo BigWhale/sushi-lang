@@ -66,7 +66,7 @@ is in [Stdlib Build](stdlib-build.md).
 
 `internals/parser.py:build_parser` makes ONE LALR parser per process, with two start
 symbols: `start` for a unit, and `expr` for the text of an interpolation hole
-(`parse_hole`). The doc-block lexer callbacks (CE6011, CE6012, CE6013) do not fire while
+(`parse_hole`). The doc-block lexer callbacks ([CE6011](../error-catalog.md#ce6011), [CE6012](../error-catalog.md#ce6012), [CE6013](../error-catalog.md#ce6013)) do not fire while
 a hole is parsed, because the hole text comes from inside a string literal.
 
 `cached_lark` keeps the tables in the user cache directory (see the Grammar Cache
@@ -95,23 +95,23 @@ then per unit, in one loop:
 
 | Pass | What it does | Where |
 |---|---|---|
-| `collect` | constants and unit variables, function headers, generic types, externs, perks, extensions; one holder for each name of a unit (CE1005) | `semantics/passes/collect/` |
-| `docs` | doc blocks against their declarations (CE70xx, CW7001); completeness under `--warn-missing-docs` | `semantics/passes/docs.py` |
-| `unused` | under `--warn-unused`: dead private declarations (CW1004), unused imports (CW3006) | `semantics/unused.py` |
-| `externs` | extern signatures (CE5003) and the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
+| `collect` | constants and unit variables, function headers, generic types, externs, perks, extensions; one holder for each name of a unit ([CE1005](../error-catalog.md#ce1005)) | `semantics/passes/collect/` |
+| `docs` | doc blocks against their declarations (CE70xx, [CW7001](../error-catalog.md#cw7001)); completeness under `--warn-missing-docs` | `semantics/passes/docs.py` |
+| `unused` | under `--warn-unused`: dead private declarations ([CW1004](../error-catalog.md#cw1004)), unused imports ([CW3006](../error-catalog.md#cw3006)) | `semantics/unused.py` |
+| `externs` | extern signatures ([CE5003](../error-catalog.md#ce5003)) and the `ptr` unit gate ([CE5009](../error-catalog.md#ce5009)) | `semantics/passes/types/externals.py` |
 | `libraries` | the symbols of each linked `.slib` | `semantics/library_registration.py` |
 | `namespaces` | `use ... as`, `public use`, one scope per unit | `semantics/passes/namespaces.py` |
-| `ffi-clash` | an extern that names a symbol this build defines (CE5013) | `semantics/passes/types/externals.py` |
-| `entrypoint` | the rule for `main` (CE3007, CE3501, CE0106, CE0138) | `semantics/semantic_analyzer.py` |
+| `ffi-clash` | an extern that names a symbol this build defines ([CE5013](../error-catalog.md#ce5013)) | `semantics/passes/types/externals.py` |
+| `entrypoint` | the rule for `main` ([CE3007](../error-catalog.md#ce3007), [CE3501](../error-catalog.md#ce3501), [CE0106](../error-catalog.md#ce0106), [CE0138](../error-catalog.md#ce0138)) | `semantics/semantic_analyzer.py` |
 | `instantiate` | every generic instantiation the program names | `semantics/generics/instantiate/` |
 | `monomorphize` | a concrete copy for each instantiation | `semantics/generics/monomorphize/` |
 | `resolve` | field, variant and constant types; each spelled `Result@(T, E)` return | `semantics/passes/resolve.py` |
-| `finite-types` | a type that holds itself inline (CE2095) | `semantics/passes/finite_types.py` |
+| `finite-types` | a type that holds itself inline ([CE2095](../error-catalog.md#ce2095)) | `semantics/passes/finite_types.py` |
 | `derive` | the derived `hash()` and `clone()` | `semantics/passes/derive.py` |
-| `shadowing` | an extension method with the name of a built-in (CE2097) | `semantics/semantic_analyzer.py` |
+| `shadowing` | an extension method with the name of a built-in ([CE2097](../error-catalog.md#ce2097)) | `semantics/semantic_analyzer.py` |
 | `effects` | which functions destroy a `poke` parameter, over all units | `semantics/passes/borrow/destroy_effects.py` |
-| `scope` | declarations, scopes and the bare-name ladder (CE1001, CE2105) | `semantics/passes/scope.py` |
-| `typecheck` | types, inference, return paths (CE0107, CE0140) | `semantics/passes/types/` |
+| `scope` | declarations, scopes and the bare-name ladder ([CE1001](../error-catalog.md#ce1001), [CE2105](../error-catalog.md#ce2105)) | `semantics/passes/scope.py` |
+| `typecheck` | types, inference, return paths ([CE0107](../error-catalog.md#ce0107), [CE0140](../error-catalog.md#ce0140)) | `semantics/passes/types/` |
 | `lift` | each lambda becomes a top-level function and an environment | `semantics/passes/lift.py` |
 | `borrow` | moves, borrows and destroyed values (CE24xx) | `semantics/passes/borrow/` |
 
@@ -187,7 +187,7 @@ tables below are a map; each module's docstring holds the full rule.
 | An interned generic name (`interned_name`); "is this an instance of X" | `semantics/generics/interned.py`, `semantics/type_predicates.py` |
 | The element types of a container instance (`instance_type_arguments`) | `semantics/generics/list.py` |
 | Leading type-argument inference (`solve_leading_type_args`) | `semantics/generics/pack_inference.py` |
-| A wrong type-argument count (CE2062) | `semantics/generics/explicit_type_args.py` |
+| A wrong type-argument count ([CE2062](../error-catalog.md#ce2062)) | `semantics/generics/explicit_type_args.py` |
 | Type substitution (`substitute_type_params`) | `semantics/generics/types.py` |
 | A perk constraint on a type argument (`validate_all_constraints`) | `semantics/generics/constraints.py` |
 | A built-in method's argument count; a derived method's registration | `semantics/generics/builtin_methods.py` |
@@ -234,7 +234,7 @@ tables below are a map; each module's docstring holds the full rule.
 
 | Question | Where |
 |---|---|
-| A checked `malloc` in a generated body (RE2021 on null) | `sushi_stdlib/src/string_helpers.py` |
+| A checked `malloc` in a generated body ([RE2021](../error-catalog.md#re2021) on null) | `sushi_stdlib/src/string_helpers.py` |
 | A `Result` or `Maybe` tag, by name | `sushi_stdlib/src/results.py` |
 | An extern declaration, once per module | `sushi_stdlib/src/libc_declarations.py` |
 | errno to an error-enum tag | `sushi_stdlib/src/errno_tags.py` |
@@ -265,7 +265,7 @@ the module that owns its range:
 | NExxxx | `nori.py` | the `nori` package manager |
 
 No Python traceback reaches the user; `--traceback` adds one after the diagnostic. A
-compiler crash is CE0000 and exits with status 2. See
+compiler crash is [CE0000](../error-catalog.md#ce0000) and exits with status 2. See
 [Error Handling](../error-handling.md) for the user view.
 
 ## Stdlib and libraries
@@ -334,7 +334,7 @@ name matches. An object is written to a temporary file and renamed into place
 `compute_unit_fingerprint` (`compiler/fingerprint.py`) is a SHA-256 digest of these
 blocks:
 
-- `SOURCE`: the unit's source text (a unit with no source is CE0142).
+- `SOURCE`: the unit's source text (a unit with no source is [CE0142](../error-catalog.md#ce0142)).
 - `OWN_SYMBOLS`: the unit's public symbols and their signatures.
 - `DEP_SYMBOLS`: the full interface (struct layouts, variant tags, constant values) of
   every unit in the dependency closure, through the dependency graph.

@@ -29,7 +29,7 @@ Perks provide a way to:
 **Key Design Principles:**
 - A perk method returns a bare value (not a `Result@(T, E)`) unless it declares an error
   channel `| E`. A bare perk method body has no channel, so `??` is refused there
-  (CE0131). Handle a Result in the body with `match` or `.realise(default)`, or declare
+  ([CE0131](error-catalog.md#ce0131)). Handle a Result in the body with `match` or `.realise(default)`, or declare
   `| E` on the contract and on every implementation (see
   [Error Channels on Perk Methods](#error-channels-on-perk-methods)). A `??` inside a
   lambda in the body is legal when the lambda's type writes `| E`, because the lambda then
@@ -60,7 +60,7 @@ perk Ranked:
 Five perks ship with the compiler and cannot be declared: `Hashable` (`fn hash() u64`),
 `Drop` (`fn drop(poke self) ~`), `Eq` (`fn eq(Self other) bool`), `Ord`
 (`fn compare(Self other) i32`) and `Display` (`fn to_str() string`). A unit that declares
-any of them is **CE4001**. See [The Predefined Perks](#the-predefined-perks).
+any of them is **[CE4001](error-catalog.md#ce4001)**. See [The Predefined Perks](#the-predefined-perks).
 
 There is no `Self` type in a perk you write, so a perk method that takes a value of the
 implementing type names that type explicitly (`fn compare(Point other) i32`). A parameter is a borrow by
@@ -76,7 +76,7 @@ The receiver `self` is a borrow by default too. A method that changes its receiv
 - Methods can access `self` implicitly
 - Methods can take parameters in any of the four parameter modes
 - Multiple methods can be defined in a single perk
-- A perk cannot hold a static method (CE4014), because it has no `Self` to construct
+- A perk cannot hold a static method ([CE4014](error-catalog.md#ce4014)), because it has no `Self` to construct
 
 ## Implementing Perks
 
@@ -107,21 +107,21 @@ string literal. For a literal brace, use a single-quoted string (`'{'`), which d
 interpolate.
 
 **Implementation Rules:**
-- All methods defined in the perk must be implemented (CE4005)
-- Method signatures must match exactly: parameters, modes, return type (CE4004) and error
-  channel (CE0133)
+- All methods defined in the perk must be implemented ([CE4005](error-catalog.md#ce4005))
+- Method signatures must match exactly: parameters, modes, return type ([CE4004](error-catalog.md#ce4004)) and error
+  channel ([CE0133](error-catalog.md#ce0133))
 - Can implement multiple perks for the same type
 - Can access struct fields via `self`
 - A name has one home: a perk method and an ordinary extension method of the same name on
-  one type is CE4007. A name is a contract method or a convenience method, never both
-- A function type cannot be the target (CE2110)
+  one type is [CE4007](error-catalog.md#ce4007). A name is a contract method or a convenience method, never both
+- A function type cannot be the target ([CE2110](error-catalog.md#ce2110))
 
 ### Error Channels on Perk Methods
 
 A perk method can declare an error channel `| E`. The contract and every implementation
-must declare the same channel (CE0133). The body then spells both constructors, as a
+must declare the same channel ([CE0133](error-catalog.md#ce0133)). The body then spells both constructors, as a
 function body does: `return Result.Ok(value)` and `return Result.Err(e)`. A bare
-`return value` in a channel body is CE2030. `??` is legal in the body, and the call answers a
+`return value` in a channel body is [CE2030](error-catalog.md#ce2030). `??` is legal in the body, and the call answers a
 `Result@(T, E)`:
 
 ```sushi
@@ -181,25 +181,25 @@ fn main() i32:
 A concrete type argument is a **constraint** rather than a parameter name, the same rule
 an extension target follows: `extend Box@(i32) with Show` applies to `Box@(i32)` and to
 nothing else, and a partially concrete target such as `extend Pair@(i32, U) with Show` is
-**CE2098** -- there is no partial specialization. The compiler makes no copy for an
+**[CE2098](error-catalog.md#ce2098)** -- there is no partial specialization. The compiler makes no copy for an
 instantiation that the program does not name.
 
 The compiler checks the header of a template implementation one time, on the written
 template, and not for each instance. So `fn f(T x) i32` against a contract
-`fn f(i32 x) i32` is **CE4004**, also when every instance uses `T = i32`. To implement the
+`fn f(i32 x) i32` is **[CE4004](error-catalog.md#ce4004)**, also when every instance uses `T = i32`. To implement the
 contract for one instance, write the concrete target: `extend Box@(i32) with Pk`. The
 compiler also checks a template that has no instance, and a concrete implementation that the
 program does not use.
 
 `Drop` is no exception: a generic target may implement it, and each instantiation's copy
 carries it. The orphan rule still applies and reads the target's BASE name, so only the
-unit that declares `Box` may write `extend Box@(T) with Drop` (**CE4012**). A wrapper
+unit that declares `Box` may write `extend Box@(T) with Drop` (**[CE4012](error-catalog.md#ce4012)**). A wrapper
 whose fields already own needs no `Drop` of its own -- destroying its fields destroys the
 handle -- so declare one when the wrapper has something of its OWN to say, such as
 flushing a buffer before the handle closes.
 
 There is no specialization. A template and a concrete target of one perk on one base are
-two implementations for that instance, and the second one is **CE4002**, in either order,
+two implementations for that instance, and the second one is **[CE4002](error-catalog.md#ce4002)**, in either order,
 with a note at the first. Implement the perk on the template, or on each concrete target.
 
 ### Every array may implement a perk
@@ -239,8 +239,8 @@ of `==` or `<` at the top level, and it is not a `HashMap` key, with an implemen
 not. A `Hashable` implementation also answers a direct `xs.hash()`.
 
 The rules of an array extension apply: `extend i32[] with P` is ONE array type, a nested
-target `extend T[][] with P` is **CE2101**, and a library ships an array template in each
-library kind. `extend T[] with Drop` is **CE4016**: no unit declares an array type.
+target `extend T[][] with P` is **[CE2101](error-catalog.md#ce2101)**, and a library ships an array template in each
+library kind. `extend T[] with Drop` is **[CE4016](error-catalog.md#ce4016)**: no unit declares an array type.
 
 ## Generic Constraints
 
@@ -296,7 +296,7 @@ fn main() i32:
     return 0
 ```
 
-The compiler checks a constraint at each written type. `Tagged@(i32)` is **CE4006**, because
+The compiler checks a constraint at each written type. `Tagged@(i32)` is **[CE4006](error-catalog.md#ce4006)**, because
 `i32` does not implement `Describe`.
 
 ## Generic Functions with Perks
@@ -336,7 +336,7 @@ fn main() i32:
 ## The Predefined Perks
 
 Five perks ship with the compiler. None needs an import, none can be declared
-(**CE4001**), and no alias holds them: `sh.Hashable` is **CE2001**, as `sh.Drop` is.
+(**[CE4001](error-catalog.md#ce4001)**), and no alias holds them: `sh.Hashable` is **[CE2001](error-catalog.md#ce2001)**, as `sh.Drop` is.
 
 | Perk | Contract |
 |------|----------|
@@ -348,7 +348,7 @@ Five perks ship with the compiler. None needs an import, none can be declared
 
 **`Self` exists in these contracts only.** A perk you write still cannot name its receiver.
 An implementation of `Eq`, `Ord` or `Display` writes its own type where the contract says
-`Self`. A generic target writes its own instantiation. A mismatch is **CE4004**, and its help
+`Self`. A generic target writes its own instantiation. A mismatch is **[CE4004](error-catalog.md#ce4004)**, and its help
 prints the contract with the target filled in.
 
 ```sushi
@@ -389,13 +389,13 @@ The design is in [Derived contracts](design/derived-contracts.md).
   of another derived method, `contains` and `index_of`, a `HashMap` key and `print`.
 - **Not derived:** a type that holds a function value, a `ptr`, a closure, an iterator or a
   `HashMap@(K, V)`. An implementation gives such a type the contract. A constraint on it
-  is **CE4006**.
+  is **[CE4006](error-catalog.md#ce4006)**.
 - **Constraints follow the top-level rule.** `bool` satisfies `Eq` and `Display`. It does not
   satisfy `Ord`, because a bare bool has no order. A bool FIELD orders `false` before `true`.
 - **Methods:** `a.eq(b)` and `a.compare(b)` exist on every struct, enum and primitive. `x.to_str()`
-  exists on every struct and enum. A wrong argument type is **CE2006**.
+  exists on every struct and enum. A wrong argument type is **[CE2006](error-catalog.md#ce2006)**.
 - **One home per name.** Two perks that give one type a method of the same name are
-  **CE4015**. A derived method is not a home: a type can implement a user perk that provides
+  **[CE4015](error-catalog.md#ce4015)**. A derived method is not a home: a type can implement a user perk that provides
   `compare`. An explicit `a.compare(b)` then reads that implementation, and `<` still reads
   `Ord`.
 
@@ -410,13 +410,13 @@ derives a `hash()` for it, or when the type implements the perk itself.
   enum and array whose parts the compiler can hash -- a `List@(T)` and an `Own@(T)`
   hash what they hold. No `extend ... with Hashable` is written, and none is needed.
 - **Not satisfied:** a type the derive pass refuses -- a struct holding a
-  `HashMap@(K, V)`, a `ptr`, or a function value. A constraint on it is **CE4006**,
+  `HashMap@(K, V)`, a `ptr`, or a function value. A constraint on it is **[CE4006](error-catalog.md#ce4006)**,
   exactly as for any other perk.
 - **Overridable:** `extend T with Hashable: fn hash() u64:` REPLACES the derived hash
   everywhere (see [method resolution](design/method-resolution.md)). It also satisfies
   the constraint for a type the derive pass refuses. It gives a hash only: it does not
   make the type comparable, so a type with no equality (for example, a struct with
-  a function-typed field) is still not a `HashMap` key (**CE2055**), unless it also
+  a function-typed field) is still not a `HashMap` key (**[CE2055](error-catalog.md#ce2055)**), unless it also
   implements `Eq` (see
   [Key Requirements](stdlib/collections/hashmap.md#key-requirements)).
 
@@ -600,10 +600,10 @@ A perk is private by default, as every declaration is. Write `public perk` to ex
 What a private perk hides is the CONTRACT:
 
 - Another unit cannot implement a private perk or constrain a type parameter with it
-  (CE4011). A method that the perk provides stays callable, because a unit that can name the
+  ([CE4011](error-catalog.md#ce4011)). A method that the perk provides stays callable, because a unit that can name the
   type can call what the type implements.
 - A public declaration cannot constrain a type parameter with a private perk of its own unit
-  (CE3010), because the caller would have to name a perk that it cannot see.
+  ([CE3010](error-catalog.md#ce3010)), because the caller would have to name a perk that it cannot see.
 
 An implementation (`extend T with P`) carries no `public` marker. It is as visible as its
 target type.
@@ -614,22 +614,22 @@ Perk-related compiler errors:
 
 | Code | Description | Example |
 |------|-------------|---------|
-| CE4001 | Duplicate perk definition | Declaring `Describe` twice, or declaring `Hashable`, `Drop`, `Eq`, `Ord` or `Display`, which the compiler predefines |
-| CE4002 | Type already implements perk | Two `extend Point with Hashable:` blocks, or `extend T[] with P` and `extend i32[] with P` |
-| CE4003 | Unknown perk, or a perk out of the unit's scope | `extend Point with UnknownPerk:`, or `@(T: Named)` where only another unit imports `Named` |
-| CE4004 | Method signature mismatch | Wrong parameter types, modes or return type; also a template header that does not match for every `T` |
-| CE4005 | Missing required method | Perk defines `hash()` but implementation lacks it |
-| CE4006 | Type doesn't implement required perk | `Container@(T: Hashable)` used with a type that is not `Hashable`. Reported one time, at the type that names the instantiation, with a note at the constraint |
-| CE4007 | Method name conflict | A perk method and an extension method of the same name on one type |
-| CE4010 | Perk cannot have type parameters | `perk Conv@(T):`, or `fn show@(U)(U x)` in an implementation |
-| CE4011 | Private perk used from another unit | `extend Box with other.PrivatePerk:`, or `@(T: other.PrivatePerk)` |
-| CE4012 | `Drop` implemented outside the declaring unit | `extend lib.Handle with Drop:` in a consumer |
-| CE4016 | `Drop` on a type that no unit declares | `extend i32[] with Drop:`, `extend T[] with Drop:`, `extend string with Drop:` |
-| CE4015 | Method name with two homes | `extend Score with Ord:` and `extend Score with Ranked:` that both provide `compare` |
-| CE4014 | Static method in a perk | `static fn get() i32` in an implementation |
-| CE0133 | Error channel mismatch | The contract declares `| E` and the implementation does not, or the two channels differ |
-| CE2110 | Function type as the target | `extend fn(i32) -> i32 with Show:` |
-| CE3010 | Private perk in a public constraint | `public fn f@(T: MyPrivatePerk)(T x) ~` |
+| [CE4001](error-catalog.md#ce4001) | Duplicate perk definition | Declaring `Describe` twice, or declaring `Hashable`, `Drop`, `Eq`, `Ord` or `Display`, which the compiler predefines |
+| [CE4002](error-catalog.md#ce4002) | Type already implements perk | Two `extend Point with Hashable:` blocks, or `extend T[] with P` and `extend i32[] with P` |
+| [CE4003](error-catalog.md#ce4003) | Unknown perk, or a perk out of the unit's scope | `extend Point with UnknownPerk:`, or `@(T: Named)` where only another unit imports `Named` |
+| [CE4004](error-catalog.md#ce4004) | Method signature mismatch | Wrong parameter types, modes or return type; also a template header that does not match for every `T` |
+| [CE4005](error-catalog.md#ce4005) | Missing required method | Perk defines `hash()` but implementation lacks it |
+| [CE4006](error-catalog.md#ce4006) | Type doesn't implement required perk | `Container@(T: Hashable)` used with a type that is not `Hashable`. Reported one time, at the type that names the instantiation, with a note at the constraint |
+| [CE4007](error-catalog.md#ce4007) | Method name conflict | A perk method and an extension method of the same name on one type |
+| [CE4010](error-catalog.md#ce4010) | Perk cannot have type parameters | `perk Conv@(T):`, or `fn show@(U)(U x)` in an implementation |
+| [CE4011](error-catalog.md#ce4011) | Private perk used from another unit | `extend Box with other.PrivatePerk:`, or `@(T: other.PrivatePerk)` |
+| [CE4012](error-catalog.md#ce4012) | `Drop` implemented outside the declaring unit | `extend lib.Handle with Drop:` in a consumer |
+| [CE4016](error-catalog.md#ce4016) | `Drop` on a type that no unit declares | `extend i32[] with Drop:`, `extend T[] with Drop:`, `extend string with Drop:` |
+| [CE4015](error-catalog.md#ce4015) | Method name with two homes | `extend Score with Ord:` and `extend Score with Ranked:` that both provide `compare` |
+| [CE4014](error-catalog.md#ce4014) | Static method in a perk | `static fn get() i32` in an implementation |
+| [CE0133](error-catalog.md#ce0133) | Error channel mismatch | The contract declares `| E` and the implementation does not, or the two channels differ |
+| [CE2110](error-catalog.md#ce2110) | Function type as the target | `extend fn(i32) -> i32 with Show:` |
+| [CE3010](error-catalog.md#ce3010) | Private perk in a public constraint | `public fn f@(T: MyPrivatePerk)(T x) ~` |
 
 ## Known Limitations
 
@@ -646,8 +646,8 @@ perk Iterator@(Item):
 
 The rule applies to an implementation method too: it cannot declare type parameters of its
 own (`fn show@(U)(U x) i32:` inside `extend Box with Shown:`), because the contract has no
-slot to match them against. That is the same **CE4010**. In the perk declaration itself,
-`fn make@(U)(U x) i32` is a parse error (**CE6001**). A generic method is a plain
+slot to match them against. That is the same **[CE4010](error-catalog.md#ce4010)**. In the perk declaration itself,
+`fn make@(U)(U x) i32` is a parse error (**[CE6001](error-catalog.md#ce6001)**). A generic method is a plain
 extension method: `extend Box pick@(U)(U x) i32:`.
 
 Iteration needs no perk. `foreach` walks any type that has a `next()` method that answers
@@ -670,7 +670,7 @@ A perk method that you write cannot name "the implementing type". A method that 
 of that type names a concrete type in its signature, so the perk fits that type only. The
 predefined `Eq` and `Ord` are the exception: their contracts hold a `Self` placeholder that
 only the compiler can write, and an implementation writes its own type there. For the same reason,
-a perk cannot hold a static method or a constructor (CE4014).
+a perk cannot hold a static method or a constructor ([CE4014](error-catalog.md#ce4014)).
 
 ## Best Practices
 

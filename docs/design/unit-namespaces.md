@@ -38,7 +38,7 @@ scope.
 - A qualifier folds into the name that follows it, in every written-name position except an
   array size (section 5).
 - An unqualified name resolves to a local, then to a declaration of this unit, then to a
-  name a flat import brings. Two flat candidates are `CE3012` (section 8).
+  name a flat import brings. Two flat candidates are [`CE3012`](../error-catalog.md#ce3012) (section 8).
 - `public use X` re-exports the public names of X (section 8.1).
 - A namespace is a resolution path, not a type identity: a type is still one per program
   (section 7).
@@ -88,7 +88,7 @@ fn main() i32:
 ```
 
 The alias is what makes this program expressible: two flat imports that both bring `sin`
-are `CE3012` at the call (section 8).
+are [`CE3012`](../error-catalog.md#ce3012) at the call (section 8).
 
 **The `as` clause is optional.** The flat form is not deprecated and gets no warning. It is the right form for a
 program's own units, and the qualified form is the right form when two units disagree
@@ -107,7 +107,7 @@ and in `cast`. Nothing else follows a `use` path, so the clause is unambiguous i
 ### 2.1 Where a `use` may stand, and what it reaches
 
 **Every `use` precedes every other declaration**, after the unit's own doc block if it has
-one. A `use` below a declaration is `CE3014`.
+one. A `use` below a declaration is [`CE3014`](../error-catalog.md#ce3014).
 
 **A namespace is bound for the whole unit**, not from its `use` statement downwards. The
 two halves answer one question that the grammar leaves open in both directions:
@@ -122,7 +122,7 @@ before any type). Rust allows a `use` anywhere and leaves the position to conven
 follows Go and Java: a reader should see a unit's dependencies in one block without
 searching for them.
 
-`CE3014` is the one rule in this document that refuses a placement the grammar accepts. The
+[`CE3014`](../error-catalog.md#ce3014) is the one rule in this document that refuses a placement the grammar accepts. The
 fix is always one line: move the `use` up.
 
 ## 3. Ruling 2: one namespace mechanism, two producers
@@ -198,15 +198,15 @@ the collect order of section 6.2, dependencies before dependents. The
 two rulings lean on each other by design.
 
 `origin` is carried beside the provider rather than derived from it, and it is for
-diagnostics alone: `geo.nope()` has to say which unit `geo` names, and `CE3013` has to point
+diagnostics alone: `geo.nope()` has to say which unit `geo` names, and [`CE3013`](../error-catalog.md#ce3013) has to point
 at what bound the alias first. Nothing resolves through it.
 
 **Two seams, in order.** `namespaces.py` answers *where* a name may be written.
 `visibility.py` answers *whether* it may be named at all. A namespace therefore holds a
 unit's declarations whatever their visibility, and the private ones are refused at the use
-site with `CE3005`, which points at the declaration and says it has no `public`. Filtering
+site with [`CE3005`](../error-catalog.md#ce3005), which points at the declaration and says it has no `public`. Filtering
 them out of the namespace instead would turn "not yours" into "no such name", which is the
-worse diagnostic and the one `CE3005` exists to avoid.
+worse diagnostic and the one [`CE3005`](../error-catalog.md#ce3005) exists to avoid.
 
 ### 3.2 The table is built by its own pass, and it goes after `libraries`
 
@@ -267,7 +267,7 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 | An enum variant | A variant follows its enum (`visibility.md` section 2), so it is reached *through* the enum: `my_math.Sign.Plus`, never `my_math.Plus` |
 | `print`, `println` | These are grammar forms (`print_stmt`, `println_stmt`, `grammar.lark:69`), not symbols. Syntax is never namespaced |
 | `string`, `List`, `Result`, `Maybe`, `Own`, `StdError` | In scope with no import. Nothing brought them, so no namespace holds them |
-| A private declaration of another unit | Not a visibility carve-out — see Ruling 2's second seam. It is a member, and naming it is `CE3005` |
+| A private declaration of another unit | Not a visibility carve-out — see Ruling 2's second seam. It is a member, and naming it is [`CE3005`](../error-catalog.md#ce3005) |
 | A static call on a type NOBODY imports — `List.new()`, `f64.from_bits(b)` | `List`, `f64` and `f32` are in scope with no import, so no namespace can ever hold them. `HashMap` is different: the import gates the name, so its static obeys the alias like the type does — `hm.HashMap.new()`, and the bare form behind an aliased import is refused exactly as the bare type is (the fold is `fold_namespaced_static`, section 5) |
 
 ### 4.3 The standard library has five shapes, and the rule reads all five
@@ -283,7 +283,7 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 `stdin`, `stdout` and `stderr` are ordinary names: each is a `public var File` that
 `<io/fs>` declares (`sushi_stdlib/src_sushi/io/fs.sushi`). `use <io/fs>` brings them into
 the flat scope, `use <io/fs> as fs` puts them behind the dot, and with no
-import `stdin` is CE1001. A METHOD INTERFACE is the shape that brings no name: an alias
+import `stdin` is [CE1001](../error-catalog.md#ce1001). A METHOD INTERFACE is the shape that brings no name: an alias
 on `use <collections/strings>` binds an empty namespace, and every `st.<name>` after it
 fails one at a time with the cause several lines away.
 
@@ -298,7 +298,7 @@ unit. No process-global flag gates the table.
 
 ### 4.4 An empty namespace is a warning, and never an error
 
-**`as` on an import that brings no nameable declaration is `CW3004`**, at the `use`
+**`as` on an import that brings no nameable declaration is [`CW3004`](../error-catalog.md#cw3004)**, at the `use`
 statement. A warning, not an error, because a namespace can be empty for three different
 reasons and only one of them is a mistake:
 
@@ -409,17 +409,17 @@ fn main() i32:
 LALR reduces `.empty_list` to `member_access` and not to `method_call`, because the token
 after it is `AT` and not `(`. The chain therefore arrives as
 `maybe_call: atom(it) member_access(.empty_list) call(@(i32) ())`. Omitting the argument is
-CE2060, so if the builder refused a `type_list` on a call whose callee is not a bare `Name`,
+[CE2060](../error-catalog.md#ce2060), so if the builder refused a `type_list` on a call whose callee is not a bare `Name`,
 **aliasing a unit would make its return-type-only generics uncallable.**
 
-So `DotCall` carries `type_args` (`semantics/ast.py`), and `CE6102` is raised in the
+So `DotCall` carries `type_args` (`semantics/ast.py`), and [`CE6102`](../error-catalog.md#ce6102) is raised in the
 typecheck pass (`_reject_call_site_type_args`, `passes/types/calls/dotcall.py`) when the
 receiver is a VALUE. It cannot be a `SyntaxDiagnostic`: the builder cannot know whether a
 receiver `Name` is a bound alias, and only a pass that has the `NamespaceTable` can.
 
-The rule behind CE6102 holds. Section 5's folding turns `it.empty_list@(i32)()` into
+The rule behind [CE6102](../error-catalog.md#ce6102) holds. Section 5's folding turns `it.empty_list@(i32)()` into
 `empty_list@(i32)()` resolved against one unit, which is a direct call to a named free
-function — exactly what CE6102 permits.
+function — exactly what [CE6102](../error-catalog.md#ce6102) permits.
 
 ### 5.2 A pattern is a written-name position, and its grammar takes the qualifier
 
@@ -453,14 +453,14 @@ pattern: [NAME "."] NAME "." NAME ["(" [pattern_list] ")"]
 Nesting needs nothing further: `pattern_item` admits a `pattern`, so
 `Shape.Wrap(geo.Sign.Plus)` works through the production above. The resolution rule is the
 same — section 5's folding strips the leading segment and the arm resolves against one
-unit, so exhaustiveness, payload binding and the literal-arm rules (CE2074 / CE2075 /
-CE2076) read what they read for an unqualified arm.
+unit, so exhaustiveness, payload binding and the literal-arm rules ([CE2074](../error-catalog.md#ce2074) / [CE2075](../error-catalog.md#ce2075) /
+[CE2076](../error-catalog.md#ce2076)) read what they read for an unqualified arm.
 
 A qualifier that names nothing is refused as **a name that does not exist**, and the code
 depends on the position. In an expression a leading `NAME .` may be a value, so an unbound
-qualifier falls through to the ordinary rules and answers `CE2008` or `CE1001`. In a type
-position it cannot be anything else, and the answer is `CE2001`, with a help line that
-names the import which would bring the name. `CE3012` is the AMBIGUITY code and answers a
+qualifier falls through to the ordinary rules and answers [`CE2008`](../error-catalog.md#ce2008) or [`CE1001`](../error-catalog.md#ce1001). In a type
+position it cannot be anything else, and the answer is [`CE2001`](../error-catalog.md#ce2001), with a help line that
+names the import which would bring the name. [`CE3012`](../error-catalog.md#ce3012) is the AMBIGUITY code and answers a
 different question -- too many candidates, not none.
 
 ### 5.3 One position cannot be qualified
@@ -468,7 +468,7 @@ different question -- too many candidates, not none.
 An array size may not be qualified. `i32[my_math.SIZE]` is refused. A fixed array's size is
 read while the unit's own AST is built (that is also why a constant next door is a
 value and not a size), and an alias is bound long after that. The
-diagnostic is `CE2099`.
+diagnostic is [`CE2099`](../error-catalog.md#ce2099).
 
 ### 5.4 A constant declaration is two written-name positions
 
@@ -515,7 +515,7 @@ Three consequences, all deliberate:
 **Two units may export one name.** Two units exporting `sine` is not an error. It is an
 error only where an unqualified `sine` is written in a unit that imported both flat, and
 then the diagnostic is at that use, names both candidates, and says that `as` resolves it
-(`CE3012`).
+([`CE3012`](../error-catalog.md#ce3012)).
 
 **An import is not re-exported, unless it is a `public use`.** `my_math.<name>` reaches what
 `math` *declares*. It never reaches what `math` imported with a plain `use`. The qualified
@@ -526,7 +526,7 @@ and behind the dot alike (section 8.1).
 **A name does not arrive through the import of another unit.** If `top` imports `mid` and
 `mid` imports `deep`, `top` must write `use "deep"` to call a function of `deep`.
 
-`CW3001` ("duplicate use statement") is a repeat with the same alias, or with none.
+[`CW3001`](../error-catalog.md#cw3001) ("duplicate use statement") is a repeat with the same alias, or with none.
 `use "math"` followed by `use "math" as m` is not a duplicate — the two statements do
 different things.
 
@@ -569,7 +569,7 @@ Sushi unit path, being relative to the importing file, cannot be.
 So the cost of this ruling is real: a consumer inherits the type-declaring dependencies of
 everything it imports, on every `let`, unless a unit re-exports them. Two things lift it:
 re-export, which is decided and built (`public use`, section 8.1), and `let` inference,
-which `CE2007` marks the exact site of and which does not exist. Phase 1 accepts the cost
+which [`CE2007`](../error-catalog.md#ce2007) marks the exact site of and which does not exist. Phase 1 accepts the cost
 rather than a third mechanism to avoid it.
 
 ### 6.2 Collection order: dependencies before dependents
@@ -631,7 +631,7 @@ scope, exactly as a local shadows an FFI namespace
 (`passes/types/__init__.py:152`). One rule, one seam, both producers.
 
 **An alias may not collide.** An alias binds a name in the unit that wrote it, so it is
-`CE3013` if that unit already binds the name: another alias, an FFI namespace, or one of
+[`CE3013`](../error-catalog.md#ce3013) if that unit already binds the name: another alias, an FFI namespace, or one of
 its own declarations. Two aliases for one unit are legal and both work; the same alias
 twice is not.
 
@@ -642,7 +642,7 @@ unqualified name, and it is short:
 |---|---|
 | 1 | a local variable or a parameter — the ordinary scope rules |
 | 2 | a declaration of this unit |
-| 3 | a name a flat `use` of this unit brought in — one candidate resolves, two or more is `CE3012` |
+| 3 | a name a flat `use` of this unit brought in — one candidate resolves, two or more is [`CE3012`](../error-catalog.md#ce3012) |
 
 Row 3 holds a registry stdlib module's CONSTANT as it holds its functions. One scope-aware
 lookup answers `PI`, `E` and `TAU` (`stdlib_registry.lookup_stdlib_constant`), at row 3: a
@@ -664,12 +664,12 @@ because a pass that walks an expression acts on the kind and not on the unit:
 | 3 | a registry module's constant | reads it |
 | 4 | a function, generic or plain | takes its value |
 | 5 | a `use ... as` alias, or an FFI namespace | **not a value** |
-| 6 | a type name — struct, enum, either one's generic form, a primitive | **not a value**: `CE2105` |
-| — | nothing at all | `CE1001`, with the import that would bring it |
+| 6 | a type name — struct, enum, either one's generic form, a primitive | **not a value**: [`CE2105`](../error-catalog.md#ce2105) |
+| — | nothing at all | [`CE1001`](../error-catalog.md#ce1001), with the import that would bring it |
 
-**A type name in a value position is `CE2105`**, because the fault is the POSITION and not
+**A type name in a value position is [`CE2105`](../error-catalog.md#ce2105)**, because the fault is the POSITION and not
 the name: `let i32 x = Color` names a declared enum where a value must stand. The receiver
-position follows the same rule with `CE2102`.
+position follows the same rule with [`CE2102`](../error-catalog.md#ce2102).
 
 **The order lives in one module** (`semantics/name_ladder.py`) and the LOOKUPS stay each
 pass's own, because they are not the same lookups: the typecheck pass resolves a
@@ -679,7 +679,7 @@ rung and `classify` walks them, so a rung cannot be dropped or reordered in one 
 alone. `tests/unit/test_bare_name_ladder_is_one.py` is the gate: every rung is
 reachable, a higher rung wins over the one below, and every value position -- an
 initializer, a hole, a `return`, an argument, an operand, an index, a borrow -- reads
-`CE2105` for all four kinds of type name.
+[`CE2105`](../error-catalog.md#ce2105) for all four kinds of type name.
 
 A type name stays legal in every WRITTEN-name position, and none of them reaches this
 ladder: an annotation, a constraint, and its own dot, where the name is a member of the
@@ -689,10 +689,10 @@ type and not a value (section 5, and `method-resolution.md`).
 
 Row 2 holds ONE declaration for a name. In one unit, one name has one declaration, whatever
 its kind: `fn`, `const`, `var`, `struct`, `enum` and `perk` share one set of names. The
-SECOND declaration in source order is `CE1005`, and its note points at the first. The first
+SECOND declaration in source order is [`CE1005`](../error-catalog.md#ce1005), and its note points at the first. The first
 keeps the name, and the refused declaration enters no table, so the uses of the first give
-no more errors. Two declarations of ONE kind keep that kind's code (`CE0004`, `CE2046`,
-`CE4001`, `CE0101`, `CE0105`), and a struct beside an enum is `CE0006`. The
+no more errors. Two declarations of ONE kind keep that kind's code ([`CE0004`](../error-catalog.md#ce0004), [`CE2046`](../error-catalog.md#ce2046),
+[`CE4001`](../error-catalog.md#ce4001), [`CE0101`](../error-catalog.md#ce0101), [`CE0105`](../error-catalog.md#ce0105)), and a struct beside an enum is [`CE0006`](../error-catalog.md#ce0006). The
 collectors run kind by kind, so the collection order is not the source order: one walk over
 the unit's declarations, sorted by position, decides the holder of each name before any
 collector runs (`semantics/passes/collect/unit_names.py`).
@@ -706,9 +706,9 @@ Two TYPES of one name in two units stay refused, because a type is one per progr
 (`type-identity.md`).
 
 Row 2 beating row 3 is also the rule the linker follows: a private function has internal linkage, so the consumer's call binds to the
-consumer's definition (`visibility.md` decision 10). It warns — `CW3002` — because
+consumer's definition (`visibility.md` decision 10). It warns — [`CW3002`](../error-catalog.md#cw3002) — because
 shadowing an export is rarely intended and the reader of the call site cannot see which
-declaration answers. `as` is what makes the choice explicit, and `CW3002`'s `doc` string
+declaration answers. `as` is what makes the choice explicit, and [`CW3002`](../error-catalog.md#cw3002)'s `doc` string
 says so.
 
 The table is keyed by unit, so no declaration displaces another: row 2 is a lookup in the
@@ -745,7 +745,7 @@ it like Swift and refuses like Go.
 
 **The diagnostic blames neither unit.** When the two extensions come from two libraries,
 neither author is at fault and the consumer can edit neither. So when the two declarations
-come from two units, `CE0101` is relational: a note per unit, `unit '<name>' declares it
+come from two units, [`CE0101`](../error-catalog.md#ce0101) is relational: a note per unit, `unit '<name>' declares it
 here`, and no side blamed (`passes/collect/functions.py`, both the concrete and the
 generic-target site). One unit writing both gets the plain duplicate shape, because there
 the second one IS the duplicate.
@@ -753,11 +753,11 @@ the second one IS the duplicate.
 #### The warning belongs to `--lib`, and to nothing else
 
 The person who can fix a foreign-extension collision is never the person who sees it. A
-consumer combining two libraries reads `CE0101` about code they did not write and cannot
+consumer combining two libraries reads [`CE0101`](../error-catalog.md#ce0101) about code they did not write and cannot
 change; only a diagnostic at the declaration reaches somebody who can act. So there is a
 warning, and its scope is the whole of its design:
 
-> **CW3003**, at `--lib` build time only: this library extends a type it did not declare,
+> **[CW3003](../error-catalog.md#cw3003)**, at `--lib` build time only: this library extends a type it did not declare,
 > so the method name is claimed for every consumer, and a second library claiming it makes
 > the two unusable together.
 
@@ -781,19 +781,19 @@ cross-unit perk implementations in the tree — `tests/libs/`, `tests/perks/cros
 `tests/visibility/perk/` — is that shape, eight of them on a builtin and four on a type the
 implementing unit declares itself. That is why the foreign-target count is zero.
 
-**A perk implementation never warns, whatever its target.** The hazard CW3003
+**A perk implementation never warns, whatever its target.** The hazard [CW3003](../error-catalog.md#cw3003)
 names is a claim with no escape: a consumer holding two colliding plain extensions can edit
 neither. A perk implementation's claim has the escape built in — the consumer's OWN
 implementation is the sanctioned override and wins over a shipped one
 (`tests/libs/shipped_perks/test_lib_perk_impl_local_override.sushi` is the measured proof). So
 `extend i32 with Doubler` in a library stays quiet, and the two library fixtures of that
 shape keep building clean. The predicate lives in `semantics/foreign_extensions.py`, one
-function for both consumers: the CW3003 emitter in the pipeline and the manifest extractor.
+function for both consumers: the [CW3003](../error-catalog.md#cw3003) emitter in the pipeline and the manifest extractor.
 
 The source stdlib holds many extensions and perk implementations: the combinators in
 `src_sushi/collections/iter.sushi` are on builtin generic targets (`List@(T)`, `T[]`), and
 the `io/*` and `net/*` modules extend the types that each module declares. A bundled stdlib
-module is not a `--lib` build, so CW3003 does not apply to it. CW3003 fires nowhere in real
+module is not a `--lib` build, so [CW3003](../error-catalog.md#cw3003) does not apply to it. [CW3003](../error-catalog.md#cw3003) fires nowhere in real
 library code, which is what a warning aimed at a future hazard should do.
 
 **The consumer's half.** `--lib-info` lists the foreign types a library claims methods on,
@@ -841,7 +841,7 @@ place U's own names land -- flat behind a flat `use "U"`, behind the dot of `use
 **Four rules.**
 
 1. `public use X` re-exports what X brings. It is also an ordinary `use` for U itself. It
-   takes no `as` (CE3016): a re-export is of names, not of a namespace, and an alias is
+   takes no `as` ([CE3016](../error-catalog.md#ce3016)): a re-export is of names, not of a namespace, and an alias is
    local to the unit that wrote it (section 8). The alias still binds, so the one fault
    gets one diagnostic.
 2. Only a `public use` re-exports. A plain `use` in U brings nothing to U's importers. Re-exports compose along `public use` chains -- if X says `public use Y`, U's
@@ -861,7 +861,7 @@ place U's own names land -- flat behind a flat `use "U"`, behind the dot of `use
    is read through the re-export. A registry (Python) module has no `use`
    statement to write, so it declares its re-exports in a `REEXPORTS` tuple beside its
    functions (`StdlibModule.reexports`); `<io/files>` hands on `<io/error>` that way. A
-   `public use` that hands on nothing public warns (CW3005), as an empty alias does (CW3004).
+   `public use` that hands on nothing public warns ([CW3005](../error-catalog.md#cw3005)), as an empty alias does ([CW3004](../error-catalog.md#cw3004)).
    A plain `use` re-exports nothing: `<io/error>` imports `<net/error>` for the one name
    that the conversion `NetError as IoError` needs (a conversion lives in the unit of its
    target, `error-conversion.md` section 3.5), so a program that uses `<io/fs>` loads the
@@ -871,14 +871,14 @@ place U's own names land -- flat behind a flat `use "U"`, behind the dot of `use
 **Shadows and duplicates.** A re-exported name is a candidate exactly as a flat import's
 is. U's own declaration wins over its re-exports, as a unit's own wins over its imports
 (section 8's ladder, row 2 over row 3). Two re-exports that offer DIFFERENT declarations
-of one name are CE3012 at the use, like two flat imports. The same declaration reached
+of one name are [CE3012](../error-catalog.md#ce3012) at the use, like two flat imports. The same declaration reached
 twice -- `use <io/fs>` and `use <io/error>` in one unit, or two units that both re-export
 `geometry` -- is ONE candidate: `VisibilityTable.candidates` counts by declaring unit and
 not by path, and must keep doing so. A predefined enum has no declaring unit and is never
-a candidate for CE3012. Only X's PUBLIC declarations travel: U cannot give away what it may
-not name, and CE3005 stays the consumer's answer for a private one it writes anyway. The
+a candidate for [CE3012](../error-catalog.md#ce3012). Only X's PUBLIC declarations travel: U cannot give away what it may
+not name, and [CE3005](../error-catalog.md#ce3005) stays the consumer's answer for a private one it writes anyway. The
 provider still HOLDS the private, as every namespace does, so `u.hidden` is "not yours"
-and not "no such name"; what CW3005 counts is the public subset.
+and not "no such name"; what [CW3005](../error-catalog.md#cw3005) counts is the public subset.
 
 **One type, whatever the path.** Guaranteed by the type model and pinned by a gate.
 Identity is nominal and program-wide (`docs/design/type-identity.md`; Ruling 6: a
@@ -886,7 +886,7 @@ namespace is a resolution path, not a type identity). A qualifier folds into the
 name before the table lookup, so `IoError`, `fs.IoError`, `io.IoError` and a name reached
 through a two-hop chain resolve to the ONE synthesized `EnumType`, and
 `Result<string, IoError>` interns once: a program that names `Vec` bare through two hops and
-behind two aliases, and `IoError` bare and behind two aliases, gets no CE0126. The fixtures
+behind two aliases, and `IoError` bare and behind two aliases, gets no [CE0126](../error-catalog.md#ce0126). The fixtures
 under `tests/namespaces/reexport/` hold it.
 
 **Mechanics.** The grammar takes `PUBLIC? USE`; `UseStatement.is_public` and
@@ -903,10 +903,10 @@ AST, so `_binary_reexports` reads the manifest record in its place and composes 
 way, with the same chain and the same visited set.
 
 **Tests.** `tests/namespaces/reexport/`: the flat and the aliased import of a re-exporting
-unit; a two-hop chain; a plain `use` in the middle that re-exports nothing (CE2001 with the
-import in the help); `public use ... as` (CE3016); a `public use` below a declaration
-(CE3014); two re-exports offering one name (CE3012); an own declaration beside a re-export;
-one declaration reached twice; a `public use` of a unit with nothing public (CW3005). The
+unit; a two-hop chain; a plain `use` in the middle that re-exports nothing ([CE2001](../error-catalog.md#ce2001) with the
+import in the help); `public use ... as` ([CE3016](../error-catalog.md#ce3016)); a `public use` below a declaration
+([CE3014](../error-catalog.md#ce3014)); two re-exports offering one name ([CE3012](../error-catalog.md#ce3012)); an own declaration beside a re-export;
+one declaration reached twice; a `public use` of a unit with nothing public ([CW3005](../error-catalog.md#cw3005)). The
 stdlib half: `use <io/fs>` alone writes `| IoError`, `IoError.NotFound` and
 `SeekFrom.Start`; `use <io/fs> as fs` gives `fs.IoError`; `use <net/tcp>` alone matches
 `IoError` from a read. The fixtures under `tests/namespaces/reexport/` hold rule 3.
@@ -923,7 +923,7 @@ found, and the consumer's build loads the whole graph (`_resolve_library_imports
 records. VISIBILITY is this section's rule and is not transitive: only a `public use` in
 A, or the consumer's own `use <lib/b>`, gives the consumer B's names. A plain `use
 <lib/b>` loads B for A's body and hands nothing on, so a bare `b_val()` at the consumer is
-CE2008.
+[CE2008](../error-catalog.md#ce2008).
 
 **A compiled library is a unit for the scope** (#1120). A source library's declarations
 are filed under its injected units (`lib/<library>/<unit>`), and a compiled library's
@@ -932,8 +932,8 @@ constant and unit variable in `constants.by_unit` (its `ConstSig.unit_name` is t
 library unit), and each public struct, enum and generic type as a visibility record of
 that unit (`library_registration.py`). So a compiled library's name reaches only a unit
 whose scope holds the library unit -- its own `use <lib/a>`, or a `public use` chain --
-and a second unit of the consumer that does not import the library hears CE2008, CE1001
-or CE2001, as for a source library.
+and a second unit of the consumer that does not import the library hears [CE2008](../error-catalog.md#ce2008), [CE1001](../error-catalog.md#ce1001)
+or [CE2001](../error-catalog.md#ce2001), as for a source library.
 
 A copy of a compiled library's template lands in a unit of the consumer and still
 resolves the names of its body where the template was written. The `namespaces` step
@@ -953,8 +953,8 @@ A library is identified by its stamped `library_name`, and the driver stamps eve
 <lib/...>` with the name and the version that it found (`UseStatement.library_name`), so
 the provider of section 3.1 picks the library by name: a `.slib` built under another name
 than its unit's re-exports exactly as the others do. One library that two paths reach is
-loaded once and is one candidate. Two versions of one library in the graph are CE3519. A
-dependency that is not on the path is CE3502 at the consumer, with a note at the `use`
+loaded once and is one candidate. Two versions of one library in the graph are [CE3519](../error-catalog.md#ce3519). A
+dependency that is not on the path is [CE3502](../error-catalog.md#ce3502) at the consumer, with a note at the `use`
 that needs it.
 
 **What this does not decide.** Whether a `public use` may re-export a single name
@@ -1032,7 +1032,7 @@ binds an alias to: `use <lib/foo/bar> as f` binds `f` to the unit `bar`, and for
 library the manifest is the only place that can say.
 
 **There is no scheme identifier.** A manifest records what is, not the recipe, and
-`compiler_version` already says which compiler wrote it, with `CE3503` refusing a `.slib`
+`compiler_version` already says which compiler wrote it, with [`CE3503`](../error-catalog.md#ce3503) refusing a `.slib`
 the running compiler may not consume.
 
 ## 10. Diagnostics
@@ -1041,32 +1041,32 @@ This document owns these codes:
 
 | Code | Raised at | Says |
 |---|---|---|
-| **CE3012** | an unqualified use | the name is offered by more than one flat import; names every candidate, and says `as` resolves it |
-| **CE3013** | the `use` statement | the alias is already bound in this unit; the note points at what bound it |
-| **CE3014** | the `use` statement | a `use` below a declaration; every import comes first (section 2.1) |
-| **CW3003** | an `extend` of a foreign type, at `--lib` build time ONLY | this library claims a method on a type it did not declare (section 8). Not gated on either phase: it needs the target's declaring unit and the `--lib` flag, and nothing else this document adds |
-| **CW3004** | the `use` statement | `as` bound an empty namespace (section 4.4). A warning because a namespace is empty for three reasons and only one is a mistake |
-| **CE1005** | the second declaration | one unit declares one name twice, in two kinds (section 8); the note points at the first declaration |
+| **[CE3012](../error-catalog.md#ce3012)** | an unqualified use | the name is offered by more than one flat import; names every candidate, and says `as` resolves it |
+| **[CE3013](../error-catalog.md#ce3013)** | the `use` statement | the alias is already bound in this unit; the note points at what bound it |
+| **[CE3014](../error-catalog.md#ce3014)** | the `use` statement | a `use` below a declaration; every import comes first (section 2.1) |
+| **[CW3003](../error-catalog.md#cw3003)** | an `extend` of a foreign type, at `--lib` build time ONLY | this library claims a method on a type it did not declare (section 8). Not gated on either phase: it needs the target's declaring unit and the `--lib` flag, and nothing else this document adds |
+| **[CW3004](../error-catalog.md#cw3004)** | the `use` statement | `as` bound an empty namespace (section 4.4). A warning because a namespace is empty for three reasons and only one is a mistake |
+| **[CE1005](../error-catalog.md#ce1005)** | the second declaration | one unit declares one name twice, in two kinds (section 8); the note points at the first declaration |
 
 Reused rather than duplicated:
 
 | Code | Also answers |
 |---|---|
-| `CE3005` | `my_math.helper` where `helper` is private to `math`. The two-seam rule (section 3) routes it here |
-| `CE2008` | `my_math.nope()` where `math` declares no `nope` at all. `NamespaceTable.members` supplies the "did you mean" help line |
-| `CE2099` | a qualified array size (section 5.3) |
-| `CW3002` | a unit's own declaration wins over a flat import and warns (section 8) |
-| `CE2007` | load-bearing. It is why section 6.1 needs an escape: a `let` cannot infer, so a type that cannot be named cannot be bound |
-| `CE6102` | "Explicit type arguments only on a direct call to a named free function" reads the RECEIVER, not the parse shape, so a qualified call may carry them (section 5.1) |
+| [`CE3005`](../error-catalog.md#ce3005) | `my_math.helper` where `helper` is private to `math`. The two-seam rule (section 3) routes it here |
+| [`CE2008`](../error-catalog.md#ce2008) | `my_math.nope()` where `math` declares no `nope` at all. `NamespaceTable.members` supplies the "did you mean" help line |
+| [`CE2099`](../error-catalog.md#ce2099) | a qualified array size (section 5.3) |
+| [`CW3002`](../error-catalog.md#cw3002) | a unit's own declaration wins over a flat import and warns (section 8) |
+| [`CE2007`](../error-catalog.md#ce2007) | load-bearing. It is why section 6.1 needs an escape: a `let` cannot infer, so a type that cannot be named cannot be bound |
+| [`CE6102`](../error-catalog.md#ce6102) | "Explicit type arguments only on a direct call to a named free function" reads the RECEIVER, not the parse shape, so a qualified call may carry them (section 5.1) |
 
 Four more codes, and the scope each one has in this design:
 
 | Code | Scope |
 |---|---|
-| `CE3011` | a TYPE name a consumer redeclares against a library, imported flat or behind an alias. An alias does not help a type -- identity is nominal, so one name is one shape however the name is written. A function or a constant of that name coexists: the tables are keyed by unit, so each declaration takes its own global |
-| `CW3001` | a repeat with the same alias, or with none (section 6) |
-| `CE0101` | a duplicate extension on a foreign type, relational, naming both units and blaming neither (section 8); and a duplicate callable in ONE unit. A private function in each of two units coexists (section 7), a library's private function and a GENERIC function included: its table carries the two views, and its instance takes its declaring unit's symbol prefix |
-| `CE0105` | a duplicate constant in one unit, or against a library's PUBLIC constant, which the consumer can see and read. A private constant in each of two units coexists (section 7) |
+| [`CE3011`](../error-catalog.md#ce3011) | a TYPE name a consumer redeclares against a library, imported flat or behind an alias. An alias does not help a type -- identity is nominal, so one name is one shape however the name is written. A function or a constant of that name coexists: the tables are keyed by unit, so each declaration takes its own global |
+| [`CW3001`](../error-catalog.md#cw3001) | a repeat with the same alias, or with none (section 6) |
+| [`CE0101`](../error-catalog.md#ce0101) | a duplicate extension on a foreign type, relational, naming both units and blaming neither (section 8); and a duplicate callable in ONE unit. A private function in each of two units coexists (section 7), a library's private function and a GENERIC function included: its table carries the two views, and its instance takes its declaring unit's symbol prefix |
+| [`CE0105`](../error-catalog.md#ce0105) | a duplicate constant in one unit, or against a library's PUBLIC constant, which the consumer can see and read. A private constant in each of two units coexists (section 7) |
 
 ## 11. What this does not decide
 
@@ -1089,7 +1089,7 @@ under phase 2, where two units may extend two different types that share a name.
 with `docs/design/method-resolution.md`.
 
 **`let` inference.** Section 6.1 measures its absence and rules without it. Adding it is a
-language change with a much wider blast radius than a namespace, and `CE2007` is where it
+language change with a much wider blast radius than a namespace, and [`CE2007`](../error-catalog.md#ce2007) is where it
 would land.
 
 **Per-alias visibility.** An alias is local to its unit (section 8) and carries no marker.

@@ -15,19 +15,19 @@ each named for the stage it runs.
 | Pass | What it does | Where |
 |---|---|---|
 | `collect` | constants, function headers, generic types, externals | `semantics/passes/collect/` |
-| `docs` | check each doc block against its declaration (CE7001-CE7008, CW7001), and its completeness under `--warn-missing-docs` (CW7002-CW7006) | `semantics/passes/docs.py` |
-| `unused` | under `--warn-unused`: a private declaration nothing in its unit reaches (CW1004), an import whose unit names nothing it brings (CW3006) | `semantics/unused.py` |
-| `externs` | extern signatures (CE5003), `CW5001`, the `ptr` unit gate (CE5009) | `semantics/passes/types/externals.py` |
+| `docs` | check each doc block against its declaration ([CE7001](../error-catalog.md#ce7001)-[CE7008](../error-catalog.md#ce7008), [CW7001](../error-catalog.md#cw7001)), and its completeness under `--warn-missing-docs` ([CW7002](../error-catalog.md#cw7002)-[CW7006](../error-catalog.md#cw7006)) | `semantics/passes/docs.py` |
+| `unused` | under `--warn-unused`: a private declaration nothing in its unit reaches ([CW1004](../error-catalog.md#cw1004)), an import whose unit names nothing it brings ([CW3006](../error-catalog.md#cw3006)) | `semantics/unused.py` |
+| `externs` | extern signatures ([CE5003](../error-catalog.md#ce5003)), [`CW5001`](../error-catalog.md#cw5001), the `ptr` unit gate ([CE5009](../error-catalog.md#ce5009)) | `semantics/passes/types/externals.py` |
 | `libraries` | register every symbol a `.slib` exports | `semantics/library_registration.py` |
-| `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds (CE3013, CE3014, CE3016, CW3004, CW3005) | `semantics/passes/namespaces.py` |
-| `ffi-clash` | fold each link name written as a string constant (CE5015), then reject an `unsafe external` that names a symbol this build defines (CE5013). Its instance half runs directly after `monomorphize` (see below) | `semantics/passes/types/externals.py` |
-| `entrypoint` | main's whole rule: it exists (CE3007), a library carries none (CE3501), it returns an integer (CE0106), and it takes `string[] args` or nothing (CE0138) | `semantics/semantic_analyzer.py` |
+| `namespaces` | bind what each unit may write behind a dot, and what its flat scope holds ([CE3013](../error-catalog.md#ce3013), [CE3014](../error-catalog.md#ce3014), [CE3016](../error-catalog.md#ce3016), [CW3004](../error-catalog.md#cw3004), [CW3005](../error-catalog.md#cw3005)) | `semantics/passes/namespaces.py` |
+| `ffi-clash` | fold each link name written as a string constant ([CE5015](../error-catalog.md#ce5015)), then reject an `unsafe external` that names a symbol this build defines ([CE5013](../error-catalog.md#ce5013)). Its instance half runs directly after `monomorphize` (see below) | `semantics/passes/types/externals.py` |
+| `entrypoint` | main's whole rule: it exists ([CE3007](../error-catalog.md#ce3007)), a library carries none ([CE3501](../error-catalog.md#ce3501)), it returns an integer ([CE0106](../error-catalog.md#ce0106)), and it takes `string[] args` or nothing ([CE0138](../error-catalog.md#ce0138)) | `semantics/semantic_analyzer.py` |
 | `instantiate` | collect every generic instantiation the program asks for | `semantics/generics/instantiate/` |
 | `monomorphize` | generic definitions become concrete instances | `semantics/generics/monomorphize/` |
 | `resolve` | struct field, enum variant and constant types become concrete; a spelled Result return is interned | `semantics/passes/resolve.py` |
-| `finite-types` | reject a type that contains itself by value (CE2095) | `semantics/passes/finite_types.py` |
+| `finite-types` | reject a type that contains itself by value ([CE2095](../error-catalog.md#ce2095)) | `semantics/passes/finite_types.py` |
 | `derive` | auto-derive `hash()` and `clone()` (not `Eq`, `Ord` or `Display`: the contract walk answers those) | `semantics/passes/derive.py` |
-| `shadowing` | reject an extension method that collides with a built-in (CE2097) | `semantics/semantic_analyzer.py` |
+| `shadowing` | reject an extension method that collides with a built-in ([CE2097](../error-catalog.md#ce2097)) | `semantics/semantic_analyzer.py` |
 | `effects` | which functions destroy a `poke` parameter, transitively | `semantics/passes/borrow/destroy_effects.py` |
 | `scope` | scope and variable analysis | `semantics/passes/scope.py` |
 | `typecheck` | type validation and inference | `semantics/passes/types/` |
@@ -70,23 +70,23 @@ Collect global definitions before analyzing function bodies.
 6. **Extension methods**, instance and STATIC alike, with `is_static` carried on the
    collected signature (`docs/design/method-resolution.md`). The two refusals a static
    brings are structural and so are decided here: a receiver named in the signature or
-   the body is `CE0134`, and a static spelling a variant of the enum it extends is
-   `CE2103`. A `static` inside a perk implementation is `CE4014`, in the perk collector.
+   the body is [`CE0134`](../error-catalog.md#ce0134), and a static spelling a variant of the enum it extends is
+   [`CE2103`](../error-catalog.md#ce2103). A `static` inside a perk implementation is [`CE4014`](../error-catalog.md#ce4014), in the perk collector.
 7. **The error channel of a written body.** A callable has a channel only when its
    signature writes `| E` or returns an explicit `Result@(T, E)`; there is no default
-   error type (`docs/design/error-channel.md`). The collect pass emits `CE0131` for a `??`
+   error type (`docs/design/error-channel.md`). The collect pass emits [`CE0131`](../error-catalog.md#ce0131) for a `??`
    in EVERY bare function and method body: a free function, an extension method and a
    perk-implementation method (`passes/collect/utils.py`, `functions.py`, `perks.py`).
    It fires once per declaration and covers a template nobody instantiates. Both
-   spellings at once (`Result@(T, E1) | E2`) is `CE2085`, here too. A lambda takes its
+   spellings at once (`Result@(T, E1) | E2`) is [`CE2085`](../error-catalog.md#ce2085), here too. A lambda takes its
    channel from its TYPE, which only the `typecheck` pass knows, so the `typecheck` pass
-   emits `CE0131` for a `??` in a bare lambda (`passes/types/expressions.py`).
+   emits [`CE0131`](../error-catalog.md#ce0131) for a `??` in a bare lambda (`passes/types/expressions.py`).
 8. **Conversions.** `extend <Source> as <Target>:` is an `ExtendDef` named `as`, and
    `collect_conversion` (`passes/collect/conversions.py`) judges it in this order: a `??`
-   in the body is `CE0131` (the body is bare); a side that is generic or not an error type
-   is `CE2520`; an identity is `CE2521`; a declaration outside the unit of the target
-   type (the home module, for a predefined target) is `CE2519`; a second declaration of
-   one pair is `CE0101`. An accepted conversion is filed in `SymbolTables.conversions`,
+   in the body is [`CE0131`](../error-catalog.md#ce0131) (the body is bare); a side that is generic or not an error type
+   is [`CE2520`](../error-catalog.md#ce2520); an identity is [`CE2521`](../error-catalog.md#ce2521); a declaration outside the unit of the target
+   type (the home module, for a predefined target) is [`CE2519`](../error-catalog.md#ce2519); a second declaration of
+   one pair is [`CE0101`](../error-catalog.md#ce0101). An accepted conversion is filed in `SymbolTables.conversions`,
    keyed by the pair of names; a refused one leaves the AST. A conversion is not filed in
    the extension table, and a side that only a binary library declares is judged again
    in the `libraries` step.
@@ -94,8 +94,8 @@ Collect global definitions before analyzing function bodies.
 ### One predicate for the channel
 
 `has_channel` (`semantics/channel.py`) is the one question "does this callable answer a
-Result". Every reader asks it: the `collect` pass (`CE0131`, `CE2085`), the `typecheck`
-pass (the body state, the return rule, the `??` channel, `CE0107`, what a call yields),
+Result". Every reader asks it: the `collect` pass ([`CE0131`](../error-catalog.md#ce0131), [`CE2085`](../error-catalog.md#ce2085)), the `typecheck`
+pass (the body state, the return rule, the `??` channel, [`CE0107`](../error-catalog.md#ce0107), what a call yields),
 the `lift` pass (the desugar of an expression lambda: `return e` when bare,
 `return Result.Ok(e)` with a channel), and the backend. Do not test `err_type` directly:
 an explicit `Result@(T, E)` return has a channel and no `err_type`.
@@ -105,7 +105,7 @@ an explicit `Result@(T, E)` return has a channel and no `err_type`.
 The collectors run kind by kind, so the collection order is not the source order. Before
 they run, `claim_unit_names` (`collect/unit_names.py`) sorts the unit's top-level
 declarations by position and refuses each later declaration of a name that an earlier one
-of another kind holds: `CE0006` for a struct beside an enum, `CE1005` for every other
+of another kind holds: [`CE0006`](../error-catalog.md#ce0006) for a struct beside an enum, [`CE1005`](../error-catalog.md#ce1005) for every other
 pair. A refused declaration enters no table. Two declarations of one kind
 stay with that kind's collector and its own code.
 
@@ -123,8 +123,8 @@ creates. That is why a library unit comes first without being told to. A binary 
 matches no unit and adds no edge, because it has no unit to compile.
 
 The order also serves the two rules that read the perk table when an implementation is
-collected -- the perk exists (`CE4003`), and its marker lets this unit implement it
-(`CE4011`). A perk declared next door is in the table when the implementing unit is reached.
+collected -- the perk exists ([`CE4003`](../error-catalog.md#ce4003)), and its marker lets this unit implement it
+([`CE4011`](../error-catalog.md#ce4011)). A perk declared next door is in the table when the implementing unit is reached.
 Five perks are in the table before any unit is collected: `Drop`, `Hashable`, `Eq`, `Ord`
 and `Display`, the compiler's own (`register_predefined_perks`). The contracts of `Eq` and
 `Ord` hold a receiver placeholder (`ReceiverType`) where a user perk cannot write `Self`;
@@ -172,9 +172,9 @@ never be shown its own code measured against somebody else's declaration.
 
 The rules that read it live where the use is: `passes/types/visibility.py` for a call and a
 bare constant read, the type funnel for a named type, the collect pass itself for a
-TYPE declaration that collides with a library's (CE3011) or a declaration that promises
-something about a private perk (CE4011), and `passes/types/public_signatures.py` for the leak fence (CE3009,
-CE3010). `docs/design/visibility.md` is normative.
+TYPE declaration that collides with a library's ([CE3011](../error-catalog.md#ce3011)) or a declaration that promises
+something about a private perk ([CE4011](../error-catalog.md#ce4011)), and `passes/types/public_signatures.py` for the leak fence ([CE3009](../error-catalog.md#ce3009),
+[CE3010](../error-catalog.md#ce3010)). `docs/design/visibility.md` is normative.
 
 ### One reporter, many files
 
@@ -205,15 +205,15 @@ variable (`var`) also takes an empty container (`List.new()`, `from([])`).
 link name, param/return types). It rejects duplicate names within a namespace. The
 same module holds `LinkNames` and `reject_disagreeing_link_names`, which the `ffi-clash`
 step runs over every unit after it folds the link names: two declarations of one link
-name with other C types are `CE5001`, and each `RESERVED_EXTERNS` built-in is the first
+name with other C types are [`CE5001`](../error-catalog.md#ce5001), and each `RESERVED_EXTERNS` built-in is the first
 declaration of its name (#1099). The table is exposed as `collector.externals` and threaded
 into the scope pass, the type validator, and the backend.
 
-The C-ABI allowlist check (`CE5003`) and the `CW5001` four-guarantee warning live
+The C-ABI allowlist check ([`CE5003`](../error-catalog.md#ce5003)) and the [`CW5001`](../error-catalog.md#cw5001) four-guarantee warning live
 in `semantics/passes/types/externals.py::validate_external_signatures`, run right
 after collection.
 
-`CE5013` has two halves. The `ffi-clash` step checks every symbol that exists before
+[`CE5013`](../error-catalog.md#ce5013) has two halves. The `ffi-clash` step checks every symbol that exists before
 `instantiate`: a function, a constant, a library record, a generated symbol. A
 monomorphized instance exists only after `monomorphize`, so
 `SemanticAnalyzer._check_instance_clash` runs the second half directly after that pass
@@ -246,15 +246,15 @@ Eight errors and one warning, all of them always on. `check_docs` is the entry p
 
 | Condition | Code |
 |---|---|
-| a `- Parameter` tag names no parameter of this callable | CE7001 |
-| two `- Parameter` tags for one name | CE7002 |
-| a second `- Returns:` or `- Errors:` | CE7003 |
-| an unrecognised tag keyword | CE7004 |
-| a block in a body that is not the first item | CE7005 |
-| a declaration with a block above it and a block first in its body | CE7006 |
-| an `- Example:` tag that introduces no fenced block | CE7007 |
-| a fence inside a block that is never closed | CE7008 |
-| a block that documents nothing | CW7001 |
+| a `- Parameter` tag names no parameter of this callable | [CE7001](../error-catalog.md#ce7001) |
+| two `- Parameter` tags for one name | [CE7002](../error-catalog.md#ce7002) |
+| a second `- Returns:` or `- Errors:` | [CE7003](../error-catalog.md#ce7003) |
+| an unrecognised tag keyword | [CE7004](../error-catalog.md#ce7004) |
+| a block in a body that is not the first item | [CE7005](../error-catalog.md#ce7005) |
+| a declaration with a block above it and a block first in its body | [CE7006](../error-catalog.md#ce7006) |
+| an `- Example:` tag that introduces no fenced block | [CE7007](../error-catalog.md#ce7007) |
+| a fence inside a block that is never closed | [CE7008](../error-catalog.md#ce7008) |
+| a block that documents nothing | [CW7001](../error-catalog.md#cw7001) |
 
 Every check finds a claim that CONTRADICTS the declaration, which is why none of them is
 behind a flag.
@@ -268,16 +268,16 @@ what keeps the always-on side unable to drift behind a flag.
 
 | Condition | Code |
 |---|---|
-| a declaration with no doc block | CW7002 |
-| a documented callable with a parameter that no `- Parameter` tag names | CW7003 |
-| a documented callable that returns a value, with no `- Returns:` | CW7004 |
-| a documented function that declares `\| E`, with no `- Errors:` | CW7005 |
-| a unit with no doc block | CW7006 |
+| a declaration with no doc block | [CW7002](../error-catalog.md#cw7002) |
+| a documented callable with a parameter that no `- Parameter` tag names | [CW7003](../error-catalog.md#cw7003) |
+| a documented callable that returns a value, with no `- Returns:` | [CW7004](../error-catalog.md#cw7004) |
+| a documented function that declares `\| E`, with no `- Errors:` | [CW7005](../error-catalog.md#cw7005) |
+| a unit with no doc block | [CW7006](../error-catalog.md#cw7006) |
 
 Three rules shape the table. Every declaration is asked, public and private, because an
 internal API is documented surface too. `fn main()` and the `unsafe external` seam are the
-two exemptions, named in one predicate. And CW7003, CW7004 and CW7005 presuppose a block:
-a declaration with none collects CW7002 and stops, so one omission is one diagnostic.
+two exemptions, named in one predicate. And [CW7003](../error-catalog.md#cw7003), [CW7004](../error-catalog.md#cw7004) and [CW7005](../error-catalog.md#cw7005) presuppose a block:
+a declaration with none collects [CW7002](../error-catalog.md#cw7002) and stops, so one omission is one diagnostic.
 
 ### One walk
 
@@ -312,17 +312,17 @@ alone. When the variable is not set, the pass skips every library unit.
 The pass runs only under `--warn-unused`. A private name is visible only in its own unit,
 so the pass checks each unit alone, over the WRITTEN declarations of the unit.
 
-**CW1004.** The roots of a unit are every `public` declaration, every `extend` block (an
+**[CW1004](../error-catalog.md#cw1004).** The roots of a unit are every `public` declaration, every `extend` block (an
 extension method and a perk implementation, which a call reaches through a receiver and
 not through a name), the `unsafe external` blocks, and `fn main()`. The pass starts at the
 roots and follows each name that a reached declaration mentions. A private constant,
 variable, struct, enum, perk or function that it does not reach is dead.
 
-**CW3006.** A `use` line is used when the unit mentions a name that the import brings: a
+**[CW3006](../error-catalog.md#cw3006).** A `use` line is used when the unit mentions a name that the import brings: a
 name the imported unit declares or re-exports (`Provider.members`, the walk the
 `namespaces` pass reads), the alias of an `as` import, an extension or perk method of a
 unit it reaches, and for `<collections/strings>` a string method, which is the per-unit
-rule of CE3015. A `public use` is a root and the pass never reports it. The pass does not
+rule of [CE3015](../error-catalog.md#ce3015). A `public use` is a root and the pass never reports it. The pass does not
 report an import of a library.
 
 The names that a declaration mentions are all the strings in its subtree, but not the doc
@@ -343,7 +343,7 @@ Library units are skipped. The test runner's dead-code gate sets the hidden
 environment variable `SUSHI_STDLIB_DEAD_GATE=1`. When it is set, the pass also checks each
 bundled stdlib unit, in the same way that `SUSHI_STDLIB_DOC_GATE=1` works for the `docs`
 pass. The runner compiles the program that imports every bundled module, and each program
-under `toolchain/src/`, and fails the run on a CW1004 or CW3006 in one of those files.
+under `toolchain/src/`, and fails the run on a [CW1004](../error-catalog.md#cw1004) or [CW3006](../error-catalog.md#cw3006) in one of those files.
 
 ## The `externs` pass: FFI signature validation
 
@@ -352,11 +352,11 @@ under `toolchain/src/`, and fails the run on a CW1004 or CW3006 in one of those 
 Runs over every unit right after `collect`, so no later pass ever meets an extern the
 C ABI cannot carry.
 
-- `validate_external_signatures()` — the C-ABI allowlist (`CE5003`) and the `CW5001`
+- `validate_external_signatures()` — the C-ABI allowlist ([`CE5003`](../error-catalog.md#ce5003)) and the [`CW5001`](../error-catalog.md#cw5001)
   four-guarantee warning. A variadic libc extern must be declared `var_arg`; a fixed
   declaration reads garbage on Apple arm64.
 - `validate_ptr_unit_gate()` — `ptr` is opaque and quarantined to a unit that declares
-  the extern block it came from (`CE5009`).
+  the extern block it came from ([`CE5009`](../error-catalog.md#ce5009)).
 
 See `docs/ffi.md`.
 
@@ -370,17 +370,17 @@ constants, perk implementations, and generic templates.
 
 A constant is registered from SOURCE, whichever list it came from: it has no body to link,
 so the manifest carries the declaration's text and the consumer re-parses it. A clash with
-the consumer's own name is `CE0105` for a published constant -- the answer a source library
-gives for the same program -- and `CE5007` for a closure one, which may not be renamed
+the consumer's own name is [`CE0105`](../error-catalog.md#ce0105) for a published constant -- the answer a source library
+gives for the same program -- and [`CE5007`](../error-catalog.md#ce5007) for a closure one, which may not be renamed
 because the library's own bodies call it.
 
 Placement is load-bearing at both ends. Perk DEFINITIONS are seeded BEFORE the `collect`
 loop, because perk-impl collection validates each impl against the visible definitions
-(`CE4003`). Perk IMPLEMENTATIONS register here, after the consumer's own (local wins) and
+([`CE4003`](../error-catalog.md#ce4003)). Perk IMPLEMENTATIONS register here, after the consumer's own (local wins) and
 before `instantiate`, so the constraint validator sees them. Generic structs register
 before generic enums, because an enum payload may name a struct.
 
-A clash between a library's export-closure helper and a local name is `CE5007`:
+A clash between a library's export-closure helper and a local name is [`CE5007`](../error-catalog.md#ce5007):
 local-wins would silently change what the library's monomorphized bodies call. See
 `docs/design/libraries.md`.
 
@@ -424,17 +424,17 @@ that declares `origin`.
 
 Five rules:
 
-- `CE3014` -- a `use` below a declaration. The span comes from the AST builder, because
+- [`CE3014`](../error-catalog.md#ce3014) -- a `use` below a declaration. The span comes from the AST builder, because
   the `libraries` step above appends a library's constants and private types to a host
   unit's lists and each carries a span from its own file.
-- `CE3013` -- the alias is already bound in this unit: another alias, an FFI namespace,
+- [`CE3013`](../error-catalog.md#ce3013) -- the alias is already bound in this unit: another alias, an FFI namespace,
   or one of its own declarations. `_` is refused too, as the discard name.
-- `CW3004` -- the `as` reached no name. A warning, because a namespace is empty for
+- [`CW3004`](../error-catalog.md#cw3004) -- the `as` reached no name. A warning, because a namespace is empty for
   three reasons and only one is a mistake (`unit-namespaces.md` section 4.4).
-- `CE3016` -- `public use ... as`. A re-export is of names and not of a namespace; the
+- [`CE3016`](../error-catalog.md#ce3016) -- `public use ... as`. A re-export is of names and not of a namespace; the
   alias still binds, so the one fault gets one diagnostic.
-- `CW3005` -- a `public use` whose import brings no PUBLIC name. The provider holds the
-  privates too (so `u.hidden` is CE3005 and not "no such name"), and the count here is
+- [`CW3005`](../error-catalog.md#cw3005) -- a `public use` whose import brings no PUBLIC name. The provider holds the
+  privates too (so `u.hidden` is [CE3005](../error-catalog.md#ce3005) and not "no such name"), and the count here is
   of what the re-export can hand on.
 
 ### Why it stands between `libraries` and `ffi-clash`
@@ -449,7 +449,7 @@ the first that has to ask it of ONE unit.
 
 This pass answers WHERE a name may be written. `semantics/visibility.py` answers WHETHER
 it may be named. So a namespace holds a unit's declarations whatever their visibility,
-and a private one is refused at the use site with `CE3005` -- filtering privates out
+and a private one is refused at the use site with [`CE3005`](../error-catalog.md#ce3005) -- filtering privates out
 would turn "not yours" into "no such name".
 
 The typecheck pass reads the table through `TypeValidator.resolve_namespaced`, and the
@@ -461,18 +461,18 @@ The typecheck pass reads the table through `TypeValidator.resolve_namespaced`, a
 
 The ONE home of main's rule. It checks four things, in this order:
 
-1. an executable carries a `main` -- `CE3007`;
-2. a library carries none -- `CE3501`;
-3. `main` returns a BARE integer type (i8-i64, u8-u64), the exit code -- `CE0106`. A
-   `| E` on `main`, or a `Result@(T, E)` return, is `CE0106` too, and a `??` in its body
-   is `CE0131` from the `collect` pass;
-4. `main` takes no parameters or exactly one `string[] args` -- `CE0138`. The answer
+1. an executable carries a `main` -- [`CE3007`](../error-catalog.md#ce3007);
+2. a library carries none -- [`CE3501`](../error-catalog.md#ce3501);
+3. `main` returns a BARE integer type (i8-i64, u8-u64), the exit code -- [`CE0106`](../error-catalog.md#ce0106). A
+   `| E` on `main`, or a `Result@(T, E)` return, is [`CE0106`](../error-catalog.md#ce0106) too, and a `??` in its body
+   is [`CE0131`](../error-catalog.md#ce0131) from the `collect` pass;
+4. `main` takes no parameters or exactly one `string[] args` -- [`CE0138`](../error-catalog.md#ce0138). The answer
    sets `main_expects_args` for the back end.
 
 The build kind reaches the analyzer as the `is_library` keyword, the way the library
-linker does. The `args` array is a BORROWED view of argv, so moving it is `CE2410`.
+linker does. The `args` array is a BORROWED view of argv, so moving it is [`CE2410`](../error-catalog.md#ce2410).
 
-The `CW3003` foreign-extension warning is in the pipeline, because it is not about
+The [`CW3003`](../error-catalog.md#cw3003) foreign-extension warning is in the pipeline, because it is not about
 `main`.
 
 ## The `instantiate` pass: generic instantiation collection
@@ -610,7 +610,7 @@ this way gets its own copies in the next round (#1146).
 
 Every instance carries the TEMPLATE's spans, and each copy is walked by the per-unit
 passes as an ordinary function -- correctly, because a per-instance truth is only visible
-there: a consume that is a plain copy for one type argument is CE2411 for an owning one.
+there: a consume that is a plain copy for one type argument is [CE2411](../error-catalog.md#ce2411) for an owning one.
 What must not follow is the COUNT. A fault in the shared body is reported once, at one
 caret, and not once per instantiation.
 
@@ -633,7 +633,7 @@ well as the copies, and `collapse_repeats` reduces those walks to one report per
 
 `TypeSubstitutor.substitute_expr` and `substitute_statement` replace a type parameter
 wherever an instantiated body names one. Both walks are TOTAL over their node union, and
-the fall-through is a hard CE0135. A copy is not an acceptable answer: a node with no arm
+the fall-through is a hard [CE0135](../error-catalog.md#ce0135). A copy is not an acceptable answer: a node with no arm
 keeps the type parameter, and the compiler's own bookkeeping name -- `T`, `U` -- reaches
 the user.
 
@@ -648,14 +648,14 @@ no sub-expression and no type of its own, which a shallow copy answers completel
 
 ### A refused instantiation
 
-An instantiation that violates a perk constraint is CE4006 ONCE, at the first site that
+An instantiation that violates a perk constraint is [CE4006](../error-catalog.md#ce4006) ONCE, at the first site that
 named it -- the collector records `(span, file)` per instantiation for this -- with a note
 at the constraint, which may stand in another file (a stdlib template's). It is built
 nowhere: not cached, not published, so no template copy is ever cut for it, and the
 whole-program analysis STOPS after the monomorphize step, as it does after
-CE2095. The per-unit passes would only have read the same fault back as a CE2008 from
-inside a copy's body. A late function request that a constraint refuses is CE4006 at the
-call that asked for it, and the analysis goes on; no CE2061 is added to it.
+[CE2095](../error-catalog.md#ce2095). The per-unit passes would only have read the same fault back as a [CE2008](../error-catalog.md#ce2008) from
+inside a copy's body. A late function request that a constraint refuses is [CE4006](../error-catalog.md#ce4006) at the
+call that asked for it, and the analysis goes on; no [CE2061](../error-catalog.md#ce2061) is added to it.
 
 The generic-target extension and perk-implementation copies are first cut from the
 collector's set, before the functions are monomorphized. Every instantiation interned after
@@ -746,14 +746,14 @@ struct Rectangle:
 
 Type identity is NOMINAL (`docs/design/type-identity.md`): a `StructType` compares and
 hashes on its name alone. Two spellings of one name therefore hash alike and compare
-unequal, which poisons the enum table (CE0126). This pass is what makes the table entry
+unequal, which poisons the enum table ([CE0126](../error-catalog.md#ce0126)). This pass is what makes the table entry
 the single authority, so every later pass reads a resolved type and never rebuilds one.
 
 ## The `finite-types` pass: reject a by-value containment cycle
 
 **File:** `semantics/passes/finite_types.py`
 
-A type that contains itself by value has no finite size, and is rejected with `CE2095`. The
+A type that contains itself by value has no finite size, and is rejected with [`CE2095`](../error-catalog.md#ce2095). The
 escape is indirection: `Own@(T)`, or a dynamic array.
 
 ```sushi
@@ -772,7 +772,7 @@ It is also the one pass that STOPS the analysis on failure: every later pass ass
 finitely-sized type.
 
 The pass owns EVERY inline cycle: a struct field, a fixed-size array element and an
-enum payload are all stored inline. A pure enum cycle reads the same `CE2095` as the struct
+enum payload are all stored inline. A pure enum cycle reads the same [`CE2095`](../error-catalog.md#ce2095) as the struct
 twin -- once per cycle, at the first member's declaration, with the chain:
 
 <!-- docs-sweep: error CE2095 -->
@@ -896,10 +896,10 @@ an enum payload, an array element, a `List` or `Own` element and a map key. The 
 reads the same order in `emit_value_hash` (`backend/types/value_hash.py`): the override,
 then the derived method, then the primitive built-ins.
 
-A type that derives no `hash()` has no such method, so a `.hash()` call on it is CE2008
+A type that derives no `hash()` has no such method, so a `.hash()` call on it is [CE2008](../error-catalog.md#ce2008)
 at the call site, with the line and the caret.
 
-`.clone()` is refused on a type that declares a resource or holds one (CE2431); the
+`.clone()` is refused on a type that declares a resource or holds one ([CE2431](../error-catalog.md#ce2431)); the
 escape is `.share()`.
 
 ## The `shadowing` pass: an extension may not shadow a built-in
@@ -907,7 +907,7 @@ escape is `.share()`.
 **File:** `semantics/semantic_analyzer.py` (`_check_extension_shadows_builtin`)
 
 All three resolution layers pick a built-in method before an extension method, so an
-extension whose name collides with one could never be called. That is `CE2097` rather than
+extension whose name collides with one could never be called. That is [`CE2097`](../error-catalog.md#ce2097) rather than
 silent dead code.
 
 Placement is load-bearing at BOTH ends: after `derive`, which registers the struct and enum
@@ -941,7 +941,7 @@ and destroyed values are the work of the `borrow` pass.
 
 1. **Declarations**: register each `let`, parameter and pattern binding in its scope
 2. **Scopes**: track block-level scopes
-3. **Names**: report a name that reaches nothing (CE1001)
+3. **Names**: report a name that reaches nothing ([CE1001](../error-catalog.md#ce1001))
 4. **What KIND of name is this**: the bare-name ladder, from `semantics/name_ladder.py`
 
 ### The bare-name ladder
@@ -954,7 +954,7 @@ its own lookups (`ScopeAnalyzer.is_local` … `is_type`, and `visitor._Inference
 `classify` walks them, and `tests/unit/test_bare_name_ladder_is_one.py` is the gate.
 
 This pass owns the two rungs that are not values: a type name in a value position or
-under a borrow is `CE2105`, and a name that reaches nothing is `CE1001`.
+under a borrow is [`CE2105`](../error-catalog.md#ce2105), and a name that reaches nothing is [`CE1001`](../error-catalog.md#ce1001).
 
 ### Scope Tracking
 
@@ -1007,12 +1007,12 @@ All paths are under `semantics/passes/`.
 | `types/calls/` | call validation: `dotcall.py` (`resolve_dotcall`, what `X.Y(args)` names), `statics.py`, `namespaced.py`, `methods.py`, `user_defined.py`, `generics.py`, `structs.py`, `enums.py` |
 | `types/expressions.py` | operators, and the three closed operand rules: `reject_non_bool_condition`, `reject_non_numeric_arithmetic`, `reject_uncomparable_operands` |
 | `types/statements.py` | `let`, rebind, `if`, `while`, `foreach`, `return` |
-| `types/control_flow.py`, `types/signatures.py` | the return paths (CE0107, CE0140) and the declaration signatures |
-| `types/matching.py` | patterns: each arm checked against the scrutinee, the rows for the checker, CE2040 / CE2074 / CE2118 |
+| `types/control_flow.py`, `types/signatures.py` | the return paths ([CE0107](../error-catalog.md#ce0107), [CE0140](../error-catalog.md#ce0140)) and the declaration signatures |
+| `types/matching.py` | patterns: each arm checked against the scrutinee, the rows for the checker, [CE2040](../error-catalog.md#ce2040) / [CE2074](../error-catalog.md#ce2074) / [CE2118](../error-catalog.md#ce2118) |
 | `types/exhaustiveness.py` | the one exhaustiveness checker for every match: usefulness over a pattern matrix (missing patterns, dead arms) |
 | `types/arrays.py` | the built-in array methods, and `reject_non_i32` for an index, a count or a range bound |
 | `types/constants.py` | constant definitions |
-| `types/public_signatures.py` | the fence over every public signature (CE3009, CE3010, the `ptr` fence) |
+| `types/public_signatures.py` | the fence over every public signature ([CE3009](../error-catalog.md#ce3009), [CE3010](../error-catalog.md#ce3010), the `ptr` fence) |
 | `types/visibility.py` | the pass's view of the visibility seam |
 | `types/qualified.py` | a type name behind an alias (`geo.Vec`) |
 | `types/externals.py` | the FFI checks (the `externs` and `ffi-clash` passes also run from here) |
@@ -1025,13 +1025,13 @@ are in `semantics/type_predicates.py`.
 table (`resolve_namespaced`) for the name behind the dot. When the binding is an extern,
 it stamps `external_ref = (provider origin, name)` on the node for the backend and gives
 back the `ExternalSig`. The call yields the raw C type, with no Result around it, so `??`
-on a foreign value is `CE2507`.
+on a foreign value is [`CE2507`](../error-catalog.md#ce2507).
 
 ### Error types, `??` and conversions
 
 **E3.** The `E` of every `Result@(T, E)` is an error type (`is_error_type`,
 `semantics/type_predicates.py`). `semantics/error_types.py` is the seam, and
-`reject_non_error_type` is the one emitter of `CE2084`. Three callers reach it: the
+`reject_non_error_type` is the one emitter of [`CE2084`](../error-catalog.md#ce2084). Three callers reach it: the
 written-type walk (`validate_type_name` → `reject_non_error_channels`,
 `passes/types/utils.py`), the spelled `| E` of a signature (`validate_error_channel`,
 `passes/types/signatures.py`), and each generic instance whose template writes a type
@@ -1040,19 +1040,19 @@ for a method-level type parameter), with a note at the template. A type with no 
 came from inference and is not judged.
 
 **What `??` takes.** `validate_try_expression` (`passes/types/expressions.py`) asks for the
-enclosing channel first (`CE0131` in a bare lambda, `CE2508` outside every body; a bare
+enclosing channel first ([`CE0131`](../error-catalog.md#ce0131) in a bare lambda, [`CE2508`](../error-catalog.md#ce2508) outside every body; a bare
 written body was refused by the `collect` pass), and then for the operand:
 `_unwrapped_arms` accepts a `Result` instance by type identity (`is_instance_of`) and
-nothing else, so a `Maybe` and a user enum with `Ok`/`Err` variants are `CE2507`.
+nothing else, so a `Maybe` and a user enum with `Ok`/`Err` variants are [`CE2507`](../error-catalog.md#ce2507).
 
 **Conversions.** `_error_arms_agree` compares the operand's error type with the
 channel's. The same type propagates unchanged; otherwise `find_conversion`
 (`semantics/conversions.py`, the one reader of the table, gate
 `tests/unit/test_conversion_lookup_is_one.py`) answers the declared conversion, or the
-`??` is `CE2511` with a help that names the declaration. The answer is stamped on the node
+`??` is [`CE2511`](../error-catalog.md#ce2511) with a help that names the declaration. The answer is stamped on the node
 (`TryExpr.inferred_conversion`), and the backend calls the conversion before the scope
 cleanup of the propagation path. `validate_cast_expression` asks the same question for
-`e as T` (`CastExpr.inferred_conversion`, else `CE2014`). A generic function asks it per
+`e as T` (`CastExpr.inferred_conversion`, else [`CE2014`](../error-catalog.md#ce2014)). A generic function asks it per
 instance, because each instance has its own copy of the node.
 
 **`or_err` and `map_err`.** Both are built-in methods with a method-level type parameter
@@ -1062,18 +1062,18 @@ instance, because each instance has its own copy of the node.
 `solve_builtin_signature` solves `E` or `F` from the argument through
 `solve_leading_type_args`, E3 judges the solved type at the call, and the parameter modes
 and the `nom self` receiver are stamped for the `borrow` pass. A read-through `or_err` (a
-borrowed `Maybe` whose payload owns a resource) outside the operand of a `??` is `CE2522`,
+borrowed `Maybe` whose payload owns a resource) outside the operand of a `??` is [`CE2522`](../error-catalog.md#ce2522),
 from the `borrow` pass.
 
 ### Return paths
 
 A body that answers a value or a Result and can reach its end with no `return` is
-`CE0107`. The rule is one for a function, a lambda block body and an extension or perk
+[`CE0107`](../error-catalog.md#ce0107). The rule is one for a function, a lambda block body and an extension or perk
 method. A `~` body with a channel ends with `return Result.Ok(~)`; nothing adds the
 `Ok`. A BARE `~` body (a function, a method or a lambda) answers nothing and may reach its
 end.
 
-A statement after a statement that always ends the path is `CE0140`: one diagnostic for
+A statement after a statement that always ends the path is [`CE0140`](../error-catalog.md#ce0140): one diagnostic for
 each block, at the first dead statement, with a note at the statement that ends the path.
 
 <!-- docs-sweep: error CE0107 -->
@@ -1092,7 +1092,7 @@ fn main() i32:
 ### A field the type does not declare
 
 A name behind a VALUE's dot is a field of that value's type, and one the type does not
-declare is `CE2106`, at the read. The four backend `CE0029` sites are an internal
+declare is [`CE2106`](../error-catalog.md#ce2106), at the read. The four backend [`CE0029`](../error-catalog.md#ce0029) sites are an internal
 backstop that no program reaches.
 
 A receiver that carries NO field reads the same rule. An array, a primitive, a
@@ -1103,10 +1103,10 @@ fieldless kind answers the empty list, and everything else answers None.
 
 None means the position is not this rule's. A namespace member, a bare enum variant,
 an unresolved name, a generic reference and a receiver the pass could not type all
-belong elsewhere, and a false `CE2106` there would be worse than the `CE0029` backstop.
+belong elsewhere, and a false [`CE2106`](../error-catalog.md#ce2106) there would be worse than the [`CE0029`](../error-catalog.md#ce0029) backstop.
 
 An ENUM receiver answers the empty list too, so `pts.get(0).x` over a `Maybe@(Point)` is
-`CE2106`. An enum carries variants, and
+[`CE2106`](../error-catalog.md#ce2106). An enum carries variants, and
 a variant is reached by a pattern and not by a dot, so the note says that and the help says
 how to get at the value: `??`, `.realise(default)` or `match` for a `Result`,
 `.realise(default)`, `match` or `.or_err(nom e)??` for a `Maybe` (`is_builtin_wrapper_enum`,
@@ -1121,7 +1121,7 @@ compiler declares, so `s.len` reads the same note. Otherwise the help quotes
 `suggest_member` -- the one reader every position that can miss already uses -- or lists
 what the type does declare.
 
-`CE2102` is the same rule one position over: a name behind a TYPE's dot.
+[`CE2102`](../error-catalog.md#ce2102) is the same rule one position over: a name behind a TYPE's dot.
 
 ### Type Checking Examples
 
@@ -1161,7 +1161,7 @@ stamped, and the lifted function must be borrow-checked like any other.
 through `_validate_function` -- the `annotate` hook -- like every other function's, and
 the `typecheck` pass does not descend into a lambda body at all. `visit_lambda` keeps
 only what no lifted function carries: the function TYPE the enclosing expression needs,
-and the capture rules (CE2094), because lift consumes the capture list into the
+and the capture rules ([CE2094](../error-catalog.md#ce2094)), because lift consumes the capture list into the
 environment struct. So the body is checked once, and a fault in it is reported once.
 
 The annotation of one lifted body comes BEFORE the search for a lambda nested in it. The
@@ -1190,9 +1190,9 @@ r := r + 1               # x is 43
 ```
 
 `bind_let_reference` (`passes/borrow/bindings.py`) registers the binding with its full
-`ReferenceType`, freezes the owner (CE2412 on a later mutation), and refuses a second
-`poke` of the same owner (CE2403) or a `peek`/`poke` mix (CE2407). A write through a
-`peek` binding is CE2408.
+`ReferenceType`, freezes the owner ([CE2412](../error-catalog.md#ce2412) on a later mutation), and refuses a second
+`poke` of the same owner ([CE2403](../error-catalog.md#ce2403)) or a `peek`/`poke` mix ([CE2407](../error-catalog.md#ce2407)). A write through a
+`peek` binding is [CE2408](../error-catalog.md#ce2408).
 
 2. **A call borrow ends with the call; a `let`-borrow freezes its owner**
 
@@ -1212,7 +1212,7 @@ fn main() i32:
 ```
 
 A `let` that reads through an owner is a borrow for the rest of its block. A change to
-the owner while that borrow lives is CE2412:
+the owner while that borrow lives is [CE2412](../error-catalog.md#ce2412):
 
 <!-- docs-sweep: error CE2412 -->
 ```sushi
@@ -1255,12 +1255,12 @@ arr.destroy()
 println(arr.len())         # CE2406: use of destroyed variable 'arr'
 ```
 
-CE2406 is the one diagnostic for a use after a destroy. The `borrow` pass reads the flow,
+[CE2406](../error-catalog.md#ce2406) is the one diagnostic for a use after a destroy. The `borrow` pass reads the flow,
 and it covers a value of every type. (The `typecheck` pass gave CE2024 for an array at the
 same position until #1137; that code is retired.)
 
 5. **A `let` reading through an owner BORROWS, and consuming or invalidating that borrow is an
-   error (CE2411, CE2412)**
+   error ([CE2411](../error-catalog.md#ce2411), [CE2412](../error-catalog.md#ce2412))**
 
 A `let` does not always take ownership of what it binds. Its OWNERSHIP is derived from the
 *provenance* of its source expression -- one of three: `OWNED` (a bare local, or a `nom`
@@ -1291,8 +1291,8 @@ fn main() i32:
 ```
 
 The borrow lasts to the end of the block that declared it. Mutating, freeing, or rebinding `w`
-while `borrowed` is still live is **CE2412**; handing `borrowed` itself to a `nom`
-parameter or another consuming position is **CE2411**. A value binding and a reference binding (rule 1) are tracked the same way; the
+while `borrowed` is still live is **[CE2412](../error-catalog.md#ce2412)**; handing `borrowed` itself to a `nom`
+parameter or another consuming position is **[CE2411](../error-catalog.md#ce2411)**. A value binding and a reference binding (rule 1) are tracked the same way; the
 reference binding adds the WRITE path -- a store through it reaches the owner.
 
 6. **A loop body is checked in rounds, and `break` / `continue` end a path**
@@ -1304,7 +1304,7 @@ rounds and returns a `LoopFlow` (`passes/borrow/flow.py`):
 - `fixed_point`: `entry` joined with the facts that reach the back edge after round 1. Round 2,
   the reporting round, starts here, so a move in one round is seen by the next.
 - `back_edge`: the facts on the paths that reach the next round -- the end of the body and every
-  `continue`. A `foreach` reads its iterator's invalidation (CE2412) from these paths only.
+  `continue`. A `foreach` reads its iterator's invalidation ([CE2412](../error-catalog.md#ce2412)) from these paths only.
 - `exit`: `fixed_point` joined with every `break` path. This is the state after the loop, so a
   move before a `break` is still seen after the loop.
 
@@ -1312,7 +1312,7 @@ A `break` or a `continue` ends its path for the joins of an `if` or a `match` in
 (`terminates(..., leaves_round=True)`). A `foreach` over an owned temporary (`a.clone().iter()`)
 freezes nothing (`walks_a_temporary`). When the iterator reports a move of its container that
 came round the back edge, the owner's state records it (`move_reported_by`), and the move gives
-no second CE2405 in round 2.
+no second [CE2405](../error-catalog.md#ce2405) in round 2.
 
 ### Borrow Tracking
 
@@ -1384,21 +1384,21 @@ order.
 ## Error Examples by Pass
 
 **`scope`:**
-- CE1001: use of undeclared identifier
-- CE2105: a type name in a value position
+- [CE1001](../error-catalog.md#ce1001): use of undeclared identifier
+- [CE2105](../error-catalog.md#ce2105): a type name in a value position
 
 **`typecheck`:**
-- CE2002 and the other CE2xxx codes: type mismatch
-- CE2009: wrong argument count, `.realise()` included
-- CE2505: cannot assign Result@(T, E) to non-Result variable without handling
-- CE0107: a path with no `return`; CE0140: an unreachable statement
+- [CE2002](../error-catalog.md#ce2002) and the other CE2xxx codes: type mismatch
+- [CE2009](../error-catalog.md#ce2009): wrong argument count, `.realise()` included
+- [CE2505](../error-catalog.md#ce2505): cannot assign Result@(T, E) to non-Result variable without handling
+- [CE0107](../error-catalog.md#ce0107): a path with no `return`; [CE0140](../error-catalog.md#ce0140): an unreachable statement
 
 **`borrow`:**
-- CE2405: cannot borrow moved variable
-- CE2406: use of destroyed variable
-- CE2411: cannot consume a borrow
-- CE2412: cannot mutate an owner while a `let`-borrow lives
-- CE2404: a borrow of an expression with no stable address
+- [CE2405](../error-catalog.md#ce2405): cannot borrow moved variable
+- [CE2406](../error-catalog.md#ce2406): use of destroyed variable
+- [CE2411](../error-catalog.md#ce2411): cannot consume a borrow
+- [CE2412](../error-catalog.md#ce2412): cannot mutate an owner while a `let`-borrow lives
+- [CE2404](../error-catalog.md#ce2404): a borrow of an expression with no stable address
 
 ---
 

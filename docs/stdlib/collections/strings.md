@@ -28,7 +28,7 @@ use <collections/strings>
 
 The import is checked PER UNIT. The unit that holds a string method call must import
 `<collections/strings>` itself, or get it through its own `public use` chain. An import
-in another unit of the program does not count. A missing import is **CE3015**. The
+in another unit of the program does not count. A missing import is **[CE3015](../../error-catalog.md#ce3015)**. The
 examples on this page leave out the `use` line; a complete program needs it.
 
 Some string methods need no import:
@@ -242,7 +242,7 @@ println(utf8.reverse())  # "éfac"
 
 `.reverse()` does not change the string, but today the compiler checks it like the
 in-place array `.reverse()`. So the receiver must be a name that you could write: a local
-works, but a parameter is refused (CE2422) and a temporary is refused (CE2429). Bind the
+works, but a parameter is refused ([CE2422](../../error-catalog.md#ce2422)) and a temporary is refused ([CE2429](../../error-catalog.md#ce2429)). Bind the
 value to a local first (`let string local = p.clone()`, then `local.reverse()`).
 
 ### `.repeat(i32 n) -> string`
@@ -467,8 +467,8 @@ malformed input).
 Two primitives of the string itself need no import and copy nothing (#1091). With them a
 string method can be an ordinary `extend string` method written in Sushi.
 
-- **`s[i] -> u8`**: the byte at offset `i`, bounds-checked (`RE2020` past `size`). A read
-  only: `s[i] := v` is `CE2113`.
+- **`s[i] -> u8`**: the byte at offset `i`, bounds-checked ([`RE2020`](../../error-catalog.md#re2020) past `size`). A read
+  only: `s[i] := v` is [`CE2113`](../../error-catalog.md#ce2113).
 - **`string.from_bytes(nom u8[] b) -> string`**: the string takes the array's buffer.
   No byte is copied and none is checked for UTF-8.
 

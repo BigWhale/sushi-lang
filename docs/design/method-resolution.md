@@ -3,7 +3,7 @@
 How `x.method(args)` is resolved, in what order, and why a user extension method can never
 displace a built-in one.
 
-Status: **decided**. The rule is enforced by `CE2097`.
+Status: **decided**. The rule is enforced by [`CE2097`](../error-catalog.md#ce2097).
 
 ## The rule
 
@@ -15,7 +15,7 @@ Stated as precedence, highest first:
 
 | | provider | example | can a user replace it? |
 |---|---|---|---|
-| 1 | **built-in** | `arr.len()`, `n.to_str()`, `p.hash()`, `xs.push(1)` | not by an extension -- `CE2097` |
+| 1 | **built-in** | `arr.len()`, `n.to_str()`, `p.hash()`, `xs.push(1)` | not by an extension -- [`CE2097`](../error-catalog.md#ce2097) |
 | 2 | **perk implementation** | `extend Point with Hashable: fn hash() u64` | this *is* the replacement mechanism |
 | 3 | **extension method** | `extend i32 squared() i32` | only for names no built-in carries |
 
@@ -41,7 +41,7 @@ dispatcher.
 
 Inference is the layer that goes wrong quietly. `validate_assignment_compatibility` opens with
 `if value_type is None: return`, so a family that fails to infer does not report anything --
-the annotation is simply never checked, and the mismatch reaches the backend as a `CE0017`
+the annotation is simply never checked, and the mismatch reaches the backend as a [`CE0017`](../error-catalog.md#ce0017)
 internal error. Two faults can hide there: an inference layer that reads the
 backend-populated builtin-method registry (the pipeline imports codegen after semantic
 analysis, so the registry is empty then), and a family that claims a name it cannot type
@@ -62,7 +62,7 @@ Two rules follow, and both are load-bearing:
 ## The built-in families
 
 `builtin_method_exists(receiver_type, method_name)` in
-`semantics/generics/builtin_methods.py:builtin_method_exists` is the question CE2097 asks,
+`semantics/generics/builtin_methods.py:builtin_method_exists` is the question [CE2097](../error-catalog.md#ce2097) asks,
 and it holds no list of its own: it asks the family TABLE
 (`semantics/passes/types/method_registry.py`). Each family carries an ANSWER -- does the
 compiler define this name on this receiver, with no perk question -- and the claim the
@@ -82,7 +82,7 @@ family that yields to one. So the seam and the pass read one list:
   It covers every struct and enum, and `eq` and `compare` cover every primitive
 
 A perk implementation changes the claim and not the answer: it is the sanctioned override,
-so an extension of a built-in name is still CE2097. `tests/unit/test_builtin_method_seam.py`
+so an extension of a built-in name is still [CE2097](../error-catalog.md#ce2097). `tests/unit/test_builtin_method_seam.py`
 holds the seam and the table equal over a matrix of receivers and names, with the names
 read from each family's own table. Two places answering one question drift (*if the same
 question is asked in six places, the fix is a seam, not a fallback*).
@@ -124,8 +124,8 @@ own members first:
 Sushi's auto-derived `hash`/`clone` (and the derived `Eq`/`Ord`/`Display`) are the `#[derive]` analogue, and **Sushi has no opt-out
 from derivation**. So a colliding extension is not merely lower-priority, it is unreachable by
 construction -- which meets the project's own bar for erroring rather than warning: *if the situation
-cannot possibly do what the user wrote, it is an error, not a warning*. `CE4007` (perk vs
-extension) and `CE0101` (duplicate extension method) are hard errors for strictly milder collisions.
+cannot possibly do what the user wrote, it is an error, not a warning*. [`CE4007`](../error-catalog.md#ce4007) (perk vs
+extension) and [`CE0101`](../error-catalog.md#ce0101) (duplicate extension method) are hard errors for strictly milder collisions.
 
 ## Why perks win
 
@@ -157,11 +157,11 @@ extend Point with Hashable:
 ```
 
 Perk implementations are collected into `PerkImplementationTable` and never enter
-`ExtensionTable`, so `CE2097` cannot see them. That is a structural property, not a special
+`ExtensionTable`, so [`CE2097`](../error-catalog.md#ce2097) cannot see them. That is a structural property, not a special
 case in the check -- and it is pinned by a test so a future refactor merging the two tables
 trips over it.
 
-## CE2097
+## [CE2097](../error-catalog.md#ce2097)
 
 ```
 error [CE2097]: extension method 'hash()' conflicts with the built-in 'P.hash()'.
@@ -197,12 +197,12 @@ A separate question from precedence, and settled by the same principle. Status: 
 | `extend Box@(T) f()` -- fully generic | every instantiation of `Box` |
 | `extend Box@(i32) f()` -- fully concrete | `Box@(i32)` only |
 | `extend Box@(i32) f()` **and** `extend Box@(string) f()` | legal -- two types, two methods |
-| `extend Box@(T) f()` **and** `extend Box@(i32) f()` | **rejected** -- `CE0101`, relational |
-| `extend Pair@(i32, U) f()` -- partially concrete | **rejected** -- `CE2098` |
+| `extend Box@(T) f()` **and** `extend Box@(i32) f()` | **rejected** -- [`CE0101`](../error-catalog.md#ce0101), relational |
+| `extend Pair@(i32, U) f()` -- partially concrete | **rejected** -- [`CE2098`](../error-catalog.md#ce2098) |
 | `extend T[] f()` -- an array template | every dynamic array |
-| `extend T[] f()` **and** `extend i32[] f()` | **rejected** -- `CE0101`, relational, in either order |
-| `extend Box@(T) with P` **and** `extend Box@(i32) with P` | **rejected** -- `CE4002`, relational, in either order |
-| `extend T[] with P` **and** `extend i32[] with P` | **rejected** -- `CE4002`, relational, in either order |
+| `extend T[] f()` **and** `extend i32[] f()` | **rejected** -- [`CE0101`](../error-catalog.md#ce0101), relational, in either order |
+| `extend Box@(T) with P` **and** `extend Box@(i32) with P` | **rejected** -- [`CE4002`](../error-catalog.md#ce4002), relational, in either order |
+| `extend T[] with P` **and** `extend i32[] with P` | **rejected** -- [`CE4002`](../error-catalog.md#ce4002), relational, in either order |
 
 The overlap rule has three positions: a generic extension, an array extension and a perk
 implementation (a generic target or an array target). In each position the SECOND
@@ -213,7 +213,7 @@ implementation wins and the library template's copy for that type is not registe
 
 **A PERK IMPLEMENTATION reads the same table.** `extend Box@(T) with Show` is a template
 and `extend Box@(i32) with Show` is a constraint, exactly as above, and a partially
-concrete target is the same CE2098. The template is re-filed out of `Program.perk_impls`
+concrete target is the same [CE2098](../error-catalog.md#ce2098). The template is re-filed out of `Program.perk_impls`
 and into `Program.generic_perk_impls` -- the same move a generic extension makes, and for
 the same reason: the typecheck pass, the backend's declaration and definition loops and
 the unit fingerprint all walk `perk_impls` assuming a concrete `self`. One copy per
@@ -224,7 +224,7 @@ ordinary implementation from there on.
 **The instantiation runs before the functions are monomorphized**, and that order is
 load-bearing: a `@(S: Show)` constraint is checked while a generic function is
 monomorphized, so `Box@(i32)` has to already say it implements `Show` or the call is
-CE4006 for a type that does. It also puts `Drop` within reach: `TypeQueries.drops` reads
+[CE4006](../error-catalog.md#ce4006) for a type that does. It also puts `Drop` within reach: `TypeQueries.drops` reads
 the perk table, so the copy registered here is in the set before `derive`, `effects` and
 the `borrow` pass ask whether the instantiation owns a resource.
 
@@ -259,15 +259,15 @@ unit, after the per-unit loop, so no body is checked twice. A fault in the body 
 each element type that has it, and one time for each of them.
 
 A template header is judged once, where it is written (#811): `fn take(T x)` against a
-contract `fn take(i32 x)` is CE4004. A method name the template shares with an `extend T[]`
-extension or with an extension on one array type is CE4007, and a name that another perk
-gives an array type is CE4015. `extend T[][] with P` is CE2101, as for an extension.
+contract `fn take(i32 x)` is [CE4004](../error-catalog.md#ce4004). A method name the template shares with an `extend T[]`
+extension or with an extension on one array type is [CE4007](../error-catalog.md#ce4007), and a name that another perk
+gives an array type is [CE4015](../error-catalog.md#ce4015). `extend T[][] with P` is [CE2101](../error-catalog.md#ce2101), as for an extension.
 
 **Why the overlap is rejected rather than resolved by most-specific-wins.** Under
 specialization, whether the template's body is dead code would depend on which instantiations
 exist ELSEWHERE in the program: with only `Box@(string)` live the template method is compiled
 and never called, and one `Box@(i32)` anywhere makes it live again. That is a reachability rule
-keyed on the rest of the program, and `CE2097` above is built on the opposite rule -- an
+keyed on the rest of the program, and [`CE2097`](../error-catalog.md#ce2097) above is built on the opposite rule -- an
 unreachable declaration is a diagnostic. Rejecting is also forward-compatible: an error can
 become working code later, while removing specialization later breaks programs.
 
@@ -290,7 +290,7 @@ at the CALL SITE (`$array` templates; ruling 3). A **method-level type parameter
 template answers by unification, and the copy's symbol carries the solved arguments.
 An **error channel** (`| E`) changes what a resolved call YIELDS (the interned
 `Result@(T, E)`), not how it resolves. The one resolution-adjacent diagnostic is
-**CE2515**, a FALLBACK where CE2008 would fire: the method is missing on a
+**[CE2515](../error-catalog.md#ce2515)**, a FALLBACK where [CE2008](../error-catalog.md#ce2008) would fire: the method is missing on a
 Result/Maybe receiver and present on its payload type, which is an unhandled channel,
 not a typo. Resolution runs first — a method found on the wrapper itself
 (`.realise`) is rung 1. The decision record is
@@ -336,7 +336,7 @@ a method named `static` are not writable.
 | parameters | ordinary, and the modes are the ordinary four | the same, plus the receiver's |
 | return | ordinary; `\| E` opts into the channel exactly as elsewhere | the same |
 | visibility | none of its own -- as visible as its target type | the same |
-| in a perk | **never** -- a perk has no `Self` (CE4014) | that is what a perk contracts |
+| in a perk | **never** -- a perk has no `Self` ([CE4014](../error-catalog.md#ce4014)) | that is what a perk contracts |
 
 Everything in the right column that is not about the receiver is the same for a static. A static's
 parameters BORROW unless marked `nom`; its owning return is the caller's; its `| E`
@@ -346,7 +346,7 @@ and the two positions that could name one are one fault with one code:
 - a receiver MODE in the signature -- `extend Vec static at(poke self)`,
 - a mention of `self` in the body.
 
-Both are **CE0134**, tier 2, with the caret on whichever was written.
+Both are **[CE0134](../error-catalog.md#ce0134)**, tier 2, with the caret on whichever was written.
 
 ### Which targets
 
@@ -364,12 +364,12 @@ is the stdlib's example of the first: `R` comes from the handle, in every positi
 The first step is also what lets a `| E` static be written at all: a Result-valued call is never
 stamped, so the stamp alone could not solve `match`, `.realise` or `??` over it.
 
-An ARRAY target is **CE2104**. An array type has no spelling in an expression position
+An ARRAY target is **[CE2104](../error-catalog.md#ce2104)**. An array type has no spelling in an expression position
 -- `i32[].two()` is a parse error, and no form reaches it -- so the declaration would
-compile and never be callable. That is CE2097's hazard, and the answer is the same one:
+compile and never be callable. That is [CE2097](../error-catalog.md#ce2097)'s hazard, and the answer is the same one:
 if the situation cannot possibly do what the user wrote, it is an error.
 
-A type parameter that NEITHER step reaches is **CE2060**, and the text names both
+A type parameter that NEITHER step reaches is **[CE2060](../error-catalog.md#ce2060)**, and the text names both
 sources: no argument names it, and this position declares no type. `Cage.empty()` in a
 `println` hole is the shape; `Pair.of_first(3)` in one names `B` alone, because the
 argument solved `A`. Binding the result answers it when the return names the target
@@ -379,7 +379,7 @@ a method carries no call-site `@(...)` slot at all. The test is
 narrow on purpose -- it fires only when the base name declares a static of that name --
 because a generic ENUM in an unstamped position is a variant construction whose stamp
 the surrounding statement supplies, and `Result.Ok(0)` is 6,559 of those. The built-in
-twin (`println("{List.new().len()}")`) is CE2060 too, and its help line says that the
+twin (`println("{List.new().len()}")`) is [CE2060](../error-catalog.md#ce2060) too, and its help line says that the
 built-in static reads its type from the binding alone.
 
 ```sushi
@@ -402,9 +402,9 @@ nothing: the copy of an instance that the monomorphize pass reaches is cut by th
 and a second copy from the queue was a duplicate symbol (#1153).
 
 The stamp is the reason a static is not only ergonomics. A free function whose `T`
-names only the RETURN cannot be inferred (CE2060) and has to spell `box_new@(i32)()`; a
+names only the RETURN cannot be inferred ([CE2060](../error-catalog.md#ce2060)) and has to spell `box_new@(i32)()`; a
 static reads the binding site instead. It is also why `new` is available as a static's
-name and not as a free function's (CE6001).
+name and not as a free function's ([CE6001](../error-catalog.md#ce6001)).
 
 ### The two collisions, and a third for perks
 
@@ -412,16 +412,16 @@ A name has exactly one home, so both are refused where they are written:
 
 | written | refusal |
 |---|---|
-| a static and an instance method of one name on one type | **CE0101**, the duplicate-extension rule |
-| a static and a VARIANT of one name on one enum | **CE2103**, relational -- the variant would always win, which is CE2097's hazard |
+| a static and an instance method of one name on one type | **[CE0101](../error-catalog.md#ce0101)**, the duplicate-extension rule |
+| a static and a VARIANT of one name on one enum | **[CE2103](../error-catalog.md#ce2103)**, relational -- the variant would always win, which is [CE2097](../error-catalog.md#ce2097)'s hazard |
 
-CE2045's help names both escapes for the same reason: a name behind an enum's dot could be
+[CE2045](../error-catalog.md#ce2045)'s help names both escapes for the same reason: a name behind an enum's dot could be
 either member.
 
-**Two perks cannot share a method name on one type: CE4015.** `extend Score with Ord` and
+**Two perks cannot share a method name on one type: [CE4015](../error-catalog.md#ce4015).** `extend Score with Ord` and
 `extend Score with Ranked`, where both provide `compare`, leave a call of `compare` naming
 neither. The two bodies would also take one symbol. The error is relational, with a note at
-the first perk. The same rule gives CE4007 for a perk method beside an extension method.
+the first perk. The same rule gives [CE4007](../error-catalog.md#ce4007) for a perk method beside an extension method.
 
 **A derived method is not a home.** A type that derives `compare` from `Ord` may implement a
 user perk that provides `compare`. An explicit `a.compare(b)` reads the implementation,
@@ -449,7 +449,7 @@ general path covers them.
 | what modes do the arguments cross in | `CalleeKind.STATIC_METHOD` -- a kind of its own, not a widened `METHOD`, because a receiver-less callee asks a different question. Gate: `tests/unit/test_callee_mode_matrix.py` |
 | the alias fold | `fold_namespaced_static`: it asks whether the namespace holds a type, so `geo.Vec.origin()` folds like `hm.HashMap.new()` |
 
-The refusal for a type whose dot holds no such member is **CE2102**. The fault is the
+The refusal for a type whose dot holds no such member is **[CE2102](../error-catalog.md#ce2102)**. The fault is the
 POSITION, not the name: the scope pass lets a type name through in a receiver position and
 leaves the answer to the pass that has the method tables.
 
@@ -485,7 +485,7 @@ outnumbers a static call 22 to 1 (10,469 to 479).
 - **No `::`.** A second path operator to disambiguate what a dot already means is a
   bigger change than the feature, and on a struct the dot is not ambiguous at all.
 - **No static in a perk.** A perk has no `Self`, so a contract cannot hold a
-  constructor. CE4014.
+  constructor. [CE4014](../error-catalog.md#ce4014).
 - **No overloading.** A name has one home; both collisions above are refusals.
 
 A static exports through every library kind, as an instance method does. A SOURCE
@@ -520,7 +520,7 @@ extend Counter with Source:
 The channel is part of the signature, so the contract and the implementation must
 agree: a contract that declares one and an implementation that omits it, an
 implementation that invents one the contract has not got, and two channels over
-different error types are all the same mismatch. **CE0133** is the relational
+different error types are all the same mismatch. **[CE0133](../error-catalog.md#ce0133)** is the relational
 diagnostic -- the primary at the implementation, a note at the contract method.
 
 A perk method has no `Self` type, so a contract cannot say "returns another one of me".

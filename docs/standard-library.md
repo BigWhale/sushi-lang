@@ -192,7 +192,7 @@ match open("output.txt", FileMode.Write()):
 A buffered writer is better when the loop is long: one system call per window, not one
 per line. `BufWriter` comes from `<io/buf>`. Each call answers `IoError`, so `??` goes in
 a function that has the `| IoError` channel, not in `main`: `main` is bare, and a `??`
-there is CE0131:
+there is [CE0131](error-catalog.md#ce0131):
 
 ```sushi
 use <io/fs>
@@ -246,7 +246,7 @@ fn greet() ~ | IoError:
 - Inspection, slicing, transformation, padding, stripping
 - Splitting/joining (`split_once`, `rsplit_once` answer a `Maybe` of a pair), case conversion, parsing
 - UTF-8 aware where needed
-- Each unit that calls a string method must import the module itself (CE3015).
+- Each unit that calls a string method must import the module itself ([CE3015](error-catalog.md#ce3015)).
   `is_empty()` and `clone()` need no import
 
 **Iter combinators** - higher-order functions (`use <collections/iter>`):

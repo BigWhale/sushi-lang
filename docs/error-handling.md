@@ -58,14 +58,14 @@ fn main() i32:
 ```
 
 - A body with a channel spells both constructors: `return Result.Ok(x)` and
-  `return Result.Err(e)`. A bare `return x` there is **CE2030**.
+  `return Result.Err(e)`. A bare `return x` there is **[CE2030](error-catalog.md#ce2030)**.
 - A BARE body returns the value itself. `return Result.Ok(...)` and `return Result.Err(...)`
-  are **CE2091**, and a `??` is **CE0131**. A bare function that calls a fallible one
+  are **[CE2091](error-catalog.md#ce2091)**, and a `??` is **[CE0131](error-catalog.md#ce0131)**. A bare function that calls a fallible one
   handles the error in its body (`match`, `.realise(default)`), or its signature writes
   `| E`.
-- The call of a bare function returns the value. `??` on it is **CE2507**, and `.realise`
-  on it is **CE2008**, because the value is not a `Result`.
-- A body that returns a value, or a Result, ends in a `return` on every path (**CE0107**).
+- The call of a bare function returns the value. `??` on it is **[CE2507](error-catalog.md#ce2507)**, and `.realise`
+  on it is **[CE2008](error-catalog.md#ce2008)**, because the value is not a `Result`.
+- A body that returns a value, or a Result, ends in a `return` on every path (**[CE0107](error-catalog.md#ce0107)**).
   A bare `~` body returns nothing and can reach its end.
 - A function declared in an `unsafe external "C"` block (the FFI) is bare too. A C
   function returns a raw value, so `libc.strlen(s)` yields a plain `i64`. See
@@ -111,13 +111,13 @@ fn divide(i32 a, i32 b) i32 | MathError:
 ```
 
 `MathError` is a predefined error type, and `use <math>` brings its name. Do not declare your
-own `MathError`: a predefined name cannot be declared again (**CE2046**), also in a unit
+own `MathError`: a predefined name cannot be declared again (**[CE2046](error-catalog.md#ce2046)**), also in a unit
 with no `use <math>`. Give your own error type a new name. The examples below use this
 `divide`.
 
 The error type `E` must be an ERROR TYPE, in both spellings (`T | E` and `Result@(T, E)`)
-and in every position (**CE2084**): an enum declared with `error`, or a predefined error
-type. Do not mix the two spellings in one signature (**CE2085**).
+and in every position (**[CE2084](error-catalog.md#ce2084)**): an enum declared with `error`, or a predefined error
+type. Do not mix the two spellings in one signature (**[CE2085](error-catalog.md#ce2085)**).
 
 #### Explicit Result@(T, E) Syntax
 
@@ -154,7 +154,7 @@ An error type is an enum with a flag. Everything an enum does, it does: `match`,
 payloads, derived equality and printing, extension methods. It is also ordinary data: a
 field, a parameter or a list element can hold one.
 
-The `E` of every `Result` must be an error type. A plain `enum` there is **CE2084**, and
+The `E` of every `Result` must be an error type. A plain `enum` there is **[CE2084](error-catalog.md#ce2084)**, and
 the help says to declare it with `error`:
 
 <!-- docs-sweep: error CE2084 -->
@@ -203,10 +203,10 @@ fn divide(i32 a, i32 b) i32 | MathError:
     return Result.Ok(a / b)
 ```
 
-**Important:** `Result.Err()` without an error value is a **compile error** (**CE2050**, wrong argument count for the `Err` variant). Always include the error value.
+**Important:** `Result.Err()` without an error value is a **compile error** (**[CE2050](error-catalog.md#ce2050)**, wrong argument count for the `Err` variant). Always include the error value.
 
 **Every constructor is spelled.** The compiler never wraps a bare value into `Ok`. A
-`return value` in a body that answers a Result is **CE2030**, and a `~` success is
+`return value` in a body that answers a Result is **[CE2030](error-catalog.md#ce2030)**, and a `~` success is
 `return Result.Ok(~)`. The rule is the same for a function, a lambda block body, and an
 extension or perk method that declares an error channel `| E`:
 
@@ -221,14 +221,14 @@ extend i32 half_checked() i32 | OddError:
 ```
 
 A body with NO channel is the other way round: it returns the value itself, and both
-constructors are refused there (**CE2091**). The rule is the same for a function, a lambda
+constructors are refused there (**[CE2091](error-catalog.md#ce2091)**). The rule is the same for a function, a lambda
 and a method. See [Error Channels on Methods](#error-channels-on-methods).
 
-A body that can reach its end with no `return` is **CE0107**. This includes a `~` function
+A body that can reach its end with no `return` is **[CE0107](error-catalog.md#ce0107)**. This includes a `~` function
 with a channel, a `| E` method and a lambda block body with a channel: such a `~` body ends
 with `return Result.Ok(~)`. A BARE `~` body returns nothing and can reach its end. A
 statement after a statement that always ends the path (a `return` in every branch) is
-**CE0140**.
+**[CE0140](error-catalog.md#ce0140)**.
 
 ### Handling Results
 
@@ -269,7 +269,7 @@ fn main() i32:
 
 **A condition is a bool, and nothing else is one.** A `Result@(T, E)` and a `Maybe@(T)`
 are both refused in an `if`, in a `while`, and in an operand of `and`, `or`, `xor` or
-`not`. The code is **CE2516**, and the escape is to name the question: `.is_ok()`,
+`not`. The code is **[CE2516](error-catalog.md#ce2516)**, and the escape is to name the question: `.is_ok()`,
 `.is_err()`, `.is_some()` or `.is_none()` answers with a bool, while `??`,
 `.realise(default)` and `match` take the value.
 
@@ -285,7 +285,7 @@ compiler does not choose one, so you write the question.
 
 **A field of the value is not a field of the wrapper either.** A `Result@(T, E)` and a
 `Maybe@(T)` are enums, and an enum carries variants, so a dot on the wrapper is
-**CE2106**. Take the value first, with the same three tools.
+**[CE2106](error-catalog.md#ce2106)**. Take the value first, with the same three tools.
 
 ```sushi
 struct Point:
@@ -530,7 +530,7 @@ fn main() i32:
 
 The `??` operator unwraps a `Result@(T, E)`, and it propagates the error to the caller.
 
-**Important:** `??` takes a `Result@(T, E)` and nothing else (**CE2507**). The error type
+**Important:** `??` takes a `Result@(T, E)` and nothing else (**[CE2507](error-catalog.md#ce2507)**). The error type
 of the operand must be the error type of the enclosing body, or the program must declare
 a conversion between the two (see [Error Conversion](#error-conversion)). Sushi converts
 no error on its own.
@@ -575,7 +575,7 @@ For `Result@(T, E)`:
 - `Result.Err(e)?? → return Result.Err(e)` (propagates; `E` is the error type of the
   enclosing function, or a declared conversion turns `e` into it)
 
-A `Maybe@(T)` holds no error value, so `??` on it is **CE2507**. Write the error value with
+A `Maybe@(T)` holds no error value, so `??` on it is **[CE2507](error-catalog.md#ce2507)**. Write the error value with
 `or_err`: `m.or_err(nom e)??` (see [Propagating from a Maybe](#propagating-from-a-maybe)).
 
 ### Chaining Operations
@@ -642,9 +642,9 @@ fn main() i32:
 A `Result` that owns nothing (`Result@(i32, StdError)`) is copied out of, and the local
 stays usable. A BORROWED `Result` -- a parameter, a `match` or `foreach` binding -- is read
 through, not spent: `let string s = r??` binds a borrow that frees nothing, and consuming
-the read (`return Result.Ok(r??)`) is **CE2411**, with `.clone()` as the escape. When the
+the read (`return Result.Ok(r??)`) is **[CE2411](error-catalog.md#ce2411)**, with `.clone()` as the escape. When the
 ERROR type of a borrowed `Result` owns heap (an error that holds a `string`), `r??` itself
-is **CE2411**: the `Err` path would give the caller a value that `r`'s owner still frees.
+is **[CE2411](error-catalog.md#ce2411)**: the `Err` path would give the caller a value that `r`'s owner still frees.
 Write `r.clone()??`. A borrowed `Result` with a plain error type (every stdlib error type)
 stays legal. The design record is `docs/design/borrow-model.md` §10d.
 
@@ -672,8 +672,8 @@ fn main() i32:
 ```
 
 It is the same `??`, in one more position: the error types must match, or a declared
-conversion runs (CE2511),
-the loop's own scope is cleaned up on the way out, and it is refused in `main` (CE0131),
+conversion runs ([CE2511](error-catalog.md#ce2511)),
+the loop's own scope is cleaned up on the way out, and it is refused in `main` ([CE0131](error-catalog.md#ce0131)),
 because `main` is bare.
 
 Drop the marker and the item is the plain `Result`, which is what lets a body report one
@@ -698,12 +698,12 @@ fn main() i32:
         Result.Err(_) -> return 1
 ```
 
-A `??` binder over an item that is not a `Result` has nothing to unwrap: **CE2517**.
+A `??` binder over an item that is not a `Result` has nothing to unwrap: **[CE2517](error-catalog.md#ce2517)**.
 
 ### Propagating from a Maybe
 
 A `Maybe@(T)` says that a value is absent. It does not say why, so it holds no error
-value, and `??` on it is **CE2507**. `m.or_err(nom e)` turns it into a `Result@(T, E)`:
+value, and `??` on it is **[CE2507](error-catalog.md#ce2507)**. `m.or_err(nom e)` turns it into a `Result@(T, E)`:
 `Some(v)` becomes `Ok(v)`, and `None` becomes `Err(e)`. Then `??` propagates it.
 
 ```sushi
@@ -727,12 +727,12 @@ fn main() i32:
 ```
 
 - The argument is `nom`: the error value moves into the `Err`. A missing marker is
-  **CE2427**. The error value must be an error type (**CE2084**).
+  **[CE2427](error-catalog.md#ce2427)**. The error value must be an error type (**[CE2084](error-catalog.md#ce2084)**).
 - The receiver is `nom self`. A named `Maybe` that owns something (a `Maybe@(string)`) is
-  spent by the call (**CE2435**). A `Maybe` that owns nothing is copied.
+  spent by the call (**[CE2435](error-catalog.md#ce2435)**). A `Maybe` that owns nothing is copied.
 - A BORROWED `Maybe` is read through: a get-out such as `xs.get(0)`, a parameter, a
   pattern binding. Under `??` the value binds a borrow, as a get-out always does. When the
-  payload owns something, the call must be the operand of `??` (**CE2522**): its `Result`
+  payload owns something, the call must be the operand of `??` (**[CE2522](error-catalog.md#ce2522)**): its `Result`
   holds a borrowed `Ok` and an owned `Err`, and only `??` takes the two apart. In a `let`,
   a `match` or a method call, take an owned copy first: `xs.get(0).clone().or_err(nom e)`.
 
@@ -778,7 +778,7 @@ fn outer() i32 | ErrorB:
 
 `main` returns the exit code of the program. It is bare: it returns an integer type
 (`return 0`), and it has no error channel. A `| E` on `main`, or a `Result@(T, E)` return,
-is **CE0106**. A `??` in `main` is **CE0131**, as in every bare body. Handle each failure in
+is **[CE0106](error-catalog.md#ce0106)**. A `??` in `main` is **[CE0131](error-catalog.md#ce0131)**, as in every bare body. Handle each failure in
 the body with `match` or `.realise(default)`, and return a code:
 
 <!-- docs-sweep: skip (calls a helper defined in an earlier block on this page) -->
@@ -799,7 +799,7 @@ fn main() i32:
 ### A Total Helper Can Be Bare
 
 A private helper that cannot fail, and will not gain a failure, can be bare. The caller
-uses the value directly: no `??` and no `.realise` (a `??` on it is **CE2507**). The bare
+uses the value directly: no `??` and no `.realise` (a `??` on it is **[CE2507](error-catalog.md#ce2507)**). The bare
 helper composes with a caller of any channel:
 
 ```sushi
@@ -827,7 +827,7 @@ fn main() i32:
 
 A helper that CAN fail declares the error type of its caller, or the caller's error type
 declares a conversion from the helper's, or `??` does not compose through it
-(**CE2511**). Keep a channel on a public helper when there is any doubt (see
+(**[CE2511](error-catalog.md#ce2511)**). Keep a channel on a public helper when there is any doubt (see
 [A Bare Function Is the Exception](#a-bare-function-is-the-exception)).
 
 ## Error Conversion
@@ -867,22 +867,22 @@ fn main() i32:
 `self` is the source value. It has no name, no parameters and no return type.
 
 - **`??`** calls the conversion when the two error types differ. With no declaration, the
-  `??` is **CE2511**, and the help names the declaration to write.
-- **`e as AppError`** calls it explicitly. With no declaration, the cast is **CE2014**.
+  `??` is **[CE2511](error-catalog.md#ce2511)**, and the help names the declaration to write.
+- **`e as AppError`** calls it explicitly. With no declaration, the cast is **[CE2014](error-catalog.md#ce2014)**.
   `as` consumes its operand: for a borrowed error that owns a `string`, write
-  `e.clone() as AppError` (**CE2411**).
+  `e.clone() as AppError` (**[CE2411](error-catalog.md#ce2411)**).
 - **One step.** `A as B` and `B as C` do not give `A` to `C`. Declare `A as C` when a
   function needs it.
 - **Only the unit that declares the target type** may declare a conversion into it
-  (**CE2519**). An application's error type lists the errors it absorbs, beside its own
+  (**[CE2519](error-catalog.md#ce2519)**). An application's error type lists the errors it absorbs, beside its own
   declaration. A predefined error type belongs to its home module, so the stdlib declares
   `FileError as IoError` and `NetError as IoError` in `<io/error>`, and no unit may declare
   a conversion into `StdError`. A library declares its own error type and converts
   `IoError` into it.
-- **Two non-generic error types** (**CE2520**), never one type into itself (**CE2521**),
-  and one declaration per pair (**CE0101**).
+- **Two non-generic error types** (**[CE2520](error-catalog.md#ce2520)**), never one type into itself (**[CE2521](error-catalog.md#ce2521)**),
+  and one declaration per pair (**[CE0101](error-catalog.md#ce0101)**).
 - **The body is bare**: a `| E` on a conversion is a parse error, and a `??` in it is
-  **CE0131**. The body consumes `self`, so it can move a payload into the target.
+  **[CE0131](error-catalog.md#ce0131)**. The body consumes `self`, so it can move a payload into the target.
 - **No import is needed.** A conversion is found by its pair of types, and it is as
   visible as its target type.
 
@@ -932,13 +932,13 @@ fn main() i32:
 `f` takes the error `nom`, so the lambda writes `|nom LowError e|`. A lambda parameter
 cannot own a resource, so for an error that holds a `string` pass a named function:
 `fn wrap(nom ParseError e) AppError`. The receiver is `nom self`: a named `Result` that
-owns something is spent, and a borrowed one is **CE2411** (write `r.clone().map_err(f)`).
+owns something is spent, and a borrowed one is **[CE2411](error-catalog.md#ce2411)** (write `r.clone().map_err(f)`).
 
 ## Error Channels on Methods
 
 An extension method and a perk method follow the rule of a function. With no `| E`, the
-method is BARE: no `Result`, no `Result.Ok(...)` in the body (**CE2091**), and no `??` in
-the body (**CE0131**). Handle a Result inside such a body with `match` or
+method is BARE: no `Result`, no `Result.Ok(...)` in the body (**[CE2091](error-catalog.md#ce2091)**), and no `??` in
+the body (**[CE0131](error-catalog.md#ce0131)**). Handle a Result inside such a body with `match` or
 `.realise(default)`.
 
 A method that can fail declares an error channel `| E`, as a function does. Then:
@@ -946,9 +946,9 @@ A method that can fail declares an error channel `| E`, as a function does. Then
 - the call answers `Result@(T, E)`, and the caller handles it with `??`, `.realise()` or
   `match`
 - the body spells both constructors, `return Result.Ok(...)` and `return Result.Err(...)`;
-  a bare `return value` is **CE2030**
+  a bare `return value` is **[CE2030](error-catalog.md#ce2030)**
 - `??` is legal in the body, and the error types must match, or a declared conversion runs
-  (**CE2511**)
+  (**[CE2511](error-catalog.md#ce2511)**)
 
 ```sushi
 error OddError:
@@ -970,11 +970,11 @@ fn main() i32:
 ```
 
 A method chain stops at a channel that is still unhandled. `n.half_checked().squared()` is
-**CE2515**, because `.squared()` is a method of `i32` and not of the `Result`. Write
+**[CE2515](error-catalog.md#ce2515)**, because `.squared()` is a method of `i32` and not of the `Result`. Write
 `n.half_checked()??.squared()` in a body with the same channel, or handle the Result first.
 
 On a perk method, the contract and every implementation must declare the same channel
-(**CE0133**). See [Perks](perks.md#error-channels-on-perk-methods).
+(**[CE0133](error-catalog.md#ce0133)**). See [Perks](perks.md#error-channels-on-perk-methods).
 
 ## Patterns and Best Practices
 
@@ -1110,13 +1110,13 @@ fn main() i32:
 
 ## Traps Are Not Errors
 
-A runtime error is a defect, not an error: RE2020 for an index out of bounds, RE2021 for a
+A runtime error is a defect, not an error: [RE2020](error-catalog.md#re2020) for an index out of bounds, [RE2021](error-catalog.md#re2021) for a
 failed allocation, and the other `RExxxx` codes. A trap stops the program. A bare function
 can trap exactly as a function with a channel can, and a channel does not catch a trap. Use
 the checked form when the failure is data: `.get(i)` returns `Maybe@(T)`, and `arr[i]`
 traps.
 
-`assert(cond, message)` is the trap that a program writes itself: RE2026, with the file,
+`assert(cond, message)` is the trap that a program writes itself: [RE2026](error-catalog.md#re2026), with the file,
 the line and the column of the `assert`, and the message. Use it for a state that a
 correct program never reaches. When a caller can do something about the failure, it is
 an error and not a defect: give the function a channel and return `Result.Err(...)`.
@@ -1126,35 +1126,35 @@ See [Assertions](language-reference.md#assertions).
 
 Common error codes related to error handling:
 
-- **CE0106**: `main` returns a type that is not a bare integer, or declares a channel
-- **CE0107**: A body can reach its end with no `return`
-- **CE0131**: `??` in a bare body: a function, a method, a lambda or `main` (no `| E`)
-- **CE0133**: A perk implementation and its contract declare different error channels
-- **CE0140**: A statement after a statement that always ends the path
-- **CE2008**: `.realise()` on the call of a bare function (the value is not a Result)
-- **CE2009**: `.realise()` wrong argument count (the code of every miscount)
-- **CE2030**: A bare `return value` in a body that answers a Result
-- **CE2084**: The `E` of a `Result@(T, E)` is not an error type (declare it with `error`)
-- **CE2014**: `e as T` between two error types with no declared conversion
-- **CE2050**: `Result.Err()` with no error value
-- **CE2085**: `| E` together with an explicit `Result@(T, E)` return type
-- **CE2091**: `Result.Ok(...)` or `Result.Err(...)` in a bare body: a function, a method or a lambda (no `| E`)
-- **CE2106**: A field read on a `Result` or a `Maybe` (take the value first)
-- **CE2116**: The message of an `assert` is not a `string`
-- **CE2503**: `.realise()` default type mismatch
-- **CE2505**: Assigning a `Result@(T, E)` to a non-Result without handling
-- **CE2507**: `??` on an operand that is not a `Result@(T, E)`: a `Maybe` (use `or_err`), or the call of a bare function
-- **CE2511**: `??` with an error type that differs from the function's error type, and no declared conversion
-- **CE2515**: A method chain continues past an unhandled channel
-- **CE2516**: A `Result` or a `Maybe` used as a condition, an `assert` condition included
-- **CE2517**: A `??` binder in `foreach` over an item that is not a `Result`
-- **CE2519**: A conversion declared outside the unit of its target type
-- **CE2520**: A conversion whose source or target is not a non-generic error type
-- **CE2521**: A conversion from a type into itself
-- **CE2522**: A read-through `or_err` (a borrowed `Maybe` that owns its payload) outside `??`
-- **CW2001**: Unused `Result@(T, E)` value (warning)
+- **[CE0106](error-catalog.md#ce0106)**: `main` returns a type that is not a bare integer, or declares a channel
+- **[CE0107](error-catalog.md#ce0107)**: A body can reach its end with no `return`
+- **[CE0131](error-catalog.md#ce0131)**: `??` in a bare body: a function, a method, a lambda or `main` (no `| E`)
+- **[CE0133](error-catalog.md#ce0133)**: A perk implementation and its contract declare different error channels
+- **[CE0140](error-catalog.md#ce0140)**: A statement after a statement that always ends the path
+- **[CE2008](error-catalog.md#ce2008)**: `.realise()` on the call of a bare function (the value is not a Result)
+- **[CE2009](error-catalog.md#ce2009)**: `.realise()` wrong argument count (the code of every miscount)
+- **[CE2030](error-catalog.md#ce2030)**: A bare `return value` in a body that answers a Result
+- **[CE2084](error-catalog.md#ce2084)**: The `E` of a `Result@(T, E)` is not an error type (declare it with `error`)
+- **[CE2014](error-catalog.md#ce2014)**: `e as T` between two error types with no declared conversion
+- **[CE2050](error-catalog.md#ce2050)**: `Result.Err()` with no error value
+- **[CE2085](error-catalog.md#ce2085)**: `| E` together with an explicit `Result@(T, E)` return type
+- **[CE2091](error-catalog.md#ce2091)**: `Result.Ok(...)` or `Result.Err(...)` in a bare body: a function, a method or a lambda (no `| E`)
+- **[CE2106](error-catalog.md#ce2106)**: A field read on a `Result` or a `Maybe` (take the value first)
+- **[CE2116](error-catalog.md#ce2116)**: The message of an `assert` is not a `string`
+- **[CE2503](error-catalog.md#ce2503)**: `.realise()` default type mismatch
+- **[CE2505](error-catalog.md#ce2505)**: Assigning a `Result@(T, E)` to a non-Result without handling
+- **[CE2507](error-catalog.md#ce2507)**: `??` on an operand that is not a `Result@(T, E)`: a `Maybe` (use `or_err`), or the call of a bare function
+- **[CE2511](error-catalog.md#ce2511)**: `??` with an error type that differs from the function's error type, and no declared conversion
+- **[CE2515](error-catalog.md#ce2515)**: A method chain continues past an unhandled channel
+- **[CE2516](error-catalog.md#ce2516)**: A `Result` or a `Maybe` used as a condition, an `assert` condition included
+- **[CE2517](error-catalog.md#ce2517)**: A `??` binder in `foreach` over an item that is not a `Result`
+- **[CE2519](error-catalog.md#ce2519)**: A conversion declared outside the unit of its target type
+- **[CE2520](error-catalog.md#ce2520)**: A conversion whose source or target is not a non-generic error type
+- **[CE2521](error-catalog.md#ce2521)**: A conversion from a type into itself
+- **[CE2522](error-catalog.md#ce2522)**: A read-through `or_err` (a borrowed `Maybe` that owns its payload) outside `??`
+- **[CW2001](error-catalog.md#cw2001)**: Unused `Result@(T, E)` value (warning)
 
-`main` is bare, so a `??` in `main()` is CE0131.
+`main` is bare, so a `??` in `main()` is [CE0131](error-catalog.md#ce0131).
 
 ---
 

@@ -221,9 +221,9 @@ can be found again. The hash of every NaN is the same.
 **Not supported:**
 
 - A dynamic array (`i32[]`, `string[]`) at any depth of an array type (`i32[2][]`,
-  `i32[][2]`): **CE2058**. A dynamic array has no equality test at the top level. Use a
+  `i32[][2]`): **[CE2058](../../error-catalog.md#ce2058)**. A dynamic array has no equality test at the top level. Use a
   fixed array, or a `List@(T)`.
-- A type with no equality test: **CE2055**. That is a function value, a `ptr`, a
+- A type with no equality test: **[CE2055](../../error-catalog.md#ce2055)**. That is a function value, a `ptr`, a
   `HashMap@(K, V)`, and a type that holds one, unless the type implements `Eq`.
   A note names the field.
 - A `HashMap@(K, V)` itself. A map has no hash of its own: its buckets carry a state for
@@ -238,7 +238,7 @@ Hashing and equality are two contracts. `extend T with Hashable` REPLACES the ha
 `T` everywhere, and it makes a type hashable that the compiler cannot hash (for example,
 a struct with a function-typed field). It does NOT give `T` an equality test. A function
 value and a `ptr` have no equality. Thus a type that holds one of them is not a key with
-a `Hashable` override alone (**CE2055**, and #936):
+a `Hashable` override alone (**[CE2055](../../error-catalog.md#ce2055)**, and #936):
 
 <!-- docs-sweep: error CE2055 -->
 ```sushi

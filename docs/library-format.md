@@ -82,7 +82,7 @@ Each sushi emoji is 4 UTF-8 bytes, total magic is 16 bytes.
 4-byte unsigned integer (little-endian). Current version: `5`.
 
 Used for forward compatibility checks. A reader accepts version 5 only; anything else is
-**CE3509**. There is no upgrade shim, and none is planned: Sushi has no users in the wild,
+**[CE3509](error-catalog.md#ce3509)**. There is no upgrade shim, and none is planned: Sushi has no users in the wild,
 so a file of another version is rejected rather than read with a guess. A file of another
 version can have a different ABI in its bitcode, and a reader must not call it with the wrong
 ABI. Rebuild the library.
@@ -615,29 +615,29 @@ receiver's TYPE, which is nominal and program-wide, so there is no unit in it to
 
 There is **no scheme identifier**. A manifest records what is, not the recipe, and
 `compiler_version` already says which compiler wrote it -- with `requires_compiler`
-(CE3503) refusing a `.slib` the running compiler may not consume.
+([CE3503](error-catalog.md#ce3503)) refusing a `.slib` the running compiler may not consume.
 
 ## Error Codes
 
 | Code | Description |
 |------|-------------|
-| CE3500 | The `--lib` output path does not end in `.slib` |
-| CE3502 | A `use <lib/...>` names a library that no search directory holds |
-| CE3503 | The library's `requires_compiler` excludes the running compiler |
-| CE3504 | A binary or hybrid library was built for another platform |
-| CE3505 | No `library_version` available at build time (no `nori.toml`, no `--lib-version`) |
-| CE3506 | Source section truncated |
-| CE3508 | Invalid magic bytes (not a valid `.slib` file) |
-| CE3509 | Unsupported format version (a container other than version 5) |
-| CE3510 | Metadata section truncated |
-| CE3511 | Bitcode section truncated |
-| CE3507 | The bitcode of a binary or hybrid library does not link |
-| CE3512 | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, a `conversions` record whose sides are not two error types or whose `link_symbol` is not the symbol of the pair, or a binary or hybrid library's templates schema is not version 9 (a library built before schema 9 is rebuilt) |
-| CE3513 | File exceeds maximum size (1GB) |
-| CE3515 | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
-| CE3516 | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |
-| CE3517 | The `nori.toml` in the working directory is not valid |
-| CE3518 | The `nori.toml` in the working directory cannot be read |
+| [CE3500](error-catalog.md#ce3500) | The `--lib` output path does not end in `.slib` |
+| [CE3502](error-catalog.md#ce3502) | A `use <lib/...>` names a library that no search directory holds |
+| [CE3503](error-catalog.md#ce3503) | The library's `requires_compiler` excludes the running compiler |
+| [CE3504](error-catalog.md#ce3504) | A binary or hybrid library was built for another platform |
+| [CE3505](error-catalog.md#ce3505) | No `library_version` available at build time (no `nori.toml`, no `--lib-version`) |
+| [CE3506](error-catalog.md#ce3506) | Source section truncated |
+| [CE3508](error-catalog.md#ce3508) | Invalid magic bytes (not a valid `.slib` file) |
+| [CE3509](error-catalog.md#ce3509) | Unsupported format version (a container other than version 5) |
+| [CE3510](error-catalog.md#ce3510) | Metadata section truncated |
+| [CE3511](error-catalog.md#ce3511) | Bitcode section truncated |
+| [CE3507](error-catalog.md#ce3507) | The bitcode of a binary or hybrid library does not link |
+| [CE3512](error-catalog.md#ce3512) | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, a `conversions` record whose sides are not two error types or whose `link_symbol` is not the symbol of the pair, or a binary or hybrid library's templates schema is not version 9 (a library built before schema 9 is rebuilt) |
+| [CE3513](error-catalog.md#ce3513) | File exceeds maximum size (1GB) |
+| [CE3515](error-catalog.md#ce3515) | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
+| [CE3516](error-catalog.md#ce3516) | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |
+| [CE3517](error-catalog.md#ce3517) | The `nori.toml` in the working directory is not valid |
+| [CE3518](error-catalog.md#ce3518) | The `nori.toml` in the working directory cannot be read |
 
 One truncation code per section rather than one shared code: the message names which
 section is short, and that is what tells a reader where the file was cut.
@@ -702,24 +702,24 @@ what does not travel in it.
 
 ### Reading
 
-Before the file is opened, a path that does not end in `.slib` is CE3516. An OS error of the
-open or of a read is CE3515.
+Before the file is opened, a path that does not end in `.slib` is [CE3516](error-catalog.md#ce3516). An OS error of the
+open or of a read is [CE3515](error-catalog.md#ce3515).
 
-1. Read and validate the 16-byte magic (CE3508)
-2. Refuse a file larger than 1 GiB (CE3513), before any section is read
-3. Read the 4-byte version, reject it if unsupported (CE3509)
+1. Read and validate the 16-byte magic ([CE3508](error-catalog.md#ce3508))
+2. Refuse a file larger than 1 GiB ([CE3513](error-catalog.md#ce3513)), before any section is read
+3. Read the 4-byte version, reject it if unsupported ([CE3509](error-catalog.md#ce3509))
 4. Read the 4-byte flags and 4-byte kind, skip 16 bytes of reserved fields
 5. Read the 8-byte metadata length
-6. Read the metadata blob, deserialize it with MessagePack (CE3512)
+6. Read the metadata blob, deserialize it with MessagePack ([CE3512](error-catalog.md#ce3512))
 7. Read the 8-byte source length
 8. Read the source blob, deserialize it with MessagePack (skip it to reach the bitcode)
 9. Read the 8-byte bitcode length
 10. Read the bitcode blob
 After the read, the consumer and `--lib-info` check the manifest against `MANIFEST_SCHEMA`
-(`check_manifest`, CE3512).
+(`check_manifest`, [CE3512](error-catalog.md#ce3512)).
 
 Each declared section length is checked against the bytes that are left in the file BEFORE the
-read. A length that is too long is a truncation: CE3510 (metadata), CE3506 (source) or CE3511
+read. A length that is too long is a truncation: [CE3510](error-catalog.md#ce3510) (metadata), [CE3506](error-catalog.md#ce3506) (source) or [CE3511](error-catalog.md#ce3511)
 (bitcode).
 
 A reader that wants only part of this stops early: `read_metadata_only` stops after step 6,

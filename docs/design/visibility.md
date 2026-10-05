@@ -36,7 +36,7 @@ seam answers who may name an entry.
 
 | Seam | Where |
 |---|---|
-| The use-site fence | `semantics/visibility.py:reject_private_cross_unit_use` — one record, one predicate, one CE3005 with a `{kind}` word and a note at the declaration |
+| The use-site fence | `semantics/visibility.py:reject_private_cross_unit_use` — one record, one predicate, one [CE3005](../error-catalog.md#ce3005) with a `{kind}` word and a note at the declaration |
 | The leak fence | `passes/types/public_signatures.py:check_public_signatures` — one runner over one walk, and each rule brings its own pair of sets |
 | The type funnel | `passes/types/utils.py:validate_type_name`, with every arm, over `semantics/type_walk.py:walk_named_types` |
 
@@ -88,7 +88,7 @@ error [CE0004]: duplicate struct 'Node'.
 The same holds for a perk. A function and a constant are different: each carries the unit
 that declared it, so two units may each declare a private `fn helper` or a private
 `const SCRATCH` (`docs/design/unit-namespaces.md` section 9). That shape is legal and
-nothing is reported. CE0101 and CE0105 answer the same name twice inside ONE unit. For the
+nothing is reported. [CE0101](../error-catalog.md#ce0101) and [CE0105](../error-catalog.md#ce0105) answer the same name twice inside ONE unit. For the
 kinds that have one winner for the whole program, the loser of a contested name is
 recorded, and no rule measures the code of a loser against the declaration of the winner.
 
@@ -126,7 +126,7 @@ name.
 
 One reader answers for all five rules: `read_public` in
 `ast_builder/utils/tree_navigation.py` hands back the marker AND its span. The span is
-what tells a written marker from an absent one, which is what CE6103 points at.
+what tells a written marker from an absent one, which is what [CE6103](../error-catalog.md#ce6103) points at.
 
 ### Enum variants follow the enum
 
@@ -167,7 +167,7 @@ column. `extend i32 squared()` is public because `i32` is public.
 
 **The marker is refused where it can be written.** A perk-implementation body is built
 out of the `function_def` rule, so the grammar accepts `public fn shout()` inside
-`extend Box with Loud:`. CE6103 refuses it, with a caret on the marker.
+`extend Box with Loud:`. [CE6103](../error-catalog.md#ce6103) refuses it, with a caret on the marker.
 
 And one thing the leak fence has to know: an extension inherits its target type's marker,
 and a builtin target carries none. An extension on `i32` is therefore not fenced by
@@ -178,7 +178,7 @@ is as visible as its target, program-wide, so internals stay free functions.
 
 The marker is inherited, and a method name is still claimed for every consumer: a namespace
 cannot stand in front of a method, because a method is found on the receiver's type.
-`docs/design/unit-namespaces.md` section 8 measures that cost. CW3003 is the warning at
+`docs/design/unit-namespaces.md` section 8 measures that cost. [CW3003](../error-catalog.md#cw3003) is the warning at
 `--lib` build time on a library that extends a type it did not declare.
 
 The alternative was to give an extension its own marker. That makes a method's availability
@@ -291,8 +291,8 @@ Two things differ, and one does not:
 
 | | private `perk Loud` | `public perk Loud` |
 |---|---|---|
-| `extend MyStruct with Loud` in another unit | CE4011 | allowed |
-| `@(T: Loud)` in another unit | CE4011 | allowed |
+| `extend MyStruct with Loud` in another unit | [CE4011](../error-catalog.md#ce4011) | allowed |
+| `@(T: Loud)` in another unit | [CE4011](../error-catalog.md#ce4011) | allowed |
 | `my_box.shout()` in another unit | **allowed** | **allowed** |
 
 The call is the row that does not move. A perk's visibility governs the **contract** — who
@@ -306,7 +306,7 @@ constraint (`@(T: P)`) and a pack constraint (`@(...Ts: P)`) are legal only when
 declared in the unit, or its own `use` brings it, or a `public use` chain re-exports it. A
 flat import gives the bare name; an aliased import gives `p.P` (`extend Dog with p.Named`).
 A perk that a compiled library ships follows the same rule at the consumer. A perk out of
-scope is CE4003 in every position, one time, with the import in the help: a plain `use` in
+scope is [CE4003](../error-catalog.md#ce4003) in every position, one time, with the import in the help: a plain `use` in
 another unit does not bring it, because scope is not transitive. The predefined perks
 (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`) are in every scope. The check reads the scope
 that every other name reads (`reject_out_of_scope_perk`, `passes/types/visibility.py`).
@@ -434,7 +434,7 @@ widening somebody else's:
 | **Public enum variant payload** | yes | the enum's own marker |
 | Extension return and parameter | yes | the TARGET type's marker |
 | Perk method return and parameter | yes | the perk's, or the target type's |
-| Public generic constraint | yes (CE3010) | the declaring function's, struct's or enum's marker; an extension's TARGET type's, so a builtin target is not fenced |
+| Public generic constraint | yes ([CE3010](../error-catalog.md#ce3010)) | the declaring function's, struct's or enum's marker; an extension's TARGET type's, so a builtin target is not fenced |
 | Extension or perk-implementation RECEIVER | no | it IS the gate; asking would answer itself |
 | A GENERIC target (`extend Box@(T) with P`) | yes | the BASE type's marker, which is where it is written |
 | A target with no declaration (`extend i32`) | no | there is no marker to inherit |
@@ -444,7 +444,7 @@ The extension guard reading its *target's* flag mirrors the function guard readi
 
 The predicate stops at a named declaration. A signature hands out the names it SPELLS, and
 what one of those names holds belongs to its own declaration -- so a public struct with a
-private field hears CE3009 once, at the field, and not again at every signature that
+private field hears [CE3009](../error-catalog.md#ce3009) once, at the field, and not again at every signature that
 mentions the struct.
 
 The runner does not run over a LIBRARY unit at all. Its signatures were fenced when the
@@ -455,12 +455,12 @@ Three codes answer the fence, and each family owns its own range:
 
 | Code | Family | Answers |
 |---|---|---|
-| **CE3009** | `unit.py` | A public signature names a private type — Rust's E0446 |
-| **CE3010** | `unit.py` | A public signature's constraint names a private perk — Rust's E0445 |
-| **CE4011** | `perk.py` | Another unit implements or names a private perk — the perk twin of CE3005 |
+| **[CE3009](../error-catalog.md#ce3009)** | `unit.py` | A public signature names a private type — Rust's E0446 |
+| **[CE3010](../error-catalog.md#ce3010)** | `unit.py` | A public signature's constraint names a private perk — Rust's E0445 |
+| **[CE4011](../error-catalog.md#ce4011)** | `perk.py` | Another unit implements or names a private perk — the perk twin of [CE3005](../error-catalog.md#ce3005) |
 
-CE3010 and CE4011 both involve a private perk and are not the same error. CE4011 is a
-**use-site** rule: the perk is not nameable in that unit at all. CE3010 is a **leak** rule:
+[CE3010](../error-catalog.md#ce3010) and [CE4011](../error-catalog.md#ce4011) both involve a private perk and are not the same error. [CE4011](../error-catalog.md#ce4011) is a
+**use-site** rule: the perk is not nameable in that unit at all. [CE3010](../error-catalog.md#ce3010) is a **leak** rule:
 the perk is nameable right there, in its own unit, and the signature would hand it to a unit
 where it is not.
 
@@ -469,8 +469,8 @@ constraint answers one code or none, for every kind that carries one:
 
 | where the constraint is written | the declaration's visibility | answer |
 |---|---|---|
-| another unit than the perk's | any | CE4011, from the collect pass |
-| the perk's own unit | public | CE3010 |
+| another unit than the perk's | any | [CE4011](../error-catalog.md#ce4011), from the collect pass |
+| the perk's own unit | public | [CE3010](../error-catalog.md#ce3010) |
 | the perk's own unit | private, or an extension on a builtin | allowed |
 
 An extension's visibility in that table is its TARGET type's (Ruling 2), a generic
@@ -482,7 +482,7 @@ The error channel needs no special case. `fn origin() Point | E` answers
 `Result@(Point, E)`, but the fence runs on the written `func.ret`, and on the error arm as a
 position of its own. A bare `fn origin() Point` has no wrap at all.
 
-CE6103, in the syntax family, answers the marker Ruling 2 refuses: a perk
+[CE6103](../error-catalog.md#ce6103), in the syntax family, answers the marker Ruling 2 refuses: a perk
 implementation method cannot say `public`.
 
 A consumer cannot instantiate a public generic at a private type, because it cannot name
@@ -528,7 +528,7 @@ consumer.
 ### The doc lints ignore visibility
 
 `check_missing_docs` (`passes/docs.py`) walks `declarations(program)`
-(`semantics/ast_walk.py`) with no visibility gate. CW7002-CW7006 cover every declaration
+(`semantics/ast_walk.py`) with no visibility gate. [CW7002](../error-catalog.md#cw7002)-[CW7006](../error-catalog.md#cw7006) cover every declaration
 whatever its visibility.
 
 ## 7. The library boundary
@@ -547,7 +547,7 @@ Only four Sushi sources cross a unit boundary with a type, and all four are mark
 read the marker, as `_extract_public_functions` does, and the constant extractor reads the
 library's own units alone. The `not_exported` list (`_extract_not_exported`) has a
 `struct`, an `enum` and a `constant` kind, so a consumer naming a library-private type
-hears CE3005 rather than "unknown type".
+hears [CE3005](../error-catalog.md#ce3005) rather than "unknown type".
 
 A private type that a public generic's template body NAMES travels with the export
 closure as source, beside the closure's private constants, and the consumer registers it
@@ -557,7 +557,7 @@ in exactly one place: the closure, or the kept list.
 The manifest protocol is **2.3** (`docs/library-format.md`). Every record carries `unit`,
 and every record with a symbol in the shipped bitcode carries `link_symbol`
 (`docs/design/unit-namespaces.md` section 9). An older `.slib` is refused through the
-compiler-version gate (CE3503).
+compiler-version gate ([CE3503](../error-catalog.md#ce3503)).
 
 **A single-unit file never notices visibility.** That is an undertaking, and it is what
 the leak fence's two gates protect: an extension on a builtin inherits no marker, so it is
@@ -576,7 +576,7 @@ units cannot each declare a private `Node`. That is a change to type identity, n
 to visibility, and it is argued in `docs/design/type-identity.md`. For the other kinds,
 `docs/design/unit-namespaces.md` decides: a `fn` and a `const` coexist, an `as` clause
 binds an imported unit behind a dot, and a unit's scope is its own declarations plus what
-its own `use` statements bring. CE3011 and CW3002 both cite that document.
+its own `use` statements bring. [CE3011](../error-catalog.md#ce3011) and [CW3002](../error-catalog.md#cw3002) both cite that document.
 
 **Sealed calls.** Section 4 gives up "nobody outside may call this". Recovering it needs a
 name-level import, which Sushi does not have. That is a language feature, not a visibility
@@ -593,8 +593,8 @@ Four combinations, and none of them is a clash:
 
 | consumer writes | library writes | answer |
 |---|---|---|
-| `fn f` (private) | `public fn f` | legal, **CW3002** |
-| `public fn f` | `public fn f` | legal, **CW3002** |
+| `fn f` (private) | `public fn f` | legal, **[CW3002](../error-catalog.md#cw3002)** |
+| `public fn f` | `public fn f` | legal, **[CW3002](../error-catalog.md#cw3002)** |
 | `fn f` (private) | `fn f` (private) | legal, nothing said |
 | `public fn f` | `fn f` (private) | legal, nothing said |
 
@@ -608,8 +608,8 @@ library's `public fn through@(T)` is transplanted into the consumer's compile an
 monomorphized there.
 
 The other three rows are legal because a symbol carries its unit. A collision is reported
-only where it is written: CE3012 answers at a bare use where two candidates are really
-offered. CE3011 is the TYPE rule alone: a `fn` carries the unit that declared it and each
+only where it is written: [CE3012](../error-catalog.md#ce3012) answers at a bare use where two candidates are really
+offered. [CE3011](../error-catalog.md#ce3011) is the TYPE rule alone: a `fn` carries the unit that declared it and each
 unit's scope reads its own, so a consumer may declare a function beside a library's
 private one. All four rows were
 measured with a source library, and in each the consumer's call reads the consumer's
@@ -619,14 +619,14 @@ declaration while the library's own body reads its own -- `main$f` beside
 The consumer's own call resolves to the consumer's declaration, with the consumer's
 signature. There is no single winner of a function name, so nothing is dropped and
 nothing is booked as a loser. Shadowing an export is legal but rarely intended, so
-**CW3002** says so, and `use <lib/flib> as fl` puts the export behind a dot and the shadow
+**[CW3002](../error-catalog.md#cw3002)** says so, and `use <lib/flib> as fl` puts the export behind a dot and the shadow
 away. The warning is the same for every library kind (#1103): for a binary or a hybrid
 library, the `libraries` step reads the export from the manifest, which lists every public
 function and template.
 
-For a TYPE, a public name of a SOURCE library stays the plain duplicate (CE0004 / CE2046);
-a public concrete type of a BINARY library is **CE3011**, because the consumer cannot see
-the declaration to point a note at; and a library's PRIVATE type is **CE3011** for both
+For a TYPE, a public name of a SOURCE library stays the plain duplicate ([CE0004](../error-catalog.md#ce0004) / [CE2046](../error-catalog.md#ce2046));
+a public concrete type of a BINARY library is **[CE3011](../error-catalog.md#ce3011)**, because the consumer cannot see
+the declaration to point a note at; and a library's PRIVATE type is **[CE3011](../error-catalog.md#ce3011)** for both
 kinds: type identity is nominal, so one name is one shape
 and the consumer cannot have its own. A library's private CONSTANT is not refused: it is
 the function rule's shape and it takes the function rule's answer, so the two coexist and
@@ -635,8 +635,8 @@ that name is one the consumer can see and read.
 
 A PERK follows the type's rule. `PerkTable.by_name` is flat with no per-unit view,
 so one perk name is one perk per program exactly as one type name is one shape, and the
-answer follows the substance: a library's private perk is **CE3011** and a public one
-stays the plain duplicate (CE4001). CE3011 has no note that points into a file the consumer
+answer follows the substance: a library's private perk is **[CE3011](../error-catalog.md#ce3011)** and a public one
+stays the plain duplicate ([CE4001](../error-catalog.md#ce4001)). [CE3011](../error-catalog.md#ce3011) has no note that points into a file the consumer
 cannot see.
 
 ### 9.2 The perk-implementation override, and its record on the table
@@ -651,5 +651,5 @@ that `docs/design/method-resolution.md` already names.
 `implementations`, `by_type` and `by_perk`, the takeover is a method on the table, and the
 owner survives the merge.
 
-A PRIVATE perk needs nothing here: CE4011 refuses `extend X with P` in another unit before
+A PRIVATE perk needs nothing here: [CE4011](../error-catalog.md#ce4011) refuses `extend X with P` in another unit before
 the override question arises.

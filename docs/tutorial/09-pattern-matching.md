@@ -96,7 +96,7 @@ on an enum, Sushi **requires you to handle every variant** (or cover the leftove
 That's not a nuisance — it's a safety net. Suppose you later add a fourth variant to an
 enum. Every `match` that doesn't account for it suddenly fails to compile, pointing you at
 exactly the code that needs updating. Whole categories of "oops, I forgot the new case"
-bugs simply can't reach a running program. A missing variant is the error `CE2040`, and
+bugs simply can't reach a running program. A missing variant is the error [`CE2040`](../error-catalog.md#ce2040), and
 the message names the variants that you did not handle. It's the same instinct behind
 `Result` itself: make the compiler force you to deal with every possibility, so your users
 never trip over the one you missed.
@@ -111,7 +111,7 @@ never trip over the one you missed.
 ## Matching integers
 
 A `match` also works on an integer. Each arm is an integer literal, in any base. An integer
-has too many values to list, so a trailing `_` arm is required (`CE2074`).
+has too many values to list, so a trailing `_` arm is required ([`CE2074`](../error-catalog.md#ce2074)).
 
 ```sushi
 --8<-- "docs/tutorial/examples/09-pattern-matching/integer-arms.sushi"
@@ -126,9 +126,9 @@ Output:
 7: just a number
 ```
 
-Two arms with the same value are an error (`CE2075`), also when they use different bases,
+Two arms with the same value are an error ([`CE2075`](../error-catalog.md#ce2075)), also when they use different bases,
 as `42` and `0x2A` do. Every arm must fit the type of the matched value: an enum arm in a
-`match` on an integer is the error `CE2076`.
+`match` on an integer is the error [`CE2076`](../error-catalog.md#ce2076).
 
 ## Binding modes
 
@@ -143,7 +143,7 @@ parameter does ([Chapter 4](04-functions.md#parameter-modes)):
 A `nom` binding needs a value that the `match` owns. A temporary value, such as the
 result of the call `load()`, is owned by the `match`. To give a local variable to a
 `match`, write `match nom manifest:`; after this, `manifest` is not usable. A `nom`
-binding in a plain `match manifest:` is the error `CE2432`.
+binding in a plain `match manifest:` is the error [`CE2432`](../error-catalog.md#ce2432).
 
 ```sushi
 --8<-- "docs/tutorial/examples/09-pattern-matching/binding-modes.sushi"
@@ -171,7 +171,7 @@ is for data that owns memory, such as the `string[]` here.
 - Patterns nest: `Result.Err(DriveError.NotConfigured())` matches the outer and inner
   variants together.
 - Matching on an enum is **exhaustive** — the compiler insists every variant is handled
-  (`CE2040`), turning forgotten cases into compile errors instead of runtime bugs.
+  ([`CE2040`](../error-catalog.md#ce2040)), turning forgotten cases into compile errors instead of runtime bugs.
 - A `match` on an integer uses literal arms and needs a trailing `_`.
 - A pattern binding borrows by default; `poke` writes into the data, and `nom` takes it
   from a value that the `match` owns.

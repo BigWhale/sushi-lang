@@ -24,8 +24,8 @@ Some things to know:
 - An extension method with no error channel returns a **bare value**, not a `Result`. So
   `squared` ends with `return self * self`. The call site is plain `six.squared()`, with no
   `??` and no `.realise(...)`.
-- In a bare method, `return Result.Ok(...)` is an error (`CE2091`), and so is `??`
-  (`CE0131`): the method has no error channel. The section
+- In a bare method, `return Result.Ok(...)` is an error ([`CE2091`](../error-catalog.md#ce2091)), and so is `??`
+  ([`CE0131`](../error-catalog.md#ce0131)): the method has no error channel. The section
   [An error channel](#an-error-channel) shows how to add one.
 - You can call `something.method()` in a string interpolation: see `{six.squared()}`.
 
@@ -79,7 +79,7 @@ cases.
 
 `into_label` takes the whole counter and gives back its label. `nom self.label` takes the
 field out of the receiver. After the call, `c` is spent, and a use of `c` is an error
-(`CE2435`). The standard library uses this form where a value must end: `File.close()` and
+([`CE2435`](../error-catalog.md#ce2435)). The standard library uses this form where a value must end: `File.close()` and
 `BufWriter.finish()` both take `nom self`.
 
 ## An error channel
@@ -104,10 +104,10 @@ With `| E`, the rules change:
 - The call gives a `Result@(T, E)`. Handle it with `??`, `.realise(default)` or `match`,
   as in chapter 6.
 - The body spells **both** constructors: `return Result.Ok(value)` and
-  `return Result.Err(error)`. A bare `return value` is an error (`CE2030`). A method that
+  `return Result.Err(error)`. A bare `return value` is an error ([`CE2030`](../error-catalog.md#ce2030)). A method that
   returns `~` ends with `return Result.Ok(~)`.
 - `??` is legal in the body. `quarter` uses it to pass on the error of `half`.
-- A chain stops at an unhandled channel. `8.half().half()` is an error (`CE2515`), because
+- A chain stops at an unhandled channel. `8.half().half()` is an error ([`CE2515`](../error-catalog.md#ce2515)), because
   the first call gives a `Result`. In a function or method with a channel, write
   `n.half()??.half()`; otherwise handle the first result.
 
@@ -161,12 +161,12 @@ chapter 13. Those are static methods too, on types that the compiler declares.
 Some rules:
 
 - A static has **no `self`**. A receiver in the signature, or `self` in the body, is an
-  error (`CE0134`). Give the method what it needs as an ordinary parameter.
+  error ([`CE0134`](../error-catalog.md#ce0134)). Give the method what it needs as an ordinary parameter.
 - A name behind a type's dot is **one** thing: a variant or a static method. On an enum, a
-  static cannot have the name of a variant (`CE2103`). On all types, a static cannot have
-  the name of an instance method (`CE0101`).
-- An array target cannot have a static (`CE2104`): `i32[].empty()` has no spelling.
-- A perk implementation cannot hold a static (`CE4014`).
+  static cannot have the name of a variant ([`CE2103`](../error-catalog.md#ce2103)). On all types, a static cannot have
+  the name of an instance method ([`CE0101`](../error-catalog.md#ce0101)).
+- An array target cannot have a static ([`CE2104`](../error-catalog.md#ce2104)): `i32[].empty()` has no spelling.
+- A perk implementation cannot hold a static ([`CE4014`](../error-catalog.md#ce4014)).
 
 `new` is a good name for a static: `extend Box static new(i32 n) Box:`. A *free* function
 cannot have the name `new`.
@@ -196,7 +196,7 @@ Heart of Gold (crew: 5)
 ```
 
 A perk method can also declare `| E`, for example `fn halve() i32 | HalfError`. Then
-every implementation declares the same channel (`CE0133` if they do not agree), and the
+every implementation declares the same channel ([`CE0133`](../error-catalog.md#ce0133) if they do not agree), and the
 body spells `Result.Ok` and `Result.Err`, as in the section above. The `Reader` and `Writer`
 perks of `<io/contracts>` (chapter 14) use this form.
 
@@ -215,7 +215,7 @@ the methods of the perk on the value.
 
 `announce@(T: Describable)(T item)` accepts a `Robot`, a `Ship`, or any other type that
 implements `Describable`, and calls `item.describe()`. The compiler checks the constraint
-at the call site, and refuses a type that does not satisfy it (`CE4006`). Then it makes a
+at the call site, and refuses a type that does not satisfy it ([`CE4006`](../error-catalog.md#ce4006)). Then it makes a
 specialised `announce` for each type, as in chapter 10. The check occurs at compile time
 only.
 
@@ -249,7 +249,7 @@ nothing at all
 ```
 
 There is no specialization. If `extend T[] with Describable` exists, a second
-`extend i32[] with Describable` is a duplicate (`CE4002`). Implement the perk on the
+`extend i32[] with Describable` is a duplicate ([`CE4002`](../error-catalog.md#ce4002)). Implement the perk on the
 template, or on each concrete array type.
 
 ## `Hashable` is predefined
@@ -257,7 +257,7 @@ template, or on each concrete array type.
 One perk describes behaviour that the compiler already derives: hashing. Almost every type
 in Sushi gets an auto-derived `.hash() -> u64`. The perk `Hashable` (`fn hash() u64`) comes
 with the compiler, as does `Drop` (chapter 12). Do not declare it: a `perk Hashable:` of
-your own is a duplicate (`CE4001`). Every type with a derived hash **satisfies it
+your own is a duplicate ([`CE4001`](../error-catalog.md#ce4001)). Every type with a derived hash **satisfies it
 automatically**: the primitives, `string`, and a plain struct or enum.
 
 ```sushi
@@ -269,7 +269,7 @@ through its derived hash. The explicit `extend Point with Hashable` is an **over
 makes the fingerprint `30` and not the derived value. For `42` (an `i32`) and `true` (a
 `bool`) we write nothing. A type that the compiler cannot hash (for example, a struct that
 holds a `HashMap`) does not satisfy `Hashable` unless it implements the perk. The constraint
-refuses it with `CE4006`.
+refuses it with [`CE4006`](../error-catalog.md#ce4006).
 
 Output:
 
@@ -320,16 +320,16 @@ it.
 
 Perks are simple on purpose. Know these limits:
 
-- **No type parameters.** `perk Iterator@(Item):` is an error (`CE4010`).
+- **No type parameters.** `perk Iterator@(Item):` is an error ([`CE4010`](../error-catalog.md#ce4010)).
 - **No inheritance.** A perk cannot require another perk (no `perk Ord: Eq`). To ask for
   more than one capability, use `+` at the *use* site:
   `fn f@(T: Hashable + Describe)(T x)`.
 - **No default implementations.** Each type implements every method of the perk. A perk
   cannot give a fallback body.
-- **No static methods** (`CE4014`). A perk has no `Self` type, so a contract cannot hold a
+- **No static methods** ([`CE4014`](../error-catalog.md#ce4014)). A perk has no `Self` type, so a contract cannot hold a
   constructor.
 - **One home for a name.** A perk method and an extension method with the same name on the
-  same type is an error (`CE4007`). A name is a contract method or a convenience method,
+  same type is an error ([`CE4007`](../error-catalog.md#ce4007)). A name is a contract method or a convenience method,
   never both.
 
 With these limits, every perk method call goes to a known function at compile time.

@@ -42,7 +42,7 @@ Drive online. Anything is now infinitely probable.
 !!! note "No `??` in `main`"
     We unwrap with `.realise(default)` rather than `??`. The `??` operator is wonderful
     inside a function with an error channel, but `main` is bare, so `??` in `main` is
-    **CE0131**. In `main`, use `match`, `if (result.is_ok())`, or `.realise(default)`.
+    **[CE0131](../error-catalog.md#ce0131)**. In `main`, use `match`, `if (result.is_ok())`, or `.realise(default)`.
 
 ### Math
 
@@ -203,7 +203,7 @@ outside its guarantees.
 
 You declare externals inside an `unsafe external "C" as <namespace>` block. The
 `because "<reason>"` clause documents *why* the unsafety is acceptable and silences the
-CW5001 four-guarantees warning so the build stays clean. Each declaration is bodyless, and
+[CW5001](../error-catalog.md#cw5001) four-guarantees warning so the build stays clean. Each declaration is bodyless, and
 `= "symbol"` names the actual C link symbol.
 
 ```sushi
@@ -222,7 +222,7 @@ Second, and crucially: **externals return raw C values, not `Result`.** An exter
 has an error channel. So `libc.strlen(s)` yields a bare `i64`, and
 we *wrap it ourselves* in the `length` safe wrapper. `strlen` cannot fail, so `length` is
 bare; this is one of the few correct uses of the bare form. Trying to use `??` directly on a raw
-external would be a CE2507 error.
+external would be a [CE2507](../error-catalog.md#ce2507) error.
 
 !!! note "Wall off the foreign world"
     The guiding rule is *"FFI is not Sushi."* Keep the `unsafe external` block thin, and
@@ -345,7 +345,7 @@ answer() = 42
     the central **Omakase** repository at `omakase.lubica.net`. The default `.slib` holds
     source text, so it is portable, and its generic functions and types work in the
     program that imports it. A `--lib-kind binary` library is not portable across
-    platforms (`CE3504`). A library has no transitive
+    platforms ([`CE3504`](../error-catalog.md#ce3504)). A library has no transitive
     dependencies. See the
     [libraries guide](../libraries.md)
     for the details.

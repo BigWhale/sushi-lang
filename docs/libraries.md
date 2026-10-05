@@ -62,7 +62,7 @@ This writes one `.slib` file containing:
 - a MessagePack index of everything it declares, which `--lib-info` and the consumer read
 
 Every library states its own version. The value comes from the `nori.toml` in the current
-directory when there is one, and from `--lib-version` otherwise; neither is **CE3505**. See
+directory when there is one, and from `--lib-version` otherwise; neither is **[CE3505](error-catalog.md#ce3505)**. See
 [Versions and Compatibility](#versions-and-compatibility).
 
 ### Library Kinds
@@ -72,7 +72,7 @@ directory when there is one, and from `--lib-version` otherwise; neither is **CE
 | Kind | Ships | Portable | Notes |
 |--------|--------------------------|-----|--------------------------------------------|
 | `source` | unit source text | yes | the default; the consumer compiles it |
-| `binary` | LLVM bitcode | no | platform-bound (**CE3504** elsewhere) |
+| `binary` | LLVM bitcode | no | platform-bound (**[CE3504](error-catalog.md#ce3504)** elsewhere) |
 | `hybrid` | both | no | the bitcode still binds it to one platform |
 
 ```bash
@@ -95,7 +95,7 @@ A template (`extend Box@(T)`, `extend Box@(i32)`, `extend T[]`, `pick@(U)`) ship
 source, and the consumer makes its own copies. A method of an implementation of a
 private perk ships as an ordinary method of the type: the contract stays hidden, and the
 method stays callable. A consumer that declares the same method on the same type hears
-`CE0101`, on every kind.
+[`CE0101`](error-catalog.md#ce0101), on every kind.
 
 Every kind re-exports. A façade unit that says `public use` on each of the library's
 other units is the way to give a multi-unit library one namespace, and it works whichever
@@ -106,7 +106,7 @@ way, and the consumer's build compiles the module on the strength of the record 
 where no unit of its own wrote the import. A `public use <lib/other>` hands on another
 library with the same rule: the consumer's build finds `other` on `SUSHI_LIB_PATH` as if
 the consumer wrote `use <lib/other>`, and `other`'s public names are the consumer's to
-write. If `other` is not on the path, the consumer gets CE3502 with a note that names the
+write. If `other` is not on the path, the consumer gets [CE3502](error-catalog.md#ce3502) with a note that names the
 `public use`.
 
 ### Library Dependencies
@@ -123,14 +123,14 @@ kind of library:
    compiled library uses is loaded the same way.
 2. **Visibility is not transitive.** A unit may write the names of what it imports
    itself, and of what a `public use` hands on. A plain `use <lib/b>` in a library loads
-   `b` and gives the consumer no name of it: a bare `b_val()` at the consumer is CE2008
+   `b` and gives the consumer no name of it: a bare `b_val()` at the consumer is [CE2008](error-catalog.md#ce2008)
    until the consumer writes `use <lib/b>`, or the library writes `public use <lib/b>`.
 
 Visibility is also PER UNIT, and it is the same for every kind of library. A library's
 public functions, constants, unit variables and types (concrete and generic) are names
 only in a unit of the consumer that imports the library itself, or that reaches it
 through a `public use` chain. If `main.sushi` writes `use <lib/a>` and `use "helper"`, a
-call of `a_val()` in `helper.sushi` is CE2008 until `helper.sushi` writes `use <lib/a>`
+call of `a_val()` in `helper.sushi` is [CE2008](error-catalog.md#ce2008) until `helper.sushi` writes `use <lib/a>`
 too. A binary or hybrid library follows the rule of a source library here.
 
 A generic template of a library is copied at the consumer, with the type arguments of
@@ -141,18 +141,18 @@ when its unit loads `b` with a plain `use <lib/b>`, and the consumer still canno
 call `b_val()` itself. The copy works also when the unit that holds it does not import
 the library. A `use` in another unit of the same library does not count: each manifest
 `dependencies` record names the units that write it, so a binary or hybrid library
-gives the same CE2008 as a source library (#1123).
+gives the same [CE2008](error-catalog.md#ce2008) as a source library (#1123).
 
 A library is identified by the `library_name` stamped into its `.slib`, not by the path
 that the search finds. One library that several paths reach -- the consumer and a
 library, or two libraries in a diamond -- is loaded once and gives one candidate for each
-name, so `use <lib/a>` beside `use <lib/b>` is not CE3012. Two versions of one library in
-one graph are CE3519: for example, `a` was built against `b` 0.1.0 and the consumer's
+name, so `use <lib/a>` beside `use <lib/b>` is not [CE3012](error-catalog.md#ce3012). Two versions of one library in
+one graph are [CE3519](error-catalog.md#ce3519): for example, `a` was built against `b` 0.1.0 and the consumer's
 search finds `b` 0.2.0. The diagnostic names each version and the path that reached it.
-A dependency that the consumer's search cannot find is CE3502, with a note at the `use`
+A dependency that the consumer's search cannot find is [CE3502](error-catalog.md#ce3502), with a note at the `use`
 that needs it, for a plain `use` and for a `public use` alike.
 
-Two libraries that declare one extension method on one type are CE0101 at the consumer,
+Two libraries that declare one extension method on one type are [CE0101](error-catalog.md#ce0101) at the consumer,
 with a note for each library, for every kind: a method is found on its receiver's type,
 so no import can choose between the two bodies.
 
@@ -189,10 +189,10 @@ and that breaks every caller and every binary `.slib`. The compiler does not enf
 `docs/design/error-channel.md` carries the rule.
 
 A generic is no exception. `public fn pick@(T)(...)` is part of the API; `fn pick@(T)(...)`
-is internal, and a consumer that calls it hears `CE3005` exactly as it does for a concrete
+is internal, and a consumer that calls it hears [`CE3005`](error-catalog.md#ce3005) exactly as it does for a concrete
 function. Only a public generic ships as a template, so on the binary path the symbol is
 not in the consumer's tables at all -- but the manifest names what the library declares and
-keeps, so the answer is `CE3005` there too, naming the library instead of a unit. `CE2008`
+keeps, so the answer is [`CE3005`](error-catalog.md#ce3005) there too, naming the library instead of a unit. [`CE2008`](error-catalog.md#ce2008)
 is left for what it is for: a name that no unit and no linked library declares.
 
 ### No main() Required
@@ -229,18 +229,18 @@ public fn make_point(i32 x, i32 y) Point:
 
 Three consequences worth knowing:
 
-- **A public signature may not name a private type** (`CE3009`), and a public constraint
-  may not name a private perk (`CE3010`). Privacy is worth nothing if the signature hands
+- **A public signature may not name a private type** ([`CE3009`](error-catalog.md#ce3009)), and a public constraint
+  may not name a private perk ([`CE3010`](error-catalog.md#ce3010)). Privacy is worth nothing if the signature hands
   the type out anyway, so mark what the API returns and takes.
 - **A private declaration a template body needs still travels.** A public generic's body
   may name a private type, constant or helper; the export closure ships them so the
   consumer can monomorphize, and the consumer still cannot name them itself.
 - **A public constant is API, on both library kinds.** A constant has no body to link, so
   the manifest carries the declaration's own source and the consumer registers it under
-  its own name. A consumer's own constant of that name is `CE0105`. (Between two ordinary
+  its own name. A consumer's own constant of that name is [`CE0105`](error-catalog.md#ce0105). (Between two ordinary
   units of one program, the unit's own constant wins with no diagnostic.)
 
-A consumer that writes a library-private name hears `CE3005` -- "private struct 'Cursor',
+A consumer that writes a library-private name hears [`CE3005`](error-catalog.md#ce3005) -- "private struct 'Cursor',
 defined in that library" -- and not "unknown type".
 
 ## Using Libraries
@@ -485,10 +485,10 @@ A `.slib` records two versions, with two different jobs.
    directory, and never one beside the sources)
 2. the `--lib-version X.Y.Z` flag
 
-Neither present is **CE3505**, and so is a `--lib-version` that contradicts the
+Neither present is **[CE3505](error-catalog.md#ce3505)**, and so is a `--lib-version` that contradicts the
 `nori.toml` — silently preferring one would let a package ship under a version it does not
-claim. A `nori.toml` that exists must be valid: a file that cannot be read is **CE3518**,
-and any fault that nori refuses is **CE3517**. The packager stays the source of truth for a
+claim. A `nori.toml` that exists must be valid: a file that cannot be read is **[CE3518](error-catalog.md#ce3518)**,
+and any fault that nori refuses is **[CE3517](error-catalog.md#ce3517)**. The packager stays the source of truth for a
 real package, without forcing a manifest on a bare `./sushic --lib` build.
 
 ### `requires_compiler` — which compilers can build it
@@ -519,8 +519,8 @@ new compiler. It is build-wide and obviously temporary, on purpose.
 The file itself carries two more versions: the container version (`5`) and the templates
 schema version (`8`). A signature without `| E` is bare (`docs/design/error-channel.md`).
 Every function, helper and method record in the manifest states `has_channel`, and the field
-is required. A library of another version is refused: its container version is **CE3509**,
-and the templates schema of a binary or hybrid library is **CE3512**. Rebuild the library
+is required. A library of another version is refused: its container version is **[CE3509](error-catalog.md#ce3509)**,
+and the templates schema of a binary or hybrid library is **[CE3512](error-catalog.md#ce3512)**. Rebuild the library
 with the current compiler. `docs/library-format.md` carries the rows.
 
 ## Symbol Resolution
@@ -672,15 +672,15 @@ Current limitations of the library system:
    files. A library that binds a platform-specific C function through `unsafe external` still
    only builds where that function exists, and it cannot yet say so.
 2. **A binary library is platform-bound**: `--lib-kind binary` or `hybrid` ships bitcode,
-   which is bound to the platform that produced it (**CE3504**).
+   which is bound to the platform that produced it (**[CE3504](error-catalog.md#ce3504)**).
 3. **A public generic cannot reach FFI**: a public generic whose body (transitively)
    references an `unsafe external` namespace, or a private helper whose signature exposes a
-   foreign `ptr`, cannot be exported (**CE5006**; see also **CE5002**). Wrap the foreign
+   foreign `ptr`, cannot be exported (**[CE5006](error-catalog.md#ce5006)**; see also **[CE5002](error-catalog.md#ce5002)**). Wrap the foreign
    detail behind a private helper with a C-ABI-free signature. This applies to every kind,
    source included.
 4. **A public native variadic cannot be exported**: a `...T` variadic collects into a runtime
    `T[]` inside one concrete function, so there is no template to monomorphize and public
-   export is **CE0116**. A type pack (`...Ts`) is different: it exports as a template. This
+   export is **[CE0116](error-catalog.md#ce0116)**. A type pack (`...Ts`) is different: it exports as a template. This
    applies to every kind, source included.
 5. **Generic instantiation across a BINARY boundary**: the notes below describe how generics
    cross a `--lib-kind binary` library. A source library needs none of this machinery — its
@@ -694,7 +694,7 @@ Current limitations of the library system:
    machinery. A pack function carries `type_params` (the `...Ts` is recorded with `is_pack`), so it
    ships as a template and is monomorphized per call site exactly like a regular generic. Perk
    *definitions* are also shipped so consumers do not need to redeclare a perk contract that
-   originates in the library. Constraint re-checking uses `CE4006` against the consumer's
+   originates in the library. Constraint re-checking uses [`CE4006`](error-catalog.md#ce4006) against the consumer's
    perk-impl table.
 
    **Perk implementations also ship**: a library's own `extend <ConcreteType> with <Perk>:`
@@ -707,12 +707,12 @@ Current limitations of the library system:
    time; across multiple libraries shipping the same impl, the first registered wins; if a local
    extension method on the target type already uses one of the impl's method names, the library
    impl is skipped entirely (write your own `extend` to opt in, which surfaces the normal
-   `CE4007` conflict diagnostics). Only impls of perks referenced by an exported generic's
+   [`CE4007`](error-catalog.md#ce4007) conflict diagnostics). Only impls of perks referenced by an exported generic's
    constraints ship; impls of library-internal perks stay internal as contracts, and
    their methods ship as ordinary extension methods (below). An impl of a predefined perk
    (`Drop`, `Hashable`, `Eq`, `Ord`, `Display`) always ships. A shipped `Drop` makes the
    type own a resource at the consumer: it moves, and scope exit calls the library's
-   compiled `drop()`. A consumer cannot add a `Drop` to a library type (`CE4012`), so the
+   compiled `drop()`. A consumer cannot add a `Drop` to a library type ([`CE4012`](error-catalog.md#ce4012)), so the
    first precedence rule does not apply to `Drop`. A generic-target
    implementation (`extend Box@(T) with Show`) ships as a template in
    `templates.generic_perk_impls`, and the consumer makes a copy for each instantiation.
@@ -731,18 +731,18 @@ Current limitations of the library system:
    records (their definitions carry external linkage in the library bitcode and link at the
    consumer), and *constants* with their source (the consumer needs the value for compile-time
    evaluation). The manifest's `templates.closure_summary` lists what shipped, by kind. At the
-   consumer, a local symbol with the same name as a shipped private is an error (**CE5007**,
+   consumer, a local symbol with the same name as a shipped private is an error (**[CE5007](error-catalog.md#ce5007)**,
    not local-wins): shadowing it would silently change what the library's monomorphized bodies
    call. A shipped private helper is callable by the library's own bodies and by nothing
-   else: consumer code that names one is `CE3005`, like any other private function. A shipped
-   private constant is the same: a consumer that reads it hears `CE3005`. None of this can arise on the source path: library units are namespaced, so
+   else: consumer code that names one is [`CE3005`](error-catalog.md#ce3005), like any other private function. A shipped
+   private constant is the same: a consumer that reads it hears [`CE3005`](error-catalog.md#ce3005). None of this can arise on the source path: library units are namespaced, so
    there is no shared namespace to clash in, and nothing has to be shipped ahead of need.
 
    **A private the closure does not ship is named too.** The closure only walks what a
    public *generic* needs, so a private a concrete function calls -- or one nothing public
    calls -- ships nowhere. The manifest's `not_exported` key carries those names and their
    kind, and nothing else: no signature, no body, no source. It is what lets the consumer
-   hear `CE3005` for them. A name in that list is not shipped,
+   hear [`CE3005`](error-catalog.md#ce3005) for them. A name in that list is not shipped,
    so it clashes with nothing: a consumer may declare a function of the same name and it is
    the consumer's own.
 

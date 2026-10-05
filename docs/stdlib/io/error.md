@@ -129,7 +129,7 @@ fn main() i32:
     return 0
 ```
 
-No unit but this one may declare a conversion into `IoError` (CE2519). A library that
+No unit but this one may declare a conversion into `IoError` ([CE2519](../../error-catalog.md#ce2519)). A library that
 wants its own vocabulary declares its own error type and converts `IoError` into it.
 
 ## Example

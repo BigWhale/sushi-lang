@@ -19,8 +19,8 @@ use <io/path>
 ## Functions
 
 Every function in this module is **bare**: it has no error channel, and a call gives the
-`string` (or, for `split` and `split_extension`, the pair of strings) itself. Do not write `??` or `.realise(...)` on a call. A `??` on it is CE2507, and
-a `.realise(...)` on it is CE2008.
+`string` (or, for `split` and `split_extension`, the pair of strings) itself. Do not write `??` or `.realise(...)` on a call. A `??` on it is [CE2507](../../error-catalog.md#ce2507), and
+a `.realise(...)` on it is [CE2008](../../error-catalog.md#ce2008).
 
 A bare function is the exception in Sushi. These functions are bare because each one is
 total over its input and will stay so: a path join cannot fail. A function that does I/O,

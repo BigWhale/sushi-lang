@@ -33,12 +33,12 @@ fn main() i32:
 
 The parameter is `poke` because every write and every read is a `poke self` method (the
 contracts in [`<io/contracts>`](contracts.md) declare them so, for the buffered handles'
-sake), and a write through a plain borrow is **CE2422**.
+sake), and a write through a plain borrow is **[CE2422](../../error-catalog.md#ce2422)**.
 
 Three consequences worth knowing:
 
 - **The console cannot be closed.** A unit variable is storage the program keeps and is
-  never moved out of, so `stdout.close()` -- a `nom self` method -- is **CE2436**, refused
+  never moved out of, so `stdout.close()` -- a `nom self` method -- is **[CE2436](../../error-catalog.md#ce2436)**, refused
   while compiling.
 - **The console can be redirected.** `stdout := open("run.log", FileMode.Write())??`
   drops the console handle (it owns nothing, so nothing closes) and every later
@@ -548,7 +548,7 @@ fn main() i32:
 ```
 
 A `BufWriter` takes a handle it OWNS, and the console handle is a unit variable that is
-never moved out of (`nom stdout` is **CE2436**) -- so `stdout.share()` hands the writer a
+never moved out of (`nom stdout` is **[CE2436](../../error-catalog.md#ce2436)**) -- so `stdout.share()` hands the writer a
 second descriptor over the same terminal, and dropping the writer closes that one only.
 `File(fd: STDOUT_FD, owned: false)` is the other spelling: a fresh handle that closes
 nothing.

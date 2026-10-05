@@ -35,11 +35,11 @@ fn log_it() ~ | IoError:
 
 Three things follow from that, and each surprises somebody:
 
-- **A `File` cannot be copied.** `.clone()` is **CE2431**: a field-by-field copy would
+- **A `File` cannot be copied.** `.clone()` is **[CE2431](../../error-catalog.md#ce2431)**: a field-by-field copy would
   duplicate the descriptor number and leave two owners that both close it.
-- **`close()` CONSUMES the handle.** A read after a close is **CE2435** while compiling,
+- **`close()` CONSUMES the handle.** A read after a close is **[CE2435](../../error-catalog.md#ce2435)** while compiling,
   not EBADF at run time, and the scope exit that follows has nothing left to close. A
-  bare `match` binding is a read-only view, so `Result.Ok(f) -> f.close()` is CE2411:
+  bare `match` binding is a read-only view, so `Result.Ok(f) -> f.close()` is [CE2411](../../error-catalog.md#ce2411):
   write `Result.Ok(nom f)` over a scrutinee the match owns, or -- better -- delete the
   `close()` and let the drop do it. A handle held in a struct FIELD cannot be closed
   explicitly at all, for the same reason.
@@ -278,7 +278,7 @@ fn File.write_bytes(u8[] data) ~ | IoError
 
 A write answers `~` and never a count: the primitive underneath LOOPS past a short write,
 so every byte has gone or the call is an error. That is why there is no partial-write case
-to handle, and why a discarded write Result is `CW2001` at every bare-statement call site.
+to handle, and why a discarded write Result is [`CW2001`](../../error-catalog.md#cw2001) at every bare-statement call site.
 
 **Example:**
 
@@ -340,7 +340,7 @@ Close the file, and CONSUME the handle.
 fn File.close(nom self) ~ | IoError
 ```
 
-The call takes the handle, so the binding is spent: a read after a close is **CE2435**
+The call takes the handle, so the binding is spent: a read after a close is **[CE2435](../../error-catalog.md#ce2435)**
 while compiling, and the scope exit that follows has nothing to close. Call it only where
 the failure has to be SEEN -- an owned handle closes itself on drop, and a destructor
 cannot answer a `Result`. The close itself can fail: a write the file system had not
@@ -361,7 +361,7 @@ fn show(string path) ~ | IoError:
 ```
 
 **A handle in a struct field cannot be closed this way.** A field read is a borrow, and
-consuming one is **CE2411**. Let the struct's own drop close it, or take the handle out
+consuming one is **[CE2411](../../error-catalog.md#ce2411)**. Let the struct's own drop close it, or take the handle out
 of the wrapper that holds it with `into_inner()`.
 
 ### read_at and write_at
@@ -416,7 +416,7 @@ handle moves the other. That makes `share()` the shared-listener pattern -- seve
 workers taking turns on one descriptor -- and NOT the answer for concurrent reads of one
 file. `read_at()` and `write_at()` are that answer, because their offset is an argument.
 
-A handle has no `.clone()` (**CE2431**): a copy verb would hide the second descriptor.
+A handle has no `.clone()` (**[CE2431](../../error-catalog.md#ce2431)**): a copy verb would hide the second descriptor.
 `share()` is the operation that means one, and its name says so.
 
 ```sushi

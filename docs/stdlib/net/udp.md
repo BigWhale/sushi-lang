@@ -18,7 +18,7 @@ The import brings `NetError`, the channel every method answers: the module re-ex
 
 A datagram socket has no peer of its own, so every send names its destination and every receive answers with a `Datagram`: the bytes, and who sent them. That is not a convenience — an unconnected socket cannot be asked afterwards, because the sender exists only at the instant its datagram arrives.
 
-**A socket owns its descriptor.** `UdpSocket` implements `Drop`, so it moves to one owner and closes itself when that owner leaves scope. Handing a socket to a `nom` parameter transfers it; a later use of the old name is CE2405. `s.close()` is for the caller who has to see a failed close. It declares `nom self` and CONSUMES the handle, as `<net/tcp>`'s handles do, so the descriptor is released exactly once and the scope exit that follows has nothing to close. A use after a close (a second `close()`, a `recv_from`, a `local_port()`) is **CE2435** while compiling, rather than an `EBADF` at run time.
+**A socket owns its descriptor.** `UdpSocket` implements `Drop`, so it moves to one owner and closes itself when that owner leaves scope. Handing a socket to a `nom` parameter transfers it; a later use of the old name is [CE2405](../../error-catalog.md#ce2405). `s.close()` is for the caller who has to see a failed close. It declares `nom self` and CONSUMES the handle, as `<net/tcp>`'s handles do, so the descriptor is released exactly once and the scope exit that follows has nothing to close. A use after a close (a second `close()`, a `recv_from`, a `local_port()`) is **[CE2435](../../error-catalog.md#ce2435)** while compiling, rather than an `EBADF` at run time.
 
 `bind` is the one free function; everything with a receiver is an extension method with the `| NetError` channel.
 
@@ -91,7 +91,7 @@ The sender of a datagram, as an `IpAddr`. It parses the `peer_ip` field. A sende
 
 ### `s.local_port() i32 | NetError`, `s.set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError`, `s.close(nom self) ~ | NetError`
 
-The port that was bound, the bounds on a wait, and the close. The close consumes the handle, and a use after it is **CE2435**. Without a call to `close()`, the socket closes at scope exit and a failure there is lost.
+The port that was bound, the bounds on a wait, and the close. The close consumes the handle, and a use after it is **[CE2435](../../error-catalog.md#ce2435)**. Without a call to `close()`, the socket closes at scope exit and a failure there is lost.
 
 ## Limitations
 
