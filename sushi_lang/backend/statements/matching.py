@@ -28,12 +28,14 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
         _emit_integer_match(codegen, stmt)
         return
 
-    # A tuple match has no tag to switch on: each arm tests its pattern in order. Its
-    # stamp is read BEFORE the scrutinee is emitted, because a tuple-literal scrutinee
-    # builds no tuple (ruling 3 of the tuple design).
+    # A tuple match and a string match have no tag to switch on: each arm tests its
+    # pattern in order. The stamp is read BEFORE the scrutinee is emitted, because a
+    # tuple-literal scrutinee builds no tuple (ruling 3 of the tuple design).
     from sushi_lang.semantics.generics.tuples import is_tuple_type
-    if is_tuple_type(stmt.resolved_scrutinee_type):
-        _emit_tuple_match(codegen, stmt)
+    from sushi_lang.semantics.typesys import BuiltinType
+    if (is_tuple_type(stmt.resolved_scrutinee_type)
+            or stmt.resolved_scrutinee_type == BuiltinType.STRING):
+        _emit_sequential_match(codegen, stmt)
         return
 
     scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
@@ -125,24 +127,24 @@ def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     close_merge_block(codegen, end_bb, end_reached)
 
 
-def _emit_tuple_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
-    """Emit a match on a tuple: each arm tests its whole pattern, first match wins.
+def _emit_sequential_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
+    """Emit a match with no tag to switch on: each arm tests its whole pattern, in order.
 
-    A tuple-literal scrutinee builds no tuple (ruling 3): each element is one root,
-    evaluated once and from left to right, with the ownership rules of a named
-    scrutinee. Any other tuple scrutinee is one root. A failed test goes to the next
-    arm; after the last arm is the RE2023 backstop, which exhaustiveness makes
-    unreachable.
+    A tuple and a string take this path. A tuple-literal scrutinee builds no tuple
+    (ruling 3): each element is one root, evaluated once and from left to right, with
+    the ownership rules of a named scrutinee. Any other scrutinee is one root. A failed
+    test goes to the next arm; after the last arm is the RE2023 backstop, which
+    exhaustiveness makes unreachable.
     """
     from sushi_lang.semantics.ast import TupleLiteral
     from sushi_lang.semantics.generics.tuples import tuple_elements
 
-    tuple_type = stmt.resolved_scrutinee_type
+    scrutinee_type = stmt.resolved_scrutinee_type
     patterns = [arm.pattern for arm in stmt.arms]
     scope = _MatchScope()
     roots: list[_Root] = []
     if isinstance(stmt.scrutinee, TupleLiteral):
-        element_types = tuple_elements(tuple_type)
+        element_types = tuple_elements(scrutinee_type)
         values = [codegen.expressions.emit_expr(element)
                   for element in stmt.scrutinee.elements]
         for index, (element, value, element_type) in enumerate(
@@ -153,10 +155,10 @@ def _emit_tuple_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
             roots.append(_Root(element, value, element_type, slot))
     else:
         value = codegen.expressions.emit_expr(stmt.scrutinee)
-        value = _consume_if_handed_over(codegen, stmt, stmt.scrutinee, value, tuple_type)
-        slot = _own_scrutinee(codegen, stmt, stmt.scrutinee, value, tuple_type, patterns,
+        value = _consume_if_handed_over(codegen, stmt, stmt.scrutinee, value, scrutinee_type)
+        slot = _own_scrutinee(codegen, stmt, stmt.scrutinee, value, scrutinee_type, patterns,
                               scope)
-        roots.append(_Root(stmt.scrutinee, value, tuple_type, slot))
+        roots.append(_Root(stmt.scrutinee, value, scrutinee_type, slot))
 
     end_bb = codegen.func.append_basic_block(name="match.end")
     arm_blocks = [codegen.func.append_basic_block(name=f"match.arm{i}")
@@ -545,6 +547,12 @@ def _test_item(codegen: 'LLVMCodegen', item: object, position: _Position,
         binds.append(_Bind("nom", item.name, position))
     elif isinstance(item, RefBinding):
         binds.append(_Bind("ref", item.name, position, mode=item.mode))
+    elif isinstance(item, LiteralPattern) and isinstance(item.value, str):
+        # The pattern is a .rodata constant (owned = 0): nothing to free.
+        from sushi_lang.backend.types.contracts import emit_value_eq
+        expected = codegen.runtime.strings.emit_string_literal(item.value)
+        _branch_unless(codegen, emit_value_eq(codegen, position.value, expected,
+                                              position.semantic_type), on_fail)
     elif isinstance(item, LiteralPattern):
         expected = ir.Constant(position.value.type, item.value)
         _branch_unless(codegen, codegen.builder.icmp_signed("==", position.value, expected,
