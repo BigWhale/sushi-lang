@@ -165,7 +165,20 @@ fn main() i32:
 
 ### `to_ascii_lower() u8`
 
-TODO(worker)
+Answers the lowercase byte for an ASCII uppercase letter, and the byte unchanged for every other byte.
+
+The bytes that change are 65 to 90 (`a'A'` to `a'Z'`). Each one gives the byte plus 32, so the result is 97 to 122 (`a'a'` to `a'z'`). Every other byte, 128 to 255 included, is returned unchanged.
+
+```sushi
+use <text/ascii>
+
+fn main() i32:
+    println(a'G'.to_ascii_lower())      # 103 (a'g')
+    println(a'g'.to_ascii_lower())      # 103 (unchanged)
+    println(a'5'.to_ascii_lower())      # 53 (unchanged)
+    println(a'\xc9'.to_ascii_lower())   # 201 (unchanged)
+    return 0
+```
 
 ### `to_ascii_upper() u8`
 

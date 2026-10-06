@@ -106,6 +106,8 @@ A byte from 65 to 90 gives the byte plus 32. Every other byte is returned unchan
   ```
 :##
 extend u8 to_ascii_lower() u8:
+    if (self >= a'A' and self <= a'Z'):
+        return self + 32
     return self
 
 ##:
