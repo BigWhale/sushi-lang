@@ -447,6 +447,11 @@ class GrowPolicy(enum.Enum):
     """How far `emit_grow_to_fit` grows a buffer that is too small."""
     DOUBLE = "double"
     EXACT = "exact"
+    AT_LEAST = "at_least"
+
+
+# The largest capacity that doubles and stays a positive i32.
+_LARGEST_DOUBLING_CAP = 0x3FFFFFFF
 
 
 def emit_grow_to_fit(codegen: 'LLVMCodegen', *, data_ptr: ir.Value, data_ptr_ptr: ir.Value,
@@ -456,8 +461,11 @@ def emit_grow_to_fit(codegen: 'LLVMCodegen', *, data_ptr: ir.Value, data_ptr_ptr
 
     DOUBLE: `count` elements are in the buffer and one more must fit. The capacity
     doubles (0 becomes 1). EXACT: `count` elements must fit, and the capacity becomes
-    exactly `count`. The new capacity and data pointer are stored through `cap_ptr` and
-    `data_ptr_ptr`; the answer is `data_ptr` or the grown pointer, whichever is live.
+    exactly `count`. AT_LEAST: `count` elements must fit, and the capacity becomes
+    `max(2 * cap, count)`, so a sequence of bulk appends takes linear time; when `2 * cap`
+    is not a positive i32, the capacity becomes `count`. The new capacity and data
+    pointer are stored through `cap_ptr` and `data_ptr_ptr`; the answer is `data_ptr` or
+    the grown pointer, whichever is live.
     """
     b = codegen.builder
     if policy is GrowPolicy.DOUBLE:
@@ -472,6 +480,8 @@ def emit_grow_to_fit(codegen: 'LLVMCodegen', *, data_ptr: ir.Value, data_ptr_ptr
             cap_is_zero = b.icmp_unsigned("==", current_cap, ir.Constant(i32, 0))
             double_cap = b.mul(current_cap, ir.Constant(i32, 2))
             new_cap = b.select(cap_is_zero, ir.Constant(i32, 1), double_cap, name="new_cap")
+        elif policy is GrowPolicy.AT_LEAST:
+            new_cap = _at_least_capacity(codegen, current_cap, count)
         else:
             new_cap = count
         element_size = get_element_size_constant(codegen, element_llvm_type)
@@ -487,6 +497,18 @@ def emit_grow_to_fit(codegen: 'LLVMCodegen', *, data_ptr: ir.Value, data_ptr_ptr
     phi.add_incoming(data_ptr, before_growth)
     phi.add_incoming(typed_new_data_ptr, after_growth)
     return phi
+
+
+def _at_least_capacity(codegen: 'LLVMCodegen', current_cap: ir.Value,
+                       count: ir.Value) -> ir.Value:
+    """`max(2 * current_cap, count)`, or `count` when the double is not a positive i32."""
+    b = codegen.builder
+    i32 = codegen.types.i32
+    can_double = b.icmp_unsigned("<=", current_cap, ir.Constant(i32, _LARGEST_DOUBLING_CAP))
+    double_cap = b.select(can_double, b.mul(current_cap, ir.Constant(i32, 2)), count,
+                          name="double_cap")
+    double_is_enough = b.icmp_unsigned(">=", double_cap, count)
+    return b.select(double_is_enough, double_cap, count, name="new_cap")
 
 
 def _clone_string_value(codegen: 'LLVMCodegen', fat: ir.Value) -> ir.Value:

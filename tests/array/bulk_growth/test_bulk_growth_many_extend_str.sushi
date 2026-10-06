@@ -1,0 +1,20 @@
+# Ten thousand one-byte `extend_str` appends keep every byte in its position. The
+# capacity doubles on each growth, so it ends at the first power of two that holds them.
+# EXPECT_STDOUT_EXACT: "10000 16384 525000 0\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let u8[] buf = from([])
+    foreach(i in 0..10000):
+        buf.extend_str("{i % 10}")
+
+    let i32 sum = 0
+    let i32 wrong = 0
+    foreach(i in 0..buf.len()):
+        let i32 byte = buf[i] as i32
+        sum := sum + byte
+        if (byte != 48 + i % 10):
+            wrong := wrong + 1
+    println("{buf.len()} {buf.capacity()} {sum} {wrong}")
+    return 0

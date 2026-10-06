@@ -1,0 +1,33 @@
+# A bulk append that does not fit grows the capacity to max(2 * cap, needed). An append
+# that fits keeps the capacity, and an append bigger than the double grows to exactly
+# the need. The array starts empty and from a run of three bytes, whose capacity is 4.
+# EXPECT_STDOUT_EXACT: "3 3\n4 6\n6 6\n7 12\n33 33\n3 4\n4 4\n6 8\n7 8\n10 16\nabcdefghijklmnopqrstuvwxyz\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let u8[] a = from([])
+    a.extend_str("abc")
+    println("{a.len()} {a.capacity()}")
+    a.extend_str("d")
+    println("{a.len()} {a.capacity()}")
+    a.extend_str("ef")
+    println("{a.len()} {a.capacity()}")
+    a.extend_str("g")
+    println("{a.len()} {a.capacity()}")
+    a.extend_str("abcdefghijklmnopqrstuvwxyz")
+    println("{a.len()} {a.capacity()}")
+
+    let u8[] b = from([0; 3])
+    println("{b.len()} {b.capacity()}")
+    b.extend_str("x")
+    println("{b.len()} {b.capacity()}")
+    b.extend_str("yz")
+    println("{b.len()} {b.capacity()}")
+    b.extend_str("w")
+    println("{b.len()} {b.capacity()}")
+    b.extend_str("abc")
+    println("{b.len()} {b.capacity()}")
+
+    println(a.s(7, 33).to_string())
+    return 0

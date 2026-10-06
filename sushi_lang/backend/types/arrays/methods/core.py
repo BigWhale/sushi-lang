@@ -82,9 +82,9 @@ def emit_dynamic_array_extend(codegen: 'LLVMCodegen', array_value: ir.Value,
                               element_type, *, extent_is_end: bool = False) -> ir.Value:
     """Append `source[start .. start + count)` to the receiver, growing it once (#462).
 
-    Once, not `count` times: a `.push()` loop reallocates on a doubling schedule and pays a
-    bounds check and a capacity check per element, which is the cost this operation exists
-    to remove.
+    Once, not `count` times: a `.push()` loop pays a bounds check and a capacity check per
+    element, which is the cost this operation exists to remove. The growth is to at least
+    double the capacity, so many small appends do not cost one realloc each.
 
     The range is CLAMPED to what the source can answer, the way the string twins clamp.
     """
@@ -104,12 +104,10 @@ def emit_dynamic_array_extend(codegen: 'LLVMCodegen', array_value: ir.Value,
     needed = b.add(current_len, count, name="extend_needed")
 
     element_llvm_type = array_type.elements[2].pointee
-    # Grown to exactly what is needed. A doubling schedule buys nothing here, because the
-    # whole length is known before the copy starts.
     data_ptr = memory.emit_grow_to_fit(
         codegen, data_ptr=b.load(data_ptr_ptr, name="extend_data"), data_ptr_ptr=data_ptr_ptr,
         cap_ptr=cap_ptr, current_cap=current_cap, count=needed,
-        element_llvm_type=element_llvm_type, policy=memory.GrowPolicy.EXACT)
+        element_llvm_type=element_llvm_type, policy=memory.GrowPolicy.AT_LEAST)
     dest = gep_utils.gep_array_element(codegen, data_ptr, current_len, "extend_dest")
     emit_range_copy(codegen, dest, source_data, start, count, element_type,
                     element_llvm_type, prefix="extend")

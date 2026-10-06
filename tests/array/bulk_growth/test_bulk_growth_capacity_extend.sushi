@@ -1,0 +1,36 @@
+# `extend` and `extend_range` grow the capacity to max(2 * cap, needed) when the elements
+# do not fit. An append that fits keeps the capacity, an append bigger than the double
+# grows to exactly the need, and a clamped range counts only what it copies. A run of
+# three elements starts with a capacity of 4.
+# EXPECT_STDOUT_EXACT: "3 4\n4 4\n6 8\n16 16\n17 32\n22 32\n2 2\n3 4\n13 13\n14 26\n0 0 0 1 1 2 1 2 3 4\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let i32[] src = from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+    let i32[] b = from([0; 3])
+    println("{b.len()} {b.capacity()}")
+    b.extend_range(src, 0, 1)
+    println("{b.len()} {b.capacity()}")
+    b.extend_range(src, 0, 2)
+    println("{b.len()} {b.capacity()}")
+    b.extend(src)
+    println("{b.len()} {b.capacity()}")
+    b.extend_range(src, 0, 1)
+    println("{b.len()} {b.capacity()}")
+    b.extend_range(src, 5, 100)
+    println("{b.len()} {b.capacity()}")
+
+    let i32[] c = from([])
+    c.extend_range(src, 0, 2)
+    println("{c.len()} {c.capacity()}")
+    c.extend_range(src, 0, 1)
+    println("{c.len()} {c.capacity()}")
+    c.extend(src)
+    println("{c.len()} {c.capacity()}")
+    c.extend_range(src, 0, 1)
+    println("{c.len()} {c.capacity()}")
+
+    println("{b[0]} {b[1]} {b[2]} {b[3]} {b[4]} {b[5]} {b[6]} {b[7]} {b[8]} {b[9]}")
+    return 0

@@ -397,9 +397,12 @@ arr.push(9)         # reuses the buffer
 
 ### `.extend(T[] other) -> ~`
 
-Append every element of `other`. The destination grows ONCE, to exactly the length it
-needs -- a `.push()` loop pays a bounds check, a capacity check and an amortized realloc
-per element.
+Append every element of `other`. The destination grows one time at most -- a `.push()`
+loop pays a bounds check, a capacity check and an amortized realloc per element.
+
+**Growth rule for `.extend()`, `.extend_range()` and `.extend_str()`.** When the new
+elements do not fit, the capacity becomes the larger of two times the old capacity and the
+new length, so a sequence of appends takes linear time.
 
 ```sushi
 let i32[] out = from([1, 2])
@@ -598,7 +601,9 @@ arr[0] := 42
 - **Element write** (`arr[i] := v`): O(1), plus the destructor of the element it replaces
 - **Push** (`.push()`): Amortized O(1)
 - **Extend** (`.extend()`, `.extend_range()`, `.s()`, `.ss()`): O(n) with ONE allocation -- a
-  `memcpy` for a plain element type, one clone per slot for an owning one
+  `memcpy` for a plain element type, one clone per slot for an owning one. The capacity of
+  the destination of an append at least doubles when it grows, so many small appends take
+  amortized linear time
 - **Pop** (`.pop()`): O(1)
 - **Insert / Remove** (`.insert()`, `.remove()`): O(n), one `memmove` of the slots after the
   index
