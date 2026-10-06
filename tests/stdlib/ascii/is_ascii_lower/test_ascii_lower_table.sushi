@@ -1,0 +1,21 @@
+# is_ascii_lower over all 256 bytes.
+# Line 1 shows each byte that is a lowercase letter.
+# Line 2 shows the count of these bytes.
+# EXPECT_STDOUT_EXACT: "97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122\n26\n"
+# EXPECT_NO_LEAKS: true
+use <text/ascii>
+
+fn main() i32:
+    let string line = ""
+    let i32 count = 0
+    foreach(i in 0..256):
+        let u8 b = i as u8
+        if (b.is_ascii_lower()):
+            if (count == 0):
+                line := "{b}"
+            else:
+                line := "{line} {b}"
+            count := count + 1
+    println(line)
+    println(count)
+    return 0

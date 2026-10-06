@@ -38,6 +38,14 @@ All notable changes to Sushi Lang will be documented in this file.
   for a character above 127; its help gives the UTF-8 bytes. `CE2076` has two new helps
   for the wrong quote form of an arm: `'/'` on an integer scrutinee suggests `a'/'`, and
   `a'/'` on a `string` scrutinee suggests `'/'`.
+- **The `<text/ascii>` module.** Ten methods on `u8`, for a parser that reads bytes:
+  `is_ascii_digit`, `is_ascii_upper`, `is_ascii_lower`, `is_ascii_alpha`,
+  `is_ascii_alnum`, `is_ascii_hex` and `is_ascii_space` answer `bool`; `to_ascii_lower`
+  and `to_ascii_upper` answer `u8`; `hex_value` answers `Maybe@(u8)`, the value 0 to 15
+  of a hex digit. Each method tests the byte value only. No locale is read, a byte from
+  128 to 255 is never in a class, and the two case maps return it unchanged.
+  `is_ascii_space` is true for the six bytes of C `isspace`: 9, 10, 11 (VT), 12 (FF), 13
+  and 32. Every method is bare: a call gives the value, with no `??`.
 
 ## [0.15.0] - 2026-10-05
 

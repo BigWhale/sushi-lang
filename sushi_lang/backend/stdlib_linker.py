@@ -126,6 +126,7 @@ class StdlibLinker:
         "net/udp",
         "net/url",
         "sys/platform",
+        "text/ascii",
         "toolchain/slib",
     }
 

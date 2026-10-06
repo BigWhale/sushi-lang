@@ -1,0 +1,41 @@
+# to_ascii_lower in the positions a user writes.
+# The receivers are a u8 local, a string byte, a byte literal, and an array element.
+# A byte from 128 to 255 does not change.
+# EXPECT_STDOUT_EXACT: "103\n109 111 115 116 32 52 50\n122\n122\n64\n91\nand-not ok\n97 109 122 48 192\n233\n193\n"
+
+use <text/ascii>
+use <collections/strings>
+
+fn main() i32:
+    let u8 b = a'G'
+    println(b.to_ascii_lower())
+
+    let string s = "MoSt 42"
+    let i32 i = 0
+    while (i < s.size()):
+        if (i > 0):
+            print(" ")
+        print(s[i].to_ascii_lower())
+        i := i + 1
+    println("")
+
+    println(a'Z'.to_ascii_lower())
+    println(a'z'.to_ascii_lower())
+    println(a'@'.to_ascii_lower())
+    println(a'['.to_ascii_lower())
+
+    if (b.to_ascii_lower() == a'g' and not (a'5'.to_ascii_lower() != a'5')):
+        println("and-not ok")
+
+    let u8[] bytes = from([a'A', a'm', a'Z', a'0', a'\xc0'])
+    let i32 n = 0
+    foreach(x in bytes.iter()):
+        if (n > 0):
+            print(" ")
+        print(x.to_ascii_lower())
+        n := n + 1
+    println("")
+
+    println(a'\xe9'.to_ascii_lower())
+    println(a'\xc1'.to_ascii_lower())
+    return 0

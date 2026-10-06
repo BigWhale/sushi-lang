@@ -1,0 +1,18 @@
+# to_ascii_lower over all 256 bytes.
+# Each line shows a byte that changes and its lowercase byte.
+# The last line shows the count of bytes that do not change.
+# EXPECT_STDOUT_EXACT: "65 -> 97\n66 -> 98\n67 -> 99\n68 -> 100\n69 -> 101\n70 -> 102\n71 -> 103\n72 -> 104\n73 -> 105\n74 -> 106\n75 -> 107\n76 -> 108\n77 -> 109\n78 -> 110\n79 -> 111\n80 -> 112\n81 -> 113\n82 -> 114\n83 -> 115\n84 -> 116\n85 -> 117\n86 -> 118\n87 -> 119\n88 -> 120\n89 -> 121\n90 -> 122\n230\n"
+
+use <text/ascii>
+
+fn main() i32:
+    let i32 unchanged = 0
+    foreach(i in 0..256):
+        let u8 b = i as u8
+        let u8 m = b.to_ascii_lower()
+        if (m != b):
+            println("{b} -> {m}")
+        else:
+            unchanged := unchanged + 1
+    println(unchanged)
+    return 0

@@ -60,6 +60,7 @@ SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "net/tcp": _SRC_SUSHI_ROOT / "net" / "tcp.sushi",
     "net/udp": _SRC_SUSHI_ROOT / "net" / "udp.sushi",
     "net/url": _SRC_SUSHI_ROOT / "net" / "url.sushi",
+    "text/ascii": _SRC_SUSHI_ROOT / "text" / "ascii.sushi",
     "toolchain/slib": _SRC_SUSHI_ROOT / "toolchain" / "slib.sushi",
 }
 # A per-platform module is an ordinary source module on a host that has its file. On

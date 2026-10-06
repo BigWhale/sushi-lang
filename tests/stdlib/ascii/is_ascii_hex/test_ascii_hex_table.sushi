@@ -1,0 +1,22 @@
+# is_ascii_hex over all 256 byte values.
+# Line 1 shows each byte that is a hex digit. Line 2 shows the count.
+# The hex digits are 48 to 57, 65 to 70 and 97 to 102.
+# No byte from 128 to 255 is a hex digit.
+# EXPECT_STDOUT_EXACT: "48 49 50 51 52 53 54 55 56 57 65 66 67 68 69 70 97 98 99 100 101 102\n22\n"
+
+use <text/ascii>
+
+fn main() i32:
+    let string line = ""
+    let i32 count = 0
+    foreach(i in 0..256):
+        let u8 b = i as u8
+        if (b.is_ascii_hex()):
+            if (count == 0):
+                line := "{b}"
+            else:
+                line := "{line} {b}"
+            count := count + 1
+    println(line)
+    println(count)
+    return 0

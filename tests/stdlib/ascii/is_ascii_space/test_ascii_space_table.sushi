@@ -1,0 +1,19 @@
+# is_ascii_space over all 256 bytes.
+# Line 1 shows each byte that is white space. Line 2 shows the count.
+# The set is 9, 10, 11, 12 and 13, and 32.
+# EXPECT_STDOUT_EXACT: "9 10 11 12 13 32\n6\n"
+
+use <text/ascii>
+
+fn main() i32:
+    let i32 count = 0
+    foreach(i in 0..256):
+        let u8 b = i as u8
+        if (b.is_ascii_space()):
+            if (count > 0):
+                print(" ")
+            print(i)
+            count := count + 1
+    println("")
+    println(count)
+    return 0
