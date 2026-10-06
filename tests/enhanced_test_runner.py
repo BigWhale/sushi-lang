@@ -564,6 +564,7 @@ class TestRunner:
             return self._compile_and_run(test_file, test_name, category, metadata)
         finally:
             self._running.test_file = None
+            shutil.rmtree(self._scratch_dir(test_file), ignore_errors=True)
             if workspace is not None:
                 self._workspaces.pop(key, None)
                 shutil.rmtree(workspace.home, ignore_errors=True)
@@ -878,14 +879,23 @@ class TestRunner:
                            + "\n  ".join(problems))
         return True, "✓ Compilation: the rebuild report matched"
 
+    def _scratch_dir(self, test_file: Path) -> Path:
+        """The empty directory one fixture's binary runs in, inside the run's temp dir."""
+        return Path(self.temp_dir) / "scratch" / fixture_binary_name(test_file, self.tests_dir)
+
     def _runtime_cwd(self, test_file: Optional[Path], metadata: TestMetadata) -> Optional[str]:
-        """TEST_CWD, else the fixture's copy for RUN_IN_FIXTURE_DIR, else the runner's."""
+        """TEST_CWD (a relative one from the project root), else the fixture's copy for
+        RUN_IN_FIXTURE_DIR, else the fixture's scratch directory."""
         if metadata.test_cwd:
-            return metadata.test_cwd
-        workspace = None if test_file is None else self._workspace(test_file)
+            return str(self.project_root / metadata.test_cwd)
+        if test_file is None:
+            return None
+        workspace = self._workspace(test_file)
         if workspace is not None and metadata.run_in_fixture_dir:
             return str(workspace.root)
-        return None
+        scratch = self._scratch_dir(test_file)
+        scratch.mkdir(parents=True, exist_ok=True)
+        return str(scratch)
 
     def _run_compilation_test(self, test_file: Path, category: str, metadata: TestMetadata) -> Tuple[bool, str]:
         """Run compilation phase for a test."""

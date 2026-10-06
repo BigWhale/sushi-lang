@@ -306,6 +306,11 @@ Run the compiled binary in a specific working directory.
 # TEST_CWD: /
 ```
 
+- With no `TEST_CWD`, the binary runs in an empty scratch directory of its own, inside the
+  run's temporary directory. A relative path that the program writes goes there, and the
+  runner deletes it after the fixture
+- A relative `TEST_CWD` is read from the project root: `# TEST_CWD: .` is for a program
+  that reads files of the checkout
 - Makes `getcwd()`-style output host-independent
 - Also applied to the `EXPECT_NO_LEAKS` re-run
 
