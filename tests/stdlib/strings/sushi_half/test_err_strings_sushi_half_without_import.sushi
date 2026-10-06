@@ -1,0 +1,7 @@
+# A method of the Sushi half of <collections/strings> needs the import, as a built-in
+# string method does. With no import, the method is not found.
+# EXPECT_ERROR_CODES_EXACT: CE2008
+
+fn main() i32:
+    println("Mostly\nHarmless".lines().len())
+    return 0

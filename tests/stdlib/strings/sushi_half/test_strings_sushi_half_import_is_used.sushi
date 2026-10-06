@@ -1,0 +1,14 @@
+# A unit that only calls methods of the Sushi half of <collections/strings> uses its
+# import. The unused-use lint gives no warning for it.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_STDOUT_EXACT: "2\nff\n"
+# EXPECT_STDERR_EMPTY: true
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn main() i32:
+    println("Mostly\nHarmless".lines().len())
+    let u32 n = 255
+    println(n.to_hex())
+    return 0
