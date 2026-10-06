@@ -1,0 +1,34 @@
+# is_ascii_alpha in the positions a user writes.
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue true false\ntrue\nfalse\nboth\nnot alpha\n2\nfalse\n"
+
+use <text/ascii>
+use <collections/strings>
+
+fn main() i32:
+    let u8 local = a'm'
+    println(local.is_ascii_alpha())
+    let u8 under = a'_'
+    println(under.is_ascii_alpha())
+
+    let string s = "Z9a"
+    print("{s[0].is_ascii_alpha()} ")
+    print("{s[2].is_ascii_alpha()} ")
+    println(s[1].is_ascii_alpha())
+
+    println(a'Q'.is_ascii_alpha())
+    println(a'@'.is_ascii_alpha())
+
+    if (a'x'.is_ascii_alpha() and a'X'.is_ascii_alpha()):
+        println("both")
+    if (not a'['.is_ascii_alpha()):
+        println("not alpha")
+
+    let u8[] bytes = from([a'a', a'1', a'B', a'`'])
+    let i32 n = 0
+    foreach(b in bytes.iter()):
+        if (b.is_ascii_alpha()):
+            n := n + 1
+    println(n)
+
+    println(a'\xe9'.is_ascii_alpha())
+    return 0

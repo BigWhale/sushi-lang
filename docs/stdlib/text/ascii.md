@@ -87,7 +87,21 @@ fn main() i32:
 
 ### `is_ascii_alpha() bool`
 
-TODO(worker)
+Answers `true` when the byte is an ASCII letter, uppercase or lowercase.
+
+The set is 65-90 (`a'A'` to `a'Z'`) and 97-122 (`a'a'` to `a'z'`). Every other byte gives
+`false`.
+
+```sushi
+use <text/ascii>
+
+fn main() i32:
+    println(a'k'.is_ascii_alpha())    # true
+    println(a'K'.is_ascii_alpha())    # true
+    println(a'4'.is_ascii_alpha())    # false
+    println(a'\xe9'.is_ascii_alpha()) # false
+    return 0
+```
 
 ### `is_ascii_alnum() bool`
 
