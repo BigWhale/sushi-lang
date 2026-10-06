@@ -113,8 +113,8 @@ def test_the_seam_exists():
     from sushi_lang.semantics.passes.types.inference import int_literal_default
     from sushi_lang.semantics.typesys import BuiltinType
 
-    assert int_literal_default(IntLit(value=47)) == BuiltinType.I32
-    assert int_literal_default(IntLit(value=47, byte_spelling="a'/'")) == BuiltinType.U8
+    assert int_literal_default(IntLit(value=47, loc=None)) == BuiltinType.I32
+    assert int_literal_default(IntLit(value=47, loc=None, byte_spelling="a'/'")) == BuiltinType.U8
 
 
 def test_the_scan_sees_each_shape():

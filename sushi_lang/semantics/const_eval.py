@@ -473,9 +473,10 @@ class ConstantEvaluator:
     def _evaluate_int_lit(self, expr: IntLit, expected_type: Type,
                           span: Optional[Span]) -> ScalarConstant:
         """Evaluate integer literal with type inference."""
+        from sushi_lang.semantics.passes.types.inference import int_literal_default
         if is_integer_type(expected_type):
             return ScalarConstant(expr.value, expected_type)
-        return ScalarConstant(expr.value, BuiltinType.I32)
+        return ScalarConstant(expr.value, int_literal_default(expr))
 
     def _evaluate_float_lit(self, expr: FloatLit, expected_type: Type,
                             span: Optional[Span]) -> ScalarConstant:

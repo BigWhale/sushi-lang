@@ -109,8 +109,9 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return interned if interned is not None else ty
 
     def visit_intlit(self, node: IntLit) -> Optional[Type]:
-        """Infer integer literal type (context-typed if stamped, else default i32)."""
-        return node.resolved_type or BuiltinType.I32
+        """Infer integer literal type (context-typed if stamped, else the default)."""
+        from sushi_lang.semantics.passes.types.inference import int_literal_default
+        return node.resolved_type or int_literal_default(node)
 
     def visit_floatlit(self, node: FloatLit) -> Optional[Type]:
         """Infer float literal type (context-typed if stamped, else default f64)."""
