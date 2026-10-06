@@ -57,11 +57,11 @@ class Receiver(Enum):
 class _InternedByTheCaller:
     """Marks a row whose answer is interned by the reader of this table.
 
-    `get`, `first`, `last`, `pop` and `remove` each answer `Maybe@(T)` and `index_of` answers
-    `Maybe@(i32)`. Interning a `Maybe` needs the enum table and one owner, and
-    `ArrayMethodInferrer` resolves all six before it reaches this table, so a rule here
-    would be a second answer to a question already answered. The row still carries the
-    marker, so no name sits in the table with no decision at all.
+    `get`, `first`, `last`, `pop` and `remove` each answer `Maybe@(T)`, and `index_of` and
+    `index_of_from` answer `Maybe@(i32)`. Interning a `Maybe` needs the enum table and one
+    owner, and `ArrayMethodInferrer` resolves all seven before it reaches this table, so a
+    rule here would be a second answer to a question already answered. The row still
+    carries the marker, so no name sits in the table with no decision at all.
     """
 
 
@@ -181,25 +181,46 @@ def _an_index_and_an_element_to_store(call: MethodCall, array_type: ArrayReceive
     _an_element_to_store(call, array_type, reporter, validator, position=1)
 
 
-def _a_comparable_element(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
-                          validator: Optional['TypeValidator']) -> None:
-    """`contains(v)` and `index_of(v)`: one needle, of an element type that meets `==`.
+def check_search_needle(call: MethodCall, element_type: Type, reporter: Reporter,
+                        validator: Optional['TypeValidator']) -> bool:
+    """The needle of a search (`contains`, `index_of`, `index_of_from`), on every container.
 
     Equality is the `==` operator's rule (CE2514), asked through `has_equality` so the
     two cannot drift apart: a primitive in the closed set, or a struct or an enum with
     a derived or implemented `Eq`. The element gate comes before the argument check: on
     a `Handler[]` the useful answer is "a Handler has no equality", not "the argument is
-    the wrong type".
+    the wrong type". The needle takes the element type before it is read, as a `push`
+    element does, so a bare literal or a bare `Maybe.None()` is typed by the position.
+    Answers whether the call was refused.
     """
     from sushi_lang.semantics.generics.contracts import EQ, operand_contract
     from .expressions import has_equality
 
-    comparable = (has_equality(validator, array_type.base_type) if validator is not None
-                  else operand_contract(array_type.base_type, EQ)[0])
+    comparable = (has_equality(validator, element_type) if validator is not None
+                  else operand_contract(element_type, EQ)[0])
     if not comparable:
-        _reject_uncomparable_element(call, array_type.base_type, reporter)
+        _reject_uncomparable_element(call, element_type, reporter)
+        return True
+    if validator is not None:
+        from .propagation import propagate_types_to_value
+        propagate_types_to_value(validator, call.args[0], element_type)
+    _validate_element_argument(call, element_type, reporter, validator)
+    return False
+
+
+def _a_comparable_element(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
+                          validator: Optional['TypeValidator']) -> None:
+    """`contains(v)` and `index_of(v)`: one needle, of an element type that meets `==`."""
+    check_search_needle(call, array_type.base_type, reporter, validator)
+
+
+def _a_comparable_element_and_a_start(call: MethodCall, array_type: ArrayReceiver,
+                                      reporter: Reporter,
+                                      validator: Optional['TypeValidator']) -> None:
+    """`index_of_from(v, start)`: the needle, then the start, an i32 position."""
+    if check_search_needle(call, array_type.base_type, reporter, validator):
         return
-    _validate_element_argument(call, array_type.base_type, reporter, validator)
+    _reject_a_non_index(call, 1, validator)
 
 
 def _reject_uncomparable_element(call: MethodCall, element, reporter: Reporter) -> None:
@@ -391,6 +412,8 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
                           arguments=_a_comparable_element),
     "index_of": ArraySpec(1, Receiver.ANY, INTERNED_BY_THE_CALLER,
                           arguments=_a_comparable_element),
+    "index_of_from": ArraySpec(2, Receiver.ANY, INTERNED_BY_THE_CALLER,
+                               arguments=_a_comparable_element_and_a_start),
     # Only a buffer that can GROW or SHRINK takes these: a fixed array's length is part of
     # its type.
     "push": ArraySpec(1, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK),

@@ -113,11 +113,54 @@ TODO(worker)
 
 ### `.contains(T value) -> bool` and `.index_of(T value) -> Maybe@(i32)`
 
-TODO(worker)
+The search methods of the [arrays](arrays.md), with the same rules. `.contains()`
+answers `true` when an element is equal to `value`. `.index_of()` answers the index of
+the FIRST element that is equal to `value`, or `Maybe.None()`. Each search goes from
+left to right. An empty list contains nothing.
+
+The element type must have equality: the numeric types, `bool`, `string`, or a struct or
+an enum with a derived or implemented `Eq`. An element type with no equality is
+[CE2100](../../error-catalog.md#ce2100). The needle is a borrow, and the list keeps all of
+its elements.
+
+```sushi
+fn main() i32:
+    let List@(string) words = List.new()
+    words.push("alpha")
+    words.push("beta")
+    words.push("alpha")
+    println(words.contains("beta"))               # true
+    println(words.contains("delta"))              # false
+    println(words.index_of("alpha").realise(-1))  # 0
+    println(words.index_of("delta").realise(-1))  # -1
+    return 0
+```
 
 ### `.index_of_from(T value, i32 start) -> Maybe@(i32)`
 
-TODO(worker)
+Finds the first index `i` with `i >= start` where the element is equal to `value`.
+The answer is `Maybe.Some(i)`, or `Maybe.None()`. The index is from the start of the
+list, not from `start`. The rule is the rule of the [array](arrays.md) method of that
+name, and the equality rule is the rule of `.index_of()`.
+
+`start` is an `i32` position. The method clamps `start` into `0..len()`, and it does not
+trap:
+
+- A negative `start` searches from index 0.
+- A `start` that is equal to `len()` or more than `len()` gives `Maybe.None()`.
+
+```sushi
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(7)
+    l.push(3)
+    l.push(7)
+    println(l.index_of_from(7, 1).realise(-1))    # 2
+    println(l.index_of_from(7, -1).realise(-1))   # 0
+    println(l.index_of_from(3, 2).realise(-1))    # -1
+    println(l.index_of_from(7, 3).realise(-1))    # -1
+    return 0
+```
 
 ## Modification Methods
 

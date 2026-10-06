@@ -1,0 +1,7 @@
+# The start of `index_of_from` on a `List@(T)` is an i32 position.
+# EXPECT_ERROR_CODE: CE2006
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(1)
+    let i64 start = 0
+    return l.index_of_from(1, start).realise(-1)

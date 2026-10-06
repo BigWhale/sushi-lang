@@ -113,6 +113,7 @@ _RECEIVERS = (
 #: Every name any family answers to, plus names no family does.
 _NAMES = (
     "len", "get", "push", "pop", "first", "last", "index_of", "clear",
+    "index_of_from",
     "s", "ss", "split", "contains",
     "is_ok", "is_err", "realise", "expect", "err",
     "is_some", "is_none",

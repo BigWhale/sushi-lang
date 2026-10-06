@@ -38,6 +38,11 @@ from .methods_debug import (
 from .methods_iter import (
     emit_list_iter
 )
+from .methods_search import (
+    emit_list_contains,
+    emit_list_index_of,
+    emit_list_index_of_from
+)
 
 
 
@@ -62,6 +67,9 @@ LIST_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
     "debug": ContainerMethod(lambda c, e, v, t: emit_list_debug(c, v, t)),
     "iter": ContainerMethod(emit_list_iter),
     "clone": ContainerMethod(lambda c, e, v, t: emit_list_clone(c, v, t)),
+    "contains": ContainerMethod(emit_list_contains, answers_bool=True),
+    "index_of": ContainerMethod(emit_list_index_of),
+    "index_of_from": ContainerMethod(emit_list_index_of_from),
 })
 
 

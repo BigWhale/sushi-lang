@@ -1,0 +1,30 @@
+# A string element compares by content. The needle is a borrow: it stays usable after
+# the call, and the array keeps every element. Each line prints the index, or -1 for None.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "0\n0\n2\n2\n3\n-1\n-1\n-1\n-1\n2\nalpha\n2\n-1\n"
+use <collections/strings>
+
+fn run_test() i32:
+    let string[] words = from(["alpha", "beta", "alpha", "gamma"])
+    println(words.index_of_from("alpha", -1).realise(-1))
+    println(words.index_of_from("alpha", 0).realise(-1))
+    println(words.index_of_from("alpha", 1).realise(-1))
+    println(words.index_of_from("alpha", 2).realise(-1))
+    println(words.index_of_from("gamma", 3).realise(-1))
+    println(words.index_of_from("alpha", 3).realise(-1))
+    println(words.index_of_from("alpha", 4).realise(-1))
+    println(words.index_of_from("alpha", 9).realise(-1))
+    println(words.index_of_from("delta", 0).realise(-1))
+
+    let string built = "al".concat("pha")
+    println(words.index_of_from(built, 1).realise(-1))
+    println(built)
+
+    let string[3] fx = ["x", "y", "x"]
+    println(fx.index_of_from("x", 1).realise(-1))
+    println(fx.index_of_from("y", 2).realise(-1))
+    return 0
+
+fn main() i32:
+    return run_test()

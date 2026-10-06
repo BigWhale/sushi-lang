@@ -1,0 +1,15 @@
+# A `List@(T)` whose element type has no equality cannot be searched with `contains`.
+# EXPECT_ERROR_CODE: CE2100
+
+struct Handler:
+    fn(i32) -> i32 f
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let List@(Handler) hs = List.new()
+    hs.push(Handler(twice))
+    if (hs.contains(Handler(twice))):
+        return 1
+    return 0

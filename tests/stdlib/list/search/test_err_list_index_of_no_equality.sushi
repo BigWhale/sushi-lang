@@ -1,0 +1,13 @@
+# A `List@(T)` whose element type has no equality cannot be searched with `index_of`.
+# EXPECT_ERROR_CODE: CE2100
+
+struct Handler:
+    fn(i32) -> i32 f
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let List@(Handler) hs = List.new()
+    hs.push(Handler(twice))
+    return hs.index_of(Handler(twice)).realise(-1)

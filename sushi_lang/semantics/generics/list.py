@@ -20,6 +20,7 @@ LIST_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
     "push": 1, "pop": 0, "get": 1, "insert": 2, "remove": 1,
     "clear": 0, "reserve": 1, "shrink_to_fit": 0,
     "destroy": 0, "free": 0, "debug": 0, "iter": 0, "clone": 0,
+    "contains": 1, "index_of": 1, "index_of_from": 2,
 })
 
 
@@ -38,7 +39,10 @@ _ELEMENT_ARGUMENT = {"push": 0, "insert": 1}
 
 #: The methods whose INDEX or COUNT argument is an i32 position (#870), and its position.
 #: `with_capacity` is the static twin of `reserve`, read where a static is read.
-_INDEX_ARGUMENT = {"get": 0, "remove": 0, "insert": 0, "reserve": 0}
+_INDEX_ARGUMENT = {"get": 0, "remove": 0, "insert": 0, "reserve": 0, "index_of_from": 1}
+
+#: The searches: the first argument is the needle, of an element type that meets `==`.
+_SEARCH_METHODS = frozenset({"contains", "index_of", "index_of_from"})
 
 
 def validate_list_method_with_validator(
@@ -47,9 +51,19 @@ def validate_list_method_with_validator(
     reporter: Any,
     validator: Any,
 ) -> None:
-    """Validate a List<T> method call whose count is correct: the index, then the element."""
+    """Validate a List<T> method call whose count is correct: the index, then the element.
+
+    A search checks its needle first, through the one rule of the array searches.
+    """
     if call.method not in LIST_METHOD_ARITY:
         raise_internal_error("CE0083", method=call.method)
+
+    if call.method in _SEARCH_METHODS:
+        from sushi_lang.semantics.passes.types.arrays import check_search_needle
+        element_type = parse_list_types(list_type, validator)
+        if element_type is not None and check_search_needle(call, element_type, reporter,
+                                                            validator):
+            return
 
     index_arg = _INDEX_ARGUMENT.get(call.method)
     if index_arg is not None:

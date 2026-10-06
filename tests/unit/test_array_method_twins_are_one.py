@@ -13,6 +13,7 @@ ARRAYS = (Path(__file__).resolve().parents[2]
           / "sushi_lang" / "backend" / "types" / "arrays")
 CORE = ARRAYS / "methods" / "core.py"
 SAFE_ACCESS = ARRAYS / "methods" / "safe_access.py"
+SEARCH = ARRAYS / "methods" / "search.py"
 DISPATCHER = ARRAYS / "dispatcher.py"
 
 
@@ -22,6 +23,9 @@ ONE_EMITTER = {
     "get": "emit_array_get_maybe",
     "first": "emit_array_get_maybe",
     "last": "emit_array_get_maybe",
+    "contains": "emit_array_contains",
+    "index_of": "emit_array_index_of",
+    "index_of_from": "emit_array_index_of_from",
 }
 
 HALVES = ("emit_fixed_array_method", "emit_dynamic_array_method")
@@ -44,7 +48,7 @@ def _called_names(node: ast.AST) -> set[str]:
 
 
 def test_the_one_emitters_exist():
-    declared = set(_functions(CORE)) | set(_functions(SAFE_ACCESS))
+    declared = set(_functions(CORE)) | set(_functions(SAFE_ACCESS)) | set(_functions(SEARCH))
     assert set(ONE_EMITTER.values()) <= declared
 
 

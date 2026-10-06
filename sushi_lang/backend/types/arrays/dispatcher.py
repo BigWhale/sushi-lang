@@ -22,6 +22,7 @@ def is_builtin_array_method(method_name: str) -> bool:
     return method_name in {
         "len", "get", "first", "last", "contains", "index_of", "push", "pop",
         "insert", "remove",
+        "index_of_from",
         "clear", "truncate", "capacity", "destroy", "free",
         "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse",
         "extend", "extend_range", "extend_str", "s", "ss"
@@ -163,7 +164,7 @@ def emit_fixed_array_method(
                                         ir.Constant(codegen.types.i32, index),
                                         element_semantic_type)
 
-        case "contains" | "index_of":
+        case "contains" | "index_of" | "index_of_from":
             # The needle is a BORROW (#475), like fill's value.
             from .methods import search
             from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
@@ -172,6 +173,10 @@ def emit_fixed_array_method(
             if method_name == "contains":
                 return search.emit_array_contains(codegen, search_data, count, needle,
                                                   element_semantic_type, to_i1)
+            if method_name == "index_of_from":
+                return search.emit_array_index_of_from(codegen, search_data, count, needle,
+                                                       _index_arg(codegen, expr.args[1]),
+                                                       element_semantic_type)
             return search.emit_array_index_of(codegen, search_data, count, needle,
                                               element_semantic_type)
 
@@ -273,7 +278,7 @@ def emit_dynamic_array_method(
             return emit_array_get_maybe(codegen, data, count, index_value,
                                         element_semantic_type)
 
-        case "contains" | "index_of":
+        case "contains" | "index_of" | "index_of_from":
             # The needle is a BORROW (#475), like fill's value.
             from .methods import search
             from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
@@ -282,6 +287,10 @@ def emit_dynamic_array_method(
             if method_name == "contains":
                 return search.emit_array_contains(codegen, data, count, needle,
                                                   element_semantic_type, to_i1)
+            if method_name == "index_of_from":
+                return search.emit_array_index_of_from(codegen, data, count, needle,
+                                                       _index_arg(codegen, expr.args[1]),
+                                                       element_semantic_type)
             return search.emit_array_index_of(codegen, data, count, needle,
                                               element_semantic_type)
 

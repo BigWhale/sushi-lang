@@ -1,0 +1,42 @@
+# A `List@(string)` searches by content. The needle is a borrow, and the list keeps and
+# frees every element. Each index line prints the index, or -1 for None.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nfalse\n0\n3\n-1\n0\n0\n2\n2\n3\n-1\n-1\n-1\n-1\n2\nalpha\ntrue\nbeta\n"
+use <collections/strings>
+
+fn run_test() i32:
+    let List@(string) words = List.new()
+    words.push("alpha")
+    words.push("beta")
+    words.push("alpha")
+    words.push("gamma")
+
+    println(words.contains("beta"))
+    println(words.contains("delta"))
+    println(words.index_of("alpha").realise(-1))
+    println(words.index_of("gamma").realise(-1))
+    println(words.index_of("delta").realise(-1))
+
+    println(words.index_of_from("alpha", -1).realise(-1))
+    println(words.index_of_from("alpha", 0).realise(-1))
+    println(words.index_of_from("alpha", 1).realise(-1))
+    println(words.index_of_from("alpha", 2).realise(-1))
+    println(words.index_of_from("gamma", 3).realise(-1))
+    println(words.index_of_from("alpha", 3).realise(-1))
+    println(words.index_of_from("alpha", 4).realise(-1))
+    println(words.index_of_from("alpha", 9).realise(-1))
+    println(words.index_of_from("delta", 0).realise(-1))
+
+    let string built = "al".concat("pha")
+    println(words.index_of_from(built, 1).realise(-1))
+    println(built)
+    println(words.contains(built))
+
+    let string needle = "beta"
+    if (words.index_of(needle).is_some()):
+        println(needle)
+    return 0
+
+fn main() i32:
+    return run_test()

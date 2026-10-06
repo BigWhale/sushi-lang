@@ -1,10 +1,14 @@
-"""`contains(v)` and `index_of(v)`: one linear search, two answers."""
+"""`contains(v)`, `index_of(v)` and `index_of_from(v, start)`: one linear search.
+
+The array kinds and `List@(T)` all call these emitters with `(data_ptr, count)`.
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
 
 from sushi_lang.semantics.typesys import BuiltinType
+from sushi_lang.backend import gep_utils
 from sushi_lang.backend.generics.container_walk import emit_container_search
 
 if TYPE_CHECKING:
@@ -85,9 +89,36 @@ def emit_array_contains(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Va
 def emit_array_index_of(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value,
                         needle: ir.Value, element_semantic_type: 'Type') -> ir.Value:
     """`index_of(v)` as `Maybe@(i32)`: `Some(first match)`, else `None`."""
-    from sushi_lang.backend.generics.maybe import emit_maybe_some, emit_maybe_none
-
     found, index = _search(codegen, data_ptr, count, needle, element_semantic_type)
+    return _maybe_index(codegen, found, index)
+
+
+def emit_array_index_of_from(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value,
+                             needle: ir.Value, start: ir.Value,
+                             element_semantic_type: 'Type') -> ir.Value:
+    """`index_of_from(v, start)` as `Maybe@(i32)`: the first match at an index >= start.
+
+    `start` is clamped into `0..count` (D3, the rule of `.s()` and the bulk copy), so
+    nothing traps: a negative start reads from 0, and a start at or past the end leaves
+    an empty range and answers `None`. The search is the one walk over the shorter range
+    `data[start..count)`, and its index is moved back by `start`.
+    """
+    builder = codegen.builder
+    zero = ir.Constant(codegen.types.i32, 0)
+    low = builder.select(builder.icmp_signed("<", start, zero, name="from_negative"),
+                         zero, start, name="from_low")
+    clamped = builder.select(builder.icmp_signed(">", low, count, name="from_past_end"),
+                             count, low, name="from_start")
+    rest = builder.sub(count, clamped, name="from_rest")
+    rest_data = gep_utils.gep_array_element(codegen, data_ptr, clamped, "from_data")
+    found, offset = _search(codegen, rest_data, rest, needle, element_semantic_type)
+    index = builder.add(offset, clamped, name="from_index")
+    return _maybe_index(codegen, found, index)
+
+
+def _maybe_index(codegen: 'LLVMCodegen', found: ir.Value, index: ir.Value) -> ir.Value:
+    """`Some(index)` when `found`, else `None`, as one `Maybe@(i32)` value."""
+    from sushi_lang.backend.generics.maybe import emit_maybe_some, emit_maybe_none
 
     builder = codegen.builder
     some_bb = builder.append_basic_block(name="index_of_some")

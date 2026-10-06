@@ -145,7 +145,43 @@ words.index_of("delta").is_none()         # true
 
 ### `.index_of_from(T value, i32 start) -> Maybe@(i32)`
 
-TODO(worker)
+Finds the first index `i` with `i >= start` where the element is equal to `value`.
+The answer is `Maybe.Some(i)`, or `Maybe.None()` when no element from `start` to the end
+is equal to `value`. The index is from the start of the array, not from `start`.
+
+The method is on `T[]` and on `T[N]`. The equality rule and the
+[CE2100](../../error-catalog.md#ce2100) rule are the rules of `.contains()` and
+`.index_of()`. The needle is a borrow.
+
+`start` is an `i32` position. The method clamps `start` into `0..len()`, and it does not
+trap:
+
+- A negative `start` searches from index 0.
+- A `start` that is equal to `len()` or more than `len()` gives `Maybe.None()`.
+- On an empty array, the answer is always `Maybe.None()`.
+
+To find each match, call the method again from the index after the last match:
+
+```sushi
+fn main() i32:
+    let i32[] a = from([7, 3, 7, 5])
+    println(a.index_of_from(7, 0).realise(-1))    # 0
+    println(a.index_of_from(7, 1).realise(-1))    # 2
+    println(a.index_of_from(7, -5).realise(-1))   # 0
+    println(a.index_of_from(7, 3).realise(-1))    # -1
+    println(a.index_of_from(7, 4).realise(-1))    # -1
+
+    # Every match, one call per match.
+    let i32 at = 0
+    while (true):
+        match a.index_of_from(7, at):
+            Maybe.Some(i) ->
+                println("7 at {i}")               # 7 at 0, then 7 at 2
+                at := i + 1
+            Maybe.None() ->
+                break
+    return 0
+```
 
 ### `.starts_with(prefix) -> bool`
 

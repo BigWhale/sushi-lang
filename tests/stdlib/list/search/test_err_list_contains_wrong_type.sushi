@@ -1,0 +1,8 @@
+# The needle of a `List@(T)` search must be an element of type T.
+# EXPECT_ERROR_CODE: CE2006
+fn main() i32:
+    let List@(i32) l = List.new()
+    l.push(1)
+    if (l.contains("one")):
+        return 1
+    return 0
