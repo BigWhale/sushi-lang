@@ -537,7 +537,58 @@ itself, with no `??`.
 
 ### Strict parses: `.parse_u8(i32 base)` to `.parse_i64(i32 base)`
 
-TODO(worker)
+```sushi
+extend string parse_u8(i32 base) Maybe@(u8)
+extend string parse_u16(i32 base) Maybe@(u16)
+extend string parse_u32(i32 base) Maybe@(u32)
+extend string parse_u64(i32 base) Maybe@(u64)
+extend string parse_i32(i32 base) Maybe@(i32)
+extend string parse_i64(i32 base) Maybe@(i64)
+```
+
+Each method parses the text as a number of its type, in the base `base`. The rule is
+strict:
+
+- The text holds the digits of `base` and nothing else. A space, a `+`, a `0x` or `0b`
+  prefix and a `_` are refused. An empty text is refused.
+- A digit is `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35. Each digit must be less than
+  `base`.
+- A leading zero is legal: `"007"` is 7.
+- `parse_i32` and `parse_i64` take ONE leading `-` and no other sign. `"-0"` is 0. `"-"`,
+  `"--5"` and `"-+5"` are refused. The negative side reaches the minimum of the type:
+  `"-2147483648".parse_i32(10)` is `-2147483648`. The unsigned methods refuse every sign.
+- A value out of the range of the type is refused, and so is a base outside 2 to 36.
+
+A refused text gives `Maybe.None()`; a correct text gives `Maybe.Some(value)`.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    println("ff".parse_u8(16).realise(0))
+    println("-80000000".parse_i32(16).realise(0))
+    println("007".parse_u32(10).realise(0))
+    println("0x1f".parse_u32(16).is_some())
+    println(" 42".parse_u32(10).is_some())
+    println(" 42".trim().parse_u32(10).realise(0))
+    println("256".parse_u8(10).is_some())
+    return 0
+```
+
+Output:
+
+```
+255
+-2147483648
+7
+false
+false
+42
+false
+```
+
+`to_i32()` is the lenient decimal parse: it takes a leading space and a `+`. To get the
+lenient form of a strict parse, trim the text first: `s.trim().parse_u32(10)`.
 
 ### `.trim_start_matches(string t) -> string`
 

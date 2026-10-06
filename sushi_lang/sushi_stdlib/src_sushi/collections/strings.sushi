@@ -9,6 +9,60 @@ method here is bare and total, so a call gives the value directly, with no `??`.
 use <collections/strings>
 
 ##:
+Gives the value of one digit byte: `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35.
+
+- Parameter c: The byte.
+- Returns: The value of the digit, or 36 when the byte is not a digit.
+:##
+fn strict_digit(u8 c) u64:
+    if (c >= a'0' and c <= a'9'):
+        return (c - a'0') as u64
+    if (c >= a'a' and c <= a'z'):
+        return (c - a'a' + 10) as u64
+    if (c >= a'A' and c <= a'Z'):
+        return (c - a'A' + 10) as u64
+    return 36
+
+##:
+Reads the digits of `base` from `start` to the end of the text, with no sign.
+
+- Parameter text: The text.
+- Parameter start: The offset of the first digit.
+- Parameter base: The base, 2 to 36.
+- Parameter max: The largest legal value.
+- Returns: `Maybe.Some(value)`, or `Maybe.None()` when there is no digit, a byte is not a
+  digit of `base`, the value is more than `max`, or the base is outside 2 to 36.
+:##
+fn strict_digits(string text, i32 start, i32 base, u64 max) Maybe@(u64):
+    if (base < 2 or base > 36 or start >= text.size()):
+        return Maybe.None()
+    let u64 b = base as u64
+    let u64 acc = 0
+    foreach(i in start..text.size()):
+        let u64 d = strict_digit(text[i])
+        if (d >= b or acc > (max - d) / b):
+            return Maybe.None()
+        acc := acc * b + d
+    return Maybe.Some(acc)
+
+##:
+Reads the digits of `base` with one optional leading `-`.
+
+- Parameter text: The text.
+- Parameter base: The base, 2 to 36.
+- Parameter max: The largest legal positive value. A negative value can be `max + 1`.
+- Returns: `Maybe.Some(value)`, or `Maybe.None()` as `strict_digits` does.
+:##
+fn strict_signed(string text, i32 base, u64 max) Maybe@(i64):
+    if (text.size() > 0 and text[0] == a'-'):
+        match strict_digits(text, 1, base, max + 1):
+            Maybe.Some(v) -> return Maybe.Some((0 - v) as i64)
+            Maybe.None -> return Maybe.None()
+    match strict_digits(text, 0, base, max):
+        Maybe.Some(v) -> return Maybe.Some(v as i64)
+        Maybe.None -> return Maybe.None()
+
+##:
 Parses the text as a `u8` in the given base, strictly.
 
 The text holds the digits of `base` and nothing else: no space, no `0x` or `0b` prefix,
@@ -25,7 +79,9 @@ A sign is refused: the text is digits only.
   ```
 :##
 extend string parse_u8(i32 base) Maybe@(u8):
-    return Maybe.None()
+    match strict_digits(self, 0, base, 255):
+        Maybe.Some(v) -> return Maybe.Some(v as u8)
+        Maybe.None -> return Maybe.None()
 
 ##:
 Parses the text as a `u16` in the given base, strictly.
@@ -44,7 +100,9 @@ A sign is refused: the text is digits only.
   ```
 :##
 extend string parse_u16(i32 base) Maybe@(u16):
-    return Maybe.None()
+    match strict_digits(self, 0, base, 65535):
+        Maybe.Some(v) -> return Maybe.Some(v as u16)
+        Maybe.None -> return Maybe.None()
 
 ##:
 Parses the text as a `u32` in the given base, strictly.
@@ -63,7 +121,9 @@ A sign is refused: the text is digits only.
   ```
 :##
 extend string parse_u32(i32 base) Maybe@(u32):
-    return Maybe.None()
+    match strict_digits(self, 0, base, 4294967295):
+        Maybe.Some(v) -> return Maybe.Some(v as u32)
+        Maybe.None -> return Maybe.None()
 
 ##:
 Parses the text as a `u64` in the given base, strictly.
@@ -82,7 +142,9 @@ A sign is refused: the text is digits only.
   ```
 :##
 extend string parse_u64(i32 base) Maybe@(u64):
-    return Maybe.None()
+    match strict_digits(self, 0, base, 18446744073709551615):
+        Maybe.Some(v) -> return Maybe.Some(v as u64)
+        Maybe.None -> return Maybe.None()
 
 ##:
 Parses the text as a `i32` in the given base, strictly.
@@ -101,7 +163,9 @@ One leading `-` is legal and nothing else: `+` is refused.
   ```
 :##
 extend string parse_i32(i32 base) Maybe@(i32):
-    return Maybe.None()
+    match strict_signed(self, base, 2147483647):
+        Maybe.Some(v) -> return Maybe.Some(v as i32)
+        Maybe.None -> return Maybe.None()
 
 ##:
 Parses the text as a `i64` in the given base, strictly.
@@ -120,7 +184,9 @@ One leading `-` is legal and nothing else: `+` is refused.
   ```
 :##
 extend string parse_i64(i32 base) Maybe@(i64):
-    return Maybe.None()
+    match strict_signed(self, base, 9223372036854775807):
+        Maybe.Some(v) -> return Maybe.Some(v as i64)
+        Maybe.None -> return Maybe.None()
 
 ##:
 Removes every repeat of `t` at the start of the text.
