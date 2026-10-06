@@ -17,6 +17,9 @@ Complete reference for Sushi's standard library modules and types.
 - [Strings](stdlib/collections/strings.md) - String manipulation methods
 - [Iter combinators](stdlib/collections/iter.md) - `map`/`filter`/`fold` as methods on `List@(T)` and `T[]`, the free functions, `compose`, and the tuple combinators `enumerate`/`zip`/`partition`/`unzip`
 
+### Text
+- [ASCII bytes](stdlib/text/ascii.md) - ASCII classes and case maps on `u8` (`is_ascii_digit`, `is_ascii_alpha`, `to_ascii_lower`, `hex_value`, ...)
+
 ### Encoding and Compression
 - [Compression (zlib)](stdlib/compression/zlib.md) - DEFLATE and the zlib container (RFC 1950/1951)
 - [MessagePack](stdlib/encoding/msgpack.md) - MessagePack decoder
@@ -73,6 +76,7 @@ use <net/udp>              # UdpSocket
 use <net/dns>              # resolve a host name
 use <net/ip>               # IpAddr, parse and format
 use <net/url>              # split a URL
+use <text/ascii>           # ASCII classes and case maps on u8
 use <toolchain/slib>       # read the header and metadata of a .slib
 use <math>                 # Math functions
 use <random>               # Random number generation
@@ -352,6 +356,13 @@ Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and
   `split`, `split_extension`, `normalize`. See [Path algebra](stdlib/io/path.md)
 - `<io/contracts>` - The perks `Reader`, `Writer` and `Seek`. See
   [I/O contracts](stdlib/io/contracts.md)
+
+### Text (`use <text/ascii>`)
+
+- `is_ascii_digit()`, `is_ascii_upper()`, `is_ascii_lower()`, `is_ascii_alpha()`,
+  `is_ascii_alnum()`, `is_ascii_hex()`, `is_ascii_space()` - Byte classes on `u8`
+- `to_ascii_lower()`, `to_ascii_upper()` - Case maps on `u8`
+- `hex_value()` - The value of a hex digit, as `Maybe@(u8)`. See [ASCII bytes](stdlib/text/ascii.md)
 
 ### Networking (`use <net/tcp>`, `<net/udp>`, `<net/dns>`, `<net/ip>`, `<net/url>`)
 

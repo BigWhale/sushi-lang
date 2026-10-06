@@ -41,7 +41,7 @@ present locally). `src/_platform/` splits OS-specific declarations into
 ## 2. Bundled Sushi-source modules (`src_sushi/`)
 
 A small second class of stdlib module ships as plain `.sushi` source, parsed and
-compiled like user code instead of precompiled to bitcode. Six exist today:
+compiled like user code instead of precompiled to bitcode. Among them:
 
 - `collections/iter` (`src_sushi/collections/iter.sushi`) — generic combinators
   (`map`/`filter`/`fold`); nothing is emitted unless a program instantiates one.
@@ -67,6 +67,9 @@ compiled like user code instead of precompiled to bitcode. Six exist today:
   `stat()` into a `FileStat` struct, recursive `walk`, `mkdir_all`,
   `remove_all`. Builds on `io/files` and `io/path`; the first source module
   that exports a `public struct`.
+- `text/ascii` (`src_sushi/text/ascii.sushi`) — ASCII byte classes and case
+  maps, as extension methods on `u8`. The first source module that exports
+  methods on a primitive type and no free function.
 
 A bundled module must compile WARNING-FREE: its diagnostics surface in every
 program that imports it, and there is no per-unit suppression. CW2409 was
