@@ -36,4 +36,5 @@ def test_the_borrow_pass_reads_the_same_table():
 def test_every_array_method_the_table_marks_is_measured():
     """The control: the array rows the table marks as mutating are not an empty set."""
     marked = {name for name in arrays._ARRAY_METHODS if effect_of(name).mutates}
-    assert {"clear", "push", "pop", "fill", "reverse", "extend"} <= marked
+    assert {"clear", "push", "pop", "fill", "reverse", "extend",
+            "extend_back"} <= marked

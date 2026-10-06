@@ -1,0 +1,11 @@
+# A by-value parameter is a read-only borrow, so `extend_back` cannot write through it.
+# EXPECT_ERROR_CODES_EXACT: CE2422
+
+fn grow(i32[] a) ~:
+    a.extend_back(1, 2)
+
+fn main() i32:
+    let i32[] buf = from([1])
+    grow(buf)
+    println("{buf.len()}")
+    return 0

@@ -1,0 +1,37 @@
+# `extend_back` writes its receiver, so it reaches a local, a `poke` parameter, a field
+# through `poke self` and a `let poke` binding. `dist` and `count` are any i32 expression.
+# EXPECT_STDOUT_EXACT: "[1, 2, 1, 2]\n[9, 9, 9]\n[4, 5, 4, 5, 4]\n[6, 7, 6]\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Window:
+    i32[] data
+
+extend Window repeat(poke self, i32 dist, i32 count) ~:
+    self.data.extend_back(dist, count)
+
+fn twice(poke i32[] a) ~:
+    a.extend_back(a.len(), a.len())
+
+struct Holder:
+    i32[] inner
+
+fn main() i32:
+    let i32[] local = from([1, 2])
+    twice(poke local)
+    println("{local}")
+
+    let i32[] nines = from([9])
+    let i32 n = 2
+    nines.extend_back(n - 1, n * 1)
+    println("{nines}")
+
+    let Window w = Window(from([4, 5]))
+    w.repeat(2, 3)
+    println("{w.data}")
+
+    let Holder h = Holder(from([6, 7]))
+    let poke i32[] r = h.inner
+    r.extend_back(2, 1)
+    println("{h.inner}")
+    return 0

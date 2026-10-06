@@ -26,7 +26,7 @@ def is_builtin_array_method(method_name: str) -> bool:
         "index_of_from",
         "clear", "truncate", "capacity", "destroy", "free",
         "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse",
-        "extend", "extend_range", "extend_str", "s", "ss"
+        "extend", "extend_range", "extend_str", "extend_back", "s", "ss"
     }
 
 
@@ -428,6 +428,13 @@ def emit_dynamic_array_method(
                                                   text_data, text_size,
                                                   ir.Constant(codegen.types.i32, 0),
                                                   text_size, element_semantic_type)
+
+        case "extend_back":
+            from sushi_lang.backend.types.arrays.copy import emit_dynamic_array_extend_back
+            return emit_dynamic_array_extend_back(
+                codegen, receiver_value, array_struct_type.elements[2].pointee,
+                _index_arg(codegen, expr.args[0]), _index_arg(codegen, expr.args[1]),
+                element_semantic_type)
 
         case "s" | "ss":
             data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, receiver_value)

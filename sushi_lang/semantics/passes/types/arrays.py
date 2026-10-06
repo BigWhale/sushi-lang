@@ -344,7 +344,8 @@ def _a_string(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
 
 def _a_range(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
              validator: Optional['TypeValidator']) -> None:
-    """`s(start, end)` and `ss(start, count)`: two indices and no source."""
+    """`s(start, end)`, `ss(start, count)` and `extend_back(dist, count)`: two i32
+    positions and no source."""
     _reject_a_non_index(call, 0, validator)
 
 
@@ -486,6 +487,8 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
                               arguments=_a_source_and_a_range),
     "extend_str": ArraySpec(1, Receiver.BYTES, _answers_when_dynamic(BuiltinType.BLANK),
                             arguments=_a_string),
+    "extend_back": ArraySpec(2, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK),
+                             arguments=_a_range),
     "s": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
     "ss": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
 }

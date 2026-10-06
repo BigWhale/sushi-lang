@@ -1,0 +1,15 @@
+# `extend_back` copies a plain struct element by value, overlap included.
+# EXPECT_STDOUT_EXACT: "[Point(x: 1, y: 2), Point(x: 3, y: 4), Point(x: 1, y: 2), Point(x: 3, y: 4), Point(x: 1, y: 2)]\n[Point(x: 1, y: 2), Point(x: 3, y: 4), Point(x: 1, y: 2), Point(x: 3, y: 4), Point(x: 1, y: 2), Point(x: 1, y: 2), Point(x: 3, y: 4)]\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point[] p = from([Point(1, 2), Point(3, 4)])
+    p.extend_back(2, 3)
+    println("{p}")
+    p.extend_back(5, 2)
+    println("{p}")
+    return 0

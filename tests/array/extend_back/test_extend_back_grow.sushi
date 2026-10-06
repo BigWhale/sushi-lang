@@ -1,0 +1,24 @@
+# A large `count` grows the array once and then copies; the copy reads the data pointer
+# after the growth. Element k of the result is element `k % 3` of the start.
+# EXPECT_STDOUT_EXACT: "100003 0 1 2 1 1\n100003 0 0\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    a.extend_back(3, 100000)
+    let i32 bad = 0
+    foreach(k in 0..a.len()):
+        if (a[k] != (k % 3) + 1):
+            bad := bad + 1
+    println("{a.len()} {bad} {a[0]} {a[50000] - 1} {a[100002]} {a[99999]}")
+
+    let i32[] b = from([0, 1, 2])
+    b.extend_back(1, 1)
+    b.truncate(3)
+    b.extend_back(3, 100000)
+    let i32 wrong = 0
+    foreach(k in 0..b.len()):
+        if (b[k] != k % 3):
+            wrong := wrong + 1
+    println("{b.len()} {wrong} {b[100002]}")
+    return 0

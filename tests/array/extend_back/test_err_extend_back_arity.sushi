@@ -1,0 +1,8 @@
+# `extend_back` takes two arguments, the distance and the count.
+# EXPECT_ERROR_CODES_EXACT: CE2009
+
+fn main() i32:
+    let i32[] buf = from([1, 2])
+    buf.extend_back(1)
+    println("{buf.len()}")
+    return 0

@@ -1,0 +1,40 @@
+# `extend_back(dist, count)` appends `count` elements; element k is a copy of the element at
+# `len_before - dist + k`, read after the earlier appends. A count larger than the distance
+# repeats the last `dist` elements (the LZ77 rule).
+# EXPECT_STDOUT_EXACT: "[1, 2, 3, 4, 3, 4]\n[1, 2, 3, 4, 2, 3]\n[1, 2, 3, 2, 3, 2, 3, 2]\n[7, 8, 8, 8, 8, 8]\n[1, 2, 3, 1, 2, 3]\n[1, 2, 1, 2, 1, 2, 1]\n[5, 5]\n[1, 2, 3, 4, 5, 2]\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let i32[] same = from([1, 2, 3, 4])
+    same.extend_back(2, 2)
+    println("{same}")
+
+    let i32[] longer = from([1, 2, 3, 4])
+    longer.extend_back(3, 2)
+    println("{longer}")
+
+    let i32[] repeat = from([1, 2, 3])
+    repeat.extend_back(2, 5)
+    println("{repeat}")
+
+    let i32[] run = from([7, 8])
+    run.extend_back(1, 4)
+    println("{run}")
+
+    let i32[] whole = from([1, 2, 3])
+    whole.extend_back(3, 3)
+    println("{whole}")
+
+    let i32[] whole_repeat = from([1, 2])
+    whole_repeat.extend_back(2, 5)
+    println("{whole_repeat}")
+
+    let i32[] single = from([5])
+    single.extend_back(1, 1)
+    println("{single}")
+
+    let i32[] one = from([1, 2, 3, 4, 5])
+    let i32 d = 4
+    one.extend_back(d, d - 3)
+    println("{one}")
+    return 0

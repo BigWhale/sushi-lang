@@ -528,7 +528,56 @@ out.extend_range(src, 2, 3)    # out is now [0, 30, 40, 50]
 
 ### `.extend_back(i32 dist, i32 count) -> ~`
 
-TODO(worker)
+Append `count` elements. Each new element is a copy of the element `dist` places before
+it. Element `k` (from 0) of the new elements is a copy of the element at
+`len - dist + k`, where `len` is the length before the call. The method reads each element
+after it writes the earlier ones. Because of this, a `count` larger than `dist` repeats
+the last `dist` elements. This is the back-reference copy of LZ77 (DEFLATE, zlib).
+
+| call on `[1, 2, 3]` | result |
+|---|---|
+| `.extend_back(3, 2)` | `[1, 2, 3, 1, 2]` |
+| `.extend_back(2, 2)` | `[1, 2, 3, 2, 3]` |
+| `.extend_back(2, 5)` | `[1, 2, 3, 2, 3, 2, 3, 2]` -- the count is larger than the distance |
+| `.extend_back(1, 3)` | `[1, 2, 3, 3, 3, 3]` -- a run of one element |
+
+```sushi
+fn main() i32:
+    let u8[] out = from([a'a', a'b', a'c'])
+    out.extend_back(3, 6)
+    println(out.to_string())      # abcabcabc
+    let i32[] run = from([1, 2, 3])
+    run.extend_back(2, 5)
+    println("{run}")              # [1, 2, 3, 2, 3, 2, 3, 2]
+    run.extend_back(0, 4)
+    println(run.len())            # 8: a dist of 0 appends nothing
+    return 0
+```
+
+The array grows one time at most, with the growth rule of `.extend()`. For a plain element
+type, the copy is one `memcpy` when `dist` is not smaller than `count`, and one forward
+loop when it is smaller. For an owning element type, each new slot gets its own deep copy.
+
+**A bad `dist` or `count` appends nothing and reports nothing.** When `dist` is outside
+`1..len()`, or `count` is 0 or less, the array does not change. An empty array has no
+valid `dist`. If the caller must know, it checks `dist` before the call:
+
+```sushi
+fn copy_back(poke u8[] out, i32 dist, i32 length) ~ | DecodeError:
+    if (dist < 1 or dist > out.len()):
+        return Result.Err(DecodeError.BadDistance(dist))
+    out.extend_back(dist, length)
+    return Result.Ok(~)
+```
+
+The `<compression/zlib>` decoder does this check before each back reference.
+
+The source is the receiver, so this is not a copy from a borrowed source, and
+**[CE2430](../../error-catalog.md#ce2430)** does not apply. The receiver must be dynamic: a
+fixed array is **[CE2023](../../error-catalog.md#ce2023)**, as for `.push()`. The method
+writes its receiver, so a `peek` receiver is **[CE2408](../../error-catalog.md#ce2408)**.
+`dist` and `count` are `i32` positions. A result longer than the largest `i32` is the
+allocation failure **[RE2021](../../error-catalog.md#re2021)**.
 
 ### `.extend_str(string s) -> ~`
 
@@ -612,9 +661,17 @@ does not, while a range asks for what overlaps and can always answer.
 destination may reallocate its buffer, which would leave the source pointer dangling in
 the middle of the copy. Use `.clone()` or `.ss()` to take an independent source. A copy
 that must read what it is writing -- a run expanded from its own tail -- is a different
-operation, and stays a per-element loop.
+operation: `.extend_back(dist, count)`.
 
-TODO(worker): the no-op rule of `.extend_back()`.
+**`.extend_back()` has a no-op rule of its own.** When `dist` is outside `1..len()`, or
+`count` is 0 or less, it appends nothing and reports nothing. If the caller must know, it
+checks `dist` before the call, as the `<compression/zlib>` decoder does:
+
+```sushi
+if (dist < 1 or dist > out.len()):
+    return Result.Err(DecodeError.BadDistance(dist))
+out.extend_back(dist, length)
+```
 
 ### `.capacity() -> i32`
 
