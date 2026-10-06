@@ -42,9 +42,14 @@ def test_every_registry_module_has_a_row():
     assert set(StdlibRegistry.KNOWN_MODULES) <= set(UNITS)
 
 
+# The one module with two halves: its built-in methods are bitcode, and its Sushi half is a
+# source unit of the same name. The Sushi half grows as the built-in rows move to it.
+TWO_HALF_MODULES = {"collections/strings"}
+
+
 def test_no_row_is_a_unit_that_resolves_to_no_bitcode():
     assert not set(UNITS) & StdlibLinker._virtual_units
-    assert not set(UNITS) & set(SOURCE_STDLIB_MODULES)
+    assert set(UNITS) & set(SOURCE_STDLIB_MODULES) == TWO_HALF_MODULES
 
 
 def test_the_linker_resolves_each_unit_to_its_row_output(tmp_path):

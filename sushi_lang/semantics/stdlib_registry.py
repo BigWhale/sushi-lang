@@ -46,7 +46,10 @@ def platform_source(module_path: str) -> Optional[Path]:
 
 SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "collections/iter": _SRC_SUSHI_ROOT / "collections" / "iter.sushi",
+    "collections/strings": _SRC_SUSHI_ROOT / "collections" / "strings.sushi",
     "compression/zlib": _SRC_SUSHI_ROOT / "compression" / "zlib.sushi",
+    "encoding/base64": _SRC_SUSHI_ROOT / "encoding" / "base64.sushi",
+    "encoding/hex": _SRC_SUSHI_ROOT / "encoding" / "hex.sushi",
     "encoding/msgpack": _SRC_SUSHI_ROOT / "encoding" / "msgpack.sushi",
     "io/buf": _SRC_SUSHI_ROOT / "io" / "buf.sushi",
     "io/contracts": _SRC_SUSHI_ROOT / "io" / "contracts.sushi",

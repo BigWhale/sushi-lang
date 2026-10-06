@@ -1,0 +1,47 @@
+##:
+encoding/base64 -- Base64 text of bytes and back, opt in with `use <encoding/base64>`.
+
+The alphabet is the standard one of RFC 4648 section 4 (`A`-`Z`, `a`-`z`, `0`-`9`, `+`,
+`/`), with `=` padding. `encode` always pads, and `decode` requires the padding.
+:##
+use <collections/strings>
+
+##: Why a text did not decode. :##
+public error Base64Error:
+    ##: The length of the text is not a multiple of 4. :##
+    BadLength
+    ##: A byte of the text is not in the alphabet. The payload is its offset. :##
+    BadChar(i32)
+    ##: A `=` is in a position that is not the padding at the end. :##
+    BadPadding
+
+##:
+Writes bytes as Base64 text, with `=` padding.
+
+- Parameter data: The bytes.
+- Returns: The Base64 text, four characters for each three bytes or part of three.
+- Example:
+```sushi
+println(encode("Mostly Harmless".to_bytes()))
+```
+:##
+public fn encode(u8[] data) string:
+    return ""
+
+##:
+Reads Base64 text as bytes.
+
+- Parameter text: The Base64 text, with its padding.
+- Returns: The bytes.
+- Errors: `Base64Error.BadLength` when the length is not a multiple of 4,
+  `Base64Error.BadChar` with the offset of the first byte outside the alphabet, and
+  `Base64Error.BadPadding` when a `=` is not at the end.
+- Example:
+```sushi
+match decode("TW9zdGx5IEhhcm1sZXNz"):
+    Result.Ok(bytes) -> println(bytes.to_string())
+    Result.Err(_) -> println("not base64")
+```
+:##
+public fn decode(string text) u8[] | Base64Error:
+    return Result.Err(Base64Error.BadLength)

@@ -528,6 +528,51 @@ match "3.14".to_f64():
         println("Invalid float")
 ```
 
+## Methods written in Sushi
+
+The module has two halves. The methods above are built into the stdlib bitcode. The
+methods below are written in Sushi (`src_sushi/collections/strings.sushi`), and the same
+`use <collections/strings>` loads them. Each one is bare and total: a call gives the value
+itself, with no `??`.
+
+### Strict parses: `.parse_u8(i32 base)` to `.parse_i64(i32 base)`
+
+TODO(worker)
+
+### `.trim_start_matches(string t) -> string`
+
+TODO(worker)
+
+### `.trim_end_matches(string t) -> string`
+
+TODO(worker)
+
+### `.lines() -> string[]`
+
+TODO(worker)
+
+### `.split_whitespace() -> string[]`
+
+TODO(worker)
+
+### `.chars() -> string[]`
+
+TODO(worker)
+
+## Number formatting
+
+### `.to_hex()`, `.to_hex_width(i32 w)`, `.to_bin()`, `.to_bin_width(i32 w)`
+
+TODO(worker)
+
+### `.to_fixed(i32 p) -> string`
+
+TODO(worker)
+
+## StringBuilder
+
+TODO(worker)
+
 ## Best Practices
 
 - The methods do not change their receiver (they return new strings)

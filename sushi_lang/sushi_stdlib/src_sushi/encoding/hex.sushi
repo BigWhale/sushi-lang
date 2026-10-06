@@ -1,0 +1,45 @@
+##:
+encoding/hex -- hexadecimal text of bytes and back, opt in with `use <encoding/hex>`.
+
+`encode` writes two lower-case digits for each byte. `decode` reads upper and lower case
+digits, two for each byte.
+:##
+use <collections/strings>
+
+##: Why a text did not decode. :##
+public error HexError:
+    ##: The text holds an odd count of digits. :##
+    OddLength
+    ##: A byte of the text is not a hex digit. The payload is its offset. :##
+    BadDigit(i32)
+
+##:
+Writes each byte as two lower-case hex digits.
+
+- Parameter data: The bytes.
+- Returns: The hex text, two digits for each byte.
+- Example:
+```sushi
+let u8[] data = from([0xde, 0xad, 0x01])
+println(encode(data))
+```
+:##
+public fn encode(u8[] data) string:
+    return ""
+
+##:
+Reads hex text as bytes.
+
+- Parameter text: The hex digits, upper or lower case, two for each byte.
+- Returns: The bytes.
+- Errors: `HexError.OddLength` when the count of digits is odd, and
+  `HexError.BadDigit` with the offset of the first byte that is not a hex digit.
+- Example:
+```sushi
+match decode("DEad01"):
+    Result.Ok(bytes) -> println(bytes.len())
+    Result.Err(_) -> println("not hex")
+```
+:##
+public fn decode(string text) u8[] | HexError:
+    return Result.Err(HexError.OddLength)

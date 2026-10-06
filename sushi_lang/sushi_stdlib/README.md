@@ -63,6 +63,14 @@ compiled like user code instead of precompiled to bitcode. Among them:
   `posixpath`. The
   first source module that depends on a `.bc` string unit
   (`collections/strings`).
+- `collections/strings` (`src_sushi/collections/strings.sushi`) — the Sushi
+  half of the string module, and the one module with TWO halves: its built-in
+  methods are the `.bc` unit of the same name, and this file adds the methods
+  that are written in Sushi (the strict parses, the number formatters,
+  `StringBuilder`). One `use <collections/strings>` loads both. It is the only
+  source module that is not in `_virtual_units`, because it has a `.bc`.
+- `encoding/hex` and `encoding/base64` (`src_sushi/encoding/hex.sushi`,
+  `src_sushi/encoding/base64.sushi`) — the two text codecs of bytes.
 - `io/fs` (`src_sushi/io/fs.sushi`) — composed file-system operations:
   `stat()` into a `FileStat` struct, recursive `walk`, `mkdir_all`,
   `remove_all`. Builds on `io/files` and `io/path`; the first source module

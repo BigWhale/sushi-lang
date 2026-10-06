@@ -1,0 +1,790 @@
+##:
+collections/strings -- the Sushi half of the string module, opt in with `use <collections/strings>`.
+
+The module has two halves. The built-in string methods (`len`, `split`, `trim` and the
+others) are compiled into the stdlib bitcode; the methods of this file, the number
+formatters and `StringBuilder` ship as Sushi source. One import gives both halves. Every
+method here is bare and total, so a call gives the value directly, with no `??`.
+:##
+use <collections/strings>
+
+##:
+Parses the text as a `u8` in the given base, strictly.
+
+The text holds the digits of `base` and nothing else: no space, no `0x` or `0b` prefix,
+no `_`, and it is not empty. A digit is `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35.
+
+A sign is refused: the text is digits only.
+
+- Parameter base: The base, 2 to 36.
+- Returns: `Maybe.Some(value)`, or `Maybe.None()` when the text is not a `u8` in that
+  base, the value is out of range, or the base is outside 2 to 36.
+- Example:
+  ```sushi
+  println("ff".parse_u8(16).realise(0))
+  ```
+:##
+extend string parse_u8(i32 base) Maybe@(u8):
+    return Maybe.None()
+
+##:
+Parses the text as a `u16` in the given base, strictly.
+
+The text holds the digits of `base` and nothing else: no space, no `0x` or `0b` prefix,
+no `_`, and it is not empty. A digit is `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35.
+
+A sign is refused: the text is digits only.
+
+- Parameter base: The base, 2 to 36.
+- Returns: `Maybe.Some(value)`, or `Maybe.None()` when the text is not a `u16` in that
+  base, the value is out of range, or the base is outside 2 to 36.
+- Example:
+  ```sushi
+  println("ff".parse_u16(16).realise(0))
+  ```
+:##
+extend string parse_u16(i32 base) Maybe@(u16):
+    return Maybe.None()
+
+##:
+Parses the text as a `u32` in the given base, strictly.
+
+The text holds the digits of `base` and nothing else: no space, no `0x` or `0b` prefix,
+no `_`, and it is not empty. A digit is `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35.
+
+A sign is refused: the text is digits only.
+
+- Parameter base: The base, 2 to 36.
+- Returns: `Maybe.Some(value)`, or `Maybe.None()` when the text is not a `u32` in that
+  base, the value is out of range, or the base is outside 2 to 36.
+- Example:
+  ```sushi
+  println("ff".parse_u32(16).realise(0))
+  ```
+:##
+extend string parse_u32(i32 base) Maybe@(u32):
+    return Maybe.None()
+
+##:
+Parses the text as a `u64` in the given base, strictly.
+
+The text holds the digits of `base` and nothing else: no space, no `0x` or `0b` prefix,
+no `_`, and it is not empty. A digit is `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35.
+
+A sign is refused: the text is digits only.
+
+- Parameter base: The base, 2 to 36.
+- Returns: `Maybe.Some(value)`, or `Maybe.None()` when the text is not a `u64` in that
+  base, the value is out of range, or the base is outside 2 to 36.
+- Example:
+  ```sushi
+  println("ff".parse_u64(16).realise(0))
+  ```
+:##
+extend string parse_u64(i32 base) Maybe@(u64):
+    return Maybe.None()
+
+##:
+Parses the text as a `i32` in the given base, strictly.
+
+The text holds the digits of `base` and nothing else: no space, no `0x` or `0b` prefix,
+no `_`, and it is not empty. A digit is `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35.
+
+One leading `-` is legal and nothing else: `+` is refused.
+
+- Parameter base: The base, 2 to 36.
+- Returns: `Maybe.Some(value)`, or `Maybe.None()` when the text is not a `i32` in that
+  base, the value is out of range, or the base is outside 2 to 36.
+- Example:
+  ```sushi
+  println("-7f".parse_i32(16).realise(0))
+  ```
+:##
+extend string parse_i32(i32 base) Maybe@(i32):
+    return Maybe.None()
+
+##:
+Parses the text as a `i64` in the given base, strictly.
+
+The text holds the digits of `base` and nothing else: no space, no `0x` or `0b` prefix,
+no `_`, and it is not empty. A digit is `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35.
+
+One leading `-` is legal and nothing else: `+` is refused.
+
+- Parameter base: The base, 2 to 36.
+- Returns: `Maybe.Some(value)`, or `Maybe.None()` when the text is not a `i64` in that
+  base, the value is out of range, or the base is outside 2 to 36.
+- Example:
+  ```sushi
+  println("-7f".parse_i64(16).realise(0))
+  ```
+:##
+extend string parse_i64(i32 base) Maybe@(i64):
+    return Maybe.None()
+
+##:
+Removes every repeat of `t` at the start of the text.
+
+An empty `t` gives the text unchanged.
+
+- Parameter t: The text to remove.
+- Returns: A new string without the leading repeats of `t`.
+- Example:
+  ```sushi
+  println("xxabc".trim_start_matches("x"))
+  ```
+:##
+extend string trim_start_matches(string t) string:
+    return ""
+
+##:
+Removes every repeat of `t` at the end of the text.
+
+An empty `t` gives the text unchanged.
+
+- Parameter t: The text to remove.
+- Returns: A new string without the trailing repeats of `t`.
+- Example:
+  ```sushi
+  println("a/b///".trim_end_matches("/"))
+  ```
+:##
+extend string trim_end_matches(string t) string:
+    return ""
+
+##:
+Splits the text into lines.
+
+The text is split at each `\n`. A `\r` immediately before the `\n` is removed, and a
+`\r` anywhere else stays. A final `\n` does not start an empty last line, so `"a\n"`
+gives one line and `""` gives none.
+
+- Returns: The lines, each a new string without its line end.
+- Example:
+  ```sushi
+  println("one\r\ntwo\n".lines().len())
+  ```
+:##
+extend string lines() string[]:
+    return from([])
+
+##:
+Splits the text at each run of white space.
+
+White space is the set of `trim()`: the bytes 9 to 13 and 32. No token is empty, so a
+text of white space alone gives no token.
+
+- Returns: The tokens, each a new string.
+- Example:
+  ```sushi
+  println(" Mostly \t Harmless ".split_whitespace().len())
+  ```
+:##
+extend string split_whitespace() string[]:
+    return from([])
+
+##:
+Splits the text into its UTF-8 characters.
+
+A character starts at each byte that is not a UTF-8 continuation byte, which is the
+rule of `len()`, so `s.chars().len()` equals `s.len()`.
+
+- Returns: One new string for each character, in order.
+- Example:
+  ```sushi
+  println("caf\u00e9".chars().len())
+  ```
+:##
+extend string chars() string[]:
+    return from([])
+
+##:
+Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u8 n = 10
+  println(n.to_hex())
+  ```
+:##
+extend u8 to_hex() string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u16 n = 10
+  println(n.to_hex())
+  ```
+:##
+extend u16 to_hex() string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u32 n = 10
+  println(n.to_hex())
+  ```
+:##
+extend u32 to_hex() string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u64 n = 10
+  println(n.to_hex())
+  ```
+:##
+extend u64 to_hex() string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
+
+A negative value gives the two's complement bits of a `i8`.
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i8 n = 10
+  println(n.to_hex())
+  ```
+:##
+extend i8 to_hex() string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
+
+A negative value gives the two's complement bits of a `i16`.
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i16 n = 10
+  println(n.to_hex())
+  ```
+:##
+extend i16 to_hex() string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
+
+A negative value gives the two's complement bits of a `i32`.
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i32 n = 10
+  println(n.to_hex())
+  ```
+:##
+extend i32 to_hex() string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
+
+A negative value gives the two's complement bits of a `i64`.
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i64 n = 10
+  println(n.to_hex())
+  ```
+:##
+extend i64 to_hex() string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with leading zeros to `w` digits.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u8 n = 10
+  println(n.to_hex_width(4))
+  ```
+:##
+extend u8 to_hex_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with leading zeros to `w` digits.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u16 n = 10
+  println(n.to_hex_width(4))
+  ```
+:##
+extend u16 to_hex_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with leading zeros to `w` digits.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u32 n = 10
+  println(n.to_hex_width(4))
+  ```
+:##
+extend u32 to_hex_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with leading zeros to `w` digits.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u64 n = 10
+  println(n.to_hex_width(4))
+  ```
+:##
+extend u64 to_hex_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with leading zeros to `w` digits.
+
+A negative value gives the two's complement bits of a `i8`.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i8 n = 10
+  println(n.to_hex_width(4))
+  ```
+:##
+extend i8 to_hex_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with leading zeros to `w` digits.
+
+A negative value gives the two's complement bits of a `i16`.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i16 n = 10
+  println(n.to_hex_width(4))
+  ```
+:##
+extend i16 to_hex_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with leading zeros to `w` digits.
+
+A negative value gives the two's complement bits of a `i32`.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i32 n = 10
+  println(n.to_hex_width(4))
+  ```
+:##
+extend i32 to_hex_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 16, lower case, with leading zeros to `w` digits.
+
+A negative value gives the two's complement bits of a `i64`.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i64 n = 10
+  println(n.to_hex_width(4))
+  ```
+:##
+extend i64 to_hex_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 2, with no leading zero (`0` gives `"0"`).
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u8 n = 10
+  println(n.to_bin())
+  ```
+:##
+extend u8 to_bin() string:
+    return ""
+
+##:
+Writes the value in base 2, with no leading zero (`0` gives `"0"`).
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u16 n = 10
+  println(n.to_bin())
+  ```
+:##
+extend u16 to_bin() string:
+    return ""
+
+##:
+Writes the value in base 2, with no leading zero (`0` gives `"0"`).
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u32 n = 10
+  println(n.to_bin())
+  ```
+:##
+extend u32 to_bin() string:
+    return ""
+
+##:
+Writes the value in base 2, with no leading zero (`0` gives `"0"`).
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u64 n = 10
+  println(n.to_bin())
+  ```
+:##
+extend u64 to_bin() string:
+    return ""
+
+##:
+Writes the value in base 2, with no leading zero (`0` gives `"0"`).
+
+A negative value gives the two's complement bits of a `i8`.
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i8 n = 10
+  println(n.to_bin())
+  ```
+:##
+extend i8 to_bin() string:
+    return ""
+
+##:
+Writes the value in base 2, with no leading zero (`0` gives `"0"`).
+
+A negative value gives the two's complement bits of a `i16`.
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i16 n = 10
+  println(n.to_bin())
+  ```
+:##
+extend i16 to_bin() string:
+    return ""
+
+##:
+Writes the value in base 2, with no leading zero (`0` gives `"0"`).
+
+A negative value gives the two's complement bits of a `i32`.
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i32 n = 10
+  println(n.to_bin())
+  ```
+:##
+extend i32 to_bin() string:
+    return ""
+
+##:
+Writes the value in base 2, with no leading zero (`0` gives `"0"`).
+
+A negative value gives the two's complement bits of a `i64`.
+
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i64 n = 10
+  println(n.to_bin())
+  ```
+:##
+extend i64 to_bin() string:
+    return ""
+
+##:
+Writes the value in base 2, with leading zeros to `w` digits.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u8 n = 10
+  println(n.to_bin_width(4))
+  ```
+:##
+extend u8 to_bin_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 2, with leading zeros to `w` digits.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u16 n = 10
+  println(n.to_bin_width(4))
+  ```
+:##
+extend u16 to_bin_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 2, with leading zeros to `w` digits.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u32 n = 10
+  println(n.to_bin_width(4))
+  ```
+:##
+extend u32 to_bin_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 2, with leading zeros to `w` digits.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let u64 n = 10
+  println(n.to_bin_width(4))
+  ```
+:##
+extend u64 to_bin_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 2, with leading zeros to `w` digits.
+
+A negative value gives the two's complement bits of a `i8`.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i8 n = 10
+  println(n.to_bin_width(4))
+  ```
+:##
+extend i8 to_bin_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 2, with leading zeros to `w` digits.
+
+A negative value gives the two's complement bits of a `i16`.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i16 n = 10
+  println(n.to_bin_width(4))
+  ```
+:##
+extend i16 to_bin_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 2, with leading zeros to `w` digits.
+
+A negative value gives the two's complement bits of a `i32`.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i32 n = 10
+  println(n.to_bin_width(4))
+  ```
+:##
+extend i32 to_bin_width(i32 w) string:
+    return ""
+
+##:
+Writes the value in base 2, with leading zeros to `w` digits.
+
+A negative value gives the two's complement bits of a `i64`.
+
+- Parameter w: The least count of digits; the text is padded with leading zeros. A longer value is never cut.
+- Returns: The digits as a new string.
+- Example:
+  ```sushi
+  let i64 n = 10
+  println(n.to_bin_width(4))
+  ```
+:##
+extend i64 to_bin_width(i32 w) string:
+    return ""
+
+##:
+Writes the value with exactly `p` digits after the point.
+
+The value is rounded as C `printf("%.*f")` rounds it. A `p` below 0 is 0.
+
+- Parameter p: The count of digits after the point.
+- Returns: The text as a new string.
+- Example:
+  ```sushi
+  let f64 x = 3.14159
+  println(x.to_fixed(2))
+  ```
+:##
+extend f64 to_fixed(i32 p) string:
+    return ""
+
+##:
+Writes the value with exactly `p` digits after the point.
+
+The value is rounded as C `printf("%.*f")` rounds it. A `p` below 0 is 0.
+
+- Parameter p: The count of digits after the point.
+- Returns: The text as a new string.
+- Example:
+  ```sushi
+  let f32 x = 3.14159
+  println(x.to_fixed(2))
+  ```
+:##
+extend f32 to_fixed(i32 p) string:
+    return ""
+
+##:
+Collects text, and makes one string at the end.
+
+Each `push` copies its piece one time, into one buffer; `finish` takes the buffer with no
+copy. The field is readable, because a struct is public or private whole, but it is not
+a contract.
+:##
+public struct StringBuilder:
+    ##: The bytes collected so far. :##
+    u8[] bytes
+
+##:
+Makes an empty builder.
+
+- Returns: A builder that holds no byte.
+- Example:
+  ```sushi
+  let StringBuilder sb = StringBuilder.new()
+  println(sb.is_empty())
+  ```
+:##
+extend StringBuilder static new() StringBuilder:
+    return StringBuilder(from([0]))
+
+##:
+Appends the bytes of a string.
+
+- Parameter s: The text to append.
+- Example:
+  ```sushi
+  let StringBuilder sb = StringBuilder.new()
+  sb.push("Mostly Harmless")
+  println(sb.finish())
+  ```
+:##
+extend StringBuilder push(poke self, string s) ~:
+    self.bytes.truncate(0)
+
+##:
+Appends one byte.
+
+- Parameter b: The byte to append.
+- Example:
+  ```sushi
+  let StringBuilder sb = StringBuilder.new()
+  sb.push_byte(a'!')
+  println(sb.finish())
+  ```
+:##
+extend StringBuilder push_byte(poke self, u8 b) ~:
+    self.bytes.truncate(0)
+
+##:
+Counts the bytes collected so far.
+
+- Returns: The byte count.
+- Example:
+  ```sushi
+  let StringBuilder sb = StringBuilder.new()
+  sb.push("42")
+  println(sb.size())
+  ```
+:##
+extend StringBuilder size() i32:
+    return -1
+
+##:
+Tests if the builder holds no byte.
+
+- Returns: True when nothing was appended.
+- Example:
+  ```sushi
+  println(StringBuilder.new().is_empty())
+  ```
+:##
+extend StringBuilder is_empty() bool:
+    return false
+
+##:
+Makes the string, and spends the builder.
+
+The string takes the buffer: no byte is copied.
+
+- Returns: The collected text.
+- Example:
+  ```sushi
+  let StringBuilder sb = StringBuilder.new()
+  sb.push("Mostly ")
+  sb.push("Harmless")
+  println(sb.finish())
+  ```
+:##
+extend StringBuilder finish(nom self) string:
+    return ""
