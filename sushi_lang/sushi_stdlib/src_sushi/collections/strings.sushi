@@ -264,6 +264,57 @@ rule of `len()`, so `s.chars().len()` equals `s.len()`.
 extend string chars() string[]:
     return from([])
 
+unsafe external "C" as libc because "printf rounding for to_fixed":
+    fn snprintf(poke u8[] buf, i64 n, string fmt, ...) i32 = "snprintf"
+
+##:
+Writes an unsigned value in a base, with leading zeros to a width.
+
+- Parameter v: The value.
+- Parameter base: The base, 2 or 16.
+- Parameter width: The least count of digits. A value of 0 or below adds no zero.
+- Returns: The digits, lower case, as a new string.
+:##
+fn radix_digits(u64 v, u64 base, i32 width) string:
+    let i32 count = 1
+    let u64 rest = v / base
+    while (rest > 0):
+        count := count + 1
+        rest := rest / base
+    let i32 size = count
+    if (width > size):
+        size := width
+    let u8[] out = from([a'0'; size])
+    let u64 left = v
+    let i32 i = size - 1
+    while (left > 0):
+        let u8 d = (left % base) as u8
+        if (d < 10):
+            out[i] := a'0' + d
+        else:
+            out[i] := a'a' + d - 10
+        left := left / base
+        i := i - 1
+    return string.from_bytes(nom out)
+
+##:
+Writes a value with a count of digits after the point, through C `snprintf`.
+
+- Parameter v: The value.
+- Parameter p: The count of digits after the point. A value below 0 is 0.
+- Returns: The text as a new string.
+:##
+fn fixed_digits(f64 v, i32 p) string:
+    let i32 places = p
+    if (places < 0):
+        places := 0
+    let u8[] probe = from([0; 1])
+    let i32 need = libc.snprintf(poke probe, 1, "%.*f", places, v)
+    let u8[] buf = from([0; need + 1])
+    let i32 got = libc.snprintf(poke buf, (need + 1) as i64, "%.*f", places, v)
+    buf.truncate(got)
+    return string.from_bytes(nom buf)
+
 ##:
 Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
 
@@ -275,7 +326,7 @@ Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
   ```
 :##
 extend u8 to_hex() string:
-    return ""
+    return radix_digits(self as u64, 16, 0)
 
 ##:
 Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
@@ -288,7 +339,7 @@ Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
   ```
 :##
 extend u16 to_hex() string:
-    return ""
+    return radix_digits(self as u64, 16, 0)
 
 ##:
 Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
@@ -301,7 +352,7 @@ Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
   ```
 :##
 extend u32 to_hex() string:
-    return ""
+    return radix_digits(self as u64, 16, 0)
 
 ##:
 Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
@@ -314,7 +365,7 @@ Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
   ```
 :##
 extend u64 to_hex() string:
-    return ""
+    return radix_digits(self as u64, 16, 0)
 
 ##:
 Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
@@ -329,7 +380,7 @@ A negative value gives the two's complement bits of a `i8`.
   ```
 :##
 extend i8 to_hex() string:
-    return ""
+    return radix_digits((self as u8) as u64, 16, 0)
 
 ##:
 Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
@@ -344,7 +395,7 @@ A negative value gives the two's complement bits of a `i16`.
   ```
 :##
 extend i16 to_hex() string:
-    return ""
+    return radix_digits((self as u16) as u64, 16, 0)
 
 ##:
 Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
@@ -359,7 +410,7 @@ A negative value gives the two's complement bits of a `i32`.
   ```
 :##
 extend i32 to_hex() string:
-    return ""
+    return radix_digits((self as u32) as u64, 16, 0)
 
 ##:
 Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
@@ -374,7 +425,7 @@ A negative value gives the two's complement bits of a `i64`.
   ```
 :##
 extend i64 to_hex() string:
-    return ""
+    return radix_digits((self as u64) as u64, 16, 0)
 
 ##:
 Writes the value in base 16, lower case, with leading zeros to `w` digits.
@@ -388,7 +439,7 @@ Writes the value in base 16, lower case, with leading zeros to `w` digits.
   ```
 :##
 extend u8 to_hex_width(i32 w) string:
-    return ""
+    return radix_digits(self as u64, 16, w)
 
 ##:
 Writes the value in base 16, lower case, with leading zeros to `w` digits.
@@ -402,7 +453,7 @@ Writes the value in base 16, lower case, with leading zeros to `w` digits.
   ```
 :##
 extend u16 to_hex_width(i32 w) string:
-    return ""
+    return radix_digits(self as u64, 16, w)
 
 ##:
 Writes the value in base 16, lower case, with leading zeros to `w` digits.
@@ -416,7 +467,7 @@ Writes the value in base 16, lower case, with leading zeros to `w` digits.
   ```
 :##
 extend u32 to_hex_width(i32 w) string:
-    return ""
+    return radix_digits(self as u64, 16, w)
 
 ##:
 Writes the value in base 16, lower case, with leading zeros to `w` digits.
@@ -430,7 +481,7 @@ Writes the value in base 16, lower case, with leading zeros to `w` digits.
   ```
 :##
 extend u64 to_hex_width(i32 w) string:
-    return ""
+    return radix_digits(self as u64, 16, w)
 
 ##:
 Writes the value in base 16, lower case, with leading zeros to `w` digits.
@@ -446,7 +497,7 @@ A negative value gives the two's complement bits of a `i8`.
   ```
 :##
 extend i8 to_hex_width(i32 w) string:
-    return ""
+    return radix_digits((self as u8) as u64, 16, w)
 
 ##:
 Writes the value in base 16, lower case, with leading zeros to `w` digits.
@@ -462,7 +513,7 @@ A negative value gives the two's complement bits of a `i16`.
   ```
 :##
 extend i16 to_hex_width(i32 w) string:
-    return ""
+    return radix_digits((self as u16) as u64, 16, w)
 
 ##:
 Writes the value in base 16, lower case, with leading zeros to `w` digits.
@@ -478,7 +529,7 @@ A negative value gives the two's complement bits of a `i32`.
   ```
 :##
 extend i32 to_hex_width(i32 w) string:
-    return ""
+    return radix_digits((self as u32) as u64, 16, w)
 
 ##:
 Writes the value in base 16, lower case, with leading zeros to `w` digits.
@@ -494,7 +545,7 @@ A negative value gives the two's complement bits of a `i64`.
   ```
 :##
 extend i64 to_hex_width(i32 w) string:
-    return ""
+    return radix_digits((self as u64) as u64, 16, w)
 
 ##:
 Writes the value in base 2, with no leading zero (`0` gives `"0"`).
@@ -507,7 +558,7 @@ Writes the value in base 2, with no leading zero (`0` gives `"0"`).
   ```
 :##
 extend u8 to_bin() string:
-    return ""
+    return radix_digits(self as u64, 2, 0)
 
 ##:
 Writes the value in base 2, with no leading zero (`0` gives `"0"`).
@@ -520,7 +571,7 @@ Writes the value in base 2, with no leading zero (`0` gives `"0"`).
   ```
 :##
 extend u16 to_bin() string:
-    return ""
+    return radix_digits(self as u64, 2, 0)
 
 ##:
 Writes the value in base 2, with no leading zero (`0` gives `"0"`).
@@ -533,7 +584,7 @@ Writes the value in base 2, with no leading zero (`0` gives `"0"`).
   ```
 :##
 extend u32 to_bin() string:
-    return ""
+    return radix_digits(self as u64, 2, 0)
 
 ##:
 Writes the value in base 2, with no leading zero (`0` gives `"0"`).
@@ -546,7 +597,7 @@ Writes the value in base 2, with no leading zero (`0` gives `"0"`).
   ```
 :##
 extend u64 to_bin() string:
-    return ""
+    return radix_digits(self as u64, 2, 0)
 
 ##:
 Writes the value in base 2, with no leading zero (`0` gives `"0"`).
@@ -561,7 +612,7 @@ A negative value gives the two's complement bits of a `i8`.
   ```
 :##
 extend i8 to_bin() string:
-    return ""
+    return radix_digits((self as u8) as u64, 2, 0)
 
 ##:
 Writes the value in base 2, with no leading zero (`0` gives `"0"`).
@@ -576,7 +627,7 @@ A negative value gives the two's complement bits of a `i16`.
   ```
 :##
 extend i16 to_bin() string:
-    return ""
+    return radix_digits((self as u16) as u64, 2, 0)
 
 ##:
 Writes the value in base 2, with no leading zero (`0` gives `"0"`).
@@ -591,7 +642,7 @@ A negative value gives the two's complement bits of a `i32`.
   ```
 :##
 extend i32 to_bin() string:
-    return ""
+    return radix_digits((self as u32) as u64, 2, 0)
 
 ##:
 Writes the value in base 2, with no leading zero (`0` gives `"0"`).
@@ -606,7 +657,7 @@ A negative value gives the two's complement bits of a `i64`.
   ```
 :##
 extend i64 to_bin() string:
-    return ""
+    return radix_digits((self as u64) as u64, 2, 0)
 
 ##:
 Writes the value in base 2, with leading zeros to `w` digits.
@@ -620,7 +671,7 @@ Writes the value in base 2, with leading zeros to `w` digits.
   ```
 :##
 extend u8 to_bin_width(i32 w) string:
-    return ""
+    return radix_digits(self as u64, 2, w)
 
 ##:
 Writes the value in base 2, with leading zeros to `w` digits.
@@ -634,7 +685,7 @@ Writes the value in base 2, with leading zeros to `w` digits.
   ```
 :##
 extend u16 to_bin_width(i32 w) string:
-    return ""
+    return radix_digits(self as u64, 2, w)
 
 ##:
 Writes the value in base 2, with leading zeros to `w` digits.
@@ -648,7 +699,7 @@ Writes the value in base 2, with leading zeros to `w` digits.
   ```
 :##
 extend u32 to_bin_width(i32 w) string:
-    return ""
+    return radix_digits(self as u64, 2, w)
 
 ##:
 Writes the value in base 2, with leading zeros to `w` digits.
@@ -662,7 +713,7 @@ Writes the value in base 2, with leading zeros to `w` digits.
   ```
 :##
 extend u64 to_bin_width(i32 w) string:
-    return ""
+    return radix_digits(self as u64, 2, w)
 
 ##:
 Writes the value in base 2, with leading zeros to `w` digits.
@@ -678,7 +729,7 @@ A negative value gives the two's complement bits of a `i8`.
   ```
 :##
 extend i8 to_bin_width(i32 w) string:
-    return ""
+    return radix_digits((self as u8) as u64, 2, w)
 
 ##:
 Writes the value in base 2, with leading zeros to `w` digits.
@@ -694,7 +745,7 @@ A negative value gives the two's complement bits of a `i16`.
   ```
 :##
 extend i16 to_bin_width(i32 w) string:
-    return ""
+    return radix_digits((self as u16) as u64, 2, w)
 
 ##:
 Writes the value in base 2, with leading zeros to `w` digits.
@@ -710,7 +761,7 @@ A negative value gives the two's complement bits of a `i32`.
   ```
 :##
 extend i32 to_bin_width(i32 w) string:
-    return ""
+    return radix_digits((self as u32) as u64, 2, w)
 
 ##:
 Writes the value in base 2, with leading zeros to `w` digits.
@@ -726,7 +777,7 @@ A negative value gives the two's complement bits of a `i64`.
   ```
 :##
 extend i64 to_bin_width(i32 w) string:
-    return ""
+    return radix_digits((self as u64) as u64, 2, w)
 
 ##:
 Writes the value with exactly `p` digits after the point.
@@ -742,7 +793,7 @@ The value is rounded as C `printf("%.*f")` rounds it. A `p` below 0 is 0.
   ```
 :##
 extend f64 to_fixed(i32 p) string:
-    return ""
+    return fixed_digits(self, p)
 
 ##:
 Writes the value with exactly `p` digits after the point.
@@ -758,7 +809,7 @@ The value is rounded as C `printf("%.*f")` rounds it. A `p` below 0 is 0.
   ```
 :##
 extend f32 to_fixed(i32 p) string:
-    return ""
+    return fixed_digits(self as f64, p)
 
 ##:
 Collects text, and makes one string at the end.

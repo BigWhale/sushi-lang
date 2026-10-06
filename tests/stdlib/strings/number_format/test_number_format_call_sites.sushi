@@ -1,0 +1,35 @@
+# The number formatters at every call site: a local, a parameter, a temporary, a byte
+# read from a string, an interpolation hole, a byte literal receiver, a chained call, and
+# a loop that builds a hex dump of a `u8[]`.
+# EXPECT_STDOUT_EXACT: "ff\nbeef\n1010\nfa\n4d\nn = 11111111, x = 2.72\n41\nFF\n00 01 0f 10 ab ff\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn show(u32 v) string:
+    return v.to_hex()
+
+fn bits(peek i16 v) string:
+    return v.to_bin()
+
+fn main() i32:
+    let i32 n = 255
+    println(n.to_hex())
+    println(show(48879))
+    let i16 k = 10
+    println(bits(peek k))
+    let u8 a = 200
+    let u8 b = 50
+    println((a + b).to_hex())
+    let string s = "Mostly Harmless"
+    println(s[0].to_hex_width(2))
+    let f64 x = 2.718
+    println("n = {n.to_bin()}, x = {x.to_fixed(2)}")
+    println(a'A'.to_hex())
+    println(n.to_hex().upper())
+    let u8[] data = from([0, 1, 15, 16, 171, 255])
+    let string[] parts = from([])
+    foreach(byte in data.iter()):
+        parts.push(byte.to_hex_width(2))
+    println(" ".join(parts))
+    return 0

@@ -625,11 +625,89 @@ TODO(worker)
 
 ### `.to_hex()`, `.to_hex_width(i32 w)`, `.to_bin()`, `.to_bin_width(i32 w)`
 
-TODO(worker)
+These four methods are on each integer type: `u8`, `u16`, `u32`, `u64`, `i8`, `i16`,
+`i32` and `i64`. Each one gives a new string.
+
+- `to_hex()` writes the value in base 16, in lower case, with no leading zero. The value
+  0 gives `"0"`.
+- `to_bin()` writes the value in base 2, with no leading zero.
+- `to_hex_width(w)` and `to_bin_width(w)` add leading zeros until the text has `w`
+  digits. A value that has more digits than `w` is never cut. A `w` of 0 or less adds no
+  zero.
+- A signed value gives the two's complement bits of its own width, with no minus sign:
+  `(-1 as i8).to_hex()` is `"ff"`, and `(-1).to_hex()` on an `i32` is `"ffffffff"`.
+
+The methods write digits only, with no `0x` or `0b` prefix. For a width with spaces, or
+for an alignment, use `pad_left` or `pad_right` on the result.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let u8 b = 10
+    let i8 m = -1
+    let i32 port = 8080
+    println(b.to_hex())
+    println(b.to_hex_width(2))
+    println(m.to_hex())
+    println(port.to_hex_width(8))
+    println(b.to_bin())
+    println(b.to_bin_width(8))
+    println(m.to_bin())
+    return 0
+```
+
+Output:
+
+```text
+a
+0a
+ff
+00001f90
+1010
+00001010
+11111111
+```
 
 ### `.to_fixed(i32 p) -> string`
 
-TODO(worker)
+This method is on `f64` and `f32`. It writes the value with exactly `p` digits after the
+point, and gives a new string.
+
+- The value is rounded as C `printf("%.*f")` rounds it. The rounding uses the exact
+  binary value, so 2.5 with `p = 0` gives `"2"`, and 0.125 with `p = 2` gives `"0.12"`.
+- A `p` of 0 writes no point. A `p` below 0 is the same as 0.
+- An `f32` value is first changed to `f64`, with no change to its value. Thus the digits
+  show the precision of the `f32`: `0.1` as an `f32` with `p = 10` is `"0.1000000015"`.
+- There is no limit on the length: a very large value gives all its integer digits.
+
+For a width with spaces, or for an alignment, use `pad_left` or `pad_right` on the
+result.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let f64 pi = 3.14159
+    let f64 half = 2.5
+    let f32 tenth = 0.1
+    println(pi.to_fixed(2))
+    println(pi.to_fixed(0))
+    println(half.to_fixed(0))
+    println(tenth.to_fixed(10))
+    println("[{pi.to_fixed(3).pad_left(8, ' ')}]")
+    return 0
+```
+
+Output:
+
+```text
+3.14
+3
+2
+0.1000000015
+[   3.142]
+```
 
 ## StringBuilder
 
