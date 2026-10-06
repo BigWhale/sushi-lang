@@ -103,4 +103,87 @@ In a function with an error channel, `or_err` turns a `None` into an error:
 
 ## Writes
 
-TODO(worker)
+A push appends the W bytes of a value to the end of the array, and the length of the array
+increases by W. W is 2 for a `u16`, 4 for a `u32` and 8 for a `u64`. The name of the method
+gives the byte order:
+
+- `le` (little-endian): the least significant byte goes first.
+- `be` (big-endian): the most significant byte goes first.
+
+The bytes that are already in the array do not change. There is no alignment and no
+padding: the first byte of the value goes directly after the last byte of the array.
+
+Every push is **bare** and total: it has no error channel, and every value of the type
+is legal. Do not write `??` on a call. The answer is `~`.
+
+A push writes its receiver, so the receiver must be a value that you can write. A local, a
+field of a local and a `poke` parameter are correct. A by-value parameter is a read-only
+borrow ([CE2422](../../error-catalog.md#ce2422)), and a `peek` parameter is a read-only
+reference ([CE2408](../../error-catalog.md#ce2408)). Declare the parameter `poke u8[]` and
+call the function with `poke`.
+
+To push a signed value, cast it to the unsigned type of the same width: `n as u32`. To push
+a float, push its bits: `x.to_bits()` gives a `u64` for an `f64` and a `u32` for an `f32`.
+
+### `push_u16_le(poke self, u16 v) ~` and `push_u16_be(poke self, u16 v) ~`
+
+Appends the 2 bytes of `v`. For `v = 0x0102`, `push_u16_le` appends `0x02 0x01` and
+`push_u16_be` appends `0x01 0x02`.
+
+```sushi
+use <encoding/binary>
+
+fn main() i32:
+    let u8[] buf = from([])
+    buf.push_u16_le(0x0102)
+    buf.push_u16_be(0x0102)
+    println(buf.len())                              # 4
+    println("{buf[0]} {buf[1]} {buf[2]} {buf[3]}")  # 2 1 1 2
+    return 0
+```
+
+### `push_u32_le(poke self, u32 v) ~` and `push_u32_be(poke self, u32 v) ~`
+
+Appends the 4 bytes of `v`. For `v = 0x0A0B0C0D`, `push_u32_le` appends
+`0x0D 0x0C 0x0B 0x0A` and `push_u32_be` appends `0x0A 0x0B 0x0C 0x0D`. The example also
+pushes a signed value through `as u32`: `-2` is `0xFFFFFFFE`.
+
+```sushi
+use <encoding/binary>
+
+fn main() i32:
+    let u8[] le = from([])
+    le.push_u32_le(0x0A0B_0C0D)
+    println("{le[0]} {le[1]} {le[2]} {le[3]}")      # 13 12 11 10
+    let u8[] be = from([])
+    be.push_u32_be(0x0A0B_0C0D)
+    println("{be[0]} {be[1]} {be[2]} {be[3]}")      # 10 11 12 13
+    let i32 n = -2
+    let u8[] signed = from([])
+    signed.push_u32_le(n as u32)
+    println("{signed[0]} {signed[3]}")              # 254 255
+    return 0
+```
+
+### `push_u64_le(poke self, u64 v) ~` and `push_u64_be(poke self, u64 v) ~`
+
+Appends the 8 bytes of `v`. For `v = 0x0102030405060708`, `push_u64_le` appends
+`0x08 0x07 ... 0x01` and `push_u64_be` appends `0x01 0x02 ... 0x08`. The example writes
+through a `poke` parameter, and pushes the bits of an `f64`: `1.0` is
+`0x3FF0000000000000`.
+
+```sushi
+use <encoding/binary>
+
+fn put_header(poke u8[] out, u64 id, f64 score) ~:
+    out.push_u64_be(id)
+    out.push_u64_le(score.to_bits())
+
+fn main() i32:
+    let u8[] out = from([])
+    put_header(poke out, 1, 1.0)
+    println(out.len())                              # 16
+    println("{out[0]} {out[7]}")                    # 0 1
+    println("{out[14]} {out[15]}")                  # 240 63
+    return 0
+```

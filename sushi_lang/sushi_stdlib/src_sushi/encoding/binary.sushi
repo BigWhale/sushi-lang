@@ -153,11 +153,12 @@ Appends the 2 bytes of a `u16` in little-endian order, the least significant byt
   ```sushi
   let u8[] buf = from([])
   buf.push_u16_le(0x0102)
-  println(buf.len())
+  println("{buf[0]} {buf[1]}")
   ```
 :##
 extend u8[] push_u16_le(poke self, u16 v) ~:
-    return ~
+    foreach(i in 0..2):
+        self.push((v >> (8 * i)) as u8)
 
 ##:
 Appends the 2 bytes of a `u16` in big-endian order, the most significant byte first.
@@ -167,11 +168,12 @@ Appends the 2 bytes of a `u16` in big-endian order, the most significant byte fi
   ```sushi
   let u8[] buf = from([])
   buf.push_u16_be(0x0102)
-  println(buf.len())
+  println("{buf[0]} {buf[1]}")
   ```
 :##
 extend u8[] push_u16_be(poke self, u16 v) ~:
-    return ~
+    foreach(i in 0..2):
+        self.push((v >> (8 * (1 - i))) as u8)
 
 ##:
 Appends the 4 bytes of a `u32` in little-endian order, the least significant byte first.
@@ -181,11 +183,12 @@ Appends the 4 bytes of a `u32` in little-endian order, the least significant byt
   ```sushi
   let u8[] buf = from([])
   buf.push_u32_le(0x01020304)
-  println(buf.len())
+  println("{buf[0]} {buf[3]}")
   ```
 :##
 extend u8[] push_u32_le(poke self, u32 v) ~:
-    return ~
+    foreach(i in 0..4):
+        self.push((v >> (8 * i)) as u8)
 
 ##:
 Appends the 4 bytes of a `u32` in big-endian order, the most significant byte first.
@@ -195,11 +198,12 @@ Appends the 4 bytes of a `u32` in big-endian order, the most significant byte fi
   ```sushi
   let u8[] buf = from([])
   buf.push_u32_be(0x01020304)
-  println(buf.len())
+  println("{buf[0]} {buf[3]}")
   ```
 :##
 extend u8[] push_u32_be(poke self, u32 v) ~:
-    return ~
+    foreach(i in 0..4):
+        self.push((v >> (8 * (3 - i))) as u8)
 
 ##:
 Appends the 8 bytes of a `u64` in little-endian order, the least significant byte first.
@@ -209,11 +213,12 @@ Appends the 8 bytes of a `u64` in little-endian order, the least significant byt
   ```sushi
   let u8[] buf = from([])
   buf.push_u64_le(0x0102030405060708)
-  println(buf.len())
+  println("{buf[0]} {buf[7]}")
   ```
 :##
 extend u8[] push_u64_le(poke self, u64 v) ~:
-    return ~
+    foreach(i in 0..8):
+        self.push((v >> (8 * i)) as u8)
 
 ##:
 Appends the 8 bytes of a `u64` in big-endian order, the most significant byte first.
@@ -223,8 +228,9 @@ Appends the 8 bytes of a `u64` in big-endian order, the most significant byte fi
   ```sushi
   let u8[] buf = from([])
   buf.push_u64_be(0x0102030405060708)
-  println(buf.len())
+  println("{buf[0]} {buf[7]}")
   ```
 :##
 extend u8[] push_u64_be(poke self, u64 v) ~:
-    return ~
+    foreach(i in 0..8):
+        self.push((v >> (8 * (7 - i))) as u8)

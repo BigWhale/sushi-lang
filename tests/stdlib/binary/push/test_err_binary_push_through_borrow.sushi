@@ -1,0 +1,12 @@
+# A push writes its receiver. A by-value parameter is a read-only borrow,
+# so a push through it is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2422
+use <encoding/binary>
+
+fn put(u8[] b) ~:
+    b.push_u16_le(1)
+
+fn main() i32:
+    let u8[] buf = from([])
+    put(buf)
+    return 0
