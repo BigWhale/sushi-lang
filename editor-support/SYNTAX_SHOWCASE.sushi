@@ -17,6 +17,7 @@ use "other_module"  # Example: import from another module
 const i32 MAX_SIZE = 100
 const string APP_NAME = "Sushi"
 const bool DEBUG = true
+const u8 SEPARATOR = a'/'
 
 # ============================================================================
 # 4. ENUMS WITH PATTERN MATCHING
@@ -226,6 +227,12 @@ fn array_methods_demo() ~ | StdError:
     let u8[] bytes = from([72 as u8, 101 as u8, 108 as u8, 108 as u8, 111 as u8])
     let string text = bytes.to_string()
     println("Text: {text}")
+
+    # Byte literals: the ASCII code of one character
+    let bool slash = bytes[1] == a'/'
+    match bytes[0]:
+        a'\n' -> println("Newline")
+        _ -> println("Other")
 
     # Multi-line arrays
     let string[] multiline = from([

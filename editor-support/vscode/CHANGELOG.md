@@ -2,6 +2,11 @@
 
 All notable changes to the Sushi language extension will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- Byte literal highlighting: `a'x'` and its escapes (`a'\n'`, `a'\xff'`)
+
 ## [0.1.0] - 2025-10-03
 
 ### Added

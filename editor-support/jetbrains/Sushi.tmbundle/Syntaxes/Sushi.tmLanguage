@@ -258,6 +258,23 @@
             <array>
                 <dict>
                     <key>begin</key>
+                    <string>\ba'</string>
+                    <key>end</key>
+                    <string>'|$</string>
+                    <key>name</key>
+                    <string>constant.character.byte.sushi</string>
+                    <key>patterns</key>
+                    <array>
+                        <dict>
+                            <key>match</key>
+                            <string>\\(x[0-9a-fA-F]{2}|[ntr0\\'"])</string>
+                            <key>name</key>
+                            <string>constant.character.escape.sushi</string>
+                        </dict>
+                    </array>
+                </dict>
+                <dict>
+                    <key>begin</key>
                     <string>"</string>
                     <key>end</key>
                     <string>"</string>
