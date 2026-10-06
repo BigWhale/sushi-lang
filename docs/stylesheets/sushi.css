@@ -57,3 +57,13 @@
   font-size: 1.4rem;
   line-height: 1;
 }
+
+/*
+ * Inline tooltips: the popup of a link title, which shows the message of a
+ * diagnostic code (docs/hooks/error_tooltips.py). Material sets .5rem and a
+ * 400px limit, which is too small for a compiler message.
+ */
+.md-tooltip2[role="tooltip"] > .md-tooltip2__inner {
+  font-size: 0.7rem;
+  max-width: min(100vw - 1.6rem, 560px);
+}

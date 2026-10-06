@@ -72,7 +72,7 @@ A struct declares the same field name more than once.
 
 **Message:** `{kind} '{name}' already defined as {other}`
 
-A struct and an enum share one type name for the whole program. The second declaration of a name, in SOURCE order and of either kind, is refused where it is written, and the note points at the first. The first declaration keeps the name, so its uses give no more errors. In one unit the position in the file decides; across units the order is the unit order, and a dependency comes first (#901). Until #1069 the order in one unit was the collection order: structs were collected before enums, so an enum written first was the one refused, and the struct that was written second kept the name and its uses cascaded. The header says `generic` when a declaration is generic. Rename one of the two types.
+A struct and an enum share one type name for the whole program. The compiler refuses the second declaration of a name, in SOURCE order and of either kind, where it is written, and the note points at the first. The first declaration keeps the name, so its uses give no more errors. In one unit the position in the file decides; across units the order is the unit order, and a dependency comes first. The header says `generic` when a declaration is generic. Rename one of the two types.
 
 ### CE0007 {#ce0007}
 
@@ -857,7 +857,7 @@ Two constants share the same name in a compilation unit.
 
 **Message:** `main() function must return a bare integer type (i8-i64, u8-u64), got '{type}'`
 
-The main function answers the exit code of the program, so it returns a bare integer type and has no error channel: a '| E' on it, or a 'Result@(T, E)' return, is refused. A failure in main is handled in its body, with match or .realise(default), and answered as a code (docs/design/error-channel.md). Until the bare-function change every function answered an implicit Result@(T, StdError), and an Err from main exited 1 and printed nothing.
+The main function answers the exit code of the program, so it returns a bare integer type and has no error channel: a '| E' on it, or a 'Result@(T, E)' return, is refused. Handle a failure in main in its body, with match or .realise(default), and answer it as a code. See [the error-channel design](design/error-channel.md).
 
 ### CE0107 {#ce0107}
 
@@ -865,7 +865,7 @@ The main function answers the exit code of the program, so it returns a bare int
 
 **Message:** `{callable} must return a value on all code paths`
 
-A body that answers a value or a Result must end in a return on every code path. The rule is one for a function, a lambda and an extension or perk-implementation method alike. A body with a channel ('| E', or an explicit Result@(T, E) return) answers a Result, so a `~` one ends with `return Result.Ok(~)` (#848). A BARE `~` body answers nothing, so it may reach its end (docs/design/error-channel.md). Until #824 a `~` function was exempt, and until #845 a channel method and a lambda were exempt: a body that reached its end answered a Result.Err that no source wrote. A lambda is named `lambda` and carets its own location; it named the internal symbol `__lambda_0` with no location until #846.
+A body that answers a value or a Result must end in a return on every code path. The rule is one for a function, a lambda and an extension or perk-implementation method alike. A body with a channel ('| E', or an explicit Result@(T, E) return) answers a Result, so a `~` one ends with `return Result.Ok(~)`. A BARE `~` body answers nothing, so it may reach its end. See [the error-channel design](design/error-channel.md). For a lambda, the diagnostic names it `lambda` and points at its own location.
 
 ### CE0108 {#ce0108}
 
@@ -873,7 +873,7 @@ A body that answers a value or a Result must end in a return on every code path.
 
 **Message:** `{what} is not a compile-time constant`
 
-Constant declarations must use compile-time evaluable expressions: literals, other constants, operators, casts, interpolation, and a struct or enum variant built from constants. Function calls, method calls, and variable references are not allowed. `{what}` names the expression as the source writes it ("a function call", "a `from(...)` call"); it printed the compiler's class name for the node until #1137.
+Constant declarations must use compile-time evaluable expressions: literals, other constants, operators, casts, interpolation, and a struct or enum variant built from constants. Function calls, method calls, and variable references are not allowed. `{what}` names the expression as the source writes it ("a function call", "a `from(...)` call").
 
 ### CE0109 {#ce0109}
 
@@ -905,7 +905,7 @@ Type cast is not allowed in constant expressions.
 
 **Message:** `division by zero`
 
-The compiler can read this divisor, and it is zero. One compile-time arithmetic answers a constant and a body alike, so '10 / 0' is refused in both positions. Only a divisor the compiler can read is an error: a computed one -- a variable, a loop index, a call -- is ordinary code and no check is emitted around it. The message named the constant position until #709, where the body half was added: a body divided by a literal zero, emitted 'sdiv i32 1, 0' and printed whatever the optimizer left behind -- 2 at --opt none and a different number at O2, because LLVM makes the result poison.
+The compiler can read this divisor, and it is zero. The same compile-time arithmetic applies to a constant and to a body, so '10 / 0' is refused in both positions. Only a divisor the compiler can read is an error: a computed one -- a variable, a loop index, a call -- is ordinary code and no check is emitted around it.
 
 ### CE0113 {#ce0113}
 
@@ -939,7 +939,7 @@ Variadic parameters are only permitted in plain function definitions, not in per
 
 **Message:** `public function '{name}' is variadic and cannot appear in a library public API`
 
-Native variadic functions cannot be exported through a .slib public API in v1 (the variadic flag is not serialized into the library format).
+Native variadic functions cannot be exported through a .slib public API (the library format does not record the variadic flag).
 
 ### CE0117 {#ce0117}
 
@@ -955,7 +955,7 @@ A type-pack parameter '...Ts' must be the last parameter, and a function may dec
 
 **Message:** `{message}`
 
-A function cannot mix a v2 type-pack parameter '...Ts' with a v1 native variadic '...T'.
+A function cannot mix a type-pack parameter '...Ts' with a native variadic '...T'.
 
 ### CE0119 {#ce0119}
 
@@ -1009,7 +1009,7 @@ The derive pass registered a hash() method whose LLVM emitter the backend never 
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The typecheck pass annotates every TryExpr it validates (inner type, unwrapped type, success tag, error type). Reaching the backend without one means the expression's type was never inferred - the backend no longer re-infers types, so this is a gap in the typecheck pass, not a user error.
+The typecheck pass annotates every TryExpr it validates (inner type, unwrapped type, success tag, error type). Reaching the backend without one means the expression's type was never inferred. This is a gap in the typecheck pass, not a user error.
 
 ### CE0125 {#ce0125}
 
@@ -1019,7 +1019,7 @@ The typecheck pass annotates every TryExpr it validates (inner type, unwrapped t
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The Expr union grew a member the borrow checker does not dispatch on. This used to be a SILENT fall-through, which meant no borrow checking at all for that node - the root cause of the bloom use-after-free (#174), the unchecked range bound (#175) and the unchecked perk body (#176). tests/unit/test\_borrow\_dispatch\_is\_total.py is the CI gate; this is the runtime backstop.
+The Expr union grew a member the borrow checker does not dispatch on. Without the dispatch, the borrow checker does not check that node. This is a compiler bug, not a user error.
 
 ### CE0126 {#ce0126}
 
@@ -1029,7 +1029,7 @@ The Expr union grew a member the borrow checker does not dispatch on. This used 
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-Two spellings of one generic enum (Result@(T, E), Maybe@(T)) mangled to the same name but carry different payload types -- one was interned before its UnknownType payloads were resolved. str(UnknownType('Point')) and str(StructType('Point')) are both 'Point', so both spellings claim the same table slot while describing different types. EnumType identity is nominal (#240), so the two now compare EQUAL and the mismatch can no longer cause a silent cache miss -- but the entry still describes the wrong payload, which this guard catches. Intern only through ensure\_result\_type\_in\_table / ensure\_maybe\_type\_in\_table, which resolve their payloads before mangling the name.
+Two spellings of one generic enum (Result@(T, E), Maybe@(T)) mangled to the same name but carry different payload types: one was interned before its payloads were resolved. The table entry then describes the wrong payload, and this guard catches it. Intern only through ensure\_result\_type\_in\_table / ensure\_maybe\_type\_in\_table, which resolve their payloads before mangling the name.
 
 ### CE0127 {#ce0127}
 
@@ -1049,7 +1049,7 @@ The derive pass registered a clone() method whose LLVM emitter the backend never
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-Every position that takes ownership routes through backend/ownership.py::consume, which reads the Provenance semantics stamped on the source expression. A missing stamp means The borrow pass did not classify this position -- a gap in the borrow checker's coverage of the ConsumingUse set, not a user error. It is fatal ON PURPOSE: a fallback that guessed the decision would be a twelfth derivation of the rule, which is the thing the seam exists to make impossible. Same treatment [CE0124](#ce0124) gives a missing try-expression annotation.
+Every position that takes ownership routes through backend/ownership.py::consume, which reads the Provenance semantics stamped on the source expression. A missing stamp means the borrow pass did not classify this position -- a gap in the borrow checker's coverage of the ConsumingUse set, not a user error. [CE0124](#ce0124) is the same check for a missing try-expression annotation.
 
 ### CE0130 {#ce0130}
 
@@ -1059,7 +1059,7 @@ Every position that takes ownership routes through backend/ownership.py::consume
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The AST grew a statement or expression node the scope checker does not dispatch on. This used to be a SILENT fall-through (issue #245) - an unhandled statement got no scope analysis at all, invisibly, the same hazard class [CE0125](#ce0125) closed in the borrow checker. Notably the expand(...) statement was skipped this way. tests/unit/test\_scope\_dispatch\_is\_total.py is the CI gate; this is the runtime backstop.
+The AST grew a statement or expression node the scope checker does not dispatch on. Without the dispatch, the scope checker does not analyze that node. [CE0125](#ce0125) is the same check in the borrow checker. This is a compiler bug, not a user error.
 
 ### CE0131 {#ce0131}
 
@@ -1073,7 +1073,7 @@ The AST grew a statement or expression node the scope checker does not dispatch 
 - `handle the value in the body (match, .realise(default)), or write '| E' in the signature`
 - `a conversion is bare, so handle the Result in the body (match, .realise(default))`
 
-A callable has an error channel only when its signature writes '| E' or returns an explicit Result@(T, E) (docs/design/error-channel.md). A BARE function, method or lambda returns the value itself ([CE2091](#ce2091)), so a '??' has no Result return to propagate into. Handle the Result in the body with match or .realise(default), or write '| E' in the signature. For a written function or method body the collect pass emits it, so it fires once per declaration and covers templates nobody instantiates. A lambda takes its channel from its type, so the typecheck pass emits it there; a ?? inside a lambda whose type writes '| E' is legal in any body (#399). 'main' is bare, so this replaced the CW2511 warning for a ?? in main.
+A callable has an error channel only when its signature writes '| E' or returns an explicit Result@(T, E). See [the error-channel design](design/error-channel.md). A BARE function, method or lambda returns the value itself ([CE2091](#ce2091)), so a '??' has no Result return to propagate into. Handle the Result in the body with match or .realise(default), or write '| E' in the signature. For a written function or method body the collect pass emits it, so it fires once per declaration and covers templates nobody instantiates. A lambda takes its channel from its type, so the typecheck pass emits it there; a ?? inside a lambda whose type writes '| E' is legal in any body. 'main' is bare, so a ?? in main is this error too.
 
 ### CE0132 {#ce0132}
 
@@ -1083,7 +1083,7 @@ A callable has an error channel only when its signature writes '| E' or returns 
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-A mutating built-in on a fixed array -- fill, reverse -- routes its receiver through backend/types/arrays/fixed\_addressing.py::as\_fixed\_array\_address with writable=True, which resolves an address from the AST. A receiver that names no storage has no write address, and every such receiver already has a diagnostic: [CE2096](#ce2096) for a constant, and [CE2408](#ce2408), [CE2414](#ce2414), [CE2421](#ce2421), [CE2422](#ce2422), [CE2426](#ce2426) or [CE2429](#ce2429) for the read-only receivers. Reaching this means one of them did not fire, so it is a gap in that coverage and not a user error. It is fatal ON PURPOSE: the `alloca` fallback that stood here filled a COPY of the receiver and reported nothing, which is the silent no-op #480 records. Same treatment [CE0129](#ce0129) gives a consuming use with no ownership decision.
+A mutating built-in on a fixed array -- fill, reverse -- routes its receiver through backend/types/arrays/fixed\_addressing.py::as\_fixed\_array\_address with writable=True, which resolves an address from the AST. A receiver that names no storage has no write address, and every such receiver already has a diagnostic: [CE2096](#ce2096) for a constant, and [CE2408](#ce2408), [CE2414](#ce2414), [CE2421](#ce2421), [CE2422](#ce2422), [CE2426](#ce2426) or [CE2429](#ce2429) for the read-only receivers. Reaching this means one of them did not fire, so it is a gap in that coverage and not a user error. [CE0129](#ce0129) is the same check for a consuming use with no ownership decision.
 
 ### CE0133 {#ce0133}
 
@@ -1091,7 +1091,7 @@ A mutating built-in on a fixed array -- fill, reverse -- routes its receiver thr
 
 **Message:** `method '{name}' declares {found}, but perk '{perk}' requires {expected}`
 
-The '| E' channel is part of a perk method's signature (HANDLES.md ruling R1), so a contract that declares one and an implementation that omits it are the same mismatch read from opposite ends, as are two channels over different error types. Relational: the primary sits at the implementation and a note at the contract method. Before the channel existed this code refused every '| E' on a perk-implementation method, because the declared channel was otherwise silently DROPPED and the body's returns validated against a signature nobody had. A fallible perk contract -- a Reader or a Writer -- is what the channel was needed for.
+The '| E' channel is part of a perk method's signature, so a contract that declares one and an implementation that omits it are the same mismatch read from opposite ends, as are two channels over different error types. The primary location is at the implementation, and a note points at the contract method. Write the same channel on the contract method and on the implementation.
 
 ### CE0134 {#ce0134}
 
@@ -1114,7 +1114,7 @@ A `static` extension method is called on the TYPE name (`Vec.at(3, 4)`), so noth
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The monomorphizer substitutes a type argument for every type parameter an instantiated body names. The walk handled a cast and a '??' and COPIED every other node, so a type parameter one level deeper survived and the internal name (T, U) was printed to the user (#602): a nested cast answered [CE2014](#ce2014), explicit call-site type arguments answered [CE2061](#ce2061), a lambda annotation answered [CE2002](#ce2002) and a foreach item annotation answered [CE2001](#ce2001). ONE code for TWO positions, expression and statement, because it is one fault. tests/unit/test\_substitution\_dispatch\_is\_total.py is the CI gate; this is the runtime backstop, in the shape [CE0125](#ce0125) gives the borrow checker and [CE0130](#ce0130) the scope checker.
+The monomorphizer substitutes a type argument for every type parameter an instantiated body names. This error means that an expression or a statement in an instantiated body was not substituted, so an internal type parameter name (T, U) would reach the user. This is a compiler bug, not a user error. [CE0125](#ce0125) is the same check in the borrow checker, and [CE0130](#ce0130) is the same check in the scope checker.
 
 ### CE0136 {#ce0136}
 
@@ -1124,7 +1124,7 @@ The monomorphizer substitutes a type argument for every type parameter an instan
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-semantics/visitors.py dispatches on a method name it BUILDS from the class name, and RecursiveVisitor.generic\_visit answered a miss with a bare `pass`. A node kind that ast.py added was therefore skipped in SILENCE by every consumer -- StatementValidator, ExpressionValidator and TypeInferenceVisitor -- and a class RENAME read exactly the same way (#639). Expand and Lambda were both missing an arm. A node kind a PARENT arm reads inside itself -- an ArrayElement, a MatchArm, a Pattern -- is named in visitors.WALKED\_IN\_PARENT and never arrives here. tests/unit/test\_visitor\_dispatch\_is\_total.py is the CI gate; this is the runtime backstop, in the shape [CE0125](#ce0125) gives the borrow checker and [CE0130](#ce0130) the scope checker.
+semantics/visitors.py dispatches on a method name it builds from the class name of the node. This error means that a node kind has no arm in a visitor (StatementValidator, ExpressionValidator or TypeInferenceVisitor), so the visitor would skip that node with no diagnostic. A node kind that a parent arm reads inside itself -- an ArrayElement, a MatchArm, a Pattern -- is named in visitors.WALKED\_IN\_PARENT and never arrives here. This is a compiler bug, not a user error. [CE0125](#ce0125) is the same check in the borrow checker, and [CE0130](#ce0130) is the same check in the scope checker.
 
 ### CE0137 {#ce0137}
 
@@ -1134,7 +1134,7 @@ semantics/visitors.py dispatches on a method name it BUILDS from the class name,
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The lambda lifter claims its index before it builds anything: it steps past every \_\_lambda\_&lt;n> already in the function table and every \_\_closure\_env\_&lt;n> already in the struct table, so the name it then registers is free in both. A registration that fails anyway means the name entered a table between that search and the registration, and the closure that loses the race silently aliases another unit's body and environment layout -- which is the #402 fault the search exists to prevent. It is fatal ON PURPOSE. It was a bare RuntimeError, so it reached the user as [CE0000](#ce0000) with no explanation of what had gone wrong (#687). Same treatment derive.py gives an unsortable struct cycle with CE0128.
+The lambda lifter claims its index before it builds anything: it steps past every \_\_lambda\_&lt;n> already in the function table and every \_\_closure\_env\_&lt;n> already in the struct table, so the name it then registers is free in both. A registration that fails anyway means the name entered a table between that search and the registration. The closure would then use the body and the environment layout of another closure, so the compiler stops. This is a compiler bug, not a user error.
 
 ### CE0138 {#ce0138}
 
@@ -1142,7 +1142,7 @@ The lambda lifter claims its index before it builds anything: it steps past ever
 
 **Message:** `` main() takes one parameter, `string[] args`, or no parameter ``
 
-The entry point receives the command line as `string[] args` or receives nothing. The type and the name are both part of the rule, so `fn main(string[] argv)`, `fn main(i32 x)` and `fn main(string[] args, i32 x)` are refused at the parameter that breaks it. The parameter takes no mode: argv is a borrowed view that the runtime owns, so `nom string[] args` (main would free argv a second time at exit), `peek string[] args` and `poke string[] args` are refused too (#844). Until #825 the entrypoint pass checked no parameter list: the back end handed argv on to a parameter named `args` and filled every other parameter with a zero value, so `argv` was always an empty array and `x` was always 0.
+The entry point receives the command line as `string[] args` or receives nothing. The type and the name are both part of the rule, so `fn main(string[] argv)`, `fn main(i32 x)` and `fn main(string[] args, i32 x)` are refused at the parameter that breaks it. The parameter takes no mode: argv is a borrowed view that the runtime owns, so `nom string[] args` (main would free argv a second time at exit), `peek string[] args` and `poke string[] args` are refused too.
 
 ### CE0139 {#ce0139}
 
@@ -1152,7 +1152,7 @@ The entry point receives the command line as `string[] args` or receives nothing
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The typecheck pass refuses a mixed width for `== != < <= > >=`, `+ - * / %` and `& | ^` ([CE2510](#ce2510)), and a shift brings its count to the value's width itself. So the backend comparison and bitwise emitters always receive two integer operands of one width. Reaching this means a mixed pair passed the typecheck pass, which is a gap in [CE2510](#ce2510) and not a user error. It is fatal ON PURPOSE: the comparison emitter squeezed both operands to i32 and compared them signed, so an i64 truncated and an unsigned operand took the wrong sign, and the bitwise emitter extended or truncated the right operand. Both compiled a wrong value with no diagnostic (#840).
+The typecheck pass refuses a mixed width for `== != < <= > >=`, `+ - * / %` and `& | ^` ([CE2510](#ce2510)), and a shift brings its count to the value's width itself. So the backend comparison and bitwise emitters always receive two integer operands of one width. Reaching this means a mixed pair passed the typecheck pass, which is a gap in [CE2510](#ce2510) and not a user error.
 
 ### CE0140 {#ce0140}
 
@@ -1162,7 +1162,7 @@ The typecheck pass refuses a mixed width for `== != < <= > >=`, `+ - * / %` and 
 
 **Help:** `remove the statement, or move it before the one that ends the path`
 
-A statement that follows a statement which always ends the path can never run: a `return`, an `if` with an `else` whose every arm returns, an exhaustive `match` whose every arm returns, and a `break` or a `continue` in the same block. It is an error, not a warning (#854): dead code is a statement the author thinks runs. The rule reads the reach answer [CE0107](#ce0107) reads (`statement_reach` / `block_reach`), so the fall-off rule and this rule cannot disagree. A `match` that is not exhaustive ends no path: its exhaustiveness error ([CE2040](#ce2040), [CE2074](#ce2074)) is the one diagnostic, and the next statement is not dead (#886). It is reported ONCE per block, at the first dead statement, with a note at the statement that ends the path. Until #854 the statement compiled with no diagnostic and the backend dropped it in silence. Remove the statement, or move it before the one that ends the path.
+A statement that follows a statement which always ends the path can never run: a `return`, an `if` with an `else` whose every arm returns, an exhaustive `match` whose every arm returns, and a `break` or a `continue` in the same block. It is an error, not a warning: dead code is a statement the author thinks runs. The rule uses the same reach analysis as [CE0107](#ce0107). A `match` that is not exhaustive ends no path: its exhaustiveness error ([CE2040](#ce2040), [CE2074](#ce2074)) is the one diagnostic, and the next statement is not dead. It is reported ONCE per block, at the first dead statement, with a note at the statement that ends the path. Remove the statement, or move it before the one that ends the path.
 
 ### CE0141 {#ce0141}
 
@@ -1172,7 +1172,7 @@ A statement that follows a statement which always ends the path can never run: a
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The lifecycle table in backend/lifecycle.py holds one clone/destroy pair per composite kind: dynamic\_array, fixed\_array, struct and enum. A backend module registered a handler under a kind that is not one of them, so no value of any type can reach that handler. It is a compiler fault, and no user program causes it. It was an assert statement, which `python -O` removes (#880).
+The lifecycle table in backend/lifecycle.py holds one clone/destroy pair per composite kind: dynamic\_array, fixed\_array, struct and enum. A backend module registered a handler under a kind that is not one of them, so no value of any type can reach that handler. It is a compiler fault, and no user program causes it.
 
 ### CE0142 {#ce0142}
 
@@ -1182,7 +1182,7 @@ The lifecycle table in backend/lifecycle.py holds one clone/destroy pair per com
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The cache key of a unit hashes the text that the parser read, which every unit carries as its source. A unit with no source text means a loader built it without the text, which is a compiler fault and not a user error. It is fatal ON PURPOSE: the key read the file again, so a file that changed after the parse stored the old object under the key of the new text, and a file that was gone left the source out of the key with no diagnostic (#1062).
+The cache key of a unit hashes the text that the parser read, which every unit carries as its source. A unit with no source text means a loader built it without the text, which is a compiler fault and not a user error.
 
 ### CE0143 {#ce0143}
 
@@ -1192,7 +1192,7 @@ The cache key of a unit hashes the text that the parser read, which every unit c
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The typecheck pass stamps the declared parameter modes on every function call written behind a namespace (`l.gen(nom n)`), through the one mode seam, semantics/param\_modes.py. The borrow pass reads that stamp to check each `nom` marker and to record each consuming use. A call with no stamp is a compiler fault and not a user error. It is fatal ON PURPOSE: the borrow pass skipped such a call with no diagnostic, so a generic call behind an alias lost the [CE2427](#ce2427) marker check and the back end then found no ownership decision for a `nom` argument ([CE0129](#ce0129), #1125).
+The typecheck pass stamps the declared parameter modes on every function call written behind a namespace (`l.gen(nom n)`), through the one mode seam, semantics/param\_modes.py. The borrow pass reads that stamp to check each `nom` marker and to record each consuming use. A call with no stamp is a compiler fault and not a user error. Without the stamp, the borrow pass cannot do the [CE2427](#ce2427) marker check for that call.
 
 ### CE0144 {#ce0144}
 
@@ -1202,7 +1202,7 @@ The typecheck pass stamps the declared parameter modes on every function call wr
 
 **Help:** `` walk a pack with `expand(a in {name}):`; pack forwarding and pack indexing are not supported ``
 
-A type-pack parameter `...Ts args` is used only through `expand(a in args):`, which gives one value per element. The pack name is not a value in any other position: pack forwarding (`g(args...)`, `g(args)`) and pack indexing (`args[0]`) are not supported. The diagnostic is the one fault of that use, so the call that holds it gives no second diagnostic (#1109). Before this code the use was [CE1001](#ce1001), which called a written parameter undeclared, and a call around it added [CE2060](#ce2060) and [CE0120](#ce0120). Walk the pack with `expand(a in args):`.
+A type-pack parameter `...Ts args` is used only through `expand(a in args):`, which gives one value per element. The pack name is not a value in any other position: pack forwarding (`g(args...)`, `g(args)`) and pack indexing (`args[0]`) are not supported. The diagnostic is the one fault of that use, so the call that holds it gives no second diagnostic. Walk the pack with `expand(a in args):`.
 
 ### CE0145 {#ce0145}
 
@@ -1212,7 +1212,7 @@ A type-pack parameter `...Ts args` is used only through `expand(a in args):`, wh
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-A registry row (`Signature`) and a string method row (`MethodSpec`) give their parameters and their answer in Sushi types, and `llvm_value_type` (backend/expressions/calls/stdlib/signatures.py) turns each into the LLVM type it crosses as. This row names a type that function cannot map, so the call site cannot declare the generated function. The method or the function is KNOWN: the fault is the type in its row. Before this code, a string method row said [CE0077](#ce0077) (unknown method) and a registry row said [CE0024](#ce0024) (unknown method), which named the wrong fault. Add the type to `llvm_value_type`, built through the helper in sushi\_stdlib/src/type\_definitions.py that the generator also uses.
+A registry row (`Signature`) and a string method row (`MethodSpec`) give their parameters and their answer in Sushi types, and `llvm_value_type` (backend/expressions/calls/stdlib/signatures.py) turns each into the LLVM type it crosses as. This row names a type that function cannot map, so the call site cannot declare the generated function. The method or the function is KNOWN: the fault is the type in its row. Add the type to `llvm_value_type`, built through the helper in sushi\_stdlib/src/type\_definitions.py that the generator also uses.
 
 ### CE0146 {#ce0146}
 
@@ -1220,7 +1220,7 @@ A registry row (`Signature`) and a string method row (`MethodSpec`) give their p
 
 **Message:** `internal error: the typecheck pass found no type for this foreach iterable`
 
-The typecheck pass gives the iterable of every foreach its type, and the loop reads its item type from it. When inference answers nothing and no other error was reported for the iterable, the fault is in the compiler, not in the program. The pass reports it here, at the iterable, so the backend never reads a loop with no item type. Before #1143 the pass returned with no diagnostic, and the backend stopped with [CE0015](#ce0015) and no location. Bind the iterable to a 'let' with a written type first, and please report the program.
+The typecheck pass gives the iterable of every foreach its type, and the loop reads its item type from it. When inference answers nothing and no other error was reported for the iterable, the fault is in the compiler, not in the program. The pass reports it here, at the iterable, so the backend never reads a loop with no item type. Bind the iterable to a 'let' with a written type first, and please report the program.
 
 ### CE0147 {#ce0147}
 
@@ -1228,7 +1228,7 @@ The typecheck pass gives the iterable of every foreach its type, and the loop re
 
 **Message:** `` '{name}' is a type pack: it names a type only in its `...{name}` parameter ``
 
-A type pack `...Ts` stands for any number of types, so its name is a type in ONE position: the trailing parameter `...Ts args`, which takes one argument per element. Everywhere else the name would have to be ONE type, and it is not: a parameter written `Ts x` with no `...`, a return type, an error type, a `let` type, an array element (`Ts[]`), a type argument (`List@(Ts)`), a cast and a lambda parameter are all refused at the declaration. Walk the values with `expand(a in args):`, or declare an ordinary type parameter `T` for a single value. Until #1167 a parameter `Ts x` was silently read as a second pack, so the call counted its arguments wrong, and a `let Ts y` in the body was the internal error [CE0000](#ce0000) at the first call.
+A type pack `...Ts` stands for any number of types, so its name is a type in ONE position: the trailing parameter `...Ts args`, which takes one argument per element. Everywhere else the name would have to be ONE type, and it is not: a parameter written `Ts x` with no `...`, a return type, an error type, a `let` type, an array element (`Ts[]`), a type argument (`List@(Ts)`), a cast and a lambda parameter are all refused at the declaration. Walk the values with `expand(a in args):`, or declare an ordinary type parameter `T` for a single value.
 
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
@@ -1271,7 +1271,7 @@ Emitted when 'break' or 'continue' appear outside any loop.
 
 **Message:** `{kind} '{name}' already declared in this unit as {other}`
 
-In one unit, one name has one declaration, whatever its kind: `fn`, `const`, `var`, `struct`, `enum` and `perk` share one set of names (#1076). The SECOND declaration in source order is the error, and the note points at the first. The first keeps the name, and the refused declaration enters no table, so the uses of the first give no more errors. A use of the name that finds nothing under it -- a call of a refused function, a type position or a construction of a refused struct -- is a use of the refused declaration, and it gives no second diagnostic either (#1102). Two declarations of ONE kind keep that kind's code: [CE0004](#ce0004) (struct), [CE2046](#ce2046) (enum), [CE4001](#ce4001) (perk), [CE0101](#ce0101) (fn) and [CE0105](#ce0105) (const and var), and a struct beside an enum is [CE0006](#ce0006). Across units a name may be used again: the unit's own declaration wins over a name a flat `use` brings, and two imported public names of one spelling are reached with `use ... as` ([CE3012](#ce3012) at a bare use). Two TYPES of one name in two units stay refused, because a type is one per program. Before this rule a `const` beside a `fn` crashed the backend with [CE0000](#ce0000) (the two took one symbol), and a `struct` beside a `fn` took every call of the name. Rename one of the two declarations.
+In one unit, one name has one declaration, whatever its kind: `fn`, `const`, `var`, `struct`, `enum` and `perk` share one set of names. The SECOND declaration in source order is the error, and the note points at the first. The first keeps the name, and the refused declaration enters no table, so the uses of the first give no more errors. A use of the name that finds nothing under it -- a call of a refused function, a type position or a construction of a refused struct -- is a use of the refused declaration, and it gives no second diagnostic either. Two declarations of ONE kind keep that kind's code: [CE0004](#ce0004) (struct), [CE2046](#ce2046) (enum), [CE4001](#ce4001) (perk), [CE0101](#ce0101) (fn) and [CE0105](#ce0105) (const and var), and a struct beside an enum is [CE0006](#ce0006). Across units a name may be used again: the unit's own declaration wins over a name a flat `use` brings, and two imported public names of one spelling are reached with `use ... as` ([CE3012](#ce3012) at a bare use). Two TYPES of one name in two units stay refused, because a type is one per program. Rename one of the two declarations.
 
 ## CE20xx and CE21xx: Type, array and struct errors {#ce20xx}
 
@@ -1318,7 +1318,7 @@ A function's return expression type does not match its declared return type.
 
 **Message:** `invalid operand types for operator '{op}'`
 
-The operand rule of a bitwise operator, which is the only site that emits this: & | ^ ~ &lt;&lt; >> combine or move BITS, so every operand must be an integer. A string has none, and a float keeps its own behind f64.to\_bits()/f32.to\_bits() -- the escape is to convert first, operate on the integer, and go back through from\_bits(). The gate used to ask for a numeric type, which let a float through to the backend and turned a user's program into a [CE0000](#ce0000) internal error.
+This is the operand rule of a bitwise operator: & | ^ ~ &lt;&lt; >> combine or move BITS, so every operand must be an integer. A string has none, and a float keeps its own behind f64.to\_bits()/f32.to\_bits(). To work on the bits of a float, convert it first, operate on the integer, and go back through from\_bits().
 
 ### CE2005 {#ce2005}
 
@@ -1328,7 +1328,7 @@ The operand rule of a bitwise operator, which is the only site that emits this: 
 
 **Help:** `use '== 0' or '!= 0' for integer conditions`
 
-A condition takes a 'bool' and nothing else. Sushi converts no type to a truth value: an integer is not true when it is not zero, and a string is not true when it holds bytes. Write the question instead -- 'n != 0', 's.len() > 0'. This covers every condition position: an if, an elif, a while, an assert, and the operands of the logical operators and, or, xor and not. The operators were the hole until #532. They checked no operand at all, so 'not 5' answered 0 with C truthiness while 'if (5)' was refused, and a string, a float, a struct, an enum or an array operand reached the backend and became a [CE0017](#ce0017) internal error -- the same shape #449 removed from the comparisons. A Result@(T, E) or a Maybe@(T) in one of these positions is [CE2516](#ce2516) instead, which names the predicate that answers for it.
+A condition takes a 'bool' and nothing else. Sushi converts no type to a truth value: an integer is not true when it is not zero, and a string is not true when it holds bytes. Write the question instead -- 'n != 0', 's.len() > 0'. This covers every condition position: an if, an elif, a while, an assert, and the operands of the logical operators and, or, xor and not. A Result@(T, E) or a Maybe@(T) in one of these positions is [CE2516](#ce2516) instead, which names the predicate that answers for it.
 
 ### CE2006 {#ce2006}
 
@@ -1365,7 +1365,7 @@ Variable declaration with 'let' requires an explicit type annotation.
 - `an iterator has no methods: walk it with 'foreach', or call the method on the collection it comes from`
 - `did you mean '{namespace}.{closest}'?`
 
-Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind (#469). It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` and a range have no method at all: `foreach` walks them, and `next()` is the protocol of a user type, not a method of an iterator. Until #1136 a call on an iterator was not checked, and the backend stopped with an internal error and no location.
+Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` and a range have no method at all: `foreach` walks them, and `next()` is the protocol of a user type, not a method of an iterator.
 
 ### CE2009 {#ce2009}
 
@@ -1373,7 +1373,7 @@ Function call references a function that was not declared. This is for a name th
 
 **Message:** `wrong number of arguments: '{name}' expects {expected}, got {got}`
 
-A call has the wrong number of arguments: a function, a method, a static or a built-in. The text names the callee as written and no noun, because one code serves every callee kind, and it states the counts with no noun, so the text agrees in number for a count of one (#764). The four bulk-copy array methods (`extend`, `extend_range`, `s`, `ss`) reported this fault with the internal [CE0023](#ce0023) until #764. The built-in `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, `Maybe@(T)` and `Result@(T, E)` methods, and the `List` and `HashMap` statics, reported it with CE2053, CE2016 and CE2502 until #799; their counts are one table per family now (`MethodFamily.arity`).
+A call has the wrong number of arguments: a function, a method, a static or a built-in. The text names the callee as written and states the counts. The same code covers every callee kind, the bulk-copy array methods (`extend`, `extend_range`, `s`, `ss`), and the built-in methods and statics of `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, `Maybe@(T)` and `Result@(T, E)`.
 
 ### CE2010 {#ce2010}
 
@@ -1397,7 +1397,7 @@ Array literal element count must match declared array size.
 
 **Message:** `array index {index} is out of bounds for array of size {size}`
 
-An index the compiler can read is past the end of a fixed array, in `a[i]`, in `a[i] := v` and in `a.get(i)`. The index is read through the constant evaluator: a literal, a named constant (`a[K]`) and an expression of them (`a[K + 1]`). A local of the same name as a constant shadows it, and an index that names a local is not read. A named constant was not read until #1137, so `a[K]` compiled and trapped at run time ([RE2020](#re2020)). A negative index is [CE2056](#ce2056).
+An index the compiler can read is past the end of a fixed array, in `a[i]`, in `a[i] := v` and in `a.get(i)`. The index is read through the constant evaluator: a literal, a named constant (`a[K]`) and an expression of them (`a[K + 1]`). A local of the same name as a constant shadows it, and an index that names a local is not read. An index that the compiler cannot read is checked at run time ([RE2020](#re2020)). A negative index is [CE2056](#ce2056).
 
 ### CE2013 {#ce2013}
 
@@ -1436,7 +1436,7 @@ Constants must use compile-time types. A dynamic array is not allowed at any dep
 
 **Message:** `invalid repeat count in an array literal: {reason}`
 
-A repeated element is 'value; count', and the count is a count of elements: a positive integer the compiler can read. That is a literal in any base, the name of an integer constant, or an expression of them -- the same reader a fixed array size uses. One code carries every way it can go wrong, because they share one rule and one fix, which is the precedent [CE2099](#ce2099) sets for an array size. A count of zero spells nothing and Sushi has no zero-length array, so the lower bound is one. The count is read at the typecheck pass, so unlike an array size it may name a constant of ANOTHER unit.
+A repeated element is 'value; count', and the count is a count of elements: a positive integer the compiler can read. That is a literal in any base, the name of an integer constant, or an expression of them -- the same reader a fixed array size uses. One code covers every way it can go wrong, as [CE2099](#ce2099) does for an array size. A count of zero spells nothing and Sushi has no zero-length array, so the lower bound is one. The count is read at the typecheck pass, so unlike an array size it may name a constant of ANOTHER unit.
 
 ### CE2019 {#ce2019}
 
@@ -1460,7 +1460,7 @@ A range element fills the slots it spans: '0..5' is five elements and '0..=5' is
 
 **Message:** `dynamic array method {part} mismatch for '{method}': expected {expected}, got {got}`
 
-A built-in array method was called on a receiver it does not take, or with a copy source of the wrong type. `{part}` names which one is at fault: the RECEIVER when the method takes a dynamic array (`push`, `pop`, `insert`, `truncate`) or a `u8[]` alone and the value is another kind -- a fixed array cannot change its length -- and the ARGUMENT when the source of a bulk copy (`extend`, `extend_range`) is not an array of the receiver's element type. The text said "argument" for both until #1137, so a fixed-array receiver read as a wrong argument.
+A built-in array method was called on a receiver it does not take, or with a copy source of the wrong type. `{part}` names which one is at fault: the RECEIVER when the method takes a dynamic array (`push`, `pop`, `insert`, `truncate`) or a `u8[]` alone and the value is another kind -- a fixed array cannot change its length -- and the ARGUMENT when the source of a bulk copy (`extend`, `extend_range`) is not an array of the receiver's element type.
 
 ### CE2026 {#ce2026}
 
@@ -1494,7 +1494,7 @@ Struct constructor field type mismatch.
 
 **Help:** `wrap return value: return Result.Ok(value)`
 
-Every return in a body that has an error channel spells its constructor: 'return Result.Ok(value)' or 'return Result.Err(e)'. The rule holds for a function, a lambda block body, and an extension or perk-impl method with a '| E' channel alike (#848): nothing wraps a bare value, and a '~' success is 'return Result.Ok(~)'. A BARE body (no '| E') is the other way round ([CE2091](#ce2091)).
+Every return in a body that has an error channel spells its constructor: 'return Result.Ok(value)' or 'return Result.Err(e)'. The rule holds for a function, a lambda block body, and an extension or perk-impl method with a '| E' channel alike: nothing wraps a bare value, and a '~' success is 'return Result.Ok(~)'. A BARE body (no '| E') is the other way round ([CE2091](#ce2091)).
 
 ### CE2031 {#ce2031}
 
@@ -1518,7 +1518,7 @@ Blank type cannot be used for variables, parameters, or constants.
 
 **Message:** `foreach needs something to walk, and '{got}' is neither an iterator nor a type with next()`
 
-Two things are walkable. An ITERATOR, which is what .iter() on an array or a List answers, what .keys() / .values() / .entries() answer on a HashMap, and what a range is. Or any type carrying a method 'next()' that answers Maybe@(T): the loop calls it until it answers None, and that is the whole protocol -- there is no type to implement and no perk to name (HANDLES.md ruling R21). So the fix is one of three: call .iter() on the container, give this type a next(), or check the spelling of the next() it has. Three spellings are refused, each because the loop must be able to call the method repeatedly and read a stop out of its answer: a next() answering a bare T rather than a Maybe@(T) cannot say when to stop; one declaring '| E' answers a Result and not a Maybe; one taking arguments has nothing to be handed; and a 'nom self' receiver answers once and spends the iterator. A fallible iterator puts the failure IN the item instead: Maybe@(Result@(T, E)).
+Two things are walkable. An ITERATOR, which is what .iter() on an array or a List answers, what .keys() / .values() / .entries() answer on a HashMap, and what a range is. Or any type carrying a method 'next()' that answers Maybe@(T): the loop calls it until it answers None, and that is the whole protocol -- there is no type to implement and no perk to name. So the fix is one of three: call .iter() on the container, give this type a next(), or check the spelling of the next() it has. These spellings are refused, each because the loop must be able to call the method repeatedly and read a stop out of its answer: a next() answering a bare T rather than a Maybe@(T) cannot say when to stop; one declaring '| E' answers a Result and not a Maybe; one taking arguments has nothing to be handed; and a 'nom self' receiver answers once and spends the iterator. A fallible iterator puts the failure IN the item instead: Maybe@(Result@(T, E)).
 
 ### CE2034 {#ce2034}
 
@@ -1534,7 +1534,7 @@ The declared item type in foreach does not match the iterator's element type.
 
 **Message:** `cannot interpolate expression of type '{type}' into string`
 
-An interpolation hole takes a value with a string form: an integer, a float, a bool, a string, or a struct, an enum, an array, a `List@(T)` or an `Own@(T)` through the predefined perk `Display`. The compiler derives `Display` from what a type holds -- `Point(x: 1, y: 2)`, `Shape.Circle(5)`, `[1, 2, 3]` -- and `extend T with Display: fn to_str() string` overrides it. A type that holds something with no string form (a function value, a `ptr`, a `HashMap`) has none, and a note names the field or the element. A `HashMap` itself is refused, because its iteration order is not specified. A `Maybe` and a `Result` are not printed: handle the missing value or the error first. Before #1132 a top-level array, `List@(T)` and `Own@(T)` were refused here too, although a type that held one printed it.
+An interpolation hole takes a value with a string form: an integer, a float, a bool, a string, or a struct, an enum, an array, a `List@(T)` or an `Own@(T)` through the predefined perk `Display`. The compiler derives `Display` from what a type holds -- `Point(x: 1, y: 2)`, `Shape.Circle(5)`, `[1, 2, 3]` -- and `extend T with Display: fn to_str() string` overrides it. A type that holds something with no string form (a function value, a `ptr`, a `HashMap`) has none, and a note names the field or the element. A `HashMap` itself is refused, because its iteration order is not specified. A `Maybe` and a `Result` are not printed: handle the missing value or the error first.
 
 ### CE2036 {#ce2036}
 
@@ -1574,7 +1574,7 @@ The error value inside Err() must match the function's error type.
 
 **Message:** `non-exhaustive match pattern (missing variants: {variants})`
 
-A match must have an arm for every value of its scrutinee. One checker reads every match (ruling 17 of the tuple design, docs/design/tuples.md): an enum match, a nested enum match and a tuple match. It is the usefulness algorithm over a pattern matrix: an enum position splits into its variants, a tuple position into its elements, and an integer position has no end of values, so only a `_` or a binding covers it. The `{variants}` slot lists what is missing. For a plain enum match, where no arm tests inside a payload, it lists the names of the missing variants (`Blue, Green`). When an arm tests inside a payload or a tuple, it lists the missing PATTERNS in source syntax: `Maybe.Some(Color.Green)`, `(Color.Red, _)`, at most 16 of them. Add an arm for each, or a `_` arm last. An integer or a string scrutinee with no `_` arm is [CE2074](#ce2074). Before ruling 17 the checker compared only the outer variant names, so `Maybe.Some(Color.Red) -> ...` and `Maybe.None -> ...` compiled, and the value `Maybe.Some(Color.Green)` stopped the program at run time with [RE2023](#re2023). That match is this error now.
+A match must have an arm for every value of its scrutinee. One checker reads every match: an enum match, a nested enum match and a tuple match (see [the tuple design](design/tuples.md)). It is the usefulness algorithm over a pattern matrix: an enum position splits into its variants, a tuple position into its elements, and an integer position has no end of values, so only a `_` or a binding covers it. The `{variants}` slot lists what is missing. For a plain enum match, where no arm tests inside a payload, it lists the names of the missing variants (`Blue, Green`). When an arm tests inside a payload or a tuple, it lists the missing PATTERNS in source syntax: `Maybe.Some(Color.Green)`, `(Color.Red, _)`, at most 16 of them. Add an arm for each, or a `_` arm last. An integer or a string scrutinee with no `_` arm is [CE2074](#ce2074).
 
 ### CE2041 {#ce2041}
 
@@ -1600,7 +1600,7 @@ Pattern must bind the exact number of variables for the variant's associated dat
 
 **Help:** `a name behind an enum's dot is a variant or a static method: add the variant, or declare 'extend {enum} static {variant}(...)'`
 
-The specified variant does not exist in the enum type. Since #542 an enum's dot holds TWO kinds of member -- a variant, and a static method -- so the help names both escapes: add the variant, or declare the name as a static. It is still one namespace: a variant and a static of one name on one enum is [CE2103](#ce2103), because the variant would always win.
+The specified variant does not exist in the enum type. An enum's dot holds TWO kinds of member -- a variant, and a static method -- so the help names both escapes: add the variant, or declare the name as a static. It is still one namespace: a variant and a static of one name on one enum is [CE2103](#ce2103), because the variant would always win.
 
 ### CE2046 {#ce2046}
 
@@ -1624,7 +1624,7 @@ An enum declares the same variant name more than once.
 
 **Message:** `match scrutinee must be an enum, integer or string type, got '{got}'`
 
-A match dispatches on an enum's variants, on an integer's value with literal arms (#415), or on a string's value with string literal arms. A tuple scrutinee is legal too. Other types have no match semantics. This is the SCRUTINEE's rule and nothing else. It answered four faults over seven emit sites until #741: an arm or a nested pattern that names another enum ([CE2107](#ce2107)), a nested pattern over a payload that is not an enum ([CE2108](#ce2108)), and the three `Own(...)` pattern refusals ([CE2109](#ce2109)). Three of those sites filled the quoted type slot with a whole sentence, so a user read 'got 'Own(...) pattern requires Own@(T) type, got i32''. The slot takes a type and only a type.
+A match dispatches on an enum's variants, on an integer's value with literal arms, or on a string's value with string literal arms. A tuple scrutinee is legal too. Other types have no match semantics. This is the SCRUTINEE's rule and nothing else. An arm or a nested pattern that names another enum is [CE2107](#ce2107), a nested pattern over a payload that is not an enum is [CE2108](#ce2108), and an `Own(...)` pattern over a value that is not an `Own@(T)` is [CE2109](#ce2109).
 
 ### CE2049 {#ce2049}
 
@@ -1656,7 +1656,7 @@ HashMap keys must support hashing. Use types that have .hash() method (primitive
 
 **Message:** `HashMap@(K, V) key type '{key_type}' does not support equality comparison`
 
-HashMap keys must support equality comparison (==). This is required for collision resolution. The probe compares two keys through the `Eq` contract: an `extend K with Eq` implementation, else the equality the compiler derives from what the key holds. A function value, a `ptr` and a `HashMap` have no equality, and neither does a type that holds one. A `Hashable` override gives a hash only; it does not make a type comparable (ruling on #936), so a key needs both halves: implement `Eq` beside it.
+HashMap keys must support equality comparison (==). This is required for collision resolution. The probe compares two keys through the `Eq` contract: an `extend K with Eq` implementation, else the equality the compiler derives from what the key holds. A function value, a `ptr` and a `HashMap` have no equality, and neither does a type that holds one. A `Hashable` override gives a hash only; it does not make a type comparable, so a key needs both halves: implement `Eq` beside it.
 
 ### CE2056 {#ce2056}
 
@@ -1697,7 +1697,7 @@ Dynamic arrays are not allowed as HashMap keys due to memory management constrai
 - `bind the result to a declared type ('let {base}@(...) x = {base}.{method}(...)'), or name {params} in a parameter so the argument solves it`
 - `a static whose return does not name '{base}' has no declared type to read from -- name {params} in a parameter, or make it a generic free function ('fn {method}@(T)(...)'), which takes explicit type arguments`
 
-Type inference failed for a generic call. A generic FREE function solves its type parameters from its arguments, and a parameter named only in the return has no source -- spell the type arguments (`f@(i32)()`). A generic STATIC solves them in two steps, as one resolution (#573): from the arguments, for every target type parameter a parameter names, then from the declared type at the binding site for the rest. A parameter neither step reaches is this error, and the text names both sources and the parameter. When the unifier knows why an argument does not fit, the reason names it: a fixed-size parameter takes an array of that size alone, so `T[3]` against an `i32[4]` says 'the parameter is 'T\[3\]', the argument is 'i32\[4\]'' (#1137). History: from #542 to #573 a static read the stamp alone, which left a `| E` static unwritable -- a Result-valued call is never stamped.
+Type inference failed for a generic call. A generic FREE function solves its type parameters from its arguments, and a parameter named only in the return has no source -- spell the type arguments (`f@(i32)()`). A generic STATIC solves them in two steps, as one resolution: from the arguments, for every target type parameter a parameter names, then from the declared type at the binding site for the rest. A parameter neither step reaches is this error, and the text names both sources and the parameter. When the unifier knows why an argument does not fit, the reason names it: a fixed-size parameter takes an array of that size alone, so `T[3]` against an `i32[4]` says 'the parameter is 'T\[3\]', the argument is 'i32\[4\]''.
 
 ### CE2061 {#ce2061}
 
@@ -1713,7 +1713,7 @@ Internal compiler error: monomorphized function missing from function table.
 
 **Message:** `generic '{name}' expects {expected} type argument(s), got {got}`
 
-A `@(...)` type-argument list does not give the generic the count it declares. One rule for every position: an explicit call-site list (`id@(i32, i32)(1)`; explicit type arguments are all-or-nothing), a written type (`let Box@(i32, i32) b`, a parameter, a field, a payload), and an extension or perk-implementation target (`extend Box@(T, U)`). Before #796 a written type answered [CE2001](#ce2001) 'unknown type' and a target reached an internal error or was accepted in silence.
+A `@(...)` type-argument list does not give the generic the count it declares. One rule for every position: an explicit call-site list (`id@(i32, i32)(1)`; explicit type arguments are all-or-nothing), a written type (`let Box@(i32, i32) b`, a parameter, a field, a payload), and an extension or perk-implementation target (`extend Box@(T, U)`).
 
 ### CE2063 {#ce2063}
 
@@ -1726,7 +1726,7 @@ A `@(...)` type-argument list does not give the generic the count it declares. O
 - `annotate the lambda's parameter types ('|i32 x| ...'), or pass a named function -- a bare-param lambda has no type of its own to infer from`
 - `no argument of this call has a type that holds {it_or_them}; a method call has no '@(...)' slot, so write the type parameter in a parameter type`
 
-A method-level type parameter (`extend List@(T) mapv@(U)(...)`) is inference-only in v1: there is no call-site `@(...)` slot on a method call, so every parameter must be solvable from the arguments. Two shapes cannot be solved, and the help names the one that applies. The bare-param lambda: `xs.mapv(|x| x * 2)` gives the lambda no type of its own, so nothing unifies against `fn(T) -> U`; the escape is to annotate the lambda's parameter -- `xs.mapv(|i32 x| x * 2)` -- or to pass a named function. And a type parameter that no parameter type holds: no argument can solve it, so the help says to write it in a parameter type. A written parameter type is resolved before the solve, so `|P p|` over a struct or an enum `P` solves as `|i32 x|` does (#1135); the help blamed the lambda for that case before.
+A method-level type parameter (`extend List@(T) mapv@(U)(...)`) is inference-only: there is no call-site `@(...)` slot on a method call, so every parameter must be solvable from the arguments. Two shapes cannot be solved, and the help names the one that applies. The bare-param lambda: `xs.mapv(|x| x * 2)` gives the lambda no type of its own, so nothing unifies against `fn(T) -> U`; the escape is to annotate the lambda's parameter -- `xs.mapv(|i32 x| x * 2)` -- or to pass a named function. And a type parameter that no parameter type holds: no argument can solve it, so the help says to write it in a parameter type. A written parameter type is resolved before the solve, so `|P p|` over a struct or an enum `P` solves as `|i32 x|` does.
 
 ### CE2064 {#ce2064}
 
@@ -1744,7 +1744,7 @@ The receiver target's bare names (`extend Box@(T)`, `extend T[]`) and the method
 
 **Help:** `declare the type first, e.g. 'let {example} v = {constructor}', then use 'v'`
 
-A generic struct constructor in a position with no declared type solves its type parameters from its arguments, as a generic function call does (#1150): `Box(5)` is `Box@(i32)`. Each argument is unified with the field it fills, through the one leading solver. Two arguments that give one type parameter two types cannot be solved: `Both(1, "x")` over `T left` and `T right` gives `T` the types `i32` and `string`, and the reason names the field and the argument that disagree. A literal takes no type from its sibling here, the rule of a generic call (`same(big, 1)` is [CE2060](#ce2060)). Declare the type first, `let Both@(i64) b = Both(big, 1)`: a declared type gives the type arguments and each argument is then checked against its field. A constructor whose arguments give a type parameter nothing is [CE2112](#ce2112). Until #1150 every generic struct constructor with no declared type was [CE2008](#ce2008) 'undefined function', which is false: the name is a declared type.
+A generic struct constructor in a position with no declared type solves its type parameters from its arguments, as a generic function call does: `Box(5)` is `Box@(i32)`. Each argument is unified with the field it fills, through the one leading solver. Two arguments that give one type parameter two types cannot be solved: `Both(1, "x")` over `T left` and `T right` gives `T` the types `i32` and `string`, and the reason names the field and the argument that disagree. A literal takes no type from its sibling here, the rule of a generic call (`same(big, 1)` is [CE2060](#ce2060)). Declare the type first, `let Both@(i64) b = Both(big, 1)`: a declared type gives the type arguments and each argument is then checked against its field. A constructor whose arguments give a type parameter nothing is [CE2112](#ce2112).
 
 ### CE2070 {#ce2070}
 
@@ -1768,7 +1768,7 @@ Leading zero octals (like 077) are ambiguous and error-prone. Use explicit 0o pr
 
 **Message:** `range expression requires integer types for start and end bounds. Got {got}, expected {expected}`
 
-A range bound is an i32 position, as an index is (#870). This code is for a bound that is not a number at all (a string, a bool). A number of another type -- an i8, an i64, an f64 -- is [CE2002](#ce2002) with the help 'as i32'; a bare literal takes i32 from the position.
+A range bound is an i32 position, as an index is. This code is for a bound that is not a number at all (a string, a bool). A number of another type -- an i8, an i64, an f64 -- is [CE2002](#ce2002) with the help 'as i32'; a bare literal takes i32 from the position.
 
 ### CE2073 {#ce2073}
 
@@ -1784,7 +1784,7 @@ The literal does not fit the target type's range. Use a wider type, or an explic
 
 **Message:** `non-exhaustive {kind} match (add a trailing '_' arm)`
 
-A match on an integer or a string scrutinee cannot list every value, so it must end with a wildcard arm. The `{kind}` slot names the scrutinee kind: integer or string. Introduced with integer literal match arms (#415); string literal arms use the same code.
+A match on an integer or a string scrutinee cannot list every value, so it must end with a wildcard arm. The `{kind}` slot names the scrutinee kind: integer or string.
 
 ### CE2075 {#ce2075}
 
@@ -1800,7 +1800,7 @@ Two literal arms match the same VALUE. For an integer, the radix does not change
 
 **Message:** `match arm does not fit the scrutinee: {arm_kind} arm on a '{scrutinee_type}' scrutinee`
 
-An integer literal arm needs an integer scrutinee, a string literal arm needs a string scrutinee, and an enum pattern arm needs an enum scrutinee. One match cannot mix these arm kinds (#415): a string arm on an integer match, an integer arm on a string match, and a literal arm on an enum match are all this error. A literal NESTED in a pattern that reads a value of the wrong kind is [CE2119](#ce2119).
+An integer literal arm needs an integer scrutinee, a string literal arm needs a string scrutinee, and an enum pattern arm needs an enum scrutinee. One match cannot mix these arm kinds: a string arm on an integer match, an integer arm on a string match, and a literal arm on an enum match are all this error. A literal NESTED in a pattern that reads a value of the wrong kind is [CE2119](#ce2119).
 
 ### CE2077 {#ce2077}
 
@@ -1810,7 +1810,7 @@ An integer literal arm needs an integer scrutinee, a string literal arm needs a 
 
 **Help:** `use a wider type, or compute in one and cast the result with 'as'`
 
-An expression whose value the compiler reads is computed at the declared width, and a result that leaves the type is reported. C is the only language that truncates in silence, and truncation made the evaluator disagree with the machine -- a u8 constant of '200 + 100' held 300, so a widening cast read 300 while the program printed 44. The overflow-checked operators are + - \* / % and unary minus; & | ^ ~ &lt;&lt; >> are width-defined and never report, because the bits that leave the width are lost by design. The escape is a wider type, or an explicit 'as' cast when the bit pattern is what you want. Run time does not change: two locals still wrap.
+An expression whose value the compiler reads is computed at the declared width, and a result that leaves the type is reported. For example, a u8 constant of '200 + 100' is this error. The overflow-checked operators are + - \* / % and unary minus; & | ^ ~ &lt;&lt; >> are width-defined and never report, because the bits that leave the width are lost by design. The escape is a wider type, or an explicit 'as' cast when the bit pattern is what you want. Run time does not change: two locals still wrap.
 
 ### CE2080 {#ce2080}
 
@@ -1852,7 +1852,7 @@ Named struct constructor field type mismatch.
 
 **Help:** `declare '{name}' with 'error' in place of 'enum'`
 
-The `E` of every `Result@(T, E)` is an error type: an enum declared with `error`, or one of the seven predefined error types (rule E3, docs/design/error-conversion.md section 2.4). A `Result` is the value of an error channel, and only an error fits into an error channel. The rule covers both spellings, because `T | E` is sugar for `Result@(T, E)`. It covers every position: the channel of a function, a method, a perk contract, a perk implementation, a lambda and a function type, and also a `let`, a field, a payload, a parameter and a generic argument, at any depth. The diagnostic points at the written type that holds the `E`. A type parameter in the `E` position is judged at each instance: the diagnostic is at the instance and names the type argument, and a note points at the template. A `Result` that the compiler infers is not judged, because the position that it comes from was judged. A plain enum, a struct, a primitive, an array, a function type, `Maybe` and `Result` are refused, and the message says which one the type is. For a plain enum, the help says to declare it with `error`. Before E3 the rule was 'the E is an enum' (#663, #668), and CE2086 refused `Maybe` and `Result` by name. A name that spells nothing stops at [CE2001](#ce2001).
+The `E` of every `Result@(T, E)` is an error type: an enum declared with `error`, or one of the seven predefined error types (see [the error-conversion design](design/error-conversion.md)). A `Result` is the value of an error channel, and only an error fits into an error channel. The rule covers both spellings, because `T | E` is sugar for `Result@(T, E)`. It covers every position: the channel of a function, a method, a perk contract, a perk implementation, a lambda and a function type, and also a `let`, a field, a payload, a parameter and a generic argument, at any depth. The diagnostic points at the written type that holds the `E`. A type parameter in the `E` position is judged at each instance: the diagnostic is at the instance and names the type argument, and a note points at the template. A `Result` that the compiler infers is not judged, because the position that it comes from was judged. A plain enum, a struct, a primitive, an array, a function type, `Maybe` and `Result` are refused, and the message says which one the type is. For a plain enum, the help says to declare it with `error`. A name that spells nothing stops at [CE2001](#ce2001).
 
 ### CE2085 {#ce2085}
 
@@ -1876,7 +1876,7 @@ Each element type bound to a perk-constrained type-pack '...Ts: Perk' must imple
 
 **Message:** `{callable} must use a bare 'return <value>' ('return ~' in a '~' body), not 'return Result.Ok(...)' or 'return Result.Err(...)'`
 
-A BARE function, lambda, or extension or perk-impl method (no '| E' and no Result@(T, E) return) has an unwrapped ABI: it answers the value itself and no Result, so both Result constructors are refused (docs/design/error-channel.md). A callable with a '| E' channel spells 'return Result.Ok(x)' and 'return Result.Err(e)', and a bare 'return x' there is [CE2030](#ce2030). A bare function that can fail writes '| E'. Until #848 a channel body returned its success bare and the compiler wrapped it into Ok in silence (ruling 6 of the UFCS epic, reversed); [CE2091](#ce2091) then also refused 'Result.Ok(...)' in a channel body. Until the bare-function change only a method could be bare.
+A BARE function, lambda, or extension or perk-impl method (no '| E' and no Result@(T, E) return) has an unwrapped ABI: it answers the value itself and no Result, so both Result constructors are refused. See [the error-channel design](design/error-channel.md). A callable with a '| E' channel spells 'return Result.Ok(x)' and 'return Result.Err(e)', and a bare 'return x' there is [CE2030](#ce2030). A bare function that can fail writes '| E'.
 
 ### CE2092 {#ce2092}
 
@@ -1899,7 +1899,7 @@ A first-class function value must match the expected function type exactly: same
 - `state a function type whose parameter types solve each type parameter of '{name}'`
 - `state the function type at the position, for example 'let fn(i32) -> i32 g = {name}'`
 
-A top-level function is a function value. A generic function is a function value only where the position states a function type that solves its type arguments: a typed `let` (`let fn(i32) -> i32 g = identity`), a parameter of a function type, or a typed field. A position that states no function type (a `print` argument, a parameter of an unsolved generic callee), or a function type that does not solve the type arguments, is this error. An extension method, a perk method and an FFI external are not function values (#1105).
+A top-level function is a function value. A generic function is a function value only where the position states a function type that solves its type arguments: a typed `let` (`let fn(i32) -> i32 g = identity`), a parameter of a function type, or a typed field. A position that states no function type (a `print` argument, a parameter of an unsolved generic callee), or a function type that does not solve the type arguments, is this error. An extension method, a perk method and an FFI external are not function values.
 
 ### CE2094 {#ce2094}
 
@@ -1907,7 +1907,7 @@ A top-level function is a function value. A generic function is a function value
 
 **Message:** `illegal closure capture: {reason}`
 
-Tier 1 closures capture by value (copy) or by move (owned types). Capturing a borrow (peek/poke) through a closure is deferred to Tier 2. An owning or variadic function-value parameter type is also rejected in Tier 1 (the indirect-call path has no deep-copy/variadic-collapse yet).
+A closure captures by value (copy) or by move (owned types). It cannot capture a borrow (peek/poke). A function-value parameter type that owns a resource or is variadic is also refused.
 
 ### CE2095 {#ce2095}
 
@@ -1943,7 +1943,7 @@ Method resolution always considers built-in methods before extension methods -- 
 
 **Help:** `name every type parameter, or make every argument concrete -- there is no partial specialization`
 
-An extension target names either every type parameter -- `extend Box@(T)`, which applies to every instantiation -- or a concrete type for every argument -- `extend Box@(i32)`, which applies to that instantiation alone. A partial form such as `extend Pair@(i32, U)` is partial specialization, and Sushi has none. Rejecting it is what keeps an ordering rule from ever being needed: two fully-concrete targets cannot overlap and template-versus-concrete is strictly ordered, so `Pair@(i32, U)` against `Pair@(T, string)` -- equally specific, neither more so -- cannot arise. That ambiguity is where Rust's specialization has stalled for years. Name every parameter, make every argument concrete, or implement a perk on the concrete target. A perk implementation's target reads the same rule and the same code (#860).
+An extension target names either every type parameter -- `extend Box@(T)`, which applies to every instantiation -- or a concrete type for every argument -- `extend Box@(i32)`, which applies to that instantiation alone. A partial form such as `extend Pair@(i32, U)` is partial specialization, and Sushi has none. Name every parameter, make every argument concrete, or implement a perk on the concrete target. A perk implementation's target reads the same rule and the same code.
 
 ### CE2099 {#ce2099}
 
@@ -1956,7 +1956,7 @@ An extension target names either every type parameter -- `extend Box@(T)`, which
 - `declare an integer constant in this unit and name it bare`
 - `write a positive integer in any base (256, 0x100, 0b1_0000_0000) or the name of an integer constant declared in this unit`
 
-A fixed array's size is a count of elements, so it must be a positive integer the compiler can read: a literal in any base (256, 0x100, 0b1\_0000\_0000, 0o400) or the name of an integer constant. One code carries every way it can go wrong, because they share one rule and one fix. The size is read while the unit's AST is built, so the constant must be declared in the SAME unit -- a constant next door is reachable as a value but not as a size (#440). A constant of this unit that is not an integer (a `f64`, a `bool`) cannot count elements, and the reason names its type (#1107). Before this code existed, hex and a name did not parse at all ([CE6001](#ce6001), unexpected token) and a zero size left the type unbuilt, which surfaced as [CE2007](#ce2007), a missing type annotation on a line that has one (#439).
+A fixed array's size is a count of elements, so it must be a positive integer the compiler can read: a literal in any base (256, 0x100, 0b1\_0000\_0000, 0o400) or the name of an integer constant. One code carries every way it can go wrong, because they share one rule and one fix. The size is read while the unit's AST is built, so the constant must be declared in the SAME unit -- a constant next door is reachable as a value but not as a size. A constant of this unit that is not an integer (a `f64`, a `bool`) cannot count elements, and the reason names its type.
 
 ### CE2100 {#ce2100}
 
@@ -1966,7 +1966,7 @@ A fixed array's size is a count of elements, so it must be a positive integer th
 
 **Help:** `put the row in a struct ('struct Row: {type} cells'), which takes a derived 'Eq', and search a 'Row[]'`
 
-contains() and index\_of() compare the needle against each element with '==', and the element type must be one that '==' accepts ([CE2514](#ce2514) is the operator half of the same rule): a numeric type, bool, string, or a struct or an enum with a derived or implemented `Eq`. A closure element, or a struct that holds one, has no '==', so a search over it has no meaning the compiler could supply. Implement `Eq` for the element (`extend T with Eq: fn eq(T other) bool`), or search an array of the identifying part instead. An array element (fixed or dynamic, at any depth) is refused too, because an array has no '==' at the top level ([CE2514](#ce2514)). An array cannot implement `Eq`, so the escape is a struct that holds the row (`struct Row: i32[2] cells`): the struct takes a derived `Eq` that compares the row element by element, and a `Row[]` can be searched (#1116).
+contains() and index\_of() compare the needle against each element with '==', and the element type must be one that '==' accepts ([CE2514](#ce2514) is the operator half of the same rule): a numeric type, bool, string, or a struct or an enum with a derived or implemented `Eq`. A closure element, or a struct that holds one, has no '==', so a search over it has no meaning the compiler could supply. Implement `Eq` for the element (`extend T with Eq: fn eq(T other) bool`), or search an array of the identifying part instead. An array element (fixed or dynamic, at any depth) is refused too, because an array has no '==' at the top level ([CE2514](#ce2514)). An array cannot implement `Eq`, so the escape is a struct that holds the row (`struct Row: i32[2] cells`): the struct takes a derived `Eq` that compares the row element by element, and a `Row[]` can be searched.
 
 ### CE2101 {#ce2101}
 
@@ -1976,7 +1976,7 @@ contains() and index\_of() compare the needle against each element with '==', an
 
 **Help:** `write a bare type-parameter name ('extend T[]') or a plain declared type ('extend i32[]'); 'extend T[]' also applies to a nested array, with T the inner array type`
 
-An array extension target's element position takes exactly two spellings: a bare undeclared name, which binds a type parameter (`extend T[]` applies to every element type), and the name of a plain declared type (`extend i32[]`, `extend Crate[]`), which applies to that array type alone. A generic instantiation (`extend Maybe@(T)[]`) has no meaning here -- the parameter would bind through two layers. A nested array element (`extend T[][]`, `extend i32[][]`, `extend i32[3][]`) is refused for the same reason, and it is not necessary: `extend T[]` binds `T = i32[]` and applies to an `i32[][]` receiver, and to an `i32[3][]` one with `T = i32[3]`. Before this code, the generic-element spelling fell through to the concrete path and reported a false [CE2001](#ce2001) for a type nobody had to declare.
+An array extension target's element position takes exactly two spellings: a bare undeclared name, which binds a type parameter (`extend T[]` applies to every element type), and the name of a plain declared type (`extend i32[]`, `extend Crate[]`), which applies to that array type alone. A generic instantiation (`extend Maybe@(T)[]`) has no meaning here -- the parameter would bind through two layers. A nested array element (`extend T[][]`, `extend i32[][]`, `extend i32[3][]`) is refused for the same reason, and it is not necessary: `extend T[]` binds `T = i32[]` and applies to an `i32[][]` receiver, and to an `i32[3][]` one with `T = i32[3]`.
 
 ### CE2102 {#ce2102}
 
@@ -1989,7 +1989,7 @@ An array extension target's element position takes exactly two spellings: a bare
 - `'{method}' is an instance method here: call it on a value of '{type}', not on the type name`
 - `declare it as 'extend {type} static {method}(...)'`
 
-A name behind a type's dot is a MEMBER of that type (#542, ruling Q1): a variant, or a static method. This type declares neither of that name. Before statics existed the struct spelling answered [CE1001](#ce1001) 'use of undeclared identifier' for a type that IS declared -- wrong about the one thing it named, because the fault is the POSITION and not the name. Declare the method as `extend {type} static {method}(...)`, or call an instance method on a value of the type.
+A name behind a type's dot is a MEMBER of that type: a variant, or a static method. This type declares neither of that name. The fault is the POSITION and not the name. Declare the method as `extend {type} static {method}(...)`, or call an instance method on a value of the type.
 
 ### CE2103 {#ce2103}
 
@@ -1999,7 +1999,7 @@ A name behind a type's dot is a MEMBER of that type (#542, ruling Q1): a variant
 
 **Help:** `a name behind a type's dot is a variant or a static, never both -- rename the static`
 
-One namespace sits behind a type's dot (#542, ruling Q1): a name there is a variant or a static method, never both. A variant always wins at the call site, so a static of that name is compiled and then never called -- the hazard [CE2097](#ce2097) refuses for a built-in. Relational: the primary sits at the static declaration and a note at the variant. Rename the static.
+One namespace sits behind a type's dot: a name there is a variant or a static method, never both. A variant always wins at the call site, so a static of that name is compiled and then never called -- the hazard [CE2097](#ce2097) refuses for a built-in. Relational: the primary sits at the static declaration and a note at the variant. Rename the static.
 
 ### CE2104 {#ce2104}
 
@@ -2009,7 +2009,7 @@ One namespace sits behind a type's dot (#542, ruling Q1): a name there is a vari
 
 **Help:** `write a free function, or a static on a struct that holds the array`
 
-A static is called on the TYPE name, and an array type has no spelling in an expression position: `i32[].two()` is a parse error, and there is no form that would reach `extend i32[] static two()` or `extend T[] static two()`. The declaration would compile and never be callable, which is the hazard [CE2097](#ce2097) refuses for a colliding built-in -- if the situation cannot possibly do what the user wrote, it is an error and not a warning. Write a free function, or a static on a struct that holds the array.
+A static is called on the TYPE name, and an array type has no spelling in an expression position: `i32[].two()` is a parse error, and there is no form that would reach `extend i32[] static two()` or `extend T[] static two()`. The declaration would compile and never be callable, which is the hazard [CE2097](#ce2097) refuses for a colliding built-in. Write a free function, or a static on a struct that holds the array.
 
 ### CE2105 {#ce2105}
 
@@ -2023,7 +2023,7 @@ A static is called on the TYPE name, and an array type has no spelling in an exp
 - `a value of an enum is one of its variants`
 - `` a value of a struct is a construction or a static: `{name}(...)` ``
 
-A type name is written in a TYPE position -- a declaration, an annotation, a constraint -- and behind its own dot, where it names a member (#542, ruling Q1). It is not a value, so a value position cannot hold it. An enum name used to pass every semantic pass and reach the emitter, where it answered [CE0055](#ce0055) 'unknown variable or constant' with the note that says the fault is a compiler bug: no file, no line, no caret, and the blame on the wrong person (#600). A struct name answered [CE1001](#ce1001) 'use of undeclared identifier' about a type that IS declared, which is the answer [CE2102](#ce2102) already retired for the receiver position: the fault is the POSITION and not the name. One ladder answers both now (`semantics/name_ladder.py`). Write a value of the type: a variant for an enum, a construction or a static for a struct.
+A type name is written in a TYPE position -- a declaration, an annotation, a constraint -- and behind its own dot, where it names a member. It is not a value, so a value position cannot hold it. The fault is the POSITION and not the name. Write a value of the type: a variant for an enum, a construction or a static for a struct.
 
 ### CE2106 {#ce2106}
 
@@ -2040,7 +2040,7 @@ A type name is written in a TYPE position -- a declaration, an annotation, a con
 - `did you mean '{field}'?`
 - `'{type}' declares {fields}`
 
-A name behind a VALUE's dot is a field of that value's type, and this type declares no such field -- [CE2102](#ce2102) is the same rule one position over, behind a TYPE's dot. The typecheck pass used to let an unknown field through untouched: the read reached codegen, and the backend was the first thing to notice, answering [CE0029](#ce0029) with the note that says the fault is a bug in the compiler -- tier 1, no file, no line, no caret, and the blame on the wrong person for what is a typo (#630). The four backend [CE0029](#ce0029) sites stay as the internal backstop they read as. A METHOD is not a field: `v.name` with no parentheses reads a field, and a bound-method value is deferred to Tier 2, so write the call. #630 answered only a STRUCT receiver. A receiver that carries NO field -- an array, a primitive, a string, a closure, a `ptr` -- still reached the backend, where the SHAPE of the read picked the internal code: [CE0031](#ce0031) off a name or an assignment target, [CE0044](#ce0044) through a field, [CE0043](#ce0043) through an array element (#661). One rule answers them all, and `builtin_method_exists` is what tells a compiler-defined method from a typo, so `s.len` reads the same note a struct's method read does. An ENUM receiver reads it too (#666). #661 left that one alone, and it was worse than an internal error: a `Maybe@(T)` is an ordinary interned enum, so the backend unwrapped the receiver to its payload struct and read field 0, which is the TAG -- `pts.get(0).x` compiled clean and printed 0 where the element held 11, and a test fixture had frozen the wrong number. An enum carries variants, and a variant is reached by a pattern and not by a dot, so the help says to take the value first: `??`, `.realise(default)` or `match` for a Result, `.realise(default)`, `match` or `.or_err(nom e)??` for a Maybe (`??` takes a Result only), `match` for a user enum. A `Maybe@(T)` gets no implicit unwrap, for the reason a condition is a bool and nothing else (#522/#532), and because the `None` arm has no answer.
+A name behind a VALUE's dot is a field of that value's type, and this type declares no such field -- [CE2102](#ce2102) is the same rule one position over, behind a TYPE's dot. A METHOD is not a field: `v.name` with no parentheses reads a field, and Sushi has no bound-method value, so write the call. The rule covers every receiver: a struct, and a receiver that carries NO field -- an array, a primitive, a string, a closure, a `ptr`. A compiler-defined method, such as `s.len`, gets the same note as a method of a struct. An ENUM receiver is this error too: an enum carries variants, and a variant is reached by a pattern and not by a dot. So the help says to take the value first: `??`, `.realise(default)` or `match` for a Result, `.realise(default)`, `match` or `.or_err(nom e)??` for a Maybe (`??` takes a Result only), `match` for a user enum. A `Maybe@(T)` gets no implicit unwrap, for the reason a condition is a bool and nothing else, and because the `None` arm has no answer.
 
 ### CE2107 {#ce2107}
 
@@ -2048,7 +2048,7 @@ A name behind a VALUE's dot is a field of that value's type, and this type decla
 
 **Message:** `pattern matches enum '{got}', but the value has type '{expected}'`
 
-A pattern names the enum it destructures, and the value it reads is of another type. This is the outer arm's rule and the nested pattern's rule alike: `Other.Alpha ->` against a `Shape` scrutinee, and `Outer.Wrap(Other.Alpha)` against a payload the variant declares as `Inner`. It is relational, so the note points at the value -- the scrutinee for an outer arm, the variant that declares the payload for a nested one. Both sites answered [CE2048](#ce2048) until #741, which reads 'match scrutinee must be an enum or integer type, got 'Other''. That sentence was false twice over: 'Other' IS an enum, and the enum the slot named was the PATTERN's and not the scrutinee's.
+A pattern names the enum it destructures, and the value it reads is of another type. This is the outer arm's rule and the nested pattern's rule alike: `Other.Alpha ->` against a `Shape` scrutinee, and `Outer.Wrap(Other.Alpha)` against a payload the variant declares as `Inner`. It is relational, so the note points at the value -- the scrutinee for an outer arm, the variant that declares the payload for a nested one.
 
 ### CE2108 {#ce2108}
 
@@ -2056,7 +2056,7 @@ A pattern names the enum it destructures, and the value it reads is of another t
 
 **Message:** `nested pattern needs an enum value, got '{got}'`
 
-A nested pattern destructures a variant's payload, so the payload must be an enum. `Box.Held(Other.Alpha)` over a `Held(i32)` reads this, and so does the same shape one level down inside an `Own(...)` pattern -- one rule, two positions. An element of a tuple pattern is a third position: `(Color.Red, n)` over a `(bool, i32)` reads this too. Both answered [CE2048](#ce2048) until #741, where the Own position put a whole sentence in the quoted type slot: 'got 'Nested pattern inside Own(...) requires enum type, got i32''.
+A nested pattern destructures a variant's payload, so the payload must be an enum. `Box.Held(Other.Alpha)` over a `Held(i32)` reads this, and so does the same shape one level down inside an `Own(...)` pattern -- one rule, two positions. An element of a tuple pattern is a third position: `(Color.Red, n)` over a `(bool, i32)` reads this too.
 
 ### CE2109 {#ce2109}
 
@@ -2064,7 +2064,7 @@ A nested pattern destructures a variant's payload, so the payload must be an enu
 
 **Message:** `Own(...) pattern needs an Own@(T) value, got '{got}'`
 
-An `Own(...)` pattern reads through an owning pointer, so the value it reads must be an `Own@(T)`. A plain payload is not one, and neither is a malformed `Own@(i32, i32)`, whose payload cannot be read -- that one arrives behind a [CE2001](#ce2001) for the type itself. It answered [CE2048](#ce2048) until #741, which put the whole explanation inside the quoted type slot: 'got 'Own(...) pattern requires Own@(T) type, got i32''.
+An `Own(...)` pattern reads through an owning pointer, so the value it reads must be an `Own@(T)`. A plain payload is not one, and neither is a malformed `Own@(i32, i32)`, whose payload cannot be read -- that one arrives behind a [CE2001](#ce2001) for the type itself.
 
 ### CE2110 {#ce2110}
 
@@ -2072,7 +2072,7 @@ An `Own(...)` pattern reads through an owning pointer, so the value it reads mus
 
 **Message:** `a {kind} cannot be an extension or perk-implementation target: '{target}'`
 
-An extension names a type that the extension table can key on: a primitive, an array, a struct or an enum. A function type and a tuple type are structural, and an extension on one is not designed. A tuple is refused by ruling 5 of the tuple design (docs/design/tuples.md): write a struct with named fields and extend that, or a free function that takes the tuple. For a function type, the table key, the symbol, a perk implementation on it and a closure as `self` all have no rule. The declaration was accepted and then dropped in silence until #771, so a call answered [CE2008](#ce2008) 'undefined function' and a `self` in the body answered [CE2008](#ce2008) 'undefined function 'self''. It is refused at the target now, and it is the one diagnostic: the body is not checked and a call of the method adds nothing. A perk implementation follows the same rule (#864): `extend fn(i32) -> i32 with P` compiled, and a call of the perk method on a function value ran. A method a function value carries is built in (`.clone()`). Write a free function that takes the function value as a parameter.
+An extension names a type that the extension table can key on: a primitive, an array, a struct or an enum. A function type and a tuple type are structural, and an extension on one is refused. For a tuple, write a struct with named fields and extend that, or a free function that takes the tuple (see [the tuple design](design/tuples.md)). The refusal at the target is the one diagnostic: the body is not checked and a call of the method adds nothing. A perk implementation follows the same rule: `extend fn(i32) -> i32 with P` is refused too. A method a function value carries is built in (`.clone()`). Write a free function that takes the function value as a parameter.
 
 ### CE2111 {#ce2111}
 
@@ -2080,7 +2080,7 @@ An extension names a type that the extension table can key on: a primitive, an a
 
 **Message:** `cannot infer the element type of an empty {form}`
 
-An empty `from([])` or a `new()` spells no element, so it takes the element type of its POSITION: a `let`, a field, a payload, a parameter, a `.realise()` default, a return (#544). A position with no type -- a method receiver, an index base, a `println` argument -- gives it nothing, and no element can be read. It reached the backend with no stamp, and the backend answered the internal error [CE0042](#ce0042) with the note that says the fault is in the compiler (#868); `new()` did the same until #889. Declare the array first: `let i32[] xs = from([])`, then use `xs`.
+An empty `from([])` or a `new()` spells no element, so it takes the element type of its POSITION: a `let`, a field, a payload, a parameter, a `.realise()` default, a return. A position with no type -- a method receiver, an index base, a `println` argument -- gives it nothing, and no element can be read. Declare the array first: `let i32[] xs = from([])`, then use `xs`.
 
 ### CE2112 {#ce2112}
 
@@ -2090,7 +2090,7 @@ An empty `from([])` or a `new()` spells no element, so it takes the element type
 
 **Help:** `declare the type first, e.g. 'let {example} v = {constructor}', then use 'v'`
 
-A generic enum constructor takes its instance from the position that holds it: a `let`, a `return`, a parameter, a field, a payload. A position with no declared type -- a match scrutinee, a method receiver, a `??` operand, a foreach iterable, an interpolation hole, an expression statement, a generic argument -- gives it nothing, so the arguments give the type: `Maybe.Some(1)` is `Maybe@(i32)` and `Slot.Full(7)` is `Slot@(i32)`. A type parameter that no argument gives has no source: the error type of `Result.Ok(1)`, the Ok type of `Result.Err(e)`, the type of `Maybe.None()`. There is no default, and a missing error type is not `StdError` (the rule of Rust E0282 and of Swift). Declare the type first, `let Maybe@(i32) m = Maybe.None()`, then use `m`. Until #1005 the typecheck pass accepted such a constructor with no stamp, and the backend stopped with an internal error ([CE0113](#ce0113), [CE0055](#ce0055), [CE0124](#ce0124) or [CE0015](#ce0015)). A generic STRUCT constructor follows the same rule from its fields (#1150): `Box(5)` is `Box@(i32)`, and a type parameter that no field argument gives is this error (`struct Marker@(T)` with only an `i32` field). Two arguments that disagree are [CE2065](#ce2065). Until #1150 such a constructor was [CE2008](#ce2008) 'undefined function'.
+A generic enum constructor takes its instance from the position that holds it: a `let`, a `return`, a parameter, a field, a payload. A position with no declared type -- a match scrutinee, a method receiver, a `??` operand, a foreach iterable, an interpolation hole, an expression statement, a generic argument -- gives it nothing, so the arguments give the type: `Maybe.Some(1)` is `Maybe@(i32)` and `Slot.Full(7)` is `Slot@(i32)`. A type parameter that no argument gives has no source: the error type of `Result.Ok(1)`, the Ok type of `Result.Err(e)`, the type of `Maybe.None()`. There is no default, and a missing error type is not `StdError` (the rule of Rust E0282 and of Swift). Declare the type first, `let Maybe@(i32) m = Maybe.None()`, then use `m`. A generic STRUCT constructor follows the same rule from its fields: `Box(5)` is `Box@(i32)`, and a type parameter that no field argument gives is this error (`struct Marker@(T)` with only an `i32` field). Two arguments that disagree are [CE2065](#ce2065).
 
 ### CE2113 {#ce2113}
 
@@ -2098,7 +2098,7 @@ A generic enum constructor takes its instance from the position that holds it: a
 
 **Message:** `` a string is immutable: `s[i]` reads a byte and cannot be written ``
 
-A string gives its bytes in place for a read (#1091): `s[i]` answers the `u8` at byte offset `i`, bounds-checked like an array index. A write through it is refused. A string bound from a literal lives in `.rodata`, so a store there is undefined behaviour, and a string is immutable by design in every other position too. Build a new string instead: copy the bytes with `s.to_bytes()`, change the `u8[]`, and hand it over with `string.from_bytes(nom b)`, which takes the buffer with no second copy.
+A string gives its bytes in place for a read: `s[i]` answers the `u8` at byte offset `i`, bounds-checked like an array index. A write through it is refused. A string bound from a literal lives in `.rodata`, so a store there is undefined behaviour, and a string is immutable by design in every other position too. Build a new string instead: copy the bytes with `s.to_bytes()`, change the `u8[]`, and hand it over with `string.from_bytes(nom b)`, which takes the buffer with no second copy.
 
 ### CE2114 {#ce2114}
 
@@ -2106,7 +2106,7 @@ A string gives its bytes in place for a read (#1091): `s[i]` answers the `u8` at
 
 **Message:** `` a value of type {type} is not indexable: only an array or a string takes `[i]` ``
 
-An index reads an element of an array (`T[N]`, `T[]`) or a byte of a string (#1091), and nothing else. A `List@(T)` answers `.get(i)` (a `Maybe@(T)`), a `HashMap@(K, V)` answers `.get(key)`. Before #1091 this was [CE2002](#ce2002) with the text of an assignment, `cannot assign string to array type`, which described a mismatch that the program did not write.
+An index reads an element of an array (`T[N]`, `T[]`) or a byte of a string, and nothing else. A `List@(T)` answers `.get(i)` (a `Maybe@(T)`), a `HashMap@(K, V)` answers `.get(key)`.
 
 ### CE2115 {#ce2115}
 
@@ -2114,7 +2114,7 @@ An index reads an element of an array (`T[N]`, `T[]`) or a byte of a string (#10
 
 **Message:** `cannot print a value of type '{type}'`
 
-`print` and `println` take what an interpolation hole takes ([CE2035](#ce2035)): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. An array, a `List@(T)` and an `Own@(T)` print as a type that holds them prints them (`[1, 2, 3]`, the payload of an `Own@(T)`), and a `HashMap` is refused, because its iteration order is not specified. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)`. A type that holds something with no string form has none, and a note names the field or the element. Before this code the typecheck pass asked nothing but [CE2037](#ce2037), and such a value reached the backend and became the internal error [CE0017](#ce0017).
+`print` and `println` take what an interpolation hole takes ([CE2035](#ce2035)): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. An array, a `List@(T)` and an `Own@(T)` print as a type that holds them prints them (`[1, 2, 3]`, the payload of an `Own@(T)`), and a `HashMap` is refused, because its iteration order is not specified. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)`. A type that holds something with no string form has none, and a note names the field or the element.
 
 ### CE2116 {#ce2116}
 
@@ -2122,7 +2122,7 @@ An index reads an element of an array (`T[N]`, `T[]`) or a byte of a string (#10
 
 **Message:** `the message of an assert must be a string, got {got}`
 
-`assert(cond, message)` prints its message when the condition is false, so the message is a `string`: a literal, an interpolation, or a call that answers one. An assert does not convert a value to a string for you, as `print` does, because the message is a sentence about the fault and not a value to show. Write the value in an interpolation hole: `assert(n > 0, "n was {n}")`. The program builds the message only when the condition is false (docs/design/assert.md).
+`assert(cond, message)` prints its message when the condition is false, so the message is a `string`: a literal, an interpolation, or a call that answers one. An assert does not convert a value to a string for you, as `print` does, because the message is a sentence about the fault and not a value to show. Write the value in an interpolation hole: `assert(n > 0, "n was {n}")`. The program builds the message only when the condition is false. See [the assert design](design/assert.md).
 
 ### CE2117 {#ce2117}
 
@@ -2130,7 +2130,7 @@ An index reads an element of an array (`T[N]`, `T[]`) or a byte of a string (#10
 
 **Message:** `cannot destructure '{type}': it is not a tuple`
 
-Only a tuple destructures: `let (a, b) = t` splits a tuple value into its elements, and each binder owns its element (from an owned value) or borrows it (from a borrow). A struct has named fields and reads them by name (`s.field`); a struct field that owns a resource comes out with a marked field take (`nom s.field`). A nested destructure element follows the same rule: the element it splits must be a tuple. The item of a `foreach` destructure and the right side of a destructuring rebind (`(a, b) := v`) must be a tuple too. A tuple pattern in a `match` arm reads a tuple, at the top of an arm, in an enum payload and in another tuple pattern, so it is refused over a value of any other type. Added with tuples (docs/design/tuples.md).
+Only a tuple destructures: `let (a, b) = t` splits a tuple value into its elements, and each binder owns its element (from an owned value) or borrows it (from a borrow). A struct has named fields and reads them by name (`s.field`); a struct field that owns a resource comes out with a marked field take (`nom s.field`). A nested destructure element follows the same rule: the element it splits must be a tuple. The item of a `foreach` destructure and the right side of a destructuring rebind (`(a, b) := v`) must be a tuple too. A tuple pattern in a `match` arm reads a tuple, at the top of an arm, in an enum payload and in another tuple pattern, so it is refused over a value of any other type. See [the tuple design](design/tuples.md).
 
 ### CE2118 {#ce2118}
 
@@ -2138,7 +2138,7 @@ Only a tuple destructures: `let (a, b) = t` splits a tuple value into its elemen
 
 **Message:** `unreachable match arm '{pattern}': the arms above it match every value it matches`
 
-Ruling 18 of the tuple design (docs/design/tuples.md). A match tries its arms in order, and an arm runs only for a value that no arm above it matches. When the arms above match every value that this arm matches, the arm can never run: `(_, _) -> ...` before `(Color.Red, _) -> ...`, or `Maybe.Some(c) -> ...` before `Maybe.Some(Color.Red) -> ...`. Such an arm is dead code, and dead code is an error in Sushi, as a statement after a `return` is. The note at each covering arm names the arms that match those values first; the arms together can cover it, as `(Color.Red, _)` and `(Color.Green, _)` cover `(_, Color.Red)`. Remove the arm, or move it above the arms that cover it. One checker reads every match (ruling 17): an enum match, a nested enum match, an integer match and a tuple match. Where an older rule names the fault, that rule is the one diagnostic for the arm: a second arm for the same enum variant is [CE2041](#ce2041), a `_` arm that is not the last arm is [CE2041](#ce2041) (and the arms after it get no second error), and a second literal arm for the same value is [CE2075](#ce2075). Before ruling 17 the checker compared only the outer variant names, so an arm that could not run was accepted in silence.
+A match tries its arms in order, and an arm runs only for a value that no arm above it matches. When the arms above match every value that this arm matches, the arm can never run: `(_, _) -> ...` before `(Color.Red, _) -> ...`, or `Maybe.Some(c) -> ...` before `Maybe.Some(Color.Red) -> ...`. Such an arm is dead code, and dead code is an error in Sushi, as a statement after a `return` is. The note at each covering arm names the arms that match those values first; the arms together can cover it, as `(Color.Red, _)` and `(Color.Green, _)` cover `(_, Color.Red)`. Remove the arm, or move it above the arms that cover it. One checker reads every match: an enum match, a nested enum match, an integer match and a tuple match (see [the tuple design](design/tuples.md)). Where another code names the fault, that code is the one diagnostic for the arm: a second arm for the same enum variant is [CE2041](#ce2041), a `_` arm that is not the last arm is [CE2041](#ce2041) (and the arms after it get no second error), and a second literal arm for the same value is [CE2075](#ce2075).
 
 ### CE2119 {#ce2119}
 
@@ -2146,7 +2146,7 @@ Ruling 18 of the tuple design (docs/design/tuples.md). A match tries its arms in
 
 **Message:** `{kind} literal pattern needs {kind} value, got '{got}'`
 
-An integer literal and a string literal are legal in every pattern position (decision D3 of the tuple design, docs/design/tuples.md): a literal arm of a match, an element of a tuple pattern (`(0, n) ->`, `("get", v) ->`) and a payload of an enum pattern (`Maybe.Some(0) ->`, `Maybe.Some("--help") ->`). Inside a pattern, the value at the position must then be of the literal's kind: an integer for an integer literal, a `string` for a string literal. The `{kind}` slot names the literal kind with its article (`an integer`, `a string`), so that the text reads correctly for both kinds. A `bool`, a float and a struct have no literal pattern: such a position takes a binding or `_`, and the arm body tests the value (`(b, n) -> if (b): ...`). A literal arm at the top of a match whose scrutinee is of another kind is [CE2076](#ce2076). Added with tuple patterns; the string kind was added with string literal arms.
+An integer literal and a string literal are legal in every pattern position: a literal arm of a match, an element of a tuple pattern (`(0, n) ->`, `("get", v) ->`) and a payload of an enum pattern (`Maybe.Some(0) ->`, `Maybe.Some("--help") ->`). See [the tuple design](design/tuples.md). Inside a pattern, the value at the position must then be of the literal's kind: an integer for an integer literal, a `string` for a string literal. The `{kind}` slot names the literal kind with its article (`an integer`, `a string`), so that the text reads correctly for both kinds. A `bool`, a float and a struct have no literal pattern: such a position takes a binding or `_`, and the arm body tests the value (`(b, n) -> if (b): ...`). A literal arm at the top of a match whose scrutinee is of another kind is [CE2076](#ce2076).
 
 ### CE2120 {#ce2120}
 
@@ -2154,7 +2154,7 @@ An integer literal and a string literal are legal in every pattern position (dec
 
 **Message:** `the destructure names {count} elements, but '{type}' has {arity}`
 
-A `let` destructure names one element for each element of the tuple, in order: `let (q, r) = divmod(7, 2)` splits a two-element tuple. A `_` is an element too, so it keeps the count. A nested destructure follows the same rule for the nested tuple. There is no rest element: write `_` for each element the destructure does not keep. A `foreach` destructure (`foreach((k, v) in pairs.iter()):`) and a destructuring rebind (`(a, b) := f()`) are destructures too, and they take the same rule. A tuple pattern in a `match` arm (`(a, b, c) ->`) names one item for each element by the same rule. Added with tuples (docs/design/tuples.md).
+A `let` destructure names one element for each element of the tuple, in order: `let (q, r) = divmod(7, 2)` splits a two-element tuple. A `_` is an element too, so it keeps the count. A nested destructure follows the same rule for the nested tuple. There is no rest element: write `_` for each element the destructure does not keep. A `foreach` destructure (`foreach((k, v) in pairs.iter()):`) and a destructuring rebind (`(a, b) := f()`) are destructures too, and they take the same rule. A tuple pattern in a `match` arm (`(a, b, c) ->`) names one item for each element by the same rule. See [the tuple design](design/tuples.md).
 
 ### CE2121 {#ce2121}
 
@@ -2164,7 +2164,7 @@ A `let` destructure names one element for each element of the tuple, in order: `
 
 **Help:** `convert it with 'as i32'`
 
-An index, a count and a range bound are i32 positions (#870): an array index `a[i]`, a repeat count `[v; n]`, and each bound of a range `a..b`, in a `foreach` and in an array literal (`[a..b]`) alike. A bare literal takes i32 there. A value of any other type is refused, and nothing widens it: the backend used to zero-extend a narrow value, so `-1 as i8` counted 255, and an i64 bound of 4294967297 was cut to 1. Convert the value with `as i32`. The text names the position and states the rule, because nothing is assigned. A method argument in an i32 position (`get`, `insert`, `truncate`, `s`) is [CE2006](#ce2006), which names the argument; an assignment of the wrong type is [CE2002](#ce2002). Until #1137 this fault was [CE2002](#ce2002), whose text said 'cannot assign'.
+An index, a count and a range bound are i32 positions: an array index `a[i]`, a repeat count `[v; n]`, and each bound of a range `a..b`, in a `foreach` and in an array literal (`[a..b]`) alike. A bare literal takes i32 there. A value of any other type is refused, and nothing widens it. Convert the value with `as i32`. The text names the position and states the rule, because nothing is assigned. A method argument in an i32 position (`get`, `insert`, `truncate`, `s`) is [CE2006](#ce2006), which names the argument; an assignment of the wrong type is [CE2002](#ce2002).
 
 ### CE2122 {#ce2122}
 
@@ -2174,7 +2174,7 @@ An index, a count and a range bound are i32 positions (#870): an array index `a[
 
 **Help:** `` walk it with `foreach`, or spell it into an array: `from([a..b])` ``
 
-A range (`a..b`, `a..=b`) has two positions, and only two: the iterable of a `foreach` (`foreach(i in 0..3):`) and an element of an array literal (`[0..3]`, `from([0..n])`). Sushi has no range type and no range object, as Rust (`Range`) and Python (`range`) have, so a range cannot be a function or a method argument, a constructor argument, a `return` value, a `let` initializer or an operand. Walk it with `foreach`, or spell it into an array with `from([a..b])` and use the array. Until #1165 a range given to a generic function passed the typecheck pass and stopped the backend with the internal error [CE0000](#ce0000), and a range in a typed position was a type mismatch about an `Iterator@(i32)` that no program can write.
+A range (`a..b`, `a..=b`) has two positions, and only two: the iterable of a `foreach` (`foreach(i in 0..3):`) and an element of an array literal (`[0..3]`, `from([0..n])`). Sushi has no range type and no range object, as Rust (`Range`) and Python (`range`) have, so a range cannot be a function or a method argument, a constructor argument, a `return` value, a `let` initializer or an operand. Walk it with `foreach`, or spell it into an array with `from([a..b])` and use the array.
 
 ### CE2123 {#ce2123}
 
@@ -2184,7 +2184,7 @@ A range (`a..b`, `a..=b`) has two positions, and only two: the iterable of a `fo
 
 **Help:** `write '{text}' with single quotes to match the braces as text`
 
-A match arm compares the value with a FIXED value, and the compiler must know that value. A hole (`"{x}" ->`) is a run-time value, so a double-quoted pattern with a hole is refused. The compiler does not read the hole as a value to compare with, and it does not fold it. A single-quoted literal does not interpolate: write `'{x}' ->` to match the braces as text. To compare with a run-time value, use a `_` arm and test the value in the arm body (`_ -> if (s == x): ...`), or bind it in a nested position. Added with string arms in a match.
+A match arm compares the value with a FIXED value, and the compiler must know that value. A hole (`"{x}" ->`) is a run-time value, so a double-quoted pattern with a hole is refused. The compiler does not read the hole as a value to compare with, and it does not fold it. A single-quoted literal does not interpolate: write `'{x}' ->` to match the braces as text. To compare with a run-time value, use a `_` arm and test the value in the arm body (`_ -> if (s == x): ...`), or bind it in a nested position.
 
 ## CE24xx: Borrow and reference errors {#ce24xx}
 
@@ -2201,7 +2201,7 @@ The borrow checker gives these errors. They are about ownership, moves and borro
 - `` a constant is read-only storage: `peek` reads it, and `poke` writes it; declare a `var` for storage that you can write ``
 - `only storage can be borrowed, and this name has none; read the value, or copy it into a local first`
 
-This is a WRITE rule. A constant is read-only STORAGE: it is one object in `.rodata`, so a pointer into it exists and `peek` reads through it. `poke` writes through the pointer, and a write to read-only memory is undefined behaviour and not a diagnostic. Declare a `var` for storage that you can write. A TAKE is not this code's: `nom` is a consuming use, so [CE2436](#ce2436) answers it for a constant and a unit variable alike (#726). The code has a second half: a name that reaches storage of NO kind -- a top-level function, a registry stdlib constant, an FFI namespace -- refuses every mode, `peek` too, because there is nothing to point at. A name that is declared NOWHERE is [CE1001](#ce1001) and a TYPE name in a value position is [CE2105](#ce2105), so neither is reported together with this one for one token. ONE gate answers the question for every position -- semantics/constant\_borrow.py:reject\_borrow\_of\_constant -- because the rule was written five times with four predicates and one of them read the FLAT constant table (#685). ConstantTable.by\_name holds one record per NAME over the whole program and is first-wins, so a unit whose own `var` shared a name with an earlier unit's `const` was refused, and a unit whose own `const` shared a name with an earlier unit's `var` was let through to write read-only memory. The `poke` pattern binding was the position nothing asked at all, and it wrote there too. Until #713 the code refused a `peek` as well, in three of its four positions, and the match arm allowed it: the reason line said a constant has no FRAME slot, which is true and is the wrong test, because nothing here needs a frame slot and the match arm already took the address. tests/unit/test\_borrow\_of\_constant\_matrix.py is the CI gate.
+This is a WRITE rule. A constant is read-only STORAGE: it is one object in `.rodata`, so a pointer into it exists and `peek` reads through it. `poke` writes through the pointer, and a write to read-only memory is undefined behaviour. Declare a `var` for storage that you can write. A TAKE is not this code's: `nom` is a consuming use, so [CE2436](#ce2436) answers it for a constant and a unit variable alike. The code has a second half: a name that reaches storage of NO kind -- a top-level function, a registry stdlib constant, an FFI namespace -- refuses every mode, `peek` too, because there is nothing to point at. A name that is declared NOWHERE is [CE1001](#ce1001) and a TYPE name in a value position is [CE2105](#ce2105), so neither is reported together with this one for one token. The rule is the same in every borrow position: a `peek` or `poke` argument, a `let peek` or `let poke`, a `peek self` or `poke self` call, a pattern binding and a foreach item.
 
 ### CE2401 {#ce2401}
 
@@ -2232,7 +2232,7 @@ A variable can only have one active poke (read-write) borrow at a time to preven
 
 **Help:** `` a `let {mode}` binds a PLACE: a local, a field, an element, or an Own's payload (`o.get()`); bind a call result by value, with `let T {name} = ...` ``
 
-A borrow is a pointer, so it needs storage that the frame keeps. A `peek x` / `poke x` argument takes a name or a field chain off one (`poke obj.field`). A `let peek T x = <place>` / `let poke T x = <place>` takes a place: a name, a member or index chain off one, or an `Own@(T).get()` on one. A `peek` / `poke` pattern binding points into the scrutinee, so the scrutinee must be a place (the same places a reference `let` takes, #788) or a temporary that the match owns (ruling R11). A call result, a `??`, a literal and a construction are temporaries and have no address. Bind the value first (`let T x = make()`), and then borrow the name.
+A borrow is a pointer, so it needs storage that the frame keeps. A `peek x` / `poke x` argument takes a name or a field chain off one (`poke obj.field`). A `let peek T x = <place>` / `let poke T x = <place>` takes a place: a name, a member or index chain off one, or an `Own@(T).get()` on one. A `peek` / `poke` pattern binding points into the scrutinee, so the scrutinee must be a place (the same places a reference `let` takes) or a temporary that the match owns. A call result, a `??`, a literal and a construction are temporaries and have no address. Bind the value first (`let T x = make()`), and then borrow the name.
 
 ### CE2405 {#ce2405}
 
@@ -2240,7 +2240,7 @@ A borrow is a pointer, so it needs storage that the frame keeps. A `peek x` / `p
 
 **Message:** `cannot borrow moved variable '{name}'`
 
-Attempted to borrow a variable whose ownership has been transferred elsewhere: `f(nom x)`, `match nom x:`, a marked field take `nom x.field`, or `x??` over a `Result` local that owns something in either arm (#548) -- the unwrap moves the payload out, so the wrapper is spent (`docs/design/borrow-model.md` S10d).
+Attempted to borrow a variable whose ownership has been transferred elsewhere: `f(nom x)`, `match nom x:`, a marked field take `nom x.field`, or `x??` over a `Result` local that owns something in either arm -- the unwrap moves the payload out, so the wrapper is spent (see [the borrow model](design/borrow-model.md)).
 
 ### CE2406 {#ce2406}
 
@@ -2292,7 +2292,7 @@ main's `string[] args` aliases the process argv, which the runtime owns and free
 - `` a descriptor cannot be deep-copied, so there is no `{name}.clone()`; take a second owner with `{name}.share()`, or restructure so only one owner is needed ``
 - `` a descriptor cannot be deep-copied, so there is no `{name}.clone()`, and its type has no `share()` that gives a second owner; hand the value over with a `nom` parameter, or restructure so only one owner is needed ``
 
-A borrow names storage something else owns and still frees, so a position that takes ownership cannot have it. Three shapes borrow: a `match` payload binding, a `foreach` loop binding over a container, and every read THROUGH a live owner -- a field read (`h.inner`), an index (`rows[i]`), a container get-out (`c.get(0)`, `own.get()`, also under `.or_err(nom e)??`) and `r??` over a BORROWED `Result` (#548; over one the function owns, the `??` spends it instead). The `??` itself is a consuming use when the ERROR type of a borrowed `Result` owns heap, because the Err path puts the error in the returned Err while the owner still frees it (#1171): write `r.clone()??`. A plain error type is copied and stays legal. Reading through a borrow is free; clone it to take an independent value: `{name}.clone()`. A `nom self` method call consumes its receiver and an `as` conversion consumes its operand, so the help names the use of the copy: `r.clone().map_err(f)`, `e.clone() as AppError` (docs/design/error-conversion.md sections 3.2 and 5). Where the OWNER is a local this function holds, `nom {name}` is the third way -- a marked field TAKE, one step off a bare name, which hands the field over and spends the whole receiver (ruling R28, `docs/design/borrow-model.md` S10c). Only a value whose type transitively owns heap (a dynamic array, List, Own, HashMap, a string or a capturing closure) is affected -- a primitive borrow is unrestricted, and so is a string bound directly from a literal, which points into read-only memory and owns nothing.
+A borrow names storage something else owns and still frees, so a position that takes ownership cannot have it. Three shapes borrow: a `match` payload binding, a `foreach` loop binding over a container, and every read THROUGH a live owner -- a field read (`h.inner`), an index (`rows[i]`), a container get-out (`c.get(0)`, `own.get()`, also under `.or_err(nom e)??`) and `r??` over a BORROWED `Result` (over one the function owns, the `??` spends it instead). The `??` itself is a consuming use when the ERROR type of a borrowed `Result` owns heap, because the Err path puts the error in the returned Err while the owner still frees it: write `r.clone()??`. A plain error type is copied and stays legal. Reading through a borrow is free; clone it to take an independent value: `{name}.clone()`. A `nom self` method call consumes its receiver and an `as` conversion consumes its operand, so the help names the use of the copy: `r.clone().map_err(f)`, `e.clone() as AppError` (see [the error-conversion design](design/error-conversion.md)). Where the OWNER is a local this function holds, `nom {name}` is the third way -- a marked field TAKE, one step off a bare name, which hands the field over and spends the whole receiver (see [the borrow model](design/borrow-model.md)). Only a value whose type transitively owns heap (a dynamic array, List, Own, HashMap, a string or a capturing closure) is affected -- a primitive borrow is unrestricted, and so is a string bound directly from a literal, which points into read-only memory and owns nothing.
 
 ### CE2412 {#ce2412}
 
@@ -2309,7 +2309,7 @@ A borrow names storage something else owns and still frees, so a position that t
 - `{change} after the loop: '{receiver}' owns a resource and cannot be cloned`
 - `` {change} after the loop, or walk an independent value: `{receiver}.clone().{method}()` ``
 
-A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(0).or_err(nom e)??` -- BORROWS: it names storage the owner keeps and still frees. Mutating, freeing, rebinding or moving that owner while the binding is live would leave the binding pointing at storage the owner no longer holds. A bare `match` payload binding of an owning payload views the owner's storage the same way, for the arm. A `foreach` over a container iterator (`.iter()`, `.keys()`, `.values()`, `.entries()`) views the container's storage from the loop entry to the loop exit, so a change that can move or free that storage -- a `push`, `insert`, `remove`, `pop`, `clear`, `truncate`, `extend` or `reserve`, a rebind, a `nom` or a `poke` of the container -- is refused in the body; an in-place write (`fill`, `reverse`, an indexed assignment) keeps the storage and stays legal (#956). A borrowed argument is read DURING its call, so a binding passed to a call that changes its owner (`a.fill(first)`) is a use while the owner changes (#888). The borrow lasts to the end of the block that declares it, so move the mutation after that block, or take an independent value with `.clone()`. This is Rust's E0502.
+A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(0).or_err(nom e)??` -- BORROWS: it names storage the owner keeps and still frees. Mutating, freeing, rebinding or moving that owner while the binding is live would leave the binding pointing at storage the owner no longer holds. A bare `match` payload binding of an owning payload views the owner's storage the same way, for the arm. A `foreach` over a container iterator (`.iter()`, `.keys()`, `.values()`, `.entries()`) views the container's storage from the loop entry to the loop exit, so a change that can move or free that storage -- a `push`, `insert`, `remove`, `pop`, `clear`, `truncate`, `extend` or `reserve`, a rebind, a `nom` or a `poke` of the container -- is refused in the body; an in-place write (`fill`, `reverse`, an indexed assignment) keeps the storage and stays legal. A borrowed argument is read DURING its call, so a binding passed to a call that changes its owner (`a.fill(first)`) is a use while the owner changes. The borrow lasts to the end of the block that declares it, so move the mutation after that block, or take an independent value with `.clone()`. This is Rust's E0502.
 
 ### CE2414 {#ce2414}
 
@@ -2319,7 +2319,7 @@ A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(
 
 **Help:** `` '{name}' is a view of the owner's value and not storage of its own, so the write ({what}) cannot stand; bind the payload `poke` to write through to the owner, or `nom` to take it where the match owns its scrutinee -- otherwise {escape} ``
 
-A BARE `match` payload binding and a BARE `foreach` loop binding borrow a value the scrutinee or the container owns. The compiled binding is a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow -- never reaches the owner and is silently lost (issue #253). The binding carries a MODE, and the mode is the escape (HANDLES.md ruling R11): `poke` binds a pointer into the owner's storage, so the write reaches it, and `nom` takes the value outright where the match owns its scrutinee. A copy is the third way -- `.clone()`, mutate, store back -- and a type that owns a resource has none, so for one of those the message names `.share()` instead, exactly as [CE2411](#ce2411) does. A rebind of the binding ITSELF is refused with the same code (#590), and the escapes are the same three. It was legal while the binding was believed to be a private copy: the compiled copy is SHALLOW, so the store freed a payload the scrutinee still owned -- a double free the plain-payload case only hid. The position is a field on the `READONLY_RECEIVERS` row (`refuses_a_rebind`), not a gate of its own: a parameter and a by-value receiver own their slot and stay rebindable.
+A BARE `match` payload binding and a BARE `foreach` loop binding borrow a value the scrutinee or the container owns. The compiled binding is a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow -- never reaches the owner and is lost. The binding carries a MODE, and the mode is the escape: `poke` binds a pointer into the owner's storage, so the write reaches it, and `nom` takes the value outright where the match owns its scrutinee. A copy is the third way -- `.clone()`, mutate, store back -- and a type that owns a resource has none, so for one of those the message names `.share()` instead, exactly as [CE2411](#ce2411) does. A rebind of the binding ITSELF is refused with the same code, and the escapes are the same three: the compiled copy is SHALLOW, so the store would free a payload the scrutinee still owns. A parameter and a by-value receiver own their slot and stay rebindable.
 
 ### CE2415 {#ce2415}
 
@@ -2327,7 +2327,7 @@ A BARE `match` payload binding and a BARE `foreach` loop binding borrow a value 
 
 **Message:** `a struct field cannot have a reference type ('{ty}')`
 
-A `peek` / `poke` struct field parses but has no checked semantics: nothing relates the field's borrow to the value it points at, so the struct may outlive it. Reading such a field is an internal error today (issue #315). Store an owned value, or an index into a container the struct does not own. A borrow inside a struct needs lifetimes and is a possible future feature; until it is designed, the form is rejected.
+A `peek` / `poke` struct field has no checked semantics: nothing relates the field's borrow to the value it points at, so the struct may outlive it. Store an owned value, or an index into a container the struct does not own.
 
 ### CE2416 {#ce2416}
 
@@ -2335,7 +2335,7 @@ A `peek` / `poke` struct field parses but has no checked semantics: nothing rela
 
 **Message:** `an enum variant payload cannot have a reference type ('{ty}')`
 
-A `peek` / `poke` enum payload parses and runs with no tracking of any kind, so the enum may outlive the value it borrows (issue #316). It is also how a returned borrow escapes: a `Result@(peek T, E)` is an enum payload, which is the shape that made a dangling read reachable (issue #314). Carry an owned value in the variant. Same lifetime problem as a reference struct field ([CE2415](#ce2415)).
+A `peek` / `poke` enum payload has no tracking of any kind, so the enum may outlive the value it borrows. It is also how a returned borrow would escape: a `Result@(peek T, E)` is an enum payload. Carry an owned value in the variant. Same lifetime problem as a reference struct field ([CE2415](#ce2415)).
 
 ### CE2417 {#ce2417}
 
@@ -2343,7 +2343,7 @@ A `peek` / `poke` enum payload parses and runs with no tracking of any kind, so 
 
 **Message:** `a function cannot return a reference type ('{ty}')`
 
-Returning a `peek` / `poke` lets a function hand out a borrow of its own local, and the caller reads it after the frame is gone -- a dangling read that compiles clean today (issue #314). `typesys.py` states the intended rule, 'borrows are function-scoped (end at function return)', and this is what enforces it. Return an owned value, or `.clone()` what you borrowed. Returning a borrow needs lifetimes to be sound.
+Returning a `peek` / `poke` would let a function hand out a borrow of its own local, and the caller would read it after the frame is gone -- a dangling read. A borrow ends when the function returns. Return an owned value, or `.clone()` what you borrowed.
 
 ### CE2418 {#ce2418}
 
@@ -2353,7 +2353,7 @@ Returning a `peek` / `poke` lets a function hand out a borrow of its own local, 
 
 **Help:** `write the single borrow: a borrow of a borrow is the same borrow`
 
-Both grammar rules for a borrow are recursive, so `peek peek i32` parses -- in a type position and in an expression position (issue #317). There is no double borrow in the language: a borrow of a borrow is the same borrow, and the extra level has no meaning at any layer. Write the single borrow.
+Both grammar rules for a borrow are recursive, so `peek peek i32` parses -- in a type position and in an expression position. There is no double borrow in the language: a borrow of a borrow is the same borrow, and the extra level has no meaning at any layer. Write the single borrow.
 
 ### CE2419 {#ce2419}
 
@@ -2361,7 +2361,7 @@ Both grammar rules for a borrow are recursive, so `peek peek i32` parses -- in a
 
 **Message:** `a reference type cannot be a generic type argument ('{ty}')`
 
-A container of borrows -- `List@(peek T)`, `HashMap@(peek K, V)`, `Maybe@(peek T)` -- has no defined semantics: nothing relates the stored borrows to the values they point at, and the backend cannot lay one out (issue #318). Store owned values, or indices into a container that outlives the uses. There is NO `Maybe` / `Result` exemption on purpose: those two are exactly how a returned borrow escapes ([CE2417](#ce2417)). Foreign `ptr` carries the same restriction, as [CE5012](#ce5012).
+A container of borrows -- `List@(peek T)`, `HashMap@(peek K, V)`, `Maybe@(peek T)` -- has no defined semantics: nothing relates the stored borrows to the values they point at, and the backend cannot lay one out. Store owned values, or indices into a container that outlives the uses. There is NO `Maybe` / `Result` exemption: those two are how a returned borrow would escape ([CE2417](#ce2417)). Foreign `ptr` carries the same restriction, as [CE5012](#ce5012).
 
 ### CE2420 {#ce2420}
 
@@ -2369,7 +2369,7 @@ A container of borrows -- `List@(peek T)`, `HashMap@(peek K, V)`, `Maybe@(peek T
 
 **Message:** `an extension cannot target a reference type ('{ty}')`
 
-`extend peek T` compiles and is permanently uncallable: a reference target falls through method resolution, so every call reports 'no such method' and the body is dead code the author believes they wrote (issue #319). Extend the referent instead -- the methods on `&T` ARE the methods on `T`, so `extend T` is already callable through a `peek T` / `poke T` receiver. This is the [CE2097](#ce2097) shape: an extension that can never be reached is a diagnostic, not silence.
+`extend peek T` would be permanently uncallable: a reference target falls through method resolution, so every call would report 'no such method'. Extend the referent instead -- the methods on a borrow of `T` ARE the methods on `T`, so `extend T` is already callable through a `peek T` / `poke T` receiver. This is the [CE2097](#ce2097) shape: an extension that can never be reached is a diagnostic, not silence.
 
 ### CE2421 {#ce2421}
 
@@ -2377,9 +2377,9 @@ A container of borrows -- `List@(peek T)`, `HashMap@(peek K, V)`, `Maybe@(peek T
 
 **Message:** `cannot write through 'self': a method receiver is a read-only borrow`
 
-**Help:** `` the write ({what}) would land on the method's private copy of the receiver; declare the receiver mutable -- `(poke self, ...)` -- and the write reaches the caller (#327), or return the new value and let the caller store it ``
+**Help:** `` the write ({what}) would land on the method's private copy of the receiver; declare the receiver mutable -- `(poke self, ...)` -- and the write reaches the caller, or return the new value and let the caller store it ``
 
-An extension or perk method receives `self` as a BORROW: the caller keeps the value (the ruling on issue #298, `docs/design/ownership-conventions.md` S8.6). The compiled receiver is a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow of it -- never reaches the caller. A plain field was silently LOST; an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy (issue #326). This is [CE2414](#ce2414)'s rule for the one receiver [CE2414](#ce2414) does not cover. The mutating receiver is spelled `poke self` (issue #327): declare the method `extend T name(poke self, ...)` and the write reaches the caller. Alternatively return the new value and let the caller store it.
+An extension or perk method receives `self` as a BORROW: the caller keeps the value (see [the ownership conventions](design/ownership-conventions.md)). The compiled receiver is a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow of it -- never reaches the caller. This is [CE2414](#ce2414)'s rule for the one receiver [CE2414](#ce2414) does not cover. The mutating receiver is spelled `poke self`: declare the method `extend T name(poke self, ...)` and the write reaches the caller. Alternatively return the new value and let the caller store it.
 
 ### CE2422 {#ce2422}
 
@@ -2389,7 +2389,7 @@ An extension or perk method receives `self` as a BORROW: the caller keeps the va
 
 **Help:** `` the write ({what}) would land on the {callable}'s private copy of the argument; declare the parameter `poke` if the {callable} must write through it{copy} ``
 
-Every parameter of every callable is a BORROW of the caller's value unless it says `nom`: a free function, a lambda, and an extension or perk method, `self` and the explicit parameters alike (the ruling on issue #298, extended to every callable by the borrow-by-default ruling). A by-value one is compiled as a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow of it -- never reaches the caller: a plain field was silently lost, and an owning field was a double free plus a leak, because the field rebind released the caller's buffer through the copy. [CE2421](#ce2421) is the same rule for the receiver. `{callable}` is "method" or "function", as the declaration is; the text said "method" for a free function too until #1137. The escape: declare the parameter `poke T` and the write reaches the caller, or `nom T` and the callee owns the value.
+Every parameter of every callable is a BORROW of the caller's value unless it says `nom`: a free function, a lambda, and an extension or perk method, `self` and the explicit parameters alike. A by-value one is compiled as a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow of it -- would never reach the caller. [CE2421](#ce2421) is the same rule for the receiver. `{callable}` is "method" or "function", as the declaration is. The escape: declare the parameter `poke T` and the write reaches the caller, or `nom T` and the callee owns the value.
 
 ### CE2423 {#ce2423}
 
@@ -2397,7 +2397,7 @@ Every parameter of every callable is a BORROW of the caller's value unless it sa
 
 **Message:** `a reference binding needs addressable elements; this iterable yields values`
 
-A `peek`/`poke` foreach binding is a pointer into the container's element storage, so the iterable must HAVE element storage. A range (`0..10`) synthesizes its values, and `HashMap.entries()` synthesizes each `Entry` pair on the fly -- there is no address to bind (issue #300). Iterate a container (`arr.iter()`, `list.iter()`, `map.keys()`, `map.values()`) or drop the marker and take the value.
+A `peek`/`poke` foreach binding is a pointer into the container's element storage, so the iterable must HAVE element storage. A range (`0..10`) synthesizes its values, and `HashMap.entries()` synthesizes each `Entry` pair on the fly -- there is no address to bind. Iterate a container (`arr.iter()`, `list.iter()`, `map.keys()`, `map.values()`) or drop the marker and take the value.
 
 ### CE2424 {#ce2424}
 
@@ -2407,7 +2407,7 @@ A `peek`/`poke` foreach binding is a pointer into the container's element storag
 
 **Help:** `bind the payload by value in the nested pattern, or restructure to match the inner enum at the top level`
 
-A top-level `Variant(poke x)` binds a pointer into the scrutinee's payload storage and is supported (issue #300 phase 3, on the aligned enum payload layout). A NESTED pattern is different: extraction walks through temporary copies of the inner enums, so a pointer into one writes to storage nobody reads -- the silently-lost-write class of issue #253. Bind the payload by value in the nested pattern, or restructure to match the inner enum at the top level. A tuple pattern follows the same line: an element of the arm's own tuple pattern, also in a tuple pattern inside it, takes `poke` (`(poke n, _) ->`), and a tuple pattern in an enum payload (`Maybe.Some((poke a, b))`) and an enum pattern inside a tuple pattern are nested.
+A top-level `Variant(poke x)` binds a pointer into the scrutinee's payload storage and is supported. A NESTED pattern is different: extraction walks through temporary copies of the inner enums, so a pointer into one writes to storage nobody reads, and the write is lost. Bind the payload by value in the nested pattern, or restructure to match the inner enum at the top level. A tuple pattern follows the same line: an element of the arm's own tuple pattern, also in a tuple pattern inside it, takes `poke` (`(poke n, _) ->`), and a tuple pattern in an enum payload (`Maybe.Some((poke a, b))`) and an enum pattern inside a tuple pattern are nested.
 
 ### CE2425 {#ce2425}
 
@@ -2420,7 +2420,7 @@ A top-level `Variant(poke x)` binds a pointer into the scrutinee's payload stora
 - `` the receiver comes first: `(poke self, <params>)` ``
 - `` a reference parameter is written `poke T name`; the bare form is only the receiver, spelled `poke self` ``
 
-The receiver parameter (#327) is the FIRST parameter of an EXTENSION or PERK method: `extend Counter bump(poke self) ~:`. It is not valid in a plain top-level function (a plain function has no receiver -- take `poke T name`), not valid after the first position, and a bare `poke name` that is not `self` is a reference parameter missing its type.
+The receiver parameter is the FIRST parameter of an EXTENSION or PERK method: `extend Counter bump(poke self) ~:`. It is not valid in a plain top-level function (a plain function has no receiver -- take `poke T name`), not valid after the first position, and a bare `poke name` that is not `self` is a reference parameter missing its type.
 
 ### CE2426 {#ce2426}
 
@@ -2430,7 +2430,7 @@ The receiver parameter (#327) is the FIRST parameter of an EXTENSION or PERK met
 
 **Help:** `the write ({what}) reaches storage another value owns and still frees, so it is lost from the owner's view, a reallocating write frees the owner's buffer, and a rebind frees a value the owner still holds; write to the owner directly -- otherwise {escape}`
 
-A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(0).or_err(nom e)??` -- BORROWS: it names storage the owner keeps and still frees (issue #242). A write through it is not merely lost, which is what [CE2414](#ce2414) says for a match/foreach binding: the binding holds its own copy of the descriptor while the DATA is shared, so a mutating method updates a length nobody reads, a field assignment lands on the private copy, and a `.push()` that reallocates frees the OWNER's buffer -- a double free plus a read of released memory that compiled clean before issue #344. Write to the owner directly (`h.items.push(9)`), or take an independent value with `.clone()`, mutate it, and store it back. A rebind of the binding itself reads the same code (#590): the slot holds a descriptor over data the owner keeps, so the store frees a value the owner still holds. [CE2412](#ce2412) is the complementary question -- may the OWNER be changed while the binding lives -- not an alternative to this one.
+A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(0).or_err(nom e)??` -- BORROWS: it names storage the owner keeps and still frees. A write through it is not merely lost, which is what [CE2414](#ce2414) says for a match/foreach binding: the binding holds its own copy of the descriptor while the DATA is shared, so a mutating method updates a length nobody reads, a field assignment lands on the private copy, and a `.push()` that reallocates frees the OWNER's buffer -- a double free plus a read of released memory. Write to the owner directly (`h.items.push(9)`), or take an independent value with `.clone()`, mutate it, and store it back. A rebind of the binding itself reads the same code: the slot holds a descriptor over data the owner keeps, so the store frees a value the owner still holds. [CE2412](#ce2412) is the complementary question -- may the OWNER be changed while the binding lives -- not an alternative to this one.
 
 ### CE2427 {#ce2427}
 
@@ -2443,7 +2443,7 @@ A `let` bound from a read THROUGH an owner -- `let v = h.items`, `let v = c.get(
 - `` the callee takes ownership here; write `nom` at the call site too, or `nom <arg>.clone()` to keep your own value ``
 - `` the callee only borrows this argument, so it stays yours after the call; drop the `nom` ``
 
-A `nom` parameter takes OWNERSHIP of its argument, and that must be visible where the value is handed over: without the marker, `f(s)` would not show whether `s` survives the call, and the reader would have to open the callee to find out (docs/design/borrow-model.md S3). So the marker is written at both ends, or at neither. Add `nom` at the call site to hand the value over, or drop it if the callee only borrows. `.clone()` is the escape when the caller needs to keep its own value: `f(nom s.clone())`. A built-in method follows the same rule (#1173): its parameters borrow unless its family's table says otherwise, so `m.realise(nom 3)` is this error; a container slot (`push`, `insert`, `Own.alloc`) takes ownership by position, with or without the marker.
+A `nom` parameter takes OWNERSHIP of its argument, and that must be visible where the value is handed over: without the marker, `f(s)` would not show whether `s` survives the call, and the reader would have to open the callee to find out (see [the borrow model](design/borrow-model.md)). So the marker is written at both ends, or at neither. Add `nom` at the call site to hand the value over, or drop it if the callee only borrows. `.clone()` is the escape when the caller needs to keep its own value: `f(nom s.clone())`. A built-in method follows the same rule: its parameters borrow unless its family's table says otherwise, so `m.realise(nom 3)` is this error; a container slot (`push`, `insert`, `Own.alloc`) takes ownership by position, with or without the marker.
 
 ### CE2428 {#ce2428}
 
@@ -2451,7 +2451,7 @@ A `nom` parameter takes OWNERSHIP of its argument, and that must be visible wher
 
 **Message:** `` `nom` has no meaning on the foreign parameter '{name}' ``
 
-FFI is outside the mode system. A C callee never receives a Sushi value: the compiler marshals the argument into a fresh C representation that the CALLER owns and frees at scope exit, so there is nothing for a foreign parameter to take ownership of. Declare the parameter without the marker. The four modes describe how a value crosses a SUSHI call boundary (docs/design/borrow-model.md S5).
+FFI is outside the mode system. A C callee never receives a Sushi value: the compiler marshals the argument into a fresh C representation that the CALLER owns and frees at scope exit, so there is nothing for a foreign parameter to take ownership of. Declare the parameter without the marker. The four modes describe how a value crosses a SUSHI call boundary (see [the borrow model](design/borrow-model.md)).
 
 ### CE2429 {#ce2429}
 
@@ -2461,7 +2461,7 @@ FFI is outside the mode system. A C callee never receives a Sushi value: the com
 
 **Help:** `` the write ({what}) would land on the copy and be lost; bind a clone, mutate it, and rebuild the owner -- or mutate in place through a nested `Own(poke ...)` reference binding where the `Own` sits in an enum payload ``
 
-The value past a call boundary is a temporary copy, not the owner's storage: `o.get()` is a get-out, so `o.get().items.push(9)` would land on the copy and be lost, while the `Own` keeps and frees the real buffer (issue #407 -- the write compiled, printed the old length, and the leak counters balanced). A FRESH temporary is rejected by the same rule, because the statement discards the value and the write is dead either way. Bind a clone, mutate it, and rebuild the owner -- `let Holder h = o.get().clone()`, `h.items.push(9)`, `o := Own.alloc(h)` -- or, where the `Own` sits in an enum payload, mutate in place through a nested `Own(poke inner)` reference binding (#300).
+The value past a call boundary is a temporary copy, not the owner's storage: `o.get()` is a get-out, so `o.get().items.push(9)` would land on the copy and be lost, while the `Own` keeps and frees the real buffer. A FRESH temporary is rejected by the same rule, because the statement discards the value and the write is dead either way. Bind a clone, mutate it, and rebuild the owner -- `let Holder h = o.get().clone()`, `h.items.push(9)`, `o := Own.alloc(h)` -- or, where the `Own` sits in an enum payload, mutate in place through a nested `Own(poke inner)` reference binding.
 
 ### CE2430 {#ce2430}
 
@@ -2469,7 +2469,7 @@ The value past a call boundary is a temporary copy, not the owner's storage: `o.
 
 **Message:** `'{name}' cannot be the source of a bulk write into '{target}'`
 
-A bulk write borrows its source and writes its destination, and the source may not be storage the write changes. A growth -- `.extend()`, `.extend_range()` -- may REALLOCATE the destination's buffer, so `a.extend(a)` would leave the source pointer dangling in the middle of the copy. A refill -- `.fill()` -- frees each slot before it stores a copy of the argument, so `a.fill(a[0])` frees slot 0 and then copies freed memory into every later slot (#867). The refill is refused only when the element type owns a resource: a plain element such as an `i32` is read by value, nothing aliases, and `b.fill(b[0])` stays legal. A fixed array follows the same rule, and an index is read as any slot, so `rows[i].cells.fill(rows[j].cells[0])` is refused too. That is a memory-safety hole rather than a wrong answer, so it is refused rather than defined. The escape is `.clone()` (`a.fill(a[0].clone())`), or `.ss(start, count)` for a range, either of which gives an independent source. [CE2412](#ce2412) is the neighbouring question -- may the OWNER be changed while a `let`-borrow of it lives -- and not this one, because here the borrow is a method argument. A copy that must read what it is writing is not this operation at all: a DEFLATE back-reference expands a run by reading bytes the same loop just wrote, and it stays a per-element loop for that reason.
+A bulk write borrows its source and writes its destination, and the source may not be storage the write changes. A growth -- `.extend()`, `.extend_range()` -- may REALLOCATE the destination's buffer, so `a.extend(a)` would leave the source pointer dangling in the middle of the copy. A refill -- `.fill()` -- frees each slot before it stores a copy of the argument, so `a.fill(a[0])` frees slot 0 and then copies freed memory into every later slot. The refill is refused only when the element type owns a resource: a plain element such as an `i32` is read by value, nothing aliases, and `b.fill(b[0])` stays legal. A fixed array follows the same rule, and an index is read as any slot, so `rows[i].cells.fill(rows[j].cells[0])` is refused too. The escape is `.clone()` (`a.fill(a[0].clone())`), or `.ss(start, count)` for a range, either of which gives an independent source. [CE2412](#ce2412) is the neighbouring question -- may the OWNER be changed while a `let`-borrow of it lives -- and not this one, because here the borrow is a method argument. A copy that must read what it is writing, such as a DEFLATE back-reference, is not this operation: write it as a per-element loop.
 
 ### CE2431 {#ce2431}
 
@@ -2479,7 +2479,7 @@ A bulk write borrows its source and writes its destination, and the source may n
 
 **Help:** `a second owner of a handle is '.share()'; for a value that holds handles, build a new one from a '.share()' of each handle`
 
-HANDLES.md ruling R3. `.clone()` is the one deep copy, and a derived clone copies a value FIELD BY FIELD. A type that implements the `Drop` perk owns something no field walk can see -- a file or a socket holds one i32 descriptor -- so a derived clone would copy that number and leave two values holding one descriptor, both of which drop. That is a double close, and the copy verb would hide it. A copy verb must not quietly mean a second handle: Rust hit this with Arc::clone, wrote a lint for it, and then demoted the lint. Sushi gives the second-owner operation its own name instead. Use `.share()`, which is dup(2) and says what it does -- an independent descriptor over a SHARED open file description, so the offset is shared too. For concurrent reads of one file the answer is `read_at`/`write_at`, where the offset is an argument and no state is shared. The refusal reaches a struct that HOLDS a resource type, an array of them and a container of them, because cloning any of those copies the descriptor one level down; it is reported at the INSTANTIATION for a generic body that clones, because one monomorphized body serves every type argument and the argument is what makes it illegal.
+`.clone()` is the one deep copy, and a derived clone copies a value FIELD BY FIELD. A type that implements the `Drop` perk owns something no field walk can see -- a file or a socket holds one i32 descriptor -- so a derived clone would copy that number and leave two values holding one descriptor, both of which drop. That is a double close. Use `.share()`, which is dup(2) and says what it does -- an independent descriptor over a SHARED open file description, so the offset is shared too. For concurrent reads of one file the answer is `read_at`/`write_at`, where the offset is an argument and no state is shared. The refusal reaches a struct that HOLDS a resource type, an array of them and a container of them, because cloning any of those copies the descriptor one level down; it is reported at the INSTANTIATION for a generic body that clones, because one monomorphized body serves every type argument and the argument is what makes it illegal.
 
 ### CE2432 {#ce2432}
 
@@ -2489,7 +2489,7 @@ HANDLES.md ruling R3. `.clone()` is the one deep copy, and a derived clone copie
 
 **Help:** `` hand the value to the match -- `match nom {scrutinee}:` -- and it may be taken here; drop the marker to read through the borrow instead ``
 
-HANDLES.md ruling R11. A `nom` payload binding takes the value out of the scrutinee, so the match has to OWN the scrutinee to give it away. A TEMPORARY -- a call result, a constructor, a `??` -- is owned by construction and needs no marker. A place expression is not: `match r:` leaves `r` the owner, and `r` still frees the payload at the end of its scope, so a second owner here would be a double free. Write `match nom r:` to hand the value to the match; `r` is then consumed exactly as `f(nom r)` consumes it, and a later mention of it is [CE2405](#ce2405). Marked at both ends or neither is the same rule [CE2427](#ce2427) states for a call argument. To keep `r`, drop the marker and read through the borrow, or bind `poke` to write through it.
+A `nom` payload binding takes the value out of the scrutinee, so the match has to OWN the scrutinee to give it away. A TEMPORARY -- a call result, a constructor, a `??` -- is owned by construction and needs no marker. A place expression is not: `match r:` leaves `r` the owner, and `r` still frees the payload at the end of its scope, so a second owner here would be a double free. Write `match nom r:` to hand the value to the match; `r` is then consumed exactly as `f(nom r)` consumes it, and a later mention of it is [CE2405](#ce2405). Marked at both ends or neither is the same rule [CE2427](#ce2427) states for a call argument. To keep `r`, drop the marker and read through the borrow, or bind `poke` to write through it.
 
 ### CE2433 {#ce2433}
 
@@ -2499,7 +2499,7 @@ HANDLES.md ruling R11. A `nom` payload binding takes the value out of the scruti
 
 **Help:** `` mark '{name}' `nom` as well, or drop the `nom` from '{taken}' and read both through the borrow ``
 
-HANDLES.md ruling R11, the all-or-nothing rule. What suppresses the match's free is the WHOLE scrutinee and not one payload slot, so an arm that takes any payload leaves every other owning payload of that variant with no owner at all -- taking one and borrowing its neighbour is a leak of the neighbour, not a dangling read. Mark every owning binding in the arm `nom`, or none of them. A payload that owns no heap is unaffected: an i32 beside a taken array stays a plain binding. Discarding the neighbour with `_` does NOT help -- it is the same slot with no name. A per-slot take needs a drop flag per payload, which is a later change; today the variant moves whole.
+This is the all-or-nothing rule. What suppresses the match's free is the WHOLE scrutinee and not one payload slot, so an arm that takes any payload leaves every other owning payload of that variant with no owner at all -- taking one and borrowing its neighbour is a leak of the neighbour, not a dangling read. Mark every owning binding in the arm `nom`, or none of them. A payload that owns no heap is unaffected: an i32 beside a taken array stays a plain binding. Discarding the neighbour with `_` does NOT help -- it is the same slot with no name. The variant moves whole.
 
 ### CE2434 {#ce2434}
 
@@ -2509,7 +2509,7 @@ HANDLES.md ruling R11, the all-or-nothing rule. What suppresses the match's free
 
 **Help:** `` bind the pointee by value, or `Own(poke x)` to write through it; to take the value out, move the whole `Own@(T)` with a `nom` binding on the payload that holds it ``
 
-HANDLES.md ruling R11. `Own@(T)` is a heap cell that owns its pointee. Taking the pointee out with `nom` would leave the cell itself with nothing to free it, because the only thing that can suppress the match's free is the whole scrutinee -- so the malloc'd box would leak while the value inside it moved on. `Own(poke x)` and `Own(peek x)` stay legal: both bind the heap pointer and take nothing. To move the value out, take the `Own@(T)` itself -- a `nom` binding on the payload that holds it -- and read through it at the new owner. Freeing the box alone needs an owner for the cell that survives the move, which is a later change.
+`Own@(T)` is a heap cell that owns its pointee. Taking the pointee out with `nom` would leave the cell itself with nothing to free it, because the only thing that can suppress the match's free is the whole scrutinee -- so the malloc'd box would leak while the value inside it moved on. `Own(poke x)` and `Own(peek x)` stay legal: both bind the heap pointer and take nothing. To move the value out, take the `Own@(T)` itself -- a `nom` binding on the payload that holds it -- and read through it at the new owner.
 
 ### CE2435 {#ce2435}
 
@@ -2517,7 +2517,7 @@ HANDLES.md ruling R11. `Own@(T)` is a heap cell that owns its pointee. Taking th
 
 **Message:** `cannot use '{name}': '{method}' consumed it`
 
-HANDLES.md ruling R27. A `nom self` method takes ownership of what it was called on, so the binding is spent by the call. This is not [CE2405](#ce2405) and the difference is not cosmetic: nothing was transferred to another owner that the reader can point at, and a receiver's mode is DECLARATION-only, so there is no `nom` marker anywhere on the page. The diagnostic has to carry what the syntax cannot, which is why it names the method. One code covers every consuming receiver, and the method name is what tells the two shapes apart: `close()` releases a descriptor and answers `~`, so nothing went anywhere, while `lines()` and `into_inner()` hand the value onward. A `nom` ARGUMENT keeps [CE2405](#ce2405), because `eat(nom s)` is a real move and the marker is visible. To keep using the value, do not call the consuming method -- an owned handle closes itself when its owner leaves scope, so an explicit `close()` is only for the caller who has to SEE the failure.
+A `nom self` method takes ownership of what it was called on, so the binding is spent by the call. This is not [CE2405](#ce2405): nothing was transferred to another owner that the reader can point at, and a receiver's mode is DECLARATION-only, so there is no `nom` marker anywhere on the page. So the diagnostic names the method. One code covers every consuming receiver, and the method name is what tells the two shapes apart: `close()` releases a descriptor and answers `~`, so nothing went anywhere, while `lines()` and `into_inner()` hand the value onward. A `nom` ARGUMENT keeps [CE2405](#ce2405), because `eat(nom s)` is a real move and the marker is visible. To keep using the value, do not call the consuming method -- an owned handle closes itself when its owner leaves scope, so an explicit `close()` is only for the caller who has to SEE the failure.
 
 ### CE2436 {#ce2436}
 
@@ -2525,7 +2525,7 @@ HANDLES.md ruling R27. A `nom self` method takes ownership of what it was called
 
 **Message:** `cannot move '{name}': it is {kind}, storage the program keeps for its whole run; borrow it instead, or take an independent value`
 
-This is the rule for UNIT-LEVEL STORAGE, and both kinds read it. A `var` declaration is storage in the data segment and a `const` is one object in `.rodata`: one per program, initialized before `main`, never destroyed at exit (docs/design/unit-storage.md). Neither has an owner that can hand the value away. Moving it out -- a `nom` argument, a `let` bound straight from it, a `return` of it, a `nom self` method such as `close()` -- would give a callee or a binding the right to free storage nothing re-initializes, so the same rule that fences `main`'s argv view ([CE2410](#ce2410)) fences both. A plain value copies out freely; only a type that owns a resource is refused, which is why `nom` of a `const i32` stays the harmless copy it always was. Pass it as a borrow (`f(v)`, `peek v`, `poke v`), or take an independent value: `.clone()` for a plain owner, `.share()` for a handle. A REBIND is the one way to change what a `var` holds, and it frees the old value. The constant half arrived with #726: a take of a constant compiled and ran, because a `nom` is a CONSUMING use and the borrow pass returned early for a name with no `BorrowState`. It was harmless by accident alone -- a constant could hold nothing but plain data and a literal-backed `string`, whose drop is a no-op -- and the constant surface has widened repeatedly. The home is the borrow pass because every other consuming-use rule is there ([CE2405](#ce2405), [CE2410](#ce2410), [CE2411](#ce2411), [CE2401](#ce2401)); [CE2400](#ce2400) stays the WRITE rule. A name behind an alias (`c.GREETING`) is the same declaration as the flat name and reads the same rule: until #1016 the borrow pass classified it as a field read, and no ownership decision was made, so the backend stopped with [CE0129](#ce0129).
+This is the rule for UNIT-LEVEL STORAGE, and both kinds read it. A `var` declaration is storage in the data segment and a `const` is one object in `.rodata`: one per program, initialized before `main`, never destroyed at exit (see [the unit-storage design](design/unit-storage.md)). Neither has an owner that can hand the value away. Moving it out -- a `nom` argument, a `let` bound straight from it, a `return` of it, a `nom self` method such as `close()` -- would give a callee or a binding the right to free storage nothing re-initializes, so the same rule that fences `main`'s argv view ([CE2410](#ce2410)) fences both. A plain value copies out freely; only a type that owns a resource is refused, so `nom` of a `const i32` is a harmless copy. Pass it as a borrow (`f(v)`, `peek v`, `poke v`), or take an independent value: `.clone()` for a plain owner, `.share()` for a handle. A REBIND is the one way to change what a `var` holds, and it frees the old value. [CE2400](#ce2400) is the WRITE rule. A name behind an alias (`c.GREETING`) is the same declaration as the flat name and reads the same rule.
 
 ## CE25xx: Result, Maybe and conversion errors {#ce25xx}
 
@@ -2553,7 +2553,7 @@ Result@(T, E) values must be explicitly handled before assigning to non-Result v
 
 **Message:** `cannot call .realise() on '{ty}' (a '~' success has no value to extract)`
 
-A `~ | E` function answers Result@(~, E): its success carries no value, so a default for it means nothing. Test the outcome with `match` or `.is_ok()`, or propagate it with `??` in a body with a channel. A bare `~` function answers no Result at all (docs/design/error-channel.md). The same rule holds for a Maybe@(~).
+A `~ | E` function answers Result@(~, E): its success carries no value, so a default for it means nothing. Test the outcome with `match` or `.is_ok()`, or propagate it with `??` in a body with a channel. A bare `~` function answers no Result at all (see [the error-channel design](design/error-channel.md)). The same rule holds for a Maybe@(~).
 
 ### CE2507 {#ce2507}
 
@@ -2566,7 +2566,7 @@ A `~ | E` function answers Result@(~, E): its success carries no value, so a def
 - `` a `Maybe` holds no error value, so write one with `or_err`: `m.or_err(nom <error value>)??` ``
 - `` answer a `Result@(T, E)` here (the callee writes `| E`), or use the value without `??` ``
 
-The ?? operator takes a Result@(T, E) and nothing else. It unwraps the Ok, or it returns the Err from the enclosing body, so the Err must hold an error value that the program made. A Maybe@(T) holds no error value: before #1168, ?? on a None returned an Err built from an undefined value, and the answer changed with --opt. Write the error value at the site with or\_err: m.or\_err(nom AppError.Empty)??. The ?? operator reads the TYPE of its operand and not its variant names, because type identity is nominal. So a user enum with Ok/Err or Some/None variants is not a Result: its Err payload is out of reach of the rule that an E is an error type. Answer a Result@(T, E) (a callee writes | E), or use the value without ??. The rule is ruling C8 of docs/design/error-conversion.md.
+The ?? operator takes a Result@(T, E) and nothing else. It unwraps the Ok, or it returns the Err from the enclosing body, so the Err must hold an error value that the program made. A Maybe@(T) holds no error value. Write the error value at the site with or\_err: m.or\_err(nom AppError.Empty)??. The ?? operator reads the TYPE of its operand and not its variant names, because type identity is nominal. So a user enum with Ok/Err or Some/None variants is not a Result: its Err payload is out of reach of the rule that an E is an error type. Answer a Result@(T, E) (a callee writes | E), or use the value without ??. See [the error-conversion design](design/error-conversion.md).
 
 ### CE2508 {#ce2508}
 
@@ -2574,7 +2574,7 @@ The ?? operator takes a Result@(T, E) and nothing else. It unwraps the Ok, or it
 
 **Message:** `` `??` is legal only in a body with an error channel ('| E' or a Result@(T, E) return) ``
 
-The ?? operator propagates an error by an early return, so it needs an enclosing body that returns a Result@(T, E): a function, a method or a lambda that writes '| E', or a function that returns an explicit Result@(T, E). This code is the backstop for a `??` that stands outside every body. A `??` in a BARE body is [CE0131](#ce0131), and a `??` on an operand that is not a Result@(T, E) is [CE2507](#ce2507) (docs/design/error-conversion.md section 4).
+The ?? operator propagates an error by an early return, so it needs an enclosing body that returns a Result@(T, E): a function, a method or a lambda that writes '| E', or a function that returns an explicit Result@(T, E). This code is the backstop for a `??` that stands outside every body. A `??` in a BARE body is [CE0131](#ce0131), and a `??` on an operand that is not a Result@(T, E) is [CE2507](#ce2507) (see [the error-conversion design](design/error-conversion.md)).
 
 ### CE2509 {#ce2509}
 
@@ -2592,7 +2592,7 @@ Sushi does not support string concatenation with the + operator. Use string inte
 
 **Message:** `cannot use operator with mixed numeric types: {left_type} and {right_type} (use 'as' to explicitly cast one operand)`
 
-Sushi converts no numeric type on its own, so two numeric operands of one operator must have the same type. This covers arithmetic (+ - \* / %), the comparisons (== != &lt; &lt;= > >=) and the bitwise & | ^. Use 'as' to cast one operand to the other's type: (low as u32) | wide. A shift is the exception: its right operand is a count, not a second value, so its type is free and the result keeps the type of the left operand. The bitwise half of the rule arrived with #438, where a mixed pair was silently widened or TRUNCATED by the backend and the wrong answer reached the binary.
+Sushi converts no numeric type on its own, so two numeric operands of one operator must have the same type. This covers arithmetic (+ - \* / %), the comparisons (== != &lt; &lt;= > >=) and the bitwise & | ^. Use 'as' to cast one operand to the other's type: (low as u32) | wide. A shift is the exception: its right operand is a count, not a second value, so its type is free and the result keeps the type of the left operand.
 
 ### CE2511 {#ce2511}
 
@@ -2607,7 +2607,7 @@ Sushi converts no numeric type on its own, so two numeric operands of one operat
 - `` only <{home}> may declare `extend {source} as {target}:`; answer an error type of your own, and convert both errors into it ``
 - `` declare `extend {source} as {target}:` in the unit that declares '{target}', and return the converted value ``
 
-The ?? operator propagates the error of the inner Result@(T, \{inner\_err\}) into the channel of the enclosing body, Result@(T, \{outer\_err\}). When the two error types are the same type, the error propagates unchanged. A `??` converts an error only through a declared conversion (docs/design/error-conversion.md section 3.3): when the two error types differ, it calls `extend {inner_err} as {outer_err}:` if the program declares it, and the help names that declaration. When no declaration of the pair is legal (a target with no home module, such as `StdError`, or a generic error type on either side), the help names `.map_err(f)??` at the site. A conversion is one step, so `A as B` and `B as C` do not give `A` to `C` (ruling C4): the lookup is an exact match on the pair, and a program that wants `A` to `C` declares it. Only the unit that declares the target type may declare the conversion ([CE2519](#ce2519)). For one site, `r.map_err(f)??` converts with no declaration.
+The ?? operator propagates the error of the inner Result@(T, \{inner\_err\}) into the channel of the enclosing body, Result@(T, \{outer\_err\}). When the two error types are the same type, the error propagates unchanged. A `??` converts an error only through a declared conversion (see [the error-conversion design](design/error-conversion.md)): when the two error types differ, it calls `extend {inner_err} as {outer_err}:` if the program declares it, and the help names that declaration. When no declaration of the pair is legal (a target with no home module, such as `StdError`, or a generic error type on either side), the help names `.map_err(f)??` at the site. A conversion is one step, so `A as B` and `B as C` do not give `A` to `C`: the lookup is an exact match on the pair, and a program that wants `A` to `C` declares it. Only the unit that declares the target type may declare the conversion ([CE2519](#ce2519)). For one site, `r.map_err(f)??` converts with no declaration.
 
 ### CE2512 {#ce2512}
 
@@ -2615,7 +2615,7 @@ The ?? operator propagates the error of the inner Result@(T, \{inner\_err\}) int
 
 **Message:** `shift count {count} is out of range for {value_type}: a count must be from 0 to {max_count}`
 
-A shift moves the bits of its left operand, so the width of that operand is what limits the count. A count at or above the width moves every bit out of the type, and a negative count is no shift at all. Neither is a large answer: LLVM makes the result poison and the hardware promises nothing, so the program prints whatever is left behind -- 0x12 &lt;&lt; 8 on a u8 answered 32 (#438). Cast the value to a wider type when the shift is meant to reach further: (high as u32) &lt;&lt; 8. Only a count the compiler can read is an error. A computed count is defined instead of checked: a shift that empties the type answers 0, and an arithmetic right shift leaves the sign behind, which is Go's rule rather than the masking Java and Rust expose.
+A shift moves the bits of its left operand, so the width of that operand is what limits the count. A count at or above the width moves every bit out of the type, and a negative count is no shift at all. Neither has a defined answer: LLVM makes the result poison and the hardware promises nothing. Cast the value to a wider type when the shift is meant to reach further: (high as u32) &lt;&lt; 8. Only a count the compiler can read is an error. A computed count is defined instead of checked: a shift that empties the type answers 0, and an arithmetic right shift leaves the sign behind, which is the rule of Go.
 
 ### CE2513 {#ce2513}
 
@@ -2623,7 +2623,7 @@ A shift moves the bits of its left operand, so the width of that operand is what
 
 **Message:** `cannot compare '{left_type}' with '{right_type}' using operator '{op}'`
 
-A comparison asks one question of two values, so both operands must be of one type. Sushi converts nothing on its own, and there is no order between a string and a number to fall back on. Cast one operand with 'as' when both are numeric, or compare like with like. Two numeric operands that disagree are [CE2510](#ce2510) instead, which says which widths met. This code arrived with #449: every pair the typecheck pass did not look at reached the backend, which then tried to compare a string or a struct value as an i32 and answered with a [CE0017](#ce0017) internal error.
+A comparison asks one question of two values, so both operands must be of one type. Sushi converts nothing on its own, and there is no order between a string and a number to fall back on. Cast one operand with 'as' when both are numeric, or compare like with like. Two numeric operands that disagree are [CE2510](#ce2510) instead, which says which widths met.
 
 ### CE2514 {#ce2514}
 
@@ -2638,7 +2638,7 @@ A comparison asks one question of two values, so both operands must be of one ty
 - `compare the elements, or the lengths`
 - `compare the fields one at a time`
 
-Equality (== !=) reads the predefined perk `Eq`, and an order (&lt; > &lt;= >=) reads `Ord`. A primitive keeps a closed set: equality for the numeric types, bool and string, an order for the numeric types and string, where it reads the bytes. A struct or an enum, `Maybe` and `Result` included, has the equality and the order the compiler DERIVES from what it holds -- every field, or the variant and then its payload -- unless an `extend T with Eq` (or `Ord`) implementation overrides it. A type that holds something with no such contract -- a function value, a `ptr`, a `HashMap` -- has none, and a note names the field that stops it. An array, a `List` and an `Own` compare only where they are held inside a type. A bool is deliberately excluded from the order at the top level: false &lt; true is almost always a typo for != or a missing 'and'. Inside a derived order a bool field orders false before true. This code arrived with #449, where a struct, an enum and an array comparison each reached the backend and became a [CE0017](#ce0017) internal error.
+Equality (== !=) reads the predefined perk `Eq`, and an order (&lt; > &lt;= >=) reads `Ord`. A primitive keeps a closed set: equality for the numeric types, bool and string, an order for the numeric types and string, where it reads the bytes. A struct or an enum, `Maybe` and `Result` included, has the equality and the order the compiler DERIVES from what it holds -- every field, or the variant and then its payload -- unless an `extend T with Eq` (or `Ord`) implementation overrides it. A type that holds something with no such contract -- a function value, a `ptr`, a `HashMap` -- has none, and a note names the field that stops it. An array, a `List` and an `Own` compare only where they are held inside a type. A bool is deliberately excluded from the order at the top level: false &lt; true is almost always a typo for != or a missing 'and'. Inside a derived order a bool field orders false before true.
 
 ### CE2515 {#ce2515}
 
@@ -2651,7 +2651,7 @@ Equality (== !=) reads the predefined perk `Eq`, and an order (&lt; > &lt;= >=) 
 - `handle the Maybe first: match on it, '.realise(default)', or give it an error value and propagate with '.or_err(nom e)??' -- e.g. '{called}().or_err(nom <error value>)??.{method}()'`
 - `handle the channel first: match on it, '.realise(default)', or propagate with '??' -- e.g. '{called}()??.{method}()'`
 
-A method that declares '| E' returns Result@(T, E), and a Maybe@(T) is likewise more than the bare T, so the chain stops until the wrapper is handled (ruling 5 of the UFCS epic). This is a RESOLUTION FALLBACK, not a receiver-kind ban: resolution runs first, a method found on the Result/Maybe enum itself (.realise, .hash) is legal, and this code fires only when the method is missing there but present on the payload type -- which is what tells a typo from an unhandled channel. Append '??' to the call that returns a Result to propagate its Err. A Maybe holds no error value and `??` takes a Result only ([CE2507](#ce2507)), so the help for a Maybe writes one first: '.or\_err(nom e)??'. Or handle the wrapper in place with match or .realise(default). The receiver is a Result or a Maybe by type identity, never by the names of its variants.
+A method that declares '| E' returns Result@(T, E), and a Maybe@(T) is likewise more than the bare T, so the chain stops until the wrapper is handled. This is a RESOLUTION FALLBACK, not a receiver-kind ban: resolution runs first, a method found on the Result/Maybe enum itself (.realise, .hash) is legal, and this code fires only when the method is missing there but present on the payload type -- which is what tells a typo from an unhandled channel. Append '??' to the call that returns a Result to propagate its Err. A Maybe holds no error value and `??` takes a Result only ([CE2507](#ce2507)), so the help for a Maybe writes one first: '.or\_err(nom e)??'. Or handle the wrapper in place with match or .realise(default). The receiver is a Result or a Maybe by type identity, never by the names of its variants.
 
 ### CE2516 {#ce2516}
 
@@ -2664,7 +2664,7 @@ A method that declares '| E' returns Result@(T, E), and a Maybe@(T) is likewise 
 - `use '.is_ok()' to test it, or take the value with '??', '.realise(default)' or match`
 - `use '.is_some()' to test it, or take the value with '.realise(default)', match, or '.or_err(nom e)??'`
 
-A condition asks a yes-or-no question, so it takes a bool and nothing else. Sushi gives no other type a truth value: an integer, a string and a Maybe@(T) were all refused with [CE2005](#ce2005) from the start. A Result@(T, E) was the one exception. It read the Ok tag, which made 'if (f())' mean 'did the call succeed' -- a second, unwritten rule that only this one type obeyed. The exception is removed with #522, and Result now agrees with Maybe. The reason is that the exception could not be read correctly. A Result@(bool, E) has two meanings in a condition, because both the wrapper and the payload are a legal condition on their own. The compiler took the wrapper in silence, so 'Ok(false)' ran the true branch and the bool was never read. This shipped a wrong answer: io/path's extension() tested a Result@(bool) that was missing its '??', and every path answered with an empty extension (#520). C++ keeps the same design for std::optional and std::expected, and optional&lt;bool> is the standing example of the trap. Rust, Swift, Go, Kotlin and Haskell all refuse the wrapper and make you name the question. Sushi names it too: '.is\_ok()' or '.is\_some()' asks whether the call succeeded, '??' propagates the error of a Result ('.or\_err(nom e)??' gives a Maybe an error value first, because '??' takes a Result only), '.realise(default)' takes the value with a fallback, and match reads both arms. This code covers every condition position: an if, a while, and the operands of and, or, xor and not.
+A condition asks a yes-or-no question, so it takes a bool and nothing else. Sushi gives no other type a truth value: an integer and a string are refused with [CE2005](#ce2005), and a Result@(T, E) or a Maybe@(T) is refused with this code. A wrapper in a condition has no clear meaning: a Result@(bool, E) has two meanings, because both the wrapper and the payload are a legal condition on their own. Rust, Swift, Go, Kotlin and Haskell also refuse the wrapper and make you name the question. Name the question: '.is\_ok()' or '.is\_some()' asks whether the call succeeded, '??' propagates the error of a Result ('.or\_err(nom e)??' gives a Maybe an error value first, because '??' takes a Result only), '.realise(default)' takes the value with a fallback, and match reads both arms. This code covers every condition position: an if, a while, and the operands of and, or, xor and not.
 
 ### CE2517 {#ce2517}
 
@@ -2672,7 +2672,7 @@ A condition asks a yes-or-no question, so it takes a bool and nothing else. Sush
 
 **Message:** `the '??' binder needs an item that is a Result, and this loop's item is '{ty}'`
 
-A foreach walks anything whose next() answers Maybe@(T), and the '??' on the BINDER is the short form for the case where T is a Result: it unwraps the Ok and leaves the function on the first Err, exactly as '??' does in every other position. An item that is not a Result has nothing to unwrap, so the marker would mean nothing -- drop it and bind the item itself. This is not [CE2515](#ce2515), which is a resolution fallback for a CHAINED call whose channel is still unhandled, and not [CE2516](#ce2516), which is a wrapper standing where a bool belongs; here the item is the right shape for the loop and the wrong shape for the marker. A fallible iterator is written by setting T to a Result: next() answers Maybe@(Result@(T, E)), where the outer Maybe says whether there is more and the inner Result says whether reading it worked (HANDLES.md ruling R21). The protocol itself carries no error channel, so a next() that declares '| E' is not a fallible iterator -- it is a method whose own answer is wrapped, and the loop will not accept it.
+A foreach walks anything whose next() answers Maybe@(T), and the '??' on the BINDER is the short form for the case where T is a Result: it unwraps the Ok and leaves the function on the first Err, exactly as '??' does in every other position. An item that is not a Result has nothing to unwrap, so the marker would mean nothing -- drop it and bind the item itself. This is not [CE2515](#ce2515), which is a resolution fallback for a CHAINED call whose channel is still unhandled, and not [CE2516](#ce2516), which is a wrapper standing where a bool belongs; here the item is the right shape for the loop and the wrong shape for the marker. A fallible iterator is written by setting T to a Result: next() answers Maybe@(Result@(T, E)), where the outer Maybe says whether there is more and the inner Result says whether reading it worked. The protocol itself carries no error channel, so a next() that declares '| E' is not a fallible iterator -- it is a method whose own answer is wrapped, and the loop will not accept it.
 
 ### CE2518 {#ce2518}
 
@@ -2685,7 +2685,7 @@ A foreach walks anything whose next() answers Maybe@(T), and the '??' on the BIN
 - `take the value with '??', '.realise(default)' or match`
 - `take the value with '.realise(default)', match, or '.or_err(nom e)??'`
 
-Arithmetic combines numbers, so every operand of + - \* / % and of the unary minus must be an integer or a float. Nothing else carries the operation. A bool is not 0 and 1 here, an enum is a tag and a payload, and a struct or an array is a value with parts -- add the parts one at a time, and use match to read an enum. An unhandled Result@(T, E) or Maybe@(T) is the common way to land here: for a Result the fault is a missing '??', and the diagnostic names that escape beside '.realise(default)' and match. A Maybe holds no error value and '??' takes a Result only, so for a Maybe the help names '.or\_err(nom e)??' in place of '??'. The one carve-out is '+' with a string operand, which is [CE2509](#ce2509), because Sushi has no concatenation operator and [CE2509](#ce2509) names the interpolation that replaces it. Two numeric operands that disagree in width are [CE2510](#ce2510) instead, which says which widths met. This code arrived with #709. The typecheck pass read no arithmetic operand at all, so everything reached the backend: a bool or a wrapper beside a number became a [CE0000](#ce0000) internal error out of emit\_arithmetic, a struct, an enum or an array operand failed the LLVM IR parse with the same code, and '-true' compiled and printed 'true'. The constant evaluator refused every one of them with [CE0110](#ce0110) from the start, so a body and a constant now agree.
+Arithmetic combines numbers, so every operand of + - \* / % and of the unary minus must be an integer or a float. Nothing else carries the operation. A bool is not 0 and 1 here, an enum is a tag and a payload, and a struct or an array is a value with parts -- add the parts one at a time, and use match to read an enum. An unhandled Result@(T, E) or Maybe@(T) is the common way to land here: for a Result the fault is a missing '??', and the diagnostic names that escape beside '.realise(default)' and match. A Maybe holds no error value and '??' takes a Result only, so for a Maybe the help names '.or\_err(nom e)??' in place of '??'. The one carve-out is '+' with a string operand, which is [CE2509](#ce2509), because Sushi has no concatenation operator and [CE2509](#ce2509) names the interpolation that replaces it. Two numeric operands that disagree in width are [CE2510](#ce2510) instead, which says which widths met. In a constant expression, the same operands are [CE0110](#ce0110).
 
 ### CE2519 {#ce2519}
 
@@ -2698,7 +2698,7 @@ Arithmetic combines numbers, so every operand of + - \* / % and of the unary min
 - `declare an error type of your own, and convert '{name}' into it`
 - `move the conversion into the unit that declares '{name}'`
 
-A conversion `extend <Source> as <Target>:` may be declared only in the unit that declares the TARGET type (docs/design/error-conversion.md section 3.5, ruling C5), the rule that `Drop` has already. So each pair of types has at most one declaration in the program, because the target's unit is unique: two libraries cannot both declare `FileError as AppError`, and no clash must be found across units and libraries. An application lists the errors that its own error type absorbs beside the declaration of that type. For a predefined error type the declaring unit is its HOME module: `FileError` and `IoError` have the home `<io/error>`, so a conversion into `IoError` lives there and nowhere else. A library cannot convert its own error into `IoError`; it declares its own error type and converts `IoError` into it. `StdError` has no home module, so no unit may declare a conversion into it (ruling C12): a program that wants a target for its conversions declares an error type of its own. A note points at the declaration of the target when the target has one.
+A conversion `extend <Source> as <Target>:` may be declared only in the unit that declares the TARGET type, the rule that `Drop` has already (see [the error-conversion design](design/error-conversion.md)). So each pair of types has at most one declaration in the program, because the target's unit is unique: two libraries cannot both declare `FileError as AppError`, and no clash must be found across units and libraries. An application lists the errors that its own error type absorbs beside the declaration of that type. For a predefined error type the declaring unit is its HOME module: `FileError` and `IoError` have the home `<io/error>`, so a conversion into `IoError` lives there and nowhere else. A library cannot convert its own error into `IoError`; it declares its own error type and converts `IoError` into it. `StdError` has no home module, so no unit may declare a conversion into it: a program that wants a target for its conversions declares an error type of its own. A note points at the declaration of the target when the target has one.
 
 ### CE2520 {#ce2520}
 
@@ -2708,7 +2708,7 @@ A conversion `extend <Source> as <Target>:` may be declared only in the unit tha
 
 **Help:** `declare '{name}' with 'error' in place of 'enum'`
 
-A conversion turns one error value into another, for `??` and for `as` (docs/design/error-conversion.md section 3.6, ruling C6). The `E` of every `Result` is an error type (E3), so a source or a target that is not an error type -- a plain enum, a struct, a primitive -- could never meet a `??`. Declare an enum that is an error vocabulary with `error`. Both sides are also NON-GENERIC: a generic error type and an instance of one (`DecodeError@(i32)`) are refused, so the lookup is a pair of names and the library manifest a pair of strings. A generic FUNCTION may still use a conversion: in `fn f@(E)(...) T | AppError` the pair is known for each instance, and each instance looks it up. To convert a generic error, declare a non-generic error type that holds it, or convert at the one site with `map_err`.
+A conversion turns one error value into another, for `??` and for `as` (see [the error-conversion design](design/error-conversion.md)). The `E` of every `Result` is an error type ([CE2084](#ce2084)), so a source or a target that is not an error type -- a plain enum, a struct, a primitive -- could never meet a `??`. Declare an enum that is an error vocabulary with `error`. Both sides are also NON-GENERIC: a generic error type and an instance of one (`DecodeError@(i32)`) are refused, so the lookup is a pair of names and the library manifest a pair of strings. A generic FUNCTION may still use a conversion: in `fn f@(E)(...) T | AppError` the pair is known for each instance, and each instance looks it up. To convert a generic error, declare a non-generic error type that holds it, or convert at the one site with `map_err`.
 
 ### CE2521 {#ce2521}
 
@@ -2718,7 +2718,7 @@ A conversion turns one error value into another, for `??` and for `as` (docs/des
 
 **Help:** `` `??` already propagates an error of the same type unchanged; delete the declaration ``
 
-An identity conversion does nothing that the language does not already do: `??` propagates an error of the same type unchanged, and `e as T` on a value of type `T` gives the value unchanged to its new owner (docs/design/error-conversion.md section 3.4). A declaration of one would be a second, silent path for the same propagation, so it is refused. Delete the declaration.
+An identity conversion does nothing that the language does not already do: `??` propagates an error of the same type unchanged, and `e as T` on a value of type `T` gives the value unchanged to its new owner (see [the error-conversion design](design/error-conversion.md)). A declaration of one would be a second, silent path for the same propagation, so it is refused. Delete the declaration.
 
 ### CE2522 {#ce2522}
 
@@ -2728,7 +2728,7 @@ An identity conversion does nothing that the language does not already do: `??` 
 
 **Help:** `` put the call under '??': `{receiver}.{method}(...)??`, or take an owned copy first: `{receiver}.clone().{method}(...)` ``
 
-A Maybe that is a borrow -- a get-out such as 'xs.get(0)', a parameter, a pattern binding -- keeps its payload with its owner. 'or\_err' reads such a Maybe through and does not take it (docs/design/error-conversion.md section 4), so its Result holds a borrowed Ok and an owned Err. Only '??' takes the two apart: the Err moves out to the caller, and the Ok binds a borrow, as 'xs.get(0)??' does. Any other position -- a 'let', a method call such as '.is\_ok()', a 'match', an argument, a 'return' -- would hold the Result whole, and no rule frees one arm and keeps the other. So the call stands under '??', or the program takes an owned copy first with '.clone().or\_err(...)'. The rule applies when the payload owns a resource. An owned Maybe, and a borrowed Maybe whose payload owns nothing, give a Result that owns both arms, and that Result is legal in every position.
+A Maybe that is a borrow -- a get-out such as 'xs.get(0)', a parameter, a pattern binding -- keeps its payload with its owner. 'or\_err' reads such a Maybe through and does not take it (see [the error-conversion design](design/error-conversion.md)), so its Result holds a borrowed Ok and an owned Err. Only '??' takes the two apart: the Err moves out to the caller, and the Ok binds a borrow, as 'xs.get(0)??' does. Any other position -- a 'let', a method call such as '.is\_ok()', a 'match', an argument, a 'return' -- would hold the Result whole, and no rule frees one arm and keeps the other. So the call stands under '??', or the program takes an owned copy first with '.clone().or\_err(...)'. The rule applies when the payload owns a resource. An owned Maybe, and a borrowed Maybe whose payload owns nothing, give a Result that owns both arms, and that Result is legal in every position.
 
 ### CE2523 {#ce2523}
 
@@ -2738,7 +2738,7 @@ A Maybe that is a borrow -- a get-out such as 'xs.get(0)', a parameter, a patter
 
 **Help:** `build the target value directly, for example with one of its variants`
 
-Inside the body of `extend <Source> as <Target>:`, a cast `x as <Target>` of a value of the source calls that same conversion. `self` is always a value of the source, so `self as <Target>` never ends, and the cast of another value of the source only moves the work to one more call that the body can write directly. So the cast of the conversion's own pair is refused in its own body; a cast of another pair (`self as <OtherError>`) is legal. A recursion through another function is not detected, as for every function. Ruled 2026-10-04 (docs/design/error-conversion.md section 3.4).
+Inside the body of `extend <Source> as <Target>:`, a cast `x as <Target>` of a value of the source calls that same conversion. `self` is always a value of the source, so `self as <Target>` never ends, and the cast of another value of the source only moves the work to one more call that the body can write directly. So the cast of the conversion's own pair is refused in its own body; a cast of another pair (`self as <OtherError>`) is legal. A recursion through another function is not detected, as for every function. See [the error-conversion design](design/error-conversion.md).
 
 ## CE30xx: Unit errors {#ce30xx}
 
@@ -2766,7 +2766,7 @@ A required unit file could not be found at the expected location.
 
 **Message:** `cannot {verb} private {kind} '{name}' from unit '{current_unit}' ({kind} is defined in '{owner}')`
 
-A private declaration can only be named from within the unit that declares it. Mark it `public` to let another unit name it. The `{kind}` and `{verb}` fields carry which kind of declaration it was, so one gate answers for a function, a constant, a struct and an enum rather than four. A generic is no exception (#467): a source library's units are ordinary units at the consumer, so a private generic of one resolves like any other symbol, and this is where it is refused. Before that the only place that noticed was the backend, which had no template to emit. A binary library answers here too (#469): the manifest names what the library declares and does not export, so a name that reaches the consumer's tables not at all is still private and not undefined. `{owner}` is then the library rather than a unit.
+A private declaration can only be named from within the unit that declares it. Mark it `public` to let another unit name it. The `{kind}` and `{verb}` fields carry which kind of declaration it was, so one code answers for a function, a constant, a struct and an enum. A generic is no exception: a source library's units are ordinary units at the consumer, so a private generic of one resolves like any other symbol, and this is where it is refused. A binary library answers here too: the manifest names what the library declares and does not export, so a name that reaches the consumer's tables not at all is still private and not undefined. `{owner}` is then the library rather than a unit.
 
 ### CE3006 {#ce3006}
 
@@ -2816,7 +2816,7 @@ A constraint is part of a signature: a consumer that calls a generic has to sati
 
 **Message:** `cannot declare {kind} '{name}': '{owner}' declares it too`
 
-A TYPE is one name for the whole program. Identity is nominal, so one name is one shape, and a source library's units and a bundled stdlib module are ordinary compilation units at the consumer: a struct or an enum that either of them declares is a name the consumer cannot declare again, even where the library keeps it private and the consumer cannot see it. The compiler used to let the consumer's declaration replace the library's without a word. The replacement was never registered, so the consumer also lost its own declaration, and then heard [CE3005](#ce3005) about a private it wrote itself, or [CE2027](#ce2027) about a struct shape it never spelled. This code refuses the declaration and names the unit that holds the name. A BINARY library holds the same rule: a concrete type it exports (#739) and a type it keeps PRIVATE (#761) are both refused with this code, because the library's bodies were compiled against its own layout, and the analysis stops after the refusal so no body is checked against the consumer's type. The FUNCTION arm retired with unit namespaces: a function carries the unit that declared it and each unit reads its own, so a consumer may declare a function beside a library's private one. Rename your type. `docs/design/type-identity.md` phase 2 -- an interned name that carries its unit -- is what would lift this.
+A TYPE is one name for the whole program. Identity is nominal, so one name is one shape, and a source library's units and a bundled stdlib module are ordinary compilation units at the consumer: a struct or an enum that either of them declares is a name the consumer cannot declare again, even where the library keeps it private and the consumer cannot see it. This code refuses the declaration and names the unit that holds the name. A BINARY library holds the same rule: a concrete type it exports and a type it keeps PRIVATE are both refused with this code, because the library's bodies were compiled against its own layout, and the analysis stops after the refusal so no body is checked against the consumer's type. A function is not affected: a function carries the unit that declared it and each unit reads its own, so a consumer may declare a function beside a library's private one. Rename your type. See [the type-identity design](design/type-identity.md).
 
 ### CE3012 {#ce3012}
 
@@ -2826,7 +2826,7 @@ A TYPE is one name for the whole program. Identity is nominal, so one name is on
 
 **Help:** `` say which one: `use "{unit}" as u` above, then `u.{name}` ``
 
-More than one unit in scope declares this name, and nothing written here says which one is meant. A note points at each candidate. The unit's OWN declaration always wins, so this can only happen where the name comes from somewhere else entirely; a private declaration next door is not a candidate, because it is not nameable. Bind one of the units to an alias and write the name behind it -- `use "math" as m` makes `m.sine` the answer -- or rename one of the declarations. This replaces CE3003, which refused the whole program for a collision that might never be written, said so with no location, and left two libraries that both exported one name unusable together.
+More than one unit in scope declares this name, and nothing written here says which one is meant. A note points at each candidate. The unit's OWN declaration always wins, so this can only happen where the name comes from somewhere else entirely; a private declaration next door is not a candidate, because it is not nameable. Bind one of the units to an alias and write the name behind it -- `use "math" as m` makes `m.sine` the answer -- or rename one of the declarations.
 
 ### CE3013 {#ce3013}
 
@@ -2848,7 +2848,7 @@ An alias binds a name in the unit that wrote it, so it collides with anything el
 
 **Message:** `` a `use` must come before every declaration ``
 
-Every import stands at the top of the unit, after the unit's own doc block if it has one, and a namespace is bound for the whole unit rather than from its `use` downwards. The two halves answer one question today's grammar leaves open in both directions: a `use` is a toplevel, so it may sit anywhere, and a declaration is already order-independent. Go and Java both make the placement mandatory; Rust leaves it to convention. Sushi follows Go and Java, so a reader sees a unit's dependencies in one block. Move the `use` above the first declaration.
+Every import stands at the top of the unit, after the unit's own doc block if it has one, and a namespace is bound for the whole unit rather than from its `use` downwards. So a reader sees the dependencies of a unit in one block, as in Go and Java. Move the `use` above the first declaration.
 
 ### CE3015 {#ce3015}
 
@@ -2858,7 +2858,7 @@ Every import stands at the top of the unit, after the unit's own doc block if it
 
 **Help:** `` add `use <{module}>` above the first declaration of this unit ``
 
-A built-in method whose body lives in a stdlib module is callable only where that module is imported. The refusal used to be [CE0096](#ce0096), an INTERNAL error: it told the reader their program was a bug in the compiler, carried no line, no column and no caret, and asked for a report -- for a missing `use`. A missing import is a mistake in the program and reads like one now. Add the import the message names. A DIRECTORY import covers every module under it, so `use <io>` opens both `<io/stdio>` and `<io/files>`; a SIBLING import does not, and `use <io/files>` alone never made `stdout.write()` legal (#501). The import must be in the unit that holds the call: an import in another unit of the same program does not count, because scope is per unit (#942).
+A built-in method whose body lives in a stdlib module is callable only where that module is imported. A missing import is a mistake in the program. Add the import the message names. A DIRECTORY import covers every module under it; a SIBLING import does not. The import must be in the unit that holds the call: an import in another unit of the same program does not count, because scope is per unit.
 
 ### CE3016 {#ce3016}
 
@@ -2866,7 +2866,7 @@ A built-in method whose body lives in a stdlib module is callable only where tha
 
 **Message:** `` a `public use` takes no `as` ``
 
-`public use X` re-exports what X brings: the importing unit takes X's public names as its own and hands them to its importers, flat behind a flat `use` of it and behind the dot of an aliased one (`docs/design/unit-namespaces.md` section 8.1, Ruling 7). A re-export is of NAMES and never of a namespace, so there is nothing an alias could bind: an alias is local to the unit that wrote it (section 8) and is not exported, and a re-export that carried one would make the importer's spelling depend on a name it never wrote. The alias still binds here, as a plain `use ... as` would, so the one fault gets one diagnostic. Drop the `public` to keep the alias for this unit alone, or drop the `as` to re-export.
+`public use X` re-exports what X brings: the importing unit takes X's public names as its own and hands them to its importers, flat behind a flat `use` of it and behind the dot of an aliased one (see [the unit-namespaces design](design/unit-namespaces.md)). A re-export is of NAMES and never of a namespace, so there is nothing an alias could bind: an alias is local to the unit that wrote it and is not exported, and a re-export that carried one would make the importer's spelling depend on a name it never wrote. The alias still binds here, as a plain `use ... as` would, so the one fault gets one diagnostic. Drop the `public` to keep the alias for this unit alone, or drop the `as` to re-export.
 
 ### CE3017 {#ce3017}
 
@@ -2874,7 +2874,7 @@ A built-in method whose body lives in a stdlib module is callable only where tha
 
 **Message:** `cannot read '{path}': {reason}`
 
-The compiler could not read a source file: the main source or a unit it imports. The reason is the operating system's (the path is a directory, the file cannot be opened) or the text is not valid UTF-8, and then the reason names the first byte that is not and its line. Sushi source is UTF-8. This is an input condition and not a compiler bug, which is why it is not [CE0000](#ce0000): a source that was not UTF-8 used to reach the top-level guard as an internal error, and an unreadable unit printed a bare line with no code. Save the file as UTF-8, or fix the path.
+The compiler could not read a source file: the main source or a unit it imports. The reason is the operating system's (the path is a directory, the file cannot be opened) or the text is not valid UTF-8, and then the reason names the first byte that is not and its line. Sushi source is UTF-8. This is an input condition and not a compiler bug. Save the file as UTF-8, or fix the path.
 
 ### CE3018 {#ce3018}
 
@@ -2890,7 +2890,7 @@ The compiler could not read a source file: the main source or a unit it imports.
 
 **Message:** `cannot write '{path}': '{directory}' is not a directory`
 
-The output path named with `-o` is in a directory that does not exist, or its parent is not a directory. The binary, the object file, the `.ll` file and the `.slib` are all written beside that path, so the build is refused after the analysis and before any code is generated. The compiler does not create the directory: a mistyped path would otherwise create a directory nobody asked for. This is an input condition and not a compiler bug, which is why it is not [CE0000](#ce0000); it used to reach the top-level guard as an internal error, or the linker as [CE3008](#ce3008) on an incremental build. Create the directory, or fix the path.
+The output path named with `-o` is in a directory that does not exist, or its parent is not a directory. The binary, the object file, the `.ll` file and the `.slib` are all written beside that path, so the build is refused after the analysis and before any code is generated. The compiler does not create the directory: a mistyped path would otherwise create a directory nobody asked for. This is an input condition and not a compiler bug. Create the directory, or fix the path.
 
 ### CE3020 {#ce3020}
 
@@ -2898,7 +2898,7 @@ The output path named with `-o` is in a directory that does not exist, or its pa
 
 **Message:** `cannot write '{path}': {reason}`
 
-The compiler could not write a file that the command line asked for: the output named with `-o` (the binary, the `.slib`, the object file beside it) or a file in the `--cache-dir` cache. The reason is the operating system's. An `-o` path that is an existing directory, or that is in a directory the user cannot write, is refused after the analysis and before any code is generated; a write that fails later reads the same code. This is an input or environment condition and not a compiler bug, which is why it is not [CE0000](#ce0000): a directory at the `-o` path used to reach the linker as [CE3008](#ce3008), and a directory that could not be written used to reach the top-level guard as an internal error (#1010). Fix the path, remove the directory, or choose a directory that you can write.
+The compiler could not write a file that the command line asked for: the output named with `-o` (the binary, the `.slib`, the object file beside it) or a file in the `--cache-dir` cache. The reason is the operating system's. An `-o` path that is an existing directory, or that is in a directory the user cannot write, is refused after the analysis and before any code is generated; a write that fails later reads the same code. This is an input or environment condition and not a compiler bug. Fix the path, remove the directory, or choose a directory that you can write.
 
 ### CE3021 {#ce3021}
 
@@ -2906,7 +2906,7 @@ The compiler could not write a file that the command line asked for: the output 
 
 **Message:** `` `use <{module}>` has no file for this host '{host}' (the hosts are: {hosts}) ``
 
-A per-platform standard-library module (#1089) is one bundled source file per platform and architecture, and the compiler selects the file of the host it compiles on. Sushi has no conditional compilation, so a host with no file cannot compile the module at all: every value in it (an `open` flag, a struct offset, an errno number) is a fact about one platform. The supported hosts are the ones the message lists. A new host needs its own file, made with `tests/platform_probe/probe.c` on that host.
+A per-platform standard-library module is one bundled source file per platform and architecture, and the compiler selects the file of the host it compiles on. Sushi has no conditional compilation, so a host with no file cannot compile the module at all: every value in it (an `open` flag, a struct offset, an errno number) is a fact about one platform. The supported hosts are the ones the message lists. A new host needs its own file, made with `tests/platform_probe/probe.c` on that host.
 
 ## CE35xx: Library errors {#ce35xx}
 
@@ -2942,7 +2942,7 @@ Library bitcode and manifest files not found in search paths.
 
 **Message:** `library '{lib}' accepts compiler {requires}, this is {current}`
 
-A source library is compiled by the CONSUMER's compiler, not the author's, so a library that built cleanly under one compiler can fail under a later one. That is the standard cost of source distribution and it is not fixable -- only declarable. Every .slib states `requires_compiler`; the default a build stamps is `~<major>.<minor>` of the building compiler, because pre-1.0 semver makes the minor the breaking unit. A warning was considered and rejected: a real incompatibility that is only warned about surfaces later as a confusing error inside library source the consumer never wrote. The escape, for an author testing a library forward against a new compiler, is --ignore-compiler-version. The check is skipped, never failed, when either version cannot be parsed.
+A source library is compiled by the CONSUMER's compiler, not the author's, so a library that built cleanly under one compiler can fail under a later one. Every .slib states `requires_compiler`; the default a build stamps is `~<major>.<minor>` of the building compiler, because pre-1.0 semver makes the minor the breaking unit. The escape, for an author testing a library forward against a new compiler, is --ignore-compiler-version. The check is skipped, never failed, when either version cannot be parsed.
 
 ### CE3504 {#ce3504}
 
@@ -2958,7 +2958,7 @@ Libraries must be compiled for the same platform they are used on.
 
 **Message:** `cannot determine the version of library '{lib}': {reason}`
 
-A .slib records `library_version`, which it never used to: `library_name` came from the output filename and nothing stated a version at all. The value comes from `[package] version` in the nori.toml in the current directory when one exists, otherwise from an explicit --lib-version. A nori.toml in a parent directory or beside the sources is not read (#1066). Neither present is this error, and so is a --lib-version that CONTRADICTS the nori.toml -- silently preferring one would let a package ship under a version it does not claim.
+A .slib records `library_version`. The value comes from `[package] version` in the nori.toml in the current directory when one exists, otherwise from an explicit --lib-version. A nori.toml in a parent directory or beside the sources is not read. Neither present is this error, and so is a --lib-version that CONTRADICTS the nori.toml -- the compiler does not choose one, because the package must not ship under a version it does not claim.
 
 ### CE3506 {#ce3506}
 
@@ -2966,7 +2966,7 @@ A .slib records `library_version`, which it never used to: `library_name` came f
 
 **Message:** `corrupted library file '{path}': source section truncated (expected {expected} bytes, got {actual})`
 
-The container's sibling of [CE3510](#ce3510)/[CE3511](#ce3511) for the source section that version 4 added between the metadata and the bitcode. Three codes rather than one because the registry text names which section is short, which is what tells a reader where the file was cut.
+The container's sibling of [CE3510](#ce3510)/[CE3511](#ce3511) for the source section between the metadata and the bitcode. Each of the three codes names the section that is short, so it tells a reader where the file was cut.
 
 ### CE3507 {#ce3507}
 
@@ -3030,7 +3030,7 @@ Library file exceeds reasonable size limit.
 
 **Message:** `cannot read library file '{path}': {reason}`
 
-The operating system refused to open or to read the file: a directory, a file with no read permission, or an I/O failure. The reason names the cause in the words the slib-info tool uses for the same errno, so both halves of --lib-info say the same thing. It used to be a Python traceback from the --lib-info fallback and [CE0000](#ce0000) from a `use <lib/...>` that named a directory (#943).
+The operating system refused to open or to read the file: a directory, a file with no read permission, or an I/O failure. The reason names the cause in the words the slib-info tool uses for the same errno, so both halves of --lib-info say the same thing.
 
 ### CE3516 {#ce3516}
 
@@ -3038,7 +3038,7 @@ The operating system refused to open or to read the file: a directory, a file wi
 
 **Message:** `'{path}' is not a library file: the name of a .slib file ends in .slib`
 
-`--lib-info` reads a library, and a library file is named `<name>.slib`. Both halves of the command refuse another name before they open the file, with this code, so a file that happens to hold a library under another name is refused as well. It used to be an uncoded line on stderr from each half, worded differently (#977).
+`--lib-info` reads a library, and a library file is named `<name>.slib`. Both halves of the command refuse another name before they open the file, with this code, so a file that happens to hold a library under another name is refused as well.
 
 ### CE3517 {#ce3517}
 
@@ -3046,7 +3046,7 @@ The operating system refused to open or to read the file: a directory, a file wi
 
 **Message:** `cannot build library '{lib}': {reason} [{nori_code}]`
 
-A --lib build reads the nori.toml in the current directory for the library version. A nori.toml that exists must be valid: every fault that nori's manifest reader refuses stops the build here, a file that is not TOML or UTF-8, a field of the wrong TOML type, and also a field with a bad value (a missing field, a bad package name, a bad version, a bad dependency), although the compiler reads the version alone. The user wrote a manifest and it is wrong, and a build that used --lib-version would hide the fault and the version conflict of [CE3505](#ce3505). The reason is the text of the nori code in brackets -- the one manifest reader makes the check for the compiler and for nori, so both name the file and the field in the same words. It used to be a silent skip, and before that [CE0000](#ce0000) (#1040); a value fault was a silent skip until #1066. A missing nori.toml is not this error, and a nori.toml that cannot be read is [CE3518](#ce3518).
+A --lib build reads the nori.toml in the current directory for the library version. A nori.toml that exists must be valid: every fault that nori's manifest reader refuses stops the build here, a file that is not TOML or UTF-8, a field of the wrong TOML type, and also a field with a bad value (a missing field, a bad package name, a bad version, a bad dependency), although the compiler reads the version alone. The user wrote a manifest and it is wrong, and a build that used --lib-version would hide the fault and the version conflict of [CE3505](#ce3505). The reason is the text of the nori code in brackets -- the one manifest reader makes the check for the compiler and for nori, so both name the file and the field in the same words. A missing nori.toml is not this error, and a nori.toml that cannot be read is [CE3518](#ce3518).
 
 ### CE3518 {#ce3518}
 
@@ -3054,7 +3054,7 @@ A --lib build reads the nori.toml in the current directory for the library versi
 
 **Message:** `cannot build library '{lib}': cannot read '{path}': {reason}`
 
-A --lib build reads the nori.toml in the current directory for the library version. A nori.toml that exists but cannot be opened or read (no read permission, a directory, a broken link) stops the build here, and the reason is the one that the operating system gives. It is not a missing manifest: a build that used --lib-version would hide a manifest that the user wrote. A nori.toml that can be read and is not valid is [CE3517](#ce3517) (#1066).
+A --lib build reads the nori.toml in the current directory for the library version. A nori.toml that exists but cannot be opened or read (no read permission, a directory, a broken link) stops the build here, and the reason is the one that the operating system gives. It is not a missing manifest: a build that used --lib-version would hide a manifest that the user wrote. A nori.toml that can be read and is not valid is [CE3517](#ce3517).
 
 ### CE3519 {#ce3519}
 
@@ -3062,7 +3062,7 @@ A --lib build reads the nori.toml in the current directory for the library versi
 
 **Message:** `library '{lib}' is in the build at two versions, {first} and {second}`
 
-A library records every `use <lib/...>` that its units write, with the version of the library that its build found, and the consumer's build loads the whole graph. A library is identified by the `library_name` stamped into its `.slib`, so the graph holds ONE copy of each library: a body compiled against one version and linked against another is a wrong program with no diagnostic. When two paths of the graph reach two versions of one library -- a library was built against 0.1.0 and the consumer's search finds 0.2.0, or two imports find two files -- the build stops here. Each note names a version and the path that reached it: the consumer's `use`, or the library that recorded it. The escape is to rebuild the library that recorded the old version against the one that the search finds, or to put the version that it was built against first on SUSHI\_LIB\_PATH (#1120).
+A library records every `use <lib/...>` that its units write, with the version of the library that its build found, and the consumer's build loads the whole graph. A library is identified by the `library_name` stamped into its `.slib`, so the graph holds ONE copy of each library: a body compiled against one version and linked against another is a wrong program with no diagnostic. When two paths of the graph reach two versions of one library -- a library was built against 0.1.0 and the consumer's search finds 0.2.0, or two imports find two files -- the build stops here. Each note names a version and the path that reached it: the consumer's `use`, or the library that recorded it. The escape is to rebuild the library that recorded the old version against the one that the search finds, or to put the version that it was built against first on SUSHI\_LIB\_PATH.
 
 ## CE4xxx: Perk errors {#ce4xxx}
 
@@ -3098,7 +3098,7 @@ A perk can only be implemented once for each type. Remove the duplicate implemen
 - `` '{module}' declares it; add `use <{module}>` above to name it here ``
 - `` library '{library}' declares it; add `use <lib/{library}>` above to name it here ``
 
-The perk is not in the scope of this unit, in an implementation, a constraint or a pack constraint. When no unit declares the perk, define it with 'perk \{perk\}:'. When another unit or a library declares it, the help names the import that brings it: scope is per unit and not transitive, so a plain `use` in another unit does not bring it here (#1124). The predefined perks are in every scope.
+The perk is not in the scope of this unit, in an implementation, a constraint or a pack constraint. When no unit declares the perk, define it with 'perk \{perk\}:'. When another unit or a library declares it, the help names the import that brings it: scope is per unit and not transitive, so a plain `use` in another unit does not bring it here. The predefined perks are in every scope.
 
 ### CE4004 {#ce4004}
 
@@ -3150,7 +3150,7 @@ Perks cannot be generic. Remove the @(...) type parameter list; constrain generi
 
 **Message:** `cannot {action} private perk '{name}' from unit '{current_unit}' (perk is defined in '{owner}')`
 
-Ruling 3 of `docs/design/visibility.md`: a perk carries `public` and is private by default, and what a private perk hides is the CONTRACT. Another unit may not implement it and may not constrain a type parameter with it, because both of those are promises about the perk itself. Calling a method it provides is untouched: method resolution is blind to the caller, so a unit that can name the type can call what the type implements. This is a different rule from [CE3005](#ce3005), which is about naming a declaration; a perk contract has its own code because it has its own answer -- the method stays reachable while the contract does not. Mark the perk `public`, or ask its unit for a function that does the work.
+A perk carries `public` and is private by default, and what a private perk hides is the CONTRACT (see [the visibility design](design/visibility.md)). Another unit may not implement it and may not constrain a type parameter with it, because both of those are promises about the perk itself. Calling a method it provides is untouched: method resolution is blind to the caller, so a unit that can name the type can call what the type implements. This is a different rule from [CE3005](#ce3005), which is about naming a declaration; a perk contract has its own code because it has its own answer -- the method stays reachable while the contract does not. Mark the perk `public`, or ask its unit for a function that does the work.
 
 ### CE4012 {#ce4012}
 
@@ -3158,7 +3158,7 @@ Ruling 3 of `docs/design/visibility.md`: a perk carries `public` and is private 
 
 **Message:** `'Drop' cannot be implemented for '{type}' here: only unit '{owner}' declares that type`
 
-HANDLES.md ruling R2b: the orphan rule, narrowed to one perk. `PerkImplementationTable.replace` lets a consumer's `extend X with P` take over a library's implementation, which is the sanctioned override of decision 11 in `docs/design/visibility.md`. For an ordinary perk that is a feature. For `Drop` it lets a consumer silently stop a handle from closing, so the type that owns a resource is the only one allowed to say what releasing it means. It also bounds the incremental-cache problem: with the rule the declaration and the implementation are in one unit, so one unit's AST hash covers both. Add the implementation to the unit that declares the type, or ask that unit for a function that does the work.
+This is the orphan rule, narrowed to one perk: only the unit that declares a type may implement `Drop` for it. A consumer may replace a library's implementation of an ordinary perk with its own `extend X with P`. For `Drop` that would let a consumer stop a handle from closing with no diagnostic, so the type that owns a resource is the only one allowed to say what releasing it means. Add the implementation to the unit that declares the type, or ask that unit for a function that does the work.
 
 ### CE4014 {#ce4014}
 
@@ -3168,7 +3168,7 @@ HANDLES.md ruling R2b: the orphan rule, narrowed to one perk. `PerkImplementatio
 
 **Help:** `declare it as a plain extension method on the type ('extend T static name(...)'); a perk contracts instance methods only`
 
-HANDLES.md ruling R7: a perk has no `Self`, so a contract cannot say 'returns one of me' and a constructor has no signature to declare there. #542 ruling R1 keeps the refusal a COMPILER error rather than a parse error: the grammar admits the marker in the implementation position precisely so this diagnostic can point at it and say why. Declare the static as a plain extension method on the type (`extend Vec static at(...)`) -- it is as visible as the type either way -- and leave the perk to the instance methods it can contract.
+A perk has no `Self`, so a contract cannot say 'returns one of me' and a constructor has no signature to declare there. The compiler refuses a `static` in a perk implementation and points at the marker. Declare the static as a plain extension method on the type (`extend Vec static at(...)`) -- it is as visible as the type either way -- and leave the perk to the instance methods it can contract.
 
 ### CE4015 {#ce4015}
 
@@ -3176,7 +3176,7 @@ HANDLES.md ruling R7: a perk has no `Self`, so a contract cannot say 'returns on
 
 **Message:** `perk '{perk}' gives '{method}' a second home: perk '{other}' already provides it`
 
-A name has exactly one home on a type (`docs/design/method-resolution.md`). Two perks that each provide a method of one name on one type leave a call of that name naming neither implementation, and the two bodies would take one symbol. The note points at the first one. Rename the method of one perk, or implement only one of them. A derived method is not a home: a type that derives `compare` from `Ord` may still implement a user perk that provides `compare`, and an explicit call then reads the implementation.
+A name has exactly one home on a type (see [the method-resolution design](design/method-resolution.md)). Two perks that each provide a method of one name on one type leave a call of that name naming neither implementation, and the two bodies would take one symbol. The note points at the first one. Rename the method of one perk, or implement only one of them. A derived method is not a home: a type that derives `compare` from `Ord` may still implement a user perk that provides `compare`, and an explicit call then reads the implementation.
 
 ### CE4016 {#ce4016}
 
@@ -3184,7 +3184,7 @@ A name has exactly one home on a type (`docs/design/method-resolution.md`). Two 
 
 **Message:** `'Drop' cannot be implemented for '{type}': no unit declares that type`
 
-The orphan rule of [CE4012](#ce4012), at a type no unit declares: a primitive, a `string`, a fixed or a dynamic array (an array template `extend T[]` included), `List`, `HashMap`, `Own`, `Maybe`, `Result` and the predefined error enums. Only the unit that declares a type may say what releasing it means, and no unit declares one of these. Before this code the implementation was accepted and `drop()` never ran, because the compiler gives these types their own release. A resource needs a type of its own: declare a struct that holds the value and implement `Drop` on that struct.
+The orphan rule of [CE4012](#ce4012), at a type no unit declares: a primitive, a `string`, a fixed or a dynamic array (an array template `extend T[]` included), `List`, `HashMap`, `Own`, `Maybe`, `Result` and the predefined error enums. Only the unit that declares a type may say what releasing it means, and no unit declares one of these. The compiler gives these types their own release. A resource needs a type of its own: declare a struct that holds the value and implement `Drop` on that struct.
 
 ## CE5xxx: Foreign function interface errors {#ce5xxx}
 
@@ -3196,7 +3196,7 @@ These errors are about `unsafe external` blocks and the `ptr` type.
 
 **Message:** `external link-name '{symbol}' is declared with another signature`
 
-One C symbol has one signature in one program (#1099). Two `unsafe external` declarations of one link name agree only when each position has the SAME C type: each parameter, the return and `var_arg`. `i32` against `u32` does not agree, because `int` and `unsigned int` are two C types, and a C compiler refuses the pair. A fixed signature against a `var_arg` signature does not agree, also when the fixed parameters are equal. Two spellings of one C type agree: `string` and `Maybe@(string)` are both `char*`, `ptr` and `Maybe@(ptr)` are both `void*`, and a link name written as a constant is the name it folds to. Two external variables of one link name must have the same C type, and a function and a variable cannot share one link name. The rule reads every declaration in the program, in each unit and across units, the standard library units written in Sushi included. The three libc symbols that are the compiler's own, `malloc`, `free` and `exit`, are the first declaration of their names, so a user declaration of one of them must have the compiler's C types. Every other libc symbol that the compiler declares is independent of a user declaration: each call goes through the type of its own declaration. The back end declares a symbol one time, so before this rule the second declaration called through the first one and computed a wrong value with no diagnostic. The note points at the other declaration. Make the two signatures the same, or remove one declaration.
+One C symbol has one signature in one program. Two `unsafe external` declarations of one link name agree only when each position has the SAME C type: each parameter, the return and `var_arg`. `i32` against `u32` does not agree, because `int` and `unsigned int` are two C types, and a C compiler refuses the pair. A fixed signature against a `var_arg` signature does not agree, also when the fixed parameters are equal. Two spellings of one C type agree: `string` and `Maybe@(string)` are both `char*`, `ptr` and `Maybe@(ptr)` are both `void*`, and a link name written as a constant is the name it folds to. Two external variables of one link name must have the same C type, and a function and a variable cannot share one link name. The rule reads every declaration in the program, in each unit and across units, the standard library units written in Sushi included. The three libc symbols that are the compiler's own, `malloc`, `free` and `exit`, are the first declaration of their names, so a user declaration of one of them must have the compiler's C types. Every other libc symbol that the compiler declares is independent of a user declaration: each call goes through the type of its own declaration. The note points at the other declaration. Make the two signatures the same, or remove one declaration.
 
 ### CE5002 {#ce5002}
 
@@ -3212,7 +3212,7 @@ FFI is a private implementation detail of a unit. Externals and any public funct
 
 **Message:** `external signature uses non-C-ABI type '{type}'`
 
-External (FFI) signatures are limited to C-representable types: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), ptr, and ~ (void), plus `Maybe@(string)` and `Maybe@(ptr)` at the top level of a parameter or a return, which say that the pointer may be NULL (#1085): a NULL return answers `Maybe.None`, and a `Maybe.None` argument crosses as NULL. A PARAMETER may also be a byte buffer, `u8[]`, `peek u8[]` or `poke u8[]`, which crosses as the pointer to its first byte (#1088); a `u8[]` return is refused, because C cannot answer a Sushi array. Every other Maybe (`Maybe@(i32)`, a nested one), a Result, a struct, any other array (`i32[]`, a fixed `u8[N]`), a reference and a user type cannot cross the C ABI boundary.
+External (FFI) signatures are limited to C-representable types: i8..i64, u8..u64, f32, f64, bool, string (auto-marshalled), ptr, and ~ (void), plus `Maybe@(string)` and `Maybe@(ptr)` at the top level of a parameter or a return, which say that the pointer may be NULL: a NULL return answers `Maybe.None`, and a `Maybe.None` argument crosses as NULL. A PARAMETER may also be a byte buffer, `u8[]`, `peek u8[]` or `poke u8[]`, which crosses as the pointer to its first byte; a `u8[]` return is refused, because C cannot answer a Sushi array. Every other Maybe (`Maybe@(i32)`, a nested one), a Result, a struct, any other array (`i32[]`, a fixed `u8[N]`), a reference and a user type cannot cross the C ABI boundary.
 
 ### CE5004 {#ce5004}
 
@@ -3252,7 +3252,7 @@ An imported library's exported generics depend on this private helper, which shi
 
 **Message:** `` public {kind} '{name}' exposes a foreign `ptr` in its signature and cannot cross a unit boundary ``
 
-FFI is a private implementation detail of a unit. A public declaration whose parameters, return type or error arm contain `ptr` (including inside Result or Maybe) cannot be part of a unit's public API. `{kind}` says which declaration it was: a public generic, an extension method and a perk method are all reached, and each used to compile clean. Keep the function private, or wrap the pointer in a struct (struct fields may carry `ptr` across units).
+FFI is a private implementation detail of a unit. A public declaration whose parameters, return type or error arm contain `ptr` (including inside Result or Maybe) cannot be part of a unit's public API. `{kind}` says which declaration it was: a public generic, an extension method and a perk method are all reached. Keep the function private, or wrap the pointer in a struct (struct fields may carry `ptr` across units).
 
 ### CE5009 {#ce5009}
 
@@ -3260,7 +3260,7 @@ FFI is a private implementation detail of a unit. A public declaration whose par
 
 **Message:** `` foreign `ptr` used in a unit with no `unsafe external` block ``
 
-The `ptr` type may only be named in a unit that declares an `unsafe external` block - no danger zone, no ptr. This keeps every file that can traffic in raw foreign handles greppable by its `unsafe external` marker. Other units hold handles through wrapper structs declared in the FFI unit. The rule reads two walks, because a body spells the name exactly as a signature does: a local, a `foreach` item, a cast target, a lambda parameter and a call-site type argument are all naming positions. The body half read a field the AST does not have and enforced nothing until #596, so `let ptr p = 0` compiled and the type checker answered [CE2002](#ce2002) about the initializer instead.
+The `ptr` type may only be named in a unit that declares an `unsafe external` block - no danger zone, no ptr. This keeps every file that can traffic in raw foreign handles greppable by its `unsafe external` marker. Other units hold handles through wrapper structs declared in the FFI unit. The rule reads two walks, because a body spells the name exactly as a signature does: a local, a `foreach` item, a cast target, a lambda parameter and a call-site type argument are all naming positions.
 
 ### CE5010 {#ce5010}
 
@@ -3268,7 +3268,7 @@ The `ptr` type may only be named in a unit that declares an `unsafe external` bl
 
 **Message:** `` foreign `ptr` cannot be used with operator '{op}' ``
 
-A `ptr` is an opaque handle: it has no comparable identity, no arithmetic, and no truthiness. There is nothing to test for null either: a null is never a Sushi value. A C function that may answer NULL is declared `Maybe@(ptr)` and its NULL arrives as `Maybe.None`, while a plain `ptr` return asserts non-null and a NULL there is [RE2025](#re2025) at the call (#1085). The `is_null(ptr)` intrinsic this text promised before is replaced by that rule.
+A `ptr` is an opaque handle: it has no comparable identity, no arithmetic, and no truthiness. There is nothing to test for null either: a null is never a Sushi value. A C function that may answer NULL is declared `Maybe@(ptr)` and its NULL arrives as `Maybe.None`, while a plain `ptr` return asserts non-null and a NULL there is [RE2025](#re2025) at the call.
 
 ### CE5011 {#ce5011}
 
@@ -3276,7 +3276,7 @@ A `ptr` is an opaque handle: it has no comparable identity, no arithmetic, and n
 
 **Message:** `` foreign `ptr` has no method '.{method}()' ``
 
-A `ptr` has one closed set of methods, the foreign-memory methods (#1086): `load_<width>(off)` and `store_<width>(off, v)` for each integer and float width, `load_ptr(off)` (a `Maybe@(ptr)`), `store_ptr(off, q)`, `offset(n)` and `to_string(off)`, each at a byte offset. It has nothing else: no hash, no string form, no extension method. Pass it back to an external function, or wrap it in a struct and attach extension methods to the struct. Before #1086 a `ptr` had no method at all, and this text said so.
+A `ptr` has one closed set of methods, the foreign-memory methods: `load_<width>(off)` and `store_<width>(off, v)` for each integer and float width, `load_ptr(off)` (a `Maybe@(ptr)`), `store_ptr(off, q)`, `offset(n)` and `to_string(off)`, each at a byte offset. It has nothing else: no hash, no string form, no extension method. Pass it back to an external function, or wrap it in a struct and attach extension methods to the struct.
 
 ### CE5012 {#ce5012}
 
@@ -3292,7 +3292,7 @@ Only Result@(ptr, E) and Maybe@(ptr) support carrying a foreign `ptr`. Other gen
 
 **Message:** `external link-name '{symbol}' names a symbol this program defines`
 
-An `unsafe external` reaches OUT of the program: it may name a foreign symbol, never one this build defines. A program's units share one LLVM module and a linked library's module is merged into it, so a declaration and a definition of one name UNIFY -- the declaration then enters the program's own body with no ABI check, which is how a library-PRIVATE body could be run from code that may not call it, returning garbage read out of the wrong register (#470). Where the compiler already held a declaration of the name, the same program was an internal error (`DuplicatedNameError`) instead of a diagnostic. Rename the link-name, or call the Sushi function directly. The rule reads every symbol this build defines: the function and constant tables, the linked libraries, and the symbols the standard library GENERATES -- those last are in no semantic table, so the compiler reads the manifest the stdlib build writes beside its bitcode, plus a small reserved set for the ones the backend emits inline. Before that, a generated name built clean and died with a bus error at run time (#472). A generated name is refused whether this program links the unit or not. A function or a constant is compared by the SYMBOL it emits, not by its Sushi name (#1098): `<unit>$<name>` (`main` alone has no prefix), or the `link_symbol` that a binary library's manifest records. A wrapper can have the name of the C function it calls, and a link name that spells an emitted symbol is refused. [CE5001](#ce5001) is the neighbouring rule for a built-in extern DECLARATION, which LLVM deduplicates when the signatures match.
+An `unsafe external` reaches OUT of the program: it may name a foreign symbol, never one this build defines. A program's units share one LLVM module and a linked library's module is merged into it, so a declaration and a definition of one name would UNIFY -- the declaration would then enter the program's own body with no ABI check, and code that may not call a library-PRIVATE body could run it. Rename the link-name, or call the Sushi function directly. The rule reads every symbol this build defines: the function and constant tables, the linked libraries, and the symbols the standard library GENERATES -- those last are in no semantic table, so the compiler reads the manifest the stdlib build writes beside its bitcode, plus a small reserved set for the ones the backend emits inline. A generated name is refused whether this program links the unit or not. A function or a constant is compared by the SYMBOL it emits, not by its Sushi name: `<unit>$<name>` (`main` alone has no prefix), or the `link_symbol` that a binary library's manifest records. A wrapper can have the name of the C function it calls, and a link name that spells an emitted symbol is refused. [CE5001](#ce5001) is the neighbouring rule for a built-in extern DECLARATION, which LLVM deduplicates when the signatures match.
 
 ### CE5014 {#ce5014}
 
@@ -3300,7 +3300,7 @@ An `unsafe external` reaches OUT of the program: it may name a foreign symbol, n
 
 **Message:** `` `errno()` is read in a unit with no `unsafe external` block ``
 
-`errno()` answers the calling thread's `errno`, the cause a failed C call leaves behind (#1087). Only a C call can leave one, and only a unit that declares an `unsafe external` block can make a C call, so the built-in has the same confinement as the `ptr` type ([CE5009](#ce5009)): no danger zone, no errno. A unit's own `fn errno` is an ordinary declaration and wins over the built-in anywhere. Read `errno()` directly after the failed call and before any `close`, `free` or other C call, because those can overwrite it.
+`errno()` answers the calling thread's `errno`, the cause a failed C call leaves behind. Only a C call can leave one, and only a unit that declares an `unsafe external` block can make a C call, so the built-in has the same confinement as the `ptr` type ([CE5009](#ce5009)): no danger zone, no errno. A unit's own `fn errno` is an ordinary declaration and wins over the built-in anywhere. Read `errno()` directly after the failed call and before any `close`, `free` or other C call, because those can overwrite it.
 
 ### CE5015 {#ce5015}
 
@@ -3308,7 +3308,7 @@ An `unsafe external` reaches OUT of the program: it may name a foreign symbol, n
 
 **Message:** `the link name of external '{name}' is a constant of type {type}, not a string`
 
-The link name after `=` in an `unsafe external` declaration is a string literal or a string constant (#1089): `= "stat"`, `= STAT_SYMBOL`, or `= platform.STAT_SYMBOL`. A constant is the form for a symbol that differs per platform, such as `stat$INODE64` on macOS x86\_64, and `<sys/platform>` holds those names. The constant is folded in the unit that declares the block, and [CE5013](#ce5013) and [CE5001](#ce5001) read the folded name. A constant of another type names no symbol.
+The link name after `=` in an `unsafe external` declaration is a string literal or a string constant: `= "stat"`, `= STAT_SYMBOL`, or `= platform.STAT_SYMBOL`. A constant is the form for a symbol that differs per platform, such as `stat$INODE64` on macOS x86\_64, and `<sys/platform>` holds those names. The constant is folded in the unit that declares the block, and [CE5013](#ce5013) and [CE5001](#ce5001) read the folded name. A constant of another type names no symbol.
 
 ### CE5016 {#ce5016}
 
@@ -3316,7 +3316,7 @@ The link name after `=` in an `unsafe external` declaration is a string literal 
 
 **Message:** `external variable '{name}' is read-only`
 
-A `var` in an `unsafe external` block declares a C global variable (#1090), and Sushi reads it: each read loads the global at that moment. A write to a C global (`libc.optind := 1`) is refused, because nothing yet says who else reads the global or when. A write can come later with `poke` semantics. Call a C function that sets the global, or keep the value in a Sushi variable.
+A `var` in an `unsafe external` block declares a C global variable, and Sushi reads it: each read loads the global at that moment. A write to a C global (`libc.optind := 1`) is refused, because nothing says who else reads the global or when. Call a C function that sets the global, or keep the value in a Sushi variable.
 
 ## CE6xxx: Syntax errors {#ce6xxx}
 
@@ -3396,7 +3396,7 @@ The text between \{braces\} in a string literal must be a valid expression.
 
 **Message:** `a documentation block is opened here and never closed`
 
-A `##:` opens a documentation block, and a `:##` closes it. The closer is on the opening line, or it is line-initial. Treating an unmatched opener as a comment would let a whole documented API vanish from a build with no signal.
+A `##:` opens a documentation block, and a `:##` closes it. The closer is on the opening line, or it is line-initial. The compiler does not read an unmatched opener as a comment, because that would remove a whole documented API from a build with no diagnostic.
 
 ### CE6012 {#ce6012}
 
@@ -3404,7 +3404,7 @@ A `##:` opens a documentation block, and a `:##` closes it. The closer is on the
 
 **Message:** `a documentation block is closed here, but never opened`
 
-A `:##` closes a documentation block that a `##:` opened. The two delimiters are asymmetric on purpose: they let the compiler say which of the two mistakes was made.
+A `:##` closes a documentation block that a `##:` opened. The two delimiters are different, so the compiler can say which of the two mistakes was made.
 
 ### CE6013 {#ce6013}
 
@@ -3442,7 +3442,7 @@ The `@(...)` type-argument list may appear only on a call to a named free functi
 
 **Help:** `an implementation is as visible as its target type; mark the type instead`
 
-Ruling 2 of `docs/design/visibility.md`: an implementation carries no marker, because it is exactly as visible as the type it is attached to. A private type cannot be named, constructed or received in another unit, so its methods are already unreachable there, and a public type's methods are reachable wherever the type is. The marker used to parse here and be stored on the method, where nothing read it. Remove it, and mark the target type instead.
+An implementation carries no marker, because it is exactly as visible as the type it is attached to (see [the visibility design](design/visibility.md)). A private type cannot be named, constructed or received in another unit, so its methods are already unreachable there, and a public type's methods are reachable wherever the type is. Remove the marker, and mark the target type instead.
 
 ### CE6104 {#ce6104}
 
@@ -3452,7 +3452,7 @@ Ruling 2 of `docs/design/visibility.md`: an implementation carries no marker, be
 
 **Help:** `pass the arguments in declaration order`
 
-A named argument names a FIELD, and a struct declaration is the only declaration that gives a name to each position at the call site. A function parameter, a method parameter and an enum payload have no such name, so the compiler read the arguments by position and ignored the labels: `p.moved(dy: 5)` against `(i32 dx, i32 dy)` wrote the wrong slot on a program the compiler accepted (#563). The grammar takes `name: value` in every argument list, because the parser cannot know what the callee is; the rule is refused where the callee is known, which is the typecheck pass, as [CE6102](#ce6102) is. Write the arguments in declaration order.
+A named argument names a FIELD, and a struct declaration is the only declaration that gives a name to each position at the call site. A function parameter, a method parameter and an enum payload have no such name, so a label there has no meaning: `p.moved(dy: 5)` against `(i32 dx, i32 dy)` would fill the wrong slot. The grammar takes `name: value` in every argument list, because the parser cannot know what the callee is; the typecheck pass refuses the label where the callee is known, as it does for [CE6102](#ce6102). Write the arguments in declaration order.
 
 ### CE6105 {#ce6105}
 
@@ -3466,7 +3466,7 @@ A named argument names a FIELD, and a struct declaration is the only declaration
 - `` a record with names is a struct; write the types alone, as in `(i32, i32)` ``
 - `` name the element, as in `i32 x`, or discard it with `_` ``
 
-A tuple TYPE and a `let` destructure share one list rule, `(elem, elem, ...)`, and the token after the `)` tells them apart: `=` is a destructure, a NAME is a typed binding. The AST builder judges each element by its position. In a TYPE position every element is a type and nothing else: a name (`(i32 quot, i32 rem)`) and a `_` are refused, because a tuple has no named elements (ruling 9 of the tuple design) -- a record with names is a struct. In a DESTRUCTURE position an element is a bare name (`q`, the type is the element type), a typed name (`i32 q`), a `_`, or a nested destructure (`(a, b)`); a type with no name (`i32` alone) binds nothing and is refused. Added with tuples (docs/design/tuples.md).
+A tuple TYPE and a `let` destructure share one list rule, `(elem, elem, ...)`, and the token after the `)` tells them apart: `=` is a destructure, a NAME is a typed binding. The AST builder judges each element by its position. In a TYPE position every element is a type and nothing else: a name (`(i32 quot, i32 rem)`) and a `_` are refused, because a tuple has no named elements -- a record with names is a struct. In a DESTRUCTURE position an element is a bare name (`q`, the type is the element type), a typed name (`i32 q`), a `_`, or a nested destructure (`(a, b)`); a type with no name (`i32` alone) binds nothing and is refused. See [the tuple design](design/tuples.md).
 
 ### CE6106 {#ce6106}
 
@@ -3476,7 +3476,7 @@ A tuple TYPE and a `let` destructure share one list rule, `(elem, elem, ...)`, a
 
 **Help:** `` write the element number in decimal, as in `t.0` or `t.0.1` ``
 
-A tuple element is read with `.N`, where N is a plain decimal number that starts at 0: `t.0`, `t.1`, and `t.0.1` for an element of a nested tuple. The element type depends on the index, so the index is a literal and never a value (`t[i]` is not a tuple access). The lexer reads `t.0.1` as `t` `.` and the number `0.1`, and the builder splits it in two steps; a number with an underscore (`t.0_1`), an exponent (`t.1e3`) or a leading zero (`t.01`) names no element and is refused here. Added with tuples (docs/design/tuples.md).
+A tuple element is read with `.N`, where N is a plain decimal number that starts at 0: `t.0`, `t.1`, and `t.0.1` for an element of a nested tuple. The element type depends on the index, so the index is a literal and never a value (`t[i]` is not a tuple access). The lexer reads `t.0.1` as `t` `.` and the number `0.1`, and the builder splits it in two steps; a number with an underscore (`t.0_1`), an exponent (`t.1e3`) or a leading zero (`t.01`) names no element and is refused here. See [the tuple design](design/tuples.md).
 
 ### CE6107 {#ce6107}
 
@@ -3489,7 +3489,7 @@ A tuple element is read with `.N`, where N is a plain decimal number that starts
 - `a tuple holds values; write the element type alone`
 - `a binder owns its element from an owned value and borrows it from a borrow; remove the mode`
 
-A destructure element is a name, a typed name, a `_` or a nested destructure, and it carries no `peek`, `poke` or `nom`: a binder OWNS its element when the destructure takes an owned value (a temporary, or an owned local, which the destructure spends), and BORROWS it when the value is a borrow (a parameter, a field, a binding). So `let (peek i32 a, b) = t` is refused (spec decision D1 of the tuple design; a later change can add a mode). A tuple TYPE takes no mode on an element either: a tuple holds values, and a reference is a parameter or a `let` mode. Added with tuples (docs/design/tuples.md).
+A destructure element is a name, a typed name, a `_` or a nested destructure, and it carries no `peek`, `poke` or `nom`: a binder OWNS its element when the destructure takes an owned value (a temporary, or an owned local, which the destructure spends), and BORROWS it when the value is a borrow (a parameter, a field, a binding). So `let (peek i32 a, b) = t` is refused. A tuple TYPE takes no mode on an element either: a tuple holds values, and a reference is a parameter or a `let` mode. See [the tuple design](design/tuples.md).
 
 ### CE6109 {#ce6109}
 
@@ -3499,7 +3499,7 @@ A destructure element is a name, a typed name, a `_` or a nested destructure, an
 
 **Help:** `write each place once; a second assignment would replace the first`
 
-A destructuring rebind `(a, b) := v` evaluates all of `v` first and then assigns each target from left to right (rulings 13 and 16 of the tuple design). A place written twice, as in `(a, a) := (1, 2)` or `(p.x, p.x) := f()`, gets two values, and the second assignment silently replaces the first. So the same place twice in the target, nested targets included, is refused, with a note at its first position. The check compares the written places: a name, a field chain, a tuple element, and an index that is a literal or a name. Two different places of one value are legal: `(p.x, p.y) := (p.y, p.x)` is a swap, and `(i, xs[i]) := (1, 9)` assigns `i` first, so `xs[i]` reads the new `i`. Added with tuples (docs/design/tuples.md).
+A destructuring rebind `(a, b) := v` evaluates all of `v` first and then assigns each target from left to right. A place written twice, as in `(a, a) := (1, 2)` or `(p.x, p.x) := f()`, gets two values, and the second assignment silently replaces the first. So the same place twice in the target, nested targets included, is refused, with a note at its first position. The check compares the written places: a name, a field chain, a tuple element, and an index that is a literal or a name. Two different places of one value are legal: `(p.x, p.y) := (p.y, p.x)` is a swap, and `(i, xs[i]) := (1, 9)` assigns `i` first, so `xs[i]` reads the new `i`. See [the tuple design](design/tuples.md).
 
 ## CE7xxx: Documentation block errors {#ce7xxx}
 
@@ -3511,7 +3511,7 @@ These errors are about what a documentation block (`##: ... :##`) tells about it
 
 **Message:** `the '- Parameter {name}:' tag names no parameter of '{callable}'`
 
-The tag names the thing the declaration DECLARES, so the compiler can tell that no such parameter exists. A renamed parameter and a copied tag both land here. Neither pydoc nor a source scraper can find this, which is why the block belongs in the grammar.
+The tag names the thing the declaration DECLARES, so the compiler can tell that no such parameter exists. A renamed parameter and a copied tag both land here.
 
 ### CE7002 {#ce7002}
 
@@ -3537,7 +3537,7 @@ A `- Parameter` tag is keyed by the name it carries: many are legal, one for eac
 
 **Help:** `` did you mean `- {suggestion}:`? ``
 
-A list item shaped `- <Word>:` whose word is close to a tag keyword is a typo, not prose. Every documentation system that treats it as text makes a misspelled tag silently invisible, which is the failure this feature exists to remove. A word further from every keyword, such as `- Note:`, stays prose.
+A list item shaped `- <Word>:` whose word is close to a tag keyword is a typo, not prose. If the compiler read it as text, the misspelled tag would disappear with no diagnostic. A word further from every keyword, such as `- Note:`, stays prose.
 
 ### CE7005 {#ce7005}
 
@@ -3565,7 +3565,7 @@ The two positions document the same declaration, so a declaration that uses both
 
 **Help:** ```` the tag introduces a fenced block; open one with ```sushi on the next line, or delete the tag ````
 
-The whole job of the tag is to introduce a fenced block of Sushi, so a tag with nothing to introduce contradicts itself the way a `- Parameter q:` that names no parameter does. This is always on for that reason. An ABSENT example is a matter of policy and belongs behind `--warn-missing-docs`.
+The whole job of the tag is to introduce a fenced block of Sushi, so a tag with nothing to introduce contradicts itself the way a `- Parameter q:` that names no parameter does. This check is always on. An ABSENT example is reported only with `--warn-missing-docs`.
 
 ### CE7008 {#ce7008}
 
@@ -3575,7 +3575,7 @@ The whole job of the tag is to introduce a fenced block of Sushi, so a tag with 
 
 **Help:** `` close it with a run of the same character that is at least as long, before the block's own `:##` ``
 
-A doc block ends at its own `:##`, so a fence that runs past it is truncated, and a truncated example is not one. Every documentation system that reads a block as text loses the tail without a signal, which is the failure this feature exists to remove. Close the fence with a run of the SAME character that is at least as long.
+A doc block ends at its own `:##`, so a fence that runs past it is truncated, and a truncated example is not one. Close the fence with a run of the SAME character that is at least as long.
 
 ## CWxxxx: Warnings {#cwxxxx}
 
@@ -3595,7 +3595,7 @@ Source file should end with a newline character.
 
 **Message:** `cannot write LLVM IR to '{path}': {reason}`
 
-`--write-ll` asked for the IR beside the output, and the file could not be written, for example because the path is a directory or a directory on it is a regular file. The build itself succeeded and the binary or the library is written; only the IR is missing. The warning used to be a bare line that the reporter did not count, so the build exited 0 as if the IR were there. Fix the path, or choose another output with `-o`.
+`--write-ll` asked for the IR beside the output, and the file could not be written, for example because the path is a directory or a directory on it is a regular file. The build itself succeeded and the binary or the library is written; only the IR is missing. Fix the path, or choose another output with `-o`.
 
 ### CW0003 {#cw0003}
 
@@ -3603,7 +3603,7 @@ Source file should end with a newline character.
 
 **Message:** `'{flag}' has no effect {reason}`
 
-The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-kind` and `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either. The build goes on without the flag. These flags used to be ignored with no word, so a user could believe a library was built as binary, or that its object was kept, when neither was true.
+The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-kind` and `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either. The build goes on without the flag.
 
 ### CW1001 {#cw1001}
 
@@ -3635,7 +3635,7 @@ Behind `--warn-unused`, off by default. A private declaration is visible only in
 
 **Message:** `unused '{ty}' value (handle it with match, .realise(default), or '??' in a body with a channel)`
 
-A call to a function with a '| E' channel answers a Result@(T, E), and a statement that drops it loses the error. Handle it with `match`, take the value with `.realise(default)`, or propagate it with `??` in a body that has a channel itself. A `~ | E` result is exempt: there is no value to lose, and the error is still the caller's to ignore. Until the bare-function change the text named `Result@(T)` (the implicit StdError channel, now [CE2062](#ce2062)) and advised an `if` on the Result ([CE2516](#ce2516) since #522).
+A call to a function with a '| E' channel answers a Result@(T, E), and a statement that drops it loses the error. Handle it with `match`, take the value with `.realise(default)`, or propagate it with `??` in a body that has a channel itself. A `~ | E` result is exempt: there is no value to lose, and the error is still the caller's to ignore.
 
 ### CW3001 {#cw3001}
 
@@ -3651,7 +3651,7 @@ A unit was already imported earlier in this file. The duplicate use statement ha
 
 **Message:** `'{name}' shadows the {kind} '{owner}' exports`
 
-A program's own declaration takes priority over a name that a library of any kind (source, binary or hybrid) or a bundled stdlib module exports, and that is legal: a private function is emitted with internal linkage, so the two are separate symbols. The consumer's call binds to the consumer's declaration, the library's own body keeps calling its own, and both declarations being public is no longer a clash at all -- CE3003 retired, and an unqualified name with two candidates is [CE3012](#ce3012) at the use. It warns because shadowing an export is rarely intended, and because the reader of the call site cannot see which of the two answers it. Rename your declaration, or keep it and accept that the library's body is unaffected. A name the library declares privately is shadowed the same way and says nothing, because each declaration carries the unit that declared it; a library TYPE is still one name for the program ([CE3011](#ce3011)). Write `use <lib/name> as alias` to put the export behind a dot and take the shadow away. The reason is the same for each library kind, so the warning is too (#1103): a source library's export is found in its unit, a binary or hybrid library's export in its manifest, which lists every public function and template.
+A program's own declaration takes priority over a name that a library of any kind (source, binary or hybrid) or a bundled stdlib module exports, and that is legal: a private function is emitted with internal linkage, so the two are separate symbols. The consumer's call binds to the consumer's declaration, and the library's own body keeps calling its own. Both declarations may be public: an unqualified name with two candidates is [CE3012](#ce3012) at the use. It warns because shadowing an export is rarely intended, and because the reader of the call site cannot see which of the two answers it. Rename your declaration, or keep it and accept that the library's body is unaffected. A name the library declares privately is shadowed the same way and says nothing, because each declaration carries the unit that declared it; a library TYPE is still one name for the program ([CE3011](#ce3011)). Write `use <lib/name> as alias` to put the export behind a dot and take the shadow away. The warning is the same for each library kind: a source library's export is found in its unit, a binary or hybrid library's export in its manifest, which lists every public function and template.
 
 ### CW3003 {#cw3003}
 
@@ -3667,7 +3667,7 @@ The warning fires at `--lib` build time and nowhere else: shipping is when the c
 
 **Message:** `'{alias}' binds an empty namespace`
 
-The import brought no name that a qualified form could reach, so the `as` clause does nothing. It is a warning and not an error because a namespace is empty for three reasons and only one of them is a mistake: a method interface such as `<io/stdio>` can never bring a name; a unit that is nothing but `extend` blocks exports methods rather than names, and is load-bearing anyway; and a public surface that happens to be empty today is one declaration away from changing. Refusing the first two would refuse a good import for a redundant clause, and refusing the third would make an error appear and disappear as a library grew. The import still did its work. Drop the `as`.
+The import brought no name that a qualified form could reach, so the `as` clause does nothing. The import still did its work: for example, a unit that is nothing but `extend` blocks exports methods rather than names. Drop the `as`.
 
 ### CW3005 {#cw3005}
 
@@ -3675,7 +3675,7 @@ The import brought no name that a qualified form could reach, so the `as` clause
 
 **Message:** `` `public use` of '{origin}' re-exports nothing ``
 
-The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. It is a warning and not an error for the reasons [CW3004](#cw3004) gives an empty alias: a method interface such as `<collections/strings>` brings no name and never will (a `public use` of one still opens its methods to the importers), a unit of nothing but `extend` blocks exports methods rather than names, and an empty public surface is one declaration away from changing. The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something.
+The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. A method interface such as `<collections/strings>` brings no name (a `public use` of one still opens its methods to the importers), and a unit of nothing but `extend` blocks exports methods rather than names. The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something.
 
 ### CW3006 {#cw3006}
 
@@ -3699,7 +3699,7 @@ A perk implementation shipped by a library failed to deserialize. Methods it pro
 
 **Message:** `` unsafe external block suspends four Sushi guarantees (add `because "..."` to acknowledge) ``
 
-**Help:** `` see docs/ffi.md - acknowledge with `because "<reason>"` and use a safe wrapper ``
+**Help:** `` acknowledge with `because "<reason>"` and use a safe wrapper ``
 
 An `unsafe external` block disables borrow checking, RAII, Result/Maybe error handling, and bounds/null safety for the foreign declarations it contains. Provide a `because "<reason>"` clause to acknowledge the contract and silence this warning.
 
@@ -3735,7 +3735,7 @@ A block that documents some of the parameters and not the rest is the shape a re
 
 **Message:** `'{name}' returns a value, and no '- Returns:' tag says what it is`
 
-The tag describes T, not the Result that wraps it (documentation.md section 3). A callable that returns `~` returns nothing to describe and is never asked. A declaration with NO block is [CW7002](#cw7002) instead.
+The tag describes T, not the Result that wraps it (see [the documentation design](design/documentation.md)). A callable that returns `~` returns nothing to describe and is never asked. A declaration with NO block is [CW7002](#cw7002) instead.
 
 ### CW7005 {#cw7005}
 
@@ -3779,7 +3779,7 @@ System could not allocate memory (malloc/realloc returned NULL).
 
 **Message:** `insert into an unusable HashMap: no free bucket`
 
-HashMap.insert() probed every bucket without finding a slot. A live map always resizes below a 0.75 load factor, so this means the map has no buckets at all -- it was destroyed. Using a destroyed map is [CE2406](#ce2406), which now also catches a destroy through a `poke` parameter (#168). This trap remains as defense-in-depth for the destroy-effect summary's deliberate under-approximation: a generic callee, an extension method destroying its implicit `self`, a library callee, or an argument that is not a bare name.
+HashMap.insert() probed every bucket without finding a slot. A live map always resizes below a 0.75 load factor, so this means the map has no buckets at all -- it was destroyed. Using a destroyed map is [CE2406](#ce2406), also through a `poke` parameter. The compiler cannot see every destroy -- a generic callee, an extension method destroying its implicit `self`, a library callee, or an argument that is not a bare name -- so this trap catches the rest at run time.
 
 ### RE2023 {#re2023}
 
@@ -3787,7 +3787,7 @@ HashMap.insert() probed every bucket without finding a slot. A live map always r
 
 **Message:** `no match arm matched the value (expected {pattern})`
 
-A match tested its last candidate arm, and the value did not match it. `{pattern}` is that arm. Exhaustiveness checking makes this unreachable: one checker reads every match, nested patterns and tuple patterns included (ruling 17 of the tuple design), and a match that does not cover a value is the compile error [CE2040](#ce2040). The check stays in the program as a backstop. Before ruling 17 the checker compared only the outer variant names, so a nested match such as `Maybe.Some(Color.Red) -> ...` with `Maybe.None -> ...` compiled and stopped here.
+A match tested its last candidate arm, and the value did not match it. `{pattern}` is that arm. Exhaustiveness checking makes this unreachable: one checker reads every match, nested patterns and tuple patterns included, and a match that does not cover a value is the compile error [CE2040](#ce2040). The check stays in the program as a backstop.
 
 ### RE2025 {#re2025}
 
@@ -3795,7 +3795,7 @@ A match tested its last candidate arm, and the value did not match it. `{pattern
 
 **Message:** `a foreign call returned a null pointer where its declaration says non-null`
 
-An `unsafe external` function declared to return a plain `string` or `ptr` answered NULL. Null is never a Sushi value, so a plain pointer type asserts that C cannot answer one, and the call stops the program instead of passing the null on to `strlen` or to the next C call. Declare the return `Maybe@(string)` or `Maybe@(ptr)` when C can answer NULL: the call then answers `Maybe.None` (docs/ffi.md, "Null at the boundary").
+An `unsafe external` function declared to return a plain `string` or `ptr` answered NULL. Null is never a Sushi value, so a plain pointer type asserts that C cannot answer one, and the call stops the program instead of passing the null on to `strlen` or to the next C call. Declare the return `Maybe@(string)` or `Maybe@(ptr)` when C can answer NULL: the call then answers `Maybe.None`.
 
 ### RE2026 {#re2026}
 
@@ -3803,7 +3803,7 @@ An `unsafe external` function declared to return a plain `string` or `ptr` answe
 
 **Message:** `assertion failed at {where}`
 
-An `assert(cond)` or `assert(cond, message)` found its condition false. `{where}` is the file, the line and the column of the `assert`, with the file named as a compile-time diagnostic names it; a message, when there is one, follows after `: `. An assert states an invariant, so a failure is a defect and not data: the program stops with exit code 1, and no error channel catches it. A failure that a caller can handle belongs in the channel, `| E` (docs/design/assert.md).
+An `assert(cond)` or `assert(cond, message)` found its condition false. `{where}` is the file, the line and the column of the `assert`, with the file named as a compile-time diagnostic names it; a message, when there is one, follows after `: `. An assert states an invariant, so a failure is a defect and not data: the program stops with exit code 1, and no error channel catches it. A failure that a caller can handle belongs in the channel, `| E`. See [the assert design](design/assert.md).
 
 ## NExxxx: Nori package manager errors {#nexxxx}
 
