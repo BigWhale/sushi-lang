@@ -173,4 +173,27 @@ TODO(worker)
 
 ### `hex_value() Maybe@(u8)`
 
-TODO(worker)
+Answers the value of an ASCII hexadecimal digit, or `Maybe.None()` when the byte is not one.
+
+48-57 (`a'0'` to `a'9'`) give `Maybe.Some(0)` to `Maybe.Some(9)`. 65-70 (`a'A'` to `a'F'`) and
+97-102 (`a'a'` to `a'f'`) give `Maybe.Some(10)` to `Maybe.Some(15)`. Every other byte gives
+`Maybe.None()`, and so does each byte from 128 to 255.
+
+The answer is a `Maybe@(u8)`, not a `Result`, so `??` does not apply to it directly. Read it
+with `.realise(default)` when a default value is correct, for example `255` as a mark for "not a
+digit". Use `match` when the two cases must do different things. In a `| E` body,
+`b.hex_value().or_err(nom e)??` makes a missing digit an error.
+
+```sushi
+use <text/ascii>
+
+fn main() i32:
+    println(a'7'.hex_value().realise(255))    # 7
+    println(a'b'.hex_value().realise(255))    # 11
+    println(a'F'.hex_value().realise(255))    # 15
+    println(a'g'.hex_value().realise(255))    # 255
+    match a'x'.hex_value():
+        Maybe.Some(v) -> println("digit {v}")
+        Maybe.None() -> println("not a hex digit")    # not a hex digit
+    return 0
+```

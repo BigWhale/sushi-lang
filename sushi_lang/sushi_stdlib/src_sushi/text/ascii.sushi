@@ -134,4 +134,10 @@ Gives the value of an ASCII hexadecimal digit.
   ```
 :##
 extend u8 hex_value() Maybe@(u8):
+    if (self >= a'0' and self <= a'9'):
+        return Maybe.Some(self - a'0')
+    if (self >= a'A' and self <= a'F'):
+        return Maybe.Some(self - a'A' + 10)
+    if (self >= a'a' and self <= a'f'):
+        return Maybe.Some(self - a'a' + 10)
     return Maybe.None()

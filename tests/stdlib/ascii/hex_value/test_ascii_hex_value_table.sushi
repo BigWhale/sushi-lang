@@ -1,0 +1,23 @@
+# hex_value over all 256 bytes.
+# Line 1 shows each byte:value pair where the answer is Some. Line 2 shows the count of None.
+# 0-9 give 0 to 9. A-F and a-f give 10 to 15.
+# EXPECT_STDOUT_EXACT: "48:0 49:1 50:2 51:3 52:4 53:5 54:6 55:7 56:8 57:9 65:10 66:11 67:12 68:13 69:14 70:15 97:10 98:11 99:12 100:13 101:14 102:15\n234\n"
+
+use <text/ascii>
+
+fn main() i32:
+    let i32 some = 0
+    let i32 none = 0
+    foreach(i in 0..256):
+        let u8 b = i as u8
+        match b.hex_value():
+            Maybe.Some(v) ->
+                if (some > 0):
+                    print(" ")
+                print("{i}:{v}")
+                some := some + 1
+            Maybe.None() ->
+                none := none + 1
+    println("")
+    println(none)
+    return 0

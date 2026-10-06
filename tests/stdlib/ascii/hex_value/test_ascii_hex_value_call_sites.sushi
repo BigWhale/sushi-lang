@@ -1,0 +1,33 @@
+# hex_value in the positions that a user writes.
+# The receiver is a u8 local, a string byte, a byte literal and an array element.
+# The Maybe is read with match, with realise and with is_some.
+# A byte from 128 to 255 is never a hex digit.
+# EXPECT_STDOUT_EXACT: "12\n3054\n7\n255\nF is hex\ng is not hex\n0\n9\n10\n15\n255\nnone\n255\n"
+
+use <text/ascii>
+use <collections/strings>
+
+fn main() i32:
+    let u8 c = a'c'
+    println(c.hex_value().realise(255))
+    let string s = "bEe"
+    let i32 n = 0
+    let i32 i = 0
+    while (i < s.size()):
+        n := n * 16 + (s[i].hex_value().realise(0) as i32)
+        i := i + 1
+    println(n)
+    println(a'7'.hex_value().realise(255))
+    println(a'G'.hex_value().realise(255))
+    if (a'F'.hex_value().is_some() and not a'z'.hex_value().is_some()):
+        println("F is hex")
+    if (not a'g'.hex_value().is_some()):
+        println("g is not hex")
+    let u8[] bytes = from([a'0', a'9', a'A', a'f', a'-'])
+    foreach(b in bytes.iter()):
+        println(b.hex_value().realise(255))
+    match a'\xe9'.hex_value():
+        Maybe.Some(v) -> println(v)
+        Maybe.None() -> println("none")
+    println(a'\xff'.hex_value().realise(255))
+    return 0
