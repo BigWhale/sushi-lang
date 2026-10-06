@@ -1,0 +1,61 @@
+# The reads of <encoding/binary> in the positions a user writes.
+# The receiver is a plain-borrow parameter, a peek parameter, a let peek binding, a struct
+# field and a temporary. The answer goes to match, to is_some, to realise, to or_err and ??,
+# to a signed cast, and to f64.from_bits and f32.from_bits.
+# 0x3ff8000000000000 is 1.5 as an f64, 0xbfe8000000000000 is -0.75, 0x40200000 is 2.5 as an f32.
+# EXPECT_STDOUT_EXACT: "param=16909060\npeek=1027\nlet_peek=772\nfield=67305985\ntemp=16706\nmatch=258\nis_some=false\nrealise=7\nchannel=513\nchannel=none\nsigned=-1\nf64=1.5\nf64=-0.75\nf32=2.5\n"
+# EXPECT_NO_LEAKS
+
+use <encoding/binary>
+use <collections/strings>
+
+struct Header:
+    u8[] data
+
+fn first_u32(u8[] buf) u32:
+    return buf.read_u32_be(0).realise(0)
+
+fn at_u16(peek u8[] buf, i32 at) Maybe@(u16):
+    return buf.read_u16_le(at)
+
+fn need_u16(u8[] buf, i32 at) u16 | StdError:
+    let u16 v = buf.read_u16_le(at).or_err(nom StdError.Error)??
+    return Result.Ok(v)
+
+fn main() i32:
+    let u8[] buf = from([0x01, 0x02, 0x03, 0x04, 0x05])
+    println("param={first_u32(buf)}")
+    println("peek={at_u16(peek buf, 2).realise(0)}")
+
+    let peek u8[] view = buf
+    println("let_peek={view.read_u16_be(2).realise(0)}")
+
+    let Header h = Header(from([0x01, 0x02, 0x03, 0x04]))
+    println("field={h.data.read_u32_le(0).realise(0)}")
+
+    println("temp={'AB'.to_bytes().read_u16_be(0).realise(0)}")
+
+    match buf.read_u16_be(0):
+        Maybe.Some(v) -> println("match={v}")
+        Maybe.None() -> println("match=none")
+
+    println("is_some={buf.read_u64_le(0).is_some()}")
+    println("realise={buf.read_u64_be(0).realise(7)}")
+
+    match need_u16(buf, 0):
+        Result.Ok(v) -> println("channel={v}")
+        Result.Err(_) -> println("channel=none")
+    match need_u16(buf, 4):
+        Result.Ok(v) -> println("channel={v}")
+        Result.Err(_) -> println("channel=none")
+
+    let u8[] ones = from([0xff, 0xff])
+    println("signed={ones.read_u16_le(0).realise(0) as i16}")
+
+    let u8[] doubles = from([0x3f, 0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xbf, 0xe8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    println("f64={f64.from_bits(doubles.read_u64_be(0).realise(0))}")
+    println("f64={f64.from_bits(doubles.read_u64_be(8).realise(0))}")
+
+    let u8[] single = from([0x00, 0x00, 0x20, 0x40])
+    println("f32={f32.from_bits(single.read_u32_le(0).realise(0))}")
+    return 0

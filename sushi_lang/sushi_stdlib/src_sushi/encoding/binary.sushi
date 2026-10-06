@@ -11,6 +11,45 @@ traps.
 :##
 
 ##:
+Tells if `width` bytes start at an offset of a buffer.
+
+- Parameter buf: The buffer.
+- Parameter at: The offset of the first byte.
+- Parameter width: The count of bytes, 1 or more.
+- Returns: `false` when `at` is negative or the bytes go past the end.
+:##
+fn fits(u8[] buf, i32 at, i32 width) bool:
+    return at >= 0 and at <= buf.len() - width
+
+##:
+Reads `width` bytes at an offset, the least significant byte first.
+
+- Parameter buf: The buffer. The caller makes sure that the bytes fit.
+- Parameter at: The offset of the first byte.
+- Parameter width: The count of bytes, 1 to 8.
+- Returns: The bytes as an unsigned integer.
+:##
+fn le_bits(u8[] buf, i32 at, i32 width) u64:
+    let u64 v = 0
+    foreach(i in 0..width):
+        v := v | ((buf[at + i] as u64) << (8 * i))
+    return v
+
+##:
+Reads `width` bytes at an offset, the most significant byte first.
+
+- Parameter buf: The buffer. The caller makes sure that the bytes fit.
+- Parameter at: The offset of the first byte.
+- Parameter width: The count of bytes, 1 to 8.
+- Returns: The bytes as an unsigned integer.
+:##
+fn be_bits(u8[] buf, i32 at, i32 width) u64:
+    let u64 v = 0
+    foreach(i in 0..width):
+        v := (v << 8) | (buf[at + i] as u64)
+    return v
+
+##:
 Reads the 2 bytes at an offset as a little-endian `u16`, the least significant byte first.
 
 - Parameter at: The offset of the first byte.
@@ -22,7 +61,9 @@ Reads the 2 bytes at an offset as a little-endian `u16`, the least significant b
   ```
 :##
 extend u8[] read_u16_le(i32 at) Maybe@(u16):
-    return Maybe.None()
+    if (not fits(self, at, 2)):
+        return Maybe.None()
+    return Maybe.Some(le_bits(self, at, 2) as u16)
 
 ##:
 Reads the 2 bytes at an offset as a big-endian `u16`, the most significant byte first.
@@ -36,7 +77,9 @@ Reads the 2 bytes at an offset as a big-endian `u16`, the most significant byte 
   ```
 :##
 extend u8[] read_u16_be(i32 at) Maybe@(u16):
-    return Maybe.None()
+    if (not fits(self, at, 2)):
+        return Maybe.None()
+    return Maybe.Some(be_bits(self, at, 2) as u16)
 
 ##:
 Reads the 4 bytes at an offset as a little-endian `u32`, the least significant byte first.
@@ -50,7 +93,9 @@ Reads the 4 bytes at an offset as a little-endian `u32`, the least significant b
   ```
 :##
 extend u8[] read_u32_le(i32 at) Maybe@(u32):
-    return Maybe.None()
+    if (not fits(self, at, 4)):
+        return Maybe.None()
+    return Maybe.Some(le_bits(self, at, 4) as u32)
 
 ##:
 Reads the 4 bytes at an offset as a big-endian `u32`, the most significant byte first.
@@ -64,7 +109,9 @@ Reads the 4 bytes at an offset as a big-endian `u32`, the most significant byte 
   ```
 :##
 extend u8[] read_u32_be(i32 at) Maybe@(u32):
-    return Maybe.None()
+    if (not fits(self, at, 4)):
+        return Maybe.None()
+    return Maybe.Some(be_bits(self, at, 4) as u32)
 
 ##:
 Reads the 8 bytes at an offset as a little-endian `u64`, the least significant byte first.
@@ -78,7 +125,9 @@ Reads the 8 bytes at an offset as a little-endian `u64`, the least significant b
   ```
 :##
 extend u8[] read_u64_le(i32 at) Maybe@(u64):
-    return Maybe.None()
+    if (not fits(self, at, 8)):
+        return Maybe.None()
+    return Maybe.Some(le_bits(self, at, 8) as u64)
 
 ##:
 Reads the 8 bytes at an offset as a big-endian `u64`, the most significant byte first.
@@ -92,7 +141,9 @@ Reads the 8 bytes at an offset as a big-endian `u64`, the most significant byte 
   ```
 :##
 extend u8[] read_u64_be(i32 at) Maybe@(u64):
-    return Maybe.None()
+    if (not fits(self, at, 8)):
+        return Maybe.None()
+    return Maybe.Some(be_bits(self, at, 8) as u64)
 
 ##:
 Appends the 2 bytes of a `u16` in little-endian order, the least significant byte first.

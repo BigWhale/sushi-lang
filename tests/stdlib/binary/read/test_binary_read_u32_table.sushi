@@ -1,0 +1,38 @@
+# read_u32_le and read_u32_be over the known bytes 0x01 0x02 ... (7 bytes).
+# Every offset that holds 4 bytes, then the edges: a negative offset, the first offset
+# past the last full value (len - 4 + 1), the length itself, an empty array, an array
+# shorter than 4 bytes, the i32 maximum and the i32 minimum. Each edge answers None.
+# High bytes are not sign-extended.
+# EXPECT_STDOUT_EXACT: "at 0 le=67305985 be=16909060\nat 1 le=84148994 be=33752069\nat 2 le=100992003 be=50595078\nat 3 le=117835012 be=67438087\nat -1 le=none be=none\nat 4 le=none be=none\nat 7 le=none be=none\nempty le=none be=none\nshort le=none be=none\nmax le=none be=none\nmin le=none be=none\nhigh le=4244504319 be=4294901244\n"
+# EXPECT_NO_LEAKS
+
+use <encoding/binary>
+
+fn show(Maybe@(u32) m) string:
+    match m:
+        Maybe.Some(v) -> return "{v}"
+        Maybe.None() -> return "none"
+
+fn line(u8[] buf, i32 at, string tag) ~:
+    println("{tag} le={show(buf.read_u32_le(at))} be={show(buf.read_u32_be(at))}")
+
+fn main() i32:
+    let u8[] buf = from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07])
+    foreach(at in 0..4):
+        line(buf, at, "at {at}")
+    line(buf, -1, "at -1")
+    line(buf, 4, "at 4")
+    line(buf, 7, "at 7")
+
+    let u8[] empty = from([])
+    line(empty, 0, "empty")
+
+    let u8[] short = from([0x01, 0x02, 0x03])
+    line(short, 0, "short")
+
+    line(buf, 2147483647, "max")
+    line(buf, -2147483647 - 1, "min")
+
+    let u8[] high = from([0xff, 0xfe, 0xfd, 0xfc])
+    line(high, 0, "high")
+    return 0
