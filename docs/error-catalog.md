@@ -3693,7 +3693,7 @@ The import brought no name that a qualified form could reach, so the `as` clause
 
 **Message:** `` `public use` of '{origin}' re-exports nothing ``
 
-The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. A method interface such as `<collections/strings>` brings no name (a `public use` of one still opens its methods to the importers), and a unit of nothing but `extend` blocks exports methods rather than names. The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something.
+The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. A method interface such as the directory import `<collections>` brings no name (a `public use` of one still opens its methods to the importers), and a unit of nothing but `extend` blocks exports methods rather than names. The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something.
 
 ### CW3006 {#cw3006}
 

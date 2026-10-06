@@ -178,8 +178,9 @@ def _library_of(unit: Unit) -> Optional[str]:
 class MethodInterfaceNamespace(UnitNamespace):
     """A stdlib module that enables methods on a type and brings no name.
 
-    `<collections/strings>` is one, and so is a directory import such as
-    `<collections>`. It declares nothing, so its place in the scope decides no name: it
+    A directory import such as `<collections>` is one. `<collections/strings>` is not: its
+    Sushi half is a unit, and `enables_builtin_methods` keeps its methods behind an alias.
+    It declares nothing, so its place in the scope decides no name: it
     decides only whether this unit may call the methods it enables (#942).
     """
 
