@@ -268,10 +268,25 @@ def _reject_arm_kind(validator: 'TypeValidator', pattern: Pattern | LiteralPatte
         arm_kind = f"{_literal_kind(pattern.value)} literal"
     else:
         arm_kind = "enum-pattern"
-    er.emit(validator.reporter, er.ERR.CE2076, pattern.loc,
-            arm_kind=arm_kind, scrutinee_type=display_type(scrutinee_type))
+    report = er.emit_with(validator.reporter, er.ERR.CE2076, pattern.loc,
+                          arm_kind=arm_kind, scrutinee_type=display_type(scrutinee_type))
+    other_quote = _other_quote_form(pattern) if isinstance(pattern, LiteralPattern) else None
+    if other_quote is not None:
+        report = report.help(other_quote)
+    report.emit()
     arms.invalid = True
     arms.rows.append(None)
+
+
+def _other_quote_form(pattern: LiteralPattern) -> Optional[str]:
+    """The help for an arm written in the wrong quote form, the byte `a'/'` against the
+    string `'/'`, when the other form holds the same one character from 0 to 127."""
+    if pattern.is_byte and isinstance(pattern.value, int) and pattern.value <= 127:
+        return f"write `{pattern.display[1:]}` for a string arm"
+    if (isinstance(pattern.value, str) and len(pattern.value) == 1
+            and ord(pattern.value) <= 127):
+        return f"write `a'{pattern.display[1:-1]}'` for the byte"
+    return None
 
 
 def _wildcard_row(validator: 'TypeValidator', arms: _ArmRows, idx: int, count: int,
