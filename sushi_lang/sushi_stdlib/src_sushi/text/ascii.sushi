@@ -41,7 +41,7 @@ Tests if the byte is an ASCII lowercase letter, `a'a'` to `a'z'` (97-122).
   ```
 :##
 extend u8 is_ascii_lower() bool:
-    return false
+    return self >= a'a' and self <= a'z'
 
 ##:
 Tests if the byte is an ASCII letter, `a'A'` to `a'Z'` (65-90) or `a'a'` to `a'z'` (97-122).

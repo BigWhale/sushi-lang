@@ -70,7 +70,20 @@ fn main() i32:
 
 ### `is_ascii_lower() bool`
 
-TODO(worker)
+Answers `true` when the byte is an ASCII lowercase letter.
+
+The set is the bytes 97 to 122, `a'a'` to `a'z'`. Every other byte gives `false`, a byte
+from 128 to 255 too.
+
+```sushi
+use <text/ascii>
+
+fn main() i32:
+    println(a'q'.is_ascii_lower())      # true
+    println(a'Q'.is_ascii_lower())      # false
+    println(a'\xe9'.is_ascii_lower())   # false
+    return 0
+```
 
 ### `is_ascii_alpha() bool`
 
