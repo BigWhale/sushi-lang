@@ -1,0 +1,49 @@
+# `trim_start_matches(t)` removes EVERY repeat of `t` at the start of the text, and
+# `trim_end_matches(t)` every repeat at the end. The repeats are contiguous and are
+# counted from that end, so a partial repeat stays. An empty `t` gives the text
+# unchanged; a `t` longer than the text removes nothing; a text that is only repeats
+# gives "". The compare is by bytes, so a multi-byte `t` works.
+# EXPECT_STDOUT_EXACT: "[abc]\n[abc]\n[abc]\n[]\n[]\n[ab]\n[]\n[a]\n[a]\n[a ab]\n[ ab]\n[x]\n[ok→]\n[éa]\n[xyxyz]\n--\n[a/b]\n[abc]\n[abc]\n[]\n[]\n[ab]\n[]\n[b]\n[abab a]\n[a]\n[ab ]\n[x]\n[ok]\n[ab]\n[aé]\n--\n[a]\n[a]\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn br(string s) string:
+    return "[{s}]"
+
+fn main() i32:
+    println(br("xxabc".trim_start_matches("x")))
+    println(br("abc".trim_start_matches("x")))
+    println(br("abc".trim_start_matches("")))
+    println(br("".trim_start_matches("x")))
+    println(br("".trim_start_matches("")))
+    println(br("ab".trim_start_matches("abc")))
+    println(br("ababab".trim_start_matches("ab")))
+    println(br("ababa".trim_start_matches("ab")))
+    println(br("aaa".trim_start_matches("aa")))
+    println(br("a ab".trim_start_matches("ab")))
+    println(br("ab ab".trim_start_matches("ab")))
+    println(br("ééx".trim_start_matches("é")))
+    println(br("→→ok→".trim_start_matches("→")))
+    println(br("éa".trim_start_matches("e")))
+    println(br("xyxyz".trim_start_matches("xyz")))
+    println("--")
+    println(br("a/b///".trim_end_matches("/")))
+    println(br("abc".trim_end_matches("x")))
+    println(br("abc".trim_end_matches("")))
+    println(br("".trim_end_matches("/")))
+    println(br("".trim_end_matches("")))
+    println(br("ab".trim_end_matches("abc")))
+    println(br("ababab".trim_end_matches("ab")))
+    println(br("babab".trim_end_matches("ab")))
+    println(br("abab a".trim_end_matches("ab")))
+    println(br("aaa".trim_end_matches("aa")))
+    println(br("ab ab".trim_end_matches("ab")))
+    println(br("xéé".trim_end_matches("é")))
+    println(br("ok日本日本".trim_end_matches("日本")))
+    println(br("abcab".trim_end_matches("cab")))
+    println(br("aéa".trim_end_matches("a")))
+    println("--")
+    println(br("xxaxx".trim_start_matches("x").trim_end_matches("x")))
+    println(br("xxaxx".trim_end_matches("x").trim_start_matches("x")))
+    return 0

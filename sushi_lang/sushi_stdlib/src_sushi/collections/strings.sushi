@@ -189,6 +189,45 @@ extend string parse_i64(i32 base) Maybe@(i64):
         Maybe.None -> return Maybe.None()
 
 ##:
+Copies the bytes from `start` to `end` of a string into a new string.
+
+- Parameter s: The source text.
+- Parameter start: The offset of the first byte to copy.
+- Parameter end: The offset after the last byte to copy.
+- Returns: A new string that holds the bytes of that range.
+:##
+fn cut_bytes(string s, i32 start, i32 end) string:
+    let u8[] out = from([0; end - start])
+    foreach(i in start..end):
+        out[i - start] := s[i]
+    return string.from_bytes(nom out)
+
+##:
+Tests if the bytes of `t` are in `s` at the offset `at`.
+
+- Parameter s: The text to search.
+- Parameter t: The bytes to find.
+- Parameter at: The offset in `s`.
+- Returns: True when `s` holds all the bytes of `t` from `at`.
+:##
+fn bytes_match_at(string s, string t, i32 at) bool:
+    if (at < 0 or at + t.size() > s.size()):
+        return false
+    foreach(i in 0..t.size()):
+        if (s[at + i] != t[i]):
+            return false
+    return true
+
+##:
+Tests if a byte is white space, with the set of `trim()`.
+
+- Parameter b: The byte to test.
+- Returns: True for the bytes 9 to 13 and 32.
+:##
+fn is_space_byte(u8 b) bool:
+    return b == a' ' or (b >= a'\t' and b <= a'\r')
+
+##:
 Removes every repeat of `t` at the start of the text.
 
 An empty `t` gives the text unchanged.
@@ -201,7 +240,12 @@ An empty `t` gives the text unchanged.
   ```
 :##
 extend string trim_start_matches(string t) string:
-    return ""
+    let i32 m = t.size()
+    let i32 start = 0
+    if (m > 0):
+        while (bytes_match_at(self, t, start)):
+            start := start + m
+    return cut_bytes(self, start, self.size())
 
 ##:
 Removes every repeat of `t` at the end of the text.
@@ -216,7 +260,12 @@ An empty `t` gives the text unchanged.
   ```
 :##
 extend string trim_end_matches(string t) string:
-    return ""
+    let i32 m = t.size()
+    let i32 end = self.size()
+    if (m > 0):
+        while (bytes_match_at(self, t, end - m)):
+            end := end - m
+    return cut_bytes(self, 0, end)
 
 ##:
 Splits the text into lines.
@@ -232,7 +281,19 @@ gives one line and `""` gives none.
   ```
 :##
 extend string lines() string[]:
-    return from([])
+    let string[] out = from([])
+    let i32 n = self.size()
+    let i32 start = 0
+    foreach(i in 0..n):
+        if (self[i] == a'\n'):
+            let i32 end = i
+            if (end > start and self[end - 1] == a'\r'):
+                end := end - 1
+            out.push(cut_bytes(self, start, end))
+            start := i + 1
+    if (start < n):
+        out.push(cut_bytes(self, start, n))
+    return out
 
 ##:
 Splits the text at each run of white space.
@@ -247,7 +308,19 @@ text of white space alone gives no token.
   ```
 :##
 extend string split_whitespace() string[]:
-    return from([])
+    let string[] out = from([])
+    let i32 n = self.size()
+    let i32 start = -1
+    foreach(i in 0..n):
+        if (is_space_byte(self[i])):
+            if (start >= 0):
+                out.push(cut_bytes(self, start, i))
+                start := -1
+        elif (start < 0):
+            start := i
+    if (start >= 0):
+        out.push(cut_bytes(self, start, n))
+    return out
 
 ##:
 Splits the text into its UTF-8 characters.
@@ -262,7 +335,19 @@ rule of `len()`, so `s.chars().len()` equals `s.len()`.
   ```
 :##
 extend string chars() string[]:
-    return from([])
+    let string[] out = from([])
+    let i32 n = self.size()
+    let i32 start = -1
+    foreach(i in 0..n):
+        if ((self[i] & a'\xc0') != a'\x80'):
+            if (start < 0):
+                start := 0
+            else:
+                out.push(cut_bytes(self, start, i))
+                start := i
+    if (start >= 0):
+        out.push(cut_bytes(self, start, n))
+    return out
 
 unsafe external "C" as libc because "printf rounding for to_fixed":
     fn snprintf(poke u8[] buf, i64 n, string fmt, ...) i32 = "snprintf"

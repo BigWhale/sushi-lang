@@ -1,0 +1,38 @@
+# `trim_start_matches` and `trim_end_matches` at each call site: a local, a parameter,
+# a temporary, an interpolation hole, a chained call, the answer passed `nom`, and an
+# answer used after its source string is gone. Each answer is a new string.
+# EXPECT_STDOUT_EXACT: "[path/to]\n[42]\n[a=b]\n[7]\n[b c]\n2\n[tail]\n[keep]\n[keep]\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn br(string s) string:
+    return "[{s}]"
+
+fn strip_zeros(string digits) string:
+    return digits.trim_start_matches("0")
+
+fn take(nom string s) i32:
+    return s.len()
+
+fn tail_of(string text) string:
+    let string owned = text.clone()
+    return owned.trim_start_matches("-")
+
+fn main() i32:
+    let string path = "path/to///".clone()
+    println(br(path.trim_end_matches("/")))
+    println(br(strip_zeros("00042")))
+    let string key = "a"
+    let string value = "b"
+    println(br("--{key}={value}--".trim_start_matches("-").trim_end_matches("-")))
+    let string seven = "0007"
+    println("[{seven.trim_start_matches('0')}]")
+    println(br("::b c::".trim_start_matches(":").trim_end_matches(":")))
+    println(take(nom "xxhixx".trim_start_matches("x").trim_end_matches("x")))
+    println(br(tail_of("---tail")))
+    let string kept = "keep"
+    let string same = kept.trim_end_matches("")
+    println(br(same))
+    println(br(kept))
+    return 0

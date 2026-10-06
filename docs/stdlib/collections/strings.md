@@ -603,23 +603,106 @@ lenient form of a strict parse, trim the text first: `s.trim().parse_u32(10)`.
 
 ### `.trim_start_matches(string t) -> string`
 
-TODO(worker)
+Removes every repeat of `t` at the start of the text, and gives a new string. The repeats
+must touch: `"ab ab".trim_start_matches("ab")` gives `" ab"`. An empty `t` gives the text
+unchanged. A `t` that is longer than the text removes nothing, and a text of repeats alone
+gives `""`. The compare is by bytes, so a multi-byte `t` works.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    println("0042".trim_start_matches("0"))      # 42
+    println("ababx".trim_start_matches("ab"))    # x
+    println("ééx".trim_start_matches("é"))       # x
+    println("abc".trim_start_matches(""))        # abc
+    return 0
+```
 
 ### `.trim_end_matches(string t) -> string`
 
-TODO(worker)
+Removes every repeat of `t` at the end of the text, and gives a new string. The rules are
+the rules of `trim_start_matches`. The repeats are counted from the end, so a part of a
+repeat stays: `"aaa".trim_end_matches("aa")` gives `"a"`.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    println("a/b///".trim_end_matches("/"))      # a/b
+    println("babab".trim_end_matches("ab"))      # b
+    println("aaa".trim_end_matches("aa"))        # a
+    return 0
+```
 
 ### `.lines() -> string[]`
 
-TODO(worker)
+Splits the text at each `\n`, and gives each line as a new string. A `\r` immediately
+before the `\n` is removed, and a `\r` anywhere else stays. A final `\n` does not start an
+empty last line.
+
+| Text | Lines |
+|---|---|
+| `""` | `[]` |
+| `"a"` | `["a"]` |
+| `"a\n"` | `["a"]` |
+| `"a\r\nb"` | `["a", "b"]` |
+| `"\n"` | `[""]` |
+| `"a\n\nb"` | `["a", "", "b"]` |
+| `"a\rb"` | `["a\rb"]` |
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let string text = "Mostly\r\nHarmless\n"
+    let string[] lines = text.lines()
+    println(lines.len())                         # 2
+    foreach(line in lines.iter()):
+        println("[{line}]")                      # [Mostly], then [Harmless]
+    return 0
+```
 
 ### `.split_whitespace() -> string[]`
 
-TODO(worker)
+Splits the text at each run of white space, and gives each token as a new string. No
+token is empty, so `""` and `"   "` give `[]`. White space is the set of `trim()`: the
+bytes 9, 10, 11, 12, 13 and 32. Every other byte is part of a token.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let string[] words = " Mostly \t Harmless\n".split_whitespace()
+    println(words.len())                         # 2
+    println(words[0])                            # Mostly
+    println(words[1])                            # Harmless
+    return 0
+```
 
 ### `.chars() -> string[]`
 
-TODO(worker)
+Splits the text into its characters, and gives each character as a new string that holds
+the bytes of that character. A character starts at each byte that is not a UTF-8
+continuation byte (`b & 0xC0 != 0x80`). That is the rule of `len()`, so
+`s.chars().len()` equals `s.len()` for every string.
+
+The rule applies to text that is not valid UTF-8 too (for example from
+`string.from_bytes`). A continuation byte joins the character before it, and continuation
+bytes at the start join the first character. A text of continuation bytes alone has no
+character, so it gives `[]`, because its `len()` is 0.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let string word = "café"
+    let string[] cs = word.chars()
+    println("{cs.len()} {word.len()}")           # 4 4
+    println(cs[3])                               # é
+    println(cs[3].size())                        # 2
+    return 0
+```
 
 ## Number formatting
 
