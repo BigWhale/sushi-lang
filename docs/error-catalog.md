@@ -2377,7 +2377,7 @@ A container of borrows -- `List@(peek T)`, `HashMap@(peek K, V)`, `Maybe@(peek T
 
 **Message:** `cannot write through 'self': a method receiver is a read-only borrow`
 
-**Help:** `` the write ({what}) would land on the method's private copy of the receiver; declare the receiver mutable -- `(poke self, ...)` -- and the write reaches the caller (#327), or return the new value and let the caller store it ``
+**Help:** `` the write ({what}) would land on the method's private copy of the receiver; declare the receiver mutable -- `(poke self, ...)` -- and the write reaches the caller, or return the new value and let the caller store it ``
 
 An extension or perk method receives `self` as a BORROW: the caller keeps the value (see [the ownership conventions](design/ownership-conventions.md)). The compiled receiver is a private copy, so a write through it -- a mutating method, a field assignment, or a `poke` borrow of it -- never reaches the caller. This is [CE2414](#ce2414)'s rule for the one receiver [CE2414](#ce2414) does not cover. The mutating receiver is spelled `poke self`: declare the method `extend T name(poke self, ...)` and the write reaches the caller. Alternatively return the new value and let the caller store it.
 
@@ -3699,7 +3699,7 @@ A perk implementation shipped by a library failed to deserialize. Methods it pro
 
 **Message:** `` unsafe external block suspends four Sushi guarantees (add `because "..."` to acknowledge) ``
 
-**Help:** `` see docs/ffi.md - acknowledge with `because "<reason>"` and use a safe wrapper ``
+**Help:** `` acknowledge with `because "<reason>"` and use a safe wrapper ``
 
 An `unsafe external` block disables borrow checking, RAII, Result/Maybe error handling, and bounds/null safety for the foreign declarations it contains. Provide a `because "<reason>"` clause to acknowledge the contract and silence this warning.
 
