@@ -93,7 +93,9 @@ fn main() i32:
 
 A bare literal takes its type from the context: the annotation, the parameter, the field or
 the other operand. A value out of range for that type is [`CE2073`](error-catalog.md#ce2073). With no context, an
-integer literal is an `i32` and a float literal is an `f64`.
+integer literal is an `i32` and a float literal is an `f64`. A byte literal `a'x'` (the
+ASCII code of `x`, see the [reference](language-reference.md#numeric-literals)) is a `u8`
+when no context types it.
 
 ### Constants, Unit Variables and Visibility
 

@@ -22,6 +22,22 @@ All notable changes to Sushi Lang will be documented in this file.
   hole (`"{x}" ->`) is the new `CE2123`; `'{x}'` matches the braces as text. A named
   constant as a pattern (`GET ->`) and several literals in one arm (`"a" | "b" ->`) are
   not part of this change.
+- **Byte literals.** `a'x'` is the ASCII code of `x`: one byte, 0 to 255. It holds exactly
+  one character or exactly one escape. A character from 0 to 127 is written as itself
+  (`a'/'`) or as an escape. A byte from 128 to 255 is written as an escape only
+  (`a'\xe9'`). The escapes are `\n`, `\t`, `\r`, `\0`, `\\`, `\'`, `\"` and `\xNN` with
+  two hex digits, and `\xNN` is legal below 128 too. A character above 127 written as
+  itself (`a'é'`) is an error, because a Sushi string is UTF-8 and the character is more
+  than one byte. The literal takes its type from the position, as a number literal does,
+  and the default is `u8`. A value that does not fit is `CE2073`, by the decimal rule:
+  `a'\xc8'` does not fit an `i8`. Beside a bare number literal in one operation, the
+  number literal takes `u8` (`a'a' + 1` is `u8` in either order). A byte literal is legal
+  in an expression, in a `const` initializer and as a `match` arm, nested too
+  (`Maybe.Some(a'/') ->`). Two new codes: `CE6014` for a malformed byte literal (empty,
+  more than one character, an unknown escape, a `\x` without two hex digits) and `CE6015`
+  for a character above 127; its help gives the UTF-8 bytes. `CE2076` has two new helps
+  for the wrong quote form of an arm: `'/'` on an integer scrutinee suggests `a'/'`, and
+  `a'/'` on a `string` scrutinee suggests `'/'`.
 
 ## [0.15.0] - 2026-10-05
 
