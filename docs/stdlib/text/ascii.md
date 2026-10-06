@@ -27,6 +27,17 @@ write `??` on a call. Each method is total over the 256 byte values, and allocat
 A byte literal (`a'x'`) is a `u8` by default, so `a'7'.is_ascii_digit()` needs no cast, and a
 string byte `s[i]` is a `u8` too.
 
+**Import the module in each unit that calls a method.** An extension method is found on its
+type, so a call compiles in every unit of a program that loads the module, also in a unit
+that does not import it. Do not depend on that: the unused-use lint (`--warn-unused`)
+expects the import in the unit that calls the method, and a unit with no import of its own
+breaks when the other unit stops importing the module.
+
+A program that declares its own `extend u8 is_ascii_digit()` (or any other name of this
+module) and imports `<text/ascii>` gets the duplicate-function error
+[CE0101](../../error-catalog.md#ce0101): an extension method of one name on one type is
+global. A program that does not import the module is not affected.
+
 ## Methods
 
 ### `is_ascii_digit() bool`
@@ -165,9 +176,12 @@ fn main() i32:
 
 ### `to_ascii_lower() u8`
 
-Answers the lowercase byte for an ASCII uppercase letter, and the byte unchanged for every other byte.
+Answers the lowercase byte for an ASCII uppercase letter, and the byte unchanged for every
+other byte.
 
-The bytes that change are 65 to 90 (`a'A'` to `a'Z'`). Each one gives the byte plus 32, so the result is 97 to 122 (`a'a'` to `a'z'`). Every other byte, 128 to 255 included, is returned unchanged.
+The bytes that change are 65 to 90 (`a'A'` to `a'Z'`). Each one gives the byte plus 32, so
+the result is 97 to 122 (`a'a'` to `a'z'`). Every other byte, 128 to 255 included, is
+returned unchanged.
 
 ```sushi
 use <text/ascii>
@@ -182,9 +196,12 @@ fn main() i32:
 
 ### `to_ascii_upper() u8`
 
-Answers the uppercase byte for an ASCII lowercase letter, and the byte unchanged for every other byte.
+Answers the uppercase byte for an ASCII lowercase letter, and the byte unchanged for every
+other byte.
 
-The bytes that change are 97 to 122 (`a'a'` to `a'z'`). Each one gives the byte minus 32, so the result is 65 to 90 (`a'A'` to `a'Z'`). Every other byte, 128 to 255 included, is returned unchanged.
+The bytes that change are 97 to 122 (`a'a'` to `a'z'`). Each one gives the byte minus 32,
+so the result is 65 to 90 (`a'A'` to `a'Z'`). Every other byte, 128 to 255 included, is
+returned unchanged.
 
 ```sushi
 use <text/ascii>
