@@ -917,6 +917,11 @@ fn main() i32:
   let u32 shifted = a >> 2  # Result: 805306368 (zero-fill from left)
   ```
 
+### Bit Methods
+
+TODO(worker): `reverse_bits()`, `leading_zeros()` and `trailing_zeros()` on `u8`, `u16`,
+`u32` and `u64`.
+
 ### String
 
 There is no `+` concatenation operator for strings. Build strings with

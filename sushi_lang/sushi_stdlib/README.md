@@ -69,6 +69,9 @@ compiled like user code instead of precompiled to bitcode. Among them:
   that are written in Sushi (the strict parses, the number formatters,
   `StringBuilder`). One `use <collections/strings>` loads both. It is the only
   source module that is not in `_virtual_units`, because it has a `.bc`.
+- `encoding/binary` (`src_sushi/encoding/binary.sushi`) — fixed-width
+  unsigned integers in a `u8[]` and back, in either byte order, as extension
+  methods on `u8[]`.
 - `encoding/hex` and `encoding/base64` (`src_sushi/encoding/hex.sushi`,
   `src_sushi/encoding/base64.sushi`) — the two text codecs of bytes.
 - `io/fs` (`src_sushi/io/fs.sushi`) — composed file-system operations:

@@ -23,6 +23,7 @@ Complete reference for Sushi's standard library modules and types.
 ### Encoding and Compression
 - [Compression (zlib)](stdlib/compression/zlib.md) - DEFLATE and the zlib container (RFC 1950/1951)
 - [Base64](stdlib/encoding/base64.md) - Base64 text of bytes and back (RFC 4648)
+- [Binary](stdlib/encoding/binary.md) - Fixed-width integers in a byte array, in either byte order
 - [Hex](stdlib/encoding/hex.md) - Hexadecimal text of bytes and back
 - [MessagePack](stdlib/encoding/msgpack.md) - MessagePack decoder
 - [Slib reader](stdlib/toolchain/slib.md) - `.slib` header and metadata reader
@@ -65,6 +66,7 @@ use <collections/hashmap>  # HashMap@(K, V)
 use <collections/iter>     # Higher-order combinators (map/filter/fold/compose/enumerate/zip)
 use <compression/zlib>     # DEFLATE and the zlib container
 use <encoding/base64>      # Base64 encode and decode
+use <encoding/binary>      # Fixed-width integers in bytes, in either byte order
 use <encoding/hex>         # Hex encode and decode
 use <encoding/msgpack>     # MessagePack decoder
 use <io/buf>               # BufReader, BufWriter: buffered over any handle
@@ -351,6 +353,11 @@ Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and
 - `encode(u8[] data)` - Write bytes as text (two lower-case hex digits per byte, or padded Base64)
 - `decode(string text)` - Read the text back as bytes; a `HexError` or a `Base64Error` when it does not decode
 - Each module has `encode` and `decode`: import two of them with `as` (`use <encoding/base64> as b64`)
+
+### Encoding (`use <encoding/binary>`)
+
+- `read_u16_le(i32 at)` ... `read_u64_be(i32 at)` - Read a fixed-width unsigned integer from a `u8[]` at an offset, in either byte order; `Maybe.None()` when it does not fit
+- `push_u16_le(v)` ... `push_u64_be(v)` - Append the bytes of a fixed-width unsigned integer to a `u8[]`, in either byte order
 
 ### Encoding (`use <encoding/msgpack>`)
 

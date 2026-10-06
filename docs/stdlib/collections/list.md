@@ -107,6 +107,18 @@ match list.pop():
         println("Empty list")
 ```
 
+### `.first() -> Maybe@(T)` and `.last() -> Maybe@(T)`
+
+TODO(worker)
+
+### `.contains(T value) -> bool` and `.index_of(T value) -> Maybe@(i32)`
+
+TODO(worker)
+
+### `.index_of_from(T value, i32 start) -> Maybe@(i32)`
+
+TODO(worker)
+
 ## Modification Methods
 
 ### `.push(T element) -> ~`

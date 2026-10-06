@@ -1,0 +1,179 @@
+##:
+encoding/binary -- fixed-width unsigned integers in a byte array and back, opt in with
+`use <encoding/binary>`.
+
+A read takes the bytes of a value at an offset, a push appends them. Each method names
+the width and the byte order: `le` puts the least significant byte first, `be` the most
+significant byte first. There is no alignment and no padding. A signed value or a float
+goes through its bits: `v as u32`, `f.to_bits()`, `f64.from_bits(r.realise(0))`. Every
+method is bare and total: a read that does not fit answers `Maybe.None()`, and nothing
+traps.
+:##
+
+##:
+Reads the 2 bytes at an offset as a little-endian `u16`, the least significant byte first.
+
+- Parameter at: The offset of the first byte.
+- Returns: The value, or `Maybe.None()` when `at` is negative or `at + 2` is past the end.
+- Example:
+  ```sushi
+  let u8[] buf = from([0; 2])
+  println(buf.read_u16_le(0).realise(0))
+  ```
+:##
+extend u8[] read_u16_le(i32 at) Maybe@(u16):
+    return Maybe.None()
+
+##:
+Reads the 2 bytes at an offset as a big-endian `u16`, the most significant byte first.
+
+- Parameter at: The offset of the first byte.
+- Returns: The value, or `Maybe.None()` when `at` is negative or `at + 2` is past the end.
+- Example:
+  ```sushi
+  let u8[] buf = from([0; 2])
+  println(buf.read_u16_be(0).realise(0))
+  ```
+:##
+extend u8[] read_u16_be(i32 at) Maybe@(u16):
+    return Maybe.None()
+
+##:
+Reads the 4 bytes at an offset as a little-endian `u32`, the least significant byte first.
+
+- Parameter at: The offset of the first byte.
+- Returns: The value, or `Maybe.None()` when `at` is negative or `at + 4` is past the end.
+- Example:
+  ```sushi
+  let u8[] buf = from([0; 4])
+  println(buf.read_u32_le(0).realise(0))
+  ```
+:##
+extend u8[] read_u32_le(i32 at) Maybe@(u32):
+    return Maybe.None()
+
+##:
+Reads the 4 bytes at an offset as a big-endian `u32`, the most significant byte first.
+
+- Parameter at: The offset of the first byte.
+- Returns: The value, or `Maybe.None()` when `at` is negative or `at + 4` is past the end.
+- Example:
+  ```sushi
+  let u8[] buf = from([0; 4])
+  println(buf.read_u32_be(0).realise(0))
+  ```
+:##
+extend u8[] read_u32_be(i32 at) Maybe@(u32):
+    return Maybe.None()
+
+##:
+Reads the 8 bytes at an offset as a little-endian `u64`, the least significant byte first.
+
+- Parameter at: The offset of the first byte.
+- Returns: The value, or `Maybe.None()` when `at` is negative or `at + 8` is past the end.
+- Example:
+  ```sushi
+  let u8[] buf = from([0; 8])
+  println(buf.read_u64_le(0).realise(0))
+  ```
+:##
+extend u8[] read_u64_le(i32 at) Maybe@(u64):
+    return Maybe.None()
+
+##:
+Reads the 8 bytes at an offset as a big-endian `u64`, the most significant byte first.
+
+- Parameter at: The offset of the first byte.
+- Returns: The value, or `Maybe.None()` when `at` is negative or `at + 8` is past the end.
+- Example:
+  ```sushi
+  let u8[] buf = from([0; 8])
+  println(buf.read_u64_be(0).realise(0))
+  ```
+:##
+extend u8[] read_u64_be(i32 at) Maybe@(u64):
+    return Maybe.None()
+
+##:
+Appends the 2 bytes of a `u16` in little-endian order, the least significant byte first.
+
+- Parameter v: The value.
+- Example:
+  ```sushi
+  let u8[] buf = from([])
+  buf.push_u16_le(0x0102)
+  println(buf.len())
+  ```
+:##
+extend u8[] push_u16_le(poke self, u16 v) ~:
+    return ~
+
+##:
+Appends the 2 bytes of a `u16` in big-endian order, the most significant byte first.
+
+- Parameter v: The value.
+- Example:
+  ```sushi
+  let u8[] buf = from([])
+  buf.push_u16_be(0x0102)
+  println(buf.len())
+  ```
+:##
+extend u8[] push_u16_be(poke self, u16 v) ~:
+    return ~
+
+##:
+Appends the 4 bytes of a `u32` in little-endian order, the least significant byte first.
+
+- Parameter v: The value.
+- Example:
+  ```sushi
+  let u8[] buf = from([])
+  buf.push_u32_le(0x01020304)
+  println(buf.len())
+  ```
+:##
+extend u8[] push_u32_le(poke self, u32 v) ~:
+    return ~
+
+##:
+Appends the 4 bytes of a `u32` in big-endian order, the most significant byte first.
+
+- Parameter v: The value.
+- Example:
+  ```sushi
+  let u8[] buf = from([])
+  buf.push_u32_be(0x01020304)
+  println(buf.len())
+  ```
+:##
+extend u8[] push_u32_be(poke self, u32 v) ~:
+    return ~
+
+##:
+Appends the 8 bytes of a `u64` in little-endian order, the least significant byte first.
+
+- Parameter v: The value.
+- Example:
+  ```sushi
+  let u8[] buf = from([])
+  buf.push_u64_le(0x0102030405060708)
+  println(buf.len())
+  ```
+:##
+extend u8[] push_u64_le(poke self, u64 v) ~:
+    return ~
+
+##:
+Appends the 8 bytes of a `u64` in big-endian order, the most significant byte first.
+
+- Parameter v: The value.
+- Example:
+  ```sushi
+  let u8[] buf = from([])
+  buf.push_u64_be(0x0102030405060708)
+  println(buf.len())
+  ```
+:##
+extend u8[] push_u64_be(poke self, u64 v) ~:
+    return ~

@@ -143,6 +143,18 @@ let i32 at = words.index_of("beta").realise(-1)   # 1
 words.index_of("delta").is_none()         # true
 ```
 
+### `.index_of_from(T value, i32 start) -> Maybe@(i32)`
+
+TODO(worker)
+
+### `.starts_with(prefix) -> bool`
+
+TODO(worker)
+
+### `.eq_range(i32 start, other) -> bool`
+
+TODO(worker)
+
 ### `.iter() -> Iterator@(T)`
 
 Create iterator for foreach loops.
@@ -427,6 +439,10 @@ out.extend_range(src, 2, 3)    # out is now [0, 30, 40, 50]
 
 `.extend(src)` is `extend_range(src, 0, src.len())`.
 
+### `.extend_back(i32 dist, i32 count) -> ~`
+
+TODO(worker)
+
 ### `.extend_str(string s) -> ~`
 
 Append the bytes of `s` to a `u8[]`. The method grows the array once and copies the bytes
@@ -510,6 +526,8 @@ destination may reallocate its buffer, which would leave the source pointer dang
 the middle of the copy. Use `.clone()` or `.ss()` to take an independent source. A copy
 that must read what it is writing -- a run expanded from its own tail -- is a different
 operation, and stays a per-element loop.
+
+TODO(worker): the no-op rule of `.extend_back()`.
 
 ### `.capacity() -> i32`
 

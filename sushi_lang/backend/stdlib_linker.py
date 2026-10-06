@@ -113,6 +113,7 @@ class StdlibLinker:
         "collections/iter",
         "compression/zlib",
         "encoding/base64",
+        "encoding/binary",
         "encoding/hex",
         "encoding/msgpack",
         "io/buf",
