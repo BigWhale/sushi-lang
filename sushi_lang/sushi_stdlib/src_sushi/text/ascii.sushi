@@ -122,6 +122,8 @@ A byte from 97 to 122 gives the byte minus 32. Every other byte is returned unch
   ```
 :##
 extend u8 to_ascii_upper() u8:
+    if (self >= a'a' and self <= a'z'):
+        return self - 32
     return self
 
 ##:

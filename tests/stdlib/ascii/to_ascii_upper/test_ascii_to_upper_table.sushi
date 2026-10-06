@@ -1,0 +1,18 @@
+# to_ascii_upper over all 256 bytes.
+# Each line shows a byte that changes and its uppercase byte.
+# The last line shows the count of bytes that do not change.
+# EXPECT_STDOUT_EXACT: "97 -> 65\n98 -> 66\n99 -> 67\n100 -> 68\n101 -> 69\n102 -> 70\n103 -> 71\n104 -> 72\n105 -> 73\n106 -> 74\n107 -> 75\n108 -> 76\n109 -> 77\n110 -> 78\n111 -> 79\n112 -> 80\n113 -> 81\n114 -> 82\n115 -> 83\n116 -> 84\n117 -> 85\n118 -> 86\n119 -> 87\n120 -> 88\n121 -> 89\n122 -> 90\n230\n"
+
+use <text/ascii>
+
+fn main() i32:
+    let i32 unchanged = 0
+    foreach(i in 0..256):
+        let u8 b = i as u8
+        let u8 m = b.to_ascii_upper()
+        if (m != b):
+            println("{b} -> {m}")
+        else:
+            unchanged := unchanged + 1
+    println(unchanged)
+    return 0
