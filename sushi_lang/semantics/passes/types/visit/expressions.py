@@ -54,7 +54,14 @@ class ExpressionValidator(RecursiveVisitor):
         if node.op == "neg" and isinstance(node.expr, IntLit):
             context_typed = (getattr(node.expr, 'in_cast_context', False)
                              or node.expr.resolved_type is not None)
-            if not context_typed and -int(node.expr.value) < -(2 ** 31):
+            if not context_typed and node.expr.byte_spelling is not None:
+                # A byte literal's default is u8, which no negative value fits.
+                from sushi_lang.semantics.passes.types.inference import int_literal_fits
+                value = -int(node.expr.value)
+                if not int_literal_fits(value, 10, BuiltinType.U8):
+                    er.emit(self.type_validator.reporter, er.ERR.CE2073, node.loc,
+                            literal=str(value), type=BuiltinType.U8.value)
+            elif not context_typed and -int(node.expr.value) < -(2 ** 31):
                 self._emit_literal_overflow(node.expr)
             node.expr.range_checked = True
 
