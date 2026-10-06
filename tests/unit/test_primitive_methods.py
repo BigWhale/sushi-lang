@@ -54,6 +54,26 @@ def test_to_bits_is_float_only():
     assert builtin_registry.get_method(BuiltinType.I32, "to_bits") is None
 
 
+BIT_METHODS = ("reverse_bits", "leading_zeros", "trailing_zeros")
+UNSIGNED = frozenset({BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64})
+
+
+@pytest.mark.parametrize("method_name", BIT_METHODS)
+def test_bit_methods_are_unsigned_only(method_name):
+    """A signed value goes through its unsigned twin: `(x as u32).leading_zeros()`."""
+    assert PRIMITIVE_METHOD_TYPES[method_name] == UNSIGNED
+    assert builtin_registry.get_method(BuiltinType.I32, method_name) is None
+    assert builtin_registry.get_method(BuiltinType.F64, method_name) is None
+
+
+@pytest.mark.parametrize("prim_type", sorted(UNSIGNED, key=str))
+def test_bit_counts_are_i32_and_reverse_keeps_the_type(prim_type):
+    """A count is i32 (#870); the reversal has the width of its receiver."""
+    assert primitive_method_return_type(prim_type, "leading_zeros") is BuiltinType.I32
+    assert primitive_method_return_type(prim_type, "trailing_zeros") is BuiltinType.I32
+    assert primitive_method_return_type(prim_type, "reverse_bits") is prim_type
+
+
 # Return types (#239)
 #
 # The tests above assert method NAMES only, and they warm the registry themselves with the

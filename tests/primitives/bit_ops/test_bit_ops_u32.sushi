@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0 0 32 32\n1 2147483648 31 0\n4294967295 4294967295 0 0\n2147483648 1 0 31\n1192960 2902016 11 10\n"
+#
+# reverse_bits, leading_zeros and trailing_zeros on u32 (32 bits): zero, one, the maximum,
+# the top bit alone, and a pattern. Each line is: value, reversed, leading, trailing.
+fn show(u32 x) ~:
+    let u32 r = x.reverse_bits()
+    let i32 lead = x.leading_zeros()
+    let i32 trail = x.trailing_zeros()
+    println("{x} {r} {lead} {trail}")
+
+fn main() i32:
+    show(0)
+    show(1)
+    show(0xFFFF_FFFF)
+    show(0x8000_0000)
+    show(0x0012_3400)
+    return 0

@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE2008
+#
+# A float has no bit methods; f64.to_bits() gives the u64 that carries them.
+fn main() i32:
+    let f64 x = 1.5
+    let f64 r = x.reverse_bits()
+    println("{r}")
+    return 0

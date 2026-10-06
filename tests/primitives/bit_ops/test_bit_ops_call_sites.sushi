@@ -1,0 +1,48 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3 4 8 240 7\n24 96 3 40\n0 31 3\n40 26 26\nlz ok\n3 6\n"
+#
+# The bit methods in each receiver position: a variable, a constant, an expression, a
+# literal typed by a cast or by the other operand, a cast from a signed type, a chain,
+# a peek parameter, a condition, an interpolation hole and an arithmetic operand.
+const u16 MASK = 0x0F00
+const u8 TOP = 0x80
+
+fn lead_peek(peek u32 x) i32:
+    return x.leading_zeros()
+
+fn main() i32:
+    let u32 v = 40
+    let i32 a = v.trailing_zeros()
+    let i32 b = MASK.leading_zeros()
+    let i32 c = MASK.trailing_zeros()
+    let u16 d = MASK.reverse_bits()
+    let i32 e = TOP.trailing_zeros()
+    println("{a} {b} {c} {d} {e}")
+
+    let i32 f = (v << 2).leading_zeros()
+    let u8 g = (0x06 as u8).reverse_bits()
+    let u8 small = 1
+    let i32 h = (small | 0x10).leading_zeros()
+    let u64 w = 1
+    let i32 k = (w << 40).trailing_zeros()
+    println("{f} {g} {h} {k}")
+
+    let i32 neg = -1
+    let i32 one = 1
+    let i64 big = -8
+    let i32 m = (neg as u32).leading_zeros()
+    let i32 n = (one as u32).leading_zeros()
+    let i32 p = (big as u64).trailing_zeros()
+    println("{m} {n} {p}")
+
+    let u32 back = v.reverse_bits().reverse_bits()
+    let i32 q = v.reverse_bits().trailing_zeros()
+    let i32 r = lead_peek(peek v)
+    println("{back} {q} {r}")
+
+    if (v.leading_zeros() == 26):
+        println("lz ok")
+
+    let i32 bit_length = 32 - v.leading_zeros()
+    println("{v.trailing_zeros()} {bit_length}")
+    return 0

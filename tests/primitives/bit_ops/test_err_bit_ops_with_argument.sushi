@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2009
+#
+# The bit methods take no argument. The low n bits reversed are
+# c.reverse_bits() >> (W - n), not c.reverse_bits(n).
+fn main() i32:
+    let u32 c = 11
+    let u32 r = c.reverse_bits(4)
+    println("{r}")
+    return 0

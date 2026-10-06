@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0 0 16 16\n1 32768 15 0\n65535 65535 0 0\n32768 1 0 15\n242 20224 8 1\n"
+#
+# reverse_bits, leading_zeros and trailing_zeros on u16 (16 bits): zero, one, the maximum,
+# the top bit alone, and a pattern. Each line is: value, reversed, leading, trailing.
+fn show(u16 x) ~:
+    let u16 r = x.reverse_bits()
+    let i32 lead = x.leading_zeros()
+    let i32 trail = x.trailing_zeros()
+    println("{x} {r} {lead} {trail}")
+
+fn main() i32:
+    show(0)
+    show(1)
+    show(0xFFFF)
+    show(0x8000)
+    show(0x00F2)
+    return 0

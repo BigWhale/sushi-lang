@@ -919,8 +919,52 @@ fn main() i32:
 
 ### Bit Methods
 
-TODO(worker): `reverse_bits()`, `leading_zeros()` and `trailing_zeros()` on `u8`, `u16`,
-`u32` and `u64`.
+The unsigned integers `u8`, `u16`, `u32` and `u64` have three built-in bit methods. No
+method takes an argument, and no method needs an import. `W` is the width of the type:
+8, 16, 32 or 64.
+
+| Method | Answer | For `0` |
+|---|---|---|
+| `reverse_bits() T` | The bits in the reverse order, over the full width `W`. Bit 0 goes to bit `W - 1`. The type is the type of the receiver. | `0` |
+| `leading_zeros() i32` | The count of zero bits above the highest one bit. | `W` |
+| `trailing_zeros() i32` | The count of zero bits below the lowest one bit. | `W` |
+
+The two counts are `i32`, as every count and index is. A value with the top bit set
+has `leading_zeros()` 0, and an odd value has `trailing_zeros()` 0. `W -
+x.leading_zeros()` is the count of bits that `x` needs.
+
+The methods are on the unsigned types only. A signed or a float receiver is
+[CE2008](error-catalog.md#ce2008), and an argument is [CE2009](error-catalog.md#ce2009).
+Cast a signed value to its unsigned twin first: `(x as u32).leading_zeros()`. A bare
+integer literal is `i32`, so a literal receiver also needs the cast:
+`(0x80 as u8).trailing_zeros()`.
+
+**The low `n` bits, reversed.** Use the shift: `c.reverse_bits() >> (W - n)`. For `n = W`
+the count is 0, and the answer is the full reversal. For `n = 0` the count is `W`. A
+computed shift count at or above the width gives 0, so the answer is 0. Write the count
+as an expression of `n`: a count that the compiler can read must be from 0 to `W - 1`,
+so `c.reverse_bits() >> 32` on a `u32` is [CE2512](error-catalog.md#ce2512).
+
+```sushi
+fn reverse_low(u32 code, i32 n) u32:
+    return code.reverse_bits() >> (32 - n)
+
+fn main() i32:
+    let u8 b = 0b0001_0110
+    let u8 r = b.reverse_bits()
+    let i32 lead = b.leading_zeros()
+    let i32 trail = b.trailing_zeros()
+    println("{r} {lead} {trail}")                                # 104 3 1
+
+    let u32 zero = 0
+    println("{zero.leading_zeros()} {zero.trailing_zeros()}")    # 32 32
+
+    let i32 x = -1
+    println("{(x as u32).leading_zeros()}")                      # 0
+
+    println("{reverse_low(0b011, 3)} {reverse_low(0b011, 0)}")   # 6 0
+    return 0
+```
 
 ### String
 

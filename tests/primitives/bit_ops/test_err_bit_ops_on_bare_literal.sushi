@@ -1,0 +1,8 @@
+# EXPECT_ERROR_CODE: CE2008
+#
+# A bare integer literal with no context is i32, and i32 has no bit methods. The cast
+# gives the literal its unsigned type: (0x80 as u8).trailing_zeros().
+fn main() i32:
+    let i32 n = 0x80.trailing_zeros()
+    println("{n}")
+    return 0

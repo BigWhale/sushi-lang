@@ -24,10 +24,10 @@ class BuiltinMethodRegistry:
         return self._methods.get(target_type, {}).get(method_name)
 
 
-# What the compiler defines for every program: hash, to_str, to_bits and clone on the
-# primitives (backend/types/primitives/). Each is registered once, at import time, and
-# each emitter closes over a BuiltinType -- nothing a program can change -- so one table
-# serves the process.
+# What the compiler defines for every program: hash, to_str, to_bits, clone and the bit
+# methods on the primitives (backend/types/primitives/). Each is registered once, at
+# import time, and each emitter closes over a BuiltinType -- nothing a program can
+# change -- so one table serves the process.
 builtin_registry = BuiltinMethodRegistry()
 
 

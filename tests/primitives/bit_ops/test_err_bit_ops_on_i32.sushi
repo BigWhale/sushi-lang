@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2008
+#
+# The bit methods are on the unsigned integers alone. A signed value goes through its
+# unsigned twin: (x as u32).leading_zeros().
+fn main() i32:
+    let i32 x = 8
+    let i32 n = x.leading_zeros()
+    println("{n}")
+    return 0

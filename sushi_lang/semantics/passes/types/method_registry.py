@@ -268,7 +268,7 @@ class StringMethodInferrer:
 
 @dataclass
 class PrimitiveMethodInferrer:
-    """Type inferrer for built-in primitive methods (to_str, hash, to_bits)."""
+    """Type inferrer for built-in primitive methods (to_str, hash, to_bits, the bit methods)."""
     receiver_type: 'Type'
     method_name: str
     validator: 'TypeValidator'

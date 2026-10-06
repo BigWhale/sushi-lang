@@ -1,0 +1,9 @@
+# EXPECT_ERROR_CODE: CE2512
+#
+# A shift count that the compiler can read must be from 0 to W - 1. The n = 0 case of the
+# low-bits idiom needs a computed count: c.reverse_bits() >> (32 - n).
+fn main() i32:
+    let u32 c = 11
+    let u32 r = c.reverse_bits() >> 32
+    println("{r}")
+    return 0
