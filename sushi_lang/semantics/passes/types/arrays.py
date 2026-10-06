@@ -281,9 +281,13 @@ def _a_string(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
     if source_type is None:
         return
     source_type = deref_type(source_type)
-    if source_type != BuiltinType.STRING:
-        er.emit(reporter, er.ERR.CE2023, call.loc, part="argument", method=call.method,
-                expected=display_type(BuiltinType.STRING), got=display_type(source_type))
+    if source_type == BuiltinType.STRING:
+        return
+    diagnostic = er.emit_with(reporter, er.ERR.CE2023, call.loc, part="argument",
+                              method=call.method, expected=display_type(BuiltinType.STRING),
+                              got=display_type(source_type))
+    if source_type == array_type:
+        diagnostic.help(f"to append a `{display_type(source_type)}`, write `buf.extend(...)`")
 
 
 def _a_range(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
