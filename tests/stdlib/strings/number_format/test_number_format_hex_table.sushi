@@ -1,0 +1,101 @@
+# `to_hex` and `to_hex_width` on the eight integer types: base 16, lower case, no
+# leading zero, `0` is "0". A signed value gives the two's complement bits of its own
+# width. A width pads with leading zeros, never cuts, and a width of 0 or below is no width.
+# Columns per type: 0, 1, 10, the maximum, a mixed value, and for a signed type -1 and the minimum.
+# EXPECT_STDOUT_EXACT: "u8: 0 1 a ff a5\nu16: 0 1 a ffff beef\nu32: 0 1 a ffffffff deadbeef\nu64: 0 1 a ffffffffffffffff 123456789abcdef\ni8: 0 1 a 7f f0 ff 80\ni16: 0 1 a 7fff f000 ffff 8000\ni32: 0 1 a 7fffffff fffffffe ffffffff 80000000\ni64: 0 1 a 7fffffffffffffff ffffffffffffff01 ffffffffffffffff 8000000000000000\nu8 w: a a a 0a 0000a ff ff 00ff 0 000\nu16 w: a a a 0a 0000a ffff ffff 00ffff 0 000\nu32 w: a a a 0a 0000a ffffffff ffffffff 00ffffffff 0 000\nu64 w: a a a 0a 0000a ffffffffffffffff ffffffffffffffff 00ffffffffffffffff 0 000\ni8 w: a a a 0a 0000a ff ff 00ff 0 000\ni16 w: a a a 0a 0000a ffff ffff 00ffff 0 000\ni32 w: a a a 0a 0000a ffffffff ffffffff 00ffffffff 0 000\ni64 w: a a a 0a 0000a ffffffffffffffff ffffffffffffffff 00ffffffffffffffff 0 000\n0000000000000000000000000000000000000000000000000000000000000000000001\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn main() i32:
+    let u8 u8_v0 = 0
+    let u8 u8_v1 = 1
+    let u8 u8_v2 = 10
+    let u8 u8_v3 = 255
+    let u8 u8_v4 = 165
+    println("u8: {u8_v0.to_hex()} {u8_v1.to_hex()} {u8_v2.to_hex()} {u8_v3.to_hex()} {u8_v4.to_hex()}")
+    let u16 u16_v0 = 0
+    let u16 u16_v1 = 1
+    let u16 u16_v2 = 10
+    let u16 u16_v3 = 65535
+    let u16 u16_v4 = 48879
+    println("u16: {u16_v0.to_hex()} {u16_v1.to_hex()} {u16_v2.to_hex()} {u16_v3.to_hex()} {u16_v4.to_hex()}")
+    let u32 u32_v0 = 0
+    let u32 u32_v1 = 1
+    let u32 u32_v2 = 10
+    let u32 u32_v3 = 4294967295
+    let u32 u32_v4 = 3735928559
+    println("u32: {u32_v0.to_hex()} {u32_v1.to_hex()} {u32_v2.to_hex()} {u32_v3.to_hex()} {u32_v4.to_hex()}")
+    let u64 u64_v0 = 0
+    let u64 u64_v1 = 1
+    let u64 u64_v2 = 10
+    let u64 u64_v3 = 18446744073709551615
+    let u64 u64_v4 = 81985529216486895
+    println("u64: {u64_v0.to_hex()} {u64_v1.to_hex()} {u64_v2.to_hex()} {u64_v3.to_hex()} {u64_v4.to_hex()}")
+    let i8 i8_v0 = 0
+    let i8 i8_v1 = 1
+    let i8 i8_v2 = 10
+    let i8 i8_v3 = 127
+    let i8 i8_v4 = -16
+    let i8 i8_v5 = -1
+    let i8 i8_v6 = -128
+    println("i8: {i8_v0.to_hex()} {i8_v1.to_hex()} {i8_v2.to_hex()} {i8_v3.to_hex()} {i8_v4.to_hex()} {i8_v5.to_hex()} {i8_v6.to_hex()}")
+    let i16 i16_v0 = 0
+    let i16 i16_v1 = 1
+    let i16 i16_v2 = 10
+    let i16 i16_v3 = 32767
+    let i16 i16_v4 = -4096
+    let i16 i16_v5 = -1
+    let i16 i16_v6 = -32768
+    println("i16: {i16_v0.to_hex()} {i16_v1.to_hex()} {i16_v2.to_hex()} {i16_v3.to_hex()} {i16_v4.to_hex()} {i16_v5.to_hex()} {i16_v6.to_hex()}")
+    let i32 i32_v0 = 0
+    let i32 i32_v1 = 1
+    let i32 i32_v2 = 10
+    let i32 i32_v3 = 2147483647
+    let i32 i32_v4 = -2
+    let i32 i32_v5 = -1
+    let i32 i32_v6 = -2147483648
+    println("i32: {i32_v0.to_hex()} {i32_v1.to_hex()} {i32_v2.to_hex()} {i32_v3.to_hex()} {i32_v4.to_hex()} {i32_v5.to_hex()} {i32_v6.to_hex()}")
+    let i64 i64_v0 = 0
+    let i64 i64_v1 = 1
+    let i64 i64_v2 = 10
+    let i64 i64_v3 = 9223372036854775807
+    let i64 i64_v4 = -255
+    let i64 i64_v5 = -1
+    let i64 i64_v6 = -9223372036854775808
+    println("i64: {i64_v0.to_hex()} {i64_v1.to_hex()} {i64_v2.to_hex()} {i64_v3.to_hex()} {i64_v4.to_hex()} {i64_v5.to_hex()} {i64_v6.to_hex()}")
+    let u8 u8_ten = 10
+    let u8 u8_top = 255
+    let u8 u8_zero = 0
+    println("u8 w: {u8_ten.to_hex_width(0)} {u8_ten.to_hex_width(-3)} {u8_ten.to_hex_width(1)} {u8_ten.to_hex_width(2)} {u8_ten.to_hex_width(5)} {u8_top.to_hex_width(1)} {u8_top.to_hex_width(2)} {u8_top.to_hex_width(4)} {u8_zero.to_hex_width(0)} {u8_zero.to_hex_width(3)}")
+    let u16 u16_ten = 10
+    let u16 u16_top = 65535
+    let u16 u16_zero = 0
+    println("u16 w: {u16_ten.to_hex_width(0)} {u16_ten.to_hex_width(-3)} {u16_ten.to_hex_width(1)} {u16_ten.to_hex_width(2)} {u16_ten.to_hex_width(5)} {u16_top.to_hex_width(3)} {u16_top.to_hex_width(4)} {u16_top.to_hex_width(6)} {u16_zero.to_hex_width(0)} {u16_zero.to_hex_width(3)}")
+    let u32 u32_ten = 10
+    let u32 u32_top = 4294967295
+    let u32 u32_zero = 0
+    println("u32 w: {u32_ten.to_hex_width(0)} {u32_ten.to_hex_width(-3)} {u32_ten.to_hex_width(1)} {u32_ten.to_hex_width(2)} {u32_ten.to_hex_width(5)} {u32_top.to_hex_width(7)} {u32_top.to_hex_width(8)} {u32_top.to_hex_width(10)} {u32_zero.to_hex_width(0)} {u32_zero.to_hex_width(3)}")
+    let u64 u64_ten = 10
+    let u64 u64_top = 18446744073709551615
+    let u64 u64_zero = 0
+    println("u64 w: {u64_ten.to_hex_width(0)} {u64_ten.to_hex_width(-3)} {u64_ten.to_hex_width(1)} {u64_ten.to_hex_width(2)} {u64_ten.to_hex_width(5)} {u64_top.to_hex_width(15)} {u64_top.to_hex_width(16)} {u64_top.to_hex_width(18)} {u64_zero.to_hex_width(0)} {u64_zero.to_hex_width(3)}")
+    let i8 i8_ten = 10
+    let i8 i8_top = -1
+    let i8 i8_zero = 0
+    println("i8 w: {i8_ten.to_hex_width(0)} {i8_ten.to_hex_width(-3)} {i8_ten.to_hex_width(1)} {i8_ten.to_hex_width(2)} {i8_ten.to_hex_width(5)} {i8_top.to_hex_width(1)} {i8_top.to_hex_width(2)} {i8_top.to_hex_width(4)} {i8_zero.to_hex_width(0)} {i8_zero.to_hex_width(3)}")
+    let i16 i16_ten = 10
+    let i16 i16_top = -1
+    let i16 i16_zero = 0
+    println("i16 w: {i16_ten.to_hex_width(0)} {i16_ten.to_hex_width(-3)} {i16_ten.to_hex_width(1)} {i16_ten.to_hex_width(2)} {i16_ten.to_hex_width(5)} {i16_top.to_hex_width(3)} {i16_top.to_hex_width(4)} {i16_top.to_hex_width(6)} {i16_zero.to_hex_width(0)} {i16_zero.to_hex_width(3)}")
+    let i32 i32_ten = 10
+    let i32 i32_top = -1
+    let i32 i32_zero = 0
+    println("i32 w: {i32_ten.to_hex_width(0)} {i32_ten.to_hex_width(-3)} {i32_ten.to_hex_width(1)} {i32_ten.to_hex_width(2)} {i32_ten.to_hex_width(5)} {i32_top.to_hex_width(7)} {i32_top.to_hex_width(8)} {i32_top.to_hex_width(10)} {i32_zero.to_hex_width(0)} {i32_zero.to_hex_width(3)}")
+    let i64 i64_ten = 10
+    let i64 i64_top = -1
+    let i64 i64_zero = 0
+    println("i64 w: {i64_ten.to_hex_width(0)} {i64_ten.to_hex_width(-3)} {i64_ten.to_hex_width(1)} {i64_ten.to_hex_width(2)} {i64_ten.to_hex_width(5)} {i64_top.to_hex_width(15)} {i64_top.to_hex_width(16)} {i64_top.to_hex_width(18)} {i64_zero.to_hex_width(0)} {i64_zero.to_hex_width(3)}")
+    let u64 one = 1
+    println(one.to_hex_width(70))
+    return 0

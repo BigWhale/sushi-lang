@@ -397,9 +397,12 @@ arr.push(9)         # reuses the buffer
 
 ### `.extend(T[] other) -> ~`
 
-Append every element of `other`. The destination grows ONCE, to exactly the length it
-needs -- a `.push()` loop pays a bounds check, a capacity check and an amortized realloc
-per element.
+Append every element of `other`. The destination grows one time at most -- a `.push()`
+loop pays a bounds check, a capacity check and an amortized realloc per element.
+
+**Growth rule for `.extend()`, `.extend_range()` and `.extend_str()`.** When the new
+elements do not fit, the capacity becomes the larger of two times the old capacity and the
+new length, so a sequence of appends takes linear time.
 
 ```sushi
 let i32[] out = from([1, 2])
@@ -423,6 +426,30 @@ out.extend_range(src, 2, 3)    # out is now [0, 30, 40, 50]
 ```
 
 `.extend(src)` is `extend_range(src, 0, src.len())`.
+
+### `.extend_str(string s) -> ~`
+
+Append the bytes of `s` to a `u8[]`. The method grows the array once and copies the bytes
+in one copy. `buf.extend(s.to_bytes())` gives the same bytes, but it copies them two times.
+
+```sushi
+fn main() i32:
+    let u8[] buf = from([])
+    buf.extend_str("Mostly ")
+    buf.extend_str("Harmless")
+    println("{buf.to_string()} {buf.len()}")
+    return 0
+```
+
+Output:
+
+```
+Mostly Harmless 15
+```
+
+Only a dynamic `u8[]` takes `.extend_str()`. Another element type and a fixed `u8[N]` are
+**[CE2023](../../error-catalog.md#ce2023)**. An argument that is not a `string` is
+**[CE2023](../../error-catalog.md#ce2023)** too. The string is a borrow: it stays yours.
 
 ### `.s(i32 start, i32 end) -> T[]` and `.ss(i32 start, i32 count) -> T[]`
 
@@ -574,7 +601,9 @@ arr[0] := 42
 - **Element write** (`arr[i] := v`): O(1), plus the destructor of the element it replaces
 - **Push** (`.push()`): Amortized O(1)
 - **Extend** (`.extend()`, `.extend_range()`, `.s()`, `.ss()`): O(n) with ONE allocation -- a
-  `memcpy` for a plain element type, one clone per slot for an owning one
+  `memcpy` for a plain element type, one clone per slot for an owning one. The capacity of
+  the destination of an append at least doubles when it grows, so many small appends take
+  amortized linear time
 - **Pop** (`.pop()`): O(1)
 - **Insert / Remove** (`.insert()`, `.remove()`): O(n), one `memmove` of the slots after the
   index

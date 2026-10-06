@@ -8,7 +8,7 @@ generics copy lost the bloom-spread refusal and the borrow help (#747), and the 
 numbered its arguments from zero (#746).
 
 What legitimately differs between the callers is a four-tuple -- the callee's display
-name, the parameter types, the arity code and the mismatch code -- plus three policy
+name, the parameter types, the arity code and the mismatch code -- plus four policy
 questions, each a keyword:
 
   ``minimum_arity``  a variadic callee's FIXED prefix. More arguments than parameters is
@@ -17,6 +17,9 @@ questions, each a keyword:
   ``stop_on_arity``  the callers that report the count and then say nothing more.
   ``walk_arguments`` an FFI call, whose arguments the namespaced caller walked already:
                      measure them, do not walk them twice.
+  ``also_accepts``   per parameter, the other types it takes (`string.join` takes a
+                     `List@(string)` beside a `string[]`). The mismatch names the
+                     declared type, and the help names the others.
 
 The codes travel IN, so this module spells none of them. That is what lets the enum
 constructor read the same check with CE2049/CE2050, which name a VARIANT where the
@@ -52,6 +55,7 @@ def check_arguments(
     minimum_arity: bool = False,
     stop_on_arity: bool = False,
     walk_arguments: bool = True,
+    also_accepts: Sequence[Sequence[Type]] = (),
 ) -> bool:
     """Measure `args` against `params`, and answer whether the COUNT fit.
 
@@ -87,9 +91,11 @@ def check_arguments(
             actual = validator.infer_expression_type(arg)
         if expected is None or actual is None:
             continue
-        if not types_compatible(validator, actual, expected):
+        others = also_accepts[index - 1] if index <= len(also_accepts) else ()
+        if not (types_compatible(validator, actual, expected)
+                or any(types_compatible(validator, actual, other) for other in others)):
             _emit_mismatch(validator, mismatch_code, callee_name, arg, index,
-                           expected, actual)
+                           expected, actual, others)
 
     if minimum_arity:
         return arity_ok
@@ -166,7 +172,8 @@ def _spell_place(arg: Expr) -> Optional[str]:
 
 
 def _emit_mismatch(validator: 'TypeValidator', code: er.ErrorMessage, callee_name: str,
-                   arg: Expr, index: int, expected_ty: Type, actual_ty: Type) -> None:
+                   arg: Expr, index: int, expected_ty: Type, actual_ty: Type,
+                   others: Sequence[Type] = ()) -> None:
     """Report the mismatch, and say how to borrow when the parameter wants a borrow."""
     diag = er.emit_with(validator.reporter, code, getattr(arg, 'loc', None),
                         index=index, expected=display_type(expected_ty),
@@ -175,6 +182,9 @@ def _emit_mismatch(validator: 'TypeValidator', code: er.ErrorMessage, callee_nam
     place = _spell_place(arg) if isinstance(expected_ty, ReferenceType) else None
     if place is not None:
         diag.help(f"borrow it at the call site: `{expected_ty.mutability} {place}`")
+    if others:
+        spelled = ", ".join(f"`{display_type(other)}`" for other in others)
+        diag.help(f"this argument also takes {spelled}")
     diag.emit()
 
 

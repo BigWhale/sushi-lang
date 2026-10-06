@@ -1,0 +1,125 @@
+##:
+encoding/base64 -- Base64 text of bytes and back, opt in with `use <encoding/base64>`.
+
+The alphabet is the standard one of RFC 4648 section 4 (`A`-`Z`, `a`-`z`, `0`-`9`, `+`,
+`/`), with `=` padding. `encode` always pads, and `decode` requires the padding.
+:##
+use <collections/strings>
+
+##: The alphabet of RFC 4648 section 4, in the order of the values. :##
+const string ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+##: Why a text did not decode. :##
+public error Base64Error:
+    ##: The length of the text is not a multiple of 4. :##
+    BadLength
+    ##: A byte of the text is not in the alphabet. The payload is its offset. :##
+    BadChar(i32)
+    ##: A `=` is in a position that is not the padding at the end. :##
+    BadPadding
+
+##:
+Writes bytes as Base64 text, with `=` padding.
+
+- Parameter data: The bytes.
+- Returns: The Base64 text, four characters for each three bytes or part of three.
+- Example:
+```sushi
+use <collections/strings>
+println(encode("Mostly Harmless".to_bytes()))
+```
+:##
+public fn encode(u8[] data) string:
+    let i32 n = data.len()
+    let u8[] out = from([0; (n + 2) / 3 * 4])
+    let i32 full = n / 3
+    foreach(g in 0..full):
+        let u8 b0 = data[3 * g]
+        let u8 b1 = data[3 * g + 1]
+        let u8 b2 = data[3 * g + 2]
+        out[4 * g] := ALPHABET[(b0 >> 2) as i32]
+        out[4 * g + 1] := ALPHABET[(((b0 & 0x03) << 4) | (b1 >> 4)) as i32]
+        out[4 * g + 2] := ALPHABET[(((b1 & 0x0f) << 2) | (b2 >> 6)) as i32]
+        out[4 * g + 3] := ALPHABET[(b2 & 0x3f) as i32]
+    let i32 rest = n - 3 * full
+    let i32 at = 4 * full
+    if (rest == 1):
+        let u8 b0 = data[n - 1]
+        out[at] := ALPHABET[(b0 >> 2) as i32]
+        out[at + 1] := ALPHABET[((b0 & 0x03) << 4) as i32]
+        out[at + 2] := a'='
+        out[at + 3] := a'='
+    if (rest == 2):
+        let u8 b0 = data[n - 2]
+        let u8 b1 = data[n - 1]
+        out[at] := ALPHABET[(b0 >> 2) as i32]
+        out[at + 1] := ALPHABET[(((b0 & 0x03) << 4) | (b1 >> 4)) as i32]
+        out[at + 2] := ALPHABET[((b1 & 0x0f) << 2) as i32]
+        out[at + 3] := a'='
+    return string.from_bytes(nom out)
+
+##:
+Reads Base64 text as bytes.
+
+- Parameter text: The Base64 text, with its padding.
+- Returns: The bytes.
+- Errors: `Base64Error.BadLength` when the length is not a multiple of 4,
+  `Base64Error.BadChar` with the offset of the first byte outside the alphabet, and
+  `Base64Error.BadPadding` when a `=` is not at the end.
+- Example:
+```sushi
+match decode("TW9zdGx5IEhhcm1sZXNz"):
+    Result.Ok(bytes) -> println(bytes.to_string())
+    Result.Err(_) -> println("not base64")
+```
+:##
+public fn decode(string text) u8[] | Base64Error:
+    let i32 n = text.size()
+    if (n % 4 != 0):
+        return Result.Err(Base64Error.BadLength)
+    let i32 pad = 0
+    if (n > 0 and text[n - 1] == a'='):
+        pad := 1
+        if (text[n - 2] == a'='):
+            pad := 2
+    let u8[] values = from([0; n])
+    foreach(i in 0..n - pad):
+        let u8 b = text[i]
+        let i32 v = sextet(b)
+        if (v < 0):
+            if (b == a'='):
+                return Result.Err(Base64Error.BadPadding)
+            return Result.Err(Base64Error.BadChar(i))
+        values[i] := v as u8
+    let u8[] out = from([0; n / 4 * 3 - pad])
+    foreach(i in 0..out.len()):
+        let i32 g = i / 3
+        let i32 k = i % 3
+        let u8 first = values[4 * g + k]
+        let u8 second = values[4 * g + k + 1]
+        if (k == 0):
+            out[i] := (first << 2) | (second >> 4)
+        elif (k == 1):
+            out[i] := (first << 4) | (second >> 2)
+        else:
+            out[i] := (first << 6) | second
+    return Result.Ok(out)
+
+##:
+Gives the value of one byte of the alphabet.
+
+- Parameter b: The byte.
+- Returns: The value from 0 to 63, or -1 when the byte is not in the alphabet.
+:##
+fn sextet(u8 b) i32:
+    if (b >= a'A' and b <= a'Z'):
+        return (b - a'A') as i32
+    if (b >= a'a' and b <= a'z'):
+        return (b - a'a' + 26) as i32
+    if (b >= a'0' and b <= a'9'):
+        return (b - a'0' + 52) as i32
+    if (b == a'+'):
+        return 62
+    if (b == a'/'):
+        return 63
+    return -1

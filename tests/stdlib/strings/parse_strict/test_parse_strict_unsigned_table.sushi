@@ -1,0 +1,93 @@
+# The strict parse on the unsigned types: the text is the digits of the base and nothing
+# else. A digit is 0-9, then a-z or A-Z for 10 to 35, less than the base. A leading zero
+# is legal. A sign, a space, a prefix, a `_`, an empty text, a value out of range and a
+# base outside 2 to 36 give None.
+# EXPECT_STDOUT_EXACT: "u8 0\nu8 255\nu8 none\nu8 none\nu8 none\nu8 255\nu8 255\nu8 255\nu8 255\nu8 255\nu8 255\nu8 none\nu16 0\nu16 65535\nu16 none\nu16 65535\nu16 2273\nu32 0\nu32 4294967295\nu32 none\nu32 1295\nu32 1295\nu32 1295\nu32 511\nu32 34\nu32 1\nu32 0\nu32 none\nu32 none\nu32 none\nu32 none\nu32 none\nu32 none\nu32 none\nu32 none\nu32 none\nu32 none\nu32 none\nu32 none\nu32 none\nu32 none\nu32 7\nu32 0\nu32 none\nu32 none\nu32 none\nu32 none\nu32 none\nu64 0\nu64 18446744073709551615\nu64 none\nu64 18446744073709551615\nu64 none\nu64 18446744073709551615\nu64 none\nu64 none\nu64 none\nu64 1\nu64 none\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn show_u8(Maybe@(u8) m) string:
+    match m:
+        Maybe.Some(v) -> return "u8 {v}"
+        Maybe.None -> return "u8 none"
+
+fn show_u16(Maybe@(u16) m) string:
+    match m:
+        Maybe.Some(v) -> return "u16 {v}"
+        Maybe.None -> return "u16 none"
+
+fn show_u32(Maybe@(u32) m) string:
+    match m:
+        Maybe.Some(v) -> return "u32 {v}"
+        Maybe.None -> return "u32 none"
+
+fn show_u64(Maybe@(u64) m) string:
+    match m:
+        Maybe.Some(v) -> return "u64 {v}"
+        Maybe.None -> return "u64 none"
+
+fn main() i32:
+    println(show_u8("0".parse_u8(10)))
+    println(show_u8("255".parse_u8(10)))
+    println(show_u8("256".parse_u8(10)))
+    println(show_u8("260".parse_u8(10)))
+    println(show_u8("2550".parse_u8(10)))
+    println(show_u8("ff".parse_u8(16)))
+    println(show_u8("FF".parse_u8(16)))
+    println(show_u8("fF".parse_u8(16)))
+    println(show_u8("11111111".parse_u8(2)))
+    println(show_u8("377".parse_u8(8)))
+    println(show_u8("73".parse_u8(36)))
+    println(show_u8("100000000".parse_u8(2)))
+
+    println(show_u16("0".parse_u16(10)))
+    println(show_u16("65535".parse_u16(10)))
+    println(show_u16("65536".parse_u16(10)))
+    println(show_u16("ffff".parse_u16(16)))
+    println(show_u16("1r5".parse_u16(36)))
+
+    println(show_u32("0".parse_u32(10)))
+    println(show_u32("4294967295".parse_u32(10)))
+    println(show_u32("4294967296".parse_u32(10)))
+    println(show_u32("zz".parse_u32(36)))
+    println(show_u32("ZZ".parse_u32(36)))
+    println(show_u32("Zz".parse_u32(36)))
+    println(show_u32("777".parse_u32(8)))
+    println(show_u32("y".parse_u32(35)))
+    println(show_u32("1".parse_u32(36)))
+    println(show_u32("0".parse_u32(2)))
+    println(show_u32("8".parse_u32(8)))
+    println(show_u32("2".parse_u32(2)))
+    println(show_u32("g".parse_u32(16)))
+    println(show_u32("z".parse_u32(35)))
+    println(show_u32("".parse_u32(10)))
+    println(show_u32("-".parse_u32(10)))
+    println(show_u32("+5".parse_u32(10)))
+    println(show_u32(" 5".parse_u32(10)))
+    println(show_u32("5 ".parse_u32(10)))
+    println(show_u32("0x1f".parse_u32(16)))
+    println(show_u32("0b101".parse_u32(2)))
+    println(show_u32("1_000".parse_u32(10)))
+    println(show_u32("-5".parse_u32(10)))
+    println(show_u32("-0".parse_u32(10)))
+    println(show_u32("007".parse_u32(10)))
+    println(show_u32("0000".parse_u32(10)))
+    println(show_u32("0".parse_u32(1)))
+    println(show_u32("0".parse_u32(37)))
+    println(show_u32("0".parse_u32(0)))
+    println(show_u32("0".parse_u32(-1)))
+    println(show_u32("5x".parse_u32(10)))
+
+    println(show_u64("0".parse_u64(10)))
+    println(show_u64("18446744073709551615".parse_u64(10)))
+    println(show_u64("18446744073709551616".parse_u64(10)))
+    println(show_u64("ffffffffffffffff".parse_u64(16)))
+    println(show_u64("10000000000000000".parse_u64(16)))
+    println(show_u64("3w5e11264sgsf".parse_u64(36)))
+    println(show_u64("3w5e11264sgsg".parse_u64(36)))
+    println(show_u64("99999999999999999999".parse_u64(10)))
+    println(show_u64("184467440737095516150".parse_u64(10)))
+    println(show_u64("00000000000000000000000000000000000000000000000001".parse_u64(10)))
+    println(show_u64("".parse_u64(16)))
+    return 0

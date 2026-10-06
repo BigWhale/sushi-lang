@@ -1,0 +1,41 @@
+# `decode` checks the length first: a length that is not a multiple of 4 is
+# `BadLength`, white space and a bad byte included. Then the first wrong byte in text
+# order decides: a byte outside the alphabet that is not `=` is `BadChar` with its byte
+# offset, and a `=` that is not one of the 1 or 2 padding bytes at the end is
+# `BadPadding`. The URL-safe `-` and `_` and white space are outside the alphabet.
+# EXPECT_STDOUT_EXACT: "BadLength\nBadLength\nBadLength\nBadLength\nBadChar(4)\nBadChar(3)\nBadChar(3)\nBadChar(3)\nBadChar(4)\nBadChar(1)\nBadChar(0)\nBadPadding\nBadPadding\nBadPadding\nBadPadding\nBadPadding\nBadPadding\nBadPadding\nBadPadding\nBadPadding\nok 1\nok 2\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <encoding/base64>
+
+fn show(string text) string:
+    match decode(text):
+        Result.Ok(bytes) -> return "ok {bytes.len()}"
+        Result.Err(Base64Error.BadLength) -> return "BadLength"
+        Result.Err(Base64Error.BadChar(at)) -> return "BadChar({at})"
+        Result.Err(Base64Error.BadPadding) -> return "BadPadding"
+
+fn main() i32:
+    println(show("Zg="))
+    println(show("Zg== "))
+    println(show("Zm9\nv"))
+    println(show("Z"))
+    println(show("Zm9v!A=="))
+    println(show("Zm9-"))
+    println(show("Zm9_"))
+    println(show("Zm9\t"))
+    println(show("Zm9v Zg="))
+    println(show("Z!=A"))
+    println(show("é=="))
+    println(show("Zm=v"))
+    println(show("Z==="))
+    println(show("===="))
+    println(show("Zg=A"))
+    println(show("Z=!A"))
+    println(show("A=A="))
+    println(show("=AAA"))
+    println(show("AA=A"))
+    println(show("Zg==Zg=="))
+    println(show("Zg=="))
+    println(show("Zm8="))
+    return 0

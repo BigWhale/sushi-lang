@@ -1,0 +1,38 @@
+# Every length from 0 to 10 and every byte value from 0 to 255 go through `encode`
+# and back through `decode` unchanged. The bytes of length n are (i * 37 + 11) mod 256,
+# so the text uses `+` and `/`; the expected text is the RFC 4648 encoding of them.
+# EXPECT_STDOUT_EXACT: "0 [] pass\n1 [Cw==] pass\n2 [CzA=] pass\n3 [CzBV] pass\n4 [CzBVeg==] pass\n5 [CzBVep8=] pass\n6 [CzBVep/E] pass\n7 [CzBVep/E6Q==] pass\n8 [CzBVep/E6Q4=] pass\n9 [CzBVep/E6Q4z] pass\n10 [CzBVep/E6Q4zWA==] pass\n344\nAAECAwQF\n/P3+/w==\n256 pass\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+use <encoding/base64>
+
+fn same(u8[] a, u8[] b) string:
+    if (a.len() != b.len()):
+        return "fail"
+    foreach(i in 0..a.len()):
+        if (a[i] != b[i]):
+            return "fail"
+    return "pass"
+
+fn check() i32 | Base64Error:
+    foreach(n in 0..=10):
+        let u8[] data = from([0; n])
+        foreach(i in 0..n):
+            data[i] := ((i * 37 + 11) % 256) as u8
+        let string text = encode(data)
+        let u8[] back = decode(text)??
+        println("{n} [{text}] {same(data, back)}")
+    let u8[] all = from([0; 256])
+    foreach(i in 0..256):
+        all[i] := i as u8
+    let string text = encode(all)
+    println(text.size())
+    println(text.s(0, 8))
+    println(text.s(336, 344))
+    let u8[] back = decode(text)??
+    println("{back.len()} {same(all, back)}")
+    return Result.Ok(0)
+
+fn main() i32:
+    return check().realise(1)

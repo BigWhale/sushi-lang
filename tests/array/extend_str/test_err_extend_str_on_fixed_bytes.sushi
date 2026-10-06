@@ -1,0 +1,9 @@
+# A fixed array cannot change its length, so a `u8[4]` does not take `extend_str`.
+# EXPECT_ERROR_CODES_EXACT: CE2023
+# EXPECT_STDERR_CONTAINS: receiver mismatch for 'extend_str': expected u8[], got u8[4]
+
+fn main() i32:
+    let u8[4] f = [1, 2, 3, 4]
+    f.extend_str("x")
+    println("{f.len()}")
+    return 0

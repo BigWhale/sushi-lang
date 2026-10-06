@@ -112,6 +112,8 @@ class StdlibLinker:
         "collections/hashmap",
         "collections/iter",
         "compression/zlib",
+        "encoding/base64",
+        "encoding/hex",
         "encoding/msgpack",
         "io/buf",
         "io/contracts",

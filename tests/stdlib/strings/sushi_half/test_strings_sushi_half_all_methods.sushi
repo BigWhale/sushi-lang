@@ -1,0 +1,42 @@
+# One program uses every method of the Sushi half of <collections/strings>, extend_str,
+# join over a List@(string) and the two codecs: a small report of a key=value text.
+# EXPECT_STDOUT_EXACT: "3 lines\nport=8080 (0x1f90, 0b1111110010000)\nmode=fast\npath=/a/b\nratio 0.75\ntokens 4\nchars 4\nmode;path;port\n6d6f6465\nbW9kZQ==\nreport: 3 keys\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+use <encoding/hex> as hex
+use <encoding/base64> as b64
+
+fn main() i32:
+    let string text = "port=8080\r\nmode=fast\npath=/a/b///\n"
+    let string[] rows = text.lines()
+    println("{rows.len()} lines")
+    let List@(string) keys = List.new()
+    foreach(row in rows.iter()):
+        match row.split_once("="):
+            Maybe.Some((key, value)) ->
+                keys.push(key.clone())
+                match value.parse_u32(10):
+                    Maybe.Some(n) -> println("{key}={n} (0x{n.to_hex()}, 0b{n.to_bin()})")
+                    Maybe.None -> println("{key}={value.trim_end_matches('/')}")
+            Maybe.None -> println("bad row")
+    let f64 ratio = 0.75
+    println("ratio {ratio.to_fixed(2)}")
+    println("tokens {'  a b\tc\n d '.split_whitespace().len()}")
+    println("chars {'café'.chars().len()}")
+    let List@(string) sorted = List.new()
+    sorted.push("mode")
+    sorted.push("path")
+    sorted.push("port")
+    println(";".join(sorted))
+    let u8[] raw = from([])
+    raw.extend_str("mode")
+    println(hex.encode(raw))
+    println(b64.encode(raw))
+    let StringBuilder sb = StringBuilder.new()
+    sb.push("report: ")
+    sb.push("{keys.len()}")
+    sb.push_byte(a' ')
+    sb.push("keys")
+    println(sb.finish())
+    return 0

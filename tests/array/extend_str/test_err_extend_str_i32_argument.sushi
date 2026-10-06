@@ -1,0 +1,10 @@
+# The argument of `extend_str` is a string. An i32 is refused with the argument error of
+# the bulk copies.
+# EXPECT_ERROR_CODES_EXACT: CE2023
+# EXPECT_STDERR_CONTAINS: argument mismatch for 'extend_str': expected string, got i32
+
+fn main() i32:
+    let u8[] a = from([])
+    a.extend_str(5)
+    println("{a.len()}")
+    return 0

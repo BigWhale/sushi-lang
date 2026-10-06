@@ -1,0 +1,73 @@
+# The strict parse on the signed types: the digits of the base and nothing else, with
+# ONE leading `-` as the only legal sign. "-0" is 0, a lone "-" is None, a `+` is None.
+# The negative side reaches the minimum of the type, one past the positive maximum.
+# EXPECT_STDOUT_EXACT: "i32 0\ni32 0\ni32 2147483647\ni32 none\ni32 -2147483648\ni32 none\ni32 -127\ni32 2147483647\ni32 -2147483648\ni32 none\ni32 -5\ni32 -1295\ni32 -1295\ni32 -15\ni32 -7\ni32 7\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni32 none\ni64 0\ni64 0\ni64 9223372036854775807\ni64 none\ni64 -9223372036854775808\ni64 none\ni64 9223372036854775807\ni64 -9223372036854775808\ni64 none\ni64 none\ni64 none\ni64 none\ni64 -1\ni64 -255\ni64 none\ni64 none\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn show_i32(Maybe@(i32) m) string:
+    match m:
+        Maybe.Some(v) -> return "i32 {v}"
+        Maybe.None -> return "i32 none"
+
+fn show_i64(Maybe@(i64) m) string:
+    match m:
+        Maybe.Some(v) -> return "i64 {v}"
+        Maybe.None -> return "i64 none"
+
+fn main() i32:
+    println(show_i32("0".parse_i32(10)))
+    println(show_i32("-0".parse_i32(10)))
+    println(show_i32("2147483647".parse_i32(10)))
+    println(show_i32("2147483648".parse_i32(10)))
+    println(show_i32("-2147483648".parse_i32(10)))
+    println(show_i32("-2147483649".parse_i32(10)))
+    println(show_i32("-7f".parse_i32(16)))
+    println(show_i32("7FFFFFFF".parse_i32(16)))
+    println(show_i32("-80000000".parse_i32(16)))
+    println(show_i32("80000000".parse_i32(16)))
+    println(show_i32("-101".parse_i32(2)))
+    println(show_i32("-zz".parse_i32(36)))
+    println(show_i32("-ZZ".parse_i32(36)))
+    println(show_i32("-17".parse_i32(8)))
+    println(show_i32("-007".parse_i32(10)))
+    println(show_i32("007".parse_i32(10)))
+    println(show_i32("".parse_i32(10)))
+    println(show_i32("-".parse_i32(10)))
+    println(show_i32("--5".parse_i32(10)))
+    println(show_i32("-+5".parse_i32(10)))
+    println(show_i32("+5".parse_i32(10)))
+    println(show_i32("+-5".parse_i32(10)))
+    println(show_i32(" 5".parse_i32(10)))
+    println(show_i32("5 ".parse_i32(10)))
+    println(show_i32("- 5".parse_i32(10)))
+    println(show_i32("5-".parse_i32(10)))
+    println(show_i32("0x1f".parse_i32(16)))
+    println(show_i32("-0x1f".parse_i32(16)))
+    println(show_i32("1_000".parse_i32(10)))
+    println(show_i32("-9".parse_i32(8)))
+    println(show_i32("1a".parse_i32(10)))
+    println(show_i32("0".parse_i32(1)))
+    println(show_i32("0".parse_i32(37)))
+    println(show_i32("0".parse_i32(0)))
+    println(show_i32("0".parse_i32(-1)))
+    println(show_i32("-1".parse_i32(37)))
+
+    println(show_i64("0".parse_i64(10)))
+    println(show_i64("-0".parse_i64(10)))
+    println(show_i64("9223372036854775807".parse_i64(10)))
+    println(show_i64("9223372036854775808".parse_i64(10)))
+    println(show_i64("-9223372036854775808".parse_i64(10)))
+    println(show_i64("-9223372036854775809".parse_i64(10)))
+    println(show_i64("7fffffffffffffff".parse_i64(16)))
+    println(show_i64("-8000000000000000".parse_i64(16)))
+    println(show_i64("8000000000000000".parse_i64(16)))
+    println(show_i64("18446744073709551616".parse_i64(10)))
+    println(show_i64("-18446744073709551615".parse_i64(10)))
+    println(show_i64("-".parse_i64(10)))
+    println(show_i64("-00000000000000000000000000000000000000000000000001".parse_i64(10)))
+    println(show_i64("-11111111".parse_i64(2)))
+    println(show_i64("--1".parse_i64(10)))
+    println(show_i64("1".parse_i64(0)))
+    return 0

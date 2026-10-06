@@ -1,0 +1,49 @@
+# `chars()` gives one new string for each character. A character starts at each byte
+# that is not a UTF-8 continuation byte, the rule of `len()`, so `chars().len()` equals
+# `len()` for every string, an invalid one from `string.from_bytes` too: a continuation
+# byte joins the character before it, a leading one joins the first character, and a
+# text of continuation bytes alone has no character. Each line prints `len()`, the
+# element count, and each element as its bytes in brackets.
+# EXPECT_STDOUT_EXACT: "3 3 [97] [98] [99]\nc|a|f|é\n4 4 [99] [97] [102] [195 169]\n😀\n1 1 [240 159 152 128]\na|😀|b\n3 3 [97] [240 159 152 128] [98]\nn|a|ï|v|e\n5 5 [110] [97] [195 175] [118] [101]\n0 0\n1 1 [128 65]\n2 2 [65 128 128] [66]\n0 0\n1 1 [195]\n2 2 [255] [254]\n3 3 [65] [195] [65]\n2 2 [0] [65]\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn bytes_of(string s) string:
+    let string out = "["
+    foreach(i in 0..s.size()):
+        if (i > 0):
+            out := "{out} "
+        out := "{out}{s[i]}"
+    return "{out}]"
+
+fn show(string s) string:
+    let string[] cs = s.chars()
+    let string out = "{s.len()} {cs.len()}"
+    foreach(c in cs.iter()):
+        out := "{out} {bytes_of(c)}"
+    return out
+
+fn text_of(string s) string:
+    return '|'.join(s.chars())
+
+fn main() i32:
+    println(show("abc"))
+    println(text_of("café"))
+    println(show("café"))
+    println(text_of("😀"))
+    println(show("😀"))
+    println(text_of("a😀b"))
+    println(show("a😀b"))
+    println(text_of("naïve"))
+    println(show("naïve"))
+    println(show(""))
+
+    println(show(string.from_bytes(nom from([0x80 as u8, a'A']))))
+    println(show(string.from_bytes(nom from([a'A', 0x80, 0x80, a'B']))))
+    println(show(string.from_bytes(nom from([0x80 as u8, 0x80]))))
+    println(show(string.from_bytes(nom from([0xc3 as u8]))))
+    println(show(string.from_bytes(nom from([0xff as u8, 0xfe]))))
+    println(show(string.from_bytes(nom from([a'A', 0xc3, a'A']))))
+    println(show(string.from_bytes(nom from([0 as u8, a'A']))))
+    return 0

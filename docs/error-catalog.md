@@ -1460,7 +1460,7 @@ A range element fills the slots it spans: '0..5' is five elements and '0..=5' is
 
 **Message:** `dynamic array method {part} mismatch for '{method}': expected {expected}, got {got}`
 
-A built-in array method was called on a receiver it does not take, or with a copy source of the wrong type. `{part}` names which one is at fault: the RECEIVER when the method takes a dynamic array (`push`, `pop`, `insert`, `truncate`) or a `u8[]` alone and the value is another kind -- a fixed array cannot change its length -- and the ARGUMENT when the source of a bulk copy (`extend`, `extend_range`) is not an array of the receiver's element type.
+A built-in array method was called on a receiver it does not take, or with a copy source of the wrong type. `{part}` names which one is at fault: the RECEIVER when the method takes a dynamic array (`push`, `pop`, `insert`, `truncate`) or a `u8[]` alone and the value is another kind -- a fixed array cannot change its length -- and the ARGUMENT when the source of a bulk copy (`extend`, `extend_range`) is not an array of the receiver's element type, or the argument of `extend_str` is not a string.
 
 ### CE2026 {#ce2026}
 
@@ -3693,7 +3693,7 @@ The import brought no name that a qualified form could reach, so the `as` clause
 
 **Message:** `` `public use` of '{origin}' re-exports nothing ``
 
-The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. A method interface such as `<collections/strings>` brings no name (a `public use` of one still opens its methods to the importers), and a unit of nothing but `extend` blocks exports methods rather than names. The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something.
+The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. A method interface such as the directory import `<collections>` brings no name (a `public use` of one still opens its methods to the importers), and a unit of nothing but `extend` blocks exports methods rather than names. The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something.
 
 ### CW3006 {#cw3006}
 

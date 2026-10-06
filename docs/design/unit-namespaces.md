@@ -275,16 +275,16 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 | Shape | Modules | Aliasable |
 |---|---|---|
 | Registry free functions, already keyed by `(module, name)` | `<time>`, `<math>`, `<sys/env>`, `<sys/process>`, `<random>`, `<io/files>` | **yes** |
-| Sushi-source modules, injected as ordinary units | every module in `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`): `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<io/buf>`, `<io/contracts>`, `<io/error>`, `<io/fs>`, `<io/path>`, the six `<net/*>` modules and `<toolchain/slib>` | **yes** — a user unit in every respect |
+| Sushi-source modules, injected as ordinary units | every module in `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`): `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<io/buf>`, `<io/contracts>`, `<io/error>`, `<io/fs>`, `<io/path>`, the six `<net/*>` modules, `<toolchain/slib>`, `<text/ascii>`, `<encoding/hex>`, `<encoding/base64>`, and the Sushi half of `<collections/strings>` | **yes** — a user unit in every respect. `<collections/strings>` has two halves: its unit brings `StringBuilder`, and its import also enables the built-in string methods, behind an alias too (`enables_builtin_methods`, `semantics/stdlib_registry.py`) |
 | A built-in generic that the import activates | `<collections/hashmap>` (`GenericNamespace`, `semantics/namespaces.py`) | **yes** — `hm.HashMap@(i32, string)`. The import brings the name, so the namespace holds it — see 4.3.1 |
-| A method interface: the import enables methods on a type and brings **no name** | `<collections/strings>` | pointless, and said so — see below |
+| A method interface: the import enables methods on a type and brings **no name** | a directory import such as `<collections>` | pointless, and said so — see below |
 | A predefined enum the import brings | `FileMode` → `<io/fs>`; `IoError`, `FileError` → `<io/error>`; `SeekFrom` → `<io/contracts>`; `NetError` → `<net/error>`; `ProcessError` → `<sys/process>`; `EnvError` → `<sys/env>`; `MathError` → `<math>` | **yes** — `fs.FileMode.Read()`. No unit declares one, so the synthesis stamps each with its HOME (`EnumType.home_module`, the table is `passes/collect/enums.py:PREDEFINED_ENUM_HOMES`); the `namespaces` pass reads the stamp to list it as a member of the home's provider, and the type-position gate (`reject_out_of_scope_type`) reads it to refuse the bare name where the home is not imported, the `HashMap` rule. **The home is reached through the modules that re-export it** (section 8.1): `<io/contracts>` says `public use <io/error>`, `<io/fs>` and `<io/buf>` say `public use <io/contracts>`, so `use <io/fs>` alone brings `IoError`, `FileError` and `SeekFrom` beside `FileMode`, and `fs.IoError` holds behind the alias. `StdError` is the general error enum and stays global. `SeekFrom` is `<io/contracts>`'s because `Seek.seek` takes it |
 
 `stdin`, `stdout` and `stderr` are ordinary names: each is a `public var File` that
 `<io/fs>` declares (`sushi_stdlib/src_sushi/io/fs.sushi`). `use <io/fs>` brings them into
 the flat scope, `use <io/fs> as fs` puts them behind the dot, and with no
 import `stdin` is [CE1001](../error-catalog.md#ce1001). A METHOD INTERFACE is the shape that brings no name: an alias
-on `use <collections/strings>` binds an empty namespace, and every `st.<name>` after it
+on `use <collections>` binds an empty namespace, and every `st.<name>` after it
 fails one at a time with the cause several lines away.
 
 #### 4.3.1 A built-in generic is activated per unit by its import
@@ -304,7 +304,7 @@ reasons and only one of them is a mistake:
 
 | Empty because | Example |
 |---|---|
-| **structural** — a method interface can never bring a name | `use <collections/strings> as st` |
+| **structural** — a method interface can never bring a name | `use <collections> as st` |
 | **by design** — the unit exports methods, not names | a unit that is nothing but `extend` blocks |
 | **incidental** — the public surface happens to be empty today | one `public fn` away from changing |
 

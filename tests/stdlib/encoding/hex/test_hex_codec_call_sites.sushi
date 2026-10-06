@@ -1,0 +1,36 @@
+# `<encoding/hex>` behind an alias: a local, a parameter, a temporary argument, a `??`
+# in a function with a channel, and a `match` on the error variants by the alias.
+# EXPECT_STDOUT_EXACT: "78\n4d6f73746c79\n2 bytes\nbad digit at 3\nodd length\ncaught 2\n[222, 173]\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+use <encoding/hex> as hex
+
+fn count(string text) i32 | hex.HexError:
+    let u8[] bytes = hex.decode(text)??
+    return Result.Ok(bytes.len())
+
+fn explain(string text) string:
+    match count(text):
+        Result.Ok(n) -> return "{n} bytes"
+        Result.Err(hex.HexError.BadDigit(at)) -> return "bad digit at {at}"
+        Result.Err(hex.HexError.OddLength) -> return "odd length"
+
+fn through(u8[] data) string:
+    return hex.encode(data)
+
+fn main() i32:
+    println(hex.encode("x".to_bytes()))
+    let u8[] word = "Mostly".to_bytes()
+    println(through(word))
+    println(explain("dEaD"))
+    println(explain("dEaX"))
+    println(explain("dEa"))
+    match hex.decode("01x"):
+        Result.Ok(_) -> println("no error")
+        Result.Err(e) ->
+            match e:
+                hex.HexError.OddLength -> println("caught 2")
+                hex.HexError.BadDigit(_) -> println("caught 1")
+    println(hex.decode("DEad").realise(from([])))
+    return 0

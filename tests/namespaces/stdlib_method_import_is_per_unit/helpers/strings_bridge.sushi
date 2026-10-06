@@ -1,4 +1,4 @@
-public use <collections/strings>
+public use <collections>
 
 public fn bridge_marker() i32:
     return 1

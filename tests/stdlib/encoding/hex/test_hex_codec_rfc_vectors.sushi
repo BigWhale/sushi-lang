@@ -1,0 +1,43 @@
+# The base16 test vectors of RFC 4648 section 10, both ways. `encode` writes two
+# lower-case digits for each byte; `decode` reads lower case, upper case and a mix.
+# EXPECT_STDOUT_EXACT: "[]\n[66]\n[666f]\n[666f6f]\n[666f6f62]\n[666f6f6261]\n[666f6f626172]\n[]\n[f]\n[fo]\n[foo]\n[foob]\n[fooba]\n[foobar]\n[foobar]\n[foobar]\n[0, 9, 10, 15, 16, 160, 171, 255]\n[0f1a2b3c4d5e6f]\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+use <encoding/hex>
+
+fn enc(string text) string:
+    let string h = encode(text.to_bytes())
+    return "[{h}]"
+
+fn back(string text) string:
+    match decode(text):
+        Result.Ok(bytes) ->
+            let string s = bytes.to_string()
+            return "[{s}]"
+        Result.Err(_) -> return "error"
+
+fn main() i32:
+    println(enc(""))
+    println(enc("f"))
+    println(enc("fo"))
+    println(enc("foo"))
+    println(enc("foob"))
+    println(enc("fooba"))
+    println(enc("foobar"))
+    println(back(""))
+    println(back("66"))
+    println(back("666f"))
+    println(back("666f6f"))
+    println(back("666f6f62"))
+    println(back("666f6f6261"))
+    println(back("666f6f626172"))
+    println(back("666F6F626172"))
+    println(back("666F6f626172"))
+    match decode("00090a0f10A0AbfF"):
+        Result.Ok(bytes) -> println(bytes)
+        Result.Err(_) -> println("error")
+    let u8[] data = from([0x0f, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f])
+    let string h = encode(data)
+    println("[{h}]")
+    return 0

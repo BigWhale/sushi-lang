@@ -24,7 +24,7 @@ def is_builtin_array_method(method_name: str) -> bool:
         "insert", "remove",
         "clear", "truncate", "capacity", "destroy", "free",
         "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse",
-        "extend", "extend_range", "s", "ss"
+        "extend", "extend_range", "extend_str", "s", "ss"
     }
 
 
@@ -382,6 +382,17 @@ def emit_dynamic_array_method(
             return core.emit_dynamic_array_extend(codegen, receiver_value, array_struct_type,
                                                   source_data, source_len, start, count,
                                                   element_semantic_type)
+
+        case "extend_str":
+            from sushi_lang.semantics.typesys import BuiltinType
+            from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
+            text = emit_borrowed_arg(codegen, expr.args[0], BuiltinType.STRING)
+            text_data = codegen.builder.extract_value(text, 0, name="extend_str_data")
+            text_size = codegen.builder.extract_value(text, 1, name="extend_str_size")
+            return core.emit_dynamic_array_extend(codegen, receiver_value, array_struct_type,
+                                                  text_data, text_size,
+                                                  ir.Constant(codegen.types.i32, 0),
+                                                  text_size, element_semantic_type)
 
         case "s" | "ss":
             data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, receiver_value)

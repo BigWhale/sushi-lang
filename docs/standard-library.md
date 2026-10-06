@@ -14,7 +14,7 @@ Complete reference for Sushi's standard library modules and types.
 - [List@(T)](stdlib/collections/list.md) - Dynamic growable array
 - [HashMap@(K, V)](stdlib/collections/hashmap.md) - Hash table with open addressing
 - [Arrays](stdlib/collections/arrays.md) - Fixed and dynamic array methods
-- [Strings](stdlib/collections/strings.md) - String manipulation methods
+- [Strings](stdlib/collections/strings.md) - String manipulation methods, the number formatters and `StringBuilder`
 - [Iter combinators](stdlib/collections/iter.md) - `map`/`filter`/`fold` as methods on `List@(T)` and `T[]`, the free functions, `compose`, and the tuple combinators `enumerate`/`zip`/`partition`/`unzip`
 
 ### Text
@@ -22,6 +22,8 @@ Complete reference for Sushi's standard library modules and types.
 
 ### Encoding and Compression
 - [Compression (zlib)](stdlib/compression/zlib.md) - DEFLATE and the zlib container (RFC 1950/1951)
+- [Base64](stdlib/encoding/base64.md) - Base64 text of bytes and back (RFC 4648)
+- [Hex](stdlib/encoding/hex.md) - Hexadecimal text of bytes and back
 - [MessagePack](stdlib/encoding/msgpack.md) - MessagePack decoder
 - [Slib reader](stdlib/toolchain/slib.md) - `.slib` header and metadata reader
 
@@ -58,10 +60,12 @@ Complete reference for Sushi's standard library modules and types.
 ### Importing Modules
 
 ```sushi
-use <collections/strings>  # String methods
+use <collections/strings>  # String methods, number formatters, StringBuilder
 use <collections/hashmap>  # HashMap@(K, V)
 use <collections/iter>     # Higher-order combinators (map/filter/fold/compose/enumerate/zip)
 use <compression/zlib>     # DEFLATE and the zlib container
+use <encoding/base64>      # Base64 encode and decode
+use <encoding/hex>         # Hex encode and decode
 use <encoding/msgpack>     # MessagePack decoder
 use <io/buf>               # BufReader, BufWriter: buffered over any handle
 use <io/contracts>         # Reader, Writer, Seek (re-exports <io/error>)
@@ -341,6 +345,12 @@ Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and
 
 - `getenv()` - Get environment variable
 - `setenv()` - Set environment variable
+
+### Encoding (`use <encoding/hex>`, `use <encoding/base64>`)
+
+- `encode(u8[] data)` - Write bytes as text (two lower-case hex digits per byte, or padded Base64)
+- `decode(string text)` - Read the text back as bytes; a `HexError` or a `Base64Error` when it does not decode
+- Each module has `encode` and `decode`: import two of them with `as` (`use <encoding/base64> as b64`)
 
 ### Encoding (`use <encoding/msgpack>`)
 

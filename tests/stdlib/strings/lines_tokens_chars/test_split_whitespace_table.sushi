@@ -1,0 +1,38 @@
+# `split_whitespace()` splits at each run of white space and gives no empty token. White
+# space is the bytes 9, 10, 11, 12, 13 and 32; every other byte is part of a token. Each
+# line prints as the count, then each token in brackets.
+# EXPECT_STDOUT_EXACT: "0\n0\n0\n1 [a]\n2 [Mostly] [Harmless]\n2 [a] [b]\n1 [lead]\n1 [trail]\n2 [a] [b]\n7 [a] [b] [c] [d] [e] [f] [g]\n0\n2 [é] [ü]\n3 [x,y] [-] [z]\n1 3\n1 3\n3\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn show(string[] xs) string:
+    let string out = "{xs.len()}"
+    foreach(x in xs.iter()):
+        out := "{out} [{x}]"
+    return out
+
+fn main() i32:
+    println(show("".split_whitespace()))
+    println(show("   ".split_whitespace()))
+    println(show(" \t\n\r\x0b\x0c ".split_whitespace()))
+    println(show("a".split_whitespace()))
+    println(show(" Mostly \t Harmless ".split_whitespace()))
+    println(show("a b".split_whitespace()))
+    println(show("  lead".split_whitespace()))
+    println(show("trail  ".split_whitespace()))
+    println(show("a  \t\n b".split_whitespace()))
+    println(show("a\tb\nc\x0bd\x0ce\rf g".split_whitespace()))
+    println(show("\r\n".split_whitespace()))
+    println(show("é ü".split_whitespace()))
+    println(show("x,y - z".split_whitespace()))
+
+    let string below = string.from_bytes(nom from([a'a', 8, a'b']))
+    let string[] one = below.split_whitespace()
+    println("{one.len()} {one[0].size()}")
+    let string above = string.from_bytes(nom from([a'a', 14, a'b']))
+    let string[] other = above.split_whitespace()
+    println("{other.len()} {other[0].size()}")
+    let string nul = string.from_bytes(nom from([a'a', 32, 0, 32, a'b']))
+    println(nul.split_whitespace().len())
+    return 0

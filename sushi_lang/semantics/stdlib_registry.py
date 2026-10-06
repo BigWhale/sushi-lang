@@ -46,7 +46,10 @@ def platform_source(module_path: str) -> Optional[Path]:
 
 SOURCE_STDLIB_MODULES: Dict[str, Path] = {
     "collections/iter": _SRC_SUSHI_ROOT / "collections" / "iter.sushi",
+    "collections/strings": _SRC_SUSHI_ROOT / "collections" / "strings.sushi",
     "compression/zlib": _SRC_SUSHI_ROOT / "compression" / "zlib.sushi",
+    "encoding/base64": _SRC_SUSHI_ROOT / "encoding" / "base64.sushi",
+    "encoding/hex": _SRC_SUSHI_ROOT / "encoding" / "hex.sushi",
     "encoding/msgpack": _SRC_SUSHI_ROOT / "encoding" / "msgpack.sushi",
     "io/buf": _SRC_SUSHI_ROOT / "io" / "buf.sushi",
     "io/contracts": _SRC_SUSHI_ROOT / "io" / "contracts.sushi",
@@ -69,6 +72,16 @@ SOURCE_STDLIB_MODULES.update({
     module: platform_source(module) or _SRC_SUSHI_ROOT / "_platform" / f"{platform_key()}.sushi"
     for module in PLATFORM_SOURCE_MODULES
 })
+
+
+# The source modules that ALSO enable built-in methods from the stdlib bitcode: their
+# import is a method interface as well as a unit, also behind an alias.
+BUILTIN_METHOD_MODULES = frozenset({"collections/strings"})
+
+
+def enables_builtin_methods(module_path: str) -> bool:
+    """True if `use <module_path>` enables built-in methods, as well as any names."""
+    return module_path in BUILTIN_METHOD_MODULES
 
 
 def is_source_stdlib_module(module_path: str) -> bool:

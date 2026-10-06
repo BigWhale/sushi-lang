@@ -1,0 +1,34 @@
+# `lines()` splits at each `\n`. A `\r` immediately before the `\n` is removed, and a
+# `\r` anywhere else stays. A final `\n` does not start an empty last line. Each line
+# prints as the count, then each element in brackets, with a `\r` shown as <CR>.
+# EXPECT_STDOUT_EXACT: "0\n1 [a]\n1 [a]\n2 [a] [b]\n1 []\n3 [a] [] [b]\n1 [a<CR>b]\n1 [a<CR>]\n2 [] []\n1 [a]\n1 []\n2 [a<CR>] [b]\n2 [a] [<CR>]\n2 [one] [two]\n3 [a] [b] []\n2 [é] [ü]\n1 [<CR>]\n2 [ a ] [<CR> b]\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn show(string[] xs) string:
+    let string out = "{xs.len()}"
+    foreach(x in xs.iter()):
+        out := "{out} [{x.replace('\r', '<CR>')}]"
+    return out
+
+fn main() i32:
+    println(show("".lines()))
+    println(show("a".lines()))
+    println(show("a\n".lines()))
+    println(show("a\r\nb".lines()))
+    println(show("\n".lines()))
+    println(show("a\n\nb".lines()))
+    println(show("a\rb".lines()))
+    println(show("a\r".lines()))
+    println(show("\n\n".lines()))
+    println(show("a\r\n".lines()))
+    println(show("\r\n".lines()))
+    println(show("a\r\r\nb".lines()))
+    println(show("a\n\r".lines()))
+    println(show("one\r\ntwo\n".lines()))
+    println(show("a\nb\n\n".lines()))
+    println(show("é\nü".lines()))
+    println(show("\r".lines()))
+    println(show(" a \n\r b".lines()))
+    return 0

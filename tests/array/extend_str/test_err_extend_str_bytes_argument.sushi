@@ -1,0 +1,11 @@
+# extend_str takes a string. A u8[] argument is refused, and the help names `extend`,
+# the method that appends an array of the receiver's own type.
+# EXPECT_ERROR_CODES_EXACT: CE2023
+# EXPECT_STDERR_CONTAINS: buf.extend(...)
+
+fn main() i32:
+    let u8[] buf = from([])
+    let u8[] more = from([a'x'])
+    buf.extend_str(more)
+    println(buf.len())
+    return 0

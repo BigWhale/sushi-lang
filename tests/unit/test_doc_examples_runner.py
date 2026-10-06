@@ -12,9 +12,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from tests.docs_sweep import (
+    PROJECT_ROOT,
     blocks_in,
     examples_in,
     parse_attrs,
+    unit_import_of,
     wrap_example,
 )
 
@@ -163,3 +165,15 @@ def test_an_ordinary_block_is_still_collected():
     blocks = blocks_in("synthetic.md", text)
     assert len(blocks) == 1
     assert blocks[0].line == 3
+
+
+# -- the import of the documented unit --------------------------------------------
+
+def test_a_user_unit_is_imported_by_its_stem():
+    assert unit_import_of(PROJECT_ROOT / "docs" / "tutorial" / "shapes.sushi") == 'use "shapes"'
+
+
+def test_a_bundled_stdlib_module_is_imported_as_a_user_writes_it():
+    root = PROJECT_ROOT / "sushi_lang" / "sushi_stdlib" / "src_sushi"
+    assert unit_import_of(root / "collections" / "strings.sushi") == "use <collections/strings>"
+    assert unit_import_of(root / "encoding" / "hex.sushi") == "use <encoding/hex>"

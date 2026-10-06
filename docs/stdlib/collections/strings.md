@@ -52,6 +52,14 @@ provides these methods (with `is_empty` and `clone`, which need no import):
 - **Conversion**: to_bytes, to_i32, to_i64, to_f64
 - **Concatenation**: concat
 
+These are written in Sushi (see [Methods written in Sushi](#methods-written-in-sushi)):
+- **Strict parses**: parse_u8, parse_u16, parse_u32, parse_u64, parse_i32, parse_i64
+- **Trims of a given text**: trim_start_matches, trim_end_matches
+- **Lines, tokens and characters**: lines, split_whitespace, chars
+- **Number formatting** (on the integer and float types): to_hex, to_hex_width, to_bin,
+  to_bin_width, to_fixed
+- **Building**: the `StringBuilder` type
+
 ## Inspection Methods
 
 ### `.len() -> i32`
@@ -433,7 +441,12 @@ fn main() i32:
 
 ### `.join(string[] parts) -> string`
 
-Join array with separator.
+### `.join(List@(string) parts) -> string`
+
+Join the parts with the separator between two parts. An empty `parts` gives an empty
+string. The argument is a `string[]` or a `List@(string)`, and the two give the same
+result for the same elements. The call borrows `parts`, so you can use it again after
+the call.
 
 ```sushi
 let string[] words = from(["a", "b", "c"])
@@ -443,6 +456,12 @@ println(''.join(words))  # "abc"
 
 # Single quotes shine in interpolation:
 println("{','.join(words)}")
+
+let List@(string) crew = List.new()
+crew.push("Arthur")
+crew.push("Ford")
+println(' & '.join(crew))  # "Arthur & Ford"
+println(crew.len())        # 2
 ```
 
 ## Conversion Methods
@@ -527,6 +546,318 @@ match "3.14".to_f64():
     Maybe.None() ->
         println("Invalid float")
 ```
+
+## Methods written in Sushi
+
+The module has two halves. The methods above are built into the stdlib bitcode. The
+methods below are written in Sushi (`src_sushi/collections/strings.sushi`), and the same
+`use <collections/strings>` loads them. Each one is bare and total: a call gives the value
+itself, with no `??`.
+
+### Strict parses: `.parse_u8(i32 base)` to `.parse_i64(i32 base)`
+
+```sushi
+extend string parse_u8(i32 base) Maybe@(u8)
+extend string parse_u16(i32 base) Maybe@(u16)
+extend string parse_u32(i32 base) Maybe@(u32)
+extend string parse_u64(i32 base) Maybe@(u64)
+extend string parse_i32(i32 base) Maybe@(i32)
+extend string parse_i64(i32 base) Maybe@(i64)
+```
+
+Each method parses the text as a number of its type, in the base `base`. The rule is
+strict:
+
+- The text holds the digits of `base` and nothing else. A space, a `+`, a `0x` or `0b`
+  prefix and a `_` are refused. An empty text is refused.
+- A digit is `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35. Each digit must be less than
+  `base`.
+- A leading zero is legal: `"007"` is 7.
+- `parse_i32` and `parse_i64` take ONE leading `-` and no other sign. `"-0"` is 0. `"-"`,
+  `"--5"` and `"-+5"` are refused. The negative side reaches the minimum of the type:
+  `"-2147483648".parse_i32(10)` is `-2147483648`. The unsigned methods refuse every sign.
+- A value out of the range of the type is refused, and so is a base outside 2 to 36.
+
+A refused text gives `Maybe.None()`; a correct text gives `Maybe.Some(value)`.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    println("ff".parse_u8(16).realise(0))
+    println("-80000000".parse_i32(16).realise(0))
+    println("007".parse_u32(10).realise(0))
+    println("0x1f".parse_u32(16).is_some())
+    println(" 42".parse_u32(10).is_some())
+    println(" 42".trim().parse_u32(10).realise(0))
+    println("256".parse_u8(10).is_some())
+    return 0
+```
+
+Output:
+
+```
+255
+-2147483648
+7
+false
+false
+42
+false
+```
+
+`to_i32()` is the lenient decimal parse: it takes a leading space and a `+`. To get the
+lenient form of a strict parse, trim the text first: `s.trim().parse_u32(10)`.
+
+### `.trim_start_matches(string t) -> string`
+
+Removes every repeat of `t` at the start of the text, and gives a new string. The repeats
+must touch: `"ab ab".trim_start_matches("ab")` gives `" ab"`. An empty `t` gives the text
+unchanged. A `t` that is longer than the text removes nothing, and a text of repeats alone
+gives `""`. The compare is by bytes, so a multi-byte `t` works.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    println("0042".trim_start_matches("0"))      # 42
+    println("ababx".trim_start_matches("ab"))    # x
+    println("ééx".trim_start_matches("é"))       # x
+    println("abc".trim_start_matches(""))        # abc
+    return 0
+```
+
+### `.trim_end_matches(string t) -> string`
+
+Removes every repeat of `t` at the end of the text, and gives a new string. The rules are
+the rules of `trim_start_matches`. The repeats are counted from the end, so a part of a
+repeat stays: `"aaa".trim_end_matches("aa")` gives `"a"`.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    println("a/b///".trim_end_matches("/"))      # a/b
+    println("babab".trim_end_matches("ab"))      # b
+    println("aaa".trim_end_matches("aa"))        # a
+    return 0
+```
+
+### `.lines() -> string[]`
+
+Splits the text at each `\n`, and gives each line as a new string. A `\r` immediately
+before the `\n` is removed, and a `\r` anywhere else stays. A final `\n` does not start an
+empty last line.
+
+| Text | Lines |
+|---|---|
+| `""` | `[]` |
+| `"a"` | `["a"]` |
+| `"a\n"` | `["a"]` |
+| `"a\r\nb"` | `["a", "b"]` |
+| `"\n"` | `[""]` |
+| `"a\n\nb"` | `["a", "", "b"]` |
+| `"a\rb"` | `["a\rb"]` |
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let string text = "Mostly\r\nHarmless\n"
+    let string[] lines = text.lines()
+    println(lines.len())                         # 2
+    foreach(line in lines.iter()):
+        println("[{line}]")                      # [Mostly], then [Harmless]
+    return 0
+```
+
+### `.split_whitespace() -> string[]`
+
+Splits the text at each run of white space, and gives each token as a new string. No
+token is empty, so `""` and `"   "` give `[]`. White space is the set of `trim()`: the
+bytes 9, 10, 11, 12, 13 and 32. Every other byte is part of a token.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let string[] words = " Mostly \t Harmless\n".split_whitespace()
+    println(words.len())                         # 2
+    println(words[0])                            # Mostly
+    println(words[1])                            # Harmless
+    return 0
+```
+
+### `.chars() -> string[]`
+
+Splits the text into its characters, and gives each character as a new string that holds
+the bytes of that character. A character starts at each byte that is not a UTF-8
+continuation byte (`b & 0xC0 != 0x80`). That is the rule of `len()`, so
+`s.chars().len()` equals `s.len()` for every string.
+
+The rule applies to text that is not valid UTF-8 too (for example from
+`string.from_bytes`). A continuation byte joins the character before it, and continuation
+bytes at the start join the first character. A text of continuation bytes alone has no
+character, so it gives `[]`, because its `len()` is 0.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let string word = "café"
+    let string[] cs = word.chars()
+    println("{cs.len()} {word.len()}")           # 4 4
+    println(cs[3])                               # é
+    println(cs[3].size())                        # 2
+    return 0
+```
+
+## Number formatting
+
+### `.to_hex()`, `.to_hex_width(i32 w)`, `.to_bin()`, `.to_bin_width(i32 w)`
+
+These four methods are on each integer type: `u8`, `u16`, `u32`, `u64`, `i8`, `i16`,
+`i32` and `i64`. Each one gives a new string.
+
+- `to_hex()` writes the value in base 16, in lower case, with no leading zero. The value
+  0 gives `"0"`.
+- `to_bin()` writes the value in base 2, with no leading zero.
+- `to_hex_width(w)` and `to_bin_width(w)` add leading zeros until the text has `w`
+  digits. A value that has more digits than `w` is never cut. A `w` of 0 or less adds no
+  zero.
+- A signed value gives the two's complement bits of its own width, with no minus sign:
+  `(-1 as i8).to_hex()` is `"ff"`, and `(-1).to_hex()` on an `i32` is `"ffffffff"`.
+
+The methods write digits only, with no `0x` or `0b` prefix. For a width with spaces, or
+for an alignment, use `pad_left` or `pad_right` on the result.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let u8 b = 10
+    let i8 m = -1
+    let i32 port = 8080
+    println(b.to_hex())
+    println(b.to_hex_width(2))
+    println(m.to_hex())
+    println(port.to_hex_width(8))
+    println(b.to_bin())
+    println(b.to_bin_width(8))
+    println(m.to_bin())
+    return 0
+```
+
+Output:
+
+```text
+a
+0a
+ff
+00001f90
+1010
+00001010
+11111111
+```
+
+### `.to_fixed(i32 p) -> string`
+
+This method is on `f64` and `f32`. It writes the value with exactly `p` digits after the
+point, and gives a new string.
+
+- The value is rounded as C `printf("%.*f")` rounds it. The rounding uses the exact
+  binary value, so 2.5 with `p = 0` gives `"2"`, and 0.125 with `p = 2` gives `"0.12"`.
+- A `p` of 0 writes no point. A `p` below 0 is the same as 0.
+- An `f32` value is first changed to `f64`, with no change to its value. Thus the digits
+  show the precision of the `f32`: `0.1` as an `f32` with `p = 10` is `"0.1000000015"`.
+- There is no limit on the length: a very large value gives all its integer digits.
+
+For a width with spaces, or for an alignment, use `pad_left` or `pad_right` on the
+result.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let f64 pi = 3.14159
+    let f64 half = 2.5
+    let f32 tenth = 0.1
+    println(pi.to_fixed(2))
+    println(pi.to_fixed(0))
+    println(half.to_fixed(0))
+    println(tenth.to_fixed(10))
+    println("[{pi.to_fixed(3).pad_left(8, ' ')}]")
+    return 0
+```
+
+Output:
+
+```text
+3.14
+3
+2
+0.1000000015
+[   3.142]
+```
+
+## StringBuilder
+
+A `StringBuilder` collects many pieces of text and makes one string at the end. Each
+`push` copies its piece one time, into one byte buffer. `finish` gives the string with the
+buffer itself, so the end copies no byte. No byte is checked for UTF-8.
+
+```sushi
+public struct StringBuilder:
+    u8[] bytes
+```
+
+The field `bytes` is readable, because a struct is public or private whole. It is not a
+contract: use the methods.
+
+| Method | Signature | What it does |
+|---|---|---|
+| `new` | `extend StringBuilder static new() StringBuilder` | Makes an empty builder. |
+| `push` | `extend StringBuilder push(poke self, string s) ~` | Appends the bytes of `s`. The string is a borrow: it stays yours. |
+| `push_byte` | `extend StringBuilder push_byte(poke self, u8 b) ~` | Appends one byte. |
+| `size` | `extend StringBuilder size() i32` | Gives the count of BYTES so far. |
+| `is_empty` | `extend StringBuilder is_empty() bool` | Gives true when the builder holds no byte. An empty piece appends no byte. |
+| `finish` | `extend StringBuilder finish(nom self) string` | Gives the string and spends the builder. |
+
+`size()` counts bytes, and the `len()` of the result counts characters: `"é"` is 2 bytes
+and 1 character. `finish` takes `nom self`, so a use of the builder after `finish` is
+**[CE2435](../../error-catalog.md#ce2435)**. A helper that pushes takes the builder as
+`poke StringBuilder`. A builder that you drop with no `finish` frees its buffer.
+
+```sushi
+use <collections/strings>
+
+fn label(poke StringBuilder sb, string key, i32 value) ~:
+    sb.push(key)
+    sb.push("=")
+    sb.push("{value}")
+    sb.push_byte(a';')
+
+fn main() i32:
+    let StringBuilder sb = StringBuilder.new()
+    label(poke sb, "answer", 42)
+    label(poke sb, "towels", 1)
+    println("{sb.size()} {sb.is_empty()}")
+    let string text = sb.finish()
+    println(text)
+    return 0
+```
+
+Output:
+
+```text
+19 false
+answer=42;towels=1;
+```
+
+When one local string grows in one loop, `s := s.concat(x)` is enough: the compiler appends
+to the buffer of `s` in place (see [`.concat`](#concatstring-other---string)). Use a
+`StringBuilder` when the pieces come from more than one function or from a struct
+field, when you append single bytes, or when the form is not exactly `s := s.concat(x)`.
 
 ## Best Practices
 

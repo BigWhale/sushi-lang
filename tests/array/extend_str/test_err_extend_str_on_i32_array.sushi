@@ -1,0 +1,10 @@
+# `extend_str` appends bytes, so only a `u8[]` takes it. An `i32[]` receiver is refused
+# with the receiver error of every `u8[]` method.
+# EXPECT_ERROR_CODES_EXACT: CE2023
+# EXPECT_STDERR_CONTAINS: receiver mismatch for 'extend_str': expected u8[], got i32[]
+
+fn main() i32:
+    let i32[] a = from([1, 2])
+    a.extend_str("x")
+    println("{a.len()}")
+    return 0

@@ -1,0 +1,50 @@
+# The strict parse in each position: a local, a parameter, a temporary from an
+# interpolation, a slice, a match on the answer, a base that is an expression, an
+# interpolation hole, a chain after trim(), and the answer used in arithmetic.
+# EXPECT_STDOUT_EXACT: "8080\n443\n0\n42\n255\nsome -42\nnone\n7\n15\nhole 4095\n12\nnone\n2999\n6\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn port_of(string s) u32:
+    return s.parse_u32(10).realise(0)
+
+fn report(Maybe@(i32) m) ~:
+    match m:
+        Maybe.Some(v) -> println("some {v}")
+        Maybe.None -> println("none")
+
+fn main() i32:
+    let string local = "8080"
+    println(local.parse_u32(10).realise(0))
+    println(port_of("443"))
+    println(port_of("4 43"))
+
+    let u32 n = 41
+    println("{n}".parse_u32(10).realise(0) + 1)
+
+    let string framed = "xff!"
+    println(framed.ss(1, 2).parse_u8(16).realise(0))
+
+    report("-42".parse_i32(10))
+    report("42-".parse_i32(10))
+
+    let i32 b = 10
+    println("g".parse_u8(b + 6).realise(7))
+    println("f".parse_u8(b + 6).realise(7))
+
+    println("hole {'fff'.parse_u16(16).realise(0)}")
+
+    let string padded = "  12 ".clone()
+    println(padded.trim().parse_u32(10).realise(0))
+    report(padded.parse_i32(10))
+
+    let i64 total = "1000".parse_i64(10).realise(0) * 3 + "-1".parse_i64(10).realise(0)
+    println(total)
+
+    let string[] parts = "1,2,3".split(",")
+    let u64 sum = 0
+    foreach(p in parts.iter()):
+        sum := sum + p.parse_u64(10).realise(0)
+    println(sum)
+    return 0

@@ -1,0 +1,11 @@
+# Both codecs imported flat give two candidates for the bare name `encode`: the call
+# is refused. A program that imports both writes `use ... as`.
+# EXPECT_ERROR_CODES_EXACT: CE3012
+# EXPECT_STDERR_CONTAINS: "'encode' is offered by more than one import."
+use <encoding/base64>
+use <encoding/hex>
+
+fn main() i32:
+    let u8[] data = from([1, 2, 3])
+    println(encode(data))
+    return 0

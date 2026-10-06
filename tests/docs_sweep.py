@@ -438,6 +438,23 @@ def _unit_copy(unit_dir: Path, tmproot: Path) -> Path:
         return dest
 
 
+STDLIB_SOURCE_ROOT = PROJECT_ROOT / "sushi_lang" / "sushi_stdlib" / "src_sushi"
+
+
+def unit_import_of(unit_path: Path) -> str:
+    """The `use` line that brings the documented unit, as a user writes it.
+
+    A bundled stdlib module is imported by its module path. Imported by its file
+    stem instead, the Sushi half of `<collections/strings>` is loaded two times: once
+    as the copy, and once by its own `use <collections/strings>`.
+    """
+    try:
+        relative = unit_path.resolve().relative_to(STDLIB_SOURCE_ROOT)
+    except ValueError:
+        return f'use "{unit_path.stem}"'
+    return f"use <{relative.with_suffix('').as_posix()}>"
+
+
 def run_example(example: Example, tmproot: Path) -> tuple[Example, str, str]:
     """Returns (example, outcome, detail)."""
     if example.skip_reason is not None:
@@ -451,7 +468,7 @@ def run_example(example: Example, tmproot: Path) -> tuple[Example, str, str]:
     unit_dir = _unit_copy(example.unit_path.parent, tmproot)
     stem = f"doc_example_{example.unit_path.stem}_{example.index}"
     entry = unit_dir / f"{stem}.sushi"
-    entry.write_text(wrap_example(example.code, f'use "{example.unit_path.stem}"',
+    entry.write_text(wrap_example(example.code, unit_import_of(example.unit_path),
                                   example.index), encoding="utf-8")
 
     # Its own working directory, so an example that writes a file leaves nothing behind.

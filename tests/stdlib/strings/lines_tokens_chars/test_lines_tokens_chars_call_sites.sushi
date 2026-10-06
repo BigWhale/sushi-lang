@@ -1,0 +1,43 @@
+# `lines()`, `split_whitespace()` and `chars()` at each call site: a local, a parameter,
+# a temporary, a `foreach` over the answer, the answer passed `nom`, a chained call, an
+# interpolation hole, and elements used after the source string is gone.
+# EXPECT_STDOUT_EXACT: "2\n3\n[left] [right]\n<h><é><y>\nwords 3\n[a][b][c]\n2\n[Mostly][Harmless]\nfirst=x last=z\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn count_lines(string text) i32:
+    return text.lines().len()
+
+fn take(nom string[] parts) string:
+    let string out = ""
+    foreach(p in parts.iter()):
+        out := "{out}[{p}]"
+    return out
+
+fn words_of(string text) string[]:
+    let string owned = "{text} c".clone()
+    return owned.split_whitespace()
+
+fn main() i32:
+    let string src = "one\r\ntwo".clone()
+    println(src.lines().len())
+    println(count_lines("a\nb\nc\n"))
+    let string x = "left"
+    let string y = "right"
+    let string joined = ""
+    foreach(line in "{x}\n{y}".lines().iter()):
+        joined := "{joined}[{line}] "
+    println(joined.trim())
+    let string marked = ""
+    foreach(c in "héy".chars().iter()):
+        marked := "{marked}<{c}>"
+    println(marked)
+    let string abc = "a b c"
+    println("words {abc.split_whitespace().len()}")
+    println(take(nom words_of("a b")))
+    println("Mostly\nHarmless\n".lines().len())
+    println(take(nom "Mostly \t Harmless///".trim_end_matches("/").split_whitespace()))
+    let string[] kept = "x y z".clone().split_whitespace()
+    println("first={kept[0]} last={kept[2]}")
+    return 0

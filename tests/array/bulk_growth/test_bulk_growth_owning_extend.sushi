@@ -1,0 +1,29 @@
+# `extend` over an owning element type grows geometrically and still copies each slot
+# deeply: a change to the source after the appends does not reach the destination, and
+# every copy is freed once.
+# EXPECT_STDOUT_EXACT: "300 384\nw0 w1 w2 w0 w2\n600\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+
+use <collections/strings>
+
+fn main() i32:
+    let string[] src = from([])
+    foreach(i in 0..3):
+        src.push("w{i}")
+
+    let string[] words = from([])
+    let i32 rounds = 0
+    while (rounds < 100):
+        words.extend(src)
+        rounds := rounds + 1
+    println("{words.len()} {words.capacity()}")
+
+    src[0] := "changed"
+    println("{words[0]} {words[1]} {words[2]} {words[297]} {words[299]}")
+
+    let i32 total = 0
+    foreach(w in words.iter()):
+        total := total + w.len()
+    println(total)
+    return 0

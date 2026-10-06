@@ -1,0 +1,33 @@
+# `decode` checks the count of digits first: an odd count is `OddLength`, even when a
+# byte is not a digit. Then the first byte that is not a hex digit is `BadDigit`, with
+# its byte offset in the text. The bytes next to each digit range are refused.
+# EXPECT_STDOUT_EXACT: "OddLength\nOddLength\nOddLength\nOddLength\nBadDigit(0)\nBadDigit(1)\nBadDigit(1)\nBadDigit(1)\nBadDigit(0)\nBadDigit(0)\nBadDigit(0)\nBadDigit(1)\nBadDigit(2)\nBadDigit(5)\nBadDigit(2)\nBadDigit(0)\nok 1\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <encoding/hex>
+
+fn show(string text) string:
+    match decode(text):
+        Result.Ok(bytes) -> return "ok {bytes.len()}"
+        Result.Err(HexError.OddLength) -> return "OddLength"
+        Result.Err(HexError.BadDigit(at)) -> return "BadDigit({at})"
+
+fn main() i32:
+    println(show("abc"))
+    println(show("g"))
+    println(show("zzz"))
+    println(show("0é"))
+    println(show("zz"))
+    println(show("0g"))
+    println(show("0/"))
+    println(show("0:"))
+    println(show("@0"))
+    println(show("`0"))
+    println(show("G0"))
+    println(show("aG"))
+    println(show("00 1"))
+    println(show("abcdeZ"))
+    println(show("00é"))
+    println(show("\n0"))
+    println(show("Ff"))
+    return 0

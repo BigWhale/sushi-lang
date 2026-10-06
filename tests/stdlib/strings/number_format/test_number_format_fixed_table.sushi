@@ -1,0 +1,40 @@
+# `to_fixed(p)` writes exactly `p` digits after the point, rounded as C `printf("%.*f")`
+# rounds the exact binary value: 2.5 gives "2" and 0.125 gives "0.12". A `p` below 0 is 0,
+# -0.0 keeps its sign, and an f32 is written at its own precision.
+# EXPECT_STDOUT_EXACT: "3\n3.14\n3.14159\n2\n0.12\n-1.00\n0.00\n-0.00\n100000000000000000000\n3\n1000000000000000052504760255204420248704468581108159154915854115511802457988908195786371375080447864043704443832883878176942523235360430575644792184786706982848387200926575803737830233794788090059368953234970799945081119038967640880074652742780142494579258788820056842838115669472196386865459400540160\n1.500\n0.1000000015\n2.5\n-7\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn main() i32:
+    let f64 x0 = 3.14159
+    println(x0.to_fixed(0))
+    let f64 x1 = 3.14159
+    println(x1.to_fixed(2))
+    let f64 x2 = 3.14159
+    println(x2.to_fixed(5))
+    let f64 x3 = 2.5
+    println(x3.to_fixed(0))
+    let f64 x4 = 0.125
+    println(x4.to_fixed(2))
+    let f64 x5 = -1.005
+    println(x5.to_fixed(2))
+    let f64 x6 = 0.0
+    println(x6.to_fixed(2))
+    let f64 x7 = -0.0
+    println(x7.to_fixed(2))
+    let f64 x8 = 1.0e20
+    println(x8.to_fixed(0))
+    let f64 x9 = 3.14159
+    println(x9.to_fixed(-1))
+    let f64 x10 = 1.0e300
+    println(x10.to_fixed(0))
+    let f64 x11 = 1.5
+    println(x11.to_fixed(3))
+    let f32 x12 = 0.1
+    println(x12.to_fixed(10))
+    let f32 x13 = 2.5
+    println(x13.to_fixed(1))
+    let f32 x14 = -7.25
+    println(x14.to_fixed(0))
+    return 0

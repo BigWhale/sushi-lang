@@ -33,6 +33,7 @@ METHOD_EFFECTS: dict[str, MethodEffect] = {
     "insert": _INSERTS,
     "extend": _BULK_WRITES,
     "extend_range": _BULK_WRITES,
+    "extend_str": _BULK_WRITES,
     "pop": _MUTATES,
     "remove": _MUTATES,
     "clear": _MUTATES,

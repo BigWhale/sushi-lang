@@ -1,0 +1,9 @@
+# `join` takes a `string[]` or a `List@(string)`. An `i32` is neither.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_STDERR_CONTAINS: expected string[], got i32
+use <collections/strings>
+
+fn main() i32:
+    let i32 n = 5
+    println(",".join(n))
+    return 0

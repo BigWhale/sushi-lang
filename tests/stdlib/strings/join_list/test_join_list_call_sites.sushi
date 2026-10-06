@@ -1,0 +1,69 @@
+# `join` takes a `List@(string)` in every position: a local, a parameter, a `peek`
+# parameter, a temporary, a struct field, a list after `push` and `pop`, and inside an
+# interpolation hole. The separator
+# is a literal or a variable. The list is a borrow: it is used again after each call.
+# Owned elements are freed one time, by the list.
+# EXPECT_STDOUT_EXACT: "Arthur & Ford & Zaphod\nArthur, Ford, Zaphod\nArthur/Ford/Zaphod\ncrew: Arthur & Ford & Zaphod\npopped Marvin\nArthur-Ford-Zaphod\nArthur-Ford\nlen 2 first Arthur\nTrillian+42+4242\nshelf 3\nn0 n1 n2\nn0n1n2\nx1|y\npeek x1,y\nlen 2\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+struct Shelf:
+    List@(string) books
+
+fn joined(List@(string) parts, string sep) string:
+    return sep.join(parts)
+
+fn crew() List@(string):
+    let List@(string) l = List.new()
+    l.push("x{1}")
+    l.push("y")
+    return l
+
+fn by_peek(peek List@(string) p) string:
+    return ",".join(p)
+
+fn main() i32:
+    let List@(string) words = List.new()
+    words.push("Arthur")
+    words.push("Ford")
+    words.push("Zaphod")
+
+    let string sep = " & "
+    println(sep.join(words))
+    println(", ".join(words))
+    println(joined(words, "/"))
+    println("crew: {sep.join(words)}")
+
+    words.push("Marvin")
+    match words.pop():
+        Maybe.Some(name) -> println("popped {name}")
+        Maybe.None -> println("empty")
+    println("-".join(words))
+    match words.pop():
+        Maybe.Some(_) -> println("-".join(words))
+        Maybe.None -> println("empty")
+    match words.get(0):
+        Maybe.Some(first) -> println("len {words.len()} first {first}")
+        Maybe.None -> println("empty")
+
+    let List@(string) books = List.new()
+    books.push("Trillian")
+    books.push("{42}")
+    books.push("42".repeat(2))
+    let Shelf shelf = Shelf(books)
+    println("+".join(shelf.books))
+    println("shelf {shelf.books.len()}")
+
+    let List@(string) names = List.new()
+    foreach(i in 0..3):
+        names.push("n{i}")
+    let string space = " "
+    println(space.join(names))
+    println("".join(names))
+
+    println("|".join(crew()))
+    let List@(string) kept = crew()
+    println("peek {by_peek(peek kept)}")
+    println("len {kept.len()}")
+    return 0
