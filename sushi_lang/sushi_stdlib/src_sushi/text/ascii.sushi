@@ -65,7 +65,7 @@ Tests if the byte is an ASCII letter or decimal digit (48-57, 65-90 and 97-122).
   ```
 :##
 extend u8 is_ascii_alnum() bool:
-    return false
+    return (self >= a'0' and self <= a'9') or (self >= a'A' and self <= a'Z') or (self >= a'a' and self <= a'z')
 
 ##:
 Tests if the byte is an ASCII hexadecimal digit: `a'0'` to `a'9'`, `a'A'` to `a'F'` or `a'a'` to `a'f'`.
