@@ -6,6 +6,9 @@ digits, two for each byte.
 :##
 use <collections/strings>
 
+##: The digits of `encode`, in the order of their values. :##
+const string DIGITS = "0123456789abcdef"
+
 ##: Why a text did not decode. :##
 public error HexError:
     ##: The text holds an odd count of digits. :##
@@ -25,7 +28,12 @@ println(encode(data))
 ```
 :##
 public fn encode(u8[] data) string:
-    return ""
+    let u8[] out = from([0; data.len() * 2])
+    foreach(i in 0..data.len()):
+        let u8 b = data[i]
+        out[2 * i] := DIGITS[(b >> 4) as i32]
+        out[2 * i + 1] := DIGITS[(b & 0x0f) as i32]
+    return string.from_bytes(nom out)
 
 ##:
 Reads hex text as bytes.
@@ -42,4 +50,31 @@ match decode("DEad01"):
 ```
 :##
 public fn decode(string text) u8[] | HexError:
-    return Result.Err(HexError.OddLength)
+    let i32 n = text.size()
+    if (n % 2 != 0):
+        return Result.Err(HexError.OddLength)
+    let u8[] out = from([0; n / 2])
+    foreach(i in 0..n / 2):
+        let i32 high = digit_value(text[2 * i])
+        if (high < 0):
+            return Result.Err(HexError.BadDigit(2 * i))
+        let i32 low = digit_value(text[2 * i + 1])
+        if (low < 0):
+            return Result.Err(HexError.BadDigit(2 * i + 1))
+        out[i] := (high * 16 + low) as u8
+    return Result.Ok(out)
+
+##:
+Gives the value of one hex digit.
+
+- Parameter b: The byte.
+- Returns: The value from 0 to 15, or -1 when the byte is not a hex digit.
+:##
+fn digit_value(u8 b) i32:
+    if (b >= a'0' and b <= a'9'):
+        return (b - a'0') as i32
+    if (b >= a'a' and b <= a'f'):
+        return (b - a'a' + 10) as i32
+    if (b >= a'A' and b <= a'F'):
+        return (b - a'A' + 10) as i32
+    return -1

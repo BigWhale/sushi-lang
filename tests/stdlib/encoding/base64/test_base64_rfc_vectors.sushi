@@ -1,0 +1,41 @@
+# The Base64 test vectors of RFC 4648 section 10, both ways, with "Mostly Harmless".
+# `encode` always pads. `decode` accepts non-zero unused bits in the last group:
+# "Zh==" gives the same byte as "Zg==".
+# EXPECT_STDOUT_EXACT: "[]\n[Zg==]\n[Zm8=]\n[Zm9v]\n[Zm9vYg==]\n[Zm9vYmE=]\n[Zm9vYmFy]\n[TW9zdGx5IEhhcm1sZXNz]\n[]\n[f]\n[fo]\n[foo]\n[foob]\n[fooba]\n[foobar]\n[Mostly Harmless]\n[102]\n[102]\n[251, 255, 191]\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+use <encoding/base64>
+
+fn enc(string text) string:
+    let string b = encode(text.to_bytes())
+    return "[{b}]"
+
+fn back(string text) string:
+    match decode(text):
+        Result.Ok(bytes) ->
+            let string s = bytes.to_string()
+            return "[{s}]"
+        Result.Err(_) -> return "error"
+
+fn main() i32:
+    println(enc(""))
+    println(enc("f"))
+    println(enc("fo"))
+    println(enc("foo"))
+    println(enc("foob"))
+    println(enc("fooba"))
+    println(enc("foobar"))
+    println(enc("Mostly Harmless"))
+    println(back(""))
+    println(back("Zg=="))
+    println(back("Zm8="))
+    println(back("Zm9v"))
+    println(back("Zm9vYg=="))
+    println(back("Zm9vYmE="))
+    println(back("Zm9vYmFy"))
+    println(back("TW9zdGx5IEhhcm1sZXNz"))
+    println(decode("Zg==").realise(from([])))
+    println(decode("Zh==").realise(from([])))
+    println(decode("+/+/").realise(from([])))
+    return 0

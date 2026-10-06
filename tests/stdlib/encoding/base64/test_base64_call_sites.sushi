@@ -1,0 +1,49 @@
+# `<encoding/base64>` behind an alias, and both codecs in one program behind their
+# aliases: a temporary argument, a parameter, a `??` in a function with a channel, and
+# a `match` on the error variants by the alias.
+# EXPECT_STDOUT_EXACT: "eA==\nTW9zdGx5\n666f6f\nZm9vYmFy\n3 bytes\nbad char at 2\nbad length\nbad padding\ncaught\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+use <encoding/base64> as b64
+use <encoding/hex> as hex
+
+fn count(string text) i32 | b64.Base64Error:
+    let u8[] bytes = b64.decode(text)??
+    return Result.Ok(bytes.len())
+
+fn explain(string text) string:
+    match count(text):
+        Result.Ok(n) -> return "{n} bytes"
+        Result.Err(b64.Base64Error.BadChar(at)) -> return "bad char at {at}"
+        Result.Err(b64.Base64Error.BadLength) -> return "bad length"
+        Result.Err(b64.Base64Error.BadPadding) -> return "bad padding"
+
+fn through(u8[] data) string:
+    return b64.encode(data)
+
+fn hex_of_base64(string text) string | b64.Base64Error:
+    let u8[] bytes = b64.decode(text)??
+    return Result.Ok(hex.encode(bytes))
+
+fn base64_of_hex(string text) string | hex.HexError:
+    return Result.Ok(b64.encode(hex.decode(text)??))
+
+fn main() i32:
+    println(b64.encode("x".to_bytes()))
+    let u8[] word = "Mostly".to_bytes()
+    println(through(word))
+    println(hex_of_base64("Zm9v").realise("error"))
+    println(base64_of_hex("666F6F626172").realise("error"))
+    println(explain("Zm9v"))
+    println(explain("Zm.v"))
+    println(explain("Zm9"))
+    println(explain("Zm=v"))
+    match b64.decode("===="):
+        Result.Ok(_) -> println("no error")
+        Result.Err(e) ->
+            match e:
+                b64.Base64Error.BadPadding -> println("caught")
+                b64.Base64Error.BadLength -> println("wrong")
+                b64.Base64Error.BadChar(_) -> println("wrong")
+    return 0

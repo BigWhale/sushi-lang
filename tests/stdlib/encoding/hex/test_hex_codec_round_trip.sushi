@@ -1,0 +1,30 @@
+# Every byte value from 0 to 255 goes through `encode` and back through `decode`
+# unchanged. The text has 512 digits and starts and ends as the byte order tells.
+# EXPECT_STDOUT_EXACT: "512\n00010203\nfcfdfeff\n256\npass\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+use <encoding/hex>
+
+fn check() i32 | HexError:
+    let u8[] data = from([0; 256])
+    foreach(i in 0..256):
+        data[i] := i as u8
+    let string h = encode(data)
+    println(h.size())
+    println(h.s(0, 8))
+    println(h.s(504, 512))
+    let u8[] back = decode(h)??
+    println(back.len())
+    let i32 bad = 0
+    foreach(i in 0..256):
+        if (back[i] != data[i]):
+            bad := bad + 1
+    if (bad == 0 and back.len() == 256):
+        println("pass")
+    else:
+        println("fail")
+    return Result.Ok(0)
+
+fn main() i32:
+    return check().realise(1)
