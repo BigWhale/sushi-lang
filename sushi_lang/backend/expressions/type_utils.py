@@ -87,7 +87,8 @@ def infer_expr_semantic_type(codegen: 'LLVMCodegen', expr) -> Optional[Type]:
         # The context type the typecheck pass stamped, else the default. A literal in an `i64[]`
         # element position is i64, and answering i32 for it would report the array's
         # element type wrongly to every caller that asks.
-        return expr.resolved_type or BuiltinType.I32
+        from sushi_lang.semantics.passes.types.inference import int_literal_default
+        return expr.resolved_type or int_literal_default(expr)
 
     elif isinstance(expr, FloatLit):
         return expr.resolved_type or BuiltinType.F64

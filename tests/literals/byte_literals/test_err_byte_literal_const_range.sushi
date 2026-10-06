@@ -1,0 +1,8 @@
+# A constant takes the same range rule: `a'\xc8'` is 200, which does not fit an i8.
+# EXPECT_ERROR_CODES_EXACT: CE2073
+
+const i8 X = a'\xc8'
+
+fn main() i32:
+    println(X)
+    return 0

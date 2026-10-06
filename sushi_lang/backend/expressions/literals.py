@@ -7,6 +7,7 @@ from sushi_lang.semantics.ast import (
     Expr, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString
 )
 from sushi_lang.semantics.typesys import BuiltinType
+from sushi_lang.semantics.passes.types.inference import int_literal_default
 from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
@@ -33,8 +34,8 @@ def emit_literal(codegen: 'LLVMCodegen', expr: Expr, to_i1: bool) -> ir.Value:
 
 
 def emit_int_literal(codegen: 'LLVMCodegen', expr: IntLit) -> ir.Value:
-    """Emit an integer literal at its context type's width (default i32)."""
-    ty = expr.resolved_type or BuiltinType.I32
+    """Emit an integer literal at its context type's width, else its default type's."""
+    ty = expr.resolved_type or int_literal_default(expr)
     ll = codegen.types.ll_type(ty)
     mask = (1 << ll.width) - 1
     return ir.Constant(ll, int(expr.value) & mask)

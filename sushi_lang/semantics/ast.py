@@ -625,7 +625,7 @@ class WildcardPattern(Node):
 
 @dataclass(slots=True)
 class LiteralPattern(Node):
-    """A literal pattern: an integer (#415) or a string.
+    """A literal pattern: an integer (#415), a byte (`a'x'`) or a string.
 
     `display` keeps the source spelling for diagnostics, quotes included. `value` is
     the Python integer (sign already applied) or the string after escape processing,
@@ -634,6 +634,8 @@ class LiteralPattern(Node):
     value: int | str
     display: str
     radix: int = 10
+    # A byte arm (`a'/' ->`): an integer arm that CE2076 offers the string form for.
+    is_byte: bool = False
 
 @dataclass(slots=True)
 class RefBinding(Node):
@@ -775,6 +777,9 @@ class IntLit(Node):
     # `x as i64` gives the literal the cast's target as its context, so its range is
     # judged against that and not against the default i32.
     in_cast_context: bool = False
+    # The source spelling of a byte literal (`a'/'`), or None for a number literal. A
+    # byte literal defaults to u8, and a diagnostic names it by this spelling.
+    byte_spelling: Optional[str] = None
 
 @dataclass(slots=True)
 class FloatLit(Node):

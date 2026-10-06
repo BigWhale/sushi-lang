@@ -1,0 +1,31 @@
+# A byte literal takes its type from the position, as a number literal does: a typed
+# local, a parameter, an array element and a struct field. A negated byte literal in an
+# i32 position is -47.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "65\n126\n255\n130\n97\n98\n66\n67\n-47\n"
+
+struct Rec:
+    i32 code
+    u8 tag
+
+fn twice(i32 n) i32:
+    return n * 2
+
+fn main() i32:
+    let i32 code = a'A'
+    println(code)
+    let u16 wide = a'~'
+    println(wide)
+    let i64 big = a'\xff'
+    println(big)
+    println(twice(a'A'))
+    let u8[] bytes = from([a'a', a'b'])
+    println(bytes[0])
+    println(bytes[1])
+    let Rec r = Rec(a'B', a'C')
+    println(r.code)
+    println(r.tag)
+    let i32 n = -a'/'
+    println(n)
+    return 0

@@ -1,0 +1,2 @@
+# A library with a public constant written as a byte literal, built as a binary library.
+public const u8 SLASH = a'/'

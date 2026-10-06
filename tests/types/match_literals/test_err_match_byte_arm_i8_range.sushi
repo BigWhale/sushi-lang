@@ -1,0 +1,12 @@
+# A byte literal arm takes the scrutinee's type and the decimal range rule: `a'\xff'`
+# is 255, which does not fit an i8.
+# EXPECT_ERROR_CODES_EXACT: CE2073
+
+fn f(i8 b) string:
+    match b:
+        a'\xff' -> return "high"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(1))
+    return 0

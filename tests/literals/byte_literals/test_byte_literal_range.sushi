@@ -1,0 +1,9 @@
+# A range bound is an i32 position, so a byte literal there is an i32 and the range
+# walks the codes from `a'a'` to `a'e'`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "97\n98\n99\n100\n101\n"
+
+fn main() i32:
+    foreach(c in a'a'..=a'e'):
+        println(c)
+    return 0

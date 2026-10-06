@@ -1,0 +1,27 @@
+# A byte literal arm in a nested position: inside `Maybe.Some(...)` over the first
+# byte of a u8[], and as an element of a tuple pattern.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "slash\nother 120\nempty\na first\nother 2\n"
+
+fn head(u8[] xs) string:
+    match xs.first():
+        Maybe.Some(a'/') -> return "slash"
+        Maybe.Some(b) -> return "other {b}"
+        Maybe.None -> return "empty"
+
+fn pair((u8, i32) p) string:
+    match p:
+        (a'a', _) -> return "a first"
+        (_, n) -> return "other {n}"
+
+fn main() i32:
+    let u8[] path = from([a'/', a'x'])
+    let u8[] word = from([a'x', a'/'])
+    let u8[] none = from([])
+    println(head(path))
+    println(head(word))
+    println(head(none))
+    println(pair((a'a', 1)))
+    println(pair((a'b', 2)))
+    return 0

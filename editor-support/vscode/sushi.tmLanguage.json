@@ -198,6 +198,17 @@
     "strings": {
       "patterns": [
         {
+          "name": "constant.character.byte.sushi",
+          "begin": "\\ba'",
+          "end": "'|$",
+          "patterns": [
+            {
+              "name": "constant.character.escape.sushi",
+              "match": "\\\\(x[0-9a-fA-F]{2}|[ntr0\\\\'\"])"
+            }
+          ]
+        },
+        {
           "name": "string.quoted.double.sushi",
           "begin": "\"",
           "end": "\"",

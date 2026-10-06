@@ -3414,6 +3414,24 @@ A `:##` closes a documentation block that a `##:` opened. The two delimiters are
 
 Documentation blocks do not nest: a block ends at the first closer that qualifies. A line-initial `##:` in the interior means the enclosing block swallowed the blocks between the two openers. This is the signal GCC gives for a `/*` inside a block comment.
 
+### CE6014 {#ce6014}
+
+**Error** · syntax
+
+**Message:** `malformed byte literal '{literal}': {reason}`
+
+A byte literal `a'x'` holds exactly one character from 0 to 127, or exactly one escape: `\n`, `\t`, `\r`, `\0`, `\\`, `\'`, `\"` or `\xNN` with two hex digits. The reason names the fault: empty, more than one character, unknown escape, or `\x` without two hex digits.
+
+### CE6015 {#ce6015}
+
+**Error** · syntax
+
+**Message:** `the character '{char}' is not one byte`
+
+**Help:** `'{char}' is {count} bytes in UTF-8 ({bytes}); write a'\xNN' for the byte {value}, or compare with the string "{char}"` (the escape is left out when the character is above 255)
+
+A Sushi string is UTF-8, so a character above 127 is two to four bytes, and one byte literal cannot hold it. The help gives the UTF-8 bytes and the escape for a byte from 128 to 255. No character set is assumed.
+
 ### CE6101 {#ce6101}
 
 **Error** · syntax

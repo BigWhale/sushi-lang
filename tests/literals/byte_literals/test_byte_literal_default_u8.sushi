@@ -1,0 +1,16 @@
+# With no context a byte literal is a u8: `println` prints the byte, and a generic call
+# solves `T = u8` from it, so a u8 local takes the result and compares with a u8 local
+# with no cast.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "47\n47\ntrue\n"
+
+fn identity@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    println(a'/')
+    let u8 got = identity(nom a'/')
+    println(got)
+    let u8 slash = 47
+    println(identity(nom a'/') == slash)
+    return 0

@@ -105,8 +105,16 @@ def reject_non_i32(validator: 'TypeValidator', expr: Expr, got: Optional[Type], 
     value, so `-1 as i8` counted 255. A method argument reads CE2006 at its `argument`
     position; every other position reads CE2121, which names the `position` the caller
     gives. Answers whether the value was refused.
+
+    A bare byte literal (`a'x'`) is a bare literal too: the position gives it i32.
     """
     if got is None or got == BuiltinType.I32:
+        return False
+    from .propagation import (is_bare_numeric_literal, is_byte_literal,
+                              propagate_types_to_value, unwrap_type_preserving_unary)
+    literal = unwrap_type_preserving_unary(expr)
+    if is_byte_literal(literal) and is_bare_numeric_literal(literal):
+        propagate_types_to_value(validator, expr, BuiltinType.I32)
         return False
     if argument is None:
         report = er.emit_with(validator.reporter, er.ERR.CE2121, expr.loc,

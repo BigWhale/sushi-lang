@@ -1,0 +1,13 @@
+# A single-quoted string arm does not fit a u8 scrutinee. The help names the byte
+# literal `a'/'`.
+# EXPECT_ERROR_CODES_EXACT: CE2076
+# EXPECT_STDERR_CONTAINS: for the byte
+
+fn f(u8 b) string:
+    match b:
+        '/' -> return "slash"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(47))
+    return 0

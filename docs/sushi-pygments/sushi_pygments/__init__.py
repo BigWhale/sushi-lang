@@ -79,6 +79,10 @@ class SushiLexer(RegexLexer):
             (r"##:", String.Doc, "docblock"),
             (r"#.*$", Comment.Single),
 
+            # A byte literal `a'x'`, before the single-quote string and the name rule.
+            # The `a` touches the quote; `a '/'` is a name and a string.
+            (r"\ba'(?:[^'\\\n]|\\.)*'", String.Char),
+
             # Strings.
             (r'"', String.Double, "dqs"),
             (r"'", String.Single, "sqs"),

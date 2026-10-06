@@ -128,7 +128,7 @@ expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
 match_stmt: MATCH NOM? expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
 match_arm: (pattern | literal_pattern | wildcard_pattern | tuple_pattern) "->" (match_arm_inline | block)
 literal_pattern: "-" (INT | HEX_INT | BIN_INT | OCT_INT) -> neg_literal_pattern
-               | (INT | HEX_INT | BIN_INT | OCT_INT | STRING | CHAR_STRING)
+               | (INT | HEX_INT | BIN_INT | OCT_INT | BYTE_CHAR | STRING | CHAR_STRING)
 # A one-statement arm on the arrow. Every alternative here is a STATEMENT the
 # block form already takes, plus a bare expression -- a rebind was the one missing
 # and it is the shape a move out of a temporary wants (#552).
@@ -235,6 +235,7 @@ method_name: NAME | NEW | EXTEND
      | BIN_INT
      | OCT_INT
      | INT
+     | BYTE_CHAR
      | TRUE
      | FALSE
      | STRING
@@ -335,6 +336,10 @@ TRUE: "true"
 FALSE: "false"
 STRING: /\"([^\"\\]|\\.)*\"/
 CHAR_STRING: /'([^'\\]|\\.)*'/
+# The byte literal `a'x'`. The basic lexer tries terminals in priority order, so the
+# priority puts it ahead of NAME, which would take the `a`. Like the numeric terminals
+# it matches a permissive superset; `parse_byte_literal` says what is wrong.
+BYTE_CHAR.4: /a'([^'\\\n]|\\.)*'/
 
 ASSIGN_REBIND: ":="
 UNDERSCORE: "_"

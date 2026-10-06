@@ -1,0 +1,13 @@
+# The `a` prefix does not take the name `a`: a local named `a` is legal, `a + 1` and
+# `a*a` read it, and a byte literal beside it takes its i32 type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n3\n4\n97\n99\n"
+
+fn main() i32:
+    let i32 a = 2
+    println(a)
+    println(a + 1)
+    println(a*a)
+    println(a'a')
+    println(a + a'a')
+    return 0

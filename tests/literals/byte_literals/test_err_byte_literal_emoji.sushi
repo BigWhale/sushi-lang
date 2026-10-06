@@ -1,0 +1,8 @@
+# A character of four UTF-8 bytes is not a byte literal. The help names the four bytes.
+# EXPECT_ERROR_CODES_EXACT: CE6015
+# EXPECT_STDERR_CONTAINS: 4 bytes
+
+fn main() i32:
+    let u8 b = a'🍣'
+    println(b)
+    return 0

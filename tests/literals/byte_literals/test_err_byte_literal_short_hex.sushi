@@ -1,0 +1,10 @@
+# `\x` takes exactly two hex digits: `a'\x4'` has one, and `a'\xg1'` has a letter that
+# is not a hex digit. Both are reported, one diagnostic each.
+# EXPECT_ERROR_CODES_EXACT: CE6014, CE6014
+
+fn main() i32:
+    let u8 short = a'\x4'
+    let u8 bad = a'\xg1'
+    println(short)
+    println(bad)
+    return 0

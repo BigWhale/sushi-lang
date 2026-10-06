@@ -1,0 +1,13 @@
+# A byte literal arm is an integer arm, so it does not fit a string scrutinee. The help
+# names the string arm `'/'`.
+# EXPECT_ERROR_CODES_EXACT: CE2076
+# EXPECT_STDERR_CONTAINS: for a string arm
+
+fn f(string s) string:
+    match s:
+        a'/' -> return "slash"
+        _ -> return "other"
+
+fn main() i32:
+    println(f("/"))
+    return 0

@@ -479,7 +479,7 @@ extend string upper_ascii() string:
     let u8[] out = from([0; self.size()])
     foreach(i in 0..self.size()):
         let u8 b = self[i]
-        if (b >= 97 and b <= 122):
+        if (b >= a'a' and b <= a'z'):
             out[i] := b - 32
         else:
             out[i] := b
@@ -489,6 +489,9 @@ fn main() i32:
     println("Mostly Harmless".upper_ascii())   # MOSTLY HARMLESS
     return 0
 ```
+
+`a'a'` and `a'z'` are byte literals: the bytes 97 and 122, typed `u8` here (see
+[Numeric Literals](../../language-reference.md#numeric-literals)).
 
 `upper_ascii` allocates once and copies once, as the built-in `upper()` does; written
 over `to_bytes()` and `to_string()` it would copy twice.

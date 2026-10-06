@@ -12,10 +12,17 @@ from sushi_lang.semantics.generics.types import GenericTypeRef
 
 _LITERAL_TYPES: dict[type, "Type"] = {
     StringLit: BuiltinType.STRING,
-    IntLit: BuiltinType.I32,
     FloatLit: BuiltinType.F64,
     BoolLit: BuiltinType.BOOL,
 }
+
+
+def _literal_type(expr) -> "Type | None":
+    """The default type of a literal; an integer literal reads its kind (`a'x'` is u8)."""
+    if isinstance(expr, IntLit):
+        from sushi_lang.semantics.passes.types.inference import int_literal_default
+        return int_literal_default(expr)
+    return _LITERAL_TYPES.get(type(expr))
 
 
 class TypeInferrer:
@@ -31,7 +38,7 @@ class TypeInferrer:
 
     def infer_simple_receiver_type(self, receiver) -> "Type | None":
         """Simple type inference for method call receivers."""
-        literal_type = _LITERAL_TYPES.get(type(receiver))
+        literal_type = _literal_type(receiver)
         if literal_type is not None:
             return literal_type
         if isinstance(receiver, DotCall):

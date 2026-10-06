@@ -1,0 +1,11 @@
+# A byte literal `a'x'` is the ASCII code of the one character between the quotes.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "47\n48\n65\n32\n126\n"
+
+fn main() i32:
+    println(a'/')
+    println(a'0')
+    println(a'A')
+    println(a' ')
+    println(a'~')
+    return 0

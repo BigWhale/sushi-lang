@@ -1,0 +1,12 @@
+# A BINARY library's public constant written as a byte literal reaches the consumer
+# through the manifest, as a u8 of value 47.
+# BUILD_LIB_BINARY: byte_const_bin_lib.sushi
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "47\ntrue\n"
+use <lib/byte_const_bin_lib>
+
+fn main() i32:
+    println(SLASH)
+    let u8 slash = 47
+    println(SLASH == slash)
+    return 0

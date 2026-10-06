@@ -133,6 +133,82 @@ let i32 perm = 0o644         # 420
 
 **Note**: C-style octals with leading zeros (e.g., `077`) are **not supported** and will cause a compilation error. Use the explicit `0o` prefix instead.
 
+**Byte literals** (`a'x'`, "the ASCII code of x"):
+
+`a'x'` is one byte, 0 to 255. A character from 0 to 127 is written as itself (`a'/'`,
+`a'\n'`) or as an escape. A byte from 128 to 255 is written as an escape (`a'\xe9'`). A
+Sushi string is UTF-8, so a character above 127 is more than one byte and cannot be one
+`a'...'` literal.
+
+The literal takes single quotes only, and the `a` touches the quote. `a '/'`, with a space,
+is a parse error. A variable with the name `a` stays legal.
+
+| Escape | Byte |
+|---|---|
+| `\n` | 10 (newline) |
+| `\t` | 9 (tab) |
+| `\r` | 13 (carriage return) |
+| `\0` | 0 |
+| `\\` | 92 (backslash) |
+| `\'` | 39 (single quote) |
+| `\"` | 34 (double quote) |
+| `\xNN` | the byte `NN`: exactly two hex digits, `00` to `ff`, in either case |
+
+`\xNN` is legal below 128 too: `a'\x2f'` is `a'/'`.
+
+Two codes report a literal that is not one byte:
+
+- An empty literal (`a''`), more than one character (`a'ab'`), an unknown escape
+  (`a'\q'`) and a `\x` without two hex digits (`a'\x4'`) are
+  **[CE6014](error-catalog.md#ce6014)**. The message names the fault.
+- A character above 127, written as itself (`a'é'`), is
+  **[CE6015](error-catalog.md#ce6015)**. The help gives the UTF-8 bytes of the character.
+  For a byte from 128 to 255, the help also gives the escape. The compiler assumes no
+  character set (Latin-1, Windows-1252).
+
+A byte literal takes its type from its position, as a number literal does. With no
+context, it is a `u8`. A value that does not fit the type of the position is
+**[CE2073](error-catalog.md#ce2073)**. The range rule is the decimal rule: `a'\xc8'` is 200,
+and 200 does not fit an `i8`. The hex literal `0xc8` fits an `i8` as a bit pattern, but
+the byte literal does not.
+
+When the two operands of one operation are bare literals and one of them is a byte
+literal, the number literal takes `u8`. `a'a' + 1` and `1 + a'a'` are both `u8`, and
+`a'a' + 300` is CE2073.
+
+```sushi
+fn is_digit(u8 b) bool:
+    return b >= a'0' and b <= a'9'
+
+const u8 SEPARATOR = a'/'
+
+fn main() i32:
+    let string path = "usr/bin"
+    let bool slash = path[3] == SEPARATOR
+    let i32 code = a'A'                 # 65: the position gives i32
+    let u8 next = a'a' + 1              # 98: the pair rule gives u8
+    println("{a'/'} {slash} {code} {next} {is_digit(a'7')}")   # 47 true 65 98 true
+    return 0
+```
+
+<!-- docs-sweep: error CE2073 -->
+```sushi
+fn main() i32:
+    let i8 pattern = 0xc8               # legal: the bit pattern -56
+    let i8 byte = a'\xc8'               # CE2073: 200 does not fit i8
+    println("{pattern} {byte}")
+    return 0
+```
+
+A byte literal is not an array size, and `-a'x'` is not a match arm. In an expression,
+`-a'/'` follows the number-literal rules: with no context it is CE2073 (-47 does not fit
+`u8`), and in an `i32` position it is -47.
+
+A byte literal is not a string. In a string, `\xNN` gives a character: `"\xe9"` is the
+character U+00E9, which is two bytes in UTF-8. `a'\xe9'` is the one byte 233. A string
+also keeps an unknown escape as text (`"\q"` is the two characters `\q`), but a byte
+literal refuses it (CE6014).
+
 **Decimal literals** (base 10, no prefix):
 ```sushi
 let i32 grouped = 1_000_000   # underscores allowed
@@ -141,12 +217,13 @@ let f64 big = 1_0.2_5e1_0     # and in all three parts at once
 ```
 
 **Common features**:
-- Every literal format supports underscore separators for readability, decimal and
+- Every number literal format supports underscore separators for readability, decimal and
   float included. One underscore, and it must have a digit on each side — so `1__0`,
   `1_`, `0x_FF` and `3._14` are rejected (**[CE6006](error-catalog.md#ce6006)**), each naming the fix
 - Prefixes are case insensitive (`0xFF` == `0xff`, `0B1111` == `0b1111`)
 - A literal is **context-typed**: it takes its type from context (annotation,
-  argument, field, operand). With no numeric context it defaults to `i32`.
+  argument, field, operand). With no numeric context it defaults to `i32` (a byte
+  literal defaults to `u8`).
 
 **Context typing**: a bare literal is typed by its
 expected type and range-checked at compile time, so no cast is needed to write a
@@ -2024,7 +2101,7 @@ same rules apply to the two kinds:
   `string` scrutinee, a literal arm on an enum scrutinee, and a string arm beside an
   integer arm are **[CE2076](error-catalog.md#ce2076)**.
 - A literal is also legal inside a pattern: in an enum payload (`Maybe.Some(0) ->`,
-  `Maybe.Some("--help") ->`), in a tuple element (`(0, n) ->`, `("go", dir) ->`) and in an
+  `Maybe.Some(a'/') ->`, `Maybe.Some("--help") ->`), in a tuple element (`(0, n) ->`, `("go", dir) ->`) and in an
   `Own(...)` pattern. The value at that position must be of the kind of the literal: an
   integer for an integer literal, a `string` for a string literal (**[CE2119](error-catalog.md#ce2119)**).
 
@@ -2056,6 +2133,43 @@ fn main() i32:
     println(tag_name(tag))
     return 0
 ```
+
+#### Byte Arms
+
+A byte literal (`a'/'`, see [Numeric Literals](#numeric-literals)) is an integer arm. It
+takes the scrutinee's type by the same rule, and a value out of range is
+**[CE2073](error-catalog.md#ce2073)**. The value of the arm is its byte, so `a'/'` and `47`
+are the same arm (**[CE2075](error-catalog.md#ce2075)**). A byte literal is also legal in a
+nested position: `Maybe.Some(a'/') ->`, `(a'a', _) ->`. A negated byte literal (`-a'/'`) is
+not a pattern.
+
+```sushi
+fn kind(u8 b) i32:
+    match b:
+        a'/' -> return 1
+        a'.' -> return 2
+        a'\n' -> return 3
+        a'\xff' -> return 4
+        _ -> return 0
+
+fn starts_with_slash(u8[] bytes) bool:
+    match bytes.first():
+        Maybe.Some(a'/') -> return true
+        _ -> return false
+
+fn main() i32:
+    let string path = "a.b/c"
+    println(kind(path[1]))              # 2
+    println(kind(path[3]))              # 1
+    let u8[] bytes = from([a'/', a'x'])
+    println(starts_with_slash(bytes))   # true
+    return 0
+```
+
+The quotes tell the arm kind. `'/' ->` is a string arm, and `a'/' ->` is a byte arm. The
+wrong form is **[CE2076](error-catalog.md#ce2076)**, and the help gives the correct form:
+for `'/' ->` on a `u8` scrutinee, the help is to write `a'/'` for the byte; for `a'/' ->`
+on a `string` scrutinee, the help is to write `'/'` for a string arm.
 
 #### String Arms
 
@@ -3121,6 +3235,17 @@ error is [CE6001](error-catalog.md#ce6001) or [CE6002](error-catalog.md#ce6002),
 hole, or bind the expression to a local first. When the literal starts with the hole
 (`"{t.pad_left(3, "*")}"`), the error is [CE2026](error-catalog.md#ce2026) (unterminated interpolation), with no
 help line.
+
+A brace in a quoted literal inside a hole is a limit. The scanner that finds a hole counts
+the braces and does not read the quotes. Thus `"{a'{'}"` and `"{a'}'}"` are
+[CE6010](error-catalog.md#ce6010), and a single-quoted string with a brace (`"{'}'.len()}"`)
+is CE6010 too. Write the byte as an escape: `a'\x7b'` for `{` and `a'\x7d'` for `}`.
+
+```sushi
+fn main() i32:
+    println("{a'\x7b'} {a'\x7d'}")      # 123 125
+    return 0
+```
 
 ## Constants
 

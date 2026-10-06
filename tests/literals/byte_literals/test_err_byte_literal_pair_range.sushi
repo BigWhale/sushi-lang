@@ -1,0 +1,7 @@
+# A number literal beside a byte literal takes u8, and 300 does not fit a u8.
+# EXPECT_ERROR_CODE: CE2073
+
+fn main() i32:
+    let u8 x = a'a' + 300
+    println(x)
+    return 0

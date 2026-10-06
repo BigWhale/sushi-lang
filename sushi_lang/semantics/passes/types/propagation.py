@@ -40,6 +40,11 @@ def is_bare_numeric_literal(expr: 'Expr') -> bool:
     return isinstance(expr, (IntLit, FloatLit)) and expr.resolved_type is None
 
 
+def is_byte_literal(expr: 'Expr') -> bool:
+    """A byte literal (`a'x'`): an integer literal that defaults to u8."""
+    return isinstance(expr, IntLit) and expr.byte_spelling is not None
+
+
 def unwrap_type_preserving_unary(expr: 'Expr') -> 'Expr':
     """The value under any run of unary operators that keep their operand's type."""
     while isinstance(expr, UnaryOp) and expr.op in _TYPE_PRESERVING_UNARY:
@@ -55,9 +60,20 @@ def type_literal_from_sibling(validator: 'TypeValidator', first: 'Expr', second:
     `min` / `max`): bareness is read THROUGH the unary operators that keep their operand's
     type, two bare literals keep the default, and the operand node -- not the literal
     under it -- is propagated, so a negated literal that does not fit is CE2073.
+
+    One exception for two bare literals: when exactly one is a byte literal (`a'x'`), the
+    other takes its u8, in either order, so `a'a' + 1` is a u8 and not a width mismatch.
     """
-    first_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(first))
-    second_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(second))
+    first_lit = unwrap_type_preserving_unary(first)
+    second_lit = unwrap_type_preserving_unary(second)
+    first_bare = is_bare_numeric_literal(first_lit)
+    second_bare = is_bare_numeric_literal(second_lit)
+    if first_bare and second_bare:
+        first_byte, second_byte = is_byte_literal(first_lit), is_byte_literal(second_lit)
+        if first_byte != second_byte:
+            propagate_types_to_value(validator, second if first_byte else first,
+                                     BuiltinType.U8)
+        return
     if first_bare == second_bare:
         return
     literal, sibling = (first, second) if first_bare else (second, first)
@@ -105,8 +121,11 @@ def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
         value = sign * int(lit.value)
         radix = 10 if sign == -1 else lit.radix
         if not int_literal_fits(value, radix, expected):
+            # A byte literal is named as written; a negated one by its value, because
+            # the sign is in the value.
+            spelling = lit.byte_spelling if sign == 1 else None
             er.emit(validator.reporter, er.ERR.CE2073, lit.loc,
-                    literal=str(value), type=expected.value)
+                    literal=spelling or str(value), type=expected.value)
         # Stamp even on failure: CE2073 is authoritative and compilation aborts, but
         # stamping keeps downstream type inference consistent (no secondary CE2049).
         lit.resolved_type = expected

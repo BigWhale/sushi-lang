@@ -1,0 +1,22 @@
+# Byte literal arms on a u8 scrutinee that `s[i]` answers: a printable character, an
+# escape, and a byte from 128 to 255 in its `\xNN` form, with a trailing `_`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "other\nslash\ndot\nnewline\nhigh\n"
+use <collections/strings>
+
+fn kind(u8 b) string:
+    match b:
+        a'/' -> return "slash"
+        a'.' -> return "dot"
+        a'\n' -> return "newline"
+        a'\xff' -> return "high"
+        _ -> return "other"
+
+fn main() i32:
+    let string s = "x/.\n"
+    foreach(i in 0..s.size()):
+        println(kind(s[i]))
+    let u8[] tail = from([a'\xff'])
+    println(kind(tail[0]))
+    return 0
