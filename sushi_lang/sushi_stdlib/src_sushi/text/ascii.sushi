@@ -92,7 +92,7 @@ This is the set of C `isspace` in the C locale.
   ```
 :##
 extend u8 is_ascii_space() bool:
-    return false
+    return (self >= a'\t' and self <= a'\r') or self == a' '
 
 ##:
 Maps an ASCII uppercase letter to its lowercase letter.

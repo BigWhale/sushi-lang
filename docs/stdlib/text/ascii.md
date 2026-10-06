@@ -145,7 +145,23 @@ fn main() i32:
 
 ### `is_ascii_space() bool`
 
-TODO(worker)
+Answers true when the byte is ASCII white space.
+
+The set is the C `isspace` set in the C locale: 9 (`a'\t'`), 10 (`a'\n'`), 11 (`a'\x0b'`,
+vertical tab), 12 (`a'\x0c'`, form feed), 13 (`a'\r'`) and 32 (`a' '`). Every other byte gives
+false. A byte from 128 to 255 gives false, so `a'\xa0'` (a no-break space in Latin-1) is not
+white space.
+
+```sushi
+use <text/ascii>
+
+fn main() i32:
+    println(a' '.is_ascii_space())       # true
+    println(a'\t'.is_ascii_space())      # true
+    println(a'_'.is_ascii_space())       # false
+    println(a'\xa0'.is_ascii_space())    # false
+    return 0
+```
 
 ### `to_ascii_lower() u8`
 

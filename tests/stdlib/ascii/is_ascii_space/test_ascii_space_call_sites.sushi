@@ -1,0 +1,32 @@
+# is_ascii_space in the positions that a user writes.
+# The receiver is a u8 local, a string byte, a byte literal and an array element.
+# A byte from 128 to 255 is never white space.
+# EXPECT_STDOUT_EXACT: "true\n2\ntrue\nfalse\nnewline is space\nzero is not space\ntrue\nfalse\ntrue\ntrue\nfalse\nfalse\nfalse\n"
+
+use <text/ascii>
+use <collections/strings>
+
+fn main() i32:
+    let u8 tab = 9
+    println(tab.is_ascii_space())
+    let string s = "a b\tc"
+    let i32 n = 0
+    let i32 i = 0
+    while (i < s.size()):
+        if (s[i].is_ascii_space()):
+            n := n + 1
+        i := i + 1
+    println(n)
+    println(a' '.is_ascii_space())
+    println(a'x'.is_ascii_space())
+    let u8 c = a'\n'
+    if (c.is_ascii_space() and not a'q'.is_ascii_space()):
+        println("newline is space")
+    if (not a'0'.is_ascii_space()):
+        println("zero is not space")
+    let u8[] bytes = from([a'\r', a'z', a'\x0b', a'\x0c', a'\x00'])
+    foreach(b in bytes.iter()):
+        println(b.is_ascii_space())
+    println(a'\xe9'.is_ascii_space())
+    println(a'\xa0'.is_ascii_space())
+    return 0
