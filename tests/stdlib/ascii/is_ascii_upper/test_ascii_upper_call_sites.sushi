@@ -1,0 +1,41 @@
+# is_ascii_upper in the positions that a user writes.
+# The receivers are a u8 local, a string byte, a byte literal and an array element.
+# The call is also an operand of `and` and `not`.
+# A byte from 128 to 255 is never an uppercase letter.
+# EXPECT_STDOUT_EXACT: "true\nfalse\n1 3\ntrue\nfalse\nmixed\n3\nfalse\nfalse\n"
+# EXPECT_NO_LEAKS: true
+use <text/ascii>
+use <collections/strings>
+
+fn main() i32:
+    let u8 c = a'M'
+    let u8 d = 109
+    println(c.is_ascii_upper())
+    println(d.is_ascii_upper())
+
+    let string s = "aBcDe"
+    let string found = ""
+    foreach(i in 0..s.size()):
+        if (s[i].is_ascii_upper()):
+            if (found == ""):
+                found := "{i}"
+            else:
+                found := "{found} {i}"
+    println(found)
+
+    println(a'Z'.is_ascii_upper())
+    println(a'z'.is_ascii_upper())
+
+    if (c.is_ascii_upper() and not d.is_ascii_upper()):
+        println("mixed")
+
+    let u8[] word = from([a'S', a'u', a'S', a'h', a'I'])
+    let i32 upper = 0
+    foreach(b in word.iter()):
+        if (b.is_ascii_upper()):
+            upper := upper + 1
+    println(upper)
+
+    println(a'\xc9'.is_ascii_upper())
+    println(a'\xe9'.is_ascii_upper())
+    return 0

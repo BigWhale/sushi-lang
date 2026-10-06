@@ -53,7 +53,20 @@ fn main() i32:
 
 ### `is_ascii_upper() bool`
 
-TODO(worker)
+Answers `true` when the byte is an ASCII uppercase letter.
+
+The set is the bytes 65 to 90, `a'A'` to `a'Z'`. Every other byte gives `false`, a byte
+from 128 to 255 too.
+
+```sushi
+use <text/ascii>
+
+fn main() i32:
+    println(a'Q'.is_ascii_upper())      # true
+    println(a'q'.is_ascii_upper())      # false
+    println(a'\xc9'.is_ascii_upper())   # false
+    return 0
+```
 
 ### `is_ascii_lower() bool`
 

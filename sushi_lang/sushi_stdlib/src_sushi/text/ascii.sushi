@@ -29,7 +29,7 @@ Tests if the byte is an ASCII uppercase letter, `a'A'` to `a'Z'` (65-90).
   ```
 :##
 extend u8 is_ascii_upper() bool:
-    return false
+    return self >= a'A' and self <= a'Z'
 
 ##:
 Tests if the byte is an ASCII lowercase letter, `a'a'` to `a'z'` (97-122).

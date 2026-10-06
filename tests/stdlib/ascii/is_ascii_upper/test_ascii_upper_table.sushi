@@ -1,0 +1,21 @@
+# is_ascii_upper over all 256 bytes.
+# Line 1 shows each byte that is an uppercase letter.
+# Line 2 shows the count of these bytes.
+# EXPECT_STDOUT_EXACT: "65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90\n26\n"
+# EXPECT_NO_LEAKS: true
+use <text/ascii>
+
+fn main() i32:
+    let string line = ""
+    let i32 count = 0
+    foreach(i in 0..256):
+        let u8 b = i as u8
+        if (b.is_ascii_upper()):
+            if (count == 0):
+                line := "{b}"
+            else:
+                line := "{line} {b}"
+            count := count + 1
+    println(line)
+    println(count)
+    return 0
