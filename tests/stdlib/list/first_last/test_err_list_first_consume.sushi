@@ -1,0 +1,17 @@
+# `first()` on a List reads out of storage the list still owns, as `get()` does.
+# A consuming use of the answer is refused; the escape is `.clone()`.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+fn eat(nom string s) ~:
+    println(s)
+
+fn f(List@(string) words) ~ | StdError:
+    eat(nom words.first().or_err(nom StdError.Error)??)
+    return Result.Ok(~)
+
+fn main() i32:
+    let List@(string) words = List.new()
+    words.push("a")
+    let Result@(~, StdError) r = f(words)
+    if (r.is_ok()):
+        println("done")
+    return 0

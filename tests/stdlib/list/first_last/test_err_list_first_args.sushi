@@ -1,0 +1,7 @@
+# `first()` on a List takes no arguments; the index is what the method is.
+# EXPECT_ERROR_CODES_EXACT: CE2009
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    println(xs.first(1).realise(-1))
+    return 0

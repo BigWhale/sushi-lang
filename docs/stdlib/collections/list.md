@@ -109,7 +109,41 @@ match list.pop():
 
 ### `.first() -> Maybe@(T)` and `.last() -> Maybe@(T)`
 
-TODO(worker)
+`.first()` gives the element at index 0. `.last()` gives the element at index `len() - 1`.
+Each method is `.get()` with a fixed index, and it obeys the same rules:
+
+- On an empty list, each method gives `Maybe.None()`.
+- On a list with one element, `.first()` and `.last()` give the same element.
+- The list keeps the element. The value in the `Some` is a BORROW of the element, not a
+  copy. You can read it, but you cannot consume it
+  ([CE2411](../../error-catalog.md#ce2411)), and `match nom` on the answer is refused
+  ([CE2411](../../error-catalog.md#ce2411)). A `nom` binding in a plain `match` is refused
+  ([CE2432](../../error-catalog.md#ce2432)). Use `.clone()` to get an independent value.
+- A `let` bound from the answer (`let string s = names.first().or_err(nom e)??`) borrows
+  from the list. While the binding lives, you cannot change the list
+  ([CE2412](../../error-catalog.md#ce2412)).
+- Each method takes no argument ([CE2009](../../error-catalog.md#ce2009)).
+
+`.first()` and `.last()` read the list when you call them. After a `push` or a `pop`, they
+give the new first and last elements.
+
+```sushi
+fn main() i32:
+    let List@(string) names = List.new()
+    println(names.first().realise("none"))   # none
+    names.push("Arthur")
+    names.push("Ford")
+    names.push("Zaphod")
+    println(names.first().realise("none"))   # Arthur
+    println(names.last().realise("none"))    # Zaphod
+    match names.last():
+        Maybe.Some(n) -> println("last: {n}")    # last: Zaphod
+        Maybe.None() -> println("empty")
+    names.pop()
+    println(names.last().realise("none"))    # Ford
+    println(names.len())                     # 2
+    return 0
+```
 
 ### `.contains(T value) -> bool` and `.index_of(T value) -> Maybe@(i32)`
 

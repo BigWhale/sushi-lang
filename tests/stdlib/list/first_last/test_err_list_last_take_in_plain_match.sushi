@@ -1,0 +1,13 @@
+# A plain `match` on the answer of `last()` on a List only borrows it, as for `get()`,
+# so a `nom` payload binding cannot take the value.
+# EXPECT_ERROR_CODES_EXACT: CE2432
+fn eat(nom string s) ~:
+    println(s)
+
+fn main() i32:
+    let List@(string) words = List.new()
+    words.push("a")
+    match words.last():
+        Maybe.Some(nom s) -> eat(nom s)
+        Maybe.None() -> println("none")
+    return 0

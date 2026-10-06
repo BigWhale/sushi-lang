@@ -18,6 +18,7 @@ LIST_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
     "new": 0, "with_capacity": 1,
     "len": 0, "capacity": 0, "is_empty": 0,
     "push": 1, "pop": 0, "get": 1, "insert": 2, "remove": 1,
+    "first": 0, "last": 0,
     "clear": 0, "reserve": 1, "shrink_to_fit": 0,
     "destroy": 0, "free": 0, "debug": 0, "iter": 0, "clone": 0,
     "contains": 1, "index_of": 1, "index_of_from": 2,

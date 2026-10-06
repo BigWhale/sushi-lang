@@ -1,0 +1,37 @@
+# `first()` and `last()` on a `List@(i32)`: the element at index 0, and the element at
+# len - 1, each as `Maybe@(T)`. One element is both the first and the last. After a
+# `push` and a `pop`, `last()` follows the new end. Both are reads: the list keeps
+# every element.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "10\n30\n7\n7\n40\n10\n30\n3\n10\n10\nnone\n"
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(10)
+    xs.push(20)
+    xs.push(30)
+    println(xs.first().realise(-1))
+    println(xs.last().realise(-1))
+
+    let List@(i32) one = List.new()
+    one.push(7)
+    println(one.first().realise(-1))
+    println(one.last().realise(-1))
+
+    xs.push(40)
+    println(xs.last().realise(-1))
+    println(xs.first().realise(-1))
+    xs.pop()
+    println(xs.last().realise(-1))
+    println(xs.len())
+
+    xs.pop()
+    xs.pop()
+    println(xs.first().realise(-1))
+    println(xs.last().realise(-1))
+
+    xs.pop()
+    match xs.last():
+        Maybe.Some(v) -> println(v)
+        Maybe.None() -> println("none")
+    return 0

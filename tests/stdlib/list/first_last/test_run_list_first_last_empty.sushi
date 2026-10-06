@@ -1,0 +1,26 @@
+# An empty list has no first and no last element, so both answer `Maybe.None()`, for a
+# plain and an owning element type. A list that a `pop` empties is empty too.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\ntrue\n-1\nempty\nnone\ntrue\ntrue\n"
+fn main() i32:
+    let List@(i32) ints = List.new()
+    println("{ints.first().is_none()}")
+    println("{ints.last().is_none()}")
+
+    let List@(string) words = List.new()
+    println("{words.first().is_none()}")
+    println("{words.last().is_none()}")
+
+    println(ints.last().realise(-1))
+    println(words.first().realise("empty"))
+
+    match words.last():
+        Maybe.Some(w) -> println(w)
+        Maybe.None() -> println("none")
+
+    words.push("only")
+    words.pop()
+    println("{words.first().is_none()}")
+    println("{words.last().is_none()}")
+    return 0

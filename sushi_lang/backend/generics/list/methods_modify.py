@@ -1,6 +1,6 @@
-"""List<T> modification methods: push(), pop(), get(), clear(), insert(), remove()."""
+"""List<T> modification methods: push(), pop(), get(), first(), last(), clear(), insert(), remove()."""
 
-from typing import Any
+from typing import Any, Callable
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 
@@ -102,6 +102,30 @@ def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir
 
 def emit_list_get(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
     """Emit LLVM IR for list.get(index) - safe element access."""
+    return _emit_list_view(codegen, list_ptr, list_type,
+                           lambda _len: codegen.expressions.emit_expr(expr.args[0]))
+
+
+def emit_list_first(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
+    """Emit LLVM IR for list.first() - `get(0)`."""
+    return _emit_list_view(codegen, list_ptr, list_type,
+                           lambda _len: ir.Constant(codegen.types.i32, 0))
+
+
+def emit_list_last(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
+    """Emit LLVM IR for list.last() - `get(len() - 1)`.
+
+    An empty list gives the index -1, which the bounds check turns into `Maybe.None()`.
+    """
+    return _emit_list_view(
+        codegen, list_ptr, list_type,
+        lambda length: codegen.builder.sub(length, ir.Constant(codegen.types.i32, 1),
+                                           name="last_index"))
+
+
+def _emit_list_view(codegen: Any, list_ptr: ir.Value, list_type: StructType,
+                    index_of: Callable[[ir.Value], ir.Value]) -> ir.Value:
+    """The element at `index_of(len)` as `Maybe@(T)`, a borrowed view; None out of range."""
     from sushi_lang.backend import gep_utils
 
     element_type = extract_element_type(list_type, codegen)
@@ -114,7 +138,7 @@ def emit_list_get(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Struct
     current_len = codegen.builder.load(len_ptr, name="current_len")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    index_value = codegen.expressions.emit_expr(expr.args[0])
+    index_value = index_of(current_len)
 
     def read_element() -> ir.Value:
         element_ptr = gep_utils.gep_array_element(codegen, data_ptr, index_value, "element_ptr")

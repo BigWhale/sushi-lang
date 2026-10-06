@@ -1,0 +1,16 @@
+# A `let` bound from `first()` on a List borrows from the list, as one bound from `get()`
+# does, so the list cannot change while the binding lives.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+fn f() ~ | StdError:
+    let List@(string) words = List.new()
+    words.push("a")
+    let string head = words.first().or_err(nom StdError.Error)??
+    words.push("b")
+    println(head)
+    return Result.Ok(~)
+
+fn main() i32:
+    let Result@(~, StdError) r = f()
+    if (r.is_ok()):
+        println("done")
+    return 0

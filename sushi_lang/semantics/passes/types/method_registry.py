@@ -425,7 +425,7 @@ class ListMethodInferrer:
         if is_builtin_list_method(self.method_name):
             element_type = parse_list_types(self.receiver_type, self.validator)
             if element_type is not None:
-                if self.method_name in ("get", "pop", "remove"):
+                if self.method_name in ("get", "first", "last", "pop", "remove"):
                     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
                     return ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
                 elif self.method_name in ("index_of", "index_of_from"):
