@@ -1,0 +1,68 @@
+# `StringBuilder` collects pieces and gives one string. A new builder holds no byte and
+# gives "". `size()` counts BYTES and the string's `len()` counts characters. An empty
+# piece appends nothing. `push_byte` appends one byte, so two bytes of one UTF-8
+# character make that character. 10000 pieces `"{i},"` hold 38890 digits and 10000
+# commas.
+# EXPECT_STDOUT_EXACT: "0 true\n[] 0 0\n15 false\nMostly Harmless\n48890 false\n0,1,2,3,4,5,6,7,8,9,\n9996,9997,9998,9999,\nab\t! 4\né 2 1\n17 12 héllo wörld😀\n0 true\nab 2 false\n0 true []\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn main() i32:
+    let StringBuilder empty = StringBuilder.new()
+    println("{empty.size()} {empty.is_empty()}")
+    let string e = empty.finish()
+    println("[{e}] {e.size()} {e.len()}")
+
+    let StringBuilder one = StringBuilder.new()
+    one.push("Mostly Harmless")
+    println("{one.size()} {one.is_empty()}")
+    println(one.finish())
+
+    let StringBuilder many = StringBuilder.new()
+    foreach(i in 0..10000):
+        many.push("{i},")
+    println("{many.size()} {many.is_empty()}")
+    let string all = many.finish()
+    println(all.ss(0, 20))
+    println(all.ss(all.len() - 20, 20))
+
+    let StringBuilder bytes = StringBuilder.new()
+    bytes.push_byte(a'a')
+    bytes.push_byte(a'b')
+    bytes.push_byte(a'\t')
+    bytes.push_byte(a'!')
+    let string b = bytes.finish()
+    println("{b} {b.size()}")
+
+    let StringBuilder eacute = StringBuilder.new()
+    eacute.push_byte(a'\xc3')
+    eacute.push_byte(a'\xa9')
+    let string ea = eacute.finish()
+    println("{ea} {ea.size()} {ea.len()}")
+
+    let StringBuilder utf = StringBuilder.new()
+    utf.push("héllo")
+    utf.push(" ")
+    utf.push("wörld😀")
+    let i32 utf_size = utf.size()
+    let string u = utf.finish()
+    println("{utf_size} {u.len()} {u}")
+
+    let StringBuilder blank = StringBuilder.new()
+    blank.push("")
+    println("{blank.size()} {blank.is_empty()}")
+    blank.push("a")
+    blank.push("")
+    blank.push("b")
+    let i32 blank_size = blank.size()
+    let bool blank_empty = blank.is_empty()
+    println("{blank.finish()} {blank_size} {blank_empty}")
+
+    let StringBuilder nothing = StringBuilder.new()
+    nothing.push("")
+    nothing.push("")
+    let i32 nothing_size = nothing.size()
+    let bool nothing_empty = nothing.is_empty()
+    println("{nothing_size} {nothing_empty} [{nothing.finish()}]")
+    return 0

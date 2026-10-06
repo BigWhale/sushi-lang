@@ -1,0 +1,72 @@
+# `StringBuilder` at each call site: a builder passed `poke` to a helper that pushes, a
+# builder as a struct field pushed through `poke self` and taken with `nom`, pieces that
+# are temporaries, parameters and literals, a `finish` result used after the builder is
+# gone, and a builder dropped with no `finish`.
+# EXPECT_STDOUT_EXACT: "Hello, Arthur! Hello, Ford!\n2 8\none\ntwo\n\n01234\n6 owned 3 Zaphod 42 x\nnothing leaked\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+struct Report:
+    StringBuilder out
+    i32 count
+
+extend Report line(poke self, string text) ~:
+    self.out.push(text)
+    self.out.push_byte(a'\n')
+    self.count := self.count + 1
+
+fn greet(poke StringBuilder sb, string name) ~:
+    sb.push("Hello, ")
+    sb.push(name)
+    sb.push_byte(a'!')
+
+fn digits(i32 n) string:
+    let StringBuilder sb = StringBuilder.new()
+    foreach(i in 0..n):
+        sb.push("{i}")
+    return sb.finish()
+
+fn pieces(string param, i32 n) string:
+    let StringBuilder sb = StringBuilder.new()
+    sb.push("{n * 2}")
+    sb.push(" ")
+    sb.push("own".concat("ed"))
+    sb.push(" ")
+    sb.push("{param.len()}")
+    sb.push(" ")
+    sb.push(param.ss(0, 0))
+    sb.push("Zaphod")
+    sb.push(" ")
+    sb.push("{40 + 2} ")
+    sb.push(param.ss(0, 1))
+    return sb.finish()
+
+fn unfinished() ~:
+    let StringBuilder sb = StringBuilder.new()
+    sb.push("lost ")
+    sb.push("{42}")
+    sb.push_byte(a'?')
+
+fn main() i32:
+    let StringBuilder sb = StringBuilder.new()
+    greet(poke sb, "Arthur")
+    let string name = "Ford"
+    sb.push(" ")
+    greet(poke sb, name)
+    println(sb.finish())
+
+    let Report r = Report(StringBuilder.new(), 0)
+    r.line("one")
+    r.line("two")
+    println("{r.count} {r.out.size()}")
+    let StringBuilder taken = nom r.out
+    println(taken.finish())
+
+    let string kept = digits(5)
+    println(kept)
+    println(pieces("xyz", 3))
+
+    unfinished()
+    println("nothing leaked")
+    return 0

@@ -918,7 +918,7 @@ Makes an empty builder.
   ```
 :##
 extend StringBuilder static new() StringBuilder:
-    return StringBuilder(from([0]))
+    return StringBuilder(from([]))
 
 ##:
 Appends the bytes of a string.
@@ -932,7 +932,7 @@ Appends the bytes of a string.
   ```
 :##
 extend StringBuilder push(poke self, string s) ~:
-    self.bytes.truncate(0)
+    self.bytes.extend_str(s)
 
 ##:
 Appends one byte.
@@ -946,7 +946,7 @@ Appends one byte.
   ```
 :##
 extend StringBuilder push_byte(poke self, u8 b) ~:
-    self.bytes.truncate(0)
+    self.bytes.push(b)
 
 ##:
 Counts the bytes collected so far.
@@ -960,7 +960,7 @@ Counts the bytes collected so far.
   ```
 :##
 extend StringBuilder size() i32:
-    return -1
+    return self.bytes.len()
 
 ##:
 Tests if the builder holds no byte.
@@ -972,7 +972,7 @@ Tests if the builder holds no byte.
   ```
 :##
 extend StringBuilder is_empty() bool:
-    return false
+    return self.bytes.len() == 0
 
 ##:
 Makes the string, and spends the builder.
@@ -989,4 +989,4 @@ The string takes the buffer: no byte is copied.
   ```
 :##
 extend StringBuilder finish(nom self) string:
-    return ""
+    return string.from_bytes(nom self.bytes)

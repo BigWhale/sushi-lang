@@ -1,0 +1,13 @@
+# `push` changes its receiver, so a builder parameter with no `poke` cannot take it: that
+# is a write through a borrow.
+# EXPECT_ERROR_CODES_EXACT: CE2422
+use <collections/strings>
+
+fn add(StringBuilder sb) ~:
+    sb.push("Mostly Harmless")
+
+fn main() i32:
+    let StringBuilder sb = StringBuilder.new()
+    add(sb)
+    println(sb.finish())
+    return 0

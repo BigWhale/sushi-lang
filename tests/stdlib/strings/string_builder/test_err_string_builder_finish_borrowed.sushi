@@ -1,0 +1,13 @@
+# `finish` takes `nom self`, so a borrowed builder cannot call it: that is the consuming
+# use of a borrow.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+use <collections/strings>
+
+fn done(StringBuilder sb) string:
+    return sb.finish()
+
+fn main() i32:
+    let StringBuilder sb = StringBuilder.new()
+    sb.push("Mostly Harmless")
+    println(done(sb))
+    return 0

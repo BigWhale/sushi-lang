@@ -802,7 +802,62 @@ Output:
 
 ## StringBuilder
 
-TODO(worker)
+A `StringBuilder` collects many pieces of text and makes one string at the end. Each
+`push` copies its piece one time, into one byte buffer. `finish` gives the string with the
+buffer itself, so the end copies no byte. No byte is checked for UTF-8.
+
+```sushi
+public struct StringBuilder:
+    u8[] bytes
+```
+
+The field `bytes` is readable, because a struct is public or private whole. It is not a
+contract: use the methods.
+
+| Method | Signature | What it does |
+|---|---|---|
+| `new` | `extend StringBuilder static new() StringBuilder` | Makes an empty builder. |
+| `push` | `extend StringBuilder push(poke self, string s) ~` | Appends the bytes of `s`. The string is a borrow: it stays yours. |
+| `push_byte` | `extend StringBuilder push_byte(poke self, u8 b) ~` | Appends one byte. |
+| `size` | `extend StringBuilder size() i32` | Gives the count of BYTES so far. |
+| `is_empty` | `extend StringBuilder is_empty() bool` | Gives true when the builder holds no byte. An empty piece appends no byte. |
+| `finish` | `extend StringBuilder finish(nom self) string` | Gives the string and spends the builder. |
+
+`size()` counts bytes, and the `len()` of the result counts characters: `"é"` is 2 bytes
+and 1 character. `finish` takes `nom self`, so a use of the builder after `finish` is
+**[CE2435](../../error-catalog.md#ce2435)**. A helper that pushes takes the builder as
+`poke StringBuilder`. A builder that you drop with no `finish` frees its buffer.
+
+```sushi
+use <collections/strings>
+
+fn label(poke StringBuilder sb, string key, i32 value) ~:
+    sb.push(key)
+    sb.push("=")
+    sb.push("{value}")
+    sb.push_byte(a';')
+
+fn main() i32:
+    let StringBuilder sb = StringBuilder.new()
+    label(poke sb, "answer", 42)
+    label(poke sb, "towels", 1)
+    println("{sb.size()} {sb.is_empty()}")
+    let string text = sb.finish()
+    println(text)
+    return 0
+```
+
+Output:
+
+```text
+19 false
+answer=42;towels=1;
+```
+
+When one local string grows in one loop, `s := s.concat(x)` is enough: the compiler appends
+to the buffer of `s` in place (see [`.concat`](#concatstring-other---string)). Use a
+`StringBuilder` when the pieces come from more than one function or from a struct
+field, when you append single bytes, or when the form is not exactly `s := s.concat(x)`.
 
 ## Best Practices
 

@@ -1,0 +1,11 @@
+# `finish` spends the builder, so a later use of it is the moved-value error.
+# EXPECT_ERROR_CODES_EXACT: CE2435
+use <collections/strings>
+
+fn main() i32:
+    let StringBuilder sb = StringBuilder.new()
+    sb.push("Mostly Harmless")
+    let string s = sb.finish()
+    sb.push("!")
+    println(s)
+    return 0
