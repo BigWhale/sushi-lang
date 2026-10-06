@@ -1,0 +1,17 @@
+# An import of <collections/strings> behind an alias enables the built-in string
+# methods and the methods of the Sushi half, and the alias reaches StringBuilder.
+# EXPECT_STDOUT_EXACT: "MOSTLY\ntrue\n2\nff\nHarmless\n"
+# EXPECT_NO_LEAKS
+use <collections/strings> as cs
+
+fn main() i32:
+    let string text = "mostly"
+    println(text.upper())
+    println(text.starts_with("m"))
+    println("a\nb".lines().len())
+    let u8 n = 255
+    println(n.to_hex())
+    let cs.StringBuilder sb = cs.StringBuilder.new()
+    sb.push("Harmless")
+    println(sb.finish())
+    return 0

@@ -74,6 +74,16 @@ SOURCE_STDLIB_MODULES.update({
 })
 
 
+# The source modules that ALSO enable built-in methods from the stdlib bitcode: their
+# import is a method interface as well as a unit, also behind an alias.
+BUILTIN_METHOD_MODULES = frozenset({"collections/strings"})
+
+
+def enables_builtin_methods(module_path: str) -> bool:
+    """True if `use <module_path>` enables built-in methods, as well as any names."""
+    return module_path in BUILTIN_METHOD_MODULES
+
+
 def is_source_stdlib_module(module_path: str) -> bool:
     """True if `use <module_path>` resolves to a bundled Sushi-source module."""
     return module_path in SOURCE_STDLIB_MODULES

@@ -205,6 +205,8 @@ def _scope_of(unit_name: str, flat: Iterable[Tuple[UseStatement, Provider]],
     An ALIASED import puts no name here, but a method interface it reaches is still
     this unit's import: the methods it enables have no name for the alias to gate.
     """
+    from sushi_lang.semantics.stdlib_registry import enables_builtin_methods
+
     scoped_units: list[str] = []
     modules: list[str] = []
     generics: list[str] = []
@@ -227,7 +229,8 @@ def _scope_of(unit_name: str, flat: Iterable[Tuple[UseStatement, Provider]],
                 _binary_library_units(provider.origin, library_registry))
     for provider in aliased:
         scoped_units.extend(reached.origin for reached in provider.reaches()
-                            if isinstance(reached, MethodInterfaceNamespace))
+                            if isinstance(reached, MethodInterfaceNamespace)
+                            or enables_builtin_methods(reached.origin))
     return UnitScope(unit=unit_name, units=tuple(dict.fromkeys(scoped_units)),
                      modules=tuple(dict.fromkeys(modules)),
                      generics=tuple(dict.fromkeys(generics)), everything=False)
