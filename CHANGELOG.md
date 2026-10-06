@@ -6,6 +6,37 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Added
 
+- **The Sushi half of `<collections/strings>`.** The module now has two halves: the
+  built-in methods stay in the stdlib bitcode, and new methods are written in Sushi
+  (`src_sushi/collections/strings.sushi`). One `use <collections/strings>` loads both.
+  The new methods are bare and total:
+  - `s.parse_u8(base)`, `parse_u16`, `parse_u32`, `parse_u64`, `parse_i32`, `parse_i64`:
+    a strict parse in a base from 2 to 36. The text holds the digits of the base and
+    nothing else: no space, no `+`, no `0x` prefix, no `_`, not empty. A signed form
+    takes one leading `-`. An overflow, a bad base and every other fault give
+    `Maybe.None()`. `to_i32()` stays the lenient decimal parse.
+  - `s.trim_start_matches(t)`, `s.trim_end_matches(t)`: remove every repeat of `t` at
+    that end.
+  - `s.lines()`: splits at `\n` and removes a `\r` immediately before it; a final `\n`
+    does not start an empty line. `s.split_whitespace()`: splits at each run of the
+    bytes 9 to 13 and 32, with no empty token. `s.chars()`: one string for each UTF-8
+    character, by the rule of `len()`. Each answers a `string[]`.
+  - `n.to_hex()`, `n.to_hex_width(w)`, `n.to_bin()`, `n.to_bin_width(w)` on the eight
+    integer types: lower case, no leading zero, or zero padding to `w` digits. A signed
+    value gives the two's complement bits of its own width (`(-1 as i8).to_hex()` is
+    `"ff"`).
+  - `x.to_fixed(p)` on `f64` and `f32`: exactly `p` digits after the point, rounded as C
+    `printf("%.*f")` rounds.
+  - `StringBuilder`: `StringBuilder.new()`, `push(s)`, `push_byte(b)`, `size()`,
+    `is_empty()` and `finish()`, which takes the buffer with no copy.
+- **`<encoding/hex>` and `<encoding/base64>`.** `encode(u8[] data) string` and
+  `decode(string text) u8[] | E` in each module. Hex writes lower case and reads either
+  case; `HexError` is `OddLength` or `BadDigit(at)`. Base64 is RFC 4648 section 4, the
+  standard alphabet with `=` padding; `Base64Error` is `BadLength`, `BadChar(at)` or
+  `BadPadding`. Both modules export `encode` and `decode`, so a program that imports two
+  of them writes `use <encoding/base64> as b64`.
+- **`buf.extend_str(s)` on `u8[]`.** Appends the bytes of a string with one copy. Core,
+  no import. `buf.extend(s.to_bytes())` copied each string two times.
 - **String arms in a `match`.** A string literal (`"get"` or `'get'`) is a pattern in
   every position where an integer literal is one: the top of an arm, an enum payload
   (`Maybe.Some("--help") ->`), a tuple element (`("go", dir) ->`) and an `Own(...)`
@@ -46,6 +77,20 @@ All notable changes to Sushi Lang will be documented in this file.
   128 to 255 is never in a class, and the two case maps return it unchanged.
   `is_ascii_space` is true for the six bytes of C `isspace`: 9, 10, 11 (VT), 12 (FF), 13
   and 32. Every method is bare: a call gives the value, with no `??`.
+
+### Changed
+
+- **`sep.join(parts)` takes a `List@(string)`** as well as a `string[]`, with the same
+  answer. A `List` of another element type is still `CE2006`.
+- **A bulk array append grows geometrically.** `extend`, `extend_range` and `extend_str`
+  grow the capacity to at least two times its size when the elements do not fit, so a
+  sequence of appends takes linear time. They grew to the exact length before.
+
+### Fixed
+
+- **The unary minus on a float flips the sign bit.** `-x` gave `+0.0` for `x` = `0.0`,
+  and the literal `-0.0` was positive zero. It is negative zero now, for `f64` and `f32`.
+
 
 ## [0.15.0] - 2026-10-05
 

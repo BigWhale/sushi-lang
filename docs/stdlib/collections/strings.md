@@ -52,6 +52,14 @@ provides these methods (with `is_empty` and `clone`, which need no import):
 - **Conversion**: to_bytes, to_i32, to_i64, to_f64
 - **Concatenation**: concat
 
+These are written in Sushi (see [Methods written in Sushi](#methods-written-in-sushi)):
+- **Strict parses**: parse_u8, parse_u16, parse_u32, parse_u64, parse_i32, parse_i64
+- **Trims of a given text**: trim_start_matches, trim_end_matches
+- **Lines, tokens and characters**: lines, split_whitespace, chars
+- **Number formatting** (on the integer and float types): to_hex, to_hex_width, to_bin,
+  to_bin_width, to_fixed
+- **Building**: the `StringBuilder` type
+
 ## Inspection Methods
 
 ### `.len() -> i32`
