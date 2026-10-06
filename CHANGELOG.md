@@ -6,6 +6,33 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Added
 
+- **`<encoding/binary>`.** Fixed-width unsigned integers in a `u8[]` and back, as bare
+  extension methods on `u8[]`. `buf.read_u16_le(at)`, `read_u16_be`, `read_u32_le`,
+  `read_u32_be`, `read_u64_le`, `read_u64_be` answer `Maybe@(T)`: the bytes at `at`, `le`
+  with the least significant byte first, `be` with the most significant byte first, and
+  `Maybe.None()` when `at` is negative or the value does not fit. `buf.push_u16_le(v)` to
+  `push_u64_be(v)` append the bytes of `v` in that order. No alignment and no padding; a
+  signed value or a float goes through its bits (`v as u32`, `f.to_bits()`).
+- **`index_of_from(v, start)` on `T[]`, `T[N]` and `List@(T)`.** The first index at or
+  after `start` where the element equals `v`, or `Maybe.None()`. A negative `start` is 0;
+  a `start` at or past the end gives `Maybe.None()`. `List@(T)` also gets `contains(v)`
+  and `index_of(v)`, with the rule of the array methods, so the three search methods are
+  on every container. An element with no equality is CE2100.
+- **`starts_with(prefix)` and `eq_range(start, other)` on `T[]` and `T[N]`.** True when
+  the first elements, or the elements from `start`, equal the elements of the other
+  array (fixed or dynamic, of the same element type). An empty prefix gives true; a range
+  that is not inside the receiver gives false; nothing traps.
+- **`first()` and `last()` on `List@(T)`.** The rule of the array methods: a borrowed view
+  of the element, or `Maybe.None()` on an empty list.
+- **`extend_back(dist, count)` on `T[]`.** Appends `count` copies of the elements that
+  start `dist` back from the end, read after the earlier appends, so a `count` larger than
+  `dist` repeats the last `dist` elements (the LZ77 back reference). The array grows one
+  time. A `dist` outside `1..len()`, or a `count` of 0 or less, appends nothing.
+- **`reverse_bits()`, `leading_zeros()` and `trailing_zeros()` on `u8`, `u16`, `u32` and
+  `u64`.** `reverse_bits` reverses all the bits of the width. The two counts answer
+  `i32`, and the width for 0. A signed value goes through its unsigned twin
+  (`(x as u32).leading_zeros()`).
+
 - **The Sushi half of `<collections/strings>`.** The module now has two halves: the
   built-in methods stay in the stdlib bitcode, and new methods are written in Sushi
   (`src_sushi/collections/strings.sushi`). One `use <collections/strings>` loads both.
@@ -80,6 +107,15 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **The needle of `contains` and `index_of` on an array takes the element type.** A bare
+  literal or a bare `Maybe.None()` is typed by the position, as a `push` element is:
+  `u8[].contains(2)` was CE2006 and now compiles.
+- **New built-in names.** A program that declares its own extension method named
+  `index_of_from`, `starts_with` or `eq_range` on an array, `extend_back` on an array,
+  `first`, `last`, `contains`, `index_of` or `index_of_from` on a `List`, or
+  `reverse_bits`, `leading_zeros` or `trailing_zeros` on an unsigned integer, now gets
+  CE2097: a built-in method wins. On a `List` the check is made for each instance the
+  program uses, as for the other `List` methods.
 - **`sep.join(parts)` takes a `List@(string)`** as well as a `string[]`, with the same
   answer. A `List` of another element type is still `CE2006`.
 - **A bulk array append grows geometrically.** `extend`, `extend_range` and `extend_str`

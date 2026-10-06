@@ -77,7 +77,7 @@ if (list.is_empty()):
 Get element at index (bounds-checked). The list keeps the element — `.get()` does not remove
 it. The value in the `Some` is a BORROW of the element, not a copy. If `T` is an owning
 type (e.g. `string`, a struct/enum holding heap data), you can read the value, but you
-cannot consume it ([CE2411](../../error-catalog.md#ce2411)), and `match nom` on it is refused ([CE2432](../../error-catalog.md#ce2432)). Take an independent
+cannot consume it ([CE2411](../../error-catalog.md#ce2411)), `match nom` on it is refused ([CE2411](../../error-catalog.md#ce2411)), and a `nom` binding in a plain `match` is refused ([CE2432](../../error-catalog.md#ce2432)). Take an independent
 value with `.clone()`:
 
 ```sushi

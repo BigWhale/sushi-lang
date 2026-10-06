@@ -1,0 +1,57 @@
+# A small binary record format that uses every method of this release: the reads and
+# pushes of <encoding/binary>, index_of_from, starts_with, eq_range, extend_back on an
+# array, first, last, contains, index_of and index_of_from on a List, and the three bit
+# methods on the unsigned integers.
+# A record is the magic "SR", a u16 LE count, then per entry a u32 BE value and a u8 tag.
+# EXPECT_STDOUT_EXACT: "magic=true\nhead=true\ncount=3\nentry 0: 3735928559 tag 7\nentry 1: 16 tag 9\nentry 2: 1 tag 7\nsecond tag 7 at=2\nfirst=3735928559 last=1\nhas16=true at=1 from2=2\nbits: 9 4 0 4294967295\nrun=12\ntail=1,2,1,2,1\n"
+# EXPECT_NO_LEAKS
+
+use <encoding/binary>
+
+const u8[2] MAGIC = [a'S', a'R']
+
+fn write(u32[] values, u8[] tags) u8[]:
+    let u8[] out = from([])
+    out.push(a'S')
+    out.push(a'R')
+    out.push_u16_le(values.len() as u16)
+    foreach(i in 0..values.len()):
+        out.push_u32_be(values[i])
+        out.push(tags[i])
+    return out
+
+fn main() i32:
+    let u32[] values = from([0xdeadbeef, 16, 1])
+    let u8[] tags = from([7, 9, 7])
+    let u8[] rec = write(values, tags)
+    println("magic={rec.starts_with(MAGIC)}")
+    let u8[] head = from([a'S', a'R', 3, 0])
+    println("head={rec.eq_range(0, head)}")
+    let i32 count = rec.read_u16_le(2).realise(0) as i32
+    println("count={count}")
+    let List@(u32) read_back = List.new()
+    let u8[] read_tags = from([])
+    foreach(i in 0..count):
+        let i32 at = 4 + 5 * i
+        let u32 v = rec.read_u32_be(at).realise(0)
+        let u8 t = rec[at + 4]
+        read_back.push(v)
+        read_tags.push(t)
+        println("entry {i}: {v} tag {t}")
+    let i32 again = read_tags.index_of_from(7, 1).realise(-1)
+    println("second tag 7 at={again}")
+    println("first={read_back.first().realise(0)} last={read_back.last().realise(0)}")
+    let i32 at16 = read_back.index_of(16).realise(-1)
+    let i32 from2 = read_back.index_of_from(1, 2).realise(-1)
+    println("has16={read_back.contains(16)} at={at16} from2={from2}")
+    let u32 width = 16
+    let u32 low = (0x9 as u32).reverse_bits() >> (32 - 4)
+    println("bits: {low} {width.trailing_zeros()} {(0xdeadbeef as u32).leading_zeros()} {(0 as u32).reverse_bits() + 4294967295}")
+    let u8[] run = from([a'a'])
+    run.extend_back(1, 11)
+    println("run={run.len()}")
+    let i32[] tail = from([1, 2])
+    tail.extend_back(2, 3)
+    println("tail={tail[0]},{tail[1]},{tail[2]},{tail[3]},{tail[4]}")
+    read_back.free()
+    return 0

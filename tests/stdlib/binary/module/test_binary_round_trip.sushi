@@ -1,0 +1,54 @@
+# A push and then a read at the same offset give the value back, for every width and
+# both byte orders: 0, 1, the maximum and a mixed pattern.
+# EXPECT_STDOUT_EXACT: "u16 le ok\nu16 be ok\nu32 le ok\nu32 be ok\nu64 le ok\nu64 be ok\n"
+# EXPECT_NO_LEAKS
+
+use <encoding/binary>
+
+fn check(string name, bool ok) ~:
+    if (ok):
+        println("{name} ok")
+    else:
+        println("{name} FAILED")
+
+fn main() i32:
+    let u16[4] v16 = [0, 1, 65535, 0x12a7]
+    let u32[4] v32 = [0, 1, 4294967295, 0x12a7c3e9]
+    let u64[4] v64 = [0, 1, 18446744073709551615, 0x12a7c3e9f00d5b61]
+    let u8[] le = from([])
+    let u8[] be = from([])
+    foreach(v in v16.iter()):
+        le.push_u16_le(v)
+        be.push_u16_be(v)
+    let bool ok_le = true
+    let bool ok_be = true
+    foreach(i in 0..4):
+        ok_le := ok_le and le.read_u16_le(2 * i).realise(7) == v16[i]
+        ok_be := ok_be and be.read_u16_be(2 * i).realise(7) == v16[i]
+    check("u16 le", ok_le)
+    check("u16 be", ok_be)
+    le.clear()
+    be.clear()
+    foreach(v in v32.iter()):
+        le.push_u32_le(v)
+        be.push_u32_be(v)
+    ok_le := true
+    ok_be := true
+    foreach(i in 0..4):
+        ok_le := ok_le and le.read_u32_le(4 * i).realise(7) == v32[i]
+        ok_be := ok_be and be.read_u32_be(4 * i).realise(7) == v32[i]
+    check("u32 le", ok_le)
+    check("u32 be", ok_be)
+    le.clear()
+    be.clear()
+    foreach(v in v64.iter()):
+        le.push_u64_le(v)
+        be.push_u64_be(v)
+    ok_le := true
+    ok_be := true
+    foreach(i in 0..4):
+        ok_le := ok_le and le.read_u64_le(8 * i).realise(7) == v64[i]
+        ok_be := ok_be and be.read_u64_be(8 * i).realise(7) == v64[i]
+    check("u64 le", ok_le)
+    check("u64 be", ok_be)
+    return 0

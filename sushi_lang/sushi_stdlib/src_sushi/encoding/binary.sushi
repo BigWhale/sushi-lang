@@ -56,7 +56,7 @@ Reads the 2 bytes at an offset as a little-endian `u16`, the least significant b
 - Returns: The value, or `Maybe.None()` when `at` is negative or `at + 2` is past the end.
 - Example:
   ```sushi
-  let u8[] buf = from([0; 2])
+  let u8[] buf = from([0x01, 0x02])
   println(buf.read_u16_le(0).realise(0))
   ```
 :##
@@ -72,7 +72,7 @@ Reads the 2 bytes at an offset as a big-endian `u16`, the most significant byte 
 - Returns: The value, or `Maybe.None()` when `at` is negative or `at + 2` is past the end.
 - Example:
   ```sushi
-  let u8[] buf = from([0; 2])
+  let u8[] buf = from([0x01, 0x02])
   println(buf.read_u16_be(0).realise(0))
   ```
 :##
@@ -88,7 +88,7 @@ Reads the 4 bytes at an offset as a little-endian `u32`, the least significant b
 - Returns: The value, or `Maybe.None()` when `at` is negative or `at + 4` is past the end.
 - Example:
   ```sushi
-  let u8[] buf = from([0; 4])
+  let u8[] buf = from([0x01, 0x02, 0x03, 0x04])
   println(buf.read_u32_le(0).realise(0))
   ```
 :##
@@ -104,7 +104,7 @@ Reads the 4 bytes at an offset as a big-endian `u32`, the most significant byte 
 - Returns: The value, or `Maybe.None()` when `at` is negative or `at + 4` is past the end.
 - Example:
   ```sushi
-  let u8[] buf = from([0; 4])
+  let u8[] buf = from([0x01, 0x02, 0x03, 0x04])
   println(buf.read_u32_be(0).realise(0))
   ```
 :##
@@ -120,7 +120,7 @@ Reads the 8 bytes at an offset as a little-endian `u64`, the least significant b
 - Returns: The value, or `Maybe.None()` when `at` is negative or `at + 8` is past the end.
 - Example:
   ```sushi
-  let u8[] buf = from([0; 8])
+  let u8[] buf = from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
   println(buf.read_u64_le(0).realise(0))
   ```
 :##
@@ -136,7 +136,7 @@ Reads the 8 bytes at an offset as a big-endian `u64`, the most significant byte 
 - Returns: The value, or `Maybe.None()` when `at` is negative or `at + 8` is past the end.
 - Example:
   ```sushi
-  let u8[] buf = from([0; 8])
+  let u8[] buf = from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
   println(buf.read_u64_be(0).realise(0))
   ```
 :##
