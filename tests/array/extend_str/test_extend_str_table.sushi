@@ -1,0 +1,42 @@
+# `extend_str` appends the bytes of a string to a `u8[]` in one copy. An empty string
+# appends nothing; a multi-byte UTF-8 string appends each of its bytes; many appends grow
+# the buffer as many times as it must, and no byte is lost.
+# EXPECT_STDOUT_EXACT: "[abc] 3\n[] 0\n[abc] 3\n[café] 5\n[café] 5\n[xyz!] 4\n7000 21000\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let u8[] a = from([])
+    a.extend_str("abc")
+    println("[{a.to_string()}] {a.len()}")
+
+    let u8[] b = from([])
+    b.extend_str("")
+    println("[{b.to_string()}] {b.len()}")
+    a.extend_str("")
+    println("[{a.to_string()}] {a.len()}")
+
+    let u8[] c = from([])
+    c.extend_str("café")
+    println("[{c.to_string()}] {c.len()}")
+    let u8[] d = from([])
+    d.extend_str("ca")
+    d.extend_str("fé")
+    println("[{d.to_string()}] {d.len()}")
+
+    let u8[] e = from([])
+    e.push(a'x')
+    e.extend_str("yz")
+    e.push(a'!')
+    println("[{e.to_string()}] {e.len()}")
+
+    let u8[] many = from([])
+    let i32 i = 0
+    while (i < 1000):
+        many.extend_str("0123456")
+        i := i + 1
+    let i32 sum = 0
+    foreach(x in many.iter()):
+        sum := sum + (x as i32) - 48
+    println("{many.len()} {sum}")
+    return 0

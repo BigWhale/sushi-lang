@@ -1460,7 +1460,7 @@ A range element fills the slots it spans: '0..5' is five elements and '0..=5' is
 
 **Message:** `dynamic array method {part} mismatch for '{method}': expected {expected}, got {got}`
 
-A built-in array method was called on a receiver it does not take, or with a copy source of the wrong type. `{part}` names which one is at fault: the RECEIVER when the method takes a dynamic array (`push`, `pop`, `insert`, `truncate`) or a `u8[]` alone and the value is another kind -- a fixed array cannot change its length -- and the ARGUMENT when the source of a bulk copy (`extend`, `extend_range`) is not an array of the receiver's element type.
+A built-in array method was called on a receiver it does not take, or with a copy source of the wrong type. `{part}` names which one is at fault: the RECEIVER when the method takes a dynamic array (`push`, `pop`, `insert`, `truncate`) or a `u8[]` alone and the value is another kind -- a fixed array cannot change its length -- and the ARGUMENT when the source of a bulk copy (`extend`, `extend_range`) is not an array of the receiver's element type, or the argument of `extend_str` is not a string.
 
 ### CE2026 {#ce2026}
 

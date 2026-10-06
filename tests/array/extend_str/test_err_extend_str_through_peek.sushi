@@ -1,0 +1,12 @@
+# `extend_str` writes its receiver, so a `peek u8[]` parameter does not take it.
+# EXPECT_ERROR_CODES_EXACT: CE2408
+# EXPECT_STDERR_CONTAINS: cannot modify 'b' through peek reference
+
+fn add(peek u8[] b) ~:
+    b.extend_str("x")
+
+fn main() i32:
+    let u8[] buf = from([])
+    add(peek buf)
+    println("{buf.len()}")
+    return 0

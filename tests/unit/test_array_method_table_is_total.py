@@ -37,7 +37,7 @@ from sushi_lang.semantics.passes.types.arrays import (
 # What the module carried on the day the table replaced the three lists. A count is not a
 # rule, so these are not asserted as a target -- they are the control that says the reader
 # below found something to read.
-MEASURED_NAMES = 26
+MEASURED_NAMES = 27
 MEASURED_FIXED_ARMS = 13
 
 # The six whose answer is a `Maybe@(T)` the CALLER interns (`ArrayMethodInferrer`), and

@@ -271,6 +271,21 @@ def _a_source_and_a_range(call: MethodCall, array_type: ArrayReceiver, reporter:
     _reject_a_non_index(call, 1, validator)
 
 
+def _a_string(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
+              validator: Optional['TypeValidator']) -> None:
+    """`extend_str(s)`: the source is a string, and its bytes are the elements."""
+    if validator is None:
+        return
+    validator.validate_expression(call.args[0])
+    source_type = validator.infer_expression_type(call.args[0])
+    if source_type is None:
+        return
+    source_type = deref_type(source_type)
+    if source_type != BuiltinType.STRING:
+        er.emit(reporter, er.ERR.CE2023, call.loc, part="argument", method=call.method,
+                expected=display_type(BuiltinType.STRING), got=display_type(source_type))
+
+
 def _a_range(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
              validator: Optional['TypeValidator']) -> None:
     """`s(start, end)` and `ss(start, count)`: two indices and no source."""
@@ -405,6 +420,8 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
                         arguments=_a_source),
     "extend_range": ArraySpec(3, Receiver.DYNAMIC, _answers(BuiltinType.BLANK),
                               arguments=_a_source_and_a_range),
+    "extend_str": ArraySpec(1, Receiver.BYTES, _answers_when_dynamic(BuiltinType.BLANK),
+                            arguments=_a_string),
     "s": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
     "ss": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
 }

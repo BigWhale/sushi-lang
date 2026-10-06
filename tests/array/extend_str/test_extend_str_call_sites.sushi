@@ -1,0 +1,49 @@
+# `extend_str` takes its receiver from every place that can be written: a local, a
+# `poke u8[]` parameter, and a field through `poke self`. The string is a plain borrow
+# from every source: a literal, an interpolated temporary, a parameter, and a string that
+# `string.from_bytes` builds.
+# EXPECT_STDOUT_EXACT: "local\n[a-b-42-par-hi]\n[poke]\n[field:7]\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Sink:
+    u8[] bytes
+
+extend Sink put(poke self, string s) ~:
+    self.bytes.extend_str(s)
+
+fn append_to(poke u8[] buf, string s) ~:
+    buf.extend_str(s)
+
+fn add_param(poke u8[] buf, string s) ~:
+    buf.extend_str("-")
+    buf.extend_str(s)
+
+fn main() i32:
+    let u8[] local = from([])
+    local.extend_str("local")
+    println(local.to_string())
+
+    let u8[] buf = from([])
+    buf.extend_str("[a")
+    let i32 n = 42
+    buf.extend_str("-b-")
+    buf.extend_str("{n}")
+    add_param(poke buf, "par")
+    let u8[] raw = from([a'h', a'i'])
+    let string made = string.from_bytes(nom raw)
+    buf.extend_str("-")
+    buf.extend_str(made)
+    buf.extend_str("]")
+    println(buf.to_string())
+
+    let u8[] other = from([])
+    append_to(poke other, "[poke]")
+    println(other.to_string())
+
+    let Sink sink = Sink(from([]))
+    sink.put("[field:")
+    sink.put("{3 + 4}")
+    sink.put("]")
+    println(sink.bytes.to_string())
+    return 0

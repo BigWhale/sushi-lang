@@ -26,6 +26,7 @@ CASES = {
     "reverse":       ("i32[]", "r.reverse()", ""),
     "extend":        ("i32[]", "r.extend(from([1]))", ""),
     "extend_range":  ("i32[]", "r.extend_range(from([1]), 0, 1)", ""),
+    "extend_str":    ("u8[]", "r.extend_str(\"x\")", ""),
 }
 
 

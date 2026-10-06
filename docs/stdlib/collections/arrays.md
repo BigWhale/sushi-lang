@@ -424,6 +424,30 @@ out.extend_range(src, 2, 3)    # out is now [0, 30, 40, 50]
 
 `.extend(src)` is `extend_range(src, 0, src.len())`.
 
+### `.extend_str(string s) -> ~`
+
+Append the bytes of `s` to a `u8[]`. The method grows the array once and copies the bytes
+in one copy. `buf.extend(s.to_bytes())` gives the same bytes, but it copies them two times.
+
+```sushi
+fn main() i32:
+    let u8[] buf = from([])
+    buf.extend_str("Mostly ")
+    buf.extend_str("Harmless")
+    println("{buf.to_string()} {buf.len()}")
+    return 0
+```
+
+Output:
+
+```
+Mostly Harmless 15
+```
+
+Only a dynamic `u8[]` takes `.extend_str()`. Another element type and a fixed `u8[N]` are
+**[CE2023](../../error-catalog.md#ce2023)**. An argument that is not a `string` is
+**[CE2023](../../error-catalog.md#ce2023)** too. The string is a borrow: it stays yours.
+
 ### `.s(i32 start, i32 end) -> T[]` and `.ss(i32 start, i32 count) -> T[]`
 
 A **fresh** array holding a range of the source. The two spell the range differently and

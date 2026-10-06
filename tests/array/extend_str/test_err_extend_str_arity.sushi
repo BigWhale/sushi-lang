@@ -1,0 +1,9 @@
+# `extend_str` takes one argument, the string. A call with none is CE2009.
+# EXPECT_ERROR_CODES_EXACT: CE2009
+# EXPECT_STDERR_CONTAINS: wrong number of arguments: 'u8[].extend_str' expects 1, got 0
+
+fn main() i32:
+    let u8[] a = from([])
+    a.extend_str()
+    println("{a.len()}")
+    return 0
