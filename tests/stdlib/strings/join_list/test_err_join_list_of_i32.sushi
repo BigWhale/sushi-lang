@@ -1,0 +1,11 @@
+# `join` takes a `string[]` or a `List@(string)`. A `List@(i32)` is neither, and it is
+# refused at the argument with the declared type in the message.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_STDERR_CONTAINS: expected string[], got List@(i32)
+use <collections/strings>
+
+fn main() i32:
+    let List@(i32) nums = List.new()
+    nums.push(1)
+    println(",".join(nums))
+    return 0

@@ -433,7 +433,12 @@ fn main() i32:
 
 ### `.join(string[] parts) -> string`
 
-Join array with separator.
+### `.join(List@(string) parts) -> string`
+
+Join the parts with the separator between two parts. An empty `parts` gives an empty
+string. The argument is a `string[]` or a `List@(string)`, and the two give the same
+result for the same elements. The call borrows `parts`, so you can use it again after
+the call.
 
 ```sushi
 let string[] words = from(["a", "b", "c"])
@@ -443,6 +448,12 @@ println(''.join(words))  # "abc"
 
 # Single quotes shine in interpolation:
 println("{','.join(words)}")
+
+let List@(string) crew = List.new()
+crew.push("Arthur")
+crew.push("Ford")
+println(' & '.join(crew))  # "Arthur & Ford"
+println(crew.len())        # 2
 ```
 
 ## Conversion Methods

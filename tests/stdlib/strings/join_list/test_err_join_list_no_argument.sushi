@@ -1,0 +1,10 @@
+# `join` takes one argument, the parts to join.
+# EXPECT_ERROR_CODES_EXACT: CE2009
+use <collections/strings>
+
+fn main() i32:
+    let List@(string) words = List.new()
+    words.push("a")
+    println(",".join())
+    println(words.len())
+    return 0

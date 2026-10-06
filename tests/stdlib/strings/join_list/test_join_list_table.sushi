@@ -1,0 +1,62 @@
+# `sep.join(parts)` over a `List@(string)` gives the elements in order, with the
+# separator between two elements and nothing at the two ends. An empty list gives an
+# empty string, and one element gives that element. The answer is the same as over a
+# `string[]` that holds the same elements.
+# EXPECT_STDOUT_EXACT: "[]\n[a]\n[a, b, c]\n[abc]\n[xéyéz]\n[é→ü]\n[,,]\n[-a-]\nlist [a, b, c]\narray [a, b, c]\nlist [é→ü]\narray [é→ü]\nlist []\narray []\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/strings>
+
+fn show(string s) ~:
+    println("[{s}]")
+
+fn main() i32:
+    let List@(string) empty = List.new()
+    show(", ".join(empty))
+
+    let List@(string) one = List.new()
+    one.push("a")
+    show(", ".join(one))
+
+    let List@(string) abc = List.new()
+    abc.push("a")
+    abc.push("b")
+    abc.push("c")
+    show(", ".join(abc))
+    show("".join(abc))
+
+    let List@(string) xyz = List.new()
+    xyz.push("x")
+    xyz.push("y")
+    xyz.push("z")
+    show("é".join(xyz))
+
+    let List@(string) wide = List.new()
+    wide.push("é")
+    wide.push("ü")
+    show("→".join(wide))
+
+    let List@(string) blanks = List.new()
+    blanks.push("")
+    blanks.push("")
+    blanks.push("")
+    show(",".join(blanks))
+
+    let List@(string) middle = List.new()
+    middle.push("")
+    middle.push("a")
+    middle.push("")
+    show("-".join(middle))
+
+    let string[] abc_array = from(["a", "b", "c"])
+    println("list [{', '.join(abc)}]")
+    println("array [{', '.join(abc_array)}]")
+
+    let string[] wide_array = from(["é", "ü"])
+    println("list [{'→'.join(wide)}]")
+    println("array [{'→'.join(wide_array)}]")
+
+    let string[] empty_array = from([])
+    println("list [{'+'.join(empty)}]")
+    println("array [{'+'.join(empty_array)}]")
+    return 0

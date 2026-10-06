@@ -79,10 +79,14 @@ class MethodSpec:
 
     The return-type reader and the back end both read this row, and the back end turns
     each Sushi type into its LLVM type through `llvm_value_type`.
+
+    `also_accepts` holds, per argument, the other types that the argument takes. Each one
+    has the LLVM shape of the declared type, so the back end reads it as that type.
     """
     name: str
     arg_types: tuple
     returns: Any
+    also_accepts: tuple = ()
 
     @property
     def arg_count(self) -> int:
@@ -96,13 +100,17 @@ def _maybe(payload: Type | GenericTypeRef) -> GenericTypeRef:
     return GenericTypeRef(base_name="Maybe", type_args=(payload,))
 
 
-def _spec(name: str, args: tuple, returns: Any) -> MethodSpec:
-    return MethodSpec(f"string.{name}", args, returns)
+def _list(element: Type) -> GenericTypeRef:
+    return GenericTypeRef(base_name="List", type_args=(element,))
+
+
+def _spec(name: str, args: tuple, returns: Any, also_accepts: tuple = ()) -> MethodSpec:
+    return MethodSpec(f"string.{name}", args, returns, also_accepts)
 
 
 # The ONE spelling of every string method's signature.
 # Note: is_empty and clone are NOT here: they are inline intrinsics, not stdlib methods.
-METHOD_SPECS = {name: _spec(name, args, returns) for name, args, returns in (
+METHOD_SPECS = {row[0]: _spec(*row) for row in (
     ("len", (), _I32),
     ("size", (), _I32),
     ("upper", (), _S),
@@ -135,7 +143,7 @@ METHOD_SPECS = {name: _spec(name, args, returns) for name, args, returns in (
     ("split", (_S,), DynamicArrayType(_S)),
     ("split_once", (_S,), _maybe(tuple_ref((_S, _S)))),
     ("rsplit_once", (_S,), _maybe(tuple_ref((_S, _S)))),
-    ("join", (DynamicArrayType(_S),), _S),
+    ("join", (DynamicArrayType(_S),), _S, ((_list(_S),),)),
 
     ("replace", (_S, _S), _S),
     ("pad_left", (_I32, _S), _S),
@@ -155,7 +163,7 @@ def _validate_method_signature(call: MethodCall, spec: MethodSpec, validator: An
     from sushi_lang.semantics.passes.types.arguments import check_arguments
     check_arguments(validator, spec.name, spec.arg_types, call.args, call.loc,
                     mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                    stop_on_arity=True)
+                    stop_on_arity=True, also_accepts=spec.also_accepts)
 
 
 def is_builtin_string_method(method_name: str) -> bool:
