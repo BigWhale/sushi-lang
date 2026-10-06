@@ -1,0 +1,44 @@
+# One import of <text/ascii> gives all ten methods to one program.
+# A small tokenizer splits "x1 = 0x2F;" into its tokens.
+# EXPECT_STDOUT_EXACT: "ident X1 lower=1 upper=0\npunct =\nnumber 47\npunct ;\n"
+# EXPECT_NO_LEAKS: true
+
+use <text/ascii>
+use <collections/strings>
+
+fn main() i32:
+    let string s = "x1 = 0x2F;"
+    let i32 n = s.size()
+    let i32 i = 0
+    while (i < n):
+        let u8 b = s[i]
+        if (b.is_ascii_space()):
+            i := i + 1
+        elif (b.is_ascii_alpha()):
+            let u8[] name = new()
+            let i32 lower = 0
+            let i32 upper = 0
+            while (i < n and s[i].is_ascii_alnum()):
+                if (s[i].is_ascii_lower()):
+                    lower := lower + 1
+                if (s[i].is_ascii_upper()):
+                    upper := upper + 1
+                name.push(s[i].to_ascii_upper())
+                i := i + 1
+            println("ident {name.to_string()} lower={lower} upper={upper}")
+        elif (b.is_ascii_digit()):
+            let i32 value = 0
+            if (b == a'0' and i + 1 < n and s[i + 1].to_ascii_lower() == a'x'):
+                i := i + 2
+                while (i < n and s[i].is_ascii_hex()):
+                    value := value * 16 + (s[i].hex_value().realise(0) as i32)
+                    i := i + 1
+            else:
+                while (i < n and s[i].is_ascii_digit()):
+                    value := value * 10 + ((s[i] - a'0') as i32)
+                    i := i + 1
+            println("number {value}")
+        else:
+            println("punct {s.ss(i, 1)}")
+            i := i + 1
+    return 0

@@ -1,0 +1,6 @@
+# The methods of <text/ascii> need the import.
+# EXPECT_ERROR_CODES_EXACT: CE2008
+
+fn main() i32:
+    println(a'1'.is_ascii_digit())
+    return 0

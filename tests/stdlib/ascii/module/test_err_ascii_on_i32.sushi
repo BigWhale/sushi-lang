@@ -1,0 +1,9 @@
+# The methods of <text/ascii> are on u8 only. An i32 has none of them.
+# EXPECT_ERROR_CODES_EXACT: CE2008
+
+use <text/ascii>
+
+fn main() i32:
+    let i32 n = 48
+    println(n.is_ascii_digit())
+    return 0
