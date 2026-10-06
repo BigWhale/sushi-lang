@@ -14,6 +14,7 @@ ARRAYS = (Path(__file__).resolve().parents[2]
 CORE = ARRAYS / "methods" / "core.py"
 SAFE_ACCESS = ARRAYS / "methods" / "safe_access.py"
 SEARCH = ARRAYS / "methods" / "search.py"
+RANGE_EQ = ARRAYS / "methods" / "range_eq.py"
 DISPATCHER = ARRAYS / "dispatcher.py"
 
 
@@ -26,6 +27,8 @@ ONE_EMITTER = {
     "contains": "emit_array_contains",
     "index_of": "emit_array_index_of",
     "index_of_from": "emit_array_index_of_from",
+    "starts_with": "emit_array_eq_range",
+    "eq_range": "emit_array_eq_range",
 }
 
 HALVES = ("emit_fixed_array_method", "emit_dynamic_array_method")
@@ -48,7 +51,8 @@ def _called_names(node: ast.AST) -> set[str]:
 
 
 def test_the_one_emitters_exist():
-    declared = set(_functions(CORE)) | set(_functions(SAFE_ACCESS)) | set(_functions(SEARCH))
+    declared = (set(_functions(CORE)) | set(_functions(SAFE_ACCESS)) | set(_functions(SEARCH))
+                | set(_functions(RANGE_EQ)))
     assert set(ONE_EMITTER.values()) <= declared
 
 

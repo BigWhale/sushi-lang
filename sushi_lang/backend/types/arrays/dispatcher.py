@@ -20,7 +20,8 @@ from .fixed_addressing import as_fixed_array_address
 def is_builtin_array_method(method_name: str) -> bool:
     """Check if a method name is a built-in array method."""
     return method_name in {
-        "len", "get", "first", "last", "contains", "index_of", "push", "pop",
+        "len", "get", "first", "last", "contains", "index_of", "starts_with", "eq_range",
+        "push", "pop",
         "insert", "remove",
         "index_of_from",
         "clear", "truncate", "capacity", "destroy", "free",
@@ -97,6 +98,17 @@ def _dynamic_data_and_len(codegen: 'LLVMCodegen', receiver: ir.Value,
     len_ptr = gep_utils.gep_dynamic_array_len(codegen, receiver)
     return (codegen.builder.load(data_ptr_ptr, name=f"{prefix}_data"),
             codegen.builder.load(len_ptr, name=f"{prefix}_len"))
+
+
+def _eq_range_operands(codegen: 'LLVMCodegen', expr) -> tuple[ir.Value, ir.Value, ir.Value]:
+    """`(start, other data, other length)`: `starts_with(prefix)` is `eq_range(0, prefix)`,
+    and the other array is a borrowed source, as for `extend`."""
+    if expr.method == "starts_with":
+        start = ir.Constant(codegen.types.i32, 0)
+    else:
+        start = _index_arg(codegen, expr.args[0])
+    other_data, other_len, _ = _source_data_and_len(codegen, expr, expr.args[-1])
+    return start, other_data, other_len
 
 
 def emit_array_method(
@@ -179,6 +191,13 @@ def emit_fixed_array_method(
                                                        element_semantic_type)
             return search.emit_array_index_of(codegen, search_data, count, needle,
                                               element_semantic_type)
+
+        case "starts_with" | "eq_range":
+            from .methods.range_eq import emit_array_eq_range
+            range_data = data("eq_range")
+            start, other_data, other_len = _eq_range_operands(codegen, expr)
+            return emit_array_eq_range(codegen, range_data, count, start, other_data,
+                                       other_len, element_semantic_type, to_i1)
 
         case "iter":
             return iterators.emit_fixed_array_iter(codegen, expr, address(writable=False),
@@ -293,6 +312,13 @@ def emit_dynamic_array_method(
                                                        element_semantic_type)
             return search.emit_array_index_of(codegen, data, count, needle,
                                               element_semantic_type)
+
+        case "starts_with" | "eq_range":
+            from .methods.range_eq import emit_array_eq_range
+            data, count = _dynamic_data_and_len(codegen, receiver_value, "eq_range")
+            start, other_data, other_len = _eq_range_operands(codegen, expr)
+            return emit_array_eq_range(codegen, data, count, start, other_data, other_len,
+                                       element_semantic_type, to_i1)
 
         case "push":
             # The array stores the element shallowly and frees it, so this is a consuming

@@ -185,11 +185,62 @@ fn main() i32:
 
 ### `.starts_with(prefix) -> bool`
 
-TODO(worker)
+Answers true when the first `prefix.len()` elements of the array are equal to the
+elements of `prefix`, in the same order. The rules:
+
+- An empty prefix gives true, also on an empty array.
+- A prefix that is longer than the array gives false.
+- The comparison stops at the first element that is not equal.
+
+`prefix` is an array of the same element type: a fixed array or a dynamic array, as the
+source of `.extend()`. A prefix of a different element type is
+[CE2023](../../error-catalog.md#ce2023). The element type must have equality, as for
+`.contains()`: an element with no `==` is [CE2100](../../error-catalog.md#ce2100). The
+method borrows the array and the prefix, and it does not change them.
+
+```sushi
+const u8[4] MAGIC = [a'S', a'U', a'S', a'H']
+
+fn main() i32:
+    let u8[] file = from([a'S', a'U', a'S', a'H', 0x01])
+    println(file.starts_with(MAGIC))       # true
+    let i32[] a = from([1, 2, 3])
+    let i32[] empty = from([])
+    println(a.starts_with(empty))          # true
+    println(a.starts_with([1, 2, 3, 4]))   # false: the prefix is longer
+    return 0
+```
 
 ### `.eq_range(i32 start, other) -> bool`
 
-TODO(worker)
+Answers true when the elements `start .. start + other.len()` of the array are equal to
+the elements of `other`, in the same order. `a.starts_with(p)` is `a.eq_range(0, p)`.
+The rules:
+
+- The range must be in the array: `start` is 0 or more, and `start + other.len()` is
+  `len()` or less. A range that is not in the array gives false. This includes a negative
+  `start`, and a `start` so large that `start + other.len()` is more than the largest
+  `i32`.
+- An empty `other` gives true when `start` is from 0 to `len()`.
+- Nothing traps. The comparison stops at the first element that is not equal.
+
+`start` is an `i32` position: a value of a different type is
+[CE2006](../../error-catalog.md#ce2006). `other` has the rules of the prefix of
+`.starts_with()`: an array of the same element type, fixed or dynamic, and an element type
+with equality ([CE2100](../../error-catalog.md#ce2100)). The method borrows the array and
+`other`.
+
+```sushi
+fn main() i32:
+    let i32[] a = from([10, 20, 30, 40, 50])
+    let i32[2] pair = [30, 40]
+    println(a.eq_range(2, pair))           # true
+    println(a.eq_range(4, pair))           # false: 4 + 2 is past the end
+    println(a.eq_range(-1, pair))          # false: a negative start
+    let i32[] empty = from([])
+    println(a.eq_range(5, empty))          # true: an empty range at the end
+    return 0
+```
 
 ### `.iter() -> Iterator@(T)`
 

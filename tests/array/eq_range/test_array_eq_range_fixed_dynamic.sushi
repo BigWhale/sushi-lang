@@ -1,0 +1,16 @@
+# A fixed array and a dynamic array are each a legal receiver and a legal `other`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\nfalse\ntrue\nfalse\n"
+fn main() i32:
+    let i32[5] fixed = [10, 20, 30, 40, 50]
+    let i32[] dynamic = from([10, 20, 30, 40, 50])
+    let i32[2] fixed_other = [30, 40]
+    let i32[] dynamic_other = from([40, 50])
+    println(fixed.eq_range(3, dynamic_other))
+    println(fixed.eq_range(4, dynamic_other))
+    println(dynamic.eq_range(2, fixed_other))
+    println(dynamic.eq_range(-1, fixed_other))
+    println(fixed.eq_range(2, fixed_other))
+    println(fixed.eq_range(2147483647, fixed_other))
+    return 0

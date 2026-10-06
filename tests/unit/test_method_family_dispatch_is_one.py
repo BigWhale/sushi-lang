@@ -114,7 +114,7 @@ _RECEIVERS = (
 _NAMES = (
     "len", "get", "push", "pop", "first", "last", "index_of", "clear",
     "index_of_from",
-    "s", "ss", "split", "contains",
+    "s", "ss", "split", "contains", "starts_with", "eq_range",
     "is_ok", "is_err", "realise", "expect", "err",
     "is_some", "is_none",
     "alloc", "destroy", "new", "with_capacity", "insert", "remove",

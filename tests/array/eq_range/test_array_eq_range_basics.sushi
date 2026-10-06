@@ -1,0 +1,33 @@
+# `eq_range(start, other)` is true when the elements `start .. start + other.len()` of the
+# receiver equal the elements of `other`. A range that is not inside the receiver gives
+# false, a negative start and an overflow of `start + other.len()` included. Nothing traps.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\ntrue\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\ntrue\nfalse\nfalse\nfalse\nfalse\ntrue\nfalse\n"
+fn main() i32:
+    let i32[] a = from([1, 2, 3, 4, 5])
+    let i32[] empty = from([])
+    let i32[] middle = from([2, 3, 4])
+    let i32[] tail = from([4, 5])
+    let i32[] first_differs = from([9, 3, 4])
+    let i32[] last_differs = from([2, 3, 9])
+    let i32[] longer = from([1, 2, 3, 4, 5, 6])
+    let i32 big = 2147483647
+    println(a.eq_range(0, from([1, 2])))
+    println(a.eq_range(1, middle))
+    println(a.eq_range(3, tail))
+    println(a.eq_range(0, a))
+    println(a.eq_range(1, first_differs))
+    println(a.eq_range(1, last_differs))
+    println(a.eq_range(4, tail))
+    println(a.eq_range(5, tail))
+    println(a.eq_range(-1, tail))
+    println(a.eq_range(0, longer))
+    println(a.eq_range(5, empty))
+    println(a.eq_range(6, empty))
+    println(a.eq_range(-1, empty))
+    println(a.eq_range(big, tail))
+    println(a.eq_range(big, empty))
+    println(empty.eq_range(0, empty))
+    println(empty.eq_range(0, tail))
+    return 0

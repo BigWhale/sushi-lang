@@ -193,6 +193,19 @@ def check_search_needle(call: MethodCall, element_type: Type, reporter: Reporter
     element does, so a bare literal or a bare `Maybe.None()` is typed by the position.
     Answers whether the call was refused.
     """
+    if _refuses_an_uncomparable_element(call, element_type, reporter, validator):
+        return True
+    if validator is not None:
+        from .propagation import propagate_types_to_value
+        propagate_types_to_value(validator, call.args[0], element_type)
+    _validate_element_argument(call, element_type, reporter, validator)
+    return False
+
+
+def _refuses_an_uncomparable_element(call: MethodCall, element_type: Type,
+                                     reporter: Reporter,
+                                     validator: Optional['TypeValidator']) -> bool:
+    """The element gate of every method that compares elements (CE2100)."""
     from sushi_lang.semantics.generics.contracts import EQ, operand_contract
     from .expressions import has_equality
 
@@ -200,12 +213,7 @@ def check_search_needle(call: MethodCall, element_type: Type, reporter: Reporter
                   else operand_contract(element_type, EQ)[0])
     if not comparable:
         _reject_uncomparable_element(call, element_type, reporter)
-        return True
-    if validator is not None:
-        from .propagation import propagate_types_to_value
-        propagate_types_to_value(validator, call.args[0], element_type)
-    _validate_element_argument(call, element_type, reporter, validator)
-    return False
+    return not comparable
 
 
 def _a_comparable_element(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
@@ -240,7 +248,8 @@ def _reject_uncomparable_element(call: MethodCall, element, reporter: Reporter) 
 
 def _reject_mismatched_source(call: MethodCall, array_type: ArrayReceiver,
                               reporter: Reporter,
-                              validator: Optional['TypeValidator']) -> bool:
+                              validator: Optional['TypeValidator'],
+                              position: int = 0) -> bool:
     """A bulk copy's source: an array, of the destination's element type.
 
     The source takes the receiver's element type before it is read, the stamp a `let u8[]`
@@ -251,9 +260,10 @@ def _reject_mismatched_source(call: MethodCall, array_type: ArrayReceiver,
     if validator is None:
         return False
     from .propagation import propagate_types_to_value
-    propagate_types_to_value(validator, call.args[0], array_type)
-    validator.validate_expression(call.args[0])
-    source_type = validator.infer_expression_type(call.args[0])
+    source = call.args[position]
+    propagate_types_to_value(validator, source, array_type)
+    validator.validate_expression(source)
+    source_type = validator.infer_expression_type(source)
     if source_type is None:
         return False
     source_type = deref_type(source_type)
@@ -290,6 +300,27 @@ def _a_source_and_a_range(call: MethodCall, array_type: ArrayReceiver, reporter:
     if _reject_mismatched_source(call, array_type, reporter, validator):
         return
     _reject_a_non_index(call, 1, validator)
+
+
+def _a_comparable_source(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
+                         validator: Optional['TypeValidator']) -> None:
+    """`starts_with(prefix)`: an array of the element type, and the element meets `==`."""
+    if _refuses_an_uncomparable_element(call, array_type.base_type, reporter, validator):
+        return
+    _reject_mismatched_source(call, array_type, reporter, validator)
+
+
+def _a_start_and_a_comparable_source(call: MethodCall, array_type: ArrayReceiver,
+                                     reporter: Reporter,
+                                     validator: Optional['TypeValidator']) -> None:
+    """`eq_range(start, other)`: an i32 start, then an array of the element type."""
+    if _refuses_an_uncomparable_element(call, array_type.base_type, reporter, validator):
+        return
+    if validator is None:
+        return
+    reject_non_i32(validator, call.args[0], validator.validate_expression(call.args[0]),
+                   argument=1)
+    _reject_mismatched_source(call, array_type, reporter, validator, position=1)
 
 
 def _a_string(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
@@ -414,6 +445,12 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
                           arguments=_a_comparable_element),
     "index_of_from": ArraySpec(2, Receiver.ANY, INTERNED_BY_THE_CALLER,
                                arguments=_a_comparable_element_and_a_start),
+    # Range equality: a borrowed array of the element type, fixed or dynamic, as the
+    # source of `extend`.
+    "starts_with": ArraySpec(1, Receiver.ANY, _answers(BuiltinType.BOOL),
+                             arguments=_a_comparable_source),
+    "eq_range": ArraySpec(2, Receiver.ANY, _answers(BuiltinType.BOOL),
+                          arguments=_a_start_and_a_comparable_source),
     # Only a buffer that can GROW or SHRINK takes these: a fixed array's length is part of
     # its type.
     "push": ArraySpec(1, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK),

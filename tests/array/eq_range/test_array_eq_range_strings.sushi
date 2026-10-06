@@ -1,0 +1,17 @@
+# A string element compares by content. Both arrays are borrowed: each one keeps its
+# elements and frees them once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\nfalse\n4\nbin\n"
+use <collections/strings>
+
+fn main() i32:
+    let string[] path = from(["usr", "local", "bin", "sushic"])
+    let string[] part = from(["local", "bin"])
+    println(path.eq_range(1, part))
+    println(path.eq_range(2, part))
+    println(path.eq_range(2, from(["bi".concat("n"), "sushic"])))
+    println(path.eq_range(-1, part))
+    println(path.len())
+    println(part[1])
+    return 0

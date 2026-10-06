@@ -1,0 +1,15 @@
+# An element type with no equality has no prefix test: a function value has none.
+# EXPECT_ERROR_CODE: CE2100
+
+struct Handler:
+    fn(i32) -> i32 f
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let Handler[] hs = from([Handler(twice)])
+    let Handler[] head = from([Handler(twice)])
+    if (hs.starts_with(head)):
+        return 1
+    return 0

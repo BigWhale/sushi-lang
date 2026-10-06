@@ -1,0 +1,21 @@
+# A string element compares by content. Both arrays are borrowed: each one keeps its
+# elements and frees them once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\ntrue\nfalse\n3\nusr\n"
+use <collections/strings>
+
+fn main() i32:
+    let string[] path = from(["usr", "local", "bin"])
+    let string[] prefix = from(["usr", "local"])
+    let string[] wrong = from(["usr", "share"])
+    println(path.starts_with(prefix))
+    println(path.starts_with(wrong))
+    let string[] built = from(["us".concat("r")])
+    println(path.starts_with(built))
+    println(path.starts_with(from(["usr".concat("")])))
+    let string[2] fixed = ["local", "bin"]
+    println(path.starts_with(fixed))
+    println(path.len())
+    println(prefix[0])
+    return 0
