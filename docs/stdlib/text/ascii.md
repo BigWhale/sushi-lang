@@ -69,7 +69,25 @@ TODO(worker)
 
 ### `is_ascii_hex() bool`
 
-TODO(worker)
+Tells if the byte is an ASCII hexadecimal digit.
+
+The answer is `true` for the bytes 48 to 57 (`a'0'` to `a'9'`), 65 to 70 (`a'A'` to `a'F'`)
+and 97 to 102 (`a'a'` to `a'f'`). It is `false` for every other byte.
+
+```sushi
+use <text/ascii>
+use <collections/strings>
+
+fn main() i32:
+    println(a'c'.is_ascii_hex())       # true
+    println(a'G'.is_ascii_hex())       # false
+    let i32 n = 0
+    foreach(b in "0xBeef!".to_bytes().iter()):
+        if (b.is_ascii_hex()):
+            n := n + 1
+    println(n)                         # 5
+    return 0
+```
 
 ### `is_ascii_space() bool`
 

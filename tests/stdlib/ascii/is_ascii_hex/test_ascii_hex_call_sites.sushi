@@ -1,0 +1,41 @@
+# is_ascii_hex in the positions a user writes.
+# The receiver is a u8 local, a string byte, a byte literal and an array element.
+# The call is also an operand of and / not in an if.
+# A byte from 128 to 255 is not a hex digit.
+# EXPECT_STDOUT_EXACT: "local=true\nlocal=false\nstring=3\nliteral=true\nliteral=false\nif=yes\nnot=yes\narray=3\nhigh=false\n"
+
+use <text/ascii>
+use <collections/strings>
+
+fn main() i32:
+    let u8 c = a'E'
+    println("local={c.is_ascii_hex()}")
+    let u8 d = a'G'
+    println("local={d.is_ascii_hex()}")
+
+    let string s = "0xBeG@"
+    let i32 n = 0
+    let i32 i = 0
+    while (i < s.size()):
+        if (s[i].is_ascii_hex()):
+            n := n + 1
+        i := i + 1
+    println("string={n}")
+
+    println("literal={a'f'.is_ascii_hex()}")
+    println("literal={a'g'.is_ascii_hex()}")
+
+    if (c.is_ascii_hex() and a'9'.is_ascii_hex()):
+        println("if=yes")
+    if (not a'`'.is_ascii_hex()):
+        println("not=yes")
+
+    let u8[] bytes = from([a'0', a'F', a'a', a'@', a'G', a'/'])
+    let i32 m = 0
+    foreach(b in bytes.iter()):
+        if (b.is_ascii_hex()):
+            m := m + 1
+    println("array={m}")
+
+    println("high={a'\xe9'.is_ascii_hex()}")
+    return 0
