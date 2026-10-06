@@ -25,6 +25,7 @@ theme:
     - search.suggest
     - search.highlight
     - content.code.copy
+    - content.tooltips
 
 markdown_extensions:
   - admonition
@@ -52,6 +53,7 @@ plugins:
 # The site is not versioned: it always shows main, and the stamp says which main.
 hooks:
   - docs/hooks/version_footer.py
+  - docs/hooks/error_tooltips.py
 
 # Kept in the repo but not built as site pages.
 exclude_docs: |

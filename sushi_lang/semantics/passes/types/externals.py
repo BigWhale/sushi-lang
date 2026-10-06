@@ -379,5 +379,5 @@ def _emit_block_warning(reporter: Reporter, block: 'ExternalBlock') -> None:
             builder.note(note)
     for var in block.variables:
         builder.note(f"'{var.name}' is a C global: loaded at each read, read-only here")
-    builder.help("see docs/ffi.md - acknowledge with `because \"<reason>\"` and use a safe wrapper")
+    builder.help("acknowledge with `because \"<reason>\"` and use a safe wrapper")
     builder.emit()

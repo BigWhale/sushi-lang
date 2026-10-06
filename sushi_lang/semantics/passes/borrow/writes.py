@@ -52,7 +52,7 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
         note="'{name}' is the receiver of a method on this type, a read-only borrow",
         help="the write ({what}) would land on the method's private copy of the "
              "receiver; declare the receiver mutable -- `(poke self, ...)` -- and "
-             "the write reaches the caller (#327), or return the new value and let "
+             "the write reaches the caller, or return the new value and let "
              "the caller store it",
     ),
     ReadOnlyReceiver(
