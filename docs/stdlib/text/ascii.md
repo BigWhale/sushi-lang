@@ -31,7 +31,25 @@ string byte `s[i]` is a `u8` too.
 
 ### `is_ascii_digit() bool`
 
-TODO(worker)
+Tells if the byte is an ASCII decimal digit.
+
+The answer is `true` for the bytes 48 to 57 (`a'0'` to `a'9'`). It is `false` for every other
+byte.
+
+```sushi
+use <text/ascii>
+use <collections/strings>
+
+fn main() i32:
+    println(a'7'.is_ascii_digit())     # true
+    println(a'x'.is_ascii_digit())     # false
+    let i32 n = 0
+    foreach(b in "r2d2".to_bytes().iter()):
+        if (b.is_ascii_digit()):
+            n := n + 1
+    println(n)                         # 2
+    return 0
+```
 
 ### `is_ascii_upper() bool`
 
