@@ -1,0 +1,21 @@
+# The unary minus on a float flips the sign bit (IEEE negation): -0.0 is negative zero,
+# in a body, on the literal and in a constant, for f64 and f32.
+# EXPECT_STDOUT_EXACT: "9223372036854775808\n9223372036854775808\n9223372036854775808\n0\n2147483648\n2147483648\n0\n13832806255468478464\n"
+const f64 NEG_ZERO = -0.0
+
+fn negate(f64 x) f64:
+    return -x
+
+fn main() i32:
+    let f64 z = 0.0
+    println((-z).to_bits())
+    println((-0.0).to_bits())
+    println(NEG_ZERO.to_bits())
+    println(negate(negate(z)).to_bits())
+    let f32 y = 0.0
+    println((-y).to_bits())
+    let f32 ny = -0.0
+    println(ny.to_bits())
+    println((-ny).to_bits())
+    println((-1.5).to_bits())
+    return 0

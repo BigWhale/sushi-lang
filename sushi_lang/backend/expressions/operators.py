@@ -25,8 +25,8 @@ def emit_operator(codegen: 'LLVMCodegen', expr: Expr, to_i1: bool) -> ir.Value:
 
 
 def emit_float_negation(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
-    """Emit floating-point negation using fsub."""
-    return codegen.builder.fsub(ir.Constant(val.type, 0.0), val)
+    """Emit floating-point negation: `fneg` flips the sign bit, so -0.0 is negative zero."""
+    return codegen.builder.fneg(val)
 
 
 def emit_unary_op(codegen: 'LLVMCodegen', expr: UnaryOp, to_i1: bool) -> ir.Value:
