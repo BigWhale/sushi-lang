@@ -106,17 +106,15 @@ def emit_list_get(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Struct
                            lambda _len: codegen.expressions.emit_expr(expr.args[0]))
 
 
-def emit_list_first(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.first() - `get(0)`."""
-    return _emit_list_view(codegen, list_ptr, list_type,
-                           lambda _len: ir.Constant(codegen.types.i32, 0))
+def emit_list_end(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
+    """Emit LLVM IR for list.first() (`get(0)`) and list.last() (`get(len() - 1)`).
 
-
-def emit_list_last(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.last() - `get(len() - 1)`.
-
-    An empty list gives the index -1, which the bounds check turns into `Maybe.None()`.
+    An empty list gives the index -1 for `last`, which the bounds check turns into
+    `Maybe.None()`.
     """
+    if expr.method == "first":
+        return _emit_list_view(codegen, list_ptr, list_type,
+                               lambda _len: ir.Constant(codegen.types.i32, 0))
     return _emit_list_view(
         codegen, list_ptr, list_type,
         lambda length: codegen.builder.sub(length, ir.Constant(codegen.types.i32, 1),
