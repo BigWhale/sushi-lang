@@ -62,6 +62,20 @@ _add(ErrorMessage("CE6013", Severity.ERROR,
                      "enclosing block swallowed the blocks between the two openers. This "
                      "is the signal GCC gives for a `/*` inside a block comment."))
 
+_add(ErrorMessage("CE6014", Severity.ERROR,
+    "malformed byte literal '{literal}': {reason}",
+    Category.SYNTAX, "A byte literal `a'x'` holds exactly one character from 0 to 127, or "
+                     "exactly one escape: `\\n`, `\\t`, `\\r`, `\\0`, `\\\\`, `\\'`, `\\\"` or "
+                     "`\\xNN` with two hex digits. The reason names the fault: empty, more "
+                     "than one character, unknown escape, or `\\x` without two hex digits."))
+
+_add(ErrorMessage("CE6015", Severity.ERROR,
+    "the character '{char}' is not one byte",
+    Category.SYNTAX, "A Sushi string is UTF-8, so a character above 127 is two to four "
+                     "bytes, and one byte literal cannot hold it. The help gives the UTF-8 "
+                     "bytes and the escape for a byte from 128 to 255. No character set is "
+                     "assumed."))
+
 _add(ErrorMessage("CE6101", Severity.ERROR,
     "nested function definitions are not supported",
     Category.SYNTAX, "A function may only be defined at the top level. Use a lambda for a "

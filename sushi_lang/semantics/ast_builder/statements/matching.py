@@ -95,7 +95,8 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
 
 
 def parse_literal_pattern(t: Tree, ast_builder: 'ASTBuilder') -> LiteralPattern:
-    """Parse literal_pattern / neg_literal_pattern: an integer (#415) or a string arm.
+    """Parse literal_pattern / neg_literal_pattern: an integer (#415), a byte (`a'x'`) or a
+    string arm.
 
     Delegates the token to `expr_from_token` so radix handling, underscore
     stripping, the leading-zero rejection (CE2071) and the string escapes stay in
@@ -129,7 +130,8 @@ def parse_literal_pattern(t: Tree, ast_builder: 'ASTBuilder') -> LiteralPattern:
     # A negated literal is a VALUE, never a bit pattern (same rule as
     # _stamp_numeric_literal in passes/types/propagation.py).
     radix = 10 if negative else lit.radix
-    return LiteralPattern(value=value, display=display, radix=radix, loc=span_of(t))
+    return LiteralPattern(value=value, display=display, radix=radix,
+                          is_byte=lit.byte_spelling is not None, loc=span_of(t))
 
 
 def _read_pattern_item(node: Tree, ast_builder: 'ASTBuilder',

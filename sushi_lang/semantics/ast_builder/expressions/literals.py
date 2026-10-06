@@ -75,6 +75,71 @@ def normalize_numeric(tok: Token, ast_builder: 'ASTBuilder') -> str:
     return text.replace("_", "")
 
 
+_BYTE_ESCAPES = {"n": 10, "t": 9, "r": 13, "0": 0, "\\": 92, "'": 39, '"': 34}
+_HEX = frozenset("0123456789abcdefABCDEF")
+_ONE_BYTE = "a byte literal holds one character or one escape"
+
+
+def _read_byte(body: str) -> tuple[int | None, int, str | None]:
+    """The first character or escape of a byte literal's body.
+
+    Answers its value (None when it has none), the count of characters it takes, and
+    the reason it is malformed (None when it is not).
+    """
+    if body[0] != "\\":
+        return ord(body[0]), 1, None
+    code = body[1]
+    if code == "x":
+        digits = body[2:4]
+        if len(digits) != 2 or not set(digits) <= _HEX:
+            return None, len(body), "'\\x' takes exactly two hex digits"
+        return int(digits, 16), 4, None
+    if code in _BYTE_ESCAPES:
+        return _BYTE_ESCAPES[code], 2, None
+    return None, 2, f"unknown escape '\\{code}'"
+
+
+def parse_byte_literal(tok: Token, ast_builder: 'ASTBuilder') -> IntLit:
+    """The byte literal `a'x'`: one character from 0 to 127, or one escape (0 to 255).
+
+    The terminal matches a permissive superset, so the rule lives here: an empty body,
+    more than one character or escape, an unknown escape and a short `\\x` are CE6014,
+    and one character above 127 is CE6015. Each recovers to the value of the first
+    character or escape (else 0), with the same spelling, so the walk goes on.
+    """
+    spelling = str(tok.value)
+    body = spelling[2:-1]
+
+    def literal(value: int) -> IntLit:
+        return IntLit(value=value, radix=10, loc=span_of(tok), byte_spelling=spelling)
+
+    def malformed(reason: str, value: int) -> IntLit:
+        return ast_builder.recover(
+            SyntaxDiagnostic("CE6014", span=span_of(tok), literal=spelling, reason=reason),
+            literal(value))
+
+    if not body:
+        return malformed(f"the literal is empty; {_ONE_BYTE}", 0)
+    value, used, reason = _read_byte(body)
+    if reason is not None:
+        return malformed(reason, 0)
+    assert value is not None
+    if used < len(body):
+        return malformed(_ONE_BYTE, value)
+    if value > 127 and body[0] != "\\":
+        char = body[0]
+        encoded = char.encode("utf-8")
+        listed = " ".join(f"0x{b:02x}" for b in encoded)
+        help_text = f"'{char}' is {len(encoded)} bytes in UTF-8 ({listed}); "
+        if value <= 255:
+            help_text += f"write a'\\x{value:02x}' for the byte {value}, or "
+        help_text += f'compare with the string "{char}"'
+        return ast_builder.recover(
+            SyntaxDiagnostic("CE6015", span=span_of(tok), char=char).help(help_text),
+            literal(value if value <= 255 else 0))
+    return literal(value)
+
+
 def expr_from_token(tok: Token, ast_builder: 'ASTBuilder') -> Expr:
     """Map a single token to an Expr (literals and names)."""
     t = tok.type
@@ -100,6 +165,9 @@ def expr_from_token(tok: Token, ast_builder: 'ASTBuilder') -> Expr:
 
     if t == "OCT_INT":
         return IntLit(value=int(normalize_numeric(tok, ast_builder), 8), radix=8, loc=span_of(tok))
+
+    if t == "BYTE_CHAR":
+        return parse_byte_literal(tok, ast_builder)
 
     if t == "FLOAT":
         return FloatLit(value=float(normalize_numeric(tok, ast_builder)), loc=span_of(tok))
