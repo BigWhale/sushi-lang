@@ -7,7 +7,7 @@ and the docstring version was bumped twice over a lexer that had not been read.
 
 Three gates, each one a way that drift stayed invisible:
   - the grammar's keywords must all be known to the lexer,
-  - every numeric shape the grammar accepts must lex as ONE token,
+  - every numeric and byte literal shape the grammar accepts must lex as ONE token,
   - no character in the corpus may fall through to the catch-all rule.
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from pygments.token import Number, Text
+from pygments.token import Name, Number, String, Text
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LEXER_PKG = PROJECT_ROOT / "docs" / "sushi-pygments"
@@ -90,6 +90,30 @@ def test_numeric_literal_is_one_token(literal):
     toks = _significant(literal)
     assert len(toks) == 1, f"{literal!r} split into {toks}"
     assert toks[0][0] in Number, f"{literal!r} lexed as {toks[0][0]}"
+
+
+@pytest.mark.parametrize("literal", [
+    r"a'/'", r"a'\n'", r"a'\xff'", r"a'\''", r"a'\\'",
+])
+def test_byte_literal_is_one_token(literal):
+    """A byte literal `a'x'` lexes whole, its escape included."""
+    toks = _significant(literal)
+    assert toks == [(String.Char, literal)], f"{literal!r} lexed as {toks}"
+
+
+def test_spaced_byte_literal_is_not_one_token():
+    """`a '/'` is a name and a string, not a byte literal: the `a` touches the quote."""
+    toks = _significant("a '/'")
+    assert toks[0] == (Name, "a"), f"'a '/'' lexed as {toks}"
+    assert all(t is not String.Char for t, _ in toks), f"'a '/'' lexed as {toks}"
+
+
+@pytest.mark.parametrize("source", ["a", "data", "let u8 a = data"])
+def test_name_a_is_still_a_name(source):
+    """A variable named `a` stays a name, and `data` does not start a byte literal."""
+    toks = _significant(source)
+    assert all(t is not String.Char for t, _ in toks), f"{source!r} lexed as {toks}"
+    assert toks[-1] == (Name, source.split()[-1]), f"{source!r} lexed as {toks}"
 
 
 @pytest.mark.parametrize("source", [

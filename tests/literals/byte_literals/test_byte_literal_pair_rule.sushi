@@ -1,0 +1,20 @@
+# Two bare literals in one operation, one of them a byte literal: the number literal
+# takes u8, in either operand order. The same rule serves min and max.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "98\n98\n98\n98\n25\n97\n200\n"
+use <math>
+
+fn main() i32:
+    let u8 x = a'a' + 1
+    let u8 y = 1 + a'a'
+    println(x)
+    println(y)
+    println(a'a' + 1)
+    println(1 + a'a')
+    let u8 span = a'z' - a'a'
+    println(span)
+    let u8 lo = min(a'a', 200)
+    println(lo)
+    let u8 hi = max(a'a', 200)
+    println(hi)
+    return 0

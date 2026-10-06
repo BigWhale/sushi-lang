@@ -1,0 +1,7 @@
+# A byte literal holds exactly one character or one escape: `a'ab'` holds two.
+# EXPECT_ERROR_CODES_EXACT: CE6014
+
+fn main() i32:
+    let u8 b = a'ab'
+    println(b)
+    return 0

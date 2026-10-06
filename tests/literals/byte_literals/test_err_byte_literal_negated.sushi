@@ -1,0 +1,7 @@
+# A negated byte literal follows the number-literal rules with the u8 default: with no
+# context, -47 does not fit a u8.
+# EXPECT_ERROR_CODES_EXACT: CE2073
+
+fn main() i32:
+    println(-a'/')
+    return 0

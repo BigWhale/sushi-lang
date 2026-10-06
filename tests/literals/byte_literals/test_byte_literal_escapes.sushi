@@ -1,0 +1,21 @@
+# Each escape of a byte literal gives one byte: the named escapes, and `\xNN` with two
+# hex digits in either case, from 0 to 255. A double quote is 34 with or without the
+# backslash.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "10\n9\n13\n0\n92\n39\n34\n34\n0\n127\n128\n255\n255\n"
+
+fn main() i32:
+    println(a'\n')
+    println(a'\t')
+    println(a'\r')
+    println(a'\0')
+    println(a'\\')
+    println(a'\'')
+    println(a'\"')
+    println(a'"')
+    println(a'\x00')
+    println(a'\x7f')
+    println(a'\x80')
+    println(a'\xff')
+    println(a'\xFF')
+    return 0

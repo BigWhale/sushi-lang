@@ -1,0 +1,8 @@
+# The `\xNN` escape is legal below 128 too: `a'\x2f'` is the same byte as `a'/'`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+
+fn main() i32:
+    println(a'\x2f' == a'/')
+    println(a'\x41' == a'A')
+    return 0

@@ -1,0 +1,9 @@
+# The `a` must touch the quote: `a '/'` is not a byte literal, and it stays a parse
+# error beside a local named `a`.
+# EXPECT_ERROR_CODES_EXACT: CE6001
+
+fn main() i32:
+    let i32 a = 1
+    let u8 b = a '/'
+    println(b)
+    return 0

@@ -1,0 +1,9 @@
+# The range rule of a byte literal is the decimal rule: `a'\xc8'` is 200, which does
+# not fit an i8. The diagnostic spells the literal as it is written.
+# EXPECT_ERROR_CODES_EXACT: CE2073
+# EXPECT_STDERR_CONTAINS: a'\xc8'
+
+fn main() i32:
+    let i8 x = a'\xc8'
+    println(x)
+    return 0

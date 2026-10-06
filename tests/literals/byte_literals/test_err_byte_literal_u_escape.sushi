@@ -1,0 +1,7 @@
+# A byte literal has no `\u` escape: a code point is not one byte.
+# EXPECT_ERROR_CODES_EXACT: CE6014
+
+fn main() i32:
+    let u8 b = a'\u00e9'
+    println(b)
+    return 0

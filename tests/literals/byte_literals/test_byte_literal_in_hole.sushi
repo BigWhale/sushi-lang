@@ -1,0 +1,10 @@
+# A byte literal in an interpolation hole prints its value. A brace is written as an
+# escape there, because the hole scanner counts braces: `a'\x7d'` is `}`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "47\n125\nslash 47 and brace 123\n"
+
+fn main() i32:
+    println("{a'/'}")
+    println("{a'\x7d'}")
+    println("slash {a'/'} and brace {a'\x7b'}")
+    return 0

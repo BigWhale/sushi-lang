@@ -1,0 +1,10 @@
+# A character above 127 is more than one byte in UTF-8, so it is not a byte literal.
+# The help gives its UTF-8 bytes and the escape of the byte 233.
+# EXPECT_ERROR_CODES_EXACT: CE6015
+# EXPECT_STDERR_CONTAINS: 0xc3 0xa9
+# EXPECT_STDERR_CONTAINS: a'\xe9'
+
+fn main() i32:
+    let u8 b = a'é'
+    println(b)
+    return 0

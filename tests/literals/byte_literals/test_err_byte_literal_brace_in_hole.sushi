@@ -1,0 +1,7 @@
+# The hole scanner counts braces and does not read quotes, so a closing brace in a byte
+# literal in a hole ends the hole. Write `a'\x7d'` for it.
+# EXPECT_ERROR_CODES_EXACT: CE6010
+
+fn main() i32:
+    println("{a'}'}")
+    return 0

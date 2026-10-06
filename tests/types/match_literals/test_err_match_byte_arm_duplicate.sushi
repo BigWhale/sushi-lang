@@ -1,0 +1,12 @@
+# A byte literal arm and a number arm of the same value are one arm: `a'/'` is 47.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+
+fn f(u8 b) string:
+    match b:
+        a'/' -> return "slash"
+        47 -> return "forty-seven"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(47))
+    return 0

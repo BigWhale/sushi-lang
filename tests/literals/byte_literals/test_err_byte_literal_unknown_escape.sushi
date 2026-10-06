@@ -1,0 +1,8 @@
+# `\q` is not an escape of a byte literal. A string keeps an unknown escape as text, and
+# a byte literal refuses it.
+# EXPECT_ERROR_CODES_EXACT: CE6014
+
+fn main() i32:
+    let u8 b = a'\q'
+    println(b)
+    return 0
