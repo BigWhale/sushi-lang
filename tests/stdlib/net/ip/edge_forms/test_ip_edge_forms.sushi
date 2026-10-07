@@ -1,0 +1,32 @@
+# The edge forms of the address parser and of text(): hex case, group and octet
+# widths, leading zeros, range, non-ASCII digits, and the zero-run rules of RFC 5952.
+# EXPECT_STDOUT_EXACT: "[2001:DB8:ABCD::EF] -> 2001:db8:abcd::ef\n[2001:db8:abcd::ef] -> 2001:db8:abcd::ef\n[2001:dB8::Ff] -> 2001:db8::ff\n[12345::1] refused\n[::0001] -> ::1\n[1.2.3.04] refused\n[1.2.3.0] -> 1.2.3.0\n[256.0.0.1] refused\n[255.255.255.255] -> 255.255.255.255\n[1.2.3.٤] refused\n[::٤] refused\n[1.2.3.+4] refused\n[::+f] refused\n[0:0:0:1:2:3:4:5] -> ::1:2:3:4:5\n[1:2:0:0:0:3:4:5] -> 1:2::3:4:5\n[1:2:3:4:5:0:0:0] -> 1:2:3:4:5::\n[1:0:0:2:3:0:0:4] -> 1::2:3:0:0:4\n[1:0:2:3:4:5:6:7] -> 1:0:2:3:4:5:6:7\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/ip>
+
+fn show(string text) ~:
+    match parse_ip(text):
+        Result.Ok(a) -> println("[{text}] -> {a.text()}")
+        Result.Err(_) -> println("[{text}] refused")
+
+fn main() i32:
+    show("2001:DB8:ABCD::EF")
+    show("2001:db8:abcd::ef")
+    show("2001:dB8::Ff")
+    show("12345::1")
+    show("::0001")
+    show("1.2.3.04")
+    show("1.2.3.0")
+    show("256.0.0.1")
+    show("255.255.255.255")
+    show("1.2.3.\u0664")
+    show("::\u0664")
+    show("1.2.3.+4")
+    show("::+f")
+    show("0:0:0:1:2:3:4:5")
+    show("1:2:0:0:0:3:4:5")
+    show("1:2:3:4:5:0:0:0")
+    show("1:0:0:2:3:0:0:4")
+    show("1:0:2:3:4:5:6:7")
+    return 0
