@@ -461,9 +461,7 @@ format.
 - Parameter n: The number of bits in the code.
 :##
 fn put_code(poke u8[] out, poke ZOut w, u32 code, i32 n) ~:
-    foreach(i in (n - 1)..=0):
-        let u32 bit = (code >> i) & 1
-        put_bits(poke out, poke w, bit, 1)
+    put_bits(poke out, poke w, code.reverse_bits() >> (32 - n), n)
 
 ##:
 Writes the last partial byte, with zero bits as padding.
