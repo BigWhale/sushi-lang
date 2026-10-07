@@ -73,10 +73,11 @@ class SymbolTables:
     # The analyzer's late interner (risk 1): the typecheck pass hands it a type whose
     # generic instantiations may not be interned yet. None outside a full analysis.
     intern_generic_ref: object = None
-    # The analyzer's constraint check for the method-level type arguments of one call
-    # (#1191): the free-function check, reached from the typecheck pass. None outside
-    # a full analysis.
-    check_method_constraints: Optional[Callable[..., bool]] = None
+    # The analyzer's constraint check for the type arguments of one site, reached from
+    # the typecheck pass: a method-level type argument (#1191), and in a template check a
+    # generic call, a written type and a constructor (#1070). The free-function check.
+    # None outside a full analysis.
+    check_call_constraints: Optional[Callable[..., bool]] = None
     # The analyzer's late function request: the typecheck pass hands it the
     # (declaring unit, name, type arguments) of a generic call that has no instance,
     # because the early collection did not see the call (#1155). The analyzer cuts the

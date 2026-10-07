@@ -20,7 +20,7 @@ _add(ErrorMessage("CE2002", Severity.ERROR,
 
 _add(ErrorMessage("CE2003", Severity.ERROR,
     "return type mismatch: got {got}, expected {expected}",
-    Category.TYPE, "A function's return expression type does not match its declared return type."))
+    Category.TYPE, "A function's return expression type does not match its declared return type. A generic body is checked where it is written (#1070): a value of a type parameter is not the declared return type `i32`, whatever a call gives for the parameter."))
 
 _add(ErrorMessage("CE2004", Severity.ERROR,
     "invalid operand types for operator '{op}'",
@@ -32,7 +32,7 @@ _add(ErrorMessage("CE2005", Severity.ERROR,
 
 _add(ErrorMessage("CE2006", Severity.ERROR,
     "argument type mismatch at position {index}: expected {expected}, got {got}",
-    Category.TYPE, "A function call argument type does not match the corresponding parameter type."))
+    Category.TYPE, "A function call argument type does not match the corresponding parameter type. A generic body is checked where it is written (#1070): an argument of a type parameter is compared with the parameter of the callee as written, so `T` is not `i32` whatever a call gives for it."))
 
 _add(ErrorMessage("CE2007", Severity.ERROR,
     "missing type annotation for variable '{name}'",
@@ -40,11 +40,11 @@ _add(ErrorMessage("CE2007", Severity.ERROR,
 
 _add(ErrorMessage("CE2008", Severity.ERROR,
     "undefined function '{name}'",
-    Category.TYPE, "Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is CE3005, on either library kind (#469). It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` and a range have no method at all: `foreach` walks them, and `next()` is the protocol of a user type, not a method of an iterator. Until #1136 a call on an iterator was not checked, and the backend stopped with an internal error and no location."))
+    Category.TYPE, "Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is CE3005, on either library kind (#469). It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` and a range have no method at all: `foreach` walks them, and `next()` is the protocol of a user type, not a method of an iterator. Until #1136 a call on an iterator was not checked, and the backend stopped with an internal error and no location. In a generic body (#1070), a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`."))
 
 _add(ErrorMessage("CE2009", Severity.ERROR,
     "wrong number of arguments: '{name}' expects {expected}, got {got}",
-    Category.TYPE, "A call has the wrong number of arguments: a function, a method, a static or a built-in. The text names the callee as written and no noun, because one code serves every callee kind, and it states the counts with no noun, so the text agrees in number for a count of one (#764). The four bulk-copy array methods (`extend`, `extend_range`, `s`, `ss`) reported this fault with the internal CE0023 until #764. The built-in `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, `Maybe@(T)` and `Result@(T, E)` methods, and the `List` and `HashMap` statics, reported it with CE2053, CE2016 and CE2502 until #799; their counts are one table per family now (`MethodFamily.arity`)."))
+    Category.TYPE, "A call has the wrong number of arguments: a function, a method, a static or a built-in. The text names the callee as written and no noun, because one code serves every callee kind, and it states the counts with no noun, so the text agrees in number for a count of one (#764). The four bulk-copy array methods (`extend`, `extend_range`, `s`, `ss`) reported this fault with the internal CE0023 until #764. The built-in `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, `Maybe@(T)` and `Result@(T, E)` methods, and the `List` and `HashMap` statics, reported it with CE2053, CE2016 and CE2502 until #799; their counts are one table per family now (`MethodFamily.arity`). A call in a generic body is counted where the template is written (#1070), also when no call instantiates the template."))
 
 # Array-specific errors
 _add(ErrorMessage("CE2010", Severity.ERROR,
@@ -65,7 +65,7 @@ _add(ErrorMessage("CE2013", Severity.ERROR,
 
 _add(ErrorMessage("CE2014", Severity.ERROR,
     "invalid cast from '{source}' to '{target}'",
-    Category.TYPE, "Type cast is not allowed between the specified types."))
+    Category.TYPE, "Type cast is not allowed between the specified types. In a generic body (#1070), a cast of a value of a type parameter is refused where the template is written: a type parameter is no numeric type."))
 
 _add(ErrorMessage("CE2015", Severity.ERROR,
     "constant '{name}' cannot use dynamic array type",
@@ -150,7 +150,7 @@ _add(ErrorMessage("CE2034", Severity.ERROR,
 
 _add(ErrorMessage("CE2035", Severity.ERROR,
     "cannot interpolate expression of type '{type}' into string",
-    Category.TYPE, "An interpolation hole takes a value with a string form: an integer, a float, a bool, a string, or a struct, an enum, an array, a `List@(T)` or an `Own@(T)` through the predefined perk `Display`. The compiler derives `Display` from what a type holds -- `Point(x: 1, y: 2)`, `Shape.Circle(5)`, `[1, 2, 3]` -- and `extend T with Display: fn to_str() string` overrides it. A type that holds something with no string form (a function value, a `ptr`, a `HashMap`) has none, and a note names the field or the element. A `HashMap` itself is refused, because its iteration order is not specified. A `Maybe` and a `Result` are not printed: handle the missing value or the error first. Before #1132 a top-level array, `List@(T)` and `Own@(T)` were refused here too, although a type that held one printed it."))
+    Category.TYPE, "An interpolation hole takes a value with a string form: an integer, a float, a bool, a string, or a struct, an enum, an array, a `List@(T)` or an `Own@(T)` through the predefined perk `Display`. The compiler derives `Display` from what a type holds -- `Point(x: 1, y: 2)`, `Shape.Circle(5)`, `[1, 2, 3]` -- and `extend T with Display: fn to_str() string` overrides it. A type that holds something with no string form (a function value, a `ptr`, a `HashMap`) has none, and a note names the field or the element. A `HashMap` itself is refused, because its iteration order is not specified. A `Maybe` and a `Result` are not printed: handle the missing value or the error first. Before #1132 a top-level array, `List@(T)` and `Own@(T)` were refused here too, although a type that held one printed it. In a generic body (#1070), a hole of a type parameter needs the constraint `Display` on that parameter: `@(T: Display)`."))
 
 _add(ErrorMessage("CE2036", Severity.ERROR,
     "Ok() requires a value. For blank return type use Ok(~)",
@@ -222,7 +222,7 @@ _add(ErrorMessage("CE2050", Severity.ERROR,
 # HashMap@(K, V) type errors
 _add(ErrorMessage("CE2054", Severity.ERROR,
     "HashMap@(K, V) key type '{key_type}' does not support hashing (missing .hash() method)",
-    Category.TYPE, "HashMap keys must support hashing. Use types that have .hash() method (primitives, strings, structs with hashable fields, enums, arrays)."))
+    Category.TYPE, "HashMap keys must support hashing. Use types that have .hash() method (primitives, strings, structs with hashable fields, enums, arrays). In a generic body (#1070), a key of a type parameter needs the constraint `Hashable` on that parameter."))
 
 _add(ErrorMessage("CE2055", Severity.ERROR,
     "HashMap@(K, V) key type '{key_type}' does not support equality comparison",
@@ -232,7 +232,7 @@ _add(ErrorMessage("CE2055", Severity.ERROR,
     "Eq` implementation, else the equality the compiler derives from what the key holds. "
     "A function value, a `ptr` and a `HashMap` have no equality, and neither does a type "
     "that holds one. A `Hashable` override gives a hash only; it does not make a type "
-    "comparable (ruling on #936), so a key needs both halves: implement `Eq` beside it."))
+    "comparable (ruling on #936), so a key needs both halves: implement `Eq` beside it. In a generic body (#1070), a key of a type parameter needs the constraint `Eq` on that parameter."))
 
 _add(ErrorMessage("CE2058", Severity.ERROR,
     "HashMap@(K, V) key type '{key_type}' is not comparable (dynamic arrays cannot be HashMap keys)",
@@ -382,7 +382,7 @@ _add(ErrorMessage("CE2098", Severity.ERROR,
 
 _add(ErrorMessage("CE2100", Severity.ERROR,
     "'{method}' needs an element type with equality: {reason}",
-    Category.TYPE, "contains() and index_of() compare the needle against each element with '==', and starts_with() and eq_range() compare two arrays element by element with '=='. The element type must be one that '==' accepts (CE2514 is the operator half of the same rule): a numeric type, bool, string, or a struct or an enum with a derived or implemented `Eq`. A closure element, or a struct that holds one, has no '==', so a search over it has no meaning the compiler could supply. Implement `Eq` for the element (`extend T with Eq: fn eq(T other) bool`), or search an array of the identifying part instead. An array element (fixed or dynamic, at any depth) is refused too, because an array has no '==' at the top level (CE2514). An array cannot implement `Eq`, so the escape is a struct that holds the row (`struct Row: i32[2] cells`): the struct takes a derived `Eq` that compares the row element by element, and a `Row[]` can be searched (#1116)."))
+    Category.TYPE, "contains() and index_of() compare the needle against each element with '==', and starts_with() and eq_range() compare two arrays element by element with '=='. The element type must be one that '==' accepts (CE2514 is the operator half of the same rule): a numeric type, bool, string, or a struct or an enum with a derived or implemented `Eq`. A closure element, or a struct that holds one, has no '==', so a search over it has no meaning the compiler could supply. Implement `Eq` for the element (`extend T with Eq: fn eq(T other) bool`), or search an array of the identifying part instead. An array element (fixed or dynamic, at any depth) is refused too, because an array has no '==' at the top level (CE2514). An array cannot implement `Eq`, so the escape is a struct that holds the row (`struct Row: i32[2] cells`): the struct takes a derived `Eq` that compares the row element by element, and a `Row[]` can be searched (#1116). In a generic body (#1070), a search in an array or a List of a type parameter needs the constraint `Eq` on that parameter."))
 
 _add(ErrorMessage("CE2101", Severity.ERROR,
     "invalid element '{element}' in an array extension target",
@@ -422,7 +422,7 @@ _add(ErrorMessage("CE2105", Severity.ERROR,
 
 _add(ErrorMessage("CE2106", Severity.ERROR,
     "'{type}' has no field '{field}'",
-    Category.TYPE, "A name behind a VALUE's dot is a field of that value's type, and this type declares no such field -- CE2102 is the same rule one position over, behind a TYPE's dot. The typecheck pass used to let an unknown field through untouched: the read reached codegen, and the backend was the first thing to notice, answering CE0029 with the note that says the fault is a bug in the compiler -- tier 1, no file, no line, no caret, and the blame on the wrong person for what is a typo (#630). The four backend CE0029 sites stay as the internal backstop they read as. A METHOD is not a field: `v.name` with no parentheses reads a field, and a bound-method value is deferred to Tier 2, so write the call. #630 answered only a STRUCT receiver. A receiver that carries NO field -- an array, a primitive, a string, a closure, a `ptr` -- still reached the backend, where the SHAPE of the read picked the internal code: CE0031 off a name or an assignment target, CE0044 through a field, CE0043 through an array element (#661). One rule answers them all, and `builtin_method_exists` is what tells a compiler-defined method from a typo, so `s.len` reads the same note a struct's method read does. An ENUM receiver reads it too (#666). #661 left that one alone, and it was worse than an internal error: a `Maybe@(T)` is an ordinary interned enum, so the backend unwrapped the receiver to its payload struct and read field 0, which is the TAG -- `pts.get(0).x` compiled clean and printed 0 where the element held 11, and a test fixture had frozen the wrong number. An enum carries variants, and a variant is reached by a pattern and not by a dot, so the help says to take the value first: `??`, `.realise(default)` or `match` for a Result, `.realise(default)`, `match` or `.or_err(nom e)??` for a Maybe (`??` takes a Result only), `match` for a user enum. A `Maybe@(T)` gets no implicit unwrap, for the reason a condition is a bool and nothing else (#522/#532), and because the `None` arm has no answer."))
+    Category.TYPE, "A name behind a VALUE's dot is a field of that value's type, and this type declares no such field -- CE2102 is the same rule one position over, behind a TYPE's dot. The typecheck pass used to let an unknown field through untouched: the read reached codegen, and the backend was the first thing to notice, answering CE0029 with the note that says the fault is a bug in the compiler -- tier 1, no file, no line, no caret, and the blame on the wrong person for what is a typo (#630). The four backend CE0029 sites stay as the internal backstop they read as. A METHOD is not a field: `v.name` with no parentheses reads a field, and a bound-method value is deferred to Tier 2, so write the call. #630 answered only a STRUCT receiver. A receiver that carries NO field -- an array, a primitive, a string, a closure, a `ptr` -- still reached the backend, where the SHAPE of the read picked the internal code: CE0031 off a name or an assignment target, CE0044 through a field, CE0043 through an array element (#661). One rule answers them all, and `builtin_method_exists` is what tells a compiler-defined method from a typo, so `s.len` reads the same note a struct's method read does. An ENUM receiver reads it too (#666). #661 left that one alone, and it was worse than an internal error: a `Maybe@(T)` is an ordinary interned enum, so the backend unwrapped the receiver to its payload struct and read field 0, which is the TAG -- `pts.get(0).x` compiled clean and printed 0 where the element held 11, and a test fixture had frozen the wrong number. An enum carries variants, and a variant is reached by a pattern and not by a dot, so the help says to take the value first: `??`, `.realise(default)` or `match` for a Result, `.realise(default)`, `match` or `.or_err(nom e)??` for a Maybe (`??` takes a Result only), `match` for a user enum. A `Maybe@(T)` gets no implicit unwrap, for the reason a condition is a bool and nothing else (#522/#532), and because the `None` arm has no answer. A type parameter has no field (#1070): a constraint promises methods and nothing else, so a generic body cannot read a field of a value of a type parameter."))
 
 _add(ErrorMessage("CE2110", Severity.ERROR,
     "a {kind} cannot be an extension or perk-implementation target: '{target}'",
@@ -460,7 +460,7 @@ _add(ErrorMessage("CE2112", Severity.ERROR,
 
 _add(ErrorMessage("CE2115", Severity.ERROR,
     "cannot print a value of type '{type}'",
-    Category.TYPE, "`print` and `println` take what an interpolation hole takes (CE2035): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. An array, a `List@(T)` and an `Own@(T)` print as a type that holds them prints them (`[1, 2, 3]`, the payload of an `Own@(T)`), and a `HashMap` is refused, because its iteration order is not specified. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)`. A type that holds something with no string form has none, and a note names the field or the element. Before this code the typecheck pass asked nothing but CE2037, and such a value reached the backend and became the internal error CE0017."))
+    Category.TYPE, "`print` and `println` take what an interpolation hole takes (CE2035): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. An array, a `List@(T)` and an `Own@(T)` print as a type that holds them prints them (`[1, 2, 3]`, the payload of an `Own@(T)`), and a `HashMap` is refused, because its iteration order is not specified. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)`. A type that holds something with no string form has none, and a note names the field or the element. Before this code the typecheck pass asked nothing but CE2037, and such a value reached the backend and became the internal error CE0017. In a generic body (#1070), a print of a type parameter needs the constraint `Display` on that parameter: `@(T: Display)`."))
 
 _add(ErrorMessage("CE2116", Severity.ERROR,
     "the message of an assert must be a string, got {got}",

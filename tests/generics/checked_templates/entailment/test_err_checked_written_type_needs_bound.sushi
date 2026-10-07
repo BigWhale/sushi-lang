@@ -1,0 +1,14 @@
+# A written type that names a generic instance over a type parameter needs the
+# constraints of the generic (#1070). Two writes of `Box@(T)` are one fault.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+
+struct Box@(U: Hashable):
+    U item
+    i32 n
+
+fn total@(T)(Box@(T) a, Box@(T) b) i32:
+    return a.n + b.n
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

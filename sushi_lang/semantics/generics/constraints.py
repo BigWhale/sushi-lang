@@ -88,7 +88,10 @@ class ConstraintValidator:
             if note_span is not None:
                 diagnostic = diagnostic.note_at(
                     f"the constraint '{constraint_name}' is declared here", note_span, note_file)
-            diagnostic.emit()
+            # A type parameter of a template under check passes the constraint on only
+            # when a constraint of its own promises it (#1070).
+            from sushi_lang.semantics.generics.opaque import explain_unpromised
+            explain_unpromised(diagnostic, type_arg, constraint_name).emit()
             return False
 
         return True

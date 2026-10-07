@@ -1,0 +1,17 @@
+# A constructor whose instance the call infers names a generic instance too, so it
+# needs the constraints of the generic (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+
+struct Box@(U: Hashable):
+    U item
+
+fn wrap@(T)(nom T x) i32:
+    let i32 n = Box(x).item_count()
+    return n
+
+extend Box@(U) item_count() i32:
+    return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

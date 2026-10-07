@@ -39,4 +39,4 @@ def test_every_program_table_answers_before_check():
     for field in dataclasses.fields(SymbolTables):
         assert getattr(analyzer.tables, field.name) is not None or \
             field.name in ("intern_generic_ref", "request_function_instance",
-                           "check_method_constraints")
+                           "check_call_constraints")

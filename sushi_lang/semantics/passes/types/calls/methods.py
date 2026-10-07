@@ -14,7 +14,7 @@ from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 from ..arguments import check_arguments
 from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family, stamp_builtin_modes
-from ..utils import intern_signature, reject_spread_args
+from ..utils import call_constraint_check, intern_signature, reject_spread_args
 
 # A receiver whose method calls this pass judges. `Own@(T)`, `List@(T)` and
 # `HashMap@(K, V)` are named StructTypes, so the tuple covers them with every other
@@ -359,15 +359,12 @@ def _refuses_unmet_constraints(validator: 'TypeValidator', template, receiver_ty
     """CE4006 for a method type argument that breaks its constraint, at the call (#1191).
 
     The method-level parameter takes the path of a free function's: the analyzer's
-    `check_method_constraints` hook is `validate_all_constraints` over the same
+    `check_call_constraints` hook is `validate_all_constraints` over the same
     monomorphizer. `report=False` asks the same question and emits nothing.
     """
     if not any(tp.constraints for tp in template.method_type_params):
         return False
-    check = validator.tables.check_method_constraints
-    if check is None:
-        raise er.InternalCompilerError(
-            "CE0015", message="the analyzer set no constraint check for a method type argument")
+    check = call_constraint_check(validator)
     key = ("method", _resolved(validator, receiver_type), template.name,
            tuple(_resolved(validator, arg) for arg in margs))
     return not check(template.method_type_params, margs, key, call.loc,

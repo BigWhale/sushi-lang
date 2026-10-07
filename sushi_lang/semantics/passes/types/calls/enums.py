@@ -28,6 +28,8 @@ def validate_enum_constructor(validator: 'TypeValidator', constructor: EnumConst
     enum_type = resolve_enum_type(validator, constructor, declared=declared)
     if enum_type is None:
         return
+    from ..utils import reject_unpromised_arguments
+    reject_unpromised_arguments(validator, enum_type, constructor.loc)
 
     variant = validate_variant_exists(validator, enum_type, constructor)
     if variant is None:

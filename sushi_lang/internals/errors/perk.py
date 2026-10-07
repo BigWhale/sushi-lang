@@ -32,7 +32,7 @@ _add(ErrorMessage("CE4005", Severity.ERROR,
 
 _add(ErrorMessage("CE4006", Severity.ERROR,
     "type {type} does not implement perk {perk} required by constraint",
-    Category.PERK, "A type constraint requires the type to implement a specific perk. Add an implementation with 'extend {type} with {perk}:'."))
+    Category.PERK, "A type constraint requires the type to implement a specific perk. Add an implementation with 'extend {type} with {perk}:'. A call, a written type or a constructor in a generic body (#1070) passes a type parameter on to another generic. The parameter satisfies a constraint only when a constraint of its own promises it: add the constraint to the type parameter of the caller."))
 
 _add(ErrorMessage("CE4007", Severity.ERROR,
     "method {method} conflicts with perk method from {perk}",
@@ -73,7 +73,7 @@ _add(ErrorMessage("CE4016", Severity.ERROR,
 
 _add(ErrorMessage("CE4015", Severity.ERROR,
     "perk '{perk}' gives '{method}' a second home: perk '{other}' already provides it",
-    Category.PERK, "A name has exactly one home on a type (`docs/design/method-resolution.md`). Two perks that each provide a method of one name on one type leave a call of that name naming neither implementation, and the two bodies would take one symbol. The note points at the first one. Rename the method of one perk, or implement only one of them. A derived method is not a home: a type that derives `compare` from `Ord` may still implement a user perk that provides `compare`, and an explicit call then reads the implementation."))
+    Category.PERK, "A name has exactly one home on a type (`docs/design/method-resolution.md`). Two perks that each provide a method of one name on one type leave a call of that name naming neither implementation, and the two bodies would take one symbol. The note points at the first one. Rename the method of one perk, or implement only one of them. A derived method is not a home: a type that derives `compare` from `Ord` may still implement a user perk that provides `compare`, and an explicit call then reads the implementation. The rule holds for a type parameter too (#1070): two constraints of one parameter that both declare a method of one name give it two homes, and the body cannot call the method. Remove one constraint, or rename the method of one perk."))
 
 _add(ErrorMessage("CE4017", Severity.ERROR,
     "'Clone' cannot be implemented for '{type}': the compiler decides it",

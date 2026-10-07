@@ -143,11 +143,29 @@ def _validate_call_in_template(validator: 'TypeValidator', call: Call, generic_f
     so its arguments are only walked.
     """
     func_sig = (None if any(tp.is_pack for tp in generic_func.type_params or ())
+                or not _constraints_hold_in_template(validator, call, generic_func,
+                                                     type_args)
                 else _substituted_sig(validator, generic_func, type_args, written))
     if func_sig is None:
         _walk_unchecked_arguments(validator, call)
         return
     validate_call_arguments(validator, written, func_sig, call.args, call.callee.loc)
+
+
+def _constraints_hold_in_template(validator: 'TypeValidator', call: Call, generic_func,
+                                  type_args) -> bool:
+    """The callee's constraints at the solved type arguments, in a template check (#1070).
+
+    The check of the monomorphize stage, keyed as it keys an instance, so a call that
+    stage judged is not judged twice. An argument that is a type parameter of the
+    template satisfies a constraint only when a constraint of its own promises it.
+    """
+    from sushi_lang.semantics.generics.extension_targets import instantiation_key
+    from ..utils import call_constraint_check
+    return call_constraint_check(validator)(
+        tuple(generic_func.type_params or ()), tuple(type_args),
+        ("fn", instantiation_key(generic_func.name, tuple(type_args))), call.callee.loc,
+        validator.reporter.filename, getattr(generic_func, "filename", None), True)
 
 
 def _substituted_sig(validator: 'TypeValidator', generic_func, type_args, name: str):

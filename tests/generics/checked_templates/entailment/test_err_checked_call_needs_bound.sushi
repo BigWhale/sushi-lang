@@ -1,0 +1,13 @@
+# A call in a template passes its own type parameter on: the callee's constraint must
+# be one the caller's parameter promises (#1070). `outer` is never called.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+
+fn inner@(U: Hashable)(U x) u64:
+    return x.hash()
+
+fn outer@(T)(T x) u64:
+    return inner(x)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

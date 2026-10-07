@@ -33,7 +33,61 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
     _check_type_names(validator, type_obj, span)
     reject_unusable_hashmap_keys(validator, type_obj, span)
     reject_non_error_channels(validator, type_obj, span)
+    reject_unpromised_arguments(validator, type_obj, span)
     return names_no_type(validator, type_obj)
+
+
+def _written_instances(type_obj: Type):
+    """Each generic instance a written type names, its type arguments' included.
+
+    The walk stops at a declaration: what an instance holds in its fields is its own
+    template's business, and is judged where that template is written.
+    """
+    from sushi_lang.semantics.type_walk import walk_named_types
+    for held in walk_named_types(type_obj, through_declarations=False):
+        if isinstance(held, (StructType, EnumType)) and held.generic_args:
+            yield held
+            for arg in held.generic_args:
+                yield from _written_instances(arg)
+
+
+def call_constraint_check(validator: 'TypeValidator'):
+    """The analyzer's constraint check of one site (`tables.check_call_constraints`)."""
+    check = validator.tables.check_call_constraints
+    if check is None:
+        raise er.InternalCompilerError(
+            "CE0015", message="the analyzer set no constraint check for a call site")
+    return check
+
+
+def reject_unpromised_arguments(validator: 'TypeValidator', type_obj: Optional[Type],
+                                span: Optional[Span]) -> None:
+    """CE4006 for a generic instance over a type parameter that breaks its constraints.
+
+    In a template check (#1070) a written type, and the instance a constructor infers,
+    can name `Box@(T)` for a `struct Box@(U: Hashable)`: the argument `T` must promise
+    `Hashable`. Each instance over an opaque parameter is judged by the one constraint
+    check, keyed by the instance, so a template that writes `Box@(T)` three times hears
+    one CE4006. A concrete instance was judged by the monomorphize stage.
+    """
+    if not validator.in_template_check or type_obj is None:
+        return
+    from sushi_lang.semantics.generics.opaque import holds_opaque
+
+    for held in _written_instances(type_obj):
+        args = held.generic_args or ()
+        if not any(holds_opaque(arg) for arg in args):
+            continue
+        base = held.generic_base
+        generic = (validator.generic_struct_table.by_name.get(base)
+                   or validator.generic_enum_table.by_name.get(base))
+        if generic is None:
+            continue
+        kind = "struct" if base in validator.generic_struct_table.by_name else "enum"
+        template_file = getattr(validator.tables, f"generic_{kind}s").files.get(base)
+        call_constraint_check(validator)(
+            generic.type_params, tuple(args), held.name, span,
+            validator.reporter.filename, template_file, True)
 
 
 def reject_non_error_channels(validator: 'TypeValidator', type_obj: Optional[Type],

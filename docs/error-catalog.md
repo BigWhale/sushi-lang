@@ -1318,7 +1318,7 @@ The right-hand side expression type does not match the declared or inferred left
 
 **Message:** `return type mismatch: got {got}, expected {expected}`
 
-A function's return expression type does not match its declared return type.
+A function's return expression type does not match its declared return type. A generic body is checked where it is written: a value of a type parameter is not the declared return type `i32`, whatever a call gives for the parameter.
 
 ### CE2004 {#ce2004}
 
@@ -1349,7 +1349,7 @@ A condition takes a 'bool' and nothing else. Sushi converts no type to a truth v
 - `convert it with 'as i32'`
 - `` borrow it at the call site: `{mode} {place}` ``
 
-A function call argument type does not match the corresponding parameter type.
+A function call argument type does not match the corresponding parameter type. A generic body is checked where it is written: an argument of a type parameter is compared with the parameter of the callee as written, so `T` is not `i32` whatever a call gives for it.
 
 ### CE2007 {#ce2007}
 
@@ -1373,7 +1373,7 @@ Variable declaration with 'let' requires an explicit type annotation.
 - `an iterator has no methods: walk it with 'foreach', or call the method on the collection it comes from`
 - `did you mean '{namespace}.{closest}'?`
 
-Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` and a range have no method at all: `foreach` walks them, and `next()` is the protocol of a user type, not a method of an iterator.
+Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` and a range have no method at all: `foreach` walks them, and `next()` is the protocol of a user type, not a method of an iterator. In a generic body, a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`.
 
 ### CE2009 {#ce2009}
 
@@ -1381,7 +1381,7 @@ Function call references a function that was not declared. This is for a name th
 
 **Message:** `wrong number of arguments: '{name}' expects {expected}, got {got}`
 
-A call has the wrong number of arguments: a function, a method, a static or a built-in. The text names the callee as written and states the counts. The same code covers every callee kind, the bulk-copy array methods (`extend`, `extend_range`, `s`, `ss`), and the built-in methods and statics of `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, `Maybe@(T)` and `Result@(T, E)`.
+A call has the wrong number of arguments: a function, a method, a static or a built-in. The text names the callee as written and states the counts. The same code covers every callee kind, the bulk-copy array methods (`extend`, `extend_range`, `s`, `ss`), and the built-in methods and statics of `List@(T)`, `HashMap@(K, V)`, `Own@(T)`, `Maybe@(T)` and `Result@(T, E)`. A call in a generic body is counted where the template is written, also when no call instantiates the template.
 
 ### CE2010 {#ce2010}
 
@@ -1428,7 +1428,7 @@ Array literal element type does not match declared array element type.
 - `` only <{home}> may declare `extend {source} as {target}:`; answer an error type of your own, and convert both errors into it ``
 - `` declare `extend {source} as {target}:` in the unit that declares '{target}', and return the converted value ``
 
-Type cast is not allowed between the specified types.
+Type cast is not allowed between the specified types. In a generic body, a cast of a value of a type parameter is refused where the template is written: a type parameter is no numeric type.
 
 ### CE2015 {#ce2015}
 
@@ -1542,7 +1542,7 @@ The declared item type in foreach does not match the iterator's element type.
 
 **Message:** `cannot interpolate expression of type '{type}' into string`
 
-An interpolation hole takes a value with a string form: an integer, a float, a bool, a string, or a struct, an enum, an array, a `List@(T)` or an `Own@(T)` through the predefined perk `Display`. The compiler derives `Display` from what a type holds -- `Point(x: 1, y: 2)`, `Shape.Circle(5)`, `[1, 2, 3]` -- and `extend T with Display: fn to_str() string` overrides it. A type that holds something with no string form (a function value, a `ptr`, a `HashMap`) has none, and a note names the field or the element. A `HashMap` itself is refused, because its iteration order is not specified. A `Maybe` and a `Result` are not printed: handle the missing value or the error first.
+An interpolation hole takes a value with a string form: an integer, a float, a bool, a string, or a struct, an enum, an array, a `List@(T)` or an `Own@(T)` through the predefined perk `Display`. The compiler derives `Display` from what a type holds -- `Point(x: 1, y: 2)`, `Shape.Circle(5)`, `[1, 2, 3]` -- and `extend T with Display: fn to_str() string` overrides it. A type that holds something with no string form (a function value, a `ptr`, a `HashMap`) has none, and a note names the field or the element. A `HashMap` itself is refused, because its iteration order is not specified. A `Maybe` and a `Result` are not printed: handle the missing value or the error first. In a generic body, a hole of a type parameter needs the constraint `Display` on that parameter: `@(T: Display)`.
 
 ### CE2036 {#ce2036}
 
@@ -1656,7 +1656,7 @@ Enum variant constructor must provide exact number of arguments for associated d
 
 **Message:** `HashMap@(K, V) key type '{key_type}' does not support hashing (missing .hash() method)`
 
-HashMap keys must support hashing. Use types that have .hash() method (primitives, strings, structs with hashable fields, enums, arrays).
+HashMap keys must support hashing. Use types that have .hash() method (primitives, strings, structs with hashable fields, enums, arrays). In a generic body, a key of a type parameter needs the constraint `Hashable` on that parameter.
 
 ### CE2055 {#ce2055}
 
@@ -1664,7 +1664,7 @@ HashMap keys must support hashing. Use types that have .hash() method (primitive
 
 **Message:** `HashMap@(K, V) key type '{key_type}' does not support equality comparison`
 
-HashMap keys must support equality comparison (==). This is required for collision resolution. The probe compares two keys through the `Eq` contract: an `extend K with Eq` implementation, else the equality the compiler derives from what the key holds. A function value, a `ptr` and a `HashMap` have no equality, and neither does a type that holds one. A `Hashable` override gives a hash only; it does not make a type comparable, so a key needs both halves: implement `Eq` beside it.
+HashMap keys must support equality comparison (==). This is required for collision resolution. The probe compares two keys through the `Eq` contract: an `extend K with Eq` implementation, else the equality the compiler derives from what the key holds. A function value, a `ptr` and a `HashMap` have no equality, and neither does a type that holds one. A `Hashable` override gives a hash only; it does not make a type comparable, so a key needs both halves: implement `Eq` beside it. In a generic body, a key of a type parameter needs the constraint `Eq` on that parameter.
 
 ### CE2056 {#ce2056}
 
@@ -1974,7 +1974,7 @@ A fixed array's size is a count of elements, so it must be a positive integer th
 
 **Help:** `put the row in a struct ('struct Row: {type} cells'), which takes a derived 'Eq', and search a 'Row[]'`
 
-contains() and index\_of() compare the needle against each element with '==', and starts\_with() and eq\_range() compare two arrays element by element with '=='. The element type must be one that '==' accepts ([CE2514](#ce2514) is the operator half of the same rule): a numeric type, bool, string, or a struct or an enum with a derived or implemented `Eq`. A closure element, or a struct that holds one, has no '==', so a search over it has no meaning the compiler could supply. Implement `Eq` for the element (`extend T with Eq: fn eq(T other) bool`), or search an array of the identifying part instead. An array element (fixed or dynamic, at any depth) is refused too, because an array has no '==' at the top level ([CE2514](#ce2514)). An array cannot implement `Eq`, so the escape is a struct that holds the row (`struct Row: i32[2] cells`): the struct takes a derived `Eq` that compares the row element by element, and a `Row[]` can be searched.
+contains() and index\_of() compare the needle against each element with '==', and starts\_with() and eq\_range() compare two arrays element by element with '=='. The element type must be one that '==' accepts ([CE2514](#ce2514) is the operator half of the same rule): a numeric type, bool, string, or a struct or an enum with a derived or implemented `Eq`. A closure element, or a struct that holds one, has no '==', so a search over it has no meaning the compiler could supply. Implement `Eq` for the element (`extend T with Eq: fn eq(T other) bool`), or search an array of the identifying part instead. An array element (fixed or dynamic, at any depth) is refused too, because an array has no '==' at the top level ([CE2514](#ce2514)). An array cannot implement `Eq`, so the escape is a struct that holds the row (`struct Row: i32[2] cells`): the struct takes a derived `Eq` that compares the row element by element, and a `Row[]` can be searched. In a generic body, a search in an array or a List of a type parameter needs the constraint `Eq` on that parameter.
 
 ### CE2101 {#ce2101}
 
@@ -2048,7 +2048,7 @@ A type name is written in a TYPE position -- a declaration, an annotation, a con
 - `did you mean '{field}'?`
 - `'{type}' declares {fields}`
 
-A name behind a VALUE's dot is a field of that value's type, and this type declares no such field -- [CE2102](#ce2102) is the same rule one position over, behind a TYPE's dot. A METHOD is not a field: `v.name` with no parentheses reads a field, and Sushi has no bound-method value, so write the call. The rule covers every receiver: a struct, and a receiver that carries NO field -- an array, a primitive, a string, a closure, a `ptr`. A compiler-defined method, such as `s.len`, gets the same note as a method of a struct. An ENUM receiver is this error too: an enum carries variants, and a variant is reached by a pattern and not by a dot. So the help says to take the value first: `??`, `.realise(default)` or `match` for a Result, `.realise(default)`, `match` or `.or_err(nom e)??` for a Maybe (`??` takes a Result only), `match` for a user enum. A `Maybe@(T)` gets no implicit unwrap, for the reason a condition is a bool and nothing else, and because the `None` arm has no answer.
+A name behind a VALUE's dot is a field of that value's type, and this type declares no such field -- [CE2102](#ce2102) is the same rule one position over, behind a TYPE's dot. A METHOD is not a field: `v.name` with no parentheses reads a field, and Sushi has no bound-method value, so write the call. The rule covers every receiver: a struct, and a receiver that carries NO field -- an array, a primitive, a string, a closure, a `ptr`. A compiler-defined method, such as `s.len`, gets the same note as a method of a struct. An ENUM receiver is this error too: an enum carries variants, and a variant is reached by a pattern and not by a dot. So the help says to take the value first: `??`, `.realise(default)` or `match` for a Result, `.realise(default)`, `match` or `.or_err(nom e)??` for a Maybe (`??` takes a Result only), `match` for a user enum. A `Maybe@(T)` gets no implicit unwrap, for the reason a condition is a bool and nothing else, and because the `None` arm has no answer. A type parameter has no field: a constraint promises methods and nothing else, so a generic body cannot read a field of a value of a type parameter.
 
 ### CE2107 {#ce2107}
 
@@ -2122,7 +2122,7 @@ An index reads an element of an array (`T[N]`, `T[]`) or a byte of a string, and
 
 **Message:** `cannot print a value of type '{type}'`
 
-`print` and `println` take what an interpolation hole takes ([CE2035](#ce2035)): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. An array, a `List@(T)` and an `Own@(T)` print as a type that holds them prints them (`[1, 2, 3]`, the payload of an `Own@(T)`), and a `HashMap` is refused, because its iteration order is not specified. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)`. A type that holds something with no string form has none, and a note names the field or the element.
+`print` and `println` take what an interpolation hole takes ([CE2035](#ce2035)): an integer, a float, a bool, a string, or a struct or an enum through the predefined perk `Display`. An array, a `List@(T)` and an `Own@(T)` print as a type that holds them prints them (`[1, 2, 3]`, the payload of an `Own@(T)`), and a `HashMap` is refused, because its iteration order is not specified. A `Maybe` must be handled first -- `match` it, or take the value with `.realise(default)`. A type that holds something with no string form has none, and a note names the field or the element. In a generic body, a print of a type parameter needs the constraint `Display` on that parameter: `@(T: Display)`.
 
 ### CE2116 {#ce2116}
 
@@ -2615,7 +2615,7 @@ Sushi converts no numeric type on its own, so two numeric operands of one operat
 - `` only <{home}> may declare `extend {source} as {target}:`; answer an error type of your own, and convert both errors into it ``
 - `` declare `extend {source} as {target}:` in the unit that declares '{target}', and return the converted value ``
 
-The ?? operator propagates the error of the inner Result@(T, \{inner\_err\}) into the channel of the enclosing body, Result@(T, \{outer\_err\}). When the two error types are the same type, the error propagates unchanged. A `??` converts an error only through a declared conversion (see [the error-conversion design](design/error-conversion.md)): when the two error types differ, it calls `extend {inner_err} as {outer_err}:` if the program declares it, and the help names that declaration. When no declaration of the pair is legal (a target with no home module, such as `StdError`, or a generic error type on either side), the help names `.map_err(f)??` at the site. A conversion is one step, so `A as B` and `B as C` do not give `A` to `C`: the lookup is an exact match on the pair, and a program that wants `A` to `C` declares it. Only the unit that declares the target type may declare the conversion ([CE2519](#ce2519)). For one site, `r.map_err(f)??` converts with no declaration.
+The ?? operator propagates the error of the inner Result@(T, \{inner\_err\}) into the channel of the enclosing body, Result@(T, \{outer\_err\}). When the two error types are the same type, the error propagates unchanged. A `??` converts an error only through a declared conversion (see [the error-conversion design](design/error-conversion.md)): when the two error types differ, it calls `extend {inner_err} as {outer_err}:` if the program declares it, and the help names that declaration. When no declaration of the pair is legal (a target with no home module, such as `StdError`, or a generic error type on either side), the help names `.map_err(f)??` at the site. A conversion is one step, so `A as B` and `B as C` do not give `A` to `C`: the lookup is an exact match on the pair, and a program that wants `A` to `C` declares it. Only the unit that declares the target type may declare the conversion ([CE2519](#ce2519)). For one site, `r.map_err(f)??` converts with no declaration. In a generic body, a `??` on a Result whose error type is a type parameter propagates that same error type and no other, because the template cannot name a conversion for it.
 
 ### CE2512 {#ce2512}
 
@@ -2646,7 +2646,7 @@ A comparison asks one question of two values, so both operands must be of one ty
 - `compare the elements, or the lengths`
 - `compare the fields one at a time`
 
-Equality (== !=) reads the predefined perk `Eq`, and an order (&lt; > &lt;= >=) reads `Ord`. A primitive keeps a closed set: equality for the numeric types, bool and string, an order for the numeric types and string, where it reads the bytes. A struct or an enum, `Maybe` and `Result` included, has the equality and the order the compiler DERIVES from what it holds -- every field, or the variant and then its payload -- unless an `extend T with Eq` (or `Ord`) implementation overrides it. A type that holds something with no such contract -- a function value, a `ptr`, a `HashMap` -- has none, and a note names the field that stops it. An array, a `List` and an `Own` compare only where they are held inside a type. A bool is deliberately excluded from the order at the top level: false &lt; true is almost always a typo for != or a missing 'and'. Inside a derived order a bool field orders false before true.
+Equality (== !=) reads the predefined perk `Eq`, and an order (&lt; > &lt;= >=) reads `Ord`. A primitive keeps a closed set: equality for the numeric types, bool and string, an order for the numeric types and string, where it reads the bytes. A struct or an enum, `Maybe` and `Result` included, has the equality and the order the compiler DERIVES from what it holds -- every field, or the variant and then its payload -- unless an `extend T with Eq` (or `Ord`) implementation overrides it. A type that holds something with no such contract -- a function value, a `ptr`, a `HashMap` -- has none, and a note names the field that stops it. An array, a `List` and an `Own` compare only where they are held inside a type. A bool is deliberately excluded from the order at the top level: false &lt; true is almost always a typo for != or a missing 'and'. Inside a derived order a bool field orders false before true. A generic body is checked where it is written: `==` and `!=` on a type parameter need the constraint `Eq`, and `<`, `<=`, `>` and `>=` need `Ord`. Add the constraint to the type parameter.
 
 ### CE2515 {#ce2515}
 
@@ -2693,7 +2693,7 @@ A foreach walks anything whose next() answers Maybe@(T), and the '??' on the BIN
 - `take the value with '??', '.realise(default)' or match`
 - `take the value with '.realise(default)', match, or '.or_err(nom e)??'`
 
-Arithmetic combines numbers, so every operand of + - \* / % and of the unary minus must be an integer or a float. Nothing else carries the operation. A bool is not 0 and 1 here, an enum is a tag and a payload, and a struct or an array is a value with parts -- add the parts one at a time, and use match to read an enum. An unhandled Result@(T, E) or Maybe@(T) is the common way to land here: for a Result the fault is a missing '??', and the diagnostic names that escape beside '.realise(default)' and match. A Maybe holds no error value and '??' takes a Result only, so for a Maybe the help names '.or\_err(nom e)??' in place of '??'. The one carve-out is '+' with a string operand, which is [CE2509](#ce2509), because Sushi has no concatenation operator and [CE2509](#ce2509) names the interpolation that replaces it. Two numeric operands that disagree in width are [CE2510](#ce2510) instead, which says which widths met. In a constant expression, the same operands are [CE0110](#ce0110).
+Arithmetic combines numbers, so every operand of + - \* / % and of the unary minus must be an integer or a float. Nothing else carries the operation. A bool is not 0 and 1 here, an enum is a tag and a payload, and a struct or an array is a value with parts -- add the parts one at a time, and use match to read an enum. An unhandled Result@(T, E) or Maybe@(T) is the common way to land here: for a Result the fault is a missing '??', and the diagnostic names that escape beside '.realise(default)' and match. A Maybe holds no error value and '??' takes a Result only, so for a Maybe the help names '.or\_err(nom e)??' in place of '??'. The one carve-out is '+' with a string operand, which is [CE2509](#ce2509), because Sushi has no concatenation operator and [CE2509](#ce2509) names the interpolation that replaces it. Two numeric operands that disagree in width are [CE2510](#ce2510) instead, which says which widths met. In a constant expression, the same operands are [CE0110](#ce0110). A type parameter has no arithmetic: no constraint promises one, so a generic body refuses the arithmetic operators and the unary minus on a value of a type parameter. Write the function for a numeric type.
 
 ### CE2519 {#ce2519}
 
@@ -3132,7 +3132,7 @@ The perk implementation is missing a required method. All methods declared in th
 
 **Message:** `type {type} does not implement perk {perk} required by constraint`
 
-A type constraint requires the type to implement a specific perk. Add an implementation with 'extend \{type\} with \{perk\}:'.
+A type constraint requires the type to implement a specific perk. Add an implementation with 'extend \{type\} with \{perk\}:'. A call, a written type or a constructor in a generic body passes a type parameter on to another generic. The parameter satisfies a constraint only when a constraint of its own promises it: add the constraint to the type parameter of the caller.
 
 ### CE4007 {#ce4007}
 
@@ -3184,7 +3184,7 @@ A perk has no `Self`, so a contract cannot say 'returns one of me' and a constru
 
 **Message:** `perk '{perk}' gives '{method}' a second home: perk '{other}' already provides it`
 
-A name has exactly one home on a type (see [the method-resolution design](design/method-resolution.md)). Two perks that each provide a method of one name on one type leave a call of that name naming neither implementation, and the two bodies would take one symbol. The note points at the first one. Rename the method of one perk, or implement only one of them. A derived method is not a home: a type that derives `compare` from `Ord` may still implement a user perk that provides `compare`, and an explicit call then reads the implementation.
+A name has exactly one home on a type (see [the method-resolution design](design/method-resolution.md)). Two perks that each provide a method of one name on one type leave a call of that name naming neither implementation, and the two bodies would take one symbol. The note points at the first one. Rename the method of one perk, or implement only one of them. A derived method is not a home: a type that derives `compare` from `Ord` may still implement a user perk that provides `compare`, and an explicit call then reads the implementation. The rule holds for a type parameter too: two constraints of one parameter that both declare a method of one name give it two homes, and the body cannot call the method. Remove one constraint, or rename the method of one perk.
 
 ### CE4016 {#ce4016}
 

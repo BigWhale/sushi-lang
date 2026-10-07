@@ -1,0 +1,12 @@
+# A caller whose type parameter promises the callee's constraint passes it on (#1070).
+# EXPECT_STDOUT_EXACT: "true\n"
+
+fn inner@(U: Hashable)(U x) u64:
+    return x.hash()
+
+fn outer@(T: Hashable)(T x) u64:
+    return inner(x)
+
+fn main() i32:
+    println(outer(42) == inner(42))
+    return 0
