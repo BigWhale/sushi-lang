@@ -293,32 +293,41 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
 
 def holds_declared_resource(t: Optional["Type"], drops: AbstractSet[str],
                             resolve: Optional[Callable[["Type"], Optional["Type"]]] = None,
-                            ) -> bool:
+                            found: Optional[list] = None) -> bool:
     """Does this type declare a resource, or hold one anywhere inside it?
 
     NARROWER than `owns_resource`, and the difference is the whole point: a `string`
     owns heap and answers True there, and it deep-copies perfectly well. This asks only
     about the DECLARED half -- a `Drop` type, a struct with one in a field, an array or
-    a container of them.
+    a container of them -- and an opaque type parameter that does not promise `Clone`
+    (#1070, R5): `Clone` is the promise "holds no resource", so the two are one fact.
 
     It is what `.clone()` is refused on (ruling R3). A derived clone of a handle copies
     the descriptor number, so two values hold one descriptor and both drop: a double
     close that the copy verb hides. `.share()` is the operation that means a second
     owner, and it says so in its name.
+
+    The walk stops where the type holds nothing by value (`_HOLDS_STOPS`: a function
+    value, an iterator, a pointer). A user struct holds what its fields hold; only a
+    container keeps its element in its type arguments, so only a container's are read.
+    `found`, when given, receives each type that declares a resource: the clone check
+    reads it to name the fault (CE4018 for a type parameter, CE2431 for a handle).
     """
     from sushi_lang.semantics.type_walk import walk_named_types
+    from sushi_lang.semantics.type_predicates import generic_base_of
+    bases = _container_bases()
 
     def declares_here(ty: "Type") -> bool:
         if isinstance(ty, TypeParameter):
-            # `Clone` is the promise "holds no resource" (#1070, R5): one fact, two names.
             return ty.is_opaque and not ty.promises("Clone")
         return isinstance(ty, (StructType, EnumType)) and ty.name in drops
 
-    return any(
-        declares_here(ty)
-        for ty in walk_named_types(
-            t, stop=lambda ty: type(ty).__name__ in _HOLDS_STOPS, resolve=resolve,
-            struct_type_args=True))
+    declaring = [ty for ty in walk_named_types(
+        t, stop=lambda ty: type(ty).__name__ in _HOLDS_STOPS, resolve=resolve,
+        struct_type_args=lambda ty: generic_base_of(ty) in bases) if declares_here(ty)]
+    if found is not None:
+        found.extend(declaring)
+    return bool(declaring)
 
 
 @dataclass(frozen=True)

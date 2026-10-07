@@ -1,0 +1,19 @@
+# A function value that names a type parameter holds no resource of it: `.clone()` of
+# the value, and of a struct that holds one, needs no `Clone` on the parameter (#1070).
+# EXPECT_STDOUT_EXACT: "6\n7\n"
+
+struct Holder@(T):
+    fn(i32) -> T make
+
+fn keep@(T)(fn(T) -> T f) fn(T) -> T:
+    return f.clone()
+
+fn twin@(T)(Holder@(T) h) Holder@(T):
+    return h.clone()
+
+fn main() i32:
+    let fn(i32) -> i32 g = keep(|i32 n| n + 1)
+    println(g(5))
+    let Holder@(i32) h = twin(Holder(|i32 n| n + 2))
+    println(h.make(5))
+    return 0

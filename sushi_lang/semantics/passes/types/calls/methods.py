@@ -435,19 +435,22 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
     from sushi_lang.semantics.typesys import holds_declared_resource
     if call.method != "clone":
         return False
-    if _reject_clone_of_opaque(validator, call, receiver_type):
-        return True
-    drops = validator.drop_type_names
-    if not drops:
-        return False
 
     def resolve(ty):
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
         return resolve_unknown_type(ty, validator.struct_table.by_name,
                                     validator.enum_table.by_name)
 
-    if not holds_declared_resource(receiver_type, drops, resolve=resolve):
+    # One predicate (`holds_declared_resource`), and the type that answers it picks the
+    # code: an opaque type parameter with no `Clone` (CE4018, #1070), or a handle.
+    held: list = []
+    if not holds_declared_resource(receiver_type, validator.drop_type_names,
+                                   resolve=resolve, found=held):
         return False
+    unpromised = [ty for ty in held if isinstance(ty, TypeParameter)]
+    if unpromised:
+        _reject_clone_of_opaque(validator, call, receiver_type, unpromised[0])
+        return True
 
     er.emit_with(validator.reporter, er.ERR.CE2431, call.loc,
                  type=display_type(receiver_type)) \
@@ -458,23 +461,18 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
 
 
 def _reject_clone_of_opaque(validator: 'TypeValidator', call: MethodCall,
-                            receiver_type) -> bool:
-    """CE4018: a value that holds a type parameter with no `Clone` has no deep copy.
+                            receiver_type, param: TypeParameter) -> None:
+    """CE4018: the receiver holds a type parameter that does not promise `Clone`.
 
     In a template check (#1070, R5) the parameter MAY hold a resource, so the body can
-    clone it only when the parameter promises `Clone`. One rule for the value of `T`, a
-    `List@(T)` and a user `Box@(T)`: the receiver holds the parameter.
+    clone a value that holds it only when the parameter promises `Clone`.
     """
-    from sushi_lang.semantics.generics.opaque import note_opaque, opaque_parameters
-    unpromised = [p for p in opaque_parameters(receiver_type) if not p.promises("Clone")]
-    if not unpromised:
-        return False
+    from sushi_lang.semantics.generics.opaque import note_opaque
     diagnostic = er.emit_with(validator.reporter, er.ERR.CE4018, call.loc,
-                              type=display_type(receiver_type), param=unpromised[0].name)
-    note_opaque(diagnostic, unpromised[0]) \
-        .help(f"add 'Clone' to the constraints of '{unpromised[0].name}': "
-              f"'@({unpromised[0].name}: Clone)'").emit()
-    return True
+                              type=display_type(receiver_type), param=param.name)
+    note_opaque(diagnostic, param) \
+        .help(f"add 'Clone' to the constraints of '{param.name}': "
+              f"'@({param.name}: Clone)'").emit()
 
 
 def extension_call_result_type(validator: 'TypeValidator', method):
