@@ -1,0 +1,11 @@
+# A `return` inside an `expand` decides nothing on the template: the pack is not known
+# there, so the path is left to the copy, and the template takes no CE0107 (#1070).
+# EXPECT_STDOUT_EXACT: "1\n"
+
+fn first@(...Ts: Display)(...Ts args) string:
+    expand(a in args):
+        return "{a}"
+
+fn main() i32:
+    println(first(1, 2))
+    return 0

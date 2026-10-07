@@ -1,6 +1,6 @@
 """Result pattern validation utilities."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional, Tuple, List
+from typing import TYPE_CHECKING, Optional, Tuple, List, Union, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
@@ -77,43 +77,23 @@ def is_result_pattern(node: Expr) -> Tuple[bool, Optional[str]]:
 
 
 def validate_result_pattern(validator: 'TypeValidator', node: Expr,
-                           expected_type: 'Type') -> bool:
-    """Main orchestrator for Result pattern validation."""
-    is_result, variant_name = is_result_pattern(node)
+                            expected_type: 'Type') -> None:
+    """Check the payload of a `Result.Ok(...)` / `Result.Err(...)` against the channel.
 
-    if not is_result:
-        if isinstance(node, MethodCall):
-            if isinstance(node.receiver, Name) and (
-                node.receiver.id in validator.enum_table.by_name or
-                node.receiver.id in validator.generic_enum_table.by_name
-            ):
-                return False
-        return False
-
+    The caller decided with `spells_a_result` that the node is one of the two; this
+    checks only the payload (CE2031, CE2039).
+    """
     from sushi_lang.semantics.generics.results import is_result_enum, result_ok_err
 
+    _, variant_name = is_result_pattern(node)
     if is_result_enum(expected_type):
         compare_type, expected_error_type = result_ok_err(expected_type)
     else:
         compare_type = expected_type
         expected_error_type = None
 
-    loc = node.loc
-
-    if isinstance(node, EnumConstructor):
-        args = node.args
-    elif isinstance(node, DotCall):
-        args = node.args
-    elif isinstance(node, MethodCall):
-        args = node.args
-    else:
-        return False
-
+    args = cast(Union[EnumConstructor, DotCall, MethodCall], node).args
     if variant_name == "Ok":
-        validate_result_ok_value(validator, args, compare_type, loc)
-    elif variant_name == "Err":
-        validate_result_err_value(validator, args, expected_error_type, loc)
+        validate_result_ok_value(validator, args, compare_type, node.loc)
     else:
-        return False
-
-    return True
+        validate_result_err_value(validator, args, expected_error_type, node.loc)

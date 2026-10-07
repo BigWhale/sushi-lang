@@ -5,14 +5,15 @@ from enum import Enum
 from typing import Iterable, Optional
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import Block, Break, Continue, Lambda, Stmt, Return, If, Match
+from sushi_lang.semantics.ast import (Block, Break, Continue, Expand, Lambda, Stmt, Return,
+                                 If, Match)
 
 
 class Reach(Enum):
     """Where the path through a statement or a block goes."""
     ENDS = "ends"            # it returns on every path
     FALLS = "falls"          # some path reaches the statement after it
-    UNDECIDED = "undecided"  # a `match` refused as not exhaustive decides it (#886)
+    UNDECIDED = "undecided"  # a refused `match` (#886) or a template `expand` (#1070)
 
 
 def _branches(reaches: Iterable[Reach]) -> Reach:
@@ -55,6 +56,13 @@ def statement_reach(self, stmt: Stmt) -> Reach:
         if stmt.not_exhaustive and reach is Reach.ENDS:
             return Reach.UNDECIDED
         return reach
+
+    if isinstance(stmt, Expand):
+        # Only a template still holds an `expand`: a copy holds the unrolled body. The
+        # pack is not known here, so a body that ends leaves the path to the copy (#1070).
+        if block_reach(self, stmt.body) is Reach.FALLS:
+            return Reach.FALLS
+        return Reach.UNDECIDED
 
     # A loop may not run, or may break. Every other statement goes on to the next.
     return Reach.FALLS

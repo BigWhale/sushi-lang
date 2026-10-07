@@ -160,6 +160,7 @@ def check_template_statements(self, program) -> None:
     for node, kind in bodies:
         self.reporter.leave_body()
         self.body_name = callable_text(node.name, kind)
+        self.in_template_copy = False
         _reject_path_faults(self, node)
         if has_channel(node):
             _reject_unspelled_returns(self, node.body)

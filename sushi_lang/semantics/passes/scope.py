@@ -54,8 +54,8 @@ class VariableInfo:
     # (#1019, #1031).
     written: Optional[WrittenLet] = None
     # What CW1001 calls the name: a "variable" or a "parameter". None for the loop
-    # variable of an `expand`, which repeats a body once per pack element and need not
-    # read the element.
+    # variable of an `expand`: no copy declares it, because the unroll renames it, so
+    # neither CW1001 nor CW1002 names it on the template either (#1070).
     kind: Optional[str] = "variable"
 
 
@@ -184,9 +184,11 @@ class ScopeAnalyzer:
             return
 
         shown = written.name if written is not None else name
-        for outer_scope in self.scopes[:-1]:
+        # The loop variable of an `expand` takes no part in the shadow check (`kind`).
+        outer_scopes = self.scopes[:-1] if kind is not None else []
+        for outer_scope in outer_scopes:
             outer_var = _declared_as(outer_scope, shown)
-            if outer_var is None:
+            if outer_var is None or outer_var.kind is None:
                 continue
             if written not in self._shadows_told:
                 diag = self.err.emit_with(er.ERR.CW1002, span, name=shown)

@@ -110,16 +110,22 @@ def is_written(decl: object) -> bool:
 
 
 def is_template_copy(body: object) -> bool:
-    """Whether the compiler cut this body from a template whose WRITTEN body is checked.
+    """Whether the compiler cut this body from a template that a walk of THIS build read.
 
     The rules that need no type run once, on the template as written (#1070), so a copy
-    does not run them again: one fault, one diagnostic. A copy of a generic function and
-    a method of a copied perk implementation carry `instance_of`; a copy of an extension
-    carries the unit it went home to. A lambda lifted out of a copy is not one: the
-    template check does not enter a lambda, because a lambda can take its channel from
-    the type that its position expects.
+    of such a template does not run them again: one fault, one diagnostic. A copy of a
+    generic function and a method of a copied perk implementation carry `instance_of`; a
+    copy of an extension carries the unit it went home to.
+
+    Two copies are not muted. A copy of a binary or hybrid library's template: the
+    template is only in the tables, no walk of this build reads it, so the copy is the
+    one place its body is checked. And a lambda lifted out of a copy: the template check
+    does not enter a lambda, because a lambda can take its channel from the type that
+    its position expects.
     """
     from sushi_lang.semantics.ast import ExtendDef
+    if getattr(body, "is_library_template", False):
+        return False
     if isinstance(body, ExtendDef):
         return body.home_unit is not None
     if getattr(body, "instance_of", None) is None:

@@ -1058,7 +1058,7 @@ the iterator's element does not match is **[CE2034](error-catalog.md#ce2034)**.
 
 **`_` discards the item.** A loop that only repeats its body writes `_` as the binder, as
 a `match` pattern does. `_` binds nothing and the body cannot name it, so it is never
-[CW1001](error-catalog.md#cw1001) (unused variable). A NAMED binder that the body never reads is still [CW1001](error-catalog.md#cw1001).
+[CW1001](error-catalog.md#cw1001) (an unused name). A NAMED binder that the body never reads is still [CW1001](error-catalog.md#cw1001).
 
 ```sushi
 fn main() i32:
