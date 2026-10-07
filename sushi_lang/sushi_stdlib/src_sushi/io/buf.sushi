@@ -19,8 +19,7 @@ offer -- read_line(), read_all(), lines(), fill() -- stay concrete methods; a co
 that direction (Rust's BufRead) is a separate, later question.
 
 Limitations: fill() is part of the surface because an extension method carries no
-visibility marker -- it is as visible as the type it extends. write() copies the string's bytes twice, once into
-to_bytes() and once into the buffer.
+visibility marker -- it is as visible as the type it extends.
 :##
 
 use <collections/strings>
@@ -156,11 +155,7 @@ extend BufReader@(R) read_line(poke self) Maybe@(string) | IoError:
             if (not self.fill()??):
                 break
         let i32 stop = self.window.len()
-        let i32 at = -1
-        foreach(i in self.pos..stop):
-            if (self.window[i] == 10):
-                at := i
-                break
+        let i32 at = self.window.index_of_from(a'\n', self.pos).realise(-1)
         saw_any := true
         if (at < 0):
             line.extend_range(self.window, self.pos, stop - self.pos)
@@ -384,7 +379,7 @@ extend BufWriter@(W) with Writer:
     - Errors: IoError, when a drain failed.
     :##
     fn write(poke self, string data) ~ | IoError:
-        self.buf.extend(data.to_bytes())
+        self.buf.extend_str(data)
         self.drain_if_full()??
         return Result.Ok(~)
 
@@ -410,7 +405,7 @@ costs no system call of its own.
 - Errors: IoError, when a drain failed.
 :##
 extend BufWriter@(W) write_line(poke self, string data) ~ | IoError:
-    self.buf.extend(data.to_bytes())
+    self.buf.extend_str(data)
     self.buf.push(10)
     self.drain_if_full()??
     return Result.Ok(~)
