@@ -1,5 +1,6 @@
 """The monomorphize pass: every generic definition becomes concrete instances."""
 from __future__ import annotations
+import copy
 from contextlib import contextmanager
 from typing import Dict, Iterator, Optional, Tuple, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
@@ -101,6 +102,7 @@ class Monomorphizer:
         key: object = None,
         template_file: str | None = None,
         error_params: Dict[str, object] | None = None,
+        site: Tuple[object, str | None] | None = None,
     ) -> bool:
         """Validate perk constraints on type arguments. False when one refused (#579).
 
@@ -122,7 +124,11 @@ class Monomorphizer:
         if key is not None and key in self._refused:
             return False
 
-        span, filename = self.sites.get(key, (None, None)) if key is not None else (None, None)
+        if site is not None:
+            span, filename = site
+        else:
+            span, filename = (self.sites.get(key, (None, None)) if key is not None
+                              else (None, None))
         valid = self._error_arguments_hold(type_params, type_args, error_params or {},
                                            span, filename, template_file)
         for position, param in enumerate(type_params):
@@ -144,6 +150,23 @@ class Monomorphizer:
             if key is not None:
                 self._refused.add(key)
         return valid
+
+    def check_call_constraints(self, params, args, key, span, filename, report: bool) -> bool:
+        """The constraints of the method-level type arguments of one call (#1191).
+
+        With `report` the check is `_validate_type_constraints`, the one a free function
+        takes. Without it the answer is the same and nothing is emitted: the inferring
+        half of the typecheck pass asks it too.
+        """
+        if key in self._refused:
+            return False
+        if report:
+            return self._validate_type_constraints(
+                params, args, key=key, template_file=filename, site=(span, filename))
+        probe = copy.copy(self.constraint_validator)
+        probe.reporter = Reporter()
+        return all(probe.validate_all_constraints(param, arg, span)
+                   for param, arg in zip(params, args, strict=False))
 
     def _error_arguments_hold(self, type_params, type_args, error_params, span,
                               filename, template_file) -> bool:

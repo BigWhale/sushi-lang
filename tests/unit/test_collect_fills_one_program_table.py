@@ -28,6 +28,7 @@ FILLED_LATER = {
     "refused_extension_keys": "the typecheck pass",
     "intern_generic_ref": "the analyzer's late interner",
     "request_function_instance": "the analyzer's late function request",
+    "check_method_constraints": "the analyzer's constraint check for a method call",
 }
 
 

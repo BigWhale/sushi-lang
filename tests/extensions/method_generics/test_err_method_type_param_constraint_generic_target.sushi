@@ -1,0 +1,18 @@
+# A constraint on a method-level type parameter is checked at the call (#1191).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+perk Weigh:
+    fn weight() i32
+
+struct Box@(T):
+    T value
+
+extend Box@(T) pair_with@(U: Weigh)(U other) i32:
+    return other.weight()
+
+struct Plain:
+    i32 n
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(b.pair_with(Plain(2)))
+    return 0

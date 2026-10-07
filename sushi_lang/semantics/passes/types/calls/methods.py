@@ -289,7 +289,7 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
         substitute_type_params(p.ty, receiver_subst) if p.ty is not None else None
         for p in template.params]
 
-    margs_names = list(template.method_type_params)
+    margs_names = list(template.method_type_param_names)
     arg_types = [infer_call_arg_type(validator, arg) if expected is not None else None
                  for arg, expected in zip(call.args, expected_params, strict=False)]
     type_param_map, unsolved = solve_leading_type_args(
@@ -316,6 +316,9 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     # E3 at the call, which is the instance: no copy is cut for a refused argument.
     if _refuses_non_error_arguments(validator, template, receiver_type, full_subst, call,
                                     report):
+        return RESOLUTION_REPORTED if report else None
+
+    if _refuses_unmet_constraints(validator, template, receiver_type, margs, call, report):
         return RESOLUTION_REPORTED if report else None
 
     ret = (substitute_type_params(template.ret_type, full_subst)
@@ -348,6 +351,23 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     _queue_extension_instantiation(validator, template, receiver_type,
                                    receiver_args, margs)
     return concrete
+
+
+def _refuses_unmet_constraints(validator: 'TypeValidator', template, receiver_type,
+                               margs, call, report: bool) -> bool:
+    """CE4006 for a method type argument that breaks its constraint, at the call (#1191).
+
+    The method-level parameter takes the path of a free function's: the analyzer's
+    `check_method_constraints` hook is `validate_all_constraints` over the same
+    monomorphizer. `report=False` asks the same question and emits nothing.
+    """
+    check = getattr(validator.tables, "check_method_constraints", None)
+    if check is None or not any(tp.constraints for tp in template.method_type_params):
+        return False
+    key = ("method", _resolved(validator, receiver_type), template.name,
+           tuple(_resolved(validator, arg) for arg in margs))
+    return not check(template.method_type_params, margs, key, call.loc,
+                     template.filename, report)
 
 
 def _refuses_non_error_arguments(validator: 'TypeValidator', template, receiver_type,

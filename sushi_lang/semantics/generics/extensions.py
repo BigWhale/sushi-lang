@@ -87,7 +87,7 @@ def monomorphize_extension_method(
     receiver substitution in this ONE pass over the template.
     """
     substitution = _type_substitution(generic_method.type_params, type_args)
-    substitution.update(_type_substitution(generic_method.method_type_params,
+    substitution.update(_type_substitution(generic_method.method_type_param_names,
                                            method_type_args))
     concrete = substitute_signature(generic_method.decl, substitution, substitutor)
     concrete.target_type = concrete_target_type

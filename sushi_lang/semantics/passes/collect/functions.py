@@ -403,11 +403,15 @@ class GenericExtensionMethod:
     err_span: Optional[Span] = None
     # Method-level type parameters (`name@(U)`): SEPARATE from the receiver-derived
     # `type_params`, whose CE0096 strict zip stays untouched. Solved at the call site.
-    method_type_params: Tuple[str, ...] = ()
+    method_type_params: Tuple[BoundedTypeParam, ...] = ()
     is_static: bool = False          # no receiver, called on the type name (#542)
     # The declaration as written. A copy is this node with its types substituted, so a
     # field the record does not spell is not lost (#803).
     decl: Optional[ExtendDef] = None
+
+    @property
+    def method_type_param_names(self) -> Tuple[str, ...]:
+        return tuple(tp.name for tp in self.method_type_params)
 
 
 @dataclass
@@ -471,8 +475,12 @@ class _ExtensionHeader:
     # Method-level type parameters (`name@(U)`, ruling on identity). Their names join
     # the receiver-derived ones in the deep signature conversion; a name that repeats a
     # receiver parameter is CE2064, refused where the receiver's own names are known.
-    method_type_params: Tuple[str, ...]
+    method_type_params: Tuple[BoundedTypeParam, ...]
     is_static: bool
+
+    @property
+    def method_type_param_names(self) -> Tuple[str, ...]:
+        return tuple(tp.name for tp in self.method_type_params)
 
 
 def _read_extension_header(ext: ExtendDef) -> Optional[_ExtensionHeader]:
@@ -494,7 +502,7 @@ def _read_extension_header(ext: ExtendDef) -> Optional[_ExtensionHeader]:
         target_type_span=ext.target_type_span,
         ret_span=ext.ret_span or name_span,
         err_span=ext.err_span,
-        method_type_params=tuple(tp.name for tp in (ext.type_params or ())),
+        method_type_params=tuple(ext.type_params or ()),
         is_static=ext.is_static,
     )
 
@@ -1022,7 +1030,7 @@ class FunctionCollector:
         method = self._generic_method(
             h, base_type_name=target_type.base_name,
             type_params=shape.param_names, target_key=shape.target_key,
-            type_param_names=(*shape.param_names, *h.method_type_params))
+            type_param_names=(*shape.param_names, *h.method_type_param_names))
 
         if self._reject_overlapping_target(method, target_type, h.name_span):
             return
@@ -1040,7 +1048,7 @@ class FunctionCollector:
                                     h.target_type_span or h.name_span):
             return True
 
-        shadowed = [m for m in h.method_type_params if m in shape.param_names]
+        shadowed = [m for m in h.method_type_param_names if m in shape.param_names]
         if shadowed:
             er.emit(self.r, ERR.CE2064, h.name_span, name=shadowed[0])
             return True
@@ -1073,7 +1081,7 @@ class FunctionCollector:
 
         param_name = shape.param_names[0]
 
-        if param_name in h.method_type_params:
+        if param_name in h.method_type_param_names:
             er.emit(self.r, ERR.CE2064, h.name_span, name=param_name)
             return None
 
@@ -1093,7 +1101,7 @@ class FunctionCollector:
 
         self.generic_extensions.add_method(self._generic_method(
             h, base_type_name=ARRAY_BASE_KEY, type_params=(param_name,),
-            target_key="", type_param_names=(param_name, *h.method_type_params)))
+            target_key="", type_param_names=(param_name, *h.method_type_param_names)))
         return None
 
     def _collect_concrete_extension(self, h: '_ExtensionHeader') -> None:
@@ -1169,7 +1177,7 @@ class FunctionCollector:
 
         self.generic_extensions.add_method(self._generic_method(
             h, base_type_name=base, type_params=(), target_key="",
-            type_param_names=h.method_type_params))
+            type_param_names=h.method_type_param_names))
         # The declaration itself must not be walked as a concrete extension: stash the
         # receiver so the drain can rebuild the target, and let collect_extensions
         # re-file the node under generic_extensions.
