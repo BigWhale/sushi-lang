@@ -203,12 +203,7 @@ fn parse_octet(string piece) u32 | NetError:
         return Result.Err(NetError.InvalidAddress)
     if (width > 1 and piece.char_at(0) == "0"):
         return Result.Err(NetError.InvalidAddress)
-    let u32 value = 0
-    foreach(i in 0..width):
-        let string digit = piece.char_at(i)
-        if (digit < "0" or digit > "9"):
-            return Result.Err(NetError.InvalidAddress)
-        value := value * 10 + ((digit.to_i32().realise(0)) as u32)
+    let u32 value = piece.parse_u32(10).or_err(nom NetError.InvalidAddress)??
     if (value > 255):
         return Result.Err(NetError.InvalidAddress)
     return Result.Ok(value)
@@ -241,28 +236,7 @@ fn parse_group(string piece) u16 | NetError:
     let i32 width = piece.len()
     if (width == 0 or width > 4):
         return Result.Err(NetError.InvalidAddress)
-    let u32 value = 0
-    foreach(i in 0..width):
-        let u32 nibble = hex_value(piece.char_at(i))??
-        value := value * 16 + nibble
-    return Result.Ok(value as u16)
-
-##:
-Reads one hexadecimal digit, in either case.
-
-The table doubles as the value: the index of a digit in it IS the nibble it
-stands for.
-
-- Parameter digit: The one-character text to read.
-- Returns: The digit's value, 0 to 15.
-- Errors: NetError.InvalidAddress, when the character is not hexadecimal.
-:##
-fn hex_value(string digit) u32 | NetError:
-    let string lower = digit.lower()
-    let i32 nibble = "0123456789abcdef".find(lower).realise(-1)
-    if (nibble < 0):
-        return Result.Err(NetError.InvalidAddress)
-    return Result.Ok(nibble as u32)
+    return Result.Ok(piece.parse_u16(16).or_err(nom NetError.InvalidAddress)??)
 
 ##:
 The eight groups of an IPv6 address, with any `::` run expanded.
@@ -402,36 +376,16 @@ fn v6_text(u64 high, u64 low) string:
     if (best_start < 0):
         let string[] all = from([])
         foreach(i in 0..8):
-            all.push(hex_text(groups[i]))
+            all.push(groups[i].to_hex())
         return ":".join(all)
 
     let string[] before = from([])
     foreach(i in 0..best_start):
-        before.push(hex_text(groups[i]))
+        before.push(groups[i].to_hex())
     let string[] after = from([])
     foreach(i in (best_start + best_len)..8):
-        after.push(hex_text(groups[i]))
+        after.push(groups[i].to_hex())
 
     let string head = ":".join(before)
     let string tail = ":".join(after)
     return "{head}::{tail}"
-
-##:
-Renders one group in lowercase hex, with no leading zero.
-
-- Parameter group: The group to render.
-- Returns: One to four hexadecimal digits.
-:##
-fn hex_text(u16 group) string:
-    if (group == 0):
-        return "0"
-    let string digits = "0123456789abcdef"
-    let string[] out = from([])
-    let bool started = false
-    foreach(i in 0..4):
-        let u32 shift = ((3 - i) * 4) as u32
-        let i32 nibble = (((group as u32) >> shift) & 15) as i32
-        if (nibble != 0 or started):
-            started := true
-            out.push(digits.char_at(nibble))
-    return "".join(out)
