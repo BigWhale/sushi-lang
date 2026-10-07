@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Set, Tuple
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -18,6 +18,9 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.semantics.generics.extension_targets import RefusalRecord
 
 from .utils import reject_reference_in, reject_try_in_body, reject_variadic_param
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.generics.types import TypeParameter
 
 
 @dataclass
@@ -144,12 +147,24 @@ class PerkImplementationTable:
     on_array_miss: Optional[Callable[..., bool]] = field(
         default=None, repr=False, compare=False)
 
+    # The program's perks, set by `SymbolTables`: an opaque type parameter answers the
+    # methods its constraints declare (#1070), and those are read from the perk.
+    perks: Optional[PerkTable] = field(default=None, repr=False, compare=False)
+    _promised: Dict[tuple, Optional[FuncDef]] = field(
+        default_factory=dict, repr=False, compare=False)
+
     def implements(self, type_name: str, perk_name: str) -> bool:
         """Check if a type implements a perk."""
         return (type_name, perk_name) in self.implementations
 
     def implements_type(self, ty: 'Type', perk_name: str) -> bool:
-        """Does this TYPE implement the perk? An array template's copy is cut on a miss."""
+        """Does this TYPE implement the perk? An array template's copy is cut on a miss.
+
+        An opaque type parameter implements what a constraint of it promises (#1070).
+        """
+        from sushi_lang.semantics.generics.types import TypeParameter
+        if isinstance(ty, TypeParameter):
+            return ty.promises(perk_name)
         type_name = _get_type_name(ty)
         if type_name is None:
             return False
@@ -160,8 +175,12 @@ class PerkImplementationTable:
 
     def _cut_on_miss(self, ty: 'Type', *, perk: Optional[str] = None,
                      method: Optional[str] = None) -> bool:
+        """No copy is cut for an array over an opaque type parameter: it is no type of
+        the program (#1070)."""
+        from sushi_lang.semantics.generics.opaque import holds_opaque
         from sushi_lang.semantics.typesys import DynamicArrayType
         return (self.on_array_miss is not None and isinstance(ty, DynamicArrayType)
+                and not holds_opaque(ty)
                 and self.on_array_miss(ty, perk=perk, method=method))
 
     def get(self, type_name: str, perk_name: str) -> Optional[ExtendWithDef]:
@@ -169,13 +188,52 @@ class PerkImplementationTable:
         return self.implementations.get((type_name, perk_name))
 
     def get_method(self, target_type: 'Type', method_name: str) -> Optional['FuncDef']:
-        """Get a specific perk method for a type."""
+        """Get a specific perk method for a type.
+
+        An opaque type parameter answers the method a constraint of it declares (#1070).
+        """
+        from sushi_lang.semantics.generics.types import TypeParameter
+        if isinstance(target_type, TypeParameter):
+            return self._promised_method(target_type, method_name)
         type_name = _get_type_name(target_type)
         if type_name is None:
             return None
         found = self._method(type_name, method_name)
         if found is None and self._cut_on_miss(target_type, method=method_name):
             found = self._method(type_name, method_name)
+        return found
+
+    def promising_perks(self, param: 'Type', method_name: str) -> List[str]:
+        """The constraints of an opaque parameter that declare `method_name`, in order."""
+        from sushi_lang.semantics.generics.types import TypeParameter
+        if not isinstance(param, TypeParameter) or self.perks is None:
+            return []
+        found = []
+        for perk_name in param.constraints:
+            perk = self.perks.get(perk_name)
+            if perk is not None and any(m.name == method_name for m in perk.methods):
+                found.append(perk_name)
+        return found
+
+    def _promised_method(self, param: "TypeParameter", method_name: str) -> Optional[FuncDef]:
+        """The method of the first constraint that declares it, as an implementation.
+
+        The contract's signature, with the implementing type (`ReceiverType`) read as the
+        parameter itself, so `Clone.clone()` answers `T`. The body is empty: a template
+        check reads the signature alone. A second constraint that declares the name too
+        is the template's CE4015, and the first one answers here.
+        """
+        key = (param, param.constraints, method_name)
+        if key in self._promised:
+            return self._promised[key]
+        perks = self.promising_perks(param, method_name)
+        found = None
+        if perks:
+            perk = self.perks.get(perks[0]) if self.perks is not None else None
+            sig = next(m for m in perk.methods if m.name == method_name) if perk else None
+            if sig is not None:
+                found = _as_implementation(sig, param)
+        self._promised[key] = found
         return found
 
     def _method(self, type_name: str, method_name: str) -> Optional['FuncDef']:
@@ -186,6 +244,23 @@ class PerkImplementationTable:
                     if method.name == method_name:
                         return method
         return None
+
+
+def _as_implementation(sig: PerkMethodSignature, param: Type) -> FuncDef:
+    """A contract method as the implementation an opaque parameter promises (#1070)."""
+    from dataclasses import replace
+    from sushi_lang.semantics.ast import Block
+
+    def receiver_is(ty: Optional[Type]) -> Optional[Type]:
+        return param if isinstance(ty, ReceiverType) else ty
+
+    return FuncDef(
+        loc=sig.loc, name=sig.name,
+        params=[replace(p, ty=receiver_is(p.ty)) for p in sig.params],
+        ret=receiver_is(sig.ret), body=Block(loc=sig.loc, statements=[]),
+        err_type=sig.err_type, err_span=sig.err_span, name_span=sig.name_span,
+        ret_span=sig.ret_span, self_mode=sig.self_mode,
+        self_mode_span=sig.self_mode_span)
 
 
 def _get_type_name(ty: Optional[Type]) -> Optional[str]:
@@ -714,13 +789,15 @@ class PerkCollector:
     def _add_template(self, impl: ExtendWithDef, base_type_name: str,
                       type_params: Tuple[str, ...]) -> None:
         """File a template, its method signatures written in `TypeParameter`s."""
-        from sushi_lang.semantics.passes.collect.functions import deep_type_params
+        from sushi_lang.semantics.passes.collect.functions import (
+            bare_type_params, deep_type_params)
 
+        params = bare_type_params(type_params)
         for method in impl.methods or []:
-            method.ret = deep_type_params(method.ret, type_params)
-            method.err_type = deep_type_params(method.err_type, type_params)
+            method.ret = deep_type_params(method.ret, params)
+            method.err_type = deep_type_params(method.err_type, params)
             for param in method.params:
-                param.ty = deep_type_params(param.ty, type_params)
+                param.ty = deep_type_params(param.ty, params)
 
         self.generic_perk_impls.add(GenericPerkImpl(
             base_type_name=base_type_name,

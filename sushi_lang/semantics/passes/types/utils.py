@@ -118,30 +118,8 @@ def reject_unusable_hashmap_keys(validator: 'TypeValidator', type_obj: Optional[
 
 def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span: Optional[Span]) -> None:
     """Validate that every type name in a written type is known and may be named here."""
-    if type_obj is None:
+    if type_obj is None or _answers_its_name(validator, type_obj, span):
         return
-
-    # A name written behind an alias answers to the namespace that holds it before it
-    # answers to anything else (`docs/design/unit-namespaces.md` section 5). What
-    # survives carries the bare name and every rule below reads it unchanged.
-    from .qualified import reject_qualified_type
-    if reject_qualified_type(validator, type_obj, span):
-        return
-
-    # A name this unit did not import is not a type here (section 6.1). Checked once,
-    # for the two shapes a written type name takes, and never for a QUALIFIED one: the
-    # namespace seam above has already said where that name may be written.
-    from .visibility import reject_out_of_scope_type, type_name_is_contested
-    written = getattr(type_obj, "name", None) or getattr(type_obj, "base_name", None)
-    if getattr(type_obj, "namespace", None) is None and isinstance(written, str):
-        # A type name this unit declared and lost (#921): the declaration's CE0004 /
-        # CE0006 / CE3011 is the one fault. The type arguments are still the unit's own.
-        if type_name_is_contested(validator, written):
-            for type_arg in getattr(type_obj, "type_args", None) or ():
-                _check_type_names(validator, type_arg, span)
-            return
-        if reject_out_of_scope_type(validator, written, span):
-            return
 
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(type_obj, GenericTypeRef):
@@ -244,6 +222,40 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
             _check_type_names(validator, type_obj.pointee_type, span)
         elif isinstance(type_obj, IteratorType):
             _check_type_names(validator, type_obj.element_type, span)
+
+
+def _answers_its_name(validator: 'TypeValidator', type_obj: Type,
+                      span: Optional[Span]) -> bool:
+    """The rules of where a written NAME may stand; True when nothing more is to check.
+
+    The type parameter of the template under check is no written name (#1070).
+    """
+    from sushi_lang.semantics.generics.types import TypeParameter
+    if isinstance(type_obj, TypeParameter) and type_obj.is_opaque:
+        return True
+
+    # A name written behind an alias answers to the namespace that holds it before it
+    # answers to anything else (`docs/design/unit-namespaces.md` section 5). What
+    # survives carries the bare name and every rule below reads it unchanged.
+    from .qualified import reject_qualified_type
+    if reject_qualified_type(validator, type_obj, span):
+        return True
+
+    # A name this unit did not import is not a type here (section 6.1). Checked once,
+    # for the two shapes a written type name takes, and never for a QUALIFIED one: the
+    # namespace seam above has already said where that name may be written.
+    from .visibility import reject_out_of_scope_type, type_name_is_contested
+    written = getattr(type_obj, "name", None) or getattr(type_obj, "base_name", None)
+    if getattr(type_obj, "namespace", None) is None and isinstance(written, str):
+        # A type name this unit declared and lost (#921): the declaration's CE0004 /
+        # CE0006 / CE3011 is the one fault. The type arguments are still the unit's own.
+        if type_name_is_contested(validator, written):
+            for type_arg in getattr(type_obj, "type_args", None) or ():
+                _check_type_names(validator, type_arg, span)
+            return True
+        if reject_out_of_scope_type(validator, written, span):
+            return True
+    return False
 
 
 def reject_unknown_template_name(validator: 'TypeValidator', type_obj: Type,

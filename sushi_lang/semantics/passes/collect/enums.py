@@ -48,6 +48,8 @@ class EnumTable:
     # this table -- so the alternative was a parameter on all 33 of their call sites.
     derived: DerivedMethodTable = field(default_factory=DerivedMethodTable,
                                         compare=False, repr=False)
+    # True only for the overlay of a template check (#1070), as on `StructTable`.
+    admits_opaque: bool = False
 
 
 @dataclass

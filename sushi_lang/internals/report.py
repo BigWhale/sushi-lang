@@ -33,10 +33,16 @@ _INTERNED_SPELLING = re.compile(r"[A-Za-z0-9_]<")
 # one spelling put back answers 2 -- a zero here is a measured zero, not a dead pattern.
 _RETIRED_BORROW = re.compile(r"&\s*(?:peek|poke)\b")
 
+# An opaque type parameter is `T#main.f` in an interned name (#1070). The owner tells two
+# templates' `T` apart in a table key and never in a message: a user writes `T`.
+_OPAQUE_SPELLING = re.compile(r"[A-Za-z0-9_]#[A-Za-z_]")
+
 # Each row is a pattern and the repair its message names.
 _REFUSED_SPELLINGS: tuple[tuple[re.Pattern[str], str], ...] = (
     (_INTERNED_SPELLING,
      "names a type with the internal spelling. Render it with display_type()"),
+    (_OPAQUE_SPELLING,
+     "names a type parameter with its template. Render it with display_type()"),
     (_RETIRED_BORROW,
      "spells a borrow with the retired `&`. Write the bare `peek` / `poke`"),
 )

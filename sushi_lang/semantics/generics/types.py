@@ -1,7 +1,7 @@
 """Generic type definitions for Sushi Lang."""
 
 from __future__ import annotations
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, ClassVar, Optional, Tuple, Union
 
 from sushi_lang.semantics.generics.interned import interned_name
@@ -9,25 +9,63 @@ from sushi_lang.semantics.generics.interned import interned_name
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type, EnumVariantInfo
     from sushi_lang.semantics.ast import BoundedTypeParam
+    from sushi_lang.internals.report import Span
 
 TypeParam = Union['TypeParameter', 'BoundedTypeParam']
+
+# What separates an opaque parameter from its template in an INTERNAL name
+# (`List<T#main.f>`). It is never `<`, `>`, `,` or a space, because the type-argument
+# splitter reads those, and a diagnostic never prints it (`display_type`; the spelling
+# gate refuses it).
+OPAQUE_MARK = "#"
+
+
+@dataclass(frozen=True)
+class TemplateId:
+    """The identity of one template: the unit that declares it and its own name."""
+    unit: Optional[str]
+    name: str
+
+    def __str__(self) -> str:
+        return self.name if self.unit is None else f"{self.unit}.{self.name}"
 
 
 @dataclass(frozen=True)
 class TypeParameter:
-    """Represents a generic type parameter."""
+    """A type parameter of a generic declaration.
+
+    With no `owner`, it is a parameter as a template record stores it. With an `owner`,
+    it is OPAQUE (#1070): the type parameter of that one template, in the body as the
+    template check reads it. It stands for some type that satisfies `constraints`, and
+    for nothing more. Identity is the name and the owner, so the `T` of `f` and the `T`
+    of `g` are two types; the owner decides the constraints, so they take no part in it.
+    """
     name: str  # Parameter name (e.g., "T", "E", "U")
+    owner: Optional[TemplateId] = None
+    # The perk names (the table keys) of the constraints, as written.
+    constraints: Tuple[str, ...] = field(default=(), compare=False)
+    # Where the parameter is written, with its constraint list (`T: A + B`).
+    span: Optional['Span'] = field(default=None, compare=False)
     # A bare parameter is never a pack; `BoundedTypeParam` carries the field that can be.
     is_pack: ClassVar[bool] = False
 
+    @property
+    def is_opaque(self) -> bool:
+        return self.owner is not None
+
+    def promises(self, perk: str) -> bool:
+        """The ONE answer to "does a constraint of this opaque parameter promise `perk`"."""
+        return self.is_opaque and perk in self.constraints
+
     def __str__(self) -> str:
-        return self.name
+        return self.name if self.owner is None else f"{self.name}{OPAQUE_MARK}{self.owner}"
 
     def __hash__(self) -> int:
-        return hash(("type_param", self.name))
+        return hash(("type_param", self.name, self.owner))
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, TypeParameter) and self.name == other.name
+        return (isinstance(other, TypeParameter) and self.name == other.name
+                and self.owner == other.owner)
 
 
 @dataclass(frozen=True)
@@ -221,6 +259,6 @@ def substituted_call_result(generic_func, type_args) -> Optional[Type]:
                           type_args=(ret, substitute_type_params(err, substitution)))
 
 
-__all__ = ["TypeParameter", "TypePack", "GenericEnumType", "GenericStructType",
+__all__ = ["OPAQUE_MARK", "TemplateId", "TypeParameter", "TypePack", "GenericEnumType", "GenericStructType",
            "GenericTypeRef", "substitute_type_params", "type_param_substitution",
            "substituted_call_result"]

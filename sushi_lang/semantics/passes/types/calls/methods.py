@@ -8,6 +8,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
     IteratorType, StructType)
+from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
@@ -19,8 +20,9 @@ from ..utils import reject_spread_args
 # `HashMap@(K, V)` are named StructTypes, so the tuple covers them with every other
 # struct. An `Iterator@(T)` (a range too) answers no method, and it is here so that a
 # call on one is CE2008 at the call and not an internal error in the backend (#1136).
+# An opaque type parameter answers what its constraints promise, and nothing else (#1070).
 RECEIVERS_WITH_METHODS = (BuiltinType, ArrayType, DynamicArrayType, EnumType,
-                          FunctionType, IteratorType, StructType)
+                          FunctionType, IteratorType, StructType, TypeParameter)
 
 if TYPE_CHECKING:
     from .. import TypeValidator

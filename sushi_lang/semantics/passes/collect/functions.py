@@ -53,14 +53,39 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.tuples import is_tuple_type
 
 
-def deep_type_params(ty: Optional[Type], names) -> Optional[Type]:
-    """Convert every UnknownType naming one of `names` into a TypeParameter, THROUGH
+def deep_type_params(ty: Optional[Type], params: Dict[str, TypeParameter]) -> Optional[Type]:
+    """Convert every UnknownType that `params` names into its TypeParameter, THROUGH
     the whole signature type -- nested GenericTypeRef arguments, function types and
-    array elements included, where the old top-level convert stopped."""
-    if ty is None or not names:
+    array elements included, where the old top-level convert stopped.
+
+    `params` maps a name to the parameter it becomes: an owner-less one for an extension
+    template (`bare_type_params`), the opaque one of a function template (#1070)."""
+    if ty is None or not params:
         return ty
     from sushi_lang.semantics.generics.types import substitute_type_params
-    return substitute_type_params(ty, {n: TypeParameter(name=n) for n in names})
+    return substitute_type_params(ty, dict(params))
+
+
+def bare_type_params(names) -> Dict[str, TypeParameter]:
+    """Each name as a type parameter with no owner: what a template record stores."""
+    return {n: TypeParameter(name=n) for n in names}
+
+
+def opaque_type_params(type_params, unit: Optional[str],
+                       template: str) -> Dict[str, TypeParameter]:
+    """The opaque parameter of each type parameter of one function template (#1070).
+
+    The ONE builder of an opaque parameter: its owner is the template, and it carries
+    the constraint names and the span of the written parameter. A pack parameter keeps
+    its own form (Phase 4).
+    """
+    from sushi_lang.semantics.generics.types import TemplateId
+    owner = TemplateId(unit, template)
+    return {tp.name: TypeParameter(tp.name, owner=owner,
+                                   constraints=tuple(tp.constraints or ()),
+                                   span=tp.loc)
+            for tp in type_params
+            if isinstance(tp, BoundedTypeParam) and not tp.is_pack}
 
 
 def is_explicit_result_type(ty: Optional[Type]) -> bool:
@@ -269,6 +294,9 @@ class GenericFuncDef:
                                                  # channel, as on `FuncDef`
     scope_unit: Optional[str] = None             # On an instance of a compiled library's
                                                  # template: the scope it reads, as on `FuncDef`
+    # Each type parameter's opaque form, by name (#1070): what the record's signature is
+    # written in, and the substitution the template check cuts its body with.
+    opaque: Dict[str, TypeParameter] = field(default_factory=dict)
 
 
 class Redeclaration(Enum):
@@ -862,20 +890,26 @@ class FunctionCollector:
         if body is None:
             return
 
+        # The record's signature is written in the opaque parameters (#1070), AFTER the
+        # refusals above, which read the types as written. The AST keeps its own.
+        opaque = opaque_type_params(type_param_instances, self.current_unit_name, name)
+        params = [replace(param, ty=deep_type_params(param.ty, opaque)) for param in params]
+
         generic_func = GenericFuncDef(
             name=name,
             type_params=type_param_instances,
             params=params,
-            ret=ret_ty,
+            ret=deep_type_params(ret_ty, opaque),
             body=body,
             is_public=fn.is_public,
             loc=fn.loc,
             name_span=name_span,
             ret_span=ret_span,
-            err_type=fn.err_type,
+            err_type=deep_type_params(fn.err_type, opaque),
             err_span=fn.err_span,
             unit_name=self.current_unit_name,
             filename=self.current_unit_file,
+            opaque=opaque,
         )
 
         self.generic_funcs.declare(name, generic_func)
@@ -1191,8 +1225,10 @@ class FunctionCollector:
         `type_param_names` are the names the signature converts into a `TypeParameter`:
         the receiver's, the method's own, or both.
         """
+        params = bare_type_params(type_param_names)
+
         def convert(ty: Optional[Type]) -> Optional[Type]:
-            return deep_type_params(ty, type_param_names)
+            return deep_type_params(ty, params)
 
         return GenericExtensionMethod(
             base_type_name=base_type_name,

@@ -285,8 +285,8 @@ def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr', arms: _Arms,
     conversion of the pair, the one lookup of `semantics/conversions.py`, and nothing
     else (docs/design/error-conversion.md section 3.3): a chain is never followed.
     Otherwise it is CE2511, and the help names the declaration to write. In a generic
-    function the pair is asked per instance, because the typecheck pass checks each
-    instance's own copy of the body.
+    function the pair is asked one time, on the template (#1070): an opaque `E` is equal
+    to itself alone, so a `??` propagates the same `E` and nothing else (R8).
     """
     outer_ok_type, outer_err_type = result_ok_err(channel)
     inner_err_type = arms.error_type

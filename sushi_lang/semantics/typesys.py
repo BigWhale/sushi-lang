@@ -284,7 +284,8 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
         if isinstance(ty, (StructType, EnumType)):
             return ty.name in drops or (
                 isinstance(ty, StructType) and generic_base_of(ty) in bases)
-        return False
+        # An opaque type parameter MAY own, so a value of it moves (#1070, R5).
+        return isinstance(ty, TypeParameter) and ty.is_opaque
 
     return any(owns_here(ty) for ty in walk_named_types(
         t, stop=lambda ty: type(ty).__name__ in _OWNS_STOPS, resolve=resolve))
@@ -306,8 +307,15 @@ def holds_declared_resource(t: Optional["Type"], drops: AbstractSet[str],
     owner, and it says so in its name.
     """
     from sushi_lang.semantics.type_walk import walk_named_types
+
+    def declares_here(ty: "Type") -> bool:
+        if isinstance(ty, TypeParameter):
+            # `Clone` is the promise "holds no resource" (#1070, R5): one fact, two names.
+            return ty.is_opaque and not ty.promises("Clone")
+        return isinstance(ty, (StructType, EnumType)) and ty.name in drops
+
     return any(
-        isinstance(ty, (StructType, EnumType)) and ty.name in drops
+        declares_here(ty)
         for ty in walk_named_types(
             t, stop=lambda ty: type(ty).__name__ in _HOLDS_STOPS, resolve=resolve,
             struct_type_args=True))

@@ -31,7 +31,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Callable, Dict, Mapping, Optional
 
 from sushi_lang.semantics.generics.contract_walk import Override, Walk, decide
-from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
+from sushi_lang.semantics.generics.types import (
+    GenericEnumType, GenericStructType, TypeParameter)
 from sushi_lang.semantics.type_predicates import is_instance_of, is_numeric_type
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ReferenceType, StructType, Type,
@@ -66,7 +67,7 @@ REFUSED_KINDS: Dict[str, str] = {
     "FunctionType": "a function value",
     "ReferenceType": "a reference",
     "IteratorType": "an iterator",
-    "TypeParameter": "an unsubstituted type parameter",
+    "TypeParameter": "a type parameter whose constraints do not promise it",
     "TypePack": "a type pack",
     "GenericTypeRef": "an uninstantiated generic type",
     "GenericStructType": "a generic struct (should be monomorphized first)",
@@ -202,6 +203,10 @@ def operand_contract(ty: Optional[Type], contract: str, *,
         ty = resolve(ty)
     if isinstance(ty, BuiltinType):
         return _top_level_primitive(ty, contract), None
+    if isinstance(ty, TypeParameter):
+        # An opaque parameter meets the contract when a constraint promises it (#1070);
+        # the override reads that promise.
+        return overridden is not None and overridden(ty), None
     if not is_contract_receiver(ty):
         return False, None
     if contract == DISPLAY and is_instance_of(ty, "Maybe", "Result"):

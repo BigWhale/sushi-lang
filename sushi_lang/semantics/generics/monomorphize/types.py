@@ -366,10 +366,15 @@ class TypeMonomorphizer:
                 mono.constraint_violations += 1
             return
 
-    def _is_abstract(self, type_args: Tuple[Type, ...]) -> bool:
-        """Whether an argument still names an enclosing template's type parameter."""
+    def _is_abstract(self, type_args: Tuple[Type, ...], *, opaque_bound: bool = False) -> bool:
+        """Whether an argument still names an enclosing template's type parameter.
+
+        `opaque_bound` is the table's own answer (`admits_opaque`): only the overlay of a
+        template check holds an instance over an opaque parameter (#1070).
+        """
         structs, enums = self._tables()
-        return any(is_abstract_type(arg, structs, enums) for arg in type_args)
+        return any(is_abstract_type(arg, structs, enums, opaque_bound=opaque_bound)
+                   for arg in type_args)
 
     def _canonical_args(self, type_args: Tuple[Type, ...]) -> Tuple[Type, ...]:
         """The arguments in the spelling the instantiate pass collects them in.
@@ -407,7 +412,7 @@ class TypeMonomorphizer:
         """
         if table is None or concrete.name in table.by_name:
             return
-        if self._is_abstract(concrete.generic_args or ()):
+        if self._is_abstract(concrete.generic_args or (), opaque_bound=table.admits_opaque):
             return
         table.by_name[concrete.name] = concrete
         table.order.append(concrete.name)

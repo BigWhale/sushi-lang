@@ -5,6 +5,7 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS)
+from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.name_ladder import BareName, classify
 
 if TYPE_CHECKING:
@@ -473,7 +474,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         inferred_type = METHOD_TYPE_REGISTRY.infer_method_type(
             actual_type, node, self.type_validator)
 
-        if isinstance(actual_type, CONCRETE_EXTENSION_TARGETS):
+        if isinstance(actual_type, (*CONCRETE_EXTENSION_TARGETS, TypeParameter)):
             # An extension or perk method's return type is a DECLARED spelling, so it
             # resolves before it is stamped: a `Maybe@(string)` left as a GenericTypeRef is
             # no EnumType, so every consumer reading the stamp fell through -- the backend

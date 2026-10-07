@@ -32,6 +32,7 @@ from sushi_lang.semantics.typesys import (
     ReferenceType,
     StructType,
 )
+from sushi_lang.semantics.generics.types import TemplateId, TypeParameter
 from sushi_lang.sushi_stdlib.src.collections.strings import METHOD_SPECS
 
 
@@ -59,6 +60,9 @@ _HASHMAP = _struct("HashMap<i32, string>", "HashMap")
 _OWN = _struct("Own<i32>", "Own")
 _RESULT = _enum("Result<i32, StdError>", "Result")
 _MAYBE = _enum("Maybe<i32>", "Maybe")
+# The opaque type parameter of a template check (#1070): no built-in family claims it.
+_OPAQUE = TypeParameter("T", owner=TemplateId("main", "f"),
+                        constraints=("Hashable", "Eq", "Display", "Clone"))
 
 
 def _derived_table() -> DerivedMethodTable:
@@ -107,6 +111,7 @@ RECEIVERS = (
     ReferenceType(referenced_type=_POINT),
     ReferenceType(referenced_type=_LIST),
     ForeignPtrType(),
+    _OPAQUE,
 )
 
 #: Each family's own names, read from the family's own table, plus a miss.
@@ -159,6 +164,18 @@ def test_the_matrix_holds_misses_as_well_as_hits():
     """A matrix of hits alone cannot see a seam that says yes to everything."""
     answers = {builtin_method_exists(r, n, DERIVED) for r in RECEIVERS for n in NAMES}
     assert answers == {True, False}
+
+
+def test_no_family_claims_an_opaque_type_parameter():
+    """A method on an opaque `T` is what a constraint promises, and nothing else (#1070).
+
+    The perk rung answers it, so every family must refuse the receiver, whatever its
+    constraints say: a family that claimed one would answer a method no constraint
+    promises.
+    """
+    claimed = {name: _claimed(_OPAQUE, name) for name in NAMES}
+    assert {name: families for name, families in claimed.items() if families} == {}
+    assert not any(builtin_method_exists(_OPAQUE, name, DERIVED) for name in NAMES)
 
 
 def test_a_perk_override_is_still_a_builtin_to_the_seam():

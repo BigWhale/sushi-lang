@@ -33,7 +33,7 @@ UNHASHABLE_KINDS: Dict[str, str] = {
     "FunctionType": "a function value (unhashable)",
     "ReferenceType": "a reference (unhashable)",
     "IteratorType": "an iterator (unhashable)",
-    "TypeParameter": "an unsubstituted type parameter",
+    "TypeParameter": "a type parameter whose constraints do not promise it",
     "TypePack": "a type pack",
     "GenericTypeRef": "an uninstantiated generic type",
     "GenericStructType": "a generic struct (should be monomorphized first)",
