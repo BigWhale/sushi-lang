@@ -19,6 +19,7 @@ The four spare header fields are read and not validated.
 use <io/fs>
 public use <io/error>
 use <encoding/msgpack>
+use <encoding/binary>
 use <collections/strings>
 
 ##: The 16 bytes at the start of every `.slib` file. :##
@@ -113,22 +114,6 @@ public struct SlibLibrary:
     SlibSizes sizes
 
 ##:
-Reads an unsigned little-endian integer from a byte buffer.
-
-The caller makes sure that the buffer holds the bytes.
-
-- Parameter h: The buffer to read.
-- Parameter off: The index of the first byte.
-- Parameter nbytes: The number of bytes to read, 8 or fewer.
-- Returns: The integer.
-:##
-fn le_uint(peek u8[] h, i32 off, i32 nbytes) u64:
-    let u64 acc = 0
-    foreach(i in 0..nbytes):
-        acc := acc | ((h[off + i] as u64) << ((8 * i) as u64))
-    return acc
-
-##:
 Opens a file to read bytes.
 
 - Parameter path: The path of the file.
@@ -213,19 +198,19 @@ fn read_header(poke File f, u64 total) u64 | SlibError:
     if (total < MAGIC_SIZE):
         first := total
     let u8[] header = read_part(poke f, first, total, SlibSection.Metadata())??
-    foreach(i in 0..header.len()):
-        if (header[i] != SLIB_MAGIC[i]):
-            return Result.Err(SlibError.BadMagic())
+    if (not SLIB_MAGIC.starts_with(header)):
+        return Result.Err(SlibError.BadMagic())
     if (total > SLIB_MAX_FILE_SIZE):
         return Result.Err(SlibError.TooLarge(total))
     if (total < HEADER_SIZE):
         return Result.Err(SlibError.Truncated(SlibSection.Metadata(), HEADER_SIZE, total))
     let u8[] rest = read_part(poke f, HEADER_SIZE - first, total - first, SlibSection.Metadata())??
     header.extend(rest)
-    let u64 version = le_uint(peek header, VERSION_AT, 4)
-    if (version != CONTAINER_VERSION):
-        return Result.Err(SlibError.BadVersion(version as u32))
-    return Result.Ok(le_uint(peek header, METADATA_LENGTH_AT, 8))
+    let u64 have = header.len() as u64
+    let u32 version = header.read_u32_le(VERSION_AT).or_err(nom SlibError.Truncated(SlibSection.Metadata(), HEADER_SIZE, have))??
+    if ((version as u64) != CONTAINER_VERSION):
+        return Result.Err(SlibError.BadVersion(version))
+    return Result.Ok(header.read_u64_le(METADATA_LENGTH_AT).or_err(nom SlibError.Truncated(SlibSection.Metadata(), HEADER_SIZE, have))??)
 
 ##:
 Reads and decodes the metadata blob.
@@ -260,12 +245,12 @@ fn read_sections(poke File f, u64 left) (SlibSizes, u64) | SlibError:
     let u64 rest = left
     let u8[] src_field = read_part(poke f, LENGTH_FIELD_SIZE, rest, SlibSection.Source())??
     rest := rest - LENGTH_FIELD_SIZE
-    let u64 slen = le_uint(peek src_field, 0, 8)
+    let u64 slen = src_field.read_u64_le(0).or_err(nom SlibError.Truncated(SlibSection.Source(), LENGTH_FIELD_SIZE, src_field.len() as u64))??
     skip_part(poke f, slen, rest, SlibSection.Source())??
     rest := rest - slen
     let u8[] bc_field = read_part(poke f, LENGTH_FIELD_SIZE, rest, SlibSection.Bitcode())??
     rest := rest - LENGTH_FIELD_SIZE
-    let u64 bclen = le_uint(peek bc_field, 0, 8)
+    let u64 bclen = bc_field.read_u64_le(0).or_err(nom SlibError.Truncated(SlibSection.Bitcode(), LENGTH_FIELD_SIZE, bc_field.len() as u64))??
     return Result.Ok((SlibSizes(slen, bclen), rest))
 
 ##:
