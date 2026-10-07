@@ -1,4 +1,5 @@
 use "ldu_pl2"
 
 public fn gen@(T)(T x) i32:
+    x
     return b_val()

@@ -931,10 +931,10 @@ public perk Named:
 Takes a value with two constraints.
 
 - Parameter x: The value.
-- Returns: Zero.
+- Returns: The length of its name.
 :##
 public fn both@(T: Hashable + Named)(T x) i32:
-    return 0
+    return x.name().len()
 
 ##:
 A blue colour.
@@ -983,6 +983,7 @@ Takes a value before a pack.
 - Returns: Two.
 :##
 public fn lead@(T, ...Ts: Display)(T first, ...Ts rest) i32:
+    first
     return 2
 """
 

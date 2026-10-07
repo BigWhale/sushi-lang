@@ -2,8 +2,8 @@
 # the type arguments in the file, not at a column inside the text of the hole (#1038).
 # EXPECT_ERROR_CODES_EXACT: CE2062
 # EXPECT_STDERR_CONTAINS: test_err_hole_type_args_arity.sushi:10:27: error [CE2062]
-fn pick@(T)(T x) i32:
-    return 1
+fn pick@(T: Hashable)(T x) i32:
+    return x.hash() as i32
 
 
 fn show() ~:

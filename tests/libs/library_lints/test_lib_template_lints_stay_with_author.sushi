@@ -1,7 +1,8 @@
 # A source library's generic template is checked when the consumer instantiates it.
-# Its unused parameter, unused local and discarded Result are the author's warnings:
-# the consumer reports none of them and exits 0 (#1007).
-# BUILD_LIB: lint_tpl_lib.sushi
+# Its unused parameter and unused local are the author's warnings: the author's build
+# reports them, because a template is checked where it is written (#1070), and the
+# consumer reports none of them and exits 0 (#1007).
+# BUILD_LIB_WARNS: lint_tpl_lib.sushi -> CW1001
 # EXPECT_STDOUT_EXACT: "2\n"
 # EXPECT_STDERR_EMPTY: true
 use <lib/lint_tpl_lib>
