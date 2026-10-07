@@ -19,6 +19,7 @@ against the scheme.
 :##
 
 use <collections/strings>
+use <text/ascii>
 
 ##:
 One absolute URL, split into its parts.
@@ -203,15 +204,14 @@ The default port of a scheme.
 - Returns: The default port, or `Maybe.None()` when the scheme has no known one.
 :##
 fn default_port(string scheme) Maybe@(i32):
-    if (scheme == "http" or scheme == "ws"):
-        return Maybe.Some(80)
-    if (scheme == "https" or scheme == "wss"):
-        return Maybe.Some(443)
-    if (scheme == "ftp"):
-        return Maybe.Some(21)
-    if (scheme == "ssh"):
-        return Maybe.Some(22)
-    return Maybe.None()
+    match scheme:
+        "http" -> return Maybe.Some(80)
+        "ws" -> return Maybe.Some(80)
+        "https" -> return Maybe.Some(443)
+        "wss" -> return Maybe.Some(443)
+        "ftp" -> return Maybe.Some(21)
+        "ssh" -> return Maybe.Some(22)
+        _ -> return Maybe.None()
 
 ##:
 Whether a text is a scheme.
@@ -222,17 +222,11 @@ RFC 3986 wants a letter first, then letters, digits, `+`, `-` and `.`.
 - Returns: True when every character is allowed and the first is a letter.
 :##
 fn is_scheme(string text) bool:
-    if (text.len() == 0):
+    if (text.size() == 0 or not text[0].is_ascii_alpha()):
         return false
-    let string first = text.char_at(0).lower()
-    if (first < "a" or first > "z"):
-        return false
-    foreach(i in 1..text.len()):
-        let string c = text.char_at(i).lower()
-        let bool letter = c >= "a" and c <= "z"
-        let bool digit = c >= "0" and c <= "9"
-        let bool mark = c == "+" or c == "-" or c == "."
-        if (not (letter or digit or mark)):
+    foreach(i in 1..text.size()):
+        let u8 c = text[i]
+        if (not (c.is_ascii_alnum() or c == a'+' or c == a'-' or c == a'.')):
             return false
     return true
 
@@ -246,11 +240,7 @@ Reads a port: digits only, and 1 to 65535.
 fn read_port(string text) i32 | UrlError:
     if (text.len() == 0 or text.len() > 5):
         return Result.Err(UrlError.BadPort)
-    foreach(i in 0..text.len()):
-        let string c = text.char_at(i)
-        if (c < "0" or c > "9"):
-            return Result.Err(UrlError.BadPort)
-    let i32 value = text.to_i32().realise(0)
+    let u32 value = text.parse_u32(10).or_err(nom UrlError.BadPort)??
     if (value < 1 or value > 65535):
         return Result.Err(UrlError.BadPort)
-    return Result.Ok(value)
+    return Result.Ok(value as i32)
