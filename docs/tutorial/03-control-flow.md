@@ -61,7 +61,9 @@ of values is a **range**. Ranges come in two flavours:
 - `start..end` is **exclusive** — it stops just before `end` (so `0..5` yields `0,1,2,3,4`).
 - `start..=end` is **inclusive** — it includes `end` (so `1..=3` yields `1,2,3`).
 
-If `start` is greater than `end`, the range counts **down** automatically. The two bounds
+A range always counts **up**. If `start` is not below `end`, the range is empty. To count
+down, put `.rev()` on the range: `(1..=3).rev()` yields `3,2,1`, the same values, last
+first. The two bounds
 of a range are `i32` values. A bound of a different type, such as a `u8` variable, is an
 error ([`CE2121`](../error-catalog.md#ce2121)); convert it with `as i32`. You can also
 `foreach` over an array by calling `.iter()` on it:
@@ -83,7 +85,7 @@ Inclusive 1..=3:
   1
   2
   3
-Descending 3..0:
+Descending (1..=3).rev():
   3
   2
   1
@@ -185,7 +187,8 @@ compiler refuses it with [`CE0140`](../error-catalog.md#ce0140) ("unreachable st
 - `while (condition):` repeats while the condition holds; rebind with `:=` to make
   progress.
 - `foreach(x in source):` iterates; ranges give you `start..end` (exclusive), `start..=end`
-  (inclusive), and automatic descending order. A range bound is an `i32`.
+  (inclusive), and they always count up; `(start..end).rev()` counts down. A range bound
+  is an `i32`.
 - `.iter()` lets `foreach` walk an array. Any other type becomes walkable by carrying a
   `next()` that answers `Maybe@(T)` — the loop calls it until it answers `Maybe.None`.
 - A fallible iterator puts the failure in its item (`Maybe@(Result@(T, E))`), and `??` on

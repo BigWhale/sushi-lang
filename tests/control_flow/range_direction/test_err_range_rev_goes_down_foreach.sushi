@@ -1,0 +1,7 @@
+# `.rev()` does not make a range that goes down legal: the bounds of `10..0` go down.
+# EXPECT_ERROR_CODES_EXACT: CE2125
+
+fn main() i32:
+    foreach(i in (10..0).rev()):
+        println(i)
+    return 0

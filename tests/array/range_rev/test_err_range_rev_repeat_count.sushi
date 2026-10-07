@@ -1,0 +1,7 @@
+# A `.rev()` range is a range element, and a range element takes no repeat count.
+# EXPECT_ERROR_CODE: CE2020
+
+fn main() i32:
+    let i32[] a = from([(0..3).rev(); 2])
+    println(a.len())
+    return 0

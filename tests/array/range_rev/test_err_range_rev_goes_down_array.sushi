@@ -1,0 +1,7 @@
+# `.rev()` does not make a range element that goes down legal.
+# EXPECT_ERROR_CODES_EXACT: CE2125
+
+fn main() i32:
+    let i32[] a = from([(10..0).rev()])
+    println(a.len())
+    return 0

@@ -1,17 +1,20 @@
 """The IR twin of `semantics/ranges.py`, for bounds the compiler cannot read (#478).
 
-Same formula, five instructions:
+Same formula. A range always goes up, and `.rev()` walks the same values, last first:
 
-    count = |end - start| + (inclusive ? 1 : 0)
-    step  = (end >= start) ? +1 : -1
+    count = max(end - start + (inclusive ? 1 : 0), 0)
+    step  = reverse ? -1 : +1
+    first = reverse ? start + count - 1 : start
 
-`semantics/ranges.py` states it over Python integers and this module states it as IR. Both
-live behind a named seam, and `tests/unit/test_range_plan_matrix.py` pins them against each
-other so neither can drift.
+The clamp is a `select`, so a range whose end is below its start has a count of zero and
+the walk does not start. `semantics/ranges.py` states the formula over Python integers and
+this module states it as IR. `foreach` over a range and an array-literal range element both
+call `emit_range`, so the two positions share one formula.
 
-llvmlite does not fold, so a readable range must NEVER reach here: `builder.add` of two
-constants emits `add i32 3, 4` into the module, and at `--opt none` there is no second
-chance. `runs.py` picks the tier and calls this only for a bound it could not read.
+llvmlite does not fold, so a readable range must NEVER reach here from an array literal:
+`builder.add` of two constants emits `add i32 3, 4` into the module, and at `--opt none`
+there is no second chance. `runs.py` picks the tier and calls this only for a bound it
+could not read.
 """
 from __future__ import annotations
 
@@ -27,7 +30,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class EmittedRange:
-    """A range as three i32 values: where it starts, which way it walks, and how far."""
+    """A range as three i32 values: where the walk starts, which way it steps, how far."""
     first: ir.Value
     step: ir.Value
     count: ir.Value
@@ -38,17 +41,17 @@ def emit_range(codegen: 'LLVMCodegen', expr: 'RangeExpr') -> EmittedRange:
     b = codegen.builder
     i32 = codegen.types.i32
 
-    first = codegen.utils.require_i32(codegen.expressions.emit_expr(expr.start))
+    start = codegen.utils.require_i32(codegen.expressions.emit_expr(expr.start))
     end = codegen.utils.require_i32(codegen.expressions.emit_expr(expr.end))
 
-    span = b.sub(end, first, name="range_span")
-    descending = b.icmp_signed("<", span, ir.Constant(i32, 0), name="range_descending")
-    magnitude = b.select(descending, b.sub(ir.Constant(i32, 0), span), span,
-                         name="range_magnitude")
-
-    count = magnitude
+    span = b.sub(end, start, name="range_span")
     if expr.inclusive:
-        count = b.add(magnitude, ir.Constant(i32, 1), name="range_count")
+        span = b.add(span, ir.Constant(i32, 1), name="range_span_inclusive")
+    empty = b.icmp_signed("<", span, ir.Constant(i32, 0), name="range_empty")
+    count = b.select(empty, ir.Constant(i32, 0), span, name="range_count")
 
-    step = b.select(descending, ir.Constant(i32, -1), ir.Constant(i32, 1), name="range_step")
-    return EmittedRange(first=first, step=step, count=count)
+    if not expr.reverse:
+        return EmittedRange(first=start, step=ir.Constant(i32, 1), count=count)
+    last = b.sub(b.add(start, count, name="range_past"), ir.Constant(i32, 1),
+                 name="range_last")
+    return EmittedRange(first=last, step=ir.Constant(i32, -1), count=count)

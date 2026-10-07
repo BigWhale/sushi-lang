@@ -413,6 +413,9 @@ fn main() i32:
     foreach(i in 0..3):          # a range: 0 1 2; `0..=3` includes the end
         println(i)
 
+    foreach(i in (0..3).rev()):  # a range always goes up; `.rev()` counts down: 2 1 0
+        println(i)
+
     return 0
 ```
 

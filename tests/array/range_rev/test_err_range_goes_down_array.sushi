@@ -1,0 +1,7 @@
+# A range element whose readable bounds go down is refused: a range always goes up.
+# EXPECT_ERROR_CODES_EXACT: CE2125
+
+fn main() i32:
+    let i32[] a = from([5..0])
+    println(a.len())
+    return 0

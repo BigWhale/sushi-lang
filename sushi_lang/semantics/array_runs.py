@@ -70,7 +70,7 @@ def read_runs(elements: Sequence[ArrayElement], read_int: ReadInt,
     `require_readable_length`. A count it CAN read is checked at once, because Ruling 2 says
     a count you can see that spells nothing is a typo in every position.
     """
-    from sushi_lang.semantics.ranges import read_range
+    from sushi_lang.semantics.ranges import read_range, reject_a_range_that_goes_down
 
     runs: List[Run] = []
     start: Optional[int] = 0
@@ -85,6 +85,9 @@ def read_runs(elements: Sequence[ArrayElement], read_int: ReadInt,
                 continue
 
             plan = read_range(element.value, read_int, reporter)
+            if reject_a_range_that_goes_down(plan, reporter):
+                failed = True
+                continue
             if plan is not None and plan.count < 1:
                 er.emit(reporter, er.ERR.CE2019, element.value.loc,
                         reason="this range yields no value, and Sushi has no "

@@ -1,16 +1,21 @@
-# The direction is a run-time `select` when the bounds are not readable (#478, Ruling 1).
+# A range with a computed bound that goes down is EMPTY: a range always goes up. A
+# countdown with a computed bound is `.rev()`, and the count is read at run time.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
-# EXPECT_STDOUT_EXACT: "5 4 0\n4 4 1\n"
+# EXPECT_STDOUT_EXACT: "0 0\n5 4 0\n4 3 0\n"
 
 
 fn run_test() i32:
     let i32 k = 4
     let i32[] down = from([k..=0])
-    println("{down.len()} {down[0]} {down[4]}")
-
     let i32[] short = from([k..0])
-    println("{short.len()} {short[0]} {short[3]}")
+    println("{down.len()} {short.len()}")
+
+    let i32[] rdown = from([(0..=k).rev()])
+    println("{rdown.len()} {rdown[0]} {rdown[4]}")
+
+    let i32[] rshort = from([(0..k).rev()])
+    println("{rshort.len()} {rshort[0]} {rshort[3]}")
     return 0
 
 fn main() i32:

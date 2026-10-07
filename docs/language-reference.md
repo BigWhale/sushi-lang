@@ -1082,6 +1082,36 @@ an array literal (`from([0..n])`). A range anywhere else -- a function, method o
 constructor argument, a `return`, a `let` initializer, an operand -- is [`CE2122`](error-catalog.md#ce2122). Spell it
 into an array to keep it.
 
+**A range always goes up.** `a..b` is empty when `a >= b`, and `a..=b` is empty when
+`a > b`. A countdown is `(a..b).rev()`: the same values, last first. `.rev()` is the one
+method a range takes, and the result is a range again, with the same two positions. A
+second `.rev()` turns the range back. `(0..n).rev()` is `n - 1` down to 0, and it is empty
+when `n` is 0:
+
+```sushi
+fn main() i32:
+    let i32 n = 3
+    foreach(i in (0..n).rev()):          # 2 1 0
+        println(i)
+    foreach(i in (1..=3).rev()):         # 3 2 1
+        println(i)
+    foreach(i in n..0):                  # empty: a range always goes up
+        println(i)
+    return 0
+```
+
+When the compiler can read both bounds and the range goes down, the range is
+**[CE2125](error-catalog.md#ce2125)**, and the help gives the countdown. A range with a computed bound is empty
+when it does not go up, and nothing is reported:
+
+<!-- docs-sweep: error CE2125 -->
+```sushi
+fn main() i32:
+    foreach(i in 10..0):                 # CE2125: write `(1..=10).rev()`
+        println(i)
+    return 0
+```
+
 <!-- docs-sweep: skip (a fragment: the narrative owns the struct) -->
 ```sushi
 extend Countdown next(poke self) Maybe@(i32):    # this makes a Countdown walkable
@@ -1328,14 +1358,14 @@ fn main() i32:
 #### A range element
 
 An element may be a **range**, and it fills the slots it spans. `start..end` is exclusive
-and `start..=end` is inclusive, and the direction follows `foreach`, so a descending
-range descends:
+and `start..=end` is inclusive. A range always goes up, as in `foreach`, and `.rev()` fills
+the same values, last first:
 
 ```sushi
 fn main() i32:
     let i32[]  up      = from([0..5])       # 0 1 2 3 4
     let i32[]  through = from([0..=5])      # 0 1 2 3 4 5
-    let i32[]  down    = from([5..0])       # 5 4 3 2 1
+    let i32[]  down    = from([(1..=5).rev()])  # 5 4 3 2 1
     let i32[6] table   = [0..=5]
     let i32[]  mixed   = from([-1, 0..3, 99])   # -1 0 1 2 99
     println("{up.len()} {through.len()} {down.len()} {table[5]} {mixed.len()}")
@@ -1346,7 +1376,7 @@ A range yields **i32**, exactly as `foreach(i in 0..5)` does, so `let i64[] a =
 from([0..5])` is a type mismatch. It obeys the same position rule as a repeat: a bound in
 a `from()` literal may be any i32 expression, and a fixed array or a constant needs one
 the compiler can read. A bound it cannot read there is **[CE2019](error-catalog.md#ce2019)**, and so is a readable
-range that yields nothing:
+range that yields nothing. A readable range that goes down is **[CE2125](error-catalog.md#ce2125)**:
 
 <!-- docs-sweep: error CE2019 -->
 ```sushi

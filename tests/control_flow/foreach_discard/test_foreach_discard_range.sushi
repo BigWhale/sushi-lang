@@ -7,6 +7,6 @@
 fn main() i32:
     foreach(_ in 0..3):
         println("x")
-    foreach(i32 _ in 5..=4):
+    foreach(i32 _ in (4..=5).rev()):
         println("y")
     return 0

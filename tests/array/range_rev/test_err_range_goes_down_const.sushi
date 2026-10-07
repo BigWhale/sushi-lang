@@ -1,0 +1,7 @@
+# A constant table cannot hold a range that goes down: write `(6..=9).rev()`.
+# EXPECT_ERROR_CODES_EXACT: CE2125
+const i32[4] DOWN = [9..=6]
+
+fn main() i32:
+    println(DOWN[0])
+    return 0

@@ -27,8 +27,9 @@ An **iterator** is `{i32 index, i32 length, T* data}` — a cursor over contiguo
 answer one on a `HashMap`, and a range is one. It has no `next` to call: the loop reads the
 length and indexes. `Iterator@(T)` is deliberately not a nameable type (**[CE2001](../error-catalog.md#ce2001)**), so an
 iterator only ever appears as the iterable of the loop that consumes it. It has no method
-either: `a.iter().len()`, `(0..3).len()` and `a.iter().next()` are each **[CE2008](../error-catalog.md#ce2008)** at the
-call.
+either: `a.iter().len()` and `a.iter().next()` are each **[CE2008](../error-catalog.md#ce2008)** at the call. A range is
+not a value, so `(0..3).len()` is **[CE2122](../error-catalog.md#ce2122)**. `.rev()` is the one method a range takes:
+the AST builder folds it into the range, which then yields the same values, last first.
 
 A **protocol iterator** is any type carrying a nullary `next()` that answers `Maybe@(T)`.
 The loop calls it until it answers `None`. There is no type to implement and no perk to

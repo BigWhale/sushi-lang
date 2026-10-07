@@ -1,0 +1,7 @@
+# An inclusive range that goes down is refused too: `5..=4` cannot be empty by accident.
+# EXPECT_ERROR_CODES_EXACT: CE2125
+
+fn main() i32:
+    foreach(i in 5..=4):
+        println(i)
+    return 0

@@ -1,0 +1,7 @@
+# An inclusive range element whose readable bounds go down is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2125
+
+fn main() i32:
+    let i32[3] a = [5..=3]
+    println(a[0])
+    return 0

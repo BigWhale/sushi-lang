@@ -1102,10 +1102,15 @@ class TryExpr(Node):
 
 @dataclass(slots=True)
 class RangeExpr(Node):
-    """Range expression: start..end or start..=end"""
+    """Range expression: start..end or start..=end, and `(start..end).rev()`.
+
+    A range always goes up. `reverse` is set by `.rev()`, which the AST builder folds into
+    the node: the same values, last first. A second `.rev()` clears it.
+    """
     start: "Expr"           # Start expression (must evaluate to integer)
     end: "Expr"             # End expression (must evaluate to integer)
     inclusive: bool         # True for ..=, False for ..
+    reverse: bool = False   # True after an odd number of `.rev()` calls
 
 Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda, TupleLiteral]
 # The three call shapes; each carries the whole set of callee stamps.

@@ -1,0 +1,7 @@
+# A readable `.rev()` range that yields nothing spells no slot, as `3..3` does.
+# EXPECT_ERROR_CODES_EXACT: CE2019
+
+fn main() i32:
+    let i32[] a = from([(3..3).rev()])
+    println(a.len())
+    return 0

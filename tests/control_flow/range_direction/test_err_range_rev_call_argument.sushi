@@ -1,0 +1,8 @@
+# A `.rev()` range given to a function is still a range, and a range is not a value.
+# EXPECT_ERROR_CODES_EXACT: CE2122
+fn first(i32 x) i32:
+    return x
+
+fn main() i32:
+    println(first((0..3).rev()))
+    return 0
