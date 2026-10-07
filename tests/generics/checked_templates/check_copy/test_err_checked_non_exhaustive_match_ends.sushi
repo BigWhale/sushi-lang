@@ -1,0 +1,20 @@
+# A `match` that is not exhaustive is the one fault, also in a template (#1070): the
+# statement after it is not dead, because the missing arm reaches it.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+
+enum Sign:
+    Plus
+    Minus
+    Zero
+
+fn pick@(T: Display)(T a, Sign s) i32:
+    match s:
+        Sign.Plus ->
+            println(a)
+            return 1
+        Sign.Minus -> return 2
+    return 0
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

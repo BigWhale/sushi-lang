@@ -1,0 +1,20 @@
+# A user perk in a constraint gives the template its method (#1070): `x.speak()` is
+# checked where the template is written, and each copy calls the implementation.
+# EXPECT_STDOUT_EXACT: "Woof\n"
+
+perk Speak:
+    fn speak() string
+
+struct Dog:
+    i32 age
+
+extend Dog with Speak:
+    fn speak() string:
+        return "Woof"
+
+fn talk@(T: Speak)(T x) string:
+    return x.speak()
+
+fn main() i32:
+    println(talk(Dog(3)))
+    return 0

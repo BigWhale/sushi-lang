@@ -47,7 +47,9 @@ class TypeMonomorphizer:
             # An abstract instantiation still names an enclosing template's type params, so
             # there is nothing to monomorphize until a call site binds them. A bogus concrete
             # enum would sit in the table as a type that was never built.
-            if self._is_abstract(type_args):
+            table = self.monomorphizer.enum_table
+            if self._is_abstract(type_args,
+                                 opaque_bound=table is not None and table.admits_opaque):
                 continue
 
             generic = generic_enums[base_name]

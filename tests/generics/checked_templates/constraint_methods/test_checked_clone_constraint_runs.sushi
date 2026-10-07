@@ -1,0 +1,15 @@
+# With `T: Clone`, a template may clone a value of `T` (#1070, R5). Each copy clones its
+# type argument, and a string copy frees what it allocates.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nMostly Harmless\n"
+# EXPECT_NO_LEAKS
+
+fn twin@(T: Clone)(T x) T:
+    return x.clone()
+
+fn main() i32:
+    let string word = "Mostly"
+    let string s = "{word} Harmless"
+    let string t = twin(s)
+    println(s)
+    println(t)
+    return 0

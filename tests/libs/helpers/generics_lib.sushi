@@ -13,7 +13,7 @@ public fn first_of@(T)(T a, T b) T:
     return chosen
 
 # Constrained generic: used to prove consumer-relative constraint re-checking.
-public fn max_of@(T: Greater)(T a, T b) T:
+public fn max_of@(T: Greater + Ord)(T a, T b) T:
     if (a > b):
         return a
     return b

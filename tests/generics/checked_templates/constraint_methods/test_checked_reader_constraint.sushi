@@ -1,0 +1,32 @@
+# A constraint method with `poke self` and `| IoError` resolves through the constraint
+# (#1070): the template reads four bytes from any Reader, and `??` propagates the
+# IoError of the contract.
+# EXPECT_STDOUT_EXACT: "4\n"
+# EXPECT_NO_LEAKS
+use <io/contracts>
+
+struct Bytes:
+    u8[] data
+    i32 at
+
+extend Bytes with Reader:
+    fn read(poke self, i32 max) string | IoError:
+        let u8[] got = self.read_bytes(max)??
+        return Result.Ok(got.to_string())
+
+    fn read_bytes(poke self, i32 max) u8[] | IoError:
+        let i32 end = self.at + max
+        if (end > self.data.len()):
+            end := self.data.len()
+        let u8[] got = self.data.s(self.at, end)
+        self.at := end
+        return Result.Ok(got)
+
+fn head@(R: Reader)(poke R r) i32 | IoError:
+    let u8[] first = r.read_bytes(4)??
+    return Result.Ok(first.len())
+
+fn main() i32:
+    let Bytes b = Bytes(from([a'M', a'o', a's', a't', a'l', a'y']), 0)
+    println(head(poke b).realise(-1))
+    return 0

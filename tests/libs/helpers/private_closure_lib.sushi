@@ -26,7 +26,7 @@ fn pick_first@(T)(nom T a, nom T b) T:
     chosen := a
     return chosen
 
-public fn compute@(T)(nom T a, nom T b) T:
+public fn compute@(T: Clone)(nom T a, nom T b) T:
     let i32 boost = scale_up(2)
     # The private struct is used directly in this template body, so the
     # consumer's monomorphized instance references it too (it ships in the

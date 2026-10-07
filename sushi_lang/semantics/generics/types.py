@@ -230,6 +230,28 @@ def _param_name(tp) -> str:
     return tp.name if hasattr(tp, "name") else str(tp)
 
 
+def substituted_call_signature(generic_func, type_args):
+    """The signature of a generic declaration with `type_args` put through it.
+
+    `(params, ret, err)`: each parameter with its type substituted, the return, and the
+    channel. The PURE substitution, so nothing is interned. None when the count does not
+    fit the declaration, or the declaration has no return. One derivation for what a call
+    yields (`substituted_call_result`) and for what a call in a template check passes
+    (#1070), where no instance is cut.
+    """
+    from sushi_lang.semantics.generics.monomorphize.transformer import substituted_param
+    substitution = type_param_substitution(generic_func, type_args)
+    if substitution is None or generic_func.ret is None:
+        return None
+    params = [substituted_param(p, substitute_type_params(p.ty, substitution)
+                                if p.ty is not None else None)
+              for p in generic_func.params]
+    ret = substitute_type_params(generic_func.ret, substitution)
+    err = (substitute_type_params(generic_func.err_type, substitution)
+           if generic_func.err_type is not None else None)
+    return params, ret, err
+
+
 def substituted_call_result(generic_func, type_args) -> Optional[Type]:
     """What a call to a generic declaration yields, read from its SUBSTITUTED signature.
 
@@ -245,18 +267,15 @@ def substituted_call_result(generic_func, type_args) -> Optional[Type]:
     does not exist yet comes back as a `GenericTypeRef`, which is what keeps an early
     answer out of the enum table.
     """
-    substitution = type_param_substitution(generic_func, type_args)
-    if substitution is None or generic_func.ret is None:
+    signature = substituted_call_signature(generic_func, type_args)
+    if signature is None:
         return None
-
-    ret = substitute_type_params(generic_func.ret, substitution)
+    _params, ret, err = signature
     if isinstance(ret, GenericTypeRef) and ret.base_name == "Result":
         return ret
-    err = generic_func.err_type
     if err is None:
         return ret
-    return GenericTypeRef(base_name="Result",
-                          type_args=(ret, substitute_type_params(err, substitution)))
+    return GenericTypeRef(base_name="Result", type_args=(ret, err))
 
 
 __all__ = ["OPAQUE_MARK", "TemplateId", "TypeParameter", "TypePack", "GenericEnumType", "GenericStructType",

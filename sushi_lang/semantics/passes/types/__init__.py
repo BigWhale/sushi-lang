@@ -42,12 +42,20 @@ class TypeValidator:
     # collection did not make (#1155). An early pass only reads, so its inferrer may not.
     requests_late_instances = True
 
+    # True only over the check copy of a template (`templates.TemplateValidator`, #1070).
+    in_template_check = False
+
     def __init__(self, reporter: Reporter, tables: 'SymbolTables',
                  current_unit_name: Optional[str] = None,
                  monomorphized_functions: Optional[Dict[str, tuple]] = None,
                  in_library_unit: bool = False,
-                 namespaces: Optional['NamespaceTable'] = None) -> None:
+                 namespaces: Optional['NamespaceTable'] = None,
+                 checks_templates: bool = False) -> None:
         self.reporter = reporter
+        # Whether `run` checks each function template of the unit on a check copy
+        # (#1070): a unit of the program, and a bundled stdlib unit. A consumed library
+        # unit was checked by its own `--lib` build.
+        self.checks_templates = checks_templates
         self.err = PassErrorReporter(reporter)
         self.tables = tables
         self.const_table = tables.constants
@@ -144,16 +152,22 @@ class TypeValidator:
         for const in program.constants:
             validate_constant(self, const)
 
+        # A function template is checked one time, on a check copy, where it is written
+        # (#1070). The copy reads the statement rules too, with the stamps it gets.
+        from .templates import check_function_template
+        checked: set[int] = set()
         for func in program.functions:
-            if hasattr(func, 'type_params') and func.type_params:
+            if func.type_params:
+                if self.checks_templates and check_function_template(self, func):
+                    checked.add(id(func))
                 continue
             self._validate_function(func)
 
-        # The loop above skips a template, and a generic extension and a generic-target
-        # perk implementation have no loop here at all: their statement rules that need
-        # no type are read once, on the body as written (#1070).
+        # A template the loop above did not check, a generic extension and a
+        # generic-target perk implementation: their statement rules that need no type
+        # are read once, on the body as written.
         from .signatures import check_template_statements
-        check_template_statements(self, program)
+        check_template_statements(self, program, checked)
 
         for ext in program.extensions:
             self._validate_extension_method(ext)

@@ -204,7 +204,7 @@ only, because a list of pairs is not a target that an extension method can name.
   println("{names.len()} names, {ages.len()} ages")
   ```
 :##
-public fn unzip@(T, U)(List@((T, U)) xs) (List@(T), List@(U)):
+public fn unzip@(T: Clone, U: Clone)(List@((T, U)) xs) (List@(T), List@(U)):
     let List@(T) firsts = List.new()
     let List@(U) seconds = List.new()
     foreach((a, b) in xs.iter()):

@@ -434,6 +434,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         substituted = generic_call_result_type(self.type_validator, call, generic_func)
         if substituted is None:
             return None
+        if self.type_validator.in_template_check:
+            # The answer can name an instance over an opaque parameter that the overlay
+            # has not built yet (#1070); the overlay interner builds it.
+            from sushi_lang.semantics.passes.types.utils import intern_signature
+            intern_signature(self.type_validator, substituted)
         return resolve_declared_type(self.type_validator,
                                      self._materialize_wrapper(substituted))
 

@@ -1230,6 +1230,14 @@ The typecheck pass gives the iterable of every foreach its type, and the loop re
 
 A type pack `...Ts` stands for any number of types, so its name is a type in ONE position: the trailing parameter `...Ts args`, which takes one argument per element. Everywhere else the name would have to be ONE type, and it is not: a parameter written `Ts x` with no `...`, a return type, an error type, a `let` type, an array element (`Ts[]`), a type argument (`List@(Ts)`), a cast and a lambda parameter are all refused at the declaration. Walk the values with `expand(a in args):`, or declare an ordinary type parameter `T` for a single value.
 
+### CE0148 {#ce0148}
+
+**Error** · internal
+
+**Message:** `an opaque type parameter reached the program table: '{name}'`
+
+The check of a generic template builds its instances over an opaque type parameter in a scratch layer over the program tables. A program table must never hold one: the backend has no layout for a type parameter. One scan at the end of the analysis reads every struct and enum name. This is a fault in the compiler, not in the program; please report the program.
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.
@@ -3193,6 +3201,14 @@ The orphan rule of [CE4012](#ce4012), at a type no unit declares: a primitive, a
 **Message:** `'Clone' cannot be implemented for '{type}': the compiler decides it`
 
 `Clone` is a structural perk. A type satisfies it when it holds no resource, that is when it is not a `Drop` type and holds none in a field, an element or a payload. The built-in `.clone()` is the contract, so an implementation would have no method to override. A handle has no `Clone` on purpose: a copy would close one descriptor twice. `.share()` is the way to get a second owner of a handle. Remove the implementation.
+
+### CE4018 {#ce4018}
+
+**Error** · perk
+
+**Message:** `cannot clone '{type}': the type parameter '{param}' has no constraint 'Clone'`
+
+A generic body is checked one time, where it is written. A type parameter is opaque there: the body knows only what its constraints promise. `.clone()` makes a deep copy, and a deep copy of a value that holds a resource is a second handle. So a body can clone a value of a type parameter, or of a type that holds one (a `List@(T)`, a `Box@(T)`), only when the parameter declares the constraint `Clone`. Every type that holds no resource satisfies `Clone`. A handle does not; `.share()` is the way to get a second owner of a handle. Add `Clone` to the constraints: `@(T: Clone)`. The note points at the type parameter. [CE2431](#ce2431) is the refusal of a concrete type that holds a resource.
 
 ## CE5xxx: Foreign function interface errors {#ce5xxx}
 

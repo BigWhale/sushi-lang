@@ -1,0 +1,10 @@
+# `.hash()` on a type parameter needs a constraint that promises it (#1070, R5). The
+# template is never called, and the check is still made where it is written.
+# EXPECT_ERROR_CODES_EXACT: CE2008
+
+fn digest@(T)(T x) u64:
+    return x.hash()
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

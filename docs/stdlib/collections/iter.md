@@ -183,7 +183,7 @@ the answer with `.iter()`, and destructure the item in the `foreach`.
 | `enumerate@(T)(List@(T) xs)` | `List@((i32, T))`: each element with its index, from 0 |
 | `zip@(T, U)(List@(T) xs, List@(U) ys)` | `List@((T, U))`: the elements side by side; it stops at the shorter list |
 | `partition@(T)(List@(T) xs, fn(T) -> bool pred)` | `(List@(T), List@(T))`: the elements that `pred` keeps, then the others, each in order |
-| `unzip@(T, U)(List@((T, U)) xs)` | `(List@(T), List@(U))`: the first elements, then the second elements |
+| `unzip@(T: Clone, U: Clone)(List@((T, U)) xs)` | `(List@(T), List@(U))`: the first elements, then the second elements |
 
 The methods are `xs.enumerate()`, `xs.zip(ys)` and `xs.partition(pred)`; on a `T[]`
 receiver, `zip` takes a `U[]`.

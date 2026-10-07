@@ -14,7 +14,7 @@ from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 from ..arguments import check_arguments
 from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family, stamp_builtin_modes
-from ..utils import reject_spread_args
+from ..utils import intern_signature, reject_spread_args
 
 # A receiver whose method calls this pass judges. `Own@(T)`, `List@(T)` and
 # `HashMap@(K, V)` are named StructTypes, so the tuple covers them with every other
@@ -41,8 +41,6 @@ def instantiate_array_extension(validator: 'TypeValidator',
     checks the body copy after the per-unit loop.
     """
     from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
-    from sushi_lang.semantics.generics.types import substitute_type_params
-    from sushi_lang.semantics.passes.collect.functions import ExtensionMethod, Param
 
     templates = validator.generic_extension_table.declarations(ARRAY_BASE_KEY, method_name)
     template = next((t for t in templates
@@ -55,9 +53,30 @@ def instantiate_array_extension(validator: 'TypeValidator',
     # holds the bare name, and a copy for it checks a body over an unknown type (#1161).
     receiver_type = _resolved(validator, receiver_type)
     element = receiver_type.base_type
-    substitution = {template.type_params[0]: element}
+    concrete = substituted_extension_signature(
+        validator, template, receiver_type, {template.type_params[0]: element})
+    # A template check answers the signature and writes nothing (#1070).
+    if not validator.in_template_check:
+        validator.extension_table.add_method(concrete)
+        _queue_extension_instantiation(validator, template, receiver_type, (element,), ())
+    return concrete
+
+
+def substituted_extension_signature(validator: 'TypeValidator', template, receiver_type,
+                                    substitution):
+    """The signature of an extension template with `substitution` put through it.
+
+    The ONE builder, for every rung that answers a call from a template: an array
+    template, a method-generic template, and a generic-target template in a template
+    check (#1070). It interns what the signature names (risk 1) and writes no table.
+    """
+    from sushi_lang.semantics.generics.types import substitute_type_params
+    from sushi_lang.semantics.passes.collect.functions import ExtensionMethod, Param
+
     ret = (substitute_type_params(template.ret_type, substitution)
            if template.ret_type is not None else None)
+    err = (substitute_type_params(template.err_type, substitution)
+           if getattr(template, "err_type", None) is not None else None)
     params = [Param(
         name=p.name,
         ty=substitute_type_params(p.ty, substitution) if p.ty is not None else None,
@@ -65,41 +84,15 @@ def instantiate_array_extension(validator: 'TypeValidator',
         is_variadic=getattr(p, "is_variadic", False),
         is_nom=getattr(p, "is_nom", False),
     ) for p in template.params]
-
-    err = (substitute_type_params(template.err_type, substitution)
-           if getattr(template, "err_type", None) is not None else None)
-    concrete = ExtensionMethod(
-        target_type=receiver_type, name=method_name, params=params, ret_type=ret,
+    intern_signature(validator, ret, err, *(p.ty for p in params))
+    return ExtensionMethod(
+        target_type=receiver_type, name=template.name, params=params, ret_type=ret,
         loc=template.loc, target_type_span=template.target_type_span,
         name_span=template.name_span, ret_span=template.ret_span,
         self_mode=template.self_mode, filename=template.filename,
         unit_name=template.unit_name,
         err_type=err, err_span=getattr(template, "err_span", None),
         is_static=bool(getattr(template, "is_static", False)))
-    _intern_signature(validator, ret, err, *(p.ty for p in params))
-    validator.extension_table.add_method(concrete)
-    _queue_extension_instantiation(validator, template, receiver_type, (element,), ())
-    return concrete
-
-
-def _intern_signature(validator: 'TypeValidator', *types) -> None:
-    """Intern every instantiation a call-site substituted signature names (risk 1).
-
-    The call site is the first place that names the element type of a `T[]` template
-    and the method type arguments of a method-generic one, so a `List@(T)` in the
-    signature can name an instance nothing else in the program names. It is interned
-    NOW, so the call's answer is a concrete type and not a `GenericTypeRef` (#1143).
-
-    The reader of what a call yields asks again: a `T[]` signature enters the extension
-    table at its first call, and that call can be an inference of the `instantiate`
-    pass, which runs before the interner exists.
-    """
-    interner = getattr(validator.tables, "intern_generic_ref", None)
-    if interner is None:
-        return
-    for ty in types:
-        if ty is not None:
-            interner(ty)
 
 
 def _resolved(validator: 'TypeValidator', ty):
@@ -170,10 +163,36 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
             return RESOLUTION_REPORTED
         method = resolved
 
+    if method is None and validator.in_template_check:
+        method = _generic_target_signature(validator, receiver_type, method_name)
+
     if method is not None and bool(getattr(method, "is_static", False)) != static:
         return None
 
     return method
+
+
+def _generic_target_signature(validator: 'TypeValidator', receiver_type,
+                              method_name: str):
+    """A generic-target extension that answers an instance over an opaque parameter.
+
+    In a template check (#1070) the receiver `List@(T)` has no copy in the extension
+    table: no copy is cut for an opaque instance. The template answers instead, with the
+    receiver's arguments put through its signature, and nothing is written.
+    """
+    from sushi_lang.semantics.generics.opaque import holds_opaque
+    base = getattr(receiver_type, "generic_base", None)
+    args = getattr(receiver_type, "generic_args", None) or ()
+    if base is None or not holds_opaque(receiver_type):
+        return None
+    template = validator.generic_extension_table.find_applicable(
+        base, method_name, receiver_type.name)
+    if (template is None or template.method_type_params
+            or len(template.type_params) != len(args)):
+        return None
+    names = [p.name if hasattr(p, "name") else p for p in template.type_params]
+    return substituted_extension_signature(validator, template, receiver_type,
+                                           dict(zip(names, args, strict=True)))
 
 
 def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
@@ -279,7 +298,6 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     from sushi_lang.semantics.generics.pack_inference import (
         infer_call_arg_type, solve_leading_type_args)
     from sushi_lang.semantics.generics.types import substitute_type_params
-    from sushi_lang.semantics.passes.collect.functions import ExtensionMethod, Param
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
     template, receiver_subst = _find_method_generic_template(
@@ -323,35 +341,16 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     if _refuses_unmet_constraints(validator, template, receiver_type, margs, call, report):
         return RESOLUTION_REPORTED if report else None
 
-    ret = (substitute_type_params(template.ret_type, full_subst)
-           if template.ret_type is not None else None)
-    err = (substitute_type_params(template.err_type, full_subst)
-           if getattr(template, "err_type", None) is not None else None)
-    params = [Param(
-        name=p.name,
-        ty=substitute_type_params(p.ty, full_subst) if p.ty is not None else None,
-        name_span=p.name_span, type_span=p.type_span, index=p.index,
-        is_variadic=getattr(p, "is_variadic", False),
-        is_nom=getattr(p, "is_nom", False),
-    ) for p in template.params]
-
-    _intern_signature(validator, ret, err, *(p.ty for p in params))
-
-    concrete = ExtensionMethod(
-        target_type=receiver_type, name=call.method, params=params, ret_type=ret,
-        loc=template.loc, target_type_span=template.target_type_span,
-        name_span=template.name_span, ret_span=template.ret_span,
-        self_mode=template.self_mode, filename=template.filename,
-        unit_name=template.unit_name,
-        err_type=err, err_span=getattr(template, "err_span", None),
-        is_static=bool(getattr(template, "is_static", False)))
-
+    concrete = substituted_extension_signature(validator, template, receiver_type,
+                                               full_subst)
     call.callee_method_type_args = margs
 
-    receiver_names = [p.name if hasattr(p, "name") else p for p in template.type_params]
-    receiver_args = tuple(receiver_subst[n] for n in receiver_names)
-    _queue_extension_instantiation(validator, template, receiver_type,
-                                   receiver_args, margs)
+    # A template check cuts no copy (#1070).
+    if not validator.in_template_check:
+        receiver_names = [p.name if hasattr(p, "name") else p for p in template.type_params]
+        receiver_args = tuple(receiver_subst[n] for n in receiver_names)
+        _queue_extension_instantiation(validator, template, receiver_type,
+                                       receiver_args, margs)
     return concrete
 
 
@@ -439,6 +438,8 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
     from sushi_lang.semantics.typesys import holds_declared_resource
     if call.method != "clone":
         return False
+    if _reject_clone_of_opaque(validator, call, receiver_type):
+        return True
     drops = validator.drop_type_names
     if not drops:
         return False
@@ -459,6 +460,26 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
     return True
 
 
+def _reject_clone_of_opaque(validator: 'TypeValidator', call: MethodCall,
+                            receiver_type) -> bool:
+    """CE4018: a value that holds a type parameter with no `Clone` has no deep copy.
+
+    In a template check (#1070, R5) the parameter MAY hold a resource, so the body can
+    clone it only when the parameter promises `Clone`. One rule for the value of `T`, a
+    `List@(T)` and a user `Box@(T)`: the receiver holds the parameter.
+    """
+    from sushi_lang.semantics.generics.opaque import note_opaque, opaque_parameters
+    unpromised = [p for p in opaque_parameters(receiver_type) if not p.promises("Clone")]
+    if not unpromised:
+        return False
+    diagnostic = er.emit_with(validator.reporter, er.ERR.CE4018, call.loc,
+                              type=display_type(receiver_type), param=unpromised[0].name)
+    note_opaque(diagnostic, unpromised[0]) \
+        .help(f"add 'Clone' to the constraints of '{unpromised[0].name}': "
+              f"'@({unpromised[0].name}: Clone)'").emit()
+    return True
+
+
 def extension_call_result_type(validator: 'TypeValidator', method):
     """What a resolved method call YIELDS: the bare return, or its channel Result.
 
@@ -470,7 +491,7 @@ def extension_call_result_type(validator: 'TypeValidator', method):
     if declared is None:
         declared = getattr(method, "ret", None)
     err_type = getattr(method, "err_type", None)
-    _intern_signature(validator, declared, err_type)
+    intern_signature(validator, declared, err_type)
     return call_yield(validator, declared, err_type)
 
 
@@ -725,10 +746,31 @@ def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
         if isinstance(receiver_type, IteratorType):
             diag.help("an iterator has no methods: walk it with 'foreach', or call the "
                       "method on the collection it comes from")
+        _explain_unpromised_method(validator, diag, receiver_type, call.method)
         diag.emit()
         return
 
     _check_user_method(validator, call, receiver_type, method, stop_on_arity=False)
+
+
+def _explain_unpromised_method(validator: 'TypeValidator', diag, receiver_type,
+                               method_name: str) -> None:
+    """The note and the help of CE2008 on an opaque type parameter (#1070).
+
+    The body knows the methods its constraints promise and nothing more, so the fix is a
+    constraint: the help names the perks that declare a method of this name.
+    """
+    from sushi_lang.semantics.generics.opaque import note_opaque, providing_perks
+    if not (isinstance(receiver_type, TypeParameter) and receiver_type.is_opaque):
+        return
+    note_opaque(diag, receiver_type)
+    perks = providing_perks(validator.perk_table, method_name)
+    if perks:
+        choices = " or ".join(f"'@({receiver_type.name}: {perk})'" for perk in perks)
+        diag.help(f"add a constraint that provides '{method_name}': {choices}")
+    else:
+        diag.help(f"no perk declares '{method_name}'; a type parameter has the methods "
+                  f"of its constraints and nothing more")
 
 
 def _was_refused(validator: 'TypeValidator', receiver_type, method_name: str) -> bool:

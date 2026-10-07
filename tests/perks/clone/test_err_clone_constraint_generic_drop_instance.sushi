@@ -1,0 +1,19 @@
+# An instance of a generic type whose Drop implementation is a template holds a
+# resource, so it does not satisfy `Clone` (R5): CE4006 at the call.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+
+struct Sink@(T):
+    T last
+
+extend Sink@(T) with Drop:
+    fn drop(poke self) ~:
+        println("dropped")
+
+fn twin@(T: Clone)(T x) T:
+    return x.clone()
+
+fn main() i32:
+    let Sink@(i32) s = Sink(1)
+    let Sink@(i32) t = twin(s)
+    println(t.last)
+    return 0

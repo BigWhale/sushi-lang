@@ -152,6 +152,10 @@ class PerkImplementationTable:
     perks: Optional[PerkTable] = field(default=None, repr=False, compare=False)
     _promised: Dict[tuple, Optional[FuncDef]] = field(
         default_factory=dict, repr=False, compare=False)
+    # The program's generic-target templates, set by `SymbolTables`: an instance over an
+    # opaque type parameter has no copy, and the template answers its methods (#1070).
+    templates: Optional['GenericPerkImplTable'] = field(
+        default=None, repr=False, compare=False)
 
     def implements(self, type_name: str, perk_name: str) -> bool:
         """Check if a type implements a perk."""
@@ -201,6 +205,39 @@ class PerkImplementationTable:
         found = self._method(type_name, method_name)
         if found is None and self._cut_on_miss(target_type, method=method_name):
             found = self._method(type_name, method_name)
+        if found is None:
+            found = self._template_method(target_type, method_name)
+        return found
+
+    def _template_method(self, target_type: 'Type', method_name: str) -> Optional[FuncDef]:
+        """The method a generic-target template gives an instance over an opaque parameter.
+
+        `extend Box@(T) with Show` gives every `Box@(...)` its `show()`, and in a template
+        check `Box@(T)` names no copy (#1070). The template's header answers, with the
+        instance's arguments put through it; the body is empty, because the check reads
+        the signature alone.
+        """
+        from sushi_lang.semantics.ast import Block
+        from sushi_lang.semantics.generics.extensions import substitute_header
+        from sushi_lang.semantics.generics.opaque import holds_opaque
+        base = getattr(target_type, "generic_base", None)
+        args = getattr(target_type, "generic_args", None) or ()
+        if self.templates is None or base is None or not holds_opaque(target_type):
+            return None
+        key = (target_type, (), method_name)
+        if key in self._promised:
+            return self._promised[key]
+        found = None
+        for template in self.templates.templates(base):
+            if len(template.type_params) != len(args):
+                continue
+            method = next((m for m in template.impl.methods if m.name == method_name), None)
+            if method is not None:
+                found = substitute_header(method, dict(zip(template.type_params, args,
+                                                           strict=True)),
+                                          Block(loc=method.loc, statements=[]))
+                break
+        self._promised[key] = found
         return found
 
     def promising_perks(self, param: 'Type', method_name: str) -> List[str]:

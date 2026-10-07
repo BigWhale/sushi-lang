@@ -29,6 +29,16 @@ def substitute_signature(decl, substitution: Dict[str, Type], substitutor: "Type
     skipped. The body is this instantiation's OWN: the typecheck pass's stamps and the
     borrow pass's decisions are per instantiation (#391).
     """
+    return substitute_header(decl, substitution,
+                             substitutor.substitute_body(decl.body, substitution))
+
+
+def substitute_header(decl, substitution: Dict[str, Type], body):
+    """`substitute_signature` with the body given: the header half of the one copy.
+
+    A template check asks a perk-implementation template for a method's signature over
+    an opaque instance (#1070) and reads no body, so it hands an empty one.
+    """
     def sub(ty: Optional[Type]) -> Optional[Type]:
         return substitute_type_params(ty, substitution) if ty is not None else None
 
@@ -39,7 +49,7 @@ def substitute_signature(decl, substitution: Dict[str, Type], substitutor: "Type
         params=[substituted_param(param, sub(param.ty)) for param in decl.params],
         ret=sub(decl.ret),
         err_type=sub(decl.err_type),
-        body=substitutor.substitute_body(decl.body, substitution),
+        body=body,
         # A copy is an instance: its method-level type parameters are solved.
         type_params=None,
     )

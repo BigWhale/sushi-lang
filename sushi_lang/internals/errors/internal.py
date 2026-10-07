@@ -485,3 +485,12 @@ _add(ErrorMessage("CE0146", Severity.ERROR,
     "item type. Before #1143 the pass returned with no diagnostic, and the backend "
     "stopped with CE0015 and no location. Bind the iterable to a 'let' with a written "
     "type first, and please report the program."))
+
+_add(ErrorMessage("CE0148", Severity.ERROR,
+    "an opaque type parameter reached the program table: '{name}'",
+    Category.INTERNAL,
+    "The check of a generic template builds its instances over an opaque type "
+    "parameter in a scratch layer over the program tables (#1070). A program table must "
+    "never hold one: the backend has no layout for a type parameter. One scan at the end "
+    "of the analysis reads every struct and enum name. This is a fault in the compiler, "
+    "not in the program; please report the program."))

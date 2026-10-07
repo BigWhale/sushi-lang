@@ -353,6 +353,30 @@ def validate_constant_array_index(validator: 'TypeValidator', expr: 'Expr',
                 size=array_size)
 
 
+def intern_signature(validator: 'TypeValidator', *types) -> None:
+    """Intern every instantiation a call-site substituted signature names (risk 1).
+
+    Two callers: a method answered from a template (`calls/methods.py`), and a generic
+    function call in a template check (#1070), which names an instance over an opaque
+    parameter that the overlay interner builds.
+
+    The call site is the first place that names the element type of a `T[]` template
+    and the method type arguments of a method-generic one, so a `List@(T)` in the
+    signature can name an instance nothing else in the program names. It is interned
+    NOW, so the call's answer is a concrete type and not a `GenericTypeRef` (#1143).
+
+    The reader of what a call yields asks again: a `T[]` signature enters the extension
+    table at its first call, and that call can be an inference of the `instantiate`
+    pass, which runs before the interner exists.
+    """
+    interner = getattr(validator.tables, "intern_generic_ref", None)
+    if interner is None:
+        return
+    for ty in types:
+        if ty is not None:
+            interner(ty)
+
+
 def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Optional[Type]:
     """The concrete type that a DECLARED type names -- the pass's ONE answer (#755).
 
@@ -458,7 +482,10 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
             validator.variable_types[param.name] = resolve_declared_type(validator, param.ty)
             continue
 
-        if isinstance(param.ty, (BuiltinType, StructType, EnumType, ForeignPtrType)):
+        from sushi_lang.semantics.generics.types import TypeParameter
+        if isinstance(param.ty, (BuiltinType, StructType, EnumType, ForeignPtrType,
+                                 TypeParameter)):
+            # A type parameter here is the opaque one of a template check (#1070).
             validator.variable_types[param.name] = param.ty
         elif isinstance(param.ty, UnknownType):
             resolved_type = resolve_declared_type(validator, param.ty)
@@ -475,8 +502,10 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
                     validator.variable_types[param.name] = resolved_type
                     param.ty = resolved_type  # Update AST node for backend
 
+                    # A check copy writes no signature of the program (#1070).
                     func_sig = (validator.func_sig(validator.current_function.name)
-                                if validator.current_function else None)
+                                if validator.current_function
+                                and not validator.in_template_check else None)
                     if func_sig is not None:
                         for sig_param in func_sig.params:
                             if sig_param.name == param.name:

@@ -92,6 +92,7 @@ class SymbolTables:
         from sushi_lang.semantics.generics.hashing import hash_override_of
         from sushi_lang.semantics.passes.collect.perks import PerkCollector
         self.perk_impls.perks = self.perks
+        self.perk_impls.templates = self.generic_perk_impls
         derived = self.enums.derived
         derived.hash_override = hash_override_of(self.perk_impls, self.generic_perk_impls)
         for perk in (PerkCollector.EQ_PERK, PerkCollector.ORD_PERK,

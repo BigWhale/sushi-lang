@@ -63,6 +63,16 @@ def _lint_checks(unit: Unit, gate_env: Optional[str] = None) -> bool:
     return not unit.from_library and unit.name in SOURCE_STDLIB_MODULES
 
 
+def _checks_templates(unit: Unit) -> bool:
+    """Does the typecheck pass check the function templates of this unit (#1070)?
+
+    A unit of the program -- a library's own units at its `--lib` build included -- and
+    a bundled stdlib unit. A consumed library unit is not checked again: its own build
+    checked it."""
+    return unit.provenance is None or (not unit.from_library
+                                       and unit.name in SOURCE_STDLIB_MODULES)
+
+
 @dataclass(frozen=True)
 class Lints:
     """The warning-control flags: `--warn-missing-docs` and `--warn-unused`.
@@ -154,6 +164,13 @@ class SemanticAnalyzer:
         `_check_late_functions` repeats them for each function instance cut after the
         loop started (a late request of the typecheck pass, #1155), and
         `_check_array_extensions` drives both to a fixpoint.
+
+        The `typecheck` pass also checks each function template of the unit one time, on a
+        check copy, where it is written (#1070, `passes/types/templates.py`): each type
+        parameter is opaque, the copy lives in an overlay of the tables, and the pass runs
+        `lift` on the copy alone. After the fixpoint, `_reject_opaque_in_program_tables`
+        is the backstop (CE0148): no instance over an opaque parameter reached a program
+        table.
 
         One call in `_check_multi_file` carries no row, because it is not a pass:
         `_register_monomorphized_extensions` merges the generic-target extension copies
@@ -260,6 +277,19 @@ class SemanticAnalyzer:
                           destroy_effects, enum_names)
         self._check_array_extensions(compilation_order, monomorphizer, libraries,
                                      destroy_effects, enum_names)
+        self._reject_opaque_in_program_tables()
+
+    def _reject_opaque_in_program_tables(self) -> None:
+        """CE0148, the backstop of the template check (#1070): no opaque type reached here.
+
+        The check builds its instances in an overlay; a writer that missed the overlay
+        would hand the backend a type parameter. One scan of the names, one time.
+        """
+        from sushi_lang.internals.errors import raise_internal_error
+        from sushi_lang.semantics.generics.types import OPAQUE_MARK
+        for name in (*self.tables.structs.order, *self.tables.enums.order):
+            if OPAQUE_MARK in name:
+                raise_internal_error("CE0148", name=name)
 
     def _collect(self, compilation_order: list[Unit]) -> LibraryRegistration:
         """collect: constants, headers and generic types, from every unit.
@@ -785,7 +815,7 @@ class SemanticAnalyzer:
             reporter, self.tables, current_unit_name=unit.name,
             monomorphized_functions=monomorphizer.monomorphized_functions,
             in_library_unit=unit.provenance is not None,
-            namespaces=namespaces)
+            namespaces=namespaces, checks_templates=_checks_templates(unit))
         lifter = LambdaLifter(self.tables.structs, self.tables.funcs, unit.ast,
                               annotate=typecheck)
         # The enum names let the checker tell `Box.Full(a)` from a method call -- both
