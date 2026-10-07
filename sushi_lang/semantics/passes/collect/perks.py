@@ -150,8 +150,11 @@ class PerkImplementationTable:
     # The program's perks, set by `SymbolTables`: an opaque type parameter answers the
     # methods its constraints declare (#1070), and those are read from the perk.
     perks: Optional[PerkTable] = field(default=None, repr=False, compare=False)
-    _promised: Dict[tuple, Optional[FuncDef]] = field(
-        default_factory=dict, repr=False, compare=False)
+    # The methods answered for an opaque type parameter or an instance over one, kept
+    # for one template check. Only the table of a check's overlay holds a dict here
+    # (`template_scope.py`): the program table keeps nothing over an opaque type.
+    promised: Optional[Dict[tuple, Optional[FuncDef]]] = field(
+        default=None, repr=False, compare=False)
     # The program's generic-target templates, set by `SymbolTables`: an instance over an
     # opaque type parameter has no copy, and the template answers its methods (#1070).
     templates: Optional['GenericPerkImplTable'] = field(
@@ -222,23 +225,32 @@ class PerkImplementationTable:
         from sushi_lang.semantics.generics.opaque import holds_opaque
         base = getattr(target_type, "generic_base", None)
         args = getattr(target_type, "generic_args", None) or ()
-        if self.templates is None or base is None or not holds_opaque(target_type):
+        templates = self.templates
+        if templates is None or base is None or not holds_opaque(target_type):
             return None
-        key = (target_type, (), method_name)
-        if key in self._promised:
-            return self._promised[key]
-        found = None
-        for template in self.templates.templates(base):
-            if len(template.type_params) != len(args):
-                continue
-            method = next((m for m in template.impl.methods if m.name == method_name), None)
-            if method is not None:
-                found = substitute_header(method, dict(zip(template.type_params, args,
-                                                           strict=True)),
-                                          Block(loc=method.loc, statements=[]))
-                break
-        self._promised[key] = found
-        return found
+
+        def build() -> Optional[FuncDef]:
+            for template in templates.templates(base):
+                if len(template.type_params) != len(args):
+                    continue
+                method = next((m for m in template.impl.methods if m.name == method_name),
+                              None)
+                if method is not None:
+                    return substitute_header(
+                        method, dict(zip(template.type_params, args, strict=True)),
+                        Block(loc=method.loc, statements=[]))
+            return None
+
+        return self._remembered((target_type, (), method_name), build)
+
+    def _remembered(self, key: tuple, build: Callable[[], Optional[FuncDef]]
+                    ) -> Optional[FuncDef]:
+        """`build()`, kept in the check's own `promised` table when there is one."""
+        if self.promised is None:
+            return build()
+        if key not in self.promised:
+            self.promised[key] = build()
+        return self.promised[key]
 
     def promising_perks(self, param: 'Type', method_name: str) -> List[str]:
         """The constraints of an opaque parameter that declare `method_name`, in order."""
@@ -260,18 +272,15 @@ class PerkImplementationTable:
         check reads the signature alone. A second constraint that declares the name too
         is the template's CE4015, and the first one answers here.
         """
-        key = (param, param.constraints, method_name)
-        if key in self._promised:
-            return self._promised[key]
-        perks = self.promising_perks(param, method_name)
-        found = None
-        if perks:
-            perk = self.perks.get(perks[0]) if self.perks is not None else None
-            sig = next(m for m in perk.methods if m.name == method_name) if perk else None
-            if sig is not None:
-                found = _as_implementation(sig, param)
-        self._promised[key] = found
-        return found
+        def build() -> Optional[FuncDef]:
+            perks = self.promising_perks(param, method_name)
+            perk = self.perks.get(perks[0]) if perks and self.perks is not None else None
+            if perk is None:
+                return None
+            sig = next(m for m in perk.methods if m.name == method_name)
+            return _as_implementation(sig, param)
+
+        return self._remembered((param, param.constraints, method_name), build)
 
     def _method(self, type_name: str, method_name: str) -> Optional['FuncDef']:
         for perk_name in self.by_type.get(type_name, set()):

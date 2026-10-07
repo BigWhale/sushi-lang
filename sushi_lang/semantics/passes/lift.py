@@ -47,7 +47,6 @@ class LambdaLifter:
         # every copy carrying the template's spans, so the copies answer one report
         # (#648).
         self._owner_instance_of = None
-        self._owner_template_id = None
         # And which template: a lambda of a copy of a template that the template check
         # refused reports nothing, as the copy does (#1070).
         self._owner_template_id = None

@@ -352,9 +352,13 @@ class ExpressionValidator(RecursiveVisitor):
             # A generic-fn reference is allowed WITH an explicit expected fn type: solve
             # the type args and rewrite to the mangled name. A bare one stays CE2093.
             from sushi_lang.semantics.passes.types.calls.generics import (
-                reject_unsolved_generic_value, resolve_generic_fn_reference)
+                GENERIC_VALUE_REFUSED, reject_unsolved_generic_value,
+                resolve_generic_fn_reference)
             expected = getattr(node, "expected_type", None)
-            resolved = resolve_generic_fn_reference(tv, node.id, expected)
+            resolved = resolve_generic_fn_reference(tv, node.id, expected, loc=node.loc)
+            # A refused constraint is the one fault (#1070); CE2093 is not added to it.
+            if resolved is GENERIC_VALUE_REFUSED:
+                return
             if resolved is not None:
                 node.id = resolved[0]  # mirror the call-site mangled-name rewrite
                 return

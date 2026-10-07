@@ -84,3 +84,19 @@ def test_the_scratch_monomorphizer_builds_in_the_overlay():
     assert maybe is not None and maybe.name in scope.tables.enums.by_name
     assert maybe.name not in program.enums.by_name
     assert scope.monomorphizer.struct_table is scope.tables.structs
+
+
+def test_the_promised_methods_stay_in_the_overlay():
+    """The method an opaque parameter promises is kept for one check, not the program."""
+    from sushi_lang.semantics.passes.collect.perks import PerkCollector
+    program = _program()
+    PerkCollector(None, program.perks, program.perk_impls,
+                  is_declared_type=lambda name: False).register_predefined_perks()
+    overlay = template_scope(program).tables
+    promised = TypeParameter("T", owner=TemplateId("main", "f"), constraints=("Hashable",))
+    assert overlay.perk_impls.get_method(promised, "hash") is not None
+    assert overlay.perk_impls.implementations is program.perk_impls.implementations
+    assert overlay.perk_impls.promised
+    assert program.perk_impls.promised is None
+    assert program.perk_impls.get_method(promised, "hash") is not None
+    assert program.perk_impls.promised is None

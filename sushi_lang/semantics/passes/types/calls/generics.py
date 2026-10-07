@@ -143,8 +143,8 @@ def _validate_call_in_template(validator: 'TypeValidator', call: Call, generic_f
     so its arguments are only walked.
     """
     func_sig = (None if any(tp.is_pack for tp in generic_func.type_params or ())
-                or not _constraints_hold_in_template(validator, call, generic_func,
-                                                     type_args)
+                or not _constraints_hold_in_template(validator, call.callee.loc,
+                                                     generic_func, type_args)
                 else _substituted_sig(validator, generic_func, type_args, written))
     if func_sig is None:
         _walk_unchecked_arguments(validator, call)
@@ -152,9 +152,11 @@ def _validate_call_in_template(validator: 'TypeValidator', call: Call, generic_f
     validate_call_arguments(validator, written, func_sig, call.args, call.callee.loc)
 
 
-def _constraints_hold_in_template(validator: 'TypeValidator', call: Call, generic_func,
+def _constraints_hold_in_template(validator: 'TypeValidator', loc, generic_func,
                                   type_args) -> bool:
     """The callee's constraints at the solved type arguments, in a template check (#1070).
+
+    `loc` is where the template names the callee: a call, or a function value.
 
     The check of the monomorphize stage, keyed as it keys an instance, so a call that
     stage judged is not judged twice. An argument that is a type parameter of the
@@ -164,7 +166,7 @@ def _constraints_hold_in_template(validator: 'TypeValidator', call: Call, generi
     from ..utils import call_constraint_check
     return call_constraint_check(validator)(
         tuple(generic_func.type_params or ()), tuple(type_args),
-        ("fn", instantiation_key(generic_func.name, tuple(type_args))), call.callee.loc,
+        ("fn", instantiation_key(generic_func.name, tuple(type_args))), loc,
         validator.reporter.filename, getattr(generic_func, "filename", None), True)
 
 
@@ -322,8 +324,13 @@ def reject_unsolved_generic_value(validator: 'TypeValidator', loc, name: str,
                  reason=reason).help(help_text).emit()
 
 
+# What `resolve_generic_fn_reference` answers when a constraint refused the solved type
+# arguments and said so (#1070): the caller adds no CE2093 on top.
+GENERIC_VALUE_REFUSED = object()
+
+
 def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected_ty,
-                                 generic_func=None):
+                                 generic_func=None, loc=None):
     """Resolve a generic-fn reference against an expected FunctionType (T2.3).
 
     A bare name reads the unit's own view; a name behind an alias hands in the
@@ -348,6 +355,12 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
         return None
 
     if validator.in_template_check:
+        # A value passes the template's type parameter on, as a call does: the callee's
+        # constraints are checked where the value is written. The inferring half gives
+        # no `loc` and asks nothing; the validating half reports.
+        if loc is not None and not _constraints_hold_in_template(
+                validator, loc, generic_func, type_args):
+            return GENERIC_VALUE_REFUSED
         func_sig = _substituted_sig(validator, generic_func, type_args, name)
         mangled_name = name
     else:

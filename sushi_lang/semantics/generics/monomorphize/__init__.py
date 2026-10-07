@@ -60,6 +60,10 @@ class Monomorphizer:
     # The instantiate pass's site table (#579): the first span that named each
     # instantiation, keyed by interned name, so a constraint violation has a caret.
     sites: dict = field(default_factory=dict)
+    # The file of each unit, by name: the site of an instantiation that a COPY's body
+    # names is in the file of the copy's template, so a constraint refusal of it has a
+    # location (#1070).
+    unit_files: Dict[str, str] = field(default_factory=dict)
     # How many instantiations a constraint refused. The analyzer STOPS the whole-program
     # analysis after the monomorphize step when this is non-zero (Ruling 4, #579): no copy
     # was cut for a refused instantiation, and the per-unit passes would only read the
@@ -161,12 +165,14 @@ class Monomorphizer:
 
     def check_call_constraints(self, params, args, key, span, filename, template_file,
                                report: bool) -> bool:
-        """The constraints of the method-level type arguments of one call (#1191).
+        """The constraints of the type arguments of one site, from the typecheck pass.
 
-        The check a free function takes. `filename` is the file of the call and
-        `template_file` the file of the constraint. Without `report` the answer is the
-        same and nothing is emitted or recorded: the inferring half of the typecheck
-        pass asks it too.
+        Four sites: a method-level type argument (#1191), and in a template check a
+        generic call or function value, a written generic instance and an inferred
+        constructor (#1070). The check a free function takes. `filename` is the file of
+        the site and `template_file` the file of the constraint. Without `report` the
+        answer is the same and nothing is emitted or recorded: the inferring half of the
+        typecheck pass asks it too.
         """
         return self._validate_type_constraints(
             params, args, key=key, template_file=template_file, site=(span, filename),

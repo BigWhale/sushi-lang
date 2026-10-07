@@ -68,8 +68,10 @@ def template_scope(tables: 'SymbolTables') -> TemplateScope:
 
     Every table that a check copy writes is a scratch one: the struct and enum tables
     (instances and their derived methods), the late interner, and the extension queues.
-    A late function request is not made at all. Every other table is the program's, and
-    the check copy only reads it.
+    A late function request is not made at all. The perk-implementation table is a copy
+    that shares the program's implementations and keeps the methods it answers for an
+    opaque type in a table of its own. Every other table is the program's, and the check
+    copy only reads it.
     """
     from sushi_lang.semantics.generics.monomorphize import Monomorphizer
 
@@ -77,6 +79,8 @@ def template_scope(tables: 'SymbolTables') -> TemplateScope:
     funcs = FunctionTable()
     overlay = dataclasses.replace(
         tables, structs=overlay_structs(tables.structs), enums=overlay_enums(tables.enums),
+        # The same implementations, with a promise table of the check's own.
+        perk_impls=dataclasses.replace(tables.perk_impls, promised={}),
         request_function_instance=None, pending_extension_instantiations=[],
         queued_extension_keys=set(), refused_extension_keys=set())
     monomorphizer = Monomorphizer(

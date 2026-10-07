@@ -1,0 +1,20 @@
+# A constraint refusal of an instance that only a copy's body names points at the call
+# in the template that names it (#1070): `outer(x)` in `outer2`, never a file alone.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: "test_err_checked_nested_call_has_a_site.sushi:16:12"
+
+struct Handler:
+    fn(i32) -> i32 f
+
+fn hasher@(U: Hashable)(U x) u64:
+    return x.hash()
+
+fn outer@(T: Hashable)(T x) u64:
+    return hasher(x)
+
+fn outer2@(T)(T x) u64:
+    return outer(x)
+
+fn main() i32:
+    println(outer2(Handler(|i32 n| n + 1)))
+    return 0

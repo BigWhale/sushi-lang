@@ -283,13 +283,26 @@ class SemanticAnalyzer:
         """CE0148, the backstop of the template check (#1070): no opaque type reached here.
 
         The check builds its instances in an overlay; a writer that missed the overlay
-        would hand the backend a type parameter. One scan of the names, one time.
+        would hand the backend a type parameter. One scan, one time: each name, and each
+        type a field or a payload holds -- a lambda environment of a check copy has a
+        plain name and an opaque field. The walk stops at every other declaration, so
+        each entry is read once.
         """
         from sushi_lang.internals.errors import raise_internal_error
-        from sushi_lang.semantics.generics.types import OPAQUE_MARK
-        for name in (*self.tables.structs.order, *self.tables.enums.order):
-            if OPAQUE_MARK in name:
-                raise_internal_error("CE0148", name=name)
+        from sushi_lang.semantics.generics.types import OPAQUE_MARK, TypeParameter
+        from sushi_lang.semantics.type_walk import DECLARATION_KINDS, walk_named_types
+        # What the tables hold: a name the order keeps and the table dropped is no type.
+        entries = [entry for table in (self.tables.structs, self.tables.enums)
+                   for entry in map(table.by_name.get, table.order) if entry is not None]
+        def other_declaration(top):
+            return lambda ty: ty is not top and type(ty).__name__ in DECLARATION_KINDS
+
+        for entry in entries:
+            if OPAQUE_MARK in entry.name:
+                raise_internal_error("CE0148", name=entry.name)
+            for held in walk_named_types(entry, stop=other_declaration(entry)):
+                if isinstance(held, TypeParameter) and held.is_opaque:
+                    raise_internal_error("CE0148", name=entry.name)
 
     def _collect(self, compilation_order: list[Unit]) -> LibraryRegistration:
         """collect: constants, headers and generic types, from every unit.
@@ -602,6 +615,7 @@ class SemanticAnalyzer:
             struct_table=self.tables.structs,
             tables=self.tables,
             sites=instantiations.sites,
+            unit_files=self._unit_files(),
         )
 
         # The late-interning seam (risk 1 of the UFCS epic): when the per-unit typecheck
@@ -619,6 +633,12 @@ class SemanticAnalyzer:
         self.array_perk_copies = ArrayPerkCopies(self.tables, monomorphizer.substitutor)
         self.tables.perk_impls.on_array_miss = self.array_perk_copies
         return monomorphizer
+
+    def _unit_files(self) -> dict[str, str]:
+        """The file of each unit of the build, by unit name."""
+        if self.unit_manager is None:
+            return {}
+        return {unit.name: str(unit.file_path) for unit in self.unit_manager.units.values()}
 
     def _resolved_instantiations(self, type_instantiations) -> tuple[set, set]:
         """Split the collected type instantiations into enums and structs, arguments resolved."""

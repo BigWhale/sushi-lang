@@ -560,11 +560,13 @@ class ExpressionScanner:
                 return
             if self._declares_concrete(name):
                 return
-            self._record_fn_reference(name, self.generic_funcs[name], expected_ty)
+            self._record_fn_reference(name, self.generic_funcs[name], expected_ty,
+                                      value.loc)
         elif isinstance(value, MemberAccess):
             binding = self._namespaced_binding(value.receiver, value.member)
             if binding is not None and binding.kind == "generic function":
-                self._record_fn_reference(binding.name, binding.record, expected_ty)
+                self._record_fn_reference(binding.name, binding.record, expected_ty,
+                                          value.loc)
 
     def scan_fn_value_arguments(self, call, position_types) -> None:
         """Record each generic-fn value among a call's arguments against its position's type.
@@ -751,8 +753,9 @@ class ExpressionScanner:
             return None
         return self.namespaces.lookup(receiver.id, member)
 
-    def _record_fn_reference(self, name: str, generic_func, expected_ty) -> None:
-        """Solve the type arguments from the expected fn type and record the instance."""
+    def _record_fn_reference(self, name: str, generic_func, expected_ty, loc) -> None:
+        """Solve the type arguments from the expected fn type and record the instance,
+        with the site that names it (#1070)."""
         from sushi_lang.semantics.generics.pack_inference import solve_leading_type_args
         type_args = solve_leading_type_args(
             generic_func, list(expected_ty.param_types),
@@ -763,6 +766,7 @@ class ExpressionScanner:
 
         self.function_instantiations.add(
             (getattr(generic_func, "unit_name", None), name, type_args))
+        self._record_function_site(name, type_args, loc)
         self._collect_substituted_signature(generic_func, type_args)
 
     def _collect_from_type(self, ty: "Type") -> None:

@@ -123,6 +123,9 @@ class FunctionMonomorphizer:
         # body binds in the DEFINITION's unit (D4's rule, at home), so the walk
         # resolves a nested generic call against the enclosing generic's unit.
         self._asking_unit = None
+        # And the file the walked body is written in: a nested instantiation records its
+        # site there, so a constraint refusal of it has a location (#1070).
+        self._asking_file: Optional[str] = None
 
     def _generic_def(self, unit_name, func_name):
         """The generic `func_name` means inside `unit_name`: own unit, then flat.
@@ -240,7 +243,7 @@ class FunctionMonomorphizer:
 
         self._collect_fn_value_instantiations(
             concrete_func.body, getattr(generic, "unit_name", None),
-            functions=[concrete_func])
+            file=self._file_of(generic), functions=[concrete_func])
 
         self.monomorphizer.func_cache[cache_key] = concrete_func
 
@@ -407,12 +410,30 @@ class FunctionMonomorphizer:
         and a template walk solved them against an unbound type parameter (#795).
         """
         var_types = {param.name: param.ty for param in params if param.ty is not None}
-        saved_unit = self._asking_unit
+        saved_unit, saved_file = self._asking_unit, self._asking_file
         self._asking_unit = getattr(generic_func, "unit_name", None)
+        self._asking_file = self._file_of(generic_func)
         self._collect_block_instantiations(body, var_types)
-        self._asking_unit = saved_unit
+        self._asking_unit, self._asking_file = saved_unit, saved_file
+
+    def _file_of(self, decl) -> Optional[str]:
+        """The file a template or a copy is written in: its own, or its home unit's."""
+        filename = getattr(decl, "filename", None)
+        if filename is not None:
+            return filename
+        home = getattr(decl, "unit_name", None) or getattr(decl, "home_unit", None)
+        return self.monomorphizer.unit_files.get(home) if home is not None else None
+
+    def _record_site(self, name: str, type_args, loc) -> None:
+        """The first site that names a nested function instantiation (#579, #1070)."""
+        if loc is None or self._asking_file is None:
+            return
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        self.monomorphizer.sites.setdefault(
+            ("fn", instantiation_key(name, tuple(type_args))), (loc, self._asking_file))
 
     def _collect_fn_value_instantiations(self, body: 'Block', unit_name: Optional[str],
+                                         file: Optional[str] = None,
                                          **declarations) -> None:
         """Every generic function VALUE in one copy, queued for monomorphization (#1036).
 
@@ -444,6 +465,8 @@ class FunctionMonomorphizer:
             func_table=tables.funcs.by_name,
             tables=tables,
             namespaces=namespaces,
+            sites=self.monomorphizer.sites,
+            current_file=file,
         )
         program = Program(uses=[], constants=[], structs=[], enums=[], perks=[],
                           functions=[], extensions=[], generic_extensions=[],
@@ -504,11 +527,14 @@ class FunctionMonomorphizer:
 
         saved = getattr(self.monomorphizer, 'pending_instantiations', None)
         self.monomorphizer.pending_instantiations = set()
-        saved_unit = self._asking_unit
+        saved_unit, saved_file = self._asking_unit, self._asking_file
         self._asking_unit = None
+        self._asking_file = self._file_of(extend_def)
         self._collect_block_instantiations(extend_def.body, var_types)
         self._asking_unit = saved_unit
-        self._collect_fn_value_instantiations(extend_def.body, None, extensions=[extend_def])
+        self._collect_fn_value_instantiations(extend_def.body, None, file=self._asking_file,
+                                              extensions=[extend_def])
+        self._asking_file = saved_file
         found = self.monomorphizer.pending_instantiations
         self.monomorphizer.pending_instantiations = saved if saved is not None else set()
         return found
@@ -527,13 +553,16 @@ class FunctionMonomorphizer:
 
         saved = getattr(self.monomorphizer, 'pending_instantiations', None)
         self.monomorphizer.pending_instantiations = set()
-        saved_unit = self._asking_unit
+        saved_unit, saved_file = self._asking_unit, self._asking_file
         self._asking_unit = None
+        self._asking_file = self._file_of(method)
         self._collect_block_instantiations(method.body, var_types)
         self._asking_unit = saved_unit
         from sushi_lang.semantics.ast import ExtendWithDef
+        file = self._asking_file
+        self._asking_file = saved_file
         self._collect_fn_value_instantiations(
-            method.body, None, perk_impls=[ExtendWithDef(
+            method.body, None, file=file, perk_impls=[ExtendWithDef(
                 target_type=target_type, perk_name="", methods=[method],
                 loc=getattr(method, "loc", None))])
         found = self.monomorphizer.pending_instantiations
@@ -663,6 +692,7 @@ class FunctionMonomorphizer:
                         # Instead, we add to a worklist that will be processed by monomorphize_all_functions
                         cache_key = (getattr(generic_func, "unit_name", None),
                                      function_name, type_args)
+                        self._record_site(function_name, type_args, expr.loc)
                         if cache_key not in self.monomorphizer.func_cache and hasattr(self.monomorphizer, 'pending_instantiations'):
                             self.monomorphizer.pending_instantiations.add(cache_key)
 
