@@ -1,0 +1,11 @@
+# A statement after a `return` in a `T[]` extension template is CE0140 at the
+# template, also when no call instantiates it (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE0140
+
+extend T[] size() i32:
+    return self.len()
+    println("dead")
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

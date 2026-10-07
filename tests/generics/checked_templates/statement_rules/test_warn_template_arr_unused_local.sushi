@@ -1,0 +1,12 @@
+# A local that a `T[]` extension template never reads is CW1001 at the template,
+# once, also when no call instantiates the template (#1070).
+# EXPECT_ERROR_CODES_EXACT: CW1001
+# EXPECT_STDERR_CONTAINS: :7:5: warning [CW1001]: unused variable 'spare'.
+
+extend T[] size() i32:
+    let i32 spare = 1
+    return self.len()
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -109,6 +109,25 @@ def is_written(decl: object) -> bool:
     return not getattr(decl, "is_synthesized", False)
 
 
+def is_template_copy(body: object) -> bool:
+    """Whether the compiler cut this body from a template whose WRITTEN body is checked.
+
+    The rules that need no type run once, on the template as written (#1070), so a copy
+    does not run them again: one fault, one diagnostic. A copy of a generic function and
+    a method of a copied perk implementation carry `instance_of`; a copy of an extension
+    carries the unit it went home to. A lambda lifted out of a copy is not one: the
+    template check does not enter a lambda, because a lambda can take its channel from
+    the type that its position expects.
+    """
+    from sushi_lang.semantics.ast import ExtendDef
+    if isinstance(body, ExtendDef):
+        return body.home_unit is not None
+    if getattr(body, "instance_of", None) is None:
+        return False
+    from sushi_lang.semantics.passes.lift import is_lifted_lambda
+    return not is_lifted_lambda(cast("FuncDef", body))
+
+
 def _bodied_kinds(program: 'Program') -> Iterator[Tuple[str, BodiedDecl]]:
     """Every declaration with a body, with the word a diagnostic calls it by.
 

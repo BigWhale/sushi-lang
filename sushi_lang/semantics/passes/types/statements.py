@@ -259,12 +259,23 @@ def _validate_channel_return(validator: 'TypeValidator', value, channel) -> None
     because nothing wraps a bare value (#848).
     """
     from .propagation import propagate_types_to_value
-    from .result_validation import validate_result_pattern
+    from .result_validation import spells_a_result, validate_result_pattern
     propagate_types_to_value(validator, value, channel)
     validator.validate_expression(value)
-    if not validate_result_pattern(validator, value, channel):
-        er.emit_with(validator.reporter, er.ERR.CE2030, value.loc) \
-            .help("wrap return value: return Result.Ok(value)").emit()
+    if spells_a_result(value):
+        validate_result_pattern(validator, value, channel)
+    elif not validator.in_template_copy:
+        reject_unspelled_result(validator, value)
+
+
+def reject_unspelled_result(validator: 'TypeValidator', value) -> None:
+    """CE2030: a `return` in a channel body spells no `Result` constructor.
+
+    Two callers, one decision (`spells_a_result`): a body as it is validated, and a
+    template body as it is written (#1070).
+    """
+    er.emit_with(validator.reporter, er.ERR.CE2030, value.loc) \
+        .help("wrap return value: return Result.Ok(value)").emit()
 
 
 def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:

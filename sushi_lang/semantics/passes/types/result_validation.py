@@ -49,6 +49,16 @@ def validate_result_err_value(validator: 'TypeValidator', args: List[Expr],
                    expected=display_type(expected_err_type), got=display_type(error_value_type))
 
 
+def spells_a_result(node: Expr) -> bool:
+    """Whether the expression is written `Result.Ok(...)` or `Result.Err(...)`.
+
+    The CE2030 decision (#848). It reads the written expression and no type, so a
+    template body takes it as written (#1070).
+    """
+    is_result, variant_name = is_result_pattern(node)
+    return is_result and variant_name in ("Ok", "Err")
+
+
 def is_result_pattern(node: Expr) -> Tuple[bool, Optional[str]]:
     """Detect if node is Result.Ok/Err across all AST node types."""
     if isinstance(node, EnumConstructor):

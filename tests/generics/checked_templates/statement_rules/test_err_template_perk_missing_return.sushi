@@ -1,0 +1,17 @@
+# A method of a perk implementation on a generic target whose body can reach its end
+# with no `return` is CE0107 at the template, also when no call instantiates it (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE0107
+
+perk Sized:
+    fn size() i32
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Sized:
+    fn size() i32:
+        println("no return")
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -751,7 +751,7 @@ class SemanticAnalyzer:
                 continue
 
             unit_reporter = self._unit_reporter(unit)
-            passes = self._unit_passes(unit, unit_reporter, unit_reporter, monomorphizer,
+            passes = self._unit_passes(unit, unit_reporter, monomorphizer,
                                        libraries, destroy_effects, enum_names)
             passes.scope.run(unit.ast)
             passes.typecheck.run(unit.ast)
@@ -760,7 +760,7 @@ class SemanticAnalyzer:
 
             self._merge_unit(unit_reporter)
 
-    def _unit_passes(self, unit: Unit, reporter: Reporter, scope_reporter: Reporter,
+    def _unit_passes(self, unit: Unit, reporter: Reporter,
                      monomorphizer, libraries: LibraryRegistration, destroy_effects,
                      enum_names: set[str]) -> _UnitPasses:
         """The scope, typecheck, lift and borrow passes of ONE unit, in its own scope.
@@ -771,7 +771,7 @@ class SemanticAnalyzer:
         name and a name behind an alias mean in the copy what they mean in the template.
         """
         namespaces = self.tables.namespaces.get(unit.name)
-        scope = ScopeAnalyzer(scope_reporter, self.tables.constants, self.tables.structs,
+        scope = ScopeAnalyzer(reporter, self.tables.constants, self.tables.structs,
                               self.tables.enums, self.tables.generic_enums,
                               self.tables.generic_structs, external_table=self.tables.externals,
                               kept_constants=libraries.kept_constant_names(),
@@ -950,7 +950,7 @@ class SemanticAnalyzer:
         seen = {diagnostic_identity(d) for d in self.reporter.items}
         for home, impls in by_home.values():
             scratch = self._unit_reporter(home)
-            passes = self._unit_passes(home, scratch, scratch, monomorphizer, libraries,
+            passes = self._unit_passes(home, scratch, monomorphizer, libraries,
                                        destroy_effects, enum_names)
             for impl in impls:
                 passes.scope._check_perk_implementation(impl)
@@ -1309,9 +1309,9 @@ class SemanticAnalyzer:
         template (#1064): its private functions and its aliases are the copy's too. The
         copies mirror the per-unit order scope -> typecheck -> lift -> borrow (#399). They
         were deep-copied BEFORE scope ran, so no walk ever stamped their lambda captures;
-        the scope run here exists only for that stamp and reports into a throwaway -- the
-        template's own scope run already reported its findings once. The lifted functions
-        land in the home unit's AST, the one module that defines the copy.
+        the scope run here exists only for that stamp and reports nothing -- the
+        template's own scope run already reported its findings once (#1070). The lifted
+        functions land in the home unit's AST, the one module that defines the copy.
 
         One body error would otherwise be reported once per instantiation, plus once from
         the template -- so the run collects into its own reporter and merges what is new.
@@ -1325,8 +1325,8 @@ class SemanticAnalyzer:
         for home_name, copies in by_home.items():
             home = units[home_name]
             scratch = self._unit_reporter(home)
-            passes = self._unit_passes(home, scratch, self._unit_reporter(home),
-                                       monomorphizer, libraries, destroy_effects, enum_names)
+            passes = self._unit_passes(home, scratch, monomorphizer, libraries,
+                                       destroy_effects, enum_names)
             for extend_def in copies:
                 passes.scope._check_extension_method(extend_def)
                 passes.typecheck._validate_extension_method(extend_def)
@@ -1354,8 +1354,8 @@ class SemanticAnalyzer:
 
         An early copy is in its unit's AST when the per-unit loop walks it. A late copy
         is put into the AST after that loop, so it is checked here, with the passes of
-        its home unit, in the same order. A function template is not checked itself, so
-        the findings of the scope pass are kept too; one diagnostic that two copies
+        its home unit, in the same order. The scope pass reports nothing for a copy,
+        because it walked the template itself (#1070); one diagnostic that two copies
         give is merged one time.
         """
         by_home: dict[str, tuple[Unit, list[FuncDef]]] = {}
@@ -1365,7 +1365,7 @@ class SemanticAnalyzer:
         seen = {diagnostic_identity(d) for d in self.reporter.items}
         for home, copies in by_home.values():
             scratch = self._unit_reporter(home)
-            passes = self._unit_passes(home, scratch, scratch, monomorphizer, libraries,
+            passes = self._unit_passes(home, scratch, monomorphizer, libraries,
                                        destroy_effects, enum_names)
             for funcdef in copies:
                 passes.scope._check_function(funcdef)

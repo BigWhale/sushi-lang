@@ -1,0 +1,20 @@
+# A perk implementation on a generic target with one unused parameter, called with two
+# type arguments, is told once, at the template (#1070).
+# EXPECT_ERROR_CODES_EXACT: CW1001
+# EXPECT_STDERR_CONTAINS: :13:19: warning [CW1001]: unused parameter 'spare'.
+
+perk Scaled:
+    fn scaled(i32 spare) i32
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Scaled:
+    fn scaled(i32 spare) i32:
+        return 1
+
+fn main() i32:
+    let Box@(i32) a = Box(1)
+    let Box@(string) b = Box("one")
+    println(a.scaled(2) + b.scaled(3))
+    return 0

@@ -92,6 +92,9 @@ class TypeValidator:
         # The conversion whose body this is (`ExtendDef.declared_conversion`), or None.
         self.body_conversion: Optional["Conversion"] = None
         self.channel_result: Optional[Type] = None
+        # True while the body is a copy of a template (`ast_walk.is_template_copy`): the
+        # statement rules that need no type ran once on the written template (#1070).
+        self.in_template_copy: bool = False
         # Whose code is being validated. A source library's unit is compiled at the
         # consumer, and its bodies mention whatever the consumer's call substituted into
         # a template -- a private type of the consumer's included. The consumer must not
@@ -145,6 +148,12 @@ class TypeValidator:
             if hasattr(func, 'type_params') and func.type_params:
                 continue
             self._validate_function(func)
+
+        # The loop above skips a template, and a generic extension and a generic-target
+        # perk implementation have no loop here at all: their statement rules that need
+        # no type are read once, on the body as written (#1070).
+        from .signatures import check_template_statements
+        check_template_statements(self, program)
 
         for ext in program.extensions:
             self._validate_extension_method(ext)

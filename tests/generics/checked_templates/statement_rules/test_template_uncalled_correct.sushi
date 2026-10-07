@@ -1,0 +1,30 @@
+# A correct template of each kind that no call instantiates compiles with no
+# diagnostic: the statement rules read the written body and find nothing (#1070).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_STDERR_EMPTY: true
+
+perk Sized:
+    fn size() i32 | StdError
+
+struct Box@(T):
+    T item
+
+fn pick@(T)(nom T item, i32 n) T | StdError:
+    if (n < 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(item)
+
+extend Box@(T) count(i32 n) i32:
+    let i32 doubled = n * 2
+    return doubled
+
+extend T[] size_plus(i32 n) i32:
+    return self.len() + n
+
+extend Box@(T) with Sized:
+    fn size() i32 | StdError:
+        return Result.Ok(1)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

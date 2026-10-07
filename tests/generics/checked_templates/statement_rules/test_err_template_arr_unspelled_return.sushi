@@ -1,0 +1,11 @@
+# A `return` that does not spell `Result.Ok(...)` or `Result.Err(...)` in a `T[]`
+# extension template with a channel is CE2030 at the template, also when no call
+# instantiates it (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2030
+
+extend T[] size() i32 | StdError:
+    return self.len()
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

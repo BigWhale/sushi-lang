@@ -3635,9 +3635,9 @@ The command line names a flag that the build it asks for does not read, so the f
 
 **Warning** · scope
 
-**Message:** `unused variable '{name}'`
+**Message:** `unused {kind} '{name}'`
 
-A variable was declared with 'let' but never used.
+A name was declared and nothing reads it. The message says which kind of name it is: a `variable` is declared with `let` or bound by a `foreach` item or a pattern, and a `parameter` is a parameter of a function, a method or a lambda. The loop variable of an `expand` is not reported. A template body is checked once, where it is written, also when no call instantiates it, and a copy of the template does not report the name again. Read the name, remove it, or write `_` where the position takes a discard.
 
 ### CW1002 {#cw1002}
 

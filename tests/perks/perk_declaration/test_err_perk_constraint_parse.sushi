@@ -1,4 +1,8 @@
 # Test parsing of perk constraints in function signatures
+# The template body is checked where it is written, with no call (#1070): `compute_hash`
+# returns a bare value from a body with a channel (CE2030). The parse half is
+# test_perk_constraint_parse.sushi.
+# EXPECT_ERROR_CODES_EXACT: CE2030
 
 struct Point:
     i32 x
@@ -10,7 +14,7 @@ extend Point with Hashable:
 
 # Function with single constraint
 fn compute_hash@(T: Hashable)(T value) u64 | StdError:
-    return Result.Ok(value.hash())
+    return value.hash()
 
 fn main() i32:
     return 0

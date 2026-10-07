@@ -1,0 +1,18 @@
+# A `return` that does not spell `Result.Ok(...)` or `Result.Err(...)` in a method of
+# a perk implementation on a generic target, with a channel, is CE2030 at the
+# template, also when no call instantiates it (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2030
+
+perk Sized:
+    fn size() i32 | StdError
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Sized:
+    fn size() i32 | StdError:
+        return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

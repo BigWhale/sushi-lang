@@ -1,0 +1,12 @@
+# A generic function template with one fault, called with two type arguments, is told
+# once, at the template, and never once for each copy (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE0107
+
+fn pick@(T)(nom T item, bool keep) T:
+    if (keep):
+        return item
+
+fn main() i32:
+    println(pick(nom 1, true))
+    println(pick(nom "one", true))
+    return 0

@@ -1,10 +1,10 @@
 # Test: Generic functions with perk constraints parse correctly
 
 fn compute_hash@(T: Hashable)(T value) u64 | StdError:
-    return value.hash()
+    return Result.Ok(value.hash())
 
-fn process@(T: Hashable)(T item) ~:
-    return ~
+fn process@(T: Hashable)(T item) u64:
+    return item.hash()
 
 fn main() i32:
     return 0
