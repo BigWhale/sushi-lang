@@ -74,3 +74,7 @@ _add(ErrorMessage("CE4016", Severity.ERROR,
 _add(ErrorMessage("CE4015", Severity.ERROR,
     "perk '{perk}' gives '{method}' a second home: perk '{other}' already provides it",
     Category.PERK, "A name has exactly one home on a type (`docs/design/method-resolution.md`). Two perks that each provide a method of one name on one type leave a call of that name naming neither implementation, and the two bodies would take one symbol. The note points at the first one. Rename the method of one perk, or implement only one of them. A derived method is not a home: a type that derives `compare` from `Ord` may still implement a user perk that provides `compare`, and an explicit call then reads the implementation."))
+
+_add(ErrorMessage("CE4017", Severity.ERROR,
+    "'Clone' cannot be implemented for '{type}': the compiler decides it",
+    Category.PERK, "`Clone` is a structural perk. A type satisfies it when it holds no resource, that is when it is not a `Drop` type and holds none in a field, an element or a payload. The built-in `.clone()` is the contract, so an implementation would have no method to override. A handle has no `Clone` on purpose: a copy would close one descriptor twice. `.share()` is the way to get a second owner of a handle. Remove the implementation."))

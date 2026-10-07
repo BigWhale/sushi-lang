@@ -1,0 +1,17 @@
+# A struct that holds a handle has no `Clone` either.
+# EXPECT_ERROR_CODE: CE4006
+
+use <io/fs>
+
+struct Log:
+    File out
+
+fn dup@(T: Clone)(T _value) i32:
+    return 1
+
+fn run() i32 | IoError:
+    let Log l = Log(stdout.share()??)
+    return Result.Ok(dup(l))
+
+fn main() i32:
+    return run().realise(1)

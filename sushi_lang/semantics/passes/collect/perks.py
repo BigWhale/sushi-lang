@@ -357,6 +357,9 @@ class PerkCollector:
     EQ_PERK = "Eq"
     ORD_PERK = "Ord"
     DISPLAY_PERK = "Display"
+    # `Clone` is structural only: a type satisfies it when it holds no resource, and the
+    # built-in `.clone()` is the contract. No implementation is accepted (CE4017).
+    CLONE_PERK = "Clone"
 
     def _predefined_perks(self) -> List[PerkDef]:
         """The perks that ship with the compiler, public and importless."""
@@ -395,6 +398,13 @@ class PerkCollector:
                 name=self.DISPLAY_PERK,
                 methods=[PerkMethodSignature(name="to_str", params=[],
                                              ret=BuiltinType.STRING)],
+                is_public=True,
+            ),
+            PerkDef(
+                loc=None,
+                name=self.CLONE_PERK,
+                methods=[PerkMethodSignature(name="clone", params=[],
+                                             ret=ReceiverType())],
                 is_public=True,
             ),
         ]
@@ -803,6 +813,15 @@ class PerkCollector:
         if not self.perks.get(perk_name):
             # The one diagnostic of the fault. Its calls stay silent.
             er.emit(self.r, ERR.CE4003, perk_name_span, perk=perk_name)
+            from sushi_lang.semantics.generics.types import GenericTypeRef
+            self._refuse_methods(target_type.base_name
+                                 if isinstance(target_type, GenericTypeRef)
+                                 else type_name, impl)
+            return False
+
+        if perk_name == self.CLONE_PERK:
+            from sushi_lang.semantics.generics.type_display import display_type
+            er.emit(self.r, ERR.CE4017, perk_name_span, type=display_type(target_type))
             from sushi_lang.semantics.generics.types import GenericTypeRef
             self._refuse_methods(target_type.base_name
                                  if isinstance(target_type, GenericTypeRef)

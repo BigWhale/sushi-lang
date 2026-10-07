@@ -1,7 +1,8 @@
 """Generic constraint validation for Sushi compiler."""
 
 from typing import Optional
-from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.typesys import Type, holds_declared_resource
+from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.passes.collect import (
     PerkTable, PerkImplementationTable, StructTable, EnumTable)
@@ -91,7 +92,8 @@ class ConstraintValidator:
     def _derived_implements(self, type_arg: Type, constraint_name: str) -> bool:
         """Does the compiler derive this contract for the type? Then it satisfies it.
 
-        `Hashable` (#696) and the three contracts `Eq`, `Ord` and `Display`.
+        `Hashable` (#696), the three contracts `Eq`, `Ord` and `Display`, and `Clone`,
+        which every type satisfies unless it holds a resource (the CE2431 predicate).
 
         One predicate, the derive pass's own: `hashability_of`. A type it refuses -- a
         struct holding a `HashMap`, a `ptr`, a function value -- does not satisfy the
@@ -108,6 +110,9 @@ class ConstraintValidator:
                                           self.generic_perk_impls)
             return operand_contract(type_arg, constraint_name, overridden=overridden,
                                     resolve=resolve)[0]
+        if constraint_name == PerkCollector.CLONE_PERK:
+            return not holds_declared_resource(
+                type_arg, drop_type_names(self.perk_impl_table), resolve=resolve)
         if constraint_name != PerkCollector.HASHABLE_PERK:
             return False
         overridden = hash_override_of(self.perk_impl_table, self.generic_perk_impls)

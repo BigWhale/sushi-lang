@@ -3186,6 +3186,14 @@ A name has exactly one home on a type (see [the method-resolution design](design
 
 The orphan rule of [CE4012](#ce4012), at a type no unit declares: a primitive, a `string`, a fixed or a dynamic array (an array template `extend T[]` included), `List`, `HashMap`, `Own`, `Maybe`, `Result` and the predefined error enums. Only the unit that declares a type may say what releasing it means, and no unit declares one of these. The compiler gives these types their own release. A resource needs a type of its own: declare a struct that holds the value and implement `Drop` on that struct.
 
+### CE4017 {#ce4017}
+
+**Error** · perk
+
+**Message:** `'Clone' cannot be implemented for '{type}': the compiler decides it`
+
+`Clone` is a structural perk. A type satisfies it when it holds no resource, that is when it is not a `Drop` type and holds none in a field, an element or a payload. The built-in `.clone()` is the contract, so an implementation would have no method to override. A handle has no `Clone` on purpose: a copy would close one descriptor twice. `.share()` is the way to get a second owner of a handle. Remove the implementation.
+
 ## CE5xxx: Foreign function interface errors {#ce5xxx}
 
 These errors are about `unsafe external` blocks and the `ptr` type.
