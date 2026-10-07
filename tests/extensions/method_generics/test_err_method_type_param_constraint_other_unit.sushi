@@ -1,0 +1,12 @@
+# The call sits in this unit and the template in another: CE4006 names this file (#1191).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: other_unit.sushi:11:13: error [CE4006]
+use "helpers/weigh_box"
+
+struct Plain:
+    i32 n
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(b.pair_with(Plain(2)))
+    return 0

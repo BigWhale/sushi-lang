@@ -361,13 +361,16 @@ def _refuses_unmet_constraints(validator: 'TypeValidator', template, receiver_ty
     `check_method_constraints` hook is `validate_all_constraints` over the same
     monomorphizer. `report=False` asks the same question and emits nothing.
     """
-    check = getattr(validator.tables, "check_method_constraints", None)
-    if check is None or not any(tp.constraints for tp in template.method_type_params):
+    if not any(tp.constraints for tp in template.method_type_params):
         return False
+    check = validator.tables.check_method_constraints
+    if check is None:
+        raise er.InternalCompilerError(
+            "CE0015", message="the analyzer set no constraint check for a method type argument")
     key = ("method", _resolved(validator, receiver_type), template.name,
            tuple(_resolved(validator, arg) for arg in margs))
     return not check(template.method_type_params, margs, key, call.loc,
-                     template.filename, report)
+                     validator.reporter.filename, template.filename, report)
 
 
 def _refuses_non_error_arguments(validator: 'TypeValidator', template, receiver_type,

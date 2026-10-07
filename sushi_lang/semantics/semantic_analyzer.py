@@ -579,9 +579,7 @@ class SemanticAnalyzer:
         self.tables.intern_generic_ref = (
             lambda ty: self._intern_generic_type_refs(monomorphizer, (ty,)))
 
-        self.tables.check_method_constraints = (
-            lambda params, args, key, span, filename, report:
-            monomorphizer.check_call_constraints(params, args, key, span, filename, report))
+        self.tables.check_method_constraints = monomorphizer.check_call_constraints
 
         # The array-template perk copies are cut on demand from here on (#699): the
         # constraint check of the next stage is the first reader that can miss.

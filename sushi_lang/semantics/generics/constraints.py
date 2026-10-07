@@ -41,6 +41,12 @@ class ConstraintValidator:
         self.struct_table = struct_table
         self.enum_table = enum_table
 
+    def satisfies(self, type_arg: Type, constraint_name: str) -> bool:
+        """Does the type meet the constraint? No diagnostic: the one predicate."""
+        return (self.perk_impl_table.implements_type(type_arg, constraint_name)
+                or template_covers(self.generic_perk_impls, type_arg, constraint_name)
+                or self._derived_implements(type_arg, constraint_name))
+
     def validate_constraint(
         self,
         type_arg: Type,
@@ -69,9 +75,7 @@ class ConstraintValidator:
         if self.perk_table.get(constraint_name) is None:
             return True
 
-        if not (self.perk_impl_table.implements_type(type_arg, constraint_name)
-                or template_covers(self.generic_perk_impls, type_arg, constraint_name)
-                or self._derived_implements(type_arg, constraint_name)):
+        if not self.satisfies(type_arg, constraint_name):
             if pack_index is None:
                 diagnostic = er.emit_with(self.reporter, er.ERR.CE4006, span,
                                           filename=filename, type=display_type(type_arg),

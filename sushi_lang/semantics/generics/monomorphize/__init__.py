@@ -1,6 +1,5 @@
 """The monomorphize pass: every generic definition becomes concrete instances."""
 from __future__ import annotations
-import copy
 from contextlib import contextmanager
 from typing import Dict, Iterator, Optional, Tuple, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
@@ -8,7 +7,7 @@ from dataclasses import dataclass, field
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.semantics.typesys import Type, EnumType, StructType
 from sushi_lang.semantics.ast import BoundedTypeParam
-from sushi_lang.internals.report import Reporter
+from sushi_lang.internals.report import Reporter, Span
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import FuncDef
@@ -102,7 +101,8 @@ class Monomorphizer:
         key: object = None,
         template_file: str | None = None,
         error_params: Dict[str, object] | None = None,
-        site: Tuple[object, str | None] | None = None,
+        site: Tuple[Optional[Span], str | None] | None = None,
+        report: bool = True,
     ) -> bool:
         """Validate perk constraints on type arguments. False when one refused (#579).
 
@@ -129,8 +129,9 @@ class Monomorphizer:
         else:
             span, filename = (self.sites.get(key, (None, None)) if key is not None
                               else (None, None))
-        valid = self._error_arguments_hold(type_params, type_args, error_params or {},
-                                           span, filename, template_file)
+        valid = (self._error_arguments_hold(type_params, type_args, error_params or {},
+                                            span, filename, template_file)
+                 if report else True)
         for position, param in enumerate(type_params):
             if self.constraint_validator is None:
                 break
@@ -142,31 +143,34 @@ class Monomorphizer:
             else:
                 bound = [(None, type_args[position])] if position < len(type_args) else []
             for pack_index, arg in bound:
-                if not self.constraint_validator.validate_all_constraints(
-                        param, arg, span, filename, note=note, pack_index=pack_index):
+                if report:
+                    held = self.constraint_validator.validate_all_constraints(
+                        param, arg, span, filename, note=note, pack_index=pack_index)
+                else:
+                    held = all(self.constraint_validator.satisfies(arg, name)
+                               for name in param.constraints)
+                if not held:
                     valid = False
+        if not report:
+            return valid
         if not valid:
             self.constraint_violations += 1
             if key is not None:
                 self._refused.add(key)
         return valid
 
-    def check_call_constraints(self, params, args, key, span, filename, report: bool) -> bool:
+    def check_call_constraints(self, params, args, key, span, filename, template_file,
+                               report: bool) -> bool:
         """The constraints of the method-level type arguments of one call (#1191).
 
-        With `report` the check is `_validate_type_constraints`, the one a free function
-        takes. Without it the answer is the same and nothing is emitted: the inferring
-        half of the typecheck pass asks it too.
+        The check a free function takes. `filename` is the file of the call and
+        `template_file` the file of the constraint. Without `report` the answer is the
+        same and nothing is emitted or recorded: the inferring half of the typecheck
+        pass asks it too.
         """
-        if key in self._refused:
-            return False
-        if report:
-            return self._validate_type_constraints(
-                params, args, key=key, template_file=filename, site=(span, filename))
-        probe = copy.copy(self.constraint_validator)
-        probe.reporter = Reporter()
-        return all(probe.validate_all_constraints(param, arg, span)
-                   for param, arg in zip(params, args, strict=False))
+        return self._validate_type_constraints(
+            params, args, key=key, template_file=template_file, site=(span, filename),
+            report=report)
 
     def _error_arguments_hold(self, type_params, type_args, error_params, span,
                               filename, template_file) -> bool:

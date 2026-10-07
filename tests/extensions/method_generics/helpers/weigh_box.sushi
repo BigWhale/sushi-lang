@@ -1,0 +1,8 @@
+public perk Weigh:
+    fn weight() i32
+
+public struct Box@(T):
+    T value
+
+extend Box@(T) pair_with@(U: Weigh)(U other) i32:
+    return other.weight()
