@@ -6,7 +6,7 @@ import textwrap
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Any
+from typing import AbstractSet, List, Optional, Any
 
 from lark import Token
 
@@ -286,6 +286,10 @@ class Reporter:
         # de-duplicator: a repeat anywhere else is a bug to be fixed where it is made,
         # and stays visible.
         self.collapse_repeats: bool = False
+        # The templates whose check reported an error (#1070), shared with the analysis.
+        # A body that is a copy of one says nothing: the template said the fault.
+        self.refused_templates: AbstractSet[object] = frozenset()
+        self.muted: bool = False
         self.items: List[Diagnostic] = []
         self._identities: set = set()
         # Every error offered, by code, a dropped repeat included, so "did this walk
@@ -299,14 +303,18 @@ class Reporter:
         `origin` is whose FILE the spans belong to -- a transplanted library template's
         came from the manifest slice, not from the consumer's file (#471).
         `collapse_repeats` is whether this body is one of many copies of one source.
+        `muted` is whether it is a copy of a template whose check reported an error
+        (#1070): a muted diagnostic counts as offered and is not recorded.
         """
         self.origin = getattr(func, "library_origin", None)
         self.collapse_repeats = getattr(func, "instance_of", None) is not None
+        self.muted = getattr(func, "template_id", None) in self.refused_templates
 
     def leave_body(self) -> None:
         """Clear what `enter_body` set, for a walk that reads no function body."""
         self.origin = None
         self.collapse_repeats = False
+        self.muted = False
 
     def _record(self, d: Diagnostic) -> Diagnostic:
         # The one funnel every diagnostic passes: `error`, `warn` and the two builder
@@ -329,6 +337,8 @@ class Reporter:
             return d
         if d.kind == "error":
             self.errors_offered[d.code] += 1
+        if self.muted:
+            return d
         # AFTER the origin fixups: they can change the file a span is read against, and
         # the file is part of what makes two reports the same one.
         identity = diagnostic_identity(d)

@@ -28,6 +28,7 @@ from sushi_lang.semantics.typesys import (
     ReferenceType,
 )
 from sushi_lang.semantics.generics.types import (
+    TemplateId,
     TypeParameter,
     GenericTypeRef,
     TypeParam,
@@ -79,7 +80,6 @@ def opaque_type_params(type_params, unit: Optional[str],
     the constraint names and the span of the written parameter. A pack parameter keeps
     its own form (Phase 4).
     """
-    from sushi_lang.semantics.generics.types import TemplateId
     owner = TemplateId(unit, template)
     return {tp.name: TypeParameter(tp.name, owner=owner,
                                    constraints=tuple(tp.constraints or ()),
@@ -297,6 +297,8 @@ class GenericFuncDef:
     # Each type parameter's opaque form, by name (#1070): what the record's signature is
     # written in, and the substitution the template check cuts its body with.
     opaque: Dict[str, TypeParameter] = field(default_factory=dict)
+    # On an instance: the template it is a copy of, as on `FuncDef`.
+    template_id: Optional['TemplateId'] = None
 
 
 class Redeclaration(Enum):

@@ -83,6 +83,9 @@ class SymbolTables:
     # copy at once and checks its body after the per-unit loop. None outside the
     # per-unit passes.
     request_function_instance: object = None
+    # The templates whose check reported an error (#1070). The reporter mutes every copy
+    # of one: the template said each fault one time, at its own spans.
+    refused_templates: set = field(default_factory=set)
 
     def __post_init__(self) -> None:
         from sushi_lang.semantics.generics.contract_walk import perk_override_of

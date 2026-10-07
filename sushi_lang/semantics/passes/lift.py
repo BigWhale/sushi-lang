@@ -47,6 +47,10 @@ class LambdaLifter:
         # every copy carrying the template's spans, so the copies answer one report
         # (#648).
         self._owner_instance_of = None
+        self._owner_template_id = None
+        # And which template: a lambda of a copy of a template that the template check
+        # refused reports nothing, as the copy does (#1070).
+        self._owner_template_id = None
         # And which scope its names resolve in: a copy of a compiled library's
         # template resolves in the library unit's (#1120), and so does its lambda.
         self._owner_scope_unit: Optional[str] = None
@@ -59,6 +63,7 @@ class LambdaLifter:
         self._owner_is_library = False
         self._owner_origin = None
         self._owner_instance_of = None
+        self._owner_template_id = None
         # Extension and perk-impl bodies emit through the same statement paths
         # as a plain fn, so their lambdas lift the same way (#399).
         # program.generic_extensions stays unwalked: templates, like generic
@@ -78,6 +83,7 @@ class LambdaLifter:
         self._owner_is_library = bool(getattr(fn, "is_library_template", False))
         self._owner_origin = getattr(fn, "library_origin", None)
         self._owner_instance_of = getattr(fn, "instance_of", None)
+        self._owner_template_id = getattr(fn, "template_id", None)
         self._owner_scope_unit = getattr(fn, "scope_unit", None)
         self._walk(fn.body)
 
@@ -92,6 +98,7 @@ class LambdaLifter:
         self._owner_is_library = False
         self._owner_origin = None
         self._owner_instance_of = None
+        self._owner_template_id = None
         self._owner_scope_unit = None
         return self._lifted[before:]
 
@@ -106,6 +113,7 @@ class LambdaLifter:
         self._owner_is_library = False
         self._owner_origin = None
         self._owner_instance_of = None
+        self._owner_template_id = None
         self._owner_scope_unit = scope_unit
         self._walk(body)
         self._owner_scope_unit = None
@@ -195,6 +203,7 @@ class LambdaLifter:
             raise_internal_error("CE0137", name=lifted.name)
         self._lifted.append(lifted)
         lifted.instance_of = self._owner_instance_of
+        lifted.template_id = self._owner_template_id
         lifted.scope_unit = self._owner_scope_unit
 
     def _annotate_then_walk(self, lifted: FuncDef) -> None:

@@ -176,15 +176,17 @@ class SemanticAnalyzer:
             # A miss in the backend is a miss: every copy it needs was cut here.
             self.tables.perk_impls.on_array_miss = None
 
-    @staticmethod
-    def _unit_reporter(unit, gate_env: Optional[str] = None) -> Reporter:
+    def _unit_reporter(self, unit, gate_env: Optional[str] = None) -> Reporter:
         """A Reporter that knows one unit's file and source, for a per-unit pass.
 
         `gate_env` names the stdlib gate of a lint pass, which keeps a stdlib unit's
-        warnings while it is set."""
-        return Reporter(source=unit.read_source(), filename=str(unit.file_path),
-                        provenance=unit.provenance,
-                        keeps_warnings=_lint_checks(unit, gate_env))
+        warnings while it is set. The reporter reads the refused templates of the
+        analysis, so a copy of one reports nothing (#1070)."""
+        reporter = Reporter(source=unit.read_source(), filename=str(unit.file_path),
+                            provenance=unit.provenance,
+                            keeps_warnings=_lint_checks(unit, gate_env))
+        reporter.refused_templates = self.tables.refused_templates
+        return reporter
 
     def _merge_unit(self, unit_reporter: Reporter) -> None:
         """Hand one unit's findings to the program reporter, in source order.
@@ -1205,95 +1207,14 @@ class SemanticAnalyzer:
         return [ty for ty in types if ty is not None]
 
     def _intern_generic_type_refs(self, monomorphizer, types) -> None:
-        """Monomorphize, resolve, size-check and derive every NEW instantiation `types` name.
-
-        The one late-interning seam: the typecheck pass reaches it through
-        `tables.intern_generic_ref` when a call site solves a method-level type
-        argument, and the drain reaches it for the copies' bodies.
-
-        Every run here names the instances that are NEW to it. The passes walked both
-        tables whole once already, and this seam sits inside a fixpoint loop, so a
-        whole-table re-run cost O(all types) for each instance and changed nothing but
-        the new names (#676). `names_since` is the one answer to what a table gained.
-
-        ONE window serves resolve, derive and the finite-types walk: this round's own
-        instances. A `Result` or a `Maybe` the typecheck pass interns between two rounds
-        derives its hash AND its clone at the intern itself (#720), so no later walk has
-        to repair it, and an older cycle stopped the analysis already (#677).
-        """
-        from sushi_lang.semantics.generics.extension_targets import instantiation_key
-        from sushi_lang.semantics.generics.tuples import TUPLE_BASE, intern_tuple
-        from sushi_lang.semantics.generics.types import GenericTypeRef
-
-        struct_insts: set = set()
-        enum_insts: set = set()
-
-        def resolve_ref(ty):
-            """A concrete Type for `ty`, queueing what is not interned yet."""
-            if not isinstance(ty, GenericTypeRef):
-                return ty
-            args = tuple(resolve_ref(a) for a in ty.type_args)
-            if any(a is None or isinstance(a, GenericTypeRef) for a in args):
-                return None
-            key = instantiation_key(ty.base_name, args)
-            interned = self.tables.structs.by_name.get(key) or self.tables.enums.by_name.get(key)
-            if interned is not None:
-                return interned
-            if ty.base_name == TUPLE_BASE:
-                return intern_tuple(self.tables.structs, self.tables.enums, args)
-            if ty.base_name in self.tables.generic_structs.by_name:
-                struct_insts.add((ty.base_name, args))
-            elif ty.base_name in self.tables.generic_enums.by_name:
-                enum_insts.add((ty.base_name, args))
-            return None
-
-        for ty in types:
-            if ty is not None:
-                resolve_ref(ty)
-
-        if not struct_insts and not enum_insts:
-            return
-
-        from sushi_lang.semantics.passes.finite_types import table_marks
-        marks = table_marks(self.tables.structs, self.tables.enums)
-        monomorphizer.monomorphize_all(self.tables.generic_enums.by_name, enum_insts)
-        monomorphizer.monomorphize_all_structs(self.tables.generic_structs.by_name, struct_insts)
-        self._settle_new_instances(marks)
+        """The one late interner, over the program tables (`generics/late_interning.py`)."""
+        from sushi_lang.semantics.generics.late_interning import intern_generic_type_refs
+        intern_generic_type_refs(self.tables, monomorphizer, self.reporter, types)
 
     def _settle_new_instances(self, marks) -> None:
-        """Resolve, size-check and derive every instance the tables gained after `marks`.
-
-        Two callers: the late interner above, and the late function request, whose copy
-        can name a type for the first time.
-        """
-        from sushi_lang.semantics.passes.finite_types import (
-            check_infinite_size_types, names_since)
-
-        # One list for both tables: a type name is one per program, so each table takes
-        # the names it holds.
-        new_structs, new_enums = names_since(self.tables.structs, self.tables.enums, marks)
-        interned = [*new_structs, *new_enums]
-
-        from sushi_lang.semantics.passes.resolve import (
-            resolve_enum_variant_types, resolve_struct_field_types)
-        resolve_struct_field_types(self.tables.structs, self.tables.enums, only=interned)
-        resolve_enum_variant_types(self.tables.structs, self.tables.enums, only=interned)
-
-        # A late-solved instance can hold itself by value, and the whole-program run of
-        # finite-types is over: walk it again from the new names alone (#677).
-        check_infinite_size_types(self.tables.structs, self.tables.enums, self.reporter, since=marks)
-
-        from sushi_lang.semantics.passes.derive import (
-            register_all_array_hashes, register_all_clones,
-            register_all_enum_hashes, register_all_struct_hashes)
-        register_all_struct_hashes(self.tables.structs, self.tables.derived_methods,
-                                   only=interned)
-        register_all_enum_hashes(self.tables.enums, self.tables.derived_methods,
-                                 only=interned)
-        register_all_array_hashes(self.tables.structs, self.tables.enums,
-                                  self.tables.derived_methods, only=interned)
-        register_all_clones(self.tables.structs, self.tables.enums,
-                            self.tables.derived_methods, only=interned)
+        """Settle what the program tables gained after `marks` (`generics/late_interning.py`)."""
+        from sushi_lang.semantics.generics.late_interning import settle_new_instances
+        settle_new_instances(self.tables, self.reporter, marks)
 
     def _check_monomorphized_extensions(self, compilation_order: list[Unit], monomorphizer,
                                         libraries: LibraryRegistration, destroy_effects,

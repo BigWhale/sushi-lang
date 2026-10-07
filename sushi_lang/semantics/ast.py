@@ -13,6 +13,7 @@ ALIAS = {"alias": True}
 if TYPE_CHECKING:
     from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
+    from sushi_lang.semantics.generics.types import TemplateId
     from sushi_lang.semantics.namespaces import NamespaceRef
     from sushi_lang.semantics.param_modes import ParamMode
 
@@ -255,6 +256,9 @@ class FuncDef(Node):
     # The written type-pack parameters of the template this body is an instance of. The
     # copy fans each one out, so the name is no local; a use outside `expand` is CE0144.
     pack_names: Tuple[str, ...] = ()
+    # The template this body is a copy of, by identity (#1070). The reporter mutes the
+    # copies of a template whose check refused it: the template said the fault one time.
+    template_id: Optional["TemplateId"] = None
 
 
 @dataclass(slots=True)

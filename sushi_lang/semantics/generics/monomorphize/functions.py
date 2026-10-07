@@ -212,21 +212,7 @@ class FunctionMonomorphizer:
         if substitution is None:
             return None
 
-        # Substitute in parameter types. A pack-typed value-parameter fans out
-        # into N concrete params (one per pack element, possibly zero); a normal
-        # param yields exactly one concrete param identical to the legacy result.
-        substitutor = self.monomorphizer.substitutor
-        concrete_params = []
-        pack_param_fanout: Dict[str, list] = {}
-        for param in generic.params:
-            expanded = substitutor.expand_pack_param(param, substitution)
-            if substitutor._pack_binding_for(param, substitution) is not None:
-                pack_param_fanout[param.name] = [p.name for p in expanded]
-            concrete_params.extend(expanded)
-
-        concrete_ret = self.monomorphizer.substitutor.substitute_type(
-            generic.ret, substitution
-        ) if generic.ret else None
+        concrete_func, pack_param_fanout = self._cut(generic, substitution)
 
         # A trailing pack type-param passes its arity, so the symbol is distinct per pack
         # size and cannot collide with a regular generic of the same base.
@@ -243,33 +229,14 @@ class FunctionMonomorphizer:
         self.monomorphizer.monomorphized_functions[mangled_name] = (
             getattr(generic, "unit_name", None), generic.name, type_args)
 
-        concrete_body = self.monomorphizer.substitutor.substitute_body(generic.body, substitution)
-
         # Unroll `expand(...)` into ordinary statements, so no later pass ever sees an
         # Expand: each element's copy is straight-line and names its element parameter.
         if pack_param_fanout:
             from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
-            concrete_body = unroll_expands(concrete_body, pack_param_fanout)
+            concrete_func.body = unroll_expands(concrete_func.body, pack_param_fanout)
 
-        self._collect_nested_instantiations(concrete_body, concrete_params, generic)
-
-        # The channel is substituted like every other type in the signature. A copy
-        # carries `err_type` through, so `fn f@(E)(T v) i32 | E` would otherwise reach
-        # the backend with an unsubstituted type parameter in its error arm.
-        # `generics/extensions.py` does the same for a method's channel.
-        concrete_err = self.monomorphizer.substitutor.substitute_type(
-            generic.err_type, substitution
-        ) if getattr(generic, "err_type", None) else None
-
-        from sushi_lang.semantics.channel import has_channel
-        concrete_func = copy.copy(generic)
-        concrete_func.written_channel = has_channel(generic)
+        self._collect_nested_instantiations(concrete_func.body, concrete_func.params, generic)
         concrete_func.name = mangled_name
-        concrete_func.params = concrete_params
-        concrete_func.ret = concrete_ret
-        concrete_func.err_type = concrete_err
-        concrete_func.body = concrete_body
-        concrete_func.type_params = None  # No longer generic
 
         self._collect_fn_value_instantiations(
             concrete_func.body, getattr(generic, "unit_name", None),
@@ -278,6 +245,53 @@ class FunctionMonomorphizer:
         self.monomorphizer.func_cache[cache_key] = concrete_func
 
         return concrete_func
+
+    def cut_body(self, generic: 'GenericFuncDef',
+                 substitution: "Dict[str, Type | TypePack]") -> 'FuncDef':
+        """The template with `substitution` put through its signature and its body.
+
+        It does not mangle, register, collect nested instantiations or unroll: the
+        template check cuts its check copy with the opaque parameters here (#1070), and
+        `monomorphize_function` adds its own bookkeeping to the same cut.
+        """
+        return self._cut(generic, substitution)[0]
+
+    def _cut(self, generic: 'GenericFuncDef',
+             substitution: "Dict[str, Type | TypePack]") -> "Tuple[FuncDef, Dict[str, list]]":
+        """The cut, and the element names each pack parameter fans out to."""
+        # Substitute in parameter types. A pack-typed value-parameter fans out
+        # into N concrete params (one per pack element, possibly zero); a normal
+        # param yields exactly one concrete param identical to the legacy result.
+        substitutor = self.monomorphizer.substitutor
+        concrete_params = []
+        pack_param_fanout: Dict[str, list] = {}
+        for param in generic.params:
+            expanded = substitutor.expand_pack_param(param, substitution)
+            if substitutor._pack_binding_for(param, substitution) is not None:
+                pack_param_fanout[param.name] = [p.name for p in expanded]
+            concrete_params.extend(expanded)
+
+        concrete_ret = substitutor.substitute_type(
+            generic.ret, substitution) if generic.ret else None
+
+        concrete_body = substitutor.substitute_body(generic.body, substitution)
+
+        # The channel is substituted like every other type in the signature. A copy
+        # carries `err_type` through, so `fn f@(E)(T v) i32 | E` would otherwise reach
+        # the backend with an unsubstituted type parameter in its error arm.
+        # `generics/extensions.py` does the same for a method's channel.
+        concrete_err = substitutor.substitute_type(
+            generic.err_type, substitution) if getattr(generic, "err_type", None) else None
+
+        from sushi_lang.semantics.channel import has_channel
+        concrete_func = copy.copy(generic)
+        concrete_func.written_channel = has_channel(generic)
+        concrete_func.params = concrete_params
+        concrete_func.ret = concrete_ret
+        concrete_func.err_type = concrete_err
+        concrete_func.body = concrete_body
+        concrete_func.type_params = None  # No longer generic
+        return concrete_func, pack_param_fanout
 
     def monomorphize_all_functions(
         self,
@@ -355,8 +369,11 @@ class FunctionMonomorphizer:
                 continue
 
             # Which source this body is a copy of. Every copy carries the template's
-            # spans, so the reporter tells a fault in the shared source once (#648).
+            # spans, so the reporter tells a fault in the shared source once (#648), and
+            # says nothing for a template whose check refused it (#1070).
             concrete_func.instance_of = generic_func.name
+            from sushi_lang.semantics.generics.types import TemplateId
+            concrete_func.template_id = TemplateId(home_unit, generic_func.name)
             concrete_func.pack_names = tuple(
                 p.name for p in generic_func.params if p.is_pack)
 
