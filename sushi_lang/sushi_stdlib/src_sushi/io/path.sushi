@@ -57,9 +57,10 @@ public fn dirname(string path) string:
     match path.find_last("/"):
         Maybe.Some(i) ->
             let string head = path.s(0, i + 1)
-            if (head.replace("/", "").is_empty()):
+            let string trimmed = head.trim_end_matches("/")
+            if (trimmed.is_empty()):
                 return head
-            return strip_trailing_separators(head)
+            return trimmed
         Maybe.None() -> return ""
 
 ##:
@@ -165,24 +166,6 @@ fn root_prefix(string path) string:
     return "/"
 
 ##:
-Drops the separator run at the end. The caller has already handled the
-all-separator head.
-
-- Parameter head: The directory part, with its trailing separators.
-- Returns: The part without them.
-:##
-fn strip_trailing_separators(string head) string:
-    let i32 end = head.len()
-    let i32 keep = end
-    foreach(i in 0..end):
-        let i32 back = end - 1 - i
-        if (head.char_at(back) == "/"):
-            keep := back
-        else:
-            return head.s(0, keep)
-    return head.s(0, keep)
-
-##:
 True when every character before index `d` is a dot, which makes `d` part of
 a hidden-file prefix and not an extension mark.
 
@@ -191,10 +174,7 @@ a hidden-file prefix and not an extension mark.
 - Returns: Whether the dot belongs to the hidden-file prefix.
 :##
 fn leading_dots_reach(string name, i32 d) bool:
-    foreach(i in 0..d):
-        if (name.char_at(i) != "."):
-            return false
-    return true
+    return name.s(0, d).trim_start_matches(".").is_empty()
 
 ##:
 Applies one `..` to the kept components: it removes the component before it;
@@ -205,7 +185,7 @@ at the root of a rooted path it vanishes, on a relative path it is kept.
 :##
 fn pop_or_keep_dotdot(poke List@(string) kept, bool rooted) ~:
     if (kept.len() > 0):
-        match kept.get(kept.len() - 1):
+        match kept.last():
             Maybe.Some(last) ->
                 if (last == ".."):
                     kept.push("..")
@@ -225,14 +205,4 @@ Joins the kept components with single separators.
 - Returns: The joined body, or an empty string.
 :##
 fn rebuild(List@(string) kept) string:
-    let string out = ""
-    let i32 n = kept.len()
-    foreach(i in 0..n):
-        match kept.get(i):
-            Maybe.Some(part) ->
-                if (i > 0):
-                    out := out.concat("/").concat(part)
-                else:
-                    out := part.clone()
-            Maybe.None() -> ~
-    return out
+    return "/".join(kept)
