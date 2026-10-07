@@ -23,6 +23,10 @@ _ALL_PRIMITIVES = frozenset({
 # and tests/unit/test_clone_totality.py asks only through it.
 _CLONE_PRIMITIVES = _ALL_PRIMITIVES - {BuiltinType.STRING}
 
+# The bit methods are on the unsigned integers alone (STDFIRST D7): a signed value goes
+# through its unsigned twin, `(x as u32).leading_zeros()`.
+_UNSIGNED = (BuiltinType.U8, BuiltinType.U16, BuiltinType.U32, BuiltinType.U64)
+
 # method name -> {receiver type: return type}. Keyed per (method, RECEIVER) because
 # to_bits() is receiver-dependent -- f32 yields u32, f64 yields u64 -- and the width is
 # the whole point. Sole authority for both questions; PRIMITIVE_METHOD_TYPES is a derived
@@ -34,6 +38,9 @@ PRIMITIVE_METHOD_RETURNS: dict[str, dict[BuiltinType, BuiltinType]] = {
     # The identity: a primitive owns no heap. It must still EXIST, because one
     # monomorphized body has to satisfy `T = i32` and `T = string` alike.
     "clone": {t: t for t in sorted(_CLONE_PRIMITIVES, key=str)},
+    "reverse_bits": {t: t for t in _UNSIGNED},
+    "leading_zeros": dict.fromkeys(_UNSIGNED, BuiltinType.I32),
+    "trailing_zeros": dict.fromkeys(_UNSIGNED, BuiltinType.I32),
 }
 
 # Method name -> the primitive types that carry it. Derived; do not edit independently.
@@ -59,7 +66,7 @@ def primitive_method_return_type(target_type: Type, method_name: str) -> Type | 
 
 
 def validate_primitive_method(call: MethodCall, target_type: Type, reporter: Any) -> None:
-    """Validate a builtin primitive method call. All three take no arguments."""
+    """Validate a builtin primitive method call. None of them takes an argument."""
     if call.args:
         er.emit(reporter, er.ERR.CE2009, call.loc,
                 name=f"{display_type(target_type)}.{call.method}", expected=0, got=len(call.args))

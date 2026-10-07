@@ -1,0 +1,13 @@
+# A byte buffer compared against a constant tag at an offset.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\nfalse\n"
+const u8[4] TAG = [a'I', a'D', a'A', a'T']
+
+fn main() i32:
+    let u8[] chunk = from([0x00, 0x00, 0x00, 0x0d, a'I', a'D', a'A', a'T', 0xff])
+    println(chunk.eq_range(4, TAG))
+    println(chunk.eq_range(3, TAG))
+    println(TAG.eq_range(0, TAG))
+    println(chunk.eq_range(6, TAG))
+    return 0

@@ -1,0 +1,11 @@
+# `extend_back` writes its receiver, so a `peek i32[]` parameter does not take it.
+# EXPECT_ERROR_CODES_EXACT: CE2408
+
+fn grow(peek i32[] a) ~:
+    a.extend_back(1, 2)
+
+fn main() i32:
+    let i32[] buf = from([1])
+    grow(peek buf)
+    println("{buf.len()}")
+    return 0

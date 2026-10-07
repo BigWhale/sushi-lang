@@ -1,0 +1,70 @@
+# The push methods in the positions that a user writes.
+# A poke parameter as the receiver, a struct field as the receiver and as the value,
+# the bits of a float through to_bits(), a signed value through `as`, a push in a loop,
+# and three widths in sequence on one array.
+# Each line prints the length, then each byte by index.
+# EXPECT_STDOUT_EXACT: "8: 10 11 12 13 10 11 12 13\n2: 144 31\n2: 31 144\n8: 63 240 0 0 0 0 0 0\n4: 0 0 128 63\n4: 254 255 255 255\n2: 254 212\n6: 0 0 0 1 0 2\n14: 1 0 0 0 0 2 3 0 0 0 0 0 0 0\n"
+# EXPECT_NO_LEAKS: true
+use <encoding/binary>
+
+struct Frame:
+    u8[] bytes
+
+struct Header:
+    u16 port
+
+fn show(u8[] b) string:
+    let string s = "{b.len()}:"
+    foreach(i in 0..b.len()):
+        s := "{s} {b[i]}"
+    return s
+
+fn put(poke u8[] b) ~:
+    b.push_u32_be(0x0A0B_0C0D)
+
+fn main() i32:
+    let u8[] out = from([])
+    put(poke out)
+    put(poke out)
+    println(show(out))
+
+    let Frame f = Frame(from([]))
+    f.bytes.push_u16_le(0x1F90)
+    println(show(f.bytes))
+
+    let Header h = Header(8080)
+    let u8[] port = from([])
+    port.push_u16_be(h.port)
+    println(show(port))
+
+    let f64 x = 1.0
+    let u8[] wide = from([])
+    wide.push_u64_be(x.to_bits())
+    println(show(wide))
+
+    let f32 y = 1.0
+    let u8[] narrow = from([])
+    narrow.push_u32_le(y.to_bits())
+    println(show(narrow))
+
+    let i32 n = -2
+    let u8[] signed = from([])
+    signed.push_u32_le(n as u32)
+    println(show(signed))
+
+    let i16 m = -300
+    let u8[] short = from([])
+    short.push_u16_be(m as u16)
+    println(show(short))
+
+    let u8[] seq = from([])
+    foreach(i in 0..3):
+        seq.push_u16_be(i as u16)
+    println(show(seq))
+
+    let u8[] mixed = from([])
+    mixed.push_u16_le(1)
+    mixed.push_u32_be(2)
+    mixed.push_u64_le(3)
+    println(show(mixed))
+    return 0

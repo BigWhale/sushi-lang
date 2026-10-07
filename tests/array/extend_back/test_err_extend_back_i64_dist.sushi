@@ -1,0 +1,9 @@
+# `dist` is an i32 position: an i64 value needs `as i32`.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+
+fn main() i32:
+    let i32[] buf = from([1, 2])
+    let i64 d = 1
+    buf.extend_back(d, 2)
+    println("{buf.len()}")
+    return 0

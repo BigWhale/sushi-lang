@@ -71,7 +71,8 @@ family that yields to one. So the seam and the pass read one list:
 
 - **arrays** (fixed and dynamic) -- `len`, `get`, `push`, `pop`, `iter`, `clone`, `hash`, ...
 - **string** -- the stdlib string methods, plus the primitive `to_str`/`hash`
-- **primitives** -- `to_str`, `hash`, `clone`, and the float-only `to_bits`
+- **primitives** -- `to_str`, `hash`, `clone`, the float-only `to_bits`, and the
+  unsigned-only `reverse_bits`, `leading_zeros` and `trailing_zeros`
 - **containers** -- `Result`, `Maybe`, `Own`, `List`, `HashMap`
 - **function values** -- `clone`
 - **the compiler-derived pair** -- `hash()` and `clone()`, auto-derived in the derive pass for every

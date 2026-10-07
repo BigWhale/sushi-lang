@@ -1,0 +1,17 @@
+# A large `count` over an owning element: one growth, then one copy per slot, with the
+# distance smaller than the count. Every slot is freed once.
+# EXPECT_STDOUT_EXACT: "20002 0 w0 w1 w1\n"
+# EXPECT_NO_LEAKS
+# EXPECT_RUNTIME_EXIT: 0
+
+fn main() i32:
+    let string[] s = from([])
+    s.push("w{0}")
+    s.push("w{1}")
+    s.extend_back(2, 20000)
+    let i32 bad = 0
+    foreach(k in 0..s.len()):
+        if (s[k] != "w{k % 2}"):
+            bad := bad + 1
+    println("{s.len()} {bad} {s[0]} {s[1]} {s[20001]}")
+    return 0

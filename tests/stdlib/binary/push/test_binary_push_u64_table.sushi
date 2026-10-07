@@ -1,0 +1,45 @@
+# push_u64_le and push_u64_be append the 8 bytes of a u64.
+# le puts the least significant byte first, be the most significant byte first.
+# The values are 0, 1, the maximum, two mixed patterns, and a push onto a non-empty array.
+# Each line prints the length, then each byte by index.
+# EXPECT_STDOUT_EXACT: "le\n8: 0 0 0 0 0 0 0 0\n8: 1 0 0 0 0 0 0 0\n8: 255 255 255 255 255 255 255 255\n8: 8 7 6 5 4 3 2 1\n8: 16 90 165 0 1 127 255 128\n11: 9 8 7 1 0 0 0 0 0 0 0\nbe\n8: 0 0 0 0 0 0 0 0\n8: 0 0 0 0 0 0 0 1\n8: 255 255 255 255 255 255 255 255\n8: 1 2 3 4 5 6 7 8\n8: 128 255 127 1 0 165 90 16\n11: 9 8 7 0 0 0 0 0 0 0 1\n"
+# EXPECT_NO_LEAKS: true
+use <encoding/binary>
+
+fn show(u8[] b) string:
+    let string s = "{b.len()}:"
+    foreach(i in 0..b.len()):
+        s := "{s} {b[i]}"
+    return s
+
+fn le(u64 v) string:
+    let u8[] buf = from([])
+    buf.push_u64_le(v)
+    return show(buf)
+
+fn be(u64 v) string:
+    let u8[] buf = from([])
+    buf.push_u64_be(v)
+    return show(buf)
+
+fn main() i32:
+    println("le")
+    println(le(0))
+    println(le(1))
+    println(le(0xFFFF_FFFF_FFFF_FFFF))
+    println(le(0x0102_0304_0506_0708))
+    println(le(0x80FF_7F01_00A5_5A10))
+    let u8[] a = from([9, 8, 7])
+    a.push_u64_le(1)
+    println(show(a))
+
+    println("be")
+    println(be(0))
+    println(be(1))
+    println(be(0xFFFF_FFFF_FFFF_FFFF))
+    println(be(0x0102_0304_0506_0708))
+    println(be(0x80FF_7F01_00A5_5A10))
+    let u8[] b = from([9, 8, 7])
+    b.push_u64_be(1)
+    println(show(b))
+    return 0

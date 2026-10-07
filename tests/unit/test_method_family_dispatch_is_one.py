@@ -95,6 +95,7 @@ _RECEIVERS = (
     ArrayType(BuiltinType.I32, 3),
     BuiltinType.STRING,
     BuiltinType.I32,
+    BuiltinType.U32,
     BuiltinType.F64,
     BuiltinType.BOOL,
     _enum("Result<i32, StdError>", "Result"),
@@ -113,13 +114,15 @@ _RECEIVERS = (
 #: Every name any family answers to, plus names no family does.
 _NAMES = (
     "len", "get", "push", "pop", "first", "last", "index_of", "clear",
-    "s", "ss", "split", "contains",
+    "index_of_from",
+    "s", "ss", "split", "contains", "starts_with", "eq_range",
     "is_ok", "is_err", "realise", "expect", "err",
     "is_some", "is_none",
     "alloc", "destroy", "new", "with_capacity", "insert", "remove",
     "contains_key", "is_empty", "tombstone_count", "rehash", "free", "debug",
     "keys", "values", "entries", "iter", "capacity", "reserve", "shrink_to_fit",
     "hash", "clone", "to_str", "to_bits", "eq", "compare",
+    "reverse_bits", "leading_zeros", "trailing_zeros",
     "load_i32", "store_u8", "load_ptr", "store_ptr", "offset", "to_string",
     "no_such_method", "bump",
 )

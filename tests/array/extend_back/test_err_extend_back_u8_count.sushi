@@ -1,0 +1,9 @@
+# `count` is an i32 position: a u8 value needs `as i32`.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+
+fn main() i32:
+    let i32[] buf = from([1, 2])
+    let u8 c = 3
+    buf.extend_back(1, c)
+    println("{buf.len()}")
+    return 0

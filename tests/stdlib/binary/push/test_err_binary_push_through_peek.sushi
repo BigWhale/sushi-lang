@@ -1,0 +1,12 @@
+# A push writes its receiver. A peek parameter is a read-only reference,
+# so a push through it is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2408
+use <encoding/binary>
+
+fn put(peek u8[] b) ~:
+    b.push_u64_be(1)
+
+fn main() i32:
+    let u8[] buf = from([])
+    put(peek buf)
+    return 0

@@ -1,0 +1,9 @@
+# A fixed array cannot change its length, so it does not take `extend_back`: the error
+# `push` gets on one.
+# EXPECT_ERROR_CODES_EXACT: CE2023
+
+fn main() i32:
+    let i32[3] f = [1, 2, 3]
+    f.extend_back(1, 2)
+    println("{f.len()}")
+    return 0

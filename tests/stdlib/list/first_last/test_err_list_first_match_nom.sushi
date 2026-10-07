@@ -1,0 +1,13 @@
+# `match nom` hands the scrutinee to the match. The answer of `first()` on a List is a
+# view of what the list keeps, as the answer of `get()` is, so it cannot be handed over.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+fn eat(nom string s) ~:
+    println(s)
+
+fn main() i32:
+    let List@(string) words = List.new()
+    words.push("a")
+    match nom words.first():
+        Maybe.Some(nom s) -> eat(nom s)
+        Maybe.None() -> println("none")
+    return 0

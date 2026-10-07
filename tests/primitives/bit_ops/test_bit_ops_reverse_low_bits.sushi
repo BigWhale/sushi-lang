@@ -1,0 +1,28 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "u8 0 1 6 208\nu16 0 1 13 53248\nu32 0 1 13 3489660928\nu64 0 1 13 14987979559889010688\n0\n"
+#
+# The low n bits of c, reversed: c.reverse_bits() >> (W - n), with n a variable. For n = 0
+# the count is W, a computed count past the width, and the answer is 0. For n = W the
+# count is 0 and the answer is the full reversal. The value is 11 (0b1011) each time.
+fn low8(u8 c, i32 n) u8:
+    return c.reverse_bits() >> (8 - n)
+
+fn low16(u16 c, i32 n) u16:
+    return c.reverse_bits() >> (16 - n)
+
+fn low32(u32 c, i32 n) u32:
+    return c.reverse_bits() >> (32 - n)
+
+fn low64(u64 c, i32 n) u64:
+    return c.reverse_bits() >> (64 - n)
+
+fn main() i32:
+    println("u8 {low8(11, 0)} {low8(11, 1)} {low8(11, 3)} {low8(11, 8)}")
+    println("u16 {low16(11, 0)} {low16(11, 1)} {low16(11, 4)} {low16(11, 16)}")
+    println("u32 {low32(11, 0)} {low32(11, 1)} {low32(11, 4)} {low32(11, 32)}")
+    println("u64 {low64(11, 0)} {low64(11, 1)} {low64(11, 4)} {low64(11, 64)}")
+    let u32 c = 0xFFFF_FFFF
+    let i32 none = 0
+    let u32 z = c.reverse_bits() >> (32 - none)
+    println("{z}")
+    return 0

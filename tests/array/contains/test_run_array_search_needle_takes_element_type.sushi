@@ -1,0 +1,13 @@
+# The needle of contains and index_of takes the element type of its position, as a push
+# element does: a bare literal on a u8[] is a u8, and a bare Maybe.None() on a
+# Maybe@(i32)[] is that Maybe.
+# EXPECT_STDOUT_EXACT: "true 1\nfalse -1\ntrue 2\n"
+
+fn main() i32:
+    let u8[] bytes = from([7, 2, 9])
+    println("{bytes.contains(2)} {bytes.index_of(2).realise(-1)}")
+    let u8[4] fixed = [1, 2, 3, 4]
+    println("{fixed.contains(200)} {fixed.index_of(200).realise(-1)}")
+    let Maybe@(i32)[] ms = from([Maybe.Some(1), Maybe.Some(2), Maybe.None()])
+    println("{ms.contains(Maybe.None())} {ms.index_of(Maybe.None()).realise(-1)}")
+    return 0

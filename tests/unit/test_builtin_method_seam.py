@@ -201,6 +201,9 @@ NOTHING_DERIVED = DerivedMethodTable()
     (BuiltinType.I32, "to_str"),
     (BuiltinType.I32, "hash"),
     (BuiltinType.F64, "to_bits"),
+    (BuiltinType.U8, "reverse_bits"),
+    (BuiltinType.U32, "leading_zeros"),
+    (BuiltinType.U64, "trailing_zeros"),
     (EnumType(name="Result<i32, StdError>", variants=(), generic_base="Result"), "is_ok"),
     (EnumType(name="Maybe<i32>", variants=(), generic_base="Maybe"), "is_some"),
     (StructType(name="Own<i32>", fields=(), generic_base="Own"), "get"),
@@ -217,6 +220,8 @@ def test_recognised(receiver, method):
     (BuiltinType.I32, "squared"),
     (BuiltinType.I32, "to_bits"),          # float-only
     (BuiltinType.BOOL, "to_bits"),
+    (BuiltinType.I32, "leading_zeros"),    # unsigned-only
+    (BuiltinType.F64, "reverse_bits"),
     (_list(), "sum_all"),                  # the real extension in tests/extensions/list_extension_receiver
     (StructType(name="Point", fields=()), "describe"),
     # EVERY File method is an ordinary extension or perk implementation in <io/fs> now,

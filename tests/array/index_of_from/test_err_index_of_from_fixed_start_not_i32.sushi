@@ -1,0 +1,6 @@
+# The start of a search on a fixed array is an i32 position too.
+# EXPECT_ERROR_CODE: CE2006
+fn main() i32:
+    let i32[3] a = [1, 2, 3]
+    let u8 start = 1
+    return a.index_of_from(2, start).realise(-1)

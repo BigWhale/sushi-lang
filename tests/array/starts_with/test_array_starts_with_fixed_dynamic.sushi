@@ -1,0 +1,19 @@
+# A fixed array and a dynamic array are each a legal receiver and a legal prefix.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\n"
+fn main() i32:
+    let i32[4] fixed = [5, 6, 7, 8]
+    let i32[] dynamic = from([5, 6, 7, 8])
+    let i32[2] fixed_prefix = [5, 6]
+    let i32[2] fixed_other = [6, 7]
+    let i32[] dynamic_prefix = from([5, 6, 7])
+    let i32[] dynamic_long = from([5, 6, 7, 8, 9])
+    println(fixed.starts_with(dynamic_prefix))
+    println(fixed.starts_with(dynamic_long))
+    println(dynamic.starts_with(fixed_prefix))
+    println(dynamic.starts_with(fixed_other))
+    println(fixed.starts_with(fixed_prefix))
+    println(fixed.starts_with(fixed_other))
+    println(fixed.starts_with(dynamic))
+    return 0

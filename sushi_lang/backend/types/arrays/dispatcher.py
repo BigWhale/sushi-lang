@@ -20,11 +20,13 @@ from .fixed_addressing import as_fixed_array_address
 def is_builtin_array_method(method_name: str) -> bool:
     """Check if a method name is a built-in array method."""
     return method_name in {
-        "len", "get", "first", "last", "contains", "index_of", "push", "pop",
+        "len", "get", "first", "last", "contains", "index_of", "starts_with", "eq_range",
+        "push", "pop",
         "insert", "remove",
+        "index_of_from",
         "clear", "truncate", "capacity", "destroy", "free",
         "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse",
-        "extend", "extend_range", "extend_str", "s", "ss"
+        "extend", "extend_range", "extend_str", "extend_back", "s", "ss"
     }
 
 
@@ -98,6 +100,17 @@ def _dynamic_data_and_len(codegen: 'LLVMCodegen', receiver: ir.Value,
             codegen.builder.load(len_ptr, name=f"{prefix}_len"))
 
 
+def _eq_range_operands(codegen: 'LLVMCodegen', expr) -> tuple[ir.Value, ir.Value, ir.Value]:
+    """`(start, other data, other length)`: `starts_with(prefix)` is `eq_range(0, prefix)`,
+    and the other array is a borrowed source, as for `extend`."""
+    if expr.method == "starts_with":
+        start = ir.Constant(codegen.types.i32, 0)
+    else:
+        start = _index_arg(codegen, expr.args[0])
+    other_data, other_len, _ = _source_data_and_len(codegen, expr, expr.args[-1])
+    return start, other_data, other_len
+
+
 def emit_array_method(
     codegen: 'LLVMCodegen',
     expr: MethodCall | DotCall,
@@ -163,7 +176,7 @@ def emit_fixed_array_method(
                                         ir.Constant(codegen.types.i32, index),
                                         element_semantic_type)
 
-        case "contains" | "index_of":
+        case "contains" | "index_of" | "index_of_from":
             # The needle is a BORROW (#475), like fill's value.
             from .methods import search
             from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
@@ -172,8 +185,19 @@ def emit_fixed_array_method(
             if method_name == "contains":
                 return search.emit_array_contains(codegen, search_data, count, needle,
                                                   element_semantic_type, to_i1)
+            if method_name == "index_of_from":
+                return search.emit_array_index_of_from(codegen, search_data, count, needle,
+                                                       _index_arg(codegen, expr.args[1]),
+                                                       element_semantic_type)
             return search.emit_array_index_of(codegen, search_data, count, needle,
                                               element_semantic_type)
+
+        case "starts_with" | "eq_range":
+            from .methods.range_eq import emit_array_eq_range
+            range_data = data("eq_range")
+            start, other_data, other_len = _eq_range_operands(codegen, expr)
+            return emit_array_eq_range(codegen, range_data, count, start, other_data,
+                                       other_len, element_semantic_type, to_i1)
 
         case "iter":
             return iterators.emit_fixed_array_iter(codegen, expr, address(writable=False),
@@ -273,7 +297,7 @@ def emit_dynamic_array_method(
             return emit_array_get_maybe(codegen, data, count, index_value,
                                         element_semantic_type)
 
-        case "contains" | "index_of":
+        case "contains" | "index_of" | "index_of_from":
             # The needle is a BORROW (#475), like fill's value.
             from .methods import search
             from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
@@ -282,8 +306,19 @@ def emit_dynamic_array_method(
             if method_name == "contains":
                 return search.emit_array_contains(codegen, data, count, needle,
                                                   element_semantic_type, to_i1)
+            if method_name == "index_of_from":
+                return search.emit_array_index_of_from(codegen, data, count, needle,
+                                                       _index_arg(codegen, expr.args[1]),
+                                                       element_semantic_type)
             return search.emit_array_index_of(codegen, data, count, needle,
                                               element_semantic_type)
+
+        case "starts_with" | "eq_range":
+            from .methods.range_eq import emit_array_eq_range
+            data, count = _dynamic_data_and_len(codegen, receiver_value, "eq_range")
+            start, other_data, other_len = _eq_range_operands(codegen, expr)
+            return emit_array_eq_range(codegen, data, count, start, other_data, other_len,
+                                       element_semantic_type, to_i1)
 
         case "push":
             # The array stores the element shallowly and frees it, so this is a consuming
@@ -393,6 +428,13 @@ def emit_dynamic_array_method(
                                                   text_data, text_size,
                                                   ir.Constant(codegen.types.i32, 0),
                                                   text_size, element_semantic_type)
+
+        case "extend_back":
+            from sushi_lang.backend.types.arrays.copy import emit_dynamic_array_extend_back
+            return emit_dynamic_array_extend_back(
+                codegen, receiver_value, array_struct_type.elements[2].pointee,
+                _index_arg(codegen, expr.args[0]), _index_arg(codegen, expr.args[1]),
+                element_semantic_type)
 
         case "s" | "ss":
             data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, receiver_value)

@@ -1,0 +1,36 @@
+# `first()` and `last()` on a `List@(string)` are BORROWED views, as `get()` is: the
+# list keeps the element and frees it, so a read never frees it a second time and
+# nothing leaks. A `let` from the answer binds a borrow.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "alpha\ngamma\nfirst alpha\nlast gamma\n3\nalpha\ndelta\nbeta\n"
+fn run() i32 | StdError:
+    let List@(string) words = List.new()
+    words.push("alpha")
+    words.push("beta")
+    words.push("gamma")
+
+    let string head = words.first().or_err(nom StdError.Error)??
+    println(head)
+    let string tail = words.last().or_err(nom StdError.Error)??
+    println(tail)
+
+    match words.first():
+        Maybe.Some(w) -> println("first {w}")
+        Maybe.None() -> println("none")
+    match words.last():
+        Maybe.Some(w) -> println("last {w}")
+        Maybe.None() -> println("none")
+
+    println(words.len())
+    println(words.first().realise("none"))
+
+    words.push("delta")
+    println(words.last().or_err(nom StdError.Error)??)
+    words.pop()
+    words.pop()
+    println(words.last().realise("none"))
+    return Result.Ok(0)
+
+fn main() i32:
+    return run().realise(9)

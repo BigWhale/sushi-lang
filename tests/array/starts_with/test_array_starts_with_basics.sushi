@@ -1,0 +1,25 @@
+# `starts_with(prefix)` is true when the first `prefix.len()` elements equal the elements
+# of `prefix`. An empty prefix gives true; a prefix longer than the receiver gives false.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\ntrue\nfalse\nfalse\nfalse\ntrue\nfalse\ntrue\ntrue\n"
+fn main() i32:
+    let i32[] a = from([1, 2, 3, 4])
+    let i32[] empty = from([])
+    let i32[] same = from([1, 2, 3, 4])
+    let i32[] shorter = from([1, 2])
+    let i32[] longer = from([1, 2, 3, 4, 5])
+    let i32[] first_differs = from([9, 2, 3])
+    let i32[] last_differs = from([1, 2, 9])
+    println(a.starts_with(empty))
+    println(a.starts_with(same))
+    println(a.starts_with(shorter))
+    println(a.starts_with(from([1])))
+    println(a.starts_with(longer))
+    println(a.starts_with(first_differs))
+    println(a.starts_with(last_differs))
+    println(empty.starts_with(empty))
+    println(empty.starts_with(shorter))
+    println(shorter.starts_with(shorter))
+    println(a.len() == 4)
+    return 0

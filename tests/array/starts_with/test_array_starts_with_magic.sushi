@@ -1,0 +1,17 @@
+# A byte buffer against a magic constant: the check that opens a file format.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nfalse\nfalse\ntrue\nfalse\n"
+const u8[4] MAGIC = [a'S', a'U', a'S', a'H']
+
+fn main() i32:
+    let u8[] file = from([a'S', a'U', a'S', a'H', 0x01, 0x00])
+    let u8[] other = from([a'S', a'U', a'S', a'I', 0x01, 0x00])
+    let u8[] short = from([a'S', a'U', a'S'])
+    let u8[4] header = [a'S', a'U', a'S', a'H']
+    println(file.starts_with(MAGIC))
+    println(other.starts_with(MAGIC))
+    println(short.starts_with(MAGIC))
+    println(header.starts_with(MAGIC))
+    println(MAGIC.starts_with(other))
+    return 0

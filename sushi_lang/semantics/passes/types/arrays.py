@@ -57,11 +57,11 @@ class Receiver(Enum):
 class _InternedByTheCaller:
     """Marks a row whose answer is interned by the reader of this table.
 
-    `get`, `first`, `last`, `pop` and `remove` each answer `Maybe@(T)` and `index_of` answers
-    `Maybe@(i32)`. Interning a `Maybe` needs the enum table and one owner, and
-    `ArrayMethodInferrer` resolves all six before it reaches this table, so a rule here
-    would be a second answer to a question already answered. The row still carries the
-    marker, so no name sits in the table with no decision at all.
+    `get`, `first`, `last`, `pop` and `remove` each answer `Maybe@(T)`, and `index_of` and
+    `index_of_from` answer `Maybe@(i32)`. Interning a `Maybe` needs the enum table and one
+    owner, and `ArrayMethodInferrer` resolves all seven before it reaches this table, so a
+    rule here would be a second answer to a question already answered. The row still
+    carries the marker, so no name sits in the table with no decision at all.
     """
 
 
@@ -181,25 +181,54 @@ def _an_index_and_an_element_to_store(call: MethodCall, array_type: ArrayReceive
     _an_element_to_store(call, array_type, reporter, validator, position=1)
 
 
-def _a_comparable_element(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
-                          validator: Optional['TypeValidator']) -> None:
-    """`contains(v)` and `index_of(v)`: one needle, of an element type that meets `==`.
+def check_search_needle(call: MethodCall, element_type: Type, reporter: Reporter,
+                        validator: Optional['TypeValidator']) -> bool:
+    """The needle of a search (`contains`, `index_of`, `index_of_from`), on every container.
 
     Equality is the `==` operator's rule (CE2514), asked through `has_equality` so the
     two cannot drift apart: a primitive in the closed set, or a struct or an enum with
     a derived or implemented `Eq`. The element gate comes before the argument check: on
     a `Handler[]` the useful answer is "a Handler has no equality", not "the argument is
-    the wrong type".
+    the wrong type". The needle takes the element type before it is read, as a `push`
+    element does, so a bare literal or a bare `Maybe.None()` is typed by the position.
+    Answers whether the call was refused.
     """
+    if _refuses_an_uncomparable_element(call, element_type, reporter, validator):
+        return True
+    if validator is not None:
+        from .propagation import propagate_types_to_value
+        propagate_types_to_value(validator, call.args[0], element_type)
+    _validate_element_argument(call, element_type, reporter, validator)
+    return False
+
+
+def _refuses_an_uncomparable_element(call: MethodCall, element_type: Type,
+                                     reporter: Reporter,
+                                     validator: Optional['TypeValidator']) -> bool:
+    """The element gate of every method that compares elements (CE2100)."""
     from sushi_lang.semantics.generics.contracts import EQ, operand_contract
     from .expressions import has_equality
 
-    comparable = (has_equality(validator, array_type.base_type) if validator is not None
-                  else operand_contract(array_type.base_type, EQ)[0])
+    comparable = (has_equality(validator, element_type) if validator is not None
+                  else operand_contract(element_type, EQ)[0])
     if not comparable:
-        _reject_uncomparable_element(call, array_type.base_type, reporter)
+        _reject_uncomparable_element(call, element_type, reporter)
+    return not comparable
+
+
+def _a_comparable_element(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
+                          validator: Optional['TypeValidator']) -> None:
+    """`contains(v)` and `index_of(v)`: one needle, of an element type that meets `==`."""
+    check_search_needle(call, array_type.base_type, reporter, validator)
+
+
+def _a_comparable_element_and_a_start(call: MethodCall, array_type: ArrayReceiver,
+                                      reporter: Reporter,
+                                      validator: Optional['TypeValidator']) -> None:
+    """`index_of_from(v, start)`: the needle, then the start, an i32 position."""
+    if check_search_needle(call, array_type.base_type, reporter, validator):
         return
-    _validate_element_argument(call, array_type.base_type, reporter, validator)
+    _reject_a_non_index(call, 1, validator)
 
 
 def _reject_uncomparable_element(call: MethodCall, element, reporter: Reporter) -> None:
@@ -219,7 +248,8 @@ def _reject_uncomparable_element(call: MethodCall, element, reporter: Reporter) 
 
 def _reject_mismatched_source(call: MethodCall, array_type: ArrayReceiver,
                               reporter: Reporter,
-                              validator: Optional['TypeValidator']) -> bool:
+                              validator: Optional['TypeValidator'],
+                              position: int = 0) -> bool:
     """A bulk copy's source: an array, of the destination's element type.
 
     The source takes the receiver's element type before it is read, the stamp a `let u8[]`
@@ -230,9 +260,10 @@ def _reject_mismatched_source(call: MethodCall, array_type: ArrayReceiver,
     if validator is None:
         return False
     from .propagation import propagate_types_to_value
-    propagate_types_to_value(validator, call.args[0], array_type)
-    validator.validate_expression(call.args[0])
-    source_type = validator.infer_expression_type(call.args[0])
+    source = call.args[position]
+    propagate_types_to_value(validator, source, array_type)
+    validator.validate_expression(source)
+    source_type = validator.infer_expression_type(source)
     if source_type is None:
         return False
     source_type = deref_type(source_type)
@@ -271,6 +302,27 @@ def _a_source_and_a_range(call: MethodCall, array_type: ArrayReceiver, reporter:
     _reject_a_non_index(call, 1, validator)
 
 
+def _a_comparable_source(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
+                         validator: Optional['TypeValidator']) -> None:
+    """`starts_with(prefix)`: an array of the element type, and the element meets `==`."""
+    if _refuses_an_uncomparable_element(call, array_type.base_type, reporter, validator):
+        return
+    _reject_mismatched_source(call, array_type, reporter, validator)
+
+
+def _a_start_and_a_comparable_source(call: MethodCall, array_type: ArrayReceiver,
+                                     reporter: Reporter,
+                                     validator: Optional['TypeValidator']) -> None:
+    """`eq_range(start, other)`: an i32 start, then an array of the element type."""
+    if _refuses_an_uncomparable_element(call, array_type.base_type, reporter, validator):
+        return
+    if validator is None:
+        return
+    reject_non_i32(validator, call.args[0], validator.validate_expression(call.args[0]),
+                   argument=1)
+    _reject_mismatched_source(call, array_type, reporter, validator, position=1)
+
+
 def _a_string(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
               validator: Optional['TypeValidator']) -> None:
     """`extend_str(s)`: the source is a string, and its bytes are the elements."""
@@ -292,7 +344,8 @@ def _a_string(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
 
 def _a_range(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
              validator: Optional['TypeValidator']) -> None:
-    """`s(start, end)` and `ss(start, count)`: two indices and no source."""
+    """`s(start, end)`, `ss(start, count)` and `extend_back(dist, count)`: two i32
+    positions and no source."""
     _reject_a_non_index(call, 0, validator)
 
 
@@ -391,6 +444,14 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
                           arguments=_a_comparable_element),
     "index_of": ArraySpec(1, Receiver.ANY, INTERNED_BY_THE_CALLER,
                           arguments=_a_comparable_element),
+    "index_of_from": ArraySpec(2, Receiver.ANY, INTERNED_BY_THE_CALLER,
+                               arguments=_a_comparable_element_and_a_start),
+    # Range equality: a borrowed array of the element type, fixed or dynamic, as the
+    # source of `extend`.
+    "starts_with": ArraySpec(1, Receiver.ANY, _answers(BuiltinType.BOOL),
+                             arguments=_a_comparable_source),
+    "eq_range": ArraySpec(2, Receiver.ANY, _answers(BuiltinType.BOOL),
+                          arguments=_a_start_and_a_comparable_source),
     # Only a buffer that can GROW or SHRINK takes these: a fixed array's length is part of
     # its type.
     "push": ArraySpec(1, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK),
@@ -426,6 +487,8 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
                               arguments=_a_source_and_a_range),
     "extend_str": ArraySpec(1, Receiver.BYTES, _answers_when_dynamic(BuiltinType.BLANK),
                             arguments=_a_string),
+    "extend_back": ArraySpec(2, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK),
+                             arguments=_a_range),
     "s": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
     "ss": ArraySpec(2, Receiver.ANY, _a_fresh_array, arguments=_a_range),
 }

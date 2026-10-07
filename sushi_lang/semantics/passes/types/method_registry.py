@@ -237,9 +237,9 @@ class ArrayMethodInferrer:
                 maybe_type = ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
                 return maybe_type
 
-            # `index_of` answers WHERE, so its Maybe carries the index and not the
-            # element -- the one array Maybe whose payload is not `base_type`.
-            if self.method_name == "index_of":
+            # `index_of` and `index_of_from` answer WHERE, so the Maybe carries the index
+            # and not the element -- the array Maybes whose payload is not `base_type`.
+            if self.method_name in ("index_of", "index_of_from"):
                 return ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32,
                                                   struct_table=self.validator.struct_table.by_name)
 
@@ -268,7 +268,7 @@ class StringMethodInferrer:
 
 @dataclass
 class PrimitiveMethodInferrer:
-    """Type inferrer for built-in primitive methods (to_str, hash, to_bits)."""
+    """Type inferrer for built-in primitive methods (to_str, hash, to_bits, the bit methods)."""
     receiver_type: 'Type'
     method_name: str
     validator: 'TypeValidator'
@@ -425,16 +425,20 @@ class ListMethodInferrer:
         if is_builtin_list_method(self.method_name):
             element_type = parse_list_types(self.receiver_type, self.validator)
             if element_type is not None:
-                if self.method_name in ("get", "pop", "remove"):
+                if self.method_name in ("get", "first", "last", "pop", "remove"):
                     from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
                     return ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
+                elif self.method_name in ("index_of", "index_of_from"):
+                    from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
+                    return ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32,
+                                                      struct_table=self.validator.struct_table.by_name)
                 elif self.method_name == "clone":
                     # `.clone()` is the ONLY escape from CE2411 for a List read, so it must
                     # exist for every List (#242). Returns the receiver's own type.
                     return self.receiver_type
                 elif self.method_name in ("len", "capacity"):
                     return BuiltinType.I32
-                elif self.method_name == "is_empty":
+                elif self.method_name in ("is_empty", "contains"):
                     return BuiltinType.BOOL
                 elif self.method_name == "insert":
                     from sushi_lang.semantics.generics.results import ensure_result_type_in_table

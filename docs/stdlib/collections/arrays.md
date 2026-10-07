@@ -143,6 +143,105 @@ let i32 at = words.index_of("beta").realise(-1)   # 1
 words.index_of("delta").is_none()         # true
 ```
 
+### `.index_of_from(T value, i32 start) -> Maybe@(i32)`
+
+Finds the first index `i` with `i >= start` where the element is equal to `value`.
+The answer is `Maybe.Some(i)`, or `Maybe.None()` when no element from `start` to the end
+is equal to `value`. The index is from the start of the array, not from `start`.
+
+The method is on `T[]` and on `T[N]`. The equality rule and the
+[CE2100](../../error-catalog.md#ce2100) rule are the rules of `.contains()` and
+`.index_of()`. The needle is a borrow.
+
+`start` is an `i32` position. The method clamps `start` into `0..len()`, and it does not
+trap:
+
+- A negative `start` searches from index 0.
+- A `start` that is equal to `len()` or more than `len()` gives `Maybe.None()`.
+- On an empty array, the answer is always `Maybe.None()`.
+
+To find each match, call the method again from the index after the last match:
+
+```sushi
+fn main() i32:
+    let i32[] a = from([7, 3, 7, 5])
+    println(a.index_of_from(7, 0).realise(-1))    # 0
+    println(a.index_of_from(7, 1).realise(-1))    # 2
+    println(a.index_of_from(7, -5).realise(-1))   # 0
+    println(a.index_of_from(7, 3).realise(-1))    # -1
+    println(a.index_of_from(7, 4).realise(-1))    # -1
+
+    # Every match, one call per match.
+    let i32 at = 0
+    while (true):
+        match a.index_of_from(7, at):
+            Maybe.Some(i) ->
+                println("7 at {i}")               # 7 at 0, then 7 at 2
+                at := i + 1
+            Maybe.None() ->
+                break
+    return 0
+```
+
+### `.starts_with(prefix) -> bool`
+
+Answers true when the first `prefix.len()` elements of the array are equal to the
+elements of `prefix`, in the same order. The rules:
+
+- An empty prefix gives true, also on an empty array.
+- A prefix that is longer than the array gives false.
+- The comparison stops at the first element that is not equal.
+
+`prefix` is an array of the same element type: a fixed array or a dynamic array, as the
+source of `.extend()`. A prefix of a different element type is
+[CE2023](../../error-catalog.md#ce2023). The element type must have equality, as for
+`.contains()`: an element with no `==` is [CE2100](../../error-catalog.md#ce2100). The
+method borrows the array and the prefix, and it does not change them.
+
+```sushi
+const u8[4] MAGIC = [a'S', a'U', a'S', a'H']
+
+fn main() i32:
+    let u8[] file = from([a'S', a'U', a'S', a'H', 0x01])
+    println(file.starts_with(MAGIC))       # true
+    let i32[] a = from([1, 2, 3])
+    let i32[] empty = from([])
+    println(a.starts_with(empty))          # true
+    println(a.starts_with([1, 2, 3, 4]))   # false: the prefix is longer
+    return 0
+```
+
+### `.eq_range(i32 start, other) -> bool`
+
+Answers true when the elements `start .. start + other.len()` of the array are equal to
+the elements of `other`, in the same order. `a.starts_with(p)` is `a.eq_range(0, p)`.
+The rules:
+
+- The range must be in the array: `start` is 0 or more, and `start + other.len()` is
+  `len()` or less. A range that is not in the array gives false. This includes a negative
+  `start`, and a `start` so large that `start + other.len()` is more than the largest
+  `i32`.
+- An empty `other` gives true when `start` is from 0 to `len()`.
+- Nothing traps. The comparison stops at the first element that is not equal.
+
+`start` is an `i32` position: a value of a different type is
+[CE2006](../../error-catalog.md#ce2006). `other` has the rules of the prefix of
+`.starts_with()`: an array of the same element type, fixed or dynamic, and an element type
+with equality ([CE2100](../../error-catalog.md#ce2100)). The method borrows the array and
+`other`.
+
+```sushi
+fn main() i32:
+    let i32[] a = from([10, 20, 30, 40, 50])
+    let i32[2] pair = [30, 40]
+    println(a.eq_range(2, pair))           # true
+    println(a.eq_range(4, pair))           # false: 4 + 2 is past the end
+    println(a.eq_range(-1, pair))          # false: a negative start
+    let i32[] empty = from([])
+    println(a.eq_range(5, empty))          # true: an empty range at the end
+    return 0
+```
+
 ### `.iter() -> Iterator@(T)`
 
 Create iterator for foreach loops.
@@ -427,6 +526,59 @@ out.extend_range(src, 2, 3)    # out is now [0, 30, 40, 50]
 
 `.extend(src)` is `extend_range(src, 0, src.len())`.
 
+### `.extend_back(i32 dist, i32 count) -> ~`
+
+Append `count` elements. Each new element is a copy of the element `dist` places before
+it. Element `k` (from 0) of the new elements is a copy of the element at
+`len - dist + k`, where `len` is the length before the call. The method reads each element
+after it writes the earlier ones. Because of this, a `count` larger than `dist` repeats
+the last `dist` elements. This is the back-reference copy of LZ77 (DEFLATE, zlib).
+
+| call on `[1, 2, 3]` | result |
+|---|---|
+| `.extend_back(3, 2)` | `[1, 2, 3, 1, 2]` |
+| `.extend_back(2, 2)` | `[1, 2, 3, 2, 3]` |
+| `.extend_back(2, 5)` | `[1, 2, 3, 2, 3, 2, 3, 2]` -- the count is larger than the distance |
+| `.extend_back(1, 3)` | `[1, 2, 3, 3, 3, 3]` -- a run of one element |
+
+```sushi
+fn main() i32:
+    let u8[] out = from([a'a', a'b', a'c'])
+    out.extend_back(3, 6)
+    println(out.to_string())      # abcabcabc
+    let i32[] run = from([1, 2, 3])
+    run.extend_back(2, 5)
+    println("{run}")              # [1, 2, 3, 2, 3, 2, 3, 2]
+    run.extend_back(0, 4)
+    println(run.len())            # 8: a dist of 0 appends nothing
+    return 0
+```
+
+The array grows one time at most, with the growth rule of `.extend()`. For a plain element
+type, the copy is one `memcpy` when `dist` is not smaller than `count`, and one forward
+loop when it is smaller. For an owning element type, each new slot gets its own deep copy.
+
+**A bad `dist` or `count` appends nothing and reports nothing.** When `dist` is outside
+`1..len()`, or `count` is 0 or less, the array does not change. An empty array has no
+valid `dist`. If the caller must know, it checks `dist` before the call:
+
+```sushi
+fn copy_back(poke u8[] out, i32 dist, i32 length) ~ | DecodeError:
+    if (dist < 1 or dist > out.len()):
+        return Result.Err(DecodeError.BadDistance(dist))
+    out.extend_back(dist, length)
+    return Result.Ok(~)
+```
+
+The `<compression/zlib>` decoder does this check before each back reference.
+
+The source is the receiver, so this is not a copy from a borrowed source, and
+**[CE2430](../../error-catalog.md#ce2430)** does not apply. The receiver must be dynamic: a
+fixed array is **[CE2023](../../error-catalog.md#ce2023)**, as for `.push()`. The method
+writes its receiver, so a `peek` receiver is **[CE2408](../../error-catalog.md#ce2408)**.
+`dist` and `count` are `i32` positions. A result longer than the largest `i32` is the
+allocation failure **[RE2021](../../error-catalog.md#re2021)**.
+
 ### `.extend_str(string s) -> ~`
 
 Append the bytes of `s` to a `u8[]`. The method grows the array once and copies the bytes
@@ -509,7 +661,17 @@ does not, while a range asks for what overlaps and can always answer.
 destination may reallocate its buffer, which would leave the source pointer dangling in
 the middle of the copy. Use `.clone()` or `.ss()` to take an independent source. A copy
 that must read what it is writing -- a run expanded from its own tail -- is a different
-operation, and stays a per-element loop.
+operation: `.extend_back(dist, count)`.
+
+**`.extend_back()` has a no-op rule of its own.** When `dist` is outside `1..len()`, or
+`count` is 0 or less, it appends nothing and reports nothing. If the caller must know, it
+checks `dist` before the call, as the `<compression/zlib>` decoder does:
+
+```sushi
+if (dist < 1 or dist > out.len()):
+    return Result.Err(DecodeError.BadDistance(dist))
+out.extend_back(dist, length)
+```
 
 ### `.capacity() -> i32`
 

@@ -866,9 +866,9 @@ The table is stored on `EnumTable.derived` and read by name everywhere else
 table; every other reader already holds a validator or a codegen.
 
 A lookup that finds nothing falls through to `builtin_registry`, the process-wide table
-of what the compiler defines for EVERY program -- `hash`, `to_str`, `to_bits` and `clone`
-on the primitives, registered once at import time from
-`backend/types/primitives/`. Those emitters close over a `BuiltinType` and nothing a
+of what the compiler defines for EVERY program -- `hash`, `to_str`, `to_bits`, `clone`
+and the bit methods (`reverse_bits`, `leading_zeros`, `trailing_zeros`) on the
+primitives, registered once at import time from `backend/types/primitives/`. Those emitters close over a `BuiltinType` and nothing a
 program can change, so one table serves the process.
 
 ### Which types get a hash

@@ -29,6 +29,7 @@ from llvmlite import ir
 
 from sushi_lang.backend import gep_utils
 from sushi_lang.backend.generics.container_walk import emit_container_walk
+from sushi_lang.backend.utils.validation import require_builder
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -112,3 +113,83 @@ def _clamp(codegen: 'LLVMCodegen', value: ir.Value, low: ir.Value, high: ir.Valu
     b = codegen.builder
     at_least = b.select(b.icmp_signed("<", value, low), low, value, name=f"{name}_low")
     return b.select(b.icmp_signed(">", at_least, high), high, at_least, name=name)
+
+
+_I32_MAX = 0x7FFFFFFF
+
+
+def emit_dynamic_array_extend_back(codegen: 'LLVMCodegen', array_address: ir.Value,
+                                   element_llvm_type: ir.Type, dist: ir.Value,
+                                   count: ir.Value, element_type: 'Type') -> ir.Value:
+    """`extend_back(dist, count)`: append `count` elements read `dist` slots back.
+
+    Element `k` is a copy of `data[len - dist + k]`, read AFTER the earlier appends, so a
+    count larger than the distance repeats the last `dist` elements (the LZ77 rule). A
+    `dist` outside `1..len` or a `count` below 1 appends nothing, the no-op rule of the
+    bulk-copy family. The array grows once, and the copy reads the data pointer that the
+    growth answers. A length past the i32 range is the allocation failure RE2021.
+
+    The source is the receiver itself, so this is not a bulk write from a borrowed source.
+    An owning element takes its own `copy_out` per slot in a forward walk; a plain one is a
+    `memcpy` when the two ranges are apart (`dist >= count`) and a forward walk when they
+    overlap, because a `memcpy` or a `memmove` would not repeat the pattern.
+    """
+    from sushi_lang.backend.destructors import needs_cleanup
+    from sushi_lang.backend.expressions import memory
+
+    b = require_builder(codegen)
+    i32 = codegen.types.i32
+    one = ir.Constant(i32, 1)
+
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_address)
+    cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_address)
+    data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_address)
+    length = b.load(len_ptr, name="back_len")
+
+    dist_in_range = b.and_(b.icmp_signed(">=", dist, one), b.icmp_signed("<=", dist, length),
+                           name="back_dist_ok")
+    appends = b.and_(dist_in_range, b.icmp_signed(">=", count, one), name="back_appends")
+
+    with b.if_then(appends):
+        room = b.sub(ir.Constant(i32, _I32_MAX), length, name="back_room")
+        with b.if_then(b.icmp_signed(">", count, room, name="back_too_long")):
+            codegen.runtime.errors.emit_runtime_error("RE2021")
+            b.unreachable()
+
+        needed = b.add(length, count, name="back_needed")
+        data = memory.emit_grow_to_fit(
+            codegen, data_ptr=b.load(data_ptr_ptr, name="back_data"),
+            data_ptr_ptr=data_ptr_ptr, cap_ptr=cap_ptr,
+            current_cap=b.load(cap_ptr, name="back_cap"), count=needed,
+            element_llvm_type=element_llvm_type, policy=memory.GrowPolicy.AT_LEAST)
+        dest = gep_utils.gep_array_element(codegen, data, length, "back_dest")
+        start = b.sub(length, dist, name="back_start")
+
+        if needs_cleanup(codegen, element_type):
+            emit_range_copy(codegen, dest, data, start, count, element_type,
+                            element_llvm_type, prefix="back")
+        else:
+            with b.if_else(b.icmp_signed(">=", dist, count, name="back_apart")) as (apart,
+                                                                                    overlap):
+                with apart:
+                    emit_range_copy(codegen, dest, data, start, count, element_type,
+                                    element_llvm_type, prefix="back")
+                with overlap:
+                    _emit_forward_run(codegen, dest, data, start, count)
+
+        b.store(needed, len_ptr)
+
+    return ir.Constant(i32, 0)
+
+
+def _emit_forward_run(codegen: 'LLVMCodegen', dest: ir.Value, data: ir.Value,
+                      start: ir.Value, count: ir.Value) -> None:
+    """`dest[k] = data[start + k]` for k upward: each read sees the earlier writes."""
+    b = require_builder(codegen)
+    source_base = gep_utils.gep_array_element(codegen, data, start, "back_run_src")
+
+    def copy_one(slot: ir.Value, index: ir.Value) -> None:
+        source_slot = gep_utils.gep_array_element(codegen, source_base, index)
+        b.store(b.load(source_slot, name="back_run_elem"), slot)
+
+    emit_container_walk(codegen, dest, count, copy_one, prefix="back_run")

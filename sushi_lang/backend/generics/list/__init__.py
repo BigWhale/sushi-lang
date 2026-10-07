@@ -20,6 +20,7 @@ from .methods_modify import (
     emit_list_push,
     emit_list_pop,
     emit_list_get,
+    emit_list_end,
     emit_list_clear,
     emit_list_insert,
     emit_list_remove
@@ -38,6 +39,11 @@ from .methods_debug import (
 from .methods_iter import (
     emit_list_iter
 )
+from .methods_search import (
+    emit_list_contains,
+    emit_list_index_of,
+    emit_list_index_of_from
+)
 
 
 
@@ -52,6 +58,8 @@ LIST_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
     "push": ContainerMethod(emit_list_push),
     "pop": ContainerMethod(lambda c, e, v, t: emit_list_pop(c, v, t)),
     "get": ContainerMethod(emit_list_get),
+    "first": ContainerMethod(emit_list_end),
+    "last": ContainerMethod(emit_list_end),
     "clear": ContainerMethod(lambda c, e, v, t: emit_list_clear(c, v, t)),
     "insert": ContainerMethod(emit_list_insert),
     "remove": ContainerMethod(emit_list_remove),
@@ -62,6 +70,9 @@ LIST_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
     "debug": ContainerMethod(lambda c, e, v, t: emit_list_debug(c, v, t)),
     "iter": ContainerMethod(emit_list_iter),
     "clone": ContainerMethod(lambda c, e, v, t: emit_list_clone(c, v, t)),
+    "contains": ContainerMethod(emit_list_contains, answers_bool=True),
+    "index_of": ContainerMethod(emit_list_index_of),
+    "index_of_from": ContainerMethod(emit_list_index_of_from),
 })
 
 

@@ -1,0 +1,25 @@
+# A struct element compares by its derived equality, or by its `Eq` implementation.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\n"
+struct Point:
+    i32 x
+    i32 y
+
+struct Tagged:
+    i32 key
+    i32 noise
+
+extend Tagged with Eq:
+    fn eq(Tagged other) bool:
+        return self.key == other.key
+
+fn main() i32:
+    let Point[] points = from([Point(1, 2), Point(3, 4), Point(5, 6)])
+    let Point[] tail = from([Point(3, 4), Point(5, 6)])
+    println(points.eq_range(1, tail))
+    println(points.eq_range(0, tail))
+    let Tagged[] tags = from([Tagged(7, 0), Tagged(8, 0)])
+    let Tagged[] noisy = from([Tagged(8, 99)])
+    println(tags.eq_range(1, noisy))
+    return 0

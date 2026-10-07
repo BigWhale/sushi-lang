@@ -1,0 +1,31 @@
+# `first()` and `last()` on a list of structs that own a string. The answer is a borrowed
+# view of the element the list keeps, so a field read through it frees nothing.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "bolt 3\nnut 9\nbolt\nnut\n2\n"
+struct Part:
+    string name
+    i32 count
+
+fn run() i32 | StdError:
+    let List@(Part) parts = List.new()
+    parts.push(Part("bolt", 3))
+    parts.push(Part("nut", 9))
+
+    let Part p = parts.first().or_err(nom StdError.Error)??
+    println("{p.name} {p.count}")
+    let Part q = parts.last().or_err(nom StdError.Error)??
+    println("{q.name} {q.count}")
+
+    match parts.first():
+        Maybe.Some(x) -> println(x.name)
+        Maybe.None() -> println("none")
+    match parts.last():
+        Maybe.Some(x) -> println(x.name)
+        Maybe.None() -> println("none")
+
+    println(parts.len())
+    return Result.Ok(0)
+
+fn main() i32:
+    return run().realise(9)
