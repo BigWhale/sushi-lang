@@ -2,9 +2,9 @@
 # the spans of the hole still count from the file (#1038).
 # EXPECT_ERROR_CODES_EXACT: CE2062
 # EXPECT_STDERR_CONTAINS: test_err_hole_leading_space.sushi:10:30: error [CE2062]
-fn pick@(T: Hashable)(T x) i32:
-    return x.hash() as i32
-
+fn pick@(T)(T x) i32:
+    x
+    return 1
 
 fn show() ~:
     println("value {   pick@(i32, i32)(5)}")

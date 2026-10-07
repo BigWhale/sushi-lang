@@ -4,8 +4,10 @@
 fn identity@(T)(T x) T:
     return x
 
-fn swap@(T, U)(nom T a, nom U b) (U, T):
-    return (b, a)
+fn swap@(T, U)(T a, U b) ~:
+    a
+    b
+    return ~
 
 fn main() i32:
     return 0
