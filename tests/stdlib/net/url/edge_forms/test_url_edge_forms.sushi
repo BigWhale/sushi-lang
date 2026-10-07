@@ -1,0 +1,37 @@
+# The edge forms of the URL parser: the scheme alphabet, a scheme that does not
+# start with a letter, a non-ASCII scheme, the port range and digits, and the
+# default port of each known scheme.
+# EXPECT_STDOUT_EXACT: "[a+b-c.d://h/] scheme a+b-c.d port 0 default none\n[HTTP://h/] scheme http port 0 default 80\n[x1://h/] scheme x1 port 0 default none\n[1x://h/] bad scheme\n[+x://h/] bad scheme\n[hé://h/] bad scheme\n[http://h:0/] bad port\n[http://h:1/] scheme http port 1 default 1\n[http://h:65535/] scheme http port 65535 default 65535\n[http://h:65536/] bad port\n[http://h:8a/] bad port\n[http://h:00080/] scheme http port 80 default 80\n[http://h:123456/] bad port\n[http://h:/] bad port\n[ws://h/] scheme ws port 0 default 80\n[wss://h/] scheme wss port 0 default 443\n[ftp://h/] scheme ftp port 0 default 21\n[ssh://h/] scheme ssh port 0 default 22\n[gopher://h/] scheme gopher port 0 default none\n"
+# EXPECT_NO_LEAKS: true
+
+use <net/url>
+
+fn show(string text) ~:
+    match parse_url(text):
+        Result.Ok(u) ->
+            match u.port_or_default():
+                Maybe.Some(d) -> println("[{text}] scheme {u.scheme} port {u.port} default {d}")
+                Maybe.None() -> println("[{text}] scheme {u.scheme} port {u.port} default none")
+        Result.Err(e) -> println("[{text}] {e.text()}")
+
+fn main() i32:
+    show("a+b-c.d://h/")
+    show("HTTP://h/")
+    show("x1://h/")
+    show("1x://h/")
+    show("+x://h/")
+    show("h\u00e9://h/")
+    show("http://h:0/")
+    show("http://h:1/")
+    show("http://h:65535/")
+    show("http://h:65536/")
+    show("http://h:8a/")
+    show("http://h:00080/")
+    show("http://h:123456/")
+    show("http://h:/")
+    show("ws://h/")
+    show("wss://h/")
+    show("ftp://h/")
+    show("ssh://h/")
+    show("gopher://h/")
+    return 0

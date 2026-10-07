@@ -9,6 +9,7 @@ the input cannot supply, `0xffffffff` included, is `Truncated` at the header.
 :##
 
 use <collections/strings>
+use <encoding/binary>
 
 ##:
 One decoded MessagePack value.
@@ -88,14 +89,18 @@ Reads an unsigned big-endian integer.
 - Parameter cur: The cursor. The read moves it `nbytes` bytes.
 - Parameter nbytes: The width in bytes: 1, 2, 4 or 8.
 - Returns: The integer.
-- Errors: `MpError.Truncated` when the buffer ends first.
+- Errors: `MpError.Truncated` when the buffer ends first. Its offset is the end of the
+  buffer, where the read stops.
 :##
 fn be_uint(peek u8[] buf, poke MpCursor cur, i32 nbytes) u64 | MpError:
-    let u64 acc = 0
-    foreach(_ in 0..nbytes):
-        let u8 b = take(peek buf, poke cur)??
-        acc := (acc << 8) | (b as u64)
-    return Result.Ok(acc)
+    let u64 value = 0
+    match nbytes:
+        1 -> return Result.Ok(take(peek buf, poke cur)?? as u64)
+        2 -> value := buf.read_u16_be(cur.pos).or_err(nom MpError.Truncated(buf.len()))?? as u64
+        4 -> value := buf.read_u32_be(cur.pos).or_err(nom MpError.Truncated(buf.len()))?? as u64
+        _ -> value := buf.read_u64_be(cur.pos).or_err(nom MpError.Truncated(buf.len()))??
+    cur.pos := cur.pos + nbytes
+    return Result.Ok(value)
 
 ##:
 Reads a length prefix as a count.

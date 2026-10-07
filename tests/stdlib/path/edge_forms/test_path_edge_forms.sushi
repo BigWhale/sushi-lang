@@ -1,0 +1,15 @@
+# The edge forms of dirname, extension and normalize: separator runs, leading dots,
+# empty and over-climbing paths, and a path with multi-byte characters.
+# EXPECT_STDOUT_EXACT: "dirname [/] = [/]\ndirname [//] = [//]\ndirname [a//] = [a]\ndirname [///a] = [///]\ndirname [a/b//] = [a/b]\ndirname [dé/ф.txt] = [dé]\nextension [.bashrc] = []\nextension [..x] = []\nextension [a.b.c] = [c]\nextension [dir.d/file] = []\nextension [...] = []\nextension [dé/ф.txt] = [txt]\nnormalize [] = [.]\nnormalize [/..] = [/]\nnormalize [../../a] = [../../a]\nnormalize [a/../..] = [..]\nnormalize [//a//b/] = [//a/b]\nnormalize [dé/./ф/../x.txt] = [dé/x.txt]\n"
+# EXPECT_NO_LEAKS: true
+
+use <io/path>
+
+fn main() i32:
+    foreach(p in from(["/", "//", "a//", "///a", "a/b//", "dé/ф.txt"]).iter()):
+        println("dirname [{p}] = [{dirname(p)}]")
+    foreach(p in from([".bashrc", "..x", "a.b.c", "dir.d/file", "...", "dé/ф.txt"]).iter()):
+        println("extension [{p}] = [{extension(p)}]")
+    foreach(p in from(["", "/..", "../../a", "a/../..", "//a//b/", "dé/./ф/../x.txt"]).iter()):
+        println("normalize [{p}] = [{normalize(p)}]")
+    return 0

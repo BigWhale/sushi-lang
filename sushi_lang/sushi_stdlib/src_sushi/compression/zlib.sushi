@@ -12,6 +12,8 @@ gzip (RFC 1952) is not handled, so there is no CRC-32. A preset dictionary gives
 negative count, and the read gives `ZError.Truncated`.
 :##
 
+use <encoding/binary>
+
 # On the casts: a bitwise operator rejects two different numeric types
 # (CE2510), so the `as u32` and `as i32` on the OPERANDS of a shift, an OR or
 # an AND are what the language requires and not defensive noise. A shift COUNT
@@ -264,10 +266,8 @@ as little-endian 16-bit values.
 fn inflate_stored(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
     s.acc := 0
     s.cnt := 0
-    if ((s.pos + 4) > src.len()):
-        return Result.Err(ZError.Truncated(s.pos))
-    let i32 len = (src[s.pos] as i32) | ((src[s.pos + 1] as i32) << 8)
-    let i32 nlen = (src[s.pos + 2] as i32) | ((src[s.pos + 3] as i32) << 8)
+    let i32 len = src.read_u16_le(s.pos).or_err(nom ZError.Truncated(s.pos))?? as i32
+    let i32 nlen = src.read_u16_le(s.pos + 2).or_err(nom ZError.Truncated(s.pos))?? as i32
     s.pos := s.pos + 4
     if (nlen != (65535 - len)):
         return Result.Err(ZError.BadStoredLength(len, nlen))
@@ -311,8 +311,7 @@ fn inflate_codes(peek u8[] src, poke ZBits s, poke u8[] out,
             let i32 dist = ZLIB_DIST_BASE[dsym] + dx
             if (dist > out.len()):
                 return Result.Err(ZError.BadDistance(dist, out.len()))
-            foreach(_ in 0..length):
-                out.push(out[out.len() - dist])
+            out.extend_back(dist, length)
     return Result.Ok(~)
 
 ##:
@@ -462,9 +461,7 @@ format.
 - Parameter n: The number of bits in the code.
 :##
 fn put_code(poke u8[] out, poke ZOut w, u32 code, i32 n) ~:
-    foreach(i in (n - 1)..=0):
-        let u32 bit = (code >> i) & 1
-        put_bits(poke out, poke w, bit, 1)
+    put_bits(poke out, poke w, code.reverse_bits() >> (32 - n), n)
 
 ##:
 Writes the last partial byte, with zero bits as padding.
@@ -589,19 +586,17 @@ fn deflate_stored(peek u8[] src, poke u8[] out) ~:
         let i32 chunk = n - pos
         if (chunk > 65535):
             chunk := 65535
-        let i32 last = 0
-        if ((pos + chunk) >= n):
-            last := 1
+        let bool last = (pos + chunk) >= n
         # BFINAL in bit 0, BTYPE 00 in bits 1 and 2, the rest padding
-        out.push(last as u8)
-        out.push((chunk & 255) as u8)
-        out.push(((chunk >> 8) & 255) as u8)
-        let i32 nlen = 65535 - chunk
-        out.push((nlen & 255) as u8)
-        out.push(((nlen >> 8) & 255) as u8)
+        if (last):
+            out.push(1)
+        else:
+            out.push(0)
+        out.push_u16_le(chunk as u16)
+        out.push_u16_le((65535 - chunk) as u16)
         out.extend_range(src, pos, chunk)
         pos := pos + chunk
-        if (last == 1):
+        if (last):
             break
 
 ##:
@@ -755,10 +750,7 @@ public fn zlib_compress(u8[] src, i32 level) u8[] | ZError:
     out.extend(body)
 
     let u32 sum = adler32(src)
-    out.push(((sum >> 24) & 255) as u8)
-    out.push(((sum >> 16) & 255) as u8)
-    out.push(((sum >> 8) & 255) as u8)
-    out.push((sum & 255) as u8)
+    out.push_u32_be(sum)
     return Result.Ok(out)
 
 ##:
@@ -854,10 +846,7 @@ public fn zlib_uncompress(u8[] src) u8[] | ZError:
     let u8[] body = src.s(2, endp)
 
     let u8[] out = inflate_raw(body)??
-    let u32 want = (src[endp] as u32) << 24
-    want := want | ((src[endp + 1] as u32) << 16)
-    want := want | ((src[endp + 2] as u32) << 8)
-    want := want | (src[endp + 3] as u32)
+    let u32 want = src.read_u32_be(endp).or_err(nom ZError.Truncated(src.len()))??
     let u32 got = adler32(out)
     if (want != got):
         return Result.Err(ZError.BadChecksum(want, got))
