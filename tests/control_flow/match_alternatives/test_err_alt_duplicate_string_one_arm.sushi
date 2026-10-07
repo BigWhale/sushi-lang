@@ -1,0 +1,12 @@
+# "a" and 'a' are one value, so the second alternative repeats the first. The
+# duplicate-literal rule names this fault, and it is the one diagnostic.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+
+fn name(string s) i32:
+    match s:
+        "a" | 'a' -> return 1
+        _ -> return 0
+
+fn main() i32:
+    println(name("a"))
+    return 0

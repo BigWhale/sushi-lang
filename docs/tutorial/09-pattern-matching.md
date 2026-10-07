@@ -161,6 +161,33 @@ order, from the top. A string literal is also legal inside a pattern, for exampl
 `Maybe.Some("--help")` or `("go", direction)`. Two arms with the same value are the error
 [`CE2075`](../error-catalog.md#ce2075), also when one uses double quotes and the other single quotes.
 
+## Alternatives
+
+One arm can hold several patterns, with `|` between them. The arm runs when one of the
+patterns matches. Each pattern is an **alternative**.
+
+```sushi
+--8<-- "docs/tutorial/examples/09-pattern-matching/alternatives.sushi"
+```
+
+Output:
+
+```
+agree
+agree
+refuse
+unclear
+2
+3
+0
+```
+
+The arm `Drink.Tea(n) | Drink.Coffee(n)` binds `n` in both alternatives, so the arm body
+can read `n` whatever drink matched. Each alternative must bind the same names, with the
+same types and the same mode; a difference is the error [`CE2126`](../error-catalog.md#ce2126). An
+alternative can also stand inside a pattern: `Maybe.Some(1 | 2)` matches a `Some` that holds
+1 or 2. Put a space on each side of `|`: the compiler reads `||` as the logical `or`.
+
 ## Binding modes
 
 A name in a pattern, such as `count` in `Cargo.Crates(count)`, has a **mode**, like a
@@ -204,6 +231,8 @@ is for data that owns memory, such as the `string[]` here.
 - Matching on an enum is **exhaustive** — the compiler insists every variant is handled
   ([`CE2040`](../error-catalog.md#ce2040)), turning forgotten cases into compile errors instead of runtime bugs.
 - A `match` on an integer or on a `string` uses literal arms and needs a trailing `_`.
+- `|` puts several alternatives in one arm (`"yes" | "y" ->`); each alternative binds the
+  same names.
 - A pattern binding borrows by default; `poke` writes into the data, and `nom` takes it
   from a value that the `match` owns.
 - `match` is a statement; it does not give a value.

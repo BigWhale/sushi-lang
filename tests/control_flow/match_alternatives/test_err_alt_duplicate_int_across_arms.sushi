@@ -1,0 +1,13 @@
+# 0x1 is the value 1, which the first arm already matches. The duplicate-literal rule
+# names this fault, and it is the one diagnostic.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+
+fn name(i32 n) i32:
+    match n:
+        1 -> return 1
+        2 | 0x1 -> return 2
+        _ -> return 0
+
+fn main() i32:
+    println(name(1))
+    return 0

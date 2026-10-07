@@ -1,0 +1,17 @@
+# The arms cover 'Color.Red' and 'Color.Green' through alternatives, and nothing covers
+# 'Color.Blue'. The match is not exhaustive.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+# EXPECT_STDERR_CONTAINS: "Blue"
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn warm(Color c) i32:
+    match c:
+        Color.Red | Color.Green -> return 1
+
+fn main() i32:
+    println(warm(Color.Red))
+    return 0

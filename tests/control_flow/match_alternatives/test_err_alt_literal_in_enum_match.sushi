@@ -1,0 +1,17 @@
+# A literal alternative and an enum alternative never mix: the scrutinee is an enum,
+# so the literal alternative is the arm-kind error.
+# EXPECT_ERROR_CODE: CE2076
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn warm(Color c) i32:
+    match c:
+        Color.Red | 1 -> return 1
+        _ -> return 0
+
+fn main() i32:
+    println(warm(Color.Red))
+    return 0

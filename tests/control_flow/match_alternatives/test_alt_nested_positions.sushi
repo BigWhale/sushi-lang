@@ -1,0 +1,58 @@
+# `|` alternatives nested in a tuple element, in a payload that holds a tuple, in an
+# `Own(...)` pointee, and at the top of a match over a tuple literal, where each
+# alternative is a whole tuple pattern.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "cool zero\ncool\ngreen small\ngreen\nlow warm\nlow blue\nhigh\nnone\npair\npair\nno pair\nboxed small\nboxed big\n"
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn tag((Color, i32) p) string:
+    match p:
+        (Color.Red | Color.Blue, 0) -> return "cool zero"
+        (Color.Red | Color.Blue, _) -> return "cool"
+        (Color.Green, 1 | 2) -> return "green small"
+        (Color.Green, _) -> return "green"
+
+fn deep(Maybe@((i32, Color)) m) string:
+    match m:
+        Maybe.Some((1 | 2, Color.Red | Color.Green)) -> return "low warm"
+        Maybe.Some((1 | 2, Color.Blue)) -> return "low blue"
+        Maybe.Some(_) -> return "high"
+        Maybe.None -> return "none"
+
+fn pair(Color c, i32 n) string:
+    match (c, n):
+        (Color.Red, 1) | (Color.Blue, 2) -> return "pair"
+        _ -> return "no pair"
+
+fn boxed(peek Maybe@(Own@(i32)) m) string:
+    match m:
+        Maybe.Some(Own(1 | 2)) -> return "boxed small"
+        Maybe.Some(Own(_)) -> return "boxed big"
+        Maybe.None -> return "boxed none"
+
+fn main() i32:
+    println(tag((Color.Red, 0)))
+    println(tag((Color.Blue, 5)))
+    println(tag((Color.Green, 2)))
+    println(tag((Color.Green, 9)))
+    let Maybe@((i32, Color)) a = Maybe.Some((2, Color.Green))
+    let Maybe@((i32, Color)) b = Maybe.Some((1, Color.Blue))
+    let Maybe@((i32, Color)) c = Maybe.Some((7, Color.Red))
+    let Maybe@((i32, Color)) d = Maybe.None()
+    println(deep(a))
+    println(deep(b))
+    println(deep(c))
+    println(deep(d))
+    println(pair(Color.Red, 1))
+    println(pair(Color.Blue, 2))
+    println(pair(Color.Red, 2))
+    let Maybe@(Own@(i32)) small = Maybe.Some(Own.alloc(2))
+    let Maybe@(Own@(i32)) big = Maybe.Some(Own.alloc(40))
+    println(boxed(peek small))
+    println(boxed(peek big))
+    return 0

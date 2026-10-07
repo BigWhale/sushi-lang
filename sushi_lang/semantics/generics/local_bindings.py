@@ -71,11 +71,15 @@ def pattern_bindings(pattern, scrutinee_type, generic_enums,
     nothing is bound for one. A taken (`nom`) payload is the arm's own VALUE, so its
     type is the payload's (borrow-model.md S10b).
     """
-    from sushi_lang.semantics.ast import Pattern, NomBinding, TuplePattern
+    from sushi_lang.semantics.ast import Pattern, NomBinding, OrPattern, TuplePattern
     from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
 
     if scrutinee_type is None:
         return []
+    if isinstance(pattern, OrPattern):
+        # Each alternative binds the same names with the same types (CE2126).
+        return pattern_bindings(pattern.alternatives[0], scrutinee_type, generic_enums,
+                                resolve)
     if isinstance(pattern, TuplePattern):
         if not is_tuple_type(scrutinee_type):
             return []
@@ -95,7 +99,7 @@ def pattern_bindings(pattern, scrutinee_type, generic_enums,
                 bound.append((binding, payload))
         elif isinstance(binding, NomBinding):
             bound.append((binding.name, payload))
-        elif isinstance(binding, (Pattern, TuplePattern)):
+        elif isinstance(binding, (Pattern, TuplePattern, OrPattern)):
             bound.extend(pattern_bindings(binding, payload, generic_enums, resolve))
     return bound
 

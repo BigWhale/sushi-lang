@@ -1598,7 +1598,7 @@ A match must have an arm for every value of its scrutinee. One checker reads eve
 
 **Message:** `duplicate match arm for variant '{variant}'`
 
-The same enum variant cannot be matched more than once.
+The same enum variant cannot be matched more than once. An alternative is an arm for this rule: `Color.Red | Color.Red`, and an alternative that names a variant an arm above already matches, are this error at that alternative.
 
 ### CE2044 {#ce2044}
 
@@ -1808,7 +1808,7 @@ A match on an integer or a string scrutinee cannot list every value, so it must 
 
 **Message:** `duplicate literal match arm: value {value} is already matched by arm '{first}'`
 
-Two literal arms match the same VALUE. For an integer, the radix does not change the value: 0x2a and 42 are the same arm. For a string, the quotes do not change the value, and the value is read after escape processing: "a" and 'a' are the same arm, and "\t" and a literal tab are the same arm. The `{value}` slot prints a string value with its quotes. The second arm is unreachable.
+Two literal arms match the same VALUE. For an integer, the radix does not change the value: 0x2a and 42 are the same arm. For a string, the quotes do not change the value, and the value is read after escape processing: "a" and 'a' are the same arm, and "\t" and a literal tab are the same arm. The `{value}` slot prints a string value with its quotes. The second arm is unreachable. An alternative is an arm for this rule: `"a" | 'a'` in one arm, and `2 | 0x1` after an arm `1`, are this error at the second alternative, in a nested list of alternatives too (`Maybe.Some(1 | 1)`).
 
 ### CE2076 {#ce2076}
 
@@ -2154,7 +2154,7 @@ Only a tuple destructures: `let (a, b) = t` splits a tuple value into its elemen
 
 **Message:** `unreachable match arm '{pattern}': the arms above it match every value it matches`
 
-A match tries its arms in order, and an arm runs only for a value that no arm above it matches. When the arms above match every value that this arm matches, the arm can never run: `(_, _) -> ...` before `(Color.Red, _) -> ...`, or `Maybe.Some(c) -> ...` before `Maybe.Some(Color.Red) -> ...`. Such an arm is dead code, and dead code is an error in Sushi, as a statement after a `return` is. The note at each covering arm names the arms that match those values first; the arms together can cover it, as `(Color.Red, _)` and `(Color.Green, _)` cover `(_, Color.Red)`. Remove the arm, or move it above the arms that cover it. One checker reads every match: an enum match, a nested enum match, an integer match and a tuple match (see [the tuple design](design/tuples.md)). Where another code names the fault, that code is the one diagnostic for the arm: a second arm for the same enum variant is [CE2041](#ce2041), a `_` arm that is not the last arm is [CE2041](#ce2041) (and the arms after it get no second error), and a second literal arm for the same value is [CE2075](#ce2075).
+A match tries its arms in order, and an arm runs only for a value that no arm above it matches. When the arms above match every value that this arm matches, the arm can never run: `(_, _) -> ...` before `(Color.Red, _) -> ...`, or `Maybe.Some(c) -> ...` before `Maybe.Some(Color.Red) -> ...`. Such an arm is dead code, and dead code is an error in Sushi, as a statement after a `return` is. The note at each covering arm names the arms that match those values first; the arms together can cover it, as `(Color.Red, _)` and `(Color.Green, _)` cover `(_, Color.Red)`. Remove the arm, or move it above the arms that cover it. One checker reads every match: an enum match, a nested enum match, an integer match and a tuple match (see [the tuple design](design/tuples.md)). Where another code names the fault, that code is the one diagnostic for the arm: a second arm for the same enum variant is [CE2041](#ce2041), a `_` arm that is not the last arm is [CE2041](#ce2041) (and the arms after it get no second error), and a second literal arm for the same value is [CE2075](#ce2075). An alternative of an arm (`Maybe.Some(1) | Maybe.None -> ...`) takes the same rule, with the error at that alternative: it can never match when the arms above and the earlier alternatives of the same list match every value it matches, as `2` after `_` in `1 | _ | 2`. When every alternative of an arm is dead, the error is once for the whole arm.
 
 ### CE2119 {#ce2119}
 
@@ -2221,6 +2221,14 @@ An extension target and a perk-implementation target can put a bound on a type p
 **Help:** `` to count down from {high} to {low}, write `({low}..={high}).rev()` ``
 
 A range always goes up: `a..b` yields a, a+1, ..., b-1 and is empty when a >= b; `a..=b` yields a to b and is empty when a > b. A countdown is written `(a..b).rev()`, which yields the same values, last first: `(1..=10).rev()` is 10 down to 1, and `(0..n).rev()` is n-1 down to 0 and empty when n is 0. This error is for a range whose two bounds the compiler can read and whose start is above its end, in a `foreach` iterable and in an array literal element (a constant and a fixed array included), with or without `.rev()`. The help gives the countdown that yields the values the bounds name: `10..0` is `(1..=10).rev()`, `10..=0` is `(0..=10).rev()`. A range with a computed bound gets no diagnostic: it is empty when it does not go up. Before this rule the values gave the direction, so `10..0` counted down. That made the empty case run backward when a bound was computed: the countdown `(n - 1)..=0` visited -1 and 0 when n was 0, where it must visit nothing. An inclusive range could never be empty. The countdown is `(0..n).rev()` now, and it is empty when n is 0. Rust, Kotlin and Python write the direction in the code, never in the data, and Sushi does the same. `3..3` in a `foreach` is legal and empty; in an array literal it is [CE2019](#ce2019), because it spells no slot.
+
+### CE2126 {#ce2126}
+
+**Error** · type
+
+**Message:** `alternative '{alternative}' binds differently from the first alternative: {detail}`
+
+The alternatives of a pattern (`Shape.Circle(r) | Shape.Ring(r) -> ...`) bind the same names, with the same types and the same modes (bare, `peek`, `poke`, `nom`), as in Rust and Python. The arm body reads one binding, whatever alternative matched, so a name that only one alternative binds has no value on the other path, a name with two types has no one type, and a name with two modes is a copy on one path and a reference or a take on the other. The `{detail}` slot names the first difference: a name that is not bound, a name the first alternative does not bind, a different type, or a different mode. The note is at the first alternative, which every other alternative is held to. A nested list of alternatives (`Maybe.Some(Shape.Circle(r) | Shape.Ring(r))`) takes the same rule. Write two arms when the alternatives must bind different things.
 
 ## CE24xx: Borrow and reference errors {#ce24xx}
 

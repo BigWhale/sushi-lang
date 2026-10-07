@@ -1,0 +1,81 @@
+# Each alternative of an arm binds the same names, with the same types. The arm body
+# reads one binding, whatever alternative matched. The names can stand at different
+# payload positions in each alternative. The owning payloads are built at run time, so
+# the leak check sees the heap.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "9\n16\n6\n0\n3\n4\n0\n0\n7\n8\n-2\n5\n4\n0\n2 two\n3 three\n"
+use <collections/strings>
+
+enum Shape:
+    Circle(i32)
+    Ring(i32)
+    Rect(i32, i32)
+    Dot
+
+enum Color:
+    Red
+    Green
+    Blue
+
+enum Label:
+    Short(string)
+    Long(string)
+    Blank
+
+enum Pair:
+    Ab(i32, string)
+    Ba(string, i32)
+
+fn area(Shape s) i32:
+    match s:
+        Shape.Circle(r) | Shape.Ring(r) -> return r * r
+        Shape.Rect(w, h) -> return w * h
+        Shape.Dot -> return 0
+
+fn width(Maybe@(Shape) m) i32:
+    match m:
+        Maybe.Some(Shape.Circle(r) | Shape.Ring(r)) -> return r
+        Maybe.Some(Shape.Rect(w, _)) -> return w
+        Maybe.Some(Shape.Dot) | Maybe.None -> return 0
+
+fn picked((Color, i32) p) i32:
+    match p:
+        (Color.Red, n) | (Color.Blue, n) -> return n
+        (Color.Green, n) -> return 0 - n
+
+fn size(Label l) i32:
+    match l:
+        Label.Short(s) | Label.Long(s) -> return s.len()
+        Label.Blank -> return 0
+
+fn show(Pair p) ~:
+    match p:
+        Pair.Ab(n, s) | Pair.Ba(s, n) -> println("{n} {s}")
+
+fn main() i32:
+    println(area(Shape.Circle(3)))
+    println(area(Shape.Ring(4)))
+    println(area(Shape.Rect(2, 3)))
+    println(area(Shape.Dot))
+    let Maybe@(Shape) a = Maybe.Some(Shape.Circle(3))
+    let Maybe@(Shape) b = Maybe.Some(Shape.Ring(4))
+    let Maybe@(Shape) c = Maybe.Some(Shape.Dot)
+    let Maybe@(Shape) d = Maybe.None()
+    println(width(a))
+    println(width(b))
+    println(width(c))
+    println(width(d))
+    println(picked((Color.Red, 7)))
+    println(picked((Color.Blue, 8)))
+    println(picked((Color.Green, 2)))
+    let string base = "abc"
+    let Label short = Label.Short("{base}de")
+    let Label long = Label.Long("{base}d")
+    println(size(short))
+    println(size(long))
+    println(size(Label.Blank))
+    show(Pair.Ab(2, "two"))
+    let string word = "thr"
+    show(Pair.Ba("{word}ee", 3))
+    return 0

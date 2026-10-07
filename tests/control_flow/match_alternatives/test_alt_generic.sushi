@@ -1,0 +1,23 @@
+# `|` alternatives with `nom` bindings in a generic function. Each instance binds the
+# payload type of its own type argument.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4\nright side\n9\n"
+
+enum Either@(T):
+    Left(T)
+    Right(T)
+
+fn pick@(T)(nom Either@(T) e) T:
+    match nom e:
+        Either.Left(nom v) | Either.Right(nom v) -> return v
+
+fn main() i32:
+    let Either@(i32) a = Either.Left(4)
+    println(pick(nom a))
+    let string side = "right"
+    let Either@(string) b = Either.Right("{side} side")
+    println(pick(nom b))
+    let Either@(i32) c = Either.Right(9)
+    println(pick(nom c))
+    return 0

@@ -2173,8 +2173,9 @@ value. The run-time check **[RE2023](error-catalog.md#re2023)** stays as a backs
 A match on an integer scrutinee or on a `string` scrutinee dispatches on literal arms. The
 same rules apply to the two kinds:
 
-- Each arm holds one literal.
-- Two arms with the same value are a duplicate arm (**[CE2075](error-catalog.md#ce2075)**).
+- An arm holds one literal, or several literals as `|` alternatives (`0 | 1 ->`, see
+  [Alternatives](#alternatives)).
+- Two arms, or two alternatives, with the same value are a duplicate arm (**[CE2075](error-catalog.md#ce2075)**).
 - The values cannot be listed, so the match must end with a `_` arm (**[CE2074](error-catalog.md#ce2074)**).
 - One match holds one arm kind. A string arm on an integer scrutinee, an integer arm on a
   `string` scrutinee, a literal arm on an enum scrutinee, and a string arm beside an
@@ -2184,9 +2185,7 @@ same rules apply to the two kinds:
   `Own(...)` pattern. The value at that position must be of the kind of the literal: an
   integer for an integer literal, a `string` for a string literal (**[CE2119](error-catalog.md#ce2119)**).
 
-Two forms are not patterns. A named constant (`GET ->`) is a parse error: write the
-literal. Several literals in one arm (`"get" | "fetch" ->`) are a parse error too: write
-one arm for each literal.
+A named constant (`GET ->`) is not a pattern. It is a parse error: write the literal.
 
 #### Integer Arms
 
@@ -2384,6 +2383,98 @@ fn main() i32:
         (0, 0) -> println("origin")
         (0, n) -> println("on the y axis at {n}")
         (_, _) -> println("elsewhere")
+    return 0
+```
+
+### Alternatives
+
+One arm can hold several patterns, with `|` between them. The arm runs when one of them
+matches. The alternatives are tried from left to right.
+
+```sushi
+use <net/error>
+
+enum Shape:
+    Circle(i32)
+    Ring(i32)
+    Square(i32)
+
+fn default_port(string scheme) i32:
+    match scheme:
+        "http" | "ws" -> return 80
+        "https" | 'wss' -> return 443
+        _ -> return 0
+
+fn is_space(u8 c) bool:
+    match c:
+        a' ' | a'\t' | a'\n' -> return true
+        _ -> return false
+
+fn retry(NetError e) bool:
+    match e:
+        NetError.AddressInUse | NetError.TimedOut -> return true
+        _ -> return false
+
+fn radius(Shape s) i32:
+    match s:
+        Shape.Circle(r) | Shape.Ring(r) -> return r
+        Shape.Square(_) -> return 0
+
+fn small(Maybe@(i32) m) bool:
+    match m:
+        Maybe.Some(1 | 2 | 3) -> return true
+        _ -> return false
+
+fn main() i32:
+    println(default_port("ws"))             # 80
+    println(is_space(a'\t'))                # true
+    println(retry(NetError.TimedOut))       # true
+    println(radius(Shape.Ring(4)))          # 4
+    let Maybe@(i32) two = Maybe.Some(2)
+    println(small(two))                     # true
+    return 0
+```
+
+- **Positions.** An alternative stands at the top of an arm and in every position inside
+  a pattern: an enum payload (`Maybe.Some(1 | 2)`), a tuple element
+  (`(Color.Red | Color.Blue, _)`) and an `Own(...)` pattern (`Own(1 | 2)`). Over a tuple
+  literal scrutinee, each alternative at the top of the arm is a whole tuple pattern:
+  `(Color.Red, 1) | (Color.Blue, 2) ->`.
+- **Bindings.** Each alternative binds the same names, with the same types and the same
+  mode (bare, `peek`, `poke` or `nom`), as in Rust and Python. The arm body reads one
+  binding, whatever alternative matched. A name that only some alternatives bind, a name
+  with two types and a name with two modes are **[CE2126](error-catalog.md#ce2126)**, at
+  the alternative that differs, with a note at the first alternative. Write two arms when
+  the alternatives must bind different things. A `poke` binding writes through to the
+  scrutinee, and a `nom` binding takes the payload, whatever alternative matched.
+- **Exhaustiveness.** The checker reads each alternative as a pattern of its own, so the
+  alternatives can cover an enum with no `_` arm. An alternative that can never match is
+  **[CE2118](error-catalog.md#ce2118)**, at that alternative: the arms above it and the
+  earlier alternatives of the same list match every value it matches, as `2` in
+  `1 | _ | 2`. `_` is a legal alternative, and it matches every value.
+- **Duplicates.** Two alternatives with the same value (`"a" | 'a'`, `1 | 0x1`), in one
+  arm or in two arms, are **[CE2075](error-catalog.md#ce2075)**. An alternative that names
+  an enum variant a second time (`Color.Red | Color.Red`, or a variant that an arm above
+  matches) is **[CE2041](error-catalog.md#ce2041)**.
+- **No mix.** Each alternative follows the arm-kind rule of the scrutinee, so a literal
+  alternative and an enum alternative never stand in one match
+  (**[CE2076](error-catalog.md#ce2076)**, **[CE2119](error-catalog.md#ce2119)**).
+- **`||` is not two alternatives.** The lexer reads `||` as the logical operator, so
+  `1||2` is a parse error (**[CE6001](error-catalog.md#ce6001)**) with the help
+  `put a space: '1 | 2'`. `or` is not an alternative either.
+
+<!-- docs-sweep: error CE2126 -->
+```sushi
+enum Shape:
+    Circle(i32)
+    Ring(i32)
+
+fn radius(Shape s) i32:
+    match s:
+        Shape.Circle(r) | Shape.Ring(_) -> return r     # ERROR CE2126: 'r' is not bound here
+
+fn main() i32:
+    println(radius(Shape.Circle(2)))
     return 0
 ```
 

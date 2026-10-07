@@ -1,0 +1,18 @@
+# The second alternative does not bind 'r', so the arm body has no 'r' to read when
+# that alternative matches. Each alternative binds the same names.
+# EXPECT_ERROR_CODES_EXACT: CE2126
+# EXPECT_STDERR_CONTAINS: "the first alternative"
+
+enum Shape:
+    Circle(i32)
+    Ring(i32)
+    Dot
+
+fn area(Shape s) i32:
+    match s:
+        Shape.Circle(r) | Shape.Ring(_) -> return r * r
+        Shape.Dot -> return 0
+
+fn main() i32:
+    println(area(Shape.Circle(2)))
+    return 0

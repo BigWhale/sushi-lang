@@ -20,7 +20,7 @@ TERMINAL_NAMES = {
     "LPAR": "'('", "RPAR": "')'", "LSQB": "'['", "RSQB": "']'",
     "COLON": "':'", "COMMA": "','", "DOT": "'.'", "EQUAL": "'='",
     "_NEWLINE": "a newline", "_INDENT": "an indented block", "_DEDENT": "a dedent",
-    "NAME": "a name", "INT": "an integer", "STRING": "a string",
+    "NAME": "a name", "INT": "an integer", "STRING": "a string", "BIT_OR": "'|'",
     "$END": "end of file",
 }
 

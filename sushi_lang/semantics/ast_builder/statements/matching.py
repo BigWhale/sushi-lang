@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List, Union
 from lark import Tree, Token
 from sushi_lang.semantics.ast import (
     Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
-    NomBinding, PatternItem, RefBinding, TuplePattern,
+    NomBinding, OrPattern, PatternItem, RefBinding, TuplePattern,
 )
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice, expect, unhandled
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import EXPR_NODES
@@ -42,25 +42,39 @@ def parse_match_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Match:
                  loc=span_of(node))
 
 
+_ARM_PATTERNS = ("pattern", "literal_pattern", "neg_literal_pattern", "wildcard_pattern",
+                 "tuple_pattern")
+
+
+def _read_arm_pattern(t: Tree, ast_builder: 'ASTBuilder'
+                      ) -> Union[Pattern, LiteralPattern, WildcardPattern, TuplePattern]:
+    """Read one top-level pattern of an arm: the whole pattern, or one alternative."""
+    if t.data == "tuple_pattern":
+        return parse_tuple_pattern(t, ast_builder, nested=False)
+    if t.data == "pattern":
+        return parse_pattern(t, ast_builder)
+    if t.data in ("literal_pattern", "neg_literal_pattern"):
+        return parse_literal_pattern(t, ast_builder)
+    if t.data == "wildcard_pattern":
+        return WildcardPattern(loc=span_of(t))
+    unhandled(t)
+
+
 def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
-    """Parse match_arm: (pattern | wildcard_pattern) "->" (expr _NEWLINE | block)"""
+    """Parse match_arm: a pattern, or `|` alternatives of patterns, "->" and a body."""
     t = expect(t, "match_arm")
 
-    pattern: Union[Pattern, LiteralPattern, WildcardPattern, TuplePattern]
-    pattern_tree = first_tree(t.children, "pattern")
-    literal_tree = (first_tree(t.children, "literal_pattern")
-                    or first_tree(t.children, "neg_literal_pattern"))
-    wildcard_tree = first_tree(t.children, "wildcard_pattern")
-    tuple_tree = first_tree(t.children, "tuple_pattern")
-
-    if tuple_tree is not None:
-        pattern = parse_tuple_pattern(tuple_tree, ast_builder, nested=False)
+    pattern: Union[Pattern, LiteralPattern, WildcardPattern, TuplePattern, OrPattern]
+    alternatives_tree = first_tree(t.children, "arm_alternatives")
+    pattern_tree = next((c for c in t.children
+                         if isinstance(c, Tree) and c.data in _ARM_PATTERNS), None)
+    if alternatives_tree is not None:
+        alternatives: List[Union[PatternItem, WildcardPattern]] = [
+            _read_arm_pattern(c, ast_builder)
+            for c in alternatives_tree.children if isinstance(c, Tree)]
+        pattern = OrPattern(alternatives=alternatives, loc=span_of(alternatives_tree))
     elif pattern_tree is not None:
-        pattern = parse_pattern(pattern_tree, ast_builder)
-    elif literal_tree is not None:
-        pattern = parse_literal_pattern(literal_tree, ast_builder)
-    elif wildcard_tree is not None:
-        pattern = WildcardPattern(loc=span_of(wildcard_tree))
+        pattern = _read_arm_pattern(pattern_tree, ast_builder)
     else:
         ice(t, "missing pattern")
 
@@ -209,7 +223,22 @@ def _read_list_item(child: Tree, owner: Tree, ast_builder: 'ASTBuilder', nested:
         return NomBinding(name=str(name_tok.value), loc=span_of(child))
     if child.data == "pattern_item":
         return _read_pattern_item(child, ast_builder, tuple_nested=tuple_nested)
+    if child.data == "item_alternatives":
+        return _read_alternatives(child, owner, ast_builder, nested, tuple_nested)
     ice(child, "invalid pattern list child")
+
+
+def _read_alternatives(child: Tree, owner: Tree, ast_builder: 'ASTBuilder', nested: bool,
+                       tuple_nested: bool) -> OrPattern:
+    """Read `|` alternatives in one position: `Maybe.Some(1 | 2)`.
+
+    Each alternative is read as the position itself would be, so the CE2424 rule for a
+    reference binding holds for each one.
+    """
+    alternatives: List[Union[PatternItem, WildcardPattern]] = [
+        _read_list_item(alt, owner, ast_builder, nested, tuple_nested)
+        for alt in child.children if isinstance(alt, Tree)]
+    return OrPattern(alternatives=alternatives, loc=span_of(child))
 
 
 def parse_tuple_pattern(t: Tree, ast_builder: 'ASTBuilder', nested: bool) -> TuplePattern:
@@ -297,6 +326,13 @@ def parse_own_pattern(t: Tree, ast_builder: 'ASTBuilder') -> 'OwnPattern':
             _take_from_own(span_of(nom_tree)),
             OwnPattern(inner_pattern=str(nom_name_tok.value), loc=span_of(t)))
 
+    alternatives_tree = first_tree(t.children, "item_alternatives")
+    if alternatives_tree is not None:
+        inner_alternatives = _read_alternatives(alternatives_tree, t, ast_builder,
+                                                nested=True, tuple_nested=True)
+        _refuse_takes_inside_own(inner_alternatives, ast_builder)
+        return OwnPattern(inner_pattern=inner_alternatives, loc=span_of(t))
+
     pattern_item_tree = first_tree(t.children, "pattern_item")
     if pattern_item_tree is None:
         ice(t, "own_pattern must contain a pattern_item")
@@ -315,16 +351,22 @@ def _take_from_own(span) -> SyntaxDiagnostic:
                   "the payload that holds it"))
 
 
-def _refuse_takes_inside_own(pattern: 'Pattern | TuplePattern',
+def _refuse_takes_inside_own(pattern: 'Pattern | TuplePattern | OrPattern',
                              ast_builder: 'ASTBuilder') -> None:
     """Refuse each `nom` binding nested in an `Own(...)` pattern, and bind it by value.
 
     A nested `Own(...)` refused its own inner pattern when it was built, so the walk
     stops there.
     """
-    items = pattern.bindings if isinstance(pattern, Pattern) else pattern.elements
+    items: list
+    if isinstance(pattern, Pattern):
+        items = pattern.bindings
+    elif isinstance(pattern, TuplePattern):
+        items = pattern.elements
+    else:
+        items = pattern.alternatives
     for index, binding in enumerate(items):
         if isinstance(binding, NomBinding):
             items[index] = ast_builder.recover(_take_from_own(binding.loc), binding.name)
-        elif isinstance(binding, (Pattern, TuplePattern)):
+        elif isinstance(binding, (Pattern, TuplePattern, OrPattern)):
             _refuse_takes_inside_own(binding, ast_builder)

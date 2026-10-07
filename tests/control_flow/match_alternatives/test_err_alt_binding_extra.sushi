@@ -1,0 +1,17 @@
+# The second alternative binds 'r', and the first alternative does not. Each
+# alternative binds the same names.
+# EXPECT_ERROR_CODES_EXACT: CE2126
+
+enum Shape:
+    Circle(i32)
+    Ring(i32)
+    Dot
+
+fn area(Shape s) i32:
+    match s:
+        Shape.Circle(_) | Shape.Ring(r) -> return 1
+        Shape.Dot -> return 0
+
+fn main() i32:
+    println(area(Shape.Circle(2)))
+    return 0

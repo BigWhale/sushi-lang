@@ -1,0 +1,15 @@
+# 'x' is an i32 in the first alternative and an f64 in the second. The arm body reads
+# one binding, so its type cannot change with the alternative that matched.
+# EXPECT_ERROR_CODES_EXACT: CE2126
+
+enum Value:
+    Int(i32)
+    Float(f64)
+
+fn show(Value v) ~:
+    match v:
+        Value.Int(x) | Value.Float(x) -> println("{x}")
+
+fn main() i32:
+    show(Value.Int(2))
+    return 0

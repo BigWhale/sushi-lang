@@ -1,0 +1,19 @@
+# 'r' is a poke binding in the first alternative and a bare binding in the second. A
+# write through 'r' would reach the scrutinee on one path and a copy on the other, so
+# the mode is part of the rule.
+# EXPECT_ERROR_CODES_EXACT: CE2126
+
+enum Shape:
+    Circle(i32)
+    Ring(i32)
+    Dot
+
+fn grow(poke Shape s) ~:
+    match s:
+        Shape.Circle(poke r) | Shape.Ring(r) -> println(r)
+        Shape.Dot -> println(0)
+
+fn main() i32:
+    let Shape s = Shape.Circle(2)
+    grow(poke s)
+    return 0

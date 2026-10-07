@@ -319,6 +319,38 @@ after it get no [CE2118](../error-catalog.md#ce2118)), and a second literal arm 
 with an error in its pattern stops the checker for that match: its coverage is not known,
 and a second report would only repeat the first fault.
 
+**`|` alternatives: the or-expansion.** An `OrPattern` (`1 | 2`, `Shape.Circle(r) |
+Shape.Ring(r)`) stands at the top of an arm and in every pattern position. In the matrix it
+is a third kind of position, `Or(alts)`, beside `WILD` and a constructor. The algorithm
+takes it by the standard expansion: a row whose first position is an `Or` is one row for
+each alternative (`PatternMatrix._expand`, before every specialization), and a vector whose
+first position is an `Or` is useful when one of its alternatives is useful. `intersects`
+answers for an `Or` when one of its alternatives intersects. So an enum is covered through
+alternatives with no `_` arm, and a witness never holds an `Or`.
+
+A dead alternative is found per alternative, not per arm. For an arm that is useful as a
+whole, alternative i of each `Or` in its row is dead when the row with that alternative in
+the place of its `Or` is not useful against the rows above AND the rows that put the
+earlier alternatives 0..i-1 of the same `Or` there (`_dead_alternatives`). The walk goes
+into a live alternative only, so a nested `Or` inside a dead alternative is not reported a
+second time. Each dead alternative is one [CE2118](../error-catalog.md#ce2118) at its own span, with a note at each arm
+above and at each earlier alternative that shares a value with it. An arm that is dead as
+a whole is one [CE2118](../error-catalog.md#ce2118) at the arm. The labels that map an alternative back to its span
+ride on the `Or` and take no part in the comparison. The older rules keep their place: an
+alternative that repeats a literal value is [CE2075](../error-catalog.md#ce2075), in one arm or across arms, and one that
+repeats an enum variant is [CE2041](../error-catalog.md#ce2041); the repeat gets no place in the row, so
+[CE2118](../error-catalog.md#ce2118) does not speak again.
+
+The bindings of an `OrPattern` are the bindings of its first alternative, and every other
+alternative binds the same names with the same types and modes (**[CE2126](../error-catalog.md#ce2126)**). The backend
+tests the alternatives in order: a failed alternative goes to the test of the next one, the
+last one to the arm's failure target. A binding has a value on each path, so it is not one
+SSA value: each name gets one slot in the entry block, each alternative stores its value
+(the address, for a `peek` / `poke` binding) there, and the binding reads the slot at the
+join. An integer match adds one switch case for each literal alternative. An enum match
+with an `OrPattern` at the top of an arm takes the sequential path, because one arm then
+stands for several tags.
+
 Before ruling 17 the checker compared only the outer variant names, so a nested match that
 did not cover a value compiled and stopped at run time with [RE2023](../error-catalog.md#re2023). It is a compile error
 now.

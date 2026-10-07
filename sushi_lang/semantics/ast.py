@@ -691,7 +691,7 @@ class NomBinding(Node):
 @dataclass(slots=True)
 class OwnPattern(Node):
     """Own(inner_pattern) - auto-unwrap Own<T> in pattern matching."""
-    inner_pattern: Union[str, 'Pattern', 'TuplePattern', 'LiteralPattern']
+    inner_pattern: Union[str, 'Pattern', 'TuplePattern', 'LiteralPattern', 'OrPattern']
     inner_borrow: Optional[str] = None    # None | "peek" | "poke"
     inner_borrow_span: Optional[Span] = None
 
@@ -706,28 +706,54 @@ class TuplePattern(Node):
     elements: List['PatternItem']
 
 
+@dataclass(slots=True)
+class OrPattern(Node):
+    """`|` alternatives: `0 | 1 | 2`, `Shape.Circle(r) | Shape.Ring(r)`, `Maybe.Some(1 | 2)`.
+
+    It stands at the top of an arm and in every position of a pattern. It always holds two
+    or more alternatives: the AST builder makes no OrPattern for one. Each alternative binds
+    the same names with the same types and modes (CE2126), so the bindings of the FIRST
+    alternative are the bindings of the whole pattern.
+    """
+    alternatives: List[Union['PatternItem', WildcardPattern]]
+
+
 # One position of a pattern: a binding (a name, `_`, `poke x`, `nom x`), an enum pattern,
-# an integer literal, a tuple pattern, or an `Own(...)` pattern.
+# an integer literal, a tuple pattern, an `Own(...)` pattern, or `|` alternatives of these.
 PatternItem = Union[str, Pattern, OwnPattern, RefBinding, NomBinding, LiteralPattern,
-                    TuplePattern]
+                    TuplePattern, OrPattern]
 
 
-def pattern_bindings(item: object, parent: "Optional[Node]" = None):
+def alternatives_of(item: object) -> list:
+    """The alternatives of a pattern item: its own list for `|` alternatives, else itself."""
+    if isinstance(item, OrPattern):
+        return list(item.alternatives)
+    return [item]
+
+
+def pattern_bindings(item: object, parent: "Optional[Node]" = None,
+                     every_alternative: bool = False):
     """(name, owner, span) for each name that a pattern item binds, in source order.
 
     The owner is the pattern node that holds the binding (a written-binder key); the span
-    is the binding's own span, or the owner's span for a bare name.
+    is the binding's own span, or the owner's span for a bare name. `|` alternatives bind
+    what their first alternative binds (CE2126 holds the others to it);
+    `every_alternative` walks each alternative instead.
     """
-    if isinstance(item, (Pattern, TuplePattern)):
+    if isinstance(item, OrPattern):
+        for alternative in (item.alternatives if every_alternative
+                            else item.alternatives[:1]):
+            yield from pattern_bindings(alternative, parent, every_alternative)
+    elif isinstance(item, (Pattern, TuplePattern)):
         for sub in (item.bindings if isinstance(item, Pattern) else item.elements):
-            yield from pattern_bindings(sub, item)
+            yield from pattern_bindings(sub, item, every_alternative)
     elif isinstance(item, OwnPattern):
         inner = item.inner_pattern
         if isinstance(inner, str):
             if inner != "_":
                 yield inner, item, item.loc or (parent.loc if parent else None)
         else:
-            yield from pattern_bindings(inner, item)
+            yield from pattern_bindings(inner, item, every_alternative)
     elif isinstance(item, str):
         if item != "_" and parent is not None:
             yield item, parent, parent.loc
@@ -757,6 +783,8 @@ def pattern_source(item: object) -> str:
         return f"nom {item.name}"
     if isinstance(item, LiteralPattern):
         return item.display
+    if isinstance(item, OrPattern):
+        return " | ".join(pattern_source(alt) for alt in item.alternatives)
     if isinstance(item, str):
         return item
     return "_"
@@ -764,7 +792,7 @@ def pattern_source(item: object) -> str:
 @dataclass(slots=True)
 class MatchArm(Node):
     """Single arm in a match statement/expression"""
-    pattern: Union[Pattern, LiteralPattern, WildcardPattern, TuplePattern]
+    pattern: Union[Pattern, LiteralPattern, WildcardPattern, TuplePattern, OrPattern]
     body: Union["Expr", "Block"]
 
 @dataclass(slots=True)
@@ -1156,7 +1184,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 __all__ = [
     "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "ExternalVar", "Block", "Param",
-    "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "TuplePattern", "Break", "Continue",
+    "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "TuplePattern", "OrPattern", "alternatives_of", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda", "TupleLiteral", "DestructureTarget", "destructure_binders",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",

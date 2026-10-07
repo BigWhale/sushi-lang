@@ -1,0 +1,22 @@
+# `|` alternatives in a `u8` match: byte literals and hex literals in one arm.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "word\nword\ndigit\ndigit\ndigit\nspace\nspace\nspace\nother\n"
+
+fn kind(u8 c) string:
+    match c:
+        a'a' | a'_' -> return "word"
+        a'0' | a'1' | 0x32 -> return "digit"
+        a'\n' | a'\t' | 0x20 -> return "space"
+        _ -> return "other"
+
+fn main() i32:
+    println(kind(a'a'))
+    println(kind(a'_'))
+    println(kind(a'0'))
+    println(kind(a'1'))
+    println(kind(a'2'))
+    println(kind(a'\n'))
+    println(kind(a'\t'))
+    println(kind(a' '))
+    println(kind(a'z'))
+    return 0

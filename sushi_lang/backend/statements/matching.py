@@ -2,6 +2,7 @@
 from __future__ import annotations
 import itertools
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING, Callable, Optional
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils, gep_utils
@@ -30,11 +31,15 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
 
     # A tuple match and a string match have no tag to switch on: each arm tests its
     # pattern in order. The stamp is read BEFORE the scrutinee is emitted, because a
-    # tuple-literal scrutinee builds no tuple (ruling 3 of the tuple design).
+    # tuple-literal scrutinee builds no tuple (ruling 3 of the tuple design). An enum match
+    # with `|` alternatives at the top of an arm tests in order too: one arm then stands
+    # for several tags.
+    from sushi_lang.semantics.ast import OrPattern
     from sushi_lang.semantics.generics.tuples import is_tuple_type
     from sushi_lang.semantics.typesys import BuiltinType
     if (is_tuple_type(stmt.resolved_scrutinee_type)
-            or stmt.resolved_scrutinee_type == BuiltinType.STRING):
+            or stmt.resolved_scrutinee_type == BuiltinType.STRING
+            or any(isinstance(arm.pattern, OrPattern) for arm in stmt.arms)):
         _emit_sequential_match(codegen, stmt)
         return
 
@@ -96,13 +101,14 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
 def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     """Emit a match on an integer scrutinee (#415): one LLVM switch on the value.
 
-    The typecheck pass guarantees the shape: every arm is a LiteralPattern except a trailing
-    wildcard, which becomes the switch default. Integers are plain values, so
-    there is no temp-scrutinee ownership and no binding extraction; the shared
+    The typecheck pass guarantees the shape: every arm is a LiteralPattern, or `|`
+    alternatives of them, except a trailing wildcard, which becomes the switch default.
+    Each literal alternative is one case of its arm. Integers are plain values, so there
+    is no temp-scrutinee ownership and no binding extraction; the shared
     `_emit_match_arms` skips both for non-Pattern arms.
     """
     from llvmlite import ir
-    from sushi_lang.semantics.ast import LiteralPattern
+    from sushi_lang.semantics.ast import LiteralPattern, alternatives_of
 
     scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
 
@@ -114,9 +120,10 @@ def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     switch, unreachable_bb = _create_switch_instruction(codegen, scrutinee_value, wildcard_bb)
 
     for arm, arm_bb in zip(stmt.arms, arm_blocks, strict=True):
-        if isinstance(arm.pattern, LiteralPattern):
-            case_value = ir.Constant(scrutinee_value.type, arm.pattern.value)
-            switch.add_case(case_value, arm_bb)
+        for alternative in alternatives_of(arm.pattern):
+            if isinstance(alternative, LiteralPattern):
+                case_value = ir.Constant(scrutinee_value.type, alternative.value)
+                switch.add_case(case_value, arm_bb)
 
     end_reached = _emit_match_arms(codegen, stmt, arm_blocks, None, end_bb)
 
@@ -140,6 +147,8 @@ def _emit_sequential_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     from sushi_lang.semantics.generics.tuples import tuple_elements
 
     scrutinee_type = stmt.resolved_scrutinee_type
+    if scrutinee_type is None:
+        raise_internal_error("CE0121", pattern=_first_arm_pattern(stmt))
     patterns = [arm.pattern for arm in stmt.arms]
     scope = _MatchScope()
     roots: list[_Root] = []
@@ -150,7 +159,7 @@ def _emit_sequential_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
         for index, (element, value, element_type) in enumerate(
                 zip(stmt.scrutinee.elements, values, element_types, strict=True)):
             value = _consume_if_handed_over(codegen, stmt, element, value, element_type)
-            items = [_element_item(pattern, index) for pattern in patterns]
+            items = [item for pattern in patterns for item in _element_items(pattern, index)]
             slot = _own_scrutinee(codegen, stmt, element, value, element_type, items, scope)
             roots.append(_Root(element, value, element_type, slot))
     else:
@@ -169,12 +178,9 @@ def _emit_sequential_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     for index, (arm, arm_bb) in enumerate(zip(stmt.arms, arm_blocks, strict=True)):
         codegen.builder.position_at_end(arm_bb)
         codegen.memory.push_scope()
-        if len(roots) == 1:
-            positions = [(arm.pattern, roots[0])]
-        else:
-            positions = [(_element_item(arm.pattern, i), root) for i, root in enumerate(roots)]
         next_bb = arm_blocks[index + 1] if index + 1 < len(arm_blocks) else None
-        _extract_pattern_bindings(codegen, positions, _failure_target(codegen, arm, next_bb))
+        _extract_pattern_bindings(codegen, arm.pattern, roots,
+                                  _failure_target(codegen, arm, next_bb))
         end_reached = _emit_arm_body(codegen, arm, end_bb) or end_reached
 
     close_merge_block(codegen, end_bb, end_reached)
@@ -187,6 +193,17 @@ def _element_item(pattern: object, index: int) -> object:
     if isinstance(pattern, TuplePattern):
         return pattern.elements[index]
     return "_"
+
+
+def _element_items(pattern: object, index: int) -> list:
+    """The items that read element `index`, one for each top-level alternative."""
+    from sushi_lang.semantics.ast import alternatives_of
+    return [_element_item(alternative, index) for alternative in alternatives_of(pattern)]
+
+
+def _root_items(pattern: object, index: int, count: int) -> list:
+    """The items of an arm's pattern that read root `index` of `count` roots."""
+    return [pattern] if count == 1 else _element_items(pattern, index)
 
 
 def _consume_if_handed_over(codegen: 'LLVMCodegen', stmt: 'Match', scrutinee: 'Expr',
@@ -250,26 +267,32 @@ class _Root:
 
 def _pattern_takes(item: object) -> bool:
     """Does this pattern item, at any depth, take a value out of the scrutinee?"""
-    from sushi_lang.semantics.ast import NomBinding, Pattern, TuplePattern
-    if isinstance(item, NomBinding):
-        return True
-    if isinstance(item, Pattern):
-        return any(_pattern_takes(b) for b in item.bindings)
-    if isinstance(item, TuplePattern):
-        return any(_pattern_takes(e) for e in item.elements)
-    return False
+    from sushi_lang.semantics.ast import NomBinding
+    return any(isinstance(leaf, NomBinding) for leaf in _sub_patterns(item))
 
 
 def _pattern_binds_a_reference(item: object) -> bool:
     """Does this pattern item bind a `peek` / `poke` reference into the scrutinee?"""
-    from sushi_lang.semantics.ast import Pattern, RefBinding, TuplePattern
-    if isinstance(item, RefBinding):
-        return True
+    from sushi_lang.semantics.ast import RefBinding
+    return any(isinstance(leaf, RefBinding) for leaf in _sub_patterns(item))
+
+
+def _sub_patterns(item: object):
+    """The item and every item inside it, through enum payloads, tuple elements and `|`
+    alternatives. An `Own(...)` pattern reads a heap cell and not the scrutinee, so the
+    walk stops there."""
+    from sushi_lang.semantics.ast import OrPattern, Pattern, TuplePattern
+    yield item
     if isinstance(item, Pattern):
-        return any(_pattern_binds_a_reference(b) for b in item.bindings)
-    if isinstance(item, TuplePattern):
-        return any(_pattern_binds_a_reference(e) for e in item.elements)
-    return False
+        children = item.bindings
+    elif isinstance(item, TuplePattern):
+        children = item.elements
+    elif isinstance(item, OrPattern):
+        children = item.alternatives
+    else:
+        return
+    for child in children:
+        yield from _sub_patterns(child)
 
 
 def _own_scrutinee(codegen: 'LLVMCodegen', stmt: 'Match', scrutinee: 'Expr',
@@ -321,11 +344,12 @@ def _first_arm_pattern(stmt: 'Match') -> str:
 
 
 def _find_wildcard_block(stmt: 'Match', arm_blocks: list['ir.Block']) -> 'ir.Block | None':
-    """Find the block corresponding to a wildcard pattern, if any."""
-    from sushi_lang.semantics.ast import WildcardPattern
+    """Find the block of the arm that takes every value: `_`, or `|` alternatives with `_`."""
+    from sushi_lang.semantics.ast import WildcardPattern, alternatives_of
 
     for i, arm in enumerate(stmt.arms):
-        if isinstance(arm.pattern, WildcardPattern):
+        if any(isinstance(alternative, WildcardPattern)
+               for alternative in alternatives_of(arm.pattern)):
             return arm_blocks[i]
     return None
 
@@ -409,7 +433,7 @@ def _emit_match_arms(
             # to the next arm of the same tag.
             next_arm_bb = _find_next_arm_with_same_tag(codegen, stmt, arm_blocks,
                                                        root.semantic_type, i)
-            _extract_pattern_bindings(codegen, [(arm.pattern, root)],
+            _extract_pattern_bindings(codegen, arm.pattern, [root],
                                       _failure_target(codegen, arm, next_arm_bb),
                                       tag_known=True)
 
@@ -496,31 +520,134 @@ def _root_address(codegen: 'LLVMCodegen', root: _Root) -> Callable[[], 'ir.Value
     return address
 
 
-def _extract_pattern_bindings(codegen: 'LLVMCodegen', positions: list,
+def _extract_pattern_bindings(codegen: 'LLVMCodegen', pattern: object, roots: list[_Root],
                               on_fail: Callable[[], 'ir.Block'],
                               tag_known: bool = False) -> None:
-    """Test each pattern item against its root, then bind, in that order.
+    """Test an arm's pattern against its roots, then bind, in that order.
 
-    Every test comes first, so a failed test leaves the arm before anything is bound or
-    taken. Then an arm that TAKES a value clears its root's drop flag (ruling R11): the
-    free at match.end reads that flag, and only this path stores 0 into it. Then the
-    bindings are made. `tag_known` says the switch already tested the outer tag.
+    One root is the whole scrutinee. Several roots are the elements of a tuple-literal
+    scrutinee, and each element of a tuple pattern reads its own root. Every test comes
+    first, so a failed test leaves the arm before anything is bound or taken. Then an arm
+    that TAKES a value clears its root's drop flag (ruling R11): the free at match.end
+    reads that flag, and only this path stores 0 into it. Then the bindings are made.
+    `tag_known` says the switch already tested the outer tag.
     """
     from sushi_lang.backend.destructors import resolve_named_type
 
+    positions = [_Position(root.value, resolve_named_type(codegen, root.semantic_type),
+                           _root_address(codegen, root)) for root in roots]
     binds: list[_Bind] = []
-    for item, root in positions:
-        position = _Position(root.value, resolve_named_type(codegen, root.semantic_type),
-                             _root_address(codegen, root))
-        _test_item(codegen, item, position, on_fail, binds, tag_known=tag_known)
+    _test_roots(codegen, pattern, positions, on_fail, binds, tag_known)
 
-    for item, root in positions:
-        if root.storage.name is not None and _pattern_takes(item):
+    for index, root in enumerate(roots):
+        if root.storage.name is not None and any(
+                _pattern_takes(item) for item in _root_items(pattern, index, len(roots))):
             from sushi_lang.backend.ownership import relinquish_temp
             relinquish_temp(codegen, root.storage.name)
 
     for bind in binds:
         _make_binding(codegen, bind)
+
+
+def _test_roots(codegen: 'LLVMCodegen', pattern: object, positions: list[_Position],
+                on_fail: Callable[[], 'ir.Block'], binds: list,
+                tag_known: bool = False) -> None:
+    """Emit the tests of an arm's pattern over its roots, and collect its bindings."""
+    from sushi_lang.semantics.ast import OrPattern
+
+    if len(positions) == 1:
+        _test_item(codegen, pattern, positions[0], on_fail, binds, tag_known=tag_known)
+    elif isinstance(pattern, OrPattern):
+        _test_alternatives(codegen, [
+            partial(_test_roots, codegen, alternative, positions)
+            for alternative in pattern.alternatives], on_fail, binds)
+    else:
+        for index, position in enumerate(positions):
+            _test_item(codegen, _element_item(pattern, index), position, on_fail, binds)
+
+
+def _test_alternatives(codegen: 'LLVMCodegen',
+                       tests: list[Callable[[Callable[[], 'ir.Block'], list], None]],
+                       on_fail: Callable[[], 'ir.Block'], binds: list) -> None:
+    """`|` alternatives: test each one in order, until one matches.
+
+    A failed alternative goes to the test of the next one, and the last one to `on_fail`.
+    Each alternative that matches goes to one join block. A binding has a value on each
+    path, so it cannot be one SSA value at the join: each name gets ONE slot in the entry
+    block, each alternative stores its value (or, for a reference, its address) there,
+    and the binding reads the slot at the join. Every alternative binds the same names
+    with the same types and modes (CE2126), so the first one's bindings are the arm's.
+    """
+    builder, func = require_both_initialized(codegen)
+    joined = func.append_basic_block(name="match.alt_ok")
+    slots: dict[str, 'ir.AllocaInstr'] = {}
+    first: Optional[list[_Bind]] = None
+    for index, test in enumerate(tests):
+        next_bb = (func.append_basic_block(name="match.alt")
+                   if index + 1 < len(tests) else None)
+        found: list[_Bind] = []
+        test(on_fail if next_bb is None else partial(_same_block, next_bb), found)
+        for bind in found:
+            _park_binding(codegen, bind, slots)
+        if first is None:
+            first = found
+        builder.branch(joined)
+        if next_bb is not None:
+            builder.position_at_end(next_bb)
+    builder.position_at_end(joined)
+    binds.extend(_unpark_binding(codegen, bind, slots[bind.name]) for bind in first or [])
+
+
+def _same_block(block: 'ir.Block') -> 'ir.Block':
+    """A failure target that is a block made already: the next alternative's test."""
+    return block
+
+
+def _same_value(value: 'ir.Value') -> 'ir.Value':
+    """The address of a reference binding made at the join: the pointer it loaded."""
+    return value
+
+
+def _parked_value(codegen: 'LLVMCodegen', bind: _Bind) -> 'ir.Value':
+    """What an alternative stores for a binding: the address for a reference, else the value."""
+    builder, _func = require_both_initialized(codegen)
+    if bind.kind == "ref":
+        address = bind.position.address
+        if address is None:
+            raise_internal_error("CE0121", pattern=f"{bind.mode} {bind.name}")
+            return bind.position.value
+        return address()
+    if bind.kind == "own_ref":
+        return builder.extract_value(bind.own_value, 0, name="own_ptr")
+    return bind.position.value
+
+
+def _park_binding(codegen: 'LLVMCodegen', bind: _Bind, slots: dict) -> None:
+    """Store the value of a binding in the one slot of its name."""
+    builder, _func = require_both_initialized(codegen)
+    value = _parked_value(codegen, bind)
+    slot = slots.get(bind.name)
+    if slot is None:
+        slot = codegen.memory.entry_alloca(value.type, f"alt_{bind.name}")
+        slots[bind.name] = slot
+    builder.store(value, slot)
+
+
+def _unpark_binding(codegen: 'LLVMCodegen', bind: _Bind, slot: 'ir.Value') -> _Bind:
+    """The binding to make at the join: it reads what the matched alternative stored.
+
+    A reference to a payload and a reference to an `Own(...)` pointee are both a pointer
+    with a reference type, so both are made as a reference to the stored address.
+    """
+    builder, _func = require_both_initialized(codegen)
+    value = builder.load(slot, name=f"alt_{bind.name}")
+    semantic_type = bind.position.semantic_type
+    if bind.kind in ("ref", "own_ref"):
+        return _Bind("ref", bind.name, _Position(value, semantic_type,
+                                                 partial(_same_value, value)),
+                     mode=bind.mode)
+    kind = "nom" if bind.kind == "nom" else "value"
+    return _Bind(kind, bind.name, _Position(value, semantic_type, None))
 
 
 def _branch_unless(codegen: 'LLVMCodegen', matches: 'ir.Value',
@@ -537,7 +664,7 @@ def _test_item(codegen: 'LLVMCodegen', item: object, position: _Position,
     """Emit the tests of one pattern item, and collect the bindings it makes."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import (
-        LiteralPattern, NomBinding, OwnPattern, Pattern, RefBinding, TuplePattern,
+        LiteralPattern, NomBinding, OrPattern, OwnPattern, Pattern, RefBinding, TuplePattern,
     )
 
     if isinstance(item, str):
@@ -563,6 +690,9 @@ def _test_item(codegen: 'LLVMCodegen', item: object, position: _Position,
         _test_variant(codegen, item, position, on_fail, binds, tag_known)
     elif isinstance(item, OwnPattern):
         _test_own(codegen, item, position, on_fail, binds)
+    elif isinstance(item, OrPattern):
+        _test_alternatives(codegen, [partial(_test_item, codegen, alternative, position)
+                                     for alternative in item.alternatives], on_fail, binds)
 
 
 def _test_tuple(codegen: 'LLVMCodegen', pattern, position: _Position,

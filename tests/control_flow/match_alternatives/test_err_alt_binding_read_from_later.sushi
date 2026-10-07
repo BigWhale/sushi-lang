@@ -1,0 +1,17 @@
+# Only the second alternative binds 'r', and the arm body reads it. The one fault is
+# the binding that differs; the body does not get a second error for 'r'.
+# EXPECT_ERROR_CODES_EXACT: CE2126
+
+enum Shape:
+    Circle(i32)
+    Ring(i32)
+    Dot
+
+fn area(Shape s) i32:
+    match s:
+        Shape.Circle(_) | Shape.Ring(r) -> return r
+        Shape.Dot -> return 0
+
+fn main() i32:
+    println(area(Shape.Circle(2)))
+    return 0

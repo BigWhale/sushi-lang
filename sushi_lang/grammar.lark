@@ -56,7 +56,7 @@ extend_stmt: EXTEND type extend_suffix
 // an implementation block the marker exists only to be refused (CE4014): it must not
 // ride the shared `function_def`, which also serves the top level and a nested
 // statement. `method_name` widens the declaration slot the call site always had, so
-// `extend Box static new(...)` is writable (ruling R3).
+# `extend Box static new(...)` is writable (ruling R3).
 extend_suffix: WITH implemented_perk ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | STATIC? function_def)+ _DEDENT  -> extend_with_def
              | STATIC? method_name [type_params] "(" [parameters] ")" type ["|" type] ":" block  -> extend_def
 // A conversion (docs/design/error-conversion.md section 3.1): the target type and a body.
@@ -126,7 +126,12 @@ foreach_stmt: FOREACH "(" [type] (NAME | UNDERSCORE) [DOUBLE_QUESTION] "in" expr
 expand_stmt: EXPAND "(" (NAME | UNDERSCORE) "in" expr ")" ":" block
 
 match_stmt: MATCH NOM? expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
-match_arm: (pattern | literal_pattern | wildcard_pattern | tuple_pattern) "->" (match_arm_inline | block)
+match_arm: (_arm_alternative | arm_alternatives) "->" (match_arm_inline | block)
+# `|` alternatives (`0 | 1 ->`, `Shape.Circle(r) | Shape.Ring(r) ->`): one arm, several
+# patterns. One alternative is a plain arm; two or more are an `arm_alternatives` tree.
+# The lexer reads `||` as the logical operator, so `1||2` is a parse error with a help.
+_arm_alternative: pattern | literal_pattern | wildcard_pattern | tuple_pattern
+arm_alternatives: _arm_alternative (BIT_OR _arm_alternative)+
 literal_pattern: "-" (INT | HEX_INT | BIN_INT | OCT_INT) -> neg_literal_pattern
                | (INT | HEX_INT | BIN_INT | OCT_INT | BYTE_CHAR | STRING | CHAR_STRING)
 # A one-statement arm on the arrow. Every alternative here is a STATEMENT the
@@ -134,15 +139,18 @@ literal_pattern: "-" (INT | HEX_INT | BIN_INT | OCT_INT) -> neg_literal_pattern
 # and it is the shape a move out of a temporary wants (#552).
 match_arm_inline: (return_stmt | print_stmt | println_stmt | assert_stmt | call_stmt | rebind_stmt | break_stmt | continue_stmt | expr _NEWLINE)
 pattern: [NAME "."] NAME "." NAME ["(" [pattern_list] ")"]
-pattern_list: pattern_item ("," pattern_item)*
+pattern_list: _pattern_slot ("," _pattern_slot)*
+# One position of a pattern: one item, or `|` alternatives of items (`Maybe.Some(1 | 2)`).
+_pattern_slot: pattern_item | item_alternatives
+item_alternatives: pattern_item (BIT_OR pattern_item)+
 pattern_item: pattern | NAME | wildcard_pattern | own_pattern | tuple_pattern | literal_pattern
             | BORROW_MODE NAME -> ref_binding
             | NOM NAME -> nom_binding
-own_pattern: NAME "(" pattern_item ")"  -> own_pattern_call
+own_pattern: NAME "(" _pattern_slot ")"  -> own_pattern_call
 wildcard_pattern: UNDERSCORE
 tuple_list: "(" tuple_elem "," tuple_elem ("," tuple_elem)* ")"
 tuple_elem: type NAME? | UNDERSCORE
-tuple_pattern: "(" pattern_item "," pattern_item ("," pattern_item)* ")"
+tuple_pattern: "(" _pattern_slot "," _pattern_slot ("," _pattern_slot)* ")"
 
 break_stmt: BREAK _NEWLINE
 continue_stmt: CONTINUE _NEWLINE
@@ -260,7 +268,7 @@ method_name: NAME | NEW | EXTEND
 
 // Lambda literals (closures). The opening `|` only appears where an atom is
 // expected (prefix position), so it never collides with the infix bitwise-or
-// `|` in `bitwise_or`. Zero-param form is `|~|` (a BITNOT `~` between the
+# `|` in `bitwise_or`. Zero-param form is `|~|` (a BITNOT `~` between the
 // pipes) because the lexer munges `||` into a single OR token.
 //
 // Only the EXPRESSION-body lambda is a general expression (an `atom`). The
@@ -280,7 +288,7 @@ lambda_ret: "->" type ["|" type]
 
 array_literal: "[" [array_elements] "]"
 array_elements: array_element ("," array_element)*
-// `value; count` repeats one element. It is an ELEMENT form, so runs and plain
+# `value; count` repeats one element. It is an ELEMENT form, so runs and plain
 // elements mix in one literal (#446, Ruling 2). `;` appears nowhere else.
 array_element: expr (";" expr)?
 

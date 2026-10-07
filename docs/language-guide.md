@@ -1140,7 +1140,32 @@ fn main() i32:
     return 0
 ```
 
-A string pattern cannot hold an interpolation hole: `"{x}" ->` is [`CE2123`](error-catalog.md#ce2123). A named constant is not a pattern, and one arm holds one literal.
+A string pattern cannot hold an interpolation hole: `"{x}" ->` is [`CE2123`](error-catalog.md#ce2123). A named constant is not a pattern.
+
+**Alternatives**: one arm can hold several patterns, with `|` between them, and the arm runs when one of them matches. An alternative stands at the top of an arm and in every position inside a pattern. Each alternative binds the same names, with the same types and the same mode, so the arm body reads one binding whatever alternative matched; a difference is [`CE2126`](error-catalog.md#ce2126). Write `1 | 2` with spaces: the lexer reads `||` as the logical operator.
+
+```sushi
+enum Shape:
+    Circle(i32)
+    Ring(i32)
+    Square(i32)
+
+fn kind(string cmd) string:
+    match cmd:
+        "start" | "run" -> return "go"
+        "stop" | 'halt' -> return "stop"
+        _ -> return "unknown"
+
+fn radius(Shape s) i32:
+    match s:
+        Shape.Circle(r) | Shape.Ring(r) -> return r
+        Shape.Square(_) -> return 0
+
+fn main() i32:
+    println(kind("run"))
+    println(radius(Shape.Ring(3)))
+    return 0
+```
 
 **Literals inside a pattern**: an integer literal and a string literal are also legal in a payload (`Maybe.Some(0)`, `Maybe.Some("--help")`) and in a tuple element (`(0, n)`, `("go", dir)`).
 

@@ -1,0 +1,71 @@
+# `nom` bindings in every alternative of an arm TAKE an owning payload: a string and a
+# List. The match owns the scrutinee, under `match nom m:` and as a temporary. An arm
+# that takes nothing leaves the payload to the match, which frees it at the end. Each
+# value is freed one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "text hello\nnote world\nnone\n3\n2\ntemp hello\ntemp world\ntemp none\nkept note 7\nkept text 7\n"
+use <collections/strings>
+
+enum Msg:
+    Text(string)
+    Note(string)
+    Quiet
+
+enum Bag:
+    Left(List@(i32))
+    Right(List@(i32))
+
+fn make(i32 k) Msg:
+    let string base = "wor"
+    if (k == 0):
+        let string hel = "hel"
+        return Msg.Text("{hel}lo")
+    if (k == 1):
+        return Msg.Note("{base}ld")
+    return Msg.Quiet
+
+fn take(nom Msg m) string:
+    match nom m:
+        Msg.Text(nom s) | Msg.Note(nom s) -> return s
+        Msg.Quiet -> return "none"
+
+fn count(nom Bag b) i32:
+    match nom b:
+        Bag.Left(nom xs) | Bag.Right(nom xs) -> return xs.len()
+
+fn keep(nom string s) ~:
+    println("temp {s}")
+
+fn main() i32:
+    let Msg a = make(0)
+    let string ta = take(nom a)
+    println("text {ta}")
+    let Msg b = make(1)
+    let string tb = take(nom b)
+    println("note {tb}")
+    let Msg c = make(2)
+    println(take(nom c))
+    let List@(i32) three = List.new()
+    three.push(1)
+    three.push(2)
+    three.push(3)
+    let Bag left = Bag.Left(three)
+    println(count(nom left))
+    let List@(i32) two = List.new()
+    two.push(4)
+    two.push(5)
+    let Bag right = Bag.Right(two)
+    println(count(nom right))
+    foreach(k in 0..3):
+        match make(k):
+            Msg.Text(nom s) | Msg.Note(nom s) -> keep(nom s)
+            Msg.Quiet -> println("temp none")
+    let Maybe@(Msg) held = Maybe.Some(make(1))
+    match nom held:
+        Maybe.Some(Msg.Text(nom s) | Msg.Note(nom s)) -> println("kept note {s.len() + 2}")
+        Maybe.Some(Msg.Quiet) | Maybe.None -> println("kept nothing")
+    match Maybe.Some(make(0)):
+        Maybe.Some(Msg.Text(nom s) | Msg.Note(nom s)) -> println("kept text {s.len() + 2}")
+        Maybe.Some(Msg.Quiet) | Maybe.None -> println("kept nothing")
+    return 0

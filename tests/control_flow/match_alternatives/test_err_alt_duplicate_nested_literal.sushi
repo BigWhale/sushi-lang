@@ -1,0 +1,14 @@
+# A nested alternative that repeats a value of the same alternative list is a
+# duplicate literal too.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+
+fn size(Maybe@(i32) m) i32:
+    match m:
+        Maybe.Some(1 | 1) -> return 1
+        Maybe.Some(_) -> return 2
+        Maybe.None -> return 0
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(1)
+    println(size(m))
+    return 0

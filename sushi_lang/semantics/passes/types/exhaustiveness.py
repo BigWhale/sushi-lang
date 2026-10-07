@@ -4,14 +4,15 @@ The usefulness algorithm of Maranget ("Warnings for pattern matching", 2007) ove
 pattern matrix. An arm is one row. A column of an enum type splits into its variants, a
 tuple column into its elements, an `Own@(T)` column into its pointee, and an integer
 column and a string column have no end of values, so only a `_` or a binding covers
-them. Two answers come out: the values that no arm matches (the witnesses), and the
-arms that no value can reach.
+them. `|` alternatives are an `Or` position: a row with an `Or` at its head is one row
+for each alternative. Two answers come out: the values that no arm matches (the
+witnesses), and the arms and the alternatives that no value can reach.
 The design is in docs/design/tuples.md section 5b.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, List, Optional, Sequence, Tuple, Union
+from dataclasses import dataclass, field
+from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Union
 
 from sushi_lang.semantics.typesys import Type
 
@@ -42,7 +43,18 @@ class Ctor:
     args: Tuple["Pat", ...] = ()
 
 
-Pat = Union[Wild, Ctor]
+@dataclass(frozen=True)
+class Or:
+    """A position that matches what any of its alternatives matches: `1 | 2`.
+
+    `labels[i]` is what the caller knows alternative i by, for a diagnostic. It takes no
+    part in the comparison of two patterns.
+    """
+    alts: Tuple["Pat", ...]
+    labels: Tuple[Any, ...] = field(default=(), compare=False, hash=False)
+
+
+Pat = Union[Wild, Ctor, Or]
 
 # The constructors of a type, each with the types of its sub-positions, or None when the
 # values of the type cannot be listed (an integer, a string, a struct).
@@ -54,10 +66,25 @@ WITNESS_LIMIT = 16
 
 
 @dataclass(frozen=True)
+class DeadAlternative:
+    """An alternative no value reaches: its arm, its label, and what covers it.
+
+    `arms` are the arms above that share a value with it, and `alternatives` the labels
+    of the earlier alternatives of the same `|` list that share a value with it.
+    """
+    arm: int
+    label: Any
+    arms: List[int]
+    alternatives: List[Any]
+
+
+@dataclass(frozen=True)
 class Analysis:
-    """The two answers: the missing values, and each dead arm with the arms covering it."""
+    """The answers: the missing values, each dead arm with the arms covering it, and each
+    dead alternative of an arm that is not dead as a whole."""
     missing: List[Pat]
     dead: List[Tuple[int, List[int]]]
+    dead_alternatives: List[DeadAlternative] = field(default_factory=list)
 
 
 class PatternMatrix:
@@ -72,6 +99,17 @@ class PatternMatrix:
             if ctor_key == key:
                 return tuple(arg_types)
         return ()
+
+    @staticmethod
+    def _expand(rows: List[List[Pat]]) -> List[List[Pat]]:
+        """Each row with an `Or` at its head becomes one row for each alternative."""
+        out: List[List[Pat]] = []
+        for row in rows:
+            if row and isinstance(row[0], Or):
+                out.extend(PatternMatrix._expand([[alt] + row[1:] for alt in row[0].alts]))
+            else:
+                out.append(row)
+        return out
 
     @staticmethod
     def _specialize(rows: List[List[Pat]], key: object, arity: int) -> List[List[Pat]]:
@@ -103,7 +141,10 @@ class PatternMatrix:
         """Does `vector` match a value that no row matches?"""
         if not vector:
             return not rows
+        rows = self._expand(rows)
         head = vector[0]
+        if isinstance(head, Or):
+            return any(self.useful(rows, [alt] + vector[1:], types) for alt in head.alts)
         if isinstance(head, Ctor):
             arg_types = self._arg_types(head.key, types[0])
             return self.useful(self._specialize(rows, head.key, len(head.args)),
@@ -123,6 +164,7 @@ class PatternMatrix:
         """Value vectors that no row matches, at most `limit` of them."""
         if not types:
             return [] if rows else [[]]
+        rows = self._expand(rows)
         signature, heads = self._complete(rows, types[0])
         if signature is not None:
             found: List[List[Pat]] = []
@@ -156,8 +198,57 @@ def intersects(first: Pat, second: Pat) -> bool:
     """Is there a value that both patterns match?"""
     if isinstance(first, Wild) or isinstance(second, Wild):
         return True
+    if isinstance(first, Or):
+        return any(intersects(alt, second) for alt in first.alts)
+    if isinstance(second, Or):
+        return any(intersects(first, alt) for alt in second.alts)
     return (first.key == second.key and len(first.args) == len(second.args)
             and all(intersects(a, b) for a, b in zip(first.args, second.args, strict=True)))
+
+
+def _or_sites(pat: Pat, wrap: Callable[[Pat], Pat]
+              ) -> Iterator[Tuple[Or, Callable[[Pat], Pat]]]:
+    """Each outermost `Or` inside `pat`, with the function that puts a pattern in its place.
+
+    `wrap` puts a pattern in the place of `pat` itself, in the whole row.
+    """
+    if isinstance(pat, Or):
+        yield pat, wrap
+    elif isinstance(pat, Ctor):
+        for index, arg in enumerate(pat.args):
+            yield from _or_sites(arg, _in_place(pat, index, wrap))
+
+
+def _in_place(ctor: Ctor, index: int, wrap: Callable[[Pat], Pat]) -> Callable[[Pat], Pat]:
+    """The function that puts a pattern in the place of argument `index` of `ctor`."""
+    def place(p: Pat) -> Pat:
+        return wrap(Ctor(ctor.key, ctor.args[:index] + (p,) + ctor.args[index + 1:]))
+    return place
+
+
+def _dead_alternatives(matrix: PatternMatrix, seen: List[List[Pat]], row: Pat,
+                       scrutinee_type: Type, wrap: Callable[[Pat], Pat]
+                       ) -> Iterator[Tuple[Any, Pat, List[Any]]]:
+    """Each alternative in `row` that no value reaches, with its whole row and the labels of
+    the earlier alternatives of its list that share a value with it.
+
+    Alternative i is dead when the row with that alternative in the place of its `Or` is
+    not useful against the arms above and the earlier alternatives of the same list. The
+    walk goes into a live alternative only, so a dead one is reported once.
+    """
+    for site, place in _or_sites(row, wrap):
+        earlier: List[List[Pat]] = []
+        for index, alt in enumerate(site.alts):
+            whole = place(alt)
+            label = site.labels[index] if index < len(site.labels) else None
+            if not matrix.useful(seen + earlier, [whole], [scrutinee_type]):
+                before = [site.labels[k] for k in range(index)
+                          if k < len(site.labels) and intersects(site.alts[k], alt)]
+                yield label, whole, before
+            else:
+                yield from _dead_alternatives(matrix, seen + earlier, alt, scrutinee_type,
+                                              place)
+            earlier.append([whole])
 
 
 def analyze(signature: Callable[[Type], Signature], rows: Sequence[Optional[Pat]],
@@ -171,6 +262,7 @@ def analyze(signature: Callable[[Type], Signature], rows: Sequence[Optional[Pat]
     matrix = PatternMatrix(signature)
     seen: List[List[Pat]] = []
     dead: List[Tuple[int, List[int]]] = []
+    dead_alternatives: List[DeadAlternative] = []
     for index, row in enumerate(rows):
         if row is None:
             continue
@@ -178,6 +270,12 @@ def analyze(signature: Callable[[Type], Signature], rows: Sequence[Optional[Pat]
             covers = [above for above, other in enumerate(rows[:index])
                       if other is not None and intersects(other, row)]
             dead.append((index, covers))
+        else:
+            for label, whole, before in _dead_alternatives(matrix, seen, row,
+                                                           scrutinee_type, lambda p: p):
+                covers = [above for above, other in enumerate(rows[:index])
+                          if other is not None and intersects(other, whole)]
+                dead_alternatives.append(DeadAlternative(index, label, covers, before))
         seen.append([row])
     missing = [witness[0] for witness in matrix.missing(seen, [scrutinee_type])]
-    return Analysis(missing=missing, dead=dead)
+    return Analysis(missing=missing, dead=dead, dead_alternatives=dead_alternatives)
