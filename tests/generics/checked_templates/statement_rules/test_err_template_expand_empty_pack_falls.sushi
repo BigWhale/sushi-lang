@@ -1,0 +1,11 @@
+# The template leaves the path of an `expand` whose body ends to the copy (#1070). A copy
+# for an empty pack has no `return`, so it reaches its end: CE0107 at that copy.
+# EXPECT_ERROR_CODES_EXACT: CE0107
+
+fn first@(...Ts: Display)(...Ts args) string:
+    expand(a in args):
+        return "{a}"
+
+fn main() i32:
+    println(first())
+    return 0

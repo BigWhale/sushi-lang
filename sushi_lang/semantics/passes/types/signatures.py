@@ -14,7 +14,7 @@ from sushi_lang.semantics.passes.collect.functions import is_explicit_result_typ
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS)
 
-from .control_flow import block_always_returns, reject_dead_statements
+from .control_flow import Reach, block_always_returns, block_reach, reject_dead_statements
 from .utils import validate_type_name, validate_and_register_parameters
 from .perks import (
     check_no_conflicts_with_regular_methods, reject_unnamable_implemented_perk,
@@ -131,16 +131,35 @@ def _reject_fall_off(self, body, ret, channel: bool, span) -> None:
         self.err.emit(er.ERR.CE0107, span, callable=self.body_name)
 
 
-def _reject_path_faults(self, node) -> None:
+def _reject_path_faults(self, node, template=None) -> None:
     """CE0140, then CE0107, for one function or method body.
 
     Neither rule reads a type, so a template takes both once, as written, and a copy of
-    it takes neither (#1070).
+    it takes neither (#1070) -- except CE0107 where the written template left the path
+    UNDECIDED: an `expand` whose body ends, which only the pack of the copy decides.
+    `template` is the written template of a function copy; a method holds no `expand`.
     """
     if self.in_template_copy:
+        if template is not None and block_reach(self, template.body) is Reach.UNDECIDED:
+            _reject_fall_off(self, node.body, node.ret, has_channel(node), node.name_span)
         return
     reject_dead_statements(self, node.body)
     _reject_fall_off(self, node.body, node.ret, has_channel(node), node.name_span)
+
+
+def _written_template(self, func: FuncDef):
+    """The written template of a function copy that a pack fans out, or None.
+
+    Only such a template can hold an `expand`, because an `expand` walks a value pack.
+    The copy goes home to the unit of its template, so the unit's own lookup finds it.
+    """
+    if not self.in_template_copy or not func.pack_names:
+        return None
+    template = self.generic_sig(func.instance_of)
+    if template is None:
+        er.raise_internal_error(
+            "CE0015", message=f"no template '{func.instance_of}' for a copy of it")
+    return template
 
 
 def check_template_statements(self, program) -> None:
@@ -212,7 +231,7 @@ def _validate_function_body(self, func: FuncDef) -> None:
     validate_type_name(self, func.ret, func.ret_span)
 
     self._validate_block(func.body)
-    _reject_path_faults(self, func)
+    _reject_path_faults(self, func, _written_template(self, func))
 
     self.current_function = None
     _leave_body(self)

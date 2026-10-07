@@ -1,0 +1,13 @@
+# One template, called with an empty pack and with a pack of two. The copy for two
+# elements returns on every path, and the copy for no element reaches its end: one
+# CE0107, for the empty pack alone (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE0107
+
+fn first@(...Ts: Display)(...Ts args) string:
+    expand(a in args):
+        return "{a}"
+
+fn main() i32:
+    println(first())
+    println(first(1, 2))
+    return 0
