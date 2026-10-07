@@ -1,0 +1,9 @@
+# An order needs `Ord`, and `Eq` does not give one (#1070, R2, R3).
+# EXPECT_ERROR_CODES_EXACT: CE2514
+
+fn less@(T: Eq)(T a, T b) bool:
+    return a < b
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

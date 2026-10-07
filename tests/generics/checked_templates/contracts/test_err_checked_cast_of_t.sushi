@@ -1,0 +1,10 @@
+# A cast of a type parameter is refused where the template is written (#1070): `T` is
+# no numeric type, whatever a call would give for it.
+# EXPECT_ERROR_CODES_EXACT: CE2014
+
+fn widen@(T)(T x) i64:
+    return x as i64
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

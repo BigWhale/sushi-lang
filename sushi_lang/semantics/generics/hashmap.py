@@ -105,12 +105,17 @@ def reject_unusable_key(hashmap_type: StructType, validator: Any, span: Any) -> 
     from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
     has_hash = (builtin_method_exists(key_type, "hash", validator.derived_methods)
                 or validator.perk_impl_table.get_method(key_type, "hash") is not None)
+    from sushi_lang.semantics.generics.opaque import explain_unpromised
     if not has_hash:
-        er.emit(reporter, er.ERR.CE2054, span, key_type=display_type(key_type))
+        explain_unpromised(er.emit_with(reporter, er.ERR.CE2054, span,
+                                        key_type=display_type(key_type)),
+                           key_type, "Hashable").emit()
         return
 
     if not _key_supports_equality(key_type, validator):
-        er.emit(reporter, er.ERR.CE2055, span, key_type=display_type(key_type))
+        explain_unpromised(er.emit_with(reporter, er.ERR.CE2055, span,
+                                        key_type=display_type(key_type)),
+                           key_type, "Eq").emit()
 
 
 def _key_supports_equality(key_type: Type, validator: Any) -> bool:

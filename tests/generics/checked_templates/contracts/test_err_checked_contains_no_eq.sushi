@@ -1,0 +1,10 @@
+# `contains` compares elements, so an array of a type parameter needs `Eq` on it
+# (#1070, R2).
+# EXPECT_ERROR_CODES_EXACT: CE2100
+
+fn has@(T)(T[] xs, T x) bool:
+    return xs.contains(x)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

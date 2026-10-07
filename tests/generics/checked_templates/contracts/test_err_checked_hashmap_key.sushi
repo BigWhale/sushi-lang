@@ -1,0 +1,13 @@
+# A HashMap key needs a hash and an equality, so a type parameter with no constraint
+# cannot be one (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2054
+use <collections/hashmap>
+
+fn count@(T)(T key) i32:
+    let HashMap@(T, i32) seen = HashMap.new()
+    seen.insert(key, 1)
+    return seen.len()
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

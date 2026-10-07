@@ -131,7 +131,8 @@ class StatementValidator(RecursiveVisitor):
                               type=display_type(expr_type))
         if reason is not None:
             report = report.note(f"no derived Display: {reason}")
-        report.emit()
+        from sushi_lang.semantics.generics.opaque import explain_unpromised
+        explain_unpromised(report, deref_type(expr_type), DISPLAY).emit()
 
     def visit_assert(self, node: Assert) -> None:
         """Validate an assert: the condition is a bool (CE2005, CE2516), the message a

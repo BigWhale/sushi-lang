@@ -1,0 +1,19 @@
+# With `T: Display`, a hole and `println` take a value of a type parameter, and each
+# copy prints with the string form of its type argument (#1070).
+# EXPECT_STDOUT_EXACT: "value 42\nMostly Harmless\nvalue Point(x: 1, y: 2)\n"
+
+struct Point:
+    i32 x
+    i32 y
+
+fn label@(T: Display)(T x) string:
+    return "value {x}"
+
+fn show@(T: Display)(T x) ~:
+    println(x)
+
+fn main() i32:
+    println(label(42))
+    show("Mostly Harmless")
+    println(label(Point(1, 2)))
+    return 0

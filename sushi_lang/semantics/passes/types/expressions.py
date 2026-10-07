@@ -156,7 +156,8 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
                             target=display_type(target_type))
         if is_error_type(source_type) and is_error_type(resolved_target):
             diag.help(conversion_help(source_type, resolved_target, at_try=False))
-        diag.emit()
+        from sushi_lang.semantics.generics.opaque import note_opaque
+        note_opaque(diag, source_type).emit()
 
 
 def refuse_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
@@ -435,7 +436,8 @@ def reject_non_numeric_arithmetic(validator: 'TypeValidator', op: str,
         wrapper = _wrapper_of(operand_type)
         if wrapper is not None:
             report = report.help(f"take the value with {take_the_value(wrapper[0])}")
-        report.emit()
+        from sushi_lang.semantics.generics.opaque import explain_no_arithmetic
+        explain_no_arithmetic(report, operand_type).emit()
         return
 
 
@@ -542,7 +544,8 @@ def reject_uncomparable_operands(validator: 'TypeValidator', expr: BinaryOp,
     escape = _comparison_escape(left_type)
     if escape is not None:
         builder = builder.help(escape)
-    builder.emit()
+    from sushi_lang.semantics.generics.opaque import explain_unpromised
+    explain_unpromised(builder, deref_type(left_type), contract).emit()
 
 
 def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> None:
@@ -731,6 +734,10 @@ def _field_names_of(receiver_type: 'Type') -> Optional[list[str]]:
     if isinstance(receiver_type, (ArrayType, DynamicArrayType, BuiltinType, EnumType,
                                   FunctionType, PointerType, ForeignPtrType)):
         return []
+    # An opaque type parameter has the methods its constraints promise, and no field.
+    from sushi_lang.semantics.generics.types import TypeParameter
+    if isinstance(receiver_type, TypeParameter) and receiver_type.is_opaque:
+        return []
     return None
 
 
@@ -806,4 +813,6 @@ def reject_unknown_field(validator: 'TypeValidator', node: MemberAccess) -> None
             builder.help(f"did you mean '{close}'?")
         elif names:
             builder.help(f"'{shown}' declares {', '.join(repr(n) for n in names)}")
-    builder.emit()
+    # A type parameter has no field: a constraint promises methods alone (#1070).
+    from sushi_lang.semantics.generics.opaque import note_opaque
+    note_opaque(builder, receiver_type).emit()

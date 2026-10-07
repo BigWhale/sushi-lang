@@ -428,6 +428,7 @@ class ExpressionValidator(RecursiveVisitor):
                                   type=display_type(part_type))
             if reason is not None:
                 report = report.note(f"no derived Display: {reason}")
-            report.emit()
+            from sushi_lang.semantics.generics.opaque import explain_unpromised
+            explain_unpromised(report, deref_type(part_type), DISPLAY).emit()
         node.display_types = stamps if any(stamps) else None
 

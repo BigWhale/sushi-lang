@@ -236,8 +236,10 @@ def _reject_uncomparable_element(call: MethodCall, element, reporter: Reporter) 
     `==` (CE2514), and a struct that holds the row takes a derived `Eq` (#1116)."""
     shown = display_type(element)
     if not isinstance(element, (ArrayType, DynamicArrayType)):
-        er.emit(reporter, er.ERR.CE2100, call.loc, method=call.method,
-                reason=f"'{shown}' has none")
+        from sushi_lang.semantics.generics.opaque import explain_unpromised
+        explain_unpromised(er.emit_with(reporter, er.ERR.CE2100, call.loc,
+                                        method=call.method, reason=f"'{shown}' has none"),
+                           element, "Eq").emit()
         return
     er.emit_with(reporter, er.ERR.CE2100, call.loc, method=call.method,
                  reason=f"'{shown}' is an array, and an array has no '==' at the top "

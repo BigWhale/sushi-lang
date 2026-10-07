@@ -50,3 +50,29 @@ def providing_perks(perks: 'PerkTable', method: str) -> List[str]:
     """The perks that declare a method of this name, in declaration order."""
     return [name for name in perks.order
             if any(m.name == method for m in perks.by_name[name].methods)]
+
+
+def explain_unpromised(builder: 'DiagnosticBuilder', ty: Optional['Type'],
+                       perk: str) -> 'DiagnosticBuilder':
+    """The note and the help of a refusal that a constraint `perk` would lift (#1070).
+
+    Nothing is added when `ty` holds no opaque parameter that lacks the promise: a
+    concrete type keeps the refusal as it is.
+    """
+    lacking = [p for p in opaque_parameters(ty) if not p.promises(perk)]
+    if not lacking:
+        return builder
+    name = lacking[0].name
+    return note_opaque(builder, lacking[0]).help(
+        f"add '{perk}' to the constraints of '{name}': '@({name}: {perk})'")
+
+
+def explain_no_arithmetic(builder: 'DiagnosticBuilder',
+                          ty: Optional['Type']) -> 'DiagnosticBuilder':
+    """The note and the help of arithmetic on a type parameter (#1070, R2)."""
+    params = opaque_parameters(ty)
+    if not params:
+        return builder
+    return note_opaque(builder, params[0]).help(
+        "a type parameter has no arithmetic, and no constraint promises one; write the "
+        "function for a numeric type")
