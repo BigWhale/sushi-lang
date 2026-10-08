@@ -8,7 +8,7 @@ from sushi_lang.semantics.typesys import DynamicArrayType, EnumType, Type, Struc
 from sushi_lang.semantics.generics.types import substitute_type_params
 from sushi_lang.semantics.generics.monomorphize.transformer import substituted_param
 from sushi_lang.semantics.generics.extension_targets import (
-    extension_template_id, instantiation_key, perk_template_id)
+    extension_template_id, instantiation_key, perk_template_id, written_target)
 from sushi_lang.semantics.passes.collect import GenericExtensionMethod
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -109,6 +109,8 @@ def monomorphize_extension_method(
     concrete.target_params = ()
     # A copy of a template whose check refused it reports nothing (#1070).
     concrete.template_id = extension_template_id(generic_method)
+    concrete.template_target = written_target(generic_method.decl.target_type,
+                                              generic_method.decl.target_params)
     # Where the source wrote no name or no return, the collected record points a
     # diagnostic at the declaration instead.
     concrete.name_span = concrete.name_span or generic_method.name_span

@@ -1,0 +1,20 @@
+# An enum template that shadows the derived clone() is reported once, for two instances.
+# EXPECT_ERROR_CODES_EXACT: CE2097
+# EXPECT_STDERR_CONTAINS: extend Opt@(T) with <Perk>
+enum Opt@(T):
+    Has(T)
+    Nope
+
+extend Opt@(T) clone() Opt@(T):
+    return Opt.Nope()
+
+fn main() i32:
+    let Opt@(i32) a = Opt.Nope()
+    let Opt@(string) b = Opt.Nope()
+    match a:
+        Opt.Has(x) -> println(x)
+        Opt.Nope -> println("none")
+    match b:
+        Opt.Has(x) -> println(x)
+        Opt.Nope -> println("none")
+    return 0

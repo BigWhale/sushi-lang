@@ -406,6 +406,9 @@ class ExtendDef(Node):
     # The template of a copy, for the reporter's mute (#1070); see `FuncDef`. None on a
     # written extension.
     template_id: Optional["TemplateId"] = None
+    # The target of the template of a copy as the source wrote it (`Box@(T)`), so a
+    # diagnostic about the declaration names the declaration. None on a written one.
+    template_target: Optional[str] = None
 
     @property
     def is_conversion(self) -> bool:

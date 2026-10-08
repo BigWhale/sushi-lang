@@ -410,6 +410,10 @@ class ExtensionMethod:
     # is what keeps the two callable shapes apart: an instance call may not reach a
     # static, and a type-name call may not reach an instance method.
     is_static: bool = False
+    # A copy of a generic-target template: the template, and its target as written. One
+    # written declaration is one fault, so a diagnostic groups the copies by these.
+    template_id: Optional[TemplateId] = None
+    template_target: Optional[str] = None
 
 
 @dataclass

@@ -106,6 +106,21 @@ class _CopyEntry:
     borrow: Callable[[BorrowChecker, Any, list], None]
 
 
+def _written_declaration(method: Any, template_id: Any) -> tuple:
+    """The written declaration that an extension record or a template comes from.
+
+    A copy of a template keeps the template's identity and spans, so the copies of one
+    declaration, and the template itself, share this key. Two concrete-target
+    declarations of one method share a template identity and differ in their spans. A
+    written record with no template is its own key.
+    """
+    if template_id is None:
+        return ("written", id(method))
+    span = method.name_span or method.loc
+    where = None if span is None else (span.line, span.col, span.end_line, span.end_col)
+    return ("copy", template_id, where)
+
+
 def _borrow_lifted(borrow: BorrowChecker, functions) -> None:
     """Borrow-check functions, each as the body that the reporter reads."""
     for fn in functions:
@@ -344,7 +359,7 @@ class SemanticAnalyzer:
             return
         self._derive()
         self._register_monomorphized_extensions(concrete_extension_defs, compilation_order)
-        self._check_extension_shadows_builtin()
+        self._check_extension_shadows_builtin(monomorphizer.sites)
 
         destroy_effects = self._compute_effects(compilation_order)
         # Enum type names for the borrow pass's ownership-sink test, stripped to their
@@ -830,6 +845,8 @@ class SemanticAnalyzer:
                 # site resolves a static as an instance method and CE2102 refuses the
                 # very declaration that answers it.
                 is_static=getattr(extend_def, "is_static", False),
+                template_id=extend_def.template_id,
+                template_target=extend_def.template_target,
             )
             self.tables.extensions.add_method(extension_method)
 
@@ -1298,47 +1315,74 @@ class SemanticAnalyzer:
             seen.add(identity)
             self.reporter.items.append(diagnostic)
 
-    def _check_extension_shadows_builtin(self) -> None:
+    def _check_extension_shadows_builtin(self, sites: dict) -> None:
         """Reject an extension method that collides with a built-in (CE2097).
 
-        An `extend T[]` template is judged where it is written, on the receiver `T[]`.
-        It is not in the extension table, and no copy of it is ever cut for a built-in
-        name, because the built-in answers every call first.
+        The question is asked per instance, because the answer can differ: a type with no
+        derived `hash()` may take an extension `hash()`. The report is per WRITTEN
+        declaration: the copies of one template share its identity and its spans, so
+        they are one fault. An `extend T[]` template is judged where it is written, on
+        the receiver `T[]`. It is not in the extension table, and no copy of it is ever
+        cut for a built-in name, because the built-in answers every call first.
         """
-        from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+        from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
+        from sushi_lang.semantics.generics.extension_targets import (
+            ARRAY_BASE_KEY, extension_template_id, written_target)
+        from sushi_lang.semantics.generics.monomorphize.order import in_site_order
+        from sushi_lang.semantics.generics.type_display import display_type
         from sushi_lang.semantics.generics.types import TypeParameter
         from sushi_lang.semantics.typesys import DynamicArrayType
 
+        collisions: dict = {}
+
+        def collide(target_type, method_name: str, method, template_id, written) -> None:
+            if builtin_method_exists(target_type, method_name,
+                                     self.tables.derived_methods):
+                key = _written_declaration(method, template_id)
+                collisions.setdefault(key, []).append(
+                    (target_type, method_name, method, written))
+
         for target_type, methods in self.tables.extensions.by_type.items():
             for method_name, method in methods.items():
-                self._reject_builtin_shadow(target_type, method_name, method)
+                collide(target_type, method_name, method, method.template_id,
+                        method.template_target or display_type(target_type))
 
         templates = self.tables.generic_extensions.by_type.get(ARRAY_BASE_KEY, {})
         for (method_name, _key), template in templates.items():
             receiver = DynamicArrayType(
                 base_type=TypeParameter(name=template.type_params[0]))
-            self._reject_builtin_shadow(receiver, method_name, template)
+            decl = template.decl
+            written = (written_target(decl.target_type, decl.target_params)
+                       if decl is not None and decl.target_type is not None
+                       else display_type(receiver))
+            collide(receiver, method_name, template,
+                    extension_template_id(template), written)
 
-    def _reject_builtin_shadow(self, target_type, method_name: str, method) -> None:
-        """CE2097 when the compiler defines `method_name` on `target_type`."""
-        from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
+        for found in collisions.values():
+            first = in_site_order(
+                found, sites, lambda item: getattr(item[0], "name", None),
+                lambda item: (display_type(item[0]),))[0]
+            self._reject_builtin_shadow(*first)
+
+    def _reject_builtin_shadow(self, target_type, method_name: str, method,
+                               written: str) -> None:
+        """CE2097 for one written declaration, at the instance `target_type`.
+
+        `written` is the target as the source wrote it (`Box@(T)`, `T[]`).
+        """
         from sushi_lang.semantics.generics.type_display import display_type
 
-        if not builtin_method_exists(target_type, method_name,
-                                     self.tables.derived_methods):
-            return
-        shown = f"{display_type(target_type)}.{method_name}"
         er.emit_with(
             self.reporter, er.ERR.CE2097,
             method.name_span or method.loc,
-            name=method_name, type=display_type(target_type),
+            name=method_name, type=written,
         ).note(
-            f"'{shown}()' is defined by the compiler"
+            f"'{display_type(target_type)}.{method_name}()' is defined by the compiler"
         ).help(
             "a built-in method is always chosen before an extension method, so "
             f"this one could never be called -- rename it, or provide "
             f"'{method_name}()' through a perk implementation "
-            f"('extend {display_type(target_type)} with <Perk>'), which does "
+            f"('extend {written} with <Perk>'), which does "
             "take precedence"
         ).emit()
 
