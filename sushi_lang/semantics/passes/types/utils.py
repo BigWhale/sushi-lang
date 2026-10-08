@@ -1,5 +1,7 @@
 """Shared utilities for type validation."""
 from __future__ import annotations
+
+import functools
 from typing import TYPE_CHECKING, AbstractSet, Callable, List, Optional
 
 from sushi_lang.semantics.type_predicates import is_instance_of
@@ -52,12 +54,16 @@ def _written_instances(type_obj: Type):
 
 
 def call_constraint_check(validator: 'TypeValidator'):
-    """The analyzer's constraint check of one site (`tables.check_call_constraints`)."""
+    """The analyzer's constraint check of one site (`tables.check_call_constraints`).
+
+    A refusal goes to the reporter of the validator that asks, which is the reporter of
+    the unit that holds the site.
+    """
     check = validator.tables.check_call_constraints
     if check is None:
         raise er.InternalCompilerError(
             "CE0015", message="the analyzer set no constraint check for a call site")
-    return check
+    return functools.partial(check, reporter=validator.reporter)
 
 
 def reject_unpromised_arguments(validator: 'TypeValidator', type_obj: Optional[Type],

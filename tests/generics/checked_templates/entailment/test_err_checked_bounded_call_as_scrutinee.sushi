@@ -1,0 +1,23 @@
+# A template that calls an extension with a target bound it does not promise, as the
+# scrutinee of a `match`, is refused at the call (#1070), and the `match` knows that a
+# diagnostic was given: one fault, one diagnostic, and no internal error.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+
+error Bad:
+    Oops
+
+struct Feed@(T):
+    T[] items
+
+extend Feed@(T: Clone) first() Result@(T, Bad):
+    match self.items.get(0):
+        Maybe.Some(v) -> return Result.Ok(v.clone())
+        Maybe.None -> return Result.Err(Bad.Oops)
+
+fn report@(T)(Feed@(T) f) i32:
+    match f.first():
+        Result.Ok(_) -> return 1
+        Result.Err(_) -> return 0
+
+fn main() i32:
+    return report(Feed(from([1])))

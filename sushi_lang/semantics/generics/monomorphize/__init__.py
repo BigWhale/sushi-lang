@@ -164,7 +164,7 @@ class Monomorphizer:
         return valid
 
     def check_call_constraints(self, params, args, key, span, filename, template_file,
-                               report: bool) -> bool:
+                               report: bool, *, reporter) -> bool:
         """The constraints of the type arguments of one site, from the typecheck pass.
 
         Four sites: a method-level type argument (#1191), and in a template check a
@@ -173,10 +173,20 @@ class Monomorphizer:
         the site and `template_file` the file of the constraint. Without `report` the
         answer is the same and nothing is emitted or recorded: the inferring half of the
         typecheck pass asks it too.
+
+        A refusal goes to `reporter`, the reporter of the unit that holds the site: that
+        unit then knows a diagnostic was given (a `match` over the refused call reads
+        it, and the template check refuses its template), and the diagnostic takes its
+        place in the unit's source order.
         """
-        return self._validate_type_constraints(
-            params, args, key=key, template_file=template_file, site=(span, filename),
-            report=report)
+        if self.constraint_validator is None:
+            return self._validate_type_constraints(
+                params, args, key=key, template_file=template_file,
+                site=(span, filename), report=report)
+        with self.constraint_validator.reporting_to(reporter):
+            return self._validate_type_constraints(
+                params, args, key=key, template_file=template_file,
+                site=(span, filename), report=report)
 
     def _error_arguments_hold(self, type_params, type_args, error_params, span,
                               filename, template_file) -> bool:
