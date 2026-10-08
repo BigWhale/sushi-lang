@@ -77,13 +77,17 @@ def validate_generic_function_call(
         # CE4018) is why nothing was inferred: its diagnostic is the one fault (#1105,
         # #1109, #1165, #1070). Any other argument fault stands beside CE2060.
         if not contested and _untyped_argument_faults(validator) == said:
-            er.emit(
+            # An argument of an opaque type (two `expand` binders, two type
+            # parameters) gets the note at its declaration (#1070).
+            from sushi_lang.semantics.generics.opaque import note_opaque
+            from sushi_lang.semantics.generics.pack_inference import infer_call_arg_type
+            note_opaque(er.emit_with(
                 validator.reporter,
                 er.ERR.CE2060,
                 call.callee.loc,
                 name=written,
                 reason=why[0] if why else "could not infer type arguments from call site"
-            )
+            ), *(infer_call_arg_type(validator, arg) for arg in call.args)).emit()
         return
 
     if validator.in_template_check:

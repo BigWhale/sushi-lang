@@ -1,0 +1,19 @@
+# Two `expand` binders have two element types, so one type parameter cannot take both:
+# the inference fails where the template is written, and the notes point at both
+# binders (#1070, R6). The note is the thing under test.
+# EXPECT_ERROR_CODES_EXACT: CE2060
+# EXPECT_STDERR_CONTAINS: 'a' holds one element of the pack '...Ts'
+# EXPECT_STDERR_CONTAINS: 'b' holds one element of the pack '...Ts'
+
+fn same@(T: Eq)(T x, T y) bool:
+    return x == y
+
+fn pairs@(...Ts: Eq)(...Ts args) ~:
+    expand(a in args):
+        expand(b in args):
+            if (same(a, b)):
+                println("Mostly Harmless")
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0
