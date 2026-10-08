@@ -157,7 +157,7 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
         if is_error_type(source_type) and is_error_type(resolved_target):
             diag.help(conversion_help(source_type, resolved_target, at_try=False))
         from sushi_lang.semantics.generics.opaque import note_opaque
-        note_opaque(diag, source_type).emit()
+        note_opaque(diag, source_type, resolved_target).emit()
 
 
 def refuse_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
@@ -306,10 +306,12 @@ def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr', arms: _Arms,
     if conversion is not None:
         return True, conversion
 
-    er.emit_with(validator.reporter, er.ERR.CE2511, expr.loc,
-                 ok_type=display_type(outer_ok_type),
-                 inner_err=display_type(inner_err_type),
-                 outer_err=display_type(outer_err_type)) \
+    from sushi_lang.semantics.generics.opaque import note_opaque
+    diagnostic = er.emit_with(validator.reporter, er.ERR.CE2511, expr.loc,
+                              ok_type=display_type(outer_ok_type),
+                              inner_err=display_type(inner_err_type),
+                              outer_err=display_type(outer_err_type))
+    note_opaque(diagnostic, inner, outer) \
         .help(conversion_help(inner, outer, at_try=True)).emit()
     return False, None
 
@@ -324,7 +326,14 @@ def conversion_help(source: 'Type', target: 'Type', *, at_try: bool) -> str:
     spelling casts the VALUE.
     """
     from sushi_lang.semantics.passes.collect.enums import PREDEFINED_ENUM_HOMES
+    from sushi_lang.semantics.generics.opaque import holds_opaque
     source_text, target_text = display_type(source), display_type(target)
+    if holds_opaque(source) or holds_opaque(target):
+        # R8 (#1070): no conversion can name a type parameter, so a `??` propagates the
+        # same error type and no other.
+        return (f"a type parameter has no conversion, so only the same error type "
+                f"propagates; {_site_form(source_text, target_text, at_try)}, or write "
+                f"the concrete error type in the signature")
     generic = next((side for side in (source, target) if getattr(side, "generic_args", None)),
                    None)
     if generic is not None:

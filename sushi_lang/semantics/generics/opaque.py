@@ -32,9 +32,13 @@ def holds_opaque(ty: Optional['Type']) -> bool:
     return bool(opaque_parameters(ty))
 
 
-def note_opaque(builder: 'DiagnosticBuilder', ty: Optional['Type']) -> 'DiagnosticBuilder':
-    """A note at the declaration of each opaque parameter that `ty` holds."""
-    for param in opaque_parameters(ty):
+def note_opaque(builder: 'DiagnosticBuilder',
+                *types: Optional['Type']) -> 'DiagnosticBuilder':
+    """A note at the declaration of each opaque parameter that the types hold, one time."""
+    params: List[TypeParameter] = []
+    for ty in types:
+        params += [p for p in opaque_parameters(ty) if p not in params]
+    for param in params:
         if param.span is None:
             continue
         if param.constraints:
@@ -53,13 +57,19 @@ def providing_perks(perks: 'PerkTable', method: str) -> List[str]:
 
 
 def explain_unpromised(builder: 'DiagnosticBuilder', ty: Optional['Type'],
-                       perk: str) -> 'DiagnosticBuilder':
+                       perk: str, at_fault: Optional[List['Type']] = None
+                       ) -> 'DiagnosticBuilder':
     """The note and the help of a refusal that a constraint `perk` would lift (#1070).
 
     Nothing is added when `ty` holds no opaque parameter that lacks the promise: a
-    concrete type keeps the refusal as it is.
+    concrete type keeps the refusal as it is. `at_fault` is the answer of the predicate
+    that refused, when it names the types at fault: `Clone` reads
+    `holds_declared_resource`, which stops where a type holds nothing by value, so a
+    parameter that only a function value names is not at fault.
     """
-    lacking = [p for p in opaque_parameters(ty) if not p.promises(perk)]
+    held = opaque_parameters(ty) if at_fault is None else [
+        t for t in at_fault if isinstance(t, TypeParameter) and t.is_opaque]
+    lacking = [p for p in held if not p.promises(perk)]
     if not lacking:
         return builder
     name = lacking[0].name

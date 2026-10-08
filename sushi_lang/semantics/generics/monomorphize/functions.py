@@ -416,13 +416,20 @@ class FunctionMonomorphizer:
         self._collect_block_instantiations(body, var_types)
         self._asking_unit, self._asking_file = saved_unit, saved_file
 
-    def _file_of(self, decl) -> Optional[str]:
-        """The file a template or a copy is written in: its own, or its home unit's."""
-        filename = getattr(decl, "filename", None)
+    def _file_of(self, decl, filename: Optional[str] = None) -> Optional[str]:
+        """The file a template or a copy is written in (#1070).
+
+        `filename` when the caller holds the template's own; else the declaration's
+        own file, its home unit's, or the slice a library template came from.
+        """
+        filename = filename or getattr(decl, "filename", None)
         if filename is not None:
             return filename
         home = getattr(decl, "unit_name", None) or getattr(decl, "home_unit", None)
-        return self.monomorphizer.unit_files.get(home) if home is not None else None
+        if home is not None and home in self.monomorphizer.unit_files:
+            return self.monomorphizer.unit_files[home]
+        origin = getattr(decl, "library_origin", None)
+        return origin.filename if origin is not None else None
 
     def _record_site(self, name: str, type_args, loc) -> None:
         """The first site that names a nested function instantiation (#579, #1070)."""
@@ -539,8 +546,9 @@ class FunctionMonomorphizer:
         self.monomorphizer.pending_instantiations = saved if saved is not None else set()
         return found
 
-    def collect_from_perk_method_body(self, target_type: Type,
-                                      method) -> Set[Tuple[str, Tuple[Type, ...]]]:
+    def collect_from_perk_method_body(self, target_type: Type, method,
+                                      filename: Optional[str] = None
+                                      ) -> Set[Tuple[str, Tuple[Type, ...]]]:
         """The same walk, for one monomorphized perk-implementation method.
 
         A perk method carries no target of its own -- the `extend X with P` header does
@@ -555,7 +563,7 @@ class FunctionMonomorphizer:
         self.monomorphizer.pending_instantiations = set()
         saved_unit, saved_file = self._asking_unit, self._asking_file
         self._asking_unit = None
-        self._asking_file = self._file_of(method)
+        self._asking_file = self._file_of(method, filename)
         self._collect_block_instantiations(method.body, var_types)
         self._asking_unit = saved_unit
         from sushi_lang.semantics.ast import ExtendWithDef

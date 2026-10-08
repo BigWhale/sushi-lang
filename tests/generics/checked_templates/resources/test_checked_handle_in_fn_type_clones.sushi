@@ -1,0 +1,28 @@
+# A struct that names a handle only in a function type holds no handle: it clones, and
+# it satisfies `Clone` (#1070, R5). The resource walk stops at a function value, and it
+# reads the type arguments of a container only.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_NO_LEAKS
+use <io/fs>
+
+struct Holder@(X):
+    fn(nom X) -> X pass
+
+fn hand_on(nom File f) File:
+    return f
+
+fn twin@(T: Clone)(T x) T:
+    return x.clone()
+
+fn main() i32:
+    let Holder@(File) h = Holder(hand_on)
+    let Holder@(File) copy = h.clone()
+    let Holder@(File) other = twin(copy)
+    match open("/dev/null", FileMode.Read()):
+        Result.Ok(nom f) ->
+            let File g = other.pass(nom f)
+            match g.close():
+                Result.Ok(_) -> println("Mostly Harmless")
+                Result.Err(_) -> println("closed badly")
+        Result.Err(_) -> println("no /dev/null")
+    return 0

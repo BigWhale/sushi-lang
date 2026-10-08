@@ -91,7 +91,9 @@ class ConstraintValidator:
             # A type parameter of a template under check passes the constraint on only
             # when a constraint of its own promises it (#1070).
             from sushi_lang.semantics.generics.opaque import explain_unpromised
-            explain_unpromised(diagnostic, type_arg, constraint_name).emit()
+            at_fault = (self._clone_resources(type_arg)
+                        if constraint_name == PerkCollector.CLONE_PERK else None)
+            explain_unpromised(diagnostic, type_arg, constraint_name, at_fault).emit()
             return False
 
         return True
@@ -118,13 +120,26 @@ class ConstraintValidator:
             return operand_contract(type_arg, constraint_name, overridden=overridden,
                                     resolve=resolve)[0]
         if constraint_name == PerkCollector.CLONE_PERK:
-            return not holds_declared_resource(
-                type_arg, drop_type_names(self.perk_impl_table), resolve=resolve)
+            return not self._clone_resources(type_arg)
         if constraint_name != PerkCollector.HASHABLE_PERK:
             return False
         overridden = hash_override_of(self.perk_impl_table, self.generic_perk_impls)
         can_hash, _reason = hashability_of(type_arg, resolve=resolve, overridden=overridden)
         return can_hash
+
+    def _clone_resources(self, type_arg: Type) -> list:
+        """The types in `type_arg` that declare a resource: `Clone` holds when none does.
+
+        The one predicate, `holds_declared_resource`, with its `found` list, so the refusal
+        names the type parameter at fault (#1070).
+        """
+        resolve = (table_resolver(self.struct_table, self.enum_table)
+                   if self.struct_table is not None and self.enum_table is not None
+                   else None)
+        found: list = []
+        holds_declared_resource(type_arg, drop_type_names(self.perk_impl_table),
+                                resolve=resolve, found=found)
+        return found
 
     def validate_all_constraints(
         self,

@@ -305,8 +305,12 @@ class Monomorphizer:
         """Function instantiations in one monomorphized extension body (#392)."""
         return self.function_monomorphizer.collect_from_extension_body(extend_def)
 
-    def collect_from_perk_method_body(self, target_type, method
+    def collect_from_perk_method_body(self, target_type, method,
+                                      filename: Optional[str] = None
                                       ) -> Set[Tuple[str, Tuple[Type, ...]]]:
-        """The same, for one method of a monomorphized perk implementation."""
+        """The same, for one method of a monomorphized perk implementation.
+
+        `filename` is the file of the template, where a nested instantiation's site is.
+        """
         return self.function_monomorphizer.collect_from_perk_method_body(
-            target_type, method)
+            target_type, method, filename)
