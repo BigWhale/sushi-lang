@@ -1,4 +1,7 @@
-public fn widen@(T)(T a) i32:
+public fn widen@(T)(nom T a) i32:
     let i32 spare = 3
-    let i32 x = a
-    return x
+    let T x = a
+    let T y = a
+    x
+    y
+    return 0
