@@ -39,6 +39,43 @@ def substituted_param(param, ty: "Type | None") -> 'Param':
     return Param(**kept)
 
 
+def pack_binding_for(param, substitution: Dict[str, "Type | TypePack"]
+                     ) -> 'TypePack | None':
+    """The TypePack a value-parameter fans out to, or None if it is not pack-typed: a
+    bare type-parameter reference bound to a TypePack."""
+    if isinstance(param.ty, (TypeParameter, UnknownType)):
+        binding = substitution.get(param.ty.name)
+        if isinstance(binding, TypePack):
+            return binding
+    return None
+
+
+def fan_out_pack_param(param, pack: TypePack) -> List['Param']:
+    """The ONE fan-out of a value pack: one parameter per element (#1070).
+
+    The monomorphizer reads it to cut a copy, and a template check reads it to measure
+    a call of a pack template against its substituted signature.
+    """
+    from sushi_lang.semantics.ast import Param
+    from sushi_lang.semantics.hidden_names import pack_element_name
+    return [
+        Param(
+            name=pack_element_name(param.name, i),
+            ty=element_type,
+            name_span=param.name_span,
+            type_span=param.type_span,
+            loc=getattr(param, 'loc', None),
+            is_variadic=False,
+            # Each element is marked as pack-derived, so the scope pass does not report
+            # these synthesized parameters, whose names a user cannot see.
+            is_pack=True,
+            is_nom=getattr(param, 'is_nom', False),
+            nom_span=getattr(param, 'nom_span', None),
+        )
+        for i, element_type in enumerate(pack.types)
+    ]
+
+
 def _copied_try_let(source, copy_):
     """The `??` binder's `let` of a copied `Foreach`: the statement its copied body holds.
 
@@ -173,43 +210,17 @@ class TypeSubstitutor:
         self, param: 'Param', substitution: Dict[str, "Type | TypePack"]
     ) -> 'TypePack | None':
         """The TypePack a value-parameter fans out to, or None if it is not pack-typed."""
-        if isinstance(param.ty, (TypeParameter, UnknownType)):
-            binding = substitution.get(param.ty.name)
-            if isinstance(binding, TypePack):
-                return binding
-        return None
+        return pack_binding_for(param, substitution)
 
     def expand_pack_param(
         self, param: 'Param', substitution: Dict[str, "Type | TypePack"]
     ) -> List['Param']:
         """Fan a single value-parameter out into its concrete instantiation(s)."""
-        from sushi_lang.semantics.ast import Param
-        from sushi_lang.semantics.hidden_names import pack_element_name
-
-        # Detect a pack-typed parameter: a bare type-param reference bound to a
-        # TypePack. The expansion happens HERE, before substitute_type is ever
-        # called on the pack name (which would hit the scalar-position guard).
-        pack = self._pack_binding_for(param, substitution)
+        # The expansion happens HERE, before substitute_type is ever called on the pack
+        # name (which would hit the scalar-position guard).
+        pack = pack_binding_for(param, substitution)
         if pack is not None:
-            return [
-                Param(
-                    name=pack_element_name(param.name, i),
-                    ty=element_type,
-                    name_span=param.name_span,
-                    type_span=param.type_span,
-                    loc=getattr(param, 'loc', None),
-                    is_variadic=False,
-                    # Mark each fan-out element as pack-derived so later passes can
-                    # treat it specially (e.g. the scope pass must not emit a spurious
-                    # CW1001 unused-variable warning: until expand(...) lands (T7b) the
-                    # only way to consume these synthesized params is unavailable, and
-                    # they carry user-invisible names like args_0/args_1).
-                    is_pack=True,
-                    is_nom=getattr(param, 'is_nom', False),
-                    nom_span=getattr(param, 'nom_span', None),
-                )
-                for i, element_type in enumerate(pack.types)
-            ]
+            return fan_out_pack_param(param, pack)
 
         concrete_type = self.substitute_type(param.ty, substitution) if param.ty else None
         return [substituted_param(param, concrete_type)]

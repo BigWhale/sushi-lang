@@ -1,0 +1,29 @@
+# An element of `...Ts: Render + Show` passes the constraint of `...Us: Show`, and each
+# copy calls the inner template with its own element (#1070, R6).
+# EXPECT_STDOUT_EXACT: "show:1\nshow:2\n"
+
+perk Render:
+    fn render() string
+
+perk Show:
+    fn show() string
+
+extend i32 with Render:
+    fn render() string:
+        return "i:{self}"
+
+extend i32 with Show:
+    fn show() string:
+        return "show:{self}"
+
+fn inner@(...Us: Show)(...Us items) ~:
+    expand(item in items):
+        println(item.show())
+
+fn outer@(...Ts: Render + Show)(...Ts args) ~:
+    expand(a in args):
+        inner(a)
+
+fn main() i32:
+    outer(1, 2)
+    return 0

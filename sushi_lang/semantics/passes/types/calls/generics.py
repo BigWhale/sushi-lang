@@ -139,12 +139,11 @@ def _validate_call_in_template(validator: 'TypeValidator', call: Call, generic_f
     The arguments are measured against the callee's signature with the solved type
     arguments put through it, as the instance path measures them against the copy. No
     symbol is chosen, no instance is looked up or requested, and the callee keeps its
-    name: the check copy is discarded. A callee with a pack parameter is a later phase,
-    so its arguments are only walked.
+    name: the check copy is discarded. A pack callee is measured the same way: its
+    substituted signature has one parameter per element of the pack.
     """
-    func_sig = (None if any(tp.is_pack for tp in generic_func.type_params or ())
-                or not _constraints_hold_in_template(validator, call.callee.loc,
-                                                     generic_func, type_args)
+    func_sig = (None if not _constraints_hold_in_template(validator, call.callee.loc,
+                                                          generic_func, type_args)
                 else _substituted_sig(validator, generic_func, type_args, written))
     if func_sig is None:
         _walk_unchecked_arguments(validator, call)

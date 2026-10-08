@@ -346,7 +346,7 @@ _add(ErrorMessage("CE2085", Severity.ERROR,
 # CE2087-CE2089 reserved for future extensions
 _add(ErrorMessage("CE2090", Severity.ERROR,
     "type-pack element {index} of type '{ty}' does not satisfy constraint '{perk}'",
-    Category.TYPE, "Each element type bound to a perk-constrained type-pack '...Ts: Perk' must implement the required perk."))
+    Category.TYPE, "Each element type bound to a perk-constrained type-pack '...Ts: Perk' must implement the required perk. In a generic body (#1070), a type parameter or an element of a pack passes the constraint of a pack on only when its own constraints promise it, and the help names the constraint to add."))
 
 _add(ErrorMessage("CE2091", Severity.ERROR,
     "{callable} must use a bare 'return <value>' ('return ~' in a '~' body), not 'return Result.Ok(...)' or 'return Result.Err(...)'",

@@ -260,13 +260,19 @@ def substituted_call_signature(generic_func, type_args):
     yields (`substituted_call_result`) and for what a call in a template check passes
     (#1070), where no instance is cut.
     """
-    from sushi_lang.semantics.generics.monomorphize.transformer import substituted_param
+    from sushi_lang.semantics.generics.monomorphize.transformer import (
+        fan_out_pack_param, pack_binding_for, substituted_param)
     substitution = type_param_substitution(generic_func, type_args)
     if substitution is None or generic_func.ret is None:
         return None
-    params = [substituted_param(p, substitute_type_params(p.ty, substitution)
-                                if p.ty is not None else None)
-              for p in generic_func.params]
+    params = []
+    for p in generic_func.params:
+        pack = pack_binding_for(p, substitution)
+        if pack is not None:
+            params += fan_out_pack_param(p, pack)
+        else:
+            params.append(substituted_param(p, substitute_type_params(p.ty, substitution)
+                                            if p.ty is not None else None))
     ret = substitute_type_params(generic_func.ret, substitution)
     err = (substitute_type_params(generic_func.err_type, substitution)
            if generic_func.err_type is not None else None)

@@ -1,0 +1,22 @@
+# A call of a pack template in a template check judges the constraints of the pack at
+# each argument: `x` has an unconstrained type parameter, which does not promise
+# `Render` (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2090
+
+perk Render:
+    fn render() string
+
+extend i32 with Render:
+    fn render() string:
+        return "i:{self}"
+
+fn show_all@(...Ts: Render)(...Ts args) ~:
+    expand(a in args):
+        println(a.render())
+
+fn outer@(T)(T x) ~:
+    show_all(x, 1)
+
+fn main() i32:
+    show_all(1)
+    return 0
