@@ -1,0 +1,11 @@
+# After the alternative `_`, the alternative `2` of the same arm can never match. It is
+# reported one time.
+# EXPECT_ERROR_CODES_EXACT: CE2118
+
+fn name(i32 n) i32:
+    match n:
+        1 | _ | 2 -> return 1
+
+fn main() i32:
+    println(name(2))
+    return 0

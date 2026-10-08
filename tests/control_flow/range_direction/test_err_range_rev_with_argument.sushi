@@ -1,0 +1,7 @@
+# `rev` on a range takes no argument.
+# EXPECT_ERROR_CODES_EXACT: CE2009
+
+fn main() i32:
+    foreach(i in (0..3).rev(1)):
+        println(i)
+    return 0

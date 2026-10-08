@@ -1,0 +1,27 @@
+# `_` is a legal alternative. In the last arm, `1 | _` matches every value, so the arm
+# is also the arm for each value the arms above do not take.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "zero\nrest\nrest\nred\nrest\n"
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn name(i32 n) string:
+    match n:
+        0 -> return "zero"
+        1 | _ -> return "rest"
+
+fn color(Color c) string:
+    match c:
+        Color.Red -> return "red"
+        Color.Green | _ -> return "rest"
+
+fn main() i32:
+    println(name(0))
+    println(name(1))
+    println(name(5))
+    println(color(Color.Red))
+    println(color(Color.Blue))
+    return 0

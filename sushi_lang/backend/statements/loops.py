@@ -389,98 +389,50 @@ def _emit_hashmap_foreach(
 
 
 def _emit_range_foreach(codegen: 'LLVMCodegen', node: 'Foreach', range_expr: 'RangeExpr') -> None:
-    """Emit optimized foreach loop for range expressions."""
+    """Emit a foreach over a range: ONE counted loop over the formula of `emit_range`.
 
-    builder, func = require_both_initialized(codegen)
+    A counter k runs from 0 while k < count, and the item is `first + step * k`. An array
+    literal fills its slots with the same formula, so the two positions cannot disagree.
+    A range that does not go up has a count of zero, and the body does not run.
+    """
+    from llvmlite import ir
+    from sushi_lang.backend.ranges import emit_range
+
+    b, func = require_both_initialized(codegen)
     codegen.utils.ensure_open_block()
 
-    start_value = codegen.expressions.emit_expr(range_expr.start)
-    start_i32 = codegen.utils.require_i32(start_value)
+    i32 = codegen.types.i32
+    span = emit_range(codegen, range_expr)
 
-    end_value = codegen.expressions.emit_expr(range_expr.end)
-    end_i32 = codegen.utils.require_i32(end_value)
+    index_slot = entry_alloca(b, i32, name="range_index")
+    b.store(ir.Constant(i32, 0), index_slot)
 
-    start_slot = entry_alloca(codegen.builder, codegen.types.i32, name="range_start")
-    codegen.builder.store(start_i32, start_slot)
+    cond_bb = func.append_basic_block(name="range.cond")
+    body_bb = func.append_basic_block(name="range.body")
+    incr_bb = func.append_basic_block(name="range.incr")
+    end_bb = func.append_basic_block(name="range.end")
+    b.branch(cond_bb)
 
-    end_slot = entry_alloca(codegen.builder, codegen.types.i32, name="range_end")
-    codegen.builder.store(end_i32, end_slot)
+    b.position_at_end(cond_bb)
+    index = b.load(index_slot, name="range_index_val")
+    b.cbranch(b.icmp_signed("<", index, span.count, name="range_more"), body_bb, end_bb)
 
-    start_loaded = codegen.builder.load(start_slot, name="start_val")
-    end_loaded = codegen.builder.load(end_slot, name="end_val")
-    is_ascending = codegen.builder.icmp_signed("<", start_loaded, end_loaded, name="is_ascending")
-
-    ascending_bb = codegen.func.append_basic_block(name="range.ascending")
-    descending_bb = codegen.func.append_basic_block(name="range.descending")
-    end_bb = codegen.func.append_basic_block(name="range.end")
-
-    codegen.builder.cbranch(is_ascending, ascending_bb, descending_bb)
-
-    codegen.builder.position_at_end(ascending_bb)
-    _emit_range_loop_path(codegen, node, start_slot, end_slot, range_expr.inclusive, ascending=True, end_bb=end_bb)
-
-    codegen.builder.position_at_end(descending_bb)
-    _emit_range_loop_path(codegen, node, start_slot, end_slot, range_expr.inclusive, ascending=False, end_bb=end_bb)
-
-    codegen.builder.position_at_end(end_bb)
-
-
-def _emit_range_loop_path(
-    codegen: 'LLVMCodegen',
-    node: 'Foreach',
-    start_slot: 'ir.Value',
-    end_slot: 'ir.Value',
-    inclusive: bool,
-    ascending: bool,
-    end_bb: 'ir.Block'
-) -> None:
-    """Emit one direction of the range loop (ascending or descending)."""
-    from llvmlite import ir
-
-    end_val = codegen.builder.load(end_slot, name="end_val")
-    if inclusive:
-        if ascending:
-            adjusted_end = codegen.builder.add(end_val, ir.Constant(codegen.types.i32, 1), name="adjusted_end")
-        else:
-            adjusted_end = codegen.builder.sub(end_val, ir.Constant(codegen.types.i32, 1), name="adjusted_end")
-    else:
-        adjusted_end = end_val
-
-    cond_bb = codegen.func.append_basic_block(name=f"range.{'asc' if ascending else 'desc'}.cond")
-    body_bb = codegen.func.append_basic_block(name=f"range.{'asc' if ascending else 'desc'}.body")
-    incr_bb = codegen.func.append_basic_block(name=f"range.{'asc' if ascending else 'desc'}.incr")
-
-    start_val = codegen.builder.load(start_slot, name="start_val")
-    counter_slot = entry_alloca(codegen.builder, codegen.types.i32, name=node.item_name)
-    codegen.builder.store(start_val, counter_slot)
-
-    codegen.builder.branch(cond_bb)
-
-    codegen.builder.position_at_end(cond_bb)
-    current_counter = codegen.builder.load(counter_slot, name=f"{node.item_name}_val")
-
-    if ascending:
-        condition = codegen.builder.icmp_signed("<", current_counter, adjusted_end, name="loop_cond")
-    else:
-        condition = codegen.builder.icmp_signed(">", current_counter, adjusted_end, name="loop_cond")
-
-    codegen.builder.cbranch(condition, body_bb, end_bb)
-
-    codegen.builder.position_at_end(body_bb)
+    b.position_at_end(body_bb)
     with loop_frame(codegen, continue_bb=incr_bb, break_bb=end_bb, back_edge=incr_bb):
         element_ll_type = codegen.types.ll_type(node.item_type)
-        counter_value = codegen.builder.load(counter_slot, name=node.item_name)
-        codegen.memory.create_local(node.item_name, element_ll_type, counter_value, node.item_type)
+        current = b.load(index_slot, name="range_index_cur")
+        item = b.add(span.first, b.mul(span.step, current, name="range_offset"),
+                     name=node.item_name)
+        codegen.memory.create_local(node.item_name, element_ll_type, item, node.item_type)
         _emit_block(codegen, node.body)
 
-    codegen.builder.position_at_end(incr_bb)
-    current_val = codegen.builder.load(counter_slot, name="current_val")
-    if ascending:
-        next_val = codegen.builder.add(current_val, ir.Constant(codegen.types.i32, 1), name="next_val")
-    else:
-        next_val = codegen.builder.sub(current_val, ir.Constant(codegen.types.i32, 1), name="next_val")
-    codegen.builder.store(next_val, counter_slot)
-    codegen.builder.branch(cond_bb)
+    b.position_at_end(incr_bb)
+    advanced = b.add(b.load(index_slot, name="range_index_old"), ir.Constant(i32, 1),
+                     name="range_index_next")
+    b.store(advanced, index_slot)
+    b.branch(cond_bb)
+
+    b.position_at_end(end_bb)
 
 
 def bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,

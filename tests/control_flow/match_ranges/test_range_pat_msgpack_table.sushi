@@ -1,0 +1,54 @@
+# The format byte of MessagePack, as a table of u8 ranges and literals. The first table
+# names every byte, 0xc1 included, so it needs no `_` arm. The second table leaves 0xc1
+# out and ends with `_`. A loop prints the arm that each of the 256 values takes.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "ppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppmmmmmmmmmmmmmmmmaaaaaaaaaaaaaaaassssssssssssssssssssssssssssssssnxbbBBBeeeffuuuuiiiiEEEEESSSAAMMNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN\nppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppmmmmmmmmmmmmmmmmaaaaaaaaaaaaaaaassssssssssssssssssssssssssssssssn?bbBBBeeeffuuuuiiiiEEEEESSSAAMMNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN\n"
+
+fn tag(u8 b) string:
+    match b:
+        0x00..=0x7f -> return "p"
+        0x80..=0x8f -> return "m"
+        0x90..=0x9f -> return "a"
+        0xa0..=0xbf -> return "s"
+        0xc0 -> return "n"
+        0xc1 -> return "x"
+        0xc2 | 0xc3 -> return "b"
+        0xc4..=0xc6 -> return "B"
+        0xc7..=0xc9 -> return "e"
+        0xca..=0xcb -> return "f"
+        0xcc..=0xcf -> return "u"
+        0xd0..=0xd3 -> return "i"
+        0xd4..=0xd8 -> return "E"
+        0xd9..=0xdb -> return "S"
+        0xdc..=0xdd -> return "A"
+        0xde..=0xdf -> return "M"
+        0xe0..=0xff -> return "N"
+
+fn tag_or_rest(u8 b) string:
+    match b:
+        0x00..=0x7f -> return "p"
+        0x80..=0x8f -> return "m"
+        0x90..=0x9f -> return "a"
+        0xa0..=0xbf -> return "s"
+        0xc0 -> return "n"
+        0xc2 | 0xc3 -> return "b"
+        0xc4..=0xc6 -> return "B"
+        0xc7..=0xc9 -> return "e"
+        0xca..=0xcb -> return "f"
+        0xcc..=0xcf -> return "u"
+        0xd0..=0xd3 -> return "i"
+        0xd4..=0xd8 -> return "E"
+        0xd9..=0xdb -> return "S"
+        0xdc..=0xdd -> return "A"
+        0xde..=0xdf -> return "M"
+        0xe0..=0xff -> return "N"
+        _ -> return "?"
+
+fn main() i32:
+    foreach(i in 0..256):
+        print(tag(i as u8))
+    println("")
+    foreach(i in 0..256):
+        print(tag_or_rest(i as u8))
+    println("")
+    return 0

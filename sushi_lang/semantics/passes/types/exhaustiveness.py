@@ -2,16 +2,19 @@
 
 The usefulness algorithm of Maranget ("Warnings for pattern matching", 2007) over a
 pattern matrix. An arm is one row. A column of an enum type splits into its variants, a
-tuple column into its elements, an `Own@(T)` column into its pointee, and an integer
-column and a string column have no end of values, so only a `_` or a binding covers
-them. Two answers come out: the values that no arm matches (the witnesses), and the
-arms that no value can reach.
+tuple column into its elements, and an `Own@(T)` column into its pointee. An integer
+column holds the values of its type from the lowest to the highest, and the rows split it
+into intervals at the bounds of their literals and ranges: the arms cover the column when
+they cover each interval. A string column has no end of values, so only a `_` or a
+binding covers it. `|` alternatives are an `Or` position: a row with an `Or` at its head is one row
+for each alternative. Two answers come out: the values that no arm matches (the
+witnesses), and the arms and the alternatives that no value can reach.
 The design is in docs/design/tuples.md section 5b.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, List, Optional, Sequence, Tuple, Union
+from dataclasses import dataclass, field
+from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Union
 
 from sushi_lang.semantics.typesys import Type
 
@@ -24,10 +27,43 @@ class Wild:
 WILD = Wild()
 
 # The key of the one constructor of a tuple and of an `Own@(T)`. A variant's key is its
-# name, an integer literal's key is its value, and a string literal's key is
-# `string_key(value)`.
+# name, an integer literal's or range's key is an `IntRange`, and a string literal's key
+# is `string_key(value)`.
 TUPLE_KEY = ("tuple",)
 OWN_KEY = ("own",)
+
+
+@dataclass(frozen=True)
+class IntRange:
+    """The key of an integer pattern: the values from `low` to `high`, both included.
+
+    A literal is the range of one value. A range with `low > high` matches no value.
+    """
+    low: int
+    high: int
+
+    def is_empty(self) -> bool:
+        """True when no value is in the range."""
+        return self.low > self.high
+
+    def contains(self, other: "IntRange") -> bool:
+        """True when every value of `other` is in this range."""
+        return self.low <= other.low and other.high <= self.high
+
+    def overlaps(self, other: "IntRange") -> bool:
+        """True when a value is in both ranges."""
+        return max(self.low, other.low) <= min(self.high, other.high)
+
+
+@dataclass(frozen=True)
+class IntegerColumn:
+    """The signature of an integer type: every value from `low` to `high`.
+
+    It has no fixed list of constructors. The rows of a matrix split it into intervals at
+    the bounds of their keys, and each interval is one constructor of no arguments.
+    """
+    low: int
+    high: int
 
 
 def string_key(value: str) -> Tuple[str, str]:
@@ -42,11 +78,23 @@ class Ctor:
     args: Tuple["Pat", ...] = ()
 
 
-Pat = Union[Wild, Ctor]
+@dataclass(frozen=True)
+class Or:
+    """A position that matches what any of its alternatives matches: `1 | 2`.
 
-# The constructors of a type, each with the types of its sub-positions, or None when the
-# values of the type cannot be listed (an integer, a string, a struct).
-Signature = Optional[Sequence[Tuple[object, Tuple[Type, ...]]]]
+    `labels[i]` is what the caller knows alternative i by, for a diagnostic. It takes no
+    part in the comparison of two patterns.
+    """
+    alts: Tuple["Pat", ...]
+    labels: Tuple[Any, ...] = field(default=(), compare=False, hash=False)
+
+
+Pat = Union[Wild, Ctor, Or]
+
+# The constructors of a type, each with the types of its sub-positions, an
+# `IntegerColumn` for an integer type, or None when the values of the type cannot be
+# listed (a string, a struct).
+Signature = Optional[Union[Sequence[Tuple[object, Tuple[Type, ...]]], IntegerColumn]]
 
 # A bound on the number of witnesses. A wide tuple of enums has a product of missing
 # combinations, and a diagnostic names a few of them.
@@ -54,10 +102,25 @@ WITNESS_LIMIT = 16
 
 
 @dataclass(frozen=True)
+class DeadAlternative:
+    """An alternative no value reaches: its arm, its label, and what covers it.
+
+    `arms` are the arms above that share a value with it, and `alternatives` the labels
+    of the earlier alternatives of the same `|` list that share a value with it.
+    """
+    arm: int
+    label: Any
+    arms: List[int]
+    alternatives: List[Any]
+
+
+@dataclass(frozen=True)
 class Analysis:
-    """The two answers: the missing values, and each dead arm with the arms covering it."""
+    """The answers: the missing values, each dead arm with the arms covering it, and each
+    dead alternative of an arm that is not dead as a whole."""
     missing: List[Pat]
     dead: List[Tuple[int, List[int]]]
+    dead_alternatives: List[DeadAlternative] = field(default_factory=list)
 
 
 class PatternMatrix:
@@ -68,10 +131,45 @@ class PatternMatrix:
         self.signature = signature
 
     def _arg_types(self, key: object, ty: Type) -> Tuple[Type, ...]:
-        for ctor_key, arg_types in self.signature(ty) or ():
+        signature = self.signature(ty)
+        if isinstance(signature, IntegerColumn):
+            return ()
+        for ctor_key, arg_types in signature or ():
             if ctor_key == key:
                 return tuple(arg_types)
         return ()
+
+    @staticmethod
+    def _split(rows: List[List[Pat]], span: IntRange) -> List[IntRange]:
+        """`span` cut at the bounds of the integer keys at the head of the rows.
+
+        Each piece is inside a head key or outside it, so one containment test answers
+        whether a row matches all of a piece. An empty span has no piece.
+        """
+        if span.is_empty():
+            return []
+        cuts = {span.low}
+        for row in rows:
+            head = row[0]
+            if isinstance(head, Ctor) and isinstance(head.key, IntRange) \
+                    and not head.key.is_empty():
+                for cut in (head.key.low, head.key.high + 1):
+                    if span.low < cut <= span.high:
+                        cuts.add(cut)
+        starts = sorted(cuts)
+        ends = [start - 1 for start in starts[1:]] + [span.high]
+        return [IntRange(low, high) for low, high in zip(starts, ends, strict=True)]
+
+    @staticmethod
+    def _expand(rows: List[List[Pat]]) -> List[List[Pat]]:
+        """Each row with an `Or` at its head becomes one row for each alternative."""
+        out: List[List[Pat]] = []
+        for row in rows:
+            if row and isinstance(row[0], Or):
+                out.extend(PatternMatrix._expand([[alt] + row[1:] for alt in row[0].alts]))
+            else:
+                out.append(row)
+        return out
 
     @staticmethod
     def _specialize(rows: List[List[Pat]], key: object, arity: int) -> List[List[Pat]]:
@@ -79,7 +177,9 @@ class PatternMatrix:
         for row in rows:
             head = row[0]
             if isinstance(head, Ctor):
-                if head.key == key:
+                if head.key == key or (isinstance(key, IntRange)
+                                       and isinstance(head.key, IntRange)
+                                       and head.key.contains(key)):
                     out.append(list(head.args) + row[1:])
             else:
                 out.append(_wilds(arity) + row[1:])
@@ -95,6 +195,11 @@ class PatternMatrix:
         if signature is None:
             return None, set()
         heads = {row[0].key for row in rows if isinstance(row[0], Ctor)}
+        if isinstance(signature, IntegerColumn):
+            pieces = self._split(rows, IntRange(signature.low, signature.high))
+            if all(_covered(piece, heads) for piece in pieces):
+                return [(piece, ()) for piece in pieces], heads
+            return None, heads
         if all(key in heads for key, _ in signature):
             return signature, heads
         return None, heads
@@ -103,7 +208,13 @@ class PatternMatrix:
         """Does `vector` match a value that no row matches?"""
         if not vector:
             return not rows
+        rows = self._expand(rows)
         head = vector[0]
+        if isinstance(head, Or):
+            return any(self.useful(rows, [alt] + vector[1:], types) for alt in head.alts)
+        if isinstance(head, Ctor) and isinstance(head.key, IntRange):
+            return any(self.useful(self._specialize(rows, piece, 0), vector[1:], types[1:])
+                       for piece in self._split(rows, head.key))
         if isinstance(head, Ctor):
             arg_types = self._arg_types(head.key, types[0])
             return self.useful(self._specialize(rows, head.key, len(head.args)),
@@ -123,6 +234,7 @@ class PatternMatrix:
         """Value vectors that no row matches, at most `limit` of them."""
         if not types:
             return [] if rows else [[]]
+        rows = self._expand(rows)
         signature, heads = self._complete(rows, types[0])
         if signature is not None:
             found: List[List[Pat]] = []
@@ -142,6 +254,9 @@ class PatternMatrix:
         listed = self.signature(types[0])
         if listed is None or not heads:
             fills: List[Pat] = [WILD]
+        elif isinstance(listed, IntegerColumn):
+            pieces = self._split(rows, IntRange(listed.low, listed.high))
+            fills = [Ctor(piece) for piece in pieces if not _covered(piece, heads)]
         else:
             fills = [Ctor(key, (WILD,) * len(arg_types))
                      for key, arg_types in listed if key not in heads]
@@ -152,12 +267,75 @@ def _wilds(count: int) -> List[Pat]:
     return [WILD] * count
 
 
+def _covered(piece: IntRange, heads: set) -> bool:
+    """Does an integer key among the heads hold the whole piece?"""
+    return any(isinstance(key, IntRange) and key.contains(piece) for key in heads)
+
+
+def covers(keys: Sequence[IntRange], key: IntRange) -> bool:
+    """Do the integer keys together hold every value of `key`? An empty key: True."""
+    rows: List[List[Pat]] = [[Ctor(k)] for k in keys]
+    heads = set(keys)
+    return all(_covered(piece, heads) for piece in PatternMatrix._split(rows, key))
+
+
 def intersects(first: Pat, second: Pat) -> bool:
     """Is there a value that both patterns match?"""
     if isinstance(first, Wild) or isinstance(second, Wild):
         return True
+    if isinstance(first, Or):
+        return any(intersects(alt, second) for alt in first.alts)
+    if isinstance(second, Or):
+        return any(intersects(first, alt) for alt in second.alts)
+    if isinstance(first.key, IntRange) and isinstance(second.key, IntRange):
+        return first.key.overlaps(second.key)
     return (first.key == second.key and len(first.args) == len(second.args)
             and all(intersects(a, b) for a, b in zip(first.args, second.args, strict=True)))
+
+
+def _or_sites(pat: Pat, wrap: Callable[[Pat], Pat]
+              ) -> Iterator[Tuple[Or, Callable[[Pat], Pat]]]:
+    """Each outermost `Or` inside `pat`, with the function that puts a pattern in its place.
+
+    `wrap` puts a pattern in the place of `pat` itself, in the whole row.
+    """
+    if isinstance(pat, Or):
+        yield pat, wrap
+    elif isinstance(pat, Ctor):
+        for index, arg in enumerate(pat.args):
+            yield from _or_sites(arg, _in_place(pat, index, wrap))
+
+
+def _in_place(ctor: Ctor, index: int, wrap: Callable[[Pat], Pat]) -> Callable[[Pat], Pat]:
+    """The function that puts a pattern in the place of argument `index` of `ctor`."""
+    def place(p: Pat) -> Pat:
+        return wrap(Ctor(ctor.key, ctor.args[:index] + (p,) + ctor.args[index + 1:]))
+    return place
+
+
+def _dead_alternatives(matrix: PatternMatrix, seen: List[List[Pat]], row: Pat,
+                       scrutinee_type: Type, wrap: Callable[[Pat], Pat]
+                       ) -> Iterator[Tuple[Any, Pat, List[Any]]]:
+    """Each alternative in `row` that no value reaches, with its whole row and the labels of
+    the earlier alternatives of its list that share a value with it.
+
+    Alternative i is dead when the row with that alternative in the place of its `Or` is
+    not useful against the arms above and the earlier alternatives of the same list. The
+    walk goes into a live alternative only, so a dead one is reported once.
+    """
+    for site, place in _or_sites(row, wrap):
+        earlier: List[List[Pat]] = []
+        for index, alt in enumerate(site.alts):
+            whole = place(alt)
+            label = site.labels[index] if index < len(site.labels) else None
+            if not matrix.useful(seen + earlier, [whole], [scrutinee_type]):
+                before = [site.labels[k] for k in range(index)
+                          if k < len(site.labels) and intersects(site.alts[k], alt)]
+                yield label, whole, before
+            else:
+                yield from _dead_alternatives(matrix, seen + earlier, alt, scrutinee_type,
+                                              place)
+            earlier.append([whole])
 
 
 def analyze(signature: Callable[[Type], Signature], rows: Sequence[Optional[Pat]],
@@ -171,6 +349,7 @@ def analyze(signature: Callable[[Type], Signature], rows: Sequence[Optional[Pat]
     matrix = PatternMatrix(signature)
     seen: List[List[Pat]] = []
     dead: List[Tuple[int, List[int]]] = []
+    dead_alternatives: List[DeadAlternative] = []
     for index, row in enumerate(rows):
         if row is None:
             continue
@@ -178,6 +357,12 @@ def analyze(signature: Callable[[Type], Signature], rows: Sequence[Optional[Pat]
             covers = [above for above, other in enumerate(rows[:index])
                       if other is not None and intersects(other, row)]
             dead.append((index, covers))
+        else:
+            for label, whole, before in _dead_alternatives(matrix, seen, row,
+                                                           scrutinee_type, lambda p: p):
+                covers = [above for above, other in enumerate(rows[:index])
+                          if other is not None and intersects(other, whole)]
+                dead_alternatives.append(DeadAlternative(index, label, covers, before))
         seen.append([row])
     missing = [witness[0] for witness in matrix.missing(seen, [scrutinee_type])]
-    return Analysis(missing=missing, dead=dead)
+    return Analysis(missing=missing, dead=dead, dead_alternatives=dead_alternatives)

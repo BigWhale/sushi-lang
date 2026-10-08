@@ -1,0 +1,14 @@
+# The ranges do not hold every i32, and there is no `_` arm. The error names the first
+# value that no arm matches: the i32 minimum.
+# EXPECT_ERROR_CODES_EXACT: CE2074
+# EXPECT_STDERR_CONTAINS: -2147483648
+
+fn f(i32 n) string:
+    match n:
+        0..=9 -> return "digit"
+        10..=19 -> return "teen"
+    return "other"
+
+fn main() i32:
+    println(f(1))
+    return 0

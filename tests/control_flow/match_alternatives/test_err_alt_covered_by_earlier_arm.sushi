@@ -1,0 +1,15 @@
+# The alternative `Maybe.Some(1)` can never match: the arm above matches every value it
+# matches. The other alternative of the arm is still reachable, so the one error is at
+# that alternative, and it is reported one time.
+# EXPECT_ERROR_CODES_EXACT: CE2118
+# EXPECT_STDERR_CONTAINS: "Maybe.Some(1)"
+
+fn size(Maybe@(i32) m) i32:
+    match m:
+        Maybe.Some(_) -> return 1
+        Maybe.Some(1) | Maybe.None -> return 0
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(1)
+    println(size(m))
+    return 0

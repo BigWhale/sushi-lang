@@ -1,0 +1,11 @@
+# `5..5` matches no value, so the arm can never run.
+# EXPECT_ERROR_CODES_EXACT: CE2118
+
+fn f(i32 n) string:
+    match n:
+        5..5 -> return "never"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(5))
+    return 0

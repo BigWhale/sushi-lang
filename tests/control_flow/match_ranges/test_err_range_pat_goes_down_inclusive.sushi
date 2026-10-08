@@ -1,0 +1,12 @@
+# A range pattern always goes up. The help gives the written order to use.
+# EXPECT_ERROR_CODES_EXACT: CE2125
+# EXPECT_STDERR_CONTAINS: 0x80..=0x8f
+
+fn f(u8 b) string:
+    match b:
+        0x8f..=0x80 -> return "fixmap"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(1))
+    return 0

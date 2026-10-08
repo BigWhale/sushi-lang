@@ -1,0 +1,18 @@
+# In a tuple pattern, two arms can share values: the first arm that matches runs. A
+# nested range that shares values with an arm above is legal, because the arm still
+# matches values of its own.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "first\nfirst\nsecond\nrest\n"
+
+fn which(i32 a, i32 b) string:
+    match (a, b):
+        (0..=9, _) -> return "first"
+        (5..=20, 0..=9) -> return "second"
+        _ -> return "rest"
+
+fn main() i32:
+    println(which(5, 5))
+    println(which(9, 50))
+    println(which(15, 5))
+    println(which(15, 50))
+    return 0

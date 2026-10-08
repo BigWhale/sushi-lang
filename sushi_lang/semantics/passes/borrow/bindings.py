@@ -7,8 +7,8 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import (
-    DotCall, Expr, LiteralPattern, MethodCall, Name, NomBinding, Pattern, RefBinding,
-    TuplePattern,
+    DotCall, Expr, LiteralPattern, MethodCall, Name, NomBinding, OrPattern, Pattern,
+    RangePattern, RefBinding, TuplePattern,
 )
 from sushi_lang.semantics.constant_borrow import READ_ONLY_MODE
 from sushi_lang.semantics.ownership import TypeClass
@@ -313,8 +313,8 @@ def _register_item(checker: 'BorrowChecker', scope: BindingScope, item: object,
     `span` is the span of the pattern that holds the position, for a bare name.
     """
     match item:
-        case "_" | LiteralPattern():
-            pass                      # a discard and a literal bind nothing
+        case "_" | LiteralPattern() | RangePattern():
+            pass                      # a discard, a literal and a range bind nothing
         case str():
             scope.bind_value(item, ty, span)
             freeze_for_a_view(checker, scope, item, ty, span, scrutinee, kind)
@@ -336,6 +336,11 @@ def _register_item(checker: 'BorrowChecker', scope: BindingScope, item: object,
                           if isinstance(item, Pattern) else item.loc)
             for sub, sub_type in _sub_items(checker, item, ty):
                 _register_item(checker, scope, sub, sub_type, scrutinee, kind, inner_span)
+        case OrPattern():
+            # Each alternative binds the same names with the same types and modes
+            # (CE2126), so the first one registers them for the arm.
+            _register_item(checker, scope, item.alternatives[0], ty, scrutinee, kind,
+                           item.loc or span)
         case _:
             _register_own_pattern(checker, scope, item, ty, span, scrutinee)
 
@@ -379,45 +384,76 @@ def reject_partial_take(checker: 'BorrowChecker', pattern: object,
     All-or-nothing per arm and per scrutinee, for the reason the code's text states:
     what suppresses the match's free is the WHOLE scrutinee, so a payload left behind in
     a taking arm is freed by nobody. Each element of a tuple-literal scrutinee is its own
-    scrutinee (ruling 3 of the tuple design), and the caller asks once for each.
+    scrutinee (ruling 3 of the tuple design), and the caller asks once for each. With `|`
+    alternatives, each path through them is one way the arm can match, and each path
+    takes the rule.
     """
-    taken: list = []
-    left: list = []
-    _survey_arm(checker, pattern, scrutinee_type, None, taken, left)
-    if not taken or not left:
-        return
+    for taken, left in _survey_paths(checker, pattern, scrutinee_type, None):
+        if taken and left:
+            _report_partial_take(checker, taken, left)
+            return
+
+
+def _report_partial_take(checker: 'BorrowChecker', taken: tuple, left: tuple) -> None:
+    """CE2433 at the first owning position a taking path leaves behind."""
     name, span = left[0]
     diag = checker.err.emit_with(er.ERR.CE2433, span, name=name)
     taken_name, taken_span = taken[0]
     if taken_span is not None:
         diag.note_at(f"'{taken_name}' is taken here, which moves the whole variant",
                      taken_span)
-    diag.help(f"mark '{name}' `nom` as well, or drop the `nom` from '{taken[0][0]}' and "
+    diag.help(f"mark '{name}' `nom` as well, or drop the `nom` from '{taken_name}' and "
               f"read both through the borrow")
     diag.emit()
 
 
-def _survey_arm(checker: 'BorrowChecker', item: object, ty: Optional[Type],
-                span: Optional[Span], taken: list, left: list) -> None:
-    """Collect an arm's taking bindings and the OWNING positions it leaves behind."""
+# One way an arm can match: the bindings it takes, and the owning positions it leaves.
+_Path = tuple[tuple, tuple]
+
+
+def _survey_paths(checker: 'BorrowChecker', item: object, ty: Optional[Type],
+                  span: Optional[Span]) -> list[_Path]:
+    """The taking bindings and the OWNING positions left behind, for each path.
+
+    A pattern with no `|` alternatives has one path. Two paths that take and leave the
+    same positions are one path.
+    """
+    if isinstance(item, OrPattern):
+        return _unique([path for alternative in item.alternatives
+                        for path in _survey_paths(checker, alternative, ty, span)])
     if isinstance(item, (Pattern, TuplePattern)):
         inner_span = (item.variant_name_span or item.loc
                       if isinstance(item, Pattern) else item.loc)
+        paths: list[_Path] = [((), ())]
         for sub, sub_type in _sub_items(checker, item, ty):
-            _survey_arm(checker, sub, sub_type, inner_span, taken, left)
-        return
+            paths = _unique([(taken + sub_taken, left + sub_left)
+                             for taken, left in paths
+                             for sub_taken, sub_left in _survey_paths(
+                                 checker, sub, sub_type, inner_span)])
+        return paths
     if isinstance(item, NomBinding):
-        taken.append((item.name, item.loc or span))
-        return
-    if isinstance(item, LiteralPattern) or span is None:
-        return
+        return [(((item.name, item.loc or span),), ())]
+    if isinstance(item, (LiteralPattern, RangePattern)) or span is None:
+        return [((), ())]
     # Everything else keeps the payload where it is: a bare binding, a `poke` / `peek`
     # reference into it, an `Own(...)` unwrap, and a `_` discard, which is the same slot
     # with no name.
     if checker.types.type_class(ty) is not TypeClass.MOVE:
-        return
+        return [((), ())]
     name = getattr(item, "name", None) or (item if isinstance(item, str) else "_")
-    left.append((name, getattr(item, "loc", None) or span))
+    return [((), ((name, getattr(item, "loc", None) or span),))]
+
+
+def _unique(paths: list[_Path]) -> list[_Path]:
+    """The paths in order, each one time. Positions compare by name and by span."""
+    seen: set = set()
+    kept: list[_Path] = []
+    for path in paths:
+        key = tuple(tuple((name, id(where)) for name, where in half) for half in path)
+        if key not in seen:
+            seen.add(key)
+            kept.append(path)
+    return kept
 
 
 def _register_own_pattern(checker: 'BorrowChecker', scope: BindingScope, binding,
@@ -428,7 +464,7 @@ def _register_own_pattern(checker: 'BorrowChecker', scope: BindingScope, binding
     inner_borrow = getattr(binding, "inner_borrow", None)
     pointee = checker.types.own_payload(payload_type)
 
-    if isinstance(inner, (Pattern, TuplePattern)):
+    if isinstance(inner, (Pattern, TuplePattern, OrPattern, LiteralPattern, RangePattern)):
         _register_item(checker, scope, inner, pointee, scrutinee,
                        ScrutineeKind.OWN_PAYLOAD, span)
     elif isinstance(inner, str) and inner != "_":

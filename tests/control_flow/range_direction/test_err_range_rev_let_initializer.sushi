@@ -1,0 +1,6 @@
+# A `.rev()` range is still a range, and a range is not a value.
+# EXPECT_ERROR_CODES_EXACT: CE2122
+
+fn main() i32:
+    let i32 x = (0..3).rev()
+    return x

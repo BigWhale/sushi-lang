@@ -295,6 +295,11 @@ def _inside_a_perk(stack: list) -> bool:
     return False
 
 
+# The lexer reads `||` as the logical operator, so `1||2` in a pattern is one OR token
+# where an alternative `|` is legal.
+_DOUBLE_BAR_HINT = "put a space: '1 | 2'"
+
+
 def parse_error_hint(e: UnexpectedInput, src: str = "") -> Optional[str]:
     """Advice for a parse failure the grammar cannot phrase itself. None if none applies."""
     expected = getattr(e, "expected", None)
@@ -302,6 +307,11 @@ def parse_error_hint(e: UnexpectedInput, src: str = "") -> Optional[str]:
         hint = _sole_lpar_hint(e)
         if hint is not None:
             return hint
+
+    token = getattr(e, "token", None)
+    if (expected is not None and "BIT_OR" in expected
+            and getattr(token, "type", None) == "OR" and str(token) == "||"):
+        return _DOUBLE_BAR_HINT
 
     line = getattr(e, "line", None)
     col = getattr(e, "column", None)

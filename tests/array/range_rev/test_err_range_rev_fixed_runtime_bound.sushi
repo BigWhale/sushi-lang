@@ -1,0 +1,8 @@
+# A fixed array needs readable bounds, with `.rev()` as without it.
+# EXPECT_ERROR_CODE: CE2019
+
+fn main() i32:
+    let i32 n = 3
+    let i32[3] a = [(0..n).rev()]
+    println(a[0])
+    return 0

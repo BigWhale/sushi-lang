@@ -1,21 +1,26 @@
 """The one reader of a RANGE whose bounds the compiler can read (#478).
 
 A range appears in two positions that must agree: `foreach(i in 0..5)` steps a counter, and
-`from([0..5])` fills five slots. The rules used to live in the back end's loop emitter alone,
-so any other reader would have re-derived the direction and the inclusive adjustment.
+`from([0..5])` fills five slots. Both read the formula here, so no reader derives the count
+or the direction for itself.
 
-The formula is the whole of it:
+A range ALWAYS goes up. `(a..b).rev()` yields the same values, last first. The formula is
+the whole of it:
 
-    count = |end - start| + (inclusive ? 1 : 0)
-    step  = (end >= start) ? +1 : -1
+    count = max(end - start + (inclusive ? 1 : 0), 0)
+    step  = reverse ? -1 : +1
+    first = reverse ? last value (end - 1, or end when inclusive) : start
     slot i holds first + step * i
 
-It has no branch. `foreach` needs one because it compares a counter against the end; a fill
-does not, because it knows the count before it starts.
+A range whose end is below its start is EMPTY. With readable bounds that is a typo, and the
+caller reports CE2125 (`reject_a_range_that_goes_down`). With a computed bound it is data,
+and nothing is reported. The old rule took the direction from the values, so the countdown
+`(n - 1)..=0` walked -1 and 0 when n was 0. The countdown is `(0..n).rev()` now, and it is
+empty when n is 0.
 
 The formula is stated twice, because it must be: here over Python integers, and in
 `backend/ranges.py` as IR for the bounds the compiler cannot read.
-`tests/unit/test_range_plan_matrix.py` pins the two against each other.
+`tests/unit/test_range_plan_matrix.py` pins the Python half against a table.
 
 The bounds are read through a callback rather than by importing the evaluator, the way
 `array_runs.py` reads a repeat count.
@@ -38,6 +43,14 @@ class RangePlan:
     count: int
     inclusive: bool
     loc: Optional[Span]
+    start: int
+    end: int
+    reverse: bool
+
+    @property
+    def goes_down(self) -> bool:
+        """True when the written bounds go down. CE2125 refuses such a range."""
+        return self.start > self.end
 
     def last(self) -> int:
         """The LAST value this range yields. Undefined for an empty range."""
@@ -64,14 +77,39 @@ def read_range(expr: RangeExpr, read_int: ReadInt,
     if end is None:
         return None
 
-    span = abs(end - start)
+    count = max(end - start + (1 if expr.inclusive else 0), 0)
     return RangePlan(
-        first=start,
-        step=1 if end >= start else -1,
-        count=span + 1 if expr.inclusive else span,
+        first=start + count - 1 if expr.reverse else start,
+        step=-1 if expr.reverse else 1,
+        count=count,
         inclusive=expr.inclusive,
         loc=expr.loc,
+        start=start,
+        end=end,
+        reverse=expr.reverse,
     )
+
+
+def reject_a_range_that_goes_down(plan: Optional[RangePlan], reporter: Reporter) -> bool:
+    """CE2125 when both bounds are readable and the range goes down. True when reported.
+
+    The `foreach` check and the array-element reader both call this, so the two positions
+    give one diagnostic with one help. The help spells the countdown that yields the values
+    the written bounds name: `10..0` is `(1..=10).rev()`, `10..=0` is `(0..=10).rev()`.
+    """
+    from sushi_lang.internals import errors as er
+
+    if plan is None or not plan.goes_down:
+        return False
+    operator = "..=" if plan.inclusive else ".."
+    written = f"{plan.start}{operator}{plan.end}"
+    if plan.reverse:
+        written = f"({written}).rev()"
+    low = plan.end if plan.inclusive else plan.end + 1
+    er.emit_with(reporter, er.ERR.CE2125, plan.loc, range=written) \
+        .help(f"to count down from {plan.start} to {low}, write `({low}..={plan.start}).rev()`") \
+        .emit()
+    return True
 
 
 def holds_a_range_value(root: object) -> bool:

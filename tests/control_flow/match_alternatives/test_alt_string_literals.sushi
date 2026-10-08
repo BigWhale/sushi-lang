@@ -1,0 +1,34 @@
+# `|` alternatives in a string match. A double-quoted and a single-quoted literal mix
+# in one arm. The scrutinee strings are built at run time, so the leak check sees the
+# heap.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "80\n80\n443\n443\n0\nread\nread\nread\nwrite\nunknown\n"
+
+fn port(string scheme) i32:
+    match scheme:
+        "http" | "ws" -> return 80
+        "https" | 'wss' -> return 443
+        _ -> return 0
+
+fn verb(string v) string:
+    match v:
+        "get" | 'fetch' | "read" -> return "read"
+        "put" | "post" -> return "write"
+        _ -> return "unknown"
+
+fn main() i32:
+    let string h = "ht"
+    let string w = "w"
+    println(port("{h}tp"))
+    println(port("{w}s"))
+    println(port("{h}tps"))
+    println(port("{w}ss"))
+    println(port("ftp"))
+    println(verb("get"))
+    let string f = "fet"
+    println(verb("{f}ch"))
+    println(verb("read"))
+    println(verb("post"))
+    println(verb("delete"))
+    return 0

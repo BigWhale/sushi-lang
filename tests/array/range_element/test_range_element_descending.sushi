@@ -1,14 +1,15 @@
-# Ruling 1: the direction follows `foreach`. `5..0` yields 5, 4, 3, 2, 1 and `5..=0` adds 0.
+# A range always goes up, so a descending element is written with `.rev()`.
+# `(1..=5).rev()` yields 5, 4, 3, 2, 1 and `(0..=5).rev()` adds 0.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "5 5 4 3 2 1\n6 5 0\n"
 
 
 fn run_test() i32:
-    let i32[] a = from([5..0])
+    let i32[] a = from([(1..=5).rev()])
     println("{a.len()} {a[0]} {a[1]} {a[2]} {a[3]} {a[4]}")
 
-    let i32[] b = from([5..=0])
+    let i32[] b = from([(0..=5).rev()])
     println("{b.len()} {b[0]} {b[5]}")
     return 0
 

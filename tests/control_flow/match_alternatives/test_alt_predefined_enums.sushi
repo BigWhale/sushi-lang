@@ -1,0 +1,42 @@
+# `|` alternatives over the predefined enums: `NetError` variants in one arm, literal
+# alternatives in the payload of a `Maybe`, and a `Result` arm whose alternatives are
+# two different variants.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "retry\nretry\nfail\nsmall\nsmall\nbig\nnone\nstop\nstop\ngo\n"
+use <net/error>
+
+fn retry(NetError e) string:
+    match e:
+        NetError.AddressInUse | NetError.Other -> return "retry"
+        _ -> return "fail"
+
+fn size(Maybe@(i32) m) string:
+    match m:
+        Maybe.Some(1 | 2 | 3) -> return "small"
+        Maybe.Some(_) -> return "big"
+        Maybe.None -> return "none"
+
+fn status(Result@(i32, StdError) r) string:
+    match r:
+        Result.Ok(0) | Result.Err(_) -> return "stop"
+        Result.Ok(_) -> return "go"
+
+fn main() i32:
+    println(retry(NetError.AddressInUse))
+    println(retry(NetError.Other))
+    println(retry(NetError.TimedOut))
+    let Maybe@(i32) one = Maybe.Some(1)
+    let Maybe@(i32) three = Maybe.Some(3)
+    let Maybe@(i32) nine = Maybe.Some(9)
+    let Maybe@(i32) nothing = Maybe.None()
+    println(size(one))
+    println(size(three))
+    println(size(nine))
+    println(size(nothing))
+    let Result@(i32, StdError) zero = Result.Ok(0)
+    let Result@(i32, StdError) failed = Result.Err(StdError.Error)
+    let Result@(i32, StdError) five = Result.Ok(5)
+    println(status(zero))
+    println(status(failed))
+    println(status(five))
+    return 0

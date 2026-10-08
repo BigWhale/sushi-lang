@@ -1,0 +1,11 @@
+# A range bound must fit the scrutinee type: 256 is not a u8, in the exclusive form too.
+# EXPECT_ERROR_CODES_EXACT: CE2073
+
+fn f(u8 b) string:
+    match b:
+        0..256 -> return "any"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(1))
+    return 0

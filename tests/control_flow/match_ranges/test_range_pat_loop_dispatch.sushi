@@ -1,0 +1,18 @@
+# A loop sends each value from -3 to 12 through a match of literals, ranges and a `_`
+# arm, and prints one letter for the arm that each value takes.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "...zaaabbbbc.cc.\n"
+
+fn letter(i32 n) string:
+    match n:
+        0 -> return "z"
+        1..=3 -> return "a"
+        4..8 -> return "b"
+        8 | 10..=11 -> return "c"
+        _ -> return "."
+
+fn main() i32:
+    foreach(i in -3..13):
+        print(letter(i))
+    println("")
+    return 0

@@ -1,0 +1,13 @@
+# Two arms above together match every value of `3..=7`, so the arm can never run.
+# EXPECT_ERROR_CODES_EXACT: CE2118
+
+fn f(i32 n) string:
+    match n:
+        0..=4 -> return "low"
+        5..=9 -> return "high"
+        3..=7 -> return "never"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(3))
+    return 0

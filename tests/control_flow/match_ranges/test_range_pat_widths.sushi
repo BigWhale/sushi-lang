@@ -1,0 +1,91 @@
+# A range arm on each integer width, with bounds at the ends of the type. A hex bound is
+# a bit pattern of the scrutinee type: on an i8, `0x80..=0xfd` is -128 to -3, the literal
+# arm `0xfe` is -2, and `0xf0..=0xff` is -16 to -1. On an i64, `0x8000_0000_0000_0000` is
+# the i64 minimum.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "i8 two\ni8 high\ni8 low\ni8 top\ni8 rest\nu8 top\nu8 low\ni16 bottom\ni16 low\nu16 top\nu16 low\ni32 bottom\ni32 low\nu32 top\nu32 low\ni64 bottom\ni64 low\nu64 top\nu64 low\n"
+
+fn on_i8(i8 v) string:
+    match v:
+        0x80..=0xfd -> return "i8 high"
+        0xfe -> return "i8 two"
+        _ -> return "i8 low"
+
+fn on_i8_top(i8 v) string:
+    match v:
+        0xf0..=0xff -> return "i8 top"
+        _ -> return "i8 rest"
+
+fn on_u8(u8 v) string:
+    match v:
+        0xf0..=0xff -> return "u8 top"
+        _ -> return "u8 low"
+
+fn on_i16(i16 v) string:
+    match v:
+        -32768..-32000 -> return "i16 bottom"
+        _ -> return "i16 low"
+
+fn on_u16(u16 v) string:
+    match v:
+        0xff00..=0xffff -> return "u16 top"
+        _ -> return "u16 low"
+
+fn on_i32(i32 v) string:
+    match v:
+        -2147483648..=-2147483000 -> return "i32 bottom"
+        _ -> return "i32 low"
+
+fn on_u32(u32 v) string:
+    match v:
+        0xffff_ff00..=0xffff_ffff -> return "u32 top"
+        _ -> return "u32 low"
+
+fn on_i64(i64 v) string:
+    match v:
+        0x8000_0000_0000_0000..=0x8000_0000_0000_00ff -> return "i64 bottom"
+        _ -> return "i64 low"
+
+fn on_u64(u64 v) string:
+    match v:
+        0xffff_ffff_ffff_ff00..=0xffff_ffff_ffff_ffff -> return "u64 top"
+        _ -> return "u64 low"
+
+fn main() i32:
+    let i8 a = -2
+    let i8 b = -100
+    let i8 c = 1
+    let i8 top = -1
+    println(on_i8(a))
+    println(on_i8(b))
+    println(on_i8(c))
+    println(on_i8_top(top))
+    println(on_i8_top(0))
+    let u8 d = 255
+    let u8 e = 7
+    println(on_u8(d))
+    println(on_u8(e))
+    let i16 f = -32768
+    let i16 g = -32000
+    println(on_i16(f))
+    println(on_i16(g))
+    let u16 h = 65535
+    let u16 i = 1
+    println(on_u16(h))
+    println(on_u16(i))
+    let i32 j = -2147483648
+    println(on_i32(j))
+    println(on_i32(0))
+    let u32 k = 4294967295
+    let u32 l = 3
+    println(on_u32(k))
+    println(on_u32(l))
+    let i64 m = -9223372036854775808
+    let i64 n = 0
+    println(on_i64(m))
+    println(on_i64(n))
+    let u64 o = 18446744073709551615
+    let u64 p = 18446744073709551359
+    println(on_u64(o))
+    println(on_u64(p))
+    return 0

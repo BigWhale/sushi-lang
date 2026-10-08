@@ -1,0 +1,46 @@
+# A range always goes up. When a bound is computed and the range does not go up, the
+# range is empty: there is no diagnostic, and the loop body does not run. The old
+# countdown `(n - 1)..=0` is empty for every n above 1; `(0..n).rev()` is the countdown,
+# and it is empty when n is 0.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDERR_EMPTY: true
+# EXPECT_STDOUT_EXACT: "a|\nb|\nc|\nd|\ne|\nf|0 1 2 \ng|\nh|-1 0 \n"
+
+fn main() i32:
+    let i32 k = 4
+    let i32 n = 3
+    let i32 zero = 0
+    let i32 m = 0 - 2
+    print("a|")
+    foreach(i in k..0):
+        print("{i} ")
+    println("")
+    print("b|")
+    foreach(i in k..=0):
+        print("{i} ")
+    println("")
+    print("c|")
+    foreach(i in (n - 1)..=0):
+        print("{i} ")
+    println("")
+    print("d|")
+    foreach(i in 0..m):
+        print("{i} ")
+    println("")
+    print("e|")
+    foreach(i in k..k):
+        print("{i} ")
+    println("")
+    print("f|")
+    foreach(i in 0..(k - 1)):
+        print("{i} ")
+    println("")
+    print("g|")
+    foreach(i in (0..zero).rev()):
+        print("{i} ")
+    println("")
+    print("h|")
+    foreach(i in (zero - 1)..=0):
+        print("{i} ")
+    println("")
+    return 0

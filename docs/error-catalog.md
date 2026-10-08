@@ -1381,7 +1381,7 @@ Variable declaration with 'let' requires an explicit type annotation.
 - `an iterator has no methods: walk it with 'foreach', or call the method on the collection it comes from`
 - `did you mean '{namespace}.{closest}'?`
 
-Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` and a range have no method at all: `foreach` walks them, and `next()` is the protocol of a user type, not a method of an iterator. In a generic body, a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
+Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` has no method at all: `foreach` walks it, and `next()` is the protocol of a user type, not a method of an iterator. A range has one method, `.rev()`; any other method on a range is [CE2122](#ce2122). `0..n.rev()` is the range `0..(n.rev())`, so its method is on the i32 `n`, and that is this error. In a generic body, a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
 
 ### CE2009 {#ce2009}
 
@@ -1460,7 +1460,7 @@ A repeated element is 'value; count', and the count is a count of elements: a po
 
 **Message:** `invalid range in an array literal: {reason}`
 
-A range element fills the slots it spans: '0..5' is five elements and '0..=5' is six, and the direction follows `foreach`, so '5..0' descends. One code carries every way a range cannot fill slots, the way [CE2017](#ce2017) carries every bad repeat count, because they share one rule and one fix. Two ways: a bound the compiler cannot read in a position that needs a readable LENGTH -- a fixed array, whose length is part of its type, and a constant, whose evaluator needs the values -- and a readable range that yields nothing, because Sushi has no zero-length array and '3..3' spells nothing. The escape for the first is `from()`, which carries its length in the descriptor and accepts any i32 expression as a bound. A range yields i32 ([CE2121](#ce2121) for a bound of any other type), and it cannot carry a repeat count ([CE2020](#ce2020)).
+A range element fills the slots it spans: '0..5' is five elements and '0..=5' is six. A range always goes up, as in `foreach`, and '(0..5).rev()' fills the same five values, last first. A range whose readable bounds go down is [CE2125](#ce2125). One code carries every way a range cannot fill slots, the way [CE2017](#ce2017) carries every bad repeat count, because they share one rule and one fix. Two ways: a bound the compiler cannot read in a position that needs a readable LENGTH -- a fixed array, whose length is part of its type, and a constant, whose evaluator needs the values -- and a readable range that yields nothing, because Sushi has no zero-length array and '3..3' spells nothing. The escape for the first is `from()`, which carries its length in the descriptor and accepts any i32 expression as a bound. A range yields i32 ([CE2121](#ce2121) for a bound of any other type), and it cannot carry a repeat count ([CE2020](#ce2020)).
 
 ### CE2020 {#ce2020}
 
@@ -1590,7 +1590,7 @@ The error value inside Err() must match the function's error type.
 
 **Message:** `non-exhaustive match pattern (missing variants: {variants})`
 
-A match must have an arm for every value of its scrutinee. One checker reads every match: an enum match, a nested enum match and a tuple match (see [the tuple design](design/tuples.md)). It is the usefulness algorithm over a pattern matrix: an enum position splits into its variants, a tuple position into its elements, and an integer position has no end of values, so only a `_` or a binding covers it. The `{variants}` slot lists what is missing. For a plain enum match, where no arm tests inside a payload, it lists the names of the missing variants (`Blue, Green`). When an arm tests inside a payload or a tuple, it lists the missing PATTERNS in source syntax: `Maybe.Some(Color.Green)`, `(Color.Red, _)`, at most 16 of them. Add an arm for each, or a `_` arm last. An integer or a string scrutinee with no `_` arm is [CE2074](#ce2074).
+A match must have an arm for every value of its scrutinee. One checker reads every match: an enum match, a nested enum match and a tuple match (see [the tuple design](design/tuples.md)). It is the usefulness algorithm over a pattern matrix: an enum position splits into its variants, a tuple position into its elements, and an integer position into intervals of its type, cut at the bounds of the literals and the ranges of the arms. The arms cover an integer position when they cover each interval, so `Maybe.Some(0..=127) -> ...` and `Maybe.Some(-128..=-1) -> ...` cover a `Maybe@(i8)` payload; else a `_` or a binding covers it. A string position has no end of values, so only a `_` or a binding covers it. The `{variants}` slot lists what is missing. For a plain enum match, where no arm tests inside a payload, it lists the names of the missing variants (`Blue, Green`). When an arm tests inside a payload or a tuple, it lists the missing PATTERNS in source syntax: `Maybe.Some(Color.Green)`, `(Color.Red, _)`, `(10, _)`, at most 16 of them. An integer position in a missing pattern is a value or a range of values that no arm matches (`Maybe.Some(128..=255)`). Add an arm for each, or a `_` arm last. An integer or a string scrutinee that the arms do not cover is [CE2074](#ce2074).
 
 ### CE2041 {#ce2041}
 
@@ -1598,7 +1598,7 @@ A match must have an arm for every value of its scrutinee. One checker reads eve
 
 **Message:** `duplicate match arm for variant '{variant}'`
 
-The same enum variant cannot be matched more than once.
+The same enum variant cannot be matched more than once. An alternative is an arm for this rule: `Color.Red | Color.Red`, and an alternative that names a variant an arm above already matches, are this error at that alternative.
 
 ### CE2044 {#ce2044}
 
@@ -1784,7 +1784,7 @@ Leading zero octals (like 077) are ambiguous and error-prone. Use explicit 0o pr
 
 **Message:** `range expression requires integer types for start and end bounds. Got {got}, expected {expected}`
 
-A range bound is an i32 position, as an index is. This code is for a bound that is not a number at all (a string, a bool). A number of another type -- an i8, an i64, an f64 -- is [CE2002](#ce2002) with the help 'as i32'; a bare literal takes i32 from the position.
+A range bound is an i32 position, as an index is. This code is for a bound that is not a number at all (a string, a bool). A number of another type -- an i8, an i64, an f64 -- is [CE2002](#ce2002) with the help 'as i32'; a bare literal takes i32 from the position. A range in a match PATTERN (`0x80..=0x8f ->`) takes an integer literal as each bound, and a string bound there (`"a".."z" ->`) is this error at that bound: a string has no order that a pattern can read.
 
 ### CE2073 {#ce2073}
 
@@ -1792,15 +1792,15 @@ A range bound is an i32 position, as an index is. This code is for a bound that 
 
 **Message:** `literal {literal} out of range for {type}`
 
-The literal does not fit the target type's range. Use a wider type, or an explicit 'as' cast if you intend the bit pattern.
+The literal does not fit the target type's range. Use a wider type, or an explicit 'as' cast if you intend the bit pattern. A literal arm of a match and each bound of a range arm (`0..=255 ->`) take the type of the value they read, by the same rule: on a u8, `-1..=5` and `0..256` are this error at the bound that does not fit.
 
 ### CE2074 {#ce2074}
 
 **Error** · type
 
-**Message:** `non-exhaustive {kind} match (add a trailing '_' arm)`
+**Message:** `non-exhaustive {kind} match: no arm matches {missing} (add a trailing '_' arm)`
 
-A match on an integer or a string scrutinee cannot list every value, so it must end with a wildcard arm. The `{kind}` slot names the scrutinee kind: integer or string.
+A match must have an arm for every value of its scrutinee. The arms of an integer match cover the type when their literals and ranges together hold every value of it, from the lowest to the highest: `0x00..=0x7f` and `0x80..=0xff` cover a u8, and that match needs no `_` arm. Else the match ends with a `_` arm. The `{missing}` slot names the FIRST value that no arm matches, in decimal and in the base of the first integer arm (`the value 128 (0x80)`), so the gap is visible. The values of a string cannot be listed, so a string match always ends with a `_` arm, and the slot reads `every other string`. The `{kind}` slot names the scrutinee kind: integer or string.
 
 ### CE2075 {#ce2075}
 
@@ -1808,7 +1808,7 @@ A match on an integer or a string scrutinee cannot list every value, so it must 
 
 **Message:** `duplicate literal match arm: value {value} is already matched by arm '{first}'`
 
-Two literal arms match the same VALUE. For an integer, the radix does not change the value: 0x2a and 42 are the same arm. For a string, the quotes do not change the value, and the value is read after escape processing: "a" and 'a' are the same arm, and "\t" and a literal tab are the same arm. The `{value}` slot prints a string value with its quotes. The second arm is unreachable.
+Two literal arms match the same VALUE. For an integer, the radix does not change the value: 0x2a and 42 are the same arm. For a string, the quotes do not change the value, and the value is read after escape processing: "a" and 'a' are the same arm, and "\t" and a literal tab are the same arm. The `{value}` slot prints a string value with its quotes. The second arm is unreachable. An alternative is an arm for this rule: `"a" | 'a'` in one arm, and `2 | 0x1` after an arm `1`, are this error at the second alternative, in a nested list of alternatives too (`Maybe.Some(1 | 1)`). A non-decimal literal is a bit pattern of the scrutinee type, so on an i8 `0xff` and `-1` are one value and one arm. A RANGE arm (`0x80..=0x8f`) matches each value from its start to its end, and a range or a literal that shares a value with an arm above is this error: the `{value}` slot names the FIRST value in both, in decimal and in the written base (`143 (0x8f)`), and `{first}` names the arm above. One fault gives one diagnostic, so the code depends on what the pattern adds. A literal whose value an arm above matches is this error, because it is a repeated value. A range that shares some values with the arms above and has values of its own is this error. A range whose every value the arms above match adds nothing: it is a dead arm, [CE2118](#ce2118), and not this error.
 
 ### CE2076 {#ce2076}
 
@@ -2154,7 +2154,7 @@ Only a tuple destructures: `let (a, b) = t` splits a tuple value into its elemen
 
 **Message:** `unreachable match arm '{pattern}': the arms above it match every value it matches`
 
-A match tries its arms in order, and an arm runs only for a value that no arm above it matches. When the arms above match every value that this arm matches, the arm can never run: `(_, _) -> ...` before `(Color.Red, _) -> ...`, or `Maybe.Some(c) -> ...` before `Maybe.Some(Color.Red) -> ...`. Such an arm is dead code, and dead code is an error in Sushi, as a statement after a `return` is. The note at each covering arm names the arms that match those values first; the arms together can cover it, as `(Color.Red, _)` and `(Color.Green, _)` cover `(_, Color.Red)`. Remove the arm, or move it above the arms that cover it. One checker reads every match: an enum match, a nested enum match, an integer match and a tuple match (see [the tuple design](design/tuples.md)). Where another code names the fault, that code is the one diagnostic for the arm: a second arm for the same enum variant is [CE2041](#ce2041), a `_` arm that is not the last arm is [CE2041](#ce2041) (and the arms after it get no second error), and a second literal arm for the same value is [CE2075](#ce2075).
+A match tries its arms in order, and an arm runs only for a value that no arm above it matches. When the arms above match every value that this arm matches, the arm can never run: `(_, _) -> ...` before `(Color.Red, _) -> ...`, or `Maybe.Some(c) -> ...` before `Maybe.Some(Color.Red) -> ...`. Such an arm is dead code, and dead code is an error in Sushi, as a statement after a `return` is. The note at each covering arm names the arms that match those values first; the arms together can cover it, as `(Color.Red, _)` and `(Color.Green, _)` cover `(_, Color.Red)`. Remove the arm, or move it above the arms that cover it. One checker reads every match: an enum match, a nested enum match, an integer match and a tuple match (see [the tuple design](design/tuples.md)). The arms of an integer match can cover the type ([CE2074](#ce2074)), so a `_` arm after arms that hold every value of a u8 is this error. A range arm whose every value the arms above match is this error, and so is a range that matches no value (`5..5`). Where another code names the fault, that code is the one diagnostic for the arm: a second arm for the same enum variant is [CE2041](#ce2041), a `_` arm that is not the last arm is [CE2041](#ce2041) (and the arms after it get no second error), and a literal arm for a value that an arm above matches is [CE2075](#ce2075), as is a range that shares some values with the arms above and has values of its own. An alternative of an arm (`Maybe.Some(1) | Maybe.None -> ...`) takes the same rule, with the error at that alternative: it can never match when the arms above and the earlier alternatives of the same list match every value it matches, as `2` after `_` in `1 | _ | 2`. When every alternative of an arm is dead, the error is once for the whole arm.
 
 ### CE2119 {#ce2119}
 
@@ -2190,7 +2190,7 @@ An index, a count and a range bound are i32 positions: an array index `a[i]`, a 
 
 **Help:** `` walk it with `foreach`, or spell it into an array: `from([a..b])` ``
 
-A range (`a..b`, `a..=b`) has two positions, and only two: the iterable of a `foreach` (`foreach(i in 0..3):`) and an element of an array literal (`[0..3]`, `from([0..n])`). Sushi has no range type and no range object, as Rust (`Range`) and Python (`range`) have, so a range cannot be a function or a method argument, a constructor argument, a `return` value, a `let` initializer or an operand. Walk it with `foreach`, or spell it into an array with `from([a..b])` and use the array.
+A range (`a..b`, `a..=b`) has two positions, and only two: the iterable of a `foreach` (`foreach(i in 0..3):`) and an element of an array literal (`[0..3]`, `from([0..n])`). Sushi has no range type and no range object, as Rust (`Range`) and Python (`range`) have, so a range cannot be a function or a method argument, a constructor argument, a `return` value, a `let` initializer or an operand. Walk it with `foreach`, or spell it into an array with `from([a..b])` and use the array. `.rev()` is the one method a range takes, and the result is a range again, with the same two positions: `foreach(i in (0..3).rev()):` and `[(0..3).rev()]`. Any other method on a range is this error.
 
 ### CE2123 {#ce2123}
 
@@ -2211,6 +2211,24 @@ A match arm compares the value with a FIXED value, and the compiler must know th
 **Help:** `rename the type parameter so that it names no type, or remove the bound; a concrete target argument already names one instance`
 
 An extension target and a perk-implementation target can put a bound on a type parameter: `extend List@(T: Clone) filter(...)`, `extend (T: Clone)[] filter(...)`, `extend Box@(T: Eq) with Show:`. A bare name that a unit declares is a type, and a target argument that names a type is a constraint on one instance (`extend Box@(Point)`). A bound on a type has no meaning: the type satisfies the perk or it does not. The declaration is refused, and a call of its method gives no second error.
+
+### CE2125 {#ce2125}
+
+**Error** · type
+
+**Message:** `range '{range}' goes down: a range always goes up`
+
+**Help:** `` to count down from {high} to {low}, write `({low}..={high}).rev()` ``
+
+A range always goes up: `a..b` yields a, a+1, ..., b-1 and is empty when a >= b; `a..=b` yields a to b and is empty when a > b. A countdown is written `(a..b).rev()`, which yields the same values, last first: `(1..=10).rev()` is 10 down to 1, and `(0..n).rev()` is n-1 down to 0 and empty when n is 0. This error is for a range whose two bounds the compiler can read and whose start is above its end, in a `foreach` iterable and in an array literal element (a constant and a fixed array included), with or without `.rev()`. The help gives the countdown that yields the values the bounds name: `10..0` is `(1..=10).rev()`, `10..=0` is `(0..=10).rev()`. A range with a computed bound gets no diagnostic: it is empty when it does not go up. Before this rule the values gave the direction, so `10..0` counted down. That made the empty case run backward when a bound was computed: the countdown `(n - 1)..=0` visited -1 and 0 when n was 0, where it must visit nothing. An inclusive range could never be empty. The countdown is `(0..n).rev()` now, and it is empty when n is 0. Rust, Kotlin and Python write the direction in the code, never in the data, and Sushi does the same. `3..3` in a `foreach` is legal and empty; in an array literal it is [CE2019](#ce2019), because it spells no slot. A range in a match PATTERN (`0x80..=0x8f ->`) goes up by the same rule, and `0x8f..=0x80` or `5..3` there is this error. Its help gives the written order to use (`0x80..=0x8f`), because a pattern has no direction to keep. The bounds are read as values of the scrutinee type, so on an i8 `0x80..=0xff` is -128 to -1 and goes up. `5..5` in a pattern goes nowhere: it matches no value, which is the dead-arm error [CE2118](#ce2118).
+
+### CE2126 {#ce2126}
+
+**Error** · type
+
+**Message:** `alternative '{alternative}' binds differently from the first alternative: {detail}`
+
+The alternatives of a pattern (`Shape.Circle(r) | Shape.Ring(r) -> ...`) bind the same names, with the same types and the same modes (bare, `peek`, `poke`, `nom`), as in Rust and Python. The arm body reads one binding, whatever alternative matched, so a name that only one alternative binds has no value on the other path, a name with two types has no one type, and a name with two modes is a copy on one path and a reference or a take on the other. The `{detail}` slot names the first difference: a name that is not bound, a name the first alternative does not bind, a different type, or a different mode. The note is at the first alternative, which every other alternative is held to. A nested list of alternatives (`Maybe.Some(Shape.Circle(r) | Shape.Ring(r))`) takes the same rule. Write two arms when the alternatives must bind different things.
 
 ## CE24xx: Borrow and reference errors {#ce24xx}
 

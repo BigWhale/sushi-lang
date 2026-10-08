@@ -1,0 +1,25 @@
+# `.rev()` on a range element fills the slots with the values of the range, last first.
+# A short range is spelled slot by slot, and a long one is a walk; both count down.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "4 3 2 1 0 \n5 4 3 2 1 0 \n9 2 1 0 7 \n20 19 0\n"
+
+fn show(i32[] xs) ~:
+    foreach(x in xs.iter()):
+        print("{x} ")
+    println("")
+
+fn run_test() i32:
+    let i32[] a = from([(0..5).rev()])
+    show(a)
+    let i32[] b = from([(0..=5).rev()])
+    show(b)
+    let i32[] c = from([9, (0..3).rev(), 7])
+    show(c)
+    let i32[] d = from([(0..20).rev()])
+    println("{d.len()} {d[0]} {d[19]}")
+    return 0
+
+fn main() i32:
+    let i32 result = run_test()
+    return result

@@ -1,0 +1,25 @@
+enum Drink:
+    Tea(i32)
+    Coffee(i32)
+    Water
+
+fn answer(string word) string:
+    match word:
+        "yes" | "y" | 'sure' -> return "agree"
+        "no" | "n" -> return "refuse"
+        _ -> return "unclear"
+
+fn cups(Drink d) i32:
+    match d:
+        Drink.Tea(n) | Drink.Coffee(n) -> return n
+        Drink.Water -> return 0
+
+fn main() i32:
+    println(answer("y"))
+    println(answer("sure"))
+    println(answer("n"))
+    println(answer("maybe"))
+    println(cups(Drink.Tea(2)))
+    println(cups(Drink.Coffee(3)))
+    println(cups(Drink.Water))
+    return 0

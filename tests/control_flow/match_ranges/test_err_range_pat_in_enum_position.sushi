@@ -1,0 +1,15 @@
+# A nested range needs an integer value at its position. The payload here is an enum.
+# EXPECT_ERROR_CODES_EXACT: CE2119
+
+enum Color:
+    Red
+    Green
+
+fn f(Maybe@(Color) m) string:
+    match m:
+        Maybe.Some(0..=1) -> return "first"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(Maybe.Some(Color.Red)))
+    return 0

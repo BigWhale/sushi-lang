@@ -1,0 +1,11 @@
+# Two alternatives of one nested list share the value 3.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+
+fn f(Maybe@(i32) m) string:
+    match m:
+        Maybe.Some(1..=5 | 3) -> return "low"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(Maybe.Some(1)))
+    return 0

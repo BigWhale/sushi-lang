@@ -1,0 +1,13 @@
+# A template is checked where it is written, and a type parameter is opaque there. A
+# range arm compares integer values, so it is refused on a `T`, as a literal arm is.
+# EXPECT_ERROR_CODES_EXACT: CE2119
+
+fn wide@(T)(Maybe@(T) m) string:
+    match m:
+        Maybe.Some(0x80..=0xfe) -> return "high"
+        _ -> return "other"
+
+fn main() i32:
+    let u8 b = 200
+    println(wide(Maybe.Some(b)))
+    return 0

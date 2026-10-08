@@ -1,0 +1,14 @@
+# Two ranges share the value 0x8f (143). The error names the first shared value and the
+# arm that matches it first.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+# EXPECT_STDERR_CONTAINS: 143
+
+fn f(u8 b) string:
+    match b:
+        0x80..=0x8f -> return "fixmap"
+        0x8f..=0x9f -> return "fixarray"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(1))
+    return 0

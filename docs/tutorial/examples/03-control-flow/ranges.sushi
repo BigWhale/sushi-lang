@@ -7,8 +7,8 @@ fn main() i32:
     foreach(i in 1..=3):
         println("  {i}")
 
-    println("Descending 3..0:")
-    foreach(i in 3..0):
+    println("Descending (1..=3).rev():")
+    foreach(i in (1..=3).rev()):
         println("  {i}")
 
     println("Over an array:")

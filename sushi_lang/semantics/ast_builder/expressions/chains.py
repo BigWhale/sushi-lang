@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from lark import Tree, Token
 from sushi_lang.semantics.ast import (
-    Expr, Name, BlankLit, MemberAccess, DotCall, TryExpr, Call, TupleLiteral)
+    Expr, Name, BlankLit, MemberAccess, DotCall, TryExpr, Call, TupleLiteral, RangeExpr)
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import read_method_name, unhandled
 from sushi_lang.internals.report import span_of
 
@@ -112,6 +112,10 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
             elif call_node.data == "method_call":
                 method = str(read_method_name(call_node))
                 args, field_names = calls.extract_call_args(call_node, ast_builder)
+                if method == "rev" and isinstance(result_expr, RangeExpr):
+                    result_expr = _reversed_range(result_expr, args,
+                                                  _span_through(t, call_node), ast_builder)
+                    continue
                 # Carried, not read here: `sh.Point(y: 2, x: 1)` parses as a
                 # method call on `sh`, and only a pass with the namespace table can
                 # tell that it is a named struct construction (#561).
@@ -142,6 +146,23 @@ def expr_call_chain(t: Tree, ast_builder: 'ASTBuilder') -> Expr:
                 unhandled(call_node)
 
     return result_expr
+
+
+def _reversed_range(expr: RangeExpr, args: list, loc, ast_builder: 'ASTBuilder') -> RangeExpr:
+    """`(a..b).rev()` is the range node with `reverse` toggled, not a method call.
+
+    A range is not a value (CE2122), so `.rev()` cannot be an ordinary method: the node
+    stays one `RangeExpr`, and every reader of a range position sees it unchanged. The
+    span grows to cover the call.
+    """
+    from sushi_lang.internals.diagnostics import SushiError
+
+    folded = RangeExpr(start=expr.start, end=expr.end, inclusive=expr.inclusive,
+                       reverse=not expr.reverse, loc=loc)
+    if args:
+        return ast_builder.recover(
+            SushiError("CE2009", span=loc, name="rev", expected=0, got=len(args)), folded)
+    return folded
 
 
 def _span_through(chain: Tree, step: Tree):

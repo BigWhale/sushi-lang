@@ -1,0 +1,60 @@
+# `(a..b).rev()` yields the values of `a..b`, last first. It is empty when `a..b` is
+# empty, with readable bounds and with computed bounds.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDERR_EMPTY: true
+# EXPECT_STDOUT_EXACT: "a|4 3 2 1 0 \nb|10 9 8 7 6 5 4 3 2 1 \nc|\nd|3 \ne|0 \nf|-1 -2 -3 \ng|1 0 -1 -2 \nh|2 1 0 \ni|\nj|\nk|7 6 5 \nl|\n"
+
+fn main() i32:
+    print("a|")
+    foreach(i in (0..5).rev()):
+        print("{i} ")
+    println("")
+    print("b|")
+    foreach(i in (1..=10).rev()):
+        print("{i} ")
+    println("")
+    print("c|")
+    foreach(i in (3..3).rev()):
+        print("{i} ")
+    println("")
+    print("d|")
+    foreach(i in (3..=3).rev()):
+        print("{i} ")
+    println("")
+    print("e|")
+    foreach(i in (0..1).rev()):
+        print("{i} ")
+    println("")
+    print("f|")
+    foreach(i in (-3..=-1).rev()):
+        print("{i} ")
+    println("")
+    print("g|")
+    foreach(i in (-2..2).rev()):
+        print("{i} ")
+    println("")
+    let i32 n = 3
+    let i32 zero = 0
+    print("h|")
+    foreach(i in (0..n).rev()):
+        print("{i} ")
+    println("")
+    print("i|")
+    foreach(i in (0..zero).rev()):
+        print("{i} ")
+    println("")
+    print("j|")
+    foreach(i in ((zero - 1)..=zero - 5).rev()):
+        print("{i} ")
+    println("")
+    let i32 lo = 5
+    let i32 hi = 7
+    print("k|")
+    foreach(i in (lo..=hi).rev()):
+        print("{i} ")
+    println("")
+    print("l|")
+    foreach(i in (hi..=lo).rev()):
+        print("{i} ")
+    println("")
+    return 0

@@ -1,0 +1,28 @@
+fn grade(i32 score) string:
+    match score:
+        90..=100 -> return "A"
+        75..90 -> return "B"
+        50..75 -> return "C"
+        0..50 -> return "fail"
+        _ -> return "not a score"
+
+fn kind(u8 c) string:
+    match c:
+        a'0'..=a'9' -> return "digit"
+        a'a'..=a'z' | a'A'..=a'Z' -> return "letter"
+        _ -> return "other"
+
+fn half(u8 b) string:
+    match b:
+        0x00..=0x7f -> return "low"
+        0x80..=0xff -> return "high"
+
+fn main() i32:
+    println("95: {grade(95)}")
+    println("75: {grade(75)}")
+    println("12: {grade(12)}")
+    println("120: {grade(120)}")
+    println("7: {kind(a'7')}")
+    println("Q: {kind(a'Q')}")
+    println("200: {half(200)}")
+    return 0

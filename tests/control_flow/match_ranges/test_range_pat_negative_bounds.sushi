@@ -1,0 +1,32 @@
+# A negative literal is a range bound. On an i8 the arms `-128..=-1`, `0` and `1..=127`
+# hold every value, so the match needs no `_` arm. On an i32 a negative range sits
+# beside a `_` arm.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "negative\nnegative\nzero\npositive\npositive\nsmall\nsmall\nlarge\nlarge\nother\n"
+
+fn sign(i8 n) string:
+    match n:
+        -128..=-1 -> return "negative"
+        0 -> return "zero"
+        1..=127 -> return "positive"
+
+fn depth(i32 n) string:
+    match n:
+        -5..=-1 -> return "small"
+        -100..-5 -> return "large"
+        _ -> return "other"
+
+fn main() i32:
+    let i8 lowest = -128
+    let i8 highest = 127
+    println(sign(lowest))
+    println(sign(-1))
+    println(sign(0))
+    println(sign(1))
+    println(sign(highest))
+    println(depth(-1))
+    println(depth(-5))
+    println(depth(-6))
+    println(depth(-100))
+    println(depth(-101))
+    return 0

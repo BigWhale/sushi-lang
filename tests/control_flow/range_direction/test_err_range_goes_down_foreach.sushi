@@ -1,0 +1,8 @@
+# A range always goes up. Both bounds are readable and the range goes down, so the
+# range is refused, and the help gives the countdown `(1..=10).rev()`.
+# EXPECT_ERROR_CODES_EXACT: CE2125
+
+fn main() i32:
+    foreach(i in 10..0):
+        println(i)
+    return 0

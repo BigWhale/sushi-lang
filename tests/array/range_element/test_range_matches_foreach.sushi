@@ -18,10 +18,10 @@ fn run_test() i32:
         print("{n} ")
     println("|")
 
-    foreach(i in 8..5):
+    foreach(i in (6..=8).rev()):
         print("{i} ")
     print("|")
-    let i32[] down = from([8..5])
+    let i32[] down = from([(6..=8).rev()])
     foreach(n in down.iter()):
         print("{n} ")
     println("|")

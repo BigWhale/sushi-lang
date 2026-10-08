@@ -413,6 +413,9 @@ fn main() i32:
     foreach(i in 0..3):          # a range: 0 1 2; `0..=3` includes the end
         println(i)
 
+    foreach(i in (0..3).rev()):  # a range always goes up; `.rev()` counts down: 2 1 0
+        println(i)
+
     return 0
 ```
 
@@ -1107,17 +1110,25 @@ fn main() i32:
 
 **Nested pattern matching**: The pattern `Result.Err(IoError.NotFound)` matches a `Result@(File, IoError)` whose `Err` variant contains the `IoError` variant `NotFound`. This lets you handle specific error combinations without nested match statements. A nested pattern must name the enum that the value really holds: `FileError.NotFound` here is [`CE2107`](error-catalog.md#ce2107), because `open()` answers `IoError`.
 
-**Integer patterns**: a `match` on an integer takes literal arms, and a trailing `_` arm is required ([`CE2074`](error-catalog.md#ce2074)):
+**Integer patterns**: a `match` on an integer takes literal arms and range arms (`a..b` stops before b, `a..=b` includes b). The arms must cover every value of the type: when they do not, a trailing `_` arm is required ([`CE2074`](error-catalog.md#ce2074)), and the message names the first value that no arm matches. Two arms that share a value are [`CE2075`](error-catalog.md#ce2075):
 
 ```sushi
 fn describe(i32 n) string:
     match n:
         0 -> return "zero"
+        1..=9 -> return "a digit"
         42 -> return "the answer"
         _ -> return "a number"
 
+fn half(u8 b) string:
+    match b:
+        0x00..=0x7f -> return "low"       # these two ranges cover a u8,
+        0x80..=0xff -> return "high"      # so no `_` arm is necessary
+
 fn main() i32:
     println(describe(42))
+    println(describe(7))
+    println(half(200))
     return 0
 ```
 
@@ -1137,7 +1148,32 @@ fn main() i32:
     return 0
 ```
 
-A string pattern cannot hold an interpolation hole: `"{x}" ->` is [`CE2123`](error-catalog.md#ce2123). A named constant is not a pattern, and one arm holds one literal.
+A string pattern cannot hold an interpolation hole: `"{x}" ->` is [`CE2123`](error-catalog.md#ce2123). A named constant is not a pattern.
+
+**Alternatives**: one arm can hold several patterns, with `|` between them, and the arm runs when one of them matches. An alternative stands at the top of an arm and in every position inside a pattern. Each alternative binds the same names, with the same types and the same mode, so the arm body reads one binding whatever alternative matched; a difference is [`CE2126`](error-catalog.md#ce2126). Write `1 | 2` with spaces: the lexer reads `||` as the logical operator.
+
+```sushi
+enum Shape:
+    Circle(i32)
+    Ring(i32)
+    Square(i32)
+
+fn kind(string cmd) string:
+    match cmd:
+        "start" | "run" -> return "go"
+        "stop" | 'halt' -> return "stop"
+        _ -> return "unknown"
+
+fn radius(Shape s) i32:
+    match s:
+        Shape.Circle(r) | Shape.Ring(r) -> return r
+        Shape.Square(_) -> return 0
+
+fn main() i32:
+    println(kind("run"))
+    println(radius(Shape.Ring(3)))
+    return 0
+```
 
 **Literals inside a pattern**: an integer literal and a string literal are also legal in a payload (`Maybe.Some(0)`, `Maybe.Some("--help")`) and in a tuple element (`(0, n)`, `("go", dir)`).
 

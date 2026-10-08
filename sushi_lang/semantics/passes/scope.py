@@ -672,6 +672,12 @@ class ScopeAnalyzer:
 
         for name, owner, span in pattern_bindings(arm.pattern):
             self._declare_variable(name, span, written_binder(owner, name))
+        # A name that only a later `|` alternative binds is the fault CE2126 reports. It
+        # is declared here as read, so that one fault gives one diagnostic.
+        for name, owner, span in pattern_bindings(arm.pattern, every_alternative=True):
+            if name not in self.scopes[-1]:
+                self._declare_variable(name, span, written_binder(owner, name))
+                self.scopes[-1][name].used = True
 
         if isinstance(arm.body, Block):
             self._check_block(arm.body)

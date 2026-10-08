@@ -1,0 +1,11 @@
+# Two alternatives of one arm share the value 3.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+
+fn f(i32 n) string:
+    match n:
+        1..=5 | 3 -> return "low"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(1))
+    return 0

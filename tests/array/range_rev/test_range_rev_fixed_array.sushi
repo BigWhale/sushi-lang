@@ -1,0 +1,10 @@
+# A fixed array takes a `.rev()` range with readable bounds.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 1 0\n0 1 2\n"
+
+fn main() i32:
+    let i32[3] a = [(0..3).rev()]
+    println("{a[0]} {a[1]} {a[2]}")
+    let i32[3] b = [(0..3).rev().rev()]
+    println("{b[0]} {b[1]} {b[2]}")
+    return 0

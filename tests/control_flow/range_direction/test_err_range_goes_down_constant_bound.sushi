@@ -1,0 +1,8 @@
+# A bound that names a constant is readable, so a range from TOP down to 0 is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2125
+const i32 TOP = 8
+
+fn main() i32:
+    foreach(i in TOP..0):
+        println(i)
+    return 0

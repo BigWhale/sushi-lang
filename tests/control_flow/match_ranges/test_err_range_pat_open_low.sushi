@@ -1,0 +1,11 @@
+# A range pattern has two bounds: `..=5` is not a pattern.
+# EXPECT_ERROR_CODE: CE6001
+
+fn f(i32 n) string:
+    match n:
+        ..=5 -> return "low"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(1))
+    return 0

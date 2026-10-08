@@ -1,0 +1,14 @@
+# A range in an `Own(...)` pattern reads the pointee, alone and as an alternative.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "small\nsmall\nbig\n"
+
+fn boxed(Maybe@(Own@(i32)) o) string:
+    match o:
+        Maybe.Some(Own(0..=9 | 20)) -> return "small"
+        _ -> return "big"
+
+fn main() i32:
+    println(boxed(Maybe.Some(Own.alloc(5))))
+    println(boxed(Maybe.Some(Own.alloc(20))))
+    println(boxed(Maybe.Some(Own.alloc(11))))
+    return 0

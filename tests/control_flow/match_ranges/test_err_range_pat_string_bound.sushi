@@ -1,0 +1,11 @@
+# A range bound is an integer literal. A string is not a bound.
+# EXPECT_ERROR_CODES_EXACT: CE2072
+
+fn f(string s) string:
+    match s:
+        "a".."z" -> return "letter"
+        _ -> return "other"
+
+fn main() i32:
+    println(f("a"))
+    return 0

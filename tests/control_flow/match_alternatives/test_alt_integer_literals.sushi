@@ -1,0 +1,27 @@
+# `|` alternatives in an integer match: one arm takes several values. A negative
+# literal, a hex literal and a decimal literal are values of the scrutinee type, and
+# each one is an alternative. The arms are tried in order. The last arm ends with
+# `| _`, so it is also the arm for every other value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "small\nsmall\nsmall\nnegative\nnegative\nhex\nhex\nthree\nrest\nrest\n"
+
+fn classify(i32 n) string:
+    match n:
+        0 | 1 | 2 -> return "small"
+        -1 | -2 -> return "negative"
+        0x10 | 0x20 -> return "hex"
+        3 -> return "three"
+        7 | _ -> return "rest"
+
+fn main() i32:
+    println(classify(0))
+    println(classify(1))
+    println(classify(2))
+    println(classify(-1))
+    println(classify(-2))
+    println(classify(16))
+    println(classify(32))
+    println(classify(3))
+    println(classify(7))
+    println(classify(100))
+    return 0

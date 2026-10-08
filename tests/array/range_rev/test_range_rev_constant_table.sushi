@@ -1,0 +1,12 @@
+# A `.rev()` range in a constant: the evaluator expands the values, last first.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "9 8 7 6\n4 0\n"
+
+const i32[4] DOWN = [(6..=9).rev()]
+const i32 TOP = 5
+const i32[5] COUNT = [(0..TOP).rev()]
+
+fn main() i32:
+    println("{DOWN[0]} {DOWN[1]} {DOWN[2]} {DOWN[3]}")
+    println("{COUNT[0]} {COUNT[4]}")
+    return 0

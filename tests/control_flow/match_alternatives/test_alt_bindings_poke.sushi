@@ -1,0 +1,71 @@
+# `poke` bindings in every alternative of an arm. A write through the binding reaches
+# the storage of the scrutinee, whatever alternative matched, so the owner shows the
+# new value after the match.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "big 11\nsmall 3\nlong abc!\nshort xy!\nred 6\nblue 10\n"
+
+enum Counter:
+    Small(i32)
+    Big(i32)
+    Off
+
+enum Label:
+    Short(string)
+    Long(string)
+    Blank
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn bump(poke Counter c) ~:
+    match c:
+        Counter.Small(poke n) | Counter.Big(poke n) -> n := n + 1
+        Counter.Off -> println("off")
+
+fn show(peek Counter c) ~:
+    match c:
+        Counter.Small(n) -> println("small {n}")
+        Counter.Big(n) -> println("big {n}")
+        Counter.Off -> println("off")
+
+fn shout(poke Label l) ~:
+    match l:
+        Label.Short(poke s) | Label.Long(poke s) -> s := "{s}!"
+        Label.Blank -> println("blank")
+
+fn label(peek Label l) ~:
+    match l:
+        Label.Short(s) -> println("short {s}")
+        Label.Long(s) -> println("long {s}")
+        Label.Blank -> println("blank")
+
+fn main() i32:
+    let Counter big = Counter.Big(10)
+    bump(poke big)
+    show(peek big)
+    let Counter small = Counter.Small(2)
+    match small:
+        Counter.Small(poke n) | Counter.Big(poke n) -> n := n + 1
+        Counter.Off -> println("off")
+    show(peek small)
+    let string base = "ab"
+    let Label long = Label.Long("{base}c")
+    shout(poke long)
+    label(peek long)
+    let Label short = Label.Short("xy")
+    shout(poke short)
+    label(peek short)
+    let (Color, i32) red = (Color.Red, 5)
+    let (Color, i32) blue = (Color.Blue, 9)
+    match red:
+        (Color.Red, poke n) | (Color.Blue, poke n) -> n := n + 1
+        (Color.Green, _) -> println("green")
+    match blue:
+        (Color.Red, poke n) | (Color.Blue, poke n) -> n := n + 1
+        (Color.Green, _) -> println("green")
+    println("red {red.1}")
+    println("blue {blue.1}")
+    return 0

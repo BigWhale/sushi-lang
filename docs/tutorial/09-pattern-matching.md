@@ -110,8 +110,10 @@ never trip over the one you missed.
 
 ## Matching integers
 
-A `match` also works on an integer. Each arm is an integer literal, in any base. An integer
-has too many values to list, so a trailing `_` arm is required ([`CE2074`](../error-catalog.md#ce2074)).
+A `match` also works on an integer. Each arm is an integer literal, in any base. The arms
+must cover every value of the type. A few literals do not, so this match ends with a `_`
+arm; without it, the error is [`CE2074`](../error-catalog.md#ce2074), and the message names
+the first value that no arm matches.
 
 ```sushi
 --8<-- "docs/tutorial/examples/09-pattern-matching/integer-arms.sushi"
@@ -130,10 +132,39 @@ Two arms with the same value are an error ([`CE2075`](../error-catalog.md#ce2075
 as `42` and `0x2A` do. Every arm must fit the type of the matched value: an enum arm in a
 `match` on an integer is the error [`CE2076`](../error-catalog.md#ce2076).
 
+### Ranges
+
+An arm can also hold a **range** of values. `a..b` matches a, a+1, and so on up to b-1;
+`a..=b` also matches b. A bound can be any integer literal, a byte literal such as `a'0'`
+included:
+
+```sushi
+--8<-- "docs/tutorial/examples/09-pattern-matching/range-arms.sushi"
+```
+
+Output:
+
+```
+95: A
+75: B
+12: fail
+120: not a score
+7: digit
+Q: letter
+200: high
+```
+
+The two ranges of `half` hold every value of a `u8`, so that match needs no `_` arm. A `_`
+arm there could never run, and the compiler refuses it
+([`CE2118`](../error-catalog.md#ce2118)). Two ranges that share a value are an error
+([`CE2075`](../error-catalog.md#ce2075)): `75..90` stops before 90, so it does not share a
+value with `90..=100`. A range always goes up: `100..=90` is the error
+[`CE2125`](../error-catalog.md#ce2125).
+
 ## Matching strings
 
 A `match` also works on a `string`. Each arm is a string literal, in double quotes or in
-single quotes. A string also has too many values to list, so a trailing `_` arm is
+single quotes. A string has too many values to list, so a trailing `_` arm is
 required ([`CE2074`](../error-catalog.md#ce2074)).
 
 ```sushi
@@ -160,6 +191,33 @@ The match compares bytes, so `"Hello"` does not match `"hello"`. The arms are te
 order, from the top. A string literal is also legal inside a pattern, for example
 `Maybe.Some("--help")` or `("go", direction)`. Two arms with the same value are the error
 [`CE2075`](../error-catalog.md#ce2075), also when one uses double quotes and the other single quotes.
+
+## Alternatives
+
+One arm can hold several patterns, with `|` between them. The arm runs when one of the
+patterns matches. Each pattern is an **alternative**.
+
+```sushi
+--8<-- "docs/tutorial/examples/09-pattern-matching/alternatives.sushi"
+```
+
+Output:
+
+```
+agree
+agree
+refuse
+unclear
+2
+3
+0
+```
+
+The arm `Drink.Tea(n) | Drink.Coffee(n)` binds `n` in both alternatives, so the arm body
+can read `n` whatever drink matched. Each alternative must bind the same names, with the
+same types and the same mode; a difference is the error [`CE2126`](../error-catalog.md#ce2126). An
+alternative can also stand inside a pattern: `Maybe.Some(1 | 2)` matches a `Some` that holds
+1 or 2. Put a space on each side of `|`: the compiler reads `||` as the logical `or`.
 
 ## Binding modes
 
@@ -203,7 +261,11 @@ is for data that owns memory, such as the `string[]` here.
   variants together.
 - Matching on an enum is **exhaustive** — the compiler insists every variant is handled
   ([`CE2040`](../error-catalog.md#ce2040)), turning forgotten cases into compile errors instead of runtime bugs.
-- A `match` on an integer or on a `string` uses literal arms and needs a trailing `_`.
+- A `match` on an integer uses literal and range arms (`0..=9`), and needs a trailing `_`
+  unless its arms cover the type. A `match` on a `string` uses literal arms and always
+  needs a trailing `_`.
+- `|` puts several alternatives in one arm (`"yes" | "y" ->`); each alternative binds the
+  same names.
 - A pattern binding borrows by default; `poke` writes into the data, and `nom` takes it
   from a value that the `match` owns.
 - `match` is a statement; it does not give a value.

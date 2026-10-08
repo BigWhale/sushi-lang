@@ -1,6 +1,7 @@
-# An integer element has no end of values, so it needs a `_` or a binding.
+# The literal arms do not cover the integer element, so the match needs a `_` or a
+# binding there. The error names the values that no arm matches, as ranges.
 # EXPECT_ERROR_CODES_EXACT: CE2040
-# EXPECT_STDERR_CONTAINS: (_, _)
+# EXPECT_STDERR_CONTAINS: (-2147483648..=-1, _)
 
 enum Color:
     Red

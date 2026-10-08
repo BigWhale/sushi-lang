@@ -1,0 +1,13 @@
+# A nested alternative that can never match: `_` comes first in the payload, so the
+# alternative `1` after it is dead. It is reported one time.
+# EXPECT_ERROR_CODES_EXACT: CE2118
+
+fn size(Maybe@(i32) m) i32:
+    match m:
+        Maybe.Some(_ | 1) -> return 1
+        Maybe.None -> return 0
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(1)
+    println(size(m))
+    return 0

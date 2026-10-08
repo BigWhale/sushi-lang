@@ -5,7 +5,7 @@
 
 
 const i32[6] UP = [0..=5]
-const i32[4] DOWN = [9..=6]
+const i32[4] DOWN = [(6..=9).rev()]
 
 fn main() i32:
     println("{UP[0]} {UP[5]}")

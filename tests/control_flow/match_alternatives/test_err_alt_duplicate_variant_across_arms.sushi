@@ -1,0 +1,18 @@
+# An alternative names 'Color.Red', which the first arm already matches. The
+# duplicate-arm rule for a variant names this fault, and it is the one diagnostic.
+# EXPECT_ERROR_CODES_EXACT: CE2041
+
+enum Color:
+    Red
+    Green
+    Blue
+
+fn warm(Color c) i32:
+    match c:
+        Color.Red -> return 1
+        Color.Green | Color.Red -> return 2
+        Color.Blue -> return 0
+
+fn main() i32:
+    println(warm(Color.Red))
+    return 0

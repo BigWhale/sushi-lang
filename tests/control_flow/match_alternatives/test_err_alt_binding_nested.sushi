@@ -1,0 +1,18 @@
+# Alternatives nested in a payload follow the same rule: the first binds 'r', the
+# second binds 'q'.
+# EXPECT_ERROR_CODES_EXACT: CE2126
+
+enum Shape:
+    Circle(i32)
+    Ring(i32)
+    Dot
+
+fn width(Maybe@(Shape) m) i32:
+    match m:
+        Maybe.Some(Shape.Circle(r) | Shape.Ring(q)) -> return r
+        Maybe.Some(Shape.Dot) | Maybe.None -> return 0
+
+fn main() i32:
+    let Maybe@(Shape) m = Maybe.Some(Shape.Dot)
+    println(width(m))
+    return 0

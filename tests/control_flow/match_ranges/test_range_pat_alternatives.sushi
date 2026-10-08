@@ -1,0 +1,27 @@
+# Ranges and literals are `|` alternatives of one arm, at the top of an arm and in a
+# nested position.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "picked\npicked\npicked\npicked\npicked\nrest\nrest\nrest\nsome picked\nsome rest\n"
+
+fn pick(i32 n) string:
+    match n:
+        1 | 5..=7 | 10..20 -> return "picked"
+        _ -> return "rest"
+
+fn pick_some(Maybe@(i32) m) string:
+    match m:
+        Maybe.Some(1 | 5..=7) -> return "some picked"
+        _ -> return "some rest"
+
+fn main() i32:
+    println(pick(1))
+    println(pick(5))
+    println(pick(7))
+    println(pick(10))
+    println(pick(19))
+    println(pick(8))
+    println(pick(20))
+    println(pick(0))
+    println(pick_some(Maybe.Some(6)))
+    println(pick_some(Maybe.Some(8)))
+    return 0

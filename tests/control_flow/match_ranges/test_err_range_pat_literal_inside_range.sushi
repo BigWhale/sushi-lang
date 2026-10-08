@@ -1,0 +1,12 @@
+# The literal arm `5` repeats a value that the range arm above matches.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+
+fn f(i32 n) string:
+    match n:
+        0..=9 -> return "digit"
+        5 -> return "five"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(1))
+    return 0

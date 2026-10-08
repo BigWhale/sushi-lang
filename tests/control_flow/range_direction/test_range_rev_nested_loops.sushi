@@ -1,0 +1,18 @@
+# A `.rev()` range in a nested loop, with `break` and `continue` in the reversed loop.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2:2 1 0 \n1:1 0 \n0:0 \n9 8 6 5 \n"
+
+fn main() i32:
+    foreach(i in (0..3).rev()):
+        print("{i}:")
+        foreach(j in (0..=i).rev()):
+            print("{j} ")
+        println("")
+    foreach(i in (0..10).rev()):
+        if (i == 7):
+            continue
+        if (i == 4):
+            break
+        print("{i} ")
+    println("")
+    return 0

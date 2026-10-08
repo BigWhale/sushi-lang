@@ -1,0 +1,17 @@
+# 's' is taken with `nom` in the first alternative and read through a borrow in the
+# second. The match frees the payload on one path and not on the other, so the mode
+# is part of the rule.
+# EXPECT_ERROR_CODES_EXACT: CE2126
+
+enum Msg:
+    Text(string)
+    Note(string)
+
+fn take(nom Msg m) i32:
+    match nom m:
+        Msg.Text(nom s) | Msg.Note(s) -> return s.len()
+
+fn main() i32:
+    let Msg m = Msg.Text("abc")
+    println(take(nom m))
+    return 0

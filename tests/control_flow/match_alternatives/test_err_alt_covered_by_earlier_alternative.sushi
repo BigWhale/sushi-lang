@@ -1,0 +1,13 @@
+# The second alternative `Maybe.Some(1)` can never match: the first alternative of the
+# same arm matches every value it matches. It is reported one time.
+# EXPECT_ERROR_CODES_EXACT: CE2118
+
+fn size(Maybe@(i32) m) i32:
+    match m:
+        Maybe.Some(_) | Maybe.Some(1) -> return 1
+        Maybe.None -> return 0
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(1)
+    println(size(m))
+    return 0

@@ -21,6 +21,7 @@ from sushi_lang.semantics.ast import (
     MemberAccess,
     MethodCall,
     Name,
+    OrPattern,
     Pattern,
     Print,
     PrintLn,
@@ -29,6 +30,7 @@ from sushi_lang.semantics.ast import (
     Stmt,
     TupleLiteral,
     TuplePattern,
+    alternatives_of,
     While,
 )
 from sushi_lang.semantics.ownership import Provenance
@@ -357,17 +359,29 @@ def match_scrutinees(stmt: Match) -> list[Expr]:
 
 def _arm_positions(checker: 'BorrowChecker', stmt: Match,
                    pattern: object) -> list[tuple[Expr, object, object]]:
-    """(scrutinee, its type, the pattern item that reads it) for one arm."""
-    if not isinstance(pattern, (Pattern, TuplePattern)):
+    """(scrutinee, its type, the pattern item that reads it) for one arm.
+
+    Over a tuple-literal scrutinee, `|` alternatives of tuple patterns give each element
+    the alternatives of its own position.
+    """
+    alternatives = alternatives_of(pattern)
+    if not any(isinstance(alt, (Pattern, TuplePattern)) for alt in alternatives):
         return []
     if not isinstance(stmt.scrutinee, TupleLiteral):
         return [(stmt.scrutinee, stmt.resolved_scrutinee_type, pattern)]
-    if not isinstance(pattern, TuplePattern):
+    tuples = [alt for alt in alternatives if isinstance(alt, TuplePattern)]
+    if not tuples:
         return []
     types = checker.types.tuple_element_types(stmt.resolved_scrutinee_type)
-    return [(element, types[index] if index < len(types) else None, item)
-            for index, (element, item) in enumerate(
-                zip(stmt.scrutinee.elements, pattern.elements, strict=False))]
+    positions: list[tuple[Expr, object, object]] = []
+    for index, element in enumerate(stmt.scrutinee.elements):
+        items = [alt.elements[index] for alt in tuples if index < len(alt.elements)]
+        if not items:
+            continue
+        item = items[0] if len(items) == 1 else OrPattern(alternatives=items,
+                                                          loc=getattr(pattern, "loc", None))
+        positions.append((element, types[index] if index < len(types) else None, item))
+    return positions
 
 
 def _check_match(checker: 'BorrowChecker', stmt: Match) -> None:

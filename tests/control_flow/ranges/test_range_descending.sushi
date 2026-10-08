@@ -1,12 +1,14 @@
-# EXPECT_STDOUT_CONTAINS: Descending exclusive:
-# EXPECT_STDOUT_CONTAINS: Descending inclusive:
+# A range always goes up. A countdown is written `(a..b).rev()`: the values of `a..b`,
+# last first.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Descending exclusive:\n10\n9\n8\n7\n6\nDescending inclusive:\n10\n9\n8\n7\n6\n5\n"
 fn main() i32:
     println("Descending exclusive:")
-    foreach(i in 10..5):
+    foreach(i in (6..=10).rev()):
         println(i)
 
     println("Descending inclusive:")
-    foreach(i in 10..=5):
+    foreach(i in (5..=10).rev()):
         println(i)
 
     return 0

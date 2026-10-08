@@ -1,0 +1,36 @@
+# `peek` bindings in every alternative of an arm. Each one points into the payload of
+# the scrutinee, whatever alternative matched, and reads it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "short abcde\nlong abcdefg\nblank\n5\n7\n"
+use <collections/strings>
+
+enum Label:
+    Short(string)
+    Long(string)
+    Blank
+
+fn describe(peek Label l) ~:
+    match l:
+        Label.Short(peek s) -> println("short {s}")
+        Label.Long(peek s) -> println("long {s}")
+        Label.Blank -> println("blank")
+
+fn length(peek Label l) i32:
+    match l:
+        Label.Short(peek s) | Label.Long(peek s) -> return s.len()
+        Label.Blank -> return 0
+
+fn main() i32:
+    let string base = "abc"
+    let Label short = Label.Short("{base}de")
+    let Label long = Label.Long("{base}defg")
+    let Label blank = Label.Blank
+    describe(peek short)
+    describe(peek long)
+    describe(peek blank)
+    println(length(peek short))
+    match long:
+        Label.Short(peek s) | Label.Long(peek s) -> println(s.len())
+        Label.Blank -> println(0)
+    return 0
