@@ -142,7 +142,7 @@ Dynamic array manager is None - initialization required.
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-AST structure constraint violated during code generation.
+An AST invariant is violated: a semantic pass or the code generator found a structure that the compiler does not make. This is a fault in the compiler, not in the program.
 
 ### CE0016 {#ce0016}
 

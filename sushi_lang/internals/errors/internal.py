@@ -53,7 +53,7 @@ _add(ErrorMessage("CE0014", Severity.ERROR,
 
 _add(ErrorMessage("CE0015", Severity.ERROR,
     "AST invariant violated: {message}",
-    Category.INTERNAL, "AST structure constraint violated during code generation."))
+    Category.INTERNAL, "An AST invariant is violated: a semantic pass or the code generator found a structure that the compiler does not make. This is a fault in the compiler, not in the program."))
 
 _add(ErrorMessage("CE0016", Severity.ERROR,
     "scope stack underflow: attempted to pop from empty scope stack",

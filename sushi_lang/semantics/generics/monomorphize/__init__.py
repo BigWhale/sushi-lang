@@ -116,8 +116,9 @@ class Monomorphizer:
         binds one argument (CE4006). A refusal of either kind cuts no copy.
 
         `key` names the instantiation in `sites` and in the refusal record: a refused
-        instantiation is reported ONCE, at the first site that named it, and every later
-        reach -- a field of another instance, a copy's body -- answers False silently.
+        instantiation is reported ONCE, at the first site that named it and is not
+        muted, and every later reach -- a field of another instance, a copy's body --
+        answers False silently.
         `template_file` is where the constraint is declared, for the note.
 
         `error_params` maps each type parameter that stands in an `E` position of the
@@ -197,9 +198,10 @@ class Monomorphizer:
         A refusal goes to `reporter`, the reporter of the unit that holds the site: that
         unit then knows a diagnostic was given (a `match` over the refused call reads
         it, and the template check refuses its template), and the diagnostic takes its
-        place in the unit's source order. A key is reported ONCE, at its first site. A
-        later site, in any unit, offers the same errors to its own reporter again and
-        records nothing, so it knows the call is refused and says nothing twice.
+        place in the unit's source order. A key is reported ONCE, at its first site that
+        is not muted. A later site, in any unit, offers the same errors to its own
+        reporter again and records nothing, so it knows the call is refused and says
+        nothing twice.
         """
         if report and key is not None and self.was_refused(key):
             reporter.offer_again(self._refused[key])

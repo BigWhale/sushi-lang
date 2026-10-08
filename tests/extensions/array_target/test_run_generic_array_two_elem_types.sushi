@@ -1,5 +1,5 @@
-# Two element types instantiate one `extend T[]` template in one program, and each
-# instantiation validates and runs with its own substituted parameter type.
+# Two element types instantiate one `extend T[]` template in one program. The body is
+# checked one time, with `T: Eq`, and each instantiation runs with its own element type.
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "true\ntrue\nfalse\n"
