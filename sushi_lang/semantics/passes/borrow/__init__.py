@@ -3,7 +3,8 @@
 from __future__ import annotations
 from collections import ChainMap
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, AbstractSet, Callable, Dict, FrozenSet, Iterator, List, Optional, Set
+from typing import (
+    TYPE_CHECKING, AbstractSet, Callable, Dict, FrozenSet, Iterator, List, Optional, Set)
 
 from sushi_lang.semantics.ast import (
     Block, Expand, ExtendDef, ExtendWithDef, FuncDef, Param, Program)
