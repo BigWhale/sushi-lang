@@ -36,8 +36,7 @@ def emit_dynamic_array_of_length(codegen: 'LLVMCodegen', element_llvm_type: ir.T
     """
     from sushi_lang.backend.expressions import memory
 
-    element_size = memory.get_element_size_constant(codegen, element_llvm_type)
-    total_bytes = codegen.builder.mul(length, element_size, name="total_bytes")
+    total_bytes = memory.emit_byte_size(codegen, length, element_llvm_type, name="total_bytes")
 
     null_ptr = ir.Constant(ir.PointerType(codegen.types.i8), None)
     data_ptr = memory.emit_realloc_call(codegen, null_ptr, total_bytes)
@@ -100,9 +99,9 @@ def create_dynamic_array_from_elements(codegen: 'LLVMCodegen', element_llvm_type
     # The LLVM ABI ALLOC size, which is the stride GEP uses. A padded type's data size is
     # smaller -- a string fat pointer is 12 bytes of data in a 16-byte slot -- so sizing by
     # data size while GEP strides by alloc size overflows the buffer (#24, #29).
-    element_size = memory.get_element_size_constant(codegen, element_llvm_type)
     capacity_val = ir.Constant(codegen.types.i32, capacity)
-    total_bytes = codegen.builder.mul(capacity_val, element_size, name="total_bytes")
+    total_bytes = memory.emit_byte_size(codegen, capacity_val, element_llvm_type,
+                                        name="total_bytes")
 
     null_ptr = ir.Constant(ir.PointerType(codegen.types.i8), None)
     data_ptr = memory.emit_realloc_call(codegen, null_ptr, total_bytes)

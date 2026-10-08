@@ -216,9 +216,11 @@ class DynamicArrayManager:
 
         initial_capacity = self._next_power_of_2(initial_len)
 
-        element_size = self._get_element_size_bytes(descriptor.element_type)
+        from sushi_lang.backend.expressions import memory
+
         capacity_val = make_i32_const(initial_capacity)
-        total_bytes = self.builder.mul(capacity_val, element_size, name="total_bytes")
+        total_bytes = memory.emit_byte_size(self.codegen, capacity_val, element_llvm_type,
+                                            name="total_bytes", builder=self.builder)
 
         data_ptr = emit_malloc(self.codegen, self.builder, total_bytes)
 
@@ -326,12 +328,6 @@ class DynamicArrayManager:
     def _get_llvm_type_for_element(self, element_type: Type) -> ir.Type:
         """Convert Sushi element type to LLVM type."""
         return self.codegen.types.ll_type(element_type)
-
-    def _get_element_size_bytes(self, element_type: Type) -> ir.Value:
-        """Get the per-element allocation stride in bytes as an LLVM i32 constant."""
-        from sushi_lang.backend.expressions import memory
-        element_llvm_type = self._get_llvm_type_for_element(element_type)
-        return memory.get_element_size_constant(self.codegen, element_llvm_type)
 
     def _next_power_of_2(self, n: int) -> int:
         """Return the next power of 2 >= n. Used for capacity growth."""

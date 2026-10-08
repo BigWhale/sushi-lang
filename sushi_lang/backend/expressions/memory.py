@@ -56,6 +56,24 @@ def get_element_size_constant(codegen: 'LLVMCodegen', element_type: ir.Type) -> 
         raise_internal_error("CE0079", type=str(element_type))
 
 
+def emit_byte_size(codegen: 'LLVMCodegen', count: ir.Value, element_llvm_type: ir.Type,
+                   name: str = "byte_size",
+                   builder: Optional[ir.IRBuilder] = None) -> ir.Value:
+    """The byte size of `count` elements, as an i64.
+
+    A count is an i32, and so is the element size. Their product passes the i32 range at
+    4 GiB, so both widen to i64 BEFORE the multiply. When the widening comes after the
+    multiply, the product has already wrapped, and `realloc` or `memcpy` gets a size that
+    is too small.
+    """
+    b = builder if builder is not None else codegen.builder
+    i64 = codegen.types.i64
+    element_size = get_element_size_constant(codegen, element_llvm_type)
+    count_i64 = count if count.type == i64 else b.zext(count, i64, name=f"{name}_count")
+    size_i64 = b.zext(element_size, i64, name=f"{name}_stride")
+    return b.mul(count_i64, size_i64, name=name)
+
+
 def calculate_llvm_type_size(llvm_type: 'ir.Type') -> int:
     """The ABI size in bytes of an LLVM type, padding included, as the data layout gives it.
 
@@ -460,32 +478,41 @@ def emit_grow_to_fit(codegen: 'LLVMCodegen', *, data_ptr: ir.Value, data_ptr_ptr
     """Grow a contiguous buffer so that it holds enough elements; answer its data pointer.
 
     DOUBLE: `count` elements are in the buffer and one more must fit. The capacity
-    doubles (0 becomes 1). EXACT: `count` elements must fit, and the capacity becomes
-    exactly `count`. AT_LEAST: `count` elements must fit, and the capacity becomes
+    doubles (0 becomes 1); when the double is not a positive i32, the capacity becomes
+    `count + 1`. EXACT: `count` elements must fit, and the capacity becomes exactly
+    `count`. AT_LEAST: `count` elements must fit, and the capacity becomes
     `max(2 * cap, count)`, so a sequence of bulk appends takes linear time; when `2 * cap`
-    is not a positive i32, the capacity becomes `count`. The new capacity and data
-    pointer are stored through `cap_ptr` and `data_ptr_ptr`; the answer is `data_ptr` or
-    the grown pointer, whichever is live.
+    is not a positive i32, the capacity becomes `count`. A need that is not a positive
+    i32 (a `len + count` that wrapped) is the allocation failure RE2021, because no i32
+    capacity holds it. The byte size is an i64 (`emit_byte_size`). The new capacity and
+    data pointer are stored through `cap_ptr` and `data_ptr_ptr`; the answer is
+    `data_ptr` or the grown pointer, whichever is live.
     """
     b = codegen.builder
+    i32 = codegen.types.i32
     if policy is GrowPolicy.DOUBLE:
-        need_growth = b.icmp_unsigned(">=", count, current_cap)
+        need = b.add(count, ir.Constant(i32, 1), name="grow_need")
     else:
-        need_growth = b.icmp_unsigned(">", count, current_cap)
+        need = count
+    need_growth = b.icmp_unsigned(">", need, current_cap)
 
     before_growth = b.block
     with b.if_then(need_growth):
+        with b.if_then(b.icmp_signed("<", need, ir.Constant(i32, 0), name="need_too_large")):
+            codegen.runtime.errors.emit_runtime_error("RE2021")
+            b.unreachable()
         if policy is GrowPolicy.DOUBLE:
-            i32 = codegen.types.i32
             cap_is_zero = b.icmp_unsigned("==", current_cap, ir.Constant(i32, 0))
-            double_cap = b.mul(current_cap, ir.Constant(i32, 2))
+            can_double = b.icmp_unsigned("<=", current_cap,
+                                         ir.Constant(i32, _LARGEST_DOUBLING_CAP))
+            double_cap = b.select(can_double, b.mul(current_cap, ir.Constant(i32, 2)), need)
             new_cap = b.select(cap_is_zero, ir.Constant(i32, 1), double_cap, name="new_cap")
         elif policy is GrowPolicy.AT_LEAST:
-            new_cap = _at_least_capacity(codegen, current_cap, count)
+            new_cap = _at_least_capacity(codegen, current_cap, need)
         else:
-            new_cap = count
-        element_size = get_element_size_constant(codegen, element_llvm_type)
-        new_total_size = b.mul(new_cap, element_size, name="new_total_size")
+            new_cap = need
+        new_total_size = emit_byte_size(codegen, new_cap, element_llvm_type,
+                                        name="new_total_size")
         new_data_ptr = emit_realloc_call(codegen, data_ptr, new_total_size)
         typed_new_data_ptr = b.bitcast(new_data_ptr, ir.PointerType(element_llvm_type),
                                        name="typed_new_data_ptr")

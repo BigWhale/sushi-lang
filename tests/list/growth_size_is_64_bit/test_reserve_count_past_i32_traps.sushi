@@ -1,0 +1,12 @@
+# EXPECT_STDOUT_EXACT: "1\n"
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDERR_CONTAINS: "RE2021"
+# The length 1 plus 2147483647 is past the i32 range.
+# The capacity cannot hold that count, so the reserve stops with the allocation error.
+fn main() i32:
+    let List@(i64) xs = List.new()
+    xs.push(1)
+    println(xs.len())
+    xs.reserve(2147483647)
+    println(xs.capacity())
+    return 0
