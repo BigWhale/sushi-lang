@@ -1,0 +1,22 @@
+# A destructor that calls drop() on a field is the same error.
+# The compiler destroys the owning fields after drop() runs.
+# EXPECT_ERROR_CODE: CE4020
+# EXPECT_ERROR_CODES_EXACT: CE4020
+struct Inner:
+    i32 n
+
+extend Inner with Drop:
+    fn drop(poke self) ~:
+        println("inner {self.n}")
+
+struct Outer:
+    Inner inner
+
+extend Outer with Drop:
+    fn drop(poke self) ~:
+        self.inner.drop()
+
+fn main() i32:
+    let Outer o = Outer(Inner(1))
+    println(o.inner.n)
+    return 0

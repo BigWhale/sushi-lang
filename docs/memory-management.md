@@ -215,7 +215,7 @@ fn main() i32:
     return 0  # b drops here: "ticket 9 returned"
 ```
 
-`Drop` needs no import. Four rules go with it:
+`Drop` needs no import. Five rules go with it:
 
 - **`drop()` runs first, then the fields.** A struct that holds a `Ticket` runs its own
   `drop()` before the ticket is destroyed, so what it owns is still readable while it
@@ -225,6 +225,9 @@ fn main() i32:
 - **Only the unit that declares a type may implement `Drop` for it** ([CE4012](error-catalog.md#ce4012)). Otherwise
   another unit could quietly replace the implementation and stop a resource being
   released.
+- **Only the compiler calls `drop()`** ([CE4020](error-catalog.md#ce4020)). A written call `t.drop()` is an error, also
+  through a `Drop` constraint and on a field in a destructor. To end a value early, let it
+  leave its scope, give it to a function with `nom`, or declare a `nom self` method such as `close()`.
 - **There is no `.clone()`** on a type that owns a resource, or on anything holding one
   ([CE2431](error-catalog.md#ce2431)). A deep copy would copy the descriptor number and leave two values that both
   drop -- a double release the copy verb would hide. The operation that means "a second

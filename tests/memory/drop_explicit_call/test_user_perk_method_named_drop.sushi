@@ -1,0 +1,18 @@
+# A user perk can declare a method with the name drop.
+# The call of that method is legal, and the method runs one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "release 1\n"
+perk Release:
+    fn drop(poke self) ~
+
+struct T:
+    i32 n
+
+extend T with Release:
+    fn drop(poke self) ~:
+        println("release {self.n}")
+
+fn main() i32:
+    let T t = T(1)
+    t.drop()
+    return 0

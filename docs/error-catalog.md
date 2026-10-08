@@ -3272,6 +3272,16 @@ A generic body is checked one time, where it is written. A type parameter is opa
 
 A `Drop` implementation says how each value of a type releases what it holds. A bound in its target gives `drop()` to some instances of the type and not to others, and an instance that the bound excludes releases nothing, with no diagnostic. So a `Drop` implementation inherits the bounds that its type declares and adds none. An array target is [CE4016](#ce4016).
 
+### CE4020 {#ce4020}
+
+**Error** · perk
+
+**Message:** `cannot call 'drop()' of the perk 'Drop' on '{type}': the compiler runs it at the scope exit`
+
+**Help:** `to end the value early, let it leave its scope, give it to a function with 'nom', or declare a 'nom self' method on the type (as 'close()' on a stdlib handle)`
+
+The compiler runs the `drop()` method of the predefined `Drop` perk at the scope exit of each value, one time. The contract takes `poke self`, so a written call does not end the life of its receiver: the value stays live, and the scope exit runs `drop()` again. Thus a written call of the `drop` method of `Drop` is an error in every position: on a value, through a `Drop` constraint, and on a field inside a destructor (the compiler destroys the owning fields after `drop()`). The rule reads the perk, not the name: a method `drop` of a user perk is an ordinary method. To end a value early, let it leave its scope, give it to a function with `nom`, or declare a `nom self` method on the type (the `close()` pattern of the stdlib handles). Rust refuses the same call (E0040, explicit use of a destructor method).
+
 ## CE5xxx: Foreign function interface errors {#ce5xxx}
 
 These errors are about `unsafe external` blocks and the `ptr` type.

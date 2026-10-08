@@ -1,0 +1,17 @@
+# A call of drop() through a Drop constraint is the same error.
+# EXPECT_ERROR_CODE: CE4020
+# EXPECT_ERROR_CODES_EXACT: CE4020
+struct T:
+    i32 n
+
+extend T with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.n}")
+
+fn release@(U: Drop)(poke U x) ~:
+    x.drop()
+
+fn main() i32:
+    let T t = T(1)
+    release(poke t)
+    return 0

@@ -1,0 +1,16 @@
+# A written call of the drop() method of the Drop perk is an error.
+# The compiler runs drop() at the scope exit, one time for each value.
+# EXPECT_ERROR_CODE: CE4020
+# EXPECT_ERROR_CODES_EXACT: CE4020
+# EXPECT_STDERR_CONTAINS: test_err_drop_called_on_a_local.sushi:15:5: error [CE4020]
+struct T:
+    i32 n
+
+extend T with Drop:
+    fn drop(poke self) ~:
+        println("drop {self.n}")
+
+fn main() i32:
+    let T t = T(1)
+    t.drop()
+    return 0
