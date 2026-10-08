@@ -997,7 +997,7 @@ built per instantiation. The 2,452 lines stay. The generic inference gaps are un
 
 **Q2. Do generic-target extensions keep their repeat loop? — YES.**
 
-Follows from Q1. `_check_monomorphized_extensions` re-runs the per-unit passes for each
+Follows from Q1. `_check_copies` re-runs the per-unit passes for each
 instantiation, and under template semantics that is correct, not a workaround. It
 re-runs them over SHIR instead of the AST, with per-body side tables (7.3).
 

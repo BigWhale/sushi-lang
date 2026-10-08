@@ -585,7 +585,8 @@ pass then types the call and asks the analyzer for the instance through
 the copy's body waits in `Monomorphizer.late_bodies`, because the per-unit loop is
 walking the ASTs. After the loop, `_check_array_extensions` puts each waiting body into
 its home unit and checks it with the `scope`, `typecheck`, `lift` and `borrow` passes of
-that unit (`_check_late_functions`), in the same fixpoint as the extension copies. A
+that unit (`_check_copies`, the one loop for every copy that is cut after the per-unit
+loop), in the same fixpoint as the extension copies. A
 function copy that an extension copy's body names waits and is checked in the same way.
 
 A substituted type that is itself an instance -- the `Box<string>` a `Box@(B)` field

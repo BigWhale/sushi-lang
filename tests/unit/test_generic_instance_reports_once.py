@@ -5,8 +5,8 @@ the instances as ordinary functions -- correctly, because a per-instance truth c
 found there. What must not follow is the count: one fault in the body used to answer once
 per instantiation, at one caret.
 
-The rule is the one `_check_monomorphized_extensions` already applies to a generic-target
-extension: identity is the kind, the code, the MESSAGE, the file and the span, so a
+The rule is the one `_check_copies` (the analyzer's check of the late copies) already
+applies to a generic-target extension: identity is the kind, the code, the MESSAGE, the file and the span, so a
 finding that genuinely differs by type argument keeps its own message and is still told.
 """
 from __future__ import annotations

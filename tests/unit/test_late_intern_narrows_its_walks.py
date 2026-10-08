@@ -7,8 +7,8 @@ Re-running the two resolve entry points and the four derive entry points over bo
 whole tables costs O(all types) for each instance, and the passes already did that work
 once (#676).
 
-`_check_monomorphized_extensions(..., only=None)` is the shape: `None` means the whole
-table, and a name list means those names alone.
+`only=None` is the shape of the narrowed entry points: `None` means the whole table, and
+a name list means those names alone.
 """
 from __future__ import annotations
 
