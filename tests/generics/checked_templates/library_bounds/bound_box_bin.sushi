@@ -1,0 +1,8 @@
+public perk Named:
+    fn name() string
+
+public perk Titled:
+    fn name() string
+
+public struct Crate@(T: Named):
+    T v

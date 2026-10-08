@@ -112,11 +112,6 @@ class Diagnostic:
     # honest rendering of a multi-line span, because the marker takes its width from
     # the span's last line and is drawn under its first.
     show_source: bool = True
-    # The text this span indexes into, when it is not a file on disk: a library
-    # template arrives as a source slice in the manifest, and its spans belong to the
-    # slice and to nothing else (#471). It rides on the diagnostic so it survives the
-    # per-unit reporters being merged into the top-level one.
-    source: Optional[str] = None
 
 @dataclass(frozen=True)
 class Origin:
@@ -184,7 +179,7 @@ def missed_by_template_check(d: Diagnostic, template: object) -> Diagnostic:
     text = message_for(backstop, template=getattr(template, "name", template),
                        original=d.code, message=d.message)
     return Diagnostic("error", backstop, text, d.span, filename=d.filename,
-                      sub=list(d.sub), show_source=d.show_source, source=d.source)
+                      sub=list(d.sub), show_source=d.show_source)
 
 
 def in_source_order(items: List[Diagnostic]) -> List[Diagnostic]:
@@ -329,6 +324,11 @@ class Reporter:
         self._template: object = None
         self.items: List[Diagnostic] = []
         self._identities: set = set()
+        # The text of each source slice that a library ships, by its label (#471). A
+        # span in a slice indexes into the slice and into nothing else, and a location
+        # names the slice by its label: the location of a diagnostic and of each note
+        # alike. The program reporter renders, so the libraries step fills its map.
+        self.slices: dict[str, str] = {}
         # Every error offered, by code, a dropped repeat included, so "did this walk
         # report that fault" has one answer in every copy of an instance body.
         self.errors_offered: Counter[str] = Counter()
@@ -374,7 +374,6 @@ class Reporter:
             # reporter's own name in otherwise, and that is the one to replace.
             if d.filename == self.filename:
                 d.filename = self.origin.filename
-                d.source = self.origin.source
             if self.origin.provenance is not None:
                 d.sub.append(SubDiagnostic("note", self.origin.provenance))
         elif self.provenance:
@@ -449,8 +448,14 @@ class Reporter:
     def has_warnings(self) -> bool:
         return any(d.kind == "warning" for d in self.items)
 
+    def add_slice(self, label: str, source: str) -> None:
+        """Record the text of a library slice under its label, for the renderer."""
+        self.slices[label] = source
+
     def _get_source_lines(self, filename: str, src_lines: Optional[List[str]]) -> Optional[List[str]]:
-        """Get source lines for a file, reading from disk if needed."""
+        """Get source lines for a file: a library slice, this reporter's source, or disk."""
+        if filename in self.slices:
+            return self.slices[filename].splitlines()
         if filename == self.filename:
             return src_lines
         try:
@@ -507,8 +512,7 @@ class Reporter:
                 f"[{_paint(C.DIM, d.code, use_color)}]: {message}")
 
         if d.span and d.show_source:
-            lines = (d.source.splitlines() if d.source is not None
-                     else self._get_source_lines(d.filename or self.filename or "", src_lines))
+            lines = self._get_source_lines(d.filename or self.filename or "", src_lines)
             if use_unicode:
                 tip = C.RED if d.kind == "error" else C.YELLOW
                 out.append(f"{_paint(C.GRAY, '  ╭──┤ ', use_color)}{head}")
@@ -545,10 +549,8 @@ class Reporter:
         for i, (sub, sub_span) in enumerate(located):
             sub_filename = display_filename(sub.filename or d.filename or self.filename or "")
             sub_loc = f"{sub_filename}:{sub_span.line}:{sub_span.col}"
-            sub_lines = (
-                d.source.splitlines() if d.source is not None and sub.filename is None
-                else self._get_source_lines(sub.filename or d.filename or self.filename or "", src_lines)
-            )
+            sub_lines = self._get_source_lines(
+                sub.filename or d.filename or self.filename or "", src_lines)
             kind = _paint(_sub_style(sub.kind), sub.kind, use_color)
 
             if not use_unicode:
