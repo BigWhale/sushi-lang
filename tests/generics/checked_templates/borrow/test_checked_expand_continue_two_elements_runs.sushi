@@ -1,0 +1,25 @@
+# A `continue` in an `expand` over two elements ends the round in the first element
+# (#1070, R6): the second element and the statements after the `expand` are not reached.
+# EXPECT_STDOUT_EXACT: "towel\ntowel\ntowel\n0\ntowel\ntowel\ntowel\n3\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn f@(...Ts)(...Ts args) i32:
+    let i32 n = 0
+    foreach(_ in 0..3):
+        let string s = "tow".concat("el")
+        expand(_ in args):
+            eat(nom s)
+            continue
+        println(s)
+        n := n + 1
+    return n
+
+fn main() i32:
+    println(f(1, 2))
+    println(f())
+    return 0

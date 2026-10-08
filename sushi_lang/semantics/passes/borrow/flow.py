@@ -124,6 +124,18 @@ def terminates(node, *, leaves_round: bool = False) -> bool:
             return False
 
 
+def ends_unrolled_run(stmt) -> bool:
+    """Is `stmt` a statement of an unrolled `expand` element that ends every path?
+
+    A copy of a pack template holds each element in place in its block (#1070, R6), so
+    a `break`, a `continue` or a `return` of an element can stand before more statements
+    of that block. No path reaches them, as no path leaves the element in the template
+    check: the borrow pass does not walk them and the backend does not emit them. A
+    written block holds no statement after one that ends the path (#854).
+    """
+    return bool(stmt.expand_copies) and terminates(stmt, leaves_round=True)
+
+
 @dataclass
 class LoopFrame:
     """The paths that leave one round of a loop body early (#993).

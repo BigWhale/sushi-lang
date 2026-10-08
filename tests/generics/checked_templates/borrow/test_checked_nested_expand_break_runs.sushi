@@ -1,0 +1,25 @@
+# A `break` in a nested `expand` leaves the enclosing loop (#1070, R6): no other copy
+# of the inner or the outer element is reached after it.
+# EXPECT_STDOUT_EXACT: "towel\n0\n2\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn f@(...Ts)(...Ts args) i32:
+    let string s = "tow".concat("el")
+    let i32 i = 0
+    while (i < 2):
+        expand(_ in args):
+            expand(_ in args):
+                eat(nom s)
+                break
+        i := i + 1
+    return i
+
+fn main() i32:
+    println(f(1, 2))
+    println(f())
+    return 0

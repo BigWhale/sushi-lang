@@ -1,0 +1,24 @@
+# A `break` in an `expand` over two elements leaves the loop in the first element
+# (#1070, R6): the copy does not read the second element's move as a use after the move.
+# EXPECT_STDOUT_EXACT: "towel\n0\n2\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn f@(...Ts)(...Ts args) i32:
+    let string s = "tow".concat("el")
+    let i32 i = 0
+    while (i < 2):
+        expand(_ in args):
+            eat(nom s)
+            break
+        i := i + 1
+    return i
+
+fn main() i32:
+    println(f(1, 2))
+    println(f())
+    return 0

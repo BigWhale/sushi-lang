@@ -57,6 +57,7 @@ from .consume import (
 )
 from .expressions import check_expr, reject_a_use_after_the_change
 from .flow import (
+    ends_unrolled_run,
     FlowFacts,
     LoopFlow,
     LoopFrame,
@@ -74,11 +75,17 @@ if TYPE_CHECKING:
 
 
 def check_block(checker: 'BorrowChecker', block: Block) -> None:
-    """Check a block, releasing the `let`-borrows it opened on the way out."""
+    """Check a block, releasing the `let`-borrows it opened on the way out.
+
+    The walk stops after an unrolled element statement that ends every path
+    (`ends_unrolled_run`): no path reaches the rest of the block.
+    """
     checker._scope_binding_borrows.append([])
     try:
         for stmt in block.statements:
             check_stmt(checker, stmt)
+            if ends_unrolled_run(stmt):
+                break
     finally:
         for owner, binding in checker._scope_binding_borrows.pop():
             release_binding_borrow(checker.borrow_state.get(owner), binding)
