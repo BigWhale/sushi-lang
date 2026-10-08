@@ -630,8 +630,12 @@ reads it -- the one seam every per-unit pass calls to say whose body it is about
 and the same seam that answers whose FILE the spans belong to -- and sets
 `collapse_repeats`, so a diagnostic whose `diagnostic_identity` has already been recorded
 is dropped. The identity is the kind, the code, the MESSAGE, the file and the span, so a
-finding that genuinely differs by type argument keeps its own message and is still told:
-`v + 1` over an `f64` and over a `u8` answers two CE2510s at one caret, and both survive.
+finding that genuinely differs by type argument keeps its own message and is still told.
+E3 of an opaque `E` is such a finding (ruling R8): `fail@(E)(nom E e) i32 | E` called with
+an `i32` and with a plain enum `Color` answers two [CE2084](../error-catalog.md#ce2084)s, one at each call, each with
+its own message and a note at the template. A fault that does not depend on the type
+argument (`v + 1` on a `T`) is the template's: it is reported one time, at the template
+([CE2518](../error-catalog.md#ce2518)), and the copies are muted.
 
 It is not a general de-duplicator. A repeat anywhere else is a bug to be fixed where it is
 made, and stays visible.

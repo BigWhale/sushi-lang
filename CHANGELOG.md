@@ -21,7 +21,6 @@ All notable changes to Sushi Lang will be documented in this file.
   `CE2124`, and a bound in the target of `Drop` is the new `CE4019`.
 - **`expand(_ in args)`.** The binder of an `expand` takes the lints of a `foreach` item:
   `CW1001` when nothing reads it, `CW1002` for a shadow, and `_` discards the element.
-
 - **`<encoding/binary>`.** Fixed-width unsigned integers in a `u8[]` and back, as bare
   extension methods on `u8[]`. `buf.read_u16_le(at)`, `read_u16_be`, `read_u32_le`,
   `read_u32_be`, `read_u64_le`, `read_u64_be` answer `Maybe@(T)`: the bytes at `at`, `le`

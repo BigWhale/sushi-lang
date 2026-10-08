@@ -389,7 +389,7 @@ let List@(i32) copy = map(xs, id)       # map is bare: no `??`, no `.realise()`
 ### Constraints on Functions
 
 A constraint `@(T: Perk)` says that every type argument must implement the perk. The body can
-then call the perk methods, and nothing else on a `T`. A perk method returns a **bare** value, and so does a generic
+then call the perk methods. A `T` has only what its constraints promise. A perk method returns a **bare** value, and so does a generic
 function with no `| E`. `Hashable` is predefined: every type with a
 derived `hash()` satisfies it, and the implementation below REPLACES the derived hash of
 `Point` (see [Perks](perks.md#the-predefined-perks)):

@@ -2396,7 +2396,9 @@ way to find a type argument is [`CE2060`](error-catalog.md#ce2060).
 
 **Constraints.** `@(T: Perk)` limits `T` to the types that implement the perk (see
 [Perks](#perks)). A type argument that does not implement it is [`CE4006`](error-catalog.md#ce4006). A constraint
-is legal on a function, a struct and an enum, in its `@(...)` list.
+is legal on a function, a struct and an enum, in its `@(...)` list, and on the
+method-level type parameter of an extension (`extend Box@(T) pair_with@(U: Weigh)(U
+other)`), which a call checks as it checks a free function.
 
 **A template is checked where it is written.** The compiler checks a generic body one
 time, also when no code calls it. In that check each type parameter is opaque: the body

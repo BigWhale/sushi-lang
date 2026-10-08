@@ -1,6 +1,7 @@
 # Checked generics
 
-Status: ACCEPTED and BUILT (#1070). The rulings are David's: option (b) on 2026-09-28,
+Status: ACCEPTED (#1070). Phases 0 to 4 are built; Phase 5 (the per-instance remainder
+of section 8) is pending. The rulings are David's: option (b) on 2026-09-28,
 R1 to R9 on 2026-10-07, and the two pack rulings on 2026-10-08. Section 1 describes the
 language before this work.
 
@@ -68,7 +69,7 @@ a promise.
 | Option | What the written template gets | Result |
 |---|---|---|
 | (a) The statement shape | [CE2030](../error-catalog.md#ce2030), [CE0107](../error-catalog.md#ce0107), [CE0140](../error-catalog.md#ce0140), [CW1001](../error-catalog.md#cw1001) | A small change. No type fault in a body is found |
-| Two phases (C++) | Every expression that does not depend on a type parameter | The template stays duck typed: the signature does not tell the caller what `T` must have |
+| Two phases (C++) | Every expression that does not depend on a type parameter | The body is checked against each type argument: the signature does not tell the caller what `T` must have |
 | **(b) The constraints (Rust, Swift, Go)** | The whole body, with `T` opaque | **Chosen.** The signature is the whole contract, a bad type argument is an error at the call, and a constraint is a real promise |
 
 Option (b) includes (a): the statement rules run on the template too.
@@ -84,8 +85,9 @@ In the check of a template, `T` stands for "some type that satisfies the constra
 - use an operator or a built-in method that a constraint of `T` answers (3.1);
 - pass `T` to another generic whose constraints the constraints of `T` satisfy (4).
 
-Everything else on a `T` is refused, with a note at the declaration of `T` and a help
-that names the constraint to add:
+Everything else on a `T` is refused. A refusal of an operation that a constraint could
+promise carries a note at the declaration of `T` and a help that names the constraint to
+add (section 11.2):
 
 <!-- docs-sweep: error CE2008 -->
 ```sushi
@@ -168,8 +170,8 @@ fn main() i32:
 | `+ - * / %` and the unary minus | [CE2518](../error-catalog.md#ce2518) | R2: no perk gives arithmetic. Generic numbers are a separate design item, and adding them later breaks no program |
 | a field (`x.weight`) | [CE2106](../error-catalog.md#ce2106) | a perk has no fields |
 | a cast (`x as i32`, `v as T`) | [CE2014](../error-catalog.md#ce2014) | a cast reads the concrete type |
-| a `T` where a concrete type is expected | [CE2006](../error-catalog.md#ce2006), [CE2003](../error-catalog.md#ce2003) | `T` is not `i32` in every copy |
-| a static (`T.make()`) | the existing path | a perk has no static (Known Limitation 4) |
+| a `T` where a concrete type is expected: an argument, a `return`, a `let` of a concrete type | [CE2006](../error-catalog.md#ce2006), [CE2003](../error-catalog.md#ce2003), [CE2002](../error-catalog.md#ce2002) | `T` is not `i32` in every copy. These are the ordinary type mismatches: they name `T` and carry no note at it (CE2002 notes the `let`) |
+| a static (`T.make()`) | [CE1001](../error-catalog.md#ce1001) ("use of undeclared identifier") | a perk has no static ([Perks, Known Limitations](../perks.md#known-limitations)) |
 | a method of a built-in family (`len`, `push`, `to_bits`) | [CE2008](../error-catalog.md#ce2008) | no family claims an opaque receiver |
 
 <!-- docs-sweep: error CE2518 -->
@@ -340,7 +342,7 @@ fn main() i32:
     return 0
 ```
 
-The method is not invisible to that instance ([CE2008](../error-catalog.md#ce2008)). CE4006 names the type, the perk
+The method does not become invisible to that instance, which would be [CE2008](../error-catalog.md#ce2008). CE4006 names the type, the perk
 and the bound, and this is the rule of a free function. A bound does not make two
 declarations disjoint: that needs the reasoning "`File` is not `Clone`", which changes when
 an implementation is added, and that is specialization. A template and a concrete target
@@ -349,8 +351,8 @@ stay [CE4002](../error-catalog.md#ce4002).
 
 One predicate (`target_bounds_hold`, `generics/constraints.py`) answers "does this
 template apply to this instance". The cutters of the copies, the derived-contract
-overrides and the call rung all read it. If two of them disagreed, an override would name
-a method with no copy.
+overrides and the call rung all read it. If two of them do not agree, an override names a
+method with no copy.
 
 ### 5.4 `Drop` adds no bound
 
@@ -453,6 +455,9 @@ The binder of an `expand` is a declaration, as a `foreach` item is:
 | a `let` of the binder name in a nested block, or a pattern binding of that name | [CW1002](../error-catalog.md#cw1002) |
 | `expand(a in args)` after a `let a` | [CW1002](../error-catalog.md#cw1002) at the binder |
 | `expand(_ in args)` | nothing: `_` is the discard |
+
+A `let` of the binder name directly in the `expand` body, not in a nested block, gives no
+lint today. Section 12 states this gap.
 
 ```sushi
 fn count_all@(...Ts)(...Ts items) i32:
@@ -617,7 +622,7 @@ layout for it.
 | [CE2054](../error-catalog.md#ce2054), [CE2055](../error-catalog.md#ce2055) | a `HashMap` key with no `Hashable`, no `Eq` |
 | [CE2106](../error-catalog.md#ce2106) | a field of a type parameter |
 | [CE2014](../error-catalog.md#ce2014) | a cast of or to a type parameter |
-| [CE2003](../error-catalog.md#ce2003), [CE2006](../error-catalog.md#ce2006), [CE2009](../error-catalog.md#ce2009) | a type parameter where a concrete type is expected |
+| [CE2003](../error-catalog.md#ce2003), [CE2006](../error-catalog.md#ce2006), [CE2009](../error-catalog.md#ce2009), [CE2002](../error-catalog.md#ce2002) | a type parameter where a concrete type is expected: a `return`, an argument, an argument count, a `let` of a concrete type (`let i32 y = x` is CE2002, "cannot assign T to i32", with a note at the `let`) |
 | [CE4006](../error-catalog.md#ce4006) | entailment (section 4), an added target bound at the call (5.3) |
 | [CE4015](../error-catalog.md#ce4015) | two constraints give one method two homes |
 | [CE2511](../error-catalog.md#ce2511) | `??` from an opaque `E` into another error type |
@@ -625,8 +630,12 @@ layout for it.
 | [CE0107](../error-catalog.md#ce0107), [CE0119](../error-catalog.md#ce0119), [CE0144](../error-catalog.md#ce0144) | a pack template (section 6) |
 | [CW1001](../error-catalog.md#cw1001), [CW1002](../error-catalog.md#cw1002) | the statement lints on the template, the `expand` binder |
 
-Each reused code carries a note at the declaration of the type parameter (or at the
-binder of an `expand`), and a help that names the constraint to add where one exists.
+The refusals of a PROMISE carry a note at the declaration of the type parameter (or at
+the binder of an `expand`), and a help that names the constraint to add where one exists:
+[CE2008](../error-catalog.md#ce2008), [CE2514](../error-catalog.md#ce2514), [CE2035](../error-catalog.md#ce2035), [CE2115](../error-catalog.md#ce2115), [CE2100](../error-catalog.md#ce2100), [CE2054](../error-catalog.md#ce2054), [CE2055](../error-catalog.md#ce2055), [CE2106](../error-catalog.md#ce2106), [CE2014](../error-catalog.md#ce2014),
+[CE2518](../error-catalog.md#ce2518) and [CE4018](../error-catalog.md#ce4018), and [CE4006](../error-catalog.md#ce4006) and [CE2511](../error-catalog.md#ce2511) in a template. The ordinary type
+mismatches (CE2002, CE2003, CE2006, CE2009) name `T` in the message and carry no note at
+it.
 
 ---
 
@@ -642,6 +651,11 @@ binder of an `expand`), and a help that names the constraint to add where one ex
   and that `--ignore-compiler-version` lets in, keeps the per-instance behaviour at the
   consumer (2.3).
 - **A pack on a struct or an enum** (`struct S@(...Ts)`) is outside this design.
+- **A `let` of the binder name DIRECTLY in an `expand` body gives no [CW1002](../error-catalog.md#cw1002).** In a
+  nested block it does (6.4). This is a known fault that existed before this work, and
+  `foreach` shares it: there the same direct `let` stops the build with an internal error
+  ([CE0000](../error-catalog.md#ce0000), a duplicate local in one scope). A redeclaration in one scope has no rule
+  of its own yet. Ruling P2 asks for the lint; the behaviour lags it in this one position.
 
 ## 13. Before and after
 
