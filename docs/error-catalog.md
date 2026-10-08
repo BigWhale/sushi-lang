@@ -1238,6 +1238,14 @@ A type pack `...Ts` stands for any number of types, so its name is a type in ONE
 
 The check of a generic template builds its instances over an opaque type parameter in a scratch layer over the program tables. A program table must never hold one: the backend has no layout for a type parameter. One scan at the end of the analysis reads every struct and enum name. This is a fault in the compiler, not in the program; please report the program.
 
+### CE0149 {#ce0149}
+
+**Error** · internal
+
+**Message:** `the check of the template '{template}' did not report a fault that a copy of it reports: [{original}] {message}`
+
+A generic template is checked one time, where it is written. Its copies then report only what each instance decides: an error type for a type argument in an error position, and a lambda parameter that owns for this type argument. Every other rule ran on the template. A copy that reports another error has found a fault that the template check did not find. This is a fault in the compiler. The text holds the code and the message that the copy reported, so you can still see the fault. Please report the program.
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.

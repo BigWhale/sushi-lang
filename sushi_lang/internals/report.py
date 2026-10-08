@@ -159,6 +159,27 @@ def diagnostic_identity(diagnostic: Diagnostic) -> tuple:
     )
 
 
+def _per_instance(code: str) -> bool:
+    """Can a copy of a checked template still report `code` (#1070, R7, R8)?"""
+    from sushi_lang.internals.errors import PER_INSTANCE_CODES
+    return code in PER_INSTANCE_CODES
+
+
+def missed_by_template_check(d: Diagnostic, template: object) -> Diagnostic:
+    """CE0149 for an error that a copy of a clean checked template reports (#1070).
+
+    The template check did not find the fault, so this is a fault in the compiler. The
+    diagnostic keeps the span, the file and the notes of the copy, and its text holds the
+    code and the message that the copy reported.
+    """
+    from sushi_lang.internals.errors import ERR, message_for
+    backstop = ERR.CE0149.code
+    text = message_for(backstop, template=getattr(template, "name", template),
+                       original=d.code, message=d.message)
+    return Diagnostic("error", backstop, text, d.span, filename=d.filename,
+                      sub=list(d.sub), show_source=d.show_source, source=d.source)
+
+
 def in_source_order(items: List[Diagnostic]) -> List[Diagnostic]:
     """`items` ordered by where they are in the source, one file at a time.
 
@@ -290,6 +311,11 @@ class Reporter:
         # A body that is a copy of one says nothing: the template said the fault.
         self.refused_templates: AbstractSet[object] = frozenset()
         self.muted: bool = False
+        # The templates whose check ran in this build. A body that is a copy of one that
+        # the check did not refuse reports only the per-instance remainder (R7, R8).
+        self.checked_templates: AbstractSet[object] = frozenset()
+        self.instance_only: bool = False
+        self._template: object = None
         self.items: List[Diagnostic] = []
         self._identities: set = set()
         # Every error offered, by code, a dropped repeat included, so "did this walk
@@ -303,18 +329,26 @@ class Reporter:
         `origin` is whose FILE the spans belong to -- a transplanted library template's
         came from the manifest slice, not from the consumer's file (#471).
         `collapse_repeats` is whether this body is one of many copies of one source.
-        `muted` is whether it is a copy of a template whose check reported an error
-        (#1070): a muted diagnostic counts as offered and is not recorded.
+        The template of the body has three answers (#1070). A copy of a template whose
+        check reported an error is `muted`: a muted diagnostic counts as offered and is
+        not recorded. A copy of a template that checked clean is `instance_only`: it
+        reports only the per-instance remainder (`PER_INSTANCE_CODES`), and any other
+        error is CE0149. Any other body reports everything.
         """
+        template = getattr(func, "template_id", None)
         self.origin = getattr(func, "library_origin", None)
         self.collapse_repeats = getattr(func, "instance_of", None) is not None
-        self.muted = getattr(func, "template_id", None) in self.refused_templates
+        self.muted = template in self.refused_templates
+        self.instance_only = not self.muted and template in self.checked_templates
+        self._template = template
 
     def leave_body(self) -> None:
         """Clear what `enter_body` set, for a walk that reads no function body."""
         self.origin = None
         self.collapse_repeats = False
         self.muted = False
+        self.instance_only = False
+        self._template = None
 
     def _record(self, d: Diagnostic) -> Diagnostic:
         # The one funnel every diagnostic passes: `error`, `warn` and the two builder
@@ -339,6 +373,11 @@ class Reporter:
             self.errors_offered[d.code] += 1
         if self.muted:
             return d
+        if self.instance_only and not _per_instance(d.code):
+            # A warning of the copy repeats the template's warning with a concrete type.
+            if d.kind != "error":
+                return d
+            d = missed_by_template_check(d, self._template)
         # AFTER the origin fixups: they can change the file a span is read against, and
         # the file is part of what makes two reports the same one.
         identity = diagnostic_identity(d)

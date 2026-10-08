@@ -197,12 +197,14 @@ class SemanticAnalyzer:
         """A Reporter that knows one unit's file and source, for a per-unit pass.
 
         `gate_env` names the stdlib gate of a lint pass, which keeps a stdlib unit's
-        warnings while it is set. The reporter reads the refused templates of the
-        analysis, so a copy of one reports nothing (#1070)."""
+        warnings while it is set. The reporter reads the refused and the checked
+        templates of the analysis: a copy of a refused template reports nothing, and a
+        copy of a checked one reports only the per-instance remainder (#1070)."""
         reporter = Reporter(source=unit.read_source(), filename=str(unit.file_path),
                             provenance=unit.provenance,
                             keeps_warnings=_lint_checks(unit, gate_env))
         reporter.refused_templates = self.tables.refused_templates
+        reporter.checked_templates = self.tables.checked_templates
         return reporter
 
     def _merge_unit(self, unit_reporter: Reporter) -> None:

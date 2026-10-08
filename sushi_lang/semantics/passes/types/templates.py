@@ -331,9 +331,11 @@ def _borrow(check: _Check, check_copy: Any, lifted: Sequence[FuncDef],
 
 def _close(check: _Check, template_id: TemplateId) -> None:
     """End a check: a template whose check reported an error is refused, and its copies
-    report nothing (the reporter mutes them)."""
+    report nothing (the reporter mutes them). A copy of a template that checked clean
+    reports only the per-instance remainder (R7, R8)."""
     reporter = check.validator.reporter
     reporter.leave_body()
+    check.validator.tables.checked_templates.add(template_id)
     if sum(reporter.errors_offered.values()) > check.before:
         check.validator.tables.refused_templates.add(template_id)
 

@@ -87,6 +87,9 @@ class SymbolTables:
     # The templates whose check reported an error (#1070). The reporter mutes every copy
     # of one: the template said each fault one time, at its own spans.
     refused_templates: set = field(default_factory=set)
+    # Every template whose check ran in this build (#1070). A copy of one that the check
+    # did not refuse reports only the per-instance remainder (R7, R8).
+    checked_templates: set = field(default_factory=set)
     # "Does this type satisfy this perk?" over these tables, for a target bound (#1070):
     # `ConstraintValidator.holds_bound` of a validator that emits nothing. Built by
     # `__post_init__`, so an overlay gets its own.

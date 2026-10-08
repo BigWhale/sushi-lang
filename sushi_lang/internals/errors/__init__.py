@@ -36,8 +36,17 @@ from sushi_lang.internals.errors import (  # noqa: F401
     warnings,
 )
 
+# The codes that a copy of a template can still report after the template checked clean
+# (#1070). Every other rule runs one time, on the template, and the reporter turns any
+# other error of such a copy into CE0149. `internals/report.py` is the one reader.
+PER_INSTANCE_CODES = frozenset({
+    "CE2084",  # R8: E3 at a type argument in an error position is decided per instance.
+    "CE2094",  # R7: a lambda parameter of a type parameter owns for some type arguments.
+})
+
 __all__ = [
     "ERR",
+    "PER_INSTANCE_CODES",
     "REGISTRY",
     "Category",
     "ErrorMessage",
