@@ -1,0 +1,10 @@
+# `hash` is a built-in method of every array, so a template of that name is refused.
+# A perk implementation (`extend T[] with Hashable`) is the override.
+# EXPECT_ERROR_CODES_EXACT: CE2097
+extend T[] hash() u64:
+    return 7 as u64
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println(xs.hash())
+    return 0

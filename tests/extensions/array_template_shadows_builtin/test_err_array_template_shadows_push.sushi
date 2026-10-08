@@ -1,0 +1,8 @@
+# A template that takes arguments and has the name of a built-in array method is
+# refused in the same way.
+# EXPECT_ERROR_CODES_EXACT: CE2097
+extend T[] push(nom T v) T:
+    return v
+
+fn main() i32:
+    return 0

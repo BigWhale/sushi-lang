@@ -1293,29 +1293,48 @@ class SemanticAnalyzer:
             self.reporter.items.append(diagnostic)
 
     def _check_extension_shadows_builtin(self) -> None:
-        """Reject an extension method that collides with a built-in (CE2097)."""
-        from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
-        from sushi_lang.semantics.generics.type_display import display_type
+        """Reject an extension method that collides with a built-in (CE2097).
+
+        An `extend T[]` template is judged where it is written, on the receiver `T[]`.
+        It is not in the extension table, and no copy of it is ever cut for a built-in
+        name, because the built-in answers every call first.
+        """
+        from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+        from sushi_lang.semantics.generics.types import TypeParameter
+        from sushi_lang.semantics.typesys import DynamicArrayType
 
         for target_type, methods in self.tables.extensions.by_type.items():
             for method_name, method in methods.items():
-                if not builtin_method_exists(target_type, method_name,
-                                             self.tables.derived_methods):
-                    continue
-                shown = f"{display_type(target_type)}.{method_name}"
-                er.emit_with(
-                    self.reporter, er.ERR.CE2097,
-                    method.name_span or method.loc,
-                    name=method_name, type=display_type(target_type),
-                ).note(
-                    f"'{shown}()' is defined by the compiler"
-                ).help(
-                    "a built-in method is always chosen before an extension method, so "
-                    f"this one could never be called -- rename it, or provide "
-                    f"'{method_name}()' through a perk implementation "
-                    f"('extend {display_type(target_type)} with <Perk>'), which does "
-                    "take precedence"
-                ).emit()
+                self._reject_builtin_shadow(target_type, method_name, method)
+
+        templates = self.tables.generic_extensions.by_type.get(ARRAY_BASE_KEY, {})
+        for (method_name, _key), template in templates.items():
+            receiver = DynamicArrayType(
+                base_type=TypeParameter(name=template.type_params[0]))
+            self._reject_builtin_shadow(receiver, method_name, template)
+
+    def _reject_builtin_shadow(self, target_type, method_name: str, method) -> None:
+        """CE2097 when the compiler defines `method_name` on `target_type`."""
+        from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
+        from sushi_lang.semantics.generics.type_display import display_type
+
+        if not builtin_method_exists(target_type, method_name,
+                                     self.tables.derived_methods):
+            return
+        shown = f"{display_type(target_type)}.{method_name}"
+        er.emit_with(
+            self.reporter, er.ERR.CE2097,
+            method.name_span or method.loc,
+            name=method_name, type=display_type(target_type),
+        ).note(
+            f"'{shown}()' is defined by the compiler"
+        ).help(
+            "a built-in method is always chosen before an extension method, so "
+            f"this one could never be called -- rename it, or provide "
+            f"'{method_name}()' through a perk implementation "
+            f"('extend {display_type(target_type)} with <Perk>'), which does "
+            "take precedence"
+        ).emit()
 
     def _check_entrypoint(self, compilation_order: list[Unit]) -> None:
         """Main's rule, whole. The ONE home of it (#674).

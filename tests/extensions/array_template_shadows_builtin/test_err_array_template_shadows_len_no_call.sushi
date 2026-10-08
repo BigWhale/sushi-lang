@@ -1,0 +1,8 @@
+# The template is refused when no call reaches it, because the refusal does not
+# depend on a copy for one element type.
+# EXPECT_ERROR_CODES_EXACT: CE2097
+extend T[] len() i32:
+    return 99
+
+fn main() i32:
+    return 0
