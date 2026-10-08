@@ -61,6 +61,10 @@ class Monomorphizer:
     # The instantiate pass's site table (#579): the first span that named each
     # instantiation, keyed by interned name, so a constraint violation has a caret.
     sites: dict = field(default_factory=dict)
+    # The instantiation whose copy first named each nested instantiation, by key. The
+    # chain goes up to a key that a written site named, so a refusal of a nested
+    # instance has a note at the call that the user wrote.
+    parents: dict = field(default_factory=dict)
     # How many instantiations a constraint refused. The analyzer STOPS the whole-program
     # analysis after the monomorphize step when this is non-zero (Ruling 4, #579): no copy
     # was cut for a refused instantiation, and the per-unit passes would only read the
@@ -136,8 +140,9 @@ class Monomorphizer:
         else:
             span, filename = (self.sites.get(key, (None, None)) if key is not None
                               else (None, None))
+        required_by = self.required_by(key) if site is None else None
         valid = (self._error_arguments_hold(type_params, type_args, error_params or {},
-                                            span, filename, template_file)
+                                            span, filename, template_file, required_by)
                  if report else True)
         for position, param in enumerate(type_params):
             if self.constraint_validator is None:
@@ -152,7 +157,8 @@ class Monomorphizer:
             for pack_index, arg in bound:
                 if report:
                     held = self.constraint_validator.validate_all_constraints(
-                        param, arg, span, filename, note=note, pack_index=pack_index)
+                        param, arg, span, filename, note=note, pack_index=pack_index,
+                        required_by=required_by)
                 else:
                     held = all(self.constraint_validator.satisfies(arg, name)
                                for name in param.constraints)
@@ -213,8 +219,32 @@ class Monomorphizer:
                 params, args, key=key, template_file=template_file,
                 site=(span, filename), report=report)
 
+    def required_by(self, key: object) -> Optional[tuple]:
+        """The note at the written site that started the chain of `key`, or None.
+
+        A nested instantiation was named in the body of a copy, and that copy was named
+        by another site. The chain goes up through `parents` to the last key that has a
+        site. When that key is not `key`, its site is the code that the user wrote, and
+        the note stands there. A function key names a call. A type key names a written
+        type, because the copy of an extension or a perk method is cut for each instance
+        of its target type.
+        """
+        root = None
+        seen = {key}
+        current = self.parents.get(key)
+        while current is not None and current not in seen:
+            seen.add(current)
+            if self.sites.get(current, (None, None))[0] is not None:
+                root = current
+            current = self.parents.get(current)
+        if root is None:
+            return None
+        span, filename = self.sites[root]
+        site = "call" if isinstance(root, tuple) and root[0] == "fn" else "type written"
+        return (f"this instance is required by the {site} here", span, filename)
+
     def _error_arguments_hold(self, type_params, type_args, error_params, span,
-                              filename, template_file) -> bool:
+                              filename, template_file, required_by=None) -> bool:
         """E3 at one instance: every argument in an `E` position is an error type."""
         if not error_params or self.enum_table is None or self.struct_table is None:
             return True
@@ -229,7 +259,8 @@ class Monomorphizer:
                     error_params[name], template_file)
             if reject_non_error_type(self.reporter, type_args[position], span,
                                      self.struct_table.by_name, self.enum_table.by_name,
-                                     filename=filename, note=note):
+                                     filename=filename, note=note,
+                                     required_by=required_by):
                 valid = False
         return valid
 
@@ -242,7 +273,7 @@ class Monomorphizer:
         """
         span, filename = self.sites.get(site_key, (None, None))
         if self._error_arguments_hold(type_params, type_args, error_params, span,
-                                      filename, template_file):
+                                      filename, template_file, self.required_by(site_key)):
             return True
         self.constraint_violations += 1
         return False

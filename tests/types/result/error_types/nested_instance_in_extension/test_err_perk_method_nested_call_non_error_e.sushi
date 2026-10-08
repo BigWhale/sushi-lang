@@ -1,0 +1,26 @@
+# E3 at a generic call inside the body of a perk method on a generic type: the
+# consumer writes the type `Crate@(i32)`, and the copy of `check` for it names
+# `inner_of_perk@(i32, i32)`. The diagnostic stands at the nested call. The note
+# stands at the written type that started the chain, and it says that this site is a
+# type.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: perk_method_nested_call_non_error_e.sushi:21:16
+# EXPECT_STDERR_CONTAINS: this instance is required by the type written here
+# EXPECT_STDERR_CONTAINS: perk_method_nested_call_non_error_e.sushi:24:9
+fn inner_of_perk@(T, E)(nom T x) T | E:
+    return Result.Ok(x)
+
+perk Checked:
+    fn check() bool
+
+struct Crate@(E):
+    i32 v
+
+extend Crate@(E) with Checked:
+    fn check() bool:
+        return inner_of_perk@(i32, E)(nom self.v).is_ok()
+
+fn main() i32:
+    let Crate@(i32) c = Crate(5)
+    println(c.check())
+    return 0

@@ -302,6 +302,12 @@ class SemanticAnalyzer:
         if compilation_order is None:
             return  # Error already reported
 
+        # A stage that emits through the program reporter at a site in a library unit
+        # gives the note a per-unit reporter gives.
+        for unit in compilation_order:
+            if unit.provenance is not None:
+                self.reporter.add_provenance(str(unit.file_path), unit.provenance)
+
         libraries = self._collect(compilation_order)
         self._check_docs(compilation_order)
         self._check_unused(compilation_order, self.unit_manager.units)

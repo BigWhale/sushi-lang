@@ -103,11 +103,13 @@ def kind_of(ty: Type) -> str:
 def reject_non_error_type(reporter: Reporter, ty: Type, span: Optional[Span],
                           structs: dict, enums: dict, *,
                           filename: Optional[str] = None,
-                          note: Optional[tuple] = None) -> bool:
+                          note: Optional[tuple] = None,
+                          required_by: Optional[tuple] = None) -> bool:
     """CE2084 when `ty`, in an `E` position, is not an error type. Answers whether it refused.
 
     `note` is `(message, span, filename)` of a relational note: the template, when the
-    caller judges a generic instance. A plain enum that a unit declares gets the help to
+    caller judges a generic instance. `required_by` has the same shape: the written call
+    that started the chain, when a copy named the instance. A plain enum that a unit declares gets the help to
     declare it with `error`; a predefined plain enum (`FileMode`, `SeekFrom`) does not.
     """
     named = non_error_type(ty, structs, enums)
@@ -120,8 +122,7 @@ def reject_non_error_type(reporter: Reporter, ty: Type, span: Optional[Span],
         declared = named.generic_base or named.name
         diagnostic = diagnostic.help(
             f"declare '{declared}' with 'error' in place of 'enum'")
-    if note is not None:
-        message, note_span, note_file = note
+    for message, note_span, note_file in (n for n in (note, required_by) if n is not None):
         if note_span is not None:
             diagnostic = diagnostic.note_at(message, note_span, note_file)
     diagnostic.emit()

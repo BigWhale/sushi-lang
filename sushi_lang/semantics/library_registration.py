@@ -143,15 +143,17 @@ class LibraryRegistration:
         """Whose code a library template is, and the text its spans index into.
 
         The program reporter records the slice under its label, so every location in
-        the slice renders its line: the location of a diagnostic and of each note.
+        the slice renders its line: the location of a diagnostic and of each note. It
+        records the provenance under the label too, so a diagnostic at the slice says
+        whose code it is also when no walk of a body set the origin: a site in the body
+        of a copy, read by the monomorphize stage.
         """
-        origin = Origin(
-            filename=label, source=source,
-            provenance=(f"'{lib_name}' {version or 'unknown'} "
-                        f"ships this template; it is monomorphized here because of "
-                        f"`use <lib/{lib_name}>`"))
+        provenance = (f"'{lib_name}' {version or 'unknown'} "
+                      f"ships this template; it is monomorphized here because of "
+                      f"`use <lib/{lib_name}>`")
         self.reporter.add_slice(label, source)
-        return origin
+        self.reporter.add_provenance(label, provenance)
+        return Origin(filename=label, source=source, provenance=provenance)
 
     # -- the entry points the analyzer calls --------------------------------------
 
@@ -1133,9 +1135,10 @@ class LibraryRegistration:
                 continue
 
             # A note at the declaration, a bound of its type parameter included, names
-            # the slice and renders its line (#1070). The E3 note of an instance reads
-            # the declaration span from the table, as for a template of the program.
-            self.reporter.add_slice(label, source)
+            # the slice and renders its line (#1070), and a diagnostic at the slice says
+            # whose code it is. The E3 note of an instance reads the declaration span
+            # from the table, as for a template of the program.
+            self._template_origin(lib_name, manifest.get("library_version"), label, source)
             table.files[type_name] = label
             table.spans[type_name] = snippet.declared_span(key, type_name)
             table.by_name[type_name] = generic_type

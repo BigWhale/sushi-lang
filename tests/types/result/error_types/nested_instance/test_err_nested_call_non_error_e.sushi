@@ -1,0 +1,15 @@
+# E3 at a generic call inside a template body: `outer@(i32)` names `inner@(i32, i32)`
+# in its body, and `i32` is not an error type. The diagnostic stands at the nested call,
+# and a note stands at the call in `main` that names `outer@(i32)`.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: nested_call_non_error_e.sushi:11:12
+# EXPECT_STDERR_CONTAINS: nested_call_non_error_e.sushi:14:13
+fn inner@(T, E)(nom T x) T | E:
+    return Result.Ok(x)
+
+fn outer@(E)(i32 x) bool:
+    return inner@(i32, E)(nom x).is_ok()
+
+fn main() i32:
+    println(outer@(i32)(5))
+    return 0

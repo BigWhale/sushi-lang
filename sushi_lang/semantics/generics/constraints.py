@@ -111,6 +111,7 @@ class ConstraintValidator:
         filename: Optional[str] = None,
         note: Optional[tuple] = None,
         pack_index: Optional[int] = None,
+        required_by: Optional[tuple] = None,
     ) -> bool:
         """Check if a type satisfies a single perk constraint.
 
@@ -120,7 +121,9 @@ class ConstraintValidator:
         `span` and `filename` are the site that NAMES the refused instantiation, and
         `note` is `(span, filename)` of the constraint it violates (#579): the caret goes
         on the user's type, and the note on the `@(T: Loud)` that refused it, which may
-        stand in another file -- a stdlib template's.
+        stand in another file -- a stdlib template's. `required_by` is
+        `(message, span, filename)` of the written call that started the chain, when a
+        copy named the instantiation.
 
         "Does the perk EXIST" is asked first. A name no unit declares is not a contract
         any type can fail, and this answer arrives before the unit's own -- the
@@ -147,6 +150,9 @@ class ConstraintValidator:
             if note_span is not None:
                 diagnostic = diagnostic.note_at(
                     f"the constraint '{constraint_name}' is declared here", note_span, note_file)
+            if required_by is not None:
+                by_message, by_span, by_file = required_by
+                diagnostic = diagnostic.note_at(by_message, by_span, by_file)
             # A type parameter of a template under check passes the constraint on only
             # when a constraint of its own promises it (#1070).
             from sushi_lang.semantics.generics.opaque import explain_unpromised
@@ -224,6 +230,7 @@ class ConstraintValidator:
         filename: Optional[str] = None,
         note: Optional[tuple] = None,
         pack_index: Optional[int] = None,
+        required_by: Optional[tuple] = None,
     ) -> bool:
         """Validate all constraints on a type parameter."""
         if not bounded_param.constraints or len(bounded_param.constraints) == 0:
@@ -232,7 +239,7 @@ class ConstraintValidator:
         all_valid = True
         for constraint in bounded_param.constraints:
             if not self.validate_constraint(type_arg, constraint, span, filename, note,
-                                            pack_index):
+                                            pack_index, required_by):
                 all_valid = False
 
         return all_valid

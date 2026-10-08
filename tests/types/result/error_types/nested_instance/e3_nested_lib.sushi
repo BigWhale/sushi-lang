@@ -1,0 +1,5 @@
+public fn inner@(T, E)(nom T x) T | E:
+    return Result.Ok(x)
+
+public fn outer@(E)(i32 x) bool:
+    return inner@(i32, E)(nom x).is_ok()
