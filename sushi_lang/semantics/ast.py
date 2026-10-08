@@ -382,6 +382,9 @@ class ExtendDef(Node):
     # The unit that declared the template of a monomorphized copy (#1064). The copy is
     # checked in that unit's scope and defined in that unit's module. None on a written one.
     home_unit: Optional[str] = None
+    # The file of the template record of a monomorphized copy: a library template's is
+    # its source slice (#1070). None on a written one.
+    template_file: Optional[str] = None
     # Whether the template's WRITTEN signature has a channel; see `FuncDef`.
     written_channel: Optional[bool] = None
     # A template a binary library ships, and how a diagnostic in its body is rendered;

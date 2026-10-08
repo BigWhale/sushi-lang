@@ -104,6 +104,7 @@ def monomorphize_extension_method(
     concrete.target_type = concrete_target_type
     concrete.method_type_args = tuple(method_type_args)
     concrete.home_unit = generic_method.unit_name
+    concrete.template_file = generic_method.filename
     # An instance names its target in full; the bounds belong to the template.
     concrete.target_params = ()
     # A copy of a template whose check refused it reports nothing (#1070).

@@ -61,10 +61,6 @@ class Monomorphizer:
     # The instantiate pass's site table (#579): the first span that named each
     # instantiation, keyed by interned name, so a constraint violation has a caret.
     sites: dict = field(default_factory=dict)
-    # The file of each unit, by name: the site of an instantiation that a COPY's body
-    # names is in the file of the copy's template, so a constraint refusal of it has a
-    # location (#1070).
-    unit_files: Dict[str, str] = field(default_factory=dict)
     # How many instantiations a constraint refused. The analyzer STOPS the whole-program
     # analysis after the monomorphize step when this is non-zero (Ruling 4, #579): no copy
     # was cut for a refused instantiation, and the per-unit passes would only read the
@@ -342,8 +338,7 @@ class Monomorphizer:
         """Function instantiations in one monomorphized extension body (#392)."""
         return self.function_monomorphizer.collect_from_extension_body(extend_def)
 
-    def collect_from_perk_method_body(self, target_type, method,
-                                      filename: Optional[str] = None
+    def collect_from_perk_method_body(self, target_type, method, filename: Optional[str]
                                       ) -> Set[Tuple[str, Tuple[Type, ...]]]:
         """The same, for one method of a monomorphized perk implementation.
 

@@ -677,7 +677,6 @@ class SemanticAnalyzer:
             struct_table=self.tables.structs,
             tables=self.tables,
             sites=instantiations.sites,
-            unit_files=self._unit_files(),
         )
 
         # The late-interning seam (risk 1 of the UFCS epic): when the per-unit typecheck
@@ -695,12 +694,6 @@ class SemanticAnalyzer:
         self.array_perk_copies = ArrayPerkCopies(self.tables, monomorphizer.substitutor)
         self.tables.perk_impls.on_array_miss = self.array_perk_copies
         return monomorphizer
-
-    def _unit_files(self) -> dict[str, str]:
-        """The file of each unit of the build, by unit name."""
-        if self.unit_manager is None:
-            return {}
-        return {unit.name: str(unit.file_path) for unit in self.unit_manager.units.values()}
 
     def _resolved_instantiations(self, type_instantiations) -> tuple[set, set]:
         """Split the collected type instantiations into enums and structs, arguments resolved."""

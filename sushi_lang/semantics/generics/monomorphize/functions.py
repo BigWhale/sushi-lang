@@ -244,7 +244,7 @@ class FunctionMonomorphizer:
 
         self._collect_fn_value_instantiations(
             concrete_func.body, getattr(generic, "unit_name", None),
-            file=self._file_of(generic), functions=[concrete_func])
+            file=generic.filename, functions=[concrete_func])
 
         self.monomorphizer.func_cache[cache_key] = concrete_func
 
@@ -413,24 +413,9 @@ class FunctionMonomorphizer:
         var_types = {param.name: param.ty for param in params if param.ty is not None}
         saved_unit, saved_file = self._asking_unit, self._asking_file
         self._asking_unit = getattr(generic_func, "unit_name", None)
-        self._asking_file = self._file_of(generic_func)
+        self._asking_file = generic_func.filename
         self._collect_block_instantiations(body, var_types)
         self._asking_unit, self._asking_file = saved_unit, saved_file
-
-    def _file_of(self, decl, filename: Optional[str] = None) -> Optional[str]:
-        """The file a template or a copy is written in (#1070).
-
-        `filename` when the caller holds the template's own; else the declaration's
-        own file, its home unit's, or the slice a library template came from.
-        """
-        filename = filename or getattr(decl, "filename", None)
-        if filename is not None:
-            return filename
-        home = getattr(decl, "unit_name", None) or getattr(decl, "home_unit", None)
-        if home is not None and home in self.monomorphizer.unit_files:
-            return self.monomorphizer.unit_files[home]
-        origin = getattr(decl, "library_origin", None)
-        return origin.filename if origin is not None else None
 
     def _record_site(self, name: str, type_args, loc) -> None:
         """The first site that names a nested function instantiation (#579, #1070)."""
@@ -537,7 +522,7 @@ class FunctionMonomorphizer:
         self.monomorphizer.pending_instantiations = set()
         saved_unit, saved_file = self._asking_unit, self._asking_file
         self._asking_unit = None
-        self._asking_file = self._file_of(extend_def)
+        self._asking_file = extend_def.template_file
         self._collect_block_instantiations(extend_def.body, var_types)
         self._asking_unit = saved_unit
         self._collect_fn_value_instantiations(extend_def.body, None, file=self._asking_file,
@@ -548,7 +533,7 @@ class FunctionMonomorphizer:
         return found
 
     def collect_from_perk_method_body(self, target_type: Type, method,
-                                      filename: Optional[str] = None
+                                      filename: Optional[str]
                                       ) -> Set[Tuple[str, Tuple[Type, ...]]]:
         """The same walk, for one monomorphized perk-implementation method.
 
@@ -564,7 +549,7 @@ class FunctionMonomorphizer:
         self.monomorphizer.pending_instantiations = set()
         saved_unit, saved_file = self._asking_unit, self._asking_file
         self._asking_unit = None
-        self._asking_file = self._file_of(method, filename)
+        self._asking_file = filename
         self._collect_block_instantiations(method.body, var_types)
         self._asking_unit = saved_unit
         from sushi_lang.semantics.ast import ExtendWithDef

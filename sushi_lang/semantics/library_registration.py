@@ -1062,6 +1062,9 @@ class LibraryRegistration:
             # everywhere.
             gfd.library_origin = _template_origin(
                 lib_name, manifest.get("library_version"), label, source)
+            # The record is the one home of the file a note at the template names: the
+            # slice, as the collector of an extension template files it (#1070).
+            gfd.filename = label
 
             # The snippet already carries these, but the record is the source of truth.
             rec_tps = record.get("type_params") or []
