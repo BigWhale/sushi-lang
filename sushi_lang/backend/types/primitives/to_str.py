@@ -10,6 +10,7 @@ from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinM
 from sushi_lang.sushi_stdlib.src import conversions, ir_common
 from sushi_lang.backend.constants import INT8_BIT_WIDTH
 from sushi_lang.sushi_stdlib.src.type_definitions import get_string_type
+from sushi_lang.sushi_stdlib.src.string_helpers import cstr_to_fat_pointer_with_len, fat_pointer_to_cstr
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.diagnostics import InternalCompilerError
 
@@ -51,7 +52,8 @@ def _emit_generic_to_str(prim_type: BuiltinType) -> Any:
         elif kind == 'bool':
             return codegen.runtime.formatting.emit_bool_to_string(receiver_value)
         elif kind == 'string':
-            return receiver_value
+            from sushi_lang.backend.ownership import copy_out
+            return copy_out(codegen, receiver_value, BuiltinType.STRING)
         else:
             raise_internal_error("CE0075", kind=kind)
 
@@ -93,6 +95,13 @@ def generate_module_ir() -> ir.Module:
     return module
 
 
+def _emit_string_copy(module: ir.Module, builder: ir.IRBuilder, value: ir.Value) -> ir.Value:
+    """A fresh owned copy of a string: `to_str()` answers a second value, never its receiver."""
+    copy = fat_pointer_to_cstr(module, builder, value)
+    size = builder.extract_value(value, 1, name="copy_size")
+    return cstr_to_fat_pointer_with_len(builder, copy, size, owned=1)
+
+
 _BodyEmitter = Callable[[ir.Module, ir.IRBuilder, ir.Value], ir.Value]
 
 
@@ -109,5 +118,5 @@ def _to_str_parts(kind: str, flag: Optional[bool], width: Optional[int],
     if kind == 'bool':
         return ir.IntType(INT8_BIT_WIDTH), conversions.emit_bool_to_string
     if kind == 'string':
-        return string_type, lambda m, b, v: v
+        return string_type, _emit_string_copy
     raise InternalCompilerError("CE0075", kind=kind)
