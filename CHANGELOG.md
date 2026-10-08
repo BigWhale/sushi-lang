@@ -119,6 +119,20 @@ All notable changes to Sushi Lang will be documented in this file.
   128 to 255 is never in a class, and the two case maps return it unchanged.
   `is_ascii_space` is true for the six bytes of C `isspace`: 9, 10, 11 (VT), 12 (FF), 13
   and 32. Every method is bare: a call gives the value, with no `??`.
+- **`.rev()` on a range.** `(a..b).rev()` yields the values of `a..b`, last first:
+  `(0..n).rev()` counts from `n - 1` down to 0 and is empty when `n` is 0. It is legal in
+  a `foreach` and as an element of an array literal (`[(0..5).rev()]` is
+  `[4, 3, 2, 1, 0]`), and on a range only. A `rev` with an argument is CE2009.
+- **`|` alternatives in a `match` pattern.** One arm takes several patterns, at the top
+  level and nested: `"http" | "ws" -> 80`, `Maybe.Some(1 | 2 | 3)`. Each alternative binds
+  the same names, with the same types and the same mode (`Shape.Circle(r) | Shape.Ring(r)`);
+  a difference is CE2126. An alternative that can never match is CE2118, and a value
+  repeated in one arm or across arms is CE2075. `1||2` with no space is a parse error, with
+  a help.
+- **Integer ranges in a `match` arm.** `0x80..=0x8f ->`, `a'0'..=a'9' ->` and `0..10 ->`,
+  at the top level, nested and as an alternative, on an integer scrutinee. A bound is an
+  integer literal in any form. A bound outside the type is CE2073, a range whose bounds go
+  down is CE2125, an empty range is CE2118, and two arms that share a value are CE2075.
 
 ### Changed
 
@@ -159,6 +173,16 @@ All notable changes to Sushi Lang will be documented in this file.
   `fold` clones its `init`, so each one writes the bound. A `List` or an array of a handle
   gets no copy of them: a call is `CE4006`. A program that holds a `List@(File)` and
   imports `<collections/iter>` compiles now; it gave a `CE2431` for each copy before.
+- **Breaking: a range always goes up.** `a..b` is empty when `a >= b`, and `a..=b` is
+  empty when `a > b`. A range used to take its direction from its values, so `10..0`
+  counted down. A countdown is `(1..=10).rev()` now. A range whose two bounds the compiler
+  can read and that goes down is the new error CE2125, with a help that gives the
+  `.rev()` form. A range with a computed bound gets no diagnostic: where it counted down
+  before, it is now empty. This holds in a `foreach` and in an array literal.
+- **An integer `match` that covers every value of its type needs no `_`.** The checker
+  counts the cover of literal arms and range arms (a `u8` covered by `0x00..=0x7f` and
+  `0x80..=0xff`). A gap is CE2074, and its text names the first value that no arm matches.
+  A `_` after a complete cover is CE2118. A string `match` still needs its `_`.
 - **The needle of `contains` and `index_of` on an array takes the element type.** A bare
   literal or a bare `Maybe.None()` is typed by the position, as a `push` element is:
   `u8[].contains(2)` was CE2006 and now compiles.
@@ -180,6 +204,9 @@ All notable changes to Sushi Lang will be documented in this file.
   `extend Box@(T) pair_with@(U: Weigh)(U other)`, the compiler dropped the constraint of
   `U`: the call compiled, or the fault appeared inside the body of the copy. A call whose
   argument does not satisfy it is now `CE4006` at the call, as for a free function.
+- **Two integer arms with one value after the wrap are CE2075.** On an `i8`, `0xff ->`
+  beside `-1 ->` stopped the compiler with an internal error (a switch with two equal
+  cases). Every literal is now read at the type of the scrutinee.
 - **The unary minus on a float flips the sign bit.** `-x` gave `+0.0` for `x` = `0.0`,
   and the literal `-0.0` was positive zero. It is negative zero now, for `f64` and `f32`.
 
