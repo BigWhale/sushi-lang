@@ -1,0 +1,22 @@
+# A unit with a template whose call of a bounded extension needs a bound it does not
+# state. The importer calls the template and makes a refused call of its own.
+public error Bad:
+    Oops
+
+public struct Res:
+    i32 id
+
+extend Res with Drop:
+    fn drop(poke self) ~:
+        self.id := 0
+
+public struct Feed@(T):
+    T[] items
+
+extend Feed@(T: Clone) first() Result@(i32, Bad):
+    return Result.Ok(1)
+
+public fn h@(T)(nom T x) i32:
+    match Feed(from([x])).first():
+        Result.Ok(_) -> return 1
+        Result.Err(_) -> return 0

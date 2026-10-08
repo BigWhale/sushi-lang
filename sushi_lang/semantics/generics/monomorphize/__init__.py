@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.structs import StructTable
     from sushi_lang.semantics.generics.constraints import ConstraintValidator
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.errors import raise_internal_error
 
 from .transformer import TypeSubstitutor
 from .types import TypeMonomorphizer, MonomorphizationDepthExceeded
@@ -71,11 +70,10 @@ class Monomorphizer:
     # was cut for a refused instantiation, and the per-unit passes would only read the
     # same fault back as a second diagnostic from inside a body.
     constraint_violations: int = field(default=0, init=False)
-    _refused: Set = field(default_factory=set, init=False, repr=False)
-    # The error codes each call-site refusal offered, by key (#1070): a later site of the
-    # same key offers them to its own unit's reporter again.
-    _refusal_codes: Dict[object, Counter] = field(default_factory=dict, init=False,
-                                                  repr=False)
+    # Each refused key, with the error codes its refusal offered (#579, #1070). ONE
+    # record for every writer: a later site of the key is refused silently, and a call
+    # site offers the codes to its own unit's reporter again.
+    _refused: Dict[object, Counter] = field(default_factory=dict, init=False, repr=False)
 
     _monomorphize_depth: int = field(default=0, init=False, repr=False)
 
@@ -134,6 +132,8 @@ class Monomorphizer:
         if key is not None and key in self._refused:
             return False
 
+        reporters = self._emitting_reporters()
+        before = [Counter(r.errors_offered) for r in reporters]
         if site is not None:
             span, filename = site
         else:
@@ -165,9 +165,27 @@ class Monomorphizer:
             return valid
         if not valid:
             self.constraint_violations += 1
-            if key is not None:
-                self._refused.add(key)
+            # A muted site printed nothing, so it cannot stand in for a later site: the
+            # key stays open, and the next site that is not muted reports the fault.
+            if key is not None and not any(r.muted for r in reporters):
+                offered: Counter = Counter()
+                for reporter, counted in zip(reporters, before, strict=True):
+                    offered += reporter.errors_offered - counted
+                self.refuse(key, offered)
         return valid
+
+    def _emitting_reporters(self) -> list:
+        """The reporters a constraint check emits to, each one time: the constraint
+        validator's (a call site's own, during `reporting_to`) and this one's (E3)."""
+        found = [self.reporter]
+        if (self.constraint_validator is not None
+                and self.constraint_validator.reporter is not self.reporter):
+            found.append(self.constraint_validator.reporter)
+        return found
+
+    def refuse(self, key: object, offered: Counter) -> None:
+        """Record a refused key with the error codes its refusal offered."""
+        self._refused[key] = offered
 
     def check_call_constraints(self, params, args, key, span, filename, template_file,
                                report: bool, *, reporter) -> bool:
@@ -188,21 +206,14 @@ class Monomorphizer:
         records nothing, so it knows the call is refused and says nothing twice.
         """
         if report and key is not None and self.was_refused(key):
-            if key not in self._refusal_codes:
-                raise_internal_error("CE0015", message=(
-                    "a call site meets a refusal that no call site reported"))
-            reporter.offer_again(self._refusal_codes[key])
+            reporter.offer_again(self._refused[key])
             return False
         validator = self.constraint_validator
-        before = Counter(reporter.errors_offered)
         with (validator.reporting_to(reporter) if validator is not None
               else nullcontext()):
-            held = self._validate_type_constraints(
+            return self._validate_type_constraints(
                 params, args, key=key, template_file=template_file,
                 site=(span, filename), report=report)
-        if report and not held and key is not None:
-            self._refusal_codes[key] = reporter.errors_offered - before
-        return held
 
     def _error_arguments_hold(self, type_params, type_args, error_params, span,
                               filename, template_file) -> bool:
