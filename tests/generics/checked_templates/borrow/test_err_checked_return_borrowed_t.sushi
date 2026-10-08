@@ -1,0 +1,10 @@
+# A template that returns a borrowed `T` is refused at the template (#1070, R5): some
+# type argument owns, so `x` moves. The call with `i32` does not make it legal.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn id@(T)(T x) T:
+    return x
+
+fn main() i32:
+    println(id(42))
+    return 0

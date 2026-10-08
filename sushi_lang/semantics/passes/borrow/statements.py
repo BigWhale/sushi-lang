@@ -10,6 +10,7 @@ from sushi_lang.semantics.ast import (
     Break,
     Continue,
     DotCall,
+    Expand,
     Expr,
     ExprStmt,
     Foreach,
@@ -118,6 +119,8 @@ def check_stmt(checker: 'BorrowChecker', stmt: Stmt) -> None:
             check_loop_body(checker, stmt.body)
         case Foreach():
             _check_foreach(checker, stmt)
+        case Expand():
+            _check_expand(checker, stmt)
         case Match():
             _check_match(checker, stmt)
         case Break():
@@ -447,6 +450,29 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
                   if iterator is not None else None)
         if change is not None:
             emit_change_under_iterator(checker, change, stmt.iterable, stmt.loc)
+
+
+def _check_expand(checker: 'BorrowChecker', stmt: Expand) -> None:
+    """An `expand` body of a check copy, checked once for every pack length (#1070, R6).
+
+    The body runs zero or more times, as a `foreach` body does, so a move of an outer
+    owned value in it is a move in a loop. The binder is one element of the value pack:
+    a borrow of the caller's value, or an owned value when the template takes the pack
+    with `nom`, as each copy declares the element parameter. Only a check copy holds an
+    `expand` with an element type. A written template that no check copy covers was
+    checked at its own build, and its `expand` body is not read here.
+    """
+    element_of = checker.pack_element_of
+    if element_of is None:
+        return
+    owned = isinstance(stmt.iterable, Name) and stmt.iterable.id in checker.owned_packs
+    state = BorrowState(name=stmt.var, var_type=element_of(stmt),
+                        declared_at_span=stmt.var_span or stmt.loc,
+                        declared_branch_depth=checker.branch_depth + 1)
+    state.is_borrow_param = not owned
+    with BindingScope(checker) as scope:
+        scope.register(state)
+        check_loop_body(checker, stmt.body, per_iteration=frozenset({stmt.var}))
 
 
 def check_loop_body(checker: 'BorrowChecker', body: Block,

@@ -17,6 +17,8 @@ from sushi_lang.semantics.ast import (
     Name,
     TryExpr,
 )
+from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
+from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.typesys import ReferenceType
 
 from .reads import read_type, root_owner
@@ -95,6 +97,13 @@ def emit_use_after_move(checker: 'BorrowChecker', name: str, use_span: Optional[
     diag = checker.err.emit_with(er.ERR.CE2405, use_span, name=name)
     if state.moved_at_span is not None:
         diag.note_at(f"'{name}' was moved here", state.moved_at_span)
+    param = opaque_without_clone(checker, state.var_type)
+    if param is not None:
+        note_opaque(diag, param).help(
+            f"a value of the type parameter '{param.written()}' moves, because a type "
+            f"argument can own; add 'Clone' to the constraints of '{param.written()}' "
+            f"({bound_hint(param, 'Clone')}) and hand over `{name}.clone()` before "
+            f"the move")
     diag.emit()
 
 
@@ -156,15 +165,29 @@ def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
 
 
 def refuses_clone(checker: 'BorrowChecker', ty) -> bool:
-    """Is `.clone()` refused on `ty` (CE2431)? The one type test of every clone escape.
+    """Is `.clone()` refused on `ty` (CE2431, CE4018)? The one type test of every clone
+    escape.
 
-    A type that declares a resource, or holds one, has no clone (ruling R3), so a help
-    must not offer one there.
+    A type that declares a resource, or holds one, has no clone (ruling R3), and an
+    opaque type parameter that does not promise `Clone` has none either (#1070, R5). So
+    a help must not offer one there.
     """
     from sushi_lang.semantics.typesys import holds_declared_resource
-    drops = checker.types.drops
-    return bool(drops) and holds_declared_resource(ty, drops,
-                                                   resolve=checker.types.resolve_named)
+    return holds_declared_resource(ty, checker.types.drops,
+                                   resolve=checker.types.resolve_named)
+
+
+def opaque_without_clone(checker: 'BorrowChecker', ty) -> Optional[TypeParameter]:
+    """The first opaque type parameter in `ty` that does not promise `Clone`, or None.
+
+    The clone predicate names it (`holds_declared_resource`), so the help of a refused
+    move in a template names the parameter that the fix goes on (#1070, R5).
+    """
+    from sushi_lang.semantics.typesys import holds_declared_resource
+    found: list = []
+    holds_declared_resource(ty, checker.types.drops, resolve=checker.types.resolve_named,
+                            found=found)
+    return next((t for t in found if isinstance(t, TypeParameter)), None)
 
 
 def answers_share(checker: 'BorrowChecker', ty) -> bool:
@@ -218,6 +241,16 @@ def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
     through a pattern binding). `use_of_copy` is what the position does with the copy:
     an `as` conversion (docs/design/error-conversion.md section 3.2) or a `nom self` call.
     """
+    param = opaque_without_clone(checker, ty if value_type is None else value_type)
+    if param is not None:
+        name = param.written()
+        clone = f"add 'Clone' to the constraints of '{name}' ({bound_hint(param, 'Clone')})"
+        tail = use_of_copy.tail if use_of_copy is not None else ""
+        if not handover:
+            return f"{clone}, and take an independent value with `{text}.clone()`"
+        return (f"a value of the type parameter '{name}' moves, because a type argument "
+                f"can own: take it with a `nom` parameter and pass it with `nom`, or "
+                f"{clone} and take `{text}.clone(){tail}`")
     if not refuses_clone(checker, ty):
         if use_of_copy is not None:
             return (f"clone it, and {use_of_copy.clause}: "
@@ -274,7 +307,9 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr,
     # ONE branch, on purpose: a get-out `.clone()` still hits CE0019, and that is a real
     # defect rather than a reason to word around it. The three RED `test_own_get_*` files
     # hold the branch honest until it is fixed.
-    diag.help(escape_help(checker, text, owner_type, read_type(checker, expr),
+    value_type = read_type(checker, expr)
+    _note_opaque_mover(checker, diag, value_type)
+    diag.help(escape_help(checker, text, owner_type, value_type,
                           use_of_copy=use_of_copy))
     diag.emit()
 
@@ -291,8 +326,16 @@ def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
             if note_span is not None:
                 diag.note_at(kind.note.format(name=name, mode=mode), note_span)
             break
+    _note_opaque_mover(checker, diag, state.var_type)
     diag.help(escape_help(checker, name, state.var_type, use_of_copy=use_of_copy))
     diag.emit()
+
+
+def _note_opaque_mover(checker: 'BorrowChecker', diag, ty) -> None:
+    """A note at the type parameter whose value moves, when it does not promise `Clone`."""
+    param = opaque_without_clone(checker, ty)
+    if param is not None:
+        note_opaque(diag, param)
 
 
 def expr_to_string(expr: Expr) -> str:

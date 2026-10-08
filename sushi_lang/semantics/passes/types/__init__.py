@@ -1,7 +1,7 @@
 """The typecheck pass: type validation and inference."""
 from __future__ import annotations
 from contextlib import contextmanager
-from typing import Dict, Iterator, Optional, Set, TYPE_CHECKING
+from typing import Callable, Dict, Iterator, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import Binding, NamespaceTable
@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FuncSig
     from sushi_lang.semantics.passes.collect.constants import ConstSig
     from sushi_lang.semantics.passes.types.templates import PackElements
+    from sushi_lang.semantics.template_scope import CheckCopy
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -53,12 +54,19 @@ class TypeValidator:
                  monomorphized_functions: Optional[Dict[str, tuple]] = None,
                  in_library_unit: bool = False,
                  namespaces: Optional['NamespaceTable'] = None,
-                 checks_templates: bool = False) -> None:
+                 checks_templates: bool = False,
+                 borrow_check_copy: Optional[Callable[['CheckCopy'], None]] = None) -> None:
         self.reporter = reporter
         # Whether `run` checks each function template of the unit on a check copy
         # (#1070): a unit of the program, and a bundled stdlib unit. A consumed library
         # unit was checked by its own `--lib` build.
         self.checks_templates = checks_templates
+        # The borrow pass over a check copy (#1070, R5). The analyzer gives it, because
+        # this pass does not import the borrow pass.
+        self.borrow_check_copy = borrow_check_copy
+        # The written templates that `run` checked on a check copy: the borrow pass
+        # reads each of them on its check copy, and not as written.
+        self.checked_template_ids: Set[int] = set()
         self.err = PassErrorReporter(reporter)
         self.tables = tables
         self.const_table = tables.constants
@@ -160,7 +168,7 @@ class TypeValidator:
         # the statement rules too, with the stamps it gets.
         from .templates import (
             check_extension_template, check_function_template, check_perk_template)
-        checked: set[int] = set()
+        checked = self.checked_template_ids
         for func in program.functions:
             if func.type_params:
                 if self.checks_templates and check_function_template(self, func):

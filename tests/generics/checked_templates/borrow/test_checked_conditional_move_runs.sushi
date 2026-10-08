@@ -1,0 +1,24 @@
+# A template that moves its argument in one arm of an `if` (#1070, R7): each copy keeps
+# its own drop flags, so the `string` copy frees the value on the other path.
+# EXPECT_STDOUT_EXACT: "towel\nkept\n42\nkept\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn show@(T: Display)(nom T x) ~:
+    println("{x}")
+
+fn maybe_show@(T: Display)(nom T a, bool go) ~:
+    if (go):
+        show(nom a)
+    else:
+        println("kept")
+
+fn main() i32:
+    let string s = "tow".concat("el")
+    let string t = "tea".concat("pot")
+    maybe_show(nom s, true)
+    maybe_show(nom t, false)
+    maybe_show(nom 42, true)
+    maybe_show(nom 7, false)
+    return 0

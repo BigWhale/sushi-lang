@@ -1,0 +1,16 @@
+# An `expand` body that reads each borrowed element is legal on the template and runs
+# in each copy (#1070, R5, R6).
+# EXPECT_STDOUT_EXACT: "towel\nMostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn show_all@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        println("{a}")
+
+fn main() i32:
+    let string s = "tow".concat("el")
+    let string t = "Mostly ".concat("Harmless")
+    show_all(s, t)
+    return 0

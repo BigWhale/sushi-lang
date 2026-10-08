@@ -12,15 +12,17 @@ from __future__ import annotations
 import dataclasses
 from collections import ChainMap
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple, cast
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.derived_methods import OverlayDerivedMethods
 from sushi_lang.semantics.passes.collect import EnumTable, FunctionTable, StructTable
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.ast import Expand, FuncDef
     from sushi_lang.semantics.generics.monomorphize import Monomorphizer
     from sushi_lang.semantics.tables import SymbolTables
+    from sushi_lang.semantics.typesys import Type
 
 
 def _overlay(base: Any) -> Any:
@@ -61,6 +63,24 @@ class TemplateScope:
         """The late interner over the overlay: one seam, a second table set."""
         from sushi_lang.semantics.generics.late_interning import intern_generic_type_refs
         intern_generic_type_refs(self.tables, self.monomorphizer, self.reporter, (ty,))
+
+
+@dataclass(frozen=True)
+class CheckCopy:
+    """A check copy after the typecheck pass and the lift pass, for the borrow pass (R5).
+
+    `node` is the check copy: a `FuncDef`, an `ExtendDef` or an `ExtendWithDef`.
+    `lifted` holds the functions that the lift pass made from its lambdas, and `tables`
+    is the overlay that its instances are in. `element_of` gives the element type of an
+    `expand` of a pack template, and `owned_packs` names each value pack that the
+    template takes with `nom`.
+    """
+
+    node: Any
+    lifted: Tuple['FuncDef', ...]
+    tables: 'SymbolTables'
+    element_of: Optional[Callable[['Expand'], 'Type']] = None
+    owned_packs: frozenset = frozenset()
 
 
 def template_scope(tables: 'SymbolTables') -> TemplateScope:

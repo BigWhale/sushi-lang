@@ -785,7 +785,7 @@ class SemanticAnalyzer:
             passes.scope.run(unit.ast)
             passes.typecheck.run(unit.ast)
             passes.lifter.run()
-            passes.borrow.run(unit.ast)
+            passes.borrow.run(unit.ast, skip=passes.typecheck.checked_template_ids)
 
             self._merge_unit(unit_reporter)
 
@@ -808,19 +808,21 @@ class SemanticAnalyzer:
                               visibility=self.tables.visibility,
                               function_tables=(self.tables.funcs, self.tables.generic_funcs),
                               unit_namespaces=self.tables.namespaces)
-        typecheck = TypeValidator(
-            reporter, self.tables, current_unit_name=unit.name,
-            monomorphized_functions=monomorphizer.monomorphized_functions,
-            in_library_unit=unit.provenance is not None,
-            namespaces=namespaces, checks_templates=_checks_templates(unit))
-        lifter = LambdaLifter(self.tables.structs, self.tables.funcs, unit.ast,
-                              annotate=typecheck)
         # The enum names let the checker tell `Box.Full(a)` from a method call -- both
         # are DotCall here. BASE names only: the receiver is written bare.
         borrow = BorrowChecker(reporter, destroy_effects=destroy_effects,
                                enum_names=enum_names, tables=self.tables,
                                unit_name=unit.name,
                                scope=namespaces.scope if namespaces else None)
+        # The typecheck pass calls the borrow pass on each check copy (#1070, R5).
+        typecheck = TypeValidator(
+            reporter, self.tables, current_unit_name=unit.name,
+            monomorphized_functions=monomorphizer.monomorphized_functions,
+            in_library_unit=unit.provenance is not None,
+            namespaces=namespaces, checks_templates=_checks_templates(unit),
+            borrow_check_copy=borrow.check_template_copy)
+        lifter = LambdaLifter(self.tables.structs, self.tables.funcs, unit.ast,
+                              annotate=typecheck)
         return _UnitPasses(scope, typecheck, lifter, borrow)
 
     @staticmethod

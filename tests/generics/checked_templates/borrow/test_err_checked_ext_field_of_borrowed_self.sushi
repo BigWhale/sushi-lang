@@ -1,0 +1,14 @@
+# An extension template that returns a field of a borrowed `self` is refused at the
+# template (#1070, R5), even when the only copy is for `Box@(i32)`.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+struct Box@(T):
+    T v
+
+extend Box@(T) get() T:
+    return self.v
+
+fn main() i32:
+    let Box@(i32) b = Box(42)
+    println(b.get())
+    return 0

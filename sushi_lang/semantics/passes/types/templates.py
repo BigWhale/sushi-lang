@@ -5,8 +5,8 @@ type parameter OPAQUE: the body knows what the constraints of the parameter prom
 and nothing more. A receiver parameter of an extension or a perk template has the
 bounds its base declares and the bounds its target adds (R1). The check cuts a CHECK COPY
 of the template in an overlay of the program tables (`semantics/template_scope.py`),
-with each type parameter replaced by its opaque form, and the typecheck pass checks that
-copy. Then the compiler discards the copy and the overlay. A fault of the template is
+with each type parameter replaced by its opaque form. The typecheck pass, the lift pass
+and the borrow pass check that copy (R5: an opaque parameter moves). Then the compiler discards the copy and the overlay. A fault of the template is
 reported one time, at the template's spans, and the copies of a refused template report
 nothing (the reporter mutes them).
 """
@@ -115,9 +115,12 @@ def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
 
     # The cut interns what the copy names itself.
     check_copy = _cut_and_settle(scope, cut, lambda _copy: ())
-    checker = _checker(check, PackElements(record, validator.current_unit_name))
+    elements = PackElements(record, validator.current_unit_name)
+    checker = _checker(check, elements)
     checker._validate_function(check_copy)
-    _lifter(check, checker).lift_function(check_copy)
+    lifted = _lifter(check, checker).lift_function(check_copy)
+    _borrow(check, check_copy, lifted, elements,
+            frozenset(p.name for p in record.params if p.is_pack and p.is_nom))
     _close(check, TemplateId(record.unit_name, record.name))
     return True
 
@@ -164,7 +167,8 @@ def check_extension_template(validator: TypeValidator, ext: ExtendDef) -> bool:
     check_copy = _cut_and_settle(scope, cut, lambda ext_copy: [ext_copy])
     checker = _checker(check)
     checker._validate_extension_method(check_copy)
-    _lifter(check, checker).lift_body(check_copy.body)
+    lifted = _lifter(check, checker).lift_body(check_copy.body)
+    _borrow(check, check_copy, lifted)
     _close(check, template_id)
     return True
 
@@ -207,7 +211,8 @@ def check_perk_template(validator: TypeValidator, impl: ExtendWithDef) -> bool:
     checker = _checker(check)
     from .signatures import validate_perk_template_bodies
     validate_perk_template_bodies(checker, target, check_copy)
-    _lifter(check, checker).lift_perk_impl(check_copy)
+    lifted = _lifter(check, checker).lift_perk_impl(check_copy)
+    _borrow(check, check_copy, lifted)
     _close(check, template_id)
     return True
 
@@ -304,6 +309,24 @@ def _lifter(check: _Check, checker: 'TemplateValidator'):
     from sushi_lang.semantics.passes.lift import LambdaLifter
     return LambdaLifter(check.scope.tables.structs, check.scope.funcs, _scratch_program(),
                         annotate=checker)
+
+
+def _borrow(check: _Check, check_copy: Any, lifted: Sequence[FuncDef],
+            elements: Optional[PackElements] = None,
+            owned_packs: frozenset = frozenset()) -> None:
+    """The borrow pass over the check copy and its lifted lambdas (#1070, R5).
+
+    It runs before `_close`, so a borrow fault refuses the template and mutes every copy
+    of it. The analyzer gives the hook; with no hook the template has no borrow check.
+    """
+    from sushi_lang.semantics.template_scope import CheckCopy
+    hook = check.validator.borrow_check_copy
+    if hook is None:
+        er.raise_internal_error(
+            "CE0015", message="the analyzer set no borrow check for a check copy")
+        return
+    hook(CheckCopy(check_copy, tuple(lifted), check.scope.tables,
+                   elements.element_of if elements is not None else None, owned_packs))
 
 
 def _close(check: _Check, template_id: TemplateId) -> None:
