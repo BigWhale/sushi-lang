@@ -1,0 +1,17 @@
+# One refused call, reached in two units and in a template, is reported one time, at
+# its first site (#1070). Every later site knows the call is refused: a `match` over it
+# raises no internal error, and the template that holds it is refused too.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+
+use "helpers/refused_feed"
+
+fn h@(T)(T x) i32:
+    x
+    match Feed(from([Res(1)])).first():
+        Result.Ok(_) -> return 1
+        Result.Err(_) -> return 0
+
+fn main() i32:
+    match Feed(from([Res(1)])).first():
+        Result.Ok(_) -> return h(1)
+        Result.Err(_) -> return g()

@@ -1,6 +1,7 @@
 """The monomorphize pass: every generic definition becomes concrete instances."""
 from __future__ import annotations
-from contextlib import contextmanager
+from collections import Counter
+from contextlib import contextmanager, nullcontext
 from typing import Dict, Iterator, Optional, Tuple, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
 
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.structs import StructTable
     from sushi_lang.semantics.generics.constraints import ConstraintValidator
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.errors import raise_internal_error
 
 from .transformer import TypeSubstitutor
 from .types import TypeMonomorphizer, MonomorphizationDepthExceeded
@@ -70,6 +72,10 @@ class Monomorphizer:
     # same fault back as a second diagnostic from inside a body.
     constraint_violations: int = field(default=0, init=False)
     _refused: Set = field(default_factory=set, init=False, repr=False)
+    # The error codes each call-site refusal offered, by key (#1070): a later site of the
+    # same key offers them to its own unit's reporter again.
+    _refusal_codes: Dict[object, Counter] = field(default_factory=dict, init=False,
+                                                  repr=False)
 
     _monomorphize_depth: int = field(default=0, init=False, repr=False)
 
@@ -177,16 +183,26 @@ class Monomorphizer:
         A refusal goes to `reporter`, the reporter of the unit that holds the site: that
         unit then knows a diagnostic was given (a `match` over the refused call reads
         it, and the template check refuses its template), and the diagnostic takes its
-        place in the unit's source order.
+        place in the unit's source order. A key is reported ONCE, at its first site. A
+        later site, in any unit, offers the same errors to its own reporter again and
+        records nothing, so it knows the call is refused and says nothing twice.
         """
-        if self.constraint_validator is None:
-            return self._validate_type_constraints(
+        if report and key is not None and self.was_refused(key):
+            if key not in self._refusal_codes:
+                raise_internal_error("CE0015", message=(
+                    "a call site meets a refusal that no call site reported"))
+            reporter.offer_again(self._refusal_codes[key])
+            return False
+        validator = self.constraint_validator
+        before = Counter(reporter.errors_offered)
+        with (validator.reporting_to(reporter) if validator is not None
+              else nullcontext()):
+            held = self._validate_type_constraints(
                 params, args, key=key, template_file=template_file,
                 site=(span, filename), report=report)
-        with self.constraint_validator.reporting_to(reporter):
-            return self._validate_type_constraints(
-                params, args, key=key, template_file=template_file,
-                site=(span, filename), report=report)
+        if report and not held and key is not None:
+            self._refusal_codes[key] = reporter.errors_offered - before
+        return held
 
     def _error_arguments_hold(self, type_params, type_args, error_params, span,
                               filename, template_file) -> bool:

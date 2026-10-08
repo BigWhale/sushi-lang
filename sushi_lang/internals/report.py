@@ -376,6 +376,20 @@ class Reporter:
         return any(d.kind == "error" for d in self.items)
 
     @property
+    def has_offered_errors(self) -> bool:
+        """Did a walk with this reporter offer an error, a dropped or repeated one too?"""
+        return any(self.errors_offered.values())
+
+    def offer_again(self, codes: Counter) -> None:
+        """Count errors that another site reported for the same fault, and record none.
+
+        A refusal is reported ONCE, at its first site (#579). A later site of the same
+        fault is refused too, and its walk must know it: this counts the codes as
+        offered, as a dropped repeat is counted (#1070).
+        """
+        self.errors_offered.update(codes)
+
+    @property
     def has_warnings(self) -> bool:
         return any(d.kind == "warning" for d in self.items)
 
