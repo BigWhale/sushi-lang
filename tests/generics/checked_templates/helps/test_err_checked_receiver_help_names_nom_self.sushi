@@ -1,0 +1,14 @@
+# A field of a borrowed `self` over `T` is no value to take (#1070, R5): the help names
+# `nom self`, the mode that owns the receiver.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: take the receiver with `nom self`
+
+struct Box@(T):
+    T v
+
+extend Box@(T) get() T:
+    return self.v
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

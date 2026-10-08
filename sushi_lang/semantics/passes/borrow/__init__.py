@@ -113,9 +113,8 @@ class BorrowChecker:
         self.unit_name = unit_name
         self.scope = scope
         # Set only while a check copy is read (#1070, R6): the element type of each
-        # `expand`, and the value packs that the template takes with `nom`.
+        # `expand`.
         self.pack_element_of: Optional[Callable[[Expand], Optional[Type]]] = None
-        self.owned_packs: FrozenSet[str] = frozenset()
 
     def refresh_callee_modes(self) -> None:
         """Read the function tables again: the typecheck pass can declare a late instance
@@ -167,7 +166,7 @@ class BorrowChecker:
         self.tables, self.types = copy.tables, TypeQueries(copy.tables)
         self.callee_modes = self.callee_modes.with_struct_names(
             _struct_names(copy.tables))
-        self.pack_element_of, self.owned_packs = copy.element_of, copy.owned_packs
+        self.pack_element_of = copy.element_of
         try:
             node = copy.node
             if isinstance(node, ExtendWithDef):
@@ -177,13 +176,13 @@ class BorrowChecker:
             else:
                 self.reporter.enter_body(node)
                 self._check_function(node)
-            self.pack_element_of, self.owned_packs = None, frozenset()
+            self.pack_element_of = None
             for fn in copy.lifted:
                 self.reporter.enter_body(fn)
                 self._check_function(fn)
         finally:
             self.tables, self.types, self.callee_modes = saved
-            self.pack_element_of, self.owned_packs = None, frozenset()
+            self.pack_element_of = None
             self.reporter.leave_body()
 
     def _check_perk_impl(self, perk_impl) -> None:

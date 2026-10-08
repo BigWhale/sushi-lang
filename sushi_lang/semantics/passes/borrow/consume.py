@@ -312,7 +312,8 @@ def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
                              state.first_borrow_span)
             if refuses_clone(checker, state.var_type):
                 diag.help(f"the new owner frees this value while the borrow still "
-                          f"points at it; borrow it twice: {no_clone_reason(name)}")
+                          f"points at it; borrow it twice: "
+                          f"{no_clone_reason(checker, name, state.var_type)}")
             else:
                 diag.help(f"the new owner frees this value while the borrow still "
                           f"points at it; borrow it twice, or clone what the owning "

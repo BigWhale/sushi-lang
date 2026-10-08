@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import Callable, Optional, TYPE_CHECKING, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -126,12 +126,14 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
                      use_span)
     no_clone = refuses_clone(checker, state.var_type)
     if by_the_change and no_clone:
-        diag.help(f"{no_clone_reason(name)}, so no call can read it while it "
+        diag.help(f"{no_clone_reason(checker, name, state.var_type)}, so no call can "
+                  f"read it while it "
                   f"changes '{owner}'")
     elif by_the_change:
         diag.help(f"pass an independent value: `{name}.clone()`")
     elif no_clone:
-        diag.help(f"{what} after the last use of '{name}': {no_clone_reason(name)}")
+        diag.help(f"{what} after the last use of '{name}': "
+                  f"{no_clone_reason(checker, name, state.var_type)}")
     else:
         diag.help(f"{what} after the last use of '{name}', "
                   f"or bind an independent value with `.clone()`")
@@ -155,9 +157,12 @@ def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
                                  owner=owner, name=text)
     if header is not None:
         diag.note_at(f"the loop walks '{text}' from here to the loop exit", header)
-    receiver = expr_to_string(iterable.receiver)
-    if refuses_clone(checker, read_type(checker, iterable.receiver)):
-        diag.help(f"{what} after the loop: {no_clone_reason(receiver)}")
+    walked = cast(MethodCall, iterable).receiver
+    receiver = expr_to_string(walked)
+    receiver_type = read_type(checker, walked)
+    if refuses_clone(checker, receiver_type):
+        diag.help(f"{what} after the loop: "
+                  f"{no_clone_reason(checker, receiver, receiver_type)}")
     else:
         diag.help(f"{what} after the loop, or walk an independent value: "
                   f"`{receiver}.clone().{iterable.method}()`")
@@ -223,13 +228,23 @@ class CopyUse:
     tail: str
 
 
-def no_clone_reason(text: str) -> str:
-    """The clause a help gives in place of a clone escape that CE2431 refuses."""
+def no_clone_reason(checker: 'BorrowChecker', text: str, ty) -> str:
+    """The clause a help gives in place of a clone escape that is refused.
+
+    A type that declares a resource has no clone (CE2431). An opaque type parameter
+    has one when a constraint promises `Clone` (CE4018, #1070), so the clause names that
+    constraint.
+    """
+    param = opaque_without_clone(checker, ty)
+    if param is not None:
+        return (f"'{text}' holds the type parameter '{param.written()}', which has a "
+                f"clone only with 'Clone' in its constraints ({bound_hint(param, 'Clone')})")
     return f"'{text}' owns a resource and cannot be cloned"
 
 
 def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
-                handover: bool = True, use_of_copy: Optional[CopyUse] = None) -> str:
+                handover: bool = True, use_of_copy: Optional[CopyUse] = None,
+                through_receiver: bool = False) -> str:
     """What CE2411 offers as the way out, which depends on WHAT is being consumed.
 
     `.clone()` for an ordinary owning value. A resource type has no clone (CE2431), so
@@ -240,6 +255,8 @@ def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
     type of its owner. `handover` is False where a `nom` parameter is no escape (a write
     through a pattern binding). `use_of_copy` is what the position does with the copy:
     an `as` conversion (docs/design/error-conversion.md section 3.2) or a `nom self` call.
+    `through_receiver` is a place of `self`: the method takes the receiver with
+    `nom self` to own what it reads.
     """
     param = opaque_without_clone(checker, ty if value_type is None else value_type)
     if param is not None:
@@ -248,9 +265,10 @@ def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
         tail = use_of_copy.tail if use_of_copy is not None else ""
         if not handover:
             return f"{clone}, and take an independent value with `{text}.clone()`"
+        take = ("take the receiver with `nom self`" if through_receiver
+                else "take it with a `nom` parameter and pass it with `nom`")
         return (f"a value of the type parameter '{name}' moves, because a type argument "
-                f"can own: take it with a `nom` parameter and pass it with `nom`, or "
-                f"{clone} and take `{text}.clone(){tail}`")
+                f"can own: {take}, or {clone} and take `{text}.clone(){tail}`")
     if not refuses_clone(checker, ty):
         if use_of_copy is not None:
             return (f"clone it, and {use_of_copy.clause}: "
@@ -310,7 +328,8 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr,
     value_type = read_type(checker, expr)
     _note_opaque_mover(checker, diag, value_type)
     diag.help(escape_help(checker, text, owner_type, value_type,
-                          use_of_copy=use_of_copy))
+                          use_of_copy=use_of_copy,
+                          through_receiver=state is not None and state.is_method_receiver))
     diag.emit()
 
 
@@ -327,7 +346,8 @@ def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
                 diag.note_at(kind.note.format(name=name, mode=mode), note_span)
             break
     _note_opaque_mover(checker, diag, state.var_type)
-    diag.help(escape_help(checker, name, state.var_type, use_of_copy=use_of_copy))
+    diag.help(escape_help(checker, name, state.var_type, use_of_copy=use_of_copy,
+                          through_receiver=state.is_method_receiver))
     diag.emit()
 
 

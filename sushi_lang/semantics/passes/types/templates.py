@@ -119,8 +119,7 @@ def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
     checker = _checker(check, elements)
     checker._validate_function(check_copy)
     lifted = _lifter(check, checker).lift_function(check_copy)
-    _borrow(check, check_copy, lifted, elements,
-            frozenset(p.name for p in record.params if p.is_pack and p.is_nom))
+    _borrow(check, check_copy, lifted, elements)
     _close(check, TemplateId(record.unit_name, record.name))
     return True
 
@@ -312,8 +311,7 @@ def _lifter(check: _Check, checker: 'TemplateValidator'):
 
 
 def _borrow(check: _Check, check_copy: Any, lifted: Sequence[FuncDef],
-            elements: Optional[PackElements] = None,
-            owned_packs: frozenset = frozenset()) -> None:
+            elements: Optional[PackElements] = None) -> None:
     """The borrow pass over the check copy and its lifted lambdas (#1070, R5).
 
     It runs before `_close`, so a borrow fault refuses the template and mutes every copy
@@ -326,7 +324,7 @@ def _borrow(check: _Check, check_copy: Any, lifted: Sequence[FuncDef],
             "CE0015", message="the analyzer set no borrow check for a check copy")
         return
     hook(CheckCopy(check_copy, tuple(lifted), check.scope.tables,
-                   elements.element_of if elements is not None else None, owned_packs))
+                   elements.element_of if elements is not None else None))
 
 
 def _close(check: _Check, template_id: TemplateId) -> None:

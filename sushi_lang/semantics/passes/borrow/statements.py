@@ -456,20 +456,20 @@ def _check_expand(checker: 'BorrowChecker', stmt: Expand) -> None:
     """An `expand` body of a check copy, checked once for every pack length (#1070, R6).
 
     The body runs zero or more times, as a `foreach` body does, so a move of an outer
-    owned value in it is a move in a loop. The binder is one element of the value pack:
-    a borrow of the caller's value, or an owned value when the template takes the pack
-    with `nom`, as each copy declares the element parameter. Only a check copy holds an
+    owned value in it is a move in a loop. A `break` or a `continue` in it goes to the
+    enclosing loop. The binder is one element of the value pack, a borrow of the
+    caller's value, as each copy declares the element parameter (a value pack has no
+    `nom` form). Only a check copy holds an
     `expand` with an element type. A written template that no check copy covers was
     checked at its own build, and its `expand` body is not read here.
     """
     element_of = checker.pack_element_of
     if element_of is None:
         return
-    owned = isinstance(stmt.iterable, Name) and stmt.iterable.id in checker.owned_packs
     state = BorrowState(name=stmt.var, var_type=element_of(stmt),
                         declared_at_span=stmt.var_span or stmt.loc,
                         declared_branch_depth=checker.branch_depth + 1)
-    state.is_borrow_param = not owned
+    state.is_borrow_param = True
     with BindingScope(checker) as scope:
         scope.register(state)
         check_loop_body(checker, stmt.body, per_iteration=frozenset({stmt.var}),

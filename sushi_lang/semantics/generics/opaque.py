@@ -66,7 +66,8 @@ def bound_hint(param: TypeParameter, perk: str) -> str:
     `'(T: Clone)[]'` in the target of an extension or a perk template.
     """
     form = param.bound_form or f"@({param.written()}: {{perk}})"
-    return f"'{form.replace('{perk}', perk)}'"
+    bounds = " + ".join((*param.constraints, perk))
+    return f"'{form.replace('{perk}', bounds)}'"
 
 
 def providing_perks(perks: 'PerkTable', method: str) -> List[str]:

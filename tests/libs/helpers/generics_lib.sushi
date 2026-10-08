@@ -5,8 +5,8 @@
 public perk Greater:
     fn gt(i32 other) bool
 
-# Unconstrained generic: returns its first argument (uses both params so the
-# monomorphized instance has no unused-variable warning at the consumer).
+# Generic with a Clone bound: returns a clone of its first argument (uses both params so
+# the monomorphized instance has no unused-variable warning at the consumer).
 public fn first_of@(T: Clone)(T a, T b) T:
     let T chosen = b.clone()
     chosen := a.clone()

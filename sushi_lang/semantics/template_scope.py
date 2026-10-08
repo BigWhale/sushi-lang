@@ -72,15 +72,13 @@ class CheckCopy:
     `node` is the check copy: a `FuncDef`, an `ExtendDef` or an `ExtendWithDef`.
     `lifted` holds the functions that the lift pass made from its lambdas, and `tables`
     is the overlay that its instances are in. `element_of` gives the element type of an
-    `expand` of a pack template, and `owned_packs` names each value pack that the
-    template takes with `nom`.
+    `expand` of a pack template.
     """
 
     node: Any
     lifted: Tuple['FuncDef', ...]
     tables: 'SymbolTables'
     element_of: Optional[Callable[['Expand'], 'Type']] = None
-    owned_packs: frozenset = frozenset()
 
 
 def template_scope(tables: 'SymbolTables') -> TemplateScope:

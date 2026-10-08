@@ -125,19 +125,19 @@ def _borrow_perk_copy(borrow: BorrowChecker, impl: ExtendWithDef, lifted: list) 
 
 # One row per kind of copy that is cut after the per-unit loop: a late function copy, a
 # generic-target or array-target extension copy, and an array-template perk copy.
-_COPY_ENTRIES: dict[type, _CopyEntry] = {
-    FuncDef: _CopyEntry(
+_COPY_ENTRIES: dict[str, _CopyEntry] = {
+    "function": _CopyEntry(
         scope=ScopeAnalyzer._check_function,
         typecheck=TypeValidator._validate_function,
         lift=LambdaLifter.lift_function,
         borrow=_borrow_function_copy),
-    ExtendDef: _CopyEntry(
+    "extension": _CopyEntry(
         scope=ScopeAnalyzer._check_extension_method,
         typecheck=TypeValidator._validate_extension_method,
         lift=lambda lifter, ext: lifter.lift_body(ext.body, scope_unit=ext.scope_unit,
                                                   template_id=ext.template_id),
         borrow=_borrow_extension_copy),
-    ExtendWithDef: _CopyEntry(
+    "perk": _CopyEntry(
         scope=ScopeAnalyzer._check_perk_implementation,
         typecheck=validate_perk_implementation_method,
         lift=LambdaLifter.lift_perk_impl,
@@ -146,10 +146,19 @@ _COPY_ENTRIES: dict[type, _CopyEntry] = {
 
 
 def _copy_entry(node: Any) -> _CopyEntry:
-    """The row of a copy. A function copy is a FuncDef or a cut of a template record."""
-    if isinstance(node, (ExtendDef, ExtendWithDef)):
-        return _COPY_ENTRIES[type(node)]
-    return _COPY_ENTRIES[FuncDef]
+    """The row of a copy, by its kind. A function copy is a FuncDef or a cut of a
+    template record; any other node is no copy, and that is a fault in the compiler."""
+    from sushi_lang.internals.diagnostics import InternalCompilerError
+    from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
+    if isinstance(node, ExtendWithDef):
+        return _COPY_ENTRIES["perk"]
+    if isinstance(node, ExtendDef):
+        return _COPY_ENTRIES["extension"]
+    if isinstance(node, (FuncDef, GenericFuncDef)):
+        return _COPY_ENTRIES["function"]
+    raise InternalCompilerError(
+        "CE0015", message=f"a copy of no known kind reached the copy check: "
+                          f"{type(node).__name__}")
 
 
 class SemanticAnalyzer:
