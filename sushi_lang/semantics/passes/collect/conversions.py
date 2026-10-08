@@ -23,7 +23,7 @@ from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.typesys import EnumType, Type, UnknownType
 
-from .utils import reject_try_in_body
+from .utils import reject_misplaced_expands, reject_try_in_body
 
 if TYPE_CHECKING:
     from .functions import FunctionCollector
@@ -49,6 +49,9 @@ def collect_conversion(collector: 'FunctionCollector', ext: ExtendDef, *,
         reject_try_in_body(collector.r, ext.body, "a conversion",
                            help_text="a conversion is bare, so handle the Result in "
                                      "the body (match, .realise(default))")
+        if reject_misplaced_expands(collector.r, ext.body, frozenset(),
+                                    ext.target_type_span or ext.name_span):
+            collector.refused_pack_bodies.append("conversion")
 
     source = _side(collector, ext.target_type, "source", ext.target_type_span)
     target = _side(collector, ext.ret, "target", ext.ret_span)

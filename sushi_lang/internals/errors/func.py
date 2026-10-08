@@ -89,7 +89,7 @@ _add(ErrorMessage("CE0118", Severity.ERROR,
 
 _add(ErrorMessage("CE0119", Severity.ERROR,
     "malformed expand(...): {message}",
-    Category.FUNC, "An expand(...) construct is malformed or used outside a type-pack context."))
+    Category.FUNC, "An `expand(a in args):` walks the value pack `...Ts args` of its own function, and it can stand in no other position. It is refused in a lambda body (a lambda is a callable of its own and has no type pack), in a body with no type pack (a concrete function, a generic function with no pack, an extension method, a perk method, a conversion), when the iterable is not a name, and when the name is not the value pack of the function. The rule is judged once, on the written body in the collect pass, so an uncalled template is refused too (#1070). The analysis stops after it, as it does after CE0147, because no copy of the body can be cut. Until #1070 the typecheck pass and the unroll each emitted this code in their own words, and a template that no call instantiated was not refused."))
 
 _add(ErrorMessage("CE0120", Severity.ERROR,
     "{message}",

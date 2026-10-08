@@ -1,0 +1,20 @@
+# A lambda is a callable of its own and has no type pack, so an `expand` in a lambda
+# body is refused, also when the lambda stands in a pack template.
+# EXPECT_ERROR_CODES_EXACT: CE0119
+
+perk Render:
+    fn render() string
+
+extend i32 with Render:
+    fn render() string:
+        return "i:{self}"
+
+fn show@(...Ts: Render)(...Ts args) ~:
+    let fn() -> ~ f = |~|:
+        expand(a in args):
+            println(a.render())
+    f()
+
+fn main() i32:
+    show(1, 2)
+    return 0

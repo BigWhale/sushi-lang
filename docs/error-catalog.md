@@ -963,7 +963,7 @@ A function cannot mix a type-pack parameter '...Ts' with a native variadic '...T
 
 **Message:** `malformed expand(...): {message}`
 
-An expand(...) construct is malformed or used outside a type-pack context.
+An `expand(a in args):` walks the value pack `...Ts args` of its own function, and it can stand in no other position. It is refused in a lambda body (a lambda is a callable of its own and has no type pack), in a body with no type pack (a concrete function, a generic function with no pack, an extension method, a perk method, a conversion), when the iterable is not a name, and when the name is not the value pack of the function. The rule is judged once, on the written body, so an uncalled template is refused too. The analysis stops after it, as it does after [CE0147](#ce0147), because no copy of the body can be cut.
 
 ### CE0120 {#ce0120}
 

@@ -43,7 +43,8 @@ from sushi_lang.semantics.visibility import (
 )
 
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
-                    reject_self_in_body, reject_try_in_body, reject_variadic_param)
+                    reject_misplaced_expands, reject_self_in_body, reject_try_in_body,
+                    reject_variadic_param)
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS, RefusalRecord, classify_extension_target,
     reject_bound_on_type, reject_mixed_target, reject_unwritable_target)
@@ -581,8 +582,10 @@ class FunctionCollector:
         # library already follows (docs/design/libraries.md section 7). Without this,
         # `--lib-kind` would change program semantics rather than just distribution.
         self.library_units: Set[str] = set()
-        # The templates refused with CE0147 (#1167): no copy of one can be cut.
-        self.refused_pack_templates: List[str] = []
+        # The bodies that name a type pack as one type (CE0147, #1167) or hold a
+        # misplaced `expand` (#1070): no copy of one can be cut, so the analysis stops
+        # after the collect pass.
+        self.refused_pack_bodies: List[str] = []
         # Who declared what, across the whole program: the one reader for the question
         # "did a library take this name already?" A struct table carries a file and not
         # a unit, so every collector that refuses a redeclaration asks this table.
@@ -808,6 +811,8 @@ class FunctionCollector:
         # type-params, so this fires only if a pack value-param leaked in here
         # without a matching type-pack type-param (malformed -> CE0117).
         validate_type_pack_params(self.r, fn.type_params, params, name_span)
+        if reject_misplaced_expands(self.r, fn.body, frozenset(), name_span):
+            self.refused_pack_bodies.append(name)
 
         if name in self.funcs.by_name:
             verdict = self._redeclaration(name, name_span, self.funcs.by_name[name],
@@ -892,8 +897,12 @@ class FunctionCollector:
         # a type-pack type-param). Keys on `is_pack`, disjoint from the CE0114
         # blanket above (which keys on `is_variadic`).
         validate_type_pack_params(self.r, type_params_raw, params, name_span)
-        if reject_pack_type_outside_its_parameter(self.r, fn, type_params_raw, name_span):
-            self.refused_pack_templates.append(name)
+        pack_type_refused = reject_pack_type_outside_its_parameter(
+            self.r, fn, type_params_raw, name_span)
+        pack_values = {p.name for p in params if p.is_pack}
+        expand_refused = reject_misplaced_expands(self.r, fn.body, pack_values, name_span)
+        if pack_type_refused or expand_refused:
+            self.refused_pack_bodies.append(name)
 
         ret_ty = fn.ret
         ret_span = fn.ret_span or name_span
@@ -960,6 +969,8 @@ class FunctionCollector:
             return
 
         self._reject_signature_faults(header)
+        if reject_misplaced_expands(self.r, header.body, frozenset(), header.name_span):
+            self.refused_pack_bodies.append(header.name)
         if header.is_static and self._reject_static_faults(header):
             return
 

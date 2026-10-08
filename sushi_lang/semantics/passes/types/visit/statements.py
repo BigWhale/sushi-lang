@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -47,9 +48,10 @@ class StatementValidator(RecursiveVisitor):
         validate_foreach_statement(self.type_validator, node)
 
     def visit_expand(self, node) -> None:
-        """Reject an Expand that survived to the typecheck pass (CE0119)."""
-        er.emit(self.type_validator.reporter, er.ERR.CE0119, node.loc,
-                message="expand(...) is only valid inside a function with a ...Ts type-pack parameter")
+        """No `expand` reaches the typecheck pass: the collect pass refused every
+        misplaced one, and a copy holds the unrolled body."""
+        raise_internal_error(
+            "CE0015", message="an `expand` reached the typecheck pass")
 
     def visit_match(self, node: Match) -> None:
         """Validate match statement with exhaustiveness checking."""

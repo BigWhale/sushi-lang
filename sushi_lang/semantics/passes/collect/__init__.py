@@ -220,9 +220,11 @@ class CollectorPass:
                 *self.enum_collector.refused_library_types]
 
     @property
-    def refused_pack_templates(self) -> list[str]:
-        """The generic functions that name their type pack as one type (CE0147)."""
-        return list(self.function_collector.refused_pack_templates)
+    def refused_pack_bodies(self) -> list[str]:
+        """The declarations that name a type pack as one type (CE0147) or hold a
+        misplaced `expand`."""
+        return [*self.function_collector.refused_pack_bodies,
+                *self.perk_collector.refused_pack_bodies]
 
     @property
     def _collectors(self) -> tuple:

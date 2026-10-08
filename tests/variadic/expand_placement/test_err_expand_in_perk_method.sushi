@@ -1,0 +1,16 @@
+# A perk method has no type pack, so an `expand` in the body of an implementation
+# method is refused where it is written.
+# EXPECT_ERROR_CODES_EXACT: CE0119
+
+perk Render:
+    fn render() string
+
+extend i32 with Render:
+    fn render() string:
+        expand(a in self):
+            println("Mostly Harmless")
+        return "i:{self}"
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

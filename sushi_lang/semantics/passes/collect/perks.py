@@ -17,7 +17,8 @@ from sushi_lang.semantics.typesys import (
     Type, BuiltinType, StructType, EnumType, FunctionType, ReceiverType)
 from sushi_lang.semantics.generics.extension_targets import RefusalRecord
 
-from .utils import reject_reference_in, reject_try_in_body, reject_variadic_param
+from .utils import (
+    reject_misplaced_expands, reject_reference_in, reject_try_in_body, reject_variadic_param)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.generics.types import TypeParameter
@@ -438,6 +439,9 @@ class PerkCollector:
         # and the method symbol is defined twice. (A binary library has no such problem:
         # its body is weak_odr in the .slib object and the linker discards it.)
         self.shadowed_impls: List[ExtendWithDef] = []
+        # The implementation methods that hold a misplaced `expand` (#1070): the
+        # analysis stops after the collect pass.
+        self.refused_pack_bodies: List[str] = []
         # Who declared what, for the perk-contract rule (CE4011).
         self.visibility: Optional[VisibilityTable] = None
         # The first template and the first concrete implementation of each perk on
@@ -964,6 +968,9 @@ class PerkCollector:
         for method in impl.methods or []:
             if not has_channel(method):
                 reject_try_in_body(self.r, method.body, "a perk method")
+            if reject_misplaced_expands(self.r, method.body, frozenset(),
+                                        method.name_span or impl.loc):
+                self.refused_pack_bodies.append(method.name)
 
         # A perk has no `Self` (HANDLES.md R7), so a contract cannot hold a
         # constructor. The grammar admits the marker here only so this diagnostic can

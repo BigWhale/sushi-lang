@@ -1,0 +1,14 @@
+# An extension method has no type pack, so an `expand` in its body is refused where
+# it is written, also when no call of the method exists.
+# EXPECT_ERROR_CODES_EXACT: CE0119
+
+struct Box@(T):
+    T value
+
+extend Box@(T) each() ~:
+    expand(a in self):
+        println("Mostly Harmless")
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0
