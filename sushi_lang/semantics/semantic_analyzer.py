@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
+from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import (
     Reporter, diagnostic_identity, in_source_order)
 from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef, FuncDef
@@ -150,7 +151,6 @@ _COPY_ENTRIES: dict[str, _CopyEntry] = {
 def _copy_entry(node: Any) -> _CopyEntry:
     """The row of a copy, by its kind. A function copy is a FuncDef or a cut of a
     template record; any other node is no copy, and that is a fault in the compiler."""
-    from sushi_lang.internals.diagnostics import InternalCompilerError
     from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
     if isinstance(node, ExtendWithDef):
         return _COPY_ENTRIES["perk"]
@@ -158,7 +158,7 @@ def _copy_entry(node: Any) -> _CopyEntry:
         return _COPY_ENTRIES["extension"]
     if isinstance(node, (FuncDef, GenericFuncDef)):
         return _COPY_ENTRIES["function"]
-    raise InternalCompilerError(
+    er.raise_internal_error(
         "CE0015", message=f"a copy of no known kind reached the copy check: "
                           f"{type(node).__name__}")
 
@@ -1294,7 +1294,6 @@ class SemanticAnalyzer:
 
     def _check_extension_shadows_builtin(self) -> None:
         """Reject an extension method that collides with a built-in (CE2097)."""
-        from sushi_lang.internals import errors as er
         from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
         from sushi_lang.semantics.generics.type_display import display_type
 
@@ -1331,7 +1330,6 @@ class SemanticAnalyzer:
         argv is a borrowed view the runtime owns (#844) -- or nothing. The last
         answers `main_expects_args`, which the back end reads to hand argv on.
         """
-        from sushi_lang.internals import errors as er
         from sushi_lang.semantics.generics.type_display import display_type
         from sushi_lang.semantics.type_predicates import is_integer_type
         from sushi_lang.semantics.typesys import DynamicArrayType

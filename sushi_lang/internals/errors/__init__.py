@@ -1,7 +1,7 @@
 """Diagnostics: the catalog, and the ways to emit one."""
 from __future__ import annotations
 
-from typing import Optional
+from typing import NoReturn, Optional
 
 from sushi_lang.internals.diagnostics import InternalCompilerError, SushiError
 from sushi_lang.internals.report import DiagnosticBuilder, Reporter, Span
@@ -100,6 +100,6 @@ def emit_exception(r: Reporter, exc: SushiError) -> None:
         builder.help(message)
 
 
-def raise_internal_error(code: str, **kwargs) -> None:
+def raise_internal_error(code: str, **kwargs) -> NoReturn:
     """Raise an InternalCompilerError -- a compiler bug, not a user code issue."""
     raise InternalCompilerError(code, **kwargs)
