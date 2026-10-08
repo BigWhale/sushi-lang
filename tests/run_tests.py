@@ -876,6 +876,8 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
 
 
 _REPORT_LIBRARY = """\
+use <collections/strings>
+
 ##: A colour. :##
 public enum Colour:
     ##: No payload. :##
