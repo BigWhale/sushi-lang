@@ -258,7 +258,25 @@ def reject_variadic_param(reporter, params: Iterable[Param],
 
     for p in params or ():
         if p.is_variadic or p.is_pack:
-            er.emit(reporter, er.ERR.CE0115, p.name_span or fallback, context=context)
+            er.emit(reporter, er.ERR.CE0115, p.name_span or fallback,
+                    what="'...T' parameter", context=context)
+            return True
+    return False
+
+
+def reject_type_pack_param(reporter, type_params: Optional[Iterable[Any]],
+                           fallback: Optional[Span], context: str) -> bool:
+    """CE0115: a type pack `...Ts` in a type-parameter list that is not a free function's.
+
+    A pack has two halves, the type pack and its value pack `...Ts name`, and only a free
+    function has a parameter list to hold the second half. Answers True when it refused one.
+    """
+    from sushi_lang.internals import errors as er
+
+    for tp in type_params or ():
+        if isinstance(tp, BoundedTypeParam) and tp.is_pack:
+            er.emit(reporter, er.ERR.CE0115, tp.loc or fallback,
+                    what=f"type pack '...{tp.name}'", context=context)
             return True
     return False
 

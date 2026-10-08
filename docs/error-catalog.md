@@ -929,9 +929,9 @@ A variadic '...T' parameter must be the last parameter, a function may declare a
 
 **Error** · function
 
-**Message:** `variadic '...T' parameter not allowed in {context}`
+**Message:** `variadic {what} not allowed in {context}`
 
-Variadic parameters are only permitted in plain function definitions, not in perk methods or extension methods.
+Variadic parameters are only permitted in plain function definitions, not in perk methods or extension methods. A type pack `...Ts` is refused in the type-parameter list of a struct, an enum, an error type, an extension method and a static method: a pack has two halves, and only a free function has the parameter list for its value pack `...Ts name`. The caret is on the `...Ts`. When a method has a type pack and a value pack, the type pack is the one fault. The analysis stops after the refusal, so a written instance of the type or a call of the method adds no second diagnostic.
 
 ### CE0116 {#ce0116}
 

@@ -1,0 +1,11 @@
+# A type pack and its value pack on an extension method are one fault. The type pack
+# is refused at the '...Ts' once, and the value pack adds no second diagnostic.
+# EXPECT_ERROR_CODES_EXACT: CE0115
+# EXPECT_STDERR_CONTAINS: type pack '...Ts' not allowed in an extension method
+
+extend i32 m@(...Ts: Display)(...Ts args) i32:
+    return self
+
+fn main() i32:
+    println(1.m(2, "a"))
+    return 0

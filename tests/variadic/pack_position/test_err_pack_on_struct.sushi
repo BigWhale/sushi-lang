@@ -1,0 +1,11 @@
+# A type pack in the type-parameter list of a struct is refused where it is written.
+# Only a free function may declare a type pack.
+# EXPECT_ERROR_CODES_EXACT: CE0115
+# EXPECT_STDERR_CONTAINS: type pack '...Ts' not allowed in a struct
+
+struct Bag@(...Ts):
+    i32 n
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -1,0 +1,11 @@
+# A written instance of an enum with a type pack gets no second diagnostic.
+# EXPECT_ERROR_CODES_EXACT: CE0115
+# EXPECT_STDERR_CONTAINS: type pack '...Ts' not allowed in an enum
+
+enum Choice@(...Ts):
+    One(i32)
+
+fn main() i32:
+    let Choice@(i32, string) c = Choice.One(1)
+    println("Mostly Harmless")
+    return 0

@@ -44,7 +44,7 @@ from sushi_lang.semantics.visibility import (
 
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
                     reject_misplaced_expands, reject_self_in_body, reject_try_in_body,
-                    reject_variadic_param)
+                    reject_type_pack_param, reject_variadic_param)
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS, RefusalRecord, classify_extension_target,
     reject_bound_on_type, reject_mixed_target, reject_unwritable_target)
@@ -1037,10 +1037,14 @@ class FunctionCollector:
             else:
                 seen.add(param.name)
 
-        # Variadic parameters are not allowed in extension methods (CE0115).
-        # The pack half is unreachable today, but the guard must match its
-        # documented contract and stay correct by construction (#246).
-        reject_variadic_param(self.r, h.params, None, "an extension method")
+        # A type pack and a variadic parameter are not allowed in a method (CE0115). The
+        # type pack is the first fault, so its value pack adds no second diagnostic. No
+        # copy of the method can be cut, so the analysis stops after the collect pass.
+        kind = "a static method" if h.is_static else "an extension method"
+        if reject_type_pack_param(self.r, h.method_type_params, h.name_span, kind):
+            self.refused_pack_bodies.append(h.name)
+        else:
+            reject_variadic_param(self.r, h.params, None, "an extension method")
 
     def _reject_static_faults(self, h: '_ExtensionHeader') -> bool:
         """The refusals a `static` marker brings; True when the declaration is dropped.

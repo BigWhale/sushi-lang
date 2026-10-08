@@ -1,0 +1,11 @@
+# A struct field that names the type pack gets no second diagnostic.
+# The pack in the type-parameter list is the one fault.
+# EXPECT_ERROR_CODES_EXACT: CE0115
+# EXPECT_STDERR_CONTAINS: type pack '...Ts' not allowed in a struct
+
+struct Bag@(...Ts):
+    Ts items
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

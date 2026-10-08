@@ -1,0 +1,10 @@
+# An extension method with a type pack is refused also when no call names it.
+# EXPECT_ERROR_CODES_EXACT: CE0115
+# EXPECT_STDERR_CONTAINS: extension method
+
+extend i32 m@(...Ts)() i32:
+    return self
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

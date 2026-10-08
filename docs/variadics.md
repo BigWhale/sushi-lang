@@ -317,7 +317,7 @@ unsafe external "C" as libc because "formatted output":
 | Code | Meaning |
 | --- | --- |
 | **[CE0114](error-catalog.md#ce0114)** | `...T` must be last, at most one per function; element type must not be a reference (a dynamic-array element `...T[]` is allowed); also rejected in generic functions |
-| **[CE0115](error-catalog.md#ce0115)** | a variadic parameter (`...T` or `...Ts`) is not allowed in a perk or extension method |
+| **[CE0115](error-catalog.md#ce0115)** | a variadic parameter (`...T` or `...Ts`) is not allowed in a perk or extension method; a type pack `...Ts` is not allowed on a struct, an enum, an error type, an extension method or a static method |
 | **[CE0116](error-catalog.md#ce0116)** | a public *native* `...T` function cannot be exported through a `.slib` public API (does not apply to `...Ts` packs) |
 | **[CE0117](error-catalog.md#ce0117)** | a type-pack `...Ts` must be the last type parameter; at most one pack per function |
 | **[CE0118](error-catalog.md#ce0118)** | cannot mix a type-pack `...Ts` with a native `...T` in the same function |

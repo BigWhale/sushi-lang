@@ -332,9 +332,10 @@ class SemanticAnalyzer:
         self._check_ffi_clash(compilation_order)
         self._check_entrypoint(compilation_order)
 
-        # A type pack named as one type (CE0147) or a misplaced `expand` has no copy the
-        # monomorphize pass can cut, and each call would only read the fault back, so the
-        # analysis stops before the generic passes.
+        # A type pack named as one type (CE0147), a misplaced `expand` or a type pack on a
+        # struct, an enum or a method (CE0115) has no copy the monomorphize pass can cut, and each
+        # use would only read the fault back, so the analysis stops before the generic
+        # passes.
         if self._refused_pack_bodies:
             return
 

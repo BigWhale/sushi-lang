@@ -72,8 +72,8 @@ _add(ErrorMessage("CE0114", Severity.ERROR,
     Category.FUNC, "A variadic '...T' parameter must be the last parameter, a function may declare at most one, and its element type must not be a reference (a dynamic-array element '...T[]' is allowed and moved per element)."))
 
 _add(ErrorMessage("CE0115", Severity.ERROR,
-    "variadic '...T' parameter not allowed in {context}",
-    Category.FUNC, "Variadic parameters are only permitted in plain function definitions, not in perk methods or extension methods."))
+    "variadic {what} not allowed in {context}",
+    Category.FUNC, "Variadic parameters are only permitted in plain function definitions, not in perk methods or extension methods. A type pack '...Ts' is refused in the type-parameter list of a struct, an enum, an error type, an extension method and a static method: a pack has two halves, and only a free function has the parameter list for its value pack '...Ts name'. The caret is on the '...Ts'. When a method has a type pack and a value pack, the type pack is the one fault. The analysis stops after the refusal, so a written instance of the type or a call of the method adds no second diagnostic."))
 
 _add(ErrorMessage("CE0116", Severity.ERROR,
     "public function '{name}' is variadic and cannot appear in a library public API",
