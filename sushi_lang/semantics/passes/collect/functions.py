@@ -1129,7 +1129,7 @@ class FunctionCollector:
                                                 h.ext.target_params)
         h.ext.target_shape = shape
         if reject_array_target(self.r, shape, element,
-                               h.target_type_span or h.name_span):
+                               h.target_type_span or h.name_span) or shape is None:
             return None
 
         if not shape.param_names:

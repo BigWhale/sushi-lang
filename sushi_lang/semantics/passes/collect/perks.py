@@ -877,7 +877,7 @@ class PerkCollector:
             return True
         shape = classify_array_extension_target(element, self.is_declared_type,
                                                 impl.target_params)
-        if reject_array_target(self.r, shape, element, span):
+        if reject_array_target(self.r, shape, element, span) or shape is None:
             return True
         if not shape.param_names:
             return False
