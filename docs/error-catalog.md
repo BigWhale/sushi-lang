@@ -865,7 +865,7 @@ The main function answers the exit code of the program, so it returns a bare int
 
 **Message:** `{callable} must return a value on all code paths`
 
-A body that answers a value or a Result must end in a return on every code path. The rule is one for a function, a lambda and an extension or perk-implementation method alike. A body with a channel ('| E', or an explicit Result@(T, E) return) answers a Result, so a `~` one ends with `return Result.Ok(~)`. A BARE `~` body answers nothing, so it may reach its end. See [the error-channel design](design/error-channel.md). For a lambda, the diagnostic names it `lambda` and points at its own location.
+A body that answers a value or a Result must end in a return on every code path. The rule is one for a function, a lambda and an extension or perk-implementation method alike. A body with a channel ('| E', or an explicit Result@(T, E) return) answers a Result, so a `~` one ends with `return Result.Ok(~)`. A BARE `~` body answers nothing, so it may reach its end. See [the error-channel design](design/error-channel.md). For a lambda, the diagnostic names it `lambda` and points at its own location. An `expand` may run zero times, as a loop may, so a `return` inside it does not end the path. The rule is judged once, on the template.
 
 ### CE0108 {#ce0108}
 

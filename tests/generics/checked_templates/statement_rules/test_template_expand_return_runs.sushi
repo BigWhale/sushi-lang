@@ -1,10 +1,11 @@
-# A `return` inside an `expand` decides nothing on the template: the pack is not known
-# there, so the path is left to the copy, and the template takes no CE0107 (#1070).
+# A `return` inside an `expand` runs: the first element answers. The `expand` may run
+# zero times, as a loop may, so the template ends with a `return` after it (#1070).
 # EXPECT_STDOUT_EXACT: "1\n"
 
 fn first@(...Ts: Display)(...Ts args) string:
     expand(a in args):
         return "{a}"
+    return "none"
 
 fn main() i32:
     println(first(1, 2))

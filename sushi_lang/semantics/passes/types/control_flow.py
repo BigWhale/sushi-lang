@@ -5,15 +5,15 @@ from enum import Enum
 from typing import Iterable, Optional
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import (Block, Break, Continue, Expand, Lambda, Stmt, Return,
-                                 If, Match)
+from sushi_lang.semantics.ast import (Block, Break, Continue, Lambda, Stmt, Return, If,
+                                      Match)
 
 
 class Reach(Enum):
     """Where the path through a statement or a block goes."""
     ENDS = "ends"            # it returns on every path
     FALLS = "falls"          # some path reaches the statement after it
-    UNDECIDED = "undecided"  # a refused `match` (#886) or a template `expand` (#1070)
+    UNDECIDED = "undecided"  # a refused `match` (#886)
 
 
 def _branches(reaches: Iterable[Reach]) -> Reach:
@@ -57,14 +57,8 @@ def statement_reach(self, stmt: Stmt) -> Reach:
             return Reach.UNDECIDED
         return reach
 
-    if isinstance(stmt, Expand):
-        # Only a template still holds an `expand`: a copy holds the unrolled body. The
-        # pack is not known here, so a body that ends leaves the path to the copy (#1070).
-        if block_reach(self, stmt.body) is Reach.FALLS:
-            return Reach.FALLS
-        return Reach.UNDECIDED
-
-    # A loop may not run, or may break. Every other statement goes on to the next.
+    # A loop may not run, or may break, and an `expand` may run zero times, as a loop
+    # may (ruling of 2026-10-08, #1070). Every other statement goes on to the next.
     return Reach.FALLS
 
 
@@ -89,7 +83,8 @@ def first_dead_statement(self, block: Block) -> Optional[tuple[Stmt, Stmt]]:
     statements = block.statements
     for ender, dead in zip(statements, statements[1:], strict=False):
         # Two statements from different `expand` copies, or a copy and its
-        # surroundings, were not written in sequence (#854).
+        # surroundings, were not written in sequence (#854). Only a copy of a binary
+        # library template takes this rule on an unrolled body (`is_template_copy`).
         if ender.expand_copies != dead.expand_copies:
             continue
         if ends_the_path(self, ender):
