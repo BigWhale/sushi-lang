@@ -281,8 +281,10 @@ library code. A fault that only an instance can show (such as E3 for the type
 argument of an opaque `E`) is still reported at the consumer, at the site that names the
 instance, with a note at the template. A library that an older compiler built did not
 get the author-side check. The compiler-version check refuses it at a later minor version
-([CE3503](../error-catalog.md#ce3503)); with `--ignore-compiler-version`, its templates are checked per copy, as
-before.
+([CE3503](../error-catalog.md#ce3503)). With `--ignore-compiler-version`, its templates are not checked at the
+consumer, and each copy takes the full check of a copy, as before #1070: a template fault
+shows in the copy for the type argument that has it, with the note that names the library,
+and a copy for a type argument with no fault compiles.
 
 ### 4.5 Why [CE5007](../error-catalog.md#ce5007) does not fire on the source path
 

@@ -1422,14 +1422,14 @@ both ends.
 solved from the arguments at each call:
 
 ```sushi
-extend i32 pick@(U)(U a, U b) U:
+extend i32 pick@(U)(nom U a, nom U b) U:
     if (self > 0):
         return a
     return b
 
 fn main() i32:
     let i32 plus = 1
-    println("{plus.pick(7, 9)}")     # U = i32, from the arguments
+    println("{plus.pick(nom 7, nom 9)}")     # U = i32, from the arguments
     return 0
 ```
 
@@ -1442,12 +1442,12 @@ solvable from the arguments — a bare-param lambda cannot be ([CE2063](error-ca
 struct Box@(T):
     T value
 
-extend Box@(T) unwrap() T:
-    return self.value
+extend Box@(T) unwrap(nom self) T:
+    return nom self.value   # a T moves, so the method takes the box: nom self
 
 fn main() i32:
     let Box@(i32) b = Box(42)
-    let i32 value = b.unwrap()  # Uses generic extension
+    let i32 value = b.unwrap()  # Uses generic extension; b is spent
     println("Unwrapped: {value}")
     return 0
 ```

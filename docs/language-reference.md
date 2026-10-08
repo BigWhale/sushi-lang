@@ -2554,14 +2554,14 @@ type of the position:
 struct Cage@(T):
     T[] items
 
-extend Cage@(T) static holding(T item) Cage@(T):
+extend Cage@(T) static holding(nom T item) Cage@(T):
     return Cage(from([item]))
 
 extend Cage@(T) static empty() Cage@(T):
     return Cage(from([]))
 
 fn main() i32:
-    println("{Cage.holding(9).items[0]}")           # 9: the argument makes T an i32
+    println("{Cage.holding(nom 9).items[0]}")       # 9: the argument makes T an i32
     let Cage@(i32) none = Cage.empty()              # T comes from the declared type
     println("{none.items.len()}")                   # 0
     return 0

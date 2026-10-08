@@ -620,9 +620,13 @@ mechanism covers them all. A copy's message names a concrete type (`expected i32
 string`), so the identity collapse below cannot see that it repeats the template's fault.
 
 Every instance carries the TEMPLATE's spans, and each copy of a CLEAN template is walked
-by the per-unit passes as an ordinary function for the facts that are only visible there
-(the per-instance remainder of `docs/design/checked-generics.md` section 8): a consume
-that is a plain copy for one type argument is a move for an owning one. What must not
+by the per-unit passes as an ordinary function, for the facts that are only visible there:
+the code of a consume, the drop set, the derived methods, the layout. The reporter keeps
+from such a copy only the per-instance remainder (`docs/design/checked-generics.md` section
+8.2): `enter_body` sees the template in `SymbolTables.checked_templates` and marks the body
+`instance_only`, and `_record` keeps an error of E3 ([CE2084](../error-catalog.md#ce2084)) or of a lambda parameter
+that owns ([CE2094](../error-catalog.md#ce2094)), turns every other error into the internal [CE0149](../error-catalog.md#ce0149), and drops a
+warning that repeats a warning of the template at the same code and span. What must not
 follow is the COUNT. A fault in the shared body is reported once, at one caret, and not
 once per instantiation.
 
@@ -642,8 +646,11 @@ It is not a general de-duplicator. A repeat anywhere else is a bug to be fixed w
 made, and stays visible.
 
 A lambda in a generic body lifts once per instance, so `LambdaLifter` carries
-`instance_of` onto what it lifts. The `borrow` pass is the one that walks the template as
-well as the copies, and `collapse_repeats` reduces those walks to one report per fault.
+`instance_of` onto what it lifts. The `borrow` pass checks a template on its check copy
+(see "The template check"), and its per-unit walk skips a written template that the
+`typecheck` pass checked (`BorrowChecker.run(..., skip=)` reads `checked_template_ids`). A
+written template that the driver did not check (a constraint that names no perk, a
+template of a consumed library unit) is walked as written, as before.
 
 ### The substitution walk is total
 
@@ -1110,7 +1117,12 @@ Each check:
    every writer that cuts or queues a program copy
    (`tests/unit/test_template_check_writes_no_copy.py`);
 5. runs `lift` on the check copy, into a scratch program;
-6. adds the template to `refused_templates` when the error count grew.
+6. runs the `borrow` pass on the check copy and its lifted functions
+   (`BorrowChecker.check_template_copy`, handed to the `TypeValidator` as
+   `borrow_check_copy`), over the overlay tables: an opaque `T` always moves (R5), so a
+   borrowed `T` that is returned, stored or passed on is [CE2411](../error-catalog.md#ce2411), at the template;
+7. adds the template to `checked_templates`, and to `refused_templates` when the error
+   count grew.
 
 Then it discards the check copy and the overlay. The statement rules ([CE0107](../error-catalog.md#ce0107),
 [CE0140](../error-catalog.md#ce0140), [CE2030](../error-catalog.md#ce2030)) run on the check copy too, with its stamps, and

@@ -1,7 +1,6 @@
 # Checked generics
 
-Status: ACCEPTED (#1070). Phases 0 to 4 are built; Phase 5 (the per-instance remainder
-of section 8) is pending. The rulings are David's: option (b) on 2026-09-28,
+Status: ACCEPTED and BUILT (#1070, Phases 0 to 5). The rulings are David's: option (b) on 2026-09-28,
 R1 to R9 on 2026-10-07, and the two pack rulings on 2026-10-08. Section 1 describes the
 language before this work.
 
@@ -19,6 +18,10 @@ language before this work.
 - An extension or a perk implementation on `Box@(T)` inherits the bounds that `Box`
   declares, and its target can add a bound: `extend List@(T: Clone) filter(...)`.
 - An element of a pack is opaque too, and the body of an `expand` is checked one time.
+- An opaque `T` always moves. A template that returns or stores a borrowed `T` is refused:
+  a pass-through generic takes `nom T`, or `T: Clone` and hands on `x.clone()`.
+- A copy of a clean template reports only what each instance decides (E3, the ownership
+  of a lambda parameter); everything else ran once, on the template.
 - A fault in a template is reported one time, at the template. A type argument that does
   not satisfy a constraint is an error at the call, never in the body.
 - **Breaking:** a template with an unconstrained `T` that calls `.hash()`, `.clone()`,
@@ -114,10 +117,14 @@ A template whose body is correct gives no diagnostic, also when nothing calls it
   Box@(T) with P`) and on every array (`extend T[] with P`), and a pack template.
 - **Every unit of the program**, the units of a library at its own `--lib` build
   included, in each library kind, and every bundled stdlib unit.
-- **Not a consumed library unit.** Its own `--lib` build checked it. A library that an
-  older compiler built did not get this check. The compiler-version check refuses it at a
-  later minor version ([CE3503](../error-catalog.md#ce3503)). With `--ignore-compiler-version`, its templates keep
-  the old, per-instance behaviour at the consumer.
+- **Not a consumed library unit.** Its own `--lib` build checked it. The consumer does
+  not check the template again, so each copy that the consumer cuts takes the full check
+  of a copy, not only the per-instance remainder of section 8. A library that an older
+  compiler built did not get the author-side check. The compiler-version check refuses it
+  at a later minor version ([CE3503](../error-catalog.md#ce3503)). With `--ignore-compiler-version`, its templates
+  are not checked at the consumer either: a template fault shows in a copy, for the type
+  argument that has it, with the note that names the library (the behaviour before this
+  work). A copy for a type argument that has no fault compiles.
 - **Not a template whose constraint names no perk.** [CE4003](../error-catalog.md#ce4003) is the one fault, and
   the body would read a promise that does not exist.
 
@@ -489,10 +496,10 @@ fn main() i32:
 error AppError:
     Bad
 
-fn unwrap_any@(E)(Result@(i32, E) r) i32 | AppError:
+fn unwrap_any@(E)(nom Result@(i32, E) r) i32 | AppError:
     return Result.Ok(r??)   # CE2511: an opaque E has no conversion
 
-fn pass_on@(E)(Result@(i32, E) r) i32 | E:
+fn pass_on@(E)(nom Result@(i32, E) r) i32 | E:
     return Result.Ok(r??)   # legal: the same E
 
 fn main() i32:
@@ -503,10 +510,61 @@ fn main() i32:
 
 ## 8. Ownership and the per-instance remainder (R5, R7)
 
-An opaque `T` may own a resource, so it always MOVES (R5). `owns_resource` answers True
-for an opaque `T`, and the ownership rules of the template follow from it: a `T` given
-away is spent, and a `T` that the body uses two times must be borrowed or cloned
-(`T: Clone`). The rule does not depend on the type argument, so it is judged once.
+### 8.1 An opaque `T` always moves (R5)
+
+An opaque `T` may own a resource, so it always MOVES. `owns_resource` answers True for an
+opaque `T`, and the `borrow` pass runs on the check copy of each template, with the
+overlay tables, so the ownership rules are judged once, at the template:
+
+- A template that returns, stores or passes on a BORROWED `T` is [CE2411](../error-catalog.md#ce2411). A parameter
+  is a borrow unless it says `nom`, and a field read, an element and a container get-out
+  are borrows. The help names the two fixes: take the value with `nom T` (and `nom self`
+  for a receiver), or add `Clone` and hand on `x.clone()`.
+- A `T` that the body uses after it moved is [CE2405](../error-catalog.md#ce2405), and the help names `Clone` and a
+  `.clone()` before the move.
+- A pass-through generic therefore takes `nom T`, or clones:
+
+<!-- docs-sweep: error CE2411 -->
+```sushi
+fn same@(T)(T x) T:
+    return x                # CE2411: a borrowed T cannot be returned
+
+fn main() i32:
+    return 0
+```
+
+```sushi
+fn keep@(T)(nom T x) T:
+    return x                # nom: the caller hands the value over
+
+fn copy_of@(T: Clone)(T x) T:
+    return x.clone()        # Clone: the caller keeps its value
+
+struct Box@(T):
+    T value
+
+extend Box@(T) take(nom self) T:
+    return nom self.value   # nom self: the method takes the box
+
+fn main() i32:
+    let string s = "towel"
+    let string a = copy_of(s)
+    let string b = keep(nom s)
+    let Box@(i32) box = Box(value: 42)
+    println("{a} {b} {box.take()}")          # towel towel 42
+    return 0
+```
+
+The parameter mode is part of a function type, so the two forms give two types:
+`keep@(i32)` is `fn(nom i32) -> i32` and `copy_of@(i32)` is `fn(i32) -> i32`. A generic
+function that is used as a value where `fn(i32) -> i32` is expected takes the `Clone` form.
+
+An element of a pack that an `expand` binds follows the same rule: it is a borrow of the
+value pack, so the body can read it, and it hands on `x.clone()` with `...Ts: Clone`
+(`keep(nom x)` is [CE2411](../error-catalog.md#ce2411)). A `break` or a `continue` in an `expand` body goes to the
+enclosing loop.
+
+### 8.2 The per-instance remainder (R7)
 
 Some facts exist only for a concrete type. They stay per instance (R7):
 
@@ -517,8 +575,22 @@ Some facts exist only for a concrete type. They stay per instance (R7):
 | the derived method of the concrete type | `hash`, `clone`, `Eq`, `Ord` and `Display` of `Point` are the methods of `Point` |
 | the layout | each instance has its own LLVM type |
 | E3 | section 7 |
+| a lambda parameter that owns for this type argument ([CE2094](../error-catalog.md#ce2094)) | `\|T y\|` owns when `T` is a `List@(i32)`; `\|List@(T) y\|` owns for every `T` and is refused at the template |
 
-Every other rule runs once, on the template.
+Every other rule runs once, on the template. A copy of a clean, checked template reports
+only the remainder:
+
+- an ERROR of the copy is E3 ([CE2084](../error-catalog.md#ce2084)) or the lambda-parameter rule ([CE2094](../error-catalog.md#ce2094),
+  through `owns_resource(..., opaque_owns=False)` at the template). Any other error of such
+  a copy is the internal error [CE0149](../error-catalog.md#ce0149): the template check missed a fault, and the
+  message keeps the code and the text that the copy reported;
+- a WARNING of the copy is dropped only when it repeats a warning of the template at the
+  same code and span. Another warning stays: for example [CW2001](../error-catalog.md#cw2001), a discarded
+  `Result`, where `T` is a `Result` in this copy.
+
+The copies cut after the per-unit loop (generic-target extension copies, array copies and
+late function instances) go through one loop, `_check_copies`
+(`semantic_analyzer.py`).
 
 ---
 
@@ -534,7 +606,9 @@ Every other rule runs once, on the template.
   fault.
 - **A type argument that does not satisfy a constraint** is [CE4006](../error-catalog.md#ce4006) (or [CE2090](../error-catalog.md#ce2090) for a
   pack) at the call. The body of the template reports nothing for it.
-- **A clean template** keeps the per-instance remainder of its copies (section 8).
+- **A clean template** gives its copies only the per-instance remainder (section 8.2).
+  Any other error of such a copy is [CE0149](../error-catalog.md#ce0149), an internal error, and no fault of the
+  template is reported a second time from a copy.
 
 The mute can hide a per-instance fault of a copy until the template is fixed. That costs
 the user one more build, and no fault is lost.
@@ -608,7 +682,8 @@ layout for it.
 | [CE4019](../error-catalog.md#ce4019) | `perk.py` | `Drop` with a bound in its target |
 | [CE2124](../error-catalog.md#ce2124) | `types.py` | a target bound on a name that is a type |
 | [CE6110](../error-catalog.md#ce6110) | `syntax.py` | a bound outside the top level of an `extend` target |
-| [CE0148](../error-catalog.md#ce0148) | `internal.py` | an opaque parameter reached a program table (internal) |
+| [CE0148](../error-catalog.md#ce0148) | `internal.py` | an opaque parameter reached a program table (internal, the end-of-analysis backstop) |
+| [CE0149](../error-catalog.md#ce0149) | `internal.py` | a copy of a clean, checked template reports an error outside the per-instance remainder (internal) |
 
 ### 11.2 Reused codes
 
@@ -622,6 +697,9 @@ layout for it.
 | [CE2054](../error-catalog.md#ce2054), [CE2055](../error-catalog.md#ce2055) | a `HashMap` key with no `Hashable`, no `Eq` |
 | [CE2106](../error-catalog.md#ce2106) | a field of a type parameter |
 | [CE2014](../error-catalog.md#ce2014) | a cast of or to a type parameter |
+| [CE2411](../error-catalog.md#ce2411), [CE2405](../error-catalog.md#ce2405) | a borrowed `T` returned, stored or passed on; a `T` used after it moved (section 8.1) |
+| [CE2094](../error-catalog.md#ce2094) | a lambda parameter that owns for every type argument, at the template; for one type argument, in its copy (8.2) |
+| [CE2084](../error-catalog.md#ce2084) | E3 of an opaque `E`, in the copy, with a note at the template (section 7) |
 | [CE2003](../error-catalog.md#ce2003), [CE2006](../error-catalog.md#ce2006), [CE2009](../error-catalog.md#ce2009), [CE2002](../error-catalog.md#ce2002) | a type parameter where a concrete type is expected: a `return`, an argument, an argument count, a `let` of a concrete type (`let i32 y = x` is CE2002, "cannot assign T to i32", with a note at the `let`) |
 | [CE4006](../error-catalog.md#ce4006) | entailment (section 4), an added target bound at the call (5.3) |
 | [CE4015](../error-catalog.md#ce4015) | two constraints give one method two homes |
@@ -633,7 +711,7 @@ layout for it.
 The refusals of a PROMISE carry a note at the declaration of the type parameter (or at
 the binder of an `expand`), and a help that names the constraint to add where one exists:
 [CE2008](../error-catalog.md#ce2008), [CE2514](../error-catalog.md#ce2514), [CE2035](../error-catalog.md#ce2035), [CE2115](../error-catalog.md#ce2115), [CE2100](../error-catalog.md#ce2100), [CE2054](../error-catalog.md#ce2054), [CE2055](../error-catalog.md#ce2055), [CE2106](../error-catalog.md#ce2106), [CE2014](../error-catalog.md#ce2014),
-[CE2518](../error-catalog.md#ce2518) and [CE4018](../error-catalog.md#ce4018), and [CE4006](../error-catalog.md#ce4006) and [CE2511](../error-catalog.md#ce2511) in a template. The ordinary type
+[CE2518](../error-catalog.md#ce2518) and [CE4018](../error-catalog.md#ce4018), and [CE4006](../error-catalog.md#ce4006), [CE2511](../error-catalog.md#ce2511), [CE2411](../error-catalog.md#ce2411) and [CE2405](../error-catalog.md#ce2405) in a template. The ordinary type
 mismatches (CE2002, CE2003, CE2006, CE2009) name `T` in the message and carry no note at
 it.
 
@@ -649,7 +727,7 @@ it.
 - **A user cannot implement `Clone`** ([CE4017](../error-catalog.md#ce4017)). Allowing it later breaks no program.
 - **A consumed library is not checked again.** A library that an older compiler built,
   and that `--ignore-compiler-version` lets in, keeps the per-instance behaviour at the
-  consumer (2.3).
+  consumer: its template faults show in a copy, per type argument (2.3).
 - **A pack on a struct or an enum** (`struct S@(...Ts)`) is outside this design.
 - **A `let` of the binder name DIRECTLY in an `expand` body gives no [CW1002](../error-catalog.md#cw1002).** In a
   nested block it does (6.4). This is a known fault that existed before this work, and
@@ -668,3 +746,4 @@ it.
 | `extend Box@(T) show() string: return "{self.value}"` | compiles | [CE2035](../error-catalog.md#ce2035); write `extend Box@(T: Display)` |
 | a template that nothing calls, with a fault | compiles | the fault, at the template |
 | a `--lib` build of such a template | compiles | the fault, at the author's build |
+| `fn same@(T)(T x) T: return x` | compiles; [CE2411](../error-catalog.md#ce2411) in the copy for an owning `T` | [CE2411](../error-catalog.md#ce2411) at the template; write `nom T x`, or `T: Clone` and `x.clone()` |

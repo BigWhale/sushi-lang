@@ -278,11 +278,11 @@ struct Pair@(A, B):
     A left
     B right
 
-fn first@(T)(T[] xs) T:
-    return xs[0]
+fn first@(T: Clone)(T[] xs) T:
+    return xs[0].clone()
 
-fn left_of@(A, B)(peek Pair@(A, B) p) A:
-    return p.left
+fn left_of@(A: Clone, B)(peek Pair@(A, B) p) A:
+    return p.left.clone()
 
 fn apply@(T, U)(T x, fn(T) -> U f) U:
     return f(x)
@@ -292,10 +292,10 @@ fn singleton@(T)(nom T x) List@(T):
     l.push(x)
     return l
 
-fn first_of@(T)(List@(T) l) T | StdError:
-    return Result.Ok(l.get(0).or_err(nom StdError.Error)??)
+fn first_of@(T: Clone)(List@(T) l) T | StdError:
+    return Result.Ok(l.get(0).or_err(nom StdError.Error)??.clone())
 
-fn round_trip@(T)(nom T x) T | StdError:
+fn round_trip@(T: Clone)(nom T x) T | StdError:
     return Result.Ok(first_of(singleton(nom x))??)
 
 fn main() i32:
@@ -354,8 +354,8 @@ argument to a function-typed parameter, a rebind, a `return`, a field or a paylo
 expected type selects the instantiation:
 
 ```sushi
-fn same@(T)(T x) T:
-    return x
+fn same@(T: Clone)(T x) T:
+    return x.clone()
 
 fn apply(fn(i32) -> i32 f, i32 x) i32:
     return f(x)
@@ -578,8 +578,8 @@ enum Opt@(T):
     Has(T)
     Nope
 
-extend Box@(T) unwrap() T:
-    return self.value
+extend Box@(T) unwrap(nom self) T:
+    return nom self.value
 
 extend Box@(T: Display) describe() string:
     return "Box holding {self.value}"
@@ -594,8 +594,8 @@ extend List@(T) doubled_len() i32:
 
 fn main() i32:
     let Box@(i32) b = Box(value: 42)
-    println("Unwrapped: {b.unwrap()}")
     println(b.describe())
+    println("Unwrapped: {b.unwrap()}")      # unwrap takes the box: nom self
 
     let Opt@(string) o = Opt.Has("x")
     let List@(i32) l = List.new()
@@ -1010,9 +1010,13 @@ The rules of the check:
   reports nothing for it.
 - The check runs in every build of the unit that declares the template, a `--lib` build
   included. A library author sees the faults of a template that the library does not call.
+- A `T` always moves, because a type argument can own. A body that returns, stores or
+  passes on a borrowed `T` is [`CE2411`](error-catalog.md#ce2411): take the value with `nom T` (and `nom self`
+  for a field of the receiver), or add `Clone` and hand on `x.clone()`.
 - Some facts exist only for a concrete type: whether a value copies or moves, its `drop()`,
-  its derived methods, its layout, and whether the `E` of a `Result@(T, E)` is an error
-  type. The copies keep those.
+  its derived methods, its layout, whether the `E` of a `Result@(T, E)` is an error type,
+  and whether a lambda parameter of type `T` owns. The copies keep those, and report only
+  those.
 
 The design record is [Checked generics](design/checked-generics.md).
 

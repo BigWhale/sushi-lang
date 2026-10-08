@@ -190,7 +190,10 @@ deriving it in several.
   parameter in any of those positions is [CE2411](../error-catalog.md#ce2411), and the escape is `.clone()`.
 - **Generic parameters are uniform.** `fn f@(T)(T x)` borrows for every instantiation. A
   pass-through such as `fn identity@(T)(T x) T` needs `nom T x`. There is no per-
-  instantiation mode, because the mode is declared and not inferred.
+  instantiation mode, because the mode is declared and not inferred. The rule is judged
+  once, on the template (#1070, `docs/design/checked-generics.md` section 8.1): an opaque
+  `T` always moves, so `return x` on a borrowed `T` is [CE2411](../error-catalog.md#ce2411) also when every call
+  uses an `i32`. The escapes are `nom T x`, or `@(T: Clone)` and `x.clone()`.
 - **A receiver carries a mode too, and `nom self` is one of them.** `peek self` and `poke self` cross by pointer; an unmarked receiver borrows;
   `nom self` CONSUMES, so the method owns what it was called on and the caller's binding
   is spent. `semantics/param_modes.py:receiver_mode` is the one reading of the marker,

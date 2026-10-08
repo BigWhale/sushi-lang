@@ -575,13 +575,13 @@ extend Score with Ord:
             return 1
         return 0
 
-fn find_max@(T: Ord)(T a, T b) T:
+fn find_max@(T: Ord)(nom T a, nom T b) T:
     if (a >= b):
         return a
     return b
 
 fn main() i32:
-    println(find_max(Score(3), Score(9)).value)    # 9
+    println(find_max(nom Score(3), nom Score(9)).value)    # 9
     return 0
 ```
 

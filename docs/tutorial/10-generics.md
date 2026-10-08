@@ -174,10 +174,13 @@ second of a peek Pair@(A, B): 42
 apply with fn(T) -> U: 42
 ```
 
-- `head@(T)(T[] xs)` gets `T = i32` from the element type of an `i32[]`.
-- `last_of_three@(T)(T[3] xs)` gets `T = f64` from a fixed array.
-- `second_of@(A, B)(peek Pair@(A, B) p)` gets two type parameters from one borrowed
+- `head@(T: Clone)(T[] xs)` gets `T = i32` from the element type of an `i32[]`.
+- `last_of_three@(T: Clone)(T[3] xs)` gets `T = f64` from a fixed array.
+- `second_of@(A, B: Clone)(peek Pair@(A, B) p)` gets two type parameters from one borrowed
   `Pair@(string, i32)`.
+- An element of `xs` and a field of `p` are borrows, and a `T` can own, so each function
+  returns a `.clone()`. The clone needs the constraint `Clone`. Without it, the return is
+  [CE2411](../error-catalog.md#ce2411) at the template, and the help names `nom` or `Clone`.
 - `apply@(T, U)(T x, fn(T) -> U f)` gets `T` from `21`, and `U` from the return type of the
   lambda `|i32 x| x * 2`.
 
@@ -307,10 +310,12 @@ an argument gives the type too: 12
 first 3, 0 more
 ```
 
-- `let Cage@(i32) c = Cage.holding(9)` gets `T` from the argument and from the declaration.
-- `weight(Cage.holding(12))` needs no declaration. The parameter type `Cage@(i32)` of
+- `let Cage@(i32) c = Cage.holding(nom 9)` gets `T` from the argument and from the
+  declaration. `holding` keeps its argument in the cage, so it takes it with `nom T`: a `T`
+  can own, and a body cannot store a borrowed `T`.
+- `weight(Cage.holding(nom 12))` needs no declaration. The parameter type `Cage@(i32)` of
   `weight` gives `T`.
-- `Pair.of_first(3)` gets `A = i32` from its argument. No argument contains `B`, so the
+- `Pair.of_first(nom 3)` gets `A = i32` from its argument. No argument contains `B`, so the
   declaration `Pair@(i32, string)` gives `B = string`.
 
 When no argument and no position gives a type parameter, for example

@@ -117,7 +117,8 @@ The target of an extension can also be an array type or a generic type:
 
 - `extend i32[] total()` adds a method to one array type, `i32[]`.
 - `extend T[] count()` adds a method to every dynamic array. `T` is the element type.
-- `extend Box@(T) get()` adds a method to every `Box`. A concrete argument, as in
+- `extend Box@(T: Clone) get()` adds a method to every `Box` whose `T` has `Clone`: it
+  returns a clone of the value, because a field read is a borrow. A concrete argument, as in
   `extend Box@(i32) ...`, adds the method to `Box@(i32)` only.
 
 A method can also have its **own** type parameters, after its name: `paired@(U)`. The

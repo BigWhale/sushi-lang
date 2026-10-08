@@ -138,8 +138,17 @@ All notable changes to Sushi Lang will be documented in this file.
   type-parameter error type `E` into another error type is `CE2511`: a template cannot
   name a conversion for it. A `--lib` build checks every template of the library, so the
   author sees the fault and not the consumer. Whether a value moves or copies, its
-  `drop()`, its derived methods and E3 stay facts of each instance. The design is
+  `drop()`, its derived methods, E3 and the ownership of a lambda parameter of type `T`
+  stay facts of each instance, and a copy of a clean template reports only those (any
+  other error of a copy is the internal `CE0149`). The design is
   `docs/design/checked-generics.md`.
+- **Breaking: a value of a type parameter always moves.** A type argument can own, so the
+  borrow check of the template treats a `T` as an owning value. A generic that returns,
+  stores or passes on a BORROWED `T` (a plain parameter, a field of `self`, an element) is
+  `CE2411` at the template, and a `T` used after it moved is `CE2405`, also when every call
+  uses an `i32`. A pass-through generic takes `nom T` (and the call writes `nom`), a method
+  that gives away a field of its receiver takes `nom self`, or the template adds `Clone`
+  and hands on `x.clone()`. The help names these fixes.
 - **Breaking: an `expand` may run zero times.** A `return` inside an `expand` does not end
   the path, as a `return` inside a `foreach` does not, so a pack template that returns only
   inside its `expand` is `CE0107` at the template. The copy for an empty pack decided it

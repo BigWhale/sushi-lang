@@ -2,15 +2,15 @@ struct Pair@(A, B):
     A first
     B second
 
-fn head@(T)(T[] xs) T | StdError:
+fn head@(T: Clone)(T[] xs) T | StdError:
     let T v = xs.get(0).or_err(nom StdError.Error)??
-    return Result.Ok(v)
+    return Result.Ok(v.clone())
 
-fn last_of_three@(T)(T[3] xs) T:
-    return xs[2]
+fn last_of_three@(T: Clone)(T[3] xs) T:
+    return xs[2].clone()
 
-fn second_of@(A, B)(peek Pair@(A, B) p) B:
-    return p.second
+fn second_of@(A, B: Clone)(peek Pair@(A, B) p) B:
+    return p.second.clone()
 
 fn apply@(T, U)(T x, fn(T) -> U f) U:
     return f(x)

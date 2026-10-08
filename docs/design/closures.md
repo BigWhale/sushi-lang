@@ -535,8 +535,8 @@ Referencing a generic function as a value is allowed **when an explicit expected
 is present**:
 
 ```sushi
-fn identity@(T)(T x) T:
-    return x
+fn identity@(T: Clone)(T x) T:
+    return x.clone()
 
 fn run() i32:
     let fn(i32) -> i32 g = identity   # the annotation drives the instantiation identity@(i32)
@@ -562,8 +562,8 @@ local first:
 ```sushi
 use <collections/iter>
 
-fn identity@(T)(T x) T:
-    return x
+fn identity@(T: Clone)(T x) T:
+    return x.clone()
 
 fn run() i32:
     let fn(i32) -> i32 id = identity   # fixes the instantiation
@@ -696,8 +696,8 @@ argument, a rebind, a `return`, a field, a payload, a `.realise()` default -- so
 answer never depends on another call in the program:
 
 ```sushi
-fn identity@(T)(T x) T:
-    return x
+fn identity@(T: Clone)(T x) T:
+    return x.clone()
 
 fn take(fn(i32) -> i32 f) i32:
     return f(1)

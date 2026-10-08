@@ -1,8 +1,8 @@
 struct Box@(T):
     T value
 
-extend Box@(T) get() T:
-    return self.value
+extend Box@(T: Clone) get() T:
+    return self.value.clone()
 
 extend i32[] total() i32:
     let i32 sum = 0
