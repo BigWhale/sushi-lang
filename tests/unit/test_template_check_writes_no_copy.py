@@ -15,7 +15,7 @@ import pytest
 
 from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.passes.types.calls import generics, methods, statics
-from sushi_lang.semantics.passes.types import utils
+from sushi_lang.semantics.passes.types import templates, utils
 from sushi_lang.semantics.passes.types.templates import TemplateValidator
 
 # (function, the write it guards, the question it must ask before that write)
@@ -46,3 +46,20 @@ def test_the_template_validator_answers_every_question():
     assert TemplateValidator.queues_late_copies is False
     assert TemplateValidator.requests_late_instances is False
     assert TypeValidator.in_template_check is False
+
+
+def test_the_template_rung_writes_nothing():
+    """The last rung of the method ladder answers a signature and cuts no copy (#1070)."""
+    source = inspect.getsource(methods._answer_from_template)
+    for write in ("add_method", "_queue_extension_instantiation", "_add_late_static_copy"):
+        assert write not in source, f"_answer_from_template writes '{write}'"
+
+
+ENTRY_POINTS = [templates.check_function_template, templates.check_extension_template]
+
+
+@pytest.mark.parametrize("entry", ENTRY_POINTS, ids=[e.__name__ for e in ENTRY_POINTS])
+def test_each_entry_point_checks_with_the_template_validator(entry):
+    """Each entry point of the driver checks its copy with the one `TemplateValidator`."""
+    assert "_checker(" in inspect.getsource(entry)
+    assert "TemplateValidator(" in inspect.getsource(templates._checker)

@@ -1,0 +1,16 @@
+# A target bound promises `Clone` to the body of an extension template (#1070, R1).
+# EXPECT_STDOUT_EXACT: "towel\n"
+# EXPECT_NO_LEAKS: true
+
+struct Box@(T):
+    T value
+
+extend Box@(T: Clone) twice() Box@(T):
+    return Box(self.value.clone())
+
+fn main() i32:
+    let string w = "tow"
+    let Box@(string) b = Box("{w}el")
+    let Box@(string) c = b.twice()
+    println(c.value)
+    return 0

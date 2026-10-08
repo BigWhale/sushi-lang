@@ -1,0 +1,15 @@
+# The key rule of `HashMap@(K, V)` is a bound that `HashMap` declares (#1070, R1): an
+# extension on it inherits `K: Hashable + Eq`.
+# EXPECT_STDOUT_EXACT: "true false\n"
+# EXPECT_NO_LEAKS: true
+use <collections/hashmap>
+
+extend HashMap@(K, V) holds(K key) bool:
+    return self.contains_key(key)
+
+fn main() i32:
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(1, "one")
+    println("{m.holds(1)} {m.holds(2)}")
+    m.free()
+    return 0

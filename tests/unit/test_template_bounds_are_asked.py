@@ -52,6 +52,8 @@ CUT_WITHOUT_ASKING = {
         "cuts what a call queued, and every queue writer asked",
     ("semantics/passes/types/calls/statics.py", "_add_late_static_copy"):
         "its one caller, _interned_static_target, asked",
+    ("semantics/passes/types/templates.py", "check_extension_template"):
+        "a check copy over opaque parameters, whose receiver bounds are its promises",
 }
 
 

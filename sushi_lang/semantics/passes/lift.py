@@ -70,12 +70,15 @@ class LambdaLifter:
         # lifted into the copy's home unit in _check_monomorphized_extensions.
         for ext in list(self.program.extensions):
             self._owner_scope_unit = getattr(ext, "scope_unit", None)
+            self._owner_template_id = ext.template_id
             self._walk(ext.body)
         for impl in list(self.program.perk_impls):
             for method in impl.methods:
                 self._owner_scope_unit = getattr(method, "scope_unit", None)
+                self._owner_template_id = method.template_id
                 self._walk(method.body)
         self._owner_scope_unit = None
+        self._owner_template_id = None
 
     def _walk_function(self, fn: FuncDef) -> None:
         """Lift the lambdas of one function body, as the owner of what they become."""
@@ -101,7 +104,8 @@ class LambdaLifter:
         self._owner_scope_unit = None
         return self._lifted[before:]
 
-    def lift_body(self, body, scope_unit: Optional[str] = None) -> List[FuncDef]:
+    def lift_body(self, body, scope_unit: Optional[str] = None,
+                  template_id=None) -> List[FuncDef]:
         """Lift one body and answer the FuncDefs this call produced (#399).
 
         The per-instantiation extension copies live in no unit AST, so the
@@ -112,10 +116,11 @@ class LambdaLifter:
         self._owner_is_library = False
         self._owner_origin = None
         self._owner_instance_of = None
-        self._owner_template_id = None
+        self._owner_template_id = template_id
         self._owner_scope_unit = scope_unit
         self._walk(body)
         self._owner_scope_unit = None
+        self._owner_template_id = None
         return self._lifted[before:]
 
     def lift_perk_impl(self, impl) -> List[FuncDef]:
@@ -123,7 +128,8 @@ class LambdaLifter:
         lifted: List[FuncDef] = []
         for method in impl.methods:
             lifted.extend(self.lift_body(method.body,
-                                         scope_unit=getattr(method, "scope_unit", None)))
+                                         scope_unit=getattr(method, "scope_unit", None),
+                                         template_id=method.template_id))
         return lifted
 
     def _walk(self, node) -> None:

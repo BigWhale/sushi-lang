@@ -152,9 +152,10 @@ class TypeValidator:
         for const in program.constants:
             validate_constant(self, const)
 
-        # A function template is checked one time, on a check copy, where it is written
-        # (#1070). The copy reads the statement rules too, with the stamps it gets.
-        from .templates import check_function_template
+        # A template is checked one time, on a check copy, where it is written (#1070):
+        # a function template and an extension template. The copy reads the statement
+        # rules too, with the stamps it gets.
+        from .templates import check_extension_template, check_function_template
         checked: set[int] = set()
         for func in program.functions:
             if func.type_params:
@@ -162,20 +163,22 @@ class TypeValidator:
                     checked.add(id(func))
                 continue
             self._validate_function(func)
+        for template in program.generic_extensions:
+            if self.checks_templates and check_extension_template(self, template):
+                checked.add(id(template))
 
-        # A template the loop above did not check, a generic extension and a
-        # generic-target perk implementation: their statement rules that need no type
+        from .perks import validate_template_header
+        for impl in program.generic_perk_impls:
+            self.reporter.leave_body()
+            validate_template_header(self, impl)
+
+        # A template the loops above did not check: its statement rules that need no type
         # are read once, on the body as written.
         from .signatures import check_template_statements
         check_template_statements(self, program, checked)
 
         for ext in program.extensions:
             self._validate_extension_method(ext)
-
-        from .perks import validate_template_header
-        for impl in program.generic_perk_impls:
-            self.reporter.leave_body()
-            validate_template_header(self, impl)
 
         for impl in program.perk_impls:
             # The header is read as written, never as a copy of a body (#800).

@@ -1,0 +1,13 @@
+# An extension inherits only the bounds its base declares (#1070, R1): `Box@(T)`
+# declares none, so `T` promises no `hash()`.
+# EXPECT_ERROR_CODES_EXACT: CE2008
+
+struct Box@(T):
+    T value
+
+extend Box@(T) h() u64:
+    return self.value.hash()
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

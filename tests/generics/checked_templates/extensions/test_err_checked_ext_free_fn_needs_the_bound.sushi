@@ -1,0 +1,18 @@
+# A function template that calls a bounded extension passes its type parameter on, and
+# the parameter must promise the bound (#1070). The function is never called.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+
+extend List@(T: Clone) dup_first() List@(T):
+    let List@(T) out = List.new()
+    foreach(x in self.iter()):
+        out.push(x.clone())
+        out.push(x.clone())
+        return out
+    return out
+
+fn dup_all@(T)(List@(T) xs) List@(T):
+    return xs.dup_first()
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -83,6 +83,16 @@ def parse_hashmap_types(hashmap_type: Any, tables: Any,
     return args[0], args[1]
 
 
+# The base name `HashMap` is registered under.
+HASHMAP_BASE = "HashMap"
+
+# The key rule of `HashMap@(K, V)` as a bound on `K` (#1070, R1): an extension or a perk
+# implementation on `HashMap@(K, V)` inherits it, as it inherits the constraints of a
+# user generic. It is not put on the registered `K`: the monomorphizer would judge it at
+# each instance beside the key rule below, and one fault would have two diagnostics.
+KEY_CONTRACT = ("Hashable", "Eq")
+
+
 def reject_unusable_key(hashmap_type: StructType, validator: Any, span: Any) -> None:
     """CE2058 / CE2054 / CE2055: the key rule a written HashMap type breaks (#773).
 
@@ -206,7 +216,7 @@ def hashmap_generic_struct() -> 'GenericStructType':
     from sushi_lang.semantics.typesys import DynamicArrayType
 
     return GenericStructType(
-        name="HashMap",
+        name=HASHMAP_BASE,
         type_params=(TypeParameter(name="K"), TypeParameter(name="V")),
         fields=(
             ("buckets", DynamicArrayType(base_type=BuiltinType.I32)),

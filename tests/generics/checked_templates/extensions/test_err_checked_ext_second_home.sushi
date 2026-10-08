@@ -1,0 +1,19 @@
+# The implied bound and the added bound of one receiver parameter must not give one
+# method two homes (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4015
+
+perk A:
+    fn name() string
+
+perk B:
+    fn name() string
+
+struct Box@(T: A):
+    T value
+
+extend Box@(T: B) f() i32:
+    return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

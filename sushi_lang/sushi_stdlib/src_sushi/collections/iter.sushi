@@ -27,7 +27,7 @@ Keeps the elements for which `pred` answers true.
 - Parameter pred: The predicate.
 - Returns: A new list of clones of the kept elements, in order.
 :##
-public fn filter@(T)(List@(T) xs, fn(T) -> bool pred) List@(T):
+public fn filter@(T: Clone)(List@(T) xs, fn(T) -> bool pred) List@(T):
     return xs.filter(pred)
 
 ##:
@@ -38,7 +38,7 @@ Reduces the list from left to right, and gives the accumulator to `f` at each st
 - Parameter f: The step.
 - Returns: The last value of the accumulator.
 :##
-public fn fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) U:
+public fn fold@(T, U: Clone)(List@(T) xs, U init, fn(U, T) -> U f) U:
     return xs.fold(init, f)
 
 ##:
@@ -71,7 +71,7 @@ Keeps the elements of the list for which `pred` answers true.
 - Parameter pred: The predicate.
 - Returns: A new list of clones of the kept elements, in order.
 :##
-extend List@(T) filter(fn(T) -> bool pred) List@(T):
+extend List@(T: Clone) filter(fn(T) -> bool pred) List@(T):
     let List@(T) out = List.new()
     foreach(x in self.iter()):
         if (pred(x)):
@@ -85,7 +85,7 @@ Reduces the list left to right, threading the accumulator through `f`.
 - Parameter f: The step.
 - Returns: The final accumulator value.
 :##
-extend List@(T) fold@(U)(U init, fn(U, T) -> U f) U:
+extend List@(T) fold@(U: Clone)(U init, fn(U, T) -> U f) U:
     let U acc = init.clone()
     foreach(x in self.iter()):
         acc := f(acc, x)
@@ -109,7 +109,7 @@ Keeps the elements of the array for which `pred` answers true.
 - Parameter pred: The predicate.
 - Returns: A new list of clones of the kept elements, in order.
 :##
-extend T[] filter(fn(T) -> bool pred) List@(T):
+extend (T: Clone)[] filter(fn(T) -> bool pred) List@(T):
     let List@(T) out = List.new()
     foreach(x in self.iter()):
         if (pred(x)):
@@ -123,7 +123,7 @@ Reduces the array left to right, threading the accumulator through `f`.
 - Parameter f: The step.
 - Returns: The final accumulator value.
 :##
-extend T[] fold@(U)(U init, fn(U, T) -> U f) U:
+extend T[] fold@(U: Clone)(U init, fn(U, T) -> U f) U:
     let U acc = init.clone()
     foreach(x in self.iter()):
         acc := f(acc, x)
@@ -144,7 +144,7 @@ Gives each element of the list with its index, in a new list.
       println("{i}: {name}")
   ```
 :##
-public fn enumerate@(T)(List@(T) xs) List@((i32, T)):
+public fn enumerate@(T: Clone)(List@(T) xs) List@((i32, T)):
     return xs.enumerate()
 
 ##:
@@ -166,7 +166,7 @@ Pairs the elements of two lists in order, and stops at the end of the shorter li
       println("{name} is {age}")
   ```
 :##
-public fn zip@(T, U)(List@(T) xs, List@(U) ys) List@((T, U)):
+public fn zip@(T: Clone, U: Clone)(List@(T) xs, List@(U) ys) List@((T, U)):
     return xs.zip(ys)
 
 ##:
@@ -184,7 +184,7 @@ Divides the list in two: the elements for which `pred` answers true, then the ot
   println("{even.len()} even, {odd.len()} odd")
   ```
 :##
-public fn partition@(T)(List@(T) xs, fn(T) -> bool pred) (List@(T), List@(T)):
+public fn partition@(T: Clone)(List@(T) xs, fn(T) -> bool pred) (List@(T), List@(T)):
     return xs.partition(pred)
 
 ##:
@@ -225,7 +225,7 @@ Gives each element of the list with its index, in a new list.
       println("{i}: {name}")
   ```
 :##
-extend List@(T) enumerate() List@((i32, T)):
+extend List@(T: Clone) enumerate() List@((i32, T)):
     let List@((i32, T)) out = List.new()
     let i32 i = 0
     foreach(x in self.iter()):
@@ -249,7 +249,7 @@ end of the shorter list.
       println("{name} is {age}")
   ```
 :##
-extend List@(T) zip@(U)(List@(U) other) List@((T, U)):
+extend List@(T: Clone) zip@(U: Clone)(List@(U) other) List@((T, U)):
     let List@((T, U)) out = List.new()
     let i32 n = self.len()
     if (other.len() < n):
@@ -274,7 +274,7 @@ Divides the list in two: the elements for which `pred` answers true, then the ot
   println("{even.len()} even, {odd.len()} odd")
   ```
 :##
-extend List@(T) partition(fn(T) -> bool pred) (List@(T), List@(T)):
+extend List@(T: Clone) partition(fn(T) -> bool pred) (List@(T), List@(T)):
     let List@(T) kept = List.new()
     let List@(T) rest = List.new()
     foreach(x in self.iter()):
@@ -297,7 +297,7 @@ Gives each element of the array with its index, in a new list.
       println("{i}: {name}")
   ```
 :##
-extend T[] enumerate() List@((i32, T)):
+extend (T: Clone)[] enumerate() List@((i32, T)):
     let List@((i32, T)) out = List.new()
     let i32 i = 0
     foreach(x in self.iter()):
@@ -319,7 +319,7 @@ the end of the shorter array.
       println("{name} is {age}")
   ```
 :##
-extend T[] zip@(U)(U[] other) List@((T, U)):
+extend (T: Clone)[] zip@(U: Clone)(U[] other) List@((T, U)):
     let List@((T, U)) out = List.new()
     let i32 n = self.len()
     if (other.len() < n):
@@ -340,7 +340,7 @@ Divides the array in two: the elements for which `pred` answers true, then the o
   println("{even.len()} even, {odd.len()} odd")
   ```
 :##
-extend T[] partition(fn(T) -> bool pred) (List@(T), List@(T)):
+extend (T: Clone)[] partition(fn(T) -> bool pred) (List@(T), List@(T)):
     let List@(T) kept = List.new()
     let List@(T) rest = List.new()
     foreach(x in self.iter()):

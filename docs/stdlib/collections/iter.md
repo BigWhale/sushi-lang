@@ -40,7 +40,8 @@ program-wide (see `docs/design/ufcs-combinators.md`).
 
 **Element types**: every combinator, in both forms, takes an owning element type
 (`List@(string)`). `filter` clones each kept element, and `fold` clones `init` once, so
-the accumulator can also be an owning type (`string`).
+those two state the bound `Clone` on the type they clone (#1070): a `string` is `Clone`,
+a handle such as a `File` is not.
 
 **Function arguments**: pass a **typed-param lambda** (`|i32 x| ...`) or a plain
 **function reference**. A bare-param lambda (`|x| ...`) cannot be inferred against a
@@ -74,13 +75,14 @@ fn main() i32:
 
 ### `xs.filter(fn(T) -> bool pred) -> List@(T)`
 
-On `List@(T)` and on `T[]`. Keeps the elements for which `pred` answers true, cloning
-each kept element — so an owning element type works.
+On `List@(T: Clone)` and on `(T: Clone)[]`. Keeps the elements for which `pred` answers
+true, cloning each kept element. The element type must be `Clone`: a value that holds no
+resource. A list of handles has no `filter`, and a call on one is CE4006.
 
-### `xs.fold@(U)(U init, fn(U, T) -> U f) -> U`
+### `xs.fold@(U: Clone)(U init, fn(U, T) -> U f) -> U`
 
 On `List@(T)` and on `T[]`. Reduces left to right, threading the accumulator through
-`f`. `init` is cloned once, so the accumulator can be an owning type.
+`f`. `init` is cloned once, so the accumulator type must be `Clone`.
 
 ### Chaining
 
@@ -108,7 +110,7 @@ fn main() i32:
     return 0
 ```
 
-### `filter@(T)(List@(T) xs, fn(T) -> bool pred) -> List@(T)`
+### `filter@(T: Clone)(List@(T) xs, fn(T) -> bool pred) -> List@(T)`
 
 Keep the elements for which `pred` returns `true`. Each kept element is a clone.
 
@@ -127,7 +129,7 @@ fn main() i32:
     return 0
 ```
 
-### `fold@(T, U)(List@(T) xs, U init, fn(U, T) -> U f) -> U`
+### `fold@(T, U: Clone)(List@(T) xs, U init, fn(U, T) -> U f) -> U`
 
 Reduce the list left-to-right, threading `acc` through `f`.
 
@@ -174,15 +176,15 @@ fn main() i32:
 Four combinators answer [tuples](../../language-reference.md#tuples). They follow `map`
 and `filter`: each one is a free function and a bare method on `List@(T)` and on `T[]`,
 except `unzip`, which is a free function only (an extension on a tuple type is refused). Each
-one answers a new `List`, reads its receiver as a borrow, and copies each element as
-`filter` does, so an owning element type works. A `List` is not an iterator itself: walk
+one answers a new `List`, reads its receiver as a borrow, and clones each element as
+`filter` does, so each element type must be `Clone`. A `List` is not an iterator itself: walk
 the answer with `.iter()`, and destructure the item in the `foreach`.
 
 | Free function | Answer |
 |---|---|
-| `enumerate@(T)(List@(T) xs)` | `List@((i32, T))`: each element with its index, from 0 |
-| `zip@(T, U)(List@(T) xs, List@(U) ys)` | `List@((T, U))`: the elements side by side; it stops at the shorter list |
-| `partition@(T)(List@(T) xs, fn(T) -> bool pred)` | `(List@(T), List@(T))`: the elements that `pred` keeps, then the others, each in order |
+| `enumerate@(T: Clone)(List@(T) xs)` | `List@((i32, T))`: each element with its index, from 0 |
+| `zip@(T: Clone, U: Clone)(List@(T) xs, List@(U) ys)` | `List@((T, U))`: the elements side by side; it stops at the shorter list |
+| `partition@(T: Clone)(List@(T) xs, fn(T) -> bool pred)` | `(List@(T), List@(T))`: the elements that `pred` keeps, then the others, each in order |
 | `unzip@(T: Clone, U: Clone)(List@((T, U)) xs)` | `(List@(T), List@(U))`: the first elements, then the second elements |
 
 The methods are `xs.enumerate()`, `xs.zip(ys)` and `xs.partition(pred)`; on a `T[]`

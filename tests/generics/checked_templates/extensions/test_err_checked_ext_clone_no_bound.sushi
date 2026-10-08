@@ -1,0 +1,13 @@
+# An extension template is checked where it is written (#1070): `.clone()` on `T`
+# needs `Clone`, and the template is never called.
+# EXPECT_ERROR_CODES_EXACT: CE4018
+
+struct Box@(T):
+    T value
+
+extend Box@(T) twice() Box@(T):
+    return Box(self.value.clone())
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

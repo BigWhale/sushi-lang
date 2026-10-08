@@ -385,6 +385,9 @@ class ExtendDef(Node):
     # bounded name, or None for another argument (#1070). Index-aligned with the `@(...)`
     # arguments, or the one array element. It holds no node.
     target_params: Tuple[Optional[BoundedTypeParam], ...] = ()
+    # The template of a copy, for the reporter's mute (#1070); see `FuncDef`. None on a
+    # written extension.
+    template_id: Optional["TemplateId"] = None
 
     @property
     def is_conversion(self) -> bool:

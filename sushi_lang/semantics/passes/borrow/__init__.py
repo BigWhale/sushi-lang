@@ -171,6 +171,8 @@ class BorrowChecker:
 
     def _check_extension(self, ext: ExtendDef) -> None:
         """Check borrow safety for an extension method."""
+        # A copy of a refused template says nothing (#1070), as a perk method does.
+        self.reporter.enter_body(ext)
         with self._body_scope(ext):
             self._check_callable(ext.params, ext.body, fn_name=ext.name,
                                  self_type=ext.target_type,

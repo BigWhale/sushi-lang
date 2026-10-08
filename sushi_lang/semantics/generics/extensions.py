@@ -7,7 +7,8 @@ from sushi_lang.semantics.ast import ExtendDef
 from sushi_lang.semantics.typesys import DynamicArrayType, EnumType, Type, StructType
 from sushi_lang.semantics.generics.types import substitute_type_params
 from sushi_lang.semantics.generics.monomorphize.transformer import substituted_param
-from sushi_lang.semantics.generics.extension_targets import instantiation_key
+from sushi_lang.semantics.generics.extension_targets import (
+    extension_template_id, instantiation_key, perk_template_id)
 from sushi_lang.semantics.passes.collect import GenericExtensionMethod
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -105,6 +106,8 @@ def monomorphize_extension_method(
     concrete.home_unit = generic_method.unit_name
     # An instance names its target in full; the bounds belong to the template.
     concrete.target_params = ()
+    # A copy of a template whose check refused it reports nothing (#1070).
+    concrete.template_id = extension_template_id(generic_method)
     # Where the source wrote no name or no return, the collected record points a
     # diagnostic at the declaration instead.
     concrete.name_span = concrete.name_span or generic_method.name_span
@@ -205,8 +208,10 @@ def monomorphize_perk_impl(
                for method in template.impl.methods]
     # Each copy carries the template's spans, so a diagnostic in its body is told once
     # for all the instances, the rule of a generic function's instance (#648, #800).
+    template_id = perk_template_id(template)
     for method in methods:
         method.instance_of = method.name
+        method.template_id = template_id
     return replace(
         template.impl,
         target_type=concrete_target_type,

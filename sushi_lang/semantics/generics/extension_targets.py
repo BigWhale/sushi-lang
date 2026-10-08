@@ -19,8 +19,9 @@ and the disagreement would be silent.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
-from typing import Callable, Mapping, Optional, Protocol, Sequence, Set, Tuple
+from typing import Any, Callable, Mapping, Optional, Protocol, Sequence, Set, Tuple
 
 from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.generics.interned import interned_name
@@ -34,7 +35,7 @@ from sushi_lang.semantics.typesys import (
     Type,
     UnknownType,
 )
-from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
+from sushi_lang.semantics.generics.types import GenericTypeRef, TemplateId, TypeParameter
 
 
 # A target the concrete extension table can key on. A named type is nominal, so the
@@ -383,3 +384,75 @@ def _names_a_type(arg: Type, is_declared_type: Callable[[str], bool]) -> bool:
     if isinstance(arg, UnknownType):
         return is_declared_type(arg.name)
     return True
+
+
+def receiver_bounds(template: Any, generic_structs: NameTable,
+                    generic_enums: NameTable) -> Tuple[BoundedTypeParam, ...]:
+    """The implied bounds and the target bounds of each receiver parameter (R1, #1070).
+
+    `template` is a `GenericExtensionMethod` or a `GenericPerkImpl`. For position `i`:
+    first the constraints that the base declares on its parameter `i` (an extension on
+    `Box@(T)` inherits what `struct Box@(T: Hashable)` declares, and the notes point at
+    that declaration), then the bounds the target adds, in written order, with a perk
+    that the base gave already left out. The key rule of `HashMap` is the bound that
+    `HashMap` declares on `K`. An array target has no implied bound.
+
+    The template check reads this. A cutter and a call read the TARGET bounds alone: an
+    instance that exists satisfies the implied bounds already (#579).
+    """
+    from sushi_lang.semantics.generics.hashmap import HASHMAP_BASE, KEY_CONTRACT
+    base = template.base_type_name
+    declared = generic_structs.by_name.get(base) or generic_enums.by_name.get(base)
+    declared_params = tuple(getattr(declared, "type_params", None) or ())
+    bounds = []
+    for index, param in enumerate(template.type_params):
+        name = getattr(param, "name", param)
+        constraints: list = []
+        namespaces: list = []
+        spans: list = []
+        implied = declared_params[index] if index < len(declared_params) else None
+        if implied is not None and base == HASHMAP_BASE and index == 0:
+            constraints, namespaces, spans = list(KEY_CONTRACT), [None, None], [None, None]
+        elif isinstance(implied, BoundedTypeParam):
+            constraints = list(implied.constraints)
+            namespaces = list(implied.constraint_namespaces)
+            spans = list(implied.constraint_spans)
+        written = (template.target_bounds[index]
+                   if index < len(template.target_bounds) else None)
+        if written is not None:
+            for at, perk in enumerate(written.constraints):
+                if perk in constraints:
+                    continue
+                constraints.append(perk)
+                namespaces.append(written.constraint_namespaces[at])
+                spans.append(written.constraint_span(at))
+        bounds.append(BoundedTypeParam(
+            name=name, constraints=constraints,
+            loc=written.loc if written is not None else None,
+            constraint_namespaces=namespaces, constraint_spans=spans))
+    return tuple(bounds)
+
+
+# Each character a written name cannot hold becomes `$`, which no written name holds, so
+# an owner text collides with nothing and stops no owner pattern of a rendered name.
+_NOT_AN_OWNER_CHARACTER = re.compile(r"[^A-Za-z0-9_$]")
+
+
+def owner_text(base_type_name: str) -> str:
+    """The base key of a template as a part of its identity: `i32[]` becomes `i32$$`."""
+    return _NOT_AN_OWNER_CHARACTER.sub("$", base_type_name)
+
+
+def extension_template_id(record: Any) -> TemplateId:
+    """The identity of an extension template: one per (base, method) in a program."""
+    return TemplateId(record.unit_name,
+                      f"{owner_text(record.base_type_name)}.{record.name}")
+
+
+def perk_template_id(template: Any) -> TemplateId:
+    """The identity of a perk template: one per (base, perk) in a program.
+
+    `with` is a reserved word, so no extension identity equals it.
+    """
+    return TemplateId(template.unit_name,
+                      f"{owner_text(template.base_type_name)}.with.{template.impl.perk_name}")

@@ -172,13 +172,14 @@ def check_template_statements(self, program, checked) -> None:
     in a channel body that spells no constructor (CE2030). A rule that needs the type of
     an expression waits for the copy.
 
-    `checked` holds the function templates that a check copy read (#1070): the copy
-    takes these rules with the stamps of the typecheck pass, so a `match` that is not
-    exhaustive is its own fault and makes no statement after it dead.
+    `checked` holds the templates that a check copy read (#1070): the copy takes these
+    rules with the stamps of the typecheck pass, so a `match` that is not exhaustive is
+    its own fault and makes no statement after it dead.
     """
     bodies = [(func, "function") for func in program.functions
               if func.type_params and id(func) not in checked]
-    bodies += [(ext, "method") for ext in program.generic_extensions]
+    bodies += [(ext, "method") for ext in program.generic_extensions
+               if id(ext) not in checked]
     bodies += [(method, "method")
                for impl in program.generic_perk_impls for method in impl.methods]
     for node, kind in bodies:

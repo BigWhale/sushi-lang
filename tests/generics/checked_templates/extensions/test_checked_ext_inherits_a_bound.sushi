@@ -1,0 +1,15 @@
+# An extension on `Box@(T)` inherits the bounds that `Box` declares (#1070, R1): no
+# bound is written in the target, and the body may hash `T`.
+# EXPECT_STDOUT_EXACT: "true\n"
+
+struct Box@(T: Hashable):
+    T value
+
+extend Box@(T) h() u64:
+    return self.value.hash()
+
+fn main() i32:
+    let Box@(i32) a = Box(5)
+    let Box@(i32) b = Box(5)
+    println(a.h() == b.h())
+    return 0

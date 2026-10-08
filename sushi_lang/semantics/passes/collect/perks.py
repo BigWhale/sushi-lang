@@ -78,9 +78,17 @@ class GenericPerkImplTable(RefusalRecord):
     by the target and each method name, so a call of one adds no CE2008.
     """
     by_base: Dict[str, List[GenericPerkImpl]] = field(default_factory=dict)
+    # The record of each written implementation, by the identity of its node (#1070).
+    _by_impl: Dict[int, GenericPerkImpl] = field(default_factory=dict, repr=False)
 
     def add(self, template: GenericPerkImpl) -> None:
         self.by_base.setdefault(template.base_type_name, []).append(template)
+        self._by_impl[id(template.impl)] = template
+
+    def record_of(self, impl: ExtendWithDef) -> Optional[GenericPerkImpl]:
+        """The template the collect pass filed for this written implementation, if any."""
+        record = self._by_impl.get(id(impl))
+        return record if record is not None and record.impl is impl else None
 
     def templates(self, base_type_name: str) -> List[GenericPerkImpl]:
         return self.by_base.get(base_type_name, [])

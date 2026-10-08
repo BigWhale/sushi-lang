@@ -417,7 +417,8 @@ def _refuses_unmet_bounds(validator: 'TypeValidator', template, method_name: str
     the method-level bounds (#1191) against the solved method arguments, in one call of
     the analyzer's `check_call_constraints` hook: the path of a free function. Each
     parameter that fails is reported, with the note at its bound. `report=False` asks
-    the same question and emits nothing.
+    the one predicate and emits nothing: an inference before the monomorphize stage
+    asks too, and the hook does not exist yet.
     """
     method_params = (template.method_type_params
                      if isinstance(template, GenericExtensionMethod) else ())
@@ -426,6 +427,8 @@ def _refuses_unmet_bounds(validator: 'TypeValidator', template, method_name: str
     if not any(tp.constraints for tp in params):
         return False
     args = (*tuple(receiver_args)[:len(target_bounds)], *margs)
+    if not report:
+        return not target_bounds_hold(params, args, validator.tables.holds_bound)
     check = call_constraint_check(validator)
     key = ("method", _resolved(validator, receiver_type), method_name,
            tuple(_resolved(validator, arg) for arg in margs))

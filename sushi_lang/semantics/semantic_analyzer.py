@@ -642,31 +642,8 @@ class SemanticAnalyzer:
 
     def _resolved_instantiations(self, type_instantiations) -> tuple[set, set]:
         """Split the collected type instantiations into enums and structs, arguments resolved."""
-        # Type arguments are resolved FIRST. `str(UnknownType("Point"))` and
-        # `str(StructType("Point"))` are both "Point", so the two spellings mangle to one
-        # enum name while carrying different payloads -- and EnumType hashes on the name but
-        # compares on the variants, so the unresolved one hash-matches and compares unequal.
-        # Resolving here keeps the monomorphized instance and the on-demand intern
-        # byte-identical.
-        from sushi_lang.semantics.type_resolution import resolve_unknown_type
-
-        def _resolve_args(type_args):
-            return tuple(
-                resolve_unknown_type(arg, self.tables.structs.by_name, self.tables.enums.by_name)
-                for arg in type_args
-            )
-
-        from sushi_lang.semantics.generics.tuples import TUPLE_BASE
-
-        enum_instantiations = set()
-        struct_instantiations = set()
-        for base_name, type_args in type_instantiations:
-            if base_name in self.tables.generic_enums.by_name:
-                enum_instantiations.add((base_name, _resolve_args(type_args)))
-            elif (base_name in self.tables.generic_structs.by_name
-                  or base_name == TUPLE_BASE):
-                struct_instantiations.add((base_name, _resolve_args(type_args)))
-        return enum_instantiations, struct_instantiations
+        from sushi_lang.semantics.generics.late_interning import resolved_instantiations
+        return resolved_instantiations(self.tables, type_instantiations)
 
     def _adopt_reached_instances(self, monomorphizer, enum_instantiations, concrete_enums,
                                  struct_instantiations, concrete_structs) -> None:
@@ -1207,30 +1184,9 @@ class SemanticAnalyzer:
                 monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
 
     def _monomorphize_copy_signatures(self, monomorphizer, extend_defs) -> None:
-        """Monomorphize every type instantiation a late extension copy names (#1146).
-
-        The instantiate pass collects the signature of an EARLY instantiation's copy. A
-        late instantiation exists only after that pass ended, so its copy names types
-        nothing collected: `Maybe@(Result@(string, Bad))` in the `next()` of a
-        `Feed@(string)` that only a generic body reaches. The copy's types go through the
-        collection's own walk here, before `resolve` and `derive`, which then treat them
-        as they treat every early instance. The next round of the caller's fixpoint cuts
-        the templates of what this interns.
-        """
-        from sushi_lang.semantics.generics.instantiate.type_collection import (
-            collect_type_instantiations)
-        from sushi_lang.semantics.type_resolution import TypeResolver
-
-        resolver = TypeResolver(self.tables.structs.by_name, self.tables.enums.by_name)
-        instantiations: set = set()
-        for ty in self._copy_signature_types(extend_defs):
-            collect_type_instantiations(ty, resolver, instantiations)
-        if not instantiations:
-            return
-        enum_insts, struct_insts = self._resolved_instantiations(instantiations)
-        monomorphizer.monomorphize_all(self.tables.generic_enums.by_name, enum_insts)
-        monomorphizer.monomorphize_all_structs(self.tables.generic_structs.by_name,
-                                               struct_insts)
+        """Monomorphize every type instantiation a late extension copy names (#1146)."""
+        from sushi_lang.semantics.generics.late_interning import intern_copy_signatures
+        intern_copy_signatures(self.tables, monomorphizer, extend_defs)
 
     def _intern_late_type_instantiations(self, monomorphizer, extend_defs) -> None:
         """Intern the type instantiations a call-site-solved copy names (risk 1).
@@ -1240,21 +1196,8 @@ class SemanticAnalyzer:
         `finite-types` and `derive` have run. Every fully-concrete GenericTypeRef in
         the copies' signatures and `let` annotations goes through the late interner.
         """
-        self._intern_generic_type_refs(monomorphizer, self._copy_signature_types(extend_defs))
-
-    @staticmethod
-    def _copy_signature_types(extend_defs) -> list:
-        """The types an extension copy names: its signature and its `let` annotations."""
-        from sushi_lang.semantics.generics.monomorphize.functions import let_annotations
-
-        types: list = []
-        for extend_def in extend_defs:
-            types.append(extend_def.ret)
-            types.append(getattr(extend_def, "err_type", None))
-            for param in extend_def.params:
-                types.append(param.ty)
-            types.extend(let_annotations(extend_def.body))
-        return [ty for ty in types if ty is not None]
+        from sushi_lang.semantics.generics.late_interning import copy_signature_types
+        self._intern_generic_type_refs(monomorphizer, copy_signature_types(extend_defs))
 
     def _intern_generic_type_refs(self, monomorphizer, types) -> None:
         """The one late interner, over the program tables (`generics/late_interning.py`)."""
@@ -1302,7 +1245,8 @@ class SemanticAnalyzer:
                 passes.scope._check_extension_method(extend_def)
                 passes.typecheck._validate_extension_method(extend_def)
                 lifted = passes.lifter.lift_body(extend_def.body,
-                                                 scope_unit=extend_def.scope_unit)
+                                                 scope_unit=extend_def.scope_unit,
+                                                 template_id=extend_def.template_id)
                 passes.borrow.refresh_callee_modes()
                 passes.borrow._check_extension(extend_def)
                 for fn in lifted:

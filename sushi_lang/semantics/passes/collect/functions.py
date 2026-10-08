@@ -458,10 +458,21 @@ class GenericExtensionTable(RefusalRecord):
     """
     by_type: Dict[str, Dict[Tuple[str, str], GenericExtensionMethod]] = field(default_factory=dict)
 
+    # The record of each written declaration, by the identity of its node (#1070): the
+    # template check starts from the `ExtendDef` it walks.
+    _by_decl: Dict[int, GenericExtensionMethod] = field(default_factory=dict, repr=False)
+
     def add_method(self, method: GenericExtensionMethod) -> None:
         """Add a generic extension method to the table."""
         methods = self.by_type.setdefault(method.base_type_name, {})
         methods[(method.name, method.target_key)] = method
+        if method.decl is not None:
+            self._by_decl[id(method.decl)] = method
+
+    def record_of(self, decl: ExtendDef) -> Optional[GenericExtensionMethod]:
+        """The record the collect pass filed for this written declaration, if it filed one."""
+        record = self._by_decl.get(id(decl))
+        return record if record is not None and record.decl is decl else None
 
     def declarations(self, base_type_name: str, method_name: str) -> List[GenericExtensionMethod]:
         """Every declaration of one method name on one base type."""

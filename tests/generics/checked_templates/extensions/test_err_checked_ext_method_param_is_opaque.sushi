@@ -1,0 +1,9 @@
+# A method-level type parameter is opaque in the body (#1070): `==` needs `Eq`.
+# EXPECT_ERROR_CODES_EXACT: CE2514
+
+extend i32 pick@(U)(U a, U b) bool:
+    return a == b
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

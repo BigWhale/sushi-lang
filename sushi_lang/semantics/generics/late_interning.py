@@ -106,3 +106,71 @@ def settle_new_instances(tables: 'SymbolTables', reporter: 'Reporter', marks) ->
                               only=interned)
     register_all_clones(tables.structs, tables.enums, tables.derived_methods,
                         only=interned)
+
+
+def resolved_instantiations(tables: 'SymbolTables', type_instantiations) -> tuple[set, set]:
+    """Split collected type instantiations into enums and structs, arguments resolved.
+
+    Type arguments are resolved FIRST. `str(UnknownType("Point"))` and
+    `str(StructType("Point"))` are both "Point", so the two spellings mangle to one enum
+    name while carrying different payloads -- and EnumType hashes on the name but
+    compares on the variants, so the unresolved one hash-matches and compares unequal.
+    Resolving here keeps the monomorphized instance and the on-demand intern
+    byte-identical.
+    """
+    from sushi_lang.semantics.generics.tuples import TUPLE_BASE
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+
+    def resolve_args(type_args):
+        return tuple(resolve_unknown_type(arg, tables.structs.by_name, tables.enums.by_name)
+                     for arg in type_args)
+
+    enum_instantiations = set()
+    struct_instantiations = set()
+    for base_name, type_args in type_instantiations:
+        if base_name in tables.generic_enums.by_name:
+            enum_instantiations.add((base_name, resolve_args(type_args)))
+        elif base_name in tables.generic_structs.by_name or base_name == TUPLE_BASE:
+            struct_instantiations.add((base_name, resolve_args(type_args)))
+    return enum_instantiations, struct_instantiations
+
+
+def copy_signature_types(extend_defs) -> list:
+    """The types an extension copy names: its signature and its `let` annotations."""
+    from sushi_lang.semantics.generics.monomorphize.functions import let_annotations
+
+    types: list = []
+    for extend_def in extend_defs:
+        types.append(extend_def.ret)
+        types.append(getattr(extend_def, "err_type", None))
+        for param in extend_def.params:
+            types.append(param.ty)
+        types.extend(let_annotations(extend_def.body))
+    return [ty for ty in types if ty is not None]
+
+
+def intern_copy_signatures(tables: 'SymbolTables', monomorphizer: 'Monomorphizer',
+                           extend_defs) -> None:
+    """Monomorphize every type instantiation an extension copy names (#1146, #1070).
+
+    Two table sets use it. The analyzer's: the instantiate pass collects the signature
+    of an EARLY instantiation's copy, and a late instantiation exists only after that
+    pass ended, so its copy names types nothing collected -- `Maybe@(Result@(string,
+    Bad))` in the `next()` of a `Feed@(string)` that only a generic body reaches. And the
+    overlay of a template check, whose check copy names instances over an opaque type
+    parameter. The collection's own walk reads a nested instance in one pass. The caller
+    settles what this interns (`settle_new_instances`), or `resolve` and `derive` do.
+    """
+    from sushi_lang.semantics.generics.instantiate.type_collection import (
+        collect_type_instantiations)
+    from sushi_lang.semantics.type_resolution import TypeResolver
+
+    resolver = TypeResolver(tables.structs.by_name, tables.enums.by_name)
+    instantiations: set = set()
+    for ty in copy_signature_types(extend_defs):
+        collect_type_instantiations(ty, resolver, instantiations)
+    if not instantiations:
+        return
+    enum_insts, struct_insts = resolved_instantiations(tables, instantiations)
+    monomorphizer.monomorphize_all(tables.generic_enums.by_name, enum_insts)
+    monomorphizer.monomorphize_all_structs(tables.generic_structs.by_name, struct_insts)

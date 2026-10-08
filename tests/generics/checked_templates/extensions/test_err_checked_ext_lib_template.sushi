@@ -1,0 +1,11 @@
+# The author's `--lib` build checks each extension template of the library where it is
+# written (#1070), so a library cannot ship one whose body no bound supports.
+# OUTPUT_PATH: digest.slib
+# COMPILER_FLAGS: --lib --lib-version 1.0.0 --lib-kind binary
+# EXPECT_ERROR_CODE: CE2008
+
+public struct Box@(T):
+    T value
+
+extend Box@(T) h() u64:
+    return self.value.hash()
