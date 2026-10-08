@@ -59,77 +59,52 @@ class LambdaLifter:
             if getattr(fn, "type_params", None):
                 continue  # generic templates: their instantiations carry the lambdas
             self._walk_function(fn)
-        self._owner_is_library = False
-        self._owner_origin = None
-        self._owner_instance_of = None
-        self._owner_template_id = None
         # Extension and perk-impl bodies emit through the same statement paths
         # as a plain fn, so their lambdas lift the same way (#399).
         # program.generic_extensions stays unwalked: templates, like generic
         # fn templates -- their instantiation copies carry the lambdas and are
         # lifted into the copy's home unit in `_check_copies` of the analyzer.
         for ext in list(self.program.extensions):
-            self._owner_scope_unit = getattr(ext, "scope_unit", None)
-            self._owner_template_id = ext.template_id
-            self._walk(ext.body)
+            self._walk_function(ext)
         for impl in list(self.program.perk_impls):
             for method in impl.methods:
-                self._owner_scope_unit = getattr(method, "scope_unit", None)
-                self._owner_template_id = method.template_id
-                self._walk(method.body)
-        self._owner_scope_unit = None
-        self._owner_template_id = None
+                self._walk_function(method)
+        self._own(None)
 
-    def _walk_function(self, fn: FuncDef) -> None:
-        """Lift the lambdas of one function body, as the owner of what they become."""
-        self._owner_is_library = bool(getattr(fn, "is_library_template", False))
-        self._owner_origin = getattr(fn, "library_origin", None)
-        self._owner_instance_of = getattr(fn, "instance_of", None)
-        self._owner_template_id = getattr(fn, "template_id", None)
-        self._owner_scope_unit = getattr(fn, "scope_unit", None)
+    def _own(self, owner) -> None:
+        """Take the answers of the body that the walk is inside: a function, an
+        extension method or a perk method. None clears them."""
+        self._owner_is_library = bool(getattr(owner, "is_library_template", False))
+        self._owner_origin = getattr(owner, "library_origin", None)
+        self._owner_instance_of = getattr(owner, "instance_of", None)
+        self._owner_template_id = getattr(owner, "template_id", None)
+        self._owner_scope_unit = getattr(owner, "scope_unit", None)
+
+    def _walk_function(self, fn) -> None:
+        """Lift the lambdas of one body, as the owner of what they become: a function,
+        an extension method or a perk method."""
+        self._own(fn)
         self._walk(fn.body)
 
-    def lift_function(self, fn: FuncDef) -> List[FuncDef]:
-        """Lift one function and answer the FuncDefs this call produced.
+    def lift_body(self, owner) -> List[FuncDef]:
+        """Lift the body of one function, extension method or perk method, and answer
+        the FuncDefs this call produced (#399, #1155).
 
-        A late function copy (#1155) is put into its AST after the per-unit loop, so the
-        analyzer lifts it here and borrow-checks what this call lifted.
+        A copy that is cut after the per-unit loop lives in no unit AST, so the caller
+        runs the pass that the per-unit loop cannot: it borrow-checks exactly what this
+        call lifted. Each lifted function carries the answers of its owner, as a lambda
+        of a function does.
         """
         before = len(self._lifted)
-        self._walk_function(fn)
-        self._owner_is_library = False
-        self._owner_origin = None
-        self._owner_instance_of = None
-        self._owner_template_id = None
-        self._owner_scope_unit = None
-        return self._lifted[before:]
-
-    def lift_body(self, body, scope_unit: Optional[str] = None,
-                  template_id=None) -> List[FuncDef]:
-        """Lift one body and answer the FuncDefs this call produced (#399).
-
-        The per-instantiation extension copies live in no unit AST, so the
-        caller runs the pass the per-unit loop cannot: it borrow-checks exactly
-        what this call lifted.
-        """
-        before = len(self._lifted)
-        self._owner_is_library = False
-        self._owner_origin = None
-        self._owner_instance_of = None
-        self._owner_template_id = template_id
-        self._owner_scope_unit = scope_unit
-        self._walk(body)
-        self._owner_scope_unit = None
-        self._owner_template_id = None
+        self._walk_function(owner)
+        self._own(None)
         return self._lifted[before:]
 
     def lift_perk_impl(self, impl) -> List[FuncDef]:
         """Lift every method body of one perk implementation copy (#699)."""
         lifted: List[FuncDef] = []
         for method in impl.methods:
-            lifted.extend(self.lift_body(method.body,
-                                         scope_unit=getattr(method, "scope_unit", None),
-                                         template_id=method.template_id))
+            lifted.extend(self.lift_body(method))
         return lifted
 
     def _walk(self, node) -> None:

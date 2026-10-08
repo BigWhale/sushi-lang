@@ -105,22 +105,25 @@ class _CopyEntry:
     borrow: Callable[[BorrowChecker, Any, list], None]
 
 
-def _borrow_function_copy(borrow: BorrowChecker, func: Any, lifted: list) -> None:
-    for fn in (func, *lifted):
+def _borrow_lifted(borrow: BorrowChecker, functions) -> None:
+    """Borrow-check functions, each as the body that the reporter reads."""
+    for fn in functions:
         borrow.reporter.enter_body(fn)
         borrow._check_function(fn)
 
 
+def _borrow_function_copy(borrow: BorrowChecker, func: Any, lifted: list) -> None:
+    _borrow_lifted(borrow, (func, *lifted))
+
+
 def _borrow_extension_copy(borrow: BorrowChecker, ext: ExtendDef, lifted: list) -> None:
     borrow._check_extension(ext)
-    for fn in lifted:
-        borrow._check_function(fn)
+    _borrow_lifted(borrow, lifted)
 
 
 def _borrow_perk_copy(borrow: BorrowChecker, impl: ExtendWithDef, lifted: list) -> None:
     borrow._check_perk_impl(impl)
-    for fn in lifted:
-        borrow._check_function(fn)
+    _borrow_lifted(borrow, lifted)
 
 
 # One row per kind of copy that is cut after the per-unit loop: a late function copy, a
@@ -129,13 +132,12 @@ _COPY_ENTRIES: dict[str, _CopyEntry] = {
     "function": _CopyEntry(
         scope=ScopeAnalyzer._check_function,
         typecheck=TypeValidator._validate_function,
-        lift=LambdaLifter.lift_function,
+        lift=LambdaLifter.lift_body,
         borrow=_borrow_function_copy),
     "extension": _CopyEntry(
         scope=ScopeAnalyzer._check_extension_method,
         typecheck=TypeValidator._validate_extension_method,
-        lift=lambda lifter, ext: lifter.lift_body(ext.body, scope_unit=ext.scope_unit,
-                                                  template_id=ext.template_id),
+        lift=LambdaLifter.lift_body,
         borrow=_borrow_extension_copy),
     "perk": _CopyEntry(
         scope=ScopeAnalyzer._check_perk_implementation,

@@ -119,7 +119,7 @@ def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
     elements = PackElements(record, validator.current_unit_name)
     checker = _checker(check, elements)
     checker._validate_function(check_copy)
-    lifted = _lifter(check, checker).lift_function(check_copy)
+    lifted = _lifter(check, checker).lift_body(check_copy)
     _borrow(check, check_copy, lifted, elements)
     _close(check, TemplateId(record.unit_name, record.name))
     return True
@@ -167,7 +167,7 @@ def check_extension_template(validator: TypeValidator, ext: ExtendDef) -> bool:
     check_copy = _cut_and_settle(scope, cut, lambda ext_copy: [ext_copy])
     checker = _checker(check)
     checker._validate_extension_method(check_copy)
-    lifted = _lifter(check, checker).lift_body(check_copy.body)
+    lifted = _lifter(check, checker).lift_body(check_copy)
     _borrow(check, check_copy, lifted)
     _close(check, template_id)
     return True
