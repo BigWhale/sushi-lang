@@ -1,5 +1,6 @@
-# Test generic functions with type casts involving type parameters
-# This tests body substitution where T appears in cast expressions
+# A cast from a type parameter or to a type parameter in a generic function is refused
+# where the template is written: no constraint promises a cast (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2014, CE2014, CE2014
 
 fn numeric_identity@(T)(T value) T:
     # Cast to i64 and back to T (tests generic type in cast target)

@@ -1,9 +1,9 @@
 # A cast is not always at the top level of a statement. Inside an interpolation hole the
 # substitution walk used to deepcopy it, so the cast kept the type PARAMETER and the
-# internal name `T` reached the user as CE2014 plus CE2035 (#602).
-# EXPECT_RUNTIME_EXIT: 0
-# EXPECT_NO_LEAKS: true
-# EXPECT_STDOUT_EXACT: "5\n0\n"
+# internal name `T` reached the user as CE2014 plus CE2035 (#602). A template is now
+# checked where it is written, with `T` opaque: the cast to `T` is refused, and a `T` in
+# a hole needs Display (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2014, CE2035
 
 fn show@(T)(i32 v) i32:
     println("{v as T}")

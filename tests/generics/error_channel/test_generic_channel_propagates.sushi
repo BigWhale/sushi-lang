@@ -9,8 +9,8 @@ use <collections/strings>
 error StepError:
     TooSmall
 
-fn doubled@(T)(T value, i32 base) i32 | StepError:
-    if (base < 1 or value.len() == 0):
+fn doubled@(T: Display)(T value, i32 base) i32 | StepError:
+    if (base < 1 or value.to_str().len() == 0):
         return Result.Err(StepError.TooSmall)
     return Result.Ok(base + base + 1)
 

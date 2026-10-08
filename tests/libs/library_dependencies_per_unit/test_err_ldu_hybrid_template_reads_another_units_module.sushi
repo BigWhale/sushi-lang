@@ -1,10 +1,14 @@
 # A hybrid library of two units. The second unit imports a stdlib module and the
 # entry unit does not, so the entry unit's template cannot call what the module
-# declares.
-# BUILD_LIB_HYBRID: ldu_fs.sushi
+# declares. The template is checked where it is written, so the build of the library
+# refuses it (#1070).
+# COMPILER_FLAGS: --lib --lib-version 0.0.0 --lib-kind hybrid
+# OUTPUT_PATH: ldu_fs.slib
 # EXPECT_ERROR_CODE: CE2008
-use <lib/ldu_fs>
+use "ldu_fs2"
 
-fn main() i32:
-    println("{gen_fs(1)}")
-    return 0
+public fn gen_fs@(T)(T x) i32:
+    x
+    match open("ldu_absent.txt", FileMode.Read()):
+        Result.Ok(_) -> return 1
+        Result.Err(_) -> return 0

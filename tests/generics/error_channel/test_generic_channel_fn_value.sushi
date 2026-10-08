@@ -6,10 +6,10 @@
 error StepError:
     Stuck
 
-fn bump@(T)(T value, i32 by) i32 | StepError:
+fn bump@(T: Hashable)(T value, i32 by) i32 | StepError:
     if (by == 0):
         return Result.Err(StepError.Stuck)
-    return Result.Ok(by + 8 + value - value)
+    return Result.Ok(by + 8 + ((value.hash() & 0) as i32))
 
 fn run_step(i32 by) i32 | StepError:
     let fn(i32, i32) -> i32 | StepError step = bump

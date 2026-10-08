@@ -1,0 +1,13 @@
+# A cast to a type parameter under a `+` was copied unchanged, so the monomorphized body
+# still cast to `T` (#602). A template is now checked where it is written, with `T`
+# opaque: the cast to `T` is refused, and so is the `+` on a `T` (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2014, CE2518
+
+fn bump@(T)(i32 v) i64:
+    let i64 a = (v as T) + 1
+    return a
+
+fn main() i32:
+    let i64 out = bump@(i64)(5)
+    println("{out}")
+    return 0

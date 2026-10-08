@@ -1,7 +1,8 @@
-# Design 3.6 (C6): a generic function may use a conversion. The pair is known for each
-# instance only, so each instance looks it up: `E = LowError` converts, and
-# `E = AppError` propagates the error unchanged.
-# EXPECT_STDOUT_EXACT: "ok 5\nerr AppError.Low(LowError.Bad(-1))\nerr AppError.Plain(8)\n"
+# A generic function cannot use a conversion through its type parameter. The template is
+# checked where it is written, with `E` opaque, and `??` on an opaque `E` only propagates
+# the same `E` (#1070). This body answers `AppError`, so the `??` on `Result@(i32, E)` is
+# refused, although each instance below would have a conversion or the same type.
+# EXPECT_ERROR_CODES_EXACT: CE2511
 error LowError:
     Bad(i32)
 
