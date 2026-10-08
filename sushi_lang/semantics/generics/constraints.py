@@ -15,6 +15,7 @@ from sushi_lang.semantics.generics.contract_walk import perk_override_of, templa
 from sushi_lang.semantics.generics.contracts import CONTRACTS, operand_contract
 from sushi_lang.semantics.generics.hashing import hash_override_of, hashability_of
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.generics.types import TypeParameter
 
 
 #: "Does this type satisfy this perk?" -- what a target bound asks of one argument.
@@ -132,8 +133,11 @@ class ConstraintValidator:
 
         if not self.satisfies(type_arg, constraint_name):
             if pack_index is None:
+                # A pack element is named as the source writes it, `...Ts` (#1070, R6).
+                written = (type_arg.written() if isinstance(type_arg, TypeParameter)
+                           else display_type(type_arg))
                 diagnostic = er.emit_with(self.reporter, er.ERR.CE4006, span,
-                                          filename=filename, type=display_type(type_arg),
+                                          filename=filename, type=written,
                                           perk=constraint_name)
             else:
                 diagnostic = er.emit_with(self.reporter, er.ERR.CE2090, span,
