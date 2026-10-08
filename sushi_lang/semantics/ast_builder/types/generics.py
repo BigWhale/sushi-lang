@@ -28,16 +28,22 @@ ArgReader = Callable[[Tree], Tuple[Optional[Type], Optional[BoundedTypeParam]]]
 
 def _read_type_args(type_list_node: Tree, read_arg: ArgReader
                     ) -> Tuple[List[Type], TargetParams]:
-    """Each element of a `type_list` through `read_arg`: the ONE walk of the list."""
+    """Each element of a `type_list` through `read_arg`: the ONE walk of the list.
+
+    The grammar gives every element a shape that reads as a type, so an element that
+    reads as nothing is a fault of the builder: dropping it would change the count of
+    the arguments in silence.
+    """
     args: List[Type] = []
     params: List[Optional[BoundedTypeParam]] = []
     for child in type_list_node.children:
         if not _is_type_arg(child):
             continue
         arg_type, param = read_arg(child)
-        if arg_type is not None:
-            args.append(arg_type)
-            params.append(param)
+        if arg_type is None:
+            ice(child, "a type argument read as no type")
+        args.append(arg_type)
+        params.append(param)
     return args, tuple(params)
 
 
