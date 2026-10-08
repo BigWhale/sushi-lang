@@ -11,7 +11,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, AbstractSet, Any, Optional
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.namespaces import GENERIC_UNIT_TYPES, import_help
+from sushi_lang.semantics.namespaces import (
+    GENERIC_UNIT_TYPES,
+    import_help,
+    import_target,
+)
 from sushi_lang.semantics.typesys import EnumType, StructType
 from sushi_lang.semantics.visibility import (
     DeclOrigin,
@@ -220,9 +224,8 @@ def reject_ambiguous_name(validator: 'TypeValidator', kind: str, name: str,
             diagnostic = diagnostic.note_at(
                 f"unit '{origin.unit_name}' declares it here",
                 origin.name_span, origin.filename)
-    first = candidates[0].unit_name
-    diagnostic.help(f"say which one: `use \"{first}\" as u` above, then `u.{name}`") \
-        .emit()
+    first = import_target(candidates[0].unit_name, tables=_unit_tables(validator))
+    diagnostic.help(f"say which one: `use {first} as u` above, then `u.{name}`").emit()
     return True
 
 

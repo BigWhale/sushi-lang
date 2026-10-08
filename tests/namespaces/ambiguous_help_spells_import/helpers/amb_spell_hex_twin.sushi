@@ -1,0 +1,2 @@
+public fn encode(u8[] buf) string:
+    return "{buf.len()}"
