@@ -260,8 +260,9 @@ class CollectorPass:
             current_unit=unit_name, filename=unit_file)
         # The own constraints of a generic type, judged one time where they are written:
         # a template on the type inherits them and does not judge them again (#1070).
-        for declaration in (*root.structs, *root.enums):
-            reject_second_homes(self.r, self.perks, declaration.type_params or ())
+        for declarations in (root.structs, root.enums):
+            for declaration in declarations:
+                reject_second_homes(self.r, self.perks, declaration.type_params or ())
 
         return self.tables
 
