@@ -1,0 +1,17 @@
+# A template constructs an instance over its type parameter with a `nom` argument. The
+# borrow pass of the check copy knows the instance as a constructor (#1070, R5).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+struct Box@(T):
+    T item
+
+fn boxed@(T)(nom T x) Box@(T):
+    return Box(nom x)
+
+fn main() i32:
+    let Box@(string) b = boxed(nom "Mostly ".concat("Harmless"))
+    println(b.item)
+    return 0

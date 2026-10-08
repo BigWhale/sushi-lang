@@ -45,12 +45,7 @@ def _build_callee_modes(tables, unit_name: Optional[str] = None,
     if tables is None:
         return CalleeModes()
     funcs = getattr(tables, "funcs", None)
-    # A LIVE view of both tables: the typecheck pass runs after this is built, and it
-    # interns the instance a generic struct constructor solves from its arguments (#1150).
-    struct_names = ChainMap(*(
-        table.by_name for table in (getattr(tables, "structs", None),
-                                    getattr(tables, "generic_structs", None))
-        if getattr(table, "by_name", None) is not None))
+    struct_names = _struct_names(tables)
     stdlib_sigs = funcs.stdlib_by_name() if funcs is not None else {}
     # A generic fn is called by its bare name in a template body but interned under a
     # mangled one, and the mode does not vary per instantiation. Concrete table first.
@@ -64,6 +59,15 @@ def _build_callee_modes(tables, unit_name: Optional[str] = None,
         struct_names=struct_names,
         stdlib_sigs=stdlib_sigs,
     )
+
+
+def _struct_names(tables) -> ChainMap:
+    """A LIVE view of both struct tables: the typecheck pass runs after the resolver is
+    built, and it interns the instance a generic struct constructor solves from its
+    arguments (#1150)."""
+    maps = [getattr(getattr(tables, name, None), "by_name", None)
+            for name in ("structs", "generic_structs")]
+    return ChainMap(*(names for names in maps if names is not None))
 
 
 class BorrowChecker:
@@ -154,10 +158,14 @@ class BorrowChecker:
         """The borrow rules on a check copy (#1070, R5): an opaque type parameter moves.
 
         The copy is read in the overlay tables, which hold its instances over an opaque
-        parameter. A fault here refuses the template, so each copy of it is muted.
+        parameter. The mode resolver keeps the program's function tables, which the
+        overlay shares, and reads the overlay's struct names. A fault here refuses the
+        template, so each copy of it is muted.
         """
-        saved = (self.tables, self.types)
+        saved = (self.tables, self.types, self.callee_modes)
         self.tables, self.types = copy.tables, TypeQueries(copy.tables)
+        self.callee_modes = self.callee_modes.with_struct_names(
+            _struct_names(copy.tables))
         self.pack_element_of, self.owned_packs = copy.element_of, copy.owned_packs
         try:
             node = copy.node
@@ -173,7 +181,7 @@ class BorrowChecker:
                 self.reporter.enter_body(fn)
                 self._check_function(fn)
         finally:
-            self.tables, self.types = saved
+            self.tables, self.types, self.callee_modes = saved
             self.pack_element_of, self.owned_packs = None, frozenset()
             self.reporter.leave_body()
 
