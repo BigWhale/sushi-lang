@@ -41,47 +41,29 @@ def emit_struct_value(codegen: 'LLVMCodegen', struct_type: StructType, args) -> 
     """The value of `struct_type` built from `args`, one per field: each is consumed."""
     llvm_struct_type = codegen.types.get_struct_type(struct_type)
 
+    # Every field value is emitted and held first, and taken only after the last one: a
+    # `??` in a later argument leaves before the struct exists, and the hold frees an
+    # earlier value on that exit.
+    from sushi_lang.backend.expressions.memory import emit_held_operand
+    fields = [(arg, _resolve_field_type(codegen, field_type))
+              for arg, (_field_name, field_type) in zip(args, struct_type.fields, strict=True)]
+    emitted = [_load_array_field(codegen, emit_held_operand(codegen, arg, field_type),
+                                 field_type)
+               for arg, field_type in fields]
+
     field_values = []
-    for arg, (_field_name, field_type) in zip(args, struct_type.fields, strict=True):
+    for (arg, field_type), arg_value in zip(fields, emitted, strict=True):
+        # A constructor field takes ownership of its value. This was four
+        # independent isinstance ladders -- one for owning structs, one for copy
+        # composites, one for owning enums, one for `string` -- each with its own
+        # spelling of "reads from a continuing owner", and NO arm at all for a fixed
+        # `T[N]` field. The type class is the seam's business now.
+        arg_value = consume(codegen, arg, arg_value, field_type, ConsumingUse.STRUCT_FIELD)
         if isinstance(field_type, DynamicArrayType):
-            # A `from([...])` argument is emitted like any other expression: the typecheck
-            # pass stamped the field's `T[]` on it, and the one emitter reads that stamp
-            # (#544), so no derivation of the element type lives here.
-            arg_value = codegen.expressions.emit_expr(arg)
-
-            if isinstance(arg_value.type, ir.PointerType):
-                element_llvm_type = codegen.types.ll_type(field_type.base_type)
-                expected_struct_type = ir.LiteralStructType([
-                    codegen.types.i32,
-                    codegen.types.i32,
-                    ir.PointerType(element_llvm_type)
-                ])
-                if arg_value.type.pointee == expected_struct_type:
-                    arg_value = codegen.builder.load(arg_value)
-
-            field_values.append(consume(codegen, arg, arg_value, field_type,
-                                        ConsumingUse.STRUCT_FIELD))
+            field_values.append(arg_value)
         else:
-            arg_value = codegen.expressions.emit_expr(arg)
-
-            resolved_field_type = field_type
-            if isinstance(field_type, UnknownType):
-                if field_type.name in codegen.struct_table.by_name:
-                    resolved_field_type = codegen.struct_table.by_name[field_type.name]
-                elif field_type.name in codegen.enum_table.by_name:
-                    resolved_field_type = codegen.enum_table.by_name[field_type.name]
-
-            # A constructor field takes ownership of its value. This was four
-            # independent isinstance ladders -- one for owning structs, one for copy
-            # composites, one for owning enums, one for `string` -- each with its own
-            # spelling of "reads from a continuing owner", and NO arm at all for a fixed
-            # `T[N]` field. The type class is the seam's business now.
-            arg_value = consume(codegen, arg, arg_value, resolved_field_type,
-                                ConsumingUse.STRUCT_FIELD)
-
-            llvm_field_type = codegen.types.ll_type(field_type)
-            casted_value = codegen.utils.cast_for_param(arg_value, llvm_field_type)
-            field_values.append(casted_value)
+            field_values.append(codegen.utils.cast_for_param(
+                arg_value, codegen.types.ll_type(field_type)))
 
     struct_value = ir.Constant(llvm_struct_type, ir.Undefined)
 
@@ -89,6 +71,35 @@ def emit_struct_value(codegen: 'LLVMCodegen', struct_type: StructType, args) -> 
         struct_value = codegen.builder.insert_value(struct_value, field_value, i)
 
     return struct_value
+
+
+def _resolve_field_type(codegen: 'LLVMCodegen', field_type):
+    """A field type with a named struct or enum resolved against the tables."""
+    if isinstance(field_type, UnknownType):
+        if field_type.name in codegen.struct_table.by_name:
+            return codegen.struct_table.by_name[field_type.name]
+        if field_type.name in codegen.enum_table.by_name:
+            return codegen.enum_table.by_name[field_type.name]
+    return field_type
+
+
+def _load_array_field(codegen: 'LLVMCodegen', arg_value: ir.Value, field_type) -> ir.Value:
+    """A `T[]` field value by value: some expressions answer the descriptor's address.
+
+    A `from([...])` argument is emitted like any other expression: the typecheck pass
+    stamped the field's `T[]` on it, and the one emitter reads that stamp (#544), so no
+    derivation of the element type lives here.
+    """
+    if not isinstance(field_type, DynamicArrayType) or not isinstance(arg_value.type, ir.PointerType):
+        return arg_value
+    expected_struct_type = ir.LiteralStructType([
+        codegen.types.i32,
+        codegen.types.i32,
+        ir.PointerType(codegen.types.ll_type(field_type.base_type)),
+    ])
+    if arg_value.type.pointee == expected_struct_type:
+        return codegen.builder.load(arg_value)
+    return arg_value
 
 
 def emit_member_access(codegen: 'LLVMCodegen', expr: MemberAccess, to_i1: bool = False) -> ir.Value:

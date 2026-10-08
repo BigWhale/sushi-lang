@@ -1,0 +1,32 @@
+# The control for the ?? exit: the value of an enum payload is a temporary that owns
+# a string, and the later sibling operand is Ok. The position frees it once.
+# EXPECT_STDOUT_EXACT: "77z\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn fails() string | StdError:
+    return Result.Err(StdError.Error)
+
+fn ok() string | StdError:
+    return Result.Ok("z")
+
+fn mk(i32 a) string:
+    return "{a}{a}"
+
+enum Box:
+    Two(string, string)
+    Empty
+
+fn match_box(Box bx) string:
+    match bx:
+        Box.Two(p, q) -> return "{p}{q}"
+        Box.Empty -> return "none"
+
+fn c1(i32 a) string | StdError:
+    let Box bx = Box.Two(mk(a), ok()??)
+    let string x = match_box(bx)
+    return Result.Ok(x)
+
+fn main() i32:
+    println(c1(7).realise("err"))
+    return 0

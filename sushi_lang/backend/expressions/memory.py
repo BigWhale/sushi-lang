@@ -314,6 +314,39 @@ def own_temporary(codegen: 'LLVMCodegen', expr, value: ir.Value,
     return slot
 
 
+def hold_operand(codegen: 'LLVMCodegen', expr, value: ir.Value,
+                 semantic_type: Optional[Type]) -> None:
+    """Give an owning temporary OPERAND its owner at once, before its siblings are emitted.
+
+    A `??` in a later sibling leaves before the position takes the operand, and that exit
+    frees only what has an owner. A position that only reads the operand keeps this owner;
+    a position that takes it goes through `consume()`, which releases the hold.
+    """
+    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
+
+    if value is None or semantic_type is None:
+        return
+    resolved = resolve_named_type(codegen, semantic_type)
+    if resolved is None or not needs_cleanup(codegen, resolved):
+        return
+    if not expression_is_temporary(codegen, expr):
+        return
+    ll_type = codegen.types.ll_type(resolved)
+    if isinstance(value.type, ir.PointerType) and value.type.pointee == ll_type:
+        value = codegen.builder.load(value, name="operand_val")
+    elif value.type != ll_type:
+        return
+    own_temporary(codegen, expr, value, resolved, prefix="__operand")
+
+
+def emit_held_operand(codegen: 'LLVMCodegen', expr,
+                      semantic_type: Optional[Type]) -> ir.Value:
+    """Emit one operand of a call, a construction or a comparison, and hold it at once."""
+    value = codegen.expressions.emit_expr(expr)
+    hold_operand(codegen, expr, value, semantic_type)
+    return value
+
+
 def park_value(codegen: 'LLVMCodegen', expr, value: ir.Value,
                semantic_type: Optional[Type],
                slot_type: Optional[ir.Type] = None) -> ir.Value:

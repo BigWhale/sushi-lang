@@ -26,7 +26,7 @@ runs through the same seam so the two never disagree about a count.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, List, Optional, Sequence
 
 from llvmlite import ir
@@ -89,6 +89,7 @@ def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
     from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
     from sushi_lang.backend.ranges import emit_range
     from sushi_lang.backend.destructors import needs_cleanup
+    from sushi_lang.backend.expressions.memory import emit_held_operand
 
     runs = read_runs(codegen, elements)
     if runs is None:
@@ -96,6 +97,7 @@ def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
 
     i32 = codegen.types.i32
     emitted: List[EmittedRun] = []
+    taken: List[tuple] = []
     for run in runs:
         if run.is_range:
             if run.plan is not None:
@@ -120,13 +122,19 @@ def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
             value = emit_borrowed_arg(codegen, run.value, element_type)
             owning = element_type is not None and needs_cleanup(codegen, element_type)
         else:
-            # One value, one slot, one position. This still CONSUMES.
-            value = consume(codegen, run.value, codegen.expressions.emit_expr(run.value),
-                            element_type, ConsumingUse.ARRAY_ELEMENT)
+            # One value, one slot, one position. This still CONSUMES, after the last run
+            # is emitted: until then the value is held, so a `??` in a later element
+            # frees it once.
+            value = emit_held_operand(codegen, run.value, element_type)
+            taken.append((len(emitted), run.value))
             owning = False
 
         emitted.append(EmittedRun(count=count, value=value,
                                   element_type=element_type if owning else None))
+    for index, source in taken:
+        run = emitted[index]
+        emitted[index] = replace(run, value=consume(codegen, source, run.value, element_type,
+                                                    ConsumingUse.ARRAY_ELEMENT))
     return emitted
 
 

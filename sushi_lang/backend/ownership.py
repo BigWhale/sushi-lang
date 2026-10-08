@@ -75,10 +75,10 @@ def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
 
     if decision is Ownership.MOVE:
         _mark_moved(codegen, source)
+        _release_temporary(codegen, source)
         return value
     if decision is Ownership.ADOPT:
-        if provenance is Provenance.FRESH:
-            _release_temporary(codegen, source)
+        _release_temporary(codegen, source)
         return value
 
     # REJECT is CE2411, which the borrow pass reports before codegen ever runs. Reaching it here
@@ -157,10 +157,12 @@ def _mark_moved(codegen: 'LLVMCodegen', source) -> None:
 
 
 def _release_temporary(codegen: 'LLVMCodegen', source) -> None:
-    """A FRESH value goes to its new owner, so a scope temporary that holds it frees nothing.
+    """The value goes to its new owner, so a scope temporary that holds it frees nothing.
 
     A method call holds its receiver in a scope temporary before the method is known, and
-    a `nom self` method then takes that receiver (#1169).
+    a `nom self` method then takes that receiver (#1169). An operand is held the same way
+    from its emission until its position takes it, so a `??` in a later sibling operand
+    frees it once (`hold_operand`).
     """
     name = codegen.memory.temporary_holding(source)
     if name is not None:

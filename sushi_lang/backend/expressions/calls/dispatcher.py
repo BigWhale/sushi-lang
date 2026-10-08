@@ -13,7 +13,7 @@ from sushi_lang.backend.expressions.calls.foreign import (
     emit_errno, marshal_argument, marshal_string, try_emit_foreign_ptr_method,
     unmarshal_return)
 from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION
-from sushi_lang.backend.expressions.memory import own_temporary
+from sushi_lang.backend.expressions.memory import emit_held_operand, own_temporary
 from sushi_lang.backend.ownership import ConsumingUse, consume
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -94,15 +94,16 @@ def emit_named_call(codegen: 'LLVMCodegen', expr, callee: str, llvm_fn, func_sig
 
     if variadic_param is not None:
         fixed_count = len(func_sig.params) - 1
-        fixed_args = [codegen.expressions.emit_expr(a) for a in expr.args[:fixed_count]]
+        fixed_args = _emit_named_call_arguments(codegen, expr.args[:fixed_count], func_sig)
         # The FIXED parameters follow their declared modes like any call's. The trailing
-        # arguments go into the synthesized T[], which the callee owns whole.
-        _settle_named_call_arguments(codegen, expr.args[:fixed_count], fixed_args, func_sig)
+        # arguments go into the synthesized T[], which the callee owns whole. The fixed
+        # ones are settled after the trailing ones are emitted, as every operand is.
         array_struct = build_variadic_array(
             codegen, expr.args[fixed_count:], variadic_param.ty, callee)
+        _settle_named_call_arguments(codegen, expr.args[:fixed_count], fixed_args, func_sig)
         args = fixed_args + [array_struct]
     else:
-        args = [codegen.expressions.emit_expr(a) for a in expr.args]
+        args = _emit_named_call_arguments(codegen, expr.args, func_sig)
         _settle_named_call_arguments(codegen, expr.args, args, func_sig)
 
     return emit_checked_call(codegen, llvm_fn, args, to_i1)
@@ -149,12 +150,12 @@ def _emit_indirect_call(codegen: 'LLVMCodegen', expr: Call, fat_value: 'ir.Value
     """Emit an indirect call through a function value (fat pointer)."""
     from sushi_lang.backend.runtime import closures
     from sushi_lang.semantics.param_modes import CalleeKind, effective_modes
-    args = [codegen.expressions.emit_expr(a) for a in expr.args]
     # The callee's modes travel WITH the function type, which is why the type is
     # invariant on them: without that, one indirection would defeat the rule (#335).
-    settle_call_arguments(
-        codegen, list(expr.args), args, list(fn_type.param_types),
-        effective_modes(fn_type.modes, CalleeKind.INDIRECT))
+    param_types = list(fn_type.param_types)
+    modes = effective_modes(fn_type.modes, CalleeKind.INDIRECT)
+    args = emit_call_arguments(codegen, list(expr.args), param_types, modes)
+    settle_call_arguments(codegen, list(expr.args), args, param_types, modes)
     return closures.emit_indirect_call(codegen, fat_value, fn_type, args, to_i1)
 
 
@@ -168,35 +169,39 @@ def _resolve_param_type(codegen: 'LLVMCodegen', ty):
     return ty
 
 
-def _park_argument_temp(codegen: 'LLVMCodegen', arg_expr, value: ir.Value, resolved) -> None:
-    """Give a caller-kept argument temporary an owner, so scope exit frees it once."""
-    ll_type = codegen.types.ll_type(resolved)
-    if isinstance(value.type, ir.PointerType) and value.type.pointee == ll_type:
-        value = codegen.builder.load(value, name="arg_temp_val")
-    elif value.type != ll_type:
-        return
-    own_temporary(codegen, arg_expr, value, resolved, prefix="__arg_temp")
+def emit_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, param_types: list,
+                        modes) -> list:
+    """Emit the arguments in order, and hold each owning temporary as soon as it exists.
+
+    The hold is the owner of an argument that the callee only reads. A `nom` argument
+    keeps it until `settle_call_arguments` hands the value to the callee, so a `??` in a
+    later argument frees every earlier one once.
+    """
+    args = []
+    for i, arg_expr in enumerate(arg_exprs):
+        if i >= len(modes) or i >= len(param_types):
+            args.append(codegen.expressions.emit_expr(arg_expr))
+            continue
+        resolved = _resolve_param_type(codegen, param_types[i])
+        args.append(emit_held_operand(codegen, arg_expr, resolved))
+    return args
 
 
 def settle_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
                           param_types: list, modes) -> None:
-    """THE call-argument seam: give every argument exactly one owner, in place."""
-    from sushi_lang.backend.destructors import needs_cleanup
-    from sushi_lang.backend.expressions.memory import expression_is_temporary
+    """THE call-argument seam: give every `nom` argument to the callee, after the last one.
 
+    `emit_call_arguments` gave every owning temporary its owner. A kept argument keeps
+    that owner, and `consume()` releases it for an argument the callee takes.
+    """
     for i, mode in enumerate(modes):
         if i >= len(args) or i >= len(arg_exprs):
             continue
         arg_expr = arg_exprs[i]
-        if arg_expr is None:
+        if arg_expr is None or not mode.consumes:
             continue
         resolved = _resolve_param_type(codegen, param_types[i])
-        if mode.consumes:
-            args[i] = consume(codegen, arg_expr, args[i], resolved,
-                              ConsumingUse.CALL_ARG)
-        elif (resolved is not None and needs_cleanup(codegen, resolved)
-                and expression_is_temporary(codegen, arg_expr)):
-            _park_argument_temp(codegen, arg_expr, args[i], resolved)
+        args[i] = consume(codegen, arg_expr, args[i], resolved, ConsumingUse.CALL_ARG)
 
 
 def consume_receiver(codegen: 'LLVMCodegen', expr, value: ir.Value) -> ir.Value:
@@ -208,6 +213,25 @@ def consume_receiver(codegen: 'LLVMCodegen', expr, value: ir.Value) -> ir.Value:
                    ConsumingUse.RECEIVER)
 
 
+def _method_call_modes(expr):
+    """The parameter modes and types the typecheck pass stamped on a method call."""
+    modes = getattr(expr, "callee_param_modes", None)
+    if modes is None:
+        return None, []
+    param_types = list(getattr(expr, "callee_param_types", None) or ())
+    if len(param_types) < len(modes):
+        param_types += [None] * (len(modes) - len(param_types))
+    return modes, param_types
+
+
+def emit_method_call_arguments(codegen: 'LLVMCodegen', expr) -> list:
+    """Emit a method call's arguments, each owning temporary held as soon as it exists."""
+    modes, param_types = _method_call_modes(expr)
+    if modes is None:
+        return [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    return emit_call_arguments(codegen, list(expr.args), param_types, modes)
+
+
 def settle_method_call_arguments(codegen: 'LLVMCodegen', expr, args: list) -> None:
     """Settle a method call's arguments from the modes the typecheck pass resolved.
 
@@ -216,13 +240,20 @@ def settle_method_call_arguments(codegen: 'LLVMCodegen', expr, args: list) -> No
     stamp and used to emit its arguments without reading it, so an owning temporary
     handed to one had no owner at all (#475).
     """
-    modes = getattr(expr, "callee_param_modes", None)
+    modes, param_types = _method_call_modes(expr)
     if modes is None:
         return
-    param_types = list(getattr(expr, "callee_param_types", None) or ())
-    if len(param_types) < len(modes):
-        param_types += [None] * (len(modes) - len(param_types))
     settle_call_arguments(codegen, list(expr.args), args, param_types, modes)
+
+
+def _emit_named_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, func_sig) -> list:
+    """Emit a named callee's arguments, each owning temporary held as soon as it exists."""
+    from sushi_lang.semantics.param_modes import CalleeKind, modes_for
+    if func_sig is None or not func_sig.params:
+        return [codegen.expressions.emit_expr(a) for a in arg_exprs]
+    return emit_call_arguments(
+        codegen, list(arg_exprs), [p.ty for p in func_sig.params],
+        modes_for(func_sig.params, CalleeKind.FUNCTION))
 
 
 def _settle_named_call_arguments(codegen: 'LLVMCodegen', arg_exprs: list, args: list,
@@ -264,7 +295,7 @@ def _try_emit_static_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
     if llvm_fn is None:
         raise KeyError(f"Static method not found: {func_name}")
 
-    args = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    args = emit_method_call_arguments(codegen, expr)
     settle_method_call_arguments(codegen, expr, args)
     return emit_checked_call(codegen, llvm_fn, args, to_i1)
 
@@ -485,7 +516,7 @@ def _emit_extension_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
         from sushi_lang.backend.expressions.calls.utils import emit_receiver_as_pointer
         receiver_value = emit_receiver_as_pointer(codegen, expr.receiver)
 
-    arg_values = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    arg_values = emit_method_call_arguments(codegen, expr)
     if self_mode.consumes:
         # `nom self` (ruling R25): the receiver crosses by value and the callee becomes
         # its owner, so the source is relinquished through the ownership seam exactly as

@@ -29,8 +29,11 @@ def build_variadic_array(codegen: 'LLVMCodegen', trailing_exprs: List,
     # trailing element is a CALL_ARG consuming use of the ELEMENT type: the synthesized
     # array stores it shallowly and the callee recursively destroys it at scope exit,
     # so an owning Name source moves (its own RAII is skipped) and a fresh temp adopts
-    # in. A plain-typed element is an ADOPT no-op.
-    trailing_values = [codegen.expressions.emit_expr(a) for a in trailing_exprs]
+    # in. A plain-typed element is an ADOPT no-op. Each element is held from its emission
+    # until the array takes it, so a `??` in a later element frees it once.
+    from sushi_lang.backend.expressions.memory import emit_held_operand
+    trailing_values = [emit_held_operand(codegen, a, array_type.base_type)
+                       for a in trailing_exprs]
     trailing_values = [
         consume(codegen, arg_expr, value, array_type.base_type, ConsumingUse.CALL_ARG)
         for arg_expr, value in zip(trailing_exprs, trailing_values, strict=True)

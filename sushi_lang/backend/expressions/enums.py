@@ -82,9 +82,15 @@ def emit_enum_constructor_from_method_call(
         # destroy, clone and hash all read the same offsets, so construct and extract
         # cannot disagree (they used to derive offsets from two different size walks).
         field_offsets = codegen.types.payload_field_offsets(variant.associated_types)
-        for i, (arg_expr, arg_type) in enumerate(zip(args, variant.associated_types, strict=True)):
-            arg_value = codegen.expressions.emit_expr(arg_expr)
-
+        # Every payload value is emitted and held first, and taken only after the last
+        # one: a `??` in a later argument leaves before the variant exists, and the hold
+        # frees an earlier value on that exit.
+        from sushi_lang.backend.expressions.memory import emit_held_operand
+        payload_types = list(variant.associated_types)
+        emitted = [emit_held_operand(codegen, arg_expr, arg_type)
+                   for arg_expr, arg_type in zip(args, payload_types, strict=True)]
+        for i, (arg_expr, arg_type, arg_value) in enumerate(
+                zip(args, payload_types, emitted, strict=True)):
             # Some expressions hand back a POINTER rather than the value -- an array
             # `.clone()`, for one. The payload goes into the variant's byte blob
             # verbatim, so an unnormalized pointer read back a garbage length.
