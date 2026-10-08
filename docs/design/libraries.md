@@ -265,13 +265,24 @@ test runner's stdlib gates: while `SUSHI_STDLIB_DOC_GATE` or `SUSHI_STDLIB_DEAD_
 is set, the `docs` or the `unused` pass keeps the warnings of a bundled stdlib unit, so
 the gates still see them. A source library stays silent under both gates.
 
-**The limit: a generic template is checked only when code instantiates it.** A generic
-function that no code calls is never checked, in a program and in a `--lib` build
-alike. So the author of a library sees the lints of a template only when the library's
-own code, or the author's own tests, instantiate it. There is NO author-side template
-check at `--lib`; this is the position of C++ and Zig, where a template body is checked
-at its instantiation. The consequence is that a template's warning reaches nobody when
-the author never instantiates it: the consumer drops it by the rule above.
+**A generic template is checked at the author's build.** The `typecheck` pass checks
+every template one time, where it is written, with each type parameter opaque (#1070,
+`docs/design/checked-generics.md`). This includes a template that no code calls, and it
+holds in a `--lib` build of each kind as in a program. So the author of a library sees
+the errors and the lints of each template (for example [CW1001](../error-catalog.md#cw1001) and an operation that
+no constraint promises) in the library's own build. This is the position of Rust, Swift
+and Go; before #1070 it was the position of C++ and Zig, where a template body is checked
+at its instantiation, and a template's warning reached nobody when the author never
+instantiated it.
+
+The consumer does not check the template of a consumed library unit again: the author's
+build did it. The rule above stays: the consumer drops a warning whose location is in
+library code. A fault that only an instance can show (such as E3 for the type
+argument of an opaque `E`) is still reported at the consumer, at the site that names the
+instance, with a note at the template. A library that an older compiler built did not
+get the author-side check. The compiler-version check refuses it at a later minor version
+([CE3503](../error-catalog.md#ce3503)); with `--ignore-compiler-version`, its templates are checked per copy, as
+before.
 
 ### 4.5 Why [CE5007](../error-catalog.md#ce5007) does not fire on the source path
 

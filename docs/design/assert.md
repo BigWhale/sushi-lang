@@ -75,7 +75,9 @@ in `docs/error-handling.md`.
   consuming use inside them follows the ordinary rules.
 - **An assert stands in any statement position**: a block, a match arm (`X -> assert(...)`),
   a lambda body, a generic body, an `expand` body. It is not a top-level declaration.
-- **A generic body is checked per instance**, as every other statement is. The
+- **A generic body is checked once, where it is written**, as every other statement is
+  (`docs/design/checked-generics.md`). A type parameter is opaque there, so a condition
+  `a == b` on a `T` needs `T: Eq`, and a hole in the message needs `Display`. The
   monomorphized copy keeps the position of the template.
 
 ## The run-time behaviour

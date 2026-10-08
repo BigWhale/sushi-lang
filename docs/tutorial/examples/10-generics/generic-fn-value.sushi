@@ -1,4 +1,4 @@
-fn describe@(T)(T x) string:
+fn describe@(T: Display)(T x) string:
     return "<{x}>"
 
 fn call_with_42(fn(i32) -> string f) string:

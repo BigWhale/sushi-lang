@@ -13,7 +13,7 @@ extend i32[] total() i32:
 extend T[] count() i32:
     return self.len()
 
-extend Box@(T) paired@(U)(U other) string:
+extend Box@(T: Display) paired@(U: Display)(U other) string:
     return "{self.value} and {other}"
 
 fn main() i32:

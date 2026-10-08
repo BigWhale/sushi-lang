@@ -77,7 +77,9 @@ Three things are happening here:
   the elements share *any* method.
 - **`expand(a in args):`** runs its body once per argument, with `a` bound to that argument's
   real value and type. The first `a` is an `i32`, the second a `string`, the third a `bool` —
-  each `a.describe()` dispatches to the right `extend` block.
+  each `a.describe()` dispatches to the right `extend` block. The compiler checks the body
+  one time, where it is written: there `a` is opaque, and it has only what `Describe`
+  promises.
 - **`show_all()` with no arguments is fine** — the `expand` body simply runs zero times (notice
   there's no fourth line of output).
 
@@ -130,14 +132,20 @@ Each unrolled copy appends to `line`. (The third call, `print_row()`, accumulate
 prints an empty line.) Early `return` and the `??` operator also work inside `expand`, and any
 owned temporaries you create per element are cleaned up exactly once — even on an early exit.
 
+An `expand` may run zero times, as a `foreach` may. So a `return` inside it does not end the
+function: a function that returns a value needs a `return` after the `expand` too, or it is
+[CE0107](../error-catalog.md#ce0107). The binder follows the rules of a `foreach` item: a binder that nothing reads is
+[CW1001](../error-catalog.md#cw1001), and `expand(_ in args):` runs the body for each element with no name.
+
 ## Why the constraint matters
 
 You might wonder why `...Ts: Describe` needs the `: Describe` at all. Because the elements have
 *different* types, the only operations the body can perform are ones **guaranteed for every
 possible element**. The perk bound is that guarantee, checked once where the function is
-defined. Try to call the pack with a type that doesn't implement the perk and you get a clear
-**[CE2090](../error-catalog.md#ce2090)** at the call site, naming the type and the missing perk — not a wall of errors buried
-inside the expanded body.
+defined. Without it, `a.describe()` is [CE2008](../error-catalog.md#ce2008) at the body, and a hole `"{a}"` needs
+`...Ts: Display`. Try to call the pack with a type that doesn't implement the perk and you get a
+clear **[CE2090](../error-catalog.md#ce2090)** at the call site, naming the type and the missing perk — not a wall of
+errors buried inside the expanded body.
 
 ## Packs travel across libraries
 
@@ -173,7 +181,9 @@ reference.
 - **`expand(x in pack):`** is compile-time-unrolled — once per element, each typed concretely —
   not a runtime loop. Zero arguments runs it zero times.
 - A **perk constraint** (`...Ts: Perk`) makes the body callable and is checked upfront ([CE2090](../error-catalog.md#ce2090)
-  on a bad element type).
+  on a bad element type). The body is checked once, where it is written.
+- An `expand` may run zero times, so a `return` inside it does not end the function.
+  `expand(_ in args)` discards the element.
 - `expand` bodies are ordinary code: they can accumulate, early-`return`, and use `??`.
 - Packs are **monomorphized** like generics, so they cost nothing at runtime, and they **cross
   `.slib` boundaries** (unlike native `...T`).

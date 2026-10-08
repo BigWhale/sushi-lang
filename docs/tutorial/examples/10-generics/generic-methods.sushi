@@ -1,7 +1,7 @@
 struct Box@(T):
     T item
 
-extend Box@(T) current() T:
+extend Box@(T: Clone) current() T:
     return self.item.clone()
 
 extend Box@(T) replace(poke self, nom T fresh) ~:

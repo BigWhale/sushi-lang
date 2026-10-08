@@ -30,7 +30,7 @@ each named for the stage it runs.
 | `shadowing` | reject an extension method that collides with a built-in ([CE2097](../error-catalog.md#ce2097)) | `semantics/semantic_analyzer.py` |
 | `effects` | which functions destroy a `poke` parameter, transitively | `semantics/passes/borrow/destroy_effects.py` |
 | `scope` | scope and variable analysis | `semantics/passes/scope.py` |
-| `typecheck` | type validation and inference | `semantics/passes/types/` |
+| `typecheck` | type validation and inference; each generic template is checked one time, where it is written, with its type parameters opaque | `semantics/passes/types/` |
 | `lift` | each lambda becomes a top-level function plus an environment | `semantics/passes/lift.py` |
 | `borrow` | borrow checking | `semantics/passes/borrow/` |
 
@@ -608,11 +608,22 @@ this way gets its own copies in the next round (#1146).
 
 ### One source, one report
 
-Every instance carries the TEMPLATE's spans, and each copy is walked by the per-unit
-passes as an ordinary function -- correctly, because a per-instance truth is only visible
-there: a consume that is a plain copy for one type argument is [CE2411](../error-catalog.md#ce2411) for an owning one.
-What must not follow is the COUNT. A fault in the shared body is reported once, at one
-caret, and not once per instantiation.
+The `typecheck` pass checks each template one time, where it is written (see "The template
+check" under that pass). A fault of the template is reported there, and the compiler adds
+the template to `SymbolTables.refused_templates`. Every copy of a refused template is
+MUTED: `Reporter.enter_body(func)` sets `muted` when the body's `template_id` is in the
+set, and `_record` drops each diagnostic of a muted body. A function copy, an extension
+copy, a perk-implementation copy and a lifted lambda carry the `template_id`, and the
+`typecheck`, `lift` and `borrow` passes all enter a body through `enter_body`, so one
+mechanism covers them all. A copy's message names a concrete type (`expected i32, got
+string`), so the identity collapse below cannot see that it repeats the template's fault.
+
+Every instance carries the TEMPLATE's spans, and each copy of a CLEAN template is walked
+by the per-unit passes as an ordinary function for the facts that are only visible there
+(the per-instance remainder of `docs/design/checked-generics.md` section 8): a consume
+that is a plain copy for one type argument is a move for an owning one. What must not
+follow is the COUNT. A fault in the shared body is reported once, at one caret, and not
+once per instantiation.
 
 The copy is stamped `instance_of` with the template's name. `Reporter.enter_body(func)`
 reads it -- the one seam every per-unit pass calls to say whose body it is about to read,
@@ -672,10 +683,10 @@ struct Pair@(T, U):
     T first
     U second
 
-extend Pair@(T, U) swapped() Pair@(U, T):
+extend Pair@(T: Clone, U: Clone) swapped() Pair@(U, T):
     return Pair(self.second.clone(), self.first.clone())
 
-fn first_of@(T, U)(Pair@(T, U) p) T:
+fn first_of@(T: Clone, U)(Pair@(T, U) p) T:
     return p.first.clone()
 
 fn main() i32:
@@ -1052,8 +1063,10 @@ channel's. The same type propagates unchanged; otherwise `find_conversion`
 `??` is [`CE2511`](../error-catalog.md#ce2511) with a help that names the declaration. The answer is stamped on the node
 (`TryExpr.inferred_conversion`), and the backend calls the conversion before the scope
 cleanup of the propagation path. `validate_cast_expression` asks the same question for
-`e as T` (`CastExpr.inferred_conversion`, else [`CE2014`](../error-catalog.md#ce2014)). A generic function asks it per
-instance, because each instance has its own copy of the node.
+`e as T` (`CastExpr.inferred_conversion`, else [`CE2014`](../error-catalog.md#ce2014)). In the check of a template, an
+opaque `E` has no conversion: `??` propagates the same `E` and no other ([`CE2511`](../error-catalog.md#ce2511) with a
+note at `E`, ruling R8). Each instance asks again on its own copy of the node, where E3
+also stays.
 
 **`or_err` and `map_err`.** Both are built-in methods with a method-level type parameter
 (`docs/design/error-conversion.md` section 8.3). A family's row in
@@ -1064,6 +1077,41 @@ instance, because each instance has its own copy of the node.
 and the `nom self` receiver are stamped for the `borrow` pass. A read-through `or_err` (a
 borrowed `Maybe` whose payload owns a resource) outside the operand of a `??` is [`CE2522`](../error-catalog.md#ce2522),
 from the `borrow` pass.
+
+### The template check
+
+The pass checks each template one time, where it is written (#1070,
+`docs/design/checked-generics.md`): a generic function, a generic-target or array
+extension, an extension with a method-level type parameter, and a perk implementation on a
+generic or array target. The driver is `passes/types/templates.py`, with three entry
+points: `check_function_template`, `check_extension_template` and `check_perk_template`.
+`TypeValidator.run()` calls them where it skipped a template before, for a unit that
+`_checks_templates` (`semantic_analyzer.py`) admits: a unit of the program (a library's own
+units at its `--lib` build included) and a bundled stdlib unit. A consumed library unit is
+not checked again.
+
+Each check:
+
+1. builds the opaque form of each type parameter (`opaque_type_params`, the one builder):
+   a `TypeParameter` with an owner and its constraints. For an extension or a perk
+   implementation, the receiver parameters get their implied and added bounds first
+   (`receiver_bounds`, `generics/extension_targets.py`);
+2. opens an overlay of the tables (`semantics/template_scope.py`): a read goes through to
+   the program table, a write stays in the overlay, and a scratch monomorphizer builds
+   `List@(T)`, `Maybe@(T)` and the other instances over `T` there;
+3. deep-copies the template and cuts the copy with the opaque substitution (the CHECK
+   COPY);
+4. checks the check copy with a `TemplateValidator`, whose `in_template_check` flag stops
+   every writer that cuts or queues a program copy
+   (`tests/unit/test_template_check_writes_no_copy.py`);
+5. runs `lift` on the check copy, into a scratch program;
+6. adds the template to `refused_templates` when the error count grew.
+
+Then it discards the check copy and the overlay. The statement rules ([CE0107](../error-catalog.md#ce0107),
+[CE0140](../error-catalog.md#ce0140), [CE2030](../error-catalog.md#ce2030)) run on the check copy too, with its stamps, and
+`check_template_statements` runs them on the written body of a template that the driver did
+not check. After the per-unit loop, `_reject_opaque_in_program_tables` is the backstop
+([CE0148](../error-catalog.md#ce0148)): no instance over an opaque parameter reached a program table.
 
 ### Return paths
 

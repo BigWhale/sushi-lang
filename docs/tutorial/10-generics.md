@@ -215,8 +215,10 @@ Two rules apply to explicit type arguments:
 
 ## Constraints
 
-A type parameter without a constraint accepts any type. A **constraint** limits the
-parameter to types that implement a perk. Perks are the subject of
+A type parameter without a constraint accepts any type, and so the body can do almost
+nothing with it: it can hold a `T`, move it and pass it on, and that is all. A
+**constraint** limits the parameter to types that implement a perk, and it gives the body
+the methods of that perk. Perks are the subject of
 [Chapter 11](11-perks-and-extensions.md). Here you need only this: a perk is a list of
 methods, and `extend Player with Scored:` gives those methods to `Player`.
 
@@ -237,6 +239,11 @@ key towel: always know where it is
 - `struct Keyed@(K: Hashable)` puts a constraint on a **struct**. A generic enum accepts
   constraints in the same way. `Hashable` is predefined, and each type with a derived hash
   (`string` here) satisfies it.
+
+The predefined perks give the operators too: `Eq` gives `==` and `!=`, `Ord` gives `<` and
+`>`, `Display` gives a hole `"{x}"` and `println(x)`, `Hashable` gives `.hash()`, and `Clone`
+gives `.clone()`. Each type that holds no resource satisfies `Clone`; a `File` does not.
+Arithmetic on a `T` has no perk, and the compiler refuses it.
 
 The compiler checks the constraint where you write the concrete type. For a function, this
 is the call site. For a struct or an enum, it is the written type: `let Holder@(i32) h`
@@ -261,7 +268,8 @@ a box of the text 'Mostly Harmless'
 ```
 
 - `current()` returns a copy of the item. A field read is a borrow, so the method calls
-  `.clone()` to return an independent value. `.clone()` works for each `T`.
+  `.clone()` to return an independent value. `.clone()` needs the promise `T: Clone`, so
+  the target adds it: `extend Box@(T: Clone)`. A `Box@(File)` gets no `current()`.
 - `replace(poke self, nom T fresh)` changes the box. `poke self` makes the receiver
   writable, and `nom T` takes ownership of the new item.
 - `extend Box@(i32) describe()` and `extend Box@(string) describe()` each apply to **one**
@@ -276,6 +284,10 @@ Two rules keep this clear:
   is [CE2098](../error-catalog.md#ce2098).
 
 An extension can also target a built-in generic type, for example `extend List@(T)`.
+
+A bound in a target (`T: Clone`) is legal only at the top level of an `extend` target.
+An extension also gets each bound that its type declares: on a `struct Keyed@(K: Hashable)`,
+the body of `extend Keyed@(K)` can call `.hash()` on a `K`.
 
 ## Static constructors on generic types
 
@@ -363,6 +375,7 @@ sum: 42
 ```
 
 `self.get(1)` returns a borrow into the array, so `second()` returns a `.clone()` of it.
+The clone needs the bound `(T: Clone)[]`, the array form of a target bound.
 The element position of an array target accepts two forms only: a new name, which is a
 type parameter (`extend T[]`), or the name of a declared type (`extend i32[]`,
 `extend string[]`). A generic type in that position, for example `extend Maybe@(T)[]`, is
@@ -371,8 +384,9 @@ name that you can write before a dot.
 
 ## Perk implementations on generic types
 
-A perk implementation can target a generic type too. Each instance then satisfies the
-perk, and a constrained generic function accepts it.
+A perk implementation can target a generic type too. Each instance whose type argument
+satisfies the bounds of the target then satisfies the perk, and a constrained generic
+function accepts it.
 
 ```sushi
 --8<-- "docs/tutorial/examples/10-generics/generic-perk-impl.sushi"
@@ -386,8 +400,9 @@ rendered Box(towel)
 rendered label number 7
 ```
 
-`extend Box@(T) with Show` makes `Box@(i32)` and `Box@(string)` both satisfy `Show`, so
-`render@(S: Show)` accepts both. `extend Label@(i32) with Show` applies to `Label@(i32)`
+`extend Box@(T: Display) with Show` makes `Box@(i32)` and `Box@(string)` both satisfy
+`Show`, so `render@(S: Show)` accepts both. The body puts `self.item` in a hole, so the
+target needs `T: Display`. `extend Label@(i32) with Show` applies to `Label@(i32)`
 only. A `Label@(string)` does not implement `Show`, and `render` refuses it with [CE4006](../error-catalog.md#ce4006).
 
 The compiler checks the header of a template implementation one time, as it is written.
@@ -504,6 +519,7 @@ a parameter gives T = i32: <42>
 a generic callee gives T = f64: <2.5>
 ```
 
+- `describe@(T: Display)` puts `x` in a hole, so `T` needs `Display`.
 - `let fn(string) -> string g = describe` makes the instance `describe@(string)`.
 - `call_with_42(describe)` makes `describe@(i32)`, from the parameter type
   `fn(i32) -> string`.
@@ -544,24 +560,27 @@ Thus generic code is as fast as code that you write by hand for each type. There
 run-time type information, no dynamic dispatch and no hidden allocation. Each instance is
 real code, so many instances make a larger binary. Usually this is not a problem.
 
-Monomorphization also tells you **when** the compiler checks a generic body: it checks
-each instance, with the concrete types. A constraint is a check at the call site, not a
-limit on the body. Thus a body can call a method that only some types have:
+The compiler does NOT check each instance on its own. It checks a generic body **one
+time, where you write it**, also when nothing calls it. In that check a type parameter is
+**opaque**: the body knows only what the constraints of `T` promise. So the signature is the
+whole contract, and a caller never sees an error inside a body that it did not write.
 
 ```sushi
---8<-- "docs/tutorial/examples/10-generics/per-instance-check.sushi"
+--8<-- "docs/tutorial/examples/10-generics/checked-body.sushi"
 ```
 
 Output:
 
 ```
-a string has len(): 4
+a string measures 8
+a number measures 42
 ```
 
-`size@(T)` has no constraint, but its body calls `x.len()`. The instance `size@(string)` is
-correct, because a `string` has `len()`. A call `size(4)` makes the instance `size@(i32)`,
-and the compiler reports the error in that instance: [CE2008](../error-catalog.md#ce2008) ("undefined function
-'i32.len'"). To tell the caller which types are correct, write a constraint.
+`twice_the_measure@(T: Measured)` calls `x.measure()`, and the constraint promises it. A
+body that calls a method no constraint promises is an error at the body, for example
+`fn size@(T)(T x) i32: return x.len()` is [CE2008](../error-catalog.md#ce2008) ("undefined function 'T.len'"),
+with a note at `T` and a help that names the constraint to add. A call with a type that
+does not satisfy a constraint is [CE4006](../error-catalog.md#ce4006) at the call.
 
 ## Generics across units
 
@@ -591,6 +610,9 @@ These limits are true today. Each one has a diagnostic.
 | A variadic `...T` parameter in an extension or perk method | [CE0115](../error-catalog.md#ce0115) | Use a free function |
 | Pack forwarding `inner(xs...)`, pack indexing, tuples | [CE2060](../error-catalog.md#ce2060) and others | Use `expand` in the function that holds the pack |
 | A nested array as an array target, `extend T[][]` | [CE2101](../error-catalog.md#ce2101) | Write `extend T[]`: `T` is then the inner array type |
+| Arithmetic on a type parameter, `a + b` with `a` of type `T` | [CE2518](../error-catalog.md#ce2518) | Write the function for a numeric type |
+| `==` with only `T: Ord` (a perk does not include another) | [CE2514](../error-catalog.md#ce2514) | Write both: `@(T: Eq + Ord)` |
+| A bound outside an `extend` target, `fn f(Box@(T: Clone) b)` | [CE6110](../error-catalog.md#ce6110) | Put the bound in `@(...)` of the declaration |
 
 A perk also has no inheritance, no default method bodies and no `Self` type
 ([Chapter 11](11-perks-and-extensions.md)).
@@ -607,13 +629,15 @@ A perk also has no inheritance, no default method bodies and no `Self` type
   them: `T`, `T[]`, `T[N]`, `Pair@(A, B)`, `peek T`, `fn(T) -> U`.
 - **Explicit type arguments** (`identity@(i32)(nom 5)`) are all or nothing, and only on a
   direct call of a named function.
-- **Constraints** (`@(T: Perk)`, `@(T: A + B)`) apply to functions, structs and enums.
+- **Constraints** (`@(T: Perk)`, `@(T: A + B)`) apply to functions, structs and enums,
+  and an `extend` target can add one (`extend Box@(T: Clone)`). `Eq`, `Ord`, `Display`,
+  `Hashable` and `Clone` give the operators, the hole, `.hash()` and `.clone()`.
 - Extension methods, statics, method-level type parameters, array targets, perk
   implementations and `Drop` all work on generic types.
 - A generic can carry an **error channel**, and a generic enum can be the error type.
 - A generic function is a **function value** when a position gives its type arguments.
-- The compiler **monomorphizes** generics: no run-time cost, and each instance is checked
-  with its concrete types.
+- The compiler **monomorphizes** generics: no run-time cost. It checks a generic body one
+  time, where it is written, and a type parameter has only what its constraints promise.
 
 Next, we give behaviour to types, both our types and the built-in ones, with extension
 methods and perks. Go to [Perks & Extensions](11-perks-and-extensions.md).

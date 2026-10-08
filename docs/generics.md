@@ -33,6 +33,9 @@ for each set of type arguments that the program uses (monomorphization):
 - **Methods on generic types** - `extend Box@(T)`, `extend T[]`, `extend List@(T)`, statics
   and method-level type parameters
 - **No runtime cost** - there is no runtime type information and no dynamic dispatch
+- **Checked where written** - the compiler checks a generic body one time, where it is
+  written, with each type parameter opaque. The body can do with a `T` only what a
+  constraint of `T` promises (see [A Template Is Checked Where It Is Written](#a-template-is-checked-where-it-is-written))
 
 The source syntax is `@(...)` in every position: a declaration (`struct Box@(T):`), a type
 (`Box@(i32)`), a constraint (`@(T: Hashable)`) and a call (`identity@(i32)(nom 5)`).
@@ -386,7 +389,7 @@ let List@(i32) copy = map(xs, id)       # map is bare: no `??`, no `.realise()`
 ### Constraints on Functions
 
 A constraint `@(T: Perk)` says that every type argument must implement the perk. The body can
-then call the perk methods. A perk method returns a **bare** value, and so does a generic
+then call the perk methods, and nothing else on a `T`. A perk method returns a **bare** value, and so does a generic
 function with no `| E`. `Hashable` is predefined: every type with a
 derived `hash()` satisfies it, and the implementation below REPLACES the derived hash of
 `Point` (see [Perks](perks.md#the-predefined-perks)):
@@ -463,6 +466,49 @@ fn main() i32:
     return 0
 ```
 
+### What a Constraint Promises
+
+The body of a template sees a `T` as OPAQUE: it has the methods and the operators that its
+constraints promise, and nothing more. The predefined perks give these operations:
+
+| Constraint | What the body may do with a `T` |
+|---|---|
+| `Eq` | `a == b`, `a != b`, `a.eq(b)`, and `contains` / `index_of` on a container of `T` |
+| `Ord` | `a < b`, `a <= b`, `a > b`, `a >= b`, `a.compare(b)` |
+| `Display` | a hole `"{x}"`, `print(x)`, `println(x)`, `x.to_str()` |
+| `Hashable` | `x.hash()` |
+| `Clone` | `x.clone()`, and `.clone()` of a `List@(T)`, a `Box@(T)` or a `Maybe@(T)` |
+| `Hashable + Eq` | a `HashMap@(T, V)` key |
+
+A user perk gives its own methods. There are no bundles: `T: Ord` does not give `==`, so
+write `@(T: Eq + Ord)`. Arithmetic on a `T` has no constraint, and it is refused
+([`CE2518`](error-catalog.md#ce2518)). So are a field of `T` ([`CE2106`](error-catalog.md#ce2106)) and a cast of `T` ([`CE2014`](error-catalog.md#ce2014)).
+
+`Clone` is satisfied by every type that holds no resource. A handle (`File`, `TcpStream`)
+does not satisfy it, because a deep copy of a handle would close one descriptor two times.
+`.share()` is the way to get a second owner of a handle. `.clone()` on a `T` with no `Clone`
+is [`CE4018`](error-catalog.md#ce4018):
+
+```sushi
+fn twice@(T: Clone)(T x) List@(T):
+    let List@(T) out = List.new()
+    out.push(x.clone())
+    out.push(x.clone())
+    return out
+
+fn main() i32:
+    let List@(string) l = twice("towel")
+    println("{l.len()}")      # 2
+    return 0
+```
+
+### A Constraint Passes On
+
+A template that calls another generic, writes a generic type, or builds one with a
+constructor passes its `T` on. The constraints of `T` must then promise the constraints of
+the callee. `outer@(T)` cannot call `inner@(U: Hashable)(x)`: that is [`CE4006`](error-catalog.md#ce4006) at the call
+in `outer`, and the help names `@(T: Hashable)`.
+
 For more information on perks, see the [Perks documentation](perks.md).
 
 ## Methods on Generic Types
@@ -535,7 +581,7 @@ enum Opt@(T):
 extend Box@(T) unwrap() T:
     return self.value
 
-extend Box@(T) describe() string:
+extend Box@(T: Display) describe() string:
     return "Box holding {self.value}"
 
 extend Opt@(T) is_has() bool:
@@ -558,6 +604,9 @@ fn main() i32:
 
     return 0
 ```
+
+`describe()` puts `self.value` in a hole, so its target adds the bound `T: Display`. See
+[Bounds in a Target](#bounds-in-a-target).
 
 A **concrete** type argument in the target is a constraint, not a parameter name. So
 `extend Box@(i32)` extends `Box@(i32)` alone, and one method name can serve several
@@ -584,6 +633,45 @@ A template and a concrete target for the same method name overlap, and the compi
 them ([`CE0101`](error-catalog.md#ce0101)). A partially concrete target such as `extend Pair@(i32, U)` is refused too
 ([`CE2098`](error-catalog.md#ce2098)). See the Extension Methods section of the
 [language guide](language-guide.md#extension-methods) for the full rule.
+
+### Bounds in a Target
+
+An extension on `Box@(T)` inherits every bound that `Box` declares. With
+`struct Keyed@(K: Hashable)`, the body of `extend Keyed@(K) code()` can call
+`self.key.hash()`. The `HashMap` key rule is a bound of the same kind: `extend
+HashMap@(K, V)` gets `K: Hashable + Eq`.
+
+The target can ADD a bound, `extend Box@(T: Display)`, or `(T: Clone)[]` for an array
+target. A receiver whose type argument does not satisfy the added bound is [`CE4006`](error-catalog.md#ce4006) at the
+call, and the compiler makes no copy of the method for it:
+
+```sushi
+struct Keyed@(K: Hashable):
+    K key
+
+extend Keyed@(K) code() u64:
+    return self.key.hash()                  # inherited: K is Hashable
+
+struct Box@(T):
+    T value
+
+extend Box@(T: Clone) dup() Box@(T):
+    return Box(value: self.value.clone())   # added: T is Clone
+
+fn main() i32:
+    let Keyed@(string) k = Keyed(key: "x")
+    let Box@(i32) b = Box(value: 7)
+    println("{k.code() == k.key.hash()} {b.dup().value}")   # true 7
+    return 0
+```
+
+The rules:
+
+- A bound stands only at the top level of an `extend` target. In a `let` type, a
+  parameter, a return, a field or inside a target argument, it is [`CE6110`](error-catalog.md#ce6110).
+- A bound on a name that is a type (`extend Box@(Point: Clone)`) is [`CE2124`](error-catalog.md#ce2124).
+- `Drop` adds no bound: `extend Guard@(T: Clone) with Drop` is [`CE4019`](error-catalog.md#ce4019). Put the bound
+  on the type.
 
 ### Receiver Modes and Statics
 
@@ -648,7 +736,7 @@ extends one element type. A static on an array target is [`CE2104`](error-catalo
 no spelling in an expression:
 
 ```sushi
-extend T[] second() Maybe@(T):
+extend (T: Clone)[] second() Maybe@(T):
     return self.get(1).clone()
 
 extend i32[] total() i32:
@@ -666,12 +754,13 @@ fn main() i32:
 ```
 
 The body returns `self.get(1).clone()`, because `self.get(1)` is a borrow and a `string`
-element owns heap. A body that gives a borrowed element away is [`CE2411`](error-catalog.md#ce2411).
+element owns heap. A body that gives a borrowed element away is [`CE2411`](error-catalog.md#ce2411). The clone needs
+the bound `(T: Clone)[]`: an array of a handle gets no `second()`.
 
 ### Perk Implementations on Generic Types
 
-`extend Box@(T) with Show` implements a perk for every instantiation of `Box`. Each instance
-then satisfies a constraint `@(S: Show)`:
+`extend Box@(T: Display) with Show` implements a perk for every instantiation of `Box` whose
+`T` has `Display`. Each of them then satisfies a constraint `@(S: Show)`:
 
 ```sushi
 perk Show:
@@ -680,7 +769,7 @@ perk Show:
 struct Box@(T):
     T value
 
-extend Box@(T) with Show:
+extend Box@(T: Display) with Show:
     fn show() string:
         return "Box({self.value})"
 
@@ -847,7 +936,7 @@ program uses:
 struct Box@(T):
     T value
 
-extend Box@(T) describe() string:
+extend Box@(T: Display) describe() string:
     return "Box holding {self.value}"
 
 fn main() i32:
@@ -869,48 +958,71 @@ The compiler finds the necessary instantiations from the program: a call, a writ
 `let` in a generic body, and a return that reaches another generic:
 
 ```sushi
-fn largest@(T)(T a, T b) T:
+fn largest@(T: Ord)(nom T a, nom T b) T:
     if (a > b):
         return a
     return b
 
 fn main() i32:
     # Compiler generates largest() for i32 and for f64
-    let i32 mi = largest(3, 9)
-    let f64 mf = largest(2.5, 1.5)
+    let i32 mi = largest(nom 3, nom 9)
+    let f64 mf = largest(nom 2.5, nom 1.5)
 
     println("{mi} {mf}")
 
     return 0
 ```
 
-### Each Instance Is Checked
+### A Template Is Checked Where It Is Written
 
-The compiler checks a generic body one time for each instance, not against its constraints.
-So a body can call a method that only some type arguments have. The example below compiles
-for a `string`. A call `size(4)` gives [`CE2008`](error-catalog.md#ce2008) (`undefined function 'i32.len'`) at the
-instance:
+The compiler checks a generic body ONE time, where it is written, and not in each copy. A
+template that nothing calls is checked too. In that check each type parameter is OPAQUE: the
+body can do with a `T` only what a constraint of `T` promises
+([What a Constraint Promises](#what-a-constraint-promises)). So the signature is the whole
+contract between the template and its caller.
 
+The body below calls `x.len()`, and no constraint of `T` gives `len`. The compiler reports
+[`CE2008`](error-catalog.md#ce2008) at the template, with a note at `T`, also when nothing calls `size`:
+
+<!-- docs-sweep: error CE2008 -->
 ```sushi
 use <collections/strings>
 
 fn size@(T)(T x) i32:
-    return x.len()
+    return x.len()          # CE2008: 'T' has no method 'len'
 
 fn main() i32:
-    println(size("four"))
     return 0
 ```
 
-Write a constraint when a body needs a method, so that the requirement is part of the
-signature.
+```
+error [CE2008]: undefined function 'T.len'.
+  = note: 'T' is declared here with no constraint
+  = help: no perk declares 'len'; a type parameter has the methods of its constraints and nothing more
+```
+
+The fix is a constraint that promises the method, or a function for the concrete type.
+The rules of the check:
+
+- A fault of the template is reported one time, at the template. The copies of a refused
+  template report nothing more.
+- A type argument that does not satisfy a constraint is [`CE4006`](error-catalog.md#ce4006) at the call. The body
+  reports nothing for it.
+- The check runs in every build of the unit that declares the template, a `--lib` build
+  included. A library author sees the faults of a template that the library does not call.
+- Some facts exist only for a concrete type: whether a value copies or moves, its `drop()`,
+  its derived methods, its layout, and whether the `E` of a `Result@(T, E)` is an error
+  type. The copies keep those.
+
+The design record is [Checked generics](design/checked-generics.md).
 
 ### The Passes
 
 1. **`instantiate`**: collect generic instantiations from the program
 2. **`monomorphize`**: make the concrete copies of generic types and functions
 3. **`resolve`**: resolve field and variant types to the concrete ones
-4. **`typecheck`**: check the specialized code
+4. **`typecheck`**: check each template one time, with its type parameters opaque, and
+   then check the concrete copies
 
 See [Semantic Passes](internals/semantic-passes.md) for all the passes.
 
@@ -996,9 +1108,10 @@ fn make_pair@(T, U)(nom T first, nom U second) Pair@(T, U):
 
 ### 3. Write the Constraint That the Body Needs
 
-A body that calls `.hash()` on a `T` works for every `T` that has one, but the compiler finds
-a wrong type argument only at the instance. `@(T: Hashable)` puts the requirement in the
-signature, and the caller gets [`CE4006`](error-catalog.md#ce4006) at the call.
+A body that calls `.hash()` on a `T` needs `@(T: Hashable)`, and the compiler refuses the
+body without it. The error names the constraint to add. Write only the constraints that the
+body needs: each one is a requirement on every caller, and a caller whose type argument
+does not satisfy it gets [`CE4006`](error-catalog.md#ce4006) at the call.
 
 ### 4. Test Multiple Instantiations
 
@@ -1029,7 +1142,11 @@ let Box@(bool) b3 = Box(value: true)
 | A static on an array target | [`CE2104`](error-catalog.md#ce2104) |
 | A function type or a tuple type as an extension or perk-implementation target | [`CE2110`](error-catalog.md#ce2110) |
 | A nested array as an array extension target (`extend T[][]`, `extend i32[3][]`); `extend T[]` covers the nested receiver | [`CE2101`](error-catalog.md#ce2101) |
-| A template body is checked for each instance, not against its constraints | the diagnostic of the instance, for example [`CE2008`](error-catalog.md#ce2008) |
+| No arithmetic on a type parameter, and no generic numbers (no constraint gives `+` or a numeric literal of type `T`) | [`CE2518`](error-catalog.md#ce2518) |
+| No perk bundles: `T: Ord` does not give `==`; write `@(T: Eq + Ord)` | [`CE2514`](error-catalog.md#ce2514) |
+| `Clone` is decided by the compiler; `extend X with Clone` is refused | [`CE4017`](error-catalog.md#ce4017) |
+| A bound outside the top level of an `extend` target | [`CE6110`](error-catalog.md#ce6110) |
+| A bound in the target of a `Drop` implementation | [`CE4019`](error-catalog.md#ce4019) |
 
 ---
 

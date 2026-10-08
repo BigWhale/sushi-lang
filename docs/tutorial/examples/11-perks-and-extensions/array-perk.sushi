@@ -1,7 +1,7 @@
 perk Describable:
     fn describe() string
 
-extend T[] with Describable:
+extend (T: Display)[] with Describable:
     fn describe() string:
         if (self.len() == 0):
             return "nothing at all"

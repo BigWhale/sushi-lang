@@ -168,13 +168,16 @@ A pack is normally written **perk-constrained** (`...Ts: Describe`). The constra
 body usable: every element has a *different* concrete type, so for `expand(a in args): a.describe()`
 to type-check, the compiler needs a guarantee that `.describe()` is valid on *every* element type,
 whatever they turn out to be. The perk bound *is* that guarantee, checked once at the definition —
-the same upfront-checking model Sushi already uses for ordinary generics.
+the model Sushi uses for every generic: the body is checked one time, where it is written, and a
+type parameter has only what its constraints promise (see [Checked generics](design/checked-generics.md)).
 
 If a call supplies an element type that does not implement the perk, the call fails with **[CE2090](error-catalog.md#ce2090)**
 naming the offending element and constraint.
 
 An **unconstrained** pack (`...Ts` with no bound) may be declared, but its `expand` body cannot call
-anything on the elements — there is no statically-known API common to all possible types. Useful
+anything on the elements — there is no statically-known API common to all possible types. A method
+call on an element is **[CE2008](error-catalog.md#ce2008)**, and a hole `"{a}"` is **[CE2035](error-catalog.md#ce2035)**, at the template. The
+body can still count the elements, or move each one to a parameter of the element type. Useful
 work with unconstrained packs needs forwarding or indexing, which are
 [deferred](#limitations-and-deferred-features).
 
@@ -185,7 +188,19 @@ Conceptually each element produces one copy of the body with `x` bound to that e
 value:
 
 - The body runs **once per element, in declaration order**; arity 0 means the construct vanishes.
-- `x` is the concrete per-element value — `x.method()` dispatches statically to that type's impl.
+- The body is **checked once**, where it is written. There `x` is opaque: it has what the pack's
+  constraints promise, and nothing more. Each `expand` binds its own element type, so `a == b`
+  with `a` and `b` from two `expand`s is a mixed pair (**[CE2513](error-catalog.md#ce2513)**): in a call, the two
+  elements can have two different types.
+- In each copy, `x` is the concrete per-element value — `x.method()` dispatches statically to that
+  type's impl.
+- An `expand` **may run zero times**, as a `foreach` may. So a `return` inside it does not end the
+  path: a function that answers a value needs a `return` after the `expand` too
+  (**[CE0107](error-catalog.md#ce0107)**, at the template).
+- The binder follows the lints of a `foreach` item: **[CW1001](error-catalog.md#cw1001)** when nothing reads it, and
+  **[CW1002](error-catalog.md#cw1002)** for a shadow. `expand(_ in args):` discards the element (see the
+  example below).
+
 - The body is ordinary straight-line code: it can read and update surrounding locals, so `expand`
   can **accumulate** a result, not just produce output:
 
@@ -199,6 +214,20 @@ value:
 
 - Early `return` and the `??` propagation operator work inside `expand`; any owned per-element
   temporaries are RAII-dropped exactly once, including on the early-exit paths.
+
+A discard binder counts the elements of an unconstrained pack:
+
+```sushi
+fn count_all@(...Ts)(...Ts items) i32:
+    let i32 n = 0
+    expand(_ in items):
+        n := n + 1
+    return n
+
+fn main() i32:
+    println(count_all(1, "two", true))   # 3
+    return 0
+```
 
 ## How packs compile (monomorphization)
 
@@ -215,6 +244,10 @@ Packs reuse Sushi's generics pipeline — **compile-time monomorphization with s
 
 The result is straight-line, per-element-typed code with **zero loops, type tags, or boxing** for
 the expansion.
+
+The copies are for code generation. The `typecheck` pass checks the written template one
+time, with one opaque element type for each `expand`, so a fault in the body is reported one
+time, at the template, for every arity a program calls.
 
 ## Packs across `.slib` libraries
 
@@ -288,15 +321,17 @@ unsafe external "C" as libc because "formatted output":
 | **[CE0116](error-catalog.md#ce0116)** | a public *native* `...T` function cannot be exported through a `.slib` public API (does not apply to `...Ts` packs) |
 | **[CE0117](error-catalog.md#ce0117)** | a type-pack `...Ts` must be the last type parameter; at most one pack per function |
 | **[CE0118](error-catalog.md#ce0118)** | cannot mix a type-pack `...Ts` with a native `...T` in the same function |
-| **[CE0119](error-catalog.md#ce0119)** | malformed `expand` statement |
+| **[CE0119](error-catalog.md#ce0119)** | an `expand` outside the value pack of its own function: in a lambda body, in a body with no pack, or over a name that is not the value pack. Judged on the written body; the analysis stops after it |
+| **[CE0144](error-catalog.md#ce0144)** | the value pack used as a value outside `expand` (`g(args)`, `args[0]`) |
 | **[CE0120](error-catalog.md#ce0120)** | a bloom argument `arr...` used somewhere illegal (into a non-variadic parameter, or not the sole, last trailing argument) |
-| **[CE2090](error-catalog.md#ce2090)** | a pack element type does not satisfy the pack's perk constraint |
+| **[CE2090](error-catalog.md#ce2090)** | a pack element type does not satisfy the pack's perk constraint; in a template, an argument whose type does not promise the perk of a pack callee |
+| **[CE2008](error-catalog.md#ce2008)**, **[CE2035](error-catalog.md#ce2035)** and the other codes of [checked generics](design/checked-generics.md) | (reused) an operation on an element that the pack's constraints do not promise |
 | **[CE2006](error-catalog.md#ce2006)** | (reused) blooming a non-array value, or an array of the wrong element type, into a `...T` slot |
 
 ## Limitations and deferred features
 
-- **Perk-constrained packs only** — an unconstrained `...Ts` can be declared but its `expand` body
-  cannot operate on elements yet.
+- **Perk-constrained packs only** — an unconstrained `...Ts` can be declared, but its `expand` body
+  can only count, hold and pass on the elements: an element has what the pack's constraints promise.
 - **Plain functions only** — packs (and `...T`) are not allowed in perk or extension methods
   ([CE0115](error-catalog.md#ce0115)).
 - **Bloom source must be a bare variable** — `arr...` requires `arr` to be a `Name`. You cannot

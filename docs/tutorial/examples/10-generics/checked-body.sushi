@@ -1,0 +1,20 @@
+use <collections/strings>
+
+perk Measured:
+    fn measure() i32
+
+extend string with Measured:
+    fn measure() i32:
+        return self.size()
+
+extend i32 with Measured:
+    fn measure() i32:
+        return self
+
+fn twice_the_measure@(T: Measured)(T x) i32:
+    return x.measure() * 2
+
+fn main() i32:
+    println("a string measures {twice_the_measure('four')}")
+    println("a number measures {twice_the_measure(21)}")
+    return 0
