@@ -1,0 +1,13 @@
+# Two `let`s of one name in one `expand` body are an error.
+# EXPECT_ERROR_CODES_EXACT: CE1006
+# EXPECT_STDERR_CONTAINS: test_err_let_twice_in_an_expand_body.sushi:8:9: error [CE1006]
+# EXPECT_STDERR_CONTAINS: test_err_let_twice_in_an_expand_body.sushi:7:9\n
+fn show@(...Ts: Display)(...Ts args) ~:
+    expand(v in args):
+        let string s = "{v}"
+        let string s = "[{v}]"
+        println(s)
+
+fn main() i32:
+    show(1, "two")
+    return 0

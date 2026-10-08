@@ -20,7 +20,7 @@ _add(ErrorMessage("CE0101", Severity.ERROR,
 
 _add(ErrorMessage("CE0102", Severity.ERROR,
     "duplicate parameter '{name}'",
-    Category.FUNC, "A function declares the same parameter name more than once."))
+    Category.FUNC, "A function, a method or a lambda declares the same parameter name more than once."))
 
 _add(ErrorMessage("CE0103", Severity.ERROR,
     "missing return type for function '{name}'",

@@ -1,0 +1,13 @@
+# A generic extension method that declares one parameter name two times gets one diagnostic.
+# EXPECT_ERROR_CODES_EXACT: CE0102
+# EXPECT_STDERR_CONTAINS: test_err_generic_extension_parameter_twice.sushi:7:35: error [CE0102]
+struct Holder@(T):
+    T item
+
+extend Holder@(T) both(i32 a, i32 a) i32:
+    return a
+
+fn main() i32:
+    let Holder@(i32) h = Holder(1)
+    println(h.both(1, 2))
+    return 0

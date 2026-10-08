@@ -1,0 +1,18 @@
+# A perk implementation method that declares one parameter name two times is an error.
+# EXPECT_ERROR_CODES_EXACT: CE0102
+# EXPECT_STDERR_CONTAINS: test_err_perk_method_parameter_twice.sushi:12:24: error [CE0102]
+# EXPECT_STDERR_CONTAINS: test_err_perk_method_parameter_twice.sushi:12:17\n
+perk Pick:
+    fn pick(i32 a, i32 b) i32
+
+struct Box:
+    i32 n
+
+extend Box with Pick:
+    fn pick(i32 a, i32 a) i32:
+        return a
+
+fn main() i32:
+    let Box b = Box(1)
+    println(b.pick(1, 2))
+    return 0

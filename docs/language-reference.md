@@ -474,6 +474,13 @@ fn main() i32:
     return 0
 ```
 
+A block declares a name one time. A second `let` of a name in the same block is
+[CE1006](error-catalog.md#ce1006). The parameters of a function, a `foreach` item, an
+`expand` binder and the bindings of a match arm are in the scope of the body that they
+start, so a `let` in that body cannot repeat them. To change a variable, use `:=`. To use
+a name again, declare it in a nested block: that is a shadow
+([CW1002](error-catalog.md#cw1002)).
+
 ## Functions
 
 ### Declaration

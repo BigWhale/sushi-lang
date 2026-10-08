@@ -1,0 +1,13 @@
+# A variant pattern that binds one name two times is an error. A bare binding has the
+# span of its pattern, so the error and the note show the pattern.
+# EXPECT_ERROR_CODES_EXACT: CE1006
+# EXPECT_STDERR_CONTAINS: test_err_variant_pattern_binds_a_name_twice.sushi:12:9: error [CE1006]
+# EXPECT_STDERR_CONTAINS: test_err_variant_pattern_binds_a_name_twice.sushi:12:9\n
+enum Two:
+    Both(i32, i32)
+
+fn main() i32:
+    let Two v = Two.Both(1, 2)
+    match v:
+        Two.Both(a, a) -> println(a)
+    return 0

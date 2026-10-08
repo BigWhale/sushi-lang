@@ -825,7 +825,7 @@ Two functions share the same name in a compilation unit.
 
 **Message:** `duplicate parameter '{name}'`
 
-A function declares the same parameter name more than once.
+A function, a method or a lambda declares the same parameter name more than once.
 
 ### CE0103 {#ce0103}
 
@@ -1288,6 +1288,14 @@ Emitted when 'break' or 'continue' appear outside any loop.
 **Message:** `{kind} '{name}' already declared in this unit as {other}`
 
 In one unit, one name has one declaration, whatever its kind: `fn`, `const`, `var`, `struct`, `enum` and `perk` share one set of names. The SECOND declaration in source order is the error, and the note points at the first. The first keeps the name, and the refused declaration enters no table, so the uses of the first give no more errors. A use of the name that finds nothing under it -- a call of a refused function, a type position or a construction of a refused struct -- is a use of the refused declaration, and it gives no second diagnostic either. Two declarations of ONE kind keep that kind's code: [CE0004](#ce0004) (struct), [CE2046](#ce2046) (enum), [CE4001](#ce4001) (perk), [CE0101](#ce0101) (fn) and [CE0105](#ce0105) (const and var), and a struct beside an enum is [CE0006](#ce0006). Across units a name may be used again: the unit's own declaration wins over a name a flat `use` brings, and two imported public names of one spelling are reached with `use ... as` ([CE3012](#ce3012) at a bare use). Two TYPES of one name in two units stay refused, because a type is one per program. Rename one of the two declarations.
+
+### CE1006 {#ce1006}
+
+**Error** · scope
+
+**Message:** `'{name}' is already declared in this scope`
+
+One scope declares a local name one time. A `let`, a destructure binder, a pattern binding, a `foreach` item, an `expand` binder and a parameter share the scope of the body they start, so a `let` in a `foreach` body cannot repeat the item name, and a `let` in a function body cannot repeat a parameter name. The SECOND declaration is the error, and the note points at the first. The first keeps the name. To change the value, write `:=`. To use the name again for a different value, open a nested block: a declaration there shadows the outer one ([CW1002](#cw1002)). A repeated parameter name of a function or a lambda is [CE0102](#ce0102).
 
 ## CE20xx and CE21xx: Type, array and struct errors {#ce20xx}
 

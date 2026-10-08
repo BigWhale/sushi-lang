@@ -461,10 +461,13 @@ The binder of an `expand` is a declaration, as a `foreach` item is:
 | nothing reads the binder | [CW1001](../error-catalog.md#cw1001) at the binder |
 | a `let` of the binder name in a nested block, or a pattern binding of that name | [CW1002](../error-catalog.md#cw1002) |
 | `expand(a in args)` after a `let a` | [CW1002](../error-catalog.md#cw1002) at the binder |
+| a `let` of the binder name directly in the `expand` body | [CE1006](../error-catalog.md#ce1006), an error |
 | `expand(_ in args)` | nothing: `_` is the discard |
 
-A `let` of the binder name directly in the `expand` body, not in a nested block, gives no
-lint today. Section 12 states this gap.
+The binder and the body share one scope, as a `foreach` item and its body do. So a `let` of
+the binder name directly in the `expand` body, not in a nested block, is a second declaration
+in that scope. That is the error [CE1006](../error-catalog.md#ce1006), with a note at the binder, and
+not a shadow. In a nested block the same `let` is a shadow and gives [CW1002](../error-catalog.md#cw1002).
 
 ```sushi
 fn count_all@(...Ts)(...Ts items) i32:
@@ -729,11 +732,6 @@ it.
   and that `--ignore-compiler-version` lets in, keeps the per-instance behaviour at the
   consumer: its template faults show in a copy, per type argument (2.3).
 - **A pack on a struct or an enum** (`struct S@(...Ts)`) is outside this design.
-- **A `let` of the binder name DIRECTLY in an `expand` body gives no [CW1002](../error-catalog.md#cw1002).** In a
-  nested block it does (6.4). This is a known fault that existed before this work, and
-  `foreach` shares it: there the same direct `let` stops the build with an internal error
-  ([CE0000](../error-catalog.md#ce0000), a duplicate local in one scope). A redeclaration in one scope has no rule
-  of its own yet. Ruling P2 asks for the lint; the behaviour lags it in this one position.
 
 ## 13. Before and after
 

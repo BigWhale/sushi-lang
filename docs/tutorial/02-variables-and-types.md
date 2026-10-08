@@ -58,7 +58,8 @@ strings. And `has_towel`, a `bool`, printed as the word `true`: a boolean displa
     *nested* block can use a name that an outer block already declares. This is
     **shadowing**: the inner `let` makes a *separate* variable, and the outer variable does
     not change. The compiler gives the warning [`CW1002`](../error-catalog.md#cw1002) for each shadow. When you want to
-    change a variable, use `:=`.
+    change a variable, use `:=`. A second `let` of one name in the *same* block is the
+    error [`CE1006`](../error-catalog.md#ce1006).
 
 ## The primitive types
 

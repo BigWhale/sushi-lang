@@ -1,0 +1,10 @@
+# A tuple pattern that binds one name two times is an error. A bare binding has the
+# span of its pattern, so the error and the note show the pattern.
+# EXPECT_ERROR_CODES_EXACT: CE1006
+# EXPECT_STDERR_CONTAINS: test_err_tuple_pattern_binds_a_name_twice.sushi:9:9: error [CE1006]
+# EXPECT_STDERR_CONTAINS: test_err_tuple_pattern_binds_a_name_twice.sushi:9:9\n
+fn main() i32:
+    let (i32, i32) t = (1, 2)
+    match t:
+        (a, a) -> println(a)
+    return 0
