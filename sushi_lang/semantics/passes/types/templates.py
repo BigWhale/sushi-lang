@@ -18,7 +18,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Sequence, cast
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import BoundedTypeParam, Expand, ExtendDef, FuncDef, Program
+from sushi_lang.semantics.ast import (
+    BoundedTypeParam, Expand, ExtendDef, ExtendWithDef, FuncDef, Program)
 from sushi_lang.semantics.ast_walk import walk_nodes
 from sushi_lang.semantics.generics.types import TemplateId
 from sushi_lang.semantics.typesys import DynamicArrayType
@@ -140,6 +141,63 @@ def check_extension_template(validator: TypeValidator, ext: ExtendDef) -> bool:
     checker = _checker(check)
     checker._validate_extension_method(check_copy)
     _lifter(check, checker).lift_body(check_copy.body)
+    _close(check, template_id)
+    return True
+
+
+def check_perk_template(validator: TypeValidator, impl: ExtendWithDef) -> bool:
+    """Check one perk template on a check copy. Answers whether it was checked.
+
+    `extend Box@(T) with P:` and `extend T[] with P:` (#1070). Each parameter of the
+    target is opaque with its receiver bounds (R1). The header was judged on the written
+    template (`validate_template_header`); the check reads the method bodies. A refused
+    implementation, and one of a perk that no unit declares, is not checked.
+    """
+    from sushi_lang.semantics.generics.extension_targets import (
+        ARRAY_BASE_KEY, perk_template_id, receiver_bounds)
+    from sushi_lang.semantics.passes.collect.functions import opaque_type_params
+
+    template = validator.tables.generic_perk_impls.record_of(impl)
+    if template is None or validator.perk_table.get(impl.perk_name) is None:
+        return False
+    params = receiver_bounds(template, validator.generic_struct_table,
+                             validator.generic_enum_table)
+    if _names_no_perk(validator, params):
+        return False
+
+    check = _open(validator)
+    _reject_second_homes(validator, params)
+    template_id = perk_template_id(template)
+    opaque = opaque_type_params(params, template.unit_name, template_id.name)
+    args = tuple(opaque[bound.name] for bound in params)
+    target: Any
+    if template.base_type_name == ARRAY_BASE_KEY:
+        target = DynamicArrayType(base_type=args[0])
+    else:
+        target = _overlay_instance(check.scope, template.base_type_name, args)
+
+    from sushi_lang.semantics.generics.extensions import monomorphize_perk_impl
+    from sushi_lang.semantics.generics.late_interning import (
+        intern_copy_signatures, settle_new_instances)
+    from sushi_lang.semantics.passes.finite_types import table_marks
+    scope = check.scope
+    marks = table_marks(scope.tables.structs, scope.tables.enums)
+    # The deep copy comes FIRST, for the reason of a function template.
+    check_copy = monomorphize_perk_impl(
+        dataclasses.replace(template, impl=copy.deepcopy(template.impl)), target, args,
+        scope.monomorphizer.substitutor)
+    # The check copy IS the template: written, and no copy of a template for the mute.
+    check_copy.is_synthesized = False
+    for method in check_copy.methods:
+        method.instance_of = None
+        method.template_id = None
+    intern_copy_signatures(scope.tables, scope.monomorphizer, check_copy.methods)
+    settle_new_instances(scope.tables, scope.reporter, marks)
+
+    checker = _checker(check)
+    from .signatures import validate_perk_template_bodies
+    validate_perk_template_bodies(checker, target, check_copy)
+    _lifter(check, checker).lift_perk_impl(check_copy)
     _close(check, template_id)
     return True
 

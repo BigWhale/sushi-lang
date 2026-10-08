@@ -54,6 +54,8 @@ CUT_WITHOUT_ASKING = {
         "its one caller, _interned_static_target, asked",
     ("semantics/passes/types/templates.py", "check_extension_template"):
         "a check copy over opaque parameters, whose receiver bounds are its promises",
+    ("semantics/passes/types/templates.py", "check_perk_template"):
+        "a check copy over opaque parameters, whose receiver bounds are its promises",
 }
 
 

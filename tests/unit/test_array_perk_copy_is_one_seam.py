@@ -20,6 +20,8 @@ SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 CUTTERS = frozenset({
     SOURCE_ROOT / "semantics" / "generics" / "extensions.py",
     SOURCE_ROOT / "semantics" / "generics" / "array_perk_copies.py",
+    # The template check cuts a CHECK copy in its overlay and registers nothing (#1070).
+    SOURCE_ROOT / "semantics" / "passes" / "types" / "templates.py",
 })
 INSTALLERS = frozenset({
     SOURCE_ROOT / "semantics" / "semantic_analyzer.py",

@@ -1,0 +1,20 @@
+# The fault of a perk template is reported one time, at the template, and its copies
+# report it again for no instance (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2035
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T value
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "{self.value}"
+
+fn main() i32:
+    let Box@(i32) a = Box(1)
+    let Box@(string) b = Box("towel")
+    println(a.show())
+    println(b.show())
+    return 0

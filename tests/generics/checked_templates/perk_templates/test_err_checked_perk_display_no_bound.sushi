@@ -1,0 +1,17 @@
+# A perk template is checked where it is written (#1070): a hole needs `Display` on
+# `T`, and the implementation is never used.
+# EXPECT_ERROR_CODES_EXACT: CE2035
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T value
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "{self.value}"
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

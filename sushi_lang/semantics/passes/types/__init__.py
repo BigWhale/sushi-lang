@@ -153,9 +153,10 @@ class TypeValidator:
             validate_constant(self, const)
 
         # A template is checked one time, on a check copy, where it is written (#1070):
-        # a function template and an extension template. The copy reads the statement
-        # rules too, with the stamps it gets.
-        from .templates import check_extension_template, check_function_template
+        # a function template, an extension template and a perk template. The copy reads
+        # the statement rules too, with the stamps it gets.
+        from .templates import (
+            check_extension_template, check_function_template, check_perk_template)
         checked: set[int] = set()
         for func in program.functions:
             if func.type_params:
@@ -171,6 +172,8 @@ class TypeValidator:
         for impl in program.generic_perk_impls:
             self.reporter.leave_body()
             validate_template_header(self, impl)
+            if self.checks_templates and check_perk_template(self, impl):
+                checked.add(id(impl))
 
         # A template the loops above did not check: its statement rules that need no type
         # are read once, on the body as written.

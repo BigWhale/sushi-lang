@@ -55,7 +55,8 @@ def test_the_template_rung_writes_nothing():
         assert write not in source, f"_answer_from_template writes '{write}'"
 
 
-ENTRY_POINTS = [templates.check_function_template, templates.check_extension_template]
+ENTRY_POINTS = [templates.check_function_template, templates.check_extension_template,
+                templates.check_perk_template]
 
 
 @pytest.mark.parametrize("entry", ENTRY_POINTS, ids=[e.__name__ for e in ENTRY_POINTS])

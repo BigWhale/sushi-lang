@@ -1,0 +1,23 @@
+# A method of a perk template calls another method of the same template on `self`, and
+# the check resolves it (#1070).
+# EXPECT_STDOUT_EXACT: "box!\n"
+
+perk Show:
+    fn show() string
+    fn loud() string
+
+struct Box@(T):
+    T value
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "box"
+
+    fn loud() string:
+        let string s = self.show()
+        return "{s}!"
+
+fn main() i32:
+    let Box@(i32) b = Box(42)
+    println(b.loud())
+    return 0

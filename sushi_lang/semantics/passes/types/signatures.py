@@ -181,7 +181,8 @@ def check_template_statements(self, program, checked) -> None:
     bodies += [(ext, "method") for ext in program.generic_extensions
                if id(ext) not in checked]
     bodies += [(method, "method")
-               for impl in program.generic_perk_impls for method in impl.methods]
+               for impl in program.generic_perk_impls if id(impl) not in checked
+               for method in impl.methods]
     for node, kind in bodies:
         self.reporter.leave_body()
         self.body_name = callable_text(node.name, kind)
@@ -328,6 +329,17 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
     _reject_path_faults(self, method)
 
     _leave_body(self)
+
+
+def validate_perk_template_bodies(self, target_type, impl: ExtendWithDef) -> None:
+    """The bodies of the check copy of a perk template (#1070): the target, then each method.
+
+    The header is not judged here: `validate_template_header` judged it on the written
+    template, one time.
+    """
+    _validate_target_type(self, target_type, impl.target_type_span, False)
+    for method in impl.methods:
+        _validate_method_body(self, target_type, method, False)
 
 
 def validate_extension_method(self, ext: ExtendDef) -> None:
