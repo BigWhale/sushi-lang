@@ -30,6 +30,7 @@ FILLED_LATER = {
     "request_function_instance": "the analyzer's late function request",
     "check_call_constraints": "the analyzer's constraint check for one call site",
     "refused_templates": "the typecheck pass's template check (#1070)",
+    "holds_bound": "the tables themselves, in `__post_init__`: a target bound (#1070)",
 }
 
 

@@ -419,9 +419,10 @@ TYPE_NODE_NAMES = {
     "fn_type_t",       # First-class function type (e.g., fn(i32) -> i32)
     "tuple_t",         # Tuple type (e.g., (i32, string))
     "name_t", "qualified_name_t", "qualified_generic_type_t",
-    # A bounded type argument, `T: Clone`, and its array-element form `(T: Clone)`. Only
-    # the top level of an `extend` target reads one (#1070); every other position is CE6110.
-    "bounded_type_arg", "bounded_paren_t",
+    # The bounded array element `(T: Clone)`: only the top level of an `extend` target
+    # reads one (#1070), and every other position is CE6110. The bounded type argument
+    # `T: Clone` is no `type` of the grammar; the type-argument readers ask for it.
+    "bounded_paren_t",
 }
 
 NODE_TO_TYPE: Mapping[str, BuiltinType] = {

@@ -14,11 +14,21 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
 
 
+def _is_type_arg(child: object) -> bool:
+    """An element of a `type_list`: a type, or a bounded type argument (`T: Clone`)."""
+    return is_type_node(child) or (isinstance(child, Tree)
+                                   and child.data == "bounded_type_arg")
+
+
 def parse_type_list(type_list_node: Tree, ast_builder: 'ASTBuilder') -> List[Type]:
-    """Turn a `type_list` parse node into a list of resolved Types."""
+    """Turn a `type_list` parse node into a list of resolved Types.
+
+    A bounded argument goes through `_parse_type` too, which refuses it (CE6110): this
+    reader serves every position but the top level of an `extend` target.
+    """
     type_args: List[Type] = []
     for child in type_list_node.children:
-        if is_type_node(child):
+        if _is_type_arg(child):
             arg_type = ast_builder._parse_type(child)
             if arg_type is not None:
                 type_args.append(arg_type)
@@ -63,7 +73,7 @@ def _bounded_generic_target(node: Tree, ast_builder: 'ASTBuilder') -> Tuple[Opti
     args: List[Type] = []
     params: List[Optional[BoundedTypeParam]] = []
     for child in type_list_node.children:
-        if not is_type_node(child):
+        if not _is_type_arg(child):
             continue
         if child.data == "bounded_type_arg":
             param = _target_param(child)
