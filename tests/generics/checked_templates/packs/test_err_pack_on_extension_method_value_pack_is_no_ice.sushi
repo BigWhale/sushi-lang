@@ -1,0 +1,10 @@
+# A constrained type pack with its value pack on an extension method: CE0115 refuses the
+# value pack, and the type pack gets no template check, so no internal error (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE0115, CW1001, CE2063
+
+extend i32 m@(...Ts: Display)(...Ts args) i32:
+    return self
+
+fn main() i32:
+    println(1.m(2, "a"))
+    return 0

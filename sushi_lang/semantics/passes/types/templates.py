@@ -132,13 +132,17 @@ def check_extension_template(validator: TypeValidator, ext: ExtendDef) -> bool:
     (#1070). Each receiver parameter is opaque with its receiver bounds (R1: what the
     base declares, and what the target adds), and each method-level parameter with its
     own constraints, as parameters of ONE owner. A refused declaration, and a concrete
-    target with no method-level parameter, is no template.
+    target with no method-level parameter, is no template. A method-level type pack has
+    no opaque form: a method has no value pack, so no `expand` gives it an element type,
+    and the template is not checked.
     """
     from sushi_lang.semantics.generics.extension_targets import extension_template_id
     from sushi_lang.semantics.generics.extensions import monomorphize_extension_method
 
     record = validator.generic_extension_table.record_of(ext)
     if record is None or not (record.type_params or record.method_type_params):
+        return False
+    if any(tp.is_pack for tp in record.method_type_params):
         return False
     template_id = extension_template_id(record)
     opened = _open_receiver(validator, record, template_id, record.method_type_params)

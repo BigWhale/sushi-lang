@@ -1,0 +1,11 @@
+# A type pack on an extension method has no template check: the method has no value
+# pack, so no `expand` gives the pack an element type. The call reports the ordinary
+# diagnostic, and the compiler stops with no internal error (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2063
+
+extend i32 m@(...Ts)() i32:
+    return self
+
+fn main() i32:
+    println(1.m())
+    return 0
