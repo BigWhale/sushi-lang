@@ -519,7 +519,8 @@ class PerkCollector:
                 if not isinstance(impl, ExtendWithDef):
                     continue
                 if (self._reject_type_params_in_impl(impl)
-                        or self._reject_function_target(impl, impl.target_type)):
+                        or self._reject_function_target(impl, impl.target_type)
+                        or self._reject_clone_impl(impl)):
                     refused.append(impl)
                 elif self._collect_perk_impl(impl):
                     moved.append(impl)
@@ -809,6 +810,25 @@ class PerkCollector:
                 return True
         return False
 
+    def _reject_clone_impl(self, impl: ExtendWithDef) -> bool:
+        """CE4017: `Clone` is structural, and the compiler decides it.
+
+        The caller drops the implementation from both lists, and its methods are
+        recorded, so the contract check does not judge them again.
+        """
+        if impl.perk_name != self.CLONE_PERK:
+            return False
+        from sushi_lang.semantics.generics.type_display import display_type
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        target_type = impl.target_type
+        er.emit(self.r, ERR.CE4017, impl.perk_name_span or impl.loc,
+                type=display_type(target_type))
+        type_name = (target_type.base_name if isinstance(target_type, GenericTypeRef)
+                     else _get_type_name(target_type))
+        if type_name is not None:
+            self._refuse_methods(type_name, impl)
+        return True
+
     def _refuse_methods(self, base_type_name: str, impl: ExtendWithDef) -> None:
         """Record every method of a refused implementation, so its calls stay silent."""
         for method in impl.methods or []:
@@ -1042,15 +1062,6 @@ class PerkCollector:
         if not self.perks.get(perk_name):
             # The one diagnostic of the fault. Its calls stay silent.
             er.emit(self.r, ERR.CE4003, perk_name_span, perk=perk_name)
-            from sushi_lang.semantics.generics.types import GenericTypeRef
-            self._refuse_methods(target_type.base_name
-                                 if isinstance(target_type, GenericTypeRef)
-                                 else type_name, impl)
-            return False
-
-        if perk_name == self.CLONE_PERK:
-            from sushi_lang.semantics.generics.type_display import display_type
-            er.emit(self.r, ERR.CE4017, perk_name_span, type=display_type(target_type))
             from sushi_lang.semantics.generics.types import GenericTypeRef
             self._refuse_methods(target_type.base_name
                                  if isinstance(target_type, GenericTypeRef)

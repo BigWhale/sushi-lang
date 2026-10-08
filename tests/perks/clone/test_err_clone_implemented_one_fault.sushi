@@ -1,0 +1,14 @@
+# An implementation of `Clone` is refused whole: the refusal is the one diagnostic,
+# and the contract check does not judge the methods of a refused implementation.
+# EXPECT_ERROR_CODES_EXACT: CE4017
+
+struct Pt:
+    i32 x
+
+extend Pt with Clone:
+    fn clone() Pt:
+        return Pt(self.x)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0
