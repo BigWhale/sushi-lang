@@ -164,7 +164,9 @@ def instantiation_key(base_name: str, type_args: Tuple[Type, ...]) -> str:
     return interned_name(base_name, type_args)
 
 
-TargetParams = Sequence[Optional[BoundedTypeParam]]
+# What the AST builder read at each top-level argument of a target
+# (`ExtendDef.target_params`): one declaration, for the builder and the collect pass.
+TargetParams = Tuple[Optional[BoundedTypeParam], ...]
 
 
 def classify_extension_target(
@@ -386,8 +388,8 @@ def _names_a_type(arg: Type, is_declared_type: Callable[[str], bool]) -> bool:
     return True
 
 
-def receiver_bounds(template: Any, generic_structs: NameTable,
-                    generic_enums: NameTable) -> Tuple[BoundedTypeParam, ...]:
+def receiver_bounds(template: Any, generic_structs: Any,
+                    generic_enums: Any) -> Tuple[BoundedTypeParam, ...]:
     """The implied bounds and the target bounds of each receiver parameter (R1, #1070).
 
     `template` is a `GenericExtensionMethod` or a `GenericPerkImpl`. For position `i`:
@@ -398,39 +400,71 @@ def receiver_bounds(template: Any, generic_structs: NameTable,
     `HashMap` declares on `K`. An array target has no implied bound.
 
     The template check reads this. A cutter and a call read the TARGET bounds alone: an
-    instance that exists satisfies the implied bounds already (#579).
+    instance that exists satisfies the implied bounds already (#579). An implied bound
+    carries the file of the base's declaration, so a note at it names that file.
     """
+    from sushi_lang.internals.errors import raise_internal_error
     from sushi_lang.semantics.generics.hashmap import HASHMAP_BASE, KEY_CONTRACT
     base = template.base_type_name
-    declared = generic_structs.by_name.get(base) or generic_enums.by_name.get(base)
-    declared_params = tuple(getattr(declared, "type_params", None) or ())
+    table = generic_structs if base in generic_structs.by_name else generic_enums
+    declared = table.by_name.get(base)
+    declared_file = table.files.get(base)
+    if len(template.target_bounds) != len(template.type_params):
+        raise_internal_error("CE0015", message=(
+            f"the template on '{base}' has {len(template.type_params)} parameters and "
+            f"{len(template.target_bounds)} target bounds"))
     bounds = []
-    for index, param in enumerate(template.type_params):
-        name = getattr(param, "name", param)
+    for index, (param, written) in enumerate(
+            zip(template.type_params, template.target_bounds, strict=True)):
         constraints: list = []
         namespaces: list = []
         spans: list = []
-        implied = declared_params[index] if index < len(declared_params) else None
-        if implied is not None and base == HASHMAP_BASE and index == 0:
-            constraints, namespaces, spans = list(KEY_CONTRACT), [None, None], [None, None]
+        files: list = []
+        implied = declared.type_params[index] if declared is not None else None
+        if base == HASHMAP_BASE and index == 0:
+            # The key rule has no line of its own: CE4015 gives it a prose note.
+            constraints = list(KEY_CONTRACT)
+            namespaces = spans = files = [None] * len(KEY_CONTRACT)
         elif isinstance(implied, BoundedTypeParam):
             constraints = list(implied.constraints)
             namespaces = list(implied.constraint_namespaces)
             spans = list(implied.constraint_spans)
-        written = (template.target_bounds[index]
-                   if index < len(template.target_bounds) else None)
-        if written is not None:
-            for at, perk in enumerate(written.constraints):
-                if perk in constraints:
-                    continue
-                constraints.append(perk)
-                namespaces.append(written.constraint_namespaces[at])
-                spans.append(written.constraint_span(at))
+            files = [declared_file] * len(constraints)
+        namespaces, spans, files = list(namespaces), list(spans), list(files)
+        for at, perk in enumerate(written.constraints):
+            if perk in constraints:
+                continue
+            constraints.append(perk)
+            namespaces.append(written.constraint_namespaces[at])
+            spans.append(written.constraint_span(at))
+            files.append(None)
         bounds.append(BoundedTypeParam(
-            name=name, constraints=constraints,
-            loc=written.loc if written is not None else None,
-            constraint_namespaces=namespaces, constraint_spans=spans))
+            name=getattr(param, "name", param), constraints=constraints, loc=written.loc,
+            constraint_namespaces=namespaces, constraint_spans=spans,
+            constraint_files=files))
     return tuple(bounds)
+
+
+def implied_bound_note(base: str, param: str, perk: str) -> str:
+    """The prose note of an inherited bound that no line states (#1070, R1)."""
+    from sushi_lang.semantics.generics.hashmap import HASHMAP_BASE
+    if base == HASHMAP_BASE:
+        return (f"'{perk}' is part of the key rule of 'HashMap@(K, V)', which asks it of "
+                f"'{param}'; an extension on 'HashMap' inherits that bound")
+    return f"'{base}' declares the bound '{param}: {perk}', and the target inherits it"
+
+
+def target_bound_forms(base: str, bounds: Sequence[BoundedTypeParam]) -> dict:
+    """How the help of a refusal spells a bound on each receiver parameter (#1070).
+
+    In the target's own form: `Box@(T: {perk})`, `Pair@(A, B: {perk})`, `(T: {perk})[]`.
+    `{perk}` is the place of the perk name.
+    """
+    names = [bound.name for bound in bounds]
+    if base == ARRAY_BASE_KEY:
+        return {names[0]: f"({names[0]}: {{perk}})[]"}
+    return {name: f"{base}@({', '.join(f'{n}: {{perk}}' if n == name else n for n in names)})"
+            for name in names}
 
 
 # Each character a written name cannot hold becomes `$`, which no written name holds, so

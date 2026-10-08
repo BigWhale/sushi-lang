@@ -1,0 +1,38 @@
+# A perk template with a target bound answers an operator, a hole and a held position
+# for an instance that satisfies the bound, and the derived contract answers for one
+# that does not (#1070): the copy filter, the override and the call agree.
+# EXPECT_STDOUT_EXACT: "true crate Holder(inner: crate)\nfalse Box(value: Res(id: 1)) Holder(inner: Box(value: Res(id: 1)))\n"
+# EXPECT_NO_LEAKS: true
+
+struct Res:
+    i32 id
+
+extend Res with Drop:
+    fn drop(poke self) ~:
+        self.id := 0
+
+struct Box@(T):
+    T value
+
+struct Holder@(T):
+    Box@(T) inner
+
+extend Box@(T: Clone) with Display:
+    fn to_str() string:
+        return "crate"
+
+extend Box@(T: Clone) with Eq:
+    fn eq(Box@(T) other) bool:
+        other
+        return true
+
+fn main() i32:
+    let Box@(i32) a = Box(1)
+    let Box@(i32) b = Box(2)
+    let Holder@(i32) h = Holder(Box(3))
+    println("{a == b} {a} {h}")
+    let Box@(Res) c = Box(Res(1))
+    let Box@(Res) d = Box(Res(2))
+    let Holder@(Res) k = Holder(Box(Res(1)))
+    println("{c == d} {c} {k}")
+    return 0

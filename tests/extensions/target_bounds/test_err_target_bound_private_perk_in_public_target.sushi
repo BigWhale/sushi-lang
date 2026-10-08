@@ -1,0 +1,23 @@
+# A public target may not hand out a private perk in its bound (#1070): the leak rule of
+# a constraint, for an extension and for a perk implementation alike.
+# EXPECT_ERROR_CODES_EXACT: CE3010, CE3010
+
+perk Loud:
+    fn shout() string
+
+public perk Show:
+    fn show() string
+
+public struct Crate@(T):
+    T value
+
+extend Crate@(T: Loud) f() i32:
+    return 1
+
+extend Crate@(T: Loud) with Show:
+    fn show() string:
+        return "crate"
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

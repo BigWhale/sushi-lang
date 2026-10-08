@@ -46,6 +46,10 @@ class TypeParameter:
     constraints: Tuple[str, ...] = field(default=(), compare=False)
     # Where the parameter is written, with its constraint list (`T: A + B`).
     span: Optional['Span'] = field(default=None, compare=False)
+    # How a help spells a bound on it, with `{perk}` for the perk: `Box@(T: {perk})` for
+    # a receiver parameter of an extension (#1070). None for the `@(T: {perk})` of a
+    # declaration's own type-parameter list.
+    bound_form: Optional[str] = field(default=None, compare=False)
     # A bare parameter is never a pack; `BoundedTypeParam` carries the field that can be.
     is_pack: ClassVar[bool] = False
 

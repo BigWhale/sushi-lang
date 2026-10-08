@@ -15,7 +15,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Sequence, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence, TypeVar, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
@@ -59,23 +59,24 @@ def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
 
     check = _open(validator)
     _reject_second_homes(validator, record.type_params)
-    from sushi_lang.semantics.generics.late_interning import settle_new_instances
-    from sushi_lang.semantics.passes.finite_types import table_marks
     scope = check.scope
-    marks = table_marks(scope.tables.structs, scope.tables.enums)
-    # The deep copy comes FIRST: the cut shares every node it does not visit with its
-    # source, and a stamp on the template would reach every later copy of it.
-    check_copy = scope.monomorphizer.function_monomorphizer.cut_body(
-        copy.deepcopy(record), cast(Dict[str, Any], record.opaque))
-    # The fields a copy carries, as the monomorphize stage sets them. The check copy is
-    # no copy of a template for the reporter and the statement rules: it IS the template,
-    # under its own name, so CE0107 and every other message names it as written.
-    check_copy.name = func.name
-    check_copy.instance_of = None
-    check_copy.pack_names = ()
-    check_copy.is_synthesized = False
-    settle_new_instances(scope.tables, scope.reporter, marks)
 
+    def cut() -> FuncDef:
+        # The deep copy comes FIRST: the cut shares every node it does not visit with
+        # its source, and a stamp on the template would reach every later copy of it.
+        check_copy = scope.monomorphizer.function_monomorphizer.cut_body(
+            copy.deepcopy(record), cast(Dict[str, Any], record.opaque))
+        # The fields a copy carries, as the monomorphize stage sets them. The check copy
+        # is no copy of a template for the reporter and the statement rules: it IS the
+        # template, under its own name, so CE0107 and every other message names it.
+        check_copy.name = func.name
+        check_copy.instance_of = None
+        check_copy.pack_names = ()
+        check_copy.is_synthesized = False
+        return check_copy
+
+    # The cut interns what the copy names itself.
+    check_copy = _cut_and_settle(scope, cut, lambda _copy: ())
     checker = _checker(check)
     checker._validate_function(check_copy)
     _lifter(check, checker).lift_function(check_copy)
@@ -92,52 +93,37 @@ def check_extension_template(validator: TypeValidator, ext: ExtendDef) -> bool:
     own constraints, as parameters of ONE owner. A refused declaration, and a concrete
     target with no method-level parameter, is no template.
     """
-    from sushi_lang.semantics.generics.extension_targets import (
-        ARRAY_BASE_KEY, extension_template_id, receiver_bounds)
-    from sushi_lang.semantics.passes.collect.functions import opaque_type_params
+    from sushi_lang.semantics.generics.extension_targets import extension_template_id
+    from sushi_lang.semantics.generics.extensions import monomorphize_extension_method
 
     record = validator.generic_extension_table.record_of(ext)
     if record is None or not (record.type_params or record.method_type_params):
         return False
-    receiver = receiver_bounds(record, validator.generic_struct_table,
-                               validator.generic_enum_table)
-    params = (*receiver, *record.method_type_params)
-    if _names_no_perk(validator, params):
-        return False
-
-    check = _open(validator)
-    _reject_second_homes(validator, params)
     template_id = extension_template_id(record)
-    opaque = opaque_type_params(params, record.unit_name, template_id.name)
-    receiver_args = tuple(opaque[bound.name] for bound in receiver)
-    method_args = tuple(opaque[name] for name in record.method_type_param_names)
-    target: Any
-    if record.base_type_name == ARRAY_BASE_KEY:
-        target = DynamicArrayType(base_type=receiver_args[0])
-    elif record.type_params:
-        target = _overlay_instance(check.scope, record.base_type_name, receiver_args)
-    else:
-        target = ext.target_type
-
-    from sushi_lang.semantics.generics.extensions import monomorphize_extension_method
-    from sushi_lang.semantics.generics.late_interning import (
-        intern_copy_signatures, settle_new_instances)
-    from sushi_lang.semantics.passes.finite_types import table_marks
+    opened = _open_receiver(validator, record, template_id, record.method_type_params)
+    if opened is None:
+        return False
+    check, opaque, receiver_args = opened
     scope = check.scope
-    marks = table_marks(scope.tables.structs, scope.tables.enums)
-    # The deep copy comes FIRST, for the reason of a function template.
-    check_copy = monomorphize_extension_method(
-        dataclasses.replace(record, decl=copy.deepcopy(record.decl)), target,
-        receiver_args, scope.monomorphizer.substitutor, method_args)
-    # The check copy IS the template: written, in the unit that declares it, and no copy
-    # of a template for the mute. Its target is then validated as a written type, which
-    # is the R1 check of the target against the bounds of its base.
-    check_copy.home_unit = None
-    check_copy.scope_unit = None
-    check_copy.template_id = None
-    intern_copy_signatures(scope.tables, scope.monomorphizer, [check_copy])
-    settle_new_instances(scope.tables, scope.reporter, marks)
+    method_args = tuple(opaque[name] for name in record.method_type_param_names)
+    # A concrete receiver (`extend i32 pick@(U)`) is the written target itself.
+    target: Any = (_receiver_instance(scope, record.base_type_name, receiver_args)
+                   if record.type_params else ext.target_type)
 
+    def cut() -> ExtendDef:
+        # The deep copy comes FIRST, for the reason of a function template.
+        check_copy = monomorphize_extension_method(
+            dataclasses.replace(record, decl=copy.deepcopy(record.decl)), target,
+            receiver_args, scope.monomorphizer.substitutor, method_args)
+        # The check copy IS the template: written, in the unit that declares it, and no
+        # copy of a template for the mute. Its target is then validated as a written
+        # type, which is the R1 check of the target against the bounds of its base.
+        check_copy.home_unit = None
+        check_copy.scope_unit = None
+        check_copy.template_id = None
+        return check_copy
+
+    check_copy = _cut_and_settle(scope, cut, lambda ext_copy: [ext_copy])
     checker = _checker(check)
     checker._validate_extension_method(check_copy)
     _lifter(check, checker).lift_body(check_copy.body)
@@ -153,47 +139,33 @@ def check_perk_template(validator: TypeValidator, impl: ExtendWithDef) -> bool:
     template (`validate_template_header`); the check reads the method bodies. A refused
     implementation, and one of a perk that no unit declares, is not checked.
     """
-    from sushi_lang.semantics.generics.extension_targets import (
-        ARRAY_BASE_KEY, perk_template_id, receiver_bounds)
-    from sushi_lang.semantics.passes.collect.functions import opaque_type_params
+    from sushi_lang.semantics.generics.extension_targets import perk_template_id
+    from sushi_lang.semantics.generics.extensions import monomorphize_perk_impl
 
     template = validator.tables.generic_perk_impls.record_of(impl)
     if template is None or validator.perk_table.get(impl.perk_name) is None:
         return False
-    params = receiver_bounds(template, validator.generic_struct_table,
-                             validator.generic_enum_table)
-    if _names_no_perk(validator, params):
-        return False
-
-    check = _open(validator)
-    _reject_second_homes(validator, params)
     template_id = perk_template_id(template)
-    opaque = opaque_type_params(params, template.unit_name, template_id.name)
-    args = tuple(opaque[bound.name] for bound in params)
-    target: Any
-    if template.base_type_name == ARRAY_BASE_KEY:
-        target = DynamicArrayType(base_type=args[0])
-    else:
-        target = _overlay_instance(check.scope, template.base_type_name, args)
-
-    from sushi_lang.semantics.generics.extensions import monomorphize_perk_impl
-    from sushi_lang.semantics.generics.late_interning import (
-        intern_copy_signatures, settle_new_instances)
-    from sushi_lang.semantics.passes.finite_types import table_marks
+    opened = _open_receiver(validator, template, template_id)
+    if opened is None:
+        return False
+    check, _opaque, args = opened
     scope = check.scope
-    marks = table_marks(scope.tables.structs, scope.tables.enums)
-    # The deep copy comes FIRST, for the reason of a function template.
-    check_copy = monomorphize_perk_impl(
-        dataclasses.replace(template, impl=copy.deepcopy(template.impl)), target, args,
-        scope.monomorphizer.substitutor)
-    # The check copy IS the template: written, and no copy of a template for the mute.
-    check_copy.is_synthesized = False
-    for method in check_copy.methods:
-        method.instance_of = None
-        method.template_id = None
-    intern_copy_signatures(scope.tables, scope.monomorphizer, check_copy.methods)
-    settle_new_instances(scope.tables, scope.reporter, marks)
+    target = _receiver_instance(scope, template.base_type_name, args)
 
+    def cut() -> ExtendWithDef:
+        # The deep copy comes FIRST, for the reason of a function template.
+        check_copy = monomorphize_perk_impl(
+            dataclasses.replace(template, impl=copy.deepcopy(template.impl)), target,
+            args, scope.monomorphizer.substitutor)
+        # The check copy IS the template: written, and no copy of a template for the mute.
+        check_copy.is_synthesized = False
+        for method in check_copy.methods:
+            method.instance_of = None
+            method.template_id = None
+        return check_copy
+
+    check_copy = _cut_and_settle(scope, cut, lambda impl_copy: impl_copy.methods)
     checker = _checker(check)
     from .signatures import validate_perk_template_bodies
     validate_perk_template_bodies(checker, target, check_copy)
@@ -202,14 +174,61 @@ def check_perk_template(validator: TypeValidator, impl: ExtendWithDef) -> bool:
     return True
 
 
-def _overlay_instance(scope: 'TemplateScope', base: str, args: tuple):
-    """The instance `base@(args)` over opaque parameters, interned in the overlay."""
+def _open_receiver(validator: TypeValidator, template, template_id: TemplateId,
+                   method_params: Sequence[BoundedTypeParam] = ()):
+    """Open the check of an extension or a perk template: (check, opaque, receiver args).
+
+    Each receiver parameter gets its receiver bounds (R1) and each method-level one its
+    own constraints, as opaque parameters of ONE owner. None when a bound names no perk:
+    CE4003 is that one fault.
+    """
+    from sushi_lang.semantics.generics.extension_targets import (
+        receiver_bounds, target_bound_forms)
+    from sushi_lang.semantics.passes.collect.functions import opaque_type_params
+
+    receiver = receiver_bounds(template, validator.generic_struct_table,
+                               validator.generic_enum_table)
+    params = (*receiver, *method_params)
+    if _names_no_perk(validator, params):
+        return None
+    check = _open(validator)
+    _reject_second_homes(validator, params, template.base_type_name)
+    opaque = opaque_type_params(params, template.unit_name, template_id.name,
+                                target_bound_forms(template.base_type_name, receiver))
+    return check, opaque, tuple(opaque[bound.name] for bound in receiver)
+
+
+def _receiver_instance(scope: 'TemplateScope', base: str, args: tuple):
+    """The receiver over opaque parameters: `T[]`, or `base@(args)` interned in the overlay."""
+    from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
     from sushi_lang.semantics.generics.types import GenericTypeRef
     from sushi_lang.semantics.type_resolution import resolve_type_recursively
+    if base == ARRAY_BASE_KEY:
+        return DynamicArrayType(base_type=args[0])
     ref = GenericTypeRef(base_name=base, type_args=args)
     scope.intern(ref)
     return resolve_type_recursively(ref, scope.tables.structs.by_name,
                                     scope.tables.enums.by_name)
+
+
+_Copy = TypeVar("_Copy")
+
+
+def _cut_and_settle(scope: 'TemplateScope', cut: Callable[[], _Copy],
+                    callables: Callable[[_Copy], Sequence[Any]]) -> _Copy:
+    """Cut the check copy, intern what its `callables` name, and settle the new instances.
+
+    The marks are taken just before the cut, after the receiver instance is interned, so
+    no instance is settled twice.
+    """
+    from sushi_lang.semantics.generics.late_interning import (
+        intern_copy_signatures, settle_new_instances)
+    from sushi_lang.semantics.passes.finite_types import table_marks
+    marks = table_marks(scope.tables.structs, scope.tables.enums)
+    check_copy = cut()
+    intern_copy_signatures(scope.tables, scope.monomorphizer, callables(check_copy))
+    settle_new_instances(scope.tables, scope.reporter, marks)
+    return check_copy
 
 
 @dataclass
@@ -281,13 +300,15 @@ def _names_no_perk(validator: TypeValidator, params: Sequence[Any]) -> bool:
                for tp in params for name in (tp.constraints or ()))
 
 
-def _reject_second_homes(validator: TypeValidator, params: Sequence[Any]) -> None:
+def _reject_second_homes(validator: TypeValidator, params: Sequence[Any],
+                         base: Optional[str] = None) -> None:
     """CE4015 for a method that two constraints of one type parameter both declare.
 
     A name has one home on a type, and an opaque parameter has the methods of its
     constraints. The first constraint answers the body check, so the check stays total.
     The constraints of a receiver parameter are its implied bounds and its target bounds
-    together (#1070, R1).
+    together (#1070, R1): `base` is the target's base, and an implied bound is noted in
+    the file that declares it, or in prose when no line states it (the HashMap key rule).
     """
     perks = validator.perk_table
     for tp in params:
@@ -304,12 +325,19 @@ def _reject_second_homes(validator: TypeValidator, params: Sequence[Any]) -> Non
                     continue
                 diagnostic = er.emit_with(
                     validator.reporter, er.ERR.CE4015,
-                    tp.constraint_span(index) or tp.loc, perk=perk_name,
+                    tp.constraint_span(index) or tp.loc,
+                    filename=tp.constraint_file(index), perk=perk_name,
                     method=method.name, other=first)
-                first_span = tp.constraint_span(tp.constraints.index(first))
+                at = tp.constraints.index(first)
+                first_span = tp.constraint_span(at)
                 if first_span is not None:
                     diagnostic = diagnostic.note_at(
-                        f"'{first}' provides '{method.name}' here", first_span)
+                        f"'{first}' provides '{method.name}' here", first_span,
+                        tp.constraint_file(at))
+                elif base is not None:
+                    from sushi_lang.semantics.generics.extension_targets import (
+                        implied_bound_note)
+                    diagnostic = diagnostic.note(implied_bound_note(base, tp.name, first))
                 diagnostic.emit()
 
 

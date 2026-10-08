@@ -175,6 +175,10 @@ class BoundedTypeParam:
     # the qualifier with it. `loc` marks the whole `T: Hidden + Loud`, and a rule about
     # a constraint is a rule about the perk name (#706).
     constraint_spans: List[Optional[Span]] = None
+    # The file each constraint is written in, index-aligned with `constraints`; None for
+    # the file of the declaration that holds the parameter. A receiver bound that an
+    # extension inherits from a type of another unit is written in that unit (#1070).
+    constraint_files: List[Optional[str]] = field(default_factory=list)
 
     def __post_init__(self):
         if self.constraints is None:
@@ -183,11 +187,19 @@ class BoundedTypeParam:
             self.constraint_namespaces = [None] * len(self.constraints)
         if self.constraint_spans is None:
             self.constraint_spans = [None] * len(self.constraints)
+        if not self.constraint_files:
+            self.constraint_files = [None] * len(self.constraints)
 
     def constraint_span(self, index: int) -> Optional[Span]:
         """Where constraint `index` is written, or None when nothing recorded it."""
         if 0 <= index < len(self.constraint_spans):
             return self.constraint_spans[index]
+        return None
+
+    def constraint_file(self, index: int) -> Optional[str]:
+        """The file constraint `index` is written in, or None for the holder's own file."""
+        if 0 <= index < len(self.constraint_files):
+            return self.constraint_files[index]
         return None
 
     def written_constraints(self) -> List[str]:

@@ -1,7 +1,7 @@
 # A receiver whose type argument fails a target bound is refused at the call (#1070),
 # the rule of a free function. The method is not invisible: the error names the bound.
 # EXPECT_ERROR_CODES_EXACT: CE4006
-# EXPECT_STDERR_CONTAINS: "test_err_target_bound_fails_at_the_call.sushi:20:"
+# EXPECT_STDERR_CONTAINS: "test_err_target_bound_fails_at_the_call.sushi:20:28"
 use <io/fs>
 
 extend List@(T: Clone) dup_first() List@(T):

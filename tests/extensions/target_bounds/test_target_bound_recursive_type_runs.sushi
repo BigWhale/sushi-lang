@@ -1,0 +1,25 @@
+# A bounded perk template over a recursive type (#1070): the question "does `Node`
+# satisfy `Eq`" asks itself through `Bag@(Node)`, and the open question is answered yes.
+# EXPECT_STDOUT_EXACT: "true Node(v: 1, kids: bag)\n"
+# EXPECT_NO_LEAKS: true
+
+struct Bag@(T):
+    List@(T) items
+
+extend Bag@(T: Eq) with Eq:
+    fn eq(Bag@(T) other) bool:
+        return self.items.len() == other.items.len()
+
+extend Bag@(T: Display) with Display:
+    fn to_str() string:
+        return "bag"
+
+struct Node:
+    i32 v
+    Bag@(Node) kids
+
+fn main() i32:
+    let Node a = Node(1, Bag(List.new()))
+    let Node b = Node(1, Bag(List.new()))
+    println("{a == b} {a}")
+    return 0

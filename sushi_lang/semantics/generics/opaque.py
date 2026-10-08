@@ -50,6 +50,16 @@ def note_opaque(builder: 'DiagnosticBuilder',
     return builder
 
 
+def bound_hint(param: TypeParameter, perk: str) -> str:
+    """The bound a help asks for, quoted, in the form the declaration writes it (#1070).
+
+    `'@(T: Clone)'` in a declaration's type-parameter list, `'Box@(T: Clone)'` and
+    `'(T: Clone)[]'` in the target of an extension or a perk template.
+    """
+    form = param.bound_form or f"@({param.name}: {{perk}})"
+    return f"'{form.replace('{perk}', perk)}'"
+
+
 def providing_perks(perks: 'PerkTable', method: str) -> List[str]:
     """The perks that declare a method of this name, in declaration order."""
     return [name for name in perks.order
@@ -74,7 +84,7 @@ def explain_unpromised(builder: 'DiagnosticBuilder', ty: Optional['Type'],
         return builder
     name = lacking[0].name
     return note_opaque(builder, lacking[0]).help(
-        f"add '{perk}' to the constraints of '{name}': '@({name}: {perk})'")
+        f"add '{perk}' to the constraints of '{name}': {bound_hint(lacking[0], perk)}")
 
 
 def explain_no_arithmetic(builder: 'DiagnosticBuilder',

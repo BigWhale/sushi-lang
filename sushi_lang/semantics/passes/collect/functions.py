@@ -72,18 +72,21 @@ def bare_type_params(names) -> Dict[str, TypeParameter]:
     return {n: TypeParameter(name=n) for n in names}
 
 
-def opaque_type_params(type_params, unit: Optional[str],
-                       template: str) -> Dict[str, TypeParameter]:
-    """The opaque parameter of each type parameter of one function template (#1070).
+def opaque_type_params(type_params, unit: Optional[str], template: str,
+                       bound_forms: Optional[Dict[str, str]] = None
+                       ) -> Dict[str, TypeParameter]:
+    """The opaque parameter of each type parameter of one template (#1070).
 
     The ONE builder of an opaque parameter: its owner is the template, and it carries
     the constraint names and the span of the written parameter. A pack parameter keeps
-    its own form (Phase 4).
+    its own form (Phase 4). `bound_forms` spells a bound on a receiver parameter of an
+    extension or a perk template in the target's own form.
     """
     owner = TemplateId(unit, template)
+    forms = bound_forms or {}
     return {tp.name: TypeParameter(tp.name, owner=owner,
                                    constraints=tuple(tp.constraints or ()),
-                                   span=tp.loc)
+                                   span=tp.loc, bound_form=forms.get(tp.name))
             for tp in type_params
             if isinstance(tp, BoundedTypeParam) and not tp.is_pack}
 

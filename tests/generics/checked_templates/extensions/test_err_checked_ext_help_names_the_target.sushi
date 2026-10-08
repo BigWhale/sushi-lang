@@ -1,0 +1,14 @@
+# The help of a refusal in an extension template spells the bound in the target's own
+# form (#1070): `Box@(T: Clone)`, not `@(T: Clone)`.
+# EXPECT_ERROR_CODES_EXACT: CE4018
+# EXPECT_STDERR_CONTAINS: "'Box@(T: Clone)'"
+
+struct Box@(T):
+    T value
+
+extend Box@(T) twice() Box@(T):
+    return Box(self.value.clone())
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

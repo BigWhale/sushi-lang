@@ -1,6 +1,7 @@
 """Generic constraint validation for Sushi compiler."""
 
-from typing import Callable, Optional, Sequence, Set, Tuple
+from contextlib import contextmanager
+from typing import Callable, Iterator, Optional, Sequence, Set, Tuple
 from sushi_lang.semantics.typesys import Type, holds_declared_resource
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.ast import BoundedTypeParam
@@ -28,9 +29,15 @@ def target_bounds_hold(bounds: Sequence[BoundedTypeParam], type_args: Sequence[T
     (#1070, R1): every cutter, every override and the call-site rung read it, so a
     derived override never names a method that has no copy. `holds` is
     `ConstraintValidator.holds_bound`. A template with no target bound asks nothing.
+    The bounds and the arguments are index-aligned: a count that differs is a fault of
+    the compiler, never an answer.
     """
+    if len(bounds) != len(type_args):
+        from sushi_lang.internals.errors import raise_internal_error
+        raise_internal_error("CE0015", message=(
+            f"{len(bounds)} target bounds against {len(type_args)} type arguments"))
     return all(holds(arg, perk)
-               for bound, arg in zip(bounds, type_args, strict=False)
+               for bound, arg in zip(bounds, type_args, strict=True)
                for perk in bound.constraints or ())
 
 
@@ -76,6 +83,15 @@ class ConstraintValidator:
                     or self._derived_implements(type_arg, constraint_name))
         finally:
             self._asking.discard(key)
+
+    @contextmanager
+    def reporting_to(self, reporter: Reporter) -> Iterator[None]:
+        """Emit to `reporter` for the length of one check of a site."""
+        saved, self.reporter = self.reporter, reporter
+        try:
+            yield
+        finally:
+            self.reporter = saved
 
     def holds_bound(self, type_arg: Type, constraint_name: str) -> bool:
         """Does the type satisfy a bound? A perk that no unit declares holds (#1070).

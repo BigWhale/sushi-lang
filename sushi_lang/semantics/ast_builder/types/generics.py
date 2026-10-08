@@ -1,8 +1,9 @@
 """Parser for generic type instantiations."""
 from __future__ import annotations
-from typing import NoReturn, Optional, List, TYPE_CHECKING, Tuple
+from typing import Callable, NoReturn, Optional, List, TYPE_CHECKING, Tuple
 from lark import Tree, Token
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
+from sushi_lang.semantics.generics.extension_targets import TargetParams
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.typesys import DynamicArrayType, Type, UnknownType
 from sushi_lang.semantics.ast import BoundedTypeParam
@@ -20,26 +21,62 @@ def _is_type_arg(child: object) -> bool:
                                    and child.data == "bounded_type_arg")
 
 
+# What one reader makes of one element of a `type_list`: the type, and what a target
+# argument declares (None outside a target).
+ArgReader = Callable[[Tree], Tuple[Optional[Type], Optional[BoundedTypeParam]]]
+
+
+def _read_type_args(type_list_node: Tree, read_arg: ArgReader
+                    ) -> Tuple[List[Type], TargetParams]:
+    """Each element of a `type_list` through `read_arg`: the ONE walk of the list."""
+    args: List[Type] = []
+    params: List[Optional[BoundedTypeParam]] = []
+    for child in type_list_node.children:
+        if not _is_type_arg(child):
+            continue
+        arg_type, param = read_arg(child)
+        if arg_type is not None:
+            args.append(arg_type)
+            params.append(param)
+    return args, tuple(params)
+
+
+def _read_generic(node: Tree, read_arg: ArgReader
+                  ) -> Tuple[Optional[GenericTypeRef], TargetParams]:
+    """A generic type instantiation, bare or behind an alias: the ONE reader of its parts.
+
+    `qualified_generic_type_t` carries two NAMEs and `generic_type_t` one. The
+    qualifier is recorded and the base name is the table key (Ruling 4).
+    """
+    names = name_tokens(node.children)
+    type_list_node = first_tree(node.children, "type_list")
+    if not names or type_list_node is None:
+        return None, ()
+    args, params = _read_type_args(type_list_node, read_arg)
+    if not args:
+        return None, ()
+    namespace = str(names[0]) if len(names) > 1 else None
+    return (GenericTypeRef(base_name=str(names[-1]), type_args=tuple(args),
+                           namespace=namespace), params)
+
+
+def _plain_reader(ast_builder: 'ASTBuilder') -> ArgReader:
+    """Every position but the top level of a target: a bound reaches `_parse_type` (CE6110)."""
+    return lambda child: (ast_builder._parse_type(child), None)
+
+
 def parse_type_list(type_list_node: Tree, ast_builder: 'ASTBuilder') -> List[Type]:
     """Turn a `type_list` parse node into a list of resolved Types.
 
     A bounded argument goes through `_parse_type` too, which refuses it (CE6110): this
     reader serves every position but the top level of an `extend` target.
     """
-    type_args: List[Type] = []
-    for child in type_list_node.children:
-        if _is_type_arg(child):
-            arg_type = ast_builder._parse_type(child)
-            if arg_type is not None:
-                type_args.append(arg_type)
-    return type_args
+    return _read_type_args(type_list_node, _plain_reader(ast_builder))[0]
 
 
 # The two grammar nodes of a bound in a type position: `T: Clone` in a type-argument
 # list, and `(T: Clone)` as a parenthesized type. Only the target reader below takes one.
 BOUNDED_ARGUMENT_NODES = ("bounded_type_arg", "bounded_paren_t")
-
-TargetParams = Tuple[Optional[BoundedTypeParam], ...]
 
 
 def parse_extension_target(node: Tree, ast_builder: 'ASTBuilder') -> Tuple[Optional[Type], TargetParams]:
@@ -64,30 +101,17 @@ def parse_extension_target(node: Tree, ast_builder: 'ASTBuilder') -> Tuple[Optio
     return ast_builder._parse_type(node), ()
 
 
-def _bounded_generic_target(node: Tree, ast_builder: 'ASTBuilder') -> Tuple[Optional[Type], TargetParams]:
-    """A `@(...)` target: a bare or bounded name is an `UnknownType`, any other argument a type."""
-    names = name_tokens(node.children)
-    type_list_node = first_tree(node.children, "type_list")
-    if not names or type_list_node is None:
-        return None, ()
-    args: List[Type] = []
-    params: List[Optional[BoundedTypeParam]] = []
-    for child in type_list_node.children:
-        if not _is_type_arg(child):
-            continue
+def _bounded_generic_target(node: Tree, ast_builder: 'ASTBuilder'
+                            ) -> Tuple[Optional[Type], TargetParams]:
+    """A `@(...)` target: a bounded name is an `UnknownType`, any other argument a type."""
+    def read_arg(child: Tree) -> Tuple[Optional[Type], Optional[BoundedTypeParam]]:
         if child.data == "bounded_type_arg":
             param = _target_param(child)
-            args.append(UnknownType(name=param.name))
-            params.append(param)
-            continue
-        arg_type = ast_builder._parse_type(child)
-        if arg_type is None:
-            return None, ()
-        args.append(arg_type)
-        params.append(_target_param(child) if child.data == "name_t" else None)
-    namespace = str(names[0]) if len(names) > 1 else None
-    return (GenericTypeRef(base_name=str(names[-1]), type_args=tuple(args),
-                           namespace=namespace), tuple(params))
+            return UnknownType(name=param.name), param
+        return (ast_builder._parse_type(child),
+                _target_param(child) if child.data == "name_t" else None)
+
+    return _read_generic(node, read_arg)
 
 
 def _target_param(node: Tree) -> BoundedTypeParam:
@@ -114,29 +138,8 @@ def reject_misplaced_bound(node: Tree) -> NoReturn:
 
 
 def parse_generic_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
-    """Parse a generic type instantiation, bare or behind an alias.
-
-    `qualified_generic_type_t` carries two NAMEs and `generic_type_t` one. The
-    qualifier is recorded and the base name is the table key (Ruling 4).
-    """
-    names = name_tokens(node.children)
-    if not names:
-        return None
-
-    namespace = str(names[0]) if len(names) > 1 else None
-    base_name = str(names[-1])
-
-    type_list_node = first_tree(node.children, "type_list")
-    if type_list_node is None:
-        return None
-
-    type_args: List[Type] = parse_type_list(type_list_node, ast_builder)
-
-    if not type_args:
-        return None
-
-    return GenericTypeRef(base_name=base_name, type_args=tuple(type_args),
-                          namespace=namespace)
+    """Parse a generic type instantiation, bare or behind an alias (`_read_generic`)."""
+    return _read_generic(node, _plain_reader(ast_builder))[0]
 
 
 def parse_bounded_type_params(type_params_node: Optional[Tree]) -> Optional[List[BoundedTypeParam]]:

@@ -391,8 +391,7 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
         return RESOLUTION_REPORTED if report else None
 
     receiver_names = [p.name if hasattr(p, "name") else p for p in template.type_params]
-    receiver_args = tuple(receiver_subst[n] for n in receiver_names
-                          if n in receiver_subst)
+    receiver_args = tuple(receiver_subst[n] for n in receiver_names)
     if _refuses_unmet_bounds(validator, template, template.name, receiver_type,
                              receiver_args, margs, call.loc, report=report):
         return RESOLUTION_REPORTED if report else None
@@ -426,7 +425,7 @@ def _refuses_unmet_bounds(validator: 'TypeValidator', template, method_name: str
     params = (*target_bounds, *method_params)
     if not any(tp.constraints for tp in params):
         return False
-    args = (*tuple(receiver_args)[:len(target_bounds)], *margs)
+    args = (*receiver_args, *margs)
     if not report:
         return not target_bounds_hold(params, args, validator.tables.holds_bound)
     check = call_constraint_check(validator)
@@ -532,12 +531,12 @@ def _reject_clone_of_opaque(validator: 'TypeValidator', call: MethodCall,
     In a template check (#1070, R5) the parameter MAY hold a resource, so the body can
     clone a value that holds it only when the parameter promises `Clone`.
     """
-    from sushi_lang.semantics.generics.opaque import note_opaque
+    from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
     diagnostic = er.emit_with(validator.reporter, er.ERR.CE4018, call.loc,
                               type=display_type(receiver_type), param=param.name)
     note_opaque(diagnostic, param) \
         .help(f"add 'Clone' to the constraints of '{param.name}': "
-              f"'@({param.name}: Clone)'").emit()
+              f"{bound_hint(param, 'Clone')}").emit()
 
 
 def extension_call_result_type(validator: 'TypeValidator', method):
@@ -820,13 +819,14 @@ def _explain_unpromised_method(validator: 'TypeValidator', diag, receiver_type,
     The body knows the methods its constraints promise and nothing more, so the fix is a
     constraint: the help names the perks that declare a method of this name.
     """
-    from sushi_lang.semantics.generics.opaque import note_opaque, providing_perks
+    from sushi_lang.semantics.generics.opaque import (
+        bound_hint, note_opaque, providing_perks)
     if not (isinstance(receiver_type, TypeParameter) and receiver_type.is_opaque):
         return
     note_opaque(diag, receiver_type)
     perks = providing_perks(validator.perk_table, method_name)
     if perks:
-        choices = " or ".join(f"'@({receiver_type.name}: {perk})'" for perk in perks)
+        choices = " or ".join(bound_hint(receiver_type, perk) for perk in perks)
         diag.help(f"add a constraint that provides '{method_name}': {choices}")
     else:
         diag.help(f"no perk declares '{method_name}'; a type parameter has the methods "
