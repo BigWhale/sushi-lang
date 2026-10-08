@@ -140,13 +140,14 @@ def note_first_declaration(builder: Any, spans: dict, name: str,
     `files` answers which unit that declaration was in. The current unit is not the
     answer: the note points at a table entry, and the entry may have been made while
     another unit was being collected (#473). `library` is the declaration a BINARY
-    library shipped with no span: the note names its `.slib` (#972).
+    library shipped: the note names its `.slib` (#972). That rule comes first, because
+    the span of a shipped template indexes into its manifest slice, not into a file.
     """
+    if library is not None and library.filename is not None:
+        return builder.note(f"declared by the library {library.filename}")
     prev = spans.get(name)
     if prev is not None:
         return builder.note_at(what, prev, files.get(name) if files else None)
-    if library is not None and library.filename is not None:
-        return builder.note(f"declared by the library {library.filename}")
     return builder.note("defined by the compiler")
 
 

@@ -1,0 +1,14 @@
+# A generic enum of a binary library holds its type parameter `E` in an error
+# position. The consumer writes `Outcome@(i32)`, and `i32` is no error type. The note
+# names the template's source slice and shows the template's line.
+# BUILD_LIB_BINARY: template_note_lib.sushi
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: <template:template_note_lib:Outcome>:1:13
+# EXPECT_STDERR_CONTAINS: public enum Outcome@(E):
+use <lib/template_note_lib>
+
+fn take(Outcome@(i32) o) i32:
+    return 0
+
+fn main() i32:
+    return 0

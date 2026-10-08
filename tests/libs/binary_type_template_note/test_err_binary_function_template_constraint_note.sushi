@@ -1,0 +1,12 @@
+# A generic function of a binary library constrains its type parameter with a perk.
+# The consumer calls it with `i32`, and `i32` does not implement the perk. The note
+# names the template's source slice and shows the template's line.
+# BUILD_LIB_BINARY: template_note_lib.sushi
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: <template:template_note_lib:need>:1:17
+# EXPECT_STDERR_CONTAINS: public fn need@(T: Named)(T x) i32:
+use <lib/template_note_lib>
+
+fn main() i32:
+    println(need(5))
+    return 0
