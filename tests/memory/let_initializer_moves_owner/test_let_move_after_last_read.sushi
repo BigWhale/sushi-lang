@@ -1,0 +1,26 @@
+# A `let` initializer may move an owner after the last read of a `let`-borrow of it.
+#
+# `m` and `view` are read before the moves. Nothing reads them after, so each move is
+# legal.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n3\n1\n3\n"
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+struct Holder:
+    i32[] items
+
+fn main() i32:
+    let string[] xs = from(["Mostly ".concat("Harmless")])
+    let Maybe@(string) m = xs.get(0)
+    match m:
+        Maybe.Some(s) -> println(s)
+        Maybe.None() -> println("none")
+    let string[] ys = xs
+    let Holder h = Holder(from([1, 2, 3]))
+    let i32[] view = h.items
+    println(view.len())
+    let Holder g = h
+    println(ys.len())
+    println(g.items.len())
+    return 0

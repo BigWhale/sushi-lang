@@ -1,0 +1,15 @@
+# A `let` initializer that moves a struct invalidates a `let`-borrow of its field.
+#
+# `view` reads out of `h`. `let Holder g = h` hands `h` to `g`. The read of `view`
+# after the move is CE2412.
+# EXPECT_ERROR_CODE: CE2412
+
+struct Holder:
+    i32[] items
+
+fn main() i32:
+    let Holder h = Holder(from([1, 2, 3]))
+    let i32[] view = h.items
+    let Holder g = h
+    println("g={g.items.len()} view={view.len()}")
+    return 0
