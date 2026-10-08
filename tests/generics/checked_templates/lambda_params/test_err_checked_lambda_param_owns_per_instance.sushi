@@ -1,0 +1,12 @@
+# A lambda parameter of a type parameter owns only for some type arguments, so it is
+# refused at the instance that owns (#1070, R7): here `T` is `List@(i32)`.
+# EXPECT_ERROR_CODES_EXACT: CE2094
+
+fn digest@(T: Hashable)(T x) u64:
+    let fn(T) -> u64 f = |T y| y.hash()
+    return f(x)
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    println(digest(xs))
+    return 0

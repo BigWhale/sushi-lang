@@ -214,13 +214,13 @@ class ExpressionValidator(RecursiveVisitor):
         # indirect-call path yet, so reject it. A `string` is excluded deliberately -- its
         # `owned` bit is cleared at entry, so it frees nothing, and including it would
         # silently make `|string s| ...` illegal.
-        # A parameter over an opaque type parameter is judged per instance (#1070, R7):
-        # whether its value owns depends on the type argument.
-        from sushi_lang.semantics.generics.opaque import holds_opaque
+        # A type that owns for every type argument is refused at the template; one that
+        # owns only for some is refused at the instance that owns (#1070, R7).
         drops = tv.drop_type_names
         for p in node.params:
-            if p.ty != BuiltinType.STRING and not holds_opaque(p.ty) and owns_resource(
-                    p.ty, drops, resolve=lambda ty: resolve_declared_type(tv, ty)):
+            if p.ty != BuiltinType.STRING and owns_resource(
+                    p.ty, drops, resolve=lambda ty: resolve_declared_type(tv, ty),
+                    opaque_owns=False):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"lambda parameter '{p.name}' has an owning type '{display_type(p.ty)}'; "
                                f"owning function-value parameters are deferred to Tier 2")

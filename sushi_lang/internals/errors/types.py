@@ -362,7 +362,7 @@ _add(ErrorMessage("CE2093", Severity.ERROR,
 
 _add(ErrorMessage("CE2094", Severity.ERROR,
     "illegal closure capture: {reason}",
-    Category.TYPE, "Tier 1 closures capture by value (copy) or by move (owned types). Capturing a borrow (peek/poke) through a closure is deferred to Tier 2. An owning or variadic function-value parameter type is also rejected in Tier 1 (the indirect-call path has no deep-copy/variadic-collapse yet)."))
+    Category.TYPE, "Tier 1 closures capture by value (copy) or by move (owned types). Capturing a borrow (peek/poke) through a closure is deferred to Tier 2. An owning or variadic function-value parameter type is also rejected in Tier 1 (the indirect-call path has no deep-copy/variadic-collapse yet). In a generic body, a parameter whose type owns for every type argument (`|List@(T) y|`) is refused at the template; one that owns only for some type arguments (`|T y|`) is refused at the instance that owns (#1070, R7)."))
 
 _add(ErrorMessage("CE2095", Severity.ERROR,
     "recursive type '{name}' has infinite size: {chain}",

@@ -250,7 +250,8 @@ _OWNS_STOPS = _HOLDS_STOPS | {"ReferenceType"}
 
 
 def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
-                  resolve: Optional[Callable[["Type"], Optional["Type"]]] = None) -> bool:
+                  resolve: Optional[Callable[["Type"], Optional["Type"]]] = None,
+                  opaque_owns: bool = True) -> bool:
     """True if a value of this type owns something RAII must release and a sink must transfer.
 
     Two ways to own. Most types own HEAP, and the answer is structural: a `string`, a
@@ -267,6 +268,10 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
     One question per type over `type_walk.walk_named_types`. A fixed array owns no buffer
     of its own, but its elements can own heap (#185). A container's fields are raw
     pointers, so its generic base answers (#162, #181, #183).
+
+    An opaque type parameter MAY own, so by default it answers True and a value of it
+    moves (#1070, R5). `opaque_owns=False` asks "does this type own for EVERY type
+    argument": the rule of an owning lambda parameter (CE2094, R7).
     """
     from sushi_lang.semantics.type_walk import walk_named_types
     from sushi_lang.semantics.type_predicates import generic_base_of
@@ -284,8 +289,7 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
         if isinstance(ty, (StructType, EnumType)):
             return ty.name in drops or (
                 isinstance(ty, StructType) and generic_base_of(ty) in bases)
-        # An opaque type parameter MAY own, so a value of it moves (#1070, R5).
-        return isinstance(ty, TypeParameter) and ty.is_opaque
+        return isinstance(ty, TypeParameter) and ty.is_opaque and opaque_owns
 
     return any(owns_here(ty) for ty in walk_named_types(
         t, stop=lambda ty: type(ty).__name__ in _OWNS_STOPS, resolve=resolve))
