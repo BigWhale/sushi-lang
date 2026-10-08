@@ -179,6 +179,9 @@ class BoundedTypeParam:
     # the file of the declaration that holds the parameter. A receiver bound that an
     # extension inherits from a type of another unit is written in that unit (#1070).
     constraint_files: List[Optional[str]] = field(default_factory=list)
+    # The count of the leading constraints that a receiver parameter inherits from the
+    # type that its target names (#1070, R1). The declaration of that type judges them.
+    inherited: int = 0
 
     def __post_init__(self):
         if self.constraints is None:

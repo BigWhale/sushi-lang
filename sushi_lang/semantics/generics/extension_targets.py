@@ -431,6 +431,7 @@ def receiver_bounds(template: Any, generic_structs: Any,
             spans = list(implied.constraint_spans)
             files = [declared_file] * len(constraints)
         namespaces, spans, files = list(namespaces), list(spans), list(files)
+        inherited = len(constraints)
         for at, perk in enumerate(written.constraints):
             if perk in constraints:
                 continue
@@ -441,7 +442,7 @@ def receiver_bounds(template: Any, generic_structs: Any,
         bounds.append(BoundedTypeParam(
             name=getattr(param, "name", param), constraints=constraints, loc=written.loc,
             constraint_namespaces=namespaces, constraint_spans=spans,
-            constraint_files=files))
+            constraint_files=files, inherited=inherited))
     return tuple(bounds)
 
 

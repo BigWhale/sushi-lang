@@ -21,6 +21,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
     BoundedTypeParam, Expand, ExtendDef, ExtendWithDef, FuncDef, Program)
 from sushi_lang.semantics.generics.types import TemplateId, TypeParameter
+from sushi_lang.semantics.passes.collect.perks import reject_second_homes
 from sushi_lang.semantics.typesys import DynamicArrayType
 
 from . import TypeValidator
@@ -93,7 +94,7 @@ def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
         return False
 
     check = _open(validator)
-    _reject_second_homes(validator, record.type_params)
+    reject_second_homes(validator.reporter, validator.perk_table, record.type_params)
     scope = check.scope
 
     def cut() -> FuncDef:
@@ -234,7 +235,8 @@ def _open_receiver(validator: TypeValidator, template, template_id: TemplateId,
     if _names_no_perk(validator, params):
         return None
     check = _open(validator)
-    _reject_second_homes(validator, params, template.base_type_name)
+    reject_second_homes(validator.reporter, validator.perk_table, params,
+                        template.base_type_name)
     opaque = opaque_type_params(params, template.unit_name, template_id.name,
                                 target_bound_forms(template.base_type_name, receiver))
     return check, opaque, tuple(opaque[bound.name] for bound in receiver)
@@ -351,47 +353,6 @@ def _names_no_perk(validator: TypeValidator, params: Sequence[Any]) -> bool:
     fault. The body is not checked against a promise that does not exist."""
     return any(validator.perk_table.get(name) is None
                for tp in params for name in (tp.constraints or ()))
-
-
-def _reject_second_homes(validator: TypeValidator, params: Sequence[Any],
-                         base: Optional[str] = None) -> None:
-    """CE4015 for a method that two constraints of one type parameter both declare.
-
-    A name has one home on a type, and an opaque parameter has the methods of its
-    constraints. The first constraint answers the body check, so the check stays total.
-    The constraints of a receiver parameter are its implied bounds and its target bounds
-    together (#1070, R1): `base` is the target's base, and an implied bound is noted in
-    the file that declares it, or in prose when no line states it (the HashMap key rule).
-    """
-    perks = validator.perk_table
-    for tp in params:
-        if not isinstance(tp, BoundedTypeParam):
-            continue
-        seen: dict[str, str] = {}
-        for index, perk_name in enumerate(tp.constraints or ()):
-            perk = perks.get(perk_name)
-            if perk is None:
-                continue
-            for method in perk.methods:
-                first = seen.setdefault(method.name, perk_name)
-                if first == perk_name:
-                    continue
-                diagnostic = er.emit_with(
-                    validator.reporter, er.ERR.CE4015,
-                    tp.constraint_span(index) or tp.loc,
-                    filename=tp.constraint_file(index), perk=perk_name,
-                    method=method.name, other=first)
-                at = tp.constraints.index(first)
-                first_span = tp.constraint_span(at)
-                if first_span is not None:
-                    diagnostic = diagnostic.note_at(
-                        f"'{first}' provides '{method.name}' here", first_span,
-                        tp.constraint_file(at))
-                elif base is not None:
-                    from sushi_lang.semantics.generics.extension_targets import (
-                        implied_bound_note)
-                    diagnostic = diagnostic.note(implied_bound_note(base, tp.name, first))
-                diagnostic.emit()
 
 
 def _scratch_program() -> Program:

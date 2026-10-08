@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -47,6 +47,48 @@ class PerkTable:
     def get(self, name: str) -> Optional[PerkDef]:
         """Get a perk definition by name."""
         return self.by_name.get(name)
+
+
+def reject_second_homes(reporter: Reporter, perks: PerkTable, params: Sequence[object],
+                        base: Optional[str] = None) -> None:
+    """CE4015 for a method that two constraints of one type parameter both declare.
+
+    A name has one home on a type, and an opaque parameter has the methods of its
+    constraints. The first constraint answers the body check, so the check stays total.
+    Each pair is judged one time, where its later constraint is written (#1070): the
+    collect pass judges the own constraints of a struct or an enum, and a template check
+    judges its own. A receiver parameter of a template inherits the leading bounds of
+    its target's type (R1), so a pair of two inherited bounds is the type's and is not
+    judged again. `base` is the target's base: an inherited bound is noted in the file
+    that declares it, or in prose when no line states it (the HashMap key rule).
+    """
+    for tp in params:
+        if not isinstance(tp, BoundedTypeParam):
+            continue
+        seen: Dict[str, str] = {}
+        for index, perk_name in enumerate(tp.constraints or ()):
+            perk = perks.get(perk_name)
+            if perk is None:
+                continue
+            for method in perk.methods:
+                first = seen.setdefault(method.name, perk_name)
+                if first == perk_name or index < tp.inherited:
+                    continue
+                at = tp.constraints.index(first)
+                diagnostic = er.emit_with(
+                    reporter, ERR.CE4015, tp.constraint_span(index) or tp.loc,
+                    filename=tp.constraint_file(index), perk=perk_name,
+                    method=method.name, other=first)
+                first_span = tp.constraint_span(at)
+                if first_span is not None:
+                    diagnostic = diagnostic.note_at(
+                        f"'{first}' provides '{method.name}' here", first_span,
+                        tp.constraint_file(at))
+                elif base is not None:
+                    from sushi_lang.semantics.generics.extension_targets import (
+                        implied_bound_note)
+                    diagnostic = diagnostic.note(implied_bound_note(base, tp.name, first))
+                diagnostic.emit()
 
 
 @dataclass

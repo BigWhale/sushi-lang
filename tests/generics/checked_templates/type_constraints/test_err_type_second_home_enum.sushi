@@ -1,0 +1,16 @@
+# The rule of one home holds for the type parameter of an enum too (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4015
+
+perk A:
+    fn f() i32
+
+perk B:
+    fn f() i32
+
+enum Slot@(T: A + B):
+    Full(T)
+    Empty
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -30,7 +30,7 @@ from .functions import (
 )
 from .perks import (
     GenericPerkImpl, GenericPerkImplTable, PerkCollector, PerkImplementationTable,
-    PerkTable)
+    PerkTable, reject_second_homes)
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
 from .unit_names import claim_unit_names
@@ -258,6 +258,10 @@ class CollectorPass:
         reject_private_perk_constraints(
             self.r, self.visibility, root,
             current_unit=unit_name, filename=unit_file)
+        # The own constraints of a generic type, judged one time where they are written:
+        # a template on the type inherits them and does not judge them again (#1070).
+        for declaration in (*root.structs, *root.enums):
+            reject_second_homes(self.r, self.perks, declaration.type_params or ())
 
         return self.tables
 

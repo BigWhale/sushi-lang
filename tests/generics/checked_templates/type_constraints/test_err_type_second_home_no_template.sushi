@@ -1,0 +1,16 @@
+# Two constraints of a struct's own type parameter that declare one method give the
+# method two homes, also when no template is written on the struct (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4015
+
+perk A:
+    fn f() i32
+
+perk B:
+    fn f() i32
+
+struct Box@(T: A + B):
+    T v
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0
