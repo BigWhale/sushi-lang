@@ -2,13 +2,13 @@
 # is. The warning beside it in the same template is the author's: the author's build
 # reports it, because a template is checked where it is written (#1070), and the
 # consumer does not (#1007). A template fault is the author's too, so the error here is
-# one that only an instance has: the template uses `a` two times, which copies an `i32`
-# and moves a `string`, so the `string` instance in the consumer's build is the fault.
+# one that only an instance has (R8): the template hands its `E` to a method whose `E`
+# is an error type, and the consumer's `i32` is not an error type.
 # BUILD_LIB_WARNS: lint_err_lib.sushi -> CW1001
-# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_ERROR_CODES_EXACT: CE2084
 # EXPECT_STDERR_CONTAINS: is a source library, compiled here because of `use <lib/lint_err_lib>`
 use <lib/lint_err_lib>
 
 fn main() i32:
-    println(widen(nom "text".clone()))
+    println(widen(nom 5))
     return 0

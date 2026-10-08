@@ -18,5 +18,5 @@ public fn checked(i32 n) (i32, bool) | StdError:
         return Result.Err(StdError.Error)
     return Result.Ok((n * 2, n > 10))
 
-public fn pick@(T, U)((T, U) p) T:
-    return p.0
+public fn pick@(T: Clone, U)((T, U) p) T:
+    return p.0.clone()

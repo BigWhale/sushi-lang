@@ -6,4 +6,4 @@ struct Cell@(T):
 
 public fn boxed@(T)(nom T v) T:
     let Cell@(T) c = Cell(v)
-    return c.item
+    return nom c.item

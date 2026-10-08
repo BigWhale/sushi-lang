@@ -11,8 +11,8 @@ public enum Opt@(T):
     Has(T)
     Empty
 
-extend Box@(T) peekv() T:
-    return self.v
+extend Box@(T: Clone) peekv() T:
+    return self.v.clone()
 
 public perk Named:
     fn named() i32
