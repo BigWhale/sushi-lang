@@ -3543,6 +3543,16 @@ A destructure element is a name, a typed name, a `_` or a nested destructure, an
 
 A destructuring rebind `(a, b) := v` evaluates all of `v` first and then assigns each target from left to right. A place written twice, as in `(a, a) := (1, 2)` or `(p.x, p.x) := f()`, gets two values, and the second assignment silently replaces the first. So the same place twice in the target, nested targets included, is refused, with a note at its first position. The check compares the written places: a name, a field chain, a tuple element, and an index that is a literal or a name. Two different places of one value are legal: `(p.x, p.y) := (p.y, p.x)` is a swap, and `(i, xs[i]) := (1, 9)` assigns `i` first, so `xs[i]` reads the new `i`. See [the tuple design](design/tuples.md).
 
+### CE6110 {#ce6110}
+
+**Error** · syntax
+
+**Message:** `the bound '{param}: {perks}' can stand only in the target of an 'extend'`
+
+**Help:** `write the bound in the type-parameter list of the declaration: '@({param}: {perks})'`
+
+The target of an `extend` can put a bound on a type parameter: `extend List@(T: Clone) filter(...)`, `extend (T: Clone)[] filter(...)`. The grammar accepts `NAME: Perk` in every type-argument list, because the parser cannot know the position. The AST builder refuses it in every other position: a `let` type, a parameter type, a return type, a field, an explicit type argument of a call, a conversion source, and a position inside a target argument (`extend Box@(List@(T: Clone))`). A function, a struct and an enum write the bound in their own type-parameter list.
+
 ## CE7xxx: Documentation block errors {#ce7xxx}
 
 These errors are about what a documentation block (`##: ... :##`) tells about its declaration.

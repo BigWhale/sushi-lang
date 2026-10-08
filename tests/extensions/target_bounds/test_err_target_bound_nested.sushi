@@ -1,0 +1,12 @@
+# A bound stands only at the top level of a target. A bound inside a target argument
+# is refused (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE6110
+
+struct Box@(T):
+    T value
+
+extend Box@(List@(T: Clone)) f() i32:
+    return 0
+
+fn main() i32:
+    return 0

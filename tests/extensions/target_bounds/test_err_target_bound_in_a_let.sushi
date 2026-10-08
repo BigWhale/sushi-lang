@@ -1,0 +1,10 @@
+# A bound can stand only in the target of an `extend` (#1070). A `let` type writes no
+# bound, so the AST builder refuses it with its own code.
+# EXPECT_ERROR_CODES_EXACT: CE6110
+
+fn make@(T: Clone)() i32:
+    let List@(T: Clone) xs = List.new()
+    return xs.len()
+
+fn main() i32:
+    return make@(i32)()

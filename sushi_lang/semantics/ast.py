@@ -381,6 +381,10 @@ class ExtendDef(Node):
     # A conversion: the pair the collect pass filed, with its types resolved. None on
     # every other extension, and on a refused conversion.
     declared_conversion: Optional["Conversion"] = None
+    # What each argument at the top level of the WRITTEN target declares: a bare or a
+    # bounded name, or None for another argument (#1070). Index-aligned with the `@(...)`
+    # arguments, or the one array element. It holds no node.
+    target_params: Tuple[Optional[BoundedTypeParam], ...] = ()
 
     @property
     def is_conversion(self) -> bool:
@@ -429,6 +433,8 @@ class ExtendWithDef(Node):
     is_synthesized: bool = False
     # The alias of `extend Dog with p.Named`, or None for a bare perk name.
     perk_namespace: Optional[str] = None
+    # What each argument at the top level of the written target declares; see `ExtendDef`.
+    target_params: Tuple[Optional[BoundedTypeParam], ...] = ()
 
 @dataclass(slots=True)
 class TypeConstraint:
