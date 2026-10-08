@@ -6,7 +6,7 @@
 struct P:
     i32 x
 
-extend T[] collect() List@(T):
+extend (T: Eq)[] collect() List@(T):
     let List@(T) out = List.new()
     foreach(e in self.iter()):
         if (e == e):

@@ -16,7 +16,7 @@ extend Box@(T) run() T:
 perk Runs:
     fn go() i32
 
-extend Box@(T) with Runs:
+extend Box@(T: Display) with Runs:
     fn go() i32:
         let fn(T) -> T f = gen
         let T k = f(self.v)

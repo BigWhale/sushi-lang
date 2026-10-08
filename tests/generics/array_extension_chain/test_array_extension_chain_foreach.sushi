@@ -1,7 +1,7 @@
 # A foreach over a generic T[] extension's answer, called inline (#1143).
 # EXPECT_STDOUT_EXACT: "10\n20\n"
 # EXPECT_NO_LEAKS
-extend T[] doubled() List@(T):
+extend (T: Clone)[] doubled() List@(T):
     let List@(T) out = List.new()
     foreach(x in self.iter()):
         out.push(x.clone())

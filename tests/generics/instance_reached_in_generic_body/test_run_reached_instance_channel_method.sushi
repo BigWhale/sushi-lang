@@ -12,7 +12,7 @@ struct Feed@(T):
     T[] items
     i32 at
 
-extend Feed@(T) taken() List@(T) | Bad:
+extend Feed@(T: Clone) taken() List@(T) | Bad:
     if (self.items.len() == 0):
         return Result.Err(Bad.Oops)
     let List@(T) out = List.new()

@@ -6,7 +6,7 @@
 extend T[] rows() i32:
     return self.len()
 
-extend T[] last_row() T:
+extend (T: Clone)[] last_row() T:
     return self[self.len() - 1].clone()
 
 fn main() i32:

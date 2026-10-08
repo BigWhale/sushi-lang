@@ -10,18 +10,18 @@
 struct Box@(T):
     T value
 
-extend Box@(T) peeked() Maybe@(T):
+extend Box@(T: Clone) peeked() Maybe@(T):
     return Maybe.Some(self.value.clone())
 
-extend Box@(T) listed() List@(T):
+extend Box@(T: Clone) listed() List@(T):
     let List@(T) out = List.new()
     out.push(self.value.clone())
     return out
 
-extend Box@(T) owned() Own@(T):
+extend Box@(T: Clone) owned() Own@(T):
     return Own.alloc(self.value.clone())
 
-extend Box@(T) unwrapped() T:
+extend Box@(T: Clone) unwrapped() T:
     return self.value.clone()
 
 fn run_test() i32:

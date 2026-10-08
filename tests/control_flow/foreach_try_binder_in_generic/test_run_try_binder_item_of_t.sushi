@@ -14,7 +14,7 @@ struct Feed@(T):
     i32 at
     i32 fail_at
 
-extend Feed@(T) next(poke self) Maybe@(Result@(T, Bad)):
+extend Feed@(T: Clone) next(poke self) Maybe@(Result@(T, Bad)):
     if (self.at == self.fail_at):
         self.at := self.at + 1
         return Maybe.Some(Result.Err(Bad.Broken))
@@ -24,10 +24,10 @@ extend Feed@(T) next(poke self) Maybe@(Result@(T, Bad)):
         Maybe.Some(v) -> return Maybe.Some(Result.Ok(v.clone()))
         Maybe.None -> return Maybe.None
 
-extend Feed@(T) fresh() Feed@(T):
+extend Feed@(T: Clone) fresh() Feed@(T):
     return Feed(self.items.clone(), 0, self.fail_at)
 
-fn count@(T: Display)(Feed@(T) feed) i32 | Bad:
+fn count@(T: Display + Clone)(Feed@(T) feed) i32 | Bad:
     let i32 seen = 0
     foreach(x?? in feed.fresh()):
         println("got {x}")

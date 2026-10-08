@@ -8,7 +8,7 @@ struct Box@(T):
 fn k@(T: Hashable)(T x) i32:
     return ((x.hash() as i32) * 0) + 7
 
-extend Box@(T) o() i32:
+extend Box@(T: Hashable) o() i32:
     let T y = self.v
     return k(y)
 

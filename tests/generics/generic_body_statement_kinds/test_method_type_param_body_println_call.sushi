@@ -9,7 +9,7 @@ struct Crate:
 fn k@(T: Hashable)(T x) i32:
     return 7 + (x.hash() * 0) as i32
 
-extend Crate show@(U)(U u) i32:
+extend Crate show@(U: Hashable)(U u) i32:
     println(k(u))
     return 1
 

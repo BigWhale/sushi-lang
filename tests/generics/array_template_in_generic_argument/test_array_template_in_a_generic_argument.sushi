@@ -6,7 +6,7 @@
 struct P:
     i32 x
 
-extend T[] firsts() string:
+extend (T: Display)[] firsts() string:
     return "{self[0]}"
 
 fn k@(T: Hashable)(T x) i32:

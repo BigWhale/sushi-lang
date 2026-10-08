@@ -14,10 +14,10 @@ fn tag@(U: Hashable)(U x) i32:
 fn outer@(U: Hashable)(U x) i32:
     return tag(x) + 1
 
-extend Box@(T) tagged() i32:
+extend Box@(T: Hashable) tagged() i32:
     return tag(self.value)
 
-extend Box@(T) chained() i32:
+extend Box@(T: Hashable) chained() i32:
     return outer(self.value)
 
 fn run_test() i32:

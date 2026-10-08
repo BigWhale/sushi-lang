@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "true\ntrue\nfalse\n"
-extend T[] holds(T probe) bool:
+extend (T: Eq)[] holds(T probe) bool:
     foreach(x in self.iter()):
         if (x == probe):
             return true

@@ -10,7 +10,7 @@ fn k@(T: Hashable)(T x) i32:
 extend Box@(T) static of(T v) Box@(T):
     return Box(v)
 
-extend Box@(T) wrap() i32:
+extend Box@(T: Hashable) wrap() i32:
     return k(Box.of(self.v))
 
 fn main() i32:

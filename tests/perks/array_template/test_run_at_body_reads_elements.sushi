@@ -7,7 +7,7 @@
 perk Summary:
     fn summary() string
 
-extend T[] with Summary:
+extend (T: Display)[] with Summary:
     fn summary() string:
         if (self.len() == 0):
             return "empty"
