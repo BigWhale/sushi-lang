@@ -46,7 +46,7 @@ from .utils import (extract_type_param_names, param_from_node, reject_reference_
                     reject_self_in_body, reject_try_in_body, reject_variadic_param)
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS, RefusalRecord, classify_extension_target,
-    reject_mixed_target, reject_unwritable_target)
+    reject_bound_on_type, reject_mixed_target, reject_unwritable_target)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.conversions import ConversionTable
 from .conversions import Filed, collect_conversion
@@ -438,6 +438,9 @@ class GenericExtensionMethod:
     # The declaration as written. A copy is this node with its types substituted, so a
     # field the record does not spell is not lost (#803).
     decl: Optional[ExtendDef] = None
+    # The bound the target puts on each receiver parameter (`extend List@(T: Clone)`,
+    # #1070), index-aligned with `type_params`. () for a concrete target.
+    target_bounds: Tuple[BoundedTypeParam, ...] = ()
 
     @property
     def method_type_param_names(self) -> Tuple[str, ...]:
@@ -1057,7 +1060,12 @@ class FunctionCollector:
         tables say which names are declared types -- so the answer is decided here and
         carried.
         """
-        shape = classify_extension_target(target_type, self.is_declared_type)
+        if reject_bound_on_type(self.r, target_type, h.ext.target_params,
+                                self.is_declared_type, h.target_type_span or h.name_span):
+            self.generic_extensions.refuse(target_type.base_name, h.name)
+            return
+        shape = classify_extension_target(target_type, self.is_declared_type,
+                                          h.ext.target_params)
         h.ext.target_shape = shape
         if self._reject_generic_header(h, target_type, shape):
             self.generic_extensions.refuse(target_type.base_name, h.name)
@@ -1066,7 +1074,8 @@ class FunctionCollector:
         method = self._generic_method(
             h, base_type_name=target_type.base_name,
             type_params=shape.param_names, target_key=shape.target_key,
-            type_param_names=(*shape.param_names, *h.method_type_param_names))
+            type_param_names=(*shape.param_names, *h.method_type_param_names),
+            target_bounds=shape.bounds)
 
         if self._reject_overlapping_target(method, target_type, h.name_span):
             return
@@ -1101,7 +1110,12 @@ class FunctionCollector:
             ARRAY_BASE_KEY, classify_array_extension_target, reject_array_target)
 
         element = target_type.base_type
-        shape = classify_array_extension_target(element, self.is_declared_type)
+        if reject_bound_on_type(self.r, target_type, h.ext.target_params,
+                                self.is_declared_type, h.target_type_span or h.name_span):
+            self.generic_extensions.refuse(ARRAY_BASE_KEY, h.name)
+            return None
+        shape = classify_array_extension_target(element, self.is_declared_type,
+                                                h.ext.target_params)
         h.ext.target_shape = shape
         if reject_array_target(self.r, shape, element,
                                h.target_type_span or h.name_span):
@@ -1137,7 +1151,8 @@ class FunctionCollector:
 
         self.generic_extensions.add_method(self._generic_method(
             h, base_type_name=ARRAY_BASE_KEY, type_params=(param_name,),
-            target_key="", type_param_names=(param_name, *h.method_type_param_names)))
+            target_key="", type_param_names=(param_name, *h.method_type_param_names),
+            target_bounds=shape.bounds))
         return None
 
     def _collect_concrete_extension(self, h: '_ExtensionHeader') -> None:
@@ -1221,7 +1236,9 @@ class FunctionCollector:
 
     def _generic_method(self, h: '_ExtensionHeader', *, base_type_name: str,
                         type_params: Tuple[str, ...], target_key: str,
-                        type_param_names: Tuple[str, ...]) -> GenericExtensionMethod:
+                        type_param_names: Tuple[str, ...],
+                        target_bounds: Tuple[BoundedTypeParam, ...] = (),
+                        ) -> GenericExtensionMethod:
         """The ONE `GenericExtensionMethod` build, for all three template shapes.
 
         `type_param_names` are the names the signature converts into a `TypeParameter`:
@@ -1252,6 +1269,7 @@ class FunctionCollector:
             method_type_params=h.method_type_params,
             is_static=h.is_static,
             decl=h.ext,
+            target_bounds=target_bounds,
         )
 
     def _reject_variant_collision(self, target_type: Optional[Type], name: str,

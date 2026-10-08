@@ -1,0 +1,11 @@
+# A target bound obeys the use-site rule of a constraint (#1070): a private perk of
+# another unit cannot constrain a type parameter here.
+# EXPECT_ERROR_CODES_EXACT: CE4011
+
+use "helpers/loud" as h
+
+extend List@(T: h.Loud) f() i32:
+    return self.len()
+
+fn main() i32:
+    return h.quiet()

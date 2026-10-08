@@ -32,7 +32,7 @@ _add(ErrorMessage("CE4005", Severity.ERROR,
 
 _add(ErrorMessage("CE4006", Severity.ERROR,
     "type {type} does not implement perk {perk} required by constraint",
-    Category.PERK, "A type constraint requires the type to implement a specific perk. Add an implementation with 'extend {type} with {perk}:'. A call, a written type or a constructor in a generic body (#1070) passes a type parameter on to another generic. The parameter satisfies a constraint only when a constraint of its own promises it: add the constraint to the type parameter of the caller."))
+    Category.PERK, "A type constraint requires the type to implement a specific perk. Add an implementation with 'extend {type} with {perk}:'. A call, a written type or a constructor in a generic body (#1070) passes a type parameter on to another generic. The parameter satisfies a constraint only when a constraint of its own promises it: add the constraint to the type parameter of the caller. An extension or a perk implementation can add a bound in its target (`extend List@(T: Clone)`); a call on a receiver whose type argument does not satisfy it is refused at the call."))
 
 _add(ErrorMessage("CE4007", Severity.ERROR,
     "method {method} conflicts with perk method from {perk}",
@@ -82,3 +82,7 @@ _add(ErrorMessage("CE4017", Severity.ERROR,
 _add(ErrorMessage("CE4018", Severity.ERROR,
     "cannot clone '{type}': the type parameter '{param}' has no constraint 'Clone'",
     Category.PERK, "A generic body is checked one time, where it is written (#1070). A type parameter is opaque there: the body knows only what its constraints promise. `.clone()` makes a deep copy, and a deep copy of a value that holds a resource is a second handle. So a body can clone a value of a type parameter, or of a type that holds one (a `List@(T)`, a `Box@(T)`), only when the parameter declares the constraint `Clone`. Every type that holds no resource satisfies `Clone`. A handle does not; `.share()` is the way to get a second owner of a handle. Add `Clone` to the constraints: `@(T: Clone)`. The note points at the type parameter. CE2431 is the refusal of a concrete type that holds a resource."))
+
+_add(ErrorMessage("CE4019", Severity.ERROR,
+    "'Drop' for '{target}' cannot add the bound '{param}: {perk}'",
+    Category.PERK, "A `Drop` implementation says how each value of a type releases what it holds. A bound in its target gives `drop()` to some instances of the type and not to others, and an instance that the bound excludes releases nothing, with no diagnostic. So a `Drop` implementation inherits the bounds that its type declares and adds none (#1070). An array target is CE4016."))

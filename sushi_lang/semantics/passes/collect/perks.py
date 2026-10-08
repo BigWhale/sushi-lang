@@ -11,7 +11,7 @@ from sushi_lang.semantics.visibility import (
     VisibilityTable, library_clash_origin, record_declaration,
     reject_library_clash, reject_private_perk_contract, taken_by_a_library)
 from sushi_lang.semantics.ast import (
-    Param, PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
+    BoundedTypeParam, Param, PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
 from sushi_lang.semantics.passes.collect.unit_names import RefusedDeclarations
 from sushi_lang.semantics.typesys import (
     Type, BuiltinType, StructType, EnumType, FunctionType, ReceiverType)
@@ -65,6 +65,9 @@ class GenericPerkImpl:
     impl: ExtendWithDef                    # the template, signatures already converted
     unit_name: Optional[str] = None
     filename: Optional[str] = None
+    # The bound the target puts on each parameter (`extend Box@(T: Eq) with Show`,
+    # #1070), index-aligned with `type_params`.
+    target_bounds: Tuple[BoundedTypeParam, ...] = ()
 
 
 @dataclass
@@ -783,15 +786,22 @@ class PerkCollector:
         CE2008 (#860).
         """
         from sushi_lang.semantics.generics.extension_targets import (
-            classify_extension_target, reject_mixed_target, reject_unwritable_target)
+            classify_extension_target, reject_bound_on_type, reject_mixed_target,
+            reject_unwritable_target)
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
         if not isinstance(target_type, GenericTypeRef):
             return False
-        shape = classify_extension_target(target_type, self.is_declared_type)
         span = impl.target_type_span or impl.perk_name_span
+        if reject_bound_on_type(self.r, target_type, impl.target_params,
+                                self.is_declared_type, span):
+            self._refuse_methods(target_type.base_name, impl)
+            return True
+        shape = classify_extension_target(target_type, self.is_declared_type,
+                                          impl.target_params)
         if (reject_mixed_target(self.r, target_type, shape, span, "perk-implementation")
-                or reject_unwritable_target(self.r, shape, self.is_declared_type, span)):
+                or reject_unwritable_target(self.r, shape, self.is_declared_type, span)
+                or self._reject_drop_bound(impl, target_type, shape)):
             self._refuse_methods(target_type.base_name, impl)
             return True
         if not shape.param_names:
@@ -801,8 +811,30 @@ class PerkCollector:
                                                     template=True)):
             return True
 
-        self._add_template(impl, target_type.base_name, shape.param_names)
+        self._add_template(impl, target_type.base_name, shape.param_names, shape.bounds)
         return True
+
+    def _reject_drop_bound(self, impl: ExtendWithDef, target_type, shape) -> bool:
+        """CE4019: a `Drop` implementation adds no bound to its target (#1070).
+
+        A bound would give `drop()` to some instances of the type and not to the others,
+        and an excluded instance would release nothing, with no diagnostic. An array
+        target is CE4016 already, so only a generic target asks.
+        """
+        if impl.perk_name != self.DROP_PERK:
+            return False
+        from sushi_lang.semantics.generics.extension_targets import written_target
+        for bound in shape.bounds:
+            if not bound.constraints:
+                continue
+            perks = " + ".join(bound.written_constraints())
+            er.emit_with(self.r, ERR.CE4019, bound.loc or impl.target_type_span,
+                         target=written_target(target_type, impl.target_params),
+                         param=bound.name, perk=perks) \
+                .help(f"put the bound on the type ('struct {target_type.base_name}"
+                      f"@({bound.name}: {perks})'), or remove it").emit()
+            return True
+        return False
 
     def _register_array_template(self, impl: ExtendWithDef,
                                  target_type: Optional[Type]) -> bool:
@@ -814,26 +846,33 @@ class PerkCollector:
         was refused.
         """
         from sushi_lang.semantics.generics.extension_targets import (
-            ARRAY_BASE_KEY, classify_array_extension_target, reject_array_target)
+            ARRAY_BASE_KEY, classify_array_extension_target, reject_array_target,
+            reject_bound_on_type)
         from sushi_lang.semantics.typesys import DynamicArrayType
 
         if not isinstance(target_type, DynamicArrayType):
             return False
         element = target_type.base_type
-        shape = classify_array_extension_target(element, self.is_declared_type)
-        if reject_array_target(self.r, shape, element,
-                               impl.target_type_span or impl.perk_name_span):
+        span = impl.target_type_span or impl.perk_name_span
+        if reject_bound_on_type(self.r, target_type, impl.target_params,
+                                self.is_declared_type, span):
+            self._refuse_methods(ARRAY_BASE_KEY, impl)
+            return True
+        shape = classify_array_extension_target(element, self.is_declared_type,
+                                                impl.target_params)
+        if reject_array_target(self.r, shape, element, span):
             return True
         if not shape.param_names:
             return False
         if (self._reject_overlap(impl, target_type, ARRAY_BASE_KEY, template=True)
                 or self._reject_second_home_on_base(impl, ARRAY_BASE_KEY, template=True)):
             return True
-        self._add_template(impl, ARRAY_BASE_KEY, shape.param_names)
+        self._add_template(impl, ARRAY_BASE_KEY, shape.param_names, shape.bounds)
         return True
 
     def _add_template(self, impl: ExtendWithDef, base_type_name: str,
-                      type_params: Tuple[str, ...]) -> None:
+                      type_params: Tuple[str, ...],
+                      target_bounds: Tuple[BoundedTypeParam, ...]) -> None:
         """File a template, its method signatures written in `TypeParameter`s."""
         from sushi_lang.semantics.passes.collect.functions import (
             bare_type_params, deep_type_params)
@@ -851,6 +890,7 @@ class PerkCollector:
             impl=impl,
             unit_name=self.current_unit_name,
             filename=self.current_unit_file,
+            target_bounds=target_bounds,
         ))
 
     def _reject_overlap(self, impl: ExtendWithDef, target_type: Optional[Type],

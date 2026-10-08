@@ -1,0 +1,6 @@
+# A unit with a private perk. Only this unit may constrain a type parameter with it.
+perk Loud:
+    fn shout() string
+
+public fn quiet() i32:
+    return 0

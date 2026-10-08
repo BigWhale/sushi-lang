@@ -493,3 +493,7 @@ _add(ErrorMessage("CE2121", Severity.ERROR,
 _add(ErrorMessage("CE2123", Severity.ERROR,
     "a string pattern cannot hold an interpolation hole",
     Category.TYPE, "A match arm compares the value with a FIXED value, and the compiler must know that value. A hole (`\"{x}\" ->`) is a run-time value, so a double-quoted pattern with a hole is refused. The compiler does not read the hole as a value to compare with, and it does not fold it. A single-quoted literal does not interpolate: write `'{x}' ->` to match the braces as text. To compare with a run-time value, use a `_` arm and test the value in the arm body (`_ -> if (s == x): ...`), or bind it in a nested position. Added with string arms in a match."))
+
+_add(ErrorMessage("CE2124", Severity.ERROR,
+    "the target '{target}' puts a bound on '{name}', which is a type: a bound constrains a type parameter",
+    Category.TYPE, "An extension target and a perk-implementation target can put a bound on a type parameter: `extend List@(T: Clone) filter(...)`, `extend (T: Clone)[] filter(...)`, `extend Box@(T: Eq) with Show:` (#1070). A bare name that a unit declares is a type, and a target argument that names a type is a constraint on one instance (`extend Box@(Point)`). A bound on a type has no meaning: the type satisfies the perk or it does not. The declaration is refused, and a call of its method gives no second error."))

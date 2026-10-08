@@ -103,6 +103,8 @@ def monomorphize_extension_method(
     concrete.target_type = concrete_target_type
     concrete.method_type_args = tuple(method_type_args)
     concrete.home_unit = generic_method.unit_name
+    # An instance names its target in full; the bounds belong to the template.
+    concrete.target_params = ()
     # Where the source wrote no name or no return, the collected record points a
     # diagnostic at the declaration instead.
     concrete.name_span = concrete.name_span or generic_method.name_span
@@ -197,6 +199,7 @@ def monomorphize_perk_impl(
         target_type=concrete_target_type,
         methods=methods,
         is_synthesized=True,
+        target_params=(),
     )
 
 

@@ -1294,7 +1294,7 @@ These errors are about types, arrays, structs, enums and generics.
 **Help:**
 
 - `write its type arguments, as in '{name}@(i32)'`
-- `'{name}' is a perk, and a target argument names a type`
+- `'{name}' is a perk, and a target argument names a type; to constrain a type parameter, write '{base}@(T: {name})'`
 - `` '{unit}' declares it; add `use "{unit}"` above to name it here ``
 - `` '{module}' declares it; add `use <{module}>` above to name it here ``
 - `` library '{library}' declares it; add `use <lib/{library}>` above to name it here ``
@@ -2193,6 +2193,16 @@ A range (`a..b`, `a..=b`) has two positions, and only two: the iterable of a `fo
 **Help:** `write '{text}' with single quotes to match the braces as text`
 
 A match arm compares the value with a FIXED value, and the compiler must know that value. A hole (`"{x}" ->`) is a run-time value, so a double-quoted pattern with a hole is refused. The compiler does not read the hole as a value to compare with, and it does not fold it. A single-quoted literal does not interpolate: write `'{x}' ->` to match the braces as text. To compare with a run-time value, use a `_` arm and test the value in the arm body (`_ -> if (s == x): ...`), or bind it in a nested position.
+
+### CE2124 {#ce2124}
+
+**Error** · type
+
+**Message:** `the target '{target}' puts a bound on '{name}', which is a type: a bound constrains a type parameter`
+
+**Help:** `rename the type parameter so that it names no type, or remove the bound; a concrete target argument already names one instance`
+
+An extension target and a perk-implementation target can put a bound on a type parameter: `extend List@(T: Clone) filter(...)`, `extend (T: Clone)[] filter(...)`, `extend Box@(T: Eq) with Show:`. A bare name that a unit declares is a type, and a target argument that names a type is a constraint on one instance (`extend Box@(Point)`). A bound on a type has no meaning: the type satisfies the perk or it does not. The declaration is refused, and a call of its method gives no second error.
 
 ## CE24xx: Borrow and reference errors {#ce24xx}
 
@@ -3132,7 +3142,7 @@ The perk implementation is missing a required method. All methods declared in th
 
 **Message:** `type {type} does not implement perk {perk} required by constraint`
 
-A type constraint requires the type to implement a specific perk. Add an implementation with 'extend \{type\} with \{perk\}:'. A call, a written type or a constructor in a generic body passes a type parameter on to another generic. The parameter satisfies a constraint only when a constraint of its own promises it: add the constraint to the type parameter of the caller.
+A type constraint requires the type to implement a specific perk. Add an implementation with 'extend \{type\} with \{perk\}:'. A call, a written type or a constructor in a generic body passes a type parameter on to another generic. The parameter satisfies a constraint only when a constraint of its own promises it: add the constraint to the type parameter of the caller. An extension or a perk implementation can add a bound in its target (`extend List@(T: Clone)`); a call on a receiver whose type argument does not satisfy it is refused at the call.
 
 ### CE4007 {#ce4007}
 
@@ -3209,6 +3219,16 @@ The orphan rule of [CE4012](#ce4012), at a type no unit declares: a primitive, a
 **Message:** `cannot clone '{type}': the type parameter '{param}' has no constraint 'Clone'`
 
 A generic body is checked one time, where it is written. A type parameter is opaque there: the body knows only what its constraints promise. `.clone()` makes a deep copy, and a deep copy of a value that holds a resource is a second handle. So a body can clone a value of a type parameter, or of a type that holds one (a `List@(T)`, a `Box@(T)`), only when the parameter declares the constraint `Clone`. Every type that holds no resource satisfies `Clone`. A handle does not; `.share()` is the way to get a second owner of a handle. Add `Clone` to the constraints: `@(T: Clone)`. The note points at the type parameter. [CE2431](#ce2431) is the refusal of a concrete type that holds a resource.
+
+### CE4019 {#ce4019}
+
+**Error** · perk
+
+**Message:** `'Drop' for '{target}' cannot add the bound '{param}: {perk}'`
+
+**Help:** `put the bound on the type ('struct {base}@({param}: {perk})'), or remove it`
+
+A `Drop` implementation says how each value of a type releases what it holds. A bound in its target gives `drop()` to some instances of the type and not to others, and an instance that the bound excludes releases nothing, with no diagnostic. So a `Drop` implementation inherits the bounds that its type declares and adds none. An array target is [CE4016](#ce4016).
 
 ## CE5xxx: Foreign function interface errors {#ce5xxx}
 

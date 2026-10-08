@@ -20,8 +20,9 @@ and the disagreement would be silent.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Mapping, Optional, Protocol, Set, Tuple
+from typing import Callable, Mapping, Optional, Protocol, Sequence, Set, Tuple
 
+from sushi_lang.semantics.ast import BoundedTypeParam
 from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.statics import names_a_type
 from sushi_lang.semantics.typesys import (
@@ -104,6 +105,10 @@ class ExtensionTarget:
     args: Tuple[Type, ...]
     param_names: Tuple[str, ...]   # the arguments that name a type parameter
     target_key: str                # the instantiation it constrains, "" for a template
+    # The bound each parameter carries in the target (`extend List@(T: Clone)`, #1070),
+    # index-aligned with `param_names`. A parameter with no written bound has an entry
+    # with no constraints, so that every parameter has a span for a note.
+    bounds: Tuple[BoundedTypeParam, ...] = ()
 
     @property
     def is_concrete(self) -> bool:
@@ -158,22 +163,82 @@ def instantiation_key(base_name: str, type_args: Tuple[Type, ...]) -> str:
     return interned_name(base_name, type_args)
 
 
+TargetParams = Sequence[Optional[BoundedTypeParam]]
+
+
 def classify_extension_target(
     target: GenericTypeRef,
     is_declared_type: Callable[[str], bool],
+    params: TargetParams = (),
 ) -> ExtensionTarget:
-    """Read a target's arguments as constraints, as parameter names, or as a mix."""
+    """Read a target's arguments as constraints, as parameter names, or as a mix.
+
+    `params` is what the AST builder read at each argument (`ExtendDef.target_params`).
+    An argument with a written bound is a type PARAMETER whatever its name (#1070);
+    `reject_bound_on_type` refuses a bound on a declared name before this answer is read.
+    """
     args = tuple(target.type_args)
-    param_names = tuple(
-        str(arg) for arg in args if not _names_a_type(arg, is_declared_type)
+    bounds = tuple(
+        _bound_of(arg, params, index) for index, arg in enumerate(args)
+        if _is_bounded(params, index) or not _names_a_type(arg, is_declared_type)
     )
+    param_names = tuple(bound.name for bound in bounds)
     concrete = not param_names
     return ExtensionTarget(
         base_name=target.base_name,
         args=args,
         param_names=param_names,
         target_key=instantiation_key(target.base_name, args) if concrete else "",
+        bounds=bounds,
     )
+
+
+def _is_bounded(params: TargetParams, index: int) -> bool:
+    param = params[index] if index < len(params) else None
+    return param is not None and bool(param.constraints)
+
+
+def _bound_of(arg: Type, params: TargetParams, index: int) -> BoundedTypeParam:
+    """The written entry of one parameter argument, or an entry with no constraints."""
+    param = params[index] if index < len(params) else None
+    return param if param is not None else BoundedTypeParam(name=str(arg))
+
+
+def written_target(target: Type, params: TargetParams) -> str:
+    """A target as the source wrote it, bounds included: `List@(T: Clone)`, `(T: Clone)[]`."""
+    from sushi_lang.semantics.generics.type_display import display_type
+    if isinstance(target, DynamicArrayType) and params and params[0] is not None:
+        bound = params[0]
+        return f"({bound})[]" if bound.constraints else f"{bound.name}[]"
+    if not isinstance(target, GenericTypeRef):
+        return display_type(target)
+    args = [str(params[i]) if i < len(params) and params[i] is not None
+            else display_type(arg) for i, arg in enumerate(target.type_args)]
+    base = (f"{target.namespace}.{target.base_name}" if target.namespace
+            else target.base_name)
+    return f"{base}@({', '.join(args)})"
+
+
+def reject_bound_on_type(reporter, target: Type, params: TargetParams,
+                         namer: Callable[[str], bool], span) -> bool:
+    """CE2124 for a bounded target argument whose name is a declared type (#1070).
+
+    A bare declared name constrains a target to one instance (`extend Box@(Point)`), and
+    a bound on a type has no meaning: the type satisfies the perk or it does not. The
+    extension collector and the perk collector ask here FIRST, through the one predicate
+    `DeclaredTypeNamer`. The caller records the refusal, so a call adds no CE2008.
+    """
+    from sushi_lang.internals import errors as er
+    refused = False
+    for param in params:
+        if param is None or not param.constraints or not namer(param.name):
+            continue
+        er.emit_with(reporter, er.ERR.CE2124, param.loc or span,
+                     target=written_target(target, params), name=param.name) \
+            .help("rename the type parameter so that it names no type, or remove the "
+                  "bound; a concrete target argument already names one instance").emit()
+        refused = True
+    return refused
 
 
 def reject_unwritable_target(
@@ -217,7 +282,9 @@ def reject_unwritable_target(
             continue
         help_line = ("write its type arguments, as in '{0}@(i32)'".format(arg.name)
                      if namer.names_a_generic(arg.name)
-                     else f"'{arg.name}' is a perk, and a target argument names a type")
+                     else f"'{arg.name}' is a perk, and a target argument names a type; "
+                          f"to constrain a type parameter, write "
+                          f"'{shape.base_name}@(T: {arg.name})'")
         er.emit_with(reporter, er.ERR.CE2001, span, name=arg.name) \
             .help(help_line).emit()
         refused = True
@@ -254,6 +321,7 @@ ARRAY_BASE_KEY = "$array"
 def classify_array_extension_target(
     element: Type,
     is_declared_type: Callable[[str], bool],
+    params: TargetParams = (),
 ) -> Optional[ExtensionTarget]:
     """Read a dynamic-array target's ELEMENT position (ruling 3 of the UFCS epic).
 
@@ -264,14 +332,16 @@ def classify_array_extension_target(
     """
     if isinstance(element, TypeParameter):
         return ExtensionTarget(base_name=ARRAY_BASE_KEY, args=(element,),
-                               param_names=(element.name,), target_key="")
+                               param_names=(element.name,), target_key="",
+                               bounds=(_bound_of(element, params, 0),))
     if isinstance(element, UnknownType):
-        if is_declared_type(element.name):
+        if is_declared_type(element.name) and not _is_bounded(params, 0):
             return ExtensionTarget(
                 base_name=ARRAY_BASE_KEY, args=(element,), param_names=(),
                 target_key=instantiation_key(ARRAY_BASE_KEY, (element,)))
         return ExtensionTarget(base_name=ARRAY_BASE_KEY, args=(element,),
-                               param_names=(element.name,), target_key="")
+                               param_names=(element.name,), target_key="",
+                               bounds=(_bound_of(element, params, 0),))
     if isinstance(element, (BuiltinType, StructType, EnumType)):
         return ExtensionTarget(
             base_name=ARRAY_BASE_KEY, args=(element,), param_names=(),

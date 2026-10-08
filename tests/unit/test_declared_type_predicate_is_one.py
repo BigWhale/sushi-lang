@@ -113,9 +113,27 @@ def test_every_classifier_call_hands_in_the_seam():
     calls = list(_classifier_calls())
     assert len(calls) >= 3, "the perk path, the extension path and the array path"
     for path, call in calls:
-        assert len(call.args) == 2 and not call.keywords, ast.unparse(call)
+        # A third argument is what the AST builder read at each target argument, the
+        # bounds included (#1070); the predicate stays the second.
+        assert len(call.args) in (2, 3) and not call.keywords, ast.unparse(call)
         predicate = call.args[1]
         assert isinstance(predicate, ast.Attribute), f"{path}: {ast.unparse(call)}"
         assert isinstance(predicate.value, ast.Name) and predicate.value.id == "self", \
             f"{path}: {ast.unparse(call)}"
         assert predicate.attr == "is_declared_type", f"{path}: {ast.unparse(call)}"
+
+
+def test_the_bound_refusal_hands_in_the_seam():
+    """CE2124 asks whether a bounded name is a type through the same seam (#1070)."""
+    calls = []
+    for path, tree in _modules():
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id == "reject_bound_on_type"):
+                calls.append((path, node))
+    assert len(calls) >= 3, "the perk path, the extension path and the array paths"
+    for path, call in calls:
+        predicate = call.args[3]
+        assert (isinstance(predicate, ast.Attribute)
+                and isinstance(predicate.value, ast.Name) and predicate.value.id == "self"
+                and predicate.attr == "is_declared_type"), f"{path}: {ast.unparse(call)}"

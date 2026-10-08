@@ -155,6 +155,20 @@ def _type_param_records(node) -> List[dict]:
     ]
 
 
+def _target_bound_records(node) -> List[dict]:
+    """The bounds a target writes, for the report alone (#1070).
+
+    The source slice carries the bounds, and a consumer re-parses it. The report reads
+    this record, so a reader lists `List@(T: Clone)` without a parser. It is empty when
+    no argument has a bound; otherwise it holds each parameter of the target in order.
+    """
+    params = [param for param in node.target_params if param is not None]
+    if not any(param.constraints for param in params):
+        return []
+    return [{"param": param.name, "perks": param.written_constraints()}
+            for param in params]
+
+
 def slice_decl_source(node, source_text: str) -> str:
     """Slice the full, self-contained source text of one top-level declaration."""
     loc = getattr(node, "loc", None)
@@ -283,6 +297,7 @@ def serialize_generic_perk_impl(impl: "ExtendWithDef", source_text: str) -> dict
     return with_doc({
         "type": covering_base(target),
         "type_args": [str(a) for a in type_args],
+        "target_bounds": _target_bound_records(impl),
         "perk": impl.perk_name,
         "source": slice_decl_source(impl, source_text),
         # No symbol: there is no copy to link. The signatures are written in the
@@ -327,6 +342,7 @@ def serialize_generic_extension(ext: "ExtendDef", source_text: str) -> dict:
     """
     record = serialize_extension(ext)
     record["type_params"] = _type_param_records(ext)
+    record["target_bounds"] = _target_bound_records(ext)
     record["source"] = slice_decl_source(ext, source_text)
     return record
 

@@ -320,13 +320,21 @@ def _extension_signature(ext) -> str:
     ret = str(ext.ret) if ext.ret else "~"
     err = f"|{ext.err_type}" if getattr(ext, "err_type", None) else ""
     recv = "static" if getattr(ext, "is_static", False) else (ext.self_mode or "self")
-    return (f"{ext.target_type}::{ext.name}{_type_params_signature(ext)}"
+    return (f"{ext.target_type}{_target_bounds_signature(ext)}::{ext.name}"
+            f"{_type_params_signature(ext)}"
             f"({recv};{_params_signature(ext.params)})->{ret}{err}")
 
 
 def _perk_impl_signatures(impl) -> list[str]:
-    return [f"{impl.target_type}:{impl.perk_name}::{m.name}{_callable_signature(m)}"
+    bounds = _target_bounds_signature(impl)
+    return [f"{impl.target_type}{bounds}:{impl.perk_name}::{m.name}{_callable_signature(m)}"
             for m in impl.methods]
+
+
+def _target_bounds_signature(decl) -> str:
+    """The bounds a target writes (#1070): they decide which instances get a copy."""
+    return "".join(f"[{param}]" for param in decl.target_params
+                   if param is not None and param.constraints)
 
 
 def _definition_signature(defn) -> str:

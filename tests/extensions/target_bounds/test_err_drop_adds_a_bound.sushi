@@ -1,0 +1,13 @@
+# A `Drop` implementation inherits the bounds of its type and adds none (#1070): a
+# bound would give `drop()` to some instances and leave the others with no release.
+# EXPECT_ERROR_CODES_EXACT: CE4019
+
+struct Sink@(T):
+    T value
+
+extend Sink@(T: Clone) with Drop:
+    fn drop(poke self) ~:
+        println("drop")
+
+fn main() i32:
+    return 0

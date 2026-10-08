@@ -543,6 +543,16 @@ again from a different set of visible types. `instantiation_key` is the one auth
 mangled name a concrete target matches, for the extension table and the perk-impl table
 alike.
 
+A target argument has three forms, and they do not overlap (#1070):
+
+- `Box@(Show)`, `Box@(Point)`: a bare declared name. It constrains the target to one
+  instance, and a perk name then fails as a type (CE2001).
+- `Box@(T)`: a bare undeclared name. It is a type parameter, and it inherits the bounds
+  that `Box` declares.
+- `Box@(T: Show)`: always a type parameter, with a bound that the target ADDS. `T` must
+  name no type (CE2124). The array form is `(T: Show)[]`. A bound in any other type
+  position is CE6110.
+
 ## Related
 
 - `docs/design/closures.md` -- the same rule stated for `List@(T)` extension methods

@@ -58,9 +58,12 @@ if TYPE_CHECKING:
     # The inner node a position belongs to, when it belongs to one.
     InnerDecl = Union["StructField", "EnumVariant", "CallableDecl"]
 
-    # What `signature_constraints()` reads. These four kinds declare the type
-    # parameters a constraint rides on; no other declaration has one to read.
-    ConstraintDecl = Union["FuncDef", "StructDef", "EnumDef", "ExtendDef"]
+    # What `signature_constraints()` reads. These kinds declare the type parameters a
+    # constraint rides on; no other declaration has one to read. A perk implementation
+    # has one in its target alone (`extend Box@(T: Eq) with Show`, #1070).
+    ConstraintDecl = Union["FuncDef", "StructDef", "EnumDef", "ExtendDef", "ExtendWithDef"]
+    TypeParamDecl = Union["FuncDef", "StructDef", "EnumDef", "ExtendDef"]
+    TargetDecl = Union["ExtendDef", "ExtendWithDef"]
 
     # A declaration with a body, which is what `bodied()` answers with.
     BodiedDecl = Union["FuncDef", "ExtendDef"]
@@ -224,7 +227,7 @@ def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
     """
     # Named, so that the four kinds stay one union. Left inline, the pairs read as
     # their common base class and every field below goes unchecked again.
-    declared: Tuple[Tuple[str, ConstraintDecl], ...] = (
+    declared: Tuple[Tuple[str, TypeParamDecl], ...] = (
         *(("function", func) for func in program.functions),
         *(("struct", struct) for struct in program.structs),
         *(("enum", enum) for enum in program.enums),
@@ -233,15 +236,33 @@ def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
     )
     for kind, decl in declared:
         fallback = decl.name_span or decl.loc
-        for param in decl.type_params or ():
-            constraints = param.constraints or ()
-            namespaces = param.constraint_namespaces or ()
-            for index, constraint in enumerate(constraints):
-                if isinstance(constraint, str):
-                    yield ConstraintSite(
-                        kind, decl, constraint,
-                        param.constraint_span(index) or param.loc or fallback,
-                        namespaces[index] if index < len(namespaces) else None)
+        yield from _constraint_sites(kind, decl, decl.type_params or (), fallback)
+    # The bounds a target puts on its type parameters (#1070). A copy is an instance and
+    # carries none, so each written bound is read one time.
+    targets: Tuple[Tuple[str, TargetDecl], ...] = (
+        *(("extension", ext) for ext in
+          [*program.extensions, *program.generic_extensions]),
+        *(("perk implementation", impl) for impl in
+          [*program.perk_impls, *program.generic_perk_impls]),
+    )
+    for target_kind, target in targets:
+        params = [param for param in target.target_params or () if param is not None]
+        yield from _constraint_sites(target_kind, target, params,
+                                     target.target_type_span or target.loc)
+
+
+def _constraint_sites(kind: str, decl: ConstraintDecl, params,
+                      fallback: Optional[Span]) -> Iterator[ConstraintSite]:
+    """One site for each constraint of each bounded type parameter."""
+    for param in params:
+        constraints = param.constraints or ()
+        namespaces = param.constraint_namespaces or ()
+        for index, constraint in enumerate(constraints):
+            if isinstance(constraint, str):
+                yield ConstraintSite(
+                    kind, decl, constraint,
+                    param.constraint_span(index) or param.loc or fallback,
+                    namespaces[index] if index < len(namespaces) else None)
 
 
 def _callable_sites(kind: str, decl: CallableOwner,

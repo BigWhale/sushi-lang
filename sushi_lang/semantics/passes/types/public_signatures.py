@@ -83,9 +83,13 @@ def _leak_word(site: TypeSite) -> str:
     return _POSITION_WORD.get(site.position, _kind_word(site))
 
 
-def _declared_name(site: TypeSite) -> str:
-    """The name a diagnostic uses: the inner declaration's, not its parent's."""
-    for candidate in (site.at, site.decl):
+def _declared_name(site: TypeSite | ConstraintSite) -> str:
+    """The name a diagnostic uses: the inner declaration's, not its parent's.
+
+    A perk implementation has no name of its own, and the perk it implements names it.
+    """
+    candidates = (site.at, site.decl) if isinstance(site, TypeSite) else (site.decl,)
+    for candidate in candidates:
         name = getattr(candidate, "name", None)
         if isinstance(name, str):
             return name
@@ -243,5 +247,5 @@ def check_public_signatures(validator: 'TypeValidator', program: 'Program') -> N
             _note_declaration(er.emit_with(
                 validator.reporter, er.ERR.CE3010, constraint.span,
                 kind=_kind_word(constraint),
-                name=getattr(constraint.decl, "name", "<anonymous>"),
+                name=_declared_name(constraint),
                 perk=constraint.perk_name), origin)
