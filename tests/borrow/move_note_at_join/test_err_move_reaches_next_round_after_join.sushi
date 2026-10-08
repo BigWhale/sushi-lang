@@ -1,0 +1,28 @@
+# One path of a loop round moves `s` and the other path rebinds it. The move reaches the
+# use at the top of the next round, which is CE2405 with a note at the move. That use
+# rebinds `s`, so the move in the next round is not a second error.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: test_err_move_reaches_next_round_after_join.sushi:18:14: error [CE2405]
+# EXPECT_STDERR_CONTAINS: 's' was moved here
+# EXPECT_STDERR_CONTAINS: test_err_move_reaches_next_round_after_join.sushi:20:21
+
+use <collections/strings>
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn f(bool go) i32:
+    let string s = "tow".concat("el")
+    let i32 i = 0
+    while (i < 2):
+        s := s.concat("x")
+        if (go):
+            eat(nom s)
+        else:
+            s := "c".concat("d")
+        i := i + 1
+    return i
+
+fn main() i32:
+    println(f(false))
+    return 0

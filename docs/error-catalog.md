@@ -1246,6 +1246,14 @@ The check of a generic template builds its instances over an opaque type paramet
 
 A generic template is checked one time, where it is written. Its copies then report only what each instance decides: an error type for a type argument in an error position, and a lambda parameter that owns for this type argument. Every other rule ran on the template. A copy that reports another error has found a fault that the template check did not find. This is a fault in the compiler. The text holds the code and the message that the copy reported, so you can still see the fault. Please report the program.
 
+### CE0150 {#ce0150}
+
+**Error** · internal
+
+**Message:** `the borrow pass has no move location for the moved variable '{name}'`
+
+A use-after-move error ([CE2405](#ce2405), [CE2435](#ce2435)) is relational: it shows the use, and a note shows where the value moved. The borrow pass records the location with the moved flag, and every branch join and loop join keeps the two together. A moved variable with no location means that a path set the flag and lost the location. This is a fault in the compiler, not in the program; please report the program.
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.

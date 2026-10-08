@@ -90,17 +90,18 @@ def emit_use_after_move(checker: 'BorrowChecker', name: str, use_span: Optional[
     """
     if state.move_reported_by is not None:
         return
+    moved_at = state.moved_at_span
+    if moved_at is None:
+        er.raise_internal_error("CE0150", name=name)
     method = state.consumed_by_method
     if method is not None:
         diag = checker.err.emit_with(er.ERR.CE2435, use_span,
                                      name=name, method=method)
-        if state.moved_at_span is not None:
-            diag.note_at(f"'{name}' was consumed by '{method}' here", state.moved_at_span)
+        diag.note_at(f"'{name}' was consumed by '{method}' here", moved_at)
         diag.emit()
         return
     diag = checker.err.emit_with(er.ERR.CE2405, use_span, name=name)
-    if state.moved_at_span is not None:
-        diag.note_at(f"'{name}' was moved here", state.moved_at_span)
+    diag.note_at(f"'{name}' was moved here", moved_at)
     param = opaque_without_clone(checker, state.var_type)
     if param is not None:
         note_opaque(diag, param).help(

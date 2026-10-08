@@ -1,0 +1,22 @@
+# One `match` arm moves `s` and the other arm rebinds it. The use after the `match` is
+# CE2405, and the note points at the move in the first arm.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: test_err_move_in_match_arm_rebind_in_other.sushi:18:13: error [CE2405]
+# EXPECT_STDERR_CONTAINS: 's' was moved here
+# EXPECT_STDERR_CONTAINS: test_err_move_in_match_arm_rebind_in_other.sushi:16:22
+
+use <collections/strings>
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn f(i32 k) i32:
+    let string s = "tow".concat("el")
+    match k:
+        0 -> eat(nom s)
+        _ -> s := "c".concat("d")
+    println(s)
+    return 0
+
+fn main() i32:
+    return f(0)
