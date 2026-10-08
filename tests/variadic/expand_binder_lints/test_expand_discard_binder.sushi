@@ -1,0 +1,15 @@
+# `expand(_ in args)` discards the element, as `foreach(_ in ...)` discards the
+# item. The body runs once per element, and nothing warns.
+# EXPECT_STDERR_EMPTY: true
+# EXPECT_STDOUT_EXACT: "3\n0\n"
+
+fn count@(...Ts)(...Ts args) i32:
+    let i32 n = 0
+    expand(_ in args):
+        n := n + 1
+    return n
+
+fn main() i32:
+    println(count(1, "a", 2.5))
+    println(count())
+    return 0

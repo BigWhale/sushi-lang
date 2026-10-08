@@ -53,10 +53,8 @@ class VariableInfo:
     # The binder as written in an `expand` body, when this is one of its copies
     # (#1019, #1031).
     written: Optional[WrittenLet] = None
-    # What CW1001 calls the name: a "variable" or a "parameter". None for the loop
-    # variable of an `expand`: no copy declares it, because the unroll renames it, so
-    # neither CW1001 nor CW1002 names it on the template either (#1070).
-    kind: Optional[str] = "variable"
+    # What CW1001 calls the name: a "variable" or a "parameter".
+    kind: str = "variable"
 
 
 class ScopeAnalyzer:
@@ -155,8 +153,7 @@ class ScopeAnalyzer:
         for var_info in current_scope.values():
             if var_info.written is not None:
                 self._copies.setdefault(var_info.written, []).append(var_info)
-            elif (not var_info.used and var_info.declared_at is not None
-                  and var_info.kind is not None):
+            elif not var_info.used and var_info.declared_at is not None:
                 self.err.emit(er.ERR.CW1001, var_info.declared_at,
                               kind=var_info.kind, name=var_info.name)
         if not self.scopes:
@@ -174,7 +171,7 @@ class ScopeAnalyzer:
 
     def _declare_variable(self, name: str, span: Optional[Span],
                           written: Optional[WrittenLet] = None,
-                          kind: Optional[str] = "variable") -> None:
+                          kind: str = "variable") -> None:
         """Declare a variable in the current scope.
 
         The shadow check compares WRITTEN names, and names a written `expand`-body `let`
@@ -184,11 +181,9 @@ class ScopeAnalyzer:
             return
 
         shown = written.name if written is not None else name
-        # The loop variable of an `expand` takes no part in the shadow check (`kind`).
-        outer_scopes = self.scopes[:-1] if kind is not None else []
-        for outer_scope in outer_scopes:
+        for outer_scope in self.scopes[:-1]:
             outer_var = _declared_as(outer_scope, shown)
-            if outer_var is None or outer_var.kind is None:
+            if outer_var is None:
                 continue
             if written not in self._shadows_told:
                 diag = self.err.emit_with(er.ERR.CW1002, span, name=shown)
@@ -660,7 +655,7 @@ class ScopeAnalyzer:
         """Check an expand statement (compile-time pack expansion)."""
         self._check_expression(stmt.iterable)
         self._push_scope()
-        self._declare_variable(stmt.var, stmt.var_span, kind=None)
+        self._declare_variable(stmt.var, stmt.var_span)
         self._check_block(stmt.body)
         self._pop_scope()
 

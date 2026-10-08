@@ -1,0 +1,12 @@
+# `_` discards the element of an `expand`, so it is no value in the body. A
+# `foreach(_ in ...)` item gives the same parse error.
+# EXPECT_ERROR_CODES_EXACT: CE6001
+# EXPECT_STDERR_CONTAINS: :8:17: error [CE6001]: unexpected token '_'.
+
+fn count@(...Ts)(...Ts args) ~:
+    expand(_ in args):
+        println(_)
+
+fn main() i32:
+    count(1, "a")
+    return 0

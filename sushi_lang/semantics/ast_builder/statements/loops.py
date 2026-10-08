@@ -20,9 +20,9 @@ _hidden_ids = count()
 _Child = Union[Tree, Token]
 
 
-def _discard_name() -> str:
+def _discard_name(kind: str = "fe_discard") -> str:
     """A hidden name for a `_` binder. It has no span, so the scope pass never reports it."""
-    return hidden_name("fe_discard", next(_hidden_ids))
+    return hidden_name(kind, next(_hidden_ids))
 
 
 def _desugar_try_binder(item_name: str, item_name_span: Optional[Span],
@@ -215,16 +215,21 @@ def parse_foreach_ref(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
 
 
 def parse_expand_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Expand:
-    """Parse expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block"""
+    """Parse expand_stmt: EXPAND "(" (NAME | UNDERSCORE) "in" expr ")" ":" block
+
+    The binder is read as a `foreach` item is: `_` discards the element, so it gets a
+    hidden name and no span.
+    """
     children = node.children
     _token_at(node, children, 0, "EXPAND", "first")
-    name_tok = _token_at(node, children, 1, "NAME", "for the pack name")
+    name_tok = _binder_at(node, children, 1)
+    discard = name_tok.type == "UNDERSCORE"
     iterable, body = _loop_tail(node, ast_builder)
 
     return Expand(
-        var=name_tok.value,
+        var=_discard_name("ex_discard") if discard else name_tok.value,
         iterable=iterable,
         body=body,
-        var_span=span_of(name_tok),
+        var_span=None if discard else span_of(name_tok),
         loc=span_of(node),
     )

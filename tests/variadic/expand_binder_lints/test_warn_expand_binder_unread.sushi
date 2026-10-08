@@ -1,0 +1,12 @@
+# The binder of an `expand` takes the lints of a `foreach` item: when nothing in the
+# body reads it, it is CW1001 at the binder.
+# EXPECT_ERROR_CODES_EXACT: CW1001
+# EXPECT_STDERR_CONTAINS: :7:12: warning [CW1001]: unused variable 'a'.
+
+fn count@(...Ts)(...Ts args) ~:
+    expand(a in args):
+        println("Mostly Harmless")
+
+fn main() i32:
+    count(1, "a")
+    return 0

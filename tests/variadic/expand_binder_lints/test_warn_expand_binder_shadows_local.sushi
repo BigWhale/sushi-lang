@@ -1,0 +1,14 @@
+# A binder of an `expand` that has the name of an outer local shadows it: CW1002 at
+# the binder, as for a `foreach` item.
+# EXPECT_ERROR_CODES_EXACT: CW1002
+# EXPECT_STDERR_CONTAINS: :9:12: warning [CW1002]: declared variable 'a' already exists in an outer scope.
+
+fn show@(...Ts: Display)(...Ts args) ~:
+    let i32 a = 1
+    println("{a}")
+    expand(a in args):
+        println("{a}")
+
+fn main() i32:
+    show(1, "x")
+    return 0

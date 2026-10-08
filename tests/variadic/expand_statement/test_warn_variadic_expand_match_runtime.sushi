@@ -8,6 +8,9 @@
 # enum type, exercising the frozen-Type robustness; the colliding arm binding
 # exercises the match-arm shadowing. The scrutinee is a fresh constructor each
 # copy (no intermediate `let`, which would clash as a duplicate local).
+# The pattern binding `a` shadows the binder `a`: CW1002, as for a `foreach` item.
+# EXPECT_ERROR_CODES_EXACT: CW1002
+# EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "i:1\ninner:7\ni:2\ninner:7\n"
 perk Render:
     fn display() string

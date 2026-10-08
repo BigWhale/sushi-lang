@@ -123,7 +123,7 @@ while_stmt: WHILE "(" expr ")" ":" block
 foreach_stmt: FOREACH "(" [type] (NAME | UNDERSCORE) [DOUBLE_QUESTION] "in" expr ")" ":" block
             | FOREACH "(" tuple_list "in" expr ")" ":" block -> foreach_destructure
             | FOREACH "(" BORROW_MODE (NAME | UNDERSCORE) "in" expr ")" ":" block -> foreach_ref
-expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
+expand_stmt: EXPAND "(" (NAME | UNDERSCORE) "in" expr ")" ":" block
 
 match_stmt: MATCH NOM? expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
 match_arm: (pattern | literal_pattern | wildcard_pattern | tuple_pattern) "->" (match_arm_inline | block)
