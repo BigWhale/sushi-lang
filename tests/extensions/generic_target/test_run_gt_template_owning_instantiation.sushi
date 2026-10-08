@@ -1,17 +1,17 @@
 # The escape, and the instantiation that is genuinely fine. `self` is a borrow, so an
 # owning field is cloned out of it -- and the SAME body serves `Box@(i32)`, where the
-# clone is a plain copy. One shared answer could never serve both, which is why the body
-# is checked per instantiation (#391).
+# clone is a plain copy. The body is checked once, where it is written, with `T: Clone`
+# (#1070), and each instantiation clones by its own type (#391).
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "marvin the robot\n42\nmarvin\n42\n"
 struct Box@(T):
     T value
 
-extend Box@(T) cloned() T:
+extend Box@(T: Clone) cloned() T:
     return self.value.clone()
 
-extend Box@(T) peeked() Maybe@(T):
+extend Box@(T: Clone) peeked() Maybe@(T):
     return Maybe.Some(self.value.clone())
 
 fn run_test() i32:

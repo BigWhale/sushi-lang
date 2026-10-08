@@ -2,6 +2,7 @@
 # the CE2060 that says the call has no instance.
 # EXPECT_ERROR_CODES_EXACT: CE0112, CE2060
 fn pick@(T, U)(T x) i32:
+    x
     return 0
 
 fn main() i32:

@@ -13,6 +13,7 @@ ALIAS = {"alias": True}
 if TYPE_CHECKING:
     from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
+    from sushi_lang.semantics.generics.types import TemplateId
     from sushi_lang.semantics.namespaces import NamespaceRef
     from sushi_lang.semantics.param_modes import ParamMode
 
@@ -174,6 +175,13 @@ class BoundedTypeParam:
     # the qualifier with it. `loc` marks the whole `T: Hidden + Loud`, and a rule about
     # a constraint is a rule about the perk name (#706).
     constraint_spans: List[Optional[Span]] = None
+    # The file each constraint is written in, index-aligned with `constraints`; None for
+    # the file of the declaration that holds the parameter. A receiver bound that an
+    # extension inherits from a type of another unit is written in that unit (#1070).
+    constraint_files: List[Optional[str]] = field(default_factory=list)
+    # The count of the leading constraints that a receiver parameter inherits from the
+    # type that its target names (#1070, R1). The declaration of that type judges them.
+    inherited: int = 0
 
     def __post_init__(self):
         if self.constraints is None:
@@ -182,11 +190,19 @@ class BoundedTypeParam:
             self.constraint_namespaces = [None] * len(self.constraints)
         if self.constraint_spans is None:
             self.constraint_spans = [None] * len(self.constraints)
+        if not self.constraint_files:
+            self.constraint_files = [None] * len(self.constraints)
 
     def constraint_span(self, index: int) -> Optional[Span]:
         """Where constraint `index` is written, or None when nothing recorded it."""
         if 0 <= index < len(self.constraint_spans):
             return self.constraint_spans[index]
+        return None
+
+    def constraint_file(self, index: int) -> Optional[str]:
+        """The file constraint `index` is written in, or None for the holder's own file."""
+        if 0 <= index < len(self.constraint_files):
+            return self.constraint_files[index]
         return None
 
     def written_constraints(self) -> List[str]:
@@ -255,6 +271,9 @@ class FuncDef(Node):
     # The written type-pack parameters of the template this body is an instance of. The
     # copy fans each one out, so the name is no local; a use outside `expand` is CE0144.
     pack_names: Tuple[str, ...] = ()
+    # The template this body is a copy of, by identity (#1070). The reporter mutes the
+    # copies of a template whose check refused it: the template said the fault one time.
+    template_id: Optional["TemplateId"] = None
 
 
 @dataclass(slots=True)
@@ -366,6 +385,9 @@ class ExtendDef(Node):
     # The unit that declared the template of a monomorphized copy (#1064). The copy is
     # checked in that unit's scope and defined in that unit's module. None on a written one.
     home_unit: Optional[str] = None
+    # The file of the template record of a monomorphized copy: a library template's is
+    # its source slice (#1070). None on a written one.
+    template_file: Optional[str] = None
     # Whether the template's WRITTEN signature has a channel; see `FuncDef`.
     written_channel: Optional[bool] = None
     # A template a binary library ships, and how a diagnostic in its body is rendered;
@@ -377,6 +399,13 @@ class ExtendDef(Node):
     # A conversion: the pair the collect pass filed, with its types resolved. None on
     # every other extension, and on a refused conversion.
     declared_conversion: Optional["Conversion"] = None
+    # What each argument at the top level of the WRITTEN target declares: a bare or a
+    # bounded name, or None for another argument (#1070). Index-aligned with the `@(...)`
+    # arguments, or the one array element. It holds no node.
+    target_params: Tuple[Optional[BoundedTypeParam], ...] = ()
+    # The template of a copy, for the reporter's mute (#1070); see `FuncDef`. None on a
+    # written extension.
+    template_id: Optional["TemplateId"] = None
 
     @property
     def is_conversion(self) -> bool:
@@ -425,6 +454,8 @@ class ExtendWithDef(Node):
     is_synthesized: bool = False
     # The alias of `extend Dog with p.Named`, or None for a bare perk name.
     perk_namespace: Optional[str] = None
+    # What each argument at the top level of the written target declares; see `ExtendDef`.
+    target_params: Tuple[Optional[BoundedTypeParam], ...] = ()
 
 @dataclass(slots=True)
 class TypeConstraint:

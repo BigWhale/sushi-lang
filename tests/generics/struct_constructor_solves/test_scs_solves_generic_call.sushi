@@ -4,8 +4,8 @@
 struct Box@(T):
     T v
 
-fn unbox@(T)(Box@(T) b) T:
-    return b.v
+fn unbox@(T: Clone)(Box@(T) b) T:
+    return b.v.clone()
 
 fn main() i32:
     println(unbox(Box(5)))

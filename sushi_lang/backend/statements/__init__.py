@@ -104,11 +104,19 @@ class StatementEmitter:
                 raise NotImplementedError(f"statement not supported yet: {type(stmt).__name__}")
 
     def emit_block(self, block) -> None:
-        """Emit all statements in a block."""
+        """Emit the statements of a block that a path reaches.
+
+        After an unrolled `expand` element statement that ends every path, no statement
+        of the block is reached, and the borrow pass gave none of them its stamps
+        (`ends_unrolled_run`).
+        """
+        from sushi_lang.semantics.ast_walk import ends_unrolled_run
         for stmt in self.codegen.utils.block_statements(block):
             if self.codegen.builder.block.terminator is not None:
                 break
             self.emit_stmt(stmt)
+            if ends_unrolled_run(stmt):
+                break
 
 
 __all__ = ['StatementEmitter']

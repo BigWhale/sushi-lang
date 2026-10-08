@@ -1,7 +1,7 @@
 # The same chain over an owning element type (#1143).
 # EXPECT_STDOUT_EXACT: "Arthur\nFord\n"
 # EXPECT_NO_LEAKS
-extend T[] copied() List@(T):
+extend (T: Clone)[] copied() List@(T):
     let List@(T) out = List.new()
     foreach(x in self.iter()):
         out.push(x.clone())

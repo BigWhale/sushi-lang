@@ -1,4 +1,9 @@
-public fn widen@(T)(T a) i32:
+public struct Tag:
+    i32 n
+
+extend Tag fail@(E)(nom E e) i32 | E:
+    return Result.Err(e)
+
+public fn widen@(E)(nom E e) i32:
     let i32 spare = 3
-    let i32 x = a
-    return x
+    return Tag(1).fail(nom e).realise(0)

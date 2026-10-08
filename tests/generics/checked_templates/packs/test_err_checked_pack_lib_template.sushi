@@ -1,0 +1,9 @@
+# The author's `--lib` build checks each pack template of the library where it is
+# written (#1070), so a library cannot ship one whose body no constraint supports.
+# OUTPUT_PATH: digests.slib
+# COMPILER_FLAGS: --lib --lib-version 1.0.0 --lib-kind binary
+# EXPECT_ERROR_CODE: CE2008
+
+public fn digests@(...Ts)(...Ts args) ~:
+    expand(a in args):
+        println(a.hash())

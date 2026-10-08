@@ -214,10 +214,13 @@ class ExpressionValidator(RecursiveVisitor):
         # indirect-call path yet, so reject it. A `string` is excluded deliberately -- its
         # `owned` bit is cleared at entry, so it frees nothing, and including it would
         # silently make `|string s| ...` illegal.
+        # A type that owns for every type argument is refused at the template; one that
+        # owns only for some is refused at the instance that owns (#1070, R7).
         drops = tv.drop_type_names
         for p in node.params:
             if p.ty != BuiltinType.STRING and owns_resource(
-                    p.ty, drops, resolve=lambda ty: resolve_declared_type(tv, ty)):
+                    p.ty, drops, resolve=lambda ty: resolve_declared_type(tv, ty),
+                    opaque_owns=False):
                 er.emit(tv.reporter, er.ERR.CE2094, node.loc,
                         reason=f"lambda parameter '{p.name}' has an owning type '{display_type(p.ty)}'; "
                                f"owning function-value parameters are deferred to Tier 2")
@@ -349,9 +352,13 @@ class ExpressionValidator(RecursiveVisitor):
             # A generic-fn reference is allowed WITH an explicit expected fn type: solve
             # the type args and rewrite to the mangled name. A bare one stays CE2093.
             from sushi_lang.semantics.passes.types.calls.generics import (
-                reject_unsolved_generic_value, resolve_generic_fn_reference)
+                GENERIC_VALUE_REFUSED, reject_unsolved_generic_value,
+                resolve_generic_fn_reference)
             expected = getattr(node, "expected_type", None)
-            resolved = resolve_generic_fn_reference(tv, node.id, expected)
+            resolved = resolve_generic_fn_reference(tv, node.id, expected, loc=node.loc)
+            # A refused constraint is the one fault (#1070); CE2093 is not added to it.
+            if resolved is GENERIC_VALUE_REFUSED:
+                return
             if resolved is not None:
                 node.id = resolved[0]  # mirror the call-site mangled-name rewrite
                 return
@@ -417,7 +424,9 @@ class ExpressionValidator(RecursiveVisitor):
             if (part_type is None or is_string_convertible(part_type)
                     or names_no_type(self.type_validator, deref_type(part_type))):
                 continue
-            printable, reason = top_level_contract(self.type_validator, part_type, DISPLAY)
+            refused: list = []
+            printable, reason = top_level_contract(self.type_validator, part_type, DISPLAY,
+                                                   refused)
             if printable:
                 stamps[-1] = deref_type(part_type)
                 continue
@@ -425,6 +434,7 @@ class ExpressionValidator(RecursiveVisitor):
                                   type=display_type(part_type))
             if reason is not None:
                 report = report.note(f"no derived Display: {reason}")
-            report.emit()
+            from sushi_lang.semantics.generics.opaque import explain_unpromised
+            explain_unpromised(report, DISPLAY, refused).emit()
         node.display_types = stamps if any(stamps) else None
 

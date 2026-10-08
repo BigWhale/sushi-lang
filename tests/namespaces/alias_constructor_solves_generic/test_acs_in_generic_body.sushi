@@ -3,12 +3,12 @@
 # EXPECT_STDOUT_EXACT: "4\n4\n"
 use "helpers/acs_shapes" as sh
 
-fn one@(T)(T d) i32:
+fn one@(T: Eq)(T d) i32:
     if (d == d):
         return 1
     return 0
 
-fn outer@(U)(U u) i32:
+fn outer@(U: Eq)(U u) i32:
     return one(u) + one(sh.Pt(0)) + one(sh.Mark.Off()) + one(sh.Shape.Circle(2))
 
 fn main() i32:

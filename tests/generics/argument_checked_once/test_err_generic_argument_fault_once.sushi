@@ -1,9 +1,9 @@
 # A fault in an argument of an inferred generic call is one diagnostic: the count check
 # walks no argument, and the check of the solved instance walks each one once.
 # EXPECT_ERROR_CODES_EXACT: CE0112
-fn id@(T)(T x) T:
+fn id@(T)(nom T x) T:
     return x
 
 fn main() i32:
-    println(id(5 / 0))
+    println(id(nom 5 / 0))
     return 0

@@ -156,7 +156,8 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
                             target=display_type(target_type))
         if is_error_type(source_type) and is_error_type(resolved_target):
             diag.help(conversion_help(source_type, resolved_target, at_try=False))
-        diag.emit()
+        from sushi_lang.semantics.generics.opaque import note_opaque
+        note_opaque(diag, source_type, resolved_target).emit()
 
 
 def refuse_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
@@ -285,8 +286,8 @@ def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr', arms: _Arms,
     conversion of the pair, the one lookup of `semantics/conversions.py`, and nothing
     else (docs/design/error-conversion.md section 3.3): a chain is never followed.
     Otherwise it is CE2511, and the help names the declaration to write. In a generic
-    function the pair is asked per instance, because the typecheck pass checks each
-    instance's own copy of the body.
+    function the pair is asked one time, on the template (#1070): an opaque `E` is equal
+    to itself alone, so a `??` propagates the same `E` and nothing else (R8).
     """
     outer_ok_type, outer_err_type = result_ok_err(channel)
     inner_err_type = arms.error_type
@@ -305,10 +306,12 @@ def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr', arms: _Arms,
     if conversion is not None:
         return True, conversion
 
-    er.emit_with(validator.reporter, er.ERR.CE2511, expr.loc,
-                 ok_type=display_type(outer_ok_type),
-                 inner_err=display_type(inner_err_type),
-                 outer_err=display_type(outer_err_type)) \
+    from sushi_lang.semantics.generics.opaque import note_opaque
+    diagnostic = er.emit_with(validator.reporter, er.ERR.CE2511, expr.loc,
+                              ok_type=display_type(outer_ok_type),
+                              inner_err=display_type(inner_err_type),
+                              outer_err=display_type(outer_err_type))
+    note_opaque(diagnostic, inner, outer) \
         .help(conversion_help(inner, outer, at_try=True)).emit()
     return False, None
 
@@ -323,7 +326,14 @@ def conversion_help(source: 'Type', target: 'Type', *, at_try: bool) -> str:
     spelling casts the VALUE.
     """
     from sushi_lang.semantics.passes.collect.enums import PREDEFINED_ENUM_HOMES
+    from sushi_lang.semantics.generics.opaque import holds_opaque
     source_text, target_text = display_type(source), display_type(target)
+    if holds_opaque(source) or holds_opaque(target):
+        # R8 (#1070): no conversion can name a type parameter, so a `??` propagates the
+        # same error type and no other.
+        return (f"a type parameter has no conversion, so only the same error type "
+                f"propagates; {_site_form(source_text, target_text, at_try)}, or write "
+                f"the concrete error type in the signature")
     generic = next((side for side in (source, target) if getattr(side, "generic_args", None)),
                    None)
     if generic is not None:
@@ -435,7 +445,8 @@ def reject_non_numeric_arithmetic(validator: 'TypeValidator', op: str,
         wrapper = _wrapper_of(operand_type)
         if wrapper is not None:
             report = report.help(f"take the value with {take_the_value(wrapper[0])}")
-        report.emit()
+        from sushi_lang.semantics.generics.opaque import explain_no_arithmetic
+        explain_no_arithmetic(report, operand_type).emit()
         return
 
 
@@ -464,7 +475,8 @@ def reject_zero_divisor(validator: 'TypeValidator', expr: BinaryOp,
 
 
 def top_level_contract(validator: 'TypeValidator', ty: 'Optional[Type]',
-                        contract: str) -> 'tuple[bool, Optional[str]]':
+                        contract: str, refused: 'Optional[list]' = None
+                        ) -> 'tuple[bool, Optional[str]]':
     """May a value of `ty` meet the positions of `contract` at the top level?
 
     `Eq` and `Ord` are the operators, the array search methods (`contains`, `index_of`)
@@ -472,20 +484,22 @@ def top_level_contract(validator: 'TypeValidator', ty: 'Optional[Type]',
     interpolation hole and `print`/`println`. THE rule, in one place, so the positions
     cannot drift apart: a primitive keeps its closed set, and a struct or an enum asks
     the derived contract, with the compilation's override. A printed position also
-    takes an array, a `List@(T)` and an `Own@(T)` (`printed_contract`).
+    takes an array, a `List@(T)` and an `Own@(T)` (`printed_contract`). `refused`,
+    when given, receives the types that the rule refuses, for the help of a refusal.
     """
     from sushi_lang.semantics.generics.contracts import (
         DISPLAY, operand_contract, override_of, printed_contract)
     overridden = override_of(validator.derived_methods, contract)
     if contract == DISPLAY:
-        return printed_contract(ty, overridden=overridden)
-    return operand_contract(ty, contract, overridden=overridden)
+        return printed_contract(ty, overridden=overridden, refused=refused)
+    return operand_contract(ty, contract, overridden=overridden, refused=refused)
 
 
-def has_equality(validator: 'TypeValidator', ty: 'Type') -> bool:
+def has_equality(validator: 'TypeValidator', ty: 'Type',
+                 refused: 'Optional[list]' = None) -> bool:
     """Can two values of `ty` meet `==`?"""
     from sushi_lang.semantics.generics.contracts import EQ
-    return top_level_contract(validator, ty, EQ)[0]
+    return top_level_contract(validator, ty, EQ, refused)[0]
 
 
 def _comparison_escape(ty: 'Type') -> Optional[str]:
@@ -521,14 +535,17 @@ def reject_uncomparable_operands(validator: 'TypeValidator', expr: BinaryOp,
         return
 
     if left_type != right_type:
-        er.emit(validator.reporter, er.ERR.CE2513, expr.loc,
-                left_type=display_type(left_type),
-                right_type=display_type(right_type), op=expr.op)
+        from sushi_lang.semantics.generics.opaque import note_opaque
+        note_opaque(er.emit_with(validator.reporter, er.ERR.CE2513, expr.loc,
+                                 left_type=display_type(left_type),
+                                 right_type=display_type(right_type), op=expr.op),
+                    left_type, right_type).emit()
         return
 
     from sushi_lang.semantics.generics.contracts import EQ, ORD
     contract = EQ if expr.op in _EQUALITY_OPS else ORD
-    permitted, reason = top_level_contract(validator, left_type, contract)
+    refused: list = []
+    permitted, reason = top_level_contract(validator, left_type, contract, refused)
     if permitted:
         operand = deref_type(left_type)
         if not isinstance(operand, BuiltinType):
@@ -542,7 +559,8 @@ def reject_uncomparable_operands(validator: 'TypeValidator', expr: BinaryOp,
     escape = _comparison_escape(left_type)
     if escape is not None:
         builder = builder.help(escape)
-    builder.emit()
+    from sushi_lang.semantics.generics.opaque import explain_unpromised
+    explain_unpromised(builder, contract, refused).emit()
 
 
 def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> None:
@@ -731,6 +749,10 @@ def _field_names_of(receiver_type: 'Type') -> Optional[list[str]]:
     if isinstance(receiver_type, (ArrayType, DynamicArrayType, BuiltinType, EnumType,
                                   FunctionType, PointerType, ForeignPtrType)):
         return []
+    # An opaque type parameter has the methods its constraints promise, and no field.
+    from sushi_lang.semantics.generics.types import TypeParameter
+    if isinstance(receiver_type, TypeParameter) and receiver_type.is_opaque:
+        return []
     return None
 
 
@@ -806,4 +828,6 @@ def reject_unknown_field(validator: 'TypeValidator', node: MemberAccess) -> None
             builder.help(f"did you mean '{close}'?")
         elif names:
             builder.help(f"'{shown}' declares {', '.join(repr(n) for n in names)}")
-    builder.emit()
+    # A type parameter has no field: a constraint promises methods alone (#1070).
+    from sushi_lang.semantics.generics.opaque import note_opaque
+    note_opaque(builder, receiver_type).emit()

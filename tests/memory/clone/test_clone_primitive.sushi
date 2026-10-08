@@ -6,7 +6,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 
-fn first@(T)(T[] arr) T | StdError:
+fn first@(T: Clone)(T[] arr) T | StdError:
     let T elem = arr.get(0).or_err(nom StdError.Error)??
     return Result.Ok(elem.clone())
 

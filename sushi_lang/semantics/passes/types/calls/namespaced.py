@@ -242,10 +242,13 @@ def _infer_namespaced_generic_value(validator: 'TypeValidator', node: 'MemberAcc
     stamp names the monomorphized instance as a FUNCTION, so the back end emits it as
     it emits any other function value behind an alias.
     """
-    from .generics import resolve_generic_fn_reference
+    from .generics import GENERIC_VALUE_REFUSED, resolve_generic_fn_reference
     resolved = resolve_generic_fn_reference(validator, binding.name,
                                             getattr(node, "expected_type", None),
-                                            generic_func=binding.record)
+                                            generic_func=binding.record,
+                                            loc=getattr(node, "loc", None))
+    if resolved is GENERIC_VALUE_REFUSED:
+        return None
     if resolved is None:
         _reject_generic_function_value(validator, node)
         return None

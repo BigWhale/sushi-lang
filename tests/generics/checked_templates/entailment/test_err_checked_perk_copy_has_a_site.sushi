@@ -1,0 +1,25 @@
+# A constraint refusal of an instance that only a perk-implementation copy names
+# points at the call in the template's method (#1070), never at a file alone.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: "test_err_checked_perk_copy_has_a_site.sushi:20:16"
+
+perk Hs:
+    fn hh() u64
+
+struct Handler:
+    fn(i32) -> i32 f
+
+struct Box@(T):
+    T v
+
+fn hasher@(U: Hashable)(U x) u64:
+    return x.hash()
+
+extend Box@(T) with Hs:
+    fn hh() u64:
+        return hasher(self.v)
+
+fn main() i32:
+    let Box@(Handler) b = Box(Handler(|i32 n| n + 1))
+    println(b.hh())
+    return 0

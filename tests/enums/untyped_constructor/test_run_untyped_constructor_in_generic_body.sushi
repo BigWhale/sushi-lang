@@ -4,7 +4,7 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "true\ntrue\n"
 
-fn has@(T)(T x) bool:
+fn has@(T: Clone)(T x) bool:
     return Maybe.Some(x.clone()).is_some()
 
 fn main() i32:

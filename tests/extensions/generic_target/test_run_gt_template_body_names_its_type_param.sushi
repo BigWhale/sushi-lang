@@ -8,20 +8,20 @@
 struct Box@(T):
     T value
 
-extend Box@(T) counted() i32:
+extend Box@(T: Clone) counted() i32:
     let List@(T) out = List.new()
     out.push(self.value.clone())
     let i32 n = out.len()
     out.destroy()
     return n
 
-extend Box@(T) held() T:
+extend Box@(T: Clone) held() T:
     let Own@(T) o = Own.alloc(self.value.clone())
     let T v = o.get().clone()
     o.destroy()
     return v
 
-extend Box@(T) maybe_len() i32:
+extend Box@(T: Clone) maybe_len() i32:
     let Maybe@(T) m = Maybe.Some(self.value.clone())
     if (m.is_some()):
         return 2

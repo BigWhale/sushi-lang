@@ -33,7 +33,7 @@ UNHASHABLE_KINDS: Dict[str, str] = {
     "FunctionType": "a function value (unhashable)",
     "ReferenceType": "a reference (unhashable)",
     "IteratorType": "an iterator (unhashable)",
-    "TypeParameter": "an unsubstituted type parameter",
+    "TypeParameter": "a type parameter whose constraints do not promise it",
     "TypePack": "a type pack",
     "GenericTypeRef": "an uninstantiated generic type",
     "GenericStructType": "a generic struct (should be monomorphized first)",
@@ -71,15 +71,18 @@ CONTAINER_HASH_KINDS: Dict[str, str] = {
 HashOverride = Override
 
 
-def hash_override_of(perk_impls: Any, generic_perk_impls: Any = None) -> HashOverride:
+def hash_override_of(perk_impls: Any, generic_perk_impls: Any,
+                     holds: Callable[[Type, str], bool]) -> HashOverride:
     """The `Hashable` override predicate, over the perk-implementation tables (#891)."""
     from sushi_lang.semantics.passes.collect.perks import PerkCollector
-    return perk_override_of(PerkCollector.HASHABLE_PERK, perk_impls, generic_perk_impls)
+    return perk_override_of(PerkCollector.HASHABLE_PERK, perk_impls, generic_perk_impls,
+                            holds)
 
 
 def hashability_of(ty: Type, walk: Optional[Walk] = None, *,
                    resolve: Optional[Callable[[Type], Type]] = None,
-                   overridden: Optional[HashOverride] = None) -> tuple[bool, str]:
+                   overridden: Optional[HashOverride] = None,
+                   refused: Optional[list] = None) -> tuple[bool, str]:
     """Can a derived hash read a value of `ty`? One reader for every position.
 
     A struct field, an enum payload and an array element all ask this, so a kind is
@@ -92,8 +95,11 @@ def hashability_of(ty: Type, walk: Optional[Walk] = None, *,
 
     `overridden` is asked first: a `Hashable` implementation wins in every position
     and is terminal, so a type that has one is hashable whatever its fields hold.
+    `refused`, when given, receives each held type whose kind is refused.
     """
-    walk = walk if walk is not None else Walk(resolve=resolve, overridden=overridden)
+    walk = walk if walk is not None else Walk(
+        resolve=resolve, overridden=overridden,
+        refused=refused if refused is not None else [])
     if walk.resolve is not None:
         ty = walk.resolve(ty)
 
@@ -110,6 +116,7 @@ def hashability_of(ty: Type, walk: Optional[Walk] = None, *,
 
     refusal = UNHASHABLE_KINDS.get(kind)
     if refusal is not None:
+        walk.refused.append(ty)
         return False, refusal
 
     if isinstance(ty, (ArrayType, DynamicArrayType)):

@@ -4,12 +4,12 @@
 # EXPECT_STDOUT_EXACT: "7\n41\n5\n7\n"
 use "helpers/libcallee" as l
 
-fn seven@(T)(T x) i32:
+fn seven@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     return 7 + (h & 0) as i32
 
-fn same@(T)(T x) T:
-    return x
+fn same@(T: Clone)(T x) T:
+    return x.clone()
 
 fn flip@(T)(T x, fn(T) -> i32 f) i32:
     return f(x)

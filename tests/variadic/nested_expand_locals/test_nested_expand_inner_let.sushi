@@ -10,7 +10,7 @@ extend i32 with Render:
         return "int"
 
 fn f@(...Ts: Render)(...Ts args) ~:
-    expand(a in args):
+    expand(_ in args):
         expand(b in args):
             let string t = b.display()
             println(t)

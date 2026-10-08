@@ -13,7 +13,7 @@ struct Tuple:
     i32 a
     string b
 
-fn show@(T)(T x) string:
+fn show@(T: Display)(T x) string:
     return "{x}"
 
 fn main() i32:

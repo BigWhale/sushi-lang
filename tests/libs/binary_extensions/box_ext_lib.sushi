@@ -16,8 +16,8 @@ extend Box@(T) echo(nom T x) T:
 extend Box@(i32) doubled() i32:
     return self.item * 2
 
-extend Pt pick@(U)(U a) U:
-    return a
+extend Pt pick@(U: Clone)(U a) U:
+    return a.clone()
 
 public error BoxError:
     Empty

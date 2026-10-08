@@ -40,9 +40,12 @@ Perks provide a way to:
   [The error channel is opt-in](design/error-channel.md)
 - Static dispatch only (no dynamic dispatch/vtables)
 - Explicit implementations required (no structural typing). The one exception is
-  the predefined `Hashable`, `Eq`, `Ord` and `Display`, which every type with a derived
-  method satisfies (`Eq`, `Ord` and `Display` by the top-level rule)
-- Full type checking at compile time
+  the predefined `Hashable`, `Eq`, `Ord`, `Display` and `Clone`, which every type with a
+  derived method satisfies (`Eq`, `Ord` and `Display` by the top-level rule; `Clone` by
+  holding no resource)
+- Full type checking at compile time. A generic body is checked one time, where it is
+  written, and a type parameter has the methods of its constraints and nothing more (see
+  [Checked generics](design/checked-generics.md))
 
 ## Defining Perks
 
@@ -165,7 +168,7 @@ perk Show:
 struct Box@(T):
     T item
 
-extend Box@(T) with Show:
+extend Box@(T: Display) with Show:
     fn show() string:
         return "boxed {self.item}"
 
@@ -184,15 +187,23 @@ nothing else, and a partially concrete target such as `extend Pair@(i32, U) with
 **[CE2098](error-catalog.md#ce2098)** -- there is no partial specialization. The compiler makes no copy for an
 instantiation that the program does not name.
 
-The compiler checks the header of a template implementation one time, on the written
-template, and not for each instance. So `fn f(T x) i32` against a contract
-`fn f(i32 x) i32` is **[CE4004](error-catalog.md#ce4004)**, also when every instance uses `T = i32`. To implement the
-contract for one instance, write the concrete target: `extend Box@(i32) with Pk`. The
-compiler also checks a template that has no instance, and a concrete implementation that the
-program does not use.
+The body puts `self.item` in a hole, so the target adds the bound `T: Display`. A
+`Box@(T)` whose `T` has no `Display` then does not implement `Show`, and `render` refuses it
+with **[CE4006](error-catalog.md#ce4006)**. An implementation on `Box@(T)` also inherits every bound that `Box`
+declares (`struct Box@(T: Hashable)` gives the body `T: Hashable`). A bound in a target is
+legal only at its top level; anywhere else it is **[CE6110](error-catalog.md#ce6110)**.
+
+The compiler checks a template implementation one time, on the written template, and not
+for each instance: the header and the body. In the body, `T` is opaque and has what its
+bounds promise. So `fn f(T x) i32` against a contract `fn f(i32 x) i32` is
+**[CE4004](error-catalog.md#ce4004)**, also when every instance uses `T = i32`. To implement the contract for one
+instance, write the concrete target: `extend Box@(i32) with Pk`. The compiler also checks a
+template that has no instance, and a concrete implementation that the program does not
+use.
 
 `Drop` is no exception: a generic target may implement it, and each instantiation's copy
-carries it. The orphan rule still applies and reads the target's BASE name, so only the
+carries it. A `Drop` implementation adds no bound: `extend Guard@(T: Clone) with Drop` is
+**[CE4019](error-catalog.md#ce4019)**, because an instance that the bound excludes would release nothing. The orphan rule still applies and reads the target's BASE name, so only the
 unit that declares `Box` may write `extend Box@(T) with Drop` (**[CE4012](error-catalog.md#ce4012)**). A wrapper
 whose fields already own needs no `Drop` of its own -- destroying its fields destroys the
 handle -- so declare one when the wrapper has something of its OWN to say, such as
@@ -229,8 +240,9 @@ fn main() i32:
 ```
 
 The body may name `T`: `let T head = self[0]` holds an element. The compiler checks the
-body for each element type that the program uses, so a body that is correct for `i32[]`
-and not for `string[]` is an error at the `string[]` copy only.
+body one time, with `T` opaque, so the body can do with an element only what a bound
+promises. The array form of a bound is `extend (T: Display)[] with P`: an array whose
+element has no `Display` then does not implement `P`.
 
 The predefined perks are legal on an array template. `Display` gives `println(xs)` and a
 hole their string form. `Eq`, `Ord` and `Hashable` are read by a direct call and by an array
@@ -335,7 +347,7 @@ fn main() i32:
 
 ## The Predefined Perks
 
-Five perks ship with the compiler. None needs an import, none can be declared
+Six perks ship with the compiler. None needs an import, none can be declared
 (**[CE4001](error-catalog.md#ce4001)**), and no alias holds them: `sh.Hashable` is **[CE2001](error-catalog.md#ce2001)**, as `sh.Drop` is.
 
 | Perk | Contract |
@@ -345,6 +357,7 @@ Five perks ship with the compiler. None needs an import, none can be declared
 | `Eq` | `fn eq(Self other) bool` |
 | `Ord` | `fn compare(Self other) i32` (negative, zero or positive) |
 | `Display` | `fn to_str() string` |
+| `Clone` | `fn clone() Self` |
 
 **`Self` exists in these contracts only.** A perk you write still cannot name its receiver.
 An implementation of `Eq`, `Ord` or `Display` writes its own type where the contract says
@@ -419,6 +432,29 @@ derives a `hash()` for it, or when the type implements the perk itself.
   a function-typed field) is still not a `HashMap` key (**[CE2055](error-catalog.md#ce2055)**), unless it also
   implements `Eq` (see
   [Key Requirements](stdlib/collections/hashmap.md#key-requirements)).
+
+**`Clone`** (`fn clone() Self`) is the promise that `.clone()` is legal. A type satisfies
+it when it holds no resource: it is not a `Drop` type, and no field, element or payload
+holds one. So every primitive, `string`, array, `List@(T)` and plain struct satisfies it,
+and a `File` or a struct that holds a `File` does not. The built-in `.clone()` is the
+contract, so there is nothing to override: `extend X with Clone` is **[CE4017](error-catalog.md#ce4017)**. A generic
+body that clones a `T` writes `@(T: Clone)`; without it, the clone is **[CE4018](error-catalog.md#ce4018)**. A handle
+gets a second owner with `.share()`, not with `.clone()`.
+
+```sushi
+struct Point:
+    i32 x
+    i32 y
+
+fn pair_of@(T: Clone)(T value) (T, T):
+    return (value.clone(), value.clone())
+
+fn main() i32:
+    let (Point, Point) p = pair_of(Point(1, 2))
+    let (string, string) s = pair_of("towel")
+    println("{p.0.x} {s.1}")      # 1 towel
+    return 0
+```
 
 A perk of your own follows the ordinary rule: only an explicit implementation
 satisfies it. `perk Hashy: fn hash() u64` is not satisfied by `i32`, because the
@@ -539,13 +575,13 @@ extend Score with Ord:
             return 1
         return 0
 
-fn find_max@(T: Ord)(T a, T b) T:
+fn find_max@(T: Ord)(nom T a, nom T b) T:
     if (a >= b):
         return a
     return b
 
 fn main() i32:
-    println(find_max(Score(3), Score(9)).value)    # 9
+    println(find_max(nom Score(3), nom Score(9)).value)    # 9
     return 0
 ```
 
@@ -614,18 +650,23 @@ Perk-related compiler errors:
 
 | Code | Description | Example |
 |------|-------------|---------|
-| [CE4001](error-catalog.md#ce4001) | Duplicate perk definition | Declaring `Describe` twice, or declaring `Hashable`, `Drop`, `Eq`, `Ord` or `Display`, which the compiler predefines |
+| [CE4001](error-catalog.md#ce4001) | Duplicate perk definition | Declaring `Describe` twice, or declaring `Hashable`, `Drop`, `Eq`, `Ord`, `Display` or `Clone`, which the compiler predefines |
 | [CE4002](error-catalog.md#ce4002) | Type already implements perk | Two `extend Point with Hashable:` blocks, or `extend T[] with P` and `extend i32[] with P` |
 | [CE4003](error-catalog.md#ce4003) | Unknown perk, or a perk out of the unit's scope | `extend Point with UnknownPerk:`, or `@(T: Named)` where only another unit imports `Named` |
 | [CE4004](error-catalog.md#ce4004) | Method signature mismatch | Wrong parameter types, modes or return type; also a template header that does not match for every `T` |
 | [CE4005](error-catalog.md#ce4005) | Missing required method | Perk defines `hash()` but implementation lacks it |
 | [CE4006](error-catalog.md#ce4006) | Type doesn't implement required perk | `Container@(T: Hashable)` used with a type that is not `Hashable`. Reported one time, at the type that names the instantiation, with a note at the constraint |
+| [CE4017](error-catalog.md#ce4017) | `Clone` implemented by hand | `extend Point with Clone:`; the compiler decides `Clone` |
+| [CE4018](error-catalog.md#ce4018) | Clone of a type parameter with no `Clone` | `x.clone()` in `fn f@(T)(T x)` |
+| [CE4019](error-catalog.md#ce4019) | `Drop` with a bound in its target | `extend Guard@(T: Clone) with Drop:` |
+| [CE2124](error-catalog.md#ce2124) | Bound on a name that is a type | `extend Box@(Point: Clone) m()` |
+| [CE6110](error-catalog.md#ce6110) | Bound outside the top level of a target | `fn f@(T)(Box@(T: Clone) b)` |
 | [CE4007](error-catalog.md#ce4007) | Method name conflict | A perk method and an extension method of the same name on one type |
 | [CE4010](error-catalog.md#ce4010) | Perk cannot have type parameters | `perk Conv@(T):`, or `fn show@(U)(U x)` in an implementation |
 | [CE4011](error-catalog.md#ce4011) | Private perk used from another unit | `extend Box with other.PrivatePerk:`, or `@(T: other.PrivatePerk)` |
 | [CE4012](error-catalog.md#ce4012) | `Drop` implemented outside the declaring unit | `extend lib.Handle with Drop:` in a consumer |
 | [CE4016](error-catalog.md#ce4016) | `Drop` on a type that no unit declares | `extend i32[] with Drop:`, `extend T[] with Drop:`, `extend string with Drop:` |
-| [CE4015](error-catalog.md#ce4015) | Method name with two homes | `extend Score with Ord:` and `extend Score with Ranked:` that both provide `compare` |
+| [CE4015](error-catalog.md#ce4015) | Method name with two homes | `extend Score with Ord:` and `extend Score with Ranked:` that both provide `compare`; also `@(T: A + B)` where `A` and `B` both declare one method name |
 | [CE4014](error-catalog.md#ce4014) | Static method in a perk | `static fn get() i32` in an implementation |
 | [CE0133](error-catalog.md#ce0133) | Error channel mismatch | The contract declares `| E` and the implementation does not, or the two channels differ |
 | [CE2110](error-catalog.md#ce2110) | Function type as the target | `extend fn(i32) -> i32 with Show:` |

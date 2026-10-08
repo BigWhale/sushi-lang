@@ -1,6 +1,0 @@
-use "ldu_fs2"
-
-public fn gen_fs@(T)(T x) i32:
-    match open("ldu_absent.txt", FileMode.Read()):
-        Result.Ok(_) -> return 1
-        Result.Err(_) -> return 0

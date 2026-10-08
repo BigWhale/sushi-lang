@@ -1,0 +1,32 @@
+# Correct extension templates that no call instantiates check clean where they are
+# written (#1070): a generic target, an array target, a List target, a method-level
+# type parameter, a static, a lambda in a body, and a call of another template of the
+# same unit.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_STDERR_EMPTY: true
+
+struct Box@(T):
+    T value
+
+extend Box@(T) size() i32:
+    return 1
+
+extend Box@(T) bumped() i32:
+    let fn(i32) -> i32 f = |i32 x| x + 1
+    return f(self.size())
+
+extend Box@(T) static of(nom T v) Box@(T):
+    return Box(v)
+
+extend Box@(T) pick@(U)(nom U a) U:
+    return a
+
+extend T[] count_all() i32:
+    return self.len()
+
+extend List@(T) first_len() i32:
+    return self.len()
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

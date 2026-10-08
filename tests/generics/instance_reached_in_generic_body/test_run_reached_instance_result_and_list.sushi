@@ -12,12 +12,12 @@ struct Feed@(T):
     T[] items
     i32 at
 
-extend Feed@(T) first() Result@(T, Bad):
+extend Feed@(T: Clone) first() Result@(T, Bad):
     match self.items.get(0):
         Maybe.Some(v) -> return Result.Ok(v.clone())
         Maybe.None -> return Result.Err(Bad.Oops)
 
-extend Feed@(T) all() List@(T):
+extend Feed@(T: Clone) all() List@(T):
     let List@(T) out = List.new()
     foreach(v in self.items.iter()):
         out.push(v.clone())
@@ -29,7 +29,7 @@ extend Feed@(T) never_called() Maybe@(Result@(T, Bad)):
 fn feed_of@(T)(nom T[] items) Feed@(T):
     return Feed(items, 0)
 
-fn report@(T)(nom T[] items, nom T[] empty) i32:
+fn report@(T: Display + Clone)(nom T[] items, nom T[] empty) i32:
     let Feed@(T) f = feed_of(nom items)
     match f.first():
         Result.Ok(v) -> println(v)

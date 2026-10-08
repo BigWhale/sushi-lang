@@ -358,9 +358,13 @@ is the authority, and the index is a cache of it.
     # half of CW3003. One record per extension method, in declaration order; the whole
     # key is absent when the library extends only what it declares. A perk
     # implementation makes no record: the consumer's own implementation is the
-    # sanctioned override, so that claim has an escape.
+    # sanctioned override, so that claim has an escape. `target_bounds` holds the
+    # bounds the target writes, one entry for each parameter of the target in order,
+    # and is empty when no parameter has a bound (#1070). The report prints the target
+    # with them, `extend (T: Clone)[] head`, as it does for an extension method.
     "foreign_extensions": [
-        {"type": str, "method": str, "unit": str}
+        {"type": str, "method": str, "unit": str,
+         "target_bounds": [{"param": str, "perks": [str]}]}
     ],
 
     # What a consumer's build must load (#1120): one record per stdlib module that the

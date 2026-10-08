@@ -1,0 +1,14 @@
+# A statement after a `return` in a generic-target extension template is CE0140 at
+# the template, also when no call instantiates it (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE0140
+
+struct Box@(T):
+    T item
+
+extend Box@(T) size() i32:
+    return 1
+    println("dead")
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

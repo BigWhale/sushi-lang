@@ -1,0 +1,14 @@
+# The refusal is at the call, not inside the body of the copy (#1191).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+perk Weigh:
+    fn weight() i32
+
+struct Plain:
+    i32 n
+
+extend i32 pick@(U: Weigh)(U other) i32:
+    return other.weight()
+
+fn main() i32:
+    println(5.pick(Plain(2)))
+    return 0

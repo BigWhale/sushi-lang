@@ -3,7 +3,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2060
 # EXPECT_STDERR_CONTAINS: the parameter is 'T[3]', the argument is 'i32[4]'
 fn f@(T)(T[3] xs) i32:
-    return 3
+    return xs.len()
 
 fn main() i32:
     let i32[4] a = [1, 2, 3, 4]

@@ -1,7 +1,7 @@
 # Test generic functions using type parameters in variable declarations
 # This tests body substitution where T appears in let statements
 
-fn create_pair@(T)(nom T first, nom T second) T:
+fn create_pair@(T: Clone)(nom T first, nom T second) T:
     # Variable declaration with generic type - use both params
     let T result = first.clone()
     # Copy second to temp and back to ensure both are used

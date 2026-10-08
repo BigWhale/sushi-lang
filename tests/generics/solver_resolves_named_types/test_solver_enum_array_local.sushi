@@ -5,7 +5,7 @@ enum E:
     A
     B
 
-fn cnt@(T)(T[] xs, T d) i32:
+fn cnt@(T: Hashable)(T[] xs, T d) i32:
     return xs.len() + ((d.hash() * 0) as i32)
 
 fn main() i32:

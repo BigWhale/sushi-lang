@@ -1,0 +1,15 @@
+# A pass-through template takes `nom T` (#1070, R5), and each copy moves or copies its
+# own argument.
+# EXPECT_STDOUT_EXACT: "42\nMostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn id@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    let string s = "Mostly ".concat("Harmless")
+    println(id(nom 42))
+    println(id(nom s))
+    return 0

@@ -1,7 +1,8 @@
 # A generic body that clones, instantiated at a resource type. The refusal is
-# reported at the INSTANTIATION: one monomorphized body serves every argument, so
-# the argument is what makes it illegal.
-# EXPECT_ERROR_CODE: CE2431
+# reported at the INSTANTIATION: the body clones only through the constraint `Clone`,
+# and a type that holds a resource has no `Clone`, so the argument is what makes the
+# call illegal (#1070).
+# EXPECT_ERROR_CODE: CE4006
 struct Handle:
     i32 id
 
@@ -9,7 +10,7 @@ extend Handle with Drop:
     fn drop(poke self) ~:
         println("drop {self.id}")
 
-fn twice@(T)(peek T x) T:
+fn twice@(T: Clone)(peek T x) T:
     return x.clone()
 
 fn main() i32:

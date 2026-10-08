@@ -7,7 +7,8 @@ from sushi_lang.semantics.ast import ExtendDef
 from sushi_lang.semantics.typesys import DynamicArrayType, EnumType, Type, StructType
 from sushi_lang.semantics.generics.types import substitute_type_params
 from sushi_lang.semantics.generics.monomorphize.transformer import substituted_param
-from sushi_lang.semantics.generics.extension_targets import instantiation_key
+from sushi_lang.semantics.generics.extension_targets import (
+    extension_template_id, instantiation_key, perk_template_id)
 from sushi_lang.semantics.passes.collect import GenericExtensionMethod
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -29,6 +30,16 @@ def substitute_signature(decl, substitution: Dict[str, Type], substitutor: "Type
     skipped. The body is this instantiation's OWN: the typecheck pass's stamps and the
     borrow pass's decisions are per instantiation (#391).
     """
+    return substitute_header(decl, substitution,
+                             substitutor.substitute_body(decl.body, substitution))
+
+
+def substitute_header(decl, substitution: Dict[str, Type], body):
+    """`substitute_signature` with the body given: the header half of the one copy.
+
+    A template check asks a perk-implementation template for a method's signature over
+    an opaque instance (#1070) and reads no body, so it hands an empty one.
+    """
     def sub(ty: Optional[Type]) -> Optional[Type]:
         return substitute_type_params(ty, substitution) if ty is not None else None
 
@@ -39,7 +50,7 @@ def substitute_signature(decl, substitution: Dict[str, Type], substitutor: "Type
         params=[substituted_param(param, sub(param.ty)) for param in decl.params],
         ret=sub(decl.ret),
         err_type=sub(decl.err_type),
-        body=substitutor.substitute_body(decl.body, substitution),
+        body=body,
         # A copy is an instance: its method-level type parameters are solved.
         type_params=None,
     )
@@ -87,12 +98,17 @@ def monomorphize_extension_method(
     receiver substitution in this ONE pass over the template.
     """
     substitution = _type_substitution(generic_method.type_params, type_args)
-    substitution.update(_type_substitution(generic_method.method_type_params,
+    substitution.update(_type_substitution(generic_method.method_type_param_names,
                                            method_type_args))
     concrete = substitute_signature(generic_method.decl, substitution, substitutor)
     concrete.target_type = concrete_target_type
     concrete.method_type_args = tuple(method_type_args)
     concrete.home_unit = generic_method.unit_name
+    concrete.template_file = generic_method.filename
+    # An instance names its target in full; the bounds belong to the template.
+    concrete.target_params = ()
+    # A copy of a template whose check refused it reports nothing (#1070).
+    concrete.template_id = extension_template_id(generic_method)
     # Where the source wrote no name or no return, the collected record points a
     # diagnostic at the declaration instead.
     concrete.name_span = concrete.name_span or generic_method.name_span
@@ -115,6 +131,16 @@ def _error_arguments_hold(generic_method: GenericExtensionMethod, type_args,
     return monomorphizer.error_arguments_hold(
         generic_method.type_params, type_args, error_params, site_key,
         generic_method.filename)
+
+
+def bounds_hold_for(template, type_args: Tuple[Type, ...], tables) -> bool:
+    """Does an extension or perk template apply to the instance of these arguments?
+
+    The target bounds of the template (#1070), asked by every cutter before it cuts: an
+    instance that fails one gets no copy. A call of it is refused at the call (CE4006).
+    """
+    from sushi_lang.semantics.generics.constraints import target_bounds_hold
+    return target_bounds_hold(template.target_bounds, type_args, tables.holds_bound)
 
 
 def monomorphize_all_extension_methods(
@@ -151,6 +177,9 @@ def monomorphize_all_extension_methods(
             # A concrete target has no type parameters, so it substitutes nothing -- its
             # signature and body are already written in terms of the type it names.
             substitution_args = () if target_key else type_args
+            if not bounds_hold_for(generic_method, substitution_args,
+                                   substitutor.monomorphizer.tables):
+                continue
             if not _error_arguments_hold(generic_method, substitution_args,
                                          concrete_type_name, substitutor):
                 continue
@@ -180,13 +209,16 @@ def monomorphize_perk_impl(
                for method in template.impl.methods]
     # Each copy carries the template's spans, so a diagnostic in its body is told once
     # for all the instances, the rule of a generic function's instance (#648, #800).
+    template_id = perk_template_id(template)
     for method in methods:
         method.instance_of = method.name
+        method.template_id = template_id
     return replace(
         template.impl,
         target_type=concrete_target_type,
         methods=methods,
         is_synthesized=True,
+        target_params=(),
     )
 
 
@@ -213,7 +245,8 @@ def monomorphize_all_perk_impls(
             for_each_instantiation(sources, generic_perk_impls.templates)):
         for template in templates:
             key = (concrete_type_name, template.impl.perk_name)
-            if key in result:
+            if key in result or not bounds_hold_for(template, type_args,
+                                                    substitutor.monomorphizer.tables):
                 continue
             result[key] = (
                 template,

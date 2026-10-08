@@ -1,0 +1,14 @@
+# Each `expand` binds its own element type: in a copy, the two elements of a nested
+# `expand` can have two different types. So `a == b` is a mixed pair, also under `Eq`
+# (#1070, R6).
+# EXPECT_ERROR_CODES_EXACT: CE2513
+
+fn pairs@(...Ts: Eq)(...Ts args) ~:
+    expand(a in args):
+        expand(b in args):
+            if (a == b):
+                println("Mostly Harmless")
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

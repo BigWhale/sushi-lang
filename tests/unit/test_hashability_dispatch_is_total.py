@@ -26,9 +26,11 @@ from sushi_lang.semantics.generics.types import (
     GenericEnumType,
     GenericStructType,
     GenericTypeRef,
+    TemplateId,
     TypeParameter,
     TypePack,
 )
+from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.typesys import (
     ArrayType,
     BuiltinType,
@@ -194,3 +196,23 @@ def test_the_override_does_not_give_the_type_itself_a_derived_hash():
     """The override answers for F; a DERIVED hash of F still reads F's fields."""
     f, _holders = _overridden_holder_kinds()
     assert not hashing.can_struct_be_hashed(f, overridden=lambda ty: ty == f)[0]
+
+
+def _opaque(*constraints: str) -> TypeParameter:
+    return TypeParameter("T", owner=TemplateId("main", "f"), constraints=constraints)
+
+
+def test_an_opaque_parameter_hashes_only_with_the_promise():
+    """`T: Hashable` hashes; a `T` with no such constraint does not (#1070, R5).
+
+    The override over the program's tables reads the promise, in the top position and in
+    a held one.
+    """
+    override = SymbolTables().enums.derived.hash_override
+    assert hashing.hashability_of(_opaque("Hashable"), overridden=override)[0]
+    can_hash, reason = hashing.hashability_of(_opaque("Eq"), overridden=override)
+    assert not can_hash and "constraints do not promise" in reason
+    holder = DynamicArrayType(base_type=_opaque("Hashable"))
+    assert hashing.hashability_of(holder, overridden=override)[0]
+    assert not hashing.hashability_of(DynamicArrayType(base_type=_opaque()),
+                                      overridden=override)[0]

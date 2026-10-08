@@ -36,13 +36,16 @@ class FakeEnumTable:
     """The duck-typed shape both ensure_* helpers consume.
 
     `.by_name`, `.order`, and `.derived` -- the compilation's auto-derived methods, which
-    the seams write a hash into the moment they intern an enum (#601).
+    the seams write a hash into the moment they intern an enum (#601) -- and
+    `.admits_opaque`, which only the overlay of a template check sets (#1070).
     """
 
     def __init__(self, by_name=None):
         self.by_name = dict(by_name or {})
         self.order = list(self.by_name)
         self.derived = DerivedMethodTable()
+        # A program table holds no instance over an opaque type parameter (#1070).
+        self.admits_opaque = False
 
 
 STD_ERROR = EnumType(

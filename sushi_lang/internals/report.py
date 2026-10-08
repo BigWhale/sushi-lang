@@ -6,7 +6,7 @@ import textwrap
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Any
+from typing import AbstractSet, List, Optional, Any
 
 from lark import Token
 
@@ -33,10 +33,16 @@ _INTERNED_SPELLING = re.compile(r"[A-Za-z0-9_]<")
 # one spelling put back answers 2 -- a zero here is a measured zero, not a dead pattern.
 _RETIRED_BORROW = re.compile(r"&\s*(?:peek|poke)\b")
 
+# An opaque type parameter is `T#main.f` in an interned name (#1070). The owner tells two
+# templates' `T` apart in a table key and never in a message: a user writes `T`.
+_OPAQUE_SPELLING = re.compile(r"[A-Za-z0-9_]#[A-Za-z_]")
+
 # Each row is a pattern and the repair its message names.
 _REFUSED_SPELLINGS: tuple[tuple[re.Pattern[str], str], ...] = (
     (_INTERNED_SPELLING,
      "names a type with the internal spelling. Render it with display_type()"),
+    (_OPAQUE_SPELLING,
+     "names a type parameter with its template. Render it with display_type()"),
     (_RETIRED_BORROW,
      "spells a borrow with the retired `&`. Write the bare `peek` / `poke`"),
 )
@@ -106,11 +112,6 @@ class Diagnostic:
     # honest rendering of a multi-line span, because the marker takes its width from
     # the span's last line and is drawn under its first.
     show_source: bool = True
-    # The text this span indexes into, when it is not a file on disk: a library
-    # template arrives as a source slice in the manifest, and its spans belong to the
-    # slice and to nothing else (#471). It rides on the diagnostic so it survives the
-    # per-unit reporters being merged into the top-level one.
-    source: Optional[str] = None
 
 @dataclass(frozen=True)
 class Origin:
@@ -151,6 +152,34 @@ def diagnostic_identity(diagnostic: Diagnostic) -> tuple:
         diagnostic.filename,
         None if span is None else (span.line, span.col, span.end_line, span.end_col),
     )
+
+
+def _per_instance(code: str) -> bool:
+    """Can a copy of a checked template still report `code` (#1070, R7, R8)?"""
+    from sushi_lang.internals.errors import PER_INSTANCE_CODES
+    return code in PER_INSTANCE_CODES
+
+
+def _warning_site(d: Diagnostic) -> tuple:
+    """The code, the file and the span of a warning: what a repeat of it has in common."""
+    span = d.span
+    return (d.code, d.filename,
+            None if span is None else (span.line, span.col, span.end_line, span.end_col))
+
+
+def missed_by_template_check(d: Diagnostic, template: object) -> Diagnostic:
+    """CE0149 for an error that a copy of a clean checked template reports (#1070).
+
+    The template check did not find the fault, so this is a fault in the compiler. The
+    diagnostic keeps the span, the file and the notes of the copy, and its text holds the
+    code and the message that the copy reported.
+    """
+    from sushi_lang.internals.errors import ERR, message_for
+    backstop = ERR.CE0149.code
+    text = message_for(backstop, template=getattr(template, "name", template),
+                       original=d.code, message=d.message)
+    return Diagnostic("error", backstop, text, d.span, filename=d.filename,
+                      sub=list(d.sub), show_source=d.show_source)
 
 
 def in_source_order(items: List[Diagnostic]) -> List[Diagnostic]:
@@ -280,8 +309,26 @@ class Reporter:
         # de-duplicator: a repeat anywhere else is a bug to be fixed where it is made,
         # and stays visible.
         self.collapse_repeats: bool = False
+        # The templates whose check reported an error (#1070), shared with the analysis.
+        # A body that is a copy of one says nothing: the template said the fault.
+        self.refused_templates: AbstractSet[object] = frozenset()
+        self.muted: bool = False
+        # The templates whose check ran in this build. A body that is a copy of one that
+        # the check did not refuse reports only the per-instance remainder (R7, R8).
+        self.checked_templates: AbstractSet[object] = frozenset()
+        self.instance_only: bool = False
+        # The sites (code, file, span) of the warnings that a body which is no copy of a
+        # template recorded, shared with the analysis. A copy repeats a warning of its
+        # template at the template's span, and only that repeat is dropped.
+        self.template_warnings: set = set()
+        self._template: object = None
         self.items: List[Diagnostic] = []
         self._identities: set = set()
+        # The text of each source slice that a library ships, by its label (#471). A
+        # span in a slice indexes into the slice and into nothing else, and a location
+        # names the slice by its label: the location of a diagnostic and of each note
+        # alike. The program reporter renders, so the libraries step fills its map.
+        self.slices: dict[str, str] = {}
         # Every error offered, by code, a dropped repeat included, so "did this walk
         # report that fault" has one answer in every copy of an instance body.
         self.errors_offered: Counter[str] = Counter()
@@ -293,14 +340,27 @@ class Reporter:
         `origin` is whose FILE the spans belong to -- a transplanted library template's
         came from the manifest slice, not from the consumer's file (#471).
         `collapse_repeats` is whether this body is one of many copies of one source.
+        The template of the body has three answers (#1070). A copy of a template whose
+        check reported an error is `muted`: a muted diagnostic counts as offered and is
+        not recorded. A copy of a template that checked clean is `instance_only`: it
+        reports only the per-instance remainder (`PER_INSTANCE_CODES`), and any other
+        error is CE0149; a warning of it is kept unless it repeats a warning that the
+        template reported (`template_warnings`). Any other body reports everything.
         """
+        template = getattr(func, "template_id", None)
         self.origin = getattr(func, "library_origin", None)
         self.collapse_repeats = getattr(func, "instance_of", None) is not None
+        self.muted = template in self.refused_templates
+        self.instance_only = not self.muted and template in self.checked_templates
+        self._template = template
 
     def leave_body(self) -> None:
         """Clear what `enter_body` set, for a walk that reads no function body."""
         self.origin = None
         self.collapse_repeats = False
+        self.muted = False
+        self.instance_only = False
+        self._template = None
 
     def _record(self, d: Diagnostic) -> Diagnostic:
         # The one funnel every diagnostic passes: `error`, `warn` and the two builder
@@ -314,7 +374,6 @@ class Reporter:
             # reporter's own name in otherwise, and that is the one to replace.
             if d.filename == self.filename:
                 d.filename = self.origin.filename
-                d.source = self.origin.source
             if self.origin.provenance is not None:
                 d.sub.append(SubDiagnostic("note", self.origin.provenance))
         elif self.provenance:
@@ -323,6 +382,16 @@ class Reporter:
             return d
         if d.kind == "error":
             self.errors_offered[d.code] += 1
+        if self.muted:
+            return d
+        if self.instance_only and not _per_instance(d.code):
+            # A warning at the site of a warning of the template is that warning again,
+            # with a concrete type. Any other warning is decided by this instance.
+            if d.kind != "error":
+                if _warning_site(d) in self.template_warnings:
+                    return d
+            else:
+                d = missed_by_template_check(d, self._template)
         # AFTER the origin fixups: they can change the file a span is read against, and
         # the file is part of what makes two reports the same one.
         identity = diagnostic_identity(d)
@@ -330,6 +399,8 @@ class Reporter:
             return d
         self._identities.add(identity)
         self.items.append(d)
+        if d.kind == "warning" and self._template is None:
+            self.template_warnings.add(_warning_site(d))
         return d
 
     def _author_compiles(self) -> bool:
@@ -360,11 +431,31 @@ class Reporter:
         return any(d.kind == "error" for d in self.items)
 
     @property
+    def has_offered_errors(self) -> bool:
+        """Did a walk with this reporter offer an error, a dropped or repeated one too?"""
+        return any(self.errors_offered.values())
+
+    def offer_again(self, codes: Counter) -> None:
+        """Count errors that another site reported for the same fault, and record none.
+
+        A refusal is reported ONCE, at its first site (#579). A later site of the same
+        fault is refused too, and its walk must know it: this counts the codes as
+        offered, as a dropped repeat is counted (#1070).
+        """
+        self.errors_offered.update(codes)
+
+    @property
     def has_warnings(self) -> bool:
         return any(d.kind == "warning" for d in self.items)
 
+    def add_slice(self, label: str, source: str) -> None:
+        """Record the text of a library slice under its label, for the renderer."""
+        self.slices[label] = source
+
     def _get_source_lines(self, filename: str, src_lines: Optional[List[str]]) -> Optional[List[str]]:
-        """Get source lines for a file, reading from disk if needed."""
+        """Get source lines for a file: a library slice, this reporter's source, or disk."""
+        if filename in self.slices:
+            return self.slices[filename].splitlines()
         if filename == self.filename:
             return src_lines
         try:
@@ -421,8 +512,7 @@ class Reporter:
                 f"[{_paint(C.DIM, d.code, use_color)}]: {message}")
 
         if d.span and d.show_source:
-            lines = (d.source.splitlines() if d.source is not None
-                     else self._get_source_lines(d.filename or self.filename or "", src_lines))
+            lines = self._get_source_lines(d.filename or self.filename or "", src_lines)
             if use_unicode:
                 tip = C.RED if d.kind == "error" else C.YELLOW
                 out.append(f"{_paint(C.GRAY, '  ╭──┤ ', use_color)}{head}")
@@ -459,10 +549,8 @@ class Reporter:
         for i, (sub, sub_span) in enumerate(located):
             sub_filename = display_filename(sub.filename or d.filename or self.filename or "")
             sub_loc = f"{sub_filename}:{sub_span.line}:{sub_span.col}"
-            sub_lines = (
-                d.source.splitlines() if d.source is not None and sub.filename is None
-                else self._get_source_lines(sub.filename or d.filename or self.filename or "", src_lines)
-            )
+            sub_lines = self._get_source_lines(
+                sub.filename or d.filename or self.filename or "", src_lines)
             kind = _paint(_sub_style(sub.kind), sub.kind, use_color)
 
             if not use_unicode:

@@ -318,10 +318,34 @@ def _render_impl_target(impl: dict) -> str:
     """
     from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
     type_args = impl.get('type_args') or []
+    bounded = _bounded_args(impl)
     if impl['type'] == ARRAY_BASE_KEY:
-        return f"{type_args[0]}[]"
+        return f"({bounded})[]" if bounded else f"{type_args[0]}[]"
     target = _surface(impl['type'])
-    return f"{target}@({', '.join(type_args)})" if type_args else target
+    args = bounded or ', '.join(type_args)
+    return f"{target}@({args})" if args else target
+
+
+def _bounded_args(record: dict) -> str:
+    """The parameters of a template target with their bounds, `T: Clone, U` (#1070).
+
+    Empty when the target writes no bound: the record then holds no bound record.
+    """
+    return ", ".join(
+        f"{bound['param']}: {' + '.join(bound['perks'])}" if bound['perks']
+        else bound['param']
+        for bound in record.get('target_bounds') or [])
+
+
+def _render_extension_target(ext: dict) -> str:
+    """An extension's target, with the bounds it writes: `List@(T: Clone)`, `(T: Clone)[]`."""
+    target = _surface(ext['type'])
+    bounded = _bounded_args(ext)
+    if not bounded:
+        return target
+    if target.endswith("[]"):
+        return f"({bounded})[]"
+    return f"{target.split('@(', 1)[0]}@({bounded})"
 
 
 def _named_suffix(record: dict) -> str:
@@ -391,7 +415,7 @@ def _method_line(method: dict, p: Palette) -> str:
 
 def _extension_line(ext: dict, p: Palette) -> str:
     static = "static " if ext.get('static') else ""
-    return f"  extend {_surface(ext['type'])} {static}{_render_signature(ext, p)}"
+    return f"  extend {_render_extension_target(ext)} {static}{_render_signature(ext, p)}"
 
 
 def _conversion_line(conv: dict, _p: Palette) -> str:
@@ -400,7 +424,7 @@ def _conversion_line(conv: dict, _p: Palette) -> str:
 
 
 def _foreign_line(claim: dict, p: Palette) -> str:
-    return f"  extend {_surface(claim['type'])} {claim['method']}"
+    return f"  extend {_render_extension_target(claim)} {claim['method']}"
 
 
 def _dependency_line(dep: dict, p: Palette) -> str:

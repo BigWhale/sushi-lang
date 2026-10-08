@@ -6,6 +6,21 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Added
 
+- **The predefined perk `Clone`.** `fn clone() Self`, structural: every type that holds no
+  resource satisfies it, and a handle (`File`, `TcpStream`, a struct that holds one) does
+  not. A generic body that calls `.clone()` on a `T` writes `@(T: Clone)`. The built-in
+  `.clone()` is the contract, so `extend X with Clone` is the new `CE4017`. `.share()`
+  stays the way to get a second owner of a handle.
+- **Bounds in an `extend` target.** `extend List@(T: Clone) filter(...)`,
+  `extend (T: Clone)[] second()` and `extend Box@(T: Display) with Show:` put a bound on a
+  type parameter of the target. A receiver whose type argument does not satisfy it is
+  `CE4006` at the call, and the compiler makes no copy of the method for it. An extension
+  and a perk implementation also inherit every bound that their type declares, and
+  `extend HashMap@(K, V)` gets `K: Hashable + Eq`. A bound outside the top level of an
+  `extend` target is the new `CE6110`, a bound on a name that is a type is the new
+  `CE2124`, and a bound in the target of `Drop` is the new `CE4019`.
+- **`expand(_ in args)`.** The binder of an `expand` takes the lints of a `foreach` item:
+  `CW1001` when nothing reads it, `CW1002` for a shadow, and `_` discards the element.
 - **`<encoding/binary>`.** Fixed-width unsigned integers in a `u8[]` and back, as bare
   extension methods on `u8[]`. `buf.read_u16_le(at)`, `read_u16_be`, `read_u32_le`,
   `read_u32_be`, `read_u64_le`, `read_u64_be` answer `Maybe@(T)`: the bytes at `at`, `le`
@@ -107,6 +122,43 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **Breaking: a generic body is checked where it is written.** The compiler checks each
+  template one time, also when no code calls it: a generic function, a generic or array
+  extension, an extension with a method-level type parameter, a perk implementation on a
+  generic or array target, and a pack template with its `expand` body. In that check a type
+  parameter is opaque, and the body can do with a `T` only what a constraint promises:
+  `==` and `!=` need `Eq`, `<` and the other order operators need `Ord`, a hole, `print`
+  and `println` need `Display`, `.hash()` needs `Hashable`, and `.clone()` needs `Clone`.
+  Arithmetic, a field and a cast on a `T` are refused. A template with an unconstrained
+  `T` that calls `.hash()`, `.clone()`, `==`, `<` or `{x}` on it stops compiling; the fix
+  is the constraint that the help names. A fault is reported one time, at the template,
+  with a note at the type parameter, and the copies of that template report nothing more.
+  A call, a written type or a constructor that passes `T` to another generic needs the
+  constraints of the callee among the constraints of `T` (`CE4006`). A `??` from a
+  type-parameter error type `E` into another error type is `CE2511`: a template cannot
+  name a conversion for it. A `--lib` build checks every template of the library, so the
+  author sees the fault and not the consumer. Whether a value moves or copies, its
+  `drop()`, its derived methods, E3 and the ownership of a lambda parameter of type `T`
+  stay facts of each instance, and a copy of a clean template reports only those (any
+  other error of a copy is the internal `CE0149`). The design is
+  `docs/design/checked-generics.md`.
+- **Breaking: a value of a type parameter always moves.** A type argument can own, so the
+  borrow check of the template treats a `T` as an owning value. A generic that returns,
+  stores or passes on a BORROWED `T` (a plain parameter, a field of `self`, an element) is
+  `CE2411` at the template, and a `T` used after it moved is `CE2405`, also when every call
+  uses an `i32`. A pass-through generic takes `nom T` (and the call writes `nom`), a method
+  that gives away a field of its receiver takes `nom self`, or the template adds `Clone`
+  and hands on `x.clone()`. The help names these fixes.
+- **Breaking: an `expand` may run zero times.** A `return` inside an `expand` does not end
+  the path, as a `return` inside a `foreach` does not, so a pack template that returns only
+  inside its `expand` is `CE0107` at the template. The copy for an empty pack decided it
+  before, and named the copy. A misplaced `expand` is `CE0119` on the written body, also in
+  a template that no code calls.
+- **The `<collections/iter>` combinators state `Clone`.** `filter`, `enumerate`, `zip`,
+  `partition` and `unzip` (the free functions and the methods) clone their elements, and
+  `fold` clones its `init`, so each one writes the bound. A `List` or an array of a handle
+  gets no copy of them: a call is `CE4006`. A program that holds a `List@(File)` and
+  imports `<collections/iter>` compiles now; it gave a `CE2431` for each copy before.
 - **The needle of `contains` and `index_of` on an array takes the element type.** A bare
   literal or a bare `Maybe.None()` is typed by the position, as a `push` element is:
   `u8[].contains(2)` was CE2006 and now compiles.
@@ -124,6 +176,10 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A constraint on a method-level type parameter is checked.** In
+  `extend Box@(T) pair_with@(U: Weigh)(U other)`, the compiler dropped the constraint of
+  `U`: the call compiled, or the fault appeared inside the body of the copy. A call whose
+  argument does not satisfy it is now `CE4006` at the call, as for a free function.
 - **The unary minus on a float flips the sign bit.** `-x` gave `+0.0` for `x` = `0.0`,
   and the literal `-0.0` was positive zero. It is negative zero now, for `f64` and `f32`.
 

@@ -1,0 +1,12 @@
+# An `expand` may run zero times, as a loop may, so a `return` inside it does not end
+# the path. A template whose only `return` is in its `expand` is CE0107 where it is
+# written, also when no call of it exists.
+# EXPECT_ERROR_CODES_EXACT: CE0107
+
+fn first@(...Ts: Display)(...Ts args) string:
+    expand(a in args):
+        return "{a}"
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

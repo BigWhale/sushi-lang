@@ -1,0 +1,27 @@
+# A type argument that implements the perk passes the method-level constraint (#1191).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n8\n"
+perk Weigh:
+    fn weight() i32
+
+struct Heavy:
+    i32 n
+
+extend Heavy with Weigh:
+    fn weight() i32:
+        return self.n
+
+struct Box@(T):
+    T value
+
+extend Box@(T) pair_with@(U: Weigh)(U other) i32:
+    return other.weight()
+
+extend i32 pick@(U: Weigh)(U other) i32:
+    return other.weight() + 1
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(b.pair_with(Heavy(7)))
+    println(7.pick(Heavy(7)))
+    return 0

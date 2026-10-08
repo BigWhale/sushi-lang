@@ -1,0 +1,9 @@
+# An explicit type argument of a call is no `extend` target, so a bound there is
+# refused (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE6110
+
+fn identity@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    return identity@(T: Clone)(5)

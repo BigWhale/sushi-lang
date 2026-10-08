@@ -5,15 +5,15 @@
 struct Box@(T):
     T v
 
-fn k@(T)(T x) i32:
+fn k@(T: Hashable)(T x) i32:
     return ((x.hash() as i32) * 0) + 7
 
-extend Box@(T) static of(T v) Box@(T):
+extend Box@(T) static of(nom T v) Box@(T):
     return Box(v)
 
-fn o@(T)(T x) i32:
-    return k(Box.of(x))
+fn o@(T: Hashable)(nom T x) i32:
+    return k(Box.of(nom x))
 
 fn main() i32:
-    println(o(5))
+    println(o(nom 5))
     return 0

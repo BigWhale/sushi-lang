@@ -1,0 +1,13 @@
+# One template, called with an empty pack and with a pack of two. An `expand` may run
+# zero times, so the template, whose only `return` is in its `expand`, is CE0107 where it
+# is written: one diagnostic, and a copy decides nothing (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE0107
+
+fn first@(...Ts: Display)(...Ts args) string:
+    expand(a in args):
+        return "{a}"
+
+fn main() i32:
+    println(first())
+    println(first(1, 2))
+    return 0

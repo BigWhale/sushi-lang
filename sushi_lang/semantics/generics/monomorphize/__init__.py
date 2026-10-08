@@ -1,13 +1,14 @@
 """The monomorphize pass: every generic definition becomes concrete instances."""
 from __future__ import annotations
-from contextlib import contextmanager
+from collections import Counter
+from contextlib import contextmanager, nullcontext
 from typing import Dict, Iterator, Optional, Tuple, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
 from sushi_lang.semantics.typesys import Type, EnumType, StructType
 from sushi_lang.semantics.ast import BoundedTypeParam
-from sushi_lang.internals.report import Reporter
+from sushi_lang.internals.report import Reporter, Span
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import FuncDef
@@ -65,7 +66,10 @@ class Monomorphizer:
     # was cut for a refused instantiation, and the per-unit passes would only read the
     # same fault back as a second diagnostic from inside a body.
     constraint_violations: int = field(default=0, init=False)
-    _refused: Set = field(default_factory=set, init=False, repr=False)
+    # Each refused key, with the error codes its refusal offered (#579, #1070). ONE
+    # record for every writer: a later site of the key is refused silently, and a call
+    # site offers the codes to its own unit's reporter again.
+    _refused: Dict[object, Counter] = field(default_factory=dict, init=False, repr=False)
 
     _monomorphize_depth: int = field(default=0, init=False, repr=False)
 
@@ -101,6 +105,8 @@ class Monomorphizer:
         key: object = None,
         template_file: str | None = None,
         error_params: Dict[str, object] | None = None,
+        site: Tuple[Optional[Span], str | None] | None = None,
+        report: bool = True,
     ) -> bool:
         """Validate perk constraints on type arguments. False when one refused (#579).
 
@@ -110,8 +116,9 @@ class Monomorphizer:
         binds one argument (CE4006). A refusal of either kind cuts no copy.
 
         `key` names the instantiation in `sites` and in the refusal record: a refused
-        instantiation is reported ONCE, at the first site that named it, and every later
-        reach -- a field of another instance, a copy's body -- answers False silently.
+        instantiation is reported ONCE, at the first site that named it and is not
+        muted, and every later reach -- a field of another instance, a copy's body --
+        answers False silently.
         `template_file` is where the constraint is declared, for the note.
 
         `error_params` maps each type parameter that stands in an `E` position of the
@@ -122,9 +129,16 @@ class Monomorphizer:
         if key is not None and key in self._refused:
             return False
 
-        span, filename = self.sites.get(key, (None, None)) if key is not None else (None, None)
-        valid = self._error_arguments_hold(type_params, type_args, error_params or {},
-                                           span, filename, template_file)
+        reporters = self._emitting_reporters()
+        before = [Counter(r.errors_offered) for r in reporters]
+        if site is not None:
+            span, filename = site
+        else:
+            span, filename = (self.sites.get(key, (None, None)) if key is not None
+                              else (None, None))
+        valid = (self._error_arguments_hold(type_params, type_args, error_params or {},
+                                            span, filename, template_file)
+                 if report else True)
         for position, param in enumerate(type_params):
             if self.constraint_validator is None:
                 break
@@ -136,14 +150,68 @@ class Monomorphizer:
             else:
                 bound = [(None, type_args[position])] if position < len(type_args) else []
             for pack_index, arg in bound:
-                if not self.constraint_validator.validate_all_constraints(
-                        param, arg, span, filename, note=note, pack_index=pack_index):
+                if report:
+                    held = self.constraint_validator.validate_all_constraints(
+                        param, arg, span, filename, note=note, pack_index=pack_index)
+                else:
+                    held = all(self.constraint_validator.satisfies(arg, name)
+                               for name in param.constraints)
+                if not held:
                     valid = False
+        if not report:
+            return valid
         if not valid:
             self.constraint_violations += 1
-            if key is not None:
-                self._refused.add(key)
+            # A muted site printed nothing, so it cannot stand in for a later site: the
+            # key stays open, and the next site that is not muted reports the fault.
+            if key is not None and not any(r.muted for r in reporters):
+                offered: Counter = Counter()
+                for reporter, counted in zip(reporters, before, strict=True):
+                    offered += reporter.errors_offered - counted
+                self.refuse(key, offered)
         return valid
+
+    def _emitting_reporters(self) -> list:
+        """The reporters a constraint check emits to, each one time: the constraint
+        validator's (a call site's own, during `reporting_to`) and this one's (E3)."""
+        found = [self.reporter]
+        if (self.constraint_validator is not None
+                and self.constraint_validator.reporter is not self.reporter):
+            found.append(self.constraint_validator.reporter)
+        return found
+
+    def refuse(self, key: object, offered: Counter) -> None:
+        """Record a refused key with the error codes its refusal offered."""
+        self._refused[key] = offered
+
+    def check_call_constraints(self, params, args, key, span, filename, template_file,
+                               report: bool, *, reporter) -> bool:
+        """The constraints of the type arguments of one site, from the typecheck pass.
+
+        Four sites: a method-level type argument (#1191), and in a template check a
+        generic call or function value, a written generic instance and an inferred
+        constructor (#1070). The check a free function takes. `filename` is the file of
+        the site and `template_file` the file of the constraint. Without `report` the
+        answer is the same and nothing is emitted or recorded: the inferring half of the
+        typecheck pass asks it too.
+
+        A refusal goes to `reporter`, the reporter of the unit that holds the site: that
+        unit then knows a diagnostic was given (a `match` over the refused call reads
+        it, and the template check refuses its template), and the diagnostic takes its
+        place in the unit's source order. A key is reported ONCE, at its first site that
+        is not muted. A later site, in any unit, offers the same errors to its own
+        reporter again and records nothing, so it knows the call is refused and says
+        nothing twice.
+        """
+        if report and key is not None and self.was_refused(key):
+            reporter.offer_again(self._refused[key])
+            return False
+        validator = self.constraint_validator
+        with (validator.reporting_to(reporter) if validator is not None
+              else nullcontext()):
+            return self._validate_type_constraints(
+                params, args, key=key, template_file=template_file,
+                site=(span, filename), report=report)
 
     def _error_arguments_hold(self, type_params, type_args, error_params, span,
                               filename, template_file) -> bool:
@@ -272,8 +340,11 @@ class Monomorphizer:
         """Function instantiations in one monomorphized extension body (#392)."""
         return self.function_monomorphizer.collect_from_extension_body(extend_def)
 
-    def collect_from_perk_method_body(self, target_type, method
+    def collect_from_perk_method_body(self, target_type, method, filename: Optional[str]
                                       ) -> Set[Tuple[str, Tuple[Type, ...]]]:
-        """The same, for one method of a monomorphized perk implementation."""
+        """The same, for one method of a monomorphized perk implementation.
+
+        `filename` is the file of the template, where a nested instantiation's site is.
+        """
         return self.function_monomorphizer.collect_from_perk_method_body(
-            target_type, method)
+            target_type, method, filename)

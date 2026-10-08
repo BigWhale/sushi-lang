@@ -1,0 +1,17 @@
+# A name has one home on a type: two constraints of one pack that both declare
+# `name()` give an element two homes for it (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4015
+
+perk A:
+    fn name() string
+
+perk B:
+    fn name() string
+
+fn names@(...Ts: A + B)(...Ts args) ~:
+    expand(a in args):
+        println(a.name())
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

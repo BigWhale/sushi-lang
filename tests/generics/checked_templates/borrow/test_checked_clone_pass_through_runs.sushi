@@ -1,0 +1,15 @@
+# With `Clone` on `T`, a template gives back a clone of a borrowed `T` (#1070, R5).
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nMostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+
+use <collections/strings>
+
+fn dup@(T: Clone)(T x) T:
+    return x.clone()
+
+fn main() i32:
+    let string s = "Mostly ".concat("Harmless")
+    let string t = dup(s)
+    println(s)
+    println(t)
+    return 0

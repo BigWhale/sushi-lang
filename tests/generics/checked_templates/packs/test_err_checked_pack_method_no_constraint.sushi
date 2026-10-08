@@ -1,0 +1,11 @@
+# An element of a pack is opaque and has what the constraints of the pack promise
+# (#1070, R6). With no constraint it has no `hash()`, also when no call exists.
+# EXPECT_ERROR_CODES_EXACT: CE2008
+
+fn digests@(...Ts)(...Ts args) ~:
+    expand(a in args):
+        println(a.hash())
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

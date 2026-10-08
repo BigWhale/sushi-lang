@@ -1,0 +1,19 @@
+# A bound in a perk-implementation target constrains a type parameter, and `Point`
+# is a type (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2124
+
+perk Show:
+    fn show() string
+
+struct Point:
+    i32 x
+
+struct Box@(T):
+    T value
+
+extend Box@(Point: Eq) with Show:
+    fn show() string:
+        return "box"
+
+fn main() i32:
+    return 0

@@ -8,14 +8,25 @@ struct Point:
 struct Box:
     i32 value
 
-fn process_point@(T)(T value) i32:
-    # Access field to use the value
-    let i32 x = value.x
+perk Numbered:
+    fn number() i32
+
+extend Point with Numbered:
+    fn number() i32:
+        return self.x
+
+extend Box with Numbered:
+    fn number() i32:
+        return self.value
+
+fn process_point@(T: Numbered)(T value) i32:
+    # Read a number to use the value
+    let i32 x = value.number()
     return x
 
-fn process_box@(T)(T value) i32:
-    # Access field to use the value
-    let i32 v = value.value
+fn process_box@(T: Numbered)(T value) i32:
+    # Read a number to use the value
+    let i32 v = value.number()
     return v
 
 fn run_test() i32:

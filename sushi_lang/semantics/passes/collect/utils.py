@@ -3,7 +3,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import (
-    Any, Callable, Dict, Iterable, List, Optional, Protocol, Sequence, TYPE_CHECKING)
+    AbstractSet, Any, Callable, Dict, Iterable, List, Optional, Protocol, Sequence,
+    TYPE_CHECKING)
 
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import BoundedTypeParam, Param
@@ -259,6 +260,51 @@ def reject_variadic_param(reporter, params: Iterable[Param],
             er.emit(reporter, er.ERR.CE0115, p.name_span or fallback, context=context)
             return True
     return False
+
+
+def reject_misplaced_expands(reporter, body: Any, pack_values: AbstractSet[str],
+                             fallback: Optional[Span]) -> bool:
+    """CE0119 for each `expand` that walks no value pack of its function (#1070).
+
+    Judged on the written body, so an uncalled template is refused too. `pack_values`
+    holds the names of the function's `...Ts` value packs; it is empty for every body
+    that has none. True when it refused something.
+    """
+    from sushi_lang.internals import errors as er
+    from sushi_lang.semantics.ast import Expand, Lambda, Name, Node
+    from sushi_lang.semantics.ast_walk import walk_nodes
+
+    refused = False
+
+    def fault_of(node: Expand, in_lambda: bool) -> Optional[str]:
+        if in_lambda:
+            return ("an 'expand' cannot stand in a lambda body: a lambda is a callable "
+                    "of its own and has no type pack")
+        if not pack_values:
+            return "expand(...) is only valid in a function with a '...Ts' type pack"
+        if not isinstance(node.iterable, Name):
+            return "the iterable must be the name of the function's '...Ts' value pack"
+        if node.iterable.id not in pack_values:
+            return f"'{node.iterable.id}' is not the function's '...Ts' value pack"
+        return None
+
+    def visitor(in_lambda: bool) -> Callable[[Node], bool]:
+        def visit(node: Node) -> bool:
+            nonlocal refused
+            if isinstance(node, Lambda) and not in_lambda:
+                walk_nodes(node, visitor(True))
+                return False
+            if isinstance(node, Expand):
+                message = fault_of(node, in_lambda)
+                if message is not None:
+                    er.emit(reporter, er.ERR.CE0119, node.loc or fallback,
+                            message=message)
+                    refused = True
+            return True
+        return visit
+
+    walk_nodes(body, visitor(False))
+    return refused
 
 
 def reject_self_in_body(reporter, body: Any, name: str) -> None:

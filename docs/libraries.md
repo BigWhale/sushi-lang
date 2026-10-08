@@ -47,6 +47,13 @@ An error in a library unit is reported to the consumer. A warning in a library u
 does not print, and it does not change the exit status of the consumer's build. The library's
 author sees those warnings when the library is built.
 
+The `--lib` build checks each generic template of the library one time, where it is
+written, also a template that the library does not call
+([Checked generics](design/checked-generics.md)). So the author gets the fault of a
+template, for example a `.hash()` on a `T` with no `Hashable`, and the consumer does not.
+The consumer does not check a library template again; it copies the template for its own
+type arguments.
+
 ## Creating Libraries
 
 ### The `--lib` Flag

@@ -6,12 +6,12 @@
 # EXPECT_ERROR_CODES_EXACT: CW1001, CW1002, CW1002
 # EXPECT_STDERR_CONTAINS: :15:17: warning [CW1002]: declared variable 'k' already exists in an outer scope.
 # EXPECT_STDERR_CONTAINS: :18:13: warning [CW1002]: declared variable 'k' already exists in an outer scope.
-# EXPECT_STDERR_CONTAINS: :20:37: warning [CW1001]: unused variable 'unused'.
+# EXPECT_STDERR_CONTAINS: :20:37: warning [CW1001]: unused parameter 'unused'.
 
 fn f@(...Ts)(...Ts args) ~ | StdError:
     let i32 k = 1
     let i32[] xs = from([k, 2])
-    expand(a in args):
+    expand(_ in args):
         foreach(k in xs.iter()):
             println(k)
         match Maybe.Some(3):

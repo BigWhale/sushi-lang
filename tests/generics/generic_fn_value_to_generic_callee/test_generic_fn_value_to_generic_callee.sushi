@@ -2,7 +2,7 @@
 # parameter type that the other arguments fix: T = i32 from `3`, then
 # gen@(i32) from fn(i32) -> i32 (#1029).
 # EXPECT_STDOUT_EXACT: "true\n7\n"
-fn gen@(T)(T x) i32:
+fn gen@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     println(h > 0)
     return 7

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import Callable, Optional, TYPE_CHECKING, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -17,6 +17,8 @@ from sushi_lang.semantics.ast import (
     Name,
     TryExpr,
 )
+from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
+from sushi_lang.semantics.generics.types import TypeParameter
 from sushi_lang.semantics.typesys import ReferenceType
 
 from .reads import read_type, root_owner
@@ -95,6 +97,13 @@ def emit_use_after_move(checker: 'BorrowChecker', name: str, use_span: Optional[
     diag = checker.err.emit_with(er.ERR.CE2405, use_span, name=name)
     if state.moved_at_span is not None:
         diag.note_at(f"'{name}' was moved here", state.moved_at_span)
+    param = opaque_without_clone(checker, state.var_type)
+    if param is not None:
+        note_opaque(diag, param).help(
+            f"a value of the type parameter '{param.written()}' moves, because a type "
+            f"argument can own; add 'Clone' to the constraints of '{param.written()}' "
+            f"({bound_hint(param, 'Clone')}) and hand over `{name}.clone()` before "
+            f"the move")
     diag.emit()
 
 
@@ -117,12 +126,14 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
                      use_span)
     no_clone = refuses_clone(checker, state.var_type)
     if by_the_change and no_clone:
-        diag.help(f"{no_clone_reason(name)}, so no call can read it while it "
+        diag.help(f"{no_clone_reason(checker, name, state.var_type)}, so no call can "
+                  f"read it while it "
                   f"changes '{owner}'")
     elif by_the_change:
         diag.help(f"pass an independent value: `{name}.clone()`")
     elif no_clone:
-        diag.help(f"{what} after the last use of '{name}': {no_clone_reason(name)}")
+        diag.help(f"{what} after the last use of '{name}': "
+                  f"{no_clone_reason(checker, name, state.var_type)}")
     else:
         diag.help(f"{what} after the last use of '{name}', "
                   f"or bind an independent value with `.clone()`")
@@ -146,9 +157,12 @@ def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
                                  owner=owner, name=text)
     if header is not None:
         diag.note_at(f"the loop walks '{text}' from here to the loop exit", header)
-    receiver = expr_to_string(iterable.receiver)
-    if refuses_clone(checker, read_type(checker, iterable.receiver)):
-        diag.help(f"{what} after the loop: {no_clone_reason(receiver)}")
+    walked = cast(MethodCall, iterable).receiver
+    receiver = expr_to_string(walked)
+    receiver_type = read_type(checker, walked)
+    if refuses_clone(checker, receiver_type):
+        diag.help(f"{what} after the loop: "
+                  f"{no_clone_reason(checker, receiver, receiver_type)}")
     else:
         diag.help(f"{what} after the loop, or walk an independent value: "
                   f"`{receiver}.clone().{iterable.method}()`")
@@ -156,15 +170,29 @@ def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
 
 
 def refuses_clone(checker: 'BorrowChecker', ty) -> bool:
-    """Is `.clone()` refused on `ty` (CE2431)? The one type test of every clone escape.
+    """Is `.clone()` refused on `ty` (CE2431, CE4018)? The one type test of every clone
+    escape.
 
-    A type that declares a resource, or holds one, has no clone (ruling R3), so a help
-    must not offer one there.
+    A type that declares a resource, or holds one, has no clone (ruling R3), and an
+    opaque type parameter that does not promise `Clone` has none either (#1070, R5). So
+    a help must not offer one there.
     """
     from sushi_lang.semantics.typesys import holds_declared_resource
-    drops = checker.types.drops
-    return bool(drops) and holds_declared_resource(ty, drops,
-                                                   resolve=checker.types.resolve_named)
+    return holds_declared_resource(ty, checker.types.drops,
+                                   resolve=checker.types.resolve_named)
+
+
+def opaque_without_clone(checker: 'BorrowChecker', ty) -> Optional[TypeParameter]:
+    """The first opaque type parameter in `ty` that does not promise `Clone`, or None.
+
+    The clone predicate names it (`holds_declared_resource`), so the help of a refused
+    move in a template names the parameter that the fix goes on (#1070, R5).
+    """
+    from sushi_lang.semantics.typesys import holds_declared_resource
+    found: list = []
+    holds_declared_resource(ty, checker.types.drops, resolve=checker.types.resolve_named,
+                            found=found)
+    return next((t for t in found if isinstance(t, TypeParameter)), None)
 
 
 def answers_share(checker: 'BorrowChecker', ty) -> bool:
@@ -200,13 +228,23 @@ class CopyUse:
     tail: str
 
 
-def no_clone_reason(text: str) -> str:
-    """The clause a help gives in place of a clone escape that CE2431 refuses."""
+def no_clone_reason(checker: 'BorrowChecker', text: str, ty) -> str:
+    """The clause a help gives in place of a clone escape that is refused.
+
+    A type that declares a resource has no clone (CE2431). An opaque type parameter
+    has one when a constraint promises `Clone` (CE4018, #1070), so the clause names that
+    constraint.
+    """
+    param = opaque_without_clone(checker, ty)
+    if param is not None:
+        return (f"'{text}' holds the type parameter '{param.written()}', which has a "
+                f"clone only with 'Clone' in its constraints ({bound_hint(param, 'Clone')})")
     return f"'{text}' owns a resource and cannot be cloned"
 
 
 def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
-                handover: bool = True, use_of_copy: Optional[CopyUse] = None) -> str:
+                handover: bool = True, use_of_copy: Optional[CopyUse] = None,
+                through_receiver: bool = False) -> str:
     """What CE2411 offers as the way out, which depends on WHAT is being consumed.
 
     `.clone()` for an ordinary owning value. A resource type has no clone (CE2431), so
@@ -217,7 +255,20 @@ def escape_help(checker: 'BorrowChecker', text: str, ty, value_type=None, *,
     type of its owner. `handover` is False where a `nom` parameter is no escape (a write
     through a pattern binding). `use_of_copy` is what the position does with the copy:
     an `as` conversion (docs/design/error-conversion.md section 3.2) or a `nom self` call.
+    `through_receiver` is a place of `self`: the method takes the receiver with
+    `nom self` to own what it reads.
     """
+    param = opaque_without_clone(checker, ty if value_type is None else value_type)
+    if param is not None:
+        name = param.written()
+        clone = f"add 'Clone' to the constraints of '{name}' ({bound_hint(param, 'Clone')})"
+        tail = use_of_copy.tail if use_of_copy is not None else ""
+        if not handover:
+            return f"{clone}, and take an independent value with `{text}.clone()`"
+        take = ("take the receiver with `nom self`" if through_receiver
+                else "take it with a `nom` parameter and pass it with `nom`")
+        return (f"a value of the type parameter '{name}' moves, because a type argument "
+                f"can own: {take}, or {clone} and take `{text}.clone(){tail}`")
     if not refuses_clone(checker, ty):
         if use_of_copy is not None:
             return (f"clone it, and {use_of_copy.clause}: "
@@ -274,8 +325,11 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr,
     # ONE branch, on purpose: a get-out `.clone()` still hits CE0019, and that is a real
     # defect rather than a reason to word around it. The three RED `test_own_get_*` files
     # hold the branch honest until it is fixed.
-    diag.help(escape_help(checker, text, owner_type, read_type(checker, expr),
-                          use_of_copy=use_of_copy))
+    value_type = read_type(checker, expr)
+    _note_opaque_mover(checker, diag, value_type)
+    diag.help(escape_help(checker, text, owner_type, value_type,
+                          use_of_copy=use_of_copy,
+                          through_receiver=state is not None and state.is_method_receiver))
     diag.emit()
 
 
@@ -291,8 +345,17 @@ def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
             if note_span is not None:
                 diag.note_at(kind.note.format(name=name, mode=mode), note_span)
             break
-    diag.help(escape_help(checker, name, state.var_type, use_of_copy=use_of_copy))
+    _note_opaque_mover(checker, diag, state.var_type)
+    diag.help(escape_help(checker, name, state.var_type, use_of_copy=use_of_copy,
+                          through_receiver=state.is_method_receiver))
     diag.emit()
+
+
+def _note_opaque_mover(checker: 'BorrowChecker', diag, ty) -> None:
+    """A note at the type parameter whose value moves, when it does not promise `Clone`."""
+    param = opaque_without_clone(checker, ty)
+    if param is not None:
+        note_opaque(diag, param)
 
 
 def expr_to_string(expr: Expr) -> str:

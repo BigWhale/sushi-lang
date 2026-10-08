@@ -1,2 +1,2 @@
-public fn gen@(T)(T x) T:
-    return x
+public fn gen@(T: Clone)(T x) T:
+    return x.clone()

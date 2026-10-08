@@ -150,10 +150,13 @@ def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendW
         ice(suffix, "must have at least one method implementation")
 
     attach_docs(suffix.children, methods, ast_builder)
-    target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
+    from sushi_lang.semantics.ast_builder.types.generics import parse_extension_target
+    target_type, target_params = (parse_extension_target(target_type_node, ast_builder)
+                                  if target_type_node else (None, ()))
 
     return ExtendWithDef(
         target_type=target_type,
+        target_params=target_params,
         perk_name=str(perk_names[-1]),
         methods=methods,
         loc=span_of(t),

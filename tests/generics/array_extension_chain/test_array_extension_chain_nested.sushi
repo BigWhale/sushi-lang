@@ -1,7 +1,7 @@
 # Two generic T[] extensions chained in the iterable of a foreach (#1143).
 # EXPECT_STDOUT_EXACT: "10\n20\n10\n20\n"
 # EXPECT_NO_LEAKS
-extend T[] twice() T[]:
+extend (T: Clone)[] twice() T[]:
     let T[] out = new()
     foreach(x in self.iter()):
         out.push(x.clone())
@@ -9,7 +9,7 @@ extend T[] twice() T[]:
         out.push(x.clone())
     return out
 
-extend T[] listed() List@(T):
+extend (T: Clone)[] listed() List@(T):
     let List@(T) out = List.new()
     foreach(x in self.iter()):
         out.push(x.clone())

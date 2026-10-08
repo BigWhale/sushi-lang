@@ -1,0 +1,19 @@
+# The template of `test_err_checked_fn_value_needs_bound`, called with a struct that
+# holds a function value. The instance its value names is refused, and the refusal has
+# a location: the value in the template (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: "test_err_checked_fn_value_caller_fails.sushi:14:26"
+
+struct Handler:
+    fn(i32) -> i32 f
+
+fn hasher@(U: Hashable)(U x) u64:
+    return x.hash()
+
+fn outer@(T)(T x) u64:
+    let fn(T) -> u64 g = hasher
+    return g(x)
+
+fn main() i32:
+    println(outer(Handler(|i32 n| n + 1)))
+    return 0

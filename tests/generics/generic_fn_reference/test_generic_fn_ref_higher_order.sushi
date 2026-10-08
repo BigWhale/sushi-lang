@@ -4,8 +4,8 @@
 # EXPECT_STDOUT_EXACT: "7\n"
 use <collections/iter>
 
-fn identity@(T)(T x) T:
-    return x
+fn identity@(T: Clone)(T x) T:
+    return x.clone()
 
 fn run() i32:
     let fn(i32) -> i32 id = identity

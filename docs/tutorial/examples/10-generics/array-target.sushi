@@ -1,4 +1,4 @@
-extend T[] second() Maybe@(T):
+extend (T: Clone)[] second() Maybe@(T):
     return self.get(1).clone()
 
 extend i32[] sum() i32:

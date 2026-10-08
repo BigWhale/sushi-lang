@@ -1,0 +1,9 @@
+# A target bound names a perk, and `Nope` names nothing (#1070). The rule of a
+# constraint on a function: one error at the bound.
+# EXPECT_ERROR_CODES_EXACT: CE4003
+
+extend List@(T: Nope) f() i32:
+    return self.len()
+
+fn main() i32:
+    return 0

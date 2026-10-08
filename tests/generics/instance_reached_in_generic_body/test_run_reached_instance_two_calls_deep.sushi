@@ -12,14 +12,14 @@ struct Feed@(T):
     T[] items
     i32 at
 
-extend Feed@(T) next(poke self) Maybe@(Result@(T, Bad)):
+extend Feed@(T: Clone) next(poke self) Maybe@(Result@(T, Bad)):
     let i32 at = self.at
     self.at := self.at + 1
     match self.items.get(at):
         Maybe.Some(v) -> return Maybe.Some(Result.Ok(v.clone()))
         Maybe.None -> return Maybe.None
 
-extend Feed@(T) peek_all() Maybe@(List@(T)):
+extend Feed@(T: Clone) peek_all() Maybe@(List@(T)):
     if (self.items.len() == 0):
         return Maybe.None
     let List@(T) out = List.new()
@@ -33,7 +33,7 @@ fn feed_of@(T)(nom T[] items) Feed@(T):
 fn walk@(T)(nom T[] items) Feed@(T):
     return feed_of(nom items)
 
-fn count@(T)(nom T[] items) i32:
+fn count@(T: Display + Clone)(nom T[] items) i32:
     let i32 n = 0
     foreach(r in walk(nom items)):
         match r:

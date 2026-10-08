@@ -4,9 +4,9 @@
 struct Cage@(T):
     T item
 
-extend Cage@(T) static holding(T item) Cage@(T):
+extend Cage@(T) static holding(nom T item) Cage@(T):
     return Cage(item)
 
 fn main() i32:
-    println("{Cage.holding(9).item}")
+    println("{Cage.holding(nom 9).item}")
     return 0

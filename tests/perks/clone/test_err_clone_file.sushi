@@ -1,0 +1,14 @@
+# A handle has no `Clone`: a copy of it would close one descriptor twice.
+# EXPECT_ERROR_CODE: CE4006
+
+use <io/fs>
+
+fn dup@(T: Clone)(T _value) i32:
+    return 1
+
+fn run() i32 | IoError:
+    let File f = stdin.share()??
+    return Result.Ok(dup(f))
+
+fn main() i32:
+    return run().realise(1)

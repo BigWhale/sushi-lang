@@ -1,0 +1,16 @@
+# The key rule of `HashMap@(K, V)` is a bound on `K` that an extension inherits
+# (#1070, R1). A target bound that gives `hash()` a second home is CE4015, and the note
+# names the key rule, which has no line of its own.
+# EXPECT_ERROR_CODES_EXACT: CE4015
+# EXPECT_STDERR_CONTAINS: "the key rule of 'HashMap@(K, V)'"
+use <collections/hashmap>
+
+perk Q:
+    fn hash() u64
+
+extend HashMap@(K: Q, V) f() i32:
+    return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

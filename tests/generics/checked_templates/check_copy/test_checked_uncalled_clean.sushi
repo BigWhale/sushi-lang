@@ -1,0 +1,33 @@
+# A correct function template that no call instantiates checks clean where it is
+# written (#1070): List, Maybe, Result, a tuple, a user generic, a lambda, a call of
+# another template and a combinator over a List of the type parameter. The instances it
+# names exist only while the template is checked, so the backend never sees one.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_STDERR_EMPTY: true
+use <collections/iter>
+
+struct Box@(T):
+    T item
+
+fn keep@(U)(nom U value) U:
+    return value
+
+fn shapes@(T: Clone, E)(nom T a, nom T b, Result@(T, E) r) i32:
+    let List@(T) xs = List.new()
+    let Maybe@(T) m = Maybe.None()
+    let (T, i32) pair = (a, 1)
+    let Box@(T) boxed = Box(b)
+    let fn(T) -> T same = |T y| y.clone()
+    let T other = keep(nom boxed.item)
+    xs.push(other)
+    let List@(T) mapped = xs.map(same)
+    let i32 n = xs.len() + pair.1 + mapped.len()
+    if (r.is_ok()):
+        return n
+    match m:
+        Maybe.Some(_) -> return n
+        Maybe.None -> return keep(nom n)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

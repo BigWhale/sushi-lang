@@ -535,8 +535,8 @@ Referencing a generic function as a value is allowed **when an explicit expected
 is present**:
 
 ```sushi
-fn identity@(T)(T x) T:
-    return x
+fn identity@(T: Clone)(T x) T:
+    return x.clone()
 
 fn run() i32:
     let fn(i32) -> i32 g = identity   # the annotation drives the instantiation identity@(i32)
@@ -562,8 +562,8 @@ local first:
 ```sushi
 use <collections/iter>
 
-fn identity@(T)(T x) T:
-    return x
+fn identity@(T: Clone)(T x) T:
+    return x.clone()
 
 fn run() i32:
     let fn(i32) -> i32 id = identity   # fixes the instantiation
@@ -696,8 +696,8 @@ argument, a rebind, a `return`, a field, a payload, a `.realise()` default -- so
 answer never depends on another call in the program:
 
 ```sushi
-fn identity@(T)(T x) T:
-    return x
+fn identity@(T: Clone)(T x) T:
+    return x.clone()
 
 fn take(fn(i32) -> i32 f) i32:
     return f(1)
@@ -712,8 +712,9 @@ A generic callee is solved from its other arguments first, and the value then fr
 substituted parameter type: `apply(gen, 3)` against `apply@(T)(fn(T) -> i32 f, T x)`
 solves. A value that the substituted type does not solve is [CE2093](../error-catalog.md#ce2093); a callee whose type argument
 comes ONLY from the value (`apply1@(T)(fn(T) -> i32 f)` called as `apply1(gen)`) is [CE2060](../error-catalog.md#ce2060) + [CE2093](../error-catalog.md#ce2093).
-Bind the value to a typed local first. Inside a generic body the copy is walked for each instance,
-so a position solves a generic-fn value as it does in a concrete body. A value behind an alias
+Bind the value to a typed local first. Inside a generic body, the check of the template (with
+its type parameters opaque, `docs/design/checked-generics.md`) and each copy solve a
+generic-fn value as a concrete body does. A value behind an alias
 (`l.gen`) in the copy of a generic-target extension or perk implementation is not solved: it is
 [CE2093](../error-catalog.md#ce2093). Use the bare name there, or bind the value to a typed local in a concrete function.
 Extension methods, perk methods, and FFI externals remain outside

@@ -5,7 +5,7 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "1\n2\n3\n"
 
-fn show_all@(T)(T[] xs) i32:
+fn show_all@(T: Display)(T[] xs) i32:
     foreach(T x in xs.iter()):
         println("{x}")
     return 0

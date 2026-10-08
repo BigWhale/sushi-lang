@@ -1121,14 +1121,73 @@ Writes the target of an implementation record, for example `Box@(T)` or `T[]`.
 - Returns: The target.
 :##
 fn render_impl_target(MsgValue r) string:
+    let string bounded = render_target_bounds(r)
     if (get_str(r, "type") == ARRAY_BASE_KEY):
+        if (bounded != ""):
+            return "({bounded})[]"
         let string element = join_at(r, "type_args", ", ")
         return "{element}[]"
     let string target = to_surface(get_str(r, "type"))
+    if (bounded != ""):
+        return "{target}@({bounded})"
     if (len_at(r, "type_args") == 0):
         return target
     let string body = join_at(r, "type_args", ", ")
     return "{target}@({body})"
+
+##:
+Writes the target of an extension record, with the bounds it writes, for example
+`List@(T: Clone)` or `(T: Clone)[]`.
+
+- Parameter e: The extension record.
+- Returns: The target.
+:##
+fn render_extension_target(MsgValue e) string:
+    let string target = to_surface(get_str(e, "type"))
+    let string bounded = render_target_bounds(e)
+    if (bounded == ""):
+        return target
+    if (target.ends_with("[]")):
+        return "({bounded})[]"
+    match target.find("@("):
+        Maybe.Some(at) -> return "{target.s(0, at)}@({bounded})"
+        Maybe.None() -> return target
+
+##:
+Writes the parameters of a template target with their bounds, for example `T: Clone, U`.
+
+- Parameter r: The extension or implementation record.
+- Returns: The text, or `""` when the target writes no bound.
+:##
+fn render_target_bounds(MsgValue r) string:
+    match r:
+        MsgValue.Map(pairs) ->
+            match map_index(r, "target_bounds"):
+                Maybe.Some(at) -> return render_bound_list(pairs[at].1)
+                Maybe.None() -> return ""
+        _ ->
+            return ""
+
+##:
+Writes a `target_bounds` array as `T: Clone, U`.
+
+- Parameter bounds: The `target_bounds` array.
+- Returns: The text, or `""` for an empty array.
+:##
+fn render_bound_list(MsgValue bounds) string:
+    match bounds:
+        MsgValue.Arr(items) ->
+            let string[] parts = from([])
+            foreach(b in items.iter()):
+                let string pname = get_str(b, "param")
+                let string perks = join_at(b, "perks", " + ")
+                if (perks == ""):
+                    parts.push(pname)
+                else:
+                    parts.push("{pname}: {perks}")
+            return ", ".join(parts)
+        _ ->
+            return ""
 
 ##:
 Prints one array of implementation records.
@@ -1219,7 +1278,7 @@ fn print_extension_records(MsgValue exts, bool pending, Opts o) bool:
             let bool p = pending
             foreach(e in items.iter()):
                 p := open_record(p)
-                let string target = to_surface(get_str(e, "type"))
+                let string target = render_extension_target(e)
                 let string marker = ""
                 if (get_bool(e, "static")):
                     marker := "static "
@@ -1310,7 +1369,7 @@ fn print_foreign_list(MsgValue claims, Opts o) ~:
     match claims:
         MsgValue.Arr(items) ->
             foreach(c in items.iter()):
-                let string target = to_surface(get_str(c, "type"))
+                let string target = render_extension_target(c)
                 let string method = get_str(c, "method")
                 println("  extend {target} {method}")
         _ ->

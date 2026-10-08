@@ -4,7 +4,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
-from sushi_lang.semantics.ast import Block, Break, Continue, If, Match, Return
+# The joins of this pass ask it; it lives beside `ends_unrolled_run`, which the backend
+# reads too (#1070).
+from sushi_lang.semantics.ast_walk import terminates as terminates
 
 from .state import BorrowState
 
@@ -91,37 +93,6 @@ def reinitialize(state: BorrowState) -> None:
     state.is_destroyed = False
     state.invalidated_at = None
     state.invalidated_by = ()
-
-
-def terminates(node, *, leaves_round: bool = False) -> bool:
-    """Does every path through this statement (or block) leave the function?
-
-    With `leaves_round`, a `break` and a `continue` end a path too: they leave the round
-    of the loop, and the loop frame keeps their facts (#993). This is the question of a
-    join inside a loop body. A nested loop is not descended: a `break` in it ends that
-    loop's round, not this path.
-    """
-    match node:
-        case Return():
-            return True
-        case Break() | Continue():
-            return leaves_round
-        case Block():
-            # Any terminating statement terminates the block. Later statements are
-            # unreachable; they are still checked, which over-checks and never
-            # under-checks.
-            return any(terminates(stmt, leaves_round=leaves_round)
-                       for stmt in node.statements)
-        case If():
-            return bool(node.else_block) and (
-                all(terminates(arm, leaves_round=leaves_round) for _cond, arm in node.arms)
-                and terminates(node.else_block, leaves_round=leaves_round))
-        case Match():
-            arms = getattr(node, "arms", ())
-            return bool(arms) and all(terminates(arm.body, leaves_round=leaves_round)
-                                      for arm in arms)
-        case _:
-            return False
 
 
 @dataclass

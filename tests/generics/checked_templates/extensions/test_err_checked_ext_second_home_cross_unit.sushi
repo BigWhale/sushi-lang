@@ -1,0 +1,13 @@
+# An implied bound that another unit declares gives its note in that unit's file
+# (#1070): the relational diagnostic names the file of each location.
+# EXPECT_ERROR_CODES_EXACT: CE4015
+# EXPECT_STDERR_CONTAINS: "bound_shapes.sushi:8:23"
+
+use "helpers/bound_shapes"
+
+extend Box@(T: B) f() i32:
+    return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

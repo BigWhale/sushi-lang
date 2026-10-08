@@ -28,6 +28,7 @@ from sushi_lang.semantics.typesys import (
     ReferenceType,
 )
 from sushi_lang.semantics.generics.types import (
+    TemplateId,
     TypeParameter,
     GenericTypeRef,
     TypeParam,
@@ -42,10 +43,11 @@ from sushi_lang.semantics.visibility import (
 )
 
 from .utils import (extract_type_param_names, param_from_node, reject_reference_in,
-                    reject_self_in_body, reject_try_in_body, reject_variadic_param)
+                    reject_misplaced_expands, reject_self_in_body, reject_try_in_body,
+                    reject_variadic_param)
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS, RefusalRecord, classify_extension_target,
-    reject_mixed_target, reject_unwritable_target)
+    reject_bound_on_type, reject_mixed_target, reject_unwritable_target)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.conversions import ConversionTable
 from .conversions import Filed, collect_conversion
@@ -53,14 +55,55 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.tuples import is_tuple_type
 
 
-def deep_type_params(ty: Optional[Type], names) -> Optional[Type]:
-    """Convert every UnknownType naming one of `names` into a TypeParameter, THROUGH
+def deep_type_params(ty: Optional[Type], params: Dict[str, TypeParameter]) -> Optional[Type]:
+    """Convert every UnknownType that `params` names into its TypeParameter, THROUGH
     the whole signature type -- nested GenericTypeRef arguments, function types and
-    array elements included, where the old top-level convert stopped."""
-    if ty is None or not names:
+    array elements included, where the old top-level convert stopped.
+
+    `params` maps a name to the parameter it becomes: an owner-less one for an extension
+    template (`bare_type_params`), the opaque one of a function template (#1070)."""
+    if ty is None or not params:
         return ty
     from sushi_lang.semantics.generics.types import substitute_type_params
-    return substitute_type_params(ty, {n: TypeParameter(name=n) for n in names})
+    return substitute_type_params(ty, dict(params))
+
+
+def bare_type_params(names) -> Dict[str, TypeParameter]:
+    """Each name as a type parameter with no owner: what a template record stores."""
+    return {n: TypeParameter(name=n) for n in names}
+
+
+def opaque_type_params(type_params, unit: Optional[str], template: str,
+                       bound_forms: Optional[Dict[str, str]] = None
+                       ) -> Dict[str, TypeParameter]:
+    """The opaque parameter of each type parameter of one template (#1070).
+
+    The ONE builder of an opaque parameter: its owner is the template, and it carries
+    the constraint names and the span of the written parameter. A pack parameter has
+    none: each `expand` of it binds an element type (`opaque_pack_element`).
+    `bound_forms` spells a bound on a receiver parameter of an extension or a perk
+    template in the target's own form.
+    """
+    owner = TemplateId(unit, template)
+    forms = bound_forms or {}
+    return {tp.name: TypeParameter(tp.name, owner=owner,
+                                   constraints=tuple(tp.constraints or ()),
+                                   span=tp.loc, bound_form=forms.get(tp.name))
+            for tp in type_params
+            if isinstance(tp, BoundedTypeParam) and not tp.is_pack}
+
+
+def opaque_pack_element(pack: BoundedTypeParam, unit: Optional[str], template: str,
+                        element: int, binder: str,
+                        binder_span: Optional[Span]) -> TypeParameter:
+    """The element type that one `expand` of a pack template binds (#1070, R6).
+
+    It is an opaque parameter of the template, with the constraints of the pack and its
+    own element number: two `expand`s of one pack bind two types.
+    """
+    return TypeParameter(pack.name, owner=TemplateId(unit, template),
+                         constraints=tuple(pack.constraints or ()), span=pack.loc,
+                         element=element, binder=binder, binder_span=binder_span)
 
 
 def is_explicit_result_type(ty: Optional[Type]) -> bool:
@@ -269,6 +312,11 @@ class GenericFuncDef:
                                                  # channel, as on `FuncDef`
     scope_unit: Optional[str] = None             # On an instance of a compiled library's
                                                  # template: the scope it reads, as on `FuncDef`
+    # Each type parameter's opaque form, by name (#1070): what the record's signature is
+    # written in, and the substitution the template check cuts its body with.
+    opaque: Dict[str, TypeParameter] = field(default_factory=dict)
+    # On an instance: the template it is a copy of, as on `FuncDef`.
+    template_id: Optional['TemplateId'] = None
 
 
 class Redeclaration(Enum):
@@ -403,11 +451,18 @@ class GenericExtensionMethod:
     err_span: Optional[Span] = None
     # Method-level type parameters (`name@(U)`): SEPARATE from the receiver-derived
     # `type_params`, whose CE0096 strict zip stays untouched. Solved at the call site.
-    method_type_params: Tuple[str, ...] = ()
+    method_type_params: Tuple[BoundedTypeParam, ...] = ()
     is_static: bool = False          # no receiver, called on the type name (#542)
     # The declaration as written. A copy is this node with its types substituted, so a
     # field the record does not spell is not lost (#803).
     decl: Optional[ExtendDef] = None
+    # The bound the target puts on each receiver parameter (`extend List@(T: Clone)`,
+    # #1070), index-aligned with `type_params`. () for a concrete target.
+    target_bounds: Tuple[BoundedTypeParam, ...] = ()
+
+    @property
+    def method_type_param_names(self) -> Tuple[str, ...]:
+        return tuple(tp.name for tp in self.method_type_params)
 
 
 @dataclass
@@ -421,10 +476,21 @@ class GenericExtensionTable(RefusalRecord):
     """
     by_type: Dict[str, Dict[Tuple[str, str], GenericExtensionMethod]] = field(default_factory=dict)
 
+    # The record of each written declaration, by the identity of its node (#1070): the
+    # template check starts from the `ExtendDef` it walks.
+    _by_decl: Dict[int, GenericExtensionMethod] = field(default_factory=dict, repr=False)
+
     def add_method(self, method: GenericExtensionMethod) -> None:
         """Add a generic extension method to the table."""
         methods = self.by_type.setdefault(method.base_type_name, {})
         methods[(method.name, method.target_key)] = method
+        if method.decl is not None:
+            self._by_decl[id(method.decl)] = method
+
+    def record_of(self, decl: ExtendDef) -> Optional[GenericExtensionMethod]:
+        """The record the collect pass filed for this written declaration, if it filed one."""
+        record = self._by_decl.get(id(decl))
+        return record if record is not None and record.decl is decl else None
 
     def declarations(self, base_type_name: str, method_name: str) -> List[GenericExtensionMethod]:
         """Every declaration of one method name on one base type."""
@@ -471,8 +537,12 @@ class _ExtensionHeader:
     # Method-level type parameters (`name@(U)`, ruling on identity). Their names join
     # the receiver-derived ones in the deep signature conversion; a name that repeats a
     # receiver parameter is CE2064, refused where the receiver's own names are known.
-    method_type_params: Tuple[str, ...]
+    method_type_params: Tuple[BoundedTypeParam, ...]
     is_static: bool
+
+    @property
+    def method_type_param_names(self) -> Tuple[str, ...]:
+        return tuple(tp.name for tp in self.method_type_params)
 
 
 def _read_extension_header(ext: ExtendDef) -> Optional[_ExtensionHeader]:
@@ -494,7 +564,7 @@ def _read_extension_header(ext: ExtendDef) -> Optional[_ExtensionHeader]:
         target_type_span=ext.target_type_span,
         ret_span=ext.ret_span or name_span,
         err_span=ext.err_span,
-        method_type_params=tuple(tp.name for tp in (ext.type_params or ())),
+        method_type_params=tuple(ext.type_params or ()),
         is_static=ext.is_static,
     )
 
@@ -526,8 +596,10 @@ class FunctionCollector:
         # library already follows (docs/design/libraries.md section 7). Without this,
         # `--lib-kind` would change program semantics rather than just distribution.
         self.library_units: Set[str] = set()
-        # The templates refused with CE0147 (#1167): no copy of one can be cut.
-        self.refused_pack_templates: List[str] = []
+        # The bodies that name a type pack as one type (CE0147, #1167) or hold a
+        # misplaced `expand` (#1070): no copy of one can be cut, so the analysis stops
+        # after the collect pass.
+        self.refused_pack_bodies: List[str] = []
         # Who declared what, across the whole program: the one reader for the question
         # "did a library take this name already?" A struct table carries a file and not
         # a unit, so every collector that refuses a redeclaration asks this table.
@@ -753,6 +825,8 @@ class FunctionCollector:
         # type-params, so this fires only if a pack value-param leaked in here
         # without a matching type-pack type-param (malformed -> CE0117).
         validate_type_pack_params(self.r, fn.type_params, params, name_span)
+        if reject_misplaced_expands(self.r, fn.body, frozenset(), name_span):
+            self.refused_pack_bodies.append(name)
 
         if name in self.funcs.by_name:
             verdict = self._redeclaration(name, name_span, self.funcs.by_name[name],
@@ -837,8 +911,12 @@ class FunctionCollector:
         # a type-pack type-param). Keys on `is_pack`, disjoint from the CE0114
         # blanket above (which keys on `is_variadic`).
         validate_type_pack_params(self.r, type_params_raw, params, name_span)
-        if reject_pack_type_outside_its_parameter(self.r, fn, type_params_raw, name_span):
-            self.refused_pack_templates.append(name)
+        pack_type_refused = reject_pack_type_outside_its_parameter(
+            self.r, fn, type_params_raw, name_span)
+        pack_values = {p.name for p in params if p.is_pack}
+        expand_refused = reject_misplaced_expands(self.r, fn.body, pack_values, name_span)
+        if pack_type_refused or expand_refused:
+            self.refused_pack_bodies.append(name)
 
         ret_ty = fn.ret
         ret_span = fn.ret_span or name_span
@@ -854,20 +932,26 @@ class FunctionCollector:
         if body is None:
             return
 
+        # The record's signature is written in the opaque parameters (#1070), AFTER the
+        # refusals above, which read the types as written. The AST keeps its own.
+        opaque = opaque_type_params(type_param_instances, self.current_unit_name, name)
+        params = [replace(param, ty=deep_type_params(param.ty, opaque)) for param in params]
+
         generic_func = GenericFuncDef(
             name=name,
             type_params=type_param_instances,
             params=params,
-            ret=ret_ty,
+            ret=deep_type_params(ret_ty, opaque),
             body=body,
             is_public=fn.is_public,
             loc=fn.loc,
             name_span=name_span,
             ret_span=ret_span,
-            err_type=fn.err_type,
+            err_type=deep_type_params(fn.err_type, opaque),
             err_span=fn.err_span,
             unit_name=self.current_unit_name,
             filename=self.current_unit_file,
+            opaque=opaque,
         )
 
         self.generic_funcs.declare(name, generic_func)
@@ -899,6 +983,8 @@ class FunctionCollector:
             return
 
         self._reject_signature_faults(header)
+        if reject_misplaced_expands(self.r, header.body, frozenset(), header.name_span):
+            self.refused_pack_bodies.append(header.name)
         if header.is_static and self._reject_static_faults(header):
             return
 
@@ -1013,7 +1099,12 @@ class FunctionCollector:
         tables say which names are declared types -- so the answer is decided here and
         carried.
         """
-        shape = classify_extension_target(target_type, self.is_declared_type)
+        if reject_bound_on_type(self.r, target_type, h.ext.target_params,
+                                self.is_declared_type, h.target_type_span or h.name_span):
+            self.generic_extensions.refuse(target_type.base_name, h.name)
+            return
+        shape = classify_extension_target(target_type, self.is_declared_type,
+                                          h.ext.target_params)
         h.ext.target_shape = shape
         if self._reject_generic_header(h, target_type, shape):
             self.generic_extensions.refuse(target_type.base_name, h.name)
@@ -1022,7 +1113,8 @@ class FunctionCollector:
         method = self._generic_method(
             h, base_type_name=target_type.base_name,
             type_params=shape.param_names, target_key=shape.target_key,
-            type_param_names=(*shape.param_names, *h.method_type_params))
+            type_param_names=(*shape.param_names, *h.method_type_param_names),
+            target_bounds=shape.bounds)
 
         if self._reject_overlapping_target(method, target_type, h.name_span):
             return
@@ -1040,7 +1132,7 @@ class FunctionCollector:
                                     h.target_type_span or h.name_span):
             return True
 
-        shadowed = [m for m in h.method_type_params if m in shape.param_names]
+        shadowed = [m for m in h.method_type_param_names if m in shape.param_names]
         if shadowed:
             er.emit(self.r, ERR.CE2064, h.name_span, name=shadowed[0])
             return True
@@ -1057,10 +1149,15 @@ class FunctionCollector:
             ARRAY_BASE_KEY, classify_array_extension_target, reject_array_target)
 
         element = target_type.base_type
-        shape = classify_array_extension_target(element, self.is_declared_type)
+        if reject_bound_on_type(self.r, target_type, h.ext.target_params,
+                                self.is_declared_type, h.target_type_span or h.name_span):
+            self.generic_extensions.refuse(ARRAY_BASE_KEY, h.name)
+            return None
+        shape = classify_array_extension_target(element, self.is_declared_type,
+                                                h.ext.target_params)
         h.ext.target_shape = shape
         if reject_array_target(self.r, shape, element,
-                               h.target_type_span or h.name_span):
+                               h.target_type_span or h.name_span) or shape is None:
             return None
 
         if not shape.param_names:
@@ -1073,7 +1170,7 @@ class FunctionCollector:
 
         param_name = shape.param_names[0]
 
-        if param_name in h.method_type_params:
+        if param_name in h.method_type_param_names:
             er.emit(self.r, ERR.CE2064, h.name_span, name=param_name)
             return None
 
@@ -1093,7 +1190,8 @@ class FunctionCollector:
 
         self.generic_extensions.add_method(self._generic_method(
             h, base_type_name=ARRAY_BASE_KEY, type_params=(param_name,),
-            target_key="", type_param_names=(param_name, *h.method_type_params)))
+            target_key="", type_param_names=(param_name, *h.method_type_param_names),
+            target_bounds=shape.bounds))
         return None
 
     def _collect_concrete_extension(self, h: '_ExtensionHeader') -> None:
@@ -1169,7 +1267,7 @@ class FunctionCollector:
 
         self.generic_extensions.add_method(self._generic_method(
             h, base_type_name=base, type_params=(), target_key="",
-            type_param_names=h.method_type_params))
+            type_param_names=h.method_type_param_names))
         # The declaration itself must not be walked as a concrete extension: stash the
         # receiver so the drain can rebuild the target, and let collect_extensions
         # re-file the node under generic_extensions.
@@ -1177,14 +1275,18 @@ class FunctionCollector:
 
     def _generic_method(self, h: '_ExtensionHeader', *, base_type_name: str,
                         type_params: Tuple[str, ...], target_key: str,
-                        type_param_names: Tuple[str, ...]) -> GenericExtensionMethod:
+                        type_param_names: Tuple[str, ...],
+                        target_bounds: Tuple[BoundedTypeParam, ...] = (),
+                        ) -> GenericExtensionMethod:
         """The ONE `GenericExtensionMethod` build, for all three template shapes.
 
         `type_param_names` are the names the signature converts into a `TypeParameter`:
         the receiver's, the method's own, or both.
         """
+        params = bare_type_params(type_param_names)
+
         def convert(ty: Optional[Type]) -> Optional[Type]:
-            return deep_type_params(ty, type_param_names)
+            return deep_type_params(ty, params)
 
         return GenericExtensionMethod(
             base_type_name=base_type_name,
@@ -1206,6 +1308,7 @@ class FunctionCollector:
             method_type_params=h.method_type_params,
             is_static=h.is_static,
             decl=h.ext,
+            target_bounds=target_bounds,
         )
 
     def _reject_variant_collision(self, target_type: Optional[Type], name: str,

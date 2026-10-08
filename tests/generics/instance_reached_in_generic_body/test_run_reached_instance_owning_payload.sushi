@@ -23,14 +23,14 @@ struct Feed@(T):
     T[] items
     i32 at
 
-extend Feed@(T) next(poke self) Maybe@(Result@(T, Bad)):
+extend Feed@(T: Clone) next(poke self) Maybe@(Result@(T, Bad)):
     let i32 at = self.at
     self.at := self.at + 1
     match self.items.get(at):
         Maybe.Some(v) -> return Maybe.Some(Result.Ok(v.clone()))
         Maybe.None -> return Maybe.None
 
-extend Feed@(T) copied() Maybe@(Result@(List@(T), Bad)):
+extend Feed@(T: Clone) copied() Maybe@(Result@(List@(T), Bad)):
     let List@(T) out = List.new()
     foreach(v in self.items.iter()):
         out.push(v.clone())
@@ -39,7 +39,7 @@ extend Feed@(T) copied() Maybe@(Result@(List@(T), Bad)):
 fn feed_of@(T)(nom T[] items) Feed@(T):
     return Feed(items, 0)
 
-fn names@(T: Named)(nom T[] crew) i32:
+fn names@(T: Named + Clone)(nom T[] crew) i32:
     let i32 n = 0
     foreach(r in feed_of(nom crew)):
         match r:

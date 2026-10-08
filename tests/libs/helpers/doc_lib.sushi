@@ -17,7 +17,7 @@ extend i32 with Doubler:
     fn doubled() i32:
         return self * 2
 
-public fn pick_bigger@(T: Doubler)(T a, T b) T:
+public fn pick_bigger@(T: Doubler + Clone)(T a, T b) T:
     ##:
     Picks the bigger of two doublers.
 
@@ -28,8 +28,8 @@ public fn pick_bigger@(T: Doubler)(T a, T b) T:
     - Returns: Whichever of the two doubles larger.
     :##
     if (a.doubled() > b.doubled()):
-        return a
-    return b
+        return a.clone()
+    return b.clone()
 
 ##: A box that holds one value. :##
 public struct Box@(T):

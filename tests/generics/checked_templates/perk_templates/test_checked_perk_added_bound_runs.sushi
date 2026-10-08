@@ -1,0 +1,17 @@
+# A bound in the target of a perk template promises `Display` to its methods (#1070).
+# EXPECT_STDOUT_EXACT: "42\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T value
+
+extend Box@(T: Display) with Show:
+    fn show() string:
+        return "{self.value}"
+
+fn main() i32:
+    let Box@(i32) b = Box(42)
+    println(b.show())
+    return 0

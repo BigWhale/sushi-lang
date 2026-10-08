@@ -1,5 +1,5 @@
 # A generic function and a generic callee that another unit reaches behind an alias.
-public fn five@(T)(T x) i32:
+public fn five@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     return 5 + (h & 0) as i32
 

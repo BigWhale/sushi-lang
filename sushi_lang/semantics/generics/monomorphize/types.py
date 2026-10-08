@@ -1,8 +1,10 @@
 """Enum and struct type monomorphization."""
 from __future__ import annotations
+from collections import Counter
 from typing import Dict, Tuple, Set
 
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
+from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import in_source_order
 from sushi_lang.semantics.typesys import Type, EnumType, EnumVariantInfo, StructType, UnknownType
 from sushi_lang.semantics.generics.explicit_type_args import reject_type_arg_arity
@@ -47,7 +49,9 @@ class TypeMonomorphizer:
             # An abstract instantiation still names an enclosing template's type params, so
             # there is nothing to monomorphize until a call site binds them. A bogus concrete
             # enum would sit in the table as a type that was never built.
-            if self._is_abstract(type_args):
+            table = self.monomorphizer.enum_table
+            if self._is_abstract(type_args,
+                                 opaque_bound=table is not None and table.admits_opaque):
                 continue
 
             generic = generic_enums[base_name]
@@ -263,13 +267,13 @@ class TypeMonomorphizer:
         if span is None and (generic.name, len(type_args)) in self.template_arity_refused:
             # A substitution of a template position that `refuse_template_arity`
             # reported where it is written (#807).
-            mono._refused.add(key)
+            mono.refuse(key, Counter({er.ERR.CE2062.code: 1}))
             return True
         reject_type_arg_arity(
             mono.reporter, generic.name, generic, len(type_args), span, filename,
             declared_at=mono.template_span(kind, generic.name),
             declared_in=mono.template_file(kind, generic.name))
-        mono._refused.add(key)
+        mono.refuse(key, Counter({er.ERR.CE2062.code: 1}))
         mono.constraint_violations += 1
         return True
 
@@ -366,10 +370,15 @@ class TypeMonomorphizer:
                 mono.constraint_violations += 1
             return
 
-    def _is_abstract(self, type_args: Tuple[Type, ...]) -> bool:
-        """Whether an argument still names an enclosing template's type parameter."""
+    def _is_abstract(self, type_args: Tuple[Type, ...], *, opaque_bound: bool = False) -> bool:
+        """Whether an argument still names an enclosing template's type parameter.
+
+        `opaque_bound` is the table's own answer (`admits_opaque`): only the overlay of a
+        template check holds an instance over an opaque parameter (#1070).
+        """
         structs, enums = self._tables()
-        return any(is_abstract_type(arg, structs, enums) for arg in type_args)
+        return any(is_abstract_type(arg, structs, enums, opaque_bound=opaque_bound)
+                   for arg in type_args)
 
     def _canonical_args(self, type_args: Tuple[Type, ...]) -> Tuple[Type, ...]:
         """The arguments in the spelling the instantiate pass collects them in.
@@ -407,7 +416,7 @@ class TypeMonomorphizer:
         """
         if table is None or concrete.name in table.by_name:
             return
-        if self._is_abstract(concrete.generic_args or ()):
+        if self._is_abstract(concrete.generic_args or (), opaque_bound=table.admits_opaque):
             return
         table.by_name[concrete.name] = concrete
         table.order.append(concrete.name)

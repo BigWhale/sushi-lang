@@ -1,7 +1,8 @@
 from __future__ import annotations
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import (TYPE_CHECKING, AbstractSet, Any, Callable, Dict, List, Mapping, Optional,
-                    Set, Tuple)
+from typing import (TYPE_CHECKING, AbstractSet, Any, Callable, Dict, Iterator, List, Mapping,
+                    Optional, Set, Tuple)
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -13,6 +14,7 @@ from sushi_lang.semantics.ast import (
     TupleLiteral, destructure_binders, pattern_bindings,
 )
 from sushi_lang.semantics.passes.collect import ConstantTable, StructTable, EnumTable, GenericEnumTable, GenericStructTable, ExternalTable
+from sushi_lang.semantics.ast_walk import is_template_copy
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.generics.monomorphize.unroll import (
     WrittenLet, written_binder, written_let,
@@ -51,6 +53,8 @@ class VariableInfo:
     # The binder as written in an `expand` body, when this is one of its copies
     # (#1019, #1031).
     written: Optional[WrittenLet] = None
+    # What CW1001 calls the name: a "variable" or a "parameter".
+    kind: str = "variable"
 
 
 class ScopeAnalyzer:
@@ -101,13 +105,17 @@ class ScopeAnalyzer:
         self._self_is_poke: bool = False
 
     def run(self, program: Program) -> None:
-        """Entry point for scope analysis."""
+        """Entry point for scope analysis.
+
+        A template is walked AS WRITTEN, whether a call instantiates it or not: a
+        generic function, a generic extension and a perk implementation on a generic
+        target (#1070). A copy of a template is walked for its stamps and reports
+        nothing, because the template reported each finding once (`_reports_of`).
+        """
         for const in program.constants:
             self._check_constant(const)
 
         for func in program.functions:
-            if hasattr(func, 'type_params') and func.type_params:
-                continue
             self._check_function(func)
 
         self.reporter.leave_body()
@@ -118,9 +126,19 @@ class ScopeAnalyzer:
         for ext in program.generic_extensions:
             self._check_extension_method(ext)
 
-        for perk_impl in program.perk_impls:
+        for perk_impl in [*program.perk_impls, *program.generic_perk_impls]:
             self._check_perk_implementation(perk_impl)
         self.reporter.leave_body()
+
+    @contextmanager
+    def _reports_of(self, body) -> Iterator[None]:
+        """Report the findings of one body, unless it is a copy of a template (#1070)."""
+        muted = self.err.suppressed
+        self.err.suppressed = muted or is_template_copy(body)
+        try:
+            yield
+        finally:
+            self.err.suppressed = muted
 
     def _push_scope(self) -> None:
         """Enter a new scope."""
@@ -136,7 +154,8 @@ class ScopeAnalyzer:
             if var_info.written is not None:
                 self._copies.setdefault(var_info.written, []).append(var_info)
             elif not var_info.used and var_info.declared_at is not None:
-                self.err.emit(er.ERR.CW1001, var_info.declared_at, name=var_info.name)
+                self.err.emit(er.ERR.CW1001, var_info.declared_at,
+                              kind=var_info.kind, name=var_info.name)
         if not self.scopes:
             self._report_unused_copies()
 
@@ -145,16 +164,18 @@ class ScopeAnalyzer:
         for written, copies in self._copies.items():
             if any(info.used for info in copies) or copies[0].declared_at is None:
                 continue
-            self.err.emit(er.ERR.CW1001, copies[0].declared_at, name=written.name)
+            self.err.emit(er.ERR.CW1001, copies[0].declared_at,
+                          kind=copies[0].kind, name=written.name)
         self._copies = {}
         self._shadows_told = set()
 
     def _declare_variable(self, name: str, span: Optional[Span],
-                          written: Optional[WrittenLet] = None) -> None:
+                          written: Optional[WrittenLet] = None,
+                          kind: str = "variable") -> None:
         """Declare a variable in the current scope.
 
         The shadow check compares WRITTEN names, and names a written `expand`-body `let`
-        once for all its copies (#1022).
+        once for all its copies (#1022). `kind` is what CW1001 calls the name.
         """
         if not self.scopes:
             return
@@ -174,7 +195,8 @@ class ScopeAnalyzer:
             break
 
         current_scope = self.scopes[-1]
-        current_scope[name] = VariableInfo(name=name, declared_at=span, written=written)
+        current_scope[name] = VariableInfo(name=name, declared_at=span, written=written,
+                                           kind=kind)
 
     def _is_bound_local(self, name: str) -> bool:
         """True if `name` is currently a variable in any active scope."""
@@ -395,7 +417,8 @@ class ScopeAnalyzer:
         self._capture_collectors.append(collector)
         self._push_scope()
         for p in lam.params:
-            self._declare_variable(p.name, p.name_span, written_binder(lam, p.name))
+            self._declare_variable(p.name, p.name_span, written_binder(lam, p.name),
+                                   kind="parameter")
         if isinstance(lam.body, Block):
             self._check_block(lam.body)
         else:
@@ -411,7 +434,8 @@ class ScopeAnalyzer:
 
     def _check_function(self, func: FuncDef) -> None:
         """Check a function definition, in the scope its names resolve in."""
-        with in_body_scope(self, "namespaces", func, self.unit_namespaces):
+        with in_body_scope(self, "namespaces", func, self.unit_namespaces), \
+                self._reports_of(func):
             self._check_function_body(func)
 
     def _check_function_body(self, func: FuncDef) -> None:
@@ -435,7 +459,7 @@ class ScopeAnalyzer:
             # Synthesized pack fan-out params carry user-invisible names, so they are
             # declared with no span and the implicit-variable exemption suppresses CW1001.
             span = None if param.is_pack else param.name_span
-            self._declare_variable(param.name, span)
+            self._declare_variable(param.name, span, kind="parameter")
 
         self._check_block(func.body)
         self._loop_depth = saved_loop_depth
@@ -443,7 +467,8 @@ class ScopeAnalyzer:
 
     def _check_extension_method(self, ext: ExtendDef) -> None:
         """Check an extension method definition, in the scope its names resolve in."""
-        with in_body_scope(self, "namespaces", ext, self.unit_namespaces):
+        with in_body_scope(self, "namespaces", ext, self.unit_namespaces), \
+                self._reports_of(ext):
             self._check_extension_body(ext)
 
     def _check_extension_body(self, ext: ExtendDef) -> None:
@@ -457,7 +482,7 @@ class ScopeAnalyzer:
         self._declare_variable("self", None)
 
         for param in ext.params:
-            self._declare_variable(param.name, param.name_span)
+            self._declare_variable(param.name, param.name_span, kind="parameter")
 
         self._check_block(ext.body)
         self._pop_scope()
@@ -465,21 +490,25 @@ class ScopeAnalyzer:
     def _check_perk_implementation(self, perk_impl: ExtendWithDef) -> None:
         """Check all methods in a perk implementation."""
         for method in perk_impl.methods:
-            # Whether this body is one of many copies of one source (#800).
-            self.reporter.enter_body(method)
-            self._push_scope()
+            with self._reports_of(method):
+                self._check_perk_method(method)
 
-            # Add implicit 'self' parameter - represents the target type instance.
-            # `poke self` (#327) makes it rebindable, as in extension methods.
-            self._self_is_poke = receiver_mode(method.self_mode) is ParamMode.POKE
-            self._declare_variable("self", None)
+    def _check_perk_method(self, method: FuncDef) -> None:
+        # Whether this body is one of many copies of one source (#800).
+        self.reporter.enter_body(method)
+        self._push_scope()
 
-            for param in method.params:
-                self._declare_variable(param.name, param.name_span)
+        # Add implicit 'self' parameter - represents the target type instance.
+        # `poke self` (#327) makes it rebindable, as in extension methods.
+        self._self_is_poke = receiver_mode(method.self_mode) is ParamMode.POKE
+        self._declare_variable("self", None)
 
-            with in_body_scope(self, "namespaces", method, self.unit_namespaces):
-                self._check_block(method.body)
-            self._pop_scope()
+        for param in method.params:
+            self._declare_variable(param.name, param.name_span, kind="parameter")
+
+        with in_body_scope(self, "namespaces", method, self.unit_namespaces):
+            self._check_block(method.body)
+        self._pop_scope()
 
     def _check_block(self, block: Block) -> None:
         """Check a block of statements.

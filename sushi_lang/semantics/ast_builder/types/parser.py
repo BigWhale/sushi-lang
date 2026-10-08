@@ -37,5 +37,7 @@ class TypeParser:
             return functions.parse_function_type(type_node, self.ast_builder)
         elif tag == "tuple_t":
             return tuples.parse_tuple_type(type_node, self.ast_builder)
+        elif tag in generics.BOUNDED_ARGUMENT_NODES:
+            generics.reject_misplaced_bound(type_node)
         else:
             return type_from_rule_name(tag)

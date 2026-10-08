@@ -1,0 +1,17 @@
+# A move of an outer owned value in an `expand` body is a move in a loop (#1070, R6):
+# it is refused for every pack length, as in a `foreach`.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+
+use <collections/strings>
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn each@(...Ts)(...Ts args) ~:
+    let string s = "tow".concat("el")
+    expand(_ in args):
+        eat(nom s)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

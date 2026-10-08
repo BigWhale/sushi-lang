@@ -1,0 +1,15 @@
+# A lambda in a template body is borrow-checked with the template (#1070, R5): it hands
+# its borrowed `T` parameter to a `nom` parameter.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn take@(T: Display)(nom T x) i32:
+    println("{x}")
+    return 1
+
+fn apply@(T: Display)(T x) i32:
+    let fn(T) -> i32 f = |T y| take(nom y)
+    return f(x)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

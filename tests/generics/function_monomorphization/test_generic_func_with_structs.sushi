@@ -21,7 +21,7 @@ fn make_pair@(T, U)(nom T a, nom U b) Pair@(T, U):
     let Pair@(T, U) result = Pair(a, b)
     return result
 
-fn unbox@(T)(Box@(T) boxed) T:
+fn unbox@(T: Clone)(Box@(T) boxed) T:
     # Extract value from generic struct
     # A field read borrows what the struct still owns, so returning it needs a clone.
     let T value = boxed.value

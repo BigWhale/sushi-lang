@@ -1058,7 +1058,7 @@ the iterator's element does not match is **[CE2034](error-catalog.md#ce2034)**.
 
 **`_` discards the item.** A loop that only repeats its body writes `_` as the binder, as
 a `match` pattern does. `_` binds nothing and the body cannot name it, so it is never
-[CW1001](error-catalog.md#cw1001) (unused variable). A NAMED binder that the body never reads is still [CW1001](error-catalog.md#cw1001).
+[CW1001](error-catalog.md#cw1001) (an unused name). A NAMED binder that the body never reads is still [CW1001](error-catalog.md#cw1001).
 
 ```sushi
 fn main() i32:
@@ -2396,7 +2396,53 @@ way to find a type argument is [`CE2060`](error-catalog.md#ce2060).
 
 **Constraints.** `@(T: Perk)` limits `T` to the types that implement the perk (see
 [Perks](#perks)). A type argument that does not implement it is [`CE4006`](error-catalog.md#ce4006). A constraint
-is legal on a function, a struct, an enum and an extension target.
+is legal on a function, a struct and an enum, in its `@(...)` list, and on the
+method-level type parameter of an extension (`extend Box@(T) pair_with@(U: Weigh)(U
+other)`), which a call checks as it checks a free function.
+
+**A template is checked where it is written.** The compiler checks a generic body one
+time, also when no code calls it. In that check each type parameter is opaque: the body
+can hold, move and pass on a `T`, and it can do with it only what a constraint promises.
+
+| Constraint | What the body may do with a `T` |
+|---|---|
+| a user perk | call its methods |
+| `Eq` | `==`, `!=`, `.eq()`, `contains` and `index_of` on a container of `T` |
+| `Ord` | `<`, `<=`, `>`, `>=`, `.compare()` |
+| `Display` | an interpolation hole, `print`, `println`, `.to_str()` |
+| `Hashable` | `.hash()`; with `Eq`, a `HashMap` key |
+| `Clone` | `.clone()`, also of a type that holds `T` |
+
+Anything else on a `T` is the diagnostic of the same fault on a concrete type, at the
+template, with a note at `T` and a help that names the constraint: a method is
+[`CE2008`](error-catalog.md#ce2008), a comparison [`CE2514`](error-catalog.md#ce2514), a hole [`CE2035`](error-catalog.md#ce2035), `.clone()` [`CE4018`](error-catalog.md#ce4018). Arithmetic on a
+`T` has no constraint and is [`CE2518`](error-catalog.md#ce2518); a field of `T` is [`CE2106`](error-catalog.md#ce2106) and a cast is
+[`CE2014`](error-catalog.md#ce2014). A perk does not include another: `T: Ord` gives no `==`. A call, a written
+type or a constructor that passes `T` to another generic needs the constraints of the
+callee among the constraints of `T` ([`CE4006`](error-catalog.md#ce4006)).
+
+```sushi
+fn largest@(T: Ord)(nom T a, nom T b) T:
+    if (a > b):
+        return a
+    return b
+
+fn show_twice@(T: Display + Clone)(T x) string:
+    let T y = x.clone()
+    return "{x} {y}"
+
+fn main() i32:
+    println(largest(nom 3, nom 9))                  # 9
+    println(show_twice("towel"))                    # towel towel
+    return 0
+```
+
+**Bounds in an extension target.** An extension or a perk implementation on `Box@(T)`
+inherits the bounds that `Box` declares, and its target can add one:
+`extend Box@(T: Display) show()`, `extend (T: Clone)[] second()`. A receiver whose type
+argument does not satisfy an added bound is [`CE4006`](error-catalog.md#ce4006) at the call. A bound is legal only at
+the top level of an `extend` target ([`CE6110`](error-catalog.md#ce6110) elsewhere), never on a name that is a type
+([`CE2124`](error-catalog.md#ce2124)), and never in the target of `Drop` ([`CE4019`](error-catalog.md#ce4019)).
 
 The full guide, with every inference rule and limit, is [Generics](generics.md).
 
@@ -2508,14 +2554,14 @@ type of the position:
 struct Cage@(T):
     T[] items
 
-extend Cage@(T) static holding(T item) Cage@(T):
+extend Cage@(T) static holding(nom T item) Cage@(T):
     return Cage(from([item]))
 
 extend Cage@(T) static empty() Cage@(T):
     return Cage(from([]))
 
 fn main() i32:
-    println("{Cage.holding(9).items[0]}")           # 9: the argument makes T an i32
+    println("{Cage.holding(nom 9).items[0]}")       # 9: the argument makes T an i32
     let Cage@(i32) none = Cage.empty()              # T comes from the declared type
     println("{none.items.len()}")                   # 0
     return 0
@@ -2596,10 +2642,10 @@ implementation together.
 
 The guide is [Perks](perks.md).
 
-### Predefined Perks: `Drop`, `Hashable`, `Eq`, `Ord` and `Display`
+### Predefined Perks: `Drop`, `Hashable`, `Eq`, `Ord`, `Display` and `Clone`
 
-The compiler declares five perks. Every unit can name them with no import, and a
-declaration of any of the five names is [`CE4001`](error-catalog.md#ce4001).
+The compiler declares six perks. Every unit can name them with no import, and a
+declaration of any of the six names is [`CE4001`](error-catalog.md#ce4001).
 
 | Perk | Contract | Read by |
 |------|----------|---------|
@@ -2608,6 +2654,7 @@ declaration of any of the five names is [`CE4001`](error-catalog.md#ce4001).
 | `Eq` | `fn eq(Self other) bool` | `==`, `!=`, `contains`, `index_of`, `HashMap` keys |
 | `Ord` | `fn compare(Self other) i32` | `<`, `<=`, `>`, `>=` |
 | `Display` | `fn to_str() string` | an interpolation hole, `print`, `println` |
+| `Clone` | `fn clone() Self` | `.clone()` on a type parameter |
 
 `compare` returns a negative number, zero or a positive number.
 
@@ -2641,6 +2688,12 @@ an implementation is the only way to give it one.
 A constraint `@(T: Eq)`, `@(T: Ord)` or `@(T: Display)` is satisfied by the same top-level
 rule as the operator. So `bool` satisfies `Eq` and does not satisfy `Ord`. Any other type is
 [`CE4006`](error-catalog.md#ce4006).
+
+**`Clone`** is satisfied by every type that holds no resource: a type that is not a `Drop`
+type and holds none in a field, an element or a payload. A handle (`File`, `TcpStream`)
+does not satisfy it; `.share()` gives a second owner of a handle. The built-in `.clone()`
+is the contract, so an implementation is [`CE4017`](error-catalog.md#ce4017). A generic body that clones a `T`
+writes `@(T: Clone)`; without it, the clone is [`CE4018`](error-catalog.md#ce4018).
 
 #### Methods of the contracts
 
@@ -2704,7 +2757,7 @@ memory and copies. Every other type copies. These operations change ownership:
 
 - **`.clone()`** is the only deep copy, and the compiler inserts no copy of its own. On a
   type that implements `Drop`, or holds one, it is [`CE2431`](error-catalog.md#ce2431), because the copy would be a
-  second handle. A `File` and a `TcpListener` have `.share()` for that: a second owner of
+  second handle. On a type parameter it needs `@(T: Clone)` ([`CE4018`](error-catalog.md#ce4018)). A `File` and a `TcpListener` have `.share()` for that: a second owner of
   the same open file description.
 - **`Own@(T)`** is a heap cell: `Own.alloc(v)` makes one, and `.get()` reads the payload.
   It lets a type hold itself (a list node, a tree).
@@ -2767,7 +2820,7 @@ fn sum(...i32 xs) i32:
     return total
 
 fn show_all@(...Ts: Hashable)(...Ts xs) ~:
-    expand(x in xs):                                # unrolled once per argument
+    expand(x in xs):                                # checked once, unrolled once per argument
         println(x.hash())
 
 fn main() i32:
@@ -2780,7 +2833,10 @@ fn main() i32:
 
 The native parameter comes last. `arr...` forwards a bare array variable and moves it. A
 variadic parameter in a perk method or an extension method is [`CE0115`](error-catalog.md#ce0115). A pack cannot be
-forwarded or indexed. The guide is [Variadic Functions](variadics.md).
+forwarded or indexed. The body of an `expand` is checked once, where it is written: the
+binder has what the constraints of the pack promise. An `expand` may run zero times, so a
+`return` inside it does not end the path ([`CE0107`](error-catalog.md#ce0107)). The binder takes the lints of a
+`foreach` item, and `expand(_ in xs)` discards the element. The guide is [Variadic Functions](variadics.md).
 
 ## Foreign Functions
 

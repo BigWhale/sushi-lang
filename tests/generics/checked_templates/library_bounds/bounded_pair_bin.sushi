@@ -1,0 +1,6 @@
+public struct Pair@(T):
+    T a
+    T b
+
+extend Pair@(T: Display) show() string:
+    return "({self.a}, {self.b})"

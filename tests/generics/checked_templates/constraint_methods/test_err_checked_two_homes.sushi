@@ -1,0 +1,16 @@
+# Two constraints of one type parameter that both declare `name()` give the method two
+# homes on that parameter (#1070). The template says it one time.
+# EXPECT_ERROR_CODES_EXACT: CE4015
+
+perk Named:
+    fn name() string
+
+perk Titled:
+    fn name() string
+
+fn label@(T: Named + Titled)(T x) string:
+    return x.name()
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

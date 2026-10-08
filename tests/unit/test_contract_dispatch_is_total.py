@@ -16,8 +16,10 @@ from sushi_lang.semantics import typesys
 from sushi_lang.semantics.generics.contracts import (
     ACCEPTED_KINDS, CONTRACTS, REFUSED_KINDS, WALKED_KINDS, contract_of, operand_contract,
     printed_contract)
+from sushi_lang.semantics.generics.contract_walk import perk_override_of
 from sushi_lang.semantics.generics.types import (
-    GenericEnumType, GenericStructType, GenericTypeRef, TypePack, TypeParameter)
+    GenericEnumType, GenericStructType, GenericTypeRef, TemplateId, TypePack, TypeParameter)
+from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo, ForeignPtrType, FunctionType, IteratorType,
     ReferenceType, StructType)
@@ -115,3 +117,42 @@ def test_a_printed_array_reads_its_elements_and_the_operators_do_not():
     assert not operand_contract(ints, "Display")[0]
     assert not operand_contract(ints, "Eq")[0]
     assert not operand_contract(ints, "Ord")[0]
+
+
+def _opaque(*constraints: str) -> TypeParameter:
+    return TypeParameter("T", owner=TemplateId("main", "f"), constraints=constraints)
+
+
+def _override(contract: str):
+    """The override of one contract over the tables of a program, as the analyzer has it."""
+    tables = SymbolTables()
+    return perk_override_of(contract, tables.perk_impls, tables.generic_perk_impls,
+                            tables.holds_bound)
+
+
+@pytest.mark.parametrize("contract", CONTRACTS)
+def test_an_opaque_parameter_meets_a_contract_it_promises(contract):
+    """`T: Eq` meets `==` and nothing else meets it (#1070, R2, R4): the promise answers."""
+    promised = _opaque(contract)
+    assert operand_contract(promised, contract, overridden=_override(contract))[0]
+    assert contract_of(promised, contract, overridden=_override(contract))[0]
+    assert printed_contract(promised, overridden=_override("Display"))[0] == (
+        contract == "Display")
+
+
+@pytest.mark.parametrize("contract", CONTRACTS)
+def test_an_opaque_parameter_without_the_promise_refuses(contract):
+    """No constraint, or another one: the parameter is no struct and derives nothing."""
+    for bare in (_opaque(), _opaque(*(c for c in CONTRACTS if c != contract))):
+        assert not operand_contract(bare, contract, overridden=_override(contract))[0]
+        answer, reason = contract_of(bare, contract, overridden=_override(contract))
+        assert not answer and "constraints do not promise" in reason
+
+
+@pytest.mark.parametrize("contract", CONTRACTS)
+def test_a_held_opaque_parameter_answers_its_promise(contract):
+    """A struct field of `T` reads the promise, as a field of an overriding type does."""
+    holder = StructType(name="Box<T#main.f>", fields=(("value", _opaque(contract)),))
+    assert contract_of(holder, contract, overridden=_override(contract))[0]
+    holder = StructType(name="Box<T#main.g>", fields=(("value", _opaque()),))
+    assert not contract_of(holder, contract, overridden=_override(contract))[0]

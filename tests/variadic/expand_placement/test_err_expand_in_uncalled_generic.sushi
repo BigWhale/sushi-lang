@@ -1,0 +1,12 @@
+# An `expand` walks the value pack of its own function. A generic function with no
+# type pack has none, so the `expand` is refused where it is written, also when no
+# call of the template exists.
+# EXPECT_ERROR_CODES_EXACT: CE0119
+
+fn f@(T)(T x) ~:
+    expand(a in x):
+        println("Mostly Harmless")
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

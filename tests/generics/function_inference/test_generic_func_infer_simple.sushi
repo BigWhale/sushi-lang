@@ -1,12 +1,12 @@
 # Test: Generic function with single type parameter
 # The call infers T from its argument, and the instance returns the value it was given.
 
-fn identity@(T)(T x) T:
+fn identity@(T)(nom T x) T:
     return x
 
 fn main() i32:
-    if (identity(42) != 42):
+    if (identity(nom 42) != 42):
         return 1
-    if (identity(true) != true):
+    if (identity(nom true) != true):
         return 2
     return 0

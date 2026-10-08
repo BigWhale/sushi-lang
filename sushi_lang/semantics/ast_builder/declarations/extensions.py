@@ -42,7 +42,8 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     static_tok = first_token(suffix.children, "STATIC")
 
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_params, strip_self_param
-    from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
+    from sushi_lang.semantics.ast_builder.types.generics import (
+        parse_bounded_type_params, parse_extension_target)
 
     type_params_node = first_tree(suffix.children, "type_params")
     type_params = parse_bounded_type_params(type_params_node) if type_params_node else None
@@ -53,7 +54,8 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     if body_node is None:
         ice(suffix, "missing body block")
 
-    target_type = ast_builder._parse_type(target_type_node) if target_type_node else None
+    target_type, target_params = (parse_extension_target(target_type_node, ast_builder)
+                                  if target_type_node else (None, ()))
     params = parse_params(params_node, ast_builder) if params_node else []
     self_mode, self_mode_span, params = strip_self_param(params)
     signature = read_signature_types(suffix.children, ast_builder)
@@ -77,6 +79,7 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
         doc=lift_body_doc(body, ast_builder),
         is_static=static_tok is not None,
         static_span=span_of(static_tok) if static_tok is not None else None,
+        target_params=target_params,
     )
 
 

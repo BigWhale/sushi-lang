@@ -1,13 +1,13 @@
 # A generic function value in a concrete parameter position is solved inside
 # the body of a generic function, as it is in a concrete body (#1036).
 # EXPECT_STDOUT_EXACT: "one\n4\n"
-fn gen@(T)(T x) T:
-    return x
+fn gen@(T: Clone)(T x) T:
+    return x.clone()
 
 fn apply_c(fn(i32) -> i32 f) i32:
     return f(4)
 
-fn inner@(U)(U u) i32:
+fn inner@(U: Display)(U u) i32:
     println(u)
     return apply_c(gen)
 

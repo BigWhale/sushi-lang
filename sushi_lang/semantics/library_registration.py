@@ -57,14 +57,14 @@ _PRIVATE_TYPE_TABLES = (
 )
 
 
-def _template_origin(lib_name: str, version: Optional[str], label: str,
-                     source: str) -> Origin:
-    """Whose code a library template is, and the text its spans index into."""
-    return Origin(
-        filename=label, source=source,
-        provenance=(f"'{lib_name}' {version or 'unknown'} "
-                    f"ships this template; it is monomorphized here because of "
-                    f"`use <lib/{lib_name}>`"))
+def _slice_label(lib_name: str, what: str) -> str:
+    """The file name of a source slice that a library ships: `<template:lib:what>`.
+
+    `what` names the declaration. A type in it is an identity name, and a location shows
+    it in the source spelling, `Pair@(T)`.
+    """
+    from sushi_lang.semantics.generics.type_display import display_type_name
+    return f"<template:{lib_name}:{display_type_name(what)}>"
 
 
 class _Snippet:
@@ -130,6 +130,21 @@ class LibraryRegistration:
         # `CollectorPass` rebuilds the predefined type universe each time (#675).
         self._snippet_collector: Optional[CollectorPass] = None
         self._snippet_reporter = Reporter(filename="<library snippet>")
+
+    def _template_origin(self, lib_name: str, version: Optional[str], label: str,
+                         source: str) -> Origin:
+        """Whose code a library template is, and the text its spans index into.
+
+        The program reporter records the slice under its label, so every location in
+        the slice renders its line: the location of a diagnostic and of each note.
+        """
+        origin = Origin(
+            filename=label, source=source,
+            provenance=(f"'{lib_name}' {version or 'unknown'} "
+                        f"ships this template; it is monomorphized here because of "
+                        f"`use <lib/{lib_name}>`"))
+        self.reporter.add_slice(label, source)
+        return origin
 
     # -- the entry points the analyzer calls --------------------------------------
 
@@ -706,7 +721,7 @@ class LibraryRegistration:
             if any(t.impl.perk_name == perk_name for t in table.templates(base)):
                 continue
 
-            label = f"<template:{lib_name}:{base} with {perk_name}>"
+            label = _slice_label(lib_name, f"{base} with {perk_name}")
             try:
                 program = parse_one_declaration(
                     source, f"perk implementation '{base} with {perk_name}'", label)
@@ -715,8 +730,8 @@ class LibraryRegistration:
                 continue
             # The methods are the library's code, as an extension template's are: a
             # copy may call the library's privates, and a diagnostic names the library.
-            origin = _template_origin(lib_name, manifest.get("library_version"), label,
-                                      source)
+            origin = self._template_origin(lib_name, manifest.get("library_version"),
+                                           label, source)
             for impl in [*program.perk_impls, *(program.generic_perk_impls or [])]:
                 for method in impl.methods:
                     method.is_library_template = True
@@ -933,7 +948,7 @@ class LibraryRegistration:
         from sushi_lang.semantics.library_templates import deserialize_extension
 
         for lib_name, manifest, record in self._template_records("generic_extensions"):
-            label = f"<template:{lib_name}:{record.get('type')} {record.get('name')}>"
+            label = _slice_label(lib_name, f"{record.get('type')} {record.get('name')}")
             try:
                 program = deserialize_extension(record, label)
             except TemplateSourceError as e:
@@ -945,7 +960,7 @@ class LibraryRegistration:
                 if bindings:
                     apply_template_bindings(ext.body, bindings)
                 ext.is_library_template = True
-                ext.library_origin = _template_origin(
+                ext.library_origin = self._template_origin(
                     lib_name, manifest.get("library_version"), label, source)
 
             reporter = Reporter(source=source, filename=label)
@@ -1040,7 +1055,7 @@ class LibraryRegistration:
 
             # The collector runs under the RECORD's unit, so the template and its
             # instances carry the unit that declared it at the producer (#494).
-            label = f"<template:{lib_name}:{func_name}>"
+            label = _slice_label(lib_name, func_name)
             snippet = self._collect_snippet(source, label, template_unit, lib_name,
                                             f"generic function '{func_name}'")
             gfd = snippet.declared("generic_funcs", func_name)
@@ -1060,8 +1075,11 @@ class LibraryRegistration:
             # a library's mistake against the consumer's file (#471). The filename
             # shape is the throwaway reporter's, so one convention names a template
             # everywhere.
-            gfd.library_origin = _template_origin(
+            gfd.library_origin = self._template_origin(
                 lib_name, manifest.get("library_version"), label, source)
+            # The record is the one home of the file a note at the template names: the
+            # slice, as the collector of an extension template files it (#1070).
+            gfd.filename = label
 
             # The snippet already carries these, but the record is the source of truth.
             rec_tps = record.get("type_params") or []
@@ -1100,13 +1118,17 @@ class LibraryRegistration:
             if not source:
                 continue
 
+            label = _slice_label(lib_name, type_name)
             snippet = self._collect_snippet(
-                source, f"<template:{lib_name}:{type_name}>", lib_name, lib_name,
-                f"generic {kind} '{type_name}'")
+                source, label, lib_name, lib_name, f"generic {kind} '{type_name}'")
             generic_type = snippet.declared(key, type_name)
             if generic_type is None:
                 continue
 
+            # A note at the declaration, a bound of its type parameter included, names
+            # the slice and renders its line (#1070).
+            self.reporter.add_slice(label, source)
+            table.files[type_name] = label
             table.by_name[type_name] = generic_type
             table.order.append(type_name)
             self.generic_type_owners[type_name] = lib_name

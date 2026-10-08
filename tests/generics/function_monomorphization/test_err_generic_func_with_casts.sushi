@@ -1,0 +1,47 @@
+# A cast from a type parameter or to a type parameter in a generic function is refused
+# where the template is written: no constraint promises a cast (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2014, CE2014, CE2014
+
+fn numeric_identity@(T)(nom T value) T:
+    # Cast to i64 and back to T (tests generic type in cast target)
+    let i64 temp = value as i64
+    let T result = temp as T
+    return result
+
+fn convert_to_float@(T)(nom T value) f64:
+    # Cast generic type to f64
+    let f64 result = value as f64
+    return result
+
+fn test_casts() i32:
+    # Test with i32
+    let i32 num1 = numeric_identity(nom 42)
+    # Test convert_to_float with i32 (don't need to store result)
+    if (convert_to_float(nom 42) < 0.0):
+        return 10
+
+    # Test with i8
+    let i8 byte1 = numeric_identity(nom 10 as i8)
+    # Test convert_to_float with i8
+    if (convert_to_float(nom 10 as i8) < 0.0):
+        return 11
+
+    # Test with u32
+    let u32 unsigned1 = numeric_identity(nom 100 as u32)
+    # Test convert_to_float with u32
+    if (convert_to_float(nom 100 as u32) < 0.0):
+        return 12
+
+    # Verify values
+    if (num1 != 42):
+        return 1
+    if (byte1 != 10 as i8):
+        return 2
+    if (unsigned1 != 100 as u32):
+        return 3
+
+    return 0
+
+fn main() i32:
+    let i32 result = test_casts()
+    return result

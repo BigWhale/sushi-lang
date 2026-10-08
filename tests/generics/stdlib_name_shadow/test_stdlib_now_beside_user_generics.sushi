@@ -3,11 +3,11 @@
 # EXPECT_STDOUT_EXACT: true\n7\n8\n
 use <time>
 
-fn copy@(T)(T x) T:
-    return x
+fn copy@(T: Clone)(T x) T:
+    return x.clone()
 
-fn setenv@(T)(T x) T:
-    return x
+fn setenv@(T: Clone)(T x) T:
+    return x.clone()
 
 fn main() i32:
     let i64 t = now()

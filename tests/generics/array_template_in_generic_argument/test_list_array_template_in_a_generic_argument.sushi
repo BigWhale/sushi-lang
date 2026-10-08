@@ -6,14 +6,14 @@
 struct P:
     i32 x
 
-extend T[] collect() List@(T):
+extend (T: Eq + Clone)[] collect() List@(T):
     let List@(T) out = List.new()
     foreach(e in self.iter()):
         if (e == e):
-            out.push(e)
+            out.push(e.clone())
     return out
 
-fn k@(T)(T x) i32:
+fn k@(T: Hashable)(T x) i32:
     return 7 + (x.hash() * 0) as i32
 
 fn main() i32:

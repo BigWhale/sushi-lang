@@ -1,0 +1,13 @@
+# The receiver parameter and the method-level parameter are two opaque types (#1070):
+# a `U` is not a `T`.
+# EXPECT_ERROR_CODES_EXACT: CE2003
+
+struct Box@(T):
+    T value
+
+extend Box@(T) swap@(U)(nom U u) T:
+    return u
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

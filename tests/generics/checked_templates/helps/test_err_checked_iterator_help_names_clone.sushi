@@ -1,0 +1,15 @@
+# A change of a container under its iterator, in a template (#1070, R5): the help says
+# that a value over `T` has a clone only when a constraint promises 'Clone'.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+# EXPECT_STDERR_CONTAINS: which has a clone only with 'Clone' in its constraints ('@(T: Clone)')
+
+fn grow@(T)(poke List@(T) xs) i32:
+    let i32 n = 0
+    foreach(_ in xs.iter()):
+        xs.clear()
+        n := n + 1
+    return n
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

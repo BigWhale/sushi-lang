@@ -1,0 +1,12 @@
+# `Clone` is structural: the built-in `.clone()` is the contract, so no implementation.
+# EXPECT_ERROR_CODE: CE4017
+
+struct Point:
+    i32 x
+
+extend Point with Clone:
+    fn clone() Point:
+        return Point(1)
+
+fn main() i32:
+    return 0

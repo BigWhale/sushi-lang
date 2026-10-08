@@ -4,15 +4,15 @@
 # EXPECT_STDOUT_EXACT: "1\n2\n3\n7\n"
 use "helpers/libpos" as l
 
-fn g1@(T)(T x) i32:
+fn g1@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     return 1 + (h & 0) as i32
 
-fn g2@(T)(T x) i32:
+fn g2@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     return 2 + (h & 0) as i32
 
-fn g3@(T)(T x) i32:
+fn g3@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     return 3 + (h & 0) as i32
 

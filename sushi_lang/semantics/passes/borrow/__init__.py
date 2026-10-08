@@ -3,9 +3,11 @@
 from __future__ import annotations
 from collections import ChainMap
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Dict, FrozenSet, Iterator, List, Optional, Set
+from typing import (
+    TYPE_CHECKING, AbstractSet, Callable, Dict, FrozenSet, Iterator, List, Optional, Set)
 
-from sushi_lang.semantics.ast import Block, ExtendDef, FuncDef, Param, Program
+from sushi_lang.semantics.ast import (
+    Block, Expand, ExtendDef, ExtendWithDef, FuncDef, Param, Program)
 from sushi_lang.semantics.typesys import (
     BorrowMode, BuiltinType, DynamicArrayType, ReferenceType, StructType, Type,
 )
@@ -28,6 +30,7 @@ from .writes import READONLY_RECEIVERS
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.tables import SymbolTables
+    from sushi_lang.semantics.template_scope import CheckCopy
 
 
 def _build_callee_modes(tables, unit_name: Optional[str] = None,
@@ -43,12 +46,7 @@ def _build_callee_modes(tables, unit_name: Optional[str] = None,
     if tables is None:
         return CalleeModes()
     funcs = getattr(tables, "funcs", None)
-    # A LIVE view of both tables: the typecheck pass runs after this is built, and it
-    # interns the instance a generic struct constructor solves from its arguments (#1150).
-    struct_names = ChainMap(*(
-        table.by_name for table in (getattr(tables, "structs", None),
-                                    getattr(tables, "generic_structs", None))
-        if getattr(table, "by_name", None) is not None))
+    struct_names = _struct_names(tables)
     stdlib_sigs = funcs.stdlib_by_name() if funcs is not None else {}
     # A generic fn is called by its bare name in a template body but interned under a
     # mangled one, and the mode does not vary per instantiation. Concrete table first.
@@ -62,6 +60,15 @@ def _build_callee_modes(tables, unit_name: Optional[str] = None,
         struct_names=struct_names,
         stdlib_sigs=stdlib_sigs,
     )
+
+
+def _struct_names(tables) -> ChainMap:
+    """A LIVE view of both struct tables: the typecheck pass runs after the resolver is
+    built, and it interns the instance a generic struct constructor solves from its
+    arguments (#1150)."""
+    maps = [getattr(getattr(tables, name, None), "by_name", None)
+            for name in ("structs", "generic_structs")]
+    return ChainMap(*(names for names in maps if names is not None))
 
 
 class BorrowChecker:
@@ -105,16 +112,26 @@ class BorrowChecker:
         # every other reader walks (`docs/design/unit-namespaces.md` section 8).
         self.unit_name = unit_name
         self.scope = scope
+        # Set only while a check copy is read (#1070, R6): the element type of each
+        # `expand`.
+        self.pack_element_of: Optional[Callable[[Expand], Optional[Type]]] = None
 
     def refresh_callee_modes(self) -> None:
         """Read the function tables again: the typecheck pass can declare a late instance
         after this checker was built (#1155)."""
         self.callee_modes = _build_callee_modes(self.tables, self.unit_name, self.scope)
 
-    def run(self, program: Program) -> None:
-        """Run borrow checking on the entire program."""
+    def run(self, program: Program, skip: AbstractSet[int] = frozenset()) -> None:
+        """Run borrow checking on the entire program.
+
+        `skip` holds the `id` of each written template that the typecheck pass checked
+        on a check copy: the borrow pass read that copy (`check_template_copy`), with
+        each type parameter opaque.
+        """
         self.refresh_callee_modes()
         for func in program.functions:
+            if id(func) in skip:
+                continue
             # Whose body this is: the file its diagnostics belong to (#471), and whether
             # it is one of many copies of one source (#648).
             self.reporter.enter_body(func)
@@ -124,19 +141,49 @@ class BorrowChecker:
         for ext in program.extensions:
             self._check_extension(ext)
 
-        # The TEMPLATE, with `self` still abstract. Its per-instantiation truth is checked
-        # on the monomorphized copies instead (semantic_analyzer), because an owning field
-        # is a consume in one instantiation and a plain copy in another -- one answer
-        # cannot serve both (#391). This walk stays for what does NOT depend on the type
-        # argument, and because an UNINSTANTIATED template has no copy to be checked on.
+        # A TEMPLATE that no check copy covers, as written, with `self` abstract: a
+        # template of a consumed library unit was checked at its own build. What each
+        # copy decides per instance is in the stamps of its own borrow walk (R7).
         for ext in program.generic_extensions:
-            self._check_extension(ext)
+            if id(ext) not in skip:
+                self._check_extension(ext)
 
         # Perk impl methods carry an implicit `self`, like an extension method. Omitting
         # them left a perk body unchecked entirely (#176).
         for perk_impl in program.perk_impls:
             self._check_perk_impl(perk_impl)
         self.reporter.leave_body()
+
+    def check_template_copy(self, copy: 'CheckCopy') -> None:
+        """The borrow rules on a check copy (#1070, R5): an opaque type parameter moves.
+
+        The copy is read in the overlay tables, which hold its instances over an opaque
+        parameter. The mode resolver keeps the program's function tables, which the
+        overlay shares, and reads the overlay's struct names. A fault here refuses the
+        template, so each copy of it is muted.
+        """
+        saved = (self.tables, self.types, self.callee_modes)
+        self.tables, self.types = copy.tables, TypeQueries(copy.tables)
+        self.callee_modes = self.callee_modes.with_struct_names(
+            _struct_names(copy.tables))
+        self.pack_element_of = copy.element_of
+        try:
+            node = copy.node
+            if isinstance(node, ExtendWithDef):
+                self._check_perk_impl(node)
+            elif isinstance(node, ExtendDef):
+                self._check_extension(node)
+            else:
+                self.reporter.enter_body(node)
+                self._check_function(node)
+            self.pack_element_of = None
+            for fn in copy.lifted:
+                self.reporter.enter_body(fn)
+                self._check_function(fn)
+        finally:
+            self.tables, self.types, self.callee_modes = saved
+            self.pack_element_of = None
+            self.reporter.leave_body()
 
     def _check_perk_impl(self, perk_impl) -> None:
         """Borrow-check every method body of one perk implementation."""
@@ -171,6 +218,8 @@ class BorrowChecker:
 
     def _check_extension(self, ext: ExtendDef) -> None:
         """Check borrow safety for an extension method."""
+        # A copy of a refused template says nothing (#1070), as a perk method does.
+        self.reporter.enter_body(ext)
         with self._body_scope(ext):
             self._check_callable(ext.params, ext.body, fn_name=ext.name,
                                  self_type=ext.target_type,

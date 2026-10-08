@@ -1,0 +1,22 @@
+# A target bound decides which instances get a copy (#1070). `List@(File)` fails
+# `Clone`, so no copy of `dup_first` is cut for it, and its body is never checked
+# over a handle.
+# EXPECT_STDOUT_EXACT: "2 0\n"
+# EXPECT_NO_LEAKS: true
+use <io/fs>
+
+extend List@(T: Clone) dup_first() List@(T):
+    let List@(T) out = List.new()
+    foreach(x in self.iter()):
+        out.push(x.clone())
+        out.push(x.clone())
+        return out
+    return out
+
+fn main() i32:
+    let List@(File) files = List.new()
+    let List@(i32) xs = List.new()
+    xs.push(7)
+    let List@(i32) ys = xs.dup_first()
+    println("{ys.len()} {files.len()}")
+    return 0

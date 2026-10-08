@@ -1,7 +1,7 @@
 # A generic function is a function value in an argument position: the
 # parameter type solves its type arguments, and no other call is needed (#1021).
 # EXPECT_STDOUT_EXACT: "7\n"
-fn gen@(T)(T x) i32:
+fn gen@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     return 7 + (h & 0) as i32
 

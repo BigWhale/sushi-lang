@@ -4,7 +4,7 @@
 # EXPECT_STDOUT_EXACT: "n1\nn2\n"
 # EXPECT_NO_LEAKS
 
-extend List@(T) dup@(U)(fn(T) -> U f) List@(U) | StdError:
+extend List@(T) dup@(U: Clone)(fn(T) -> U f) List@(U) | StdError:
     let List@(U) out = List.new()
     foreach(x in self.iter()):
         let U mapped = f(x)

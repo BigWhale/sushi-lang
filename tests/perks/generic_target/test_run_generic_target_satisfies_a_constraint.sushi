@@ -9,7 +9,7 @@ perk Show:
 struct Box@(T):
     T item
 
-extend Box@(T) with Show:
+extend Box@(T: Display) with Show:
     fn show() string:
         return "boxed {self.item}"
 

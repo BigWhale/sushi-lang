@@ -136,9 +136,10 @@ methods return a `List` — a dynamic array has no empty generic constructor to 
 
 !!! note "Element ownership"
     `map` and `fold` borrow each element and give it to your function, so they work on
-    every element type. `filter`, in both forms, clones each kept element, so an owning
-    element type works there too (not a type that refuses `.clone()`, such as a `Drop`
-    type). For a container element (`T[]`, `List@(T)`, `Own@(T)`), give it a function
+    every element type. `filter`, in both forms, clones each kept element, so its element
+    type needs `Clone`: an owning type such as `string` works, and a type that holds a
+    resource, such as a `File`, gets no `filter` ([`CE4006`](../error-catalog.md#ce4006) at the call). `fold` clones
+    its `init` once, so the type of `init` needs `Clone` too. For a container element (`T[]`, `List@(T)`, `Own@(T)`), give it a function
     reference, because a lambda parameter cannot be an owning container ([`CE2094`](../error-catalog.md#ce2094),
     chapter 18). A `string` lambda parameter is legal.
 

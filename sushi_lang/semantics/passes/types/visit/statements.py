@@ -11,11 +11,12 @@ if TYPE_CHECKING:
 from sushi_lang.semantics.passes.types.expressions import validate_boolean_condition
 from sushi_lang.semantics.passes.types.matching import validate_match_statement
 from sushi_lang.semantics.passes.types.statements import (
-    validate_foreach_statement, validate_let_statement, validate_rebind_statement,
-    validate_return_statement)
+    validate_expand_statement, validate_foreach_statement, validate_let_statement,
+    validate_rebind_statement, validate_return_statement)
 from sushi_lang.semantics.visitors import RecursiveVisitor
 from sushi_lang.semantics.ast import (
-    Let, Rebind, ExprStmt, Return, Print, PrintLn, Assert, If, While, Foreach, Match, Break, Continue
+    Let, Rebind, ExprStmt, Return, Print, PrintLn, Assert, If, While, Foreach, Expand, Match,
+    Break, Continue
 )
 
 
@@ -46,10 +47,9 @@ class StatementValidator(RecursiveVisitor):
         """Validate foreach statement iterator type and body."""
         validate_foreach_statement(self.type_validator, node)
 
-    def visit_expand(self, node) -> None:
-        """Reject an Expand that survived to the typecheck pass (CE0119)."""
-        er.emit(self.type_validator.reporter, er.ERR.CE0119, node.loc,
-                message="expand(...) is only valid inside a function with a ...Ts type-pack parameter")
+    def visit_expand(self, node: Expand) -> None:
+        """Validate the body of an `expand` of a pack template's check copy."""
+        validate_expand_statement(self.type_validator, node)
 
     def visit_match(self, node: Match) -> None:
         """Validate match statement with exhaustiveness checking."""
@@ -123,7 +123,9 @@ class StatementValidator(RecursiveVisitor):
         if (is_string_convertible(shown) or shown == BuiltinType.BLANK
                 or names_no_type(self.type_validator, shown)):
             return
-        printable, reason = top_level_contract(self.type_validator, expr_type, DISPLAY)
+        refused: list = []
+        printable, reason = top_level_contract(self.type_validator, expr_type, DISPLAY,
+                                               refused)
         if printable:
             node.display_type = deref_type(expr_type)
             return
@@ -131,7 +133,8 @@ class StatementValidator(RecursiveVisitor):
                               type=display_type(expr_type))
         if reason is not None:
             report = report.note(f"no derived Display: {reason}")
-        report.emit()
+        from sushi_lang.semantics.generics.opaque import explain_unpromised
+        explain_unpromised(report, DISPLAY, refused).emit()
 
     def visit_assert(self, node: Assert) -> None:
         """Validate an assert: the condition is a bool (CE2005, CE2516), the message a

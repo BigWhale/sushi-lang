@@ -1,0 +1,14 @@
+# The value pack is not a value: a use outside `expand` is refused where the template
+# is written, also when no call exists (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE0144
+
+fn inner@(...Us)(...Us items) ~:
+    expand(_ in items):
+        println("Mostly Harmless")
+
+fn outer@(...Ts)(...Ts args) ~:
+    inner(args)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -1259,6 +1259,19 @@ fn main() i32:
 
 **How it works**: The compiler detects that you use `Pair@(i32, string)` and generates a specialized version of the struct for that type combination. There's no runtime overhead - the generated code is as efficient as if you'd written a separate struct manually.
 
+**A generic body is checked where it is written**: the compiler checks the body of a generic function, extension or perk implementation one time, also when nothing calls it. A type parameter is opaque there. The body can hold, move and pass on a `T`; a method, an operator, a hole or `.clone()` on it needs a constraint that promises it (`@(T: Eq)` for `==`, `Ord` for `<`, `Display` for `"{x}"`, `Hashable` for `.hash()`, `Clone` for `.clone()`, or a perk of your own). Arithmetic on a `T` is refused. A fault is reported at the template, and a type argument that does not satisfy a constraint is an error at the call ([CE4006](error-catalog.md#ce4006)). See [Generics](generics.md#a-template-is-checked-where-it-is-written) and [Checked generics](design/checked-generics.md).
+
+```sushi
+fn largest@(T: Ord)(nom T a, nom T b) T:
+    if (a > b):         # Ord promises '>'
+        return a
+    return b
+
+fn main() i32:
+    println("{largest(nom 3, nom 9)} {largest(nom 'Arthur', nom 'Ford')}")
+    return 0
+```
+
 **Generic Nesting**: Sushi fully supports nested generics like `Result@(Maybe@(T))`, `List@(Pair@(K, V))`, or `HashMap@(string, List@(i32))`. The type system correctly handles arbitrarily deep nesting.
 
 ### Extension Methods
@@ -1409,14 +1422,14 @@ both ends.
 solved from the arguments at each call:
 
 ```sushi
-extend i32 pick@(U)(U a, U b) U:
+extend i32 pick@(U)(nom U a, nom U b) U:
     if (self > 0):
         return a
     return b
 
 fn main() i32:
     let i32 plus = 1
-    println("{plus.pick(7, 9)}")     # U = i32, from the arguments
+    println("{plus.pick(nom 7, nom 9)}")     # U = i32, from the arguments
     return 0
 ```
 
@@ -1429,17 +1442,32 @@ solvable from the arguments — a bare-param lambda cannot be ([CE2063](error-ca
 struct Box@(T):
     T value
 
-extend Box@(T) unwrap() T:
-    return self.value
+extend Box@(T) unwrap(nom self) T:
+    return nom self.value   # a T moves, so the method takes the box: nom self
 
 fn main() i32:
     let Box@(i32) b = Box(42)
-    let i32 value = b.unwrap()  # Uses generic extension
+    let i32 value = b.unwrap()  # Uses generic extension; b is spent
     println("Unwrapped: {value}")
     return 0
 ```
 
 Extension methods can be generic over generic types, user-defined and built-in alike: the type parameter (`T`) is declared on the receiver type (`Box@(T)`, `List@(T)`), and the compiler instantiates the method for each concrete type used in your program.
+
+**Bounds in the target**: a generic extension inherits every bound that its type declares (on `struct Keyed@(K: Hashable)`, the body of `extend Keyed@(K)` can call `.hash()` on a `K`; `extend HashMap@(K, V)` gets `K: Hashable + Eq`). The target can ADD a bound: `extend Box@(T: Display) describe()`, or `extend (T: Clone)[] second()` for an array target. A receiver whose type argument does not satisfy the added bound is [CE4006](error-catalog.md#ce4006) at the call. A bound is legal only at the top level of an `extend` target ([CE6110](error-catalog.md#ce6110) elsewhere), and a bound on a name that is a type is [CE2124](error-catalog.md#ce2124).
+
+```sushi
+struct Box@(T):
+    T value
+
+extend Box@(T: Display) describe() string:
+    return "Box holding {self.value}"
+
+fn main() i32:
+    let Box@(i32) b = Box(42)
+    println(b.describe())
+    return 0
+```
 
 **A concrete type argument in the target is a constraint.** `extend Box@(i32)` extends `Box@(i32)` and nothing else, so one method name can serve several instantiations with a body written for each:
 

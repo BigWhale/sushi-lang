@@ -1,0 +1,19 @@
+# `.clone()` of a value that holds a type parameter needs `Clone` on the parameter
+# (#1070, R5): the value of `T`, a `List@(T)` and a user `Box@(T)` alike.
+# EXPECT_ERROR_CODES_EXACT: CE4018, CE4018, CE4018
+
+struct Box@(T):
+    T item
+
+fn one@(T)(T x) T:
+    return x.clone()
+
+fn many@(T)(List@(T) xs) List@(T):
+    return xs.clone()
+
+fn boxed@(T)(Box@(T) b) Box@(T):
+    return b.clone()
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

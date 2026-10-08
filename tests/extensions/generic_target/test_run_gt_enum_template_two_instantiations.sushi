@@ -13,7 +13,7 @@ extend Wrap@(T) present() bool:
         Wrap.Full(_) -> return true
         Wrap.Empty -> return false
 
-extend Wrap@(T) got(T fallback) T:
+extend Wrap@(T: Clone) got(T fallback) T:
     match self:
         Wrap.Full(v) -> return v.clone()
         Wrap.Empty -> return fallback.clone()

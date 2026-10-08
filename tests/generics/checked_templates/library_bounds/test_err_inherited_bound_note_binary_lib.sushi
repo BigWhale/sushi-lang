@@ -1,0 +1,15 @@
+# A bound that a template inherits from a generic type of a binary library is written
+# in the source slice of the type. The note at the bound names the slice and renders
+# its line (#1070).
+# BUILD_LIB_BINARY: bound_box_bin.sushi
+# EXPECT_ERROR_CODES_EXACT: CE4015
+# EXPECT_STDERR_CONTAINS: "<template:bound_box_bin:Crate>:1:25"
+# EXPECT_STDERR_CONTAINS: "| public struct Crate@(T: Named):"
+use <lib/bound_box_bin>
+
+extend Crate@(T: Titled) label() i32:
+    return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

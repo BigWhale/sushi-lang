@@ -21,6 +21,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from . import TypeValidator
+    from sushi_lang.semantics.ast import Expand
 
 
 def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
@@ -259,12 +260,23 @@ def _validate_channel_return(validator: 'TypeValidator', value, channel) -> None
     because nothing wraps a bare value (#848).
     """
     from .propagation import propagate_types_to_value
-    from .result_validation import validate_result_pattern
+    from .result_validation import spells_a_result, validate_result_pattern
     propagate_types_to_value(validator, value, channel)
     validator.validate_expression(value)
-    if not validate_result_pattern(validator, value, channel):
-        er.emit_with(validator.reporter, er.ERR.CE2030, value.loc) \
-            .help("wrap return value: return Result.Ok(value)").emit()
+    if spells_a_result(value):
+        validate_result_pattern(validator, value, channel)
+    elif not validator.in_template_copy:
+        reject_unspelled_result(validator, value)
+
+
+def reject_unspelled_result(validator: 'TypeValidator', value) -> None:
+    """CE2030: a `return` in a channel body spells no `Result` constructor.
+
+    Two callers, one decision (`spells_a_result`): a body as it is validated, and a
+    template body as it is written (#1070).
+    """
+    er.emit_with(validator.reporter, er.ERR.CE2030, value.loc) \
+        .help("wrap return value: return Result.Ok(value)").emit()
 
 
 def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
@@ -395,6 +407,13 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
         # storage and its walk needs no call at all.
         element_type = resolve_protocol_iterator(validator, stmt, iterable_type)
         if element_type is None:
+            # A `next()` that a target bound refuses for this type is that fault, and
+            # not a type with no `next()` (#1070): one fault, one diagnostic.
+            from sushi_lang.semantics.passes.types.calls.methods import (
+                RESOLUTION_REPORTED, _answer_from_template)
+            if _answer_from_template(validator, iterable_type, "next", stmt.iterable.loc,
+                                     report=True) is RESOLUTION_REPORTED:
+                return
             er.emit(validator.reporter, er.ERR.CE2033, stmt.iterable.loc,
                     got=display_type(iterable_type))
             return
@@ -454,28 +473,48 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
                     stmt.item_borrow_span or stmt.loc)
             return
 
-    # The item binding lives for the LOOP and no longer (#341), so whatever it shadows is
-    # saved and restored. Without that, an outer local kept the ITEM's type.
-    _MISSING = object()
-    previous = validator.variable_types.get(stmt.item_name, _MISSING)
+    item_type = stmt.item_type
     if stmt.item_borrow is not None:
         # The binding's registered type is the REFERENCE, so every consumer that asks
         # "is this name a borrow?" (the borrow pass's rules, backend deref machinery) gets the
         # truthful answer; expression inference auto-derefs a reference-typed name.
         from sushi_lang.semantics.param_modes import borrow_mode
         from sushi_lang.semantics.typesys import ReferenceType
-        validator.variable_types[stmt.item_name] = ReferenceType(
-            stmt.item_type, borrow_mode(stmt.item_borrow))
-    else:
-        validator.variable_types[stmt.item_name] = stmt.item_type
+        item_type = ReferenceType(stmt.item_type, borrow_mode(stmt.item_borrow))
+    _validate_bound_body(validator, stmt.item_name, item_type, stmt.body)
 
+
+def _validate_bound_body(validator: 'TypeValidator', name: str, ty: 'Optional[Type]',
+                         body) -> None:
+    """Validate a loop body with its binder bound to `ty`.
+
+    The binding lives for the body and no longer (#341), so whatever it shadows is saved
+    and restored. Without that, an outer local kept the binder's type.
+    """
+    saved = ({name: validator.variable_types[name]}
+             if name in validator.variable_types else {})
+    validator.variable_types[name] = ty
     try:
-        validator._validate_block(stmt.body)
+        validator._validate_block(body)
     finally:
-        if previous is _MISSING:
-            validator.variable_types.pop(stmt.item_name, None)
-        else:
-            validator.variable_types[stmt.item_name] = previous
+        validator.variable_types.pop(name, None)
+        validator.variable_types.update(saved)
+
+
+def validate_expand_statement(validator: 'TypeValidator', stmt: 'Expand') -> None:
+    """The body of an `expand`, checked once, with the binder an element type (#1070).
+
+    Only the check copy of a pack template holds an `expand` here: the collect pass
+    refused every misplaced one, and a copy holds the unrolled body. The iterable is the
+    value pack, which is not a value (CE0144), so it is not checked as an expression.
+    """
+    elements = validator.pack_elements
+    if elements is None:
+        er.raise_internal_error(
+            "CE0015", message="an `expand` reached the typecheck pass outside a "
+                              "template check")
+        return
+    _validate_bound_body(validator, stmt.var, elements.element_of(stmt), stmt.body)
 
 
 # One counter for the whole process, for the same reason the AST builder keeps one: the

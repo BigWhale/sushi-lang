@@ -10,6 +10,7 @@ from sushi_lang.semantics.ast import (
     Break,
     Continue,
     DotCall,
+    Expand,
     Expr,
     ExprStmt,
     Foreach,
@@ -55,6 +56,7 @@ from .consume import (
     source_provenance,
 )
 from .expressions import check_expr, reject_a_use_after_the_change
+from sushi_lang.semantics.ast_walk import ends_unrolled_run
 from .flow import (
     FlowFacts,
     LoopFlow,
@@ -73,11 +75,17 @@ if TYPE_CHECKING:
 
 
 def check_block(checker: 'BorrowChecker', block: Block) -> None:
-    """Check a block, releasing the `let`-borrows it opened on the way out."""
+    """Check a block, releasing the `let`-borrows it opened on the way out.
+
+    The walk stops after an unrolled element statement that ends every path
+    (`ends_unrolled_run`): no path reaches the rest of the block.
+    """
     checker._scope_binding_borrows.append([])
     try:
         for stmt in block.statements:
             check_stmt(checker, stmt)
+            if ends_unrolled_run(stmt):
+                break
     finally:
         for owner, binding in checker._scope_binding_borrows.pop():
             release_binding_borrow(checker.borrow_state.get(owner), binding)
@@ -118,6 +126,8 @@ def check_stmt(checker: 'BorrowChecker', stmt: Stmt) -> None:
             check_loop_body(checker, stmt.body)
         case Foreach():
             _check_foreach(checker, stmt)
+        case Expand():
+            _check_expand(checker, stmt)
         case Match():
             _check_match(checker, stmt)
         case Break():
@@ -449,9 +459,33 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
             emit_change_under_iterator(checker, change, stmt.iterable, stmt.loc)
 
 
+def _check_expand(checker: 'BorrowChecker', stmt: Expand) -> None:
+    """An `expand` body of a check copy, checked once for every pack length (#1070, R6).
+
+    The body runs zero or more times, as a `foreach` body does, so a move of an outer
+    owned value in it is a move in a loop. A `break` or a `continue` in it goes to the
+    enclosing loop. The binder is one element of the value pack, a borrow of the
+    caller's value, as each copy declares the element parameter (a value pack has no
+    `nom` form). Only a check copy holds an
+    `expand` with an element type. A written template that no check copy covers was
+    checked at its own build, and its `expand` body is not read here.
+    """
+    element_of = checker.pack_element_of
+    if element_of is None:
+        return
+    state = BorrowState(name=stmt.var, var_type=element_of(stmt),
+                        declared_at_span=stmt.var_span or stmt.loc,
+                        declared_branch_depth=checker.branch_depth + 1)
+    state.is_borrow_param = True
+    with BindingScope(checker) as scope:
+        scope.register(state)
+        check_loop_body(checker, stmt.body, per_iteration=frozenset({stmt.var}),
+                        exits_leave=True)
+
+
 def check_loop_body(checker: 'BorrowChecker', body: Block,
                     per_iteration: frozenset[str] = frozenset(),
-                    view: Optional[str] = None) -> LoopFlow:
+                    view: Optional[str] = None, exits_leave: bool = False) -> LoopFlow:
     """Borrow-check a loop body to a fixed point so the back edge is honoured.
 
     `per_iteration` names the bindings the loop creates anew on every pass -- the item --
@@ -461,11 +495,17 @@ def check_loop_body(checker: 'BorrowChecker', body: Block,
     `view` is the binding that walks a container for the whole loop (a foreach
     iterator). When a move of that container reaches the back edge, the iterator reports
     it (CE2412), so the second round does not report that move again at a use (#995).
+
+    `exits_leave` is for an `expand` body (#1070, R6): it repeats once per element, but
+    it is no loop of its own, so a `break` or a `continue` in it goes to the ENCLOSING
+    loop. The reporting round hands those paths to the enclosing frame.
     """
+    enclosing = checker._loop_frames[-1] if exits_leave and checker._loop_frames else None
     entry = snapshot_flow(checker)
     prev_suppressed = checker.err.suppressed
     checker.err.suppressed = True
-    first_back, _first_breaks = _check_round(checker, body, per_iteration)
+    first_back, _first_breaks = _check_round(checker, body, per_iteration,
+                                             exits_leave=exits_leave)
     checker.err.suppressed = prev_suppressed
     fixed_point = entry if first_back is None else entry | first_back
     restore_flow(checker, fixed_point)
@@ -473,7 +513,8 @@ def check_loop_body(checker: 'BorrowChecker', body: Block,
     if reported is not None:
         reported.move_reported_by = view
     try:
-        back, breaks = _check_round(checker, body, per_iteration)
+        back, breaks = _check_round(checker, body, per_iteration,
+                                    exits_leave=exits_leave, enclosing=enclosing)
     finally:
         if reported is not None:
             reported.move_reported_by = None
@@ -499,12 +540,15 @@ def _move_reported_by_view(checker: 'BorrowChecker', view: Optional[str],
     return checker.borrow_state.get(owner)
 
 
-def _check_round(checker: 'BorrowChecker', body: Block, per_iteration: frozenset[str]
+def _check_round(checker: 'BorrowChecker', body: Block, per_iteration: frozenset[str],
+                 exits_leave: bool = False, enclosing: Optional[LoopFrame] = None
                  ) -> tuple[FlowFacts | None, FlowFacts | None]:
     """Check one round of a loop body: the paths to the back edge, the `break` paths.
 
     Each is None when no path of that kind exists. `FlowFacts.join` of no path is not an
-    identity, so a caller joins a None as nothing.
+    identity, so a caller joins a None as nothing. With `exits_leave` the `break` and
+    `continue` paths belong to the enclosing loop: they go to `enclosing` (none in a
+    discovery round), and the round itself has only the path to its end.
     """
     frame = LoopFrame()
     checker._loop_frames.append(frame)
@@ -513,6 +557,11 @@ def _check_round(checker: 'BorrowChecker', body: Block, per_iteration: frozenset
             check_block(checker, body)
     finally:
         checker._loop_frames.pop()
+    if exits_leave:
+        if enclosing is not None:
+            enclosing.breaks.extend(p.without(per_iteration) for p in frame.breaks)
+            enclosing.continues.extend(p.without(per_iteration) for p in frame.continues)
+        frame = LoopFrame()
     back = list(frame.continues)
     if not terminates(body, leaves_round=True):
         back.append(snapshot_flow(checker))

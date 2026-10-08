@@ -14,7 +14,7 @@ kind the walk misses nor miss a kind the walk enters (#718).
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Callable, Iterator, Optional, Set, cast
+from typing import Callable, Iterator, Optional, Set, Union, cast
 
 from sushi_lang.semantics.typesys import Type, UnknownType
 
@@ -149,7 +149,7 @@ def walk_named_types(
     inline_only: bool = False,
     stop: Optional[Callable[[Type], bool]] = None,
     resolve: Optional[Callable[[Type], Optional[Type]]] = None,
-    struct_type_args: bool = False,
+    struct_type_args: Union[bool, Callable[[Type], bool]] = False,
 ) -> Iterator[Type]:
     """Every type reachable from `ty`, `ty` itself first.
 
@@ -175,7 +175,8 @@ def walk_named_types(
     is entered through its type arguments.
 
     `struct_type_args=True` also enters a struct's `generic_args`. A container keeps its
-    element type there, because its fields are raw pointers and a placeholder.
+    element type there, because its fields are raw pointers and a placeholder. A
+    predicate in its place enters the arguments of the structs it answers True for.
     """
     if ty is None:
         return
@@ -215,7 +216,9 @@ def walk_named_types(
             yield from below(held)
     elif kind in DECLARATION_KINDS:
         if through_declarations:
-            if struct_type_args and kind == "StructType":
+            enters_args = (struct_type_args(ty) if callable(struct_type_args)
+                           else struct_type_args)
+            if enters_args and kind == "StructType":
                 for held in getattr(ty, "generic_args", None) or ():
                     yield from below(held)
             for held in _declared_types(ty):

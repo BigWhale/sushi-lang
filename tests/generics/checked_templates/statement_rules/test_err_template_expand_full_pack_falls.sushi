@@ -1,0 +1,11 @@
+# The rule is decided on the template, not on the pack of a call: a call with two
+# elements does not save a template whose only `return` is in its `expand`.
+# EXPECT_ERROR_CODES_EXACT: CE0107
+
+fn first@(...Ts: Display)(...Ts args) string:
+    expand(a in args):
+        return "{a}"
+
+fn main() i32:
+    println(first(1, 2))
+    return 0

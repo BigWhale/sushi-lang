@@ -1,5 +1,7 @@
 """Shared utilities for type validation."""
 from __future__ import annotations
+
+import functools
 from typing import TYPE_CHECKING, AbstractSet, Callable, List, Optional
 
 from sushi_lang.semantics.type_predicates import is_instance_of
@@ -33,7 +35,65 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
     _check_type_names(validator, type_obj, span)
     reject_unusable_hashmap_keys(validator, type_obj, span)
     reject_non_error_channels(validator, type_obj, span)
+    reject_unpromised_arguments(validator, type_obj, span)
     return names_no_type(validator, type_obj)
+
+
+def _written_instances(type_obj: Type):
+    """Each generic instance a written type names, its type arguments' included.
+
+    The walk stops at a declaration: what an instance holds in its fields is its own
+    template's business, and is judged where that template is written.
+    """
+    from sushi_lang.semantics.type_walk import walk_named_types
+    for held in walk_named_types(type_obj, through_declarations=False):
+        if isinstance(held, (StructType, EnumType)) and held.generic_args:
+            yield held
+            for arg in held.generic_args:
+                yield from _written_instances(arg)
+
+
+def call_constraint_check(validator: 'TypeValidator'):
+    """The analyzer's constraint check of one site (`tables.check_call_constraints`).
+
+    A refusal goes to the reporter of the validator that asks, which is the reporter of
+    the unit that holds the site.
+    """
+    check = validator.tables.check_call_constraints
+    if check is None:
+        raise er.InternalCompilerError(
+            "CE0015", message="the analyzer set no constraint check for a call site")
+    return functools.partial(check, reporter=validator.reporter)
+
+
+def reject_unpromised_arguments(validator: 'TypeValidator', type_obj: Optional[Type],
+                                span: Optional[Span]) -> None:
+    """CE4006 for a generic instance over a type parameter that breaks its constraints.
+
+    In a template check (#1070) a written type, and the instance a constructor infers,
+    can name `Box@(T)` for a `struct Box@(U: Hashable)`: the argument `T` must promise
+    `Hashable`. Each instance over an opaque parameter is judged by the one constraint
+    check, keyed by the instance, so a template that writes `Box@(T)` three times hears
+    one CE4006. A concrete instance was judged by the monomorphize stage.
+    """
+    if not validator.in_template_check or type_obj is None:
+        return
+    from sushi_lang.semantics.generics.opaque import holds_opaque
+
+    for held in _written_instances(type_obj):
+        args = held.generic_args or ()
+        if not any(holds_opaque(arg) for arg in args):
+            continue
+        base = held.generic_base
+        generic = (validator.generic_struct_table.by_name.get(base)
+                   or validator.generic_enum_table.by_name.get(base))
+        if generic is None:
+            continue
+        kind = "struct" if base in validator.generic_struct_table.by_name else "enum"
+        template_file = getattr(validator.tables, f"generic_{kind}s").files.get(base)
+        call_constraint_check(validator)(
+            generic.type_params, tuple(args), held.name, span,
+            validator.reporter.filename, template_file, True)
 
 
 def reject_non_error_channels(validator: 'TypeValidator', type_obj: Optional[Type],
@@ -118,30 +178,8 @@ def reject_unusable_hashmap_keys(validator: 'TypeValidator', type_obj: Optional[
 
 def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span: Optional[Span]) -> None:
     """Validate that every type name in a written type is known and may be named here."""
-    if type_obj is None:
+    if type_obj is None or _answers_its_name(validator, type_obj, span):
         return
-
-    # A name written behind an alias answers to the namespace that holds it before it
-    # answers to anything else (`docs/design/unit-namespaces.md` section 5). What
-    # survives carries the bare name and every rule below reads it unchanged.
-    from .qualified import reject_qualified_type
-    if reject_qualified_type(validator, type_obj, span):
-        return
-
-    # A name this unit did not import is not a type here (section 6.1). Checked once,
-    # for the two shapes a written type name takes, and never for a QUALIFIED one: the
-    # namespace seam above has already said where that name may be written.
-    from .visibility import reject_out_of_scope_type, type_name_is_contested
-    written = getattr(type_obj, "name", None) or getattr(type_obj, "base_name", None)
-    if getattr(type_obj, "namespace", None) is None and isinstance(written, str):
-        # A type name this unit declared and lost (#921): the declaration's CE0004 /
-        # CE0006 / CE3011 is the one fault. The type arguments are still the unit's own.
-        if type_name_is_contested(validator, written):
-            for type_arg in getattr(type_obj, "type_args", None) or ():
-                _check_type_names(validator, type_arg, span)
-            return
-        if reject_out_of_scope_type(validator, written, span):
-            return
 
     from sushi_lang.semantics.generics.types import GenericTypeRef
     if isinstance(type_obj, GenericTypeRef):
@@ -246,6 +284,40 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
             _check_type_names(validator, type_obj.element_type, span)
 
 
+def _answers_its_name(validator: 'TypeValidator', type_obj: Type,
+                      span: Optional[Span]) -> bool:
+    """The rules of where a written NAME may stand; True when nothing more is to check.
+
+    The type parameter of the template under check is no written name (#1070).
+    """
+    from sushi_lang.semantics.generics.types import TypeParameter
+    if isinstance(type_obj, TypeParameter) and type_obj.is_opaque:
+        return True
+
+    # A name written behind an alias answers to the namespace that holds it before it
+    # answers to anything else (`docs/design/unit-namespaces.md` section 5). What
+    # survives carries the bare name and every rule below reads it unchanged.
+    from .qualified import reject_qualified_type
+    if reject_qualified_type(validator, type_obj, span):
+        return True
+
+    # A name this unit did not import is not a type here (section 6.1). Checked once,
+    # for the two shapes a written type name takes, and never for a QUALIFIED one: the
+    # namespace seam above has already said where that name may be written.
+    from .visibility import reject_out_of_scope_type, type_name_is_contested
+    written = getattr(type_obj, "name", None) or getattr(type_obj, "base_name", None)
+    if getattr(type_obj, "namespace", None) is None and isinstance(written, str):
+        # A type name this unit declared and lost (#921): the declaration's CE0004 /
+        # CE0006 / CE3011 is the one fault. The type arguments are still the unit's own.
+        if type_name_is_contested(validator, written):
+            for type_arg in getattr(type_obj, "type_args", None) or ():
+                _check_type_names(validator, type_arg, span)
+            return True
+        if reject_out_of_scope_type(validator, written, span):
+            return True
+    return False
+
+
 def reject_unknown_template_name(validator: 'TypeValidator', type_obj: Type,
                                  span: Optional[Span], known: AbstractSet[str]) -> bool:
     """CE2001 for one name in a TEMPLATE signature that names no type here (#859).
@@ -339,6 +411,30 @@ def validate_constant_array_index(validator: 'TypeValidator', expr: 'Expr',
     elif index_value >= array_size:
         er.emit(validator.reporter, er.ERR.CE2012, expr.loc, index=index_value,
                 size=array_size)
+
+
+def intern_signature(validator: 'TypeValidator', *types) -> None:
+    """Intern every instantiation a call-site substituted signature names (risk 1).
+
+    Two callers: a method answered from a template (`calls/methods.py`), and a generic
+    function call in a template check (#1070), which names an instance over an opaque
+    parameter that the overlay interner builds.
+
+    The call site is the first place that names the element type of a `T[]` template
+    and the method type arguments of a method-generic one, so a `List@(T)` in the
+    signature can name an instance nothing else in the program names. It is interned
+    NOW, so the call's answer is a concrete type and not a `GenericTypeRef` (#1143).
+
+    The reader of what a call yields asks again: a `T[]` signature enters the extension
+    table at its first call, and that call can be an inference of the `instantiate`
+    pass, which runs before the interner exists.
+    """
+    interner = getattr(validator.tables, "intern_generic_ref", None)
+    if interner is None:
+        return
+    for ty in types:
+        if ty is not None:
+            interner(ty)
 
 
 def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Optional[Type]:
@@ -446,7 +542,10 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
             validator.variable_types[param.name] = resolve_declared_type(validator, param.ty)
             continue
 
-        if isinstance(param.ty, (BuiltinType, StructType, EnumType, ForeignPtrType)):
+        from sushi_lang.semantics.generics.types import TypeParameter
+        if isinstance(param.ty, (BuiltinType, StructType, EnumType, ForeignPtrType,
+                                 TypeParameter)):
+            # A type parameter here is the opaque one of a template check (#1070).
             validator.variable_types[param.name] = param.ty
         elif isinstance(param.ty, UnknownType):
             resolved_type = resolve_declared_type(validator, param.ty)
@@ -463,8 +562,10 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
                     validator.variable_types[param.name] = resolved_type
                     param.ty = resolved_type  # Update AST node for backend
 
+                    # A check copy writes no signature of the program (#1070).
                     func_sig = (validator.func_sig(validator.current_function.name)
-                                if validator.current_function else None)
+                                if validator.current_function
+                                and not validator.in_template_check else None)
                     if func_sig is not None:
                         for sig_param in func_sig.params:
                             if sig_param.name == param.name:

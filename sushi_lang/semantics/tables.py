@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Callable, Optional
 
 from sushi_lang.semantics.conversions import ConversionTable
 from sushi_lang.semantics.derived_methods import DerivedMethodTable
@@ -72,23 +73,60 @@ class SymbolTables:
     # The analyzer's late interner (risk 1): the typecheck pass hands it a type whose
     # generic instantiations may not be interned yet. None outside a full analysis.
     intern_generic_ref: object = None
+    # The analyzer's constraint check for the type arguments of one site, reached from
+    # the typecheck pass: a method-level type argument (#1191), and in a template check a
+    # generic call, a written type and a constructor (#1070). The free-function check.
+    # None outside a full analysis.
+    check_call_constraints: Optional[Callable[..., bool]] = None
     # The analyzer's late function request: the typecheck pass hands it the
     # (declaring unit, name, type arguments) of a generic call that has no instance,
     # because the early collection did not see the call (#1155). The analyzer cuts the
     # copy at once and checks its body after the per-unit loop. None outside the
     # per-unit passes.
     request_function_instance: object = None
+    # The templates whose check reported an error (#1070). The reporter mutes every copy
+    # of one: the template said each fault one time, at its own spans.
+    refused_templates: set = field(default_factory=set)
+    # Every template whose check ran in this build (#1070). A copy of one that the check
+    # did not refuse reports only the per-instance remainder (R7, R8).
+    checked_templates: set = field(default_factory=set)
+    # The sites of the warnings that a template check reported: a copy drops a warning
+    # at one of them as a repeat, and keeps every other warning (R7).
+    template_warnings: set = field(default_factory=set)
+    # "Does this type satisfy this perk?" over these tables, for a target bound (#1070):
+    # `ConstraintValidator.holds_bound` of a validator that emits nothing. Built by
+    # `__post_init__`, so an overlay gets its own.
+    holds_bound: Callable[..., bool] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         from sushi_lang.semantics.generics.contract_walk import perk_override_of
         from sushi_lang.semantics.generics.hashing import hash_override_of
         from sushi_lang.semantics.passes.collect.perks import PerkCollector
+        self.perk_impls.perks = self.perks
+        self.perk_impls.templates = self.generic_perk_impls
+        # A template's target bound is answered over THESE tables (#1070): an overlay runs
+        # this again, so its predicate reads the overlay and lands only in overlay objects
+        # (its derived methods, its perk-implementation copy).
+        holds = self.bound_validator().holds_bound
+        self.holds_bound = holds
+        self.perk_impls.holds_bound = holds
         derived = self.enums.derived
-        derived.hash_override = hash_override_of(self.perk_impls, self.generic_perk_impls)
+        derived.hash_override = hash_override_of(self.perk_impls, self.generic_perk_impls,
+                                                 holds)
         for perk in (PerkCollector.EQ_PERK, PerkCollector.ORD_PERK,
                      PerkCollector.DISPLAY_PERK):
             derived.overrides[perk] = perk_override_of(
-                perk, self.perk_impls, self.generic_perk_impls)
+                perk, self.perk_impls, self.generic_perk_impls, holds)
+
+    def bound_validator(self):
+        """A constraint validator over these tables that emits nothing: `satisfies` and
+        `holds_bound` alone are read from it."""
+        from sushi_lang.internals.report import Reporter
+        from sushi_lang.semantics.generics.constraints import ConstraintValidator
+        return ConstraintValidator(
+            perk_table=self.perks, perk_impl_table=self.perk_impls, reporter=Reporter(),
+            generic_perk_impls=self.generic_perk_impls, struct_table=self.structs,
+            enum_table=self.enums)
 
     @property
     def derived_methods(self) -> DerivedMethodTable:

@@ -1,0 +1,17 @@
+# The target of an `extend` can put a bound on its type parameter, in the `@(...)`
+# form and in the array form `(T: Clone)[]` (#1070).
+# EXPECT_STDOUT_EXACT: "1 1\n"
+# EXPECT_NO_LEAKS: true
+
+extend List@(T: Clone) count2() i32:
+    return self.len()
+
+extend (T: Clone)[] count3() i32:
+    return self.len()
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(7)
+    let i32[] ys = from([9])
+    println("{xs.count2()} {ys.count3()}")
+    return 0

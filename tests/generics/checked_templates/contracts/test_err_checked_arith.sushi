@@ -1,0 +1,13 @@
+# A type parameter has no arithmetic (#1070, R2), whatever its constraints: `+` and the
+# unary minus are refused on `T` with `Ord`.
+# EXPECT_ERROR_CODES_EXACT: CE2518, CE2518
+
+fn double@(T: Ord)(T x) T:
+    return x + x
+
+fn negate@(T: Ord)(T x) T:
+    return -x
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -1,0 +1,17 @@
+# A pack element that fails the constraint of a callee is named in the message as the
+# source writes it, `...Ts`, as the notes and the help name it (#1070, R6).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: "type ...Ts does not implement perk Hashable"
+
+fn code@(T: Hashable)(T v) u64:
+    return v.hash()
+
+fn all@(...Ts: Display)(...Ts args) u64:
+    let u64 n = 0
+    expand(a in args):
+        n := n + code(a)
+    return n
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

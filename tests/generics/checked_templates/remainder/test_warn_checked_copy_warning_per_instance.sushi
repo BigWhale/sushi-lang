@@ -1,0 +1,13 @@
+# A warning that only a copy can give is kept (#1070, R7): the template calls `g(v)`
+# for an opaque `T`, and only the copy for `Result@(i32, StdError)` drops a Result.
+# EXPECT_ERROR_CODES_EXACT: CW2001
+
+fn call@(T: Clone)(T v) i32:
+    let fn(T) -> T g = |T x| x.clone()
+    g(v)
+    return 1
+
+fn main() i32:
+    let Result@(i32, StdError) r = Result.Ok(3)
+    println(call(r))
+    return 0

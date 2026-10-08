@@ -1,0 +1,11 @@
+# A lambda parameter whose type owns for every type argument is refused at the
+# template (#1070, R7), even with no call of the template: a `List@(T)` owns for each `T`.
+# EXPECT_ERROR_CODES_EXACT: CE2094
+
+fn count@(T)(List@(T) xs) i32:
+    let fn(List@(T)) -> i32 f = |List@(T) y| y.len()
+    return f(xs)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -53,7 +53,7 @@ _add(ErrorMessage("CE0014", Severity.ERROR,
 
 _add(ErrorMessage("CE0015", Severity.ERROR,
     "AST invariant violated: {message}",
-    Category.INTERNAL, "AST structure constraint violated during code generation."))
+    Category.INTERNAL, "An AST invariant is violated: a semantic pass or the code generator found a structure that the compiler does not make. This is a fault in the compiler, not in the program."))
 
 _add(ErrorMessage("CE0016", Severity.ERROR,
     "scope stack underflow: attempted to pop from empty scope stack",
@@ -485,3 +485,24 @@ _add(ErrorMessage("CE0146", Severity.ERROR,
     "item type. Before #1143 the pass returned with no diagnostic, and the backend "
     "stopped with CE0015 and no location. Bind the iterable to a 'let' with a written "
     "type first, and please report the program."))
+
+_add(ErrorMessage("CE0148", Severity.ERROR,
+    "an opaque type parameter reached the program table: '{name}'",
+    Category.INTERNAL,
+    "The check of a generic template builds its instances over an opaque type "
+    "parameter in a scratch layer over the program tables (#1070). A program table must "
+    "never hold one: the backend has no layout for a type parameter. One scan at the end "
+    "of the analysis reads every struct and enum name. This is a fault in the compiler, "
+    "not in the program; please report the program."))
+
+_add(ErrorMessage("CE0149", Severity.ERROR,
+    "the check of the template '{template}' did not report a fault that a copy of it "
+    "reports: [{original}] {message}",
+    Category.INTERNAL,
+    "A generic template is checked one time, where it is written (#1070). Its copies "
+    "then report only what each instance decides: E3 for a type argument in an error "
+    "position (R8), and a lambda parameter that owns for this type argument (R7). Every "
+    "other rule ran on the template. A copy that reports another error has found a fault "
+    "that the template check did not find. This is a fault in the compiler. The text "
+    "holds the code and the message that the copy reported, so the user can still see "
+    "the fault."))

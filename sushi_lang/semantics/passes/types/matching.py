@@ -177,8 +177,9 @@ def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optiona
     if scrutinee_type is None:
         # A scrutinee with no type is refused by the check that found the fault. With no
         # error at all, the arms would go unchecked and the backend would guess (#1005).
-        # The reporter drops a repeat in an instance body, so the test is "any error".
-        if not validator.reporter.has_errors:
+        # The reporter drops a repeat in an instance body, and a refusal of a call site
+        # is reported at its first site only, so the test is "any error offered".
+        if not validator.reporter.has_offered_errors:
             raise_internal_error(
                 "CE0015", message="match scrutinee has no type and no diagnostic says why")
         return None

@@ -79,7 +79,8 @@ def intern_tuple(struct_table: Any, enum_table: Any, elements: Iterable[Type]) -
         generic_args=resolved,
     )
     if struct_table is None or any(
-            is_abstract_type(t, structs, enums) or names_an_unbuilt_instance(t, structs, enums)
+            is_abstract_type(t, structs, enums, opaque_bound=struct_table.admits_opaque)
+            or names_an_unbuilt_instance(t, structs, enums)
             for t in resolved):
         return interned
 

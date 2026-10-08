@@ -13,7 +13,7 @@ fn loud() string:
     println("built")
     return "never"
 
-fn same@(T)(T x, T y) ~:
+fn same@(T: Eq)(T x, T y) ~:
     assert(x == y, "the two values differ")
 
 extend i32 halve() i32:

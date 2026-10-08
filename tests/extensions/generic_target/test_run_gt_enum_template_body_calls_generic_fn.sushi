@@ -7,10 +7,10 @@ enum Wrap@(T):
     Full(T)
     Empty
 
-fn tag@(U)(U x) i32:
+fn tag@(U: Hashable)(U x) i32:
     return ((x.hash() as i32) * 0) + 7
 
-extend Wrap@(T) tagged() i32:
+extend Wrap@(T: Hashable) tagged() i32:
     return tag(self)
 
 fn run_test() i32:

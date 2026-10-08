@@ -280,7 +280,9 @@ def intern_wrapper_enum(
         return EnumType(name=name, variants=variants, generic_base=base,
                         generic_args=resolved)
 
-    if any(is_abstract_type(t, structs, enums) or names_an_unbuilt_instance(t, structs, enums)
+    opaque_bound = enum_table.admits_opaque
+    if any(is_abstract_type(t, structs, enums, opaque_bound=opaque_bound)
+           or names_an_unbuilt_instance(t, structs, enums)
            for t in resolved):
         return build()
 

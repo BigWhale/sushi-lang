@@ -12,7 +12,7 @@ struct Feed@(T):
     T[] items
     i32 at
 
-extend Feed@(T) next(poke self) Maybe@(Result@(T, Bad)):
+extend Feed@(T: Clone) next(poke self) Maybe@(Result@(T, Bad)):
     let i32 at = self.at
     self.at := self.at + 1
     match self.items.get(at):
@@ -22,7 +22,7 @@ extend Feed@(T) next(poke self) Maybe@(Result@(T, Bad)):
 fn feed_of@(T)(nom T[] items) Feed@(T):
     return Feed(items, 0)
 
-fn count@(T)(nom T[] items) i32:
+fn count@(T: Clone)(nom T[] items) i32:
     let i32 n = 0
     foreach(_ in feed_of(nom items)):
         n := n + 1

@@ -84,11 +84,15 @@ def is_error_type(ty: object) -> bool:
 
 def is_abstract_type(ty: Type, struct_table: Optional[dict] = None,
                      enum_table: Optional[dict] = None,
-                     _visited: Optional[Set[str]] = None) -> bool:
+                     _visited: Optional[Set[str]] = None, *,
+                     opaque_bound: bool = False) -> bool:
     """Whether a type still mentions an unbound type parameter.
 
     Not built on `walk_named_types`: an `UnknownType` absent from the tables is ABSTRACT
     here and a leaf there, and this walk also reads `generic_args`.
+
+    With `opaque_bound`, an OPAQUE type parameter is a bound type (#1070): the type a
+    template check reads its body with. Only the overlay tables of that check ask so.
     """
     from sushi_lang.semantics.typesys import (
         ArrayType, DynamicArrayType, ReferenceType, PointerType,
@@ -102,10 +106,11 @@ def is_abstract_type(ty: Type, struct_table: Optional[dict] = None,
         _visited = set()
 
     def recurse(inner: Type) -> bool:
-        return is_abstract_type(inner, struct_table, enum_table, _visited)
+        return is_abstract_type(inner, struct_table, enum_table, _visited,
+                                opaque_bound=opaque_bound)
 
     if isinstance(ty, TypeParameter):
-        return True
+        return not (opaque_bound and ty.is_opaque)
     if isinstance(ty, UnknownType):
         if struct_table is None and enum_table is None:
             return False

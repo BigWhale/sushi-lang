@@ -11,10 +11,10 @@ struct Pair@(T, U):
     T first
     U second
 
-fn get_first@(A, B)(peek Pair@(A, B) p) A:
+fn get_first@(A: Clone, B)(peek Pair@(A, B) p) A:
     return p.first.clone()
 
-fn get_second@(A, B)(peek Pair@(A, B) p) B:
+fn get_second@(A, B: Clone)(peek Pair@(A, B) p) B:
     return p.second.clone()
 
 fn run_test() i32:

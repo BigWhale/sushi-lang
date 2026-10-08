@@ -28,10 +28,11 @@ The dispatch is total over the type kinds, and
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Callable, Dict, Mapping, Optional
+from typing import TYPE_CHECKING, Callable, Dict, List, Mapping, Optional
 
 from sushi_lang.semantics.generics.contract_walk import Override, Walk, decide
-from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
+from sushi_lang.semantics.generics.types import (
+    GenericEnumType, GenericStructType, TypeParameter)
 from sushi_lang.semantics.type_predicates import is_instance_of, is_numeric_type
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ReferenceType, StructType, Type,
@@ -66,7 +67,7 @@ REFUSED_KINDS: Dict[str, str] = {
     "FunctionType": "a function value",
     "ReferenceType": "a reference",
     "IteratorType": "an iterator",
-    "TypeParameter": "an unsubstituted type parameter",
+    "TypeParameter": "a type parameter whose constraints do not promise it",
     "TypePack": "a type pack",
     "GenericTypeRef": "an uninstantiated generic type",
     "GenericStructType": "a generic struct (should be monomorphized first)",
@@ -96,14 +97,17 @@ _TOP_DISPLAY_NON_NUMERIC = frozenset({BuiltinType.BOOL, BuiltinType.STRING})
 
 def contract_of(ty: Type, contract: str, walk: Optional[Walk] = None, *,
                 resolve: Optional[Callable[[Type], Type]] = None,
-                overridden: Optional[Override] = None) -> tuple[bool, str]:
+                overridden: Optional[Override] = None,
+                refused: Optional[List[Type]] = None) -> tuple[bool, str]:
     """Can the derived `contract` read a value of `ty` where it is HELD?
 
     `overridden` is asked first: an implementation of the contract wins in every
     position and is terminal, so a type that has one is accepted whatever it holds.
+    `refused`, when given, receives each held type whose kind is refused.
     """
-    walk = walk if walk is not None else Walk(resolve=resolve, overridden=overridden,
-                                              cycle_answer=True)
+    walk = walk if walk is not None else Walk(
+        resolve=resolve, overridden=overridden, cycle_answer=True,
+        refused=refused if refused is not None else [])
     if walk.resolve is not None:
         ty = walk.resolve(ty)
 
@@ -116,6 +120,7 @@ def contract_of(ty: Type, contract: str, walk: Optional[Walk] = None, *,
     kind = type(ty).__name__
     refusal = REFUSED_KINDS.get(kind)
     if refusal is not None:
+        walk.refused.append(ty)
         return False, refusal
 
     if isinstance(ty, (ArrayType, DynamicArrayType)):
@@ -187,12 +192,14 @@ def is_contract_receiver(ty: Type) -> bool:
 
 def operand_contract(ty: Optional[Type], contract: str, *,
                      overridden: Optional[Override] = None,
-                     resolve: Optional[Callable[[Type], Type]] = None
+                     resolve: Optional[Callable[[Type], Type]] = None,
+                     refused: Optional[List[Type]] = None
                      ) -> tuple[bool, Optional[str]]:
     """The TOP-LEVEL rule: may a value of `ty` meet `==`, `<`, a hole or `println`?
 
     The answer carries the reason a derived contract cannot read the type, or None
     when there is nothing to add to the refusal (a kind the top level never takes).
+    `refused`, when given, receives the types that the rule refuses (`Walk.refused`).
     """
     if ty is None:
         return False, None
@@ -202,16 +209,25 @@ def operand_contract(ty: Optional[Type], contract: str, *,
         ty = resolve(ty)
     if isinstance(ty, BuiltinType):
         return _top_level_primitive(ty, contract), None
+    if isinstance(ty, TypeParameter):
+        # An opaque parameter meets the contract when a constraint promises it (#1070);
+        # the override reads that promise.
+        promised = overridden is not None and overridden(ty)
+        if not promised and refused is not None:
+            refused.append(ty)
+        return promised, None
     if not is_contract_receiver(ty):
         return False, None
     if contract == DISPLAY and is_instance_of(ty, "Maybe", "Result"):
         return False, None
-    return contract_of(ty, contract, resolve=resolve, overridden=overridden)
+    return contract_of(ty, contract, resolve=resolve, overridden=overridden,
+                       refused=refused)
 
 
 def printed_contract(ty: Optional[Type], *,
                      overridden: Optional[Override] = None,
-                     resolve: Optional[Callable[[Type], Type]] = None
+                     resolve: Optional[Callable[[Type], Type]] = None,
+                     refused: Optional[List[Type]] = None
                      ) -> tuple[bool, Optional[str]]:
     """The TOP-LEVEL rule of a hole and `print`/`println`: may a value of `ty` print?"""
     if ty is None:
@@ -222,8 +238,10 @@ def printed_contract(ty: Optional[Type], *,
         ty = resolve(ty)
     if (isinstance(ty, (ArrayType, DynamicArrayType))
             or is_instance_of(ty, "HashMap", *HELD_CONTAINERS)):
-        return contract_of(ty, DISPLAY, resolve=resolve, overridden=overridden)
-    return operand_contract(ty, DISPLAY, overridden=overridden, resolve=resolve)
+        return contract_of(ty, DISPLAY, resolve=resolve, overridden=overridden,
+                           refused=refused)
+    return operand_contract(ty, DISPLAY, overridden=overridden, resolve=resolve,
+                            refused=refused)
 
 
 def override_of(derived: 'DerivedMethodTable', contract: str) -> Optional[Override]:

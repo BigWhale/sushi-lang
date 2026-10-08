@@ -1,0 +1,32 @@
+# The predefined `Clone` perk is satisfied by every type that holds no resource: a
+# primitive, a string, a plain struct, an array, a List and a Maybe. This unit declares no
+# `perk Clone:` and writes no `extend ... with Clone`.
+# EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\ntrue\n3\n2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+struct Point:
+    i32 x
+    i32 y
+
+fn same@(T: Clone)(T value) T:
+    return value.clone()
+
+fn main() i32:
+    let i32 n = 42
+    println(same(n) == n)
+    let string s = "Mostly Harmless"
+    println(same(s) == s)
+    let Point p = Point(1, 2)
+    println(same(p) == p)
+    let Maybe@(i32) m = Maybe.Some(1)
+    println(same(m) == m)
+    let i32[] arr = from([1, 2, 3])
+    let i32[] copy = same(arr)
+    println(copy.len())
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    let List@(i32) ys = same(xs)
+    println(ys.len())
+    return 0

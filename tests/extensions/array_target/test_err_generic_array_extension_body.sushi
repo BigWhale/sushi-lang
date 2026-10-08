@@ -1,7 +1,8 @@
-# A generic array extension's body is validated per instantiation: the same body is
-# legal over i32 and a type error over string, and the call site is what instantiates.
-# EXPECT_ERROR_CODE: CE2002
-# EXPECT_STDERR_CONTAINS: "cannot assign string to i32"
+# A generic array extension's body is checked once, where it is written, with `T` opaque
+# (#1070): `let i32 n = self[0]` is a type error for every element type, so the template
+# reports it, and the instance at `string` does not report it again.
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "cannot assign T to i32"
 extend T[] first_as_i32() i32:
     let i32 n = self[0]
     return n

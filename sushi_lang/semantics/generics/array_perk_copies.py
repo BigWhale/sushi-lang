@@ -38,7 +38,8 @@ class ArrayPerkCopies:
         question needed.
         """
         from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
-        from sushi_lang.semantics.generics.extensions import monomorphize_perk_impl
+        from sushi_lang.semantics.generics.extensions import (
+            bounds_hold_for, monomorphize_perk_impl)
         from sushi_lang.semantics.passes.collect.perks import _get_type_name
 
         type_name = _get_type_name(array_type)
@@ -56,7 +57,8 @@ class ArrayPerkCopies:
             if (type_name, perk_name) in self._asked:
                 continue
             self._asked.add((type_name, perk_name))
-            if perk_impls.implements(type_name, perk_name):
+            if (perk_impls.implements(type_name, perk_name)
+                    or not bounds_hold_for(template, (array_type.base_type,), self.tables)):
                 continue
             copy = monomorphize_perk_impl(template, array_type, (array_type.base_type,),
                                           substitutor=self.substitutor)

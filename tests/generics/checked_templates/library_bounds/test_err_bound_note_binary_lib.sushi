@@ -1,0 +1,16 @@
+# A target bound of a template that a binary library ships is written in the source
+# slice of the template. The note at the bound renders the line of the slice, and its
+# location names the template with the source spelling of its type (#1070).
+# BUILD_LIB_BINARY: bounded_pair_bin.sushi
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: "<template:bounded_pair_bin:Pair@(T) show>:1:14"
+# EXPECT_STDERR_CONTAINS: "| extend Pair@(T: Display) show() string:"
+use <lib/bounded_pair_bin>
+
+struct Holder:
+    fn(i32) -> i32 f
+
+fn main() i32:
+    let Pair@(Holder) h = Pair(Holder(|i32 q| q), Holder(|i32 q| q))
+    println(h.show())
+    return 0

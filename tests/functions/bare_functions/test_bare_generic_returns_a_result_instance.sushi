@@ -9,8 +9,8 @@ fn half(i32 x) i32 | StdError:
 struct Box@(T):
     T v
 
-extend Box@(T) get() T:
-    return self.v
+extend Box@(T: Clone) get() T:
+    return self.v.clone()
 
 fn ident@(T)(nom T x) T:
     return x

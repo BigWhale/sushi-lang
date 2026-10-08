@@ -876,6 +876,8 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
 
 
 _REPORT_LIBRARY = """\
+use <collections/strings>
+
 ##: A colour. :##
 public enum Colour:
     ##: No payload. :##
@@ -931,10 +933,10 @@ public perk Named:
 Takes a value with two constraints.
 
 - Parameter x: The value.
-- Returns: Zero.
+- Returns: The length of its name.
 :##
 public fn both@(T: Hashable + Named)(T x) i32:
-    return 0
+    return x.name().len()
 
 ##:
 A blue colour.
@@ -983,7 +985,31 @@ Takes a value before a pack.
 - Returns: Two.
 :##
 public fn lead@(T, ...Ts: Display)(T first, ...Ts rest) i32:
+    first
     return 2
+
+##: A crate that holds one value. :##
+public struct Crate@(T):
+    ##: The value. :##
+    T value
+
+##:
+Tells the crate of a clonable value.
+
+- Returns: One.
+:##
+extend Crate@(T: Clone) clone_count() i32:
+    return 1
+
+##: A crate of a hashable value has a name. :##
+extend Crate@(T: Hashable) with Named:
+    ##:
+    The name.
+
+    - Returns: The name.
+    :##
+    fn name() string:
+        return "crate"
 """
 
 _REPORT_CONSUMER = """\
@@ -1011,8 +1037,9 @@ fn main() i32:
 # Whole lines the `--lib-info` report of `_REPORT_LIBRARY` must hold, in both halves (#966);
 # the fifth is a tuple, which neither half may print in its interned `$Tuple<...>` form, the
 # sixth and the seventh keep the `...` of a type pack (#1164), the eighth and the ninth
-# print the keyword `error` for a concrete and for a generic error type, and the last is
-# a conversion, which the consumer calls through `??`.
+# print the keyword `error` for a concrete and for a generic error type, the tenth is a
+# conversion, which the consumer calls through `??`, and the last two put a bound in a
+# target (#1070).
 REPORT_LINES = (
     "  fn both@(T: Hashable + Named)(T x) i32",
     "    Blue(string, i32)",
@@ -1024,6 +1051,8 @@ REPORT_LINES = (
     "  error ReportFault:",
     "  error ReportDecode@(T):",
     "  extend ReportFault as ReportWrap",
+    "  extend Crate@(T: Clone) clone_count() i32",
+    "  extend Crate@(T: Hashable) with Named:",
 )
 REPORT_KINDS = ("source", "hybrid", "binary")
 REPORT_CONSUMER_STDOUT = "blue 42\nmade 7\n4\n-1\nReportWrap.Held(ReportFault.Bad(3))\n"

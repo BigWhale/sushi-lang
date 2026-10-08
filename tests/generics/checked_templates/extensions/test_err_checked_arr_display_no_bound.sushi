@@ -1,0 +1,11 @@
+# An array template is checked where it is written (#1070): a hole needs `Display` on
+# the element.
+# EXPECT_ERROR_CODES_EXACT: CE2035
+
+extend T[] show_all() ~:
+    foreach(x in self.iter()):
+        println("{x}")
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

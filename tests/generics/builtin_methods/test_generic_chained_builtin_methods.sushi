@@ -7,13 +7,13 @@
 
 use <collections/strings>
 
-fn shout@(T)(T value) string:
+fn shout@(T: Display)(T value) string:
     return value.to_str().upper()
 
-fn measure@(T)(T value) i32:
+fn measure@(T: Display)(T value) i32:
     return value.to_str().len()
 
-fn describe@(T)(T value) string:
+fn describe@(T: Hashable)(T value) string:
     return value.hash().to_str()
 
 fn main() i32:

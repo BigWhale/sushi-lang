@@ -1,0 +1,24 @@
+# A perk template with a target bound gives its method only to the instances that
+# satisfy the bound; another instance is refused at the call (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T value
+
+struct Fnv:
+    fn(i32) -> i32 f
+
+extend Box@(T: Hashable) with Show:
+    fn show() string:
+        return "box"
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let Box@(Fnv) b = Box(Fnv(twice))
+    println(b.show())
+    return 0

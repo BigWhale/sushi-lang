@@ -8,7 +8,7 @@ fn make_maybe_some@(T)(nom T value) i32:
         Maybe.Some(_) -> return 0
         Maybe.None() -> return 1
 
-fn unwrap_or@(T)(Maybe@(T) maybe, nom T default_value) T:
+fn unwrap_or@(T: Clone)(Maybe@(T) maybe, nom T default_value) T:
     # Pattern match on generic enum
     match maybe:
         Maybe.Some(val) -> return val.clone()

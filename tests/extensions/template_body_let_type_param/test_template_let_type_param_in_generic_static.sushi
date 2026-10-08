@@ -3,16 +3,16 @@
 struct Box@(T):
     T v
 
-fn k@(T)(T x) i32:
+fn k@(T: Hashable)(T x) i32:
     return ((x.hash() as i32) * 0) + 7
 
-extend Box@(T) static of(T v) Box@(T):
+extend Box@(T: Hashable) static of(nom T v) Box@(T):
     let T y = v
     let i32 n = k(y)
     println(n)
     return Box(y)
 
 fn main() i32:
-    let Box@(i32) b = Box.of(3)
+    let Box@(i32) b = Box.of(nom 3)
     println(b.v)
     return 0

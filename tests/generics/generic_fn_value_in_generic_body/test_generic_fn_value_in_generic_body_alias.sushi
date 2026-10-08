@@ -6,7 +6,7 @@ use "helpers/libinner" as l
 fn apply_c(fn(i32) -> i32 f) i32:
     return f(4)
 
-fn inner@(U)(U u) i32:
+fn inner@(U: Display)(U u) i32:
     println(u)
     return apply_c(l.gen)
 

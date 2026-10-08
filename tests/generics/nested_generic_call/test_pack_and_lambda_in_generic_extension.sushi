@@ -15,8 +15,8 @@ struct Box@(T):
 extend Box@(T) counted() i32:
     return count(self.v, self.v, 1)
 
-extend Box@(T) applied() T:
-    return apply(|T y| y, self.v)
+extend Box@(T: Clone) applied() T:
+    return apply(|T y| y.clone(), self.v)
 
 fn main() i32:
     let Box@(i32) b = Box(9)

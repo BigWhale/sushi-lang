@@ -1,0 +1,9 @@
+# A hole `{x}` needs `Display` on a type parameter (#1070, R5).
+# EXPECT_ERROR_CODES_EXACT: CE2035
+
+fn label@(T)(T x) string:
+    return "value {x}"
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -4,7 +4,7 @@
 struct P:
     i32 x
 
-fn cnt@(T)(List@(T) xs, T d) i32:
+fn cnt@(T: Hashable)(List@(T) xs, T d) i32:
     return xs.len() + ((d.hash() * 0) as i32)
 
 fn main() i32:

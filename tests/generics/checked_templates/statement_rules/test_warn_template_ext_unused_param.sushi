@@ -1,0 +1,14 @@
+# A parameter that a generic-target extension template never reads is CW1001 at the
+# template, and the text names a parameter (#1070).
+# EXPECT_ERROR_CODES_EXACT: CW1001
+# EXPECT_STDERR_CONTAINS: :9:25: warning [CW1001]: unused parameter 'spare'.
+
+struct Box@(T):
+    T item
+
+extend Box@(T) size(i32 spare) i32:
+    return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

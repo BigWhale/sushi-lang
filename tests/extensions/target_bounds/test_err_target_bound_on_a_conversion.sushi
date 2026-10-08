@@ -1,0 +1,15 @@
+# The source of a conversion is no template target, so a bound there is refused
+# (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE6110
+
+error Box@(T):
+    Bad(T)
+
+error Other:
+    Failed
+
+extend Box@(T: Clone) as Other:
+    return Other.Failed
+
+fn main() i32:
+    return 0

@@ -1,0 +1,25 @@
+# A perk template with a target bound covers an instance that satisfies the bound:
+# through a method call, a constraint and a hole (#1070).
+# EXPECT_STDOUT_EXACT: "box box crate\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T value
+
+extend Box@(T: Hashable) with Show:
+    fn show() string:
+        return "box"
+
+extend Box@(T: Hashable) with Display:
+    fn to_str() string:
+        return "crate"
+
+fn describe@(X: Show)(X x) string:
+    return x.show()
+
+fn main() i32:
+    let Box@(i32) b = Box(42)
+    println("{b.show()} {describe(b)} {b}")
+    return 0

@@ -1,0 +1,22 @@
+# A generic function cannot cast its `nom` operand of an opaque type parameter with `as`.
+# The template is checked where it is written, with `E` opaque, and no constraint
+# promises a cast (#1070). The cast is refused, although one instance below would call the
+# declared conversion and the other would be an identity cast.
+# EXPECT_ERROR_CODES_EXACT: CE2014
+error TokenError:
+    Bad(string)
+
+error AppError:
+    Token(TokenError)
+    Note(string)
+
+extend TokenError as AppError:
+    return AppError.Token(self)
+
+fn wrap@(E)(nom E e) AppError:
+    return e as AppError
+
+fn main() i32:
+    println(wrap(nom TokenError.Bad("t {1}")))
+    println(wrap(nom AppError.Note("n {2}")))
+    return 0

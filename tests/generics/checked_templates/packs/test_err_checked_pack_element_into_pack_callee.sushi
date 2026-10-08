@@ -1,0 +1,21 @@
+# An element of a pack passes a constraint of another pack only when the constraints of
+# its own pack promise it: `...Ts: Render` does not promise `Show` (#1070, R6).
+# EXPECT_ERROR_CODES_EXACT: CE2090
+
+perk Render:
+    fn render() string
+
+perk Show:
+    fn show() string
+
+fn inner@(...Us: Show)(...Us items) ~:
+    expand(item in items):
+        println(item.show())
+
+fn outer@(...Ts: Render)(...Ts args) ~:
+    expand(a in args):
+        inner(a)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

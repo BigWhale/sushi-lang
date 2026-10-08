@@ -1,7 +1,7 @@
 """The typecheck pass: type validation and inference."""
 from __future__ import annotations
 from contextlib import contextmanager
-from typing import Dict, Iterator, Optional, Set, TYPE_CHECKING
+from typing import Callable, Dict, Iterator, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import Binding, NamespaceTable
@@ -10,6 +10,8 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.externals import ExternalSig
     from sushi_lang.semantics.passes.collect.functions import FuncSig
     from sushi_lang.semantics.passes.collect.constants import ConstSig
+    from sushi_lang.semantics.passes.types.templates import PackElements
+    from sushi_lang.semantics.template_scope import CheckCopy
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -42,12 +44,29 @@ class TypeValidator:
     # collection did not make (#1155). An early pass only reads, so its inferrer may not.
     requests_late_instances = True
 
+    # True only over the check copy of a template (`templates.TemplateValidator`, #1070).
+    in_template_check = False
+    # The element type of each `expand`, over the check copy of a pack template only.
+    pack_elements: Optional['PackElements'] = None
+
     def __init__(self, reporter: Reporter, tables: 'SymbolTables',
                  current_unit_name: Optional[str] = None,
                  monomorphized_functions: Optional[Dict[str, tuple]] = None,
                  in_library_unit: bool = False,
-                 namespaces: Optional['NamespaceTable'] = None) -> None:
+                 namespaces: Optional['NamespaceTable'] = None,
+                 checks_templates: bool = False,
+                 borrow_check_copy: Optional[Callable[['CheckCopy'], None]] = None) -> None:
         self.reporter = reporter
+        # Whether `run` checks each function template of the unit on a check copy
+        # (#1070): a unit of the program, and a bundled stdlib unit. A consumed library
+        # unit was checked by its own `--lib` build.
+        self.checks_templates = checks_templates
+        # The borrow pass over a check copy (#1070, R5). The analyzer gives it, because
+        # this pass does not import the borrow pass.
+        self.borrow_check_copy = borrow_check_copy
+        # The written templates that `run` checked on a check copy: the borrow pass
+        # reads each of them on its check copy, and not as written.
+        self.checked_template_ids: Set[int] = set()
         self.err = PassErrorReporter(reporter)
         self.tables = tables
         self.const_table = tables.constants
@@ -92,6 +111,9 @@ class TypeValidator:
         # The conversion whose body this is (`ExtendDef.declared_conversion`), or None.
         self.body_conversion: Optional["Conversion"] = None
         self.channel_result: Optional[Type] = None
+        # True while the body is a copy of a template (`ast_walk.is_template_copy`): the
+        # statement rules that need no type ran once on the written template (#1070).
+        self.in_template_copy: bool = False
         # Whose code is being validated. A source library's unit is compiled at the
         # consumer, and its bodies mention whatever the consumer's call substituted into
         # a template -- a private type of the consumer's included. The consumer must not
@@ -141,18 +163,36 @@ class TypeValidator:
         for const in program.constants:
             validate_constant(self, const)
 
+        # A template is checked one time, on a check copy, where it is written (#1070):
+        # a function template, an extension template and a perk template. The copy reads
+        # the statement rules too, with the stamps it gets.
+        from .templates import (
+            check_extension_template, check_function_template, check_perk_template)
+        checked = self.checked_template_ids
         for func in program.functions:
-            if hasattr(func, 'type_params') and func.type_params:
+            if func.type_params:
+                if self.checks_templates and check_function_template(self, func):
+                    checked.add(id(func))
                 continue
             self._validate_function(func)
-
-        for ext in program.extensions:
-            self._validate_extension_method(ext)
+        for template in program.generic_extensions:
+            if self.checks_templates and check_extension_template(self, template):
+                checked.add(id(template))
 
         from .perks import validate_template_header
         for impl in program.generic_perk_impls:
             self.reporter.leave_body()
             validate_template_header(self, impl)
+            if self.checks_templates and check_perk_template(self, impl):
+                checked.add(id(impl))
+
+        # A template the loops above did not check: its statement rules that need no type
+        # are read once, on the body as written.
+        from .signatures import check_template_statements
+        check_template_statements(self, program, checked)
+
+        for ext in program.extensions:
+            self._validate_extension_method(ext)
 
         for impl in program.perk_impls:
             # The header is read as written, never as a copy of a body (#800).

@@ -83,6 +83,16 @@ def parse_hashmap_types(hashmap_type: Any, tables: Any,
     return args[0], args[1]
 
 
+# The base name `HashMap` is registered under.
+HASHMAP_BASE = "HashMap"
+
+# The key rule of `HashMap@(K, V)` as a bound on `K` (#1070, R1): an extension or a perk
+# implementation on `HashMap@(K, V)` inherits it, as it inherits the constraints of a
+# user generic. It is not put on the registered `K`: the monomorphizer would judge it at
+# each instance beside the key rule below, and one fault would have two diagnostics.
+KEY_CONTRACT = ("Hashable", "Eq")
+
+
 def reject_unusable_key(hashmap_type: StructType, validator: Any, span: Any) -> None:
     """CE2058 / CE2054 / CE2055: the key rule a written HashMap type breaks (#773).
 
@@ -105,15 +115,37 @@ def reject_unusable_key(hashmap_type: StructType, validator: Any, span: Any) -> 
     from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
     has_hash = (builtin_method_exists(key_type, "hash", validator.derived_methods)
                 or validator.perk_impl_table.get_method(key_type, "hash") is not None)
+    from sushi_lang.semantics.generics.opaque import explain_unpromised
     if not has_hash:
-        er.emit(reporter, er.ERR.CE2054, span, key_type=display_type(key_type))
+        explain_unpromised(er.emit_with(reporter, er.ERR.CE2054, span,
+                                        key_type=display_type(key_type)),
+                           "Hashable", _unhashable_parts(key_type, validator)).emit()
         return
 
-    if not _key_supports_equality(key_type, validator):
-        er.emit(reporter, er.ERR.CE2055, span, key_type=display_type(key_type))
+    refused: list = []
+    if not _key_supports_equality(key_type, validator, refused):
+        explain_unpromised(er.emit_with(reporter, er.ERR.CE2055, span,
+                                        key_type=display_type(key_type)),
+                           "Eq", refused).emit()
 
 
-def _key_supports_equality(key_type: Type, validator: Any) -> bool:
+def _unhashable_parts(key_type: Type, validator: Any) -> list:
+    """The held types that stop a derived hash of the key: the derive pass's predicate
+    (`hashability_of`) names them, for the help of CE2054 (#1070)."""
+    from sushi_lang.semantics.generics.hashing import hash_override_of, hashability_of
+    from sushi_lang.semantics.passes.resolve import table_resolver
+    refused: list = []
+    tables = validator.tables
+    hashability_of(key_type, resolve=table_resolver(validator.struct_table,
+                                                    validator.enum_table),
+                   overridden=hash_override_of(validator.perk_impl_table,
+                                               tables.generic_perk_impls, tables.holds_bound),
+                   refused=refused)
+    return refused
+
+
+def _key_supports_equality(key_type: Type, validator: Any,
+                           refused: Optional[list] = None) -> bool:
     """Can the probe compare two keys of this type? The `Eq` contract, HELD rule.
 
     The probe compares keys through `emit_value_eq`, which reads an `Eq`
@@ -125,7 +157,8 @@ def _key_supports_equality(key_type: Type, validator: Any) -> bool:
     from sushi_lang.semantics.passes.resolve import table_resolver
     resolve = table_resolver(validator.struct_table, validator.enum_table)
     return contract_of(key_type, EQ, resolve=resolve,
-                       overridden=override_of(validator.derived_methods, EQ))[0]
+                       overridden=override_of(validator.derived_methods, EQ),
+                       refused=refused)[0]
 
 
 def _validate_hashmap_insert(
@@ -201,7 +234,7 @@ def hashmap_generic_struct() -> 'GenericStructType':
     from sushi_lang.semantics.typesys import DynamicArrayType
 
     return GenericStructType(
-        name="HashMap",
+        name=HASHMAP_BASE,
         type_params=(TypeParameter(name="K"), TypeParameter(name="V")),
         fields=(
             ("buckets", DynamicArrayType(base_type=BuiltinType.I32)),

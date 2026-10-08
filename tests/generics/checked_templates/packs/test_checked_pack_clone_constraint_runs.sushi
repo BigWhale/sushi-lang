@@ -1,0 +1,17 @@
+# With `Clone` among the constraints of the pack, `.clone()` on an element is legal,
+# and each copy clones its own element (#1070, R5, R6).
+# EXPECT_STDOUT_EXACT: "towel\nMostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+
+fn keep@(T: Display)(nom T x) ~:
+    println("{x}")
+
+fn copies@(...Ts: Clone + Display)(...Ts args) ~:
+    expand(a in args):
+        keep(nom a.clone())
+
+fn main() i32:
+    let string s = "towel"
+    let string t = "Mostly Harmless"
+    copies(s, t)
+    return 0

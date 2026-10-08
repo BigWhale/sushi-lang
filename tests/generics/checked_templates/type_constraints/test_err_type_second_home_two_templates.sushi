@@ -1,0 +1,23 @@
+# Two constraints of a struct's own type parameter that declare one method are one
+# fault of the struct (#1070). Each extension template on the struct inherits the two
+# bounds, and no template says the fault again.
+# EXPECT_ERROR_CODES_EXACT: CE4015
+
+perk A:
+    fn f() i32
+
+perk B:
+    fn f() i32
+
+struct Box@(T: A + B):
+    T v
+
+extend Box@(T) one() i32:
+    return 1
+
+extend Box@(T) two() i32:
+    return 2
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

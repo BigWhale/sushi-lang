@@ -5,7 +5,7 @@
 
 use <collections/iter>
 
-fn k@(T)(T x) i32:
+fn k@(T: Hashable)(T x) i32:
     return 7 + (x.hash() * 0) as i32
 
 fn double(i32 x) i32:

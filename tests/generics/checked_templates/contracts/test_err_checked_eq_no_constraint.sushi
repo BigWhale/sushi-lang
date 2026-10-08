@@ -1,0 +1,10 @@
+# `==` on a type parameter needs `Eq` (#1070, R2): the body knows what the constraints
+# promise, and an unconstrained `T` promises no equality.
+# EXPECT_ERROR_CODES_EXACT: CE2514
+
+fn same@(T)(T a, T b) bool:
+    return a == b
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

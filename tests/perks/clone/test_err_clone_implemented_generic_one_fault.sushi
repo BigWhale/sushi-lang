@@ -1,0 +1,14 @@
+# An implementation of `Clone` on a generic target is refused whole, with one
+# diagnostic.
+# EXPECT_ERROR_CODES_EXACT: CE4017
+
+struct Box@(T):
+    T v
+
+extend Box@(T) with Clone:
+    fn clone() Box@(T):
+        return Box(self.v)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

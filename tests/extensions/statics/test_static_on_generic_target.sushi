@@ -5,11 +5,11 @@
 struct Cage@(T):
     T item
 
-extend Cage@(T) static holding(T item) Cage@(T):
+extend Cage@(T) static holding(nom T item) Cage@(T):
     return Cage(item)
 
 fn main() i32:
-    let Cage@(i32) a = Cage.holding(9)
-    let Cage@(bool) b = Cage.holding(true)
+    let Cage@(i32) a = Cage.holding(nom 9)
+    let Cage@(bool) b = Cage.holding(nom true)
     println("{a.item} {b.item}")
     return 0

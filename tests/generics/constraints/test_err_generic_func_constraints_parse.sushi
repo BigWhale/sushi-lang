@@ -1,0 +1,14 @@
+# Test: Generic functions with perk constraints parse correctly
+# The template body is checked where it is written, with no call (#1070): `compute_hash`
+# returns a bare value from a body with a channel (CE2030), and `process` never reads
+# its parameter (CW1001). The parse half is test_generic_func_constraints_parse.sushi.
+# EXPECT_ERROR_CODES_EXACT: CE2030, CW1001
+
+fn compute_hash@(T: Hashable)(T value) u64 | StdError:
+    return value.hash()
+
+fn process@(T: Hashable)(T item) ~:
+    return ~
+
+fn main() i32:
+    return 0

@@ -32,7 +32,7 @@ _add(ErrorMessage("CE4005", Severity.ERROR,
 
 _add(ErrorMessage("CE4006", Severity.ERROR,
     "type {type} does not implement perk {perk} required by constraint",
-    Category.PERK, "A type constraint requires the type to implement a specific perk. Add an implementation with 'extend {type} with {perk}:'."))
+    Category.PERK, "A type constraint requires the type to implement a specific perk. Add an implementation with 'extend {type} with {perk}:'. A call, a written type or a constructor in a generic body (#1070) passes a type parameter on to another generic. The parameter satisfies a constraint only when a constraint of its own promises it: add the constraint to the type parameter of the caller. An extension or a perk implementation can add a bound in its target (`extend List@(T: Clone)`); a call on a receiver whose type argument does not satisfy it is refused at the call. An element of a pack, which an 'expand' binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more (#1070, R6)."))
 
 _add(ErrorMessage("CE4007", Severity.ERROR,
     "method {method} conflicts with perk method from {perk}",
@@ -73,4 +73,16 @@ _add(ErrorMessage("CE4016", Severity.ERROR,
 
 _add(ErrorMessage("CE4015", Severity.ERROR,
     "perk '{perk}' gives '{method}' a second home: perk '{other}' already provides it",
-    Category.PERK, "A name has exactly one home on a type (`docs/design/method-resolution.md`). Two perks that each provide a method of one name on one type leave a call of that name naming neither implementation, and the two bodies would take one symbol. The note points at the first one. Rename the method of one perk, or implement only one of them. A derived method is not a home: a type that derives `compare` from `Ord` may still implement a user perk that provides `compare`, and an explicit call then reads the implementation."))
+    Category.PERK, "A name has exactly one home on a type (`docs/design/method-resolution.md`). Two perks that each provide a method of one name on one type leave a call of that name naming neither implementation, and the two bodies would take one symbol. The note points at the first one. Rename the method of one perk, or implement only one of them. A derived method is not a home: a type that derives `compare` from `Ord` may still implement a user perk that provides `compare`, and an explicit call then reads the implementation. The rule holds for a type parameter too (#1070): two constraints of one parameter that both declare a method of one name give it two homes, and the body cannot call the method. Remove one constraint, or rename the method of one perk. An element of a pack, which an 'expand' binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more (#1070, R6)."))
+
+_add(ErrorMessage("CE4017", Severity.ERROR,
+    "'Clone' cannot be implemented for '{type}': the compiler decides it",
+    Category.PERK, "`Clone` is a structural perk. A type satisfies it when it holds no resource, that is when it is not a `Drop` type and holds none in a field, an element or a payload. The built-in `.clone()` is the contract, so an implementation would have no method to override. A handle has no `Clone` on purpose: a copy would close one descriptor twice. `.share()` is the way to get a second owner of a handle. Remove the implementation."))
+
+_add(ErrorMessage("CE4018", Severity.ERROR,
+    "cannot clone '{type}': the type parameter '{param}' has no constraint 'Clone'",
+    Category.PERK, "A generic body is checked one time, where it is written (#1070). A type parameter is opaque there: the body knows only what its constraints promise. `.clone()` makes a deep copy, and a deep copy of a value that holds a resource is a second handle. So a body can clone a value of a type parameter, or of a type that holds one (a `List@(T)`, a `Box@(T)`), only when the parameter declares the constraint `Clone`. Every type that holds no resource satisfies `Clone`. A handle does not; `.share()` is the way to get a second owner of a handle. Add `Clone` to the constraints: `@(T: Clone)`. The note points at the type parameter. CE2431 is the refusal of a concrete type that holds a resource. An element of a pack, which an 'expand' binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more (#1070, R6)."))
+
+_add(ErrorMessage("CE4019", Severity.ERROR,
+    "'Drop' for '{target}' cannot add the bound '{param}: {perk}'",
+    Category.PERK, "A `Drop` implementation says how each value of a type releases what it holds. A bound in its target gives `drop()` to some instances of the type and not to others, and an instance that the bound excludes releases nothing, with no diagnostic. So a `Drop` implementation inherits the bounds that its type declares and adds none (#1070). An array target is CE4016."))

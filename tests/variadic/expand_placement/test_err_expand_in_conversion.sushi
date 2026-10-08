@@ -1,0 +1,18 @@
+# A conversion has no type pack, so an `expand` in its body is refused where it is
+# written.
+# EXPECT_ERROR_CODES_EXACT: CE0119
+
+error ParseError:
+    Empty
+
+error AppError:
+    Parse(ParseError)
+
+extend ParseError as AppError:
+    expand(a in self):
+        println("Mostly Harmless")
+    return AppError.Parse(self)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

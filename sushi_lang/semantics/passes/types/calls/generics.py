@@ -73,16 +73,25 @@ def validate_generic_function_call(
         said = _untyped_argument_faults(validator)
         _walk_unchecked_arguments(validator, call)
         # An argument that has no type of its own (a generic function value, CE2093; a
-        # type-pack name, CE0144; a range, CE2122) is why nothing was inferred: its
-        # diagnostic is the one fault (#1105, #1109, #1165). Any other argument fault stands beside CE2060.
+        # type-pack name, CE0144; a range, CE2122; a refused clone of a type parameter,
+        # CE4018) is why nothing was inferred: its diagnostic is the one fault (#1105,
+        # #1109, #1165, #1070). Any other argument fault stands beside CE2060.
         if not contested and _untyped_argument_faults(validator) == said:
-            er.emit(
+            # An argument of an opaque type (two `expand` binders, two type
+            # parameters) gets the note at its declaration (#1070).
+            from sushi_lang.semantics.generics.opaque import note_opaque
+            from sushi_lang.semantics.generics.pack_inference import infer_call_arg_type
+            note_opaque(er.emit_with(
                 validator.reporter,
                 er.ERR.CE2060,
                 call.callee.loc,
                 name=written,
                 reason=why[0] if why else "could not infer type arguments from call site"
-            )
+            ), *(infer_call_arg_type(validator, arg) for arg in call.args)).emit()
+        return
+
+    if validator.in_template_check:
+        _validate_call_in_template(validator, call, generic_func, type_args, written)
         return
 
     # Generate mangled name. When the function's LAST type-param is a pack, the
@@ -125,6 +134,69 @@ def validate_generic_function_call(
     # The WRITTEN name, not the instance's symbol: the user never wrote `pair__i32` (#766).
     validate_call_arguments(validator, written, func_sig,
                             call.args, call.callee.loc)
+
+
+def _validate_call_in_template(validator: 'TypeValidator', call: Call, generic_func,
+                               type_args, written: str) -> None:
+    """A generic call in a template check (#1070): the substituted signature, no instance.
+
+    The arguments are measured against the callee's signature with the solved type
+    arguments put through it, as the instance path measures them against the copy. No
+    symbol is chosen, no instance is looked up or requested, and the callee keeps its
+    name: the check copy is discarded. A pack callee is measured the same way: its
+    substituted signature has one parameter per element of the pack.
+    """
+    func_sig = (None if not _constraints_hold_in_template(validator, call.callee.loc,
+                                                          generic_func, type_args)
+                else _substituted_sig(validator, generic_func, type_args, written))
+    if func_sig is None:
+        _walk_unchecked_arguments(validator, call)
+        return
+    validate_call_arguments(validator, written, func_sig, call.args, call.callee.loc)
+
+
+def _constraints_hold_in_template(validator: 'TypeValidator', loc, generic_func,
+                                  type_args) -> bool:
+    """The callee's constraints at the solved type arguments, in a template check (#1070).
+
+    `loc` is where the template names the callee: a call, or a function value.
+
+    The check of the monomorphize stage, keyed as it keys an instance, so a call that
+    stage judged is not judged twice. An argument that is a type parameter of the
+    template satisfies a constraint only when a constraint of its own promises it.
+    """
+    from sushi_lang.semantics.generics.extension_targets import instantiation_key
+    from ..utils import call_constraint_check
+    return call_constraint_check(validator)(
+        tuple(generic_func.type_params or ()), tuple(type_args),
+        ("fn", instantiation_key(generic_func.name, tuple(type_args))), loc,
+        validator.reporter.filename, getattr(generic_func, "filename", None), True)
+
+
+def _substituted_sig(validator: 'TypeValidator', generic_func, type_args, name: str):
+    """The signature of a generic callee at these type arguments, with no instance.
+
+    What a template check measures a call and a function value against (#1070): the
+    substituted signature, its instances interned in the overlay and each parameter
+    resolved. None when the count does not fit the declaration.
+    """
+    from sushi_lang.semantics.generics.types import substituted_call_signature
+    from sushi_lang.semantics.passes.collect.functions import FuncSig
+    from sushi_lang.semantics.type_resolution import resolve_type_recursively
+    from ..utils import intern_signature
+
+    signature = substituted_call_signature(generic_func, type_args)
+    if signature is None:
+        return None
+    params, ret, err = signature
+    intern_signature(validator, ret, err, *(p.ty for p in params))
+    structs = validator.struct_table.by_name
+    enums = validator.enum_table.by_name
+    for param in params:
+        if param.ty is not None:
+            param.ty = resolve_type_recursively(param.ty, structs, enums)
+    return FuncSig(name=name, params=params,
+                   ret_type=resolve_type_recursively(ret, structs, enums), err_type=err)
 
 
 def _request_late_instance(validator: 'TypeValidator', call_generic, type_args,
@@ -171,7 +243,8 @@ def _reject_argument_count(validator: 'TypeValidator', call: Call, generic_func,
         minimum_arity=has_pack, stop_on_arity=True)
 
 
-_UNTYPED_ARGUMENT_CODES = (er.ERR.CE2093.code, er.ERR.CE0144.code, er.ERR.CE2122.code)
+_UNTYPED_ARGUMENT_CODES = (er.ERR.CE2093.code, er.ERR.CE0144.code, er.ERR.CE2122.code,
+                           er.ERR.CE4018.code)
 
 
 def _untyped_argument_faults(validator: 'TypeValidator') -> int:
@@ -254,8 +327,13 @@ def reject_unsolved_generic_value(validator: 'TypeValidator', loc, name: str,
                  reason=reason).help(help_text).emit()
 
 
+# What `resolve_generic_fn_reference` answers when a constraint refused the solved type
+# arguments and said so (#1070): the caller adds no CE2093 on top.
+GENERIC_VALUE_REFUSED = object()
+
+
 def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected_ty,
-                                 generic_func=None):
+                                 generic_func=None, loc=None):
     """Resolve a generic-fn reference against an expected FunctionType (T2.3).
 
     A bare name reads the unit's own view; a name behind an alias hands in the
@@ -279,9 +357,19 @@ def resolve_generic_fn_reference(validator: 'TypeValidator', name: str, expected
     if type_args is None:
         return None
 
-    mangled_name = mangle_function_name(name, type_args)
-    func_sig = validator.func_table.lookup(
-        mangled_name, getattr(generic_func, "unit_name", None))
+    if validator.in_template_check:
+        # A value passes the template's type parameter on, as a call does: the callee's
+        # constraints are checked where the value is written. The inferring half gives
+        # no `loc` and asks nothing; the validating half reports.
+        if loc is not None and not _constraints_hold_in_template(
+                validator, loc, generic_func, type_args):
+            return GENERIC_VALUE_REFUSED
+        func_sig = _substituted_sig(validator, generic_func, type_args, name)
+        mangled_name = name
+    else:
+        mangled_name = mangle_function_name(name, type_args)
+        func_sig = validator.func_table.lookup(
+            mangled_name, getattr(generic_func, "unit_name", None))
     if func_sig is None:
         return None
     param_types = tuple(p.ty for p in func_sig.params)

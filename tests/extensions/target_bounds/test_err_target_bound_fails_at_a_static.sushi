@@ -1,0 +1,15 @@
+# A static on a bounded target is refused at the call when the type argument fails the
+# bound (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+use <io/fs>
+
+struct Box@(T):
+    List@(T) items
+
+extend Box@(T: Clone) static empty() Box@(T):
+    return Box(List.new())
+
+fn main() i32:
+    let Box@(File) b = Box.empty()
+    println(b.items.len())
+    return 0

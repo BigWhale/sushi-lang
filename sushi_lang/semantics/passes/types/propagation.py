@@ -383,7 +383,8 @@ def _note_declared_position(validator: 'TypeValidator', node: Expr,
     if enum_name not in validator.generic_enum_table.by_name:
         return
     if expected_type is None or isinstance(expected_type, GenericTypeRef) or is_abstract_type(
-            expected_type, validator.struct_table.by_name, validator.enum_table.by_name):
+            expected_type, validator.struct_table.by_name, validator.enum_table.by_name,
+            opaque_bound=validator.struct_table.admits_opaque):
         return
     _declared_positions(validator).add(id(node))
 

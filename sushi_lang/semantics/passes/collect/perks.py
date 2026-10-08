@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -11,13 +11,17 @@ from sushi_lang.semantics.visibility import (
     VisibilityTable, library_clash_origin, record_declaration,
     reject_library_clash, reject_private_perk_contract, taken_by_a_library)
 from sushi_lang.semantics.ast import (
-    Param, PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
+    BoundedTypeParam, Param, PerkDef, PerkMethodSignature, ExtendWithDef, FuncDef, Program)
 from sushi_lang.semantics.passes.collect.unit_names import RefusedDeclarations
 from sushi_lang.semantics.typesys import (
     Type, BuiltinType, StructType, EnumType, FunctionType, ReceiverType)
 from sushi_lang.semantics.generics.extension_targets import RefusalRecord
 
-from .utils import reject_reference_in, reject_try_in_body, reject_variadic_param
+from .utils import (
+    reject_misplaced_expands, reject_reference_in, reject_try_in_body, reject_variadic_param)
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.generics.types import TypeParameter
 
 
 @dataclass
@@ -45,6 +49,48 @@ class PerkTable:
         return self.by_name.get(name)
 
 
+def reject_second_homes(reporter: Reporter, perks: PerkTable, params: Sequence[object],
+                        base: Optional[str] = None) -> None:
+    """CE4015 for a method that two constraints of one type parameter both declare.
+
+    A name has one home on a type, and an opaque parameter has the methods of its
+    constraints. The first constraint answers the body check, so the check stays total.
+    Each pair is judged one time, where its later constraint is written (#1070): the
+    collect pass judges the own constraints of a struct or an enum, and a template check
+    judges its own. A receiver parameter of a template inherits the leading bounds of
+    its target's type (R1), so a pair of two inherited bounds is the type's and is not
+    judged again. `base` is the target's base: an inherited bound is noted in the file
+    that declares it, or in prose when no line states it (the HashMap key rule).
+    """
+    for tp in params:
+        if not isinstance(tp, BoundedTypeParam):
+            continue
+        seen: Dict[str, str] = {}
+        for index, perk_name in enumerate(tp.constraints or ()):
+            perk = perks.get(perk_name)
+            if perk is None:
+                continue
+            for method in perk.methods:
+                first = seen.setdefault(method.name, perk_name)
+                if first == perk_name or index < tp.inherited:
+                    continue
+                at = tp.constraints.index(first)
+                diagnostic = er.emit_with(
+                    reporter, ERR.CE4015, tp.constraint_span(index) or tp.loc,
+                    filename=tp.constraint_file(index), perk=perk_name,
+                    method=method.name, other=first)
+                first_span = tp.constraint_span(at)
+                if first_span is not None:
+                    diagnostic = diagnostic.note_at(
+                        f"'{first}' provides '{method.name}' here", first_span,
+                        tp.constraint_file(at))
+                elif base is not None:
+                    from sushi_lang.semantics.generics.extension_targets import (
+                        implied_bound_note)
+                    diagnostic = diagnostic.note(implied_bound_note(base, tp.name, first))
+                diagnostic.emit()
+
+
 @dataclass
 class GenericPerkImpl:
     """A perk implementation on a GENERIC target: `extend Box@(T) with Show`.
@@ -62,6 +108,9 @@ class GenericPerkImpl:
     impl: ExtendWithDef                    # the template, signatures already converted
     unit_name: Optional[str] = None
     filename: Optional[str] = None
+    # The bound the target puts on each parameter (`extend Box@(T: Eq) with Show`,
+    # #1070), index-aligned with `type_params`.
+    target_bounds: Tuple[BoundedTypeParam, ...] = ()
 
 
 @dataclass
@@ -72,9 +121,17 @@ class GenericPerkImplTable(RefusalRecord):
     by the target and each method name, so a call of one adds no CE2008.
     """
     by_base: Dict[str, List[GenericPerkImpl]] = field(default_factory=dict)
+    # The record of each written implementation, by the identity of its node (#1070).
+    _by_impl: Dict[int, GenericPerkImpl] = field(default_factory=dict, repr=False)
 
     def add(self, template: GenericPerkImpl) -> None:
         self.by_base.setdefault(template.base_type_name, []).append(template)
+        self._by_impl[id(template.impl)] = template
+
+    def record_of(self, impl: ExtendWithDef) -> Optional[GenericPerkImpl]:
+        """The template the collect pass filed for this written implementation, if any."""
+        record = self._by_impl.get(id(impl))
+        return record if record is not None and record.impl is impl else None
 
     def templates(self, base_type_name: str) -> List[GenericPerkImpl]:
         return self.by_base.get(base_type_name, [])
@@ -144,12 +201,36 @@ class PerkImplementationTable:
     on_array_miss: Optional[Callable[..., bool]] = field(
         default=None, repr=False, compare=False)
 
+    # The program's perks, set by `SymbolTables`: an opaque type parameter answers the
+    # methods its constraints declare (#1070), and those are read from the perk.
+    perks: Optional[PerkTable] = field(default=None, repr=False, compare=False)
+    # The methods answered for an opaque type parameter or an instance over one, kept
+    # for one template check. Only the table of a check's overlay holds a dict here
+    # (`template_scope.py`): the program table keeps nothing over an opaque type.
+    promised: Optional[Dict[tuple, Optional[FuncDef]]] = field(
+        default=None, repr=False, compare=False)
+    # The program's generic-target templates, set by `SymbolTables`: an instance over an
+    # opaque type parameter has no copy, and the template answers its methods (#1070).
+    templates: Optional['GenericPerkImplTable'] = field(
+        default=None, repr=False, compare=False)
+    # The target-bound predicate of the tables this table belongs to, set by
+    # `SymbolTables` (#1070): a template answers an opaque instance only when its target
+    # bounds hold for it.
+    holds_bound: Optional[Callable[..., bool]] = field(
+        default=None, repr=False, compare=False)
+
     def implements(self, type_name: str, perk_name: str) -> bool:
         """Check if a type implements a perk."""
         return (type_name, perk_name) in self.implementations
 
     def implements_type(self, ty: 'Type', perk_name: str) -> bool:
-        """Does this TYPE implement the perk? An array template's copy is cut on a miss."""
+        """Does this TYPE implement the perk? An array template's copy is cut on a miss.
+
+        An opaque type parameter implements what a constraint of it promises (#1070).
+        """
+        from sushi_lang.semantics.generics.types import TypeParameter
+        if isinstance(ty, TypeParameter):
+            return ty.promises(perk_name)
         type_name = _get_type_name(ty)
         if type_name is None:
             return False
@@ -160,8 +241,12 @@ class PerkImplementationTable:
 
     def _cut_on_miss(self, ty: 'Type', *, perk: Optional[str] = None,
                      method: Optional[str] = None) -> bool:
+        """No copy is cut for an array over an opaque type parameter: it is no type of
+        the program (#1070)."""
+        from sushi_lang.semantics.generics.opaque import holds_opaque
         from sushi_lang.semantics.typesys import DynamicArrayType
         return (self.on_array_miss is not None and isinstance(ty, DynamicArrayType)
+                and not holds_opaque(ty)
                 and self.on_array_miss(ty, perk=perk, method=method))
 
     def get(self, type_name: str, perk_name: str) -> Optional[ExtendWithDef]:
@@ -169,14 +254,96 @@ class PerkImplementationTable:
         return self.implementations.get((type_name, perk_name))
 
     def get_method(self, target_type: 'Type', method_name: str) -> Optional['FuncDef']:
-        """Get a specific perk method for a type."""
+        """Get a specific perk method for a type.
+
+        An opaque type parameter answers the method a constraint of it declares (#1070).
+        """
+        from sushi_lang.semantics.generics.types import TypeParameter
+        if isinstance(target_type, TypeParameter):
+            return self._promised_method(target_type, method_name)
         type_name = _get_type_name(target_type)
         if type_name is None:
             return None
         found = self._method(type_name, method_name)
         if found is None and self._cut_on_miss(target_type, method=method_name):
             found = self._method(type_name, method_name)
+        if found is None:
+            found = self._template_method(target_type, method_name)
         return found
+
+    def _template_method(self, target_type: 'Type', method_name: str) -> Optional[FuncDef]:
+        """The method a generic-target template gives an instance over an opaque parameter.
+
+        `extend Box@(T) with Show` gives every `Box@(...)` its `show()`, and in a template
+        check `Box@(T)` names no copy (#1070). The template's header answers, with the
+        instance's arguments put through it; the body is empty, because the check reads
+        the signature alone.
+        """
+        from sushi_lang.semantics.ast import Block
+        from sushi_lang.semantics.generics.extensions import substitute_header
+        from sushi_lang.semantics.generics.opaque import holds_opaque
+        from sushi_lang.semantics.generics.constraints import target_bounds_hold
+        base = getattr(target_type, "generic_base", None)
+        args = getattr(target_type, "generic_args", None) or ()
+        templates = self.templates
+        holds = self.holds_bound
+        if (templates is None or holds is None or base is None
+                or not holds_opaque(target_type)):
+            return None
+
+        def build() -> Optional[FuncDef]:
+            for template in templates.templates(base):
+                if (len(template.type_params) != len(args)
+                        or not target_bounds_hold(template.target_bounds, args, holds)):
+                    continue
+                method = next((m for m in template.impl.methods if m.name == method_name),
+                              None)
+                if method is not None:
+                    return substitute_header(
+                        method, dict(zip(template.type_params, args, strict=True)),
+                        Block(loc=method.loc, statements=[]))
+            return None
+
+        return self._remembered((target_type, (), method_name), build)
+
+    def _remembered(self, key: tuple, build: Callable[[], Optional[FuncDef]]
+                    ) -> Optional[FuncDef]:
+        """`build()`, kept in the check's own `promised` table when there is one."""
+        if self.promised is None:
+            return build()
+        if key not in self.promised:
+            self.promised[key] = build()
+        return self.promised[key]
+
+    def promising_perks(self, param: 'Type', method_name: str) -> List[str]:
+        """The constraints of an opaque parameter that declare `method_name`, in order."""
+        from sushi_lang.semantics.generics.types import TypeParameter
+        if not isinstance(param, TypeParameter) or self.perks is None:
+            return []
+        found = []
+        for perk_name in param.constraints:
+            perk = self.perks.get(perk_name)
+            if perk is not None and any(m.name == method_name for m in perk.methods):
+                found.append(perk_name)
+        return found
+
+    def _promised_method(self, param: "TypeParameter", method_name: str) -> Optional[FuncDef]:
+        """The method of the first constraint that declares it, as an implementation.
+
+        The contract's signature, with the implementing type (`ReceiverType`) read as the
+        parameter itself, so `Clone.clone()` answers `T`. The body is empty: a template
+        check reads the signature alone. A second constraint that declares the name too
+        is the template's CE4015, and the first one answers here.
+        """
+        def build() -> Optional[FuncDef]:
+            perks = self.promising_perks(param, method_name)
+            perk = self.perks.get(perks[0]) if perks and self.perks is not None else None
+            if perk is None:
+                return None
+            sig = next(m for m in perk.methods if m.name == method_name)
+            return _as_implementation(sig, param)
+
+        return self._remembered((param, param.constraints, method_name), build)
 
     def _method(self, type_name: str, method_name: str) -> Optional['FuncDef']:
         for perk_name in self.by_type.get(type_name, set()):
@@ -186,6 +353,23 @@ class PerkImplementationTable:
                     if method.name == method_name:
                         return method
         return None
+
+
+def _as_implementation(sig: PerkMethodSignature, param: Type) -> FuncDef:
+    """A contract method as the implementation an opaque parameter promises (#1070)."""
+    from dataclasses import replace
+    from sushi_lang.semantics.ast import Block
+
+    def receiver_is(ty: Optional[Type]) -> Optional[Type]:
+        return param if isinstance(ty, ReceiverType) else ty
+
+    return FuncDef(
+        loc=sig.loc, name=sig.name,
+        params=[replace(p, ty=receiver_is(p.ty)) for p in sig.params],
+        ret=receiver_is(sig.ret), body=Block(loc=sig.loc, statements=[]),
+        err_type=sig.err_type, err_span=sig.err_span, name_span=sig.name_span,
+        ret_span=sig.ret_span, self_mode=sig.self_mode,
+        self_mode_span=sig.self_mode_span)
 
 
 def _get_type_name(ty: Optional[Type]) -> Optional[str]:
@@ -297,6 +481,9 @@ class PerkCollector:
         # and the method symbol is defined twice. (A binary library has no such problem:
         # its body is weak_odr in the .slib object and the linker discards it.)
         self.shadowed_impls: List[ExtendWithDef] = []
+        # The implementation methods that hold a misplaced `expand` (#1070): the
+        # analysis stops after the collect pass.
+        self.refused_pack_bodies: List[str] = []
         # Who declared what, for the perk-contract rule (CE4011).
         self.visibility: Optional[VisibilityTable] = None
         # The first template and the first concrete implementation of each perk on
@@ -332,7 +519,8 @@ class PerkCollector:
                 if not isinstance(impl, ExtendWithDef):
                     continue
                 if (self._reject_type_params_in_impl(impl)
-                        or self._reject_function_target(impl, impl.target_type)):
+                        or self._reject_function_target(impl, impl.target_type)
+                        or self._reject_clone_impl(impl)):
                     refused.append(impl)
                 elif self._collect_perk_impl(impl):
                     moved.append(impl)
@@ -357,6 +545,9 @@ class PerkCollector:
     EQ_PERK = "Eq"
     ORD_PERK = "Ord"
     DISPLAY_PERK = "Display"
+    # `Clone` is structural only: a type satisfies it when it holds no resource, and the
+    # built-in `.clone()` is the contract. No implementation is accepted (CE4017).
+    CLONE_PERK = "Clone"
 
     def _predefined_perks(self) -> List[PerkDef]:
         """The perks that ship with the compiler, public and importless."""
@@ -395,6 +586,13 @@ class PerkCollector:
                 name=self.DISPLAY_PERK,
                 methods=[PerkMethodSignature(name="to_str", params=[],
                                              ret=BuiltinType.STRING)],
+                is_public=True,
+            ),
+            PerkDef(
+                loc=None,
+                name=self.CLONE_PERK,
+                methods=[PerkMethodSignature(name="clone", params=[],
+                                             ret=ReceiverType())],
                 is_public=True,
             ),
         ]
@@ -612,6 +810,25 @@ class PerkCollector:
                 return True
         return False
 
+    def _reject_clone_impl(self, impl: ExtendWithDef) -> bool:
+        """CE4017: `Clone` is structural, and the compiler decides it.
+
+        The caller drops the implementation from both lists, and its methods are
+        recorded, so the contract check does not judge them again.
+        """
+        if impl.perk_name != self.CLONE_PERK:
+            return False
+        from sushi_lang.semantics.generics.type_display import display_type
+        from sushi_lang.semantics.generics.types import GenericTypeRef
+        target_type = impl.target_type
+        er.emit(self.r, ERR.CE4017, impl.perk_name_span or impl.loc,
+                type=display_type(target_type))
+        type_name = (target_type.base_name if isinstance(target_type, GenericTypeRef)
+                     else _get_type_name(target_type))
+        if type_name is not None:
+            self._refuse_methods(type_name, impl)
+        return True
+
     def _refuse_methods(self, base_type_name: str, impl: ExtendWithDef) -> None:
         """Record every method of a refused implementation, so its calls stay silent."""
         for method in impl.methods or []:
@@ -652,15 +869,22 @@ class PerkCollector:
         CE2008 (#860).
         """
         from sushi_lang.semantics.generics.extension_targets import (
-            classify_extension_target, reject_mixed_target, reject_unwritable_target)
+            classify_extension_target, reject_bound_on_type, reject_mixed_target,
+            reject_unwritable_target)
         from sushi_lang.semantics.generics.types import GenericTypeRef
 
         if not isinstance(target_type, GenericTypeRef):
             return False
-        shape = classify_extension_target(target_type, self.is_declared_type)
         span = impl.target_type_span or impl.perk_name_span
+        if reject_bound_on_type(self.r, target_type, impl.target_params,
+                                self.is_declared_type, span):
+            self._refuse_methods(target_type.base_name, impl)
+            return True
+        shape = classify_extension_target(target_type, self.is_declared_type,
+                                          impl.target_params)
         if (reject_mixed_target(self.r, target_type, shape, span, "perk-implementation")
-                or reject_unwritable_target(self.r, shape, self.is_declared_type, span)):
+                or reject_unwritable_target(self.r, shape, self.is_declared_type, span)
+                or self._reject_drop_bound(impl, target_type, shape)):
             self._refuse_methods(target_type.base_name, impl)
             return True
         if not shape.param_names:
@@ -670,8 +894,30 @@ class PerkCollector:
                                                     template=True)):
             return True
 
-        self._add_template(impl, target_type.base_name, shape.param_names)
+        self._add_template(impl, target_type.base_name, shape.param_names, shape.bounds)
         return True
+
+    def _reject_drop_bound(self, impl: ExtendWithDef, target_type, shape) -> bool:
+        """CE4019: a `Drop` implementation adds no bound to its target (#1070).
+
+        A bound would give `drop()` to some instances of the type and not to the others,
+        and an excluded instance would release nothing, with no diagnostic. An array
+        target is CE4016 already, so only a generic target asks.
+        """
+        if impl.perk_name != self.DROP_PERK:
+            return False
+        from sushi_lang.semantics.generics.extension_targets import written_target
+        for bound in shape.bounds:
+            if not bound.constraints:
+                continue
+            perks = " + ".join(bound.written_constraints())
+            er.emit_with(self.r, ERR.CE4019, bound.loc or impl.target_type_span,
+                         target=written_target(target_type, impl.target_params),
+                         param=bound.name, perk=perks) \
+                .help(f"put the bound on the type ('struct {target_type.base_name}"
+                      f"@({bound.name}: {perks})'), or remove it").emit()
+            return True
+        return False
 
     def _register_array_template(self, impl: ExtendWithDef,
                                  target_type: Optional[Type]) -> bool:
@@ -683,34 +929,43 @@ class PerkCollector:
         was refused.
         """
         from sushi_lang.semantics.generics.extension_targets import (
-            ARRAY_BASE_KEY, classify_array_extension_target, reject_array_target)
+            ARRAY_BASE_KEY, classify_array_extension_target, reject_array_target,
+            reject_bound_on_type)
         from sushi_lang.semantics.typesys import DynamicArrayType
 
         if not isinstance(target_type, DynamicArrayType):
             return False
         element = target_type.base_type
-        shape = classify_array_extension_target(element, self.is_declared_type)
-        if reject_array_target(self.r, shape, element,
-                               impl.target_type_span or impl.perk_name_span):
+        span = impl.target_type_span or impl.perk_name_span
+        if reject_bound_on_type(self.r, target_type, impl.target_params,
+                                self.is_declared_type, span):
+            self._refuse_methods(ARRAY_BASE_KEY, impl)
+            return True
+        shape = classify_array_extension_target(element, self.is_declared_type,
+                                                impl.target_params)
+        if reject_array_target(self.r, shape, element, span) or shape is None:
             return True
         if not shape.param_names:
             return False
         if (self._reject_overlap(impl, target_type, ARRAY_BASE_KEY, template=True)
                 or self._reject_second_home_on_base(impl, ARRAY_BASE_KEY, template=True)):
             return True
-        self._add_template(impl, ARRAY_BASE_KEY, shape.param_names)
+        self._add_template(impl, ARRAY_BASE_KEY, shape.param_names, shape.bounds)
         return True
 
     def _add_template(self, impl: ExtendWithDef, base_type_name: str,
-                      type_params: Tuple[str, ...]) -> None:
+                      type_params: Tuple[str, ...],
+                      target_bounds: Tuple[BoundedTypeParam, ...]) -> None:
         """File a template, its method signatures written in `TypeParameter`s."""
-        from sushi_lang.semantics.passes.collect.functions import deep_type_params
+        from sushi_lang.semantics.passes.collect.functions import (
+            bare_type_params, deep_type_params)
 
+        params = bare_type_params(type_params)
         for method in impl.methods or []:
-            method.ret = deep_type_params(method.ret, type_params)
-            method.err_type = deep_type_params(method.err_type, type_params)
+            method.ret = deep_type_params(method.ret, params)
+            method.err_type = deep_type_params(method.err_type, params)
             for param in method.params:
-                param.ty = deep_type_params(param.ty, type_params)
+                param.ty = deep_type_params(param.ty, params)
 
         self.generic_perk_impls.add(GenericPerkImpl(
             base_type_name=base_type_name,
@@ -718,6 +973,7 @@ class PerkCollector:
             impl=impl,
             unit_name=self.current_unit_name,
             filename=self.current_unit_file,
+            target_bounds=target_bounds,
         ))
 
     def _reject_overlap(self, impl: ExtendWithDef, target_type: Optional[Type],
@@ -774,6 +1030,9 @@ class PerkCollector:
         for method in impl.methods or []:
             if not has_channel(method):
                 reject_try_in_body(self.r, method.body, "a perk method")
+            if reject_misplaced_expands(self.r, method.body, frozenset(),
+                                        method.name_span or impl.loc):
+                self.refused_pack_bodies.append(method.name)
 
         # A perk has no `Self` (HANDLES.md R7), so a contract cannot hold a
         # constructor. The grammar admits the marker here only so this diagnostic can

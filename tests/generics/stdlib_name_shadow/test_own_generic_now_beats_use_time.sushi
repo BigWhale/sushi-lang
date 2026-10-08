@@ -4,8 +4,8 @@
 # EXPECT_STDOUT_EXACT: 42\n9\n
 use <time>
 
-fn now@(T)(T x) T:
-    return x
+fn now@(T: Clone)(T x) T:
+    return x.clone()
 
 fn wide() i64:
     return 9 as i64

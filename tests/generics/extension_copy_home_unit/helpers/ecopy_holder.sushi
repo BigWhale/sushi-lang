@@ -4,11 +4,11 @@ public perk Puts:
 public struct Holder@(T):
     T v
 
-extend Holder@(T) count(i32 k) i32:
-    let T[] held = from([self.v])
+extend Holder@(T: Clone) count(i32 k) i32:
+    let T[] held = from([self.v.clone()])
     return held.len() + k
 
-extend Holder@(T) with Puts:
+extend Holder@(T: Clone) with Puts:
     fn put(i32 k) i32:
-        let T[] held = from([self.v])
+        let T[] held = from([self.v.clone()])
         return held.len() + k

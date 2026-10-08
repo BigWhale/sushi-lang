@@ -1,0 +1,18 @@
+# A parameter that a method of a perk implementation on a generic target never reads
+# is CW1001 at the template, and the text names a parameter (#1070).
+# EXPECT_ERROR_CODES_EXACT: CW1001
+# EXPECT_STDERR_CONTAINS: :13:19: warning [CW1001]: unused parameter 'spare'.
+
+perk Scaled:
+    fn scaled(i32 spare) i32
+
+struct Box@(T):
+    T item
+
+extend Box@(T) with Scaled:
+    fn scaled(i32 spare) i32:
+        return 1
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

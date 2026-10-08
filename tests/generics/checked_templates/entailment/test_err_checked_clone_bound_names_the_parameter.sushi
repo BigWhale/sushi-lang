@@ -1,0 +1,21 @@
+# A Clone constraint that a template's argument breaks names the type parameter that
+# holds the resource (#1070): `T` is held by value, and `U` only as the return of a
+# function value, which holds no `U`. The help names `T`.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: "add 'Clone' to the constraints of 'T'"
+
+struct Holder@(X):
+    fn(i32) -> X make
+
+struct Box@(Y):
+    Y item
+
+fn need@(V: Clone)(V v) V:
+    return v.clone()
+
+fn f@(U, T)(Box@((Holder@(U), T)) b) Box@((Holder@(U), T)):
+    return need(b)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

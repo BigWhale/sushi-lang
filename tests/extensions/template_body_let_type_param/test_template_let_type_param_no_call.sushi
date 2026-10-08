@@ -4,10 +4,10 @@
 struct Box@(T):
     T v
 
-fn k@(T)(T x) i32:
+fn k@(T: Hashable)(T x) i32:
     return ((x.hash() as i32) * 0) + 7
 
-extend Box@(U) o() i32:
+extend Box@(U: Hashable) o() i32:
     let U y = self.v
     return k(y)
 

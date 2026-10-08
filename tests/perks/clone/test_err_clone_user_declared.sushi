@@ -1,0 +1,8 @@
+# `Clone` is predefined, so a unit that declares it collides with the compiler's own.
+# EXPECT_ERROR_CODE: CE4001
+
+perk Clone:
+    fn clone() i32
+
+fn main() i32:
+    return 0

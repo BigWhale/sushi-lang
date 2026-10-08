@@ -1,14 +1,16 @@
 # Nested `expand`s over one pack: in the copy where both loop variables stand for the
 # same pack element, `a` and `b` are one hidden name. Each diagnostic still names the
 # written variable of its own node.
+# `eat2` takes any `Display` type, so the template checks clean, and the consume of
+# a borrowed element is a fault of each copy (#1070, R7).
 # EXPECT_ERROR_CODES_EXACT: CE2411, CE2411
 # EXPECT_STDERR_CONTAINS: cannot consume 'a'
 # EXPECT_STDERR_CONTAINS: cannot consume 'b'
 
-fn eat2(nom string s, nom string t) ~:
+fn eat2@(T: Display, U: Display)(nom T s, nom U t) ~:
     println("{s}{t}")
 
-fn f@(...Ts)(...Ts args) ~ | StdError:
+fn f@(...Ts: Display)(...Ts args) ~ | StdError:
     expand(a in args):
         expand(b in args):
             eat2(nom a, nom b)

@@ -1,0 +1,15 @@
+# With `T: Hashable`, the template may call `.hash()` on a value of `T`, and each copy
+# calls the hash of its type argument (#1070).
+# EXPECT_STDOUT_EXACT: "true\nfalse\n"
+
+struct Point:
+    i32 x
+    i32 y
+
+fn same_hash@(T: Hashable)(T a, T b) bool:
+    return a.hash() == b.hash()
+
+fn main() i32:
+    println(same_hash(Point(1, 2), Point(1, 2)))
+    println(same_hash(Point(1, 2), Point(2, 1)))
+    return 0

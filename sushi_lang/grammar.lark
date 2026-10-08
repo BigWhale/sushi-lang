@@ -123,7 +123,7 @@ while_stmt: WHILE "(" expr ")" ":" block
 foreach_stmt: FOREACH "(" [type] (NAME | UNDERSCORE) [DOUBLE_QUESTION] "in" expr ")" ":" block
             | FOREACH "(" tuple_list "in" expr ")" ":" block -> foreach_destructure
             | FOREACH "(" BORROW_MODE (NAME | UNDERSCORE) "in" expr ")" ":" block -> foreach_ref
-expand_stmt: EXPAND "(" NAME "in" expr ")" ":" block
+expand_stmt: EXPAND "(" (NAME | UNDERSCORE) "in" expr ")" ":" block
 
 match_stmt: MATCH NOM? expr ":" _NEWLINE _INDENT match_arm+ _DEDENT
 match_arm: (pattern | literal_pattern | wildcard_pattern | tuple_pattern) "->" (match_arm_inline | block)
@@ -160,7 +160,11 @@ continue_stmt: CONTINUE _NEWLINE
 ?array_type: (array_type | atom_type | paren_type) "[" array_size "]" -> array_t
            | (array_type | atom_type | paren_type) "[" "]" -> dynamic_array_t
 
+# `(T: Clone)` is the bounded element of an array target, `extend (T: Clone)[] f()`. The
+# grammar takes a bound in every type-argument list and every parenthesized type; the
+# AST builder refuses it outside the top level of an `extend` target (CE6110, #1070).
 ?paren_type: "(" type ")"
+           | "(" NAME perk_constraints ")" -> bounded_paren_t
            | tuple_list -> tuple_t
 
 ?atom_type: "i8" -> i8_t
@@ -181,7 +185,9 @@ continue_stmt: CONTINUE _NEWLINE
           | NAME "." NAME -> qualified_name_t
           | NAME -> name_t
 
-type_list: type ("," type)*
+type_list: type_arg ("," type_arg)*
+?type_arg: type
+         | NAME perk_constraints -> bounded_type_arg
 
 # A fixed array's size: every base a numeric literal has, or the name of an integer
 # constant. The builder reads it (CE2099); the grammar only says what may stand here.

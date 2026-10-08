@@ -7,13 +7,17 @@
 struct P:
     i32 x
 
-extend P weight() i32:
-    return self.x
+perk Weighted:
+    fn weight() i32
 
-fn k@(T)(T x) i32:
+extend P with Weighted:
+    fn weight() i32:
+        return self.x
+
+fn k@(T: Weighted)(T x) i32:
     return x.weight()
 
-extend T[] firstk() i32:
+extend (T: Weighted)[] firstk() i32:
     return k(self[0])
 
 fn main() i32:

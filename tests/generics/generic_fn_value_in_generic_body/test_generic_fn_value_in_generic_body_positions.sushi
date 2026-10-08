@@ -2,8 +2,8 @@
 # and a rebind inside the body of a generic function, and a position that
 # names the type parameter solves it for each instance (#1036).
 # EXPECT_STDOUT_EXACT: "5\n1\n6\nx\n3\ny\n9\n"
-fn gen@(T)(T x) T:
-    return x
+fn gen@(T: Clone)(T x) T:
+    return x.clone()
 
 fn id_i(i32 x) i32:
     return x
@@ -11,20 +11,20 @@ fn id_i(i32 x) i32:
 struct H:
     fn(i32) -> i32 f
 
-fn use_let@(U)(U u) U:
+fn use_let@(U: Clone)(U u) U:
     let fn(U) -> U f = gen
     return f(u)
 
-fn use_ret@(U)(U u) fn(U) -> U:
+fn use_ret@(U: Display + Clone)(U u) fn(U) -> U:
     println(u)
     return gen
 
-fn use_field@(U)(U u) i32:
+fn use_field@(U: Display)(U u) i32:
     println(u)
     let H h = H(gen)
     return h.f(3)
 
-fn use_rebind@(U)(U u) i32:
+fn use_rebind@(U: Display)(U u) i32:
     println(u)
     let fn(i32) -> i32 f = id_i
     f := gen

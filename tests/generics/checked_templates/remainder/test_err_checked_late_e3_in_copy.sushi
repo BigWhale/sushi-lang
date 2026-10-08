@@ -1,0 +1,20 @@
+# A copy body asks for a late function instance that E3 refuses (#1070, R8): the early
+# passes cannot type `b.v` in the copy for `i32[]`. The call in the copy gives that one
+# fault and no second error.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+
+struct Box@(T):
+    T v
+
+fn k@(E: Display)(E x) i32 | E:
+    println("{x}")
+    return Result.Ok(1)
+
+extend (T: Clone + Display)[] firstk() i32:
+    let Box@(T) b = Box(self[0].clone())
+    return k(b.v).realise(0)
+
+fn main() i32:
+    let i32[] xs = from([1])
+    println(xs.firstk())
+    return 0

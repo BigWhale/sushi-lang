@@ -40,7 +40,7 @@ _add(ErrorMessage("CE0106", Severity.ERROR,
 
 _add(ErrorMessage("CE0107", Severity.ERROR,
     "{callable} must return a value on all code paths",
-    Category.FUNC, "A body that answers a value or a Result must end in a return on every code path. The rule is one for a function, a lambda and an extension or perk-implementation method alike. A body with a channel ('| E', or an explicit Result@(T, E) return) answers a Result, so a `~` one ends with `return Result.Ok(~)` (#848). A BARE `~` body answers nothing, so it may reach its end (docs/design/error-channel.md). Until #824 a `~` function was exempt, and until #845 a channel method and a lambda were exempt: a body that reached its end answered a Result.Err that no source wrote. A lambda is named `lambda` and carets its own location; it named the internal symbol `__lambda_0` with no location until #846."))
+    Category.FUNC, "A body that answers a value or a Result must end in a return on every code path. The rule is one for a function, a lambda and an extension or perk-implementation method alike. A body with a channel ('| E', or an explicit Result@(T, E) return) answers a Result, so a `~` one ends with `return Result.Ok(~)` (#848). A BARE `~` body answers nothing, so it may reach its end (docs/design/error-channel.md). Until #824 a `~` function was exempt, and until #845 a channel method and a lambda were exempt: a body that reached its end answered a Result.Err that no source wrote. A lambda is named `lambda` and carets its own location; it named the internal symbol `__lambda_0` with no location until #846. An `expand` may run zero times, as a loop may, so a `return` inside it does not end the path. The rule is judged once, on the template (#1070); until then a copy for an empty pack decided it, and named the copy."))
 
 # Constant expression evaluation errors
 _add(ErrorMessage("CE0108", Severity.ERROR,
@@ -89,7 +89,7 @@ _add(ErrorMessage("CE0118", Severity.ERROR,
 
 _add(ErrorMessage("CE0119", Severity.ERROR,
     "malformed expand(...): {message}",
-    Category.FUNC, "An expand(...) construct is malformed or used outside a type-pack context."))
+    Category.FUNC, "An `expand(a in args):` walks the value pack `...Ts args` of its own function, and it can stand in no other position. It is refused in a lambda body (a lambda is a callable of its own and has no type pack), in a body with no type pack (a concrete function, a generic function with no pack, an extension method, a perk method, a conversion), when the iterable is not a name, and when the name is not the value pack of the function. The rule is judged once, on the written body in the collect pass, so an uncalled template is refused too (#1070). The analysis stops after it, as it does after CE0147, because no copy of the body can be cut. Until #1070 the typecheck pass and the unroll each emitted this code in their own words, and a template that no call instantiated was not refused."))
 
 _add(ErrorMessage("CE0120", Severity.ERROR,
     "{message}",
@@ -153,7 +153,7 @@ _add(ErrorMessage("CE0140", Severity.ERROR,
 
 _add(ErrorMessage("CE0144", Severity.ERROR,
     "'{name}' is a type pack, not a value",
-    Category.FUNC, "A type-pack parameter `...Ts args` is used only through `expand(a in args):`, which gives one value per element. The pack name is not a value in any other position: pack forwarding (`g(args...)`, `g(args)`) and pack indexing (`args[0]`) are not supported. The diagnostic is the one fault of that use, so the call that holds it gives no second diagnostic (#1109). Before this code the use was CE1001, which called a written parameter undeclared, and a call around it added CE2060 and CE0120. Walk the pack with `expand(a in args):`."))
+    Category.FUNC, "A type-pack parameter `...Ts args` is used only through `expand(a in args):`, which gives one value per element. The pack name is not a value in any other position: pack forwarding (`g(args...)`, `g(args)`) and pack indexing (`args[0]`) are not supported. The diagnostic is the one fault of that use, so the call that holds it gives no second diagnostic (#1109). Before this code the use was CE1001, which called a written parameter undeclared, and a call around it added CE2060 and CE0120. Walk the pack with `expand(a in args):`. A template is checked where it is written (#1070), so an uncalled template is refused too."))
 
 _add(ErrorMessage("CE0147", Severity.ERROR,
     "'{name}' is a type pack: it names a type only in its `...{name}` parameter",

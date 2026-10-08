@@ -250,7 +250,8 @@ _OWNS_STOPS = _HOLDS_STOPS | {"ReferenceType"}
 
 
 def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
-                  resolve: Optional[Callable[["Type"], Optional["Type"]]] = None) -> bool:
+                  resolve: Optional[Callable[["Type"], Optional["Type"]]] = None,
+                  opaque_owns: bool = True) -> bool:
     """True if a value of this type owns something RAII must release and a sink must transfer.
 
     Two ways to own. Most types own HEAP, and the answer is structural: a `string`, a
@@ -267,6 +268,10 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
     One question per type over `type_walk.walk_named_types`. A fixed array owns no buffer
     of its own, but its elements can own heap (#185). A container's fields are raw
     pointers, so its generic base answers (#162, #181, #183).
+
+    An opaque type parameter MAY own, so by default it answers True and a value of it
+    moves (#1070, R5). `opaque_owns=False` asks "does this type own for EVERY type
+    argument": the rule of an owning lambda parameter (CE2094, R7).
     """
     from sushi_lang.semantics.type_walk import walk_named_types
     from sushi_lang.semantics.type_predicates import generic_base_of
@@ -284,7 +289,7 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
         if isinstance(ty, (StructType, EnumType)):
             return ty.name in drops or (
                 isinstance(ty, StructType) and generic_base_of(ty) in bases)
-        return False
+        return isinstance(ty, TypeParameter) and ty.is_opaque and opaque_owns
 
     return any(owns_here(ty) for ty in walk_named_types(
         t, stop=lambda ty: type(ty).__name__ in _OWNS_STOPS, resolve=resolve))
@@ -292,25 +297,41 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
 
 def holds_declared_resource(t: Optional["Type"], drops: AbstractSet[str],
                             resolve: Optional[Callable[["Type"], Optional["Type"]]] = None,
-                            ) -> bool:
+                            found: Optional[list] = None) -> bool:
     """Does this type declare a resource, or hold one anywhere inside it?
 
     NARROWER than `owns_resource`, and the difference is the whole point: a `string`
     owns heap and answers True there, and it deep-copies perfectly well. This asks only
     about the DECLARED half -- a `Drop` type, a struct with one in a field, an array or
-    a container of them.
+    a container of them -- and an opaque type parameter that does not promise `Clone`
+    (#1070, R5): `Clone` is the promise "holds no resource", so the two are one fact.
 
     It is what `.clone()` is refused on (ruling R3). A derived clone of a handle copies
     the descriptor number, so two values hold one descriptor and both drop: a double
     close that the copy verb hides. `.share()` is the operation that means a second
     owner, and it says so in its name.
+
+    The walk stops where the type holds nothing by value (`_HOLDS_STOPS`: a function
+    value, an iterator, a pointer). A user struct holds what its fields hold; only a
+    container keeps its element in its type arguments, so only a container's are read.
+    `found`, when given, receives each type that declares a resource: the clone check
+    reads it to name the fault (CE4018 for a type parameter, CE2431 for a handle).
     """
     from sushi_lang.semantics.type_walk import walk_named_types
-    return any(
-        isinstance(ty, (StructType, EnumType)) and ty.name in drops
-        for ty in walk_named_types(
-            t, stop=lambda ty: type(ty).__name__ in _HOLDS_STOPS, resolve=resolve,
-            struct_type_args=True))
+    from sushi_lang.semantics.type_predicates import generic_base_of
+    bases = _container_bases()
+
+    def declares_here(ty: "Type") -> bool:
+        if isinstance(ty, TypeParameter):
+            return ty.is_opaque and not ty.promises("Clone")
+        return isinstance(ty, (StructType, EnumType)) and ty.name in drops
+
+    declaring = [ty for ty in walk_named_types(
+        t, stop=lambda ty: type(ty).__name__ in _HOLDS_STOPS, resolve=resolve,
+        struct_type_args=lambda ty: generic_base_of(ty) in bases) if declares_here(ty)]
+    if found is not None:
+        found.extend(declaring)
+    return bool(declaring)
 
 
 @dataclass(frozen=True)
@@ -402,6 +423,10 @@ TYPE_NODE_NAMES = {
     "fn_type_t",       # First-class function type (e.g., fn(i32) -> i32)
     "tuple_t",         # Tuple type (e.g., (i32, string))
     "name_t", "qualified_name_t", "qualified_generic_type_t",
+    # The bounded array element `(T: Clone)`: only the top level of an `extend` target
+    # reads one (#1070), and every other position is CE6110. The bounded type argument
+    # `T: Clone` is no `type` of the grammar; the type-argument readers ask for it.
+    "bounded_paren_t",
 }
 
 NODE_TO_TYPE: Mapping[str, BuiltinType] = {

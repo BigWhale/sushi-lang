@@ -2,11 +2,12 @@
 # value is not solved: the value is CE2093, and that is the one diagnostic (#1029,
 # ruled again on #1105).
 # EXPECT_ERROR_CODES_EXACT: CE2093
-fn gen@(T)(T x) i32:
+fn gen@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     return 7 + (h & 0) as i32
 
 fn apply1@(T)(fn(T) -> i32 f) i32:
+    f
     return 0
 
 fn main() i32:

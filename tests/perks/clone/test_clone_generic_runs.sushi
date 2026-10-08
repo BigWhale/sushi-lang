@@ -1,0 +1,13 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless Mostly Harmless\n"
+# EXPECT_NO_LEAKS
+
+fn both@(T: Clone)(T value) (T, T):
+    let T first = value.clone()
+    let T second = value.clone()
+    return (first, second)
+
+fn main() i32:
+    let string s = "Mostly Harmless".clone()
+    let (string a, string b) = both(s)
+    println("{a} {b}")
+    return 0

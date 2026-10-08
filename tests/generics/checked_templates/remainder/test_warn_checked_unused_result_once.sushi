@@ -1,0 +1,16 @@
+# A warning of a template is told one time, by the template check (#1070, R7): the
+# copies for `i32` and `string` repeat it with a concrete type, and they report nothing.
+# EXPECT_ERROR_CODES_EXACT: CW2001
+
+fn wrap@(T: Clone)(T x) T | StdError:
+    return Result.Ok(x.clone())
+
+fn use_it@(T: Clone)(T x) i32:
+    wrap(x)
+    return 1
+
+fn main() i32:
+    let string s = "towel"
+    println(use_it(42))
+    println(use_it(s))
+    return 0

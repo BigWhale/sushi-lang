@@ -1,7 +1,7 @@
 # A generic function is a function value in a struct field and in an enum
 # payload: the declared field and payload types solve its type arguments (#1021).
 # EXPECT_STDOUT_EXACT: "7\n7\n"
-fn gen@(T)(T x) i32:
+fn gen@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     return 7 + (h & 0) as i32
 

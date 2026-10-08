@@ -1,0 +1,25 @@
+# A `break` in a nested `expand` takes its move to the loop exit (#1070, R6): a use of
+# the moved value after the loop is a plain CE2405, at the template.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+
+use <collections/strings>
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn f@(...Ts)(...Ts args) i32:
+    let string s = "tow".concat("el")
+    let i32 i = 0
+    while (i < 2):
+        expand(_ in args):
+            expand(_ in args):
+                eat(nom s)
+                break
+        s := "c".concat("d")
+        i := i + 1
+    println(s)
+    return i
+
+fn main() i32:
+    println(f(1, 2))
+    return 0

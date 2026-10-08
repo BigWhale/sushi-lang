@@ -149,9 +149,11 @@ value of an error channel, and only an error fits into an error channel.
    (`reject_unusable_key`) is the model. The diagnostic points at the `E` of a `| E`,
    and at the written type that holds the `E` in every other position.
 2. **A type parameter in the `E` position** (`fn f@(E)() T | E`, a generic type, a
-   generic extension target, a method-level type parameter) is judged at each instance,
-   because generics are templates. The diagnostic names the type argument and
-   carries a note at the template.
+   generic extension target, a method-level type parameter) is judged at each instance.
+   A template is checked once, where it is written, but whether `E` is an error type
+   depends on the type argument, so E3 is part of the per-instance remainder
+   (`docs/design/checked-generics.md`, rulings R7 and R8). The diagnostic names the type
+   argument and carries a note at the template.
 3. **A `Result` that the compiler infers is not judged.** A call result comes from a
    signature that was judged. A `Result.Err(x)` construction takes its type from its
    position, and that position was judged.
@@ -259,8 +261,20 @@ are non-generic: a generic error type, or an instance of one (`DecodeError@(i32)
 refused as a source and as a target. The lookup is then a pair of names, and the binary
 manifest a pair of strings.
 
-A generic FUNCTION may use a conversion. In `fn f@(E)(...) T | E`, the pair is known
-for each instance only, so the conversion is looked up when the instance is checked.
+A generic function cannot convert an opaque error type. A template is checked once,
+where it is written, with each type parameter opaque (#1070,
+`docs/design/checked-generics.md`). A conversion is declared for a pair of named error
+types, and the template cannot name one for its `E`. So in a template:
+
+- `??` on a `Result@(T, E)` with an opaque `E` propagates the same `E` and no other
+  (ruling R8). A body with the channel `| E` propagates it unchanged.
+- `??` from an opaque `E` into another error type is [CE2511](../error-catalog.md#ce2511), with a note at `E`. The
+  help names `.map_err(f)??` at the site, where `f` takes `E` and answers the error type of
+  the channel, or a concrete error type in the signature.
+- `e as AppError` on an opaque `e` is [CE2014](../error-catalog.md#ce2014), the cast rule of a type parameter.
+
+A generic function whose error types are CONCRETE (`fn f@(T)(...) T | AppError` that calls
+a `| ParseError` function) uses the declared conversion as a concrete function does.
 
 ### 3.7 Ownership
 

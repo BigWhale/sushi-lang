@@ -1,0 +1,37 @@
+# A generic function cannot use a conversion through its type parameter. The template is
+# checked where it is written, with `E` opaque, and `??` on an opaque `E` only propagates
+# the same `E` (#1070). This body answers `AppError`, so the `??` on `Result@(i32, E)` is
+# refused, although each instance below would have a conversion or the same type.
+# EXPECT_ERROR_CODES_EXACT: CE2511
+error LowError:
+    Bad(i32)
+
+error AppError:
+    Low(LowError)
+    Plain(i32)
+
+extend LowError as AppError:
+    return AppError.Low(self)
+
+fn low(i32 n) i32 | LowError:
+    if (n < 0):
+        return Result.Err(LowError.Bad(n))
+    return Result.Ok(n)
+
+fn app(i32 n) i32 | AppError:
+    return Result.Err(AppError.Plain(n))
+
+fn lift@(E)(nom Result@(i32, E) r) i32 | AppError:
+    let i32 v = r??
+    return Result.Ok(v + 1)
+
+fn show(Result@(i32, AppError) r) ~:
+    match r:
+        Result.Ok(v) -> println("ok {v}")
+        Result.Err(e) -> println("err {e}")
+
+fn main() i32:
+    show(lift(nom low(4)))
+    show(lift(nom low(-1)))
+    show(lift(nom app(8)))
+    return 0

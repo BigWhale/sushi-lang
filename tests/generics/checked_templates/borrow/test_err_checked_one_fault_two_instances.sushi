@@ -1,0 +1,12 @@
+# The borrow fault of a template is reported one time, at the template, and its copies
+# for `i32` and `string` report nothing (#1070, R5).
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn id@(T)(T x) T:
+    return x
+
+fn main() i32:
+    let string s = "towel"
+    println(id(42))
+    println(id(s))
+    return 0

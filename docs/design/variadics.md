@@ -173,7 +173,16 @@ fn main() i32:
 - **`expand(x in pack): BODY`** is a compile-time-unrolled construct (the static analog of
   `foreach`): one copy of BODY is emitted per pack element, each `x` bound to that element's
   concrete type. It is not a runtime loop — no iterator or array is created.
+  - BODY is **checked once**, on the written template, before any copy (#1070, R6). There
+    `x` has an opaque element type that carries the constraints of the pack, and the body
+    can do with it only what they promise. Each `expand` node binds its own element type.
+    `docs/design/checked-generics.md` section 6 has the rule.
   - `??` and early `return` are allowed inside `expand` bodies with correct RAII.
+  - An `expand` **may run zero times**, as a `foreach` may (ruling of 2026-10-08). A `return`
+    inside it does not end the path, so a pack template whose only `return` is in its
+    `expand` is [`CE0107`](../error-catalog.md#ce0107), judged once, on the template.
+  - The binder takes the lints of a `foreach` item: [`CW1001`](../error-catalog.md#cw1001) when nothing reads it,
+    [`CW1002`](../error-catalog.md#cw1002) for a shadow, and `expand(_ in args)` is the discard.
   - Local variables declared inside `expand` are scoped to each unrolled copy (straight-line +
     nested-block-scope model).
 - **Monomorphization**: each distinct (arity, type-tuple) call site produces a separate specialized
@@ -185,14 +194,24 @@ fn main() i32:
 - **Pack elements are passed as separate positional arguments** — they are not boxed or collected
   into an array.
 - **Arity zero** is valid: `print_all()` monomorphizes an arity-0 specialization; the `expand` body
-  executes zero times.
+  executes zero times. The return rule reads this on the template, not on the arity-0 copy.
 
 ### Diagnostics
 
 - **[CE0117](../error-catalog.md#ce0117)** — type-pack `...Ts` must be the last type parameter; at most one pack per function.
 - **[CE0118](../error-catalog.md#ce0118)** — cannot mix a type-pack `...Ts` with a native homogeneous `...T` in the same function.
-- **[CE0119](../error-catalog.md#ce0119)** — malformed `expand` statement (wrong syntax, iterator variable, or target).
+- **[CE0119](../error-catalog.md#ce0119)** — an `expand` that does not walk the value pack of its own function: in a
+  lambda body, in a body with no pack (a concrete function, an extension or perk method), or
+  over a name that is not the value pack. The collect pass judges it on the written body, so an
+  uncalled template is refused too, and the analysis stops after it, as after CE0147. The
+  typecheck pass and the unroll keep only an internal-error backstop (CE0015).
+- **[CE0144](../error-catalog.md#ce0144)** — the value pack used as a value outside `expand`.
+- **[CE0107](../error-catalog.md#ce0107)** — a pack template whose only `return` is inside its `expand`.
 - **[CE2090](../error-catalog.md#ce2090)** — a pack element type at the call site does not satisfy the pack's perk constraint.
+  In a template, an argument whose type does not promise the perk of a pack callee.
+- The codes of `docs/design/checked-generics.md` (CE2008, CE2035, CE2514, CE4018 and the
+  others) — an operation on an element that the pack's constraints do not promise, at the
+  template, with a note at the pack and at the binder.
 - **[CE0147](../error-catalog.md#ce0147)** — the pack name is a type only in its own `...Ts args` parameter. A parameter
   `Ts x`, a return type, a `let` type, `Ts[]` and `List@(Ts)` are refused where the
   template is written, and the analysis stops before the generic passes.
@@ -200,8 +219,9 @@ fn main() i32:
 ### Type-pack limitations
 
 - **Perk-constrained packs only**: an unconstrained `...Ts` (no `: PerkName`) can be declared and
-  called, but the `expand` body cannot usefully operate on the elements without a perk (no
-  methods are available). Unconstrained forwarding and pack indexing are deferred.
+  called, but the `expand` body can only count, hold and pass on the elements: a method, an
+  operator or a hole on an element is refused at the template. Unconstrained forwarding and pack
+  indexing are deferred.
 - **Cross-library packs**: a public `...Ts` pack ships in a `.slib` as an
   instantiable template (`templates.generic_functions`) and is monomorphized at the consumer's call
   sites, exactly like a regular cross-library generic. [CE0116](../error-catalog.md#ce0116) still blocks native `...T` export
@@ -219,6 +239,12 @@ Pack elements that all resolve to one enum type work like any other pack
 ### Internal representation
 
 - `TypePack` in `semantics/generics/types.py` represents the variable-length type sequence.
+- The template check (`passes/types/templates.py`) drops the value pack from the check copy
+  and keeps its name in `pack_names`. `PackElements` gives each `expand` node its own opaque
+  element type, a `TypeParameter` with an element number (`opaque_pack_element`,
+  `passes/collect/functions.py`). A call of a pack template inside a template is checked
+  against its signature with the pack fanned out (`fan_out_pack_param`), the one fan-out
+  that the monomorphizer also uses.
 - `monomorphize_function` builds a pack-aware substitution map; `expand_pack_param` fans a
   pack-typed value parameter into one concrete parameter per element.
 - Name mangling: `.pack{N}` marker (e.g. `.pack3` for a three-element pack) encodes arity in a

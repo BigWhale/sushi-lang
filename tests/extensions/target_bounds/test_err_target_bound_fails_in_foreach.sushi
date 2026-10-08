@@ -1,0 +1,16 @@
+# A `next()` whose target bound fails is refused at the `foreach` with the bound's
+# error, not with the error of a type that cannot be walked (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+use <io/fs>
+
+struct Feed@(T):
+    List@(T) items
+
+extend Feed@(T: Clone) next(poke self) Maybe@(T):
+    return self.items.pop()
+
+fn main() i32:
+    let Feed@(File) feed = Feed(List.new())
+    foreach(f in feed):
+        println(f.is_terminal())
+    return 0

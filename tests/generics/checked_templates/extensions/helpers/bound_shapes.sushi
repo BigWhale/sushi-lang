@@ -1,0 +1,9 @@
+# A unit that declares two perks with one method name, and a type with a bound.
+public perk A:
+    fn name() string
+
+public perk B:
+    fn name() string
+
+public struct Box@(T: A):
+    T value

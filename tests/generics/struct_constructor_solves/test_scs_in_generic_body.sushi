@@ -6,14 +6,14 @@ struct Feed@(T):
     T[] items
     i32 at
 
-extend Feed@(T) next(poke self) Maybe@(T):
+extend Feed@(T: Clone) next(poke self) Maybe@(T):
     if (self.at >= self.items.len()):
         return Maybe.None()
-    let T v = self.items[self.at]
+    let T v = self.items[self.at].clone()
     self.at := self.at + 1
     return Maybe.Some(v)
 
-fn total@(T)(nom T[] items) i32:
+fn total@(T: Eq + Clone)(nom T[] items) i32:
     let i32 n = 0
     foreach(r in Feed(items, 0)):
         if (r == r):

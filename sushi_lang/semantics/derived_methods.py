@@ -63,3 +63,24 @@ class DerivedMethodTable(BuiltinMethodRegistry):
         if own is not None:
             return own
         return builtin_registry.get_method(target_type, method_name)
+
+
+class OverlayDerivedMethods(DerivedMethodTable):
+    """The derived methods of a template check (#1070): its own, then the program's.
+
+    The overlay of a template check registers the hash and the clone of an instance that
+    holds an opaque type parameter here, and the program table never sees one. A lookup
+    asks this table, then the program's, which asks the process-wide built-ins.
+    """
+
+    def __init__(self, base: DerivedMethodTable) -> None:
+        super().__init__()
+        self.base = base
+
+    def get_method(self, target_type: 'Type',
+                   method_name: str) -> Optional['BuiltinMethod']:
+        """This check's derived method, else the program's."""
+        own = BuiltinMethodRegistry.get_method(self, target_type, method_name)
+        if own is not None:
+            return own
+        return self.base.get_method(target_type, method_name)

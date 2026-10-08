@@ -182,6 +182,12 @@ class CalleeModes:
         self._struct_names = struct_names if struct_names is not None else frozenset()
         self._stdlib_sigs = stdlib_sigs or {}
 
+    def with_struct_names(self, struct_names) -> 'CalleeModes':
+        """The same resolver over other struct names: the overlay of a template check
+        holds the instances over an opaque parameter that a check copy constructs."""
+        return CalleeModes(func_sigs=self._func_sigs, struct_names=struct_names,
+                           stdlib_sigs=self._stdlib_sigs)
+
     def kind_of(self, name: str, local_type: Optional[Type] = None) -> CalleeKind:
         """Which kind of callee `name` denotes at a call site."""
         from sushi_lang.semantics.typesys import FunctionType

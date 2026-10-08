@@ -2,7 +2,7 @@
 # EXPECT_ERROR_CODE: CW1001
 # This tests body substitution with if/while statements
 
-fn find_max@(T)(T a, T b) T:
+fn find_max@(T: Ord)(nom T a, nom T b) T:
     # Control flow with generic types
     if (a > b):
         return a
@@ -18,12 +18,12 @@ fn loop_count@(T)(T value, i32 max) i32:
 
 fn run_test() i32:
     # Test find_max with i32
-    let i32 max1 = find_max(10, 20)
+    let i32 max1 = find_max(nom 10, nom 20)
     if (max1 != 20):
         return 1
 
     # Test find_max with i64
-    let i64 max2 = find_max(100 as i64, 50 as i64)
+    let i64 max2 = find_max(nom 100 as i64, nom 50 as i64)
     if (max2 != 100 as i64):
         return 2
 

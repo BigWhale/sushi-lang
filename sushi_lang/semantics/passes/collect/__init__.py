@@ -30,7 +30,7 @@ from .functions import (
 )
 from .perks import (
     GenericPerkImpl, GenericPerkImplTable, PerkCollector, PerkImplementationTable,
-    PerkTable)
+    PerkTable, reject_second_homes)
 from .externals import ExternalCollector, ExternalTable, ExternalSig
 from .utils import extract_type_param_names
 from .unit_names import claim_unit_names
@@ -220,9 +220,11 @@ class CollectorPass:
                 *self.enum_collector.refused_library_types]
 
     @property
-    def refused_pack_templates(self) -> list[str]:
-        """The generic functions that name their type pack as one type (CE0147)."""
-        return list(self.function_collector.refused_pack_templates)
+    def refused_pack_bodies(self) -> list[str]:
+        """The declarations that name a type pack as one type (CE0147) or hold a
+        misplaced `expand`."""
+        return [*self.function_collector.refused_pack_bodies,
+                *self.perk_collector.refused_pack_bodies]
 
     @property
     def _collectors(self) -> tuple:
@@ -256,6 +258,11 @@ class CollectorPass:
         reject_private_perk_constraints(
             self.r, self.visibility, root,
             current_unit=unit_name, filename=unit_file)
+        # The own constraints of a generic type, judged one time where they are written:
+        # a template on the type inherits them and does not judge them again (#1070).
+        for declarations in (root.structs, root.enums):
+            for declaration in declarations:
+                reject_second_homes(self.r, self.perks, declaration.type_params or ())
 
         return self.tables
 

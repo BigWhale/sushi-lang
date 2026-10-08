@@ -1,0 +1,11 @@
+# A binary library template calls a private template whose channel is `| E`. The
+# consumer's `i32` is no error type (#1070, R8), and the note at the private template
+# names the source slice of that template, not the slice of its caller.
+# BUILD_LIB_BINARY: e3_note_lib.sushi
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: <template:e3_note_lib:inner>:1:
+use <lib/e3_note_lib>
+
+fn main() i32:
+    println(outer(nom 5))
+    return 0

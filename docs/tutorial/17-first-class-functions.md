@@ -136,8 +136,8 @@ A **generic** function can be a value when the position states a function type. 
 type chooses the instantiation:
 
 ```sushi
-fn identity@(T)(T x) T:
-    return x
+fn identity@(T: Clone)(T x) T:
+    return x.clone()
 
 fn apply(fn(i32) -> i32 op, i32 v) i32:
     return op(v)

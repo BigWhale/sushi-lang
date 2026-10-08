@@ -1,0 +1,19 @@
+# With `T: Eq`, `==` and `!=` on a type parameter are legal, and each copy compares
+# with the equality of its type argument (#1070).
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\n"
+
+struct Point:
+    i32 x
+    i32 y
+
+fn same@(T: Eq)(T a, T b) bool:
+    return a == b
+
+fn differ@(T: Eq)(T a, T b) bool:
+    return a != b
+
+fn main() i32:
+    println(same(Point(1, 2), Point(1, 2)))
+    println(same("towel", "Towel"))
+    println(differ(3, 4))
+    return 0

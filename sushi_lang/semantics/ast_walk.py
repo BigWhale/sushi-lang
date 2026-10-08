@@ -30,7 +30,8 @@ from dataclasses import dataclass, fields
 from typing import (TYPE_CHECKING, Callable, Iterable, Iterator, List, Optional,
                     Tuple, Union, cast)
 
-from sushi_lang.semantics.ast import Node, VarDef
+from sushi_lang.semantics.ast import (
+    Block, Break, Continue, If, Match, Node, Return, VarDef)
 
 if TYPE_CHECKING:
     from sushi_lang.internals.report import Span
@@ -58,9 +59,12 @@ if TYPE_CHECKING:
     # The inner node a position belongs to, when it belongs to one.
     InnerDecl = Union["StructField", "EnumVariant", "CallableDecl"]
 
-    # What `signature_constraints()` reads. These four kinds declare the type
-    # parameters a constraint rides on; no other declaration has one to read.
-    ConstraintDecl = Union["FuncDef", "StructDef", "EnumDef", "ExtendDef"]
+    # What `signature_constraints()` reads. These kinds declare the type parameters a
+    # constraint rides on; no other declaration has one to read. A perk implementation
+    # has one in its target alone (`extend Box@(T: Eq) with Show`, #1070).
+    ConstraintDecl = Union["FuncDef", "StructDef", "EnumDef", "ExtendDef", "ExtendWithDef"]
+    TypeParamDecl = Union["FuncDef", "StructDef", "EnumDef", "ExtendDef"]
+    TargetDecl = Union["ExtendDef", "ExtendWithDef"]
 
     # A declaration with a body, which is what `bodied()` answers with.
     BodiedDecl = Union["FuncDef", "ExtendDef"]
@@ -107,6 +111,31 @@ def is_written(decl: object) -> bool:
     both on purpose -- see its own note.
     """
     return not getattr(decl, "is_synthesized", False)
+
+
+def is_template_copy(body: object) -> bool:
+    """Whether the compiler cut this body from a template that a walk of THIS build read.
+
+    The rules that need no type run once, on the template as written (#1070), so a copy
+    of such a template does not run them again: one fault, one diagnostic. A copy of a
+    generic function and a method of a copied perk implementation carry `instance_of`; a
+    copy of an extension carries the unit it went home to.
+
+    Two copies are not muted. A copy of a binary or hybrid library's template: the
+    template is only in the tables, no walk of this build reads it, so the copy is the
+    one place its body is checked. And a lambda lifted out of a copy: the template check
+    does not enter a lambda, because a lambda can take its channel from the type that
+    its position expects.
+    """
+    from sushi_lang.semantics.ast import ExtendDef
+    if getattr(body, "is_library_template", False):
+        return False
+    if isinstance(body, ExtendDef):
+        return body.home_unit is not None
+    if getattr(body, "instance_of", None) is None:
+        return False
+    from sushi_lang.semantics.passes.lift import is_lifted_lambda
+    return not is_lifted_lambda(cast("FuncDef", body))
 
 
 def _bodied_kinds(program: 'Program') -> Iterator[Tuple[str, BodiedDecl]]:
@@ -199,7 +228,7 @@ def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
     """
     # Named, so that the four kinds stay one union. Left inline, the pairs read as
     # their common base class and every field below goes unchecked again.
-    declared: Tuple[Tuple[str, ConstraintDecl], ...] = (
+    declared: Tuple[Tuple[str, TypeParamDecl], ...] = (
         *(("function", func) for func in program.functions),
         *(("struct", struct) for struct in program.structs),
         *(("enum", enum) for enum in program.enums),
@@ -208,15 +237,33 @@ def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
     )
     for kind, decl in declared:
         fallback = decl.name_span or decl.loc
-        for param in decl.type_params or ():
-            constraints = param.constraints or ()
-            namespaces = param.constraint_namespaces or ()
-            for index, constraint in enumerate(constraints):
-                if isinstance(constraint, str):
-                    yield ConstraintSite(
-                        kind, decl, constraint,
-                        param.constraint_span(index) or param.loc or fallback,
-                        namespaces[index] if index < len(namespaces) else None)
+        yield from _constraint_sites(kind, decl, decl.type_params or (), fallback)
+    # The bounds a target puts on its type parameters (#1070). A copy is an instance and
+    # carries none, so each written bound is read one time.
+    targets: Tuple[Tuple[str, TargetDecl], ...] = (
+        *(("extension", ext) for ext in
+          [*program.extensions, *program.generic_extensions]),
+        *(("perk implementation", impl) for impl in
+          [*program.perk_impls, *program.generic_perk_impls]),
+    )
+    for target_kind, target in targets:
+        params = [param for param in target.target_params or () if param is not None]
+        yield from _constraint_sites(target_kind, target, params,
+                                     target.target_type_span or target.loc)
+
+
+def _constraint_sites(kind: str, decl: ConstraintDecl, params,
+                      fallback: Optional[Span]) -> Iterator[ConstraintSite]:
+    """One site for each constraint of each bounded type parameter."""
+    for param in params:
+        constraints = param.constraints or ()
+        namespaces = param.constraint_namespaces or ()
+        for index, constraint in enumerate(constraints):
+            if isinstance(constraint, str):
+                yield ConstraintSite(
+                    kind, decl, constraint,
+                    param.constraint_span(index) or param.loc or fallback,
+                    namespaces[index] if index < len(namespaces) else None)
 
 
 def _callable_sites(kind: str, decl: CallableOwner,
@@ -554,3 +601,51 @@ def _walk_one(node: Node, visit: Callable[[Node], bool]) -> None:
         return
     for child in children(node):
         _walk_one(child, visit)
+
+
+def terminates(node, *, leaves_round: bool = False) -> bool:
+    """Does every path through this statement (or block) leave the function?
+
+    With `leaves_round`, a `break` and a `continue` end a path too: they leave the round
+    of the loop, and the loop frame keeps their facts (#993). This is the question of a
+    join inside a loop body. A nested loop is not descended: a `break` in it ends that
+    loop's round, not this path.
+    """
+    match node:
+        case Return():
+            return True
+        case Break() | Continue():
+            return leaves_round
+        case Block():
+            # Any terminating statement terminates the block. Later statements are
+            # unreachable; they are still checked, which over-checks and never
+            # under-checks.
+            return any(terminates(stmt, leaves_round=leaves_round)
+                       for stmt in node.statements)
+        case If():
+            return bool(node.else_block) and (
+                all(terminates(arm, leaves_round=leaves_round) for _cond, arm in node.arms)
+                and terminates(node.else_block, leaves_round=leaves_round))
+        case Match():
+            arms = getattr(node, "arms", ())
+            return bool(arms) and all(terminates(arm.body, leaves_round=leaves_round)
+                                      for arm in arms)
+        case _:
+            return False
+
+
+def ends_unrolled_run(stmt) -> bool:
+    """Is `stmt` a statement of an unrolled `expand` element that ends every path?
+
+    A copy of a pack template holds each element in place in its block (#1070, R6), so
+    a `break`, a `continue` or a `return` of an element can stand before more statements
+    of that block. No path reaches them, as no path leaves the element in the template
+    check: the borrow pass does not walk them and the backend does not emit them. Both
+    ask here, so the two cannot disagree.
+
+    Only an element statement stops the walk. A WRITTEN block can hold statements after
+    one that `terminates` accepts: the dead-statement rule (CE0140, #854) reads an `if`
+    or a `match` whose arms all break or continue as one that falls through, so it does
+    not refuse the statements after it, and the borrow pass walks them.
+    """
+    return bool(stmt.expand_copies) and terminates(stmt, leaves_round=True)

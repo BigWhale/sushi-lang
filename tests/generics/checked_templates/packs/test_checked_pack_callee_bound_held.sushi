@@ -1,0 +1,21 @@
+# A type parameter that promises the constraint of the pack passes it on to a call of
+# the pack template (#1070).
+# EXPECT_STDOUT_EXACT: "i:7\ni:1\n"
+
+perk Render:
+    fn render() string
+
+extend i32 with Render:
+    fn render() string:
+        return "i:{self}"
+
+fn show_all@(...Ts: Render)(...Ts args) ~:
+    expand(a in args):
+        println(a.render())
+
+fn outer@(T: Render)(T x) ~:
+    show_all(x, 1)
+
+fn main() i32:
+    outer(7)
+    return 0

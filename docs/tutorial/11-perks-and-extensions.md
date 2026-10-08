@@ -117,12 +117,19 @@ The target of an extension can also be an array type or a generic type:
 
 - `extend i32[] total()` adds a method to one array type, `i32[]`.
 - `extend T[] count()` adds a method to every dynamic array. `T` is the element type.
-- `extend Box@(T) get()` adds a method to every `Box`. A concrete argument, as in
+- `extend Box@(T: Clone) get()` adds a method to every `Box` whose `T` has `Clone`: it
+  returns a clone of the value, because a field read is a borrow. A concrete argument, as in
   `extend Box@(i32) ...`, adds the method to `Box@(i32)` only.
 
 A method can also have its **own** type parameters, after its name: `paired@(U)`. The
 compiler finds `U` from the arguments. A method call has no place for explicit type
 arguments.
+
+The compiler checks the body of a generic method one time, where it is written, and a
+type parameter has only what a perk promises. `paired` puts `self.value` and `other` in
+holes, so the target asks for `Display` on both: `extend Box@(T: Display)
+paired@(U: Display)`. A bound in the target (`T: Display`) is legal only there; a struct,
+an enum and a function write their bounds in their own `@(...)`.
 
 ```sushi
 --8<-- "docs/tutorial/examples/11-perks-and-extensions/targets.sushi"
@@ -138,7 +145,7 @@ Output:
 ```
 
 Chapter 19 uses these forms: the standard library declares `extend T[] map@(U)(...)` and
-`extend List@(T) filter(...)`.
+`extend List@(T: Clone) filter(...)`.
 
 ## Static methods: a constructor on the type
 
@@ -237,8 +244,10 @@ that the program uses with the perk.
 ```
 
 One implementation covers `i32[]`, `string[]` and `bool[]`. The body names `T` to hold the
-first element. `announce` accepts each array, because each array type implements
-`Describable`.
+first element and puts it in a hole, so the target asks for `Display` on the element:
+`extend (T: Display)[] with Describable`. `announce` accepts each array, because each
+array type implements `Describable`. An array whose element has no `Display` (an array of
+function values) does not.
 
 Output:
 
@@ -312,6 +321,12 @@ The override applies in every position: `println`, a hole, the generic `announce
 uses the `Towel` text for its field. `@(T: Display)` takes `42` too, because every
 primitive has a `Display`.
 
+One more perk comes with the compiler: **`Clone`**, `fn clone() Self`. A generic body that
+calls `.clone()` on a `T` asks for it: `@(T: Clone)`. Every type that holds no resource
+satisfies it, so you never implement it (an implementation is [`CE4017`](../error-catalog.md#ce4017)). A `File` does
+not satisfy it, because a copy of a file handle would close one descriptor two times;
+`.share()` gives a second owner of a handle.
+
 Where the contract says `Self`, an implementation writes its own type: `fn eq(Towel other)
 bool`. `Self` is legal in these predefined contracts only. A perk that you write cannot use
 it.
@@ -350,7 +365,7 @@ With these limits, every perk method call goes to a known function at compile ti
 - A **perk** is a contract of method signatures. A type opts in with
   `extend Type with Perk:`.
 - Perks are **generic constraints** (`@(T: Perk)`), checked at compile time.
-- `Hashable` is **predefined**, as `Drop`, `Eq`, `Ord` and `Display` are. Every type with a
+- `Hashable` is **predefined**, as `Drop`, `Eq`, `Ord`, `Display` and `Clone` are. Every type with a
   derived `hash()` satisfies it, and `extend T with Hashable` replaces the derived hash.
   The compiler also derives `==` and the order operators (`Eq`, `Ord`) and the text of
   a struct or enum (`Display`); an `extend T with Display` (or `Eq`, `Ord`)

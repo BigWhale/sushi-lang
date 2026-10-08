@@ -40,6 +40,9 @@ class StructTable:
     # The unit each span is in, keyed alike: a duplicate is reported while ANOTHER
     # unit is being collected, so the note has to name this file (#473).
     files: Dict[str, Optional[str]] = field(default_factory=dict)
+    # True only for the overlay of a template check (#1070): an instance over an OPAQUE
+    # type parameter is a type there. A program table never holds one (CE0148).
+    admits_opaque: bool = False
 
 
 @dataclass

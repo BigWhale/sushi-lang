@@ -1,4 +1,5 @@
 const i32 SECRET = 9
 
 public fn pick@(T)(T x) i32:
+    x
     return SECRET

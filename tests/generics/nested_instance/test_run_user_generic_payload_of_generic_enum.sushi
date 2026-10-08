@@ -8,7 +8,7 @@
 struct Box@(T):
     T v
 
-extend Box@(T) label() string:
+extend Box@(T: Display) label() string:
     return "box {self.v}"
 
 enum Slot@(B):

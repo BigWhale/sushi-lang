@@ -16,8 +16,8 @@ def _predefined():
     return {perk.name: perk for perk in collector._predefined_perks()}
 
 
-def test_the_predefined_set_is_exactly_five():
-    assert set(_predefined()) == {"Drop", "Hashable", "Eq", "Ord", "Display"}
+def test_the_predefined_set_is_exactly_six():
+    assert set(_predefined()) == {"Drop", "Hashable", "Eq", "Ord", "Display", "Clone"}
 
 
 def test_eq_and_ord_name_the_receiver_and_display_takes_nothing():
@@ -30,6 +30,11 @@ def test_eq_and_ord_name_the_receiver_and_display_takes_nothing():
     assert (compare.name, [type(p.ty) for p in compare.params], compare.ret) == (
         "compare", [ReceiverType], BuiltinType.I32)
     assert (to_str.name, to_str.params, to_str.ret) == ("to_str", [], BuiltinType.STRING)
+
+
+def test_clone_names_the_receiver_as_its_answer():
+    (clone,) = _predefined()["Clone"].methods
+    assert (clone.name, clone.params, type(clone.ret)) == ("clone", [], ReceiverType)
 
 
 def test_the_tables_hand_the_derived_table_the_overrides():

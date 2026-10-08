@@ -1,0 +1,10 @@
+# A template body is checked where it is written, with no call (#1070): `T` is not
+# `i32`, whatever a call would give for it.
+# EXPECT_ERROR_CODES_EXACT: CE2003
+
+fn as_number@(T)(nom T x) i32:
+    return x
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, PerkDef
+from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, Lambda, PerkDef, Return
+from sushi_lang.semantics.ast_walk import is_template_copy, walk_nodes
 from sushi_lang.semantics.typesys import BuiltinType, UnknownType
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.channel import callable_text, has_channel
@@ -98,6 +99,7 @@ def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> No
     """
     from .resolution import channel_result
     self.body_name = callable_text(name, kind)
+    self.in_template_copy = is_template_copy(node)
     self.body_return_type = ret
     validate_error_channel(self, ret, err_type, err_span)
     self.channel_result = channel_result(self, ret, err_type) if has_channel(node) else None
@@ -108,6 +110,7 @@ def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> No
 
 def _leave_body(self) -> None:
     self.body_name = None
+    self.in_template_copy = False
     self.body_return_type = None
     self.channel_result = None
     self.body_conversion = None
@@ -126,6 +129,69 @@ def _reject_fall_off(self, body, ret, channel: bool, span) -> None:
     """
     if (ret != BuiltinType.BLANK or channel) and not block_always_returns(self, body):
         self.err.emit(er.ERR.CE0107, span, callable=self.body_name)
+
+
+def _reject_path_faults(self, node) -> None:
+    """CE0140, then CE0107, for one function or method body.
+
+    Neither rule reads a type, so a template takes both once, as written, and a copy of
+    it takes neither (#1070).
+    """
+    if self.in_template_copy:
+        return
+    reject_dead_statements(self, node.body)
+    _reject_fall_off(self, node.body, node.ret, has_channel(node), node.name_span)
+
+
+def check_template_statements(self, program, checked) -> None:
+    """The statement rules that need no type, on each template body AS WRITTEN (#1070).
+
+    A generic function, a generic extension (a `T[]` template included) and each method
+    of a perk implementation on a generic target. The body is read once, whether a call
+    instantiates the template or not, and a copy of it repeats none of these rules: a
+    statement after the path ends (CE0140), a fall off the end (CE0107), and a `return`
+    in a channel body that spells no constructor (CE2030). A rule that needs the type of
+    an expression waits for the copy.
+
+    `checked` holds the templates that a check copy read (#1070): the copy takes these
+    rules with the stamps of the typecheck pass, so a `match` that is not exhaustive is
+    its own fault and makes no statement after it dead.
+    """
+    bodies = [(func, "function") for func in program.functions
+              if func.type_params and id(func) not in checked]
+    bodies += [(ext, "method") for ext in program.generic_extensions
+               if id(ext) not in checked]
+    bodies += [(method, "method")
+               for impl in program.generic_perk_impls if id(impl) not in checked
+               for method in impl.methods]
+    for node, kind in bodies:
+        self.reporter.leave_body()
+        self.body_name = callable_text(node.name, kind)
+        self.in_template_copy = False
+        _reject_path_faults(self, node)
+        if has_channel(node):
+            _reject_unspelled_returns(self, node.body)
+        _leave_body(self)
+
+
+def _reject_unspelled_returns(self, body) -> None:
+    """CE2030 at each `return` of a channel body that spells no `Result` constructor.
+
+    A lambda is a callable of its own, with the channel of its own type, so the walk does
+    not enter one.
+    """
+    from .result_validation import spells_a_result
+    from .statements import reject_unspelled_result
+
+    def visit(node) -> bool:
+        if isinstance(node, Lambda):
+            return False
+        if isinstance(node, Return) and node.value is not None \
+                and not spells_a_result(node.value):
+            reject_unspelled_result(self, node.value)
+        return True
+
+    walk_nodes(body, visit)
 
 
 def validate_function(self, func: FuncDef) -> None:
@@ -153,8 +219,7 @@ def _validate_function_body(self, func: FuncDef) -> None:
     validate_type_name(self, func.ret, func.ret_span)
 
     self._validate_block(func.body)
-    reject_dead_statements(self, func.body)
-    _reject_fall_off(self, func.body, func.ret, has_channel(func), func.name_span)
+    _reject_path_faults(self, func)
 
     self.current_function = None
     _leave_body(self)
@@ -242,10 +307,20 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
     validate_type_name(self, method.ret, method.ret_span)
 
     self._validate_block(method.body)
-    reject_dead_statements(self, method.body)
-    _reject_fall_off(self, method.body, method.ret, has_channel(method), method.name_span)
+    _reject_path_faults(self, method)
 
     _leave_body(self)
+
+
+def validate_perk_template_bodies(self, target_type, impl: ExtendWithDef) -> None:
+    """The bodies of the check copy of a perk template (#1070): the target, then each method.
+
+    The header is not judged here: `validate_template_header` judged it on the written
+    template, one time.
+    """
+    _validate_target_type(self, target_type, impl.target_type_span, False)
+    for method in impl.methods:
+        _validate_method_body(self, target_type, method, False)
 
 
 def validate_extension_method(self, ext: ExtendDef) -> None:

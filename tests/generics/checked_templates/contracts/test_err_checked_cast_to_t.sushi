@@ -1,0 +1,11 @@
+# A cast to a type parameter is refused where the template is written, and the note
+# points at the parameter, as for a cast from one (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2014
+# EXPECT_STDERR_CONTAINS: "'T' is declared here with no constraint"
+
+fn narrow@(T)(i64 v) T:
+    return v as T
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

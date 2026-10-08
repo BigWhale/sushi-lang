@@ -1,0 +1,14 @@
+# A `Clone` bound on a generic struct refuses a handle (R5): a File holds a descriptor,
+# and `.share()` is the way to a second owner of one.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+use <io/fs>
+
+struct Box@(T: Clone):
+    T item
+
+fn holds(Box@(File) b) i32:
+    return 0
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

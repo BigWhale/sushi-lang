@@ -1,0 +1,21 @@
+# A static and a method on `Cell@(T)` inherit the bound `Clone` that `Cell` declares
+# (#1070, R1).
+# EXPECT_STDOUT_EXACT: "towel towel\n"
+# EXPECT_NO_LEAKS: true
+
+struct Cell@(T: Clone):
+    T value
+
+extend Cell@(T) static of(T v) Cell@(T):
+    return Cell(v.clone())
+
+extend Cell@(T) dup() Cell@(T):
+    return Cell(self.value.clone())
+
+fn main() i32:
+    let string w = "tow"
+    let string s = "{w}el"
+    let Cell@(string) a = Cell.of(s)
+    let Cell@(string) b = a.dup()
+    println("{a.value} {b.value}")
+    return 0

@@ -15,6 +15,7 @@ from sushi_lang.semantics.generics.local_bindings import (
 )
 
 from .order import functions_in_site_order
+from .transformer import pack_binding_for
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Block, Call, ExtendDef, FuncDef
@@ -123,6 +124,9 @@ class FunctionMonomorphizer:
         # body binds in the DEFINITION's unit (D4's rule, at home), so the walk
         # resolves a nested generic call against the enclosing generic's unit.
         self._asking_unit = None
+        # And the file the walked body is written in: a nested instantiation records its
+        # site there, so a constraint refusal of it has a location (#1070).
+        self._asking_file: Optional[str] = None
 
     def _generic_def(self, unit_name, func_name):
         """The generic `func_name` means inside `unit_name`: own unit, then flat.
@@ -212,21 +216,7 @@ class FunctionMonomorphizer:
         if substitution is None:
             return None
 
-        # Substitute in parameter types. A pack-typed value-parameter fans out
-        # into N concrete params (one per pack element, possibly zero); a normal
-        # param yields exactly one concrete param identical to the legacy result.
-        substitutor = self.monomorphizer.substitutor
-        concrete_params = []
-        pack_param_fanout: Dict[str, list] = {}
-        for param in generic.params:
-            expanded = substitutor.expand_pack_param(param, substitution)
-            if substitutor._pack_binding_for(param, substitution) is not None:
-                pack_param_fanout[param.name] = [p.name for p in expanded]
-            concrete_params.extend(expanded)
-
-        concrete_ret = self.monomorphizer.substitutor.substitute_type(
-            generic.ret, substitution
-        ) if generic.ret else None
+        concrete_func, pack_param_fanout = self._cut(generic, substitution)
 
         # A trailing pack type-param passes its arity, so the symbol is distinct per pack
         # size and cannot collide with a regular generic of the same base.
@@ -243,41 +233,69 @@ class FunctionMonomorphizer:
         self.monomorphizer.monomorphized_functions[mangled_name] = (
             getattr(generic, "unit_name", None), generic.name, type_args)
 
-        concrete_body = self.monomorphizer.substitutor.substitute_body(generic.body, substitution)
-
         # Unroll `expand(...)` into ordinary statements, so no later pass ever sees an
         # Expand: each element's copy is straight-line and names its element parameter.
         if pack_param_fanout:
             from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
-            concrete_body = unroll_expands(concrete_body, pack_param_fanout)
+            concrete_func.body = unroll_expands(concrete_func.body, pack_param_fanout)
 
-        self._collect_nested_instantiations(concrete_body, concrete_params, generic)
+        self._collect_nested_instantiations(concrete_func.body, concrete_func.params, generic)
+        concrete_func.name = mangled_name
+
+        self._collect_fn_value_instantiations(
+            concrete_func.body, getattr(generic, "unit_name", None),
+            file=generic.filename, functions=[concrete_func])
+
+        self.monomorphizer.func_cache[cache_key] = concrete_func
+
+        return concrete_func
+
+    def cut_body(self, generic: 'GenericFuncDef',
+                 substitution: "Dict[str, Type | TypePack]") -> 'FuncDef':
+        """The template with `substitution` put through its signature and its body.
+
+        It does not mangle, register, collect nested instantiations or unroll: the
+        template check cuts its check copy with the opaque parameters here (#1070), and
+        `monomorphize_function` adds its own bookkeeping to the same cut.
+        """
+        return self._cut(generic, substitution)[0]
+
+    def _cut(self, generic: 'GenericFuncDef',
+             substitution: "Dict[str, Type | TypePack]") -> "Tuple[FuncDef, Dict[str, list]]":
+        """The cut, and the element names each pack parameter fans out to."""
+        # Substitute in parameter types. A pack-typed value-parameter fans out
+        # into N concrete params (one per pack element, possibly zero); a normal
+        # param yields exactly one concrete param identical to the legacy result.
+        substitutor = self.monomorphizer.substitutor
+        concrete_params = []
+        pack_param_fanout: Dict[str, list] = {}
+        for param in generic.params:
+            expanded = substitutor.expand_pack_param(param, substitution)
+            if pack_binding_for(param, substitution) is not None:
+                pack_param_fanout[param.name] = [p.name for p in expanded]
+            concrete_params.extend(expanded)
+
+        concrete_ret = substitutor.substitute_type(
+            generic.ret, substitution) if generic.ret else None
+
+        concrete_body = substitutor.substitute_body(generic.body, substitution)
 
         # The channel is substituted like every other type in the signature. A copy
         # carries `err_type` through, so `fn f@(E)(T v) i32 | E` would otherwise reach
         # the backend with an unsubstituted type parameter in its error arm.
         # `generics/extensions.py` does the same for a method's channel.
-        concrete_err = self.monomorphizer.substitutor.substitute_type(
-            generic.err_type, substitution
-        ) if getattr(generic, "err_type", None) else None
+        concrete_err = substitutor.substitute_type(
+            generic.err_type, substitution) if getattr(generic, "err_type", None) else None
 
         from sushi_lang.semantics.channel import has_channel
         concrete_func = copy.copy(generic)
         concrete_func.written_channel = has_channel(generic)
-        concrete_func.name = mangled_name
         concrete_func.params = concrete_params
         concrete_func.ret = concrete_ret
         concrete_func.err_type = concrete_err
         concrete_func.body = concrete_body
         concrete_func.type_params = None  # No longer generic
-
-        self._collect_fn_value_instantiations(
-            concrete_func.body, getattr(generic, "unit_name", None),
-            functions=[concrete_func])
-
-        self.monomorphizer.func_cache[cache_key] = concrete_func
-
-        return concrete_func
+        return concrete_func, pack_param_fanout
 
     def monomorphize_all_functions(
         self,
@@ -355,8 +373,11 @@ class FunctionMonomorphizer:
                 continue
 
             # Which source this body is a copy of. Every copy carries the template's
-            # spans, so the reporter tells a fault in the shared source once (#648).
+            # spans, so the reporter tells a fault in the shared source once (#648), and
+            # says nothing for a template whose check refused it (#1070).
             concrete_func.instance_of = generic_func.name
+            from sushi_lang.semantics.generics.types import TemplateId
+            concrete_func.template_id = TemplateId(home_unit, generic_func.name)
             concrete_func.pack_names = tuple(
                 p.name for p in generic_func.params if p.is_pack)
 
@@ -390,12 +411,22 @@ class FunctionMonomorphizer:
         and a template walk solved them against an unbound type parameter (#795).
         """
         var_types = {param.name: param.ty for param in params if param.ty is not None}
-        saved_unit = self._asking_unit
+        saved_unit, saved_file = self._asking_unit, self._asking_file
         self._asking_unit = getattr(generic_func, "unit_name", None)
+        self._asking_file = generic_func.filename
         self._collect_block_instantiations(body, var_types)
-        self._asking_unit = saved_unit
+        self._asking_unit, self._asking_file = saved_unit, saved_file
+
+    def _record_site(self, name: str, type_args, loc) -> None:
+        """The first site that names a nested function instantiation (#579, #1070)."""
+        if loc is None or self._asking_file is None:
+            return
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        self.monomorphizer.sites.setdefault(
+            ("fn", instantiation_key(name, tuple(type_args))), (loc, self._asking_file))
 
     def _collect_fn_value_instantiations(self, body: 'Block', unit_name: Optional[str],
+                                         file: Optional[str] = None,
                                          **declarations) -> None:
         """Every generic function VALUE in one copy, queued for monomorphization (#1036).
 
@@ -427,6 +458,8 @@ class FunctionMonomorphizer:
             func_table=tables.funcs.by_name,
             tables=tables,
             namespaces=namespaces,
+            sites=self.monomorphizer.sites,
+            current_file=file,
         )
         program = Program(uses=[], constants=[], structs=[], enums=[], perks=[],
                           functions=[], extensions=[], generic_extensions=[],
@@ -487,17 +520,21 @@ class FunctionMonomorphizer:
 
         saved = getattr(self.monomorphizer, 'pending_instantiations', None)
         self.monomorphizer.pending_instantiations = set()
-        saved_unit = self._asking_unit
+        saved_unit, saved_file = self._asking_unit, self._asking_file
         self._asking_unit = None
+        self._asking_file = extend_def.template_file
         self._collect_block_instantiations(extend_def.body, var_types)
         self._asking_unit = saved_unit
-        self._collect_fn_value_instantiations(extend_def.body, None, extensions=[extend_def])
+        self._collect_fn_value_instantiations(extend_def.body, None, file=self._asking_file,
+                                              extensions=[extend_def])
+        self._asking_file = saved_file
         found = self.monomorphizer.pending_instantiations
         self.monomorphizer.pending_instantiations = saved if saved is not None else set()
         return found
 
-    def collect_from_perk_method_body(self, target_type: Type,
-                                      method) -> Set[Tuple[str, Tuple[Type, ...]]]:
+    def collect_from_perk_method_body(self, target_type: Type, method,
+                                      filename: Optional[str]
+                                      ) -> Set[Tuple[str, Tuple[Type, ...]]]:
         """The same walk, for one monomorphized perk-implementation method.
 
         A perk method carries no target of its own -- the `extend X with P` header does
@@ -510,13 +547,16 @@ class FunctionMonomorphizer:
 
         saved = getattr(self.monomorphizer, 'pending_instantiations', None)
         self.monomorphizer.pending_instantiations = set()
-        saved_unit = self._asking_unit
+        saved_unit, saved_file = self._asking_unit, self._asking_file
         self._asking_unit = None
+        self._asking_file = filename
         self._collect_block_instantiations(method.body, var_types)
         self._asking_unit = saved_unit
         from sushi_lang.semantics.ast import ExtendWithDef
+        file = self._asking_file
+        self._asking_file = saved_file
         self._collect_fn_value_instantiations(
-            method.body, None, perk_impls=[ExtendWithDef(
+            method.body, None, file=file, perk_impls=[ExtendWithDef(
                 target_type=target_type, perk_name="", methods=[method],
                 loc=getattr(method, "loc", None))])
         found = self.monomorphizer.pending_instantiations
@@ -646,6 +686,7 @@ class FunctionMonomorphizer:
                         # Instead, we add to a worklist that will be processed by monomorphize_all_functions
                         cache_key = (getattr(generic_func, "unit_name", None),
                                      function_name, type_args)
+                        self._record_site(function_name, type_args, expr.loc)
                         if cache_key not in self.monomorphizer.func_cache and hasattr(self.monomorphizer, 'pending_instantiations'):
                             self.monomorphizer.pending_instantiations.add(cache_key)
 

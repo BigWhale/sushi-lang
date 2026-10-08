@@ -1,0 +1,14 @@
+# An `expand` body is borrow-checked once, on the template (#1070, R5, R6): an element
+# of a borrowed pack is a borrow, and handing it to a `nom` parameter consumes it.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn eat@(T: Display)(nom T x) ~:
+    println("{x}")
+
+fn eats@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        eat(nom a)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

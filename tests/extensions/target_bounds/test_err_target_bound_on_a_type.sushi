@@ -1,0 +1,16 @@
+# A bound constrains a type parameter, and `Point` is a type (#1070). The declaration
+# is refused, and the call of its method adds no second error.
+# EXPECT_ERROR_CODES_EXACT: CE2124
+
+struct Point:
+    i32 x
+
+struct Box@(T):
+    T value
+
+extend Box@(Point: Clone) f() i32:
+    return 1
+
+fn main() i32:
+    let Box@(Point) b = Box(Point(3))
+    return b.f()

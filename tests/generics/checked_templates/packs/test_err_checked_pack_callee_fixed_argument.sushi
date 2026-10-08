@@ -1,0 +1,27 @@
+# The fixed parameters of a pack callee are measured in a template check too: the
+# `poke` parameter takes a `poke` argument, and a plain one is a type mismatch at
+# position 1 (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2006
+
+perk Render:
+    fn render() string
+
+extend i32 with Render:
+    fn render() string:
+        return "i:{self}"
+
+fn tagged@(...Ts: Render)(poke i32 count, ...Ts args) ~:
+    expand(a in args):
+        count := count + 1
+        println(a.render())
+
+fn outer@(T: Render)(T x) ~:
+    let i32 n = 0
+    tagged(n, x)
+    println("{n}")
+
+fn main() i32:
+    let i32 m = 0
+    tagged(poke m, 1)
+    println("{m}")
+    return 0

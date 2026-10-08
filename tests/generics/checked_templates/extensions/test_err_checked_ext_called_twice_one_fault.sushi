@@ -1,0 +1,16 @@
+# The fault of an extension template is reported one time, at the template, and its
+# copies report it again for no type argument (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4018
+
+struct Box@(T):
+    T value
+
+extend Box@(T) twice() Box@(T):
+    return Box(self.value.clone())
+
+fn main() i32:
+    let Box@(i32) a = Box(1)
+    let Box@(string) b = Box("towel")
+    println(a.twice().value)
+    println(b.twice().value)
+    return 0

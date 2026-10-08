@@ -1,0 +1,16 @@
+# CW1001 names what it reports: a parameter of a function and a parameter of a lambda
+# are each an unused parameter, and a local is an unused variable (#1070).
+# EXPECT_ERROR_CODES_EXACT: CW1001, CW1001, CW1001
+# EXPECT_STDERR_CONTAINS: :8:21: warning [CW1001]: unused parameter 'spare'.
+# EXPECT_STDERR_CONTAINS: :9:5: warning [CW1001]: unused variable 'extra'.
+# EXPECT_STDERR_CONTAINS: :14:33: warning [CW1001]: unused parameter 'ignored'.
+
+fn twice(i32 n, i32 spare) i32:
+    let i32 extra = 1
+    return n * 2
+
+fn main() i32:
+    println(twice(21, 0))
+    let fn(i32) -> i32 g = |i32 ignored| 3
+    println(g(1))
+    return 0

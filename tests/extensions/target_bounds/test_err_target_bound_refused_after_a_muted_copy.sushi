@@ -1,0 +1,12 @@
+# A refusal in a muted copy of a refused template stands in for no later site (#1070):
+# the template reports its own fault, and the call in this unit, over a type that is
+# not `Clone`, reports its own.
+# EXPECT_ERROR_CODES_EXACT: CE4006, CE4006
+
+use "helpers/feed_template"
+
+fn main() i32:
+    let i32 a = h(nom Res(5))
+    match Feed(from([Res(1)])).first():
+        Result.Ok(_) -> return a
+        Result.Err(_) -> return 0

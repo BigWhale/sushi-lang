@@ -1,0 +1,5 @@
+fn inner@(E)(nom E e) i32 | E:
+    return Result.Err(e)
+
+public fn outer@(E)(nom E e) i32:
+    return inner(nom e).realise(0)

@@ -16,11 +16,16 @@ from sushi_lang.semantics.typesys import (
     element_text,
 )
 from sushi_lang.semantics.generics.types import (
+    OPAQUE_MARK,
     GenericEnumType,
     GenericStructType,
     GenericTypeRef,
     TypePack,
+    TypeParameter,
 )
+
+# The template part of an opaque parameter in an interned name: `#main.f` in `T#main.f`.
+_OPAQUE_OWNER = re.compile(re.escape(OPAQUE_MARK) + r"[^\s,<>()\[\]']+")
 
 
 def display_type(ty) -> str:
@@ -76,12 +81,18 @@ def display_type(ty) -> str:
     if isinstance(ty, UnknownType):
         return display_type_name(ty.name)
 
+    # A user writes `T`; the owner of an opaque parameter is an internal identity.
+    if isinstance(ty, TypeParameter):
+        return ty.name
+
     return str(ty)
 
 
 def display_type_name(name: str) -> str:
     """Best-effort `@(...)` for a bare identity name lacking structured metadata."""
     from sushi_lang.semantics.generics.tuples import TUPLE_BASE
+    if OPAQUE_MARK in name:
+        name = _OPAQUE_OWNER.sub("", name)
     if TUPLE_BASE in name:
         return _display_tuples_in_name(name)
     if "<" not in name:

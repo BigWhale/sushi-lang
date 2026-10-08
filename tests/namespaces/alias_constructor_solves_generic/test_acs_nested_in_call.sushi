@@ -3,13 +3,13 @@
 # EXPECT_STDOUT_EXACT: "9\n2\n"
 use "helpers/acs_shapes" as sh
 
-fn one@(T)(T d) i32:
+fn one@(T: Eq)(T d) i32:
     if (d == d):
         return 1
     return 0
 
-fn same@(T)(T d) T:
-    return d
+fn same@(T: Clone)(T d) T:
+    return d.clone()
 
 fn add(i32 a, i32 b) i32:
     return a + b

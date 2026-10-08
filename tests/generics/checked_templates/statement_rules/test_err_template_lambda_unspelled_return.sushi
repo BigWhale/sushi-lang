@@ -1,0 +1,15 @@
+# A lambda in a template takes its channel from the type its position expects, so the
+# template check does not enter it. A `return` in the lambda that spells no `Result`
+# constructor is CE2030 in each copy, and it is told once (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2030
+
+fn run@(T)(nom T item) T:
+    let fn(i32) -> i32 | StdError half = |i32 x| -> i32 | StdError:
+        return x / 2
+    println(half(4).realise(0))
+    return item
+
+fn main() i32:
+    println(run(nom 1))
+    println(run(nom "one"))
+    return 0

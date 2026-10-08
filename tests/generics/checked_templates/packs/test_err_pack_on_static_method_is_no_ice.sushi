@@ -1,0 +1,13 @@
+# A type pack on a static method has no template check, and the call reports the
+# ordinary diagnostic with no internal error (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2063
+
+struct Crate:
+    i32 w
+
+extend Crate static mk@(...Ts)() Crate:
+    return Crate(1)
+
+fn main() i32:
+    println(Crate.mk().w)
+    return 0

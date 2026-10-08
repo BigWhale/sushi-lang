@@ -9,7 +9,7 @@ fn plain(i32 x) i32:
 struct Crate:
     i32 w
 
-extend Crate pick@(U)(U u) i32:
+extend Crate pick@(U: Display)(U u) i32:
     println(u)
     return plain(4)
 

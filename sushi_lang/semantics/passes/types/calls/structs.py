@@ -10,7 +10,8 @@ from sushi_lang.semantics.ast import Call, Expr
 from ..compatibility import types_compatible
 from ..propagation import propagate_types_to_value
 from ..utils import (
-    intern_declared_wrapper, reject_spread_args, resolve_declared_type)
+    intern_declared_wrapper, reject_spread_args, reject_unpromised_arguments,
+    resolve_declared_type)
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -111,6 +112,7 @@ def validate_generic_struct_constructor(validator: 'TypeValidator', call: Call,
     base = call.callee.id
     instance = untyped_struct_instance(validator, base, call.args, call.field_names)
     if isinstance(instance, StructType):
+        reject_unpromised_arguments(validator, instance, call.loc)
         call.callee.id = instance.name
         validate_struct_constructor(validator, call)
         return instance

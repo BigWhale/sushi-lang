@@ -1,8 +1,0 @@
-use <collections/strings>
-
-fn size@(T)(T x) i32:
-    return x.len()
-
-fn main() i32:
-    println("a string has len(): {size('four')}")
-    return 0

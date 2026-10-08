@@ -7,10 +7,10 @@ enum Slot@(T):
     Full(T)
     Empty
 
-fn k@(T)(T x) i32:
+fn k@(T: Hashable)(T x) i32:
     return 7 + (x.hash() * 0) as i32
 
-extend Slot@(T) probe() i32:
+extend Slot@(T: Hashable) probe() i32:
     match self:
         Slot.Full(v) -> return k(v)
         Slot.Empty -> return 0

@@ -1,0 +1,17 @@
+# A perk template on `Box@(T)` inherits the bound that `Box` declares (#1070, R1).
+# EXPECT_STDOUT_EXACT: "42\n"
+
+perk Show:
+    fn show() string
+
+struct Box@(T: Display):
+    T value
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "{self.value}"
+
+fn main() i32:
+    let Box@(i32) b = Box(42)
+    println(b.show())
+    return 0

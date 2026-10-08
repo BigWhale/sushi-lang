@@ -1,0 +1,22 @@
+# A perk template is borrow-checked where it is written (#1070, R5): a method that hands
+# a field of a borrowed `self` to a `nom` parameter consumes a borrow.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+perk Count:
+    fn count() i32
+
+fn take@(T: Display)(nom T x) i32:
+    println("{x}")
+    return 1
+
+struct Box@(T: Display):
+    T v
+
+extend Box@(T) with Count:
+    fn count() i32:
+        return take(nom self.v)
+
+fn main() i32:
+    let Box@(i32) b = Box(42)
+    println(b.count())
+    return 0

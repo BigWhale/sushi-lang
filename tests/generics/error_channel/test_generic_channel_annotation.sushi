@@ -9,8 +9,8 @@ use <collections/strings>
 error SizeError:
     TooSmall
 
-fn sized@(T)(T value, i32 base) i32 | SizeError:
-    if (base < 0 or value.len() == 0):
+fn sized@(T: Display)(T value, i32 base) i32 | SizeError:
+    if (base < 0 or value.to_str().len() == 0):
         return Result.Err(SizeError.TooSmall)
     return Result.Ok(base + 2)
 
