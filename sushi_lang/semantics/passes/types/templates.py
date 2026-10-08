@@ -20,8 +20,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence, TypeV
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
     BoundedTypeParam, Expand, ExtendDef, ExtendWithDef, FuncDef, Program)
-from sushi_lang.semantics.ast_walk import walk_nodes
-from sushi_lang.semantics.generics.types import TemplateId
+from sushi_lang.semantics.generics.types import TemplateId, TypeParameter
 from sushi_lang.semantics.typesys import DynamicArrayType
 
 from . import TypeValidator
@@ -29,6 +28,37 @@ from . import TypeValidator
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
     from sushi_lang.semantics.template_scope import TemplateScope
+
+
+class PackElements:
+    """The element type of each `expand` of one check copy (#1070, R6).
+
+    One element type per `expand` node, numbered in the order the check meets them.
+    The number only has to be unique in one template check: the check copy, the overlay
+    and every instance that names an element type are discarded after it.
+    """
+
+    def __init__(self, record: 'GenericFuncDef', unit: Optional[str]) -> None:
+        packs = [tp for tp in record.type_params
+                 if isinstance(tp, BoundedTypeParam) and tp.is_pack]
+        self._pack = packs[-1] if packs else None
+        self._unit = unit
+        self._template = record.name
+        self._memo: Dict[int, TypeParameter] = {}
+
+    def element_of(self, node: Expand) -> TypeParameter:
+        found = self._memo.get(id(node))
+        if found is not None:
+            return found
+        if self._pack is None:
+            er.raise_internal_error(
+                "CE0015", message=f"an `expand` in '{self._template}', which has no pack")
+        from sushi_lang.semantics.passes.collect.functions import opaque_pack_element
+        element = opaque_pack_element(cast(BoundedTypeParam, self._pack), self._unit,
+                                      self._template, len(self._memo), node.var,
+                                      node.var_span)
+        self._memo[id(node)] = element
+        return element
 
 
 class TemplateValidator(TypeValidator):
@@ -44,13 +74,18 @@ class TemplateValidator(TypeValidator):
     requests_late_instances = False
     in_template_check = True
 
+    def __init__(self, *args: Any, pack_elements: Optional[PackElements] = None,
+                 **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.pack_elements = pack_elements
+
 
 def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
     """Check one function template on a check copy. Answers whether it was checked.
 
-    A template with a pack parameter, or a body with an `expand`, is not checked here
-    (packs are a later phase), and neither is a refused redeclaration, whose record is
-    another body.
+    A refused redeclaration is not checked here, because its record is another body.
+    The check copy of a pack template holds no value pack: each `expand` binds an
+    element type (`PackElements`), and a use of the pack name elsewhere is CE0144.
     """
     record = validator.generic_func_table.lookup(func.name, validator.current_unit_name)
     if (record is None or record.body is not func.body or not _checkable(record)
@@ -71,13 +106,16 @@ def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
         # template, under its own name, so CE0107 and every other message names it.
         check_copy.name = func.name
         check_copy.instance_of = None
-        check_copy.pack_names = ()
+        # The value pack is not a value in the check copy: no parameter holds it, and
+        # its name stays in `pack_names`, so a use of it is CE0144.
+        check_copy.params = [p for p in check_copy.params if not p.is_pack]
+        check_copy.pack_names = tuple(p.name for p in record.params if p.is_pack)
         check_copy.is_synthesized = False
         return check_copy
 
     # The cut interns what the copy names itself.
     check_copy = _cut_and_settle(scope, cut, lambda _copy: ())
-    checker = _checker(check)
+    checker = _checker(check, PackElements(record, validator.current_unit_name))
     checker._validate_function(check_copy)
     _lifter(check, checker).lift_function(check_copy)
     _close(check, TemplateId(record.unit_name, record.name))
@@ -249,13 +287,16 @@ def _open(validator: TypeValidator) -> _Check:
                   sum(reporter.errors_offered.values()))
 
 
-def _checker(check: _Check) -> 'TemplateValidator':
-    """The typecheck pass over the check copy: the one construction of it."""
+def _checker(check: _Check,
+             pack_elements: Optional[PackElements] = None) -> 'TemplateValidator':
+    """The typecheck pass over the check copy: the one construction of it. A pack
+    template gives the element type of each `expand`."""
     validator = check.validator
     return TemplateValidator(
         validator.reporter, check.scope.tables, current_unit_name=validator.current_unit_name,
         monomorphized_functions=validator.monomorphized_functions,
-        in_library_unit=validator.in_library_unit, namespaces=validator.namespaces)
+        in_library_unit=validator.in_library_unit, namespaces=validator.namespaces,
+        pack_elements=pack_elements)
 
 
 def _lifter(check: _Check, checker: 'TemplateValidator'):
@@ -275,22 +316,11 @@ def _close(check: _Check, template_id: TemplateId) -> None:
 
 
 def _checkable(record: 'GenericFuncDef') -> bool:
-    """The template check covers it: every type parameter has its opaque form, and the
-    body holds no `expand`."""
-    names = [getattr(tp, "name", tp) for tp in record.type_params]
-    if any(getattr(tp, "is_pack", False) for tp in record.type_params):
-        return False
-    if set(names) != set(record.opaque):
-        return False
-    found = []
-
-    def visit(node) -> bool:
-        if isinstance(node, Expand):
-            found.append(node)
-        return not found
-
-    walk_nodes(record.body, visit)
-    return not found
+    """The template check covers it: every type parameter but the pack has its opaque
+    form."""
+    names = {getattr(tp, "name", tp) for tp in record.type_params
+             if not getattr(tp, "is_pack", False)}
+    return names == set(record.opaque)
 
 
 def _names_no_perk(validator: TypeValidator, params: Sequence[Any]) -> bool:

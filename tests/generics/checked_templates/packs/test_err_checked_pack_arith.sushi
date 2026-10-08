@@ -1,0 +1,12 @@
+# No constraint promises arithmetic, so `+` on an element of a pack is refused where
+# the template is written (#1070, R2, R6).
+# EXPECT_ERROR_CODES_EXACT: CE2518
+
+fn doubles@(...Ts: Ord)(...Ts args) ~:
+    expand(a in args):
+        if (a + a > a):
+            println("Mostly Harmless")
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

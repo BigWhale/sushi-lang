@@ -9,6 +9,7 @@ from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
 from sushi_lang.semantics.ast import Let, Return, Rebind, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess, RangeExpr
+from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.places import Step, walk_place
@@ -21,6 +22,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from . import TypeValidator
+    from sushi_lang.semantics.ast import Expand
 
 
 def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
@@ -494,6 +496,31 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
             validator.variable_types.pop(stmt.item_name, None)
         else:
             validator.variable_types[stmt.item_name] = previous
+
+
+def validate_expand_statement(validator: 'TypeValidator', stmt: 'Expand') -> None:
+    """The body of an `expand`, checked once, with the binder an element type (#1070).
+
+    Only the check copy of a pack template holds an `expand` here: the collect pass
+    refused every misplaced one, and a copy holds the unrolled body. The iterable is the
+    value pack, which is not a value (CE0144), so it is not checked as an expression.
+    """
+    elements = validator.pack_elements
+    if elements is None:
+        raise_internal_error(
+            "CE0015", message="an `expand` reached the typecheck pass outside a "
+                              "template check")
+        return
+    _MISSING = object()
+    previous = validator.variable_types.get(stmt.var, _MISSING)
+    validator.variable_types[stmt.var] = elements.element_of(stmt)
+    try:
+        validator._validate_block(stmt.body)
+    finally:
+        if previous is _MISSING:
+            validator.variable_types.pop(stmt.var, None)
+        else:
+            validator.variable_types[stmt.var] = previous
 
 
 # One counter for the whole process, for the same reason the AST builder keeps one: the

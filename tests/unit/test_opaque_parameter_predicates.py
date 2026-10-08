@@ -56,3 +56,37 @@ def test_the_perk_table_answers_the_promise():
     assert clone is not None and clone.ret == _opaque("Clone")
     assert not isinstance(clone.ret, ReceiverType)
     assert impls.get_method(_opaque("Eq"), "hash") is None
+
+
+def _element(element: int, template: str = "f") -> TypeParameter:
+    return TypeParameter("Ts", owner=TemplateId("u", template), constraints=("Eq",),
+                         element=element, binder="a")
+
+
+def test_two_elements_of_one_pack_are_two_types():
+    assert _element(0) != _element(1)
+    assert _element(0) == _element(0)
+    assert hash(_element(0)) == hash(_element(0))
+    assert _element(0) != TypeParameter("Ts", owner=TemplateId("u", "f"))
+    assert TypeParameter("T", owner=TemplateId("u", "f"), element=None) == \
+        TypeParameter("T", owner=TemplateId("u", "f"))
+
+
+def test_an_element_spells_its_owner_and_its_number():
+    assert str(_element(0)) == "Ts#u.f#0"
+    assert _element(0).written() == "...Ts"
+    assert TypeParameter("T", owner=TemplateId("u", "f")).written() == "T"
+
+
+def test_an_element_renders_as_the_pack_name():
+    from sushi_lang.semantics.generics.type_display import display_type, display_type_name
+    assert display_type_name("List<Ts#u.f#0>") == "List@(Ts)"
+    assert display_type(_element(0)) == "Ts"
+
+
+def test_an_element_is_an_opaque_parameter_to_every_predicate():
+    assert _element(0).is_opaque
+    assert _element(0).promises("Eq")
+    assert not _element(0).is_pack
+    assert owns_resource(_element(0), set())
+    assert holds_declared_resource(_element(0), set())

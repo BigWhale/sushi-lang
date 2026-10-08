@@ -153,7 +153,7 @@ _add(ErrorMessage("CE0140", Severity.ERROR,
 
 _add(ErrorMessage("CE0144", Severity.ERROR,
     "'{name}' is a type pack, not a value",
-    Category.FUNC, "A type-pack parameter `...Ts args` is used only through `expand(a in args):`, which gives one value per element. The pack name is not a value in any other position: pack forwarding (`g(args...)`, `g(args)`) and pack indexing (`args[0]`) are not supported. The diagnostic is the one fault of that use, so the call that holds it gives no second diagnostic (#1109). Before this code the use was CE1001, which called a written parameter undeclared, and a call around it added CE2060 and CE0120. Walk the pack with `expand(a in args):`."))
+    Category.FUNC, "A type-pack parameter `...Ts args` is used only through `expand(a in args):`, which gives one value per element. The pack name is not a value in any other position: pack forwarding (`g(args...)`, `g(args)`) and pack indexing (`args[0]`) are not supported. The diagnostic is the one fault of that use, so the call that holds it gives no second diagnostic (#1109). Before this code the use was CE1001, which called a written parameter undeclared, and a call around it added CE2060 and CE0120. Walk the pack with `expand(a in args):`. A template is checked where it is written (#1070), so an uncalled template is refused too."))
 
 _add(ErrorMessage("CE0147", Severity.ERROR,
     "'{name}' is a type pack: it names a type only in its `...{name}` parameter",

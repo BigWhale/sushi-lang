@@ -1,0 +1,11 @@
+# `.clone()` on an element needs `Clone` among the constraints of the pack
+# (#1070, R5, R6).
+# EXPECT_ERROR_CODES_EXACT: CE4018
+
+fn copies@(...Ts: Display)(...Ts args) ~:
+    expand(a in args):
+        println(a.clone())
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

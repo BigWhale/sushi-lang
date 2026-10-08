@@ -5,18 +5,18 @@ from typing import TYPE_CHECKING
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.passes.types.expressions import validate_boolean_condition
 from sushi_lang.semantics.passes.types.matching import validate_match_statement
 from sushi_lang.semantics.passes.types.statements import (
-    validate_foreach_statement, validate_let_statement, validate_rebind_statement,
-    validate_return_statement)
+    validate_expand_statement, validate_foreach_statement, validate_let_statement,
+    validate_rebind_statement, validate_return_statement)
 from sushi_lang.semantics.visitors import RecursiveVisitor
 from sushi_lang.semantics.ast import (
-    Let, Rebind, ExprStmt, Return, Print, PrintLn, Assert, If, While, Foreach, Match, Break, Continue
+    Let, Rebind, ExprStmt, Return, Print, PrintLn, Assert, If, While, Foreach, Expand, Match,
+    Break, Continue
 )
 
 
@@ -47,11 +47,9 @@ class StatementValidator(RecursiveVisitor):
         """Validate foreach statement iterator type and body."""
         validate_foreach_statement(self.type_validator, node)
 
-    def visit_expand(self, node) -> None:
-        """No `expand` reaches the typecheck pass: the collect pass refused every
-        misplaced one, and a copy holds the unrolled body."""
-        raise_internal_error(
-            "CE0015", message="an `expand` reached the typecheck pass")
+    def visit_expand(self, node: Expand) -> None:
+        """Validate the body of an `expand` of a pack template's check copy."""
+        validate_expand_statement(self.type_validator, node)
 
     def visit_match(self, node: Match) -> None:
         """Validate match statement with exhaustiveness checking."""

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.externals import ExternalSig
     from sushi_lang.semantics.passes.collect.functions import FuncSig
     from sushi_lang.semantics.passes.collect.constants import ConstSig
+    from sushi_lang.semantics.passes.types.templates import PackElements
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -44,6 +45,8 @@ class TypeValidator:
 
     # True only over the check copy of a template (`templates.TemplateValidator`, #1070).
     in_template_check = False
+    # The element type of each `expand`, over the check copy of a pack template only.
+    pack_elements: Optional['PackElements'] = None
 
     def __init__(self, reporter: Reporter, tables: 'SymbolTables',
                  current_unit_name: Optional[str] = None,

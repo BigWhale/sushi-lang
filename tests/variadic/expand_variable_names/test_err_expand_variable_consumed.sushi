@@ -3,14 +3,16 @@
 # fault, decided by the identity of the written node: the reporter also drops an
 # identical repeat inside an instance, so the count is proved with that drop turned
 # off, and here the fixture holds the written name.
+# `eat` takes any `Display` type, so the template checks clean, and the consume of
+# a borrowed element is a fault of each copy (#1070, R7).
 # EXPECT_ERROR_CODES_EXACT: CE2411
 # EXPECT_STDERR_CONTAINS: cannot consume 'a'
 # EXPECT_STDERR_CONTAINS: `a.clone()`
 
-fn eat(nom string s) ~:
+fn eat@(T: Display)(nom T s) ~:
     println(s)
 
-fn f@(...Ts)(...Ts args) ~ | StdError:
+fn f@(...Ts: Display)(...Ts args) ~ | StdError:
     expand(a in args):
         eat(nom a)
     return Result.Ok(~)

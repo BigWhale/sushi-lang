@@ -532,9 +532,11 @@ def reject_uncomparable_operands(validator: 'TypeValidator', expr: BinaryOp,
         return
 
     if left_type != right_type:
-        er.emit(validator.reporter, er.ERR.CE2513, expr.loc,
-                left_type=display_type(left_type),
-                right_type=display_type(right_type), op=expr.op)
+        from sushi_lang.semantics.generics.opaque import note_opaque
+        note_opaque(er.emit_with(validator.reporter, er.ERR.CE2513, expr.loc,
+                                 left_type=display_type(left_type),
+                                 right_type=display_type(right_type), op=expr.op),
+                    left_type, right_type).emit()
         return
 
     from sushi_lang.semantics.generics.contracts import EQ, ORD

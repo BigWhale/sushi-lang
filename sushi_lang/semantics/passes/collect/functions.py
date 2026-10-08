@@ -79,9 +79,10 @@ def opaque_type_params(type_params, unit: Optional[str], template: str,
     """The opaque parameter of each type parameter of one template (#1070).
 
     The ONE builder of an opaque parameter: its owner is the template, and it carries
-    the constraint names and the span of the written parameter. A pack parameter keeps
-    its own form (Phase 4). `bound_forms` spells a bound on a receiver parameter of an
-    extension or a perk template in the target's own form.
+    the constraint names and the span of the written parameter. A pack parameter has
+    none: each `expand` of it binds an element type (`opaque_pack_element`).
+    `bound_forms` spells a bound on a receiver parameter of an extension or a perk
+    template in the target's own form.
     """
     owner = TemplateId(unit, template)
     forms = bound_forms or {}
@@ -90,6 +91,19 @@ def opaque_type_params(type_params, unit: Optional[str], template: str,
                                    span=tp.loc, bound_form=forms.get(tp.name))
             for tp in type_params
             if isinstance(tp, BoundedTypeParam) and not tp.is_pack}
+
+
+def opaque_pack_element(pack: BoundedTypeParam, unit: Optional[str], template: str,
+                        element: int, binder: str,
+                        binder_span: Optional[Span]) -> TypeParameter:
+    """The element type that one `expand` of a pack template binds (#1070, R6).
+
+    It is an opaque parameter of the template, with the constraints of the pack and its
+    own element number: two `expand`s of one pack bind two types.
+    """
+    return TypeParameter(pack.name, owner=TemplateId(unit, template),
+                         constraints=tuple(pack.constraints or ()), span=pack.loc,
+                         element=element, binder=binder, binder_span=binder_span)
 
 
 def is_explicit_result_type(ty: Optional[Type]) -> bool:

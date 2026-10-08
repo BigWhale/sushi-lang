@@ -1,0 +1,19 @@
+# The fault of a pack template is reported one time, at the template, and no copy
+# reports it again, whatever the arity of the pack (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE2035
+
+perk Render:
+    fn render() string
+
+extend i32 with Render:
+    fn render() string:
+        return "i:{self}"
+
+fn show@(...Ts: Render)(...Ts args) ~:
+    expand(a in args):
+        println("{a}")
+
+fn main() i32:
+    show(1)
+    show(1, 2)
+    return 0

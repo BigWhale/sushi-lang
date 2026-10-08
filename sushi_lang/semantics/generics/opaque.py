@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, List, Optional
 from sushi_lang.semantics.generics.types import TypeParameter
 
 if TYPE_CHECKING:
-    from sushi_lang.internals.report import DiagnosticBuilder
+    from sushi_lang.internals.report import DiagnosticBuilder, Span
     from sushi_lang.semantics.passes.collect.perks import PerkTable
     from sushi_lang.semantics.typesys import Type
 
@@ -34,19 +34,28 @@ def holds_opaque(ty: Optional['Type']) -> bool:
 
 def note_opaque(builder: 'DiagnosticBuilder',
                 *types: Optional['Type']) -> 'DiagnosticBuilder':
-    """A note at the declaration of each opaque parameter that the types hold, one time."""
+    """A note at the declaration of each opaque parameter that the types hold, one time.
+
+    An element of a pack gets the note of its pack one time, and a note of its own at
+    the binder of its `expand`: two elements can have two types (#1070, R6).
+    """
     params: List[TypeParameter] = []
     for ty in types:
         params += [p for p in opaque_parameters(ty) if p not in params]
+    declared: List['Span'] = []
     for param in params:
-        if param.span is None:
-            continue
-        if param.constraints:
-            text = (f"'{param.name}' is declared here with the constraints "
-                    f"{' + '.join(param.constraints)}")
-        else:
-            text = f"'{param.name}' is declared here with no constraint"
-        builder = builder.note_at(text, param.span)
+        if param.span is not None and param.span not in declared:
+            declared.append(param.span)
+            if param.constraints:
+                text = (f"'{param.written()}' is declared here with the constraints "
+                        f"{' + '.join(param.constraints)}")
+            else:
+                text = f"'{param.written()}' is declared here with no constraint"
+            builder = builder.note_at(text, param.span)
+        if param.element is not None and param.binder_span is not None:
+            builder = builder.note_at(
+                f"'{param.binder}' holds one element of the pack '{param.written()}'; "
+                "each element can have a different type", param.binder_span)
     return builder
 
 
@@ -56,7 +65,7 @@ def bound_hint(param: TypeParameter, perk: str) -> str:
     `'@(T: Clone)'` in a declaration's type-parameter list, `'Box@(T: Clone)'` and
     `'(T: Clone)[]'` in the target of an extension or a perk template.
     """
-    form = param.bound_form or f"@({param.name}: {{perk}})"
+    form = param.bound_form or f"@({param.written()}: {{perk}})"
     return f"'{form.replace('{perk}', perk)}'"
 
 
@@ -82,7 +91,7 @@ def explain_unpromised(builder: 'DiagnosticBuilder', ty: Optional['Type'],
     lacking = [p for p in held if not p.promises(perk)]
     if not lacking:
         return builder
-    name = lacking[0].name
+    name = lacking[0].written()
     return note_opaque(builder, lacking[0]).help(
         f"add '{perk}' to the constraints of '{name}': {bound_hint(lacking[0], perk)}")
 

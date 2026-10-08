@@ -39,6 +39,11 @@ class TypeParameter:
     template check reads it. It stands for some type that satisfies `constraints`, and
     for nothing more. Identity is the name and the owner, so the `T` of `f` and the `T`
     of `g` are two types; the owner decides the constraints, so they take no part in it.
+
+    An ELEMENT of a pack is an opaque parameter with an `element` number: the type that
+    one `expand` of the pack binds in the check copy (#1070, R6). The number is part of
+    the identity, because two `expand`s of one pack can bind two different types in a
+    copy. `name` is the pack name.
     """
     name: str  # Parameter name (e.g., "T", "E", "U")
     owner: Optional[TemplateId] = None
@@ -50,6 +55,11 @@ class TypeParameter:
     # a receiver parameter of an extension (#1070). None for the `@(T: {perk})` of a
     # declaration's own type-parameter list.
     bound_form: Optional[str] = field(default=None, compare=False)
+    # The element number of an `expand` in the check copy, or None (#1070, R6).
+    element: Optional[int] = None
+    # The binder name and its span, for the note of a refusal. Not identity.
+    binder: Optional[str] = field(default=None, compare=False)
+    binder_span: Optional['Span'] = field(default=None, compare=False)
     # A bare parameter is never a pack; `BoundedTypeParam` carries the field that can be.
     is_pack: ClassVar[bool] = False
 
@@ -61,15 +71,22 @@ class TypeParameter:
         """The ONE answer to "does a constraint of this opaque parameter promise `perk`"."""
         return self.is_opaque and perk in self.constraints
 
+    def written(self) -> str:
+        """The name as the source writes it: `...Ts` for an element of a pack."""
+        return self.name if self.element is None else f"...{self.name}"
+
     def __str__(self) -> str:
-        return self.name if self.owner is None else f"{self.name}{OPAQUE_MARK}{self.owner}"
+        if self.owner is None:
+            return self.name
+        text = f"{self.name}{OPAQUE_MARK}{self.owner}"
+        return text if self.element is None else f"{text}{OPAQUE_MARK}{self.element}"
 
     def __hash__(self) -> int:
-        return hash(("type_param", self.name, self.owner))
+        return hash(("type_param", self.name, self.owner, self.element))
 
     def __eq__(self, other) -> bool:
         return (isinstance(other, TypeParameter) and self.name == other.name
-                and self.owner == other.owner)
+                and self.owner == other.owner and self.element == other.element)
 
 
 @dataclass(frozen=True)

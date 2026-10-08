@@ -6,17 +6,20 @@
 # EXPECT_STDOUT_EXACT: "[i:1]\nodd\n[i:2]\neven\n"
 perk Render:
     fn display() string
+    fn even() bool
 
 extend i32 with Render:
     fn display() string:
         return "i:{self}"
+    fn even() bool:
+        return self % 2 == 0
 
 fn show_all@(...Ts: Render)(...Ts args) ~:
     expand(a in args):
         let string base = a.display()
         let string line = "[{base}]"
         println(line)
-        if (a % 2 == 0):
+        if (a.even()):
             let string tag = "even"
             println(tag)
         else:

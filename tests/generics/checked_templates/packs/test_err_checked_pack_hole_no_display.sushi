@@ -1,0 +1,14 @@
+# A hole needs `Display`, and a pack constrained only by `Render` does not promise it
+# for its elements (#1070, R6).
+# EXPECT_ERROR_CODES_EXACT: CE2035
+
+perk Render:
+    fn render() string
+
+fn show@(...Ts: Render)(...Ts args) ~:
+    expand(a in args):
+        println("{a}")
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0
