@@ -1369,7 +1369,7 @@ fn print_foreign_list(MsgValue claims, Opts o) ~:
     match claims:
         MsgValue.Arr(items) ->
             foreach(c in items.iter()):
-                let string target = to_surface(get_str(c, "type"))
+                let string target = render_extension_target(c)
                 let string method = get_str(c, "method")
                 println("  extend {target} {method}")
         _ ->

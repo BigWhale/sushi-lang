@@ -25,6 +25,8 @@ class ForeignExtensionClaim:
     target: str
     method: str
     span: Optional[Any]
+    # The declaration the claim reads: the manifest writes the bounds of its target.
+    extension: Any = None
 
 
 def _target_name(target_type: Any) -> Optional[str]:
@@ -80,5 +82,6 @@ def foreign_extension_claims(units: List['Unit']) -> List[ForeignExtensionClaim]
                 target=display_type(ext.target_type),
                 method=ext.name,
                 span=ext.target_type_span,
+                extension=ext,
             ))
     return claims

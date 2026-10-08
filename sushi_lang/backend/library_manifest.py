@@ -412,11 +412,17 @@ class LibraryManifestGenerator:
                 for unit, name in sorted(kept, key=lambda key: (key[1], key[0]))]
 
     def _extract_foreign_extensions(self, units: list['Unit']) -> list[dict]:
-        """The foreign types this library claims methods on, in declaration order."""
+        """The foreign types this library claims methods on, in declaration order.
+
+        A record carries the bounds its target writes, as an extension record does, so
+        the report prints the target one way in both sections (#1070).
+        """
         from sushi_lang.semantics.foreign_extensions import foreign_extension_claims
+        from sushi_lang.semantics.library_templates import target_bound_records
 
         return [{"type": claim.target, "method": claim.method,
-                 "unit": claim.unit_name}
+                 "unit": claim.unit_name,
+                 "target_bounds": target_bound_records(claim.extension)}
                 for claim in foreign_extension_claims(own_units(units))]
 
     def _extract_public_bindings(self, units: list['Unit'], variables: bool) -> list[dict]:

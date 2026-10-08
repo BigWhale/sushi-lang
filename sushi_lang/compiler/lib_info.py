@@ -424,7 +424,7 @@ def _conversion_line(conv: dict, _p: Palette) -> str:
 
 
 def _foreign_line(claim: dict, p: Palette) -> str:
-    return f"  extend {_surface(claim['type'])} {claim['method']}"
+    return f"  extend {_render_extension_target(claim)} {claim['method']}"
 
 
 def _dependency_line(dep: dict, p: Palette) -> str:
