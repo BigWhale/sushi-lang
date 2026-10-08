@@ -1,0 +1,16 @@
+# Two ranges hold every value of a u8, so the match needs no `_` arm. Each arm returns,
+# so the match ends the path, and the function needs no `return` after it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "low\nlow\nhigh\nhigh\n"
+
+fn half(u8 b) string:
+    match b:
+        0x00..=0x7f -> return "low"
+        0x80..=0xff -> return "high"
+
+fn main() i32:
+    println(half(0))
+    println(half(127))
+    println(half(128))
+    println(half(255))
+    return 0

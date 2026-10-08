@@ -1,0 +1,15 @@
+# The literal arms and the ranges match every value of an i8, so the `_` arm can never
+# run.
+# EXPECT_ERROR_CODES_EXACT: CE2118
+
+fn f(i8 n) string:
+    match n:
+        -128..=-1 -> return "negative"
+        0 -> return "zero"
+        1 -> return "one"
+        2..=127 -> return "more"
+        _ -> return "never"
+
+fn main() i32:
+    println(f(1))
+    return 0

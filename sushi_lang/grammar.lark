@@ -130,10 +130,14 @@ match_arm: (_arm_alternative | arm_alternatives) "->" (match_arm_inline | block)
 # `|` alternatives (`0 | 1 ->`, `Shape.Circle(r) | Shape.Ring(r) ->`): one arm, several
 # patterns. One alternative is a plain arm; two or more are an `arm_alternatives` tree.
 # The lexer reads `||` as the logical operator, so `1||2` is a parse error with a help.
-_arm_alternative: pattern | literal_pattern | wildcard_pattern | tuple_pattern
+_arm_alternative: pattern | literal_pattern | range_pattern | wildcard_pattern | tuple_pattern
 arm_alternatives: _arm_alternative (BIT_OR _arm_alternative)+
 literal_pattern: "-" (INT | HEX_INT | BIN_INT | OCT_INT) -> neg_literal_pattern
                | (INT | HEX_INT | BIN_INT | OCT_INT | BYTE_CHAR | STRING | CHAR_STRING)
+# An integer range in a pattern (`0x80..=0x8f`, `a'0'..=a'9'`, `0..10`): two literal
+# bounds. A range with an open end (`..=5`, `5..`) is not a pattern. A string bound
+# parses here, and the typecheck pass refuses it.
+range_pattern: literal_pattern (RANGE | RANGE_INCLUSIVE) literal_pattern
 # A one-statement arm on the arrow. Every alternative here is a STATEMENT the
 # block form already takes, plus a bare expression -- a rebind was the one missing
 # and it is the shape a move out of a temporary wants (#552).
@@ -144,6 +148,7 @@ pattern_list: _pattern_slot ("," _pattern_slot)*
 _pattern_slot: pattern_item | item_alternatives
 item_alternatives: pattern_item (BIT_OR pattern_item)+
 pattern_item: pattern | NAME | wildcard_pattern | own_pattern | tuple_pattern | literal_pattern
+            | range_pattern
             | BORROW_MODE NAME -> ref_binding
             | NOM NAME -> nom_binding
 own_pattern: NAME "(" _pattern_slot ")"  -> own_pattern_call

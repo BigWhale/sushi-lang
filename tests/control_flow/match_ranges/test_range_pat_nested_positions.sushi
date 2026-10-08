@@ -1,0 +1,27 @@
+# A range is a pattern in a nested position: the payload of an enum pattern and an
+# element of a tuple pattern. The arms are tried in order.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "digit\nlarge\nnone\nboth\ndigit first\nletter second\nneither\n"
+
+fn some(Maybe@(i32) m) string:
+    match m:
+        Maybe.Some(0..=9) -> return "digit"
+        Maybe.Some(_) -> return "large"
+        Maybe.None -> return "none"
+
+fn pair(i32 n, u8 c) string:
+    match (n, c):
+        (0..=9, a'a'..=a'z') -> return "both"
+        (0..=9, _) -> return "digit first"
+        (_, a'a'..=a'z') -> return "letter second"
+        _ -> return "neither"
+
+fn main() i32:
+    println(some(Maybe.Some(7)))
+    println(some(Maybe.Some(70)))
+    println(some(Maybe.None))
+    println(pair(3, a'q'))
+    println(pair(3, a'Q'))
+    println(pair(30, a'q'))
+    println(pair(30, a'Q'))
+    return 0

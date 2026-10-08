@@ -1,0 +1,12 @@
+# On an i8, the hex literal `0xff` is the bit pattern of -1, so the arm `-1` repeats it.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+
+fn f(i8 n) string:
+    match n:
+        0xff -> return "all bits"
+        -1 -> return "minus one"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(1))
+    return 0

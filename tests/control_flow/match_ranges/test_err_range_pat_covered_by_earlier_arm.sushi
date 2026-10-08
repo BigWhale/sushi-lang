@@ -1,0 +1,14 @@
+# The arm above matches every value of `2..=5`, so the range arm can never run. A range
+# that is fully covered is a dead arm, and the one error is CE2118.
+# EXPECT_ERROR_CODES_EXACT: CE2118
+# EXPECT_STDERR_CONTAINS: 2..=5
+
+fn f(i32 n) string:
+    match n:
+        0..=9 -> return "digit"
+        2..=5 -> return "never"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(3))
+    return 0

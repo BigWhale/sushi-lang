@@ -21,7 +21,7 @@ T = TypeVar('T')
 WALKED_IN_PARENT = frozenset({
     "ArrayElement",      # `visit_arrayliteral` reads .value and .count
     "MatchArm",          # `visit_match` hands the arm's BODY over; the pattern binds names
-    "Pattern", "LiteralPattern", "WildcardPattern",
+    "Pattern", "LiteralPattern", "RangePattern", "WildcardPattern",
     "OwnPattern", "RefBinding", "NomBinding", "TuplePattern", "OrPattern",
 })
 

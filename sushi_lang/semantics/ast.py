@@ -668,6 +668,21 @@ class LiteralPattern(Node):
     # A byte arm (`a'/' ->`): an integer arm that CE2076 offers the string form for.
     is_byte: bool = False
 
+
+@dataclass(slots=True)
+class RangePattern(Node):
+    """An integer range in a pattern: `0x80..=0x8f`, `a'0'..=a'9'`, `0..10`.
+
+    The two bounds are literal patterns, in every form an integer arm takes. `inclusive`
+    is the `..=` form. The values the range matches depend on the type at its position,
+    because a non-decimal bound is a bit pattern of that type: the typecheck pass and the
+    backend both read them from `semantics/integer_patterns.py`. A string bound parses,
+    and the typecheck pass refuses it (CE2072).
+    """
+    low: LiteralPattern
+    high: LiteralPattern
+    inclusive: bool
+
 @dataclass(slots=True)
 class RefBinding(Node):
     """A reference binding in a match pattern: `Shape.Poly(poke p)` (#300 phase 3)."""
@@ -691,7 +706,8 @@ class NomBinding(Node):
 @dataclass(slots=True)
 class OwnPattern(Node):
     """Own(inner_pattern) - auto-unwrap Own<T> in pattern matching."""
-    inner_pattern: Union[str, 'Pattern', 'TuplePattern', 'LiteralPattern', 'OrPattern']
+    inner_pattern: Union[str, 'Pattern', 'TuplePattern', 'LiteralPattern', 'RangePattern',
+                         'OrPattern']
     inner_borrow: Optional[str] = None    # None | "peek" | "poke"
     inner_borrow_span: Optional[Span] = None
 
@@ -719,9 +735,10 @@ class OrPattern(Node):
 
 
 # One position of a pattern: a binding (a name, `_`, `poke x`, `nom x`), an enum pattern,
-# an integer literal, a tuple pattern, an `Own(...)` pattern, or `|` alternatives of these.
+# an integer literal, an integer range, a tuple pattern, an `Own(...)` pattern, or `|`
+# alternatives of these.
 PatternItem = Union[str, Pattern, OwnPattern, RefBinding, NomBinding, LiteralPattern,
-                    TuplePattern, OrPattern]
+                    RangePattern, TuplePattern, OrPattern]
 
 
 def alternatives_of(item: object) -> list:
@@ -783,6 +800,8 @@ def pattern_source(item: object) -> str:
         return f"nom {item.name}"
     if isinstance(item, LiteralPattern):
         return item.display
+    if isinstance(item, RangePattern):
+        return f"{item.low.display}{'..=' if item.inclusive else '..'}{item.high.display}"
     if isinstance(item, OrPattern):
         return " | ".join(pattern_source(alt) for alt in item.alternatives)
     if isinstance(item, str):
@@ -792,7 +811,8 @@ def pattern_source(item: object) -> str:
 @dataclass(slots=True)
 class MatchArm(Node):
     """Single arm in a match statement/expression"""
-    pattern: Union[Pattern, LiteralPattern, WildcardPattern, TuplePattern, OrPattern]
+    pattern: Union[Pattern, LiteralPattern, RangePattern, WildcardPattern, TuplePattern,
+                   OrPattern]
     body: Union["Expr", "Block"]
 
 @dataclass(slots=True)
@@ -1184,7 +1204,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 __all__ = [
     "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "ExternalVar", "Block", "Param",
-    "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "WildcardPattern", "TuplePattern", "OrPattern", "alternatives_of", "Break", "Continue",
+    "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "RangePattern", "WildcardPattern", "TuplePattern", "OrPattern", "alternatives_of", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda", "TupleLiteral", "DestructureTarget", "destructure_binders",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",

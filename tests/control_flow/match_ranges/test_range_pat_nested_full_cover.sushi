@@ -1,0 +1,18 @@
+# The ranges in the payload hold every value of an i8, so with `Maybe.None` the match
+# covers every value and needs no `_` arm.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "negative\nnot negative\nnone\n"
+
+fn sign(Maybe@(i8) m) string:
+    match m:
+        Maybe.Some(-128..=-1) -> return "negative"
+        Maybe.Some(0..=127) -> return "not negative"
+        Maybe.None -> return "none"
+
+fn main() i32:
+    let i8 a = -5
+    let i8 b = 5
+    println(sign(Maybe.Some(a)))
+    println(sign(Maybe.Some(b)))
+    println(sign(Maybe.None))
+    return 0

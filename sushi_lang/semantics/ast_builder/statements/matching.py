@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List, Union
 from lark import Tree, Token
 from sushi_lang.semantics.ast import (
     Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
-    NomBinding, OrPattern, PatternItem, RefBinding, TuplePattern,
+    NomBinding, OrPattern, PatternItem, RangePattern, RefBinding, TuplePattern,
 )
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import first_tree, ice, expect, unhandled
 from sushi_lang.semantics.ast_builder.utils.expression_discovery import EXPR_NODES
@@ -42,12 +42,13 @@ def parse_match_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Match:
                  loc=span_of(node))
 
 
-_ARM_PATTERNS = ("pattern", "literal_pattern", "neg_literal_pattern", "wildcard_pattern",
-                 "tuple_pattern")
+_ARM_PATTERNS = ("pattern", "literal_pattern", "neg_literal_pattern", "range_pattern",
+                 "wildcard_pattern", "tuple_pattern")
 
 
 def _read_arm_pattern(t: Tree, ast_builder: 'ASTBuilder'
-                      ) -> Union[Pattern, LiteralPattern, WildcardPattern, TuplePattern]:
+                      ) -> Union[Pattern, LiteralPattern, RangePattern, WildcardPattern,
+                                 TuplePattern]:
     """Read one top-level pattern of an arm: the whole pattern, or one alternative."""
     if t.data == "tuple_pattern":
         return parse_tuple_pattern(t, ast_builder, nested=False)
@@ -55,6 +56,8 @@ def _read_arm_pattern(t: Tree, ast_builder: 'ASTBuilder'
         return parse_pattern(t, ast_builder)
     if t.data in ("literal_pattern", "neg_literal_pattern"):
         return parse_literal_pattern(t, ast_builder)
+    if t.data == "range_pattern":
+        return parse_range_pattern(t, ast_builder)
     if t.data == "wildcard_pattern":
         return WildcardPattern(loc=span_of(t))
     unhandled(t)
@@ -64,7 +67,8 @@ def parse_matcharm(t: Tree, ast_builder: 'ASTBuilder') -> MatchArm:
     """Parse match_arm: a pattern, or `|` alternatives of patterns, "->" and a body."""
     t = expect(t, "match_arm")
 
-    pattern: Union[Pattern, LiteralPattern, WildcardPattern, TuplePattern, OrPattern]
+    pattern: Union[Pattern, LiteralPattern, RangePattern, WildcardPattern, TuplePattern,
+                   OrPattern]
     alternatives_tree = first_tree(t.children, "arm_alternatives")
     pattern_tree = next((c for c in t.children
                          if isinstance(c, Tree) and c.data in _ARM_PATTERNS), None)
@@ -148,10 +152,22 @@ def parse_literal_pattern(t: Tree, ast_builder: 'ASTBuilder') -> LiteralPattern:
                           is_byte=lit.byte_spelling is not None, loc=span_of(t))
 
 
+def parse_range_pattern(t: Tree, ast_builder: 'ASTBuilder') -> RangePattern:
+    """Parse range_pattern: two literal bounds and `..` or `..=` between them."""
+    t = expect(t, "range_pattern")
+    bounds = [child for child in t.children if isinstance(child, Tree)]
+    operator = next((child for child in t.children if isinstance(child, Token)), None)
+    if len(bounds) != 2 or operator is None:
+        ice(t, "a range pattern needs two bounds and an operator")
+    low, high = (parse_literal_pattern(bound, ast_builder) for bound in bounds)
+    return RangePattern(low=low, high=high, inclusive=operator.type == "RANGE_INCLUSIVE",
+                        loc=span_of(t))
+
+
 def _read_pattern_item(node: Tree, ast_builder: 'ASTBuilder',
                        tuple_nested: bool = True) -> PatternItem:
     """Read one `pattern_item`: a nested pattern, a wildcard, an `Own(...)`, a tuple
-    pattern, a literal (an integer or a string) or a NAME.
+    pattern, a literal (an integer or a string), an integer range or a NAME.
 
     A binding MODE is not read here: `peek`/`poke` and `nom` rename the whole node
     (`ref_binding`, `nom_binding`), and `_read_list_item` reads a marked binding beside
@@ -180,6 +196,10 @@ def _read_pattern_item(node: Tree, ast_builder: 'ASTBuilder',
                or first_tree(node.children, "neg_literal_pattern"))
     if literal is not None:
         return parse_literal_pattern(literal, ast_builder)
+
+    range_tree = first_tree(node.children, "range_pattern")
+    if range_tree is not None:
+        return parse_range_pattern(range_tree, ast_builder)
 
     token = next((c for c in node.children if isinstance(c, Token)), None)
     if token is None or token.type != "NAME":

@@ -24,9 +24,13 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     codegen.utils.ensure_open_block()
 
     # An integer match (#415) switches on the scrutinee VALUE, not on an enum
-    # tag; the typecheck pass stamps `integer_match_type` on exactly those matches.
-    if getattr(stmt, 'integer_match_type', None) is not None:
-        _emit_integer_match(codegen, stmt)
+    # tag; the typecheck pass stamps `integer_match_type` on exactly those matches. A
+    # range arm is no switch case, so a match that holds one tests its arms in order.
+    if stmt.integer_match_type is not None:
+        if any(_holds_a_range(arm.pattern) for arm in stmt.arms):
+            _emit_sequential_match(codegen, stmt, stmt.integer_match_type)
+        else:
+            _emit_integer_match(codegen, stmt)
         return
 
     # A tuple match and a string match have no tag to switch on: each arm tests its
@@ -40,7 +44,7 @@ def emit_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     if (is_tuple_type(stmt.resolved_scrutinee_type)
             or stmt.resolved_scrutinee_type == BuiltinType.STRING
             or any(isinstance(arm.pattern, OrPattern) for arm in stmt.arms)):
-        _emit_sequential_match(codegen, stmt)
+        _emit_sequential_match(codegen, stmt, stmt.resolved_scrutinee_type)
         return
 
     scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
@@ -103,12 +107,14 @@ def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
 
     The typecheck pass guarantees the shape: every arm is a LiteralPattern, or `|`
     alternatives of them, except a trailing wildcard, which becomes the switch default.
-    Each literal alternative is one case of its arm. Integers are plain values, so there
-    is no temp-scrutinee ownership and no binding extraction; the shared
-    `_emit_match_arms` skips both for non-Pattern arms.
+    Each literal alternative is one case of its arm, with the value that the scrutinee
+    type reads (`0xff` is -1 on an i8). Arms that cover the type leave the default
+    unreachable. Integers are plain values, so there is no temp-scrutinee ownership and
+    no binding extraction; the shared `_emit_match_arms` skips both for non-Pattern arms.
     """
     from llvmlite import ir
     from sushi_lang.semantics.ast import LiteralPattern, alternatives_of
+    from sushi_lang.semantics.integer_patterns import literal_value
 
     scrutinee_value = codegen.expressions.emit_expr(stmt.scrutinee)
 
@@ -122,7 +128,8 @@ def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     for arm, arm_bb in zip(stmt.arms, arm_blocks, strict=True):
         for alternative in alternatives_of(arm.pattern):
             if isinstance(alternative, LiteralPattern):
-                case_value = ir.Constant(scrutinee_value.type, alternative.value)
+                case_value = ir.Constant(scrutinee_value.type,
+                                         literal_value(alternative, stmt.integer_match_type))
                 switch.add_case(case_value, arm_bb)
 
     end_reached = _emit_match_arms(codegen, stmt, arm_blocks, None, end_bb)
@@ -134,11 +141,19 @@ def _emit_integer_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     close_merge_block(codegen, end_bb, end_reached)
 
 
-def _emit_sequential_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
+def _holds_a_range(item: object) -> bool:
+    """Does an arm's pattern hold a range at its top, or as one of its top alternatives?"""
+    from sushi_lang.semantics.ast import RangePattern, alternatives_of
+    return any(isinstance(alternative, RangePattern) for alternative in alternatives_of(item))
+
+
+def _emit_sequential_match(codegen: 'LLVMCodegen', stmt: 'Match',
+                           scrutinee_type: 'Type | None') -> None:
     """Emit a match with no tag to switch on: each arm tests its whole pattern, in order.
 
-    A tuple and a string take this path. A tuple-literal scrutinee builds no tuple
-    (ruling 3): each element is one root, evaluated once and from left to right, with
+    A tuple, a string and an integer match with a range arm take this path; the caller
+    gives the scrutinee type from the stamp of its kind. A tuple-literal scrutinee builds
+    no tuple (ruling 3): each element is one root, evaluated once and from left to right, with
     the ownership rules of a named scrutinee. Any other scrutinee is one root. A failed
     test goes to the next arm; after the last arm is the RE2023 backstop, which
     exhaustiveness makes unreachable.
@@ -146,7 +161,6 @@ def _emit_sequential_match(codegen: 'LLVMCodegen', stmt: 'Match') -> None:
     from sushi_lang.semantics.ast import TupleLiteral
     from sushi_lang.semantics.generics.tuples import tuple_elements
 
-    scrutinee_type = stmt.resolved_scrutinee_type
     if scrutinee_type is None:
         raise_internal_error("CE0121", pattern=_first_arm_pattern(stmt))
     patterns = [arm.pattern for arm in stmt.arms]
@@ -664,8 +678,10 @@ def _test_item(codegen: 'LLVMCodegen', item: object, position: _Position,
     """Emit the tests of one pattern item, and collect the bindings it makes."""
     from llvmlite import ir
     from sushi_lang.semantics.ast import (
-        LiteralPattern, NomBinding, OrPattern, OwnPattern, Pattern, RefBinding, TuplePattern,
+        LiteralPattern, NomBinding, OrPattern, OwnPattern, Pattern, RangePattern, RefBinding,
+        TuplePattern,
     )
+    from sushi_lang.semantics.integer_patterns import literal_value
 
     if isinstance(item, str):
         if item != "_":
@@ -681,9 +697,12 @@ def _test_item(codegen: 'LLVMCodegen', item: object, position: _Position,
         _branch_unless(codegen, emit_value_eq(codegen, position.value, expected,
                                               position.semantic_type), on_fail)
     elif isinstance(item, LiteralPattern):
-        expected = ir.Constant(position.value.type, item.value)
+        expected = ir.Constant(position.value.type,
+                               literal_value(item, position.semantic_type))
         _branch_unless(codegen, codegen.builder.icmp_signed("==", position.value, expected,
                                                             name="literal_matches"), on_fail)
+    elif isinstance(item, RangePattern):
+        _branch_unless(codegen, _in_range(codegen, item, position), on_fail)
     elif isinstance(item, TuplePattern):
         _test_tuple(codegen, item, position, on_fail, binds)
     elif isinstance(item, Pattern):
@@ -693,6 +712,23 @@ def _test_item(codegen: 'LLVMCodegen', item: object, position: _Position,
     elif isinstance(item, OrPattern):
         _test_alternatives(codegen, [partial(_test_item, codegen, alternative, position)
                                      for alternative in item.alternatives], on_fail, binds)
+
+
+def _in_range(codegen: 'LLVMCodegen', pattern, position: _Position) -> 'ir.Value':
+    """`low <= value and value <= high`, compared by the sign of the position's type."""
+    from llvmlite import ir
+    from sushi_lang.semantics.integer_patterns import pattern_interval
+    from sushi_lang.semantics.type_predicates import is_unsigned_int
+
+    builder, _func = require_both_initialized(codegen)
+    low, high = pattern_interval(pattern, position.semantic_type)
+    compare = (builder.icmp_unsigned if is_unsigned_int(position.semantic_type)
+               else builder.icmp_signed)
+    above = compare(">=", position.value, ir.Constant(position.value.type, low),
+                    name="range_low")
+    below = compare("<=", position.value, ir.Constant(position.value.type, high),
+                    name="range_high")
+    return builder.and_(above, below, name="range_matches")
 
 
 def _test_tuple(codegen: 'LLVMCodegen', pattern, position: _Position,

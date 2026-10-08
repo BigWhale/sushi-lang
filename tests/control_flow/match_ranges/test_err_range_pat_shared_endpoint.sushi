@@ -1,0 +1,13 @@
+# `0..=10` and `10..=20` share the end point 10.
+# EXPECT_ERROR_CODES_EXACT: CE2075
+# EXPECT_STDERR_CONTAINS: value 10
+
+fn f(i32 n) string:
+    match n:
+        0..=10 -> return "low"
+        10..=20 -> return "high"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(1))
+    return 0

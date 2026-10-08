@@ -1,6 +1,6 @@
 # A literal in an enum payload covers one value of an integer payload.
 # EXPECT_ERROR_CODES_EXACT: CE2040
-# EXPECT_STDERR_CONTAINS: Maybe.Some(_)
+# EXPECT_STDERR_CONTAINS: Maybe.Some(-2147483648..=-1)
 
 fn f(Maybe@(i32) m) i32:
     match m:

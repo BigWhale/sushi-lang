@@ -2141,10 +2141,14 @@ match maybe_color:
     Maybe.None -> println("none")
 ```
 
-An integer and a string have no end of values, so an integer position or a string position
-is covered only by a `_` or a binding. A literal position covers one value. An integer
-match or a string match with no `_` arm is **[CE2074](error-catalog.md#ce2074)**. In a tuple, the missing pattern
-shows `_` for such a position: `(_, _)`.
+An integer position holds the values of its type, from the lowest to the highest. A literal
+covers one value and a range covers each value from its start to its end, so arms of
+literals and ranges can cover the whole type: `0x00..=0x7f` and `0x80..=0xff` cover a
+`u8`, and the match needs no `_` arm. A string has no end of values, so a string position
+is covered only by a `_` or a binding. An integer match that the arms do not cover, and a
+string match with no `_` arm, are **[CE2074](error-catalog.md#ce2074)**; the message names the first integer value
+that no arm matches. In a tuple or a payload, the missing pattern shows the values that no
+arm matches as a value or a range: `(-2147483648..=-1, _)`, `Maybe.Some(128..=255)`.
 
 **Every arm must match a value.** An arm is unreachable when the arms above it match every
 value that it matches. That is **[CE2118](error-catalog.md#ce2118)**, an error, with a note at each arm that covers
@@ -2159,10 +2163,12 @@ match pair:
     (_, Color.Red) -> println("second is red")    # the three arms above cover it
 ```
 
-Remove the arm, or move it above the arms that cover it. Three older rules come first,
-and each is the one diagnostic for its arm: a second arm for the same enum pattern is
-**[CE2041](error-catalog.md#ce2041)**; a `_` arm that is not the last arm is **[CE2041](error-catalog.md#ce2041)**, and the arms after it get
-no second error; a second literal arm for the same value (an integer or a string) is
+Remove the arm, or move it above the arms that cover it. A `_` arm after integer arms that
+cover the type is this error too, and so is a range arm that the arms above cover. Three
+older rules come first, and each is the one diagnostic for its arm: a second arm for the
+same enum pattern is **[CE2041](error-catalog.md#ce2041)**; a `_` arm that is not the last arm is **[CE2041](error-catalog.md#ce2041)**, and the
+arms after it get no second error; a literal arm for a value that an arm above matches (an
+integer or a string), and a range that shares some values with the arms above, are
 **[CE2075](error-catalog.md#ce2075)**.
 
 Because the checker reads nested patterns, a match that compiles has an arm for every
@@ -2174,9 +2180,13 @@ A match on an integer scrutinee or on a `string` scrutinee dispatches on literal
 same rules apply to the two kinds:
 
 - An arm holds one literal, or several literals as `|` alternatives (`0 | 1 ->`, see
-  [Alternatives](#alternatives)).
+  [Alternatives](#alternatives)). An integer arm can also hold a range (see
+  [Range Arms](#range-arms)).
 - Two arms, or two alternatives, with the same value are a duplicate arm (**[CE2075](error-catalog.md#ce2075)**).
-- The values cannot be listed, so the match must end with a `_` arm (**[CE2074](error-catalog.md#ce2074)**).
+- The arms of an integer match can cover the type, and then the match needs no `_` arm.
+  Else, and for a string match always, the match ends with a `_` arm
+  (**[CE2074](error-catalog.md#ce2074)**). A `_` arm after a cover of the type can never
+  run (**[CE2118](error-catalog.md#ce2118)**).
 - One match holds one arm kind. A string arm on an integer scrutinee, an integer arm on a
   `string` scrutinee, a literal arm on an enum scrutinee, and a string arm beside an
   integer arm are **[CE2076](error-catalog.md#ce2076)**.
@@ -2191,8 +2201,9 @@ A named constant (`GET ->`) is not a pattern. It is a parse error: write the lit
 
 Each literal takes the scrutinee's type under the usual context-typing rule. A non-decimal
 literal is a bit pattern, and a literal out of range is **[CE2073](error-catalog.md#ce2073)**. The radix does not
-change the value: `0x2a` and `42` are the same arm (**[CE2075](error-catalog.md#ce2075)**). A nested integer literal
-takes the type of its position by the same rule.
+change the value: `0x2a` and `42` are the same arm (**[CE2075](error-catalog.md#ce2075)**), and on an `i8` the
+bit pattern `0xff` and `-1` are the same arm too. A nested integer literal takes the type
+of its position by the same rule.
 
 ```sushi
 fn tag_name(u8 t) string:
@@ -2209,6 +2220,80 @@ fn tag_name(u8 t) string:
 fn main() i32:
     let u8 tag = 0xc0
     println(tag_name(tag))
+    return 0
+```
+
+#### Range Arms
+
+An integer arm can hold a RANGE of literals: `a..b` matches each value from a to b-1, and
+`a..=b` matches each value from a to b. A bound is an integer literal in every form an
+integer arm takes: decimal, hex, binary, octal, a byte literal (`a'0'..=a'9'`) and a
+negative literal (`-5..=-1`). A range arm is legal in every position a literal arm is: at
+the top of an arm, in an enum payload (`Maybe.Some(0..=9) ->`), in a tuple element
+(`(0..=9, _) ->`) and as an alternative (`a'a'..=a'z' | a'A'..=a'Z' | a'_' ->`). The
+value at its position must be an integer (**[CE2119](error-catalog.md#ce2119)**, and
+**[CE2076](error-catalog.md#ce2076)** for a range arm on a `string` or an enum scrutinee).
+
+```sushi
+fn format_kind(u8 b) string:
+    match b:
+        0x00..=0x7f -> return "positive fixint"
+        0x80..=0x8f -> return "fixmap"
+        0x90..=0x9f -> return "fixarray"
+        0xa0..=0xbf -> return "fixstr"
+        0xc0 -> return "nil"
+        0xc2 | 0xc3 -> return "bool"
+        0xe0..=0xff -> return "negative fixint"
+        _ -> return "other"
+
+fn word_char(u8 c) bool:
+    match c:
+        a'a'..=a'z' | a'A'..=a'Z' | a'0'..=a'9' | a'_' -> return true
+        _ -> return false
+
+fn sign(i8 n) string:
+    match n:
+        -128..=-1 -> return "negative"
+        0 -> return "zero"
+        1..=127 -> return "positive"
+
+fn main() i32:
+    println(format_kind(0x93))      # fixarray
+    println(word_char(a'_'))        # true
+    let i8 n = -7
+    println(sign(n))                # negative
+    return 0
+```
+
+The arms of `sign` hold every value of an `i8`, so the match needs no `_` arm, and a `_`
+arm there would be **[CE2118](error-catalog.md#ce2118)**.
+
+The rules of a range arm:
+
+- Each bound takes the type of the value it reads, as a literal arm does, and a bound out
+  of that type is **[CE2073](error-catalog.md#ce2073)**. A string bound (`"a".."z"`) is
+  **[CE2072](error-catalog.md#ce2072)**: a range bound is an integer.
+- A range always goes up. A range whose start is above its end (`0x8f..=0x80`, `5..3`) is
+  **[CE2125](error-catalog.md#ce2125)**, and the help gives the written order to use.
+- `5..5` matches no value, so its arm can never run (**[CE2118](error-catalog.md#ce2118)**).
+- A range or a literal that shares a value with an arm above, or with an earlier
+  alternative of its own arm, is **[CE2075](error-catalog.md#ce2075)**, and the message names
+  the first value in both: `0x80..=0x8f` then `0x8f..=0x9f` shares 143 (0x8f). A range
+  that the arms above cover completely adds no value: it is **[CE2118](error-catalog.md#ce2118)**.
+- A range has two bounds. `..=5` and `5..` are not patterns (a parse error), a named
+  constant is not a bound, and a pattern cannot bind the matched value (`n @ 1..=9` is a
+  parse error): match the range and read the scrutinee in the arm body.
+
+<!-- docs-sweep: error CE2075 -->
+```sushi
+fn kind(u8 b) string:
+    match b:
+        0x80..=0x8f -> return "fixmap"
+        0x8f..=0x9f -> return "fixarray"    # ERROR CE2075: value 143 (0x8f)
+        _ -> return "other"
+
+fn main() i32:
+    println(kind(0x80))
     return 0
 ```
 
@@ -2453,7 +2538,8 @@ fn main() i32:
   earlier alternatives of the same list match every value it matches, as `2` in
   `1 | _ | 2`. `_` is a legal alternative, and it matches every value.
 - **Duplicates.** Two alternatives with the same value (`"a" | 'a'`, `1 | 0x1`), in one
-  arm or in two arms, are **[CE2075](error-catalog.md#ce2075)**. An alternative that names
+  arm or in two arms, are **[CE2075](error-catalog.md#ce2075)**, and so is a range
+  alternative that shares a value with an earlier one (`1..=5 | 3`). An alternative that names
   an enum variant a second time (`Color.Red | Color.Red`, or a variant that an arm above
   matches) is **[CE2041](error-catalog.md#ce2041)**.
 - **No mix.** Each alternative follows the arm-kind rule of the scrutinee, so a literal

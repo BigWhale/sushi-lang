@@ -1,0 +1,13 @@
+# The payload arms leave out the u8 values 128 to 255. The error names them as a range.
+# EXPECT_ERROR_CODES_EXACT: CE2040
+# EXPECT_STDERR_CONTAINS: Maybe.Some(128..=255)
+
+fn f(Maybe@(u8) m) string:
+    match m:
+        Maybe.Some(0x00..=0x7f) -> return "low"
+        Maybe.None -> return "none"
+    return "other"
+
+fn main() i32:
+    println(f(Maybe.None))
+    return 0

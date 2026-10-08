@@ -1,0 +1,24 @@
+# A range bound is an integer literal in each base an integer arm takes: hex, binary,
+# octal and decimal. `0o50..0o60` matches 40 to 47.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "hex\nhex\nbin\nbin\noct\noct\nother\ndec\nother\n"
+
+fn base(i32 n) string:
+    match n:
+        0x10..=0x1f -> return "hex"
+        0b10_0000..=0b10_0111 -> return "bin"
+        0o50..0o60 -> return "oct"
+        100..=199 -> return "dec"
+        _ -> return "other"
+
+fn main() i32:
+    println(base(16))
+    println(base(31))
+    println(base(32))
+    println(base(39))
+    println(base(40))
+    println(base(47))
+    println(base(48))
+    println(base(150))
+    println(base(5))
+    return 0

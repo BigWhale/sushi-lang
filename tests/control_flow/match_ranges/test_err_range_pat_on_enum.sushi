@@ -1,0 +1,15 @@
+# A range arm needs an integer scrutinee, not an enum.
+# EXPECT_ERROR_CODES_EXACT: CE2076
+
+enum Color:
+    Red
+    Green
+
+fn f(Color c) string:
+    match c:
+        0..=1 -> return "first"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(Color.Red))
+    return 0

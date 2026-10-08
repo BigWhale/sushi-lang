@@ -1,0 +1,11 @@
+# A range arm needs an integer scrutinee.
+# EXPECT_ERROR_CODES_EXACT: CE2076
+
+fn f(string s) string:
+    match s:
+        0..=9 -> return "digit"
+        _ -> return "other"
+
+fn main() i32:
+    println(f("a"))
+    return 0

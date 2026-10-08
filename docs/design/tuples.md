@@ -294,11 +294,20 @@ exhaustiveness makes unreachable.
 of Maranget ("Warnings for pattern matching", 2007) over a pattern matrix. Each arm is one
 row. A position is `WILD` (a binding, `_`, `Own(x)`) or a constructor with sub-positions.
 An enum column splits into its variants, a tuple column into its elements (one
-constructor), an `Own@(T)` column into its pointee (one constructor), and an integer
-column has no end of values: a literal is a constructor, and only a `WILD` covers the
-rest. A string column is the second column whose values cannot be listed, and it takes the
-rule of the integer column. Each string literal is a constructor, and only a `WILD` covers
-the rest. The key of a string literal is `("string", value)` (`string_key`), so it never
+constructor), and an `Own@(T)` column into its pointee (one constructor). An integer
+column holds the values of its type from the lowest to the highest (`IntegerColumn`, from
+`integer_range`), and its constructors are INTERVALS: the key of a literal is `IntRange(v,
+v)` and the key of a range is `IntRange(low, high)`, both read as values of the column type
+(`semantics/integer_patterns.py`, so `0xff` on an i8 is -1). The rows split the column at
+the bounds of their keys (`PatternMatrix._split`) into pieces, and each piece is inside a
+key or outside it. A piece is one constructor of no arguments: a row matches it when the
+row's key contains it, and the column is complete when a key contains each piece. So
+literals and ranges can cover the whole type, and then a `_` after them is a dead arm. The
+pieces stay intervals: the checker never lists the values one by one, so a u64 column costs
+no more than a u8 column. A witness in an integer column is a piece that no row holds,
+rendered as a value or a range (`Maybe.Some(128..=255)`). A string column is the one
+column whose values cannot be listed: each string literal is a constructor, and only a
+`WILD` covers the rest. The key of a string literal is `("string", value)` (`string_key`), so it never
 equals a variant name or an integer. The value in the key is the value after escape
 processing, so `"a"` and `'a'` are one constructor. The same checker reads an enum match, a
 nested enum match, an integer match, a string match and a tuple match. It gives two
@@ -307,7 +316,8 @@ answers:
 - **The missing patterns.** A value vector that no row matches is a witness. [CE2040](../error-catalog.md#ce2040) lists
   the witnesses in source syntax (`(Color.Red, _)`, `Maybe.Some(Color.Green)`), at most 16.
   A plain enum match, where no arm tests inside a payload, keeps the list of variant names.
-  An integer or a string scrutinee keeps its own code, **[CE2074](../error-catalog.md#ce2074)**.
+  An integer or a string scrutinee keeps its own code, **[CE2074](../error-catalog.md#ce2074)**, which names the first
+  integer value that no arm matches.
 - **The dead arms (ruling 18).** An arm that is not useful against the arms above it is
   **[CE2118](../error-catalog.md#ce2118)**, an error. Its notes name the arms above it that share a value with it; those
   arms cover it together, because an arm that shares no value with it covers none of its
@@ -315,7 +325,11 @@ answers:
 
 Where an older rule names the fault, it is the one diagnostic for the arm: a second arm for
 the same enum pattern is **[CE2041](../error-catalog.md#ce2041)**, a `_` arm that is not last is **[CE2041](../error-catalog.md#ce2041)** (and the arms
-after it get no [CE2118](../error-catalog.md#ce2118)), and a second literal arm for the same value is **[CE2075](../error-catalog.md#ce2075)**. An arm
+after it get no [CE2118](../error-catalog.md#ce2118)), and a second literal arm for the same value is **[CE2075](../error-catalog.md#ce2075)**. For an integer
+arm the value is an interval, and the rule reads overlap: a literal whose value an arm or an
+earlier alternative above matches, and a range that shares some values with them and has
+values of its own, are [CE2075](../error-catalog.md#ce2075) at the first shared value. A range that they cover completely
+adds no value, so it is a dead arm and the checker reports [CE2118](../error-catalog.md#ce2118). An arm
 with an error in its pattern stops the checker for that match: its coverage is not known,
 and a second report would only repeat the first fault.
 

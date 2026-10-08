@@ -8,7 +8,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import (
     DotCall, Expr, LiteralPattern, MethodCall, Name, NomBinding, OrPattern, Pattern,
-    RefBinding, TuplePattern,
+    RangePattern, RefBinding, TuplePattern,
 )
 from sushi_lang.semantics.constant_borrow import READ_ONLY_MODE
 from sushi_lang.semantics.ownership import TypeClass
@@ -313,8 +313,8 @@ def _register_item(checker: 'BorrowChecker', scope: BindingScope, item: object,
     `span` is the span of the pattern that holds the position, for a bare name.
     """
     match item:
-        case "_" | LiteralPattern():
-            pass                      # a discard and a literal bind nothing
+        case "_" | LiteralPattern() | RangePattern():
+            pass                      # a discard, a literal and a range bind nothing
         case str():
             scope.bind_value(item, ty, span)
             freeze_for_a_view(checker, scope, item, ty, span, scrutinee, kind)
@@ -433,7 +433,7 @@ def _survey_paths(checker: 'BorrowChecker', item: object, ty: Optional[Type],
         return paths
     if isinstance(item, NomBinding):
         return [(((item.name, item.loc or span),), ())]
-    if isinstance(item, LiteralPattern) or span is None:
+    if isinstance(item, (LiteralPattern, RangePattern)) or span is None:
         return [((), ())]
     # Everything else keeps the payload where it is: a bare binding, a `poke` / `peek`
     # reference into it, an `Own(...)` unwrap, and a `_` discard, which is the same slot
@@ -464,7 +464,7 @@ def _register_own_pattern(checker: 'BorrowChecker', scope: BindingScope, binding
     inner_borrow = getattr(binding, "inner_borrow", None)
     pointee = checker.types.own_payload(payload_type)
 
-    if isinstance(inner, (Pattern, TuplePattern)):
+    if isinstance(inner, (Pattern, TuplePattern, OrPattern, LiteralPattern, RangePattern)):
         _register_item(checker, scope, inner, pointee, scrutinee,
                        ScrutineeKind.OWN_PAYLOAD, span)
     elif isinstance(inner, str) and inner != "_":

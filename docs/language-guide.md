@@ -1110,17 +1110,25 @@ fn main() i32:
 
 **Nested pattern matching**: The pattern `Result.Err(IoError.NotFound)` matches a `Result@(File, IoError)` whose `Err` variant contains the `IoError` variant `NotFound`. This lets you handle specific error combinations without nested match statements. A nested pattern must name the enum that the value really holds: `FileError.NotFound` here is [`CE2107`](error-catalog.md#ce2107), because `open()` answers `IoError`.
 
-**Integer patterns**: a `match` on an integer takes literal arms, and a trailing `_` arm is required ([`CE2074`](error-catalog.md#ce2074)):
+**Integer patterns**: a `match` on an integer takes literal arms and range arms (`a..b` stops before b, `a..=b` includes b). The arms must cover every value of the type: when they do not, a trailing `_` arm is required ([`CE2074`](error-catalog.md#ce2074)), and the message names the first value that no arm matches. Two arms that share a value are [`CE2075`](error-catalog.md#ce2075):
 
 ```sushi
 fn describe(i32 n) string:
     match n:
         0 -> return "zero"
+        1..=9 -> return "a digit"
         42 -> return "the answer"
         _ -> return "a number"
 
+fn half(u8 b) string:
+    match b:
+        0x00..=0x7f -> return "low"       # these two ranges cover a u8,
+        0x80..=0xff -> return "high"      # so no `_` arm is necessary
+
 fn main() i32:
     println(describe(42))
+    println(describe(7))
+    println(half(200))
     return 0
 ```
 
