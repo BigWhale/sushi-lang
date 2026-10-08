@@ -56,8 +56,8 @@ from .consume import (
     source_provenance,
 )
 from .expressions import check_expr, reject_a_use_after_the_change
+from sushi_lang.semantics.ast_walk import ends_unrolled_run
 from .flow import (
-    ends_unrolled_run,
     FlowFacts,
     LoopFlow,
     LoopFrame,

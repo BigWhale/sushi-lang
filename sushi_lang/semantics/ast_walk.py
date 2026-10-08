@@ -30,7 +30,8 @@ from dataclasses import dataclass, fields
 from typing import (TYPE_CHECKING, Callable, Iterable, Iterator, List, Optional,
                     Tuple, Union, cast)
 
-from sushi_lang.semantics.ast import Node, VarDef
+from sushi_lang.semantics.ast import (
+    Block, Break, Continue, If, Match, Node, Return, VarDef)
 
 if TYPE_CHECKING:
     from sushi_lang.internals.report import Span
@@ -600,3 +601,51 @@ def _walk_one(node: Node, visit: Callable[[Node], bool]) -> None:
         return
     for child in children(node):
         _walk_one(child, visit)
+
+
+def terminates(node, *, leaves_round: bool = False) -> bool:
+    """Does every path through this statement (or block) leave the function?
+
+    With `leaves_round`, a `break` and a `continue` end a path too: they leave the round
+    of the loop, and the loop frame keeps their facts (#993). This is the question of a
+    join inside a loop body. A nested loop is not descended: a `break` in it ends that
+    loop's round, not this path.
+    """
+    match node:
+        case Return():
+            return True
+        case Break() | Continue():
+            return leaves_round
+        case Block():
+            # Any terminating statement terminates the block. Later statements are
+            # unreachable; they are still checked, which over-checks and never
+            # under-checks.
+            return any(terminates(stmt, leaves_round=leaves_round)
+                       for stmt in node.statements)
+        case If():
+            return bool(node.else_block) and (
+                all(terminates(arm, leaves_round=leaves_round) for _cond, arm in node.arms)
+                and terminates(node.else_block, leaves_round=leaves_round))
+        case Match():
+            arms = getattr(node, "arms", ())
+            return bool(arms) and all(terminates(arm.body, leaves_round=leaves_round)
+                                      for arm in arms)
+        case _:
+            return False
+
+
+def ends_unrolled_run(stmt) -> bool:
+    """Is `stmt` a statement of an unrolled `expand` element that ends every path?
+
+    A copy of a pack template holds each element in place in its block (#1070, R6), so
+    a `break`, a `continue` or a `return` of an element can stand before more statements
+    of that block. No path reaches them, as no path leaves the element in the template
+    check: the borrow pass does not walk them and the backend does not emit them. Both
+    ask here, so the two cannot disagree.
+
+    Only an element statement stops the walk. A WRITTEN block can hold statements after
+    one that `terminates` accepts: the dead-statement rule (CE0140, #854) reads an `if`
+    or a `match` whose arms all break or continue as one that falls through, so it does
+    not refuse the statements after it, and the borrow pass walks them.
+    """
+    return bool(stmt.expand_copies) and terminates(stmt, leaves_round=True)

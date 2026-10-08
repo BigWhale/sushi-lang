@@ -110,7 +110,7 @@ class StatementEmitter:
         of the block is reached, and the borrow pass gave none of them its stamps
         (`ends_unrolled_run`).
         """
-        from sushi_lang.semantics.passes.borrow.flow import ends_unrolled_run
+        from sushi_lang.semantics.ast_walk import ends_unrolled_run
         for stmt in self.codegen.utils.block_statements(block):
             if self.codegen.builder.block.terminator is not None:
                 break
