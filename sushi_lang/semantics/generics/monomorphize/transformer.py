@@ -206,12 +206,6 @@ class TypeSubstitutor:
 
         return ty
 
-    def _pack_binding_for(
-        self, param: 'Param', substitution: Dict[str, "Type | TypePack"]
-    ) -> 'TypePack | None':
-        """The TypePack a value-parameter fans out to, or None if it is not pack-typed."""
-        return pack_binding_for(param, substitution)
-
     def expand_pack_param(
         self, param: 'Param', substitution: Dict[str, "Type | TypePack"]
     ) -> List['Param']:

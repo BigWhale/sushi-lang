@@ -9,7 +9,6 @@ from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
 from sushi_lang.semantics.ast import Let, Return, Rebind, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess, RangeExpr
-from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.places import Step, walk_place
@@ -511,7 +510,7 @@ def validate_expand_statement(validator: 'TypeValidator', stmt: 'Expand') -> Non
     """
     elements = validator.pack_elements
     if elements is None:
-        raise_internal_error(
+        er.raise_internal_error(
             "CE0015", message="an `expand` reached the typecheck pass outside a "
                               "template check")
         return

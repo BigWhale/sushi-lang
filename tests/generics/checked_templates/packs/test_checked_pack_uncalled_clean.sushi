@@ -1,13 +1,23 @@
 # A correct pack template that no call instantiates checks clean where it is written
 # (#1070): a lead parameter, a method through a constraint, a hole, a Maybe, a tuple and
-# its destructure, an array, a lambda that captures the element, a `??`, a nested
-# `expand` and a call of another pack template with an element. Each `expand` binds an
-# opaque element type, and no instance over one reaches the backend.
+# its destructure, an array, a lambda that captures the element, a `??`, a `foreach`
+# with a `??` binder, a nested `expand` and a call of another pack template with an
+# element. Each `expand` binds an opaque element type, and no instance over one reaches
+# the backend.
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
 # EXPECT_STDERR_EMPTY: true
 
 perk Render:
     fn render() string
+
+struct Steps:
+    i32 n
+
+extend Steps next(poke self) Maybe@(Result@(i32, StdError)):
+    if (self.n >= 3):
+        return Maybe.None
+    self.n := self.n + 1
+    return Maybe.Some(Result.Ok(self.n))
 
 fn count_all@(...Us: Render)(...Us items) i32:
     let i32 n = 0
@@ -36,6 +46,8 @@ fn shapes@(T: Display, ...Ts: Render + Display)(T head, ...Ts args) i32 | StdErr
         let fn() -> string f = |~| a.render()
         println(f())
         total := total + checked(a)??
+        foreach(step?? in Steps(0)):
+            total := total + step
         expand(b in args):
             println("{a}{b}")
         total := total + count_all(a, a)

@@ -83,8 +83,9 @@ def first_dead_statement(self, block: Block) -> Optional[tuple[Stmt, Stmt]]:
     statements = block.statements
     for ender, dead in zip(statements, statements[1:], strict=False):
         # Two statements from different `expand` copies, or a copy and its
-        # surroundings, were not written in sequence (#854). Only a copy of a binary
-        # library template takes this rule on an unrolled body (`is_template_copy`).
+        # surroundings, were not written in sequence (#854). Only a copy of a binary or
+        # hybrid library template takes this rule on an unrolled body
+        # (`is_template_copy`).
         if ender.expand_copies != dead.expand_copies:
             continue
         if ends_the_path(self, ender):

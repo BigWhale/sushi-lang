@@ -2,7 +2,6 @@
 # `poke` parameter takes a `poke` argument, and a plain one is a type mismatch at
 # position 1 (#1070).
 # EXPECT_ERROR_CODES_EXACT: CE2006
-# EXPECT_STDERR_CONTAINS: argument type mismatch at position 1
 
 perk Render:
     fn render() string

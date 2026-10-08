@@ -15,6 +15,7 @@ from sushi_lang.semantics.generics.local_bindings import (
 )
 
 from .order import functions_in_site_order
+from .transformer import pack_binding_for
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Block, Call, ExtendDef, FuncDef
@@ -270,7 +271,7 @@ class FunctionMonomorphizer:
         pack_param_fanout: Dict[str, list] = {}
         for param in generic.params:
             expanded = substitutor.expand_pack_param(param, substitution)
-            if substitutor._pack_binding_for(param, substitution) is not None:
+            if pack_binding_for(param, substitution) is not None:
                 pack_param_fanout[param.name] = [p.name for p in expanded]
             concrete_params.extend(expanded)
 
