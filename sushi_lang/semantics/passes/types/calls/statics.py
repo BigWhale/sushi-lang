@@ -118,6 +118,7 @@ def _interned_static_target(validator: 'TypeValidator', call, template, base: st
     typecheck pass queues the static's copy, so the call still has a symbol to bind to.
     """
     from sushi_lang.semantics.generics.extension_targets import instantiation_key
+    from sushi_lang.semantics.generics.extensions import bounds_hold_for
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     key = instantiation_key(base, type_args)
@@ -136,8 +137,11 @@ def _interned_static_target(validator: 'TypeValidator', call, template, base: st
         if target is None:
             return None
 
+    # An instance that fails a target bound gets no copy (#1070); the call is refused by
+    # the last rung of the method ladder.
     if (interner is not None and validator.queues_late_copies
-            and validator.extension_table.get_method(target, call.method) is None):
+            and validator.extension_table.get_method(target, call.method) is None
+            and bounds_hold_for(template, tuple(type_args), validator.tables)):
         _add_late_static_copy(validator, template, target, type_args)
     return target
 

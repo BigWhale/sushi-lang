@@ -1,0 +1,17 @@
+# A program that holds a list of handles can import the combinators (#1070): the
+# combinators that clone state the bound `Clone`, so no copy of them is cut for a
+# `List@(File)`.
+# EXPECT_STDOUT_EXACT: "2 0\n"
+# EXPECT_NO_LEAKS: true
+use <io/fs>
+use <collections/iter>
+
+fn main() i32:
+    let List@(File) files = List.new()
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(5)
+    xs.push(9)
+    let List@(i32) big = xs.filter(|i32 x| x > 2)
+    println("{big.len()} {files.len()}")
+    return 0

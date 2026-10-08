@@ -20,34 +20,38 @@ from sushi_lang.semantics.typesys import Type
 Override = Callable[[Type], bool]
 
 
-def perk_override_of(perk_name: str, perk_impls: Any,
-                     generic_perk_impls: Any = None) -> Override:
+def perk_override_of(perk_name: str, perk_impls: Any, generic_perk_impls: Any,
+                     holds: Callable[[Type, str], bool]) -> Override:
     """The override predicate of one perk, over the perk-implementation tables (#891).
 
     An explicit implementation answers, and so does a template whose copy for this type
     is not cut yet. The tables fill in place, so the predicate reads them when it is
-    asked and not when it is built.
+    asked and not when it is built. `holds` answers a template's target bound (#1070).
     """
     def overridden(ty: Type) -> bool:
         return (perk_impls.implements_type(ty, perk_name)
-                or template_covers(generic_perk_impls, ty, perk_name))
+                or template_covers(generic_perk_impls, ty, perk_name, holds))
 
     return overridden
 
 
-def template_covers(generic_perk_impls: Any, ty: Type, perk_name: str) -> bool:
+def template_covers(generic_perk_impls: Any, ty: Type, perk_name: str,
+                    holds: Callable[[Type, str], bool]) -> bool:
     """Does a template implementation of the perk cover this type (#555, #699)?
 
     `extend Box@(T) with P` covers every `Box@(...)`, and `extend T[] with P` every
     dynamic array. A copy for a late instantiation is cut after the question can be
-    asked, and the template already answers it.
+    asked, and the template already answers it. A template with a target bound covers
+    only the instances that satisfy it (#1070): the predicate the cutters read.
     """
+    from sushi_lang.semantics.generics.constraints import target_bounds_hold
     from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
     from sushi_lang.semantics.typesys import DynamicArrayType
     if not generic_perk_impls:
         return False
     if isinstance(ty, DynamicArrayType):
         return any(template.impl.perk_name == perk_name
+                   and target_bounds_hold(template.target_bounds, (ty.base_type,), holds)
                    for template in generic_perk_impls.templates(ARRAY_BASE_KEY))
     base = getattr(ty, "generic_base", None)
     args = getattr(ty, "generic_args", None)
@@ -55,6 +59,7 @@ def template_covers(generic_perk_impls: Any, ty: Type, perk_name: str) -> bool:
         return False
     return any(template.impl.perk_name == perk_name
                and len(template.type_params) == len(args)
+               and target_bounds_hold(template.target_bounds, args, holds)
                for template in generic_perk_impls.templates(base))
 
 

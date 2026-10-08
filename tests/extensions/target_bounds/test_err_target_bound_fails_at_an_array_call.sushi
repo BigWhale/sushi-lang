@@ -1,0 +1,15 @@
+# The array form of a target bound is checked at the call (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4006
+use <io/fs>
+
+extend (T: Clone)[] dup() T[]:
+    let T[] out = from([])
+    foreach(x in self.iter()):
+        out.push(x.clone())
+    return out
+
+fn main() i32:
+    let File[] files = from([])
+    let File[] more = files.dup()
+    println(more.len())
+    return 0

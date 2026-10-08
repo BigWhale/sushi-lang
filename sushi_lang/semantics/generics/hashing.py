@@ -71,10 +71,12 @@ CONTAINER_HASH_KINDS: Dict[str, str] = {
 HashOverride = Override
 
 
-def hash_override_of(perk_impls: Any, generic_perk_impls: Any = None) -> HashOverride:
+def hash_override_of(perk_impls: Any, generic_perk_impls: Any,
+                     holds: Callable[[Type, str], bool]) -> HashOverride:
     """The `Hashable` override predicate, over the perk-implementation tables (#891)."""
     from sushi_lang.semantics.passes.collect.perks import PerkCollector
-    return perk_override_of(PerkCollector.HASHABLE_PERK, perk_impls, generic_perk_impls)
+    return perk_override_of(PerkCollector.HASHABLE_PERK, perk_impls, generic_perk_impls,
+                            holds)
 
 
 def hashability_of(ty: Type, walk: Optional[Walk] = None, *,

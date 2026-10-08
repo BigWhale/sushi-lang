@@ -406,6 +406,13 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
         # storage and its walk needs no call at all.
         element_type = resolve_protocol_iterator(validator, stmt, iterable_type)
         if element_type is None:
+            # A `next()` that a target bound refuses for this type is that fault, and
+            # not a type with no `next()` (#1070): one fault, one diagnostic.
+            from sushi_lang.semantics.passes.types.calls.methods import (
+                RESOLUTION_REPORTED, _answer_from_template)
+            if _answer_from_template(validator, iterable_type, "next", stmt.iterable.loc,
+                                     report=True) is RESOLUTION_REPORTED:
+                return
             er.emit(validator.reporter, er.ERR.CE2033, stmt.iterable.loc,
                     got=display_type(iterable_type))
             return

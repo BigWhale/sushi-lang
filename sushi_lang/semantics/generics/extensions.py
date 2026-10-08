@@ -129,6 +129,16 @@ def _error_arguments_hold(generic_method: GenericExtensionMethod, type_args,
         generic_method.filename)
 
 
+def bounds_hold_for(template, type_args: Tuple[Type, ...], tables) -> bool:
+    """Does an extension or perk template apply to the instance of these arguments?
+
+    The target bounds of the template (#1070), asked by every cutter before it cuts: an
+    instance that fails one gets no copy. A call of it is refused at the call (CE4006).
+    """
+    from sushi_lang.semantics.generics.constraints import target_bounds_hold
+    return target_bounds_hold(template.target_bounds, type_args, tables.holds_bound)
+
+
 def monomorphize_all_extension_methods(
     generic_extensions: Dict[str, Dict[Tuple[str, str], GenericExtensionMethod]],
     struct_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
@@ -163,6 +173,9 @@ def monomorphize_all_extension_methods(
             # A concrete target has no type parameters, so it substitutes nothing -- its
             # signature and body are already written in terms of the type it names.
             substitution_args = () if target_key else type_args
+            if not bounds_hold_for(generic_method, substitution_args,
+                                   substitutor.monomorphizer.tables):
+                continue
             if not _error_arguments_hold(generic_method, substitution_args,
                                          concrete_type_name, substitutor):
                 continue
@@ -226,7 +239,8 @@ def monomorphize_all_perk_impls(
             for_each_instantiation(sources, generic_perk_impls.templates)):
         for template in templates:
             key = (concrete_type_name, template.impl.perk_name)
-            if key in result:
+            if key in result or not bounds_hold_for(template, type_args,
+                                                    substitutor.monomorphizer.tables):
                 continue
             result[key] = (
                 template,

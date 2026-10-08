@@ -1,6 +1,6 @@
 """Generic constraint validation for Sushi compiler."""
 
-from typing import Optional
+from typing import Callable, Optional, Sequence, Set, Tuple
 from sushi_lang.semantics.typesys import Type, holds_declared_resource
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.ast import BoundedTypeParam
@@ -14,6 +14,24 @@ from sushi_lang.semantics.generics.contract_walk import perk_override_of, templa
 from sushi_lang.semantics.generics.contracts import CONTRACTS, operand_contract
 from sushi_lang.semantics.generics.hashing import hash_override_of, hashability_of
 from sushi_lang.semantics.generics.type_display import display_type
+
+
+#: "Does this type satisfy this perk?" -- what a target bound asks of one argument.
+BoundHolds = Callable[[Type, str], bool]
+
+
+def target_bounds_hold(bounds: Sequence[BoundedTypeParam], type_args: Sequence[Type],
+                       holds: BoundHolds) -> bool:
+    """Does each type argument satisfy the target bound of its position? No diagnostic.
+
+    The ONE answer to "does this extension or perk template apply to this instance"
+    (#1070, R1): every cutter, every override and the call-site rung read it, so a
+    derived override never names a method that has no copy. `holds` is
+    `ConstraintValidator.holds_bound`. A template with no target bound asks nothing.
+    """
+    return all(holds(arg, perk)
+               for bound, arg in zip(bounds, type_args, strict=False)
+               for perk in bound.constraints or ())
 
 
 class ConstraintValidator:
@@ -40,12 +58,33 @@ class ConstraintValidator:
         # resolves each written name against the tables as it goes.
         self.struct_table = struct_table
         self.enum_table = enum_table
+        # The (type, perk) questions in progress. A template's target bound asks of the
+        # type that its own answer is part of when the type is recursive, and that
+        # question is answered yes while it is open: the other positions decide.
+        self._asking: Set[Tuple[str, str]] = set()
 
     def satisfies(self, type_arg: Type, constraint_name: str) -> bool:
         """Does the type meet the constraint? No diagnostic: the one predicate."""
-        return (self.perk_impl_table.implements_type(type_arg, constraint_name)
-                or template_covers(self.generic_perk_impls, type_arg, constraint_name)
-                or self._derived_implements(type_arg, constraint_name))
+        key = (str(type_arg), constraint_name)
+        if key in self._asking:
+            return True
+        self._asking.add(key)
+        try:
+            return (self.perk_impl_table.implements_type(type_arg, constraint_name)
+                    or template_covers(self.generic_perk_impls, type_arg, constraint_name,
+                                       self.holds_bound)
+                    or self._derived_implements(type_arg, constraint_name))
+        finally:
+            self._asking.discard(key)
+
+    def holds_bound(self, type_arg: Type, constraint_name: str) -> bool:
+        """Does the type satisfy a bound? A perk that no unit declares holds (#1070).
+
+        CE4003 is the one fault of such a bound, as of a constraint
+        (`validate_constraint`).
+        """
+        return (self.perk_table.get(constraint_name) is None
+                or self.satisfies(type_arg, constraint_name))
 
     def validate_constraint(
         self,
@@ -116,14 +155,15 @@ class ConstraintValidator:
             # `Eq`, `Ord` and `Display` read the rule their operators read, so a
             # constraint never admits a type whose body would then refuse `==`.
             overridden = perk_override_of(constraint_name, self.perk_impl_table,
-                                          self.generic_perk_impls)
+                                          self.generic_perk_impls, self.holds_bound)
             return operand_contract(type_arg, constraint_name, overridden=overridden,
                                     resolve=resolve)[0]
         if constraint_name == PerkCollector.CLONE_PERK:
             return not self._clone_resources(type_arg)
         if constraint_name != PerkCollector.HASHABLE_PERK:
             return False
-        overridden = hash_override_of(self.perk_impl_table, self.generic_perk_impls)
+        overridden = hash_override_of(self.perk_impl_table, self.generic_perk_impls,
+                                      self.holds_bound)
         can_hash, _reason = hashability_of(type_arg, resolve=resolve, overridden=overridden)
         return can_hash
 

@@ -126,7 +126,8 @@ def _opaque(*constraints: str) -> TypeParameter:
 def _override(contract: str):
     """The override of one contract over the tables of a program, as the analyzer has it."""
     tables = SymbolTables()
-    return perk_override_of(contract, tables.perk_impls, tables.generic_perk_impls)
+    return perk_override_of(contract, tables.perk_impls, tables.generic_perk_impls,
+                            tables.holds_bound)
 
 
 @pytest.mark.parametrize("contract", CONTRACTS)

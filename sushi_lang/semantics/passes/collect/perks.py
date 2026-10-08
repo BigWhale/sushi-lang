@@ -162,6 +162,11 @@ class PerkImplementationTable:
     # opaque type parameter has no copy, and the template answers its methods (#1070).
     templates: Optional['GenericPerkImplTable'] = field(
         default=None, repr=False, compare=False)
+    # The target-bound predicate of the tables this table belongs to, set by
+    # `SymbolTables` (#1070): a template answers an opaque instance only when its target
+    # bounds hold for it.
+    holds_bound: Optional[Callable[..., bool]] = field(
+        default=None, repr=False, compare=False)
 
     def implements(self, type_name: str, perk_name: str) -> bool:
         """Check if a type implements a perk."""
@@ -226,15 +231,19 @@ class PerkImplementationTable:
         from sushi_lang.semantics.ast import Block
         from sushi_lang.semantics.generics.extensions import substitute_header
         from sushi_lang.semantics.generics.opaque import holds_opaque
+        from sushi_lang.semantics.generics.constraints import target_bounds_hold
         base = getattr(target_type, "generic_base", None)
         args = getattr(target_type, "generic_args", None) or ()
         templates = self.templates
-        if templates is None or base is None or not holds_opaque(target_type):
+        holds = self.holds_bound
+        if (templates is None or holds is None or base is None
+                or not holds_opaque(target_type)):
             return None
 
         def build() -> Optional[FuncDef]:
             for template in templates.templates(base):
-                if len(template.type_params) != len(args):
+                if (len(template.type_params) != len(args)
+                        or not target_bounds_hold(template.target_bounds, args, holds)):
                     continue
                 method = next((m for m in template.impl.methods if m.name == method_name),
                               None)

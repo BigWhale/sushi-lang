@@ -1,0 +1,13 @@
+# One call checks the target bound and the method bound together, and each parameter
+# that fails is reported (#1070).
+# EXPECT_ERROR_CODES_EXACT: CE4006, CE4006
+use <io/fs>
+
+extend List@(T: Clone) zip2@(U: Clone)(List@(U) other) i32:
+    return self.len() + other.len()
+
+fn main() i32:
+    let List@(File) a = List.new()
+    let List@(File) b = List.new()
+    println(a.zip2(b))
+    return 0

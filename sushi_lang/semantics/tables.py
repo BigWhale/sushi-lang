@@ -87,6 +87,10 @@ class SymbolTables:
     # The templates whose check reported an error (#1070). The reporter mutes every copy
     # of one: the template said each fault one time, at its own spans.
     refused_templates: set = field(default_factory=set)
+    # "Does this type satisfy this perk?" over these tables, for a target bound (#1070):
+    # `ConstraintValidator.holds_bound` of a validator that emits nothing. Built by
+    # `__post_init__`, so an overlay gets its own.
+    holds_bound: Callable[..., bool] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         from sushi_lang.semantics.generics.contract_walk import perk_override_of
@@ -94,12 +98,29 @@ class SymbolTables:
         from sushi_lang.semantics.passes.collect.perks import PerkCollector
         self.perk_impls.perks = self.perks
         self.perk_impls.templates = self.generic_perk_impls
+        # A template's target bound is answered over THESE tables (#1070): an overlay runs
+        # this again, so its predicate reads the overlay and lands only in overlay objects
+        # (its derived methods, its perk-implementation copy).
+        holds = self.bound_validator().holds_bound
+        self.holds_bound = holds
+        self.perk_impls.holds_bound = holds
         derived = self.enums.derived
-        derived.hash_override = hash_override_of(self.perk_impls, self.generic_perk_impls)
+        derived.hash_override = hash_override_of(self.perk_impls, self.generic_perk_impls,
+                                                 holds)
         for perk in (PerkCollector.EQ_PERK, PerkCollector.ORD_PERK,
                      PerkCollector.DISPLAY_PERK):
             derived.overrides[perk] = perk_override_of(
-                perk, self.perk_impls, self.generic_perk_impls)
+                perk, self.perk_impls, self.generic_perk_impls, holds)
+
+    def bound_validator(self):
+        """A constraint validator over these tables that emits nothing: `satisfies` and
+        `holds_bound` alone are read from it."""
+        from sushi_lang.internals.report import Reporter
+        from sushi_lang.semantics.generics.constraints import ConstraintValidator
+        return ConstraintValidator(
+            perk_table=self.perks, perk_impl_table=self.perk_impls, reporter=Reporter(),
+            generic_perk_impls=self.generic_perk_impls, struct_table=self.structs,
+            enum_table=self.enums)
 
     @property
     def derived_methods(self) -> DerivedMethodTable:
