@@ -147,10 +147,12 @@ def _unroll_expand(
     # The collect pass refused every misplaced `expand`.
     from sushi_lang.internals.errors import raise_internal_error
 
-    if not isinstance(node.iterable, Name) or node.iterable.id not in pack_param_fanout:
+    iterable = node.iterable
+    if not isinstance(iterable, Name) or iterable.id not in pack_param_fanout:
         raise_internal_error(
             "CE0015", message="an `expand` that walks no value pack reached the unroll")
-    pack_name = node.iterable.id
+        return []
+    pack_name = iterable.id
     fanout = pack_param_fanout[pack_name]
 
     out: List[Stmt] = []

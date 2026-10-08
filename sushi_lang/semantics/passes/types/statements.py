@@ -474,28 +474,32 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
                     stmt.item_borrow_span or stmt.loc)
             return
 
-    # The item binding lives for the LOOP and no longer (#341), so whatever it shadows is
-    # saved and restored. Without that, an outer local kept the ITEM's type.
-    _MISSING = object()
-    previous = validator.variable_types.get(stmt.item_name, _MISSING)
+    item_type = stmt.item_type
     if stmt.item_borrow is not None:
         # The binding's registered type is the REFERENCE, so every consumer that asks
         # "is this name a borrow?" (the borrow pass's rules, backend deref machinery) gets the
         # truthful answer; expression inference auto-derefs a reference-typed name.
         from sushi_lang.semantics.param_modes import borrow_mode
         from sushi_lang.semantics.typesys import ReferenceType
-        validator.variable_types[stmt.item_name] = ReferenceType(
-            stmt.item_type, borrow_mode(stmt.item_borrow))
-    else:
-        validator.variable_types[stmt.item_name] = stmt.item_type
+        item_type = ReferenceType(stmt.item_type, borrow_mode(stmt.item_borrow))
+    _validate_bound_body(validator, stmt.item_name, item_type, stmt.body)
 
+
+def _validate_bound_body(validator: 'TypeValidator', name: str, ty: 'Optional[Type]',
+                         body) -> None:
+    """Validate a loop body with its binder bound to `ty`.
+
+    The binding lives for the body and no longer (#341), so whatever it shadows is saved
+    and restored. Without that, an outer local kept the binder's type.
+    """
+    saved = ({name: validator.variable_types[name]}
+             if name in validator.variable_types else {})
+    validator.variable_types[name] = ty
     try:
-        validator._validate_block(stmt.body)
+        validator._validate_block(body)
     finally:
-        if previous is _MISSING:
-            validator.variable_types.pop(stmt.item_name, None)
-        else:
-            validator.variable_types[stmt.item_name] = previous
+        validator.variable_types.pop(name, None)
+        validator.variable_types.update(saved)
 
 
 def validate_expand_statement(validator: 'TypeValidator', stmt: 'Expand') -> None:
@@ -511,16 +515,7 @@ def validate_expand_statement(validator: 'TypeValidator', stmt: 'Expand') -> Non
             "CE0015", message="an `expand` reached the typecheck pass outside a "
                               "template check")
         return
-    _MISSING = object()
-    previous = validator.variable_types.get(stmt.var, _MISSING)
-    validator.variable_types[stmt.var] = elements.element_of(stmt)
-    try:
-        validator._validate_block(stmt.body)
-    finally:
-        if previous is _MISSING:
-            validator.variable_types.pop(stmt.var, None)
-        else:
-            validator.variable_types[stmt.var] = previous
+    _validate_bound_body(validator, stmt.var, elements.element_of(stmt), stmt.body)
 
 
 # One counter for the whole process, for the same reason the AST builder keeps one: the
