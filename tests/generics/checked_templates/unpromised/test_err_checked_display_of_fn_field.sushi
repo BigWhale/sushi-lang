@@ -1,0 +1,13 @@
+# A struct over `T` that holds a function value has no `Display`, and `Display` on `T`
+# would not give it one (#1070): the help must not ask for that constraint.
+# EXPECT_ERROR_CODES_EXACT: CE2115
+
+struct Holder@(T):
+    fn(T) -> i32 f
+
+fn show@(T)(Holder@(T) h) ~:
+    println(h)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

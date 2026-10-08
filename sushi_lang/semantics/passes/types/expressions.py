@@ -475,7 +475,8 @@ def reject_zero_divisor(validator: 'TypeValidator', expr: BinaryOp,
 
 
 def top_level_contract(validator: 'TypeValidator', ty: 'Optional[Type]',
-                        contract: str) -> 'tuple[bool, Optional[str]]':
+                        contract: str, refused: 'Optional[list]' = None
+                        ) -> 'tuple[bool, Optional[str]]':
     """May a value of `ty` meet the positions of `contract` at the top level?
 
     `Eq` and `Ord` are the operators, the array search methods (`contains`, `index_of`)
@@ -483,20 +484,22 @@ def top_level_contract(validator: 'TypeValidator', ty: 'Optional[Type]',
     interpolation hole and `print`/`println`. THE rule, in one place, so the positions
     cannot drift apart: a primitive keeps its closed set, and a struct or an enum asks
     the derived contract, with the compilation's override. A printed position also
-    takes an array, a `List@(T)` and an `Own@(T)` (`printed_contract`).
+    takes an array, a `List@(T)` and an `Own@(T)` (`printed_contract`). `refused`,
+    when given, receives the types that the rule refuses, for the help of a refusal.
     """
     from sushi_lang.semantics.generics.contracts import (
         DISPLAY, operand_contract, override_of, printed_contract)
     overridden = override_of(validator.derived_methods, contract)
     if contract == DISPLAY:
-        return printed_contract(ty, overridden=overridden)
-    return operand_contract(ty, contract, overridden=overridden)
+        return printed_contract(ty, overridden=overridden, refused=refused)
+    return operand_contract(ty, contract, overridden=overridden, refused=refused)
 
 
-def has_equality(validator: 'TypeValidator', ty: 'Type') -> bool:
+def has_equality(validator: 'TypeValidator', ty: 'Type',
+                 refused: 'Optional[list]' = None) -> bool:
     """Can two values of `ty` meet `==`?"""
     from sushi_lang.semantics.generics.contracts import EQ
-    return top_level_contract(validator, ty, EQ)[0]
+    return top_level_contract(validator, ty, EQ, refused)[0]
 
 
 def _comparison_escape(ty: 'Type') -> Optional[str]:
@@ -541,7 +544,8 @@ def reject_uncomparable_operands(validator: 'TypeValidator', expr: BinaryOp,
 
     from sushi_lang.semantics.generics.contracts import EQ, ORD
     contract = EQ if expr.op in _EQUALITY_OPS else ORD
-    permitted, reason = top_level_contract(validator, left_type, contract)
+    refused: list = []
+    permitted, reason = top_level_contract(validator, left_type, contract, refused)
     if permitted:
         operand = deref_type(left_type)
         if not isinstance(operand, BuiltinType):
@@ -556,7 +560,7 @@ def reject_uncomparable_operands(validator: 'TypeValidator', expr: BinaryOp,
     if escape is not None:
         builder = builder.help(escape)
     from sushi_lang.semantics.generics.opaque import explain_unpromised
-    explain_unpromised(builder, deref_type(left_type), contract).emit()
+    explain_unpromised(builder, contract, refused).emit()
 
 
 def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> None:

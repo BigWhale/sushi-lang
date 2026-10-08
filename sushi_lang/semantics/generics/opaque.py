@@ -75,19 +75,16 @@ def providing_perks(perks: 'PerkTable', method: str) -> List[str]:
             if any(m.name == method for m in perks.by_name[name].methods)]
 
 
-def explain_unpromised(builder: 'DiagnosticBuilder', ty: Optional['Type'],
-                       perk: str, at_fault: Optional[List['Type']] = None
-                       ) -> 'DiagnosticBuilder':
+def explain_unpromised(builder: 'DiagnosticBuilder', perk: str,
+                       at_fault: List['Type']) -> 'DiagnosticBuilder':
     """The note and the help of a refusal that a constraint `perk` would lift (#1070).
 
-    Nothing is added when `ty` holds no opaque parameter that lacks the promise: a
-    concrete type keeps the refusal as it is. `at_fault` is the answer of the predicate
-    that refused, when it names the types at fault: `Clone` reads
-    `holds_declared_resource`, which stops where a type holds nothing by value, so a
-    parameter that only a function value names is not at fault.
+    `at_fault` is the answer of the predicate that refused: the types it names as the
+    cause (`Walk.refused`, the `found` list of `holds_declared_resource`). Only an opaque
+    parameter in it that lacks the promise gets the help. A function value that holds a
+    parameter is at fault itself, so a constraint on the parameter is not offered.
     """
-    held = opaque_parameters(ty) if at_fault is None else [
-        t for t in at_fault if isinstance(t, TypeParameter) and t.is_opaque]
+    held = [t for t in at_fault if isinstance(t, TypeParameter) and t.is_opaque]
     lacking = [p for p in held if not p.promises(perk)]
     if not lacking:
         return builder

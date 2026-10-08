@@ -534,7 +534,7 @@ def _reject_clone_of_opaque(validator: 'TypeValidator', call: MethodCall,
     from sushi_lang.semantics.generics.opaque import explain_unpromised
     diagnostic = er.emit_with(validator.reporter, er.ERR.CE4018, call.loc,
                               type=display_type(receiver_type), param=param.written())
-    explain_unpromised(diagnostic, receiver_type, "Clone", at_fault=[param]).emit()
+    explain_unpromised(diagnostic, "Clone", [param]).emit()
 
 
 def extension_call_result_type(validator: 'TypeValidator', method):

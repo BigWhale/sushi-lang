@@ -123,7 +123,9 @@ class StatementValidator(RecursiveVisitor):
         if (is_string_convertible(shown) or shown == BuiltinType.BLANK
                 or names_no_type(self.type_validator, shown)):
             return
-        printable, reason = top_level_contract(self.type_validator, expr_type, DISPLAY)
+        refused: list = []
+        printable, reason = top_level_contract(self.type_validator, expr_type, DISPLAY,
+                                               refused)
         if printable:
             node.display_type = deref_type(expr_type)
             return
@@ -132,7 +134,7 @@ class StatementValidator(RecursiveVisitor):
         if reason is not None:
             report = report.note(f"no derived Display: {reason}")
         from sushi_lang.semantics.generics.opaque import explain_unpromised
-        explain_unpromised(report, deref_type(expr_type), DISPLAY).emit()
+        explain_unpromised(report, DISPLAY, refused).emit()
 
     def visit_assert(self, node: Assert) -> None:
         """Validate an assert: the condition is a bool (CE2005, CE2516), the message a

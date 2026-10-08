@@ -88,6 +88,10 @@ class Walk:
     `cycle_answer` is what a recursive type answers. A derived hash is emitted inline and
     cannot reach itself, so the hash walk refuses one; the contract walks emit one
     function per type, and a call of the function it is in is legal.
+
+    `refused` receives each held type whose KIND the walk refuses, an opaque type
+    parameter that misses its override included (#1070). The help of a refusal reads it,
+    so it names a constraint only when the constraint would lift the refusal.
     """
 
     path: List[str] = field(default_factory=list)
@@ -97,6 +101,7 @@ class Walk:
     resolve: Optional[Callable[[Type], Type]] = None
     overridden: Optional[Override] = None
     cycle_answer: bool = False
+    refused: List[Type] = field(default_factory=list)
 
 
 @contextmanager

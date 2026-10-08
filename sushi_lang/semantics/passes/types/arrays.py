@@ -209,10 +209,11 @@ def _refuses_an_uncomparable_element(call: MethodCall, element_type: Type,
     from sushi_lang.semantics.generics.contracts import EQ, operand_contract
     from .expressions import has_equality
 
-    comparable = (has_equality(validator, element_type) if validator is not None
-                  else operand_contract(element_type, EQ)[0])
+    refused: list = []
+    comparable = (has_equality(validator, element_type, refused) if validator is not None
+                  else operand_contract(element_type, EQ, refused=refused)[0])
     if not comparable:
-        _reject_uncomparable_element(call, element_type, reporter)
+        _reject_uncomparable_element(call, element_type, reporter, refused)
     return not comparable
 
 
@@ -231,7 +232,8 @@ def _a_comparable_element_and_a_start(call: MethodCall, array_type: ArrayReceive
     _reject_a_non_index(call, 1, validator)
 
 
-def _reject_uncomparable_element(call: MethodCall, element, reporter: Reporter) -> None:
+def _reject_uncomparable_element(call: MethodCall, element, reporter: Reporter,
+                                 refused: list) -> None:
     """CE2100. An array element has its own reason and escape: an array has no top-level
     `==` (CE2514), and a struct that holds the row takes a derived `Eq` (#1116)."""
     shown = display_type(element)
@@ -239,7 +241,7 @@ def _reject_uncomparable_element(call: MethodCall, element, reporter: Reporter) 
         from sushi_lang.semantics.generics.opaque import explain_unpromised
         explain_unpromised(er.emit_with(reporter, er.ERR.CE2100, call.loc,
                                         method=call.method, reason=f"'{shown}' has none"),
-                           element, "Eq").emit()
+                           "Eq", refused).emit()
         return
     er.emit_with(reporter, er.ERR.CE2100, call.loc, method=call.method,
                  reason=f"'{shown}' is an array, and an array has no '==' at the top "

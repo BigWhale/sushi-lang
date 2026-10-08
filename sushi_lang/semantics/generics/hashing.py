@@ -81,7 +81,8 @@ def hash_override_of(perk_impls: Any, generic_perk_impls: Any,
 
 def hashability_of(ty: Type, walk: Optional[Walk] = None, *,
                    resolve: Optional[Callable[[Type], Type]] = None,
-                   overridden: Optional[HashOverride] = None) -> tuple[bool, str]:
+                   overridden: Optional[HashOverride] = None,
+                   refused: Optional[list] = None) -> tuple[bool, str]:
     """Can a derived hash read a value of `ty`? One reader for every position.
 
     A struct field, an enum payload and an array element all ask this, so a kind is
@@ -94,8 +95,11 @@ def hashability_of(ty: Type, walk: Optional[Walk] = None, *,
 
     `overridden` is asked first: a `Hashable` implementation wins in every position
     and is terminal, so a type that has one is hashable whatever its fields hold.
+    `refused`, when given, receives each held type whose kind is refused.
     """
-    walk = walk if walk is not None else Walk(resolve=resolve, overridden=overridden)
+    walk = walk if walk is not None else Walk(
+        resolve=resolve, overridden=overridden,
+        refused=refused if refused is not None else [])
     if walk.resolve is not None:
         ty = walk.resolve(ty)
 
@@ -112,6 +116,7 @@ def hashability_of(ty: Type, walk: Optional[Walk] = None, *,
 
     refusal = UNHASHABLE_KINDS.get(kind)
     if refusal is not None:
+        walk.refused.append(ty)
         return False, refusal
 
     if isinstance(ty, (ArrayType, DynamicArrayType)):

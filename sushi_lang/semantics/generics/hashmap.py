@@ -119,16 +119,33 @@ def reject_unusable_key(hashmap_type: StructType, validator: Any, span: Any) -> 
     if not has_hash:
         explain_unpromised(er.emit_with(reporter, er.ERR.CE2054, span,
                                         key_type=display_type(key_type)),
-                           key_type, "Hashable").emit()
+                           "Hashable", _unhashable_parts(key_type, validator)).emit()
         return
 
-    if not _key_supports_equality(key_type, validator):
+    refused: list = []
+    if not _key_supports_equality(key_type, validator, refused):
         explain_unpromised(er.emit_with(reporter, er.ERR.CE2055, span,
                                         key_type=display_type(key_type)),
-                           key_type, "Eq").emit()
+                           "Eq", refused).emit()
 
 
-def _key_supports_equality(key_type: Type, validator: Any) -> bool:
+def _unhashable_parts(key_type: Type, validator: Any) -> list:
+    """The held types that stop a derived hash of the key: the derive pass's predicate
+    (`hashability_of`) names them, for the help of CE2054 (#1070)."""
+    from sushi_lang.semantics.generics.hashing import hash_override_of, hashability_of
+    from sushi_lang.semantics.passes.resolve import table_resolver
+    refused: list = []
+    tables = validator.tables
+    hashability_of(key_type, resolve=table_resolver(validator.struct_table,
+                                                    validator.enum_table),
+                   overridden=hash_override_of(validator.perk_impl_table,
+                                               tables.generic_perk_impls, tables.holds_bound),
+                   refused=refused)
+    return refused
+
+
+def _key_supports_equality(key_type: Type, validator: Any,
+                           refused: Optional[list] = None) -> bool:
     """Can the probe compare two keys of this type? The `Eq` contract, HELD rule.
 
     The probe compares keys through `emit_value_eq`, which reads an `Eq`
@@ -140,7 +157,8 @@ def _key_supports_equality(key_type: Type, validator: Any) -> bool:
     from sushi_lang.semantics.passes.resolve import table_resolver
     resolve = table_resolver(validator.struct_table, validator.enum_table)
     return contract_of(key_type, EQ, resolve=resolve,
-                       overridden=override_of(validator.derived_methods, EQ))[0]
+                       overridden=override_of(validator.derived_methods, EQ),
+                       refused=refused)[0]
 
 
 def _validate_hashmap_insert(

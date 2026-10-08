@@ -146,14 +146,28 @@ class ConstraintValidator:
             # A type parameter of a template under check passes the constraint on only
             # when a constraint of its own promises it (#1070).
             from sushi_lang.semantics.generics.opaque import explain_unpromised
-            at_fault = (self._clone_resources(type_arg)
-                        if constraint_name == PerkCollector.CLONE_PERK else None)
-            explain_unpromised(diagnostic, type_arg, constraint_name, at_fault).emit()
+            explain_unpromised(diagnostic, constraint_name,
+                               self._at_fault(type_arg, constraint_name)).emit()
             return False
 
         return True
 
-    def _derived_implements(self, type_arg: Type, constraint_name: str) -> bool:
+    def _at_fault(self, type_arg: Type, constraint_name: str) -> list:
+        """The types that the refusing predicate names as the cause (#1070).
+
+        A derived perk names what its walk refused, and `Clone` what declares a resource.
+        A user perk is explicit, so the type argument itself lacks the implementation.
+        """
+        if constraint_name == PerkCollector.CLONE_PERK:
+            return self._clone_resources(type_arg)
+        if constraint_name in CONTRACTS or constraint_name == PerkCollector.HASHABLE_PERK:
+            refused: list = []
+            self._derived_implements(type_arg, constraint_name, refused)
+            return refused
+        return [type_arg]
+
+    def _derived_implements(self, type_arg: Type, constraint_name: str,
+                            refused: Optional[list] = None) -> bool:
         """Does the compiler derive this contract for the type? Then it satisfies it.
 
         `Hashable` (#696), the three contracts `Eq`, `Ord` and `Display`, and `Clone`,
@@ -173,14 +187,15 @@ class ConstraintValidator:
             overridden = perk_override_of(constraint_name, self.perk_impl_table,
                                           self.generic_perk_impls, self.holds_bound)
             return operand_contract(type_arg, constraint_name, overridden=overridden,
-                                    resolve=resolve)[0]
+                                    resolve=resolve, refused=refused)[0]
         if constraint_name == PerkCollector.CLONE_PERK:
             return not self._clone_resources(type_arg)
         if constraint_name != PerkCollector.HASHABLE_PERK:
             return False
         overridden = hash_override_of(self.perk_impl_table, self.generic_perk_impls,
                                       self.holds_bound)
-        can_hash, _reason = hashability_of(type_arg, resolve=resolve, overridden=overridden)
+        can_hash, _reason = hashability_of(type_arg, resolve=resolve, overridden=overridden,
+                                           refused=refused)
         return can_hash
 
     def _clone_resources(self, type_arg: Type) -> list:
