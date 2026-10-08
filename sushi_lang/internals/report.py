@@ -165,6 +165,13 @@ def _per_instance(code: str) -> bool:
     return code in PER_INSTANCE_CODES
 
 
+def _warning_site(d: Diagnostic) -> tuple:
+    """The code, the file and the span of a warning: what a repeat of it has in common."""
+    span = d.span
+    return (d.code, d.filename,
+            None if span is None else (span.line, span.col, span.end_line, span.end_col))
+
+
 def missed_by_template_check(d: Diagnostic, template: object) -> Diagnostic:
     """CE0149 for an error that a copy of a clean checked template reports (#1070).
 
@@ -315,6 +322,10 @@ class Reporter:
         # the check did not refuse reports only the per-instance remainder (R7, R8).
         self.checked_templates: AbstractSet[object] = frozenset()
         self.instance_only: bool = False
+        # The sites (code, file, span) of the warnings that a body which is no copy of a
+        # template recorded, shared with the analysis. A copy repeats a warning of its
+        # template at the template's span, and only that repeat is dropped.
+        self.template_warnings: set = set()
         self._template: object = None
         self.items: List[Diagnostic] = []
         self._identities: set = set()
@@ -333,7 +344,8 @@ class Reporter:
         check reported an error is `muted`: a muted diagnostic counts as offered and is
         not recorded. A copy of a template that checked clean is `instance_only`: it
         reports only the per-instance remainder (`PER_INSTANCE_CODES`), and any other
-        error is CE0149. Any other body reports everything.
+        error is CE0149; a warning of it is kept unless it repeats a warning that the
+        template reported (`template_warnings`). Any other body reports everything.
         """
         template = getattr(func, "template_id", None)
         self.origin = getattr(func, "library_origin", None)
@@ -374,10 +386,13 @@ class Reporter:
         if self.muted:
             return d
         if self.instance_only and not _per_instance(d.code):
-            # A warning of the copy repeats the template's warning with a concrete type.
+            # A warning at the site of a warning of the template is that warning again,
+            # with a concrete type. Any other warning is decided by this instance.
             if d.kind != "error":
-                return d
-            d = missed_by_template_check(d, self._template)
+                if _warning_site(d) in self.template_warnings:
+                    return d
+            else:
+                d = missed_by_template_check(d, self._template)
         # AFTER the origin fixups: they can change the file a span is read against, and
         # the file is part of what makes two reports the same one.
         identity = diagnostic_identity(d)
@@ -385,6 +400,8 @@ class Reporter:
             return d
         self._identities.add(identity)
         self.items.append(d)
+        if d.kind == "warning" and self._template is None:
+            self.template_warnings.add(_warning_site(d))
         return d
 
     def _author_compiles(self) -> bool:

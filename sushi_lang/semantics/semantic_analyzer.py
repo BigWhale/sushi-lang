@@ -265,6 +265,7 @@ class SemanticAnalyzer:
                             keeps_warnings=_lint_checks(unit, gate_env))
         reporter.refused_templates = self.tables.refused_templates
         reporter.checked_templates = self.tables.checked_templates
+        reporter.template_warnings = self.tables.template_warnings
         return reporter
 
     def _merge_unit(self, unit_reporter: Reporter) -> None:
