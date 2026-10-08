@@ -5,9 +5,10 @@ bit pattern of that type, so `0xff` on an i8 is -1, the value that `-1` also spe
 duplicate rule, the overlap rule, the cover rule and the backend must all read one value,
 so they all read it here.
 
-The answer depends on the TYPE at the position, not on the pattern alone: a generic
-instance shares the pattern nodes of its template, so one node can stand at an i8 in one
-instance and at a u8 in another. The pattern holds no stamp for that reason.
+The answer depends on the TYPE at the position, which the caller gives, not on the pattern
+alone. The pattern holds no stamp: the typecheck pass and the backend both read the value
+here, so they cannot disagree. A type parameter is opaque in a template, so an integer
+pattern on a `T` is refused (CE2119) before any instance is made.
 """
 from __future__ import annotations
 
