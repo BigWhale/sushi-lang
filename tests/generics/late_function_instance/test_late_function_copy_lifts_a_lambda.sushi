@@ -8,7 +8,7 @@
 struct Box@(T):
     T v
 
-fn k@(T)(T x) i32:
+fn k@(T: Hashable)(T x) i32:
     let fn(i32) -> i32 add = |i32 v| v + 7
     return add((x.hash() * 0) as i32)
 

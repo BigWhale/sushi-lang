@@ -12,7 +12,7 @@ struct Pair@(T, U):
     T first
     U second
 
-fn get_first@(A, B)(Pair@(A, B) p) A:
+fn get_first@(A: Clone, B)(Pair@(A, B) p) A:
     return p.first.clone()
 
 fn run() i32:

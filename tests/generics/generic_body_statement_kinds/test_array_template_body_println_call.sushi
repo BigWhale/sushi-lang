@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "7\n1\n"
 
-fn k@(T)(T x) i32:
+fn k@(T: Hashable)(T x) i32:
     return 7 + (x.hash() * 0) as i32
 
 extend T[] probe() i32:

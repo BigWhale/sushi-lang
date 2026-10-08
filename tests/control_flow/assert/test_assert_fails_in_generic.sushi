@@ -3,7 +3,7 @@
 # EXPECT_STDOUT_EXACT: "same\n"
 # EXPECT_STDERR_CONTAINS: "test_assert_fails_in_generic.sushi:7:5: the two values differ\n"
 
-fn same@(T)(T x, T y) ~:
+fn same@(T: Eq)(T x, T y) ~:
     assert(x == y, "the two values differ")
     println("same")
 

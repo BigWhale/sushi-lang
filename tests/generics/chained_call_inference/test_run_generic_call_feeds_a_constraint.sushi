@@ -17,7 +17,7 @@ extend Crate with Countable:
 extend Crate heavier() Crate:
     return Crate(self.weight + 2)
 
-fn make@(T)(nom T seed) Crate:
+fn make@(T: Display)(nom T seed) Crate:
     println("seeded {seed}")
     return Crate(7)
 

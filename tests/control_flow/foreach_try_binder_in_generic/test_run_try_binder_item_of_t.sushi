@@ -27,7 +27,7 @@ extend Feed@(T) next(poke self) Maybe@(Result@(T, Bad)):
 extend Feed@(T) fresh() Feed@(T):
     return Feed(self.items.clone(), 0, self.fail_at)
 
-fn count@(T)(Feed@(T) feed) i32 | Bad:
+fn count@(T: Display)(Feed@(T) feed) i32 | Bad:
     let i32 seen = 0
     foreach(x?? in feed.fresh()):
         println("got {x}")

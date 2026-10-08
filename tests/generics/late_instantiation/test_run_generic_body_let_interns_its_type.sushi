@@ -16,7 +16,7 @@ extend Box@(T) with Show:
     fn show() string:
         return "box"
 
-fn outer@(T)(nom T v) string:
+fn outer@(T: Display)(nom T v) string:
     let Box@(T) b = Box(v)
     return "{b.show()} {b.item}"
 

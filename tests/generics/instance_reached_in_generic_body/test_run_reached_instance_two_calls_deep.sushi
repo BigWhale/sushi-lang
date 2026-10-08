@@ -33,7 +33,7 @@ fn feed_of@(T)(nom T[] items) Feed@(T):
 fn walk@(T)(nom T[] items) Feed@(T):
     return feed_of(nom items)
 
-fn count@(T)(nom T[] items) i32:
+fn count@(T: Display)(nom T[] items) i32:
     let i32 n = 0
     foreach(r in walk(nom items)):
         match r:

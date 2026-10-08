@@ -7,7 +7,7 @@
 fn wrap@(T)(nom T v) T:
     return v
 
-fn carry@(U)(nom U v) string:
+fn carry@(U: Display)(nom U v) string:
     return "carried {v}"
 
 fn run() string:

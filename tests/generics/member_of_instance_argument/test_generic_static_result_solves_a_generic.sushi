@@ -9,7 +9,7 @@ struct Box@(T):
 extend Box@(T) static of(T v) Box@(T):
     return Box(v)
 
-fn k@(T)(T x) i32:
+fn k@(T: Hashable)(T x) i32:
     return 7 + (x.hash() * 0) as i32
 
 fn main() i32:

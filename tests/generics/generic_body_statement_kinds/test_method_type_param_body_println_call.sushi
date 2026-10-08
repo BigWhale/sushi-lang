@@ -6,7 +6,7 @@
 struct Crate:
     i32 weight
 
-fn k@(T)(T x) i32:
+fn k@(T: Hashable)(T x) i32:
     return 7 + (x.hash() * 0) as i32
 
 extend Crate show@(U)(U u) i32:

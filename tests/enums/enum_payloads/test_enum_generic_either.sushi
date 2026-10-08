@@ -6,7 +6,7 @@ enum Either@(T, U):
     Left(T)
     Right(U)
 
-fn swap@(T, U)(Either@(T, U) e) Either@(U, T):
+fn swap@(T: Clone, U: Clone)(Either@(T, U) e) Either@(U, T):
     # A match binding borrows the payload the scrutinee still owns, so re-wrapping it into
     # a new enum needs an independent value.
     match e:

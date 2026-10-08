@@ -15,16 +15,16 @@ fn use_let@(U)(U u) U:
     let fn(U) -> U f = gen
     return f(u)
 
-fn use_ret@(U)(U u) fn(U) -> U:
+fn use_ret@(U: Display)(U u) fn(U) -> U:
     println(u)
     return gen
 
-fn use_field@(U)(U u) i32:
+fn use_field@(U: Display)(U u) i32:
     println(u)
     let H h = H(gen)
     return h.f(3)
 
-fn use_rebind@(U)(U u) i32:
+fn use_rebind@(U: Display)(U u) i32:
     println(u)
     let fn(i32) -> i32 f = id_i
     f := gen

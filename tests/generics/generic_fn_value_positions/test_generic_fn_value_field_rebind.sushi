@@ -1,11 +1,11 @@
 # A generic function value is solved by the field type in a named struct
 # construction and in a rebind of a field (#1021).
 # EXPECT_STDOUT_EXACT: "7\n8\n"
-fn g1@(T)(T x) i32:
+fn g1@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     return 7 + (h & 0) as i32
 
-fn g2@(T)(T x) i32:
+fn g2@(T: Hashable)(T x) i32:
     let u64 h = x.hash()
     return 8 + (h & 0) as i32
 

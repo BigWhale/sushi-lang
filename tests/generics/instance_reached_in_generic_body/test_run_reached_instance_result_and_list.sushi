@@ -29,7 +29,7 @@ extend Feed@(T) never_called() Maybe@(Result@(T, Bad)):
 fn feed_of@(T)(nom T[] items) Feed@(T):
     return Feed(items, 0)
 
-fn report@(T)(nom T[] items, nom T[] empty) i32:
+fn report@(T: Display)(nom T[] items, nom T[] empty) i32:
     let Feed@(T) f = feed_of(nom items)
     match f.first():
         Result.Ok(v) -> println(v)

@@ -13,7 +13,7 @@ extend Feed@(T) next(poke self) Maybe@(T):
     self.at := self.at + 1
     return Maybe.Some(v)
 
-fn total@(T)(nom T[] items) i32:
+fn total@(T: Eq)(nom T[] items) i32:
     let i32 n = 0
     foreach(r in Feed(items, 0)):
         if (r == r):
