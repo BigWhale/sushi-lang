@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
+from typing import Any, Callable, Optional, TYPE_CHECKING
 
 from sushi_lang.internals.report import (
     Reporter, diagnostic_identity, in_source_order)
@@ -15,7 +15,8 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.generics.monomorphize import Monomorphizer
     from sushi_lang.semantics.generics.array_perk_copies import ArrayPerkCopies
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
-from sushi_lang.semantics.passes.types import TypeValidator
+from sushi_lang.semantics.passes.types import (
+    TypeValidator, validate_perk_implementation_method)
 from sushi_lang.semantics.passes.borrow import BorrowChecker
 from sushi_lang.semantics.passes.lift import LambdaLifter
 from sushi_lang.semantics.units import UnitManager, Unit
@@ -92,6 +93,65 @@ class _UnitPasses:
     borrow: BorrowChecker
 
 
+@dataclass(frozen=True)
+class _CopyEntry:
+    """The four per-unit pass entries for one kind of copy.
+
+    `borrow` takes the copy and the functions that the lift pass made from its lambdas.
+    """
+    scope: Callable[[ScopeAnalyzer, Any], None]
+    typecheck: Callable[[TypeValidator, Any], None]
+    lift: Callable[[LambdaLifter, Any], list]
+    borrow: Callable[[BorrowChecker, Any, list], None]
+
+
+def _borrow_function_copy(borrow: BorrowChecker, func: Any, lifted: list) -> None:
+    for fn in (func, *lifted):
+        borrow.reporter.enter_body(fn)
+        borrow._check_function(fn)
+
+
+def _borrow_extension_copy(borrow: BorrowChecker, ext: ExtendDef, lifted: list) -> None:
+    borrow._check_extension(ext)
+    for fn in lifted:
+        borrow._check_function(fn)
+
+
+def _borrow_perk_copy(borrow: BorrowChecker, impl: ExtendWithDef, lifted: list) -> None:
+    borrow._check_perk_impl(impl)
+    for fn in lifted:
+        borrow._check_function(fn)
+
+
+# One row per kind of copy that is cut after the per-unit loop: a late function copy, a
+# generic-target or array-target extension copy, and an array-template perk copy.
+_COPY_ENTRIES: dict[type, _CopyEntry] = {
+    FuncDef: _CopyEntry(
+        scope=ScopeAnalyzer._check_function,
+        typecheck=TypeValidator._validate_function,
+        lift=LambdaLifter.lift_function,
+        borrow=_borrow_function_copy),
+    ExtendDef: _CopyEntry(
+        scope=ScopeAnalyzer._check_extension_method,
+        typecheck=TypeValidator._validate_extension_method,
+        lift=lambda lifter, ext: lifter.lift_body(ext.body, scope_unit=ext.scope_unit,
+                                                  template_id=ext.template_id),
+        borrow=_borrow_extension_copy),
+    ExtendWithDef: _CopyEntry(
+        scope=ScopeAnalyzer._check_perk_implementation,
+        typecheck=validate_perk_implementation_method,
+        lift=LambdaLifter.lift_perk_impl,
+        borrow=_borrow_perk_copy),
+}
+
+
+def _copy_entry(node: Any) -> _CopyEntry:
+    """The row of a copy. A function copy is a FuncDef or a cut of a template record."""
+    if isinstance(node, (ExtendDef, ExtendWithDef)):
+        return _COPY_ENTRIES[type(node)]
+    return _COPY_ENTRIES[FuncDef]
+
+
 class SemanticAnalyzer:
     """Semantic analysis coordinator that runs all semantic analysis passes."""
 
@@ -159,16 +219,16 @@ class SemanticAnalyzer:
             lift          lambda lifting                         _check_units                      passes/lift.py
             borrow        borrow checking                        _check_units                      passes/borrow/
 
-        The last four run per unit, in one loop. `_check_monomorphized_extensions` repeats
-        those four for each instantiation of a generic-target extension,
-        `_check_late_functions` repeats them for each function instance cut after the
-        loop started (a late request of the typecheck pass, #1155), and
-        `_check_array_extensions` drives both to a fixpoint.
+        The last four run per unit, in one loop. `_check_copies` repeats those four for
+        each copy cut after the loop started: an extension copy of a generic or an array
+        target, an array-template perk copy, and a function instance of a late request
+        of the typecheck pass (#1155). `_check_array_extensions` drives it to a
+        fixpoint. A copy of a checked template reports only the per-instance remainder.
 
-        The `typecheck` pass also checks each function template of the unit one time, on a
-        check copy, where it is written (#1070, `passes/types/templates.py`): each type
+        The `typecheck` pass also checks each template of the unit one time, on a check
+        copy, where it is written (#1070, `passes/types/templates.py`): each type
         parameter is opaque, the copy lives in an overlay of the tables, and the pass runs
-        `lift` on the copy alone. After the fixpoint, `_reject_opaque_in_program_tables`
+        `lift` and, through a hook, `borrow` on the copy alone. After the fixpoint, `_reject_opaque_in_program_tables`
         is the backstop (CE0148): no instance over an opaque parameter reached a program
         table.
 
@@ -896,13 +956,13 @@ class SemanticAnalyzer:
             if not batch and not functions and not perk_copies:
                 break
             checked = len(self.monomorphized_extensions)
-            self._check_monomorphized_extensions(compilation_order, monomorphizer,
-                                                 libraries, destroy_effects, enum_names,
-                                                 batch)
-            self._check_array_perk_copies(monomorphizer, libraries, destroy_effects,
-                                          enum_names, perk_copies)
-            self._check_late_functions(monomorphizer, libraries, destroy_effects,
-                                       enum_names, functions)
+            units = {u.name: u for u in compilation_order if u.ast is not None}
+            copies: list[tuple[Unit, Any]] = [
+                (units[ext.home_unit or ""], ext) for ext in batch]
+            copies += perk_copies
+            copies += functions
+            self._check_copies(copies, monomorphizer, libraries, destroy_effects,
+                               enum_names)
 
     # Rounds an expansion fixpoint may take before it drops the rest. The same shape
     # and reasoning as InstantiationCollector.MAX_EXPANSION_ROUNDS. TWO readers, and
@@ -964,39 +1024,6 @@ class SemanticAnalyzer:
         if fn_instantiations:
             monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
         return placed
-
-    def _check_array_perk_copies(self, monomorphizer, libraries: LibraryRegistration,
-                                 destroy_effects, enum_names: set[str],
-                                 copies: list[tuple[Unit, ExtendWithDef]]) -> None:
-        """scope, typecheck, lift and borrow over each array-template perk copy (#699).
-
-        Each copy is checked with the passes of its home unit, in the per-unit order. A
-        fault in the template body is the same diagnostic in every copy that has it, and
-        it is merged one time.
-        """
-        from sushi_lang.semantics.passes.types import validate_perk_implementation_method
-
-        by_home: dict[str, tuple[Unit, list[ExtendWithDef]]] = {}
-        for home, impl in copies:
-            by_home.setdefault(home.name, (home, []))[1].append(impl)
-
-        seen = {diagnostic_identity(d) for d in self.reporter.items}
-        for home, impls in by_home.values():
-            scratch = self._unit_reporter(home)
-            passes = self._unit_passes(home, scratch, monomorphizer, libraries,
-                                       destroy_effects, enum_names)
-            for impl in impls:
-                passes.scope._check_perk_implementation(impl)
-                scratch.leave_body()
-                validate_perk_implementation_method(passes.typecheck, impl)
-                scratch.leave_body()
-                lifted = passes.lifter.lift_perk_impl(impl)
-                passes.borrow.refresh_callee_modes()
-                passes.borrow._check_perk_impl(impl)
-                for fn in lifted:
-                    passes.borrow._check_function(fn)
-            scratch.leave_body()
-            self._merge_new(scratch, seen)
 
     def _start_late_requests(self, monomorphizer, compilation_order: list[Unit]) -> None:
         """From the per-unit loop on, a function copy is LATE (#1155).
@@ -1213,48 +1240,42 @@ class SemanticAnalyzer:
         from sushi_lang.semantics.generics.late_interning import settle_new_instances
         settle_new_instances(self.tables, self.reporter, marks)
 
-    def _check_monomorphized_extensions(self, compilation_order: list[Unit], monomorphizer,
-                                        libraries: LibraryRegistration, destroy_effects,
-                                        enum_names: set[str], batch: list[ExtendDef]) -> None:
-        """Type- and borrow-check every instantiation of a generic-target extension.
+    def _check_copies(self, copies: list[tuple[Unit, Any]], monomorphizer,
+                      libraries: LibraryRegistration, destroy_effects,
+                      enum_names: set[str]) -> None:
+        """scope, typecheck, lift and borrow over each copy cut after the per-unit loop.
 
-        This is where a generic extension's per-instantiation truth is decided: `self` is
-        concrete here, so an owning field handed out of the body is the CE2411 it is, while
-        the same body over a plain type argument stays legal (#391). The template itself is
-        walked by scope and borrow for what does not depend on the type argument.
+        A late function copy (#1155), an extension copy of a generic or an array target,
+        and an array-template perk copy (#699). Each copy is checked with the passes of
+        its HOME unit, the unit that declared the template (#1064): its private functions
+        and its aliases are the copy's too. The passes run in the per-unit order, and
+        the lifted functions land in the home unit's AST, the one module that defines
+        the copy.
 
-        Each copy is checked with the passes of its HOME unit, the unit that declared the
-        template (#1064): its private functions and its aliases are the copy's too. The
-        copies mirror the per-unit order scope -> typecheck -> lift -> borrow (#399). They
-        were deep-copied BEFORE scope ran, so no walk ever stamped their lambda captures;
-        the scope run here exists only for that stamp and reports nothing -- the
-        template's own scope run already reported its findings once (#1070). The lifted
-        functions land in the home unit's AST, the one module that defines the copy.
-
-        One body error would otherwise be reported once per instantiation, plus once from
-        the template -- so the run collects into its own reporter and merges what is new.
+        A copy of a checked template reports only the per-instance remainder (#1070, R7):
+        the passes run for the stamps that the backend reads. A copy of a consumed
+        library's template keeps its full check, and one diagnostic that two copies give
+        is merged one time.
         """
-        units = {u.name: u for u in compilation_order if u.ast is not None}
-        by_home: dict[str, list[ExtendDef]] = {}
-        for extend_def in batch:
-            by_home.setdefault(extend_def.home_unit or "", []).append(extend_def)
+        by_home: dict[str, tuple[Unit, list[Any]]] = {}
+        for home, node in copies:
+            by_home.setdefault(home.name, (home, []))[1].append(node)
 
         seen = {diagnostic_identity(d) for d in self.reporter.items}
-        for home_name, copies in by_home.items():
-            home = units[home_name]
+        for home, nodes in by_home.values():
             scratch = self._unit_reporter(home)
             passes = self._unit_passes(home, scratch, monomorphizer, libraries,
                                        destroy_effects, enum_names)
-            for extend_def in copies:
-                passes.scope._check_extension_method(extend_def)
-                passes.typecheck._validate_extension_method(extend_def)
-                lifted = passes.lifter.lift_body(extend_def.body,
-                                                 scope_unit=extend_def.scope_unit,
-                                                 template_id=extend_def.template_id)
+            for node in nodes:
+                entry = _copy_entry(node)
+                entry.scope(passes.scope, node)
+                scratch.leave_body()
+                entry.typecheck(passes.typecheck, node)
+                scratch.leave_body()
+                lifted = entry.lift(passes.lifter, node)
                 passes.borrow.refresh_callee_modes()
-                passes.borrow._check_extension(extend_def)
-                for fn in lifted:
-                    passes.borrow._check_function(fn)
+                entry.borrow(passes.borrow, node, lifted)
+                scratch.leave_body()
             self._merge_new(scratch, seen)
 
     def _merge_new(self, scratch: Reporter, seen: set) -> None:
@@ -1265,37 +1286,6 @@ class SemanticAnalyzer:
                 continue
             seen.add(identity)
             self.reporter.items.append(diagnostic)
-
-    def _check_late_functions(self, monomorphizer, libraries: LibraryRegistration,
-                              destroy_effects, enum_names: set[str],
-                              functions: list[tuple[Unit, FuncDef]]) -> None:
-        """scope, typecheck, lift and borrow over each late function copy (#1155).
-
-        An early copy is in its unit's AST when the per-unit loop walks it. A late copy
-        is put into the AST after that loop, so it is checked here, with the passes of
-        its home unit, in the same order. The scope pass reports nothing for a copy,
-        because it walked the template itself (#1070); one diagnostic that two copies
-        give is merged one time.
-        """
-        by_home: dict[str, tuple[Unit, list[FuncDef]]] = {}
-        for home, funcdef in functions:
-            by_home.setdefault(home.name, (home, []))[1].append(funcdef)
-
-        seen = {diagnostic_identity(d) for d in self.reporter.items}
-        for home, copies in by_home.values():
-            scratch = self._unit_reporter(home)
-            passes = self._unit_passes(home, scratch, monomorphizer, libraries,
-                                       destroy_effects, enum_names)
-            for funcdef in copies:
-                passes.scope._check_function(funcdef)
-                passes.typecheck._validate_function(funcdef)
-                lifted = passes.lifter.lift_function(funcdef)
-                passes.borrow.refresh_callee_modes()
-                for fn in (funcdef, *lifted):
-                    scratch.enter_body(fn)
-                    passes.borrow._check_function(fn)
-            scratch.leave_body()
-            self._merge_new(scratch, seen)
 
     def _check_extension_shadows_builtin(self) -> None:
         """Reject an extension method that collides with a built-in (CE2097)."""
