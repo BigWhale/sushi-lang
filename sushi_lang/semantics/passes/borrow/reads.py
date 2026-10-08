@@ -10,7 +10,11 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.semantics.ast import (
+    ArrayLiteral,
+    Call,
     DotCall,
+    DynamicArrayFrom,
+    DynamicArrayNew,
     Expr,
     IndexAccess,
     MemberAccess,
@@ -109,9 +113,29 @@ def reads_through_owner(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
         if isinstance(receiver, Name):
             state = checker.borrow_state.get(receiver.id)
             return state is not None and is_get_out_container(state.var_type)
-        return reads_through_owner(checker, receiver)
+        # A temporary container is an owner too: the backend parks it and frees its
+        # elements at scope exit, so a get-out from it is a borrow (#1170).
+        return (reads_through_owner(checker, receiver)
+                or is_get_out_container(receiver_type(checker, receiver)))
 
     return False
+
+
+def receiver_type(checker: 'BorrowChecker', receiver: Optional[Expr]) -> Optional[Type]:
+    """The type of a get-out's receiver: a place, or a temporary that makes a new value.
+
+    The typecheck pass stamps the type of each temporary: a call carries what it answers,
+    and an array literal, a `from([...])` and a `new()` carry the array they make.
+    """
+    ty = read_type(checker, receiver)
+    if ty is not None:
+        return ty
+    match receiver:
+        case Call() | MethodCall() | DotCall():
+            return checker.types.resolve_named(receiver.inferred_return_type)
+        case ArrayLiteral() | DynamicArrayFrom() | DynamicArrayNew():
+            return receiver.resolved_type
+    return None
 
 
 def names_kept_storage(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
@@ -173,7 +197,7 @@ def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
     # A container `.get()` returns `Maybe@(T)`, and every use of it reaches here through
     # the `??` already unwrapped, so the interesting type is the element. `Own@(T).get()`
     # hands back the bare `T`.
-    return checker.types.element_type(read_type(checker, receiver))
+    return checker.types.element_type(receiver_type(checker, receiver))
 
 
 def constant_sig(checker: 'BorrowChecker', name: str):

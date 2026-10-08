@@ -1,0 +1,14 @@
+# A `let` over a get-out from an array literal binds a borrow. The temporary array
+# still owns the element, so a consuming use of the binding is refused.
+# EXPECT_ERROR_CODE: CE2411
+fn keep(nom string s) string:
+    return s
+
+fn run() string | StdError:
+    let i32 k = 1
+    let string s = ["ford {k}", "arthur"].first().or_err(nom StdError.Error)??
+    return Result.Ok(keep(nom s))
+
+fn main() i32:
+    println(run().realise("none"))
+    return 0

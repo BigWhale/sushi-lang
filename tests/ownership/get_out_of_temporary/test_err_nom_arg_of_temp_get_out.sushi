@@ -1,0 +1,17 @@
+# A get-out from a temporary container is a read through its owner. A `nom` argument
+# cannot take it, because the temporary frees the element at scope exit.
+# EXPECT_ERROR_CODE: CE2411
+fn make_list() List@(string):
+    let List@(string) l = List.new()
+    l.push("zaphod {3}")
+    return l
+
+fn keep(nom string s) string:
+    return s
+
+fn run() string | StdError:
+    return Result.Ok(keep(nom make_list().first().or_err(nom StdError.Error)??))
+
+fn main() i32:
+    println(run().realise("none"))
+    return 0

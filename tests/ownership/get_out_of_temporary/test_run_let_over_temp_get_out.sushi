@@ -1,0 +1,73 @@
+# A get-out (`get`, `first`, `last`) BORROWS from its container, and a temporary
+# container is an owner too. A `let` over a get-out from a temporary binds a borrow.
+# The temporary keeps its elements and frees them at scope exit, one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ford 1\nford 1\narthur 2\ntrillian 4\nzaphod 3\ntrillian 4\nmarvin 5\nslartibartfast 6\n7\nford 1\nford 1\nford 1\nford 1\n"
+use <collections/hashmap>
+
+fn give() string[]:
+    return from(["ford {1}", "arthur {2}"])
+
+fn numbers() i32[]:
+    return from([7, 8])
+
+fn make_list() List@(string):
+    let List@(string) l = List.new()
+    l.push("zaphod {3}")
+    l.push("trillian {4}")
+    return l
+
+fn make_map() HashMap@(i32, string):
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(1, "marvin {5}")
+    return m
+
+fn make_own() Own@(string):
+    return Own.alloc("slartibartfast {6}")
+
+fn keep(nom string s) string:
+    return s
+
+fn count(nom i32 n) i32:
+    return n
+
+fn first() string | StdError:
+    let string s = give().get(0).or_err(nom StdError.Error)??
+    return Result.Ok(s.clone())
+
+fn run() i32 | StdError:
+    let string a = give().get(0).or_err(nom StdError.Error)??
+    let string b = give().first().or_err(nom StdError.Error)??
+    let string c = give().last().or_err(nom StdError.Error)??
+    let string d = make_list().get(1).or_err(nom StdError.Error)??
+    let string e = make_list().first().or_err(nom StdError.Error)??
+    let string f = make_list().last().or_err(nom StdError.Error)??
+    let string g = make_map().get(1).or_err(nom StdError.Error)??
+    let string h = make_own().get()
+    println(a)
+    println(b)
+    println(c)
+    println(d)
+    println(e)
+    println(f)
+    println(g)
+    println(h)
+
+    let i32 n = numbers().get(0).or_err(nom StdError.Error)??
+    println(count(nom n))
+
+    let string kept = keep(nom give().get(0).or_err(nom StdError.Error)??.clone())
+    println(kept)
+
+    let i32 i = 0
+    while (i < 2):
+        let string w = give().get(0).or_err(nom StdError.Error)??
+        println(w)
+        i := i + 1
+
+    println(first().realise("none"))
+    return Result.Ok(0)
+
+fn main() i32:
+    return run().realise(9)

@@ -1,0 +1,17 @@
+# The scrutinee `give().get(0)` reads through the temporary array, which keeps the
+# element. The match only borrows it, so a `nom` binding cannot take the payload.
+# EXPECT_ERROR_CODE: CE2432
+fn give() string[]:
+    return from(["ford {1}", "arthur {2}"])
+
+fn keep(nom string s) string:
+    return s
+
+fn run() string:
+    match give().get(0):
+        Maybe.Some(nom s) -> return keep(nom s)
+        Maybe.None -> return "none"
+
+fn main() i32:
+    println(run())
+    return 0

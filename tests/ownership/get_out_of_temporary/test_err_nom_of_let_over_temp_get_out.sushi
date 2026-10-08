@@ -1,0 +1,16 @@
+# A `let` over a get-out from a temporary container binds a borrow. The temporary
+# still owns the element, so a consuming use of the binding is refused.
+# EXPECT_ERROR_CODE: CE2411
+fn give() string[]:
+    return from(["ford {1}", "arthur {2}"])
+
+fn keep(nom string s) string:
+    return s
+
+fn run() string | StdError:
+    let string s = give().get(0).or_err(nom StdError.Error)??
+    return Result.Ok(keep(nom s))
+
+fn main() i32:
+    println(run().realise("none"))
+    return 0
