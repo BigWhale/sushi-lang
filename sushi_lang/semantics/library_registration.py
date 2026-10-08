@@ -131,7 +131,7 @@ class LibraryRegistration:
         self._snippet_collector: Optional[CollectorPass] = None
         self._snippet_reporter = Reporter(filename="<library snippet>")
 
-    def _template_origin(self, lib_name: str, manifest: dict, label: str,
+    def _template_origin(self, lib_name: str, version: Optional[str], label: str,
                          source: str) -> Origin:
         """Whose code a library template is, and the text its spans index into.
 
@@ -140,7 +140,7 @@ class LibraryRegistration:
         """
         origin = Origin(
             filename=label, source=source,
-            provenance=(f"'{lib_name}' {manifest.get('library_version') or 'unknown'} "
+            provenance=(f"'{lib_name}' {version or 'unknown'} "
                         f"ships this template; it is monomorphized here because of "
                         f"`use <lib/{lib_name}>`"))
         self.reporter.add_slice(label, source)
@@ -730,7 +730,8 @@ class LibraryRegistration:
                 continue
             # The methods are the library's code, as an extension template's are: a
             # copy may call the library's privates, and a diagnostic names the library.
-            origin = self._template_origin(lib_name, manifest, label, source)
+            origin = self._template_origin(lib_name, manifest.get("library_version"),
+                                           label, source)
             for impl in [*program.perk_impls, *(program.generic_perk_impls or [])]:
                 for method in impl.methods:
                     method.is_library_template = True
@@ -959,7 +960,8 @@ class LibraryRegistration:
                 if bindings:
                     apply_template_bindings(ext.body, bindings)
                 ext.is_library_template = True
-                ext.library_origin = self._template_origin(lib_name, manifest, label, source)
+                ext.library_origin = self._template_origin(
+                    lib_name, manifest.get("library_version"), label, source)
 
             reporter = Reporter(source=source, filename=label)
             collector = self._function_collector(
@@ -1073,7 +1075,8 @@ class LibraryRegistration:
             # a library's mistake against the consumer's file (#471). The filename
             # shape is the throwaway reporter's, so one convention names a template
             # everywhere.
-            gfd.library_origin = self._template_origin(lib_name, manifest, label, source)
+            gfd.library_origin = self._template_origin(
+                lib_name, manifest.get("library_version"), label, source)
             # The record is the one home of the file a note at the template names: the
             # slice, as the collector of an extension template files it (#1070).
             gfd.filename = label
