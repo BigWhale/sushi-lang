@@ -3,8 +3,8 @@
 # EXPECT_ERROR_CODES_EXACT: CE2093
 use <collections/iter>
 
-fn identity@(T)(T x) T:
-    return x
+fn identity@(T: Clone)(T x) T:
+    return x.clone()
 
 fn main() i32:
     let i32[] xs = from([1, 2, 3])

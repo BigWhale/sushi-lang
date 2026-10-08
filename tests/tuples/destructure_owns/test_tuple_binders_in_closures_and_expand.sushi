@@ -17,9 +17,9 @@ struct Holder:
     (string, i32) pair
     string tag
 
-fn show_all@(...Ts: Render + Display)(...Ts args) ~:
+fn show_all@(...Ts: Render + Display + Clone)(...Ts args) ~:
     expand(a in args):
-        let (n, s) = (a, a.display())
+        let (n, s) = (a.clone(), a.display())
         println("{n} {s}")
 
 fn main() i32:

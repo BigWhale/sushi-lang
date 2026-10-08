@@ -2,7 +2,7 @@
 # `i32`, whatever a call would give for it.
 # EXPECT_ERROR_CODES_EXACT: CE2003
 
-fn as_number@(T)(T x) i32:
+fn as_number@(T)(nom T x) i32:
     return x
 
 fn main() i32:

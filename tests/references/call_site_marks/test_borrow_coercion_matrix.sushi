@@ -26,8 +26,8 @@ fn forward(poke i32 v) i32:
 
 # Type-argument inference binds T through a `peek` parameter, and the argument may be a
 # `poke` borrow -- the coercion has to survive unification.
-fn peek_generic@(T)(peek T x) T:
-    return x
+fn peek_generic@(T: Clone)(peek T x) T:
+    return x.clone()
 
 # An extension-method parameter takes the same coercion as a plain one.
 extend Box add(peek i32 x) i32:

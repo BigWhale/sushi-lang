@@ -4,18 +4,18 @@
 # EXPECT_STDOUT_EXACT: "9\n2\n1\n7\n"
 use "helpers/agc_shapes" as sh
 
-fn unbox@(T)(sh.Box@(T) b) T:
-    return b.v
+fn unbox@(T: Clone)(sh.Box@(T) b) T:
+    return b.v.clone()
 
 fn one@(T: Eq)(sh.Slot@(T) s) i32:
     if (s == s):
         return 1
     return 0
 
-fn inner@(T)(sh.Slot@(T) s, T fb) T:
+fn inner@(T: Clone)(sh.Slot@(T) s, T fb) T:
     match s:
-        sh.Slot.Full(v) -> return v
-        sh.Slot.Empty -> return fb
+        sh.Slot.Full(v) -> return v.clone()
+        sh.Slot.Empty -> return fb.clone()
 
 fn main() i32:
     println(sh.Box(9).v)

@@ -5,11 +5,11 @@ struct Pair@(A, B):
     A first
     B second
 
-fn swap@(T, U)(T a, U b) Pair@(U, T):
+fn swap@(T, U)(nom T a, nom U b) Pair@(U, T):
     return Pair(b, a)
 
 fn main() i32:
-    let Pair@(bool, i32) p = swap(42, true)
+    let Pair@(bool, i32) p = swap(nom 42, nom true)
     if (p.first != true or p.second != 42):
         return 1
     return 0

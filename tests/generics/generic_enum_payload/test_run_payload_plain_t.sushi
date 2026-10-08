@@ -7,8 +7,8 @@ enum Wrap@(T):
     One(T)
     Zero
 
-fn echo@(U)(U v) U:
-    return v
+fn echo@(U: Clone)(U v) U:
+    return v.clone()
 
 fn main() i32:
     let Wrap@(i32) w = Wrap.One(7)

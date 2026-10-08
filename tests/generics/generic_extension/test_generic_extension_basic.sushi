@@ -3,15 +3,15 @@
 
 # Test basic generic extension methods
 # This test verifies that:
-# 1. Generic extension methods can be defined (extend Box@(T) unwrap() T)
+# 1. Generic extension methods can be defined (extend Box@(T: Clone) unwrap() T)
 # 2. They are correctly monomorphized for concrete types (Box@(i32))
 # 3. Method calls work correctly with UFCS
 
 struct Box@(T):
     T value
 
-extend Box@(T) unwrap() T:
-    return self.value
+extend Box@(T: Clone) unwrap() T:
+    return self.value.clone()
 
 fn main() i32:
     let Box@(i32) b = Box(42)

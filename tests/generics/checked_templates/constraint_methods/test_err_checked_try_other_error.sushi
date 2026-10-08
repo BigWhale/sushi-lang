@@ -2,7 +2,7 @@
 # and no other (#1070, R8): the template cannot know a conversion into StdError.
 # EXPECT_ERROR_CODES_EXACT: CE2511
 
-fn unwrap@(E)(Result@(i32, E) r) i32 | StdError:
+fn unwrap@(E)(nom Result@(i32, E) r) i32 | StdError:
     return Result.Ok(r??)
 
 fn main() i32:

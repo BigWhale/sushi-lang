@@ -9,11 +9,11 @@ struct Box@(T):
 fn k@(T: Hashable)(T x) i32:
     return 7 + (x.hash() * 0) as i32
 
-extend Box@(T: Hashable) static of(T v) Box@(T):
+extend Box@(T: Hashable) static of(nom T v) Box@(T):
     println(k(v))
     return Box(v)
 
 fn main() i32:
-    let Box@(i32) b = Box.of(3)
+    let Box@(i32) b = Box.of(nom 3)
     println(b.v)
     return 0

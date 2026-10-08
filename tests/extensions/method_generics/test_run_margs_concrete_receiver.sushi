@@ -3,7 +3,7 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "7\n9\n"
-extend i32 pick@(U)(U a, U b) U:
+extend i32 pick@(U)(nom U a, nom U b) U:
     if (self > 0):
         return a
     return b
@@ -11,6 +11,6 @@ extend i32 pick@(U)(U a, U b) U:
 fn main() i32:
     let i32 plus = 1
     let i32 minus = -1
-    println("{plus.pick(7, 9)}")
-    println("{minus.pick(7, 9)}")
+    println("{plus.pick(nom 7, nom 9)}")
+    println("{minus.pick(nom 7, nom 9)}")
     return 0

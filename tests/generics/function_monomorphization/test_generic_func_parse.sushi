@@ -1,7 +1,7 @@
 # Test: Generic function definitions parse correctly
 # A compile-only claim: the point is that the generic declarations parse. The run asserts exit 0 and nothing more.
 
-fn identity@(T)(T x) T:
+fn identity@(T)(nom T x) T:
     return x
 
 fn swap@(T, U)(T a, U b) ~:

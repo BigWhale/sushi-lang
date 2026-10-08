@@ -1,8 +1,8 @@
 # A correct pack template that no call instantiates checks clean where it is written
 # (#1070): a lead parameter, a method through a constraint, a hole, a Maybe, a tuple and
-# its destructure, an array, a lambda that captures the element, a `??`, a `foreach`
-# with a `??` binder, a nested `expand` and a call of another pack template with an
-# element. Each `expand` binds an opaque element type, and no instance over one reaches
+# its destructure, an array, a lambda that captures a clone of the element, a `??`, a
+# `foreach` with a `??` binder, a nested `expand` and a call of another pack template with
+# an element. Each `expand` binds an opaque element type, and no instance over one reaches
 # the backend.
 # EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
 # EXPECT_STDERR_EMPTY: true
@@ -31,19 +31,19 @@ fn checked@(U: Render)(U x) i32 | StdError:
         return Result.Err(StdError.Error)
     return Result.Ok(1)
 
-fn shapes@(T: Display, ...Ts: Render + Display)(T head, ...Ts args) i32 | StdError:
+fn shapes@(T: Display, ...Ts: Render + Display + Clone)(T head, ...Ts args) i32 | StdError:
     println("{head}")
     let i32 total = 0
     expand(a in args):
         println(a.render())
         println("{a}")
-        match Maybe.Some(a):
+        match Maybe.Some(a.clone()):
             Maybe.Some(m) -> println(m.render())
             Maybe.None -> println("none")
-        let (x, n) = (a, 1)
+        let (x, n) = (a.clone(), 1)
         println(x.render())
-        total := total + n + from([a]).len()
-        let fn() -> string f = |~| a.render()
+        total := total + n + from([a.clone()]).len()
+        let fn() -> string f = |~| x.render()
         println(f())
         total := total + checked(a)??
         foreach(step?? in Steps(0)):

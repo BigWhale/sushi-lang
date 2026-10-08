@@ -1,2 +1,2 @@
-public fn picked@(T)(T value) T:
-    return value
+public fn picked@(T: Clone)(T value) T:
+    return value.clone()

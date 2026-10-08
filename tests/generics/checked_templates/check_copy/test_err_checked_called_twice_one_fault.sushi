@@ -2,11 +2,11 @@
 # template reports it again for no type argument (#1070).
 # EXPECT_ERROR_CODES_EXACT: CE2003
 
-fn as_number@(T)(T x) i32:
+fn as_number@(T)(nom T x) i32:
     return x
 
 fn main() i32:
-    let i32 a = as_number(5)
-    let i32 b = as_number("towel")
+    let i32 a = as_number(nom 5)
+    let i32 b = as_number(nom "towel")
     println(a + b)
     return 0

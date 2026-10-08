@@ -7,8 +7,8 @@ fn swap@(T, U)(nom (T, U) p) (U, T):
     let (a, b) = p
     return (b, a)
 
-fn first@(T, U)((T, U) p) T:
-    return p.0
+fn first@(T: Clone, U)((T, U) p) T:
+    return p.0.clone()
 
 fn main() i32:
     let (i32, string) t = (42, "answer")

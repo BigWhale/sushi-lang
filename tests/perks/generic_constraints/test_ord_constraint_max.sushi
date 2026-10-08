@@ -6,13 +6,13 @@ struct Point:
     i32 x
     i32 y
 
-fn largest@(T: Ord)(T a, T b) T:
+fn largest@(T: Ord)(nom T a, nom T b) T:
     if (a < b):
         return b
     return a
 
 fn main() i32:
-    println(largest(3, 7))
-    let Point p = largest(Point(1, 9), Point(2, 5))
+    println(largest(nom 3, nom 7))
+    let Point p = largest(nom Point(1, 9), nom Point(2, 5))
     println("{p.x} {p.y}")
     return 0

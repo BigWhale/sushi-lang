@@ -6,13 +6,13 @@ enum Slot@(T):
     Full(T)
     Empty
 
-fn inner@(T)(Slot@(T) s, T fb) T:
+fn inner@(T: Clone)(Slot@(T) s, T fb) T:
     match s:
-        Slot.Full(v) -> return v
-        Slot.Empty -> return fb
+        Slot.Full(v) -> return v.clone()
+        Slot.Empty -> return fb.clone()
 
-fn outer@(U)(U u, U fb) U:
-    return inner(Slot.Full(u), fb)
+fn outer@(U: Clone)(U u, U fb) U:
+    return inner(Slot.Full(u.clone()), fb)
 
 fn main() i32:
     println(inner(Slot.Full(7), 0))

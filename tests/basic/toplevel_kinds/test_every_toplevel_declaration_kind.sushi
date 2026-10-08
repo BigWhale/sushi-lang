@@ -34,8 +34,8 @@ extend Crate heavy(peek self) bool:
 extend Crate static empty() Crate:
     return Crate(0)
 
-extend Pair@(T, U) left(peek self) T:
-    return self.first
+extend Pair@(T: Clone, U) left(peek self) T:
+    return self.first.clone()
 
 extend Crate with Weighable:
     fn heft(peek self) i32:

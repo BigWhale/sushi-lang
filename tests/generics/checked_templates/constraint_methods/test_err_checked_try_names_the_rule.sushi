@@ -4,7 +4,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2511
 # EXPECT_STDERR_CONTAINS: "a type parameter has no conversion, so only the same error type propagates"
 
-fn unwrap@(E)(Result@(i32, E) r) i32 | StdError:
+fn unwrap@(E)(nom Result@(i32, E) r) i32 | StdError:
     return Result.Ok(r??)
 
 fn main() i32:

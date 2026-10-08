@@ -6,8 +6,8 @@ struct Box@(T):
 fn k@(T)(nom T x) T:
     return x
 
-extend Box@(T) o() T:
-    let T y = self.v
+extend Box@(T: Clone) o() T:
+    let T y = self.v.clone()
     return k(nom y)
 
 fn main() i32:

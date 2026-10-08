@@ -2,8 +2,8 @@
 # the argument form legal, because the parameter type solves the type arguments
 # (#1021).
 # EXPECT_STDOUT_EXACT: "1\n"
-fn identity@(T)(T x) T:
-    return x
+fn identity@(T: Clone)(T x) T:
+    return x.clone()
 
 fn take(fn(i32) -> i32 f) i32:
     return f(1)

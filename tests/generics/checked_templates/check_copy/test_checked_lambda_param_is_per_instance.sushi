@@ -2,8 +2,8 @@
 # rule (#1070, R7): the template does not know whether `T` owns. With `i32` it does not.
 # EXPECT_STDOUT_EXACT: "5\n"
 
-fn apply@(T)(T x, fn(T) -> T f) T:
-    let fn(T) -> T same = |T y| y
+fn apply@(T: Clone)(T x, fn(T) -> T f) T:
+    let fn(T) -> T same = |T y| y.clone()
     return f(same(x))
 
 fn main() i32:

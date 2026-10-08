@@ -6,8 +6,8 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "21\n"
 
-fn identity@(T)(T value) T:
-    return value
+fn identity@(T: Clone)(T value) T:
+    return value.clone()
 
 struct P:
     i32 x

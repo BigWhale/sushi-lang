@@ -6,8 +6,8 @@ fn apply@(U)(fn(U) -> U f, U v) U:
     let U r = f(v)
     return r
 
-fn outer@(T)(T x) T:
-    let T r = apply@(T)(|T y| y, x)
+fn outer@(T: Clone)(T x) T:
+    let T r = apply@(T)(|T y| y.clone(), x)
     return r
 
 fn main() i32:

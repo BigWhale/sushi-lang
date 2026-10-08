@@ -8,8 +8,8 @@
 struct Wrap@(T):
     T item
 
-extend Wrap@(T) inner() T:
-    return self.item
+extend Wrap@(T: Clone) inner() T:
+    return self.item.clone()
 
 fn wrap@(T)(nom T v) Wrap@(T) | StdError:
     return Result.Ok(Wrap(v))

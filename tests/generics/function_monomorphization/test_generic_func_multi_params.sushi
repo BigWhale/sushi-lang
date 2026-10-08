@@ -5,17 +5,17 @@ struct Triple@(T, U, V):
     U b
     V c
 
-fn triple@(T, U, V)(T a, U b, V c) Triple@(T, U, V):
+fn triple@(T, U, V)(nom T a, nom U b, nom V c) Triple@(T, U, V):
     return Triple(a, b, c)
 
-fn pair@(A, B)(A first, B second) Triple@(A, B, A):
-    return Triple(first, second, first)
+fn pair@(A: Clone, B)(A first, nom B second) Triple@(A, B, A):
+    return Triple(first.clone(), second, first.clone())
 
 fn main() i32:
-    let Triple@(i32, bool, f64) t = triple(1, true, 2.5)
+    let Triple@(i32, bool, f64) t = triple(nom 1, nom true, nom 2.5)
     if (t.a != 1 or t.b != true or t.c != 2.5):
         return 1
-    let Triple@(f64, i32, f64) q = pair(2.5, 7)
+    let Triple@(f64, i32, f64) q = pair(2.5, nom 7)
     if (q.a != 2.5 or q.b != 7 or q.c != 2.5):
         return 2
     return 0

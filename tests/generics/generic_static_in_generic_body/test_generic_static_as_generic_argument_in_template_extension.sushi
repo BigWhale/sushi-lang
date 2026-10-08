@@ -7,11 +7,11 @@ struct Box@(T):
 fn k@(T: Hashable)(T x) i32:
     return ((x.hash() as i32) * 0) + 7
 
-extend Box@(T) static of(T v) Box@(T):
+extend Box@(T) static of(nom T v) Box@(T):
     return Box(v)
 
-extend Box@(T: Hashable) wrap() i32:
-    return k(Box.of(self.v))
+extend Box@(T: Hashable + Clone) wrap() i32:
+    return k(Box.of(nom self.v.clone()))
 
 fn main() i32:
     let Box@(i32) b = Box(1)

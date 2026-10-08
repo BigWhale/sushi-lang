@@ -2,12 +2,12 @@
 # (#1070, R6).
 # EXPECT_ERROR_CODES_EXACT: CE2006
 
-fn eat(nom string s) ~:
+fn eat(string s) ~:
     println(s)
 
 fn feed@(...Ts: Display)(...Ts args) ~:
     expand(a in args):
-        eat(nom a)
+        eat(a)
 
 fn main() i32:
     println("Mostly Harmless")

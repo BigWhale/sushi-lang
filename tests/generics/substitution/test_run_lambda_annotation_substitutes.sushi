@@ -4,8 +4,8 @@
 # EXPECT_NO_LEAKS: true
 # EXPECT_STDOUT_EXACT: "3\n"
 
-fn apply@(T)(T v) T:
-    let fn(T) -> T f = |T x| x
+fn apply@(T: Clone)(T v) T:
+    let fn(T) -> T f = |T x| x.clone()
     return f(v)
 
 fn main() i32:

@@ -6,7 +6,7 @@
 fn k@(T: Hashable)(T x) i32:
     return 7 + (x.hash() * 0) as i32
 
-fn o@(T: Hashable)(T x) i32:
+fn o@(T: Hashable)(nom T x) i32:
     let i32 r = 0
     let Maybe@(T) m = Maybe.Some(x)
     match m:
@@ -15,5 +15,5 @@ fn o@(T: Hashable)(T x) i32:
     return r
 
 fn main() i32:
-    println(o(5))
+    println(o(nom 5))
     return 0

@@ -1,2 +1,2 @@
-public fn id@(T)(T x) T:
+public fn id@(T)(nom T x) T:
     return x
