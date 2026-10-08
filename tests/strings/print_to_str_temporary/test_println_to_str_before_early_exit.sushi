@@ -1,0 +1,25 @@
+# The to_str() result of a number is an argument of a call inside a println.
+# A later argument of the same call leaves through ??. The buffer is freed one time.
+# EXPECT_STDOUT_EXACT: "err\nerr\nafter\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn fails() string | StdError:
+    return Result.Err(StdError.Error)
+
+fn two(string a, string b) string:
+    return "{a}{b}"
+
+fn show(i32 a) string | StdError:
+    println(two(a.to_str(), fails()??))
+    return Result.Ok("ok")
+
+fn show_float(f64 e) string | StdError:
+    println(two(e.to_str(), fails()??))
+    return Result.Ok("ok")
+
+fn main() i32:
+    println(show(7).realise("err"))
+    println(show_float(1.5).realise("err"))
+    println("after")
+    return 0

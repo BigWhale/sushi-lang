@@ -1,0 +1,14 @@
+# The to_str() result of a number is a print argument. The print frees the buffer one time.
+# EXPECT_STDOUT_EXACT: "7 1.5\nafter\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let i32 a = 7
+    let f64 e = 1.5
+    print(a.to_str())
+    print(" ")
+    print(e.to_str())
+    println("")
+    println("after")
+    return 0

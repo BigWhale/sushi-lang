@@ -1,0 +1,15 @@
+# The to_str() result of a number is the receiver of a method call inside a println.
+# The receiver temporary has one owner, and that owner frees it one time.
+# EXPECT_STDOUT_EXACT: "7x\n1\n1.5y\nafter\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/strings>
+
+fn main() i32:
+    let i32 a = 7
+    let f64 e = 1.5
+    println(a.to_str().concat("x"))
+    println(a.to_str().len())
+    println(e.to_str().concat("y"))
+    println("after")
+    return 0
