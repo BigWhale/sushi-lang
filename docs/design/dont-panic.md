@@ -67,7 +67,7 @@ two do not depend on each other. Rust has both.
 | **D6** | The marker does not propagate. A callee is checked. An instance of a marked template is marked, because it is the same body | 5.3 |
 | **D7** | The marker is legal in a bundled stdlib unit without a flag | 6.1 |
 | **D8** | The marker is legal in any unit of a build that passes `--dont-panic`. Without the flag, a user unit that writes it gets an error | 6.2 |
-| **D9** | A source library that writes the marker needs the consumer's `--dont-panic`. The error names the library and the flag. A binary library needs no consent | 6.3 |
+| **D9** | A source library that writes the marker needs the consumer's `--dont-panic`. The error names the library and the flag. A concrete marked body of a binary or a hybrid library needs no consent. A marked generic template of any library kind needs it | 6.3 |
 | **D10** | Every `.slib` kind records its marked functions with their reasons. `--lib-info` lists them | 7 |
 | **D11** | A build with `--dont-panic` prints no list of what it accepted | 7 |
 | **D12** | A marked function that holds no index to uncheck is a warning, always on | 8.1 |
@@ -194,7 +194,8 @@ markers as the compiler grows, and the number of marked functions goes down over
 
 `--dont-panic` on a build that compiles no marked user function gets the no-effect warning,
 as every other flag with no effect does. The stdlib's own marked functions do not count,
-because they need no flag.
+because they need no flag. A build that has an error does not get the warning. A
+`--lib-info` run compiles no function, so the flag gets the same warning there.
 
 ## 9. The brakes
 

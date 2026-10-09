@@ -585,7 +585,7 @@ before code generation. It gives these diagnostics:
 | [CW0002](error-catalog.md#cw0002) | `cannot write LLVM IR to '<path>': <reason>` | `--write-ll` cannot write the `.ll` file. The build is written; the IR is not |
 | [CE0152](error-catalog.md#ce0152) | `<function> is marked dont_panic, and this build does not allow it` | A user unit writes the `dont_panic` marker and the build has no `--dont-panic`, or a library that the build uses has the marker and the build has no `--dont-panic` |
 | [CE6111](error-catalog.md#ce6111) | `'dont_panic' cannot stand on <position>: <reason>` | The marker is on a lambda, a perk contract method or an extern |
-| [CW0003](error-catalog.md#cw0003) | `'<flag>' has no effect <reason>` | The build does not read the flag: `--docs` without `--lib-info`, `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib`, `--write-ll` / `--keep-object` on the incremental build, or `--dont-panic` on a build with no function marked `dont_panic` outside the bundled stdlib |
+| [CW0003](error-catalog.md#cw0003) | `'<flag>' has no effect <reason>` | The build does not read the flag: `--docs` without `--lib-info`, `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib`, `--write-ll` / `--keep-object` on the incremental build, or `--dont-panic` with `--lib-info` or on a build with no function marked `dont_panic` outside the bundled stdlib |
 | [CW0004](error-catalog.md#cw0004) | `<function> is marked dont_panic, but its body has no index to uncheck` | The marker removes no check. For an author only: a user unit and a bundled stdlib unit |
 
 A warning makes the compiler exit 1; an error makes it exit 2.

@@ -22,7 +22,8 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
 
 
 def _emit_string_byte(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
-    """`s[i]` (#1091): the byte at offset i of the string's data, bounds-checked.
+    """`s[i]` (#1091): the byte at offset i of the string's data. It is bounds-checked
+    unless the index carries the `dont_panic` stamp.
 
     A read in place. A temporary string gets an owner, so `"{n}"[0]` frees it.
     """
@@ -41,7 +42,8 @@ def _emit_string_byte(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
 
 
 def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
-    """Emit the bounds-checked POINTER to `expr`'s element, without loading it."""
+    """Emit the POINTER to `expr`'s element, without loading it. It is bounds-checked
+    unless the index carries the `dont_panic` stamp."""
     from sushi_lang.backend.expressions import type_utils
 
     require_builder(codegen)

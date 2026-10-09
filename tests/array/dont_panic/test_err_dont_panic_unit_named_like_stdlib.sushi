@@ -1,0 +1,9 @@
+# A user unit named like a bundled stdlib module ("encoding/hex") is not a stdlib
+# unit. Its marker meets the gate: one error, and the help names the flag.
+# EXPECT_ERROR_CODES_EXACT: CE0152
+# EXPECT_STDERR_CONTAINS: "--dont-panic"
+use "encoding/hex"
+
+fn main() i32:
+    let i32[] xs = from([4, 2])
+    return first(xs) - 4

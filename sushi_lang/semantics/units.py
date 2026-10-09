@@ -119,10 +119,13 @@ class Unit:
 
     @property
     def is_bundled_stdlib(self) -> bool:
-        """A bundled stdlib module written in Sushi: not from a library, and named in
-        `SOURCE_STDLIB_MODULES`. A provenance alone does not answer this, because a
+        """A bundled stdlib module written in Sushi: it has a provenance, it is not from
+        a library, and it is named in `SOURCE_STDLIB_MODULES`. The name alone does not
+        answer this, because a user unit can take a stdlib module name, and that unit
+        has no provenance. A provenance alone does not answer it either, because a
         source library's unit carries one too."""
-        return not self.from_library and self.name in SOURCE_STDLIB_MODULES
+        return (self.provenance is not None and not self.from_library
+                and self.name in SOURCE_STDLIB_MODULES)
 
     @property
     def is_authors_unit(self) -> bool:

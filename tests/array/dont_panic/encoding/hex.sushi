@@ -1,0 +1,5 @@
+# A user unit that takes the name of a bundled stdlib module. It is still the user's
+# unit, so its marker needs --dont-panic.
+
+public fn first(i32[] xs) i32 dont_panic because "the caller passes a non-empty array":
+    return xs[0]
