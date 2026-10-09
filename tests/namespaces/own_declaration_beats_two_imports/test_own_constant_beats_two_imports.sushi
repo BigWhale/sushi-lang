@@ -1,0 +1,11 @@
+# The unit declares its own `K`, and two flat imports offer `K` too. The own
+# declaration wins, so the bare name reads 7.
+# EXPECT_STDOUT_EXACT: "7\n"
+use "helpers/obti_k_two"
+use "helpers/obti_k_three"
+
+const i32 K = 7
+
+fn main() i32:
+    println(K)
+    return 0

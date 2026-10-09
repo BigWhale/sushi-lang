@@ -1,0 +1,14 @@
+# Both codecs are imported flat, and the unit declares its own `encode`. The own
+# declaration shadows the export (CW3002) and takes the bare call.
+# EXPECT_ERROR_CODES_EXACT: CW3002
+# EXPECT_STDOUT_EXACT: "own 3\n"
+use <encoding/base64>
+use <encoding/hex>
+
+fn encode(u8[] data) string:
+    return "own {data.len()}"
+
+fn main() i32:
+    let u8[] data = from([1, 2, 3])
+    println(encode(data))
+    return 0

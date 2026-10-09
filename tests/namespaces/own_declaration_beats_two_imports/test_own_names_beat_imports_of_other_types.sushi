@@ -1,0 +1,18 @@
+# The imported candidates have types that differ from each other: a `string`
+# constant beside an `i32` constant, and a `| StdError` function beside a bare
+# function. The own declarations win, so each bare name reads the own one.
+# EXPECT_STDOUT_EXACT: "7\n2\n"
+use "helpers/obti_k_two"
+use "helpers/obti_k_text"
+use "helpers/obti_pick_ten"
+use "helpers/obti_pick_channel"
+
+const i32 K = 7
+
+fn pick(i32 x) i32:
+    return x + 1
+
+fn main() i32:
+    println(K)
+    println(pick(1))
+    return 0

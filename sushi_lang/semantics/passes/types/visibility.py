@@ -220,15 +220,14 @@ def reject_ambiguous_name(validator: 'TypeValidator', kind: str, name: str,
 
     Section 6 of `docs/design/unit-namespaces.md`. The refusal stands at the USE, where
     the choice was not made, and it names every candidate. CE3003 refused the whole
-    program instead, for a collision that might never be written.
+    program instead, for a collision that might never be written. The question is
+    `is_ambiguous`, so an own declaration of the unit wins before the candidates count.
     """
-    table = getattr(validator, "visibility", None)
-    if table is None:
+    if not name_is_ambiguous(validator, kind, name):
         return False
+    table = validator.visibility
     candidates = table.candidates(kind, name, validator.current_unit_name,
                                   validator.scope)
-    if len(candidates) < 2:
-        return False
 
     diagnostic = er.emit_with(validator.reporter, er.ERR.CE3012, loc, name=name)
     for origin in candidates:
