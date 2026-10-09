@@ -74,6 +74,7 @@ WRITERS: dict[str, list[tuple[str, str]]] = {
     "not_exported": [(MANIFEST, G + "_extract_not_exported")],
     "foreign_extension": [(MANIFEST, G + "_extract_foreign_extensions")],
     "conversion": [(MANIFEST, G + "_extract_conversions"), _DOCUMENTED],
+    "dont_panic": [(MANIFEST, G + "_extract_dont_panic")],
     "dependency": [(MANIFEST, G + "_extract_dependencies")],
     "closure_summary": [(MANIFEST, G + "_closure_records")],
 }
@@ -147,6 +148,7 @@ READERS: dict[tuple[str, str], dict[str, str | tuple[str, ...]]] = {
     (LIB_INFO, "_extension_line"): {"ext": "extension"},
     (LIB_INFO, "_foreign_line"): {"claim": "foreign_extension"},
     (LIB_INFO, "_conversion_line"): {"conv": "conversion"},
+    (LIB_INFO, "_dont_panic_line"): {"record": "dont_panic"},
     (LIB_INFO, "_dependency_line"): {"dep": "dependency"},
     (LIB_INFO, "_own_doc"): {"record": "function"},
     (LIB_INFO, "_unit_doc"): {"metadata": "manifest"},
@@ -163,7 +165,8 @@ SUSHI_READER: dict[str, set[str]] = {
                  "platform", "compiler_version", "compiled_at", "sushi_lib_version",
                  "units", "unit_docs", "reexports", "public_functions",
                  "public_constants", "public_variables", "structs", "enums",
-                 "templates", "foreign_extensions", "conversions", "dependencies"},
+                 "templates", "foreign_extensions", "conversions", "dont_panic",
+                 "dependencies"},
     "templates": {"generic_functions", "generic_structs", "generic_enums", "perks",
                   "perk_impls", "generic_perk_impls", "extensions", "generic_extensions"},
     "function": {"name", "params", "return_type", "error_type", "type_params", "doc"},
@@ -186,6 +189,7 @@ SUSHI_READER: dict[str, set[str]] = {
     "reexport": {"unit", "path", "kind"},
     "foreign_extension": {"type", "method", "target_bounds"},
     "conversion": {"source", "target", "doc"},
+    "dont_panic": {"name", "reason"},
     "dependency": {"path", "kind", "library_name", "library_version", "units"},
 }
 

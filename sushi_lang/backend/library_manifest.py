@@ -11,7 +11,9 @@ from sushi_lang.semantics.library_templates import (
 )
 from sushi_lang.semantics.type_predicates import contains_foreign_ptr
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
-from sushi_lang.semantics.ast import ExtendDef, Node, VarDef
+from sushi_lang.semantics.ast import ExtendDef, Node, Program, VarDef
+from sushi_lang.semantics.ast_walk import is_written
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.contracts import CONTRACTS
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
 
@@ -157,6 +159,26 @@ def _extension_target_name(target_type) -> str | None:
     return getattr(element if element is not None else target_type, "name", None)
 
 
+def _marked_declarations(program: Program) -> Iterator[tuple[str, str]]:
+    """`(name, reason)` for each written `dont_panic` declaration of one unit."""
+    for fn in program.functions:
+        if is_written(fn) and fn.dont_panic is not None:
+            yield fn.name, fn.dont_panic
+    for ext in [*program.extensions, *program.generic_extensions]:
+        if not is_written(ext) or ext.dont_panic is None:
+            continue
+        target = display_type(ext.target_type)
+        name = (f"{target} as {display_type(ext.ret)}" if ext.is_conversion
+                else f"{target}.{ext.name}")
+        yield name, ext.dont_panic
+    for impl in [*program.perk_impls, *program.generic_perk_impls]:
+        if not is_written(impl):
+            continue
+        for method in impl.methods:
+            if method.dont_panic is not None:
+                yield f"{display_type(impl.target_type)}.{method.name}", method.dont_panic
+
+
 def _binding_key(node, unit: str) -> tuple[str, str]:
     """The key of one exported template's bindings map: its unit and its name.
 
@@ -296,6 +318,14 @@ class LibraryManifestGenerator:
         reexports = self._extract_reexports(units)
         if reexports:
             manifest["reexports"] = reexports
+
+        # Each marked declaration with its `because` (docs/design/dont-panic.md, D10),
+        # so a reviewer sees the unchecked code before the first build. Every kind
+        # writes it; a source library carries the marker in its text as well. Absent
+        # when no declaration is marked.
+        dont_panic = self._extract_dont_panic(units)
+        if dont_panic:
+            manifest["dont_panic"] = dont_panic
 
         # A map beside `units`, not a change to it: `units` is an ordered list and the
         # order is load-bearing for the consumer's injection. Absent when no unit
@@ -1097,6 +1127,18 @@ class LibraryManifestGenerator:
                     kind, path = "unit", sibling
                 records.append({"unit": unit.name, "path": path, "kind": kind})
         return records
+
+    def _extract_dont_panic(self, units: list['Unit']) -> list[dict]:
+        """Every `dont_panic` declaration of the library's own units, with its reason.
+
+        A written declaration only: a monomorphized copy carries the marker of its
+        template, and the template is the record. The name is the one a reader finds
+        the declaration by: `name` for a function, `Type.name` for a method or a static,
+        and `Source as Target` for a conversion.
+        """
+        return [{"unit": unit.name, "name": name, "reason": reason}
+                for unit in own_units(units) if unit.ast is not None
+                for name, reason in _marked_declarations(unit.ast)]
 
     def _extract_dependencies(self, units: list['Unit']) -> list[dict]:
         """What a consumer's build must load: one record per module and per library.
