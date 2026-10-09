@@ -56,6 +56,7 @@ class DotCallTarget:
     type: Optional[Type] = None
     fn_type: Optional[Type] = None
     method_call: Optional[MethodCall] = None
+    receiver_type: Optional[Type] = None
 
 
 def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall', *,
@@ -120,16 +121,22 @@ def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall', *,
         if enum_target is not None:
             return enum_target
 
+    # The two rungs that are left both read the receiver's type. It is inferred ONE time
+    # here, and the METHOD rung carries it on: the receiver of a chain is the whole chain
+    # before the call, so a second inference per call doubles the work at each call.
+    receiver_type = validator.infer_expression_type(node.receiver)
+
     # obj.handler(): an indirect call through a fn-typed struct field (a same-named method
     # wins over the field -- see `resolve_fn_field_call`). The backend reads
     # `callee_fn_type` to emit the fat-pointer indirect call.
-    fn_type = _fn_field_type(validator, node)
+    fn_type = _fn_field_type(validator, node, receiver_type)
     if fn_type is not None:
         node.callee_fn_type = fn_type
         return DotCallTarget(DotCallKind.FN_FIELD, fn_type=fn_type)
 
     return DotCallTarget(DotCallKind.METHOD,
-                         method_call=_method_call_view(node, carry_stamps=report))
+                         method_call=_method_call_view(node, carry_stamps=report),
+                         receiver_type=receiver_type)
 
 
 def copy_callee_stamps(node: 'DotCall', resolved: MethodCall) -> None:
@@ -218,10 +225,11 @@ def _enum_receiver(validator: 'TypeValidator', node: 'DotCall', *,
     return DotCallTarget(DotCallKind.ENUM, type=instance)
 
 
-def _fn_field_type(validator: 'TypeValidator', node: 'DotCall') -> Optional[Type]:
+def _fn_field_type(validator: 'TypeValidator', node: 'DotCall',
+                   receiver_type: Optional[Type]) -> Optional[Type]:
     """The FunctionType of a fn-typed field this call goes through, or None."""
     from sushi_lang.semantics.passes.types.visitor import resolve_fn_field_call
-    return resolve_fn_field_call(validator, node)
+    return resolve_fn_field_call(validator, node, receiver_type)
 
 
 @dataclass(frozen=True)

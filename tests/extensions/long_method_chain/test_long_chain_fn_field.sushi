@@ -1,0 +1,15 @@
+# A call through a fn-typed field at the end of a chain of 40 calls compiles in linear time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "41\n"
+struct Op:
+    fn(i32) -> i32 apply
+    i32 n
+
+extend Op inc() Op:
+    return Op(self.apply.clone(), self.n + 1)
+
+fn main() i32:
+    let Op o = Op(|i32 x| x + 1, 0)
+    let i32 r = o.inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().apply(40)
+    println(r)
+    return 0

@@ -1,0 +1,15 @@
+# A chain of 40 extension calls on a generic struct compiles in linear time and runs.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "40\n"
+struct Cell@(T):
+    T v
+    i32 n
+
+extend Cell@(T) bump(nom self) Cell@(T):
+    return Cell(nom self.v, self.n + 1)
+
+fn main() i32:
+    let Cell@(i32) c = Cell(7, 0)
+    let Cell@(i32) d = c.bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump().bump()
+    println(d.n)
+    return 0

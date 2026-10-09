@@ -116,10 +116,9 @@ def _channel_arrived_later(lam: Lambda, cached, expected) -> bool:
             and cached.err_type != expected.err_type)
 
 
-def resolve_fn_field_call(type_validator, node) -> Optional["Type"]:
-    """Field-vs-method rule for `obj.handler(args)` (a DotCall)."""
+def resolve_fn_field_call(type_validator, node, recv_ty) -> Optional["Type"]:
+    """Field-vs-method rule for `obj.handler(args)` (a DotCall), over the receiver's type."""
     from sushi_lang.semantics.typesys import StructType, FunctionType, ReferenceType
-    recv_ty = type_validator.infer_expression_type(node.receiver)
     if isinstance(recv_ty, ReferenceType):
         recv_ty = recv_ty.referenced_type
     if not isinstance(recv_ty, StructType):

@@ -1,0 +1,22 @@
+# A chain of 40 channel calls, each one under ??, compiles in linear time and runs.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "40\n"
+error StepError:
+    Overflow
+
+struct Pt:
+    i32 x
+
+extend Pt step() Pt | StepError:
+    if (self.x > 1000):
+        return Result.Err(StepError.Overflow)
+    return Result.Ok(Pt(self.x + 1))
+
+fn walk(Pt p) Pt | StepError:
+    let Pt q = p.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??.step()??
+    return Result.Ok(q)
+
+fn main() i32:
+    let Pt r = walk(Pt(0)).realise(Pt(-1))
+    println(r.x)
+    return 0

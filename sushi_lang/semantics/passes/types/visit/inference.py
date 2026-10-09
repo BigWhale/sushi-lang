@@ -457,7 +457,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 # For now, return None and let the type be inferred from context
                 return None
 
-        receiver_type = self.type_validator.infer_expression_type(node.receiver)
+        return self._method_call_type(
+            node, self.type_validator.infer_expression_type(node.receiver))
+
+    def _method_call_type(self, node: MethodCall,
+                          receiver_type: Optional[Type]) -> Optional[Type]:
+        """The type a method call yields, over its receiver's type, and the stamp of it."""
         from sushi_lang.semantics.typesys import ReferenceType
 
         actual_type = receiver_type
@@ -525,7 +530,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if target.kind is not DotCallKind.METHOD:
             return target.type
 
-        inferred_type = self.visit_methodcall(target.method_call)
+        inferred_type = self._method_call_type(target.method_call, target.receiver_type)
         if inferred_type is not None:
             node.inferred_return_type = inferred_type
         copy_callee_stamps(node, target.method_call)
