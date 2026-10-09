@@ -27,6 +27,7 @@ class ExpressionScanner:
         generic_enums=None,
         sites=None,
         file_of=None,
+        parents=None,
     ):
         """Initialize expression scanner."""
         self.type_inferrer = type_inferrer
@@ -36,6 +37,9 @@ class ExpressionScanner:
         # `InstantiationCollector.sites`. A plain dict on the unit-test paths.
         self.sites = sites if sites is not None else {}
         self.file_of = file_of or (lambda: None)
+        # The instantiation whose template writes a site; see
+        # `InstantiationCollector.parents`.
+        self.parents = parents if parents is not None else {}
         self.generic_funcs = generic_funcs
         self.type_validator = type_validator
         self.namespaces = namespaces
@@ -351,7 +355,7 @@ class ExpressionScanner:
         self.function_instantiations.add(
             (getattr(generic_func, "unit_name", None), function_name, type_args))
         self._record_function_site(function_name, type_args, getattr(call, "loc", None))
-        self._collect_substituted_signature(generic_func, type_args)
+        self._collect_substituted_signature(generic_func, type_args, function_name)
 
     def _record_function_site(self, name: str, type_args, loc) -> None:
         """The first site naming a function instantiation, for CE4006's caret (#579)."""
@@ -482,7 +486,7 @@ class ExpressionScanner:
             return None
         return substituted_call_result(*resolved)
 
-    def _collect_substituted_signature(self, generic_func, type_args) -> None:
+    def _collect_substituted_signature(self, generic_func, type_args, name: str) -> None:
         """The instantiations a generic call's SUBSTITUTED signature names (#549, #555).
 
         `fn wrap@(T)(nom T v) Box@(T)` called with a string answers `Box@(string)`, and
@@ -496,7 +500,13 @@ class ExpressionScanner:
 
         The declared channel's Result wrapper is recorded too, which is what the
         monomorphizer interns for the concrete copy; a bare generic has none.
+
+        Each type takes its position in the template as its site, and the call `name`
+        as its parent, as a type that the copy builds does (`Monomorphizer.written_at`).
+        So a refusal of the instance stands where the template writes the type, with a
+        note at the call.
         """
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
         from sushi_lang.semantics.generics.types import (
             substitute_type_params, substituted_call_result, type_param_substitution)
 
@@ -504,16 +514,27 @@ class ExpressionScanner:
         if substitution is None:
             return
 
+        template_file = getattr(generic_func, "filename", None)
+        parent = ("fn", instantiation_key(name, tuple(type_args)))
+
+        def collect(ty, span) -> None:
+            if span is None or template_file is None:
+                self.collect_type(ty)
+            else:
+                self.collect_type(ty, site=span, file=template_file, parent=parent)
+
         if generic_func.ret is not None:
+            ret_span = getattr(generic_func, "ret_span", None)
             ret = substitute_type_params(generic_func.ret, substitution)
-            self.collect_type(ret)
+            collect(ret, ret_span)
             wrapped = substituted_call_result(generic_func, type_args)
             if wrapped is not ret:
-                self.collect_type(wrapped)
+                collect(wrapped, getattr(generic_func, "err_span", None) or ret_span)
 
         for param in generic_func.params:
             if param.ty is not None and not param.is_pack:
-                self.collect_type(substitute_type_params(param.ty, substitution))
+                collect(substitute_type_params(param.ty, substitution),
+                        getattr(param, "type_span", None))
 
     def _infer_arg_type(self, arg_expr):
         """Infer a generic call argument's type through the typecheck pass's real inferrer."""
@@ -814,9 +835,9 @@ class ExpressionScanner:
         self.function_instantiations.add(
             (getattr(generic_func, "unit_name", None), name, type_args))
         self._record_function_site(name, type_args, loc)
-        self._collect_substituted_signature(generic_func, type_args)
+        self._collect_substituted_signature(generic_func, type_args, name)
 
-    def _collect_from_type(self, ty: "Type") -> None:
+    def _collect_from_type(self, ty: "Type", site=None, file=None, parent=None) -> None:
         """Collect generic instantiations from a type annotation."""
         collect_type_instantiations(
             ty,
@@ -824,4 +845,9 @@ class ExpressionScanner:
             self.instantiations,
             structs=self.type_inferrer.struct_table or {},
             enums=self.type_inferrer.enum_table or {},
+            sites=self.sites,
+            site=site,
+            file=file,
+            parents=self.parents,
+            parent=parent,
         )

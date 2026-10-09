@@ -1,0 +1,17 @@
+# E3 at a generic type instance that a template copy builds from a `let` annotation:
+# the call names `outer@(i32)`, and the copy of `outer` builds `Holder@(i32)`. The
+# diagnostic stands at the annotation in the template. A note stands at the call.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: let_annotation_non_error_e.sushi:12:9: error [CE2084]
+# EXPECT_STDERR_CONTAINS: this instance is required by the call here
+# EXPECT_STDERR_CONTAINS: let_annotation_non_error_e.sushi:16:13
+struct Holder@(E):
+    Result@(i32, E) r
+
+fn outer@(E)(i32 x) bool:
+    let Holder@(E) h = Holder(Result.Ok(x))
+    return h.r.is_ok()
+
+fn main() i32:
+    println(outer@(i32)(5))
+    return 0

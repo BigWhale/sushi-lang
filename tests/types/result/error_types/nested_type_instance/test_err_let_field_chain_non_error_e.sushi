@@ -1,0 +1,21 @@
+# E3 at the end of a chain: the call names `outer@(i32)`, the copy of `outer` builds
+# `Outer@(i32)` from a `let` annotation, and the field of that instance builds
+# `Holder@(i32)`. The diagnostic stands at the annotation in the template. A note
+# stands at the call.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: let_field_chain_non_error_e.sushi:16:9: error [CE2084]
+# EXPECT_STDERR_CONTAINS: this instance is required by the call here
+# EXPECT_STDERR_CONTAINS: let_field_chain_non_error_e.sushi:20:13
+struct Holder@(E):
+    Result@(i32, E) r
+
+struct Outer@(E):
+    Holder@(E) h
+
+fn outer@(E)(i32 x) bool:
+    let Outer@(E) o = Outer(Holder(Result.Ok(x)))
+    return o.h.r.is_ok()
+
+fn main() i32:
+    println(outer@(i32)(5))
+    return 0

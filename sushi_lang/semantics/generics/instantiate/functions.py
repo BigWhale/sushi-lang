@@ -26,6 +26,7 @@ class FunctionCollector:
         visited_types: Set[str],
         sites: dict | None = None,
         file_of=None,
+        parents: dict | None = None,
     ):
         """Initialize function collector."""
         self.expression_scanner = expression_scanner
@@ -36,6 +37,9 @@ class FunctionCollector:
         # `InstantiationCollector.sites`. A plain dict on the unit-test paths.
         self.sites = sites if sites is not None else {}
         self.file_of = file_of or (lambda: None)
+        # The instantiation whose template writes a collected site, by key; see
+        # `InstantiationCollector.parents`.
+        self.parents = parents if parents is not None else {}
         # The declared return type of the body being walked, which solves a generic-fn
         # value in a `return` (#1021). None where nothing is declared.
         self.return_type: "Type | None" = None
@@ -397,11 +401,13 @@ class FunctionCollector:
         for arg, payload in zip(value.args, payloads, strict=False):
             self._scan_fn_value(arg, self._resolve_local_type(payload))
 
-    def _collect_from_type(self, ty: "Type", site=None) -> None:
+    def _collect_from_type(self, ty: "Type", site=None, file=None, parent=None) -> None:
         """Collect generic instantiations from a type annotation.
 
         `site` is the span of the written type, when the caller has one: the first is
-        kept per instantiation so a constraint violation can point at it (#579).
+        kept per instantiation so a constraint violation can point at it (#579). `file`
+        is the file of `site` when it is not the unit's own, and `parent` is then the
+        instantiation whose template writes the type.
         """
         inferrer = self.expression_scanner.type_inferrer
         collect_type_instantiations(
@@ -412,6 +418,8 @@ class FunctionCollector:
             enums=inferrer.enum_table or {},
             sites=self.sites,
             site=site,
-            file=self.file_of(),
+            file=file if file is not None else self.file_of(),
             visited=self.visited_types,
+            parents=self.parents,
+            parent=parent,
         )

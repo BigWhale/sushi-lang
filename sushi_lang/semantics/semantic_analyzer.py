@@ -711,6 +711,7 @@ class SemanticAnalyzer:
             struct_table=self.tables.structs,
             tables=self.tables,
             sites=instantiations.sites,
+            parents=instantiations.parents,
         )
 
         # The late-interning seam (risk 1 of the UFCS epic): when the per-unit typecheck

@@ -80,6 +80,14 @@ class Monomorphizer:
 
     _monomorphize_depth: int = field(default=0, init=False, repr=False)
 
+    # The copy that is cut now, as (template file, instantiation key), and the site that
+    # a type instance built by the substitution takes, as (span, file, parent key). Both
+    # are None outside a written position (`cutting`, `written_at`, `held_by`).
+    _cut_origin: Optional[Tuple[str | None, object]] = field(default=None, init=False,
+                                                             repr=False)
+    _type_site: Optional[Tuple[Span, str, object]] = field(default=None, init=False,
+                                                           repr=False)
+
     _substitutor: TypeSubstitutor | None = field(default=None, init=False, repr=False)
     _type_monomorphizer: TypeMonomorphizer | None = field(default=None, init=False, repr=False)
     _function_monomorphizer: FunctionMonomorphizer | None = field(default=None, init=False, repr=False)
@@ -315,6 +323,65 @@ class Monomorphizer:
         self.constraint_violations += 1
         self.refuse(key, Counter({er.ERR.CE0151.code: 1}))
         return True
+
+    @contextmanager
+    def cutting(self, filename: str | None, key: object) -> Iterator[None]:
+        """The copy of the template in `filename` for the instantiation `key` is cut."""
+        saved = self._cut_origin
+        self._cut_origin = (filename, key)
+        try:
+            yield
+        finally:
+            self._cut_origin = saved
+
+    @contextmanager
+    def written_at(self, span: Optional[Span]) -> Iterator[None]:
+        """A type written at `span` in the copy that is cut is substituted.
+
+        A generic type instance that the substitution builds takes `span` in the
+        template as its site, and the instance of the copy as its parent. So a refusal
+        of it has a location, and a note at the site that started the chain.
+        """
+        origin = self._cut_origin
+        if span is None or origin is None or origin[0] is None:
+            site = None
+        else:
+            site = (span, origin[0], origin[1])
+        with self._building_at(site):
+            yield
+
+    @contextmanager
+    def held_by(self, key: object) -> Iterator[None]:
+        """A field or a payload of the type instance `key` is substituted.
+
+        The type argument of a nested instance is written at the site of `key`, not in
+        the template. So the nested instance takes the site and the parent of `key`.
+        """
+        span, filename = self.sites.get(key, (None, None))
+        site = None if span is None else (span, filename, self.parents.get(key))
+        with self._building_at(site):
+            yield
+
+    @contextmanager
+    def _building_at(self, site) -> Iterator[None]:
+        saved = self._type_site
+        self._type_site = site
+        try:
+            yield
+        finally:
+            self._type_site = saved
+
+    def record_type_site(self, key: object) -> None:
+        """Give the type instance `key` the site of the current position, if it has none.
+
+        A site that the user wrote, from the instantiate pass, stays first.
+        """
+        if self._type_site is None or key in self.sites:
+            return
+        span, filename, parent = self._type_site
+        self.sites[key] = (span, filename)
+        if parent is not None and parent != key:
+            self.parents.setdefault(key, parent)
 
     def was_refused(self, key: object) -> bool:
         """A constraint refused this instantiation, and it was reported one time."""

@@ -30,13 +30,17 @@ def collect_type_instantiations(
     site=None,
     file: Optional[str] = None,
     visited: Optional[Set[str]] = None,
+    parents: Optional[dict] = None,
+    parent: object = None,
 ) -> None:
     """Add every instantiation `ty` names to `instantiations`.
 
     `structs` and `enums` let a bare name reach its declaration and be walked through.
     `sites` keeps the FIRST written site per instantiation, so a constraint violation can
     point at it (#579). `visited` stops the walk of an instantiation's RESOLVED arguments
-    from re-entering a type that holds itself.
+    from re-entering a type that holds itself. `parent` is the instantiation whose
+    template writes `ty`, when `site` is in that template: `parents` keeps it for each
+    instantiation that takes `site`, so a refusal has a note at the call.
     """
     from sushi_lang.semantics.generics.extension_targets import instantiation_key
 
@@ -53,8 +57,10 @@ def collect_type_instantiations(
 
         instantiations.add((inner.base_name, resolved_type_args))
         key = instantiation_key(inner.base_name, resolved_type_args)
-        if sites is not None and site is not None:
-            sites.setdefault(key, (site, file))
+        if sites is not None and site is not None and key not in sites:
+            sites[key] = (site, file)
+            if parents is not None and parent is not None:
+                parents.setdefault(key, parent)
 
         if key in visited:
             continue
@@ -65,4 +71,5 @@ def collect_type_instantiations(
         for arg in resolved_type_args:
             collect_type_instantiations(
                 arg, resolver, instantiations, structs=structs, enums=enums,
-                sites=sites, site=site, file=file, visited=visited)
+                sites=sites, site=site, file=file, visited=visited, parents=parents,
+                parent=parent)
