@@ -34,7 +34,8 @@ def _emit_string_byte(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
     string = codegen.expressions.emit_expr(expr.array)
     own_temporary(codegen, expr.array, string, BuiltinType.STRING)
     index = codegen.utils.require_i32(codegen.expressions.emit_expr(expr.index))
-    emit_bounds_check(codegen, index, builder.extract_value(string, 1), prefix="string")
+    if not expr.unchecked:
+        emit_bounds_check(codegen, index, builder.extract_value(string, 1), prefix="string")
     data = builder.extract_value(string, 0)
     return builder.load(builder.gep(data, [index], name="string_byte_at"), name="string_byte")
 
@@ -113,7 +114,8 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
         case _:
             raise_internal_error("CE0022", type=str(array_type))
 
-    emit_bounds_check(codegen, index_value, size_value, prefix=prefix)
+    if not expr.unchecked:
+        emit_bounds_check(codegen, index_value, size_value, prefix=prefix)
     # A single-index GEP off the base: llvmlite wants a constant index into an aggregate.
     return gep_utils.gep_array_element(codegen, base_of(codegen, array_slot), index_value,
                                        "elem_ptr")
