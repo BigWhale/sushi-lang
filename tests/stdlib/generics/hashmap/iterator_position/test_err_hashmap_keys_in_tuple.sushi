@@ -1,0 +1,15 @@
+# A HashMap iterator is walked only as the iterable of a foreach. Here the
+# value of .keys() is put in a tuple and taken out again, so the compiler
+# refuses the call.
+# EXPECT_ERROR_CODE: CE2127
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("a", 1)
+    let (it, n) = (m.keys(), 1)
+    foreach(k in it):
+        println(k)
+    println("done {n}")
+    return 0

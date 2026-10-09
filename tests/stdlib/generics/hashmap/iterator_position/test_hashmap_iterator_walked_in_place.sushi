@@ -1,0 +1,26 @@
+# A HashMap iterator that is the iterable of a foreach walks every entry, for
+# each of the four iterator methods. An array iterator can still go through a
+# generic function. Each map holds one entry, so the order is fixed.
+# EXPECT_STDOUT_EXACT: "a\n1\na=1\na:1\n10\n20\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+use <collections/hashmap>
+
+fn h@(T)(nom T it) T:
+    return it
+
+fn main() i32:
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("a", 1)
+    foreach(k in m.keys()):
+        println(k)
+    foreach(v in m.values()):
+        println(v)
+    foreach(e in m.entries()):
+        println("{e.key}={e.value}")
+    foreach(p in m.pairs()):
+        println("{p.0}:{p.1}")
+    let i32[] xs = from([10, 20])
+    foreach(x in h(nom xs.iter())):
+        println(x)
+    return 0

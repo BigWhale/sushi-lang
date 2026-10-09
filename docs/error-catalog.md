@@ -2264,6 +2264,16 @@ A range always goes up: `a..b` yields a, a+1, ..., b-1 and is empty when a >= b;
 
 The alternatives of a pattern (`Shape.Circle(r) | Shape.Ring(r) -> ...`) bind the same names, with the same types and the same modes (bare, `peek`, `poke`, `nom`), as in Rust and Python. The arm body reads one binding, whatever alternative matched, so a name that only one alternative binds has no value on the other path, a name with two types has no one type, and a name with two modes is a copy on one path and a reference or a take on the other. The `{detail}` slot names the first difference: a name that is not bound, a name the first alternative does not bind, a different type, or a different mode. The note is at the first alternative, which every other alternative is held to. A nested list of alternatives (`Maybe.Some(Shape.Circle(r) | Shape.Ring(r))`) takes the same rule. Write two arms when the alternatives must bind different things.
 
+### CE2127 {#ce2127}
+
+**Error** · type
+
+**Message:** `the iterator of HashMap '.{method}()' must be the iterable of a foreach`
+
+**Help:** `` walk the map where the call is written, `foreach(x in map.{method}())`, or pass the map and call '.{method}()' in the function that walks it ``
+
+A HashMap iterator (`.keys()`, `.values()`, `.entries()`, `.pairs()`) walks the buckets of the map, and the loop must know the key type and the value type to step over them. The loop knows them only when the call is the iterable itself: `foreach(k in m.keys())`. In every other position the value leaves the call with the type `Iterator@(K)` alone -- an argument of a generic function, an element of a tuple, the payload of a `Maybe` -- and a later `foreach` over it cannot find the buckets. Before this error that loop walked zero entries and gave no diagnostic. An array or a List iterator (`.iter()`) has no such limit. The fix is to walk the map where the call is written, or to pass the map and call the method in the function that walks it.
+
 ## CE24xx: Borrow and reference errors {#ce24xx}
 
 The borrow checker gives these errors. They are about ownership, moves and borrows.

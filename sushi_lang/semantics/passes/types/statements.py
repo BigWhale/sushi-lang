@@ -395,7 +395,12 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
                        validator.reporter),
             validator.reporter)
     else:
-        validator.validate_expression(stmt.iterable)
+        enclosing = validator.walked_iterable
+        validator.walked_iterable = stmt.iterable
+        try:
+            validator.validate_expression(stmt.iterable)
+        finally:
+            validator.walked_iterable = enclosing
     iterable_type = validator.infer_expression_type(stmt.iterable)
 
     if iterable_type is None:

@@ -1,0 +1,18 @@
+# A HashMap iterator is walked only as the iterable of a foreach. Here the
+# value of .values() goes through a generic function first. The loop cannot find
+# the buckets of the map from that value, so the compiler refuses the call.
+# EXPECT_ERROR_CODE: CE2127
+
+use <collections/hashmap>
+
+fn h@(T)(nom T it) T:
+    return it
+
+fn main() i32:
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("a", 1)
+    m.insert("b", 2)
+    foreach(x in h(nom m.values())):
+        println("{x}")
+    println("done")
+    return 0
