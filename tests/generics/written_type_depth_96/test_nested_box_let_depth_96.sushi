@@ -1,0 +1,12 @@
+# A written generic type with 96 levels of nesting in a let compiles
+# in time near linear in its depth, and the value reads back.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n"
+
+struct Box@(T):
+    T v
+
+fn main() i32:
+    let Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(i32)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) w = Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(Box(7))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+    println(w.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v.v)
+    return 0

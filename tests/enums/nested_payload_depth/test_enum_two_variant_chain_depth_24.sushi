@@ -1,0 +1,115 @@
+# A chain of 25 enums with two variants that hold the same enum
+# compiles in time linear in its depth.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "right left\n"
+
+enum F0:
+    Leaf(i32)
+
+enum F1:
+    Left(F0)
+    Right(F0)
+
+enum F2:
+    Left(F1)
+    Right(F1)
+
+enum F3:
+    Left(F2)
+    Right(F2)
+
+enum F4:
+    Left(F3)
+    Right(F3)
+
+enum F5:
+    Left(F4)
+    Right(F4)
+
+enum F6:
+    Left(F5)
+    Right(F5)
+
+enum F7:
+    Left(F6)
+    Right(F6)
+
+enum F8:
+    Left(F7)
+    Right(F7)
+
+enum F9:
+    Left(F8)
+    Right(F8)
+
+enum F10:
+    Left(F9)
+    Right(F9)
+
+enum F11:
+    Left(F10)
+    Right(F10)
+
+enum F12:
+    Left(F11)
+    Right(F11)
+
+enum F13:
+    Left(F12)
+    Right(F12)
+
+enum F14:
+    Left(F13)
+    Right(F13)
+
+enum F15:
+    Left(F14)
+    Right(F14)
+
+enum F16:
+    Left(F15)
+    Right(F15)
+
+enum F17:
+    Left(F16)
+    Right(F16)
+
+enum F18:
+    Left(F17)
+    Right(F17)
+
+enum F19:
+    Left(F18)
+    Right(F18)
+
+enum F20:
+    Left(F19)
+    Right(F19)
+
+enum F21:
+    Left(F20)
+    Right(F20)
+
+enum F22:
+    Left(F21)
+    Right(F21)
+
+enum F23:
+    Left(F22)
+    Right(F22)
+
+enum F24:
+    Left(F23)
+    Right(F23)
+
+fn name(F24 x) string:
+    match x:
+        F24.Left(F23.Left(_)) -> return "left left"
+        F24.Left(F23.Right(_)) -> return "left right"
+        F24.Right(F23.Left(_)) -> return "right left"
+        F24.Right(F23.Right(_)) -> return "right right"
+
+fn main() i32:
+    let F24 x = F24.Right(F23.Left(F22.Right(F21.Left(F20.Right(F19.Left(F18.Right(F17.Left(F16.Right(F15.Left(F14.Right(F13.Left(F12.Right(F11.Left(F10.Right(F9.Left(F8.Right(F7.Left(F6.Right(F5.Left(F4.Right(F3.Left(F2.Right(F1.Left(F0.Leaf(7)))))))))))))))))))))))))
+    println(name(x))
+    return 0

@@ -27,6 +27,12 @@ class TypeSizing:
         """Initialize the type sizing calculator."""
         self.struct_table = struct_table
         self.enum_table = enum_table
+        # The size of each named type, computed once. Without the memo a payload that
+        # holds an enum sizes that enum again at each level, and the time doubles per
+        # level. The key is the id of the type object, and the entry keeps the object.
+        self._enum_words: dict[int, tuple[EnumType, int]] = {}
+        self._struct_sizes: dict[int, tuple[StructType, int]] = {}
+        self._struct_aligns: dict[int, tuple[StructType, int]] = {}
 
     def get_type_size_bytes(self, semantic_type: Ty) -> int:
         """Get the size in bytes of a Sushi semantic type."""
@@ -85,6 +91,14 @@ class TypeSizing:
 
     def _calculate_struct_size(self, struct_type: StructType) -> int:
         """Calculate total size of struct accounting for padding and alignment."""
+        known = self._struct_sizes.get(id(struct_type))
+        if known is not None:
+            return known[1]
+        size = self._struct_size_of(struct_type)
+        self._struct_sizes[id(struct_type)] = (struct_type, size)
+        return size
+
+    def _struct_size_of(self, struct_type: StructType) -> int:
         offset = 0
         max_align = 1  # Track maximum alignment requirement of all fields
 
@@ -113,33 +127,39 @@ class TypeSizing:
 
         return offset
 
-    def payload_field_offsets(self, associated_types) -> list[int]:
-        """The naturally aligned offset of each payload field, relative to the payload base."""
+    def _payload_layout(self, associated_types) -> tuple[list[int], int]:
+        """The naturally aligned offset of each payload field, and the end of the last one."""
         offsets = []
         offset = 0
         for field_type in associated_types:
             offset = align_up(offset, self.get_type_alignment(field_type))
             offsets.append(offset)
             offset += self.get_type_size_bytes(field_type)
-        return offsets
+        return offsets, offset
+
+    def payload_field_offsets(self, associated_types) -> list[int]:
+        """The naturally aligned offset of each payload field, relative to the payload base."""
+        return self._payload_layout(associated_types)[0]
 
     def variant_payload_size(self, associated_types) -> int:
         """One variant's payload size in bytes, under the aligned layout."""
-        if not associated_types:
-            return 0
-        offsets = self.payload_field_offsets(associated_types)
-        return offsets[-1] + self.get_type_size_bytes(associated_types[-1])
+        return self._payload_layout(associated_types)[1]
 
     def enum_payload_word_count(self, enum_type: 'EnumType') -> int:
         """K in the enum's LLVM shape `{i32 tag, [K x i64] data}`: the widest variant's payload, in
         i64 words, minimum 1 (a payload-less enum keeps a 1-word array so the shape is uniform).
         """
+        known = self._enum_words.get(id(enum_type))
+        if known is not None:
+            return known[1]
         max_size = max(
             (self.variant_payload_size(v.associated_types)
              for v in enum_type.variants if v.associated_types),
             default=0,
         )
-        return max(align_up(max_size, 8) // 8, 1)
+        words = max(align_up(max_size, 8) // 8, 1)
+        self._enum_words[id(enum_type)] = (enum_type, words)
+        return words
 
     def get_type_alignment(self, semantic_type: Ty) -> int:
         """Get the alignment requirement in bytes for a semantic type."""
@@ -168,10 +188,15 @@ class TypeSizing:
             case DynamicArrayType():
                 return 8
             case StructType():
-                max_align = 1
-                for _field_name, field_type in semantic_type.fields:
-                    field_align = self.get_type_alignment(field_type)
-                    max_align = max(max_align, field_align)
+                known = self._struct_aligns.get(id(semantic_type))
+                if known is not None:
+                    return known[1]
+                max_align = max(
+                    (self.get_type_alignment(field_type)
+                     for _field_name, field_type in semantic_type.fields),
+                    default=1,
+                )
+                self._struct_aligns[id(semantic_type)] = (semantic_type, max_align)
                 return max_align
             case ArrayType():
                 return self.get_type_alignment(semantic_type.base_type)

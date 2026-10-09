@@ -1,0 +1,15 @@
+# A written type where Box and Maybe alternate for 64 levels compiles
+# in time near linear in its depth.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+
+struct Box@(T):
+    T v
+
+fn id(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(Box@(Maybe@(i32)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) x) i32:
+    println(x)
+    return 0
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

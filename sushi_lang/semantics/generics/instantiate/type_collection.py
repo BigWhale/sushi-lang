@@ -67,8 +67,11 @@ def collect_type_instantiations(
         visited.add(key)
         # The WRITTEN arguments are on this walk already. A RESOLVED one can name a type
         # the written form does not -- a bare name the resolver stands in for -- so it
-        # gets a walk of its own.
-        for arg in resolved_type_args:
+        # gets a walk of its own. An argument that resolution did not change gets none:
+        # a second walk of it resolves each node below it again, at every level.
+        for arg, written in zip(resolved_type_args, inner.type_args, strict=True):
+            if arg is written:
+                continue
             collect_type_instantiations(
                 arg, resolver, instantiations, structs=structs, enums=enums,
                 sites=sites, site=site, file=file, visited=visited, parents=parents,

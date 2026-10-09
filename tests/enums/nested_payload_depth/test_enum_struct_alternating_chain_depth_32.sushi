@@ -1,0 +1,273 @@
+# A chain where an enum holds a struct that holds the enum below it
+# compiles in time linear in its depth.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "32\n"
+
+enum G0:
+    Leaf(i32)
+
+struct S1:
+    G0 inner
+    i32 level
+
+enum G1:
+    Node(S1)
+    Empty
+
+struct S2:
+    G1 inner
+    i32 level
+
+enum G2:
+    Node(S2)
+    Empty
+
+struct S3:
+    G2 inner
+    i32 level
+
+enum G3:
+    Node(S3)
+    Empty
+
+struct S4:
+    G3 inner
+    i32 level
+
+enum G4:
+    Node(S4)
+    Empty
+
+struct S5:
+    G4 inner
+    i32 level
+
+enum G5:
+    Node(S5)
+    Empty
+
+struct S6:
+    G5 inner
+    i32 level
+
+enum G6:
+    Node(S6)
+    Empty
+
+struct S7:
+    G6 inner
+    i32 level
+
+enum G7:
+    Node(S7)
+    Empty
+
+struct S8:
+    G7 inner
+    i32 level
+
+enum G8:
+    Node(S8)
+    Empty
+
+struct S9:
+    G8 inner
+    i32 level
+
+enum G9:
+    Node(S9)
+    Empty
+
+struct S10:
+    G9 inner
+    i32 level
+
+enum G10:
+    Node(S10)
+    Empty
+
+struct S11:
+    G10 inner
+    i32 level
+
+enum G11:
+    Node(S11)
+    Empty
+
+struct S12:
+    G11 inner
+    i32 level
+
+enum G12:
+    Node(S12)
+    Empty
+
+struct S13:
+    G12 inner
+    i32 level
+
+enum G13:
+    Node(S13)
+    Empty
+
+struct S14:
+    G13 inner
+    i32 level
+
+enum G14:
+    Node(S14)
+    Empty
+
+struct S15:
+    G14 inner
+    i32 level
+
+enum G15:
+    Node(S15)
+    Empty
+
+struct S16:
+    G15 inner
+    i32 level
+
+enum G16:
+    Node(S16)
+    Empty
+
+struct S17:
+    G16 inner
+    i32 level
+
+enum G17:
+    Node(S17)
+    Empty
+
+struct S18:
+    G17 inner
+    i32 level
+
+enum G18:
+    Node(S18)
+    Empty
+
+struct S19:
+    G18 inner
+    i32 level
+
+enum G19:
+    Node(S19)
+    Empty
+
+struct S20:
+    G19 inner
+    i32 level
+
+enum G20:
+    Node(S20)
+    Empty
+
+struct S21:
+    G20 inner
+    i32 level
+
+enum G21:
+    Node(S21)
+    Empty
+
+struct S22:
+    G21 inner
+    i32 level
+
+enum G22:
+    Node(S22)
+    Empty
+
+struct S23:
+    G22 inner
+    i32 level
+
+enum G23:
+    Node(S23)
+    Empty
+
+struct S24:
+    G23 inner
+    i32 level
+
+enum G24:
+    Node(S24)
+    Empty
+
+struct S25:
+    G24 inner
+    i32 level
+
+enum G25:
+    Node(S25)
+    Empty
+
+struct S26:
+    G25 inner
+    i32 level
+
+enum G26:
+    Node(S26)
+    Empty
+
+struct S27:
+    G26 inner
+    i32 level
+
+enum G27:
+    Node(S27)
+    Empty
+
+struct S28:
+    G27 inner
+    i32 level
+
+enum G28:
+    Node(S28)
+    Empty
+
+struct S29:
+    G28 inner
+    i32 level
+
+enum G29:
+    Node(S29)
+    Empty
+
+struct S30:
+    G29 inner
+    i32 level
+
+enum G30:
+    Node(S30)
+    Empty
+
+struct S31:
+    G30 inner
+    i32 level
+
+enum G31:
+    Node(S31)
+    Empty
+
+struct S32:
+    G31 inner
+    i32 level
+
+enum G32:
+    Node(S32)
+    Empty
+
+fn level(G32 x) i32:
+    match x:
+        G32.Node(s) -> return s.level
+        G32.Empty -> return 0
+
+fn main() i32:
+    let G32 x = G32.Node(S32(G31.Node(S31(G30.Node(S30(G29.Node(S29(G28.Node(S28(G27.Node(S27(G26.Node(S26(G25.Node(S25(G24.Node(S24(G23.Node(S23(G22.Node(S22(G21.Node(S21(G20.Node(S20(G19.Node(S19(G18.Node(S18(G17.Node(S17(G16.Node(S16(G15.Node(S15(G14.Node(S14(G13.Node(S13(G12.Node(S12(G11.Node(S11(G10.Node(S10(G9.Node(S9(G8.Node(S8(G7.Node(S7(G6.Node(S6(G5.Node(S5(G4.Node(S4(G3.Node(S3(G2.Node(S2(G1.Node(S1(G0.Leaf(7), 1)), 2)), 3)), 4)), 5)), 6)), 7)), 8)), 9)), 10)), 11)), 12)), 13)), 14)), 15)), 16)), 17)), 18)), 19)), 20)), 21)), 22)), 23)), 24)), 25)), 26)), 27)), 28)), 29)), 30)), 31)), 32))
+    println(level(x))
+    return 0
