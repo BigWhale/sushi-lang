@@ -1,0 +1,12 @@
+# The only index of the marked body is inside a lambda, and a lambda is checked, so
+# the marker removes nothing.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_ERROR_CODES_EXACT: CW0004
+
+fn pick(i32 n) i32 dont_panic because "n is in range":
+    let i32[3] a = [1, 2, 3]
+    let fn(i32) -> i32 f = |i32 i| a[i]
+    return f(n)
+
+fn main() i32:
+    return pick(1) - 2

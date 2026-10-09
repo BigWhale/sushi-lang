@@ -1,0 +1,9 @@
+# The marker on a perk contract method is refused: a contract has no body.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_ERROR_CODES_EXACT: CE6111
+
+perk Indexed:
+    fn at(i32 i) i32 dont_panic because "the contract has no body"
+
+fn main() i32:
+    return 0

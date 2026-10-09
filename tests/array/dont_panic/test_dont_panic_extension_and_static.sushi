@@ -1,0 +1,25 @@
+# A marked extension method and a marked static.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "10\n7\n"
+
+struct Crate:
+    i32 weight
+
+extend i32[] sum_all() i32 dont_panic because "k < len holds k in range":
+    let i32 sum = 0
+    let i32 k = 0
+    while (k < self.len()):
+        sum := sum + self[k]
+        k := k + 1
+    return sum
+
+extend Crate static first_of(i32[] xs) Crate dont_panic because "the caller passes a non-empty array":
+    return Crate(xs[0])
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    println(xs.sum_all())
+    let Crate c = Crate.first_of(from([7, 8]))
+    println(c.weight)
+    return 0

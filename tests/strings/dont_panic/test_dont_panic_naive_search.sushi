@@ -1,0 +1,28 @@
+# A marked naive search: the guards hold every index in range, so the marked body
+# emits no bounds check. The answers are the same as with the checks.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\nfalse\ntrue\n"
+use <collections/strings>
+
+fn contains_naive(string hay, string needle) bool dont_panic because "i + m <= n and j < m hold i + j < n":
+    let i32 n = hay.size()
+    let i32 m = needle.size()
+    let i32 i = 0
+    while (i + m <= n):
+        let i32 j = 0
+        while (j < m and hay[i + j] == needle[j]):
+            j := j + 1
+        if (j == m):
+            return true
+        i := i + 1
+    return false
+
+fn main() i32:
+    let string hay = "Mostly Harmless"
+    println(contains_naive(hay, "Harm"))
+    println(contains_naive(hay, "Panic"))
+    println(contains_naive(hay, ""))
+    println(contains_naive("Mos", hay))
+    println(contains_naive(hay, "less"))
+    return 0

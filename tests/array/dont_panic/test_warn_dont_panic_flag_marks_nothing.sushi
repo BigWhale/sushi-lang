@@ -1,0 +1,7 @@
+# --dont-panic on a build that marks no function has no effect, and the compiler says so.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_ERROR_CODES_EXACT: CW0003
+# EXPECT_STDERR_CONTAINS: "'--dont-panic' has no effect on a build that marks no function"
+
+fn main() i32:
+    return 0

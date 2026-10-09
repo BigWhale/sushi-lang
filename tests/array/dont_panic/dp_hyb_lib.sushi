@@ -1,0 +1,4 @@
+# A hybrid library with a marked generic template: its source is re-parsed by the consumer.
+
+public fn first_of@(T)(T[] xs) T dont_panic because "the caller passes a non-empty array":
+    return xs[0].clone()
