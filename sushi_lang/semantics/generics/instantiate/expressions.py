@@ -672,11 +672,12 @@ class ExpressionScanner:
                 or self._static_param_types(type_name, call.method))
 
     def _method_param_types(self, call) -> tuple:
-        """A concrete method's parameter types on the receiver's type, or () when unknown.
+        """A method's parameter types on the receiver's type, or () when unknown.
 
         A perk implementation answers first, then a plain extension, as the method ladder
-        reads them. A generic-target method gives nothing: its parameter types name the
-        target's type parameters.
+        reads them. A receiver that is an instance of a generic type (`Box@(i32)`) has no
+        copy of its methods yet, so the declaration that applies to the instance answers,
+        with the receiver's type arguments put through its parameter types.
         """
         validator = self.type_validator
         if validator is None:
@@ -689,9 +690,55 @@ class ExpressionScanner:
         method = validator.perk_impl_table.get_method(receiver_type, call.method)
         if method is None:
             method = validator.extension_table.get_method(receiver_type, call.method)
-        if method is None or getattr(method, "is_static", False):
+        if method is None:
+            return self._instance_method_param_types(receiver_type, call.method)
+        if getattr(method, "is_static", False):
             return ()
         return tuple(p.ty for p in method.params)
+
+    def _instance_method_param_types(self, receiver_type, method_name: str) -> tuple:
+        """The parameter types of a method on an instance of a generic type, or ().
+
+        An extension declaration answers first: the one for the instance's own target,
+        else the template. Then a perk implementation on the generic target. A
+        method-generic declaration gives nothing: its call solves the method's own type
+        arguments, and those are not known here.
+        """
+        from sushi_lang.semantics.generics.types import substitute_type_params
+        from sushi_lang.semantics.type_predicates import generic_base_of
+        if isinstance(receiver_type, GenericTypeRef):
+            base, args = receiver_type.base_name, tuple(receiver_type.type_args)
+        else:
+            base = generic_base_of(receiver_type)
+            args = tuple(getattr(receiver_type, "generic_args", None) or ())
+        if base is None:
+            return ()
+        validator = self.type_validator
+        declaration = validator.generic_extension_table.find_applicable(
+            base, method_name, str(receiver_type))
+        if declaration is not None:
+            if declaration.is_static or declaration.method_type_params:
+                return ()
+            params = declaration.params
+            names = declaration.type_params
+        else:
+            found = next(
+                ((template, method)
+                 for template in validator.tables.generic_perk_impls.templates(base)
+                 for method in template.impl.methods if method.name == method_name),
+                None)
+            if found is None:
+                return ()
+            template, method = found
+            params, names = method.params, template.type_params
+        # A concrete target (`extend Box@(i32)`) declares no type parameter to substitute.
+        if not names:
+            return tuple(p.ty for p in params)
+        if len(names) != len(args):
+            return ()
+        substitution = dict(zip((getattr(n, "name", n) for n in names), args, strict=True))
+        return tuple(None if p.ty is None else substitute_type_params(p.ty, substitution)
+                     for p in params)
 
     @staticmethod
     def _realise_default_type(receiver_type) -> tuple:

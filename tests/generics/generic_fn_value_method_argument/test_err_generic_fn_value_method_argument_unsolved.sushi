@@ -1,0 +1,16 @@
+# A method parameter type that does not solve the type arguments of a generic
+# function leaves the function value CE2093, at a generic-instance receiver.
+# EXPECT_ERROR_CODES_EXACT: CE2093
+struct Box@(T):
+    T v
+
+fn hashit@(U: Hashable)(U x) u64:
+    return x.hash()
+
+extend Box@(T: Hashable) apply(fn(T, T) -> u64 f) u64:
+    return f(self.v, self.v)
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println(b.apply(hashit))
+    return 0

@@ -1,0 +1,21 @@
+# A generic function value is solved by the parameter type of a method on a
+# two-parameter generic target, from the receiver's second type argument.
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+struct Pair@(A, B):
+    A left
+    B right
+
+fn hashit@(U: Hashable)(U x) u64:
+    return x.hash()
+
+extend Pair@(A, B: Hashable) apply_right(fn(B) -> u64 f) u64:
+    return f(self.right)
+
+fn make() Pair@(i32, string):
+    return Pair(1, "Mostly Harmless")
+
+fn main() i32:
+    let Pair@(i32, f64) p = Pair(1, 2.5)
+    println(p.apply_right(hashit) == 2.5.hash())
+    println(make().apply_right(hashit) == "Mostly Harmless".hash())
+    return 0
