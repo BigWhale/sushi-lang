@@ -1,0 +1,15 @@
+# A written generic type with 96 levels of nesting in a signature
+# compiles in time near linear in its depth.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+
+struct Box@(T):
+    T v
+
+fn id(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(i32)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) x) i32:
+    println(x)
+    return 0
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field, replace
+from functools import cached_property
 from typing import TYPE_CHECKING, ClassVar, Optional, Tuple, Union
 
 from sushi_lang.semantics.generics.interned import interned_name
@@ -150,6 +151,12 @@ class GenericTypeRef:
     namespace: Optional[str] = None
 
     def __str__(self) -> str:
+        return self._interned
+
+    @cached_property
+    def _interned(self) -> str:
+        # Built once per node. The name of each argument is cached on that argument, so a
+        # deep written type does not spell every level below it again at each level.
         return interned_name(self.base_name, self.type_args)
 
     def __hash__(self) -> int:

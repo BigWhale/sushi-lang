@@ -19,6 +19,7 @@ import llvmlite.ir as ir
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, Type
 
 
@@ -36,7 +37,7 @@ def hash_override(codegen: Any, semantic_type: Type) -> Optional[ir.Function]:
     from sushi_lang.semantics.library_templates import impl_method_symbol
     llvm_fn = codegen.funcs.get(impl_method_symbol(str(semantic_type), "hash"))
     if llvm_fn is None:
-        raise_internal_error("CE0024", method="hash", type=str(semantic_type))
+        raise_internal_error("CE0024", method="hash", type=display_type(semantic_type))
     return llvm_fn
 
 
@@ -72,12 +73,12 @@ def _derived_hash(codegen: Any, semantic_type: Type) -> Any:
     from sushi_lang.semantics.generics.hashing import hashability_of, register_hash_if_hashable
     can_hash, _ = hashability_of(semantic_type)
     if not can_hash:
-        raise_internal_error("CE0052", type=str(semantic_type))
+        raise_internal_error("CE0052", type=display_type(semantic_type))
 
     if not isinstance(semantic_type, BuiltinType):
         register_hash_if_hashable(semantic_type, codegen.derived_methods)
 
     hash_method = codegen.derived_methods.get_method(semantic_type, "hash")
     if hash_method is None:
-        raise_internal_error("CE0051", type=str(semantic_type))
+        raise_internal_error("CE0051", type=display_type(semantic_type))
     return hash_method

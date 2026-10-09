@@ -1,0 +1,112 @@
+# A chain of 33 enums, each enum the payload of the next, compiles in
+# time linear in its depth, and a nested match reads the value back.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n"
+
+enum E0:
+    Leaf(i32)
+
+enum E1:
+    Node(E0)
+
+enum E2:
+    Node(E1)
+
+enum E3:
+    Node(E2)
+
+enum E4:
+    Node(E3)
+
+enum E5:
+    Node(E4)
+
+enum E6:
+    Node(E5)
+
+enum E7:
+    Node(E6)
+
+enum E8:
+    Node(E7)
+
+enum E9:
+    Node(E8)
+
+enum E10:
+    Node(E9)
+
+enum E11:
+    Node(E10)
+
+enum E12:
+    Node(E11)
+
+enum E13:
+    Node(E12)
+
+enum E14:
+    Node(E13)
+
+enum E15:
+    Node(E14)
+
+enum E16:
+    Node(E15)
+
+enum E17:
+    Node(E16)
+
+enum E18:
+    Node(E17)
+
+enum E19:
+    Node(E18)
+
+enum E20:
+    Node(E19)
+
+enum E21:
+    Node(E20)
+
+enum E22:
+    Node(E21)
+
+enum E23:
+    Node(E22)
+
+enum E24:
+    Node(E23)
+
+enum E25:
+    Node(E24)
+
+enum E26:
+    Node(E25)
+
+enum E27:
+    Node(E26)
+
+enum E28:
+    Node(E27)
+
+enum E29:
+    Node(E28)
+
+enum E30:
+    Node(E29)
+
+enum E31:
+    Node(E30)
+
+enum E32:
+    Node(E31)
+
+fn leaf(E32 x) i32:
+    match x:
+        E32.Node(E31.Node(E30.Node(E29.Node(E28.Node(E27.Node(E26.Node(E25.Node(E24.Node(E23.Node(E22.Node(E21.Node(E20.Node(E19.Node(E18.Node(E17.Node(E16.Node(E15.Node(E14.Node(E13.Node(E12.Node(E11.Node(E10.Node(E9.Node(E8.Node(E7.Node(E6.Node(E5.Node(E4.Node(E3.Node(E2.Node(E1.Node(E0.Leaf(v))))))))))))))))))))))))))))))))) -> return v
+
+fn main() i32:
+    let E32 x = E32.Node(E31.Node(E30.Node(E29.Node(E28.Node(E27.Node(E26.Node(E25.Node(E24.Node(E23.Node(E22.Node(E21.Node(E20.Node(E19.Node(E18.Node(E17.Node(E16.Node(E15.Node(E14.Node(E13.Node(E12.Node(E11.Node(E10.Node(E9.Node(E8.Node(E7.Node(E6.Node(E5.Node(E4.Node(E3.Node(E2.Node(E1.Node(E0.Leaf(7)))))))))))))))))))))))))))))))))
+    println(leaf(x))
+    return 0

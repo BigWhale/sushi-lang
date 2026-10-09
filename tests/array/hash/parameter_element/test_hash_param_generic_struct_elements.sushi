@@ -1,0 +1,13 @@
+# EXPECT_STDOUT_EXACT: "true\n"
+# A dynamic array parameter of a generic struct instance hashes as a local does.
+
+struct Box@(T):
+    T v
+
+fn id(Box@(i32)[] x) u64:
+    return x.hash()
+
+fn main() i32:
+    let Box@(i32)[] xs = from([Box(1), Box(2)])
+    println(id(xs) == xs.hash())
+    return 0

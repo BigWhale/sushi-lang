@@ -30,6 +30,16 @@ An internal error (CE00xx and some CE01xx codes) is a defect in the compiler, no
 
 The compiler crashed. This is a compiler bug, not a problem with the program being compiled.
 
+### CE0001 {#ce0001}
+
+**Error** · general
+
+**Message:** `the program nests too deeply for the compiler`
+
+**Help:** `` split the nest into `let` steps: bind an inner part to a name, then use the name in the outer part ``
+
+Each walk of the compiler goes down one or more levels for each level of a nest in the source: a call in the argument of a call, a `??` on a call, an operand of an operator, a block in a block. The compiler runs with a deep stack, so a nest of some thousands of levels compiles. A nest that goes past that depth stops the compile with this error. The program is not wrong, but the compiler cannot read it in one piece. The error has no location. Split the nest into `let` steps.
+
 ### CE0002 {#ce0002}
 
 **Error** · internal

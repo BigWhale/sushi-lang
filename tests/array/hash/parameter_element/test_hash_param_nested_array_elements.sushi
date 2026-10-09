@@ -1,0 +1,13 @@
+# EXPECT_STDOUT_EXACT: "true\n"
+# A nested dynamic array parameter of a struct hashes as a local does.
+
+struct Point:
+    i32 x
+
+fn id(Point[][] x) u64:
+    return x.hash()
+
+fn main() i32:
+    let Point[][] rows = from([from([Point(1)]), from([Point(2), Point(3)])])
+    println(id(rows) == rows.hash())
+    return 0

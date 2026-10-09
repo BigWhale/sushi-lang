@@ -16,6 +16,23 @@ _add(ErrorMessage("CE0000", Severity.ERROR,
                        "with the program being compiled."))
 
 
+_add(ErrorMessage("CE0001", Severity.ERROR,
+    "the program nests too deeply for the compiler",
+    Category.GENERAL,
+    "Each walk of the compiler (the AST builder, the scope, typecheck, lift and borrow "
+    "passes, the monomorphizer and the backend) goes down one or more Python frames for "
+    "each level of a nest in the source: a call in the argument of a call, a `??` on a "
+    "call, an operand of an operator, a block in a block. The compiler runs on a thread "
+    "with a 512 MiB stack and a Python recursion limit of 100000 frames "
+    "(sushi_lang/compiler/cli.py), so a nest of some thousands of levels compiles. A "
+    "nest that goes past that limit in any walk stops the compile with this error. The "
+    "program is not wrong, but the compiler cannot read it in one piece. The error has "
+    "no location: the limit can stop any walk, and the walk does not give the place. "
+    "Before #1222 the walks had the default limit of 1000 frames, and a nest of 98 "
+    "calls `f(...)??` stopped the typecheck pass with the internal error CE0000. Split "
+    "the nest into `let` steps: bind an inner part to a name, then use the name in the "
+    "outer part."))
+
 _add(ErrorMessage("CE0002", Severity.ERROR,
     "internal error: malformed parse tree at '{node}': {detail}",
     Category.INTERNAL, "The grammar produced a node shape the compiler cannot build. "

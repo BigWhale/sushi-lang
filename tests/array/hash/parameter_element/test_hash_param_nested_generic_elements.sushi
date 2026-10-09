@@ -1,0 +1,14 @@
+# EXPECT_STDOUT_EXACT: "true\n"
+# A struct element that holds an array of a generic instance hashes as a parameter.
+
+struct Box@(T):
+    T v
+
+fn id(Box@(Box@(i32)[])[] x) u64:
+    return x.hash()
+
+fn main() i32:
+    let Box@(i32)[] inner = from([Box(1), Box(2)])
+    let Box@(Box@(i32)[])[] xs = from([Box(nom inner)])
+    println(id(xs) == xs.hash())
+    return 0

@@ -94,11 +94,16 @@ class FunctionHelpers:
 
         ir.IRBuilder(entry).branch(start)
 
+        # A parameter type arrives as written. Resolve it here at every depth, as for a `let`.
+        # Each reader of the slot then sees the table entry of a named element.
+        from sushi_lang.semantics.type_resolution import resolve_type_recursively
         param_semantic_types = {}
         if fn_def is not None:
             for param in fn_def.params:
                 if param.ty is not None:
-                    param_semantic_types[param.name] = param.ty
+                    param_semantic_types[param.name] = resolve_type_recursively(
+                        param.ty, self.codegen.struct_table.by_name,
+                        self.codegen.enum_table.by_name)
 
         param_slots = []
         for i, arg in enumerate(llvm_fn.args):
@@ -146,15 +151,16 @@ class FunctionHelpers:
 
                 is_variadic = (getattr(param, "is_variadic", False)
                                and isinstance(param.ty, DynamicArrayType))
+                resolved = param_semantic_types.get(param.name, param.ty)
                 if is_variadic or callee_owns_param(param):
-                    self.codegen.memory.register_owning_value(param.name, param.ty, slot)
+                    self.codegen.memory.register_owning_value(param.name, resolved, slot)
                     continue
 
                 # Registered and immediately RELINQUISHED. The registration is what a
                 # REBIND needs -- the value it puts there has no other owner and would leak.
                 # The relinquish is what the CALLER needs -- the value that arrives is
                 # theirs, so no exit path may free it. Two facts, one slot, in that order.
-                self.codegen.memory.register_owning_value(param.name, param.ty, slot)
+                self.codegen.memory.register_owning_value(param.name, resolved, slot)
                 relinquish(self.codegen, param.name)
 
     def end_function(self) -> None:

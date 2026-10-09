@@ -33,7 +33,7 @@ class LLVMTypeSystem:
         self.cache = TypeCache()
         self.sizing = TypeSizing(self.struct_table, self.enum_table)
         self.mapper = TypeMapper(self.cache, self.struct_table, self.enum_table,
-                                 context or ir.Context())
+                                 self.sizing, context or ir.Context())
         self.inference = TypeInference(
             self.mapper.i8,
             self.mapper.i32,

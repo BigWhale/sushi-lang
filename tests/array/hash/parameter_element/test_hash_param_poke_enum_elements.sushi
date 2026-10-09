@@ -1,0 +1,14 @@
+# EXPECT_STDOUT_EXACT: "true\n"
+# A poke array parameter of an enum hashes as a local does.
+
+enum Color:
+    Red
+    Blue
+
+fn id(poke Color[] x) u64:
+    return x.hash()
+
+fn main() i32:
+    let Color[] cs = from([Color.Red, Color.Blue])
+    println(id(poke cs) == cs.hash())
+    return 0

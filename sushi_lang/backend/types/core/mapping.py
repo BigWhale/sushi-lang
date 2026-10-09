@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect import StructTable, EnumTable
     from sushi_lang.backend.types.core.caching import TypeCache
+    from sushi_lang.backend.types.core.sizing import TypeSizing
 
 from llvmlite import ir
 from sushi_lang.semantics.type_predicates import is_instance_of
@@ -36,12 +37,14 @@ class TypeMapper:
         cache: TypeCache,
         struct_table: StructTable,
         enum_table: EnumTable,
+        sizing: TypeSizing,
         context: 'ir.Context | None' = None,
     ):
         """Initialize type mapper with caching and type tables."""
         self.cache = cache
         self.struct_table = struct_table
         self.enum_table = enum_table
+        self.sizing = sizing
         self.context = context if context is not None else ir.Context()
 
         self.i8: ir.IntType = ir.IntType(INT8_BIT_WIDTH)
@@ -259,9 +262,7 @@ class TypeMapper:
 
         # Payload word count from the layout authority, so the array can never be
         # smaller than the aligned field offsets it must hold.
-        from sushi_lang.backend.types.core.sizing import TypeSizing
-        sizing = TypeSizing(self.struct_table, self.enum_table)
-        word_count = sizing.enum_payload_word_count(enum_type)
+        word_count = self.sizing.enum_payload_word_count(enum_type)
 
         llvm_enum = ir.LiteralStructType([
             self.i32,

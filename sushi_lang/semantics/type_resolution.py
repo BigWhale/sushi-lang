@@ -1,6 +1,6 @@
 """Type resolution utilities for UnknownType to StructType/EnumType conversion."""
 from __future__ import annotations
-from typing import Dict, Optional, Tuple, TYPE_CHECKING
+from typing import Callable, Dict, Optional, Tuple, TYPE_CHECKING
 from sushi_lang.semantics.generics.interned import interned_name
 
 if TYPE_CHECKING:
@@ -32,7 +32,8 @@ class TypeResolver:
         """
         from sushi_lang.semantics.type_walk import map_named_types
 
-        return tuple(map_named_types(arg, self.resolve) for arg in type_args)
+        resolve = name_resolver(self.struct_table, self.enum_table)
+        return tuple(map_named_types(arg, resolve) for arg in type_args)
 
     def resolve_generic_type_ref(self, ty: 'Type') -> 'Type':
         """Resolve GenericTypeRef to monomorphized EnumType or StructType."""
@@ -61,10 +62,36 @@ class TypeResolver:
         return False
 
 
+# One resolution of each `GenericTypeRef` node, keyed by the node's id: the entry
+# keeps the node, so the id cannot be used again while the memo lives.
+_RefMemo = Dict[int, Tuple['GenericTypeRef', Optional['Type'], Tuple['Type', ...]]]
+
+
+def name_resolver(
+    struct_table: Dict[str, 'StructType'],
+    enum_table: Dict[str, 'EnumType'],
+) -> Callable[['Type'], 'Type']:
+    """`resolve_unknown_type` for one walk or one map over a type.
+
+    The walk and the map call it on EACH node, and the resolution of a node resolves every
+    node below it. The memo lets each node be resolved once, so the time is linear in the
+    depth of the type, not polynomial. The tables do not change during one walk, so the
+    memo lives for one walk only.
+    """
+    memo: _RefMemo = {}
+
+    def resolve(ty: 'Type') -> 'Type':
+        return resolve_unknown_type(ty, struct_table, enum_table, memo=memo)
+
+    return resolve
+
+
 def resolve_unknown_type(
     ty: 'Type',
     struct_table: Dict[str, 'StructType'],
-    enum_table: Dict[str, 'EnumType']
+    enum_table: Dict[str, 'EnumType'],
+    *,
+    memo: Optional[_RefMemo] = None,
 ) -> 'Type':
     """Resolve UnknownType or GenericTypeRef to StructType or EnumType if possible."""
     from sushi_lang.semantics.typesys import UnknownType
@@ -82,7 +109,7 @@ def resolve_unknown_type(
     # into a ResultType here, which is NOT an EnumType -- so a Result from an annotation and a
     # Result from a call compared unequal (#184).
     elif isinstance(ty, GenericTypeRef):
-        entry, _ = _resolve_generic_ref(ty, struct_table, enum_table)
+        entry, _ = _resolve_generic_ref(ty, struct_table, enum_table, memo)
         if entry is not None:
             return entry
 
@@ -92,7 +119,8 @@ def resolve_unknown_type(
 def _resolve_generic_ref(
     ty: 'GenericTypeRef',
     struct_table: Dict[str, 'StructType'],
-    enum_table: Dict[str, 'EnumType']
+    enum_table: Dict[str, 'EnumType'],
+    memo: Optional[_RefMemo] = None,
 ) -> Tuple[Optional['Type'], Tuple['Type', ...]]:
     """The table entry a `GenericTypeRef` names, and its arguments resolved by name.
 
@@ -104,41 +132,50 @@ def _resolve_generic_ref(
     descent into the same arguments doubles the work at each level of nesting, and the
     time is then exponential in the depth of the written type.
     """
-    args = tuple(_resolve_type_name(arg, struct_table, enum_table) for arg in ty.type_args)
+    if memo is not None:
+        known = memo.get(id(ty))
+        if known is not None:
+            return known[1], known[2]
+    args = tuple(_resolve_type_name(arg, struct_table, enum_table, memo)
+                 for arg in ty.type_args)
     concrete_name = interned_name(ty.base_name, args)
 
+    entry: Optional['Type'] = None
     if concrete_name in struct_table:
-        return struct_table[concrete_name], args
-    if concrete_name in enum_table:
-        return enum_table[concrete_name], args
-    return None, args
+        entry = struct_table[concrete_name]
+    elif concrete_name in enum_table:
+        entry = enum_table[concrete_name]
+    if memo is not None:
+        memo[id(ty)] = (ty, entry, args)
+    return entry, args
 
 
 def _resolve_type_name(
     ty: 'Type',
     struct_table: Dict[str, 'StructType'],
-    enum_table: Dict[str, 'EnumType']
+    enum_table: Dict[str, 'EnumType'],
+    memo: Optional[_RefMemo] = None,
 ) -> 'Type':
     """Resolve a type far enough to spell its NAME, and no further."""
     from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
     if isinstance(ty, GenericTypeRef):
-        entry, args = _resolve_generic_ref(ty, struct_table, enum_table)
+        entry, args = _resolve_generic_ref(ty, struct_table, enum_table, memo)
         if entry is not None:
             return entry
         if args != ty.type_args:
             return GenericTypeRef(base_name=ty.base_name, type_args=args)
         return ty
 
-    resolved = resolve_unknown_type(ty, struct_table, enum_table)
+    resolved = resolve_unknown_type(ty, struct_table, enum_table, memo=memo)
 
     if isinstance(resolved, ArrayType):
-        base = _resolve_type_name(resolved.base_type, struct_table, enum_table)
+        base = _resolve_type_name(resolved.base_type, struct_table, enum_table, memo)
         if base != resolved.base_type:
             return ArrayType(base_type=base, size=resolved.size)
     elif isinstance(resolved, DynamicArrayType):
-        base = _resolve_type_name(resolved.base_type, struct_table, enum_table)
+        base = _resolve_type_name(resolved.base_type, struct_table, enum_table, memo)
         if base != resolved.base_type:
             return DynamicArrayType(base_type=base)
 
@@ -164,9 +201,7 @@ def resolve_type_recursively(
     """
     from sushi_lang.semantics.type_walk import map_named_types
 
-    return map_named_types(
-        ty, lambda held: resolve_unknown_type(held, struct_table, enum_table)
-    )
+    return map_named_types(ty, name_resolver(struct_table, enum_table))
 
 
 def contains_unresolvable_unknown_type(
@@ -183,8 +218,7 @@ def contains_unresolvable_unknown_type(
     from sushi_lang.semantics.type_walk import walk_named_types
     from sushi_lang.semantics.typesys import UnknownType
 
-    def resolve(held: 'Type') -> 'Type':
-        return resolve_unknown_type(held, struct_table, enum_table)
+    resolve = name_resolver(struct_table, enum_table)
 
     return any(
         isinstance(reached, UnknownType) and isinstance(resolve(reached), UnknownType)

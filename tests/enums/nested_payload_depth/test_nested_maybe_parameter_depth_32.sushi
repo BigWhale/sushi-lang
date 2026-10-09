@@ -1,0 +1,14 @@
+# A Maybe nested 32 levels deep in a parameter type compiles in time
+# linear in its depth.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "none\n"
+
+fn show(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(i32)))))))))))))))))))))))))))))))) x) string:
+    match x:
+        Maybe.Some(_) -> return "some"
+        Maybe.None -> return "none"
+
+fn main() i32:
+    let Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(Maybe@(i32)))))))))))))))))))))))))))))))) x = Maybe.None
+    println(show(x))
+    return 0
