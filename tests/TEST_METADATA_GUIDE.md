@@ -495,6 +495,20 @@ fixture file itself, because the one set of directives describes both steps.
 - The build has a cache of its own, outside the copy. The version is `0.0.0`, unless a
   `nori.toml` beside the library source states one.
 
+#### LIB_FLAGS
+
+```sushi
+# BUILD_LIB: dp_src_lib.sushi
+# LIB_FLAGS: --dont-panic
+```
+
+- The runner adds these flags to EVERY library build of the fixture: `BUILD_LIB`,
+  `BUILD_LIB_BINARY`, `BUILD_LIB_HYBRID`, `BUILD_LIB_WARNS` and `BUILD_LIB_AT`. It does
+  not add them to the compilation of the fixture itself; that is `COMPILER_FLAGS`.
+- Several flags on one line, or repeat the directive.
+- A flag the runner owns is refused with a printed warning, as in `COMPILER_FLAGS`.
+  `--lib` is refused here always, because the runner spells it for each library build.
+
 #### BUILD_LIB_BINARY
 
 ```sushi

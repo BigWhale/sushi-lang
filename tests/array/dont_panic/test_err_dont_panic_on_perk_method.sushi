@@ -1,5 +1,4 @@
 # The marker on a perk contract method is refused: a contract has no body.
-# COMPILER_FLAGS: --dont-panic
 # EXPECT_ERROR_CODES_EXACT: CE6111
 
 perk Indexed:

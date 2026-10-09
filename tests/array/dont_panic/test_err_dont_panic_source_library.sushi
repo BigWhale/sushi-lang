@@ -1,6 +1,7 @@
 # A source library marks a function, and the consumer does not pass --dont-panic.
 # The error names the library.
 # BUILD_LIB: dp_src_lib.sushi
+# LIB_FLAGS: --dont-panic
 # EXPECT_ERROR_CODES_EXACT: CE0152
 # EXPECT_STDERR_CONTAINS: "dp_src_lib"
 # EXPECT_STDERR_CONTAINS: "--dont-panic"

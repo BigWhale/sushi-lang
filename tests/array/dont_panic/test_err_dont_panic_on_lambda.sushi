@@ -1,5 +1,4 @@
 # The marker on a lambda is refused: a lambda can outlive its function.
-# COMPILER_FLAGS: --dont-panic
 # EXPECT_ERROR_CODES_EXACT: CE6111
 
 fn main() i32:

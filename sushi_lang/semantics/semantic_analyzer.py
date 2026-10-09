@@ -8,6 +8,7 @@ from sushi_lang.internals.report import (
     Reporter, diagnostic_identity, in_source_order)
 from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef, FuncDef
 from sushi_lang.semantics.passes.collect import CollectorPass
+from sushi_lang.semantics.passes.collect.dont_panic import MarkerGate
 from sushi_lang.semantics.tables import SymbolTables
 
 if TYPE_CHECKING:
@@ -24,7 +25,6 @@ from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
 from sushi_lang.semantics.generics.monomorphize.order import diagnostics_in_site_order
-from sushi_lang.semantics.stdlib_registry import SOURCE_STDLIB_MODULES
 from sushi_lang.semantics.library_registration import (
     LibraryRegistration, LoadedLibraries)
 
@@ -62,7 +62,7 @@ def _lint_checks(unit: Unit, gate_env: Optional[str] = None) -> bool:
         return True
     if gate_env is None or os.environ.get(gate_env, "").lower() in ("", "0", "off"):
         return False
-    return not unit.from_library and unit.name in SOURCE_STDLIB_MODULES
+    return unit.is_bundled_stdlib
 
 
 def _checks_templates(unit: Unit) -> bool:
@@ -71,8 +71,7 @@ def _checks_templates(unit: Unit) -> bool:
     A unit of the program -- a library's own units at its `--lib` build included -- and
     a bundled stdlib unit. A consumed library unit is not checked again: its own build
     checked it."""
-    return unit.provenance is None or (not unit.from_library
-                                       and unit.name in SOURCE_STDLIB_MODULES)
+    return unit.provenance is None or unit.is_bundled_stdlib
 
 
 @dataclass(frozen=True)
@@ -183,7 +182,7 @@ class SemanticAnalyzer:
 
     def __init__(self, reporter: Reporter, filename: str = "<input>", unit_manager: Optional[UnitManager] = None, library_linker: Optional[LoadedLibraries] = None, library_registry: Optional['LibraryRegistry'] = None, lints: Optional[Lints] = None,
                  generated_symbols: frozenset[str] = frozenset(),
-                 is_library: bool = False) -> None:
+                 is_library: bool = False, dont_panic: bool = False) -> None:
         self.reporter = reporter
         self.filename = filename
         self.unit_manager = unit_manager
@@ -200,6 +199,12 @@ class SemanticAnalyzer:
         # `--lib`. The `entrypoint` pass is the one home of main's rule and the rule
         # turns on the build kind: an executable needs a main, a library refuses one.
         self.is_library = is_library
+        # `--dont-panic`: a unit of this build may mark a function `dont_panic` (D8), and
+        # a source library's marker has the consumer's consent (D9). `marked` names each
+        # marker outside the bundled stdlib, so the pipeline can tell a flag that marks
+        # nothing (D13).
+        self.dont_panic = dont_panic
+        self.marked: list[str] = []
         # The whole program's symbol tables, and the ONE home of each of them: the
         # `namespaces` a unit may write behind a dot are `tables.namespaces`, and so on
         # for the other eighteen. Empty until the collect loop replaces them with what
@@ -416,7 +421,8 @@ class SemanticAnalyzer:
         global_tables = collector.tables
 
         libraries = LibraryRegistration(self.reporter, global_tables,
-                                        self.library_linker, self.library_registry)
+                                        self.library_linker, self.library_registry,
+                                        dont_panic=self.dont_panic)
         # BEFORE the consumer's units: perk-impl collection validates each impl against
         # the visible perk definitions (CE4003), so the contract must already be here.
         # A library's generic TYPES are seeded for the same reason one kind on: a
@@ -432,7 +438,8 @@ class SemanticAnalyzer:
                 continue
 
             collector.run(unit.ast, unit_name=unit.name,
-                          unit_file=str(unit.file_path))
+                          unit_file=str(unit.file_path),
+                          marker_gate=MarkerGate.for_unit(unit, self.dont_panic))
 
         # A library impl the consumer replaced must not be emitted: both bodies are
         # ordinary Sushi in ordinary units, so leaving it in place defines the method
@@ -447,6 +454,7 @@ class SemanticAnalyzer:
 
         libraries.refused_types.extend(collector.refused_library_types)
         self._refused_pack_bodies = collector.refused_pack_bodies
+        self.marked.extend(collector.marked)
         self.tables = global_tables
         return libraries
 
@@ -510,6 +518,7 @@ class SemanticAnalyzer:
         self.library_registry = libraries.registry
         self.library_perk_impls = libraries.shipped_perk_impls
         self.library_extensions = libraries.shipped_extensions
+        self.marked.extend(libraries.marked)
 
     def _build_namespaces(self, compilation_order: list[Unit], all_units: dict) -> None:
         """namespaces: what each unit may write behind a dot."""

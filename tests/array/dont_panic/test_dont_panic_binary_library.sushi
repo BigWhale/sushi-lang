@@ -1,6 +1,7 @@
 # A BINARY library needs no consent: the consumer passes no flag, and the build and
 # the run succeed.
 # BUILD_LIB_BINARY: dp_bin_lib.sushi
+# LIB_FLAGS: --dont-panic
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_STDOUT_EXACT: "4\n"
 use <lib/dp_bin_lib>

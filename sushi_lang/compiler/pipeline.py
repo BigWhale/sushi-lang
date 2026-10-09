@@ -667,8 +667,14 @@ def _analyse(unit_manager: UnitManager, compilation_order: list[Unit], library_l
         reporter, filename=entry_name, unit_manager=unit_manager,
         library_linker=library_linker,
         lints=options.lints,
-        generated_symbols=_generated_symbols(compilation_order), is_library=options.lib)
+        generated_symbols=_generated_symbols(compilation_order), is_library=options.lib,
+        dont_panic=options.dont_panic)
     analyzer.check()
+    if options.dont_panic and not analyzer.marked:
+        from sushi_lang.compiler.cli import COMMAND_LINE
+        from sushi_lang.internals import errors as er
+        er.emit(reporter, er.ERR.CW0003, None, filename=COMMAND_LINE, flag="--dont-panic",
+                reason="on a build that marks no function")
     return analyzer
 
 

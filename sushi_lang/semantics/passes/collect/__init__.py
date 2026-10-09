@@ -32,6 +32,7 @@ from .perks import (
     GenericPerkImpl, GenericPerkImplTable, PerkCollector, PerkImplementationTable,
     PerkTable, reject_second_homes)
 from .externals import ExternalCollector, ExternalTable, ExternalSig
+from .dont_panic import MarkerGate
 from .utils import extract_type_param_names
 from .unit_names import claim_unit_names
 from sushi_lang.semantics.conversions import ConversionTable
@@ -185,12 +186,14 @@ class CollectorPass:
         self._register_predefined_generics()
 
     def run(self, root: Program, unit_name: Optional[str] = None,
-            unit_file: Optional[str] = None) -> 'SymbolTables':
+            unit_file: Optional[str] = None,
+            marker_gate: Optional[MarkerGate] = None) -> 'SymbolTables':
         """Run all collection passes in dependency order, over ONE set of tables.
 
         The answer is `self.tables` every time: a unit is collected INTO what the
         units before it left, and the caller reads the whole program off the same
-        object (#672).
+        object (#672). `marker_gate` is what the unit may do with `dont_panic`; with
+        None, nothing judges the marker.
         """
         # This pass walks every unit through ONE reporter, unlike the per-unit passes,
         # which build their own. Naming the unit here is what keeps a span from being
@@ -201,7 +204,7 @@ class CollectorPass:
         if unit_file is not None:
             self.r.origin = Origin(filename=unit_file)
         try:
-            return self._collect(root, unit_name, unit_file)
+            return self._collect(root, unit_name, unit_file, marker_gate)
         finally:
             self.r.origin = previous_origin
 
@@ -229,13 +232,19 @@ class CollectorPass:
                 *self.enum_collector.refused_pack_types]
 
     @property
+    def marked(self) -> list[str]:
+        """The declarations whose `dont_panic` marker is a use of the flag (D13)."""
+        return [*self.function_collector.marked, *self.perk_collector.marked]
+
+    @property
     def _collectors(self) -> tuple:
         """All six, in collection order. One list, so no binding reaches five of them."""
         return (self.constant_collector, self.struct_collector, self.enum_collector,
                 self.perk_collector, self.external_collector, self.function_collector)
 
     def _collect(self, root: Program, unit_name: Optional[str],
-                 unit_file: Optional[str]) -> 'SymbolTables':
+                 unit_file: Optional[str],
+                 marker_gate: Optional[MarkerGate]) -> 'SymbolTables':
         # One way in for all six: the fields, not a parameter on one collector's method.
         refused = claim_unit_names(self.r, root, unit_file)
         self.visibility.refused.update((unit_name, name) for name in refused.names)
@@ -243,6 +252,10 @@ class CollectorPass:
             collector.current_unit_file = unit_file
             collector.current_unit_name = unit_name
             collector.refused = refused
+        # The two collectors that meet a body: functions, extensions, conversions and
+        # perk implementation methods.
+        self.function_collector.marker_gate = marker_gate
+        self.perk_collector.marker_gate = marker_gate
 
         self.constant_collector.collect(root)
         self.struct_collector.collect(root)

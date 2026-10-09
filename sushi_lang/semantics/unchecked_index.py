@@ -23,3 +23,19 @@ def stamp_unchecked_indexes(body: object) -> None:
 
     walk_nodes(body, stamp)
 
+
+
+def holds_an_unchecked_index(body: object) -> bool:
+    """Does `body` hold an index with the stamp? An index in a lambda does not count."""
+    found = False
+
+    def look(node: Node) -> bool:
+        nonlocal found
+        if found or isinstance(node, Lambda):
+            return False
+        if isinstance(node, IndexAccess) and node.unchecked:
+            found = True
+        return not found
+
+    walk_nodes(body, look)
+    return found

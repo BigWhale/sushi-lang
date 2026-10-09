@@ -130,6 +130,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Warn about a private declaration nothing in its unit reaches (CW1004) and "
              "an import whose unit names nothing it brings (CW3006)",
     )
+    build.add_argument(
+        "--dont-panic",
+        action="store_true",
+        help="Allow a function marked `dont_panic` in this build: each `[]` in its body "
+             "emits no bounds check (CE0152 without the flag)",
+    )
     library.add_argument(
         "--lib",
         action="store_true",
