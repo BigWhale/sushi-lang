@@ -1481,6 +1481,59 @@ The write must be able to reach the owner. It is rejected through a `peek` param
 from an owner (**[CE2426](error-catalog.md#ce2426)**), an unbound chained receiver such as `o.get().items`
 (**[CE2429](error-catalog.md#ce2429)**), and a constant (**[CE2096](error-catalog.md#ce2096)**).
 
+### Unchecked Indexes: `dont_panic`
+
+A function header may carry the marker `dont_panic because "<reason>"`. It follows the
+return type and the error channel, and it comes before the colon. In the body, `a[i]` on an
+array and `s[i]` on a string emit no bounds check, for a read and for a write. Nothing
+else changes: `get(i)` still answers a `Maybe`, `insert(i, v)` still checks its position,
+`assert` still traps, and every diagnostic stays.
+
+<!-- docs-sweep: error CE0152 -->
+```sushi
+fn contains_naive(string hay, string needle) bool dont_panic because "i + m <= n and j < m hold i + j < n":
+    let i32 n = hay.size()
+    let i32 m = needle.size()
+    let i32 i = 0
+    while (i + m <= n):
+        let i32 j = 0
+        while (j < m and hay[i + j] == needle[j]):
+            j := j + 1
+        if (j == m):
+            return true
+        i := i + 1
+    return false
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0
+```
+
+An index that is out of range in a marked body is undefined behaviour, and not the run-time
+error [RE2020](error-catalog.md#re2020). The `because` text is required. It is the proof:
+it states the guards that hold every index in range.
+
+- **Where it may stand.** On a free function, a static, an extension method, a perk
+  implementation method and a conversion (`extend A as B`). A lambda (both forms), a perk
+  contract method and an extern each give [CE6111](error-catalog.md#ce6111). A missing
+  `because` is the general parse error.
+- **Who may write it.** A bundled stdlib unit needs no flag. A user unit needs the build
+  flag `--dont-panic`; without it, the marker is [CE0152](error-catalog.md#ce0152), once per
+  function. A source library that uses the marker needs the same flag from each consumer
+  (see [Libraries](libraries.md#unchecked-indexes-and-consent)).
+- **It does not spread.** A function that a marked function calls is checked. A lambda
+  inside a marked body is checked, because it can run after the marked function returned.
+  An instance of a marked generic function is marked, because it is the same body.
+- **An inert marker.** A marked body with no `[]` to uncheck gets
+  [CW0004](error-catalog.md#cw0004). The indexes in a lambda do not count.
+
+Guideline: a marked function is a measured hot loop and nothing else. Measure it before
+and after, and put the numbers in the pull request. The `because` states the guards that
+hold every index in range. Keep the function as small as the loop. Do not mark a function
+that is faster only on paper. A library author who marks a function says so in the
+library's documentation, because each consumer must pass `--dont-panic`. The design record
+is [dont_panic](design/dont-panic.md).
+
 ## Structs
 
 ### Definition

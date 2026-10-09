@@ -1,7 +1,8 @@
 # `dont_panic`: an unchecked index inside a marked function
 
-Status: ACCEPTED, not built. The rulings are David's (2026-10-09). The measurements are
-from commit `6deb42e3` on `darwin_arm64`. The code anchors are at `5760e925`.
+Status: BUILT (#1247). The rulings are David's (2026-10-09). The measurements are
+from commit `6deb42e3` on `darwin_arm64`. The code anchors are at `5760e925`; the
+build choices of section 11 are the state after the build.
 
 ## Summary
 
@@ -11,7 +12,8 @@ from commit `6deb42e3` on `darwin_arm64`. The code anchors are at `5760e925`.
 - The marker is legal in a bundled stdlib unit, and in any unit of a build that passes
   `--dont-panic`. Everywhere else it is an error.
 - A source library that uses the marker needs the consent of each consumer, the same flag.
-- A marker that removes no check is a warning.
+  So does a marked generic template of any library kind.
+- A marker that removes no check is a warning (CW0004).
 - The stdlib names each marked function in one ratchet, with its reason and its benchmark.
 
 ## 1. The problem
@@ -159,8 +161,12 @@ pass the flag too. This is a consent: the consumer compiles the unchecked code, 
 consumer says yes. The error names the library, so that the consumer knows whose code
 asks. A library author who uses the marker states this in the library's documentation.
 
-A binary library has no such case. Its bodies are compiled already, as a C library's are.
-A hybrid library's templates are source and follow the source rule.
+A binary library or a hybrid library has this case for a marked generic template only. A
+CONCRETE marked body is compiled into the shipped bitcode, as a C library's bodies are, so
+the consumer links it and needs no consent. A marked generic TEMPLATE ships as source in
+every library kind, binary and hybrid included, because the consumer makes the copies. The
+consumer compiles that source, so the consumer must pass the flag. (The first draft of this
+section said that a binary library has no such case. That was wrong for a template.)
 
 ## 7. The manifest and `--lib-info` (D10, D11)
 
@@ -254,5 +260,38 @@ the `sushi-omakase-api` and `sushi-omakase-front` repositories.
   fixture confirms by `--dump-ll`, by hand, that a marked body holds no `_bounds_fail`
   block.
 - **The ratchet.** `tests/unit/test_dont_panic_ratchet.py`, a text scan (9.2).
+- **The codes.** `CE0152` is the gate (`internals/errors/func.py`). `CE6111` is the marker
+  on a lambda (both forms, the expression lambda and the block lambda), on a perk contract
+  method or on an extern; the message names the position (`syntax.py`). `CW0004` is the
+  inert marker. `CW0003` gains `--dont-panic`, "on a build that marks no function". A
+  missing `because` is the general parse error `CE6001`, as the grammar requires the word.
+- **Who gets the inert warning.** `CW0004` is for the author only: a user unit and a bundled
+  stdlib unit. A source-library unit in a consumer's build gets none, because the
+  consumer cannot fix the library.
+- **The marker words.** `dont_panic` is a reserved word (the terminal `DONT_PANIC`). The
+  grammar accepts the marker in the three refused positions only so that the AST builder
+  can name the position.
+- **The consent.** A source library's marker needs the consumer's `--dont-panic`. A concrete
+  marked body of a binary or hybrid library needs none. A marked generic template of any
+  kind needs it (section 6.3). The library author builds the library with `--dont-panic`
+  too; the fixture directive `LIB_FLAGS` states this for a test.
+- **The manifest.** The key `dont_panic` is a list of `{unit, name, reason}`, on every
+  kind, and absent when empty. The `sushi_lib_version` does not change, because an older
+  reader ignores a key it does not know. `name` is `name` for a function or a template,
+  `Type.method` for an extension method, a static or a perk implementation method (the type
+  in the `@(...)` spelling), and `Source as Target` for a conversion. A consumer does not
+  read the key; only `--lib-info` does (`docs/library-format.md`).
+- **`--lib-info`.** The section "Unchecked Indexes" lists one line per entry,
+  `  {name} dont_panic because "{reason}"`, with the raw reason text. Both halves print it:
+  `compiler/lib_info.py` and `toolchain/src/slib_info.sushi`.
+- **The lambda.** A lambda in a marked body keeps its checks. The backend measurement at
+  `--opt O2` with `--dont-panic` shows no bounds-fail block in the marked search function,
+  and the block stays in the lambda inside a marked body.
+- **The ratchet.** `tests/unit/test_dont_panic_ratchet.py` reads text and fails closed: a
+  `dont_panic` word outside a comment, a string or a doc block that it cannot name is a
+  failure. Its table is empty today.
+- **The fixture directive `LIB_FLAGS`** (`tests/TEST_METADATA_GUIDE.md`) passes flags to
+  each library build of a fixture. It refuses `--lib`, `--lib-kind` and `--lib-version`,
+  because the runner spells those for each build.
 - **The toolchain programs** under `toolchain/src/` are user programs; one that marks a
   function needs the flag in `toolchain/build.py`.

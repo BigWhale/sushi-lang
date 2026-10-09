@@ -508,6 +508,8 @@ fixture file itself, because the one set of directives describes both steps.
 - Several flags on one line, or repeat the directive.
 - A flag the runner owns is refused with a printed warning, as in `COMPILER_FLAGS`.
   `--lib` is refused here always, because the runner spells it for each library build.
+  `--lib-kind` and `--lib-version` are refused here too, for the same reason: use the
+  directive forms (`BUILD_LIB_BINARY`, `@ version`).
 
 #### BUILD_LIB_BINARY
 
