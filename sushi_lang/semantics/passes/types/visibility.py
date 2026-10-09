@@ -26,7 +26,8 @@ from sushi_lang.semantics.visibility import (
 if TYPE_CHECKING:
     from . import TypeValidator
 
-__all__ = ["name_is_contested", "out_of_scope_help", "reject_ambiguous_name",
+__all__ = ["name_is_ambiguous", "name_is_contested", "out_of_scope_help",
+           "reject_ambiguous_name",
            "reject_out_of_scope_perk", "reject_out_of_scope_type",
            "reject_private_call", "reject_private_kept",
            "reject_private_kept_call", "reject_private_name",
@@ -200,6 +201,17 @@ def type_is_contested(validator: 'TypeValidator', ty: Any) -> bool:
     if not isinstance(ty, (StructType, EnumType)):
         return False
     return type_name_is_contested(validator, ty.generic_base or ty.name)
+
+
+def name_is_ambiguous(validator: 'TypeValidator', kind: str, name: str) -> bool:
+    """Does the name reach two or more imported candidates and no own declaration?
+
+    Such a name has no type in the unit being validated. The inference asks this, so
+    that no check measures the use against the first candidate.
+    """
+    table = getattr(validator, "visibility", None)
+    return table is not None and table.is_ambiguous(
+        kind, name, validator.current_unit_name, validator.scope)
 
 
 def reject_ambiguous_name(validator: 'TypeValidator', kind: str, name: str,

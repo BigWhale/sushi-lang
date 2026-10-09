@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.passes.types.inference import (
     infer_array_literal_type, infer_dynamic_array_from_type, infer_index_access_type)
+from sushi_lang.semantics.passes.types.visibility import name_is_ambiguous
 from sushi_lang.semantics.visitors import NodeVisitor
 from sushi_lang.semantics.typesys import (
     Type, ArrayType, BuiltinType, DynamicArrayType, StructType)
@@ -242,7 +243,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             # bare constant or unit variable is typed.
             from sushi_lang.semantics.type_resolution import resolve_unknown_type
             const_sig = tv.const_sig(node.id)
-            if const_sig is None:
+            if const_sig is None or name_is_ambiguous(
+                    tv, "variable" if const_sig.is_var else "constant", node.id):
                 return None
             return resolve_unknown_type(const_sig.const_type,
                                         tv.struct_table.by_name,
@@ -259,6 +261,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             return self._materialize_wrapper(stdlib_const.get_return_type())
 
         if rung is BareName.FUNCTION:
+            if name_is_ambiguous(tv, "function", node.id):
+                return None
             fn_value_type = function_value_type_of(tv, node.id)
             if fn_value_type is not None:
                 return fn_value_type
@@ -371,6 +375,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 untyped_struct_instance)
             return untyped_struct_instance(self.type_validator, function_name,
                                            node.args, node.field_names)
+
+        # A name that CE3012 refuses has no type here: the first candidate is not the
+        # one the user chose.
+        if name_is_ambiguous(self.type_validator, "function", function_name):
+            return None
 
         # A declaration answers before a name a flat `use` brought in, exactly as the
         # validating half decides it (section 8's ladder). Reading the standard library

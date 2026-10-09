@@ -1,0 +1,10 @@
+# Two imports offer the unit variable `V`, with two types. The refused name has no
+# type, so the `let` gives no type mismatch and the borrow pass gives no move error.
+# EXPECT_ERROR_CODE: CE3012
+# EXPECT_ERROR_CODES_EXACT: CE3012
+use "helpers/amb_type_var_a"
+use "helpers/amb_type_var_b"
+
+fn main() i32:
+    let i32 n = V
+    return n

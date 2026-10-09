@@ -1,0 +1,10 @@
+# Two imports offer `pick`. The `let` reads no type from the refused name, so only
+# CE3012 is given.
+# EXPECT_ERROR_CODE: CE3012
+# EXPECT_ERROR_CODES_EXACT: CE3012
+use "helpers/amb_type_pick_a"
+use "helpers/amb_type_pick_b"
+
+fn main() i32:
+    let i32 n = pick(2)
+    return n

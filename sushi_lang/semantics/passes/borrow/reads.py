@@ -206,8 +206,15 @@ def constant_sig(checker: 'BorrowChecker', name: str):
     The lookup is SCOPED and never `by_name`: the flat view holds one record per name
     over the whole program and is first-wins, so it answers with another unit's
     declaration of the same name (#685, `docs/design/unit-namespaces.md` section 9).
+    A name that two imports offer reaches no record: CE3012 refused it, and the first
+    candidate is not the one the user chose.
     """
-    return checker.tables.constants.lookup(name, checker.unit_name, checker.scope)
+    sig = checker.tables.constants.lookup(name, checker.unit_name, checker.scope)
+    if sig is None or checker.tables.visibility.is_ambiguous(
+            "variable" if sig.is_var else "constant", name, checker.unit_name,
+            checker.scope):
+        return None
+    return sig
 
 
 def namespaced_storage(checker: 'BorrowChecker', expr: Optional[Expr]):

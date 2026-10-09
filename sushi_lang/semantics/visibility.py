@@ -254,6 +254,19 @@ class VisibilityTable:
                 if origin.unit_name != unit and _permitted(origin, unit)
                 and (scope is None or scope.holds_unit(origin.unit_name))]
 
+    def is_ambiguous(self, kind: str, name: str, unit: Optional[str],
+                     scope: Any = None) -> bool:
+        """Do two or more `candidates` offer this name to `unit`, and `unit` declares none?
+
+        Row 3 of the ladder in section 8 of `docs/design/unit-namespaces.md`: an own
+        declaration of `unit` answers first, and two imported candidates resolve to
+        nothing. A reader that would take the type of the first candidate asks this
+        first, so that one fault gives one diagnostic.
+        """
+        if any(origin.unit_name == unit for origin in self.origins(kind, name)):
+            return False
+        return len(self.candidates(kind, name, unit, scope)) >= 2
+
     def is_visible_from(self, kind: str, name: str, unit: Optional[str]) -> bool:
         """May `unit` name this declaration? An unrecorded name always may."""
         origin = self.origin(kind, name)

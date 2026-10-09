@@ -1,0 +1,12 @@
+# Two imports offer `pick`. The call is an argument of a function that takes an i32.
+# The refused name has no type, so the argument check gives no type mismatch.
+# EXPECT_ERROR_CODE: CE3012
+# EXPECT_ERROR_CODES_EXACT: CE3012
+use "helpers/amb_type_pick_a"
+use "helpers/amb_type_pick_b"
+
+fn twice(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    return twice(pick(1))
