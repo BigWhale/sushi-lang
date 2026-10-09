@@ -71,7 +71,7 @@ def _checks_templates(unit: Unit) -> bool:
     A unit of the program -- a library's own units at its `--lib` build included -- and
     a bundled stdlib unit. A consumed library unit is not checked again: its own build
     checked it."""
-    return unit.provenance is None or unit.is_bundled_stdlib
+    return unit.is_authors_unit
 
 
 @dataclass(frozen=True)

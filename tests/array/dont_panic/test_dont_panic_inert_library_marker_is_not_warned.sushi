@@ -1,0 +1,12 @@
+# A library marker with no index is the author's fault (CW0004 at the library build).
+# The consumer, with consent, gets no warning for it.
+# BUILD_LIB_WARNS: dp_inert_lib.sushi -> CW0004
+# LIB_FLAGS: --dont-panic
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n"
+use <lib/dp_inert_lib>
+
+fn main() i32:
+    println(answer())
+    return 0

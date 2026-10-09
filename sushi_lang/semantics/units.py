@@ -125,6 +125,12 @@ class Unit:
         return not self.from_library and self.name in SOURCE_STDLIB_MODULES
 
     @property
+    def is_authors_unit(self) -> bool:
+        """The unit of the program's own author: a unit with no provenance, or a bundled
+        stdlib module. A consumed library unit is another author's."""
+        return self.provenance is None or self.is_bundled_stdlib
+
+    @property
     def library_name(self) -> Optional[str]:
         """The source library this unit was injected from, or None for any other unit."""
         parts = self.name.split("/")

@@ -207,6 +207,8 @@ class CollectorPass:
             return self._collect(root, unit_name, unit_file, marker_gate)
         finally:
             self.r.origin = previous_origin
+            self.function_collector.marker_gate = None
+            self.perk_collector.marker_gate = None
 
     def admit_binary_libraries(self, names: Set[str]) -> None:
         """A binary library is no unit of the build, but a private TYPE template it ships

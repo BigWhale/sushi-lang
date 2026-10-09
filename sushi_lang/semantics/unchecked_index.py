@@ -24,7 +24,6 @@ def stamp_unchecked_indexes(body: object) -> None:
     walk_nodes(body, stamp)
 
 
-
 def holds_an_unchecked_index(body: object) -> bool:
     """Does `body` hold an index with the stamp? An index in a lambda does not count."""
     found = False

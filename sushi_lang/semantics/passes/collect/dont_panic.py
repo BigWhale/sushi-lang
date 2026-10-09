@@ -8,10 +8,11 @@ no index to uncheck. The hybrid templates of a library meet the same gate in
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Optional, Protocol, Union
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import ExtendDef
+from sushi_lang.semantics.ast import ExtendDef, FuncDef
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.unchecked_index import holds_an_unchecked_index
 
 if TYPE_CHECKING:
@@ -20,6 +21,16 @@ if TYPE_CHECKING:
 
 
 DONT_PANIC_FLAG = "--dont-panic"
+
+MarkedDecl = Union[FuncDef, ExtendDef]
+
+
+class MarkerCollector(Protocol):
+    """What `check_dont_panic` reads of a collector: the two that meet a body."""
+    r: 'Reporter'
+    marker_gate: Optional['MarkerGate']
+    current_unit_file: Optional[str]
+    marked: list[str]
 
 
 @dataclass(frozen=True)
@@ -40,7 +51,7 @@ class MarkerGate:
     def for_unit(cls, unit: 'Unit', flag: bool) -> 'MarkerGate':
         stdlib = unit.is_bundled_stdlib
         return cls(allowed=stdlib or flag, library=unit.library_name,
-                   warns_inert=unit.provenance is None or stdlib, counts=not stdlib)
+                   warns_inert=unit.is_authors_unit, counts=not stdlib)
 
     @classmethod
     def for_library_template(cls, library: str, flag: bool) -> 'MarkerGate':
@@ -48,9 +59,8 @@ class MarkerGate:
         return cls(allowed=flag, library=library, counts=True)
 
 
-def _subject(decl: Any, library: Optional[str]) -> str:
+def _subject(decl: MarkedDecl, library: Optional[str]) -> str:
     if isinstance(decl, ExtendDef) and decl.is_conversion:
-        from sushi_lang.semantics.generics.type_display import display_type
         name = (f"the conversion '{display_type(decl.target_type)} "
                 f"as {display_type(decl.ret)}'")
     else:
@@ -58,7 +68,7 @@ def _subject(decl: Any, library: Optional[str]) -> str:
     return name if library is None else f"{name} of the library '{library}'"
 
 
-def judge_marker(reporter: 'Reporter', gate: MarkerGate, decl: Any,
+def judge_marker(reporter: 'Reporter', gate: MarkerGate, decl: MarkedDecl,
                  filename: Optional[str]) -> bool:
     """Judge the marker of one declaration. The answer is True when the marker is a use
     of the flag."""
@@ -82,7 +92,7 @@ def judge_marker(reporter: 'Reporter', gate: MarkerGate, decl: Any,
     return gate.counts
 
 
-def check_dont_panic(collector: Any, decl: Any) -> None:
+def check_dont_panic(collector: MarkerCollector, decl: MarkedDecl) -> None:
     """The gate for one declaration of the unit that `collector` collects."""
     gate: Optional[MarkerGate] = collector.marker_gate
     if gate is not None and judge_marker(collector.r, gate, decl,

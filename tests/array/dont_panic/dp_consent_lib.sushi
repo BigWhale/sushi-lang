@@ -1,0 +1,7 @@
+# A source library with two marked functions, both with an index.
+
+public fn head(i32[] xs) i32 dont_panic because "the caller passes a non-empty array":
+    return xs[0]
+
+public fn second(i32[] xs) i32 dont_panic because "the caller passes two elements":
+    return xs[1]

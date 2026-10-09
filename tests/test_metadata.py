@@ -176,6 +176,11 @@ RUNNER_OWNED_FLAGS = frozenset({
     '-o', '--lib', '--lib-info', '--clean-cache', '--build-stdlib', '--cache-dir',
 })
 
+# The two flags the runner writes for each library build. `LIB_FLAGS` refuses them, because
+# a later one would win silently; `COMPILER_FLAGS` may spell them, as a fixture's own
+# build is no library build.
+LIB_BUILD_FLAGS = frozenset({'--lib-kind', '--lib-version'})
+
 # The one runner-owned flag a fixture may spell once it names its own output (OUTPUT_PATH):
 # the build kind is then the fixture's, because the runner no longer picks the file.
 LIB_FLAG = '--lib'
@@ -284,10 +289,11 @@ def _exact_codes(metadata: TestMetadata, value: str, test_file: Path) -> None:
     metadata.expect_error_codes_exact = (metadata.expect_error_codes_exact or []) + codes
 
 
-def _refuses_runner_flag(token: str, directive: str, test_file: Path) -> bool:
+def _refuses_runner_flag(token: str, directive: str, test_file: Path,
+                         owned: frozenset = RUNNER_OWNED_FLAGS) -> bool:
     """A flag the runner owns, refused with a printed warning. One check for every
     directive that passes flags to `sushic`."""
-    if token in RUNNER_OWNED_FLAGS:
+    if token in owned:
         _warn(f"{token} is the runner's to spell in {test_file}; {directive} ignored it")
         return True
     return False
@@ -303,8 +309,10 @@ def _compiler_flags(metadata: TestMetadata, value: str, test_file: Path) -> None
 
 
 def _lib_flags(metadata: TestMetadata, value: str, test_file: Path) -> None:
-    metadata.lib_flags.extend(token for token in _split(value)
-                              if not _refuses_runner_flag(token, "LIB_FLAGS", test_file))
+    owned = RUNNER_OWNED_FLAGS | LIB_BUILD_FLAGS
+    metadata.lib_flags.extend(
+        token for token in _split(value)
+        if not _refuses_runner_flag(token, "LIB_FLAGS", test_file, owned))
 
 
 def _test_env(metadata: TestMetadata, value: str, test_file: Path) -> None:

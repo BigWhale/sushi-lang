@@ -1,0 +1,12 @@
+# A marked generic template instantiated at two types: one CE0152, not one per instance.
+# EXPECT_ERROR_CODES_EXACT: CE0152
+
+fn first_of@(T: Clone)(T[] xs) T dont_panic because "the caller passes a non-empty array":
+    return xs[0].clone()
+
+fn main() i32:
+    let i32[] nums = from([5, 6])
+    let f64[] reals = from([1.5, 2.5])
+    println(first_of(nums))
+    println(first_of(reals))
+    return 0
