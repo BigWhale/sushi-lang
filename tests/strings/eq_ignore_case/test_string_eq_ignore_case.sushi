@@ -1,0 +1,24 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\ntrue\ntrue\ntrue\ntrue\n--\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\n"
+# EXPECT_NO_LEAKS: true
+# `eq_ignore_case(other)` compares the bytes of two texts after each ASCII upper-case
+# letter is changed to lower case. A non-ASCII letter is not changed, so "É" and "é"
+# are not equal. The bytes 64 and 91 are next to the upper-case letters and are not
+# letters. Two texts of different length are not equal.
+use <collections/strings>
+
+fn main() i32:
+    println("HeLLo".eq_ignore_case("hello"))
+    println("a1".eq_ignore_case("A1"))
+    println("".eq_ignore_case(""))
+    println("Mostly Harmless".eq_ignore_case("mOSTLY hARMLESS"))
+    println("AZ".eq_ignore_case("az"))
+    println("--")
+    println("É".eq_ignore_case("é"))
+    println("hello".eq_ignore_case("hell"))
+    println("".eq_ignore_case("a"))
+    println("abc".eq_ignore_case("abd"))
+    println("@".eq_ignore_case("`"))
+    println('['.eq_ignore_case('{'))
+    println("hello".eq_ignore_case("HELLO!"))
+    return 0

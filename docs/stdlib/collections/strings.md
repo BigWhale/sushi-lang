@@ -54,7 +54,9 @@ provides these methods (with `is_empty` and `clone`, which need no import):
 
 These are written in Sushi (see [Methods written in Sushi](#methods-written-in-sushi)):
 - **Strict parses**: parse_u8, parse_u16, parse_u32, parse_u64, parse_i32, parse_i64
-- **Trims of a given text**: trim_start_matches, trim_end_matches
+- **Searches and compares**: find_from, eq_ignore_case
+- **Trims of a given text**: trim_start_matches, trim_end_matches, trim_matches,
+  trim_start_chars, trim_end_chars, trim_chars
 - **Lines, tokens and characters**: lines, split_whitespace, chars
 - **Number formatting** (on the integer and float types): to_hex, to_hex_width, to_bin,
   to_bin_width, to_fixed
@@ -141,6 +143,47 @@ match text.find_last('hello'):
         println("Last at {pos}")  # 12
     Maybe.None() ->
         println("Not found")
+```
+
+### `.find_from(string needle, i32 start) -> Maybe@(i32)`
+
+Finds the first match of `needle` at or after the character index `start` (written in
+Sushi, see [Methods written in Sushi](#methods-written-in-sushi)). `start` and the answer
+are UTF-8 character indexes, as for `find`, so `find_from(needle, 0)` gives the answer of
+`find(needle)`. A repeated search moves `start` and cuts no new string.
+
+- A negative `start` counts as 0.
+- An empty `needle` matches at `start`.
+- A `start` equal to the character count matches only an empty `needle`.
+- A `start` more than the character count gives `Maybe.None()`.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    let string text = "héllo héllo"
+    println(text.find_from("llo", 3).realise(-1))   # 8
+    println(text.find_from("llo", 9).realise(-1))   # -1
+    println(text.find_from("", 11).realise(-1))     # 11
+    return 0
+```
+
+### `.eq_ignore_case(string other) -> bool`
+
+Compares two texts with the ASCII letters folded to lower case (written in Sushi). Each
+byte from 65 to 90 (`A` to `Z`) compares as its lower-case letter. Every other byte
+compares as it is, so a non-ASCII letter is not folded: this is the rule of `lower()`. Two
+texts of different byte length give `false`, and no byte is read for them. No new string
+is made.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    println("HeLLo".eq_ignore_case("hello"))    # true
+    println("a1".eq_ignore_case("A1"))          # true
+    println("É".eq_ignore_case("é"))            # false
+    return 0
 ```
 
 ### `.count(string needle) -> i32`
@@ -640,6 +683,69 @@ fn main() i32:
     println("a/b///".trim_end_matches("/"))      # a/b
     println("babab".trim_end_matches("ab"))      # b
     println("aaa".trim_end_matches("aa"))        # a
+    return 0
+```
+
+### `.trim_matches(string t) -> string`
+
+Removes every repeat of `t` at both ends of the text, and gives a new string. It is
+`trim_start_matches(t)` and then `trim_end_matches(t)`, with their rules. An empty `t`
+gives the text unchanged.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    println("abxab".trim_matches("ab"))          # x
+    println("aaa".trim_matches("aa"))            # a
+    println("abab".trim_matches("ab").len())     # 0
+    return 0
+```
+
+### `.trim_start_chars(string set) -> string`
+
+Removes the characters of `set` at the start of the text, and gives a new string. The
+text is read one whole code point at a time. A code point is removed when
+`set.contains(c)` is true for it, and the removal stops at the first code point that is
+not in `set`. The order of `set` has no effect. An empty `set` gives the text unchanged.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    println("0042".trim_start_chars("0"))        # 42
+    println("baXab".trim_start_chars("ab"))      # Xab
+    return 0
+```
+
+### `.trim_end_chars(string set) -> string`
+
+Removes the characters of `set` at the end of the text, and gives a new string. The rules
+are the rules of `trim_start_chars`, read from the end.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    println("4200".trim_end_chars("0"))          # 42
+    println("éaé".trim_end_chars("é"))           # éa
+    return 0
+```
+
+### `.trim_chars(string set) -> string`
+
+Removes the characters of `set` at both ends of the text, and gives a new string. It is
+`trim_start_chars(set)` and then `trim_end_chars(set)`. A set of whole code points does
+not cut a character: `"èaé".trim_chars("é")` gives `"èa"`, because `è` is not in the set,
+although `è` and `é` start with the same byte.
+
+```sushi
+use <collections/strings>
+
+fn main() i32:
+    println("/a/b//".trim_chars("/"))            # a/b
+    println("baXab".trim_chars("ab"))            # X
+    println("abc".trim_chars(""))                # abc
     return 0
 ```
 

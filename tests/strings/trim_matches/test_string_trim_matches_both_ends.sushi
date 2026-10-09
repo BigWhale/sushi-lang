@@ -1,0 +1,22 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "[a]\n[]\n[x]\n[abc]\n[]\n[ab]\n[a/b]\n["q"]\n[x]\n[日]\n"
+# EXPECT_NO_LEAKS: true
+# `trim_matches(t)` removes the repeats of `t` at both ends. It is
+# `trim_start_matches(t)` and then `trim_end_matches(t)`. An empty `t` changes nothing.
+use <collections/strings>
+
+fn br(string s) string:
+    return "[{s}]"
+
+fn main() i32:
+    println(br("aaa".trim_matches("aa")))
+    println(br("abab".trim_matches("ab")))
+    println(br("abxab".trim_matches("ab")))
+    println(br("abc".trim_matches("")))
+    println(br("".trim_matches("")))
+    println(br("ab".trim_matches("abc")))
+    println(br("//a/b///".trim_matches("/")))
+    println(br('"""q"""'.trim_matches('""')))
+    println(br("éxé".trim_matches("é")))
+    println(br("本本日本".trim_matches("本")))
+    return 0

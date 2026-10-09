@@ -1,0 +1,37 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "[42]\n[42]\n[a/b]\n--\n[a]\n[]\n[X]\n[èa]\n[x]\n[a本]\n[日a]\n--\n[abc]\n[abc]\n[abc]\n[abc]\n[]\n[]\n[]\n--\n[42x]\n[x42]\n"
+# EXPECT_NO_LEAKS: true
+# `trim_start_chars(set)` removes the code points of `set` at the start of the text,
+# `trim_end_chars(set)` at the end, and `trim_chars(set)` at both ends. The set is a
+# set of whole code points, so "è" stays when the set holds "é", although the two
+# share their first byte. An empty set changes nothing. Removal stops at the first
+# code point that is not in the set.
+use <collections/strings>
+
+fn br(string s) string:
+    return "[{s}]"
+
+fn main() i32:
+    println(br("0042".trim_start_chars("0")))
+    println(br("4200".trim_end_chars("0")))
+    println(br("/a/b//".trim_chars("/")))
+    println("--")
+    println(br("éaé".trim_chars("é")))
+    println(br("éé".trim_chars("é")))
+    println(br("baXab".trim_chars("ab")))
+    println(br("èaé".trim_chars("é")))
+    println(br("🌍x🌍".trim_chars("🌍")))
+    println(br("日a本".trim_start_chars("日本")))
+    println(br("日a本".trim_end_chars("日本")))
+    println("--")
+    println(br("abc".trim_chars("")))
+    println(br("abc".trim_start_chars("")))
+    println(br("abc".trim_end_chars("")))
+    println(br("abc".trim_chars("xyz")))
+    println(br("".trim_chars("a")))
+    println(br("".trim_start_chars("")))
+    println(br("aaa".trim_end_chars("a")))
+    println("--")
+    println(br("0042x".trim_start_chars("0")))
+    println(br("x4200".trim_end_chars("0")))
+    return 0

@@ -1,0 +1,22 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n-1\ntrue\nfalse\n"
+# EXPECT_NO_LEAKS: true
+# `find_from` and `eq_ignore_case` on owning strings, built at run time. The receiver
+# and the argument stay owned by the caller, and both are freed at the end of main.
+use <collections/strings>
+
+fn index_of(Maybe@(i32) m) i32:
+    match m:
+        Maybe.Some(i) -> return i
+        Maybe.None -> return -1
+
+fn main() i32:
+    let string text = "ab".repeat(3)
+    let string needle = "b".repeat(1)
+    let string upper = text.upper()
+    let string longer = text.concat("!")
+    println(index_of(text.find_from(needle, 2)))
+    println(index_of(text.find_from(needle, 6)))
+    println(text.eq_ignore_case(upper))
+    println(upper.eq_ignore_case(longer))
+    return 0
