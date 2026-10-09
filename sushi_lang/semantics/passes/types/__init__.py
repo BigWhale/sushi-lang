@@ -24,6 +24,7 @@ from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.types.visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
 
 from .compatibility import types_compatible
+from .operator_nest import OperatorNests
 from .constants import validate_constant
 from .public_signatures import check_public_signatures
 from .signatures import (
@@ -142,6 +143,9 @@ class TypeValidator:
         # HashMap iterator is legal only in that position (CE2127).
         self.walked_iterable: Optional[Expr] = None
 
+        # The kept types and the handed overflow checks of the expression being validated.
+        self.operator_nests = OperatorNests()
+
         self.statement_validator = StatementValidator(self)
         self.expression_validator = ExpressionValidator(self)
         self.type_inference_visitor = TypeInferenceVisitor(self)
@@ -252,13 +256,26 @@ class TypeValidator:
                                  self.namespaces_of, self.struct_table, self.enum_table)
 
     def validate_expression(self, expr: Expr) -> Optional[Type]:
-        """Validate an expression and its subexpressions using the Visitor Pattern."""
-        self.expression_validator.visit(expr)
+        """Validate an expression and its subexpressions, and answer its type.
 
-        return self.infer_expression_type(expr)
+        The type of a validated operator node is kept until the outermost expression is
+        done (`operator_nest.py`).
+        """
+        nests = self.operator_nests
+        nests.hold()
+        try:
+            self.expression_validator.visit(expr)
+            expr_type = self.infer_expression_type(expr)
+            nests.keep(expr, expr_type)
+            return expr_type
+        finally:
+            nests.leave()
 
     def infer_expression_type(self, expr: Expr) -> Optional[Type]:
-        """Infer the type of an expression using the Visitor Pattern."""
+        """Infer the type of an expression. A kept type of a validated operator answers first."""
+        known, kept_type = self.operator_nests.kept(expr)
+        if known:
+            return kept_type
         return self.type_inference_visitor.visit(expr)
 
     def namespace_of(self, receiver) -> Optional[str]:

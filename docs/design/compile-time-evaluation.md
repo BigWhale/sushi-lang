@@ -164,12 +164,14 @@ by its source. The smallest signed value `% -1` is [CE2077](../error-catalog.md#
   `tests/constants/scalar_folding/test_constants_bitwise.sushi` hold it.
 - **The check belongs to the typecheck pass.** The back end does not report a language
   error. The typecheck pass calls the evaluator for a declaration
-  (`passes/types/constants.py`). A body is the second caller: `reject_overflowing_operation`
-  (`passes/types/expressions.py`) reads every `+ - * / %` node and every unary minus with a
-  silent reporter, and raises only an overflow recorded AT that node. That one rule keeps
-  the count right -- the innermost operation of `(200 + 100) / 2` reports, the division
-  around it does not, and a use of a constant that overflows adds nothing to the report at
-  its declaration.
+  (`passes/types/constants.py`). A body is the second caller: `reject_overflowing_nest`
+  (`passes/types/expressions.py`) reads a NEST of `+ - * / %` nodes and unary minus nodes
+  with a silent reporter. The nest is the top node and each operand below it that has the
+  type of its operator (`passes/types/operator_nest.py`), so a nest is folded one time, at
+  its top, and the check is linear in the depth of the nest. It raises each overflow
+  recorded AT a node of the nest. That one rule keeps the count right -- the innermost
+  operation of `(200 + 100) / 2` reports, the division around it does not, and a use of a
+  constant that overflows adds nothing to the report at its declaration.
 - **The code is [CE2077](../error-catalog.md#ce2077).** It is in the CE2070 to CE2079 range of
   `internals/errors/types.py`, beside [CE2070](../error-catalog.md#ce2070) and [CE2073](../error-catalog.md#ce2073). It says that an operation gives a
   value the type cannot hold, and it names the operator, the value and the type.

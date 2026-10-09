@@ -589,27 +589,34 @@ def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> No
         reject_impossible_shift_count(validator, expr, left_type)
 
 
-def reject_overflowing_operation(validator: 'TypeValidator', expr: Expr,
-                                 result_type: 'Optional[Type]') -> None:
-    """CE2077 when an operation the compiler can read gives a value its type cannot hold.
+def reject_overflowing_nest(validator: 'TypeValidator',
+                            top: 'BinaryOp | UnaryOp') -> None:
+    """CE2077 for each operation of a nest that the compiler can read and that leaves its type.
 
     The evaluator does the reading and the arithmetic, so the language has ONE
     compile-time arithmetic and a constant cannot disagree with the same expression in a
     body. Its reporter is silent here, because an operand that is not constant -- a
     variable, a call -- is ordinary code and not a diagnostic.
 
-    Only an overflow recorded AT THIS node is reported. One recorded deeper belongs to
-    the node that computed it: the inner operation of `(200 + 100) / 2` reports once,
-    and a constant that overflows is reported where it is declared and not at every use.
+    `top` is an overflow-checked node, and no node above it does its check. The nest is
+    the top and each operand below it that has the type of its operator
+    (`operator_nest.py`). One fold reads the whole nest, so the nest is folded one time.
+    The fold reads the nest at the type of the left operand of the top, or at the type
+    of the operand of a negation. An overflow is reported only when it is recorded at a
+    node of the nest. An overflow in a constant that the nest names is reported where the
+    constant is declared, and not at each use.
     """
     from sushi_lang.semantics.const_eval import emit_overflow
+    from .operator_nest import nest_under
 
+    operand = top.left if isinstance(top, BinaryOp) else top.expr
     evaluator = validator.constant_evaluator()
-    evaluator.evaluate(expr, result_type, expr.loc)
+    evaluator.evaluate(top, validator.infer_expression_type(operand), top.loc)
 
-    overflow = evaluator.overflow
-    if overflow is not None and overflow.node is expr:
-        emit_overflow(validator.reporter, overflow)
+    nest = nest_under(top)
+    for overflow in evaluator.overflows:
+        if id(overflow.node) in nest:
+            emit_overflow(validator.reporter, overflow)
 
 
 def _provable_shift_count(validator: 'TypeValidator', count: Expr) -> Optional[int]:

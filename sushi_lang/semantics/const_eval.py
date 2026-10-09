@@ -219,8 +219,8 @@ class ConstantEvaluator:
         self.evaluation_stack: List[Tuple[Optional[str], str]] = []
         self.reported_cycles = (const_table.reported_cycles if reported_cycles is None
                                 else reported_cycles)
-        # The FIRST operation that left its type, for a caller whose reporter is silent.
-        self.overflow: Optional[ConstOverflow] = None
+        # Each operation that left its type, for a caller whose reporter is silent.
+        self.overflows: List[ConstOverflow] = []
 
     @property
     def scope(self) -> UnitScope:
@@ -833,8 +833,7 @@ class ConstantEvaluator:
                 and not fits_integer_type(value, semantic_type)):
             record = ConstOverflow(node=node, op=op, value=value,
                                    semantic_type=semantic_type, span=span)
-            if self.overflow is None:
-                self.overflow = record
+            self.overflows.append(record)
             emit_overflow(self.reporter, record)
             return None
 

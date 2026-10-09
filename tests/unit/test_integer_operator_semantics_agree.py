@@ -2,7 +2,7 @@
 
 The constant evaluator (`semantics/const_eval.py`) is where an operation the
 compiler reads is computed: a `const` initializer, and every literal pair in a body,
-which `reject_overflowing_operation` runs through the same evaluator. The backend used
+which `reject_overflowing_nest` runs through the same evaluator. The backend used
 to hold a second home -- `_fold_arithmetic_constants` and `_fold_bitwise_constants` in
 `backend/expressions/operators.py` folded `+ - *` and `& | ^ <<` on two `ir.Constant`
 operands, re-derived two's complement by hand, wrapped in silence where the evaluator
