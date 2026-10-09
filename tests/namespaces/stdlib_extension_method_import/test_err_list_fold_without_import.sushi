@@ -1,0 +1,12 @@
+# `.fold()` on `List@(T)` is an extension method of <collections/iter>. This unit does
+# not import the module.
+# EXPECT_ERROR_CODES_EXACT: CE3015
+# EXPECT_STDERR_CONTAINS: add `use <collections/iter>`
+fn add(i32 a, i32 b) i32:
+    return a + b
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    println(xs.fold(0, add))
+    return 0

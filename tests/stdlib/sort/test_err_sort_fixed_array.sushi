@@ -1,0 +1,8 @@
+# The sort methods extend `T[]`, and an `extend T[]` method does not reach a fixed array.
+# EXPECT_ERROR_CODE: CE2008
+use <collections/sort>
+
+fn main() i32:
+    let i32[5] xs = [5, 3, 8, 1, 2]
+    xs.sort()
+    return 0

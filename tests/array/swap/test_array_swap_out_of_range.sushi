@@ -1,0 +1,10 @@
+# An index past the end is the run-time error RE2020, as for `arr[i]`.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2020"
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32 far = 3
+    xs.swap(0, far)
+    println("{xs}")
+    return 0

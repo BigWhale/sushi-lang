@@ -1,0 +1,7 @@
+# A one-element array: the element is the minimum, the maximum and the total.
+# EXPECT_STDOUT_EXACT: "42 42 42\n"
+# EXPECT_RUNTIME_EXIT: 0
+fn main() i32:
+    let i64[] xs = from([42])
+    println("{xs.min().realise(0)} {xs.max().realise(0)} {xs.add_up()}")
+    return 0

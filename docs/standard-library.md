@@ -15,6 +15,7 @@ Complete reference for Sushi's standard library modules and types.
 - [HashMap@(K, V)](stdlib/collections/hashmap.md) - Hash table with open addressing
 - [Arrays](stdlib/collections/arrays.md) - Fixed and dynamic array methods
 - [Strings](stdlib/collections/strings.md) - String manipulation methods, the number formatters and `StringBuilder`
+- [Sorting](stdlib/collections/sort.md) - `sort`, `sort_by` and `binary_search` as methods on `T[]`
 - [Iter combinators](stdlib/collections/iter.md) - `map`/`filter`/`fold` as methods on `List@(T)` and `T[]`, the free functions, `compose`, and the tuple combinators `enumerate`/`zip`/`partition`/`unzip`
 
 ### Text
@@ -64,6 +65,7 @@ Complete reference for Sushi's standard library modules and types.
 use <collections/strings>  # String methods, number formatters, StringBuilder
 use <collections/hashmap>  # HashMap@(K, V)
 use <collections/iter>     # Higher-order combinators (map/filter/fold/compose/enumerate/zip)
+use <collections/sort>     # sort, sort_by and binary_search on T[]
 use <compression/zlib>     # DEFLATE and the zlib container
 use <encoding/base64>      # Base64 encode and decode
 use <encoding/binary>      # Fixed-width integers in bytes, in either byte order
@@ -244,7 +246,9 @@ fn greet() ~ | IoError:
 - Reading: `len()`, `get()`, `first()`, `last()`, `contains()`, `index_of()`, `iter()`
 - Growing and shrinking (dynamic only): `push()`, `pop()`, `clear()`, `truncate()`,
   `capacity()`, `extend()`, `extend_range()`
-- In place: `fill()`, `reverse()`
+- In place: `fill()`, `reverse()`, `swap()`; `resize()` (dynamic only)
+- Numeric reductions: `min()`, `max()`, `add_up()`
+- Sorting (`use <collections/sort>`, dynamic only): `sort()`, `sort_by()`, `binary_search()`
 - Copies: `clone()`, `s(start, end)`, `ss(start, count)`; the hash: `hash()`
 - Byte arrays (`u8[]`): `to_string()`, `to_string_checked()`
 - Memory (dynamic only): `free()`, `destroy()`

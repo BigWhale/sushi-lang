@@ -1,0 +1,10 @@
+# An unsigned element compares as unsigned: 250 is more than 3.
+# EXPECT_STDOUT_EXACT: "3 250\n"
+# EXPECT_RUNTIME_EXIT: 0
+fn main() i32:
+    let u8[] bytes = from([])
+    bytes.push(250)
+    bytes.push(3)
+    bytes.push(77)
+    println("{bytes.min().realise(0)} {bytes.max().realise(0)}")
+    return 0

@@ -843,6 +843,8 @@ def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
             return
         if isinstance(call.receiver, Name) and call.receiver.id in validator.refused_bindings:
             return
+        if _reject_unimported_stdlib_extension(validator, call, receiver_type):
+            return
         diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.loc,
                             name=f"{display_type(receiver_type)}.{call.method}")
         if isinstance(receiver_type, IteratorType):
@@ -945,20 +947,38 @@ def _check_receiver_mode(validator: 'TypeValidator', call: MethodCall, method) -
 
 
 def _reject_missing_method_module(validator: 'TypeValidator', call: MethodCall,
-                                  name: str, module: str) -> None:
-    """A built-in method whose body lives in a stdlib module needs THIS unit's import.
+                                  name: str, module: str) -> bool:
+    """A method whose body lives in a stdlib module needs THIS unit's import (CE3015).
 
+    The method is a built-in one, or an extension method that a source module declares.
     The question is per unit (#942): the unit that holds the call imports the module,
     or a directory above it, directly, behind an alias, or through a `public use` of
-    its own imports. An import in another unit of the program does not count.
+    its own imports. An import in another unit of the program does not count. Answers
+    whether it reported.
     """
     scope = validator.scope
     parts = module.split("/")
     if any(scope.holds_unit("/".join(parts[:depth]))
            for depth in range(1, len(parts) + 1)):
-        return
+        return False
     er.emit_with(validator.reporter, er.ERR.CE3015, call.loc, name=name, module=module) \
         .help(f"add `use <{module}>` above the first declaration of this unit")
+    return True
+
+
+def _reject_unimported_stdlib_extension(validator: 'TypeValidator', call: MethodCall,
+                                        receiver_type) -> bool:
+    """An extension method that no table holds, and that a source stdlib module declares.
+
+    The module is not loaded for this unit, so the method is not found. The refusal is
+    the one of a built-in method with a missing import, and it names the module.
+    """
+    from sushi_lang.semantics.stdlib_registry import source_extension_module
+    module = source_extension_module(receiver_type, call.method)
+    if module is None:
+        return False
+    return _reject_missing_method_module(
+        validator, call, f"{display_type(receiver_type)}.{call.method}()", module)
 
 
 # The validation half of each built-in family, in the table's order. The claim is the

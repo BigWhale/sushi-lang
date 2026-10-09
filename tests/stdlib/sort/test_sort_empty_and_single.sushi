@@ -1,0 +1,12 @@
+# An empty array and a one-element array are already in order.
+# EXPECT_STDOUT_EXACT: "[] [7]\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/sort>
+
+fn main() i32:
+    let i32[] none = from([])
+    none.sort()
+    let i32[] one = from([7])
+    one.sort_by(|i32 a, i32 b| a - b)
+    println("{none} {one}")
+    return 0

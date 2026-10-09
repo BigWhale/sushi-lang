@@ -1,0 +1,13 @@
+# `sum` is not a built-in array method, so a user extension of that name is legal.
+# EXPECT_STDOUT_EXACT: "6 6\n"
+# EXPECT_RUNTIME_EXIT: 0
+extend i32[] sum() i32:
+    let i32 total = 0
+    foreach(x in self.iter()):
+        total := total + x
+    return total
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println("{xs.sum()} {xs.add_up()}")
+    return 0

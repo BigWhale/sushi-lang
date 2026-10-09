@@ -1,0 +1,6 @@
+# A fixed array cannot change its length, so `.resize()` on it is refused.
+# EXPECT_ERROR_CODE: CE2023
+fn main() i32:
+    let i32[3] xs = [1, 2, 3]
+    xs.resize(5, 0)
+    return 0

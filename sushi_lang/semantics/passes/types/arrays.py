@@ -57,10 +57,10 @@ class Receiver(Enum):
 class _InternedByTheCaller:
     """Marks a row whose answer is interned by the reader of this table.
 
-    `get`, `first`, `last`, `pop` and `remove` each answer `Maybe@(T)`, and `index_of` and
-    `index_of_from` answer `Maybe@(i32)`. Interning a `Maybe` needs the enum table and one
-    owner, and `ArrayMethodInferrer` resolves all seven before it reaches this table, so a
-    rule here would be a second answer to a question already answered. The row still
+    `get`, `first`, `last`, `pop`, `remove`, `min` and `max` each answer `Maybe@(T)`, and
+    `index_of` and `index_of_from` answer `Maybe@(i32)`. Interning a `Maybe` needs the enum
+    table and one owner, and `ArrayMethodInferrer` resolves all nine before it reaches this
+    table, so a rule here would be a second answer to a question already answered. The row still
     carries the marker, so no name sits in the table with no decision at all.
     """
 
@@ -140,27 +140,47 @@ def _accepts_anything(call: MethodCall, array_type: ArrayReceiver, reporter: Rep
 
 
 def _an_index(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
-              validator: Optional['TypeValidator']) -> None:
-    """One index or count: an i32."""
+              validator: Optional['TypeValidator'], position: int = 0) -> None:
+    """One index or count: an i32. On a FIXED array (`get(i)`, `swap(i, j)`), one that the
+    declared size can hold, as for `arr[i]`; the other rows take a dynamic array alone."""
     if validator is None:
         return
-    reject_non_i32(validator, call.args[0], validator.validate_expression(call.args[0]),
-                   argument=1)
+    index = call.args[position]
+    reject_non_i32(validator, index, validator.validate_expression(index),
+                   argument=position + 1)
+    if isinstance(array_type, ArrayType):
+        validate_constant_array_index(validator, index, array_type.size)
 
 
-def _an_index_the_size_holds(call: MethodCall, array_type: ArrayReceiver,
-                             reporter: Reporter,
-                             validator: Optional['TypeValidator']) -> None:
-    """`get(i)`: an integer, and on a FIXED array one the declared size can hold."""
+def _two_indexes(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
+                 validator: Optional['TypeValidator']) -> None:
+    """`swap(i, j)`: each index is read as the index of `arr[i]` is."""
     _an_index(call, array_type, reporter, validator)
-    if validator is not None and isinstance(array_type, ArrayType):
-        validate_constant_array_index(validator, call.args[0], array_type.size)
+    _an_index(call, array_type, reporter, validator, position=1)
 
 
 def _an_element(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
                 validator: Optional['TypeValidator']) -> None:
     """One value of the element type."""
     _validate_element_argument(call, array_type.base_type, reporter, validator)
+
+
+def _a_length_and_an_element(call: MethodCall, array_type: ArrayReceiver,
+                             reporter: Reporter,
+                             validator: Optional['TypeValidator']) -> None:
+    """`resize(n, v)`: an i32 length, then the value of `fill(v)`, a borrowed element."""
+    _an_index(call, array_type, reporter, validator)
+    _validate_element_argument(call, array_type.base_type, reporter, validator, position=1)
+
+
+def _a_numeric_element(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
+                       validator: Optional['TypeValidator']) -> None:
+    """`min()`, `max()` and `add_up()`: no argument, and an element that `<` and `+` take
+    as a number (CE2128)."""
+    element = array_type.base_type
+    if not is_numeric_type(element):
+        er.emit(reporter, er.ERR.CE2128, call.loc, method=call.method,
+                element=display_type(element))
 
 
 def _an_element_to_store(call: MethodCall, array_type: ArrayReceiver, reporter: Reporter,
@@ -402,10 +422,16 @@ def _the_checked_insert(array_type: ArrayReceiver,
                                        struct_table=validator.struct_table.by_name)
 
 
+def _the_element(array_type: ArrayReceiver,
+                 validator: Optional['TypeValidator']) -> Optional[Type]:
+    """`add_up()`: one value of the element type."""
+    return array_type.base_type
+
+
 def _an_element_iterator(array_type: ArrayReceiver,
                          validator: Optional['TypeValidator']) -> Optional[Type]:
     """`iter()`: an iterator over the element type."""
-    return IteratorType(element_type=array_type.base_type)
+    return IteratorType(element_type=_the_element(array_type, validator))
 
 
 def _the_receiver(array_type: ArrayReceiver,
@@ -441,7 +467,7 @@ class ArraySpec:
 _ARRAY_METHODS: dict[str, ArraySpec] = {
     "len": ArraySpec(0, Receiver.ANY, _answers(BuiltinType.I32)),
     "get": ArraySpec(1, Receiver.ANY, INTERNED_BY_THE_CALLER,
-                     arguments=_an_index_the_size_holds),
+                     arguments=_an_index),
     "first": ArraySpec(0, Receiver.ANY, INTERNED_BY_THE_CALLER),
     "last": ArraySpec(0, Receiver.ANY, INTERNED_BY_THE_CALLER),
     "contains": ArraySpec(1, Receiver.ANY, _answers(BuiltinType.BOOL),
@@ -483,6 +509,17 @@ _ARRAY_METHODS: dict[str, ArraySpec] = {
     "fill": ArraySpec(1, Receiver.ANY, _answers(BuiltinType.BLANK),
                       arguments=_an_element),
     "reverse": ArraySpec(0, Receiver.ANY, _answers(BuiltinType.BLANK)),
+    "swap": ArraySpec(2, Receiver.ANY, _answers(BuiltinType.BLANK),
+                      arguments=_two_indexes),
+    "resize": ArraySpec(2, Receiver.DYNAMIC, _answers_when_dynamic(BuiltinType.BLANK),
+                        arguments=_a_length_and_an_element),
+    # The numeric reductions. `min` and `max` answer `Maybe@(T)`, because an empty array
+    # has no such element; `add_up` answers zero there.
+    "min": ArraySpec(0, Receiver.ANY, INTERNED_BY_THE_CALLER,
+                     arguments=_a_numeric_element),
+    "max": ArraySpec(0, Receiver.ANY, INTERNED_BY_THE_CALLER,
+                     arguments=_a_numeric_element),
+    "add_up": ArraySpec(0, Receiver.ANY, _the_element, arguments=_a_numeric_element),
     # The destination must be able to grow, so a fixed array is not a receiver here. It is
     # a legal SOURCE, and `.s()`/`.ss()` read either kind.
     "extend": ArraySpec(1, Receiver.DYNAMIC, _answers(BuiltinType.BLANK),

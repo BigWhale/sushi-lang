@@ -1,0 +1,6 @@
+# A bool is not numeric, so `.add_up()` on a bool array is refused.
+# EXPECT_ERROR_CODE: CE2128
+fn main() i32:
+    let bool[2] flags = [true, false]
+    println(flags.add_up())
+    return 0

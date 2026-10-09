@@ -119,6 +119,7 @@ nav:
       - HashMap: stdlib/collections/hashmap.md
       - Strings: stdlib/collections/strings.md
       - Iter combinators: stdlib/collections/iter.md
+      - Sorting: stdlib/collections/sort.md
       - MessagePack: stdlib/encoding/msgpack.md
       - Compression (zlib): stdlib/compression/zlib.md
       - Slib reader: stdlib/toolchain/slib.md

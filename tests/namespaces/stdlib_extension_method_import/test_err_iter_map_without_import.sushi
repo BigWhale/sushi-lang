@@ -1,0 +1,12 @@
+# `.map()` on `T[]` is an extension method of <collections/iter>. This unit does not
+# import the module. The refusal names the module, and the help names the import.
+# EXPECT_ERROR_CODES_EXACT: CE3015
+# EXPECT_STDERR_CONTAINS: add `use <collections/iter>` above the first declaration of this unit
+fn dbl(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let List@(i32) ys = xs.map(dbl)
+    println(ys.len())
+    return 0

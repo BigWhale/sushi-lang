@@ -1,0 +1,7 @@
+# A fixed array takes the three reductions too.
+# EXPECT_STDOUT_EXACT: "1 9 25\n"
+# EXPECT_RUNTIME_EXIT: 0
+fn main() i32:
+    let i32[5] xs = [5, 1, 9, 3, 7]
+    println("{xs.min().realise(0)} {xs.max().realise(0)} {xs.add_up()}")
+    return 0

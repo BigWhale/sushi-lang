@@ -1,0 +1,10 @@
+# Equal values do not replace the best value, and a struct field array is a receiver.
+# EXPECT_STDOUT_EXACT: "-1 8 14\n"
+# EXPECT_RUNTIME_EXIT: 0
+struct Bag:
+    i16[] items
+
+fn main() i32:
+    let Bag b = Bag(from([8, -1, 8, -1]))
+    println("{b.items.min().realise(0)} {b.items.max().realise(0)} {b.items.add_up()}")
+    return 0

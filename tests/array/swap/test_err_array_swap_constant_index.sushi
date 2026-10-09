@@ -1,0 +1,6 @@
+# A constant index past the end of a fixed array is a compile-time error, as for `arr[i]`.
+# EXPECT_ERROR_CODE: CE2012
+fn main() i32:
+    let i32[3] xs = [1, 2, 3]
+    xs.swap(0, 3)
+    return 0

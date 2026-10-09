@@ -1,0 +1,10 @@
+# `.sort()` puts i32 values with duplicates and negative values in ascending order.
+# EXPECT_STDOUT_EXACT: "[-9, -1, 0, 3, 3, 5, 42]\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/sort>
+
+fn main() i32:
+    let i32[] xs = from([3, -1, 42, 0, 3, -9, 5])
+    xs.sort()
+    println("{xs}")
+    return 0

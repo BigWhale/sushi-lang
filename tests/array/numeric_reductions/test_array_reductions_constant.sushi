@@ -1,0 +1,8 @@
+# A constant receiver is allowed, because the three methods only read.
+# EXPECT_STDOUT_EXACT: "2 13 30\n"
+# EXPECT_RUNTIME_EXIT: 0
+const i32[4] PRIMES = [2, 5, 13, 10]
+
+fn main() i32:
+    println("{PRIMES.min().realise(0)} {PRIMES.max().realise(0)} {PRIMES.add_up()}")
+    return 0

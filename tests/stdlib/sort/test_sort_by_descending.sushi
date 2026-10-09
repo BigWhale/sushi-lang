@@ -1,0 +1,10 @@
+# `.sort_by(cmp)` with a descending comparator, given as a lambda.
+# EXPECT_STDOUT_EXACT: "[9, 7, 4, 4, 1]\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/sort>
+
+fn main() i32:
+    let i32[] xs = from([4, 9, 1, 7, 4])
+    xs.sort_by(|i32 a, i32 b| b - a)
+    println("{xs}")
+    return 0

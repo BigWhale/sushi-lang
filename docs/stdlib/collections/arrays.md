@@ -13,8 +13,13 @@ let i32[5] fixed = [1, 2, 3, 4, 5]  # Fixed-size array
 let i32[] dynamic = from([1, 2, 3])  # Dynamic array
 ```
 
-The array methods need no import. A string method in an example (for example
+The built-in array methods need no import. A string method in an example (for example
 `.upper()`) needs `use <collections/strings>` in the unit that calls it.
+
+`.sort()`, `.sort_by()` and `.binary_search()` are not built in. They are extension methods
+on `T[]` in the module `<collections/sort>`, so a unit that calls them must
+`use <collections/sort>`, as `.map()` and `.filter()` need `<collections/iter>`. They do
+not reach a fixed array. See [Sorting](sort.md).
 
 ## Array Literals
 
@@ -77,14 +82,14 @@ b.slots.fill(9)                # reaches the field
 println(b.slots.len())
 ```
 
-A method that WRITES -- `.fill()`, `.reverse()` -- needs a receiver it can reach. A constant
+A method that WRITES -- `.fill()`, `.reverse()`, `.swap()` -- needs a receiver it can reach. A constant
 is rejected with **[CE2096](../../error-catalog.md#ce2096)**, and the read-only receivers each have their own code: a `peek`
 parameter is [CE2408](../../error-catalog.md#ce2408), a `match` or `foreach` binding is [CE2414](../../error-catalog.md#ce2414), a receiver without `poke self`
 is [CE2421](../../error-catalog.md#ce2421), an unmarked parameter is [CE2422](../../error-catalog.md#ce2422), a borrowing `let` is [CE2426](../../error-catalog.md#ce2426), and an unbound
 chained receiver is [CE2429](../../error-catalog.md#ce2429).
 
-A method that only READS -- `.len()`, `.get()`, `.iter()`, `.hash()`, `.clone()` -- accepts
-any receiver, a constant included.
+A method that only READS -- `.len()`, `.get()`, `.iter()`, `.hash()`, `.clone()`, `.min()`,
+`.max()`, `.add_up()` -- accepts any receiver, a constant included.
 
 ## Common Methods (Fixed and Dynamic)
 
@@ -394,6 +399,52 @@ let i32[5] arr = [1, 2, 3, 4, 5]
 arr.reverse()  # [5, 4, 3, 2, 1]
 ```
 
+### `.swap(i32 i, i32 j) -> ~`
+
+Exchange the elements at `i` and `j`, in place. The two elements change places by their
+bits, as in `.reverse()`: no element is copied, cloned or dropped, so the method works for
+an element type that owns a resource. `swap(i, i)` changes nothing.
+
+Each index is checked as the index of `arr[i]` is. An index out of range is the run-time
+error [RE2020](../../error-catalog.md#re2020). On a fixed array, an index that the compiler can read and that is out of
+range is a compile-time error: [CE2056](../../error-catalog.md#ce2056) when it is negative and [CE2012](../../error-catalog.md#ce2012) when it is past
+the end. Each index is an i32 position.
+
+```sushi
+fn main() i32:
+    let string[] words = from(["Harmless", "Mostly"])
+    words.swap(0, 1)
+    println("{words}")         # ["Mostly", "Harmless"]
+    return 0
+```
+
+### `.min() -> Maybe@(T)` and `.max() -> Maybe@(T)`
+
+The smallest and the largest element of a numeric array. An empty array answers
+`Maybe.None()`. Otherwise the best value starts as element 0, and a later element `x`
+replaces it when `x < best` (`.min()`) or when `best < x` (`.max()`). The comparison is
+the `<` of the element type: an unsigned type compares as unsigned, and a float compares
+ordered, so a NaN after element 0 is never chosen.
+
+### `.add_up() -> T`
+
+The total of a numeric array: the elements added from left to right with the run-time `+`
+of the element type. An empty array answers zero. An integer total wraps, and a float
+total follows IEEE. The method is named `add_up` and not `sum`, so a user extension named
+`sum` on an array stays legal.
+
+```sushi
+fn main() i32:
+    let i32[] xs = from([3, -7, 12])
+    println(xs.min().realise(0))   # -7
+    println(xs.max().realise(0))   # 12
+    println(xs.add_up())           # 8
+    return 0
+```
+
+The three reductions take an integer or a float element type only. Any other element
+type is [CE2128](../../error-catalog.md#ce2128). They only read, so a constant receiver is legal.
+
 ### `.clone() -> T[N]` or `T[]`
 
 Deep copy of the array. It works on a fixed array and on a dynamic array, and the copy has
@@ -492,6 +543,28 @@ let i32[] arr = from([1, 2, 3, 4, 5])
 arr.truncate(2)     # [1, 2], capacity unchanged
 arr.clear()         # [], capacity unchanged
 arr.push(9)         # reuses the buffer
+```
+
+### `.resize(i32 n, T value) -> ~`
+
+Set the length to `n`. When `n` is less than the length, the tail is removed, and each
+removed element is destroyed as `.truncate(n)` destroys it. When `n` is more than the
+length, `n - len()` slots are added at the end, and each new slot takes its own copy of
+`value`. When `n` equals the length, nothing changes. A negative `n` counts as zero.
+
+The value is a **borrow**, as for `.fill()`: it stays usable, and it can be a slot of the
+same array (`arr.resize(10, arr[0])`), because the value is read before the buffer grows.
+The growth is the one that `.extend()` uses. A fixed array cannot change its length, so a
+`T[N]` receiver is **[CE2023](../../error-catalog.md#ce2023)**.
+
+```sushi
+fn main() i32:
+    let i32[] arr = from([1, 2])
+    arr.resize(4, 0)
+    println("{arr}")    # [1, 2, 0, 0]
+    arr.resize(1, 0)
+    println("{arr}")    # [1]
+    return 0
 ```
 
 ### `.extend(T[] other) -> ~`

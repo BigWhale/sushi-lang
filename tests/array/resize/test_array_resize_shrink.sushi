@@ -1,0 +1,9 @@
+# `.resize(n, v)` below the length removes the tail and destroys each removed element.
+# EXPECT_STDOUT_EXACT: "["a1", "b2"] 2\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let string[] words = from(["a{1}", "b{2}", "c{3}", "d{4}"])
+    words.resize(2, "unused {0}")
+    println("{words} {words.len()}")
+    return 0

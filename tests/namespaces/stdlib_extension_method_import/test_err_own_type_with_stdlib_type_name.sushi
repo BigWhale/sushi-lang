@@ -1,0 +1,11 @@
+# This unit declares its own `StringBuilder`. <collections/strings> declares a type of
+# the same name with a `.finish()` method. The method of the other type is not offered,
+# so the method is undefined.
+# EXPECT_ERROR_CODES_EXACT: CE2008
+struct StringBuilder:
+    i32 size
+
+fn main() i32:
+    let StringBuilder b = StringBuilder(0)
+    b.finish()
+    return 0

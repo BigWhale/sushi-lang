@@ -2274,6 +2274,14 @@ The alternatives of a pattern (`Shape.Circle(r) | Shape.Ring(r) -> ...`) bind th
 
 A HashMap iterator (`.keys()`, `.values()`, `.entries()`, `.pairs()`) walks the buckets of the map, and the loop must know the key type and the value type to step over them. The loop knows them only when the call is the iterable itself: `foreach(k in m.keys())`. In every other position the value leaves the call with the type `Iterator@(K)` alone -- an argument of a generic function, an element of a tuple, the payload of a `Maybe` -- and a later `foreach` over it cannot find the buckets. Before this error that loop walked zero entries and gave no diagnostic. An array or a List iterator (`.iter()`) has no such limit. The fix is to walk the map where the call is written, or to pass the map and call the method in the function that walks it.
 
+### CE2128 {#ce2128}
+
+**Error** · type
+
+**Message:** `'{method}' needs a numeric element type, and '{element}' is not numeric`
+
+The array reductions `.min()`, `.max()` and `.add_up()` read each element as a number: `.min()` and `.max()` compare with the `<` of a number, and `.add_up()` adds with the `+` of a number. The element type must be an integer type or a float type. A `bool`, a `string`, a struct, an enum, an array and a function value are refused, on a fixed and on a dynamic array alike. For an order over other element types, sort the array with `.sort()` from `<collections/sort>`, or reduce it with `.fold()` from `<collections/iter>`. The reduction that adds is named `add_up` and not `sum`, so a user extension named `sum` or `total` on an array does not collide with a built-in ([CE2097](#ce2097)).
+
 ## CE24xx: Borrow and reference errors {#ce24xx}
 
 The borrow checker gives these errors. They are about ownership, moves and borrows.
@@ -2946,7 +2954,7 @@ Every import stands at the top of the unit, after the unit's own doc block if it
 
 **Help:** `` add `use <{module}>` above the first declaration of this unit ``
 
-A built-in method whose body lives in a stdlib module is callable only where that module is imported. A missing import is a mistake in the program. Add the import the message names. A DIRECTORY import covers every module under it; a SIBLING import does not. The import must be in the unit that holds the call: an import in another unit of the same program does not count, because scope is per unit.
+A method whose body lives in a stdlib module is callable only where that module is imported. This covers a built-in method that a module enables, and an extension method that a Sushi-source module declares (`.map()` on `T[]` from `<collections/iter>`, `.sort()` from `<collections/sort>`, `.is_ascii_digit()` on `u8` from `<text/ascii>`). A missing import is a mistake in the program. Add the import the message names. A DIRECTORY import covers every module under it; a SIBLING import does not. The import must be in the unit that holds the call: an import in another unit of the same program does not count, because scope is per unit.
 
 ### CE3016 {#ce3016}
 

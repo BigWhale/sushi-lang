@@ -111,6 +111,7 @@ class StdlibLinker:
     _virtual_units = {
         "collections/hashmap",
         "collections/iter",
+        "collections/sort",
         "compression/zlib",
         "encoding/base64",
         "encoding/binary",

@@ -1,0 +1,13 @@
+# Each new slot takes its own copy of an owning fill value. The value stays usable.
+# EXPECT_STDOUT_EXACT: "["a1", "z9", "z9", "z9"]\n["a1", "z9!", "z9", "z9"]\nz9\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let string[] words = from(["a{1}"])
+    let string pad = "z{9}"
+    words.resize(4, pad)
+    println("{words}")
+    words[1] := "z{9}!"
+    println("{words}")
+    println(pad)
+    return 0

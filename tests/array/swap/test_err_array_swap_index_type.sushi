@@ -1,0 +1,7 @@
+# Each index of `.swap()` is an i32 position.
+# EXPECT_ERROR_CODE: CE2006
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i64 j = 1
+    xs.swap(0, j)
+    return 0

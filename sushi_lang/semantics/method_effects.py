@@ -45,8 +45,10 @@ METHOD_EFFECTS: dict[str, MethodEffect] = {
     "rehash": _MUTATES,
     "destroy": _MUTATES,
     "free": _MUTATES,
+    "resize": _MUTATES,
     "fill": _REFILLS,
     "reverse": _WRITES_IN_PLACE,
+    "swap": _WRITES_IN_PLACE,
 }
 
 
