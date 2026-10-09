@@ -1023,6 +1023,9 @@ class MethodCall(Node):
                                             # `poke self` (#327); stamped by the typecheck pass, read
                                             # by the borrow pass (a poke call is a receiver WRITE)
                                             # and the backend (pass a pointer)
+    # The built-in method family that answered the call ("array", "list", ...), or None
+    # for a user method. The borrow pass reads a method-effect row only for its family.
+    callee_builtin_family: Optional[str] = None
     # What the typecheck pass resolved about the callee's parameters. The borrow pass
     # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
@@ -1061,6 +1064,7 @@ class DotCall(Node):
     namespace_ref: Optional["NamespaceRef"] = None
     callee_self_mode: Optional[str] = None  # "peek"/"poke" when the resolved method takes
                                             # `poke self` (#327); see MethodCall
+    callee_builtin_family: Optional[str] = None  # see MethodCall
     # What the typecheck pass resolved about the callee's parameters. The borrow pass
     # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None

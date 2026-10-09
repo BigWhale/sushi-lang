@@ -186,6 +186,7 @@ class MethodTypeRegistry:
         family = self.claim(receiver_type, call.method, validator)
         if family is None or family.beats_perk != beats_perk or family.validate is None:
             return False
+        call.callee_builtin_family = family.name
         if reject_builtin_miscount(validator.reporter, call,
                                    f"{display_type(receiver_type)}.{call.method}",
                                    family.arity):

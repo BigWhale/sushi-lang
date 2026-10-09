@@ -13,7 +13,7 @@ from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.typesys import ReferenceType
 
 from .diagnostics import parameter_escape, write_escape
-from .methods import effect_of
+from .methods import MethodEffect, callee_effect
 from .reads import borrow_owner, chain_call_boundary
 from .state import BorrowState
 
@@ -119,11 +119,17 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
 )
 
 
+def _effect(expr: MethodLike) -> MethodEffect:
+    """The method-effect row of the callee: a built-in family's row, or none."""
+    return callee_effect(expr.method, expr.callee_builtin_family)
+
+
 def changes_its_receiver(expr: MethodLike) -> bool:
     """Does this call change the value it is called on?"""
-    # A call to a `poke self` method (#327) IS a write to the receiver root --
-    # the typecheck pass stamps the resolution on the node, so this pass never re-resolves.
-    return (effect_of(expr.method).mutates
+    # The CALLEE decides, never the name alone: a built-in of a family the effect table
+    # describes, or a `poke self` method (#327). The typecheck pass stamps both on the
+    # node, so this pass never re-resolves.
+    return (_effect(expr).mutates
             or receiver_mode(expr.callee_self_mode) is ParamMode.POKE)
 
 
@@ -137,7 +143,7 @@ def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike) -> None:
     if reject_readonly_write(checker, root, expr.loc, what, receiver=receiver):
         return
     # A `poke self` method the table does not carry is taken to move storage.
-    effect = effect_of(expr.method)
+    effect = _effect(expr)
     check_owner_not_borrowed(checker, root, expr.loc, what, place=receiver,
                              moves_storage=effect.moves_storage or not effect.mutates)
 

@@ -1,0 +1,33 @@
+# The same rule on a `peek` parameter, on a temporary receiver, and on an owner that a
+# `let` binding borrows from: the extension reads its receiver and writes nothing.
+# EXPECT_STDOUT_EXACT: "5\n6\nzaphod 3\n"
+# EXPECT_NO_LEAKS
+
+struct Pair:
+    i32 a
+
+struct Holder:
+    string name
+    i32 n
+
+extend Pair reverse() i32:
+    return self.a
+
+extend Holder push(i32 x) i32:
+    return self.n + x
+
+fn make() Pair:
+    return Pair(5)
+
+fn peeked(peek Pair p) i32:
+    return p.reverse()
+
+fn main() i32:
+    println("{make().reverse()}")
+    let Pair q = Pair(6)
+    println("{peeked(peek q)}")
+    let Holder h = Holder("zaphod", 1)
+    let string n = h.name
+    let i32 got = h.push(2)
+    println("{n} {got}")
+    return 0

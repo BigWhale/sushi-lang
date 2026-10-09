@@ -11,11 +11,12 @@ from sushi_lang.semantics.method_effects import (
     METHOD_EFFECTS,
     MUTATING_METHODS,
     MethodEffect,
+    callee_effect,
     effect_of,
     methods_where,
 )
 
 __all__ = [
     "BULK_WRITE_METHODS", "CONTAINER_INSERT_METHODS", "METHOD_EFFECTS",
-    "MUTATING_METHODS", "MethodEffect", "effect_of", "methods_where",
+    "MUTATING_METHODS", "MethodEffect", "callee_effect", "effect_of", "methods_where",
 ]

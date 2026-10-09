@@ -1,0 +1,14 @@
+# `string.reverse()` answers a new string and leaves its receiver as it is. The array
+# method of the same name changes its array, and that row does not apply to a string.
+# EXPECT_STDOUT_EXACT: "cba\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn backwards(string s) string:
+    return s.reverse()
+
+fn main() i32:
+    let string s = backwards("abc")
+    println(s)
+    return 0
