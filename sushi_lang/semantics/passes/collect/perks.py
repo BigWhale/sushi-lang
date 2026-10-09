@@ -271,6 +271,31 @@ class PerkImplementationTable:
             found = self._template_method(target_type, method_name)
         return found
 
+    def providing_perk(self, target_type: 'Type', method_name: str) -> Optional[str]:
+        """The perk that gives this type `method_name`, or None.
+
+        The sources of `get_method`, in its order: a constraint of an opaque type
+        parameter, an implementation of the type, and a generic-target template. A name
+        has one home on a type (CE4015), so the first perk that gives it is the one perk.
+        """
+        from sushi_lang.semantics.generics.types import TypeParameter
+        if isinstance(target_type, TypeParameter):
+            perks = self.promising_perks(target_type, method_name)
+            return perks[0] if perks else None
+        type_name = _get_type_name(target_type)
+        if type_name is None:
+            return None
+        for perk_name in self.by_type.get(type_name, set()):
+            impl = self.implementations.get((type_name, perk_name))
+            if impl and any(m.name == method_name for m in impl.methods):
+                return perk_name
+        base = getattr(target_type, "generic_base", None)
+        if self.templates is not None and base is not None:
+            for template in self.templates.templates(base):
+                if any(m.name == method_name for m in template.impl.methods):
+                    return template.impl.perk_name
+        return None
+
     def _template_method(self, target_type: 'Type', method_name: str) -> Optional[FuncDef]:
         """The method a generic-target template gives an instance over an opaque parameter.
 

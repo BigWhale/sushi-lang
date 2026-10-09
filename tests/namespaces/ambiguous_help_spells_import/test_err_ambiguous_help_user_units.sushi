@@ -1,0 +1,12 @@
+# Two user units both offer `decode`. The help of CE3012 spells the first candidate
+# with its unit import, in quotes.
+# EXPECT_ERROR_CODE: CE3012
+# EXPECT_ERROR_CODES_EXACT: CE3012
+# EXPECT_STDERR_CONTAINS: use "helpers/amb_spell_other" as u
+use "helpers/amb_spell_codec"
+use "helpers/amb_spell_other"
+
+fn main() i32:
+    let u8[] b = from([1])
+    println(decode(b))
+    return 0

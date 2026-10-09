@@ -88,13 +88,13 @@ def settle_signature_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
     """
     from sushi_lang.semantics.param_modes import receiver_mode
     from sushi_lang.backend.expressions.calls.dispatcher import (
-        consume_receiver, settle_method_call_arguments)
+        consume_receiver, emit_method_call_arguments, settle_method_call_arguments)
     from sushi_lang.backend.expressions.memory import own_temporary, reads_a_borrow_through
     consumes = (receiver_mode(getattr(expr, "callee_self_mode", None)).consumes
                 and not reads_a_borrow_through(codegen, expr))
     if consumes:
         own_temporary(codegen, expr.receiver, receiver_value, receiver_type)
-    args = [codegen.expressions.emit_expr(arg) for arg in expr.args]
+    args = emit_method_call_arguments(codegen, expr)
     if consumes:
         receiver_value = consume_receiver(codegen, expr, receiver_value)
     settle_method_call_arguments(codegen, expr, args)

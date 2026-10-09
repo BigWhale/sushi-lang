@@ -1,0 +1,11 @@
+# A `let` in a function body that repeats a parameter name is an error.
+# EXPECT_ERROR_CODES_EXACT: CE1006
+# EXPECT_STDERR_CONTAINS: test_err_let_repeats_a_parameter.sushi:6:5: error [CE1006]
+# EXPECT_STDERR_CONTAINS: test_err_let_repeats_a_parameter.sushi:5:14\n
+fn twice(i32 n) i32:
+    let i32 n = 2
+    return n
+
+fn main() i32:
+    println(twice(1))
+    return 0

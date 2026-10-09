@@ -1,0 +1,9 @@
+# A `let` in a `foreach` body that repeats the item name is an error.
+# EXPECT_ERROR_CODES_EXACT: CE1006
+# EXPECT_STDERR_CONTAINS: test_err_let_repeats_the_foreach_item.sushi:7:9: error [CE1006]
+# EXPECT_STDERR_CONTAINS: test_err_let_repeats_the_foreach_item.sushi:6:13\n
+fn main() i32:
+    foreach(x in 0..2):
+        let i32 x = 5
+        println(x)
+    return 0

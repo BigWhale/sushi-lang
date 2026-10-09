@@ -1,0 +1,14 @@
+# A source library and a user unit both offer `decode`. The help of CE3012 spells
+# the library with its library import, `use <lib/amb_spell_lib>`. CW3002 is the
+# shadow warning at the user declaration.
+# BUILD_LIB: amb_spell_lib.sushi
+# EXPECT_ERROR_CODE: CE3012
+# EXPECT_ERROR_CODES_EXACT: CW3002, CE3012
+# EXPECT_STDERR_CONTAINS: use <lib/amb_spell_lib> as u
+use <lib/amb_spell_lib>
+use "helpers/amb_spell_codec"
+
+fn main() i32:
+    let u8[] b = from([1])
+    println(decode(b))
+    return 0

@@ -1,0 +1,10 @@
+# A `let` in a lambda body that repeats a parameter name is an error.
+# EXPECT_ERROR_CODES_EXACT: CE1006
+# EXPECT_STDERR_CONTAINS: test_err_let_repeats_a_lambda_parameter.sushi:7:9: error [CE1006]
+# EXPECT_STDERR_CONTAINS: test_err_let_repeats_a_lambda_parameter.sushi:6:33\n
+fn main() i32:
+    let fn(i32) -> i32 g = |i32 x|:
+        let i32 x = 7
+        return x
+    println(g(1))
+    return 0

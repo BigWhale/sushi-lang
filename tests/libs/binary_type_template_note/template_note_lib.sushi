@@ -1,0 +1,18 @@
+public perk Named:
+    fn named() i32
+
+public struct Holder@(E):
+    Result@(i32, E) r
+
+public enum Outcome@(E):
+    Done(Result@(i32, E))
+    Idle
+
+public struct Box@(T: Named):
+    T v
+
+public fn inner@(T, E)(nom T x) T | E:
+    return Result.Ok(x)
+
+public fn need@(T: Named)(T x) i32:
+    return x.named()

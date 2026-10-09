@@ -230,13 +230,13 @@ class FormattingOperations:
         return self.codegen.builder.gep(self._format_global(name), [zero, zero])
 
     def _allocate_conversion_buffer(self, size: int) -> ir.Value:
-        """Allocate a buffer for type-to-string conversion."""
+        """Allocate a buffer for type-to-string conversion.
+
+        The buffer is the data of an ordinary owned string. The position of that string
+        gives it its one owner, so no print frame claims the buffer here.
+        """
         buffer_size = make_i64_const(size)
-        buffer = emit_malloc(self.codegen, self.codegen.builder, buffer_size)
-        # If emitted inside a print/println argument, this to-string buffer is a temporary
-        # to free after output (#141). No-op elsewhere.
-        self.codegen.print_frames.register_data(buffer)
-        return buffer
+        return emit_malloc(self.codegen, self.codegen.builder, buffer_size)
 
     def _prepare_integer_for_sprintf(
         self, int_value: ir.Value, is_signed: bool, bit_width: int

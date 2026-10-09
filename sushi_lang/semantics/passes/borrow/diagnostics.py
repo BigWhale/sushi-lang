@@ -7,8 +7,12 @@ from typing import Callable, Optional, TYPE_CHECKING, cast
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import (
+    ArrayLiteral,
     BinaryOp,
+    Call,
     DotCall,
+    DynamicArrayFrom,
+    DynamicArrayNew,
     Expr,
     IndexAccess,
     IntLit,
@@ -86,17 +90,18 @@ def emit_use_after_move(checker: 'BorrowChecker', name: str, use_span: Optional[
     """
     if state.move_reported_by is not None:
         return
+    moved_at = state.moved_at_span
+    if moved_at is None:
+        er.raise_internal_error("CE0150", name=name)
     method = state.consumed_by_method
     if method is not None:
         diag = checker.err.emit_with(er.ERR.CE2435, use_span,
                                      name=name, method=method)
-        if state.moved_at_span is not None:
-            diag.note_at(f"'{name}' was consumed by '{method}' here", state.moved_at_span)
+        diag.note_at(f"'{name}' was consumed by '{method}' here", moved_at)
         diag.emit()
         return
     diag = checker.err.emit_with(er.ERR.CE2405, use_span, name=name)
-    if state.moved_at_span is not None:
-        diag.note_at(f"'{name}' was moved here", state.moved_at_span)
+    diag.note_at(f"'{name}' was moved here", moved_at)
     param = opaque_without_clone(checker, state.var_type)
     if param is not None:
         note_opaque(diag, param).help(
@@ -311,8 +316,12 @@ def parameter_escape(checker: 'BorrowChecker', text: str, ty) -> str:
 
 def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr,
                          use_of_copy: Optional[CopyUse] = None) -> None:
-    """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`)."""
-    text = expr_to_string(expr)
+    """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`).
+
+    The owner can be a temporary (`give().get(0)??`), so the read is spelled with the
+    temporary in its short form.
+    """
+    text = expr_to_string(expr, temporaries=True)
     diag = checker.err.emit_with(er.ERR.CE2411, expr.loc, name=text)
     owner = root_owner(expr)
     state = checker.borrow_state.get(owner) if owner is not None else None
@@ -358,27 +367,42 @@ def _note_opaque_mover(checker: 'BorrowChecker', diag, ty) -> None:
         note_opaque(diag, param)
 
 
-def expr_to_string(expr: Expr) -> str:
-    """Render an expression back to source text, for a message the user can paste."""
+def expr_to_string(expr: Expr, *, temporaries: bool = False) -> str:
+    """Render an expression back to source text, for a message the user can paste.
+
+    With `temporaries`, a receiver that makes a new value is spelled in a short form
+    (`give()`, `[...]`, `from([...])`, `new()`). A read through a temporary then has a
+    spelling, and the placeholder does not reach the user.
+    """
+    t = temporaries
     match expr:
         case Name():
             return expr.id
         case IntLit():
             return str(expr.value)
         case BinaryOp():
-            return (f"({expr_to_string(expr.left)} {expr.op} "
-                    f"{expr_to_string(expr.right)})")
+            return (f"({expr_to_string(expr.left, temporaries=t)} {expr.op} "
+                    f"{expr_to_string(expr.right, temporaries=t)})")
         case MethodCall() | DotCall():
             # Both spellings reach here, arguments included, so the text matches what the
             # user wrote.
             args = ", ".join(_argument_text(a) for a in (expr.args or []))
-            return f"{expr_to_string(expr.receiver)}.{expr.method}({args})"
+            return f"{expr_to_string(expr.receiver, temporaries=t)}.{expr.method}({args})"
         case MemberAccess():
-            return f"{expr_to_string(expr.receiver)}.{expr.member}"
+            return f"{expr_to_string(expr.receiver, temporaries=t)}.{expr.member}"
         case IndexAccess():
-            return f"{expr_to_string(expr.array)}[{expr_to_string(expr.index)}]"
+            return (f"{expr_to_string(expr.array, temporaries=t)}"
+                    f"[{expr_to_string(expr.index, temporaries=t)}]")
         case TryExpr():
-            return f"{expr_to_string(expr.expr)}??"
+            return f"{expr_to_string(expr.expr, temporaries=t)}??"
+        case Call() if temporaries and isinstance(expr.callee, Name):
+            return f"{expr.callee.id}({'...' if expr.args else ''})"
+        case ArrayLiteral() if temporaries:
+            return "[...]"
+        case DynamicArrayFrom() if temporaries:
+            return "from([...])"
+        case DynamicArrayNew() if temporaries:
+            return "new()"
         case _:
             return "<expression>"
 

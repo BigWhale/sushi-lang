@@ -1,0 +1,25 @@
+# The to_str() result of a number is an argument of a call in a let initializer.
+# A later argument of the same call leaves through ??. The buffer is freed one time.
+# EXPECT_STDOUT_EXACT: "err\nerr\nafter\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn fails() string | StdError:
+    return Result.Err(StdError.Error)
+
+fn pair(string a, string b) string:
+    return "{a}{b}"
+
+fn keep(i32 a) string | StdError:
+    let string x = pair(a.to_str(), fails()??)
+    return Result.Ok(x)
+
+fn keep_float(f64 e) string | StdError:
+    let string x = pair(e.to_str(), fails()??)
+    return Result.Ok(x)
+
+fn main() i32:
+    println(keep(7).realise("err"))
+    println(keep_float(1.5).realise("err"))
+    println("after")
+    return 0

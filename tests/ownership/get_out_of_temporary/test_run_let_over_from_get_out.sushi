@@ -1,0 +1,31 @@
+# A get-out from a `from([...])` temporary reads through that temporary, and the
+# temporary keeps its elements. A `let` over the get-out binds a borrow. Each temporary
+# frees its elements at scope exit, one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ford 1\nford 1\narthur 2\n7\nford 1\n"
+fn count(nom i32 n) i32:
+    return n
+
+fn run() i32 | StdError:
+    let i32 k = 1
+    let i32 j = 2
+    let string a = from(["ford {k}", "arthur {j}"]).get(0).or_err(nom StdError.Error)??
+    let string b = from(["ford {k}", "arthur {j}"]).first().or_err(nom StdError.Error)??
+    let string c = from(["ford {k}", "arthur {j}"]).last().or_err(nom StdError.Error)??
+    println(a)
+    println(b)
+    println(c)
+
+    let i32 n = from([7, 8]).get(0).or_err(nom StdError.Error)??
+    println(count(nom n))
+
+    let i32 i = 0
+    while (i < 1):
+        let string w = from(["ford {k}"]).get(0).or_err(nom StdError.Error)??
+        println(w)
+        i := i + 1
+    return Result.Ok(0)
+
+fn main() i32:
+    return run().realise(9)

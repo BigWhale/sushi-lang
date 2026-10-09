@@ -1,0 +1,17 @@
+# A `let` initializer that moves a `List@(string)` invalidates a `first()` view of it.
+#
+# `m` reads out of `xs`. `let List@(string) ys = xs` hands `xs` to `ys`. The read of
+# `m` after the move is CE2412.
+# EXPECT_ERROR_CODE: CE2412
+use <collections/strings>
+
+fn main() i32:
+    let List@(string) xs = List.new()
+    xs.push("Mostly ".concat("Harmless"))
+    let Maybe@(string) m = xs.first()
+    let List@(string) ys = xs
+    ys.clear()
+    match m:
+        Maybe.Some(s) -> println(s)
+        Maybe.None() -> println("none")
+    return ys.len()

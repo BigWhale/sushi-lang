@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 from .utils import (
     extract_type_param_names, note_first_declaration, reject_duplicate_type_name,
-    reject_reference_in, type_name_rules)
+    reject_reference_in, reject_type_pack_param, type_name_rules)
 
 
 @dataclass
@@ -77,6 +77,9 @@ class StructCollector:
         self.library_units: Set[str] = set()
         # The names this collector refused with CE3011 (#814): the analyzer stops on them.
         self.refused_library_types: list[str] = []
+        # The names whose type-parameter list holds a type pack (CE0115). No copy of
+        # one can be cut, so the analysis stops after the collect pass.
+        self.refused_pack_types: list[str] = []
         self.visibility: Optional[VisibilityTable] = None
         self.structs = structs
         self.generic_structs = generic_structs
@@ -159,6 +162,9 @@ class StructCollector:
         ), library_clash=self._reject_library_clash, visibility=self.visibility,
                 generic=bool(type_params)):
             return
+
+        if reject_type_pack_param(self.r, type_params_raw, name_span, "a struct"):
+            self.refused_pack_types.append(name)
 
         fields_list: List[Tuple[str, Type]] = []
         field_spans: Dict[str, Optional[Span]] = {}

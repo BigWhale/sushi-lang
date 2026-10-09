@@ -140,13 +140,14 @@ def note_first_declaration(builder: Any, spans: dict, name: str,
     `files` answers which unit that declaration was in. The current unit is not the
     answer: the note points at a table entry, and the entry may have been made while
     another unit was being collected (#473). `library` is the declaration a BINARY
-    library shipped with no span: the note names its `.slib` (#972).
+    library shipped: the note names its `.slib` (#972). That rule comes first, because
+    the span of a shipped template indexes into its manifest slice, not into a file.
     """
+    if library is not None and library.filename is not None:
+        return builder.note(f"declared by the library {library.filename}")
     prev = spans.get(name)
     if prev is not None:
         return builder.note_at(what, prev, files.get(name) if files else None)
-    if library is not None and library.filename is not None:
-        return builder.note(f"declared by the library {library.filename}")
     return builder.note("defined by the compiler")
 
 
@@ -257,7 +258,25 @@ def reject_variadic_param(reporter, params: Iterable[Param],
 
     for p in params or ():
         if p.is_variadic or p.is_pack:
-            er.emit(reporter, er.ERR.CE0115, p.name_span or fallback, context=context)
+            er.emit(reporter, er.ERR.CE0115, p.name_span or fallback,
+                    what="'...T' parameter", context=context)
+            return True
+    return False
+
+
+def reject_type_pack_param(reporter, type_params: Optional[Iterable[Any]],
+                           fallback: Optional[Span], context: str) -> bool:
+    """CE0115: a type pack `...Ts` in a type-parameter list that is not a free function's.
+
+    A pack has two halves, the type pack and its value pack `...Ts name`, and only a free
+    function has a parameter list to hold the second half. Answers True when it refused one.
+    """
+    from sushi_lang.internals import errors as er
+
+    for tp in type_params or ():
+        if isinstance(tp, BoundedTypeParam) and tp.is_pack:
+            er.emit(reporter, er.ERR.CE0115, tp.loc or fallback,
+                    what=f"type pack '...{tp.name}'", context=context)
             return True
     return False
 

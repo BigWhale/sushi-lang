@@ -513,6 +513,25 @@ def homed_enums(module_path: str, enum_table: Any) -> Dict[str, str]:
             if getattr(enum, "home_module", None) == module_path}
 
 
+def import_target(origin: str, *, stdlib: bool = False,
+                  tables: Optional[Mapping[str, NamespaceTable]] = None) -> str:
+    """What a `use` line writes to import the unit `origin`.
+
+    A library's unit is imported through its library, `<lib/<library>>`. A bundled stdlib
+    module is imported as `<module>`; a bundled Sushi-source module is injected as an
+    ordinary unit whose unit name is its module path, so `is_source_stdlib_module` says
+    which it is. Every other unit is a user unit, `"unit"`. `tables` says whether
+    `origin` belongs to a library.
+    """
+    library = getattr(tables.get(origin), "library", None) if tables else None
+    if library is not None:
+        return f"<lib/{library}>"
+    from sushi_lang.semantics.stdlib_registry import is_source_stdlib_module
+    if stdlib or is_source_stdlib_module(origin):
+        return f"<{origin}>"
+    return f'"{origin}"'
+
+
 def import_help(origin: str, *, stdlib: bool = False,
                 tables: Optional[Mapping[str, NamespaceTable]] = None) -> str:
     """The line that names the import an out-of-scope name needs (section 6.1).
@@ -520,21 +539,12 @@ def import_help(origin: str, *, stdlib: bool = False,
     Section 6's refusal is an ordinary "no such name", because that is what it is: the
     name is not in this unit's scope. This line is what turns the refusal into a fix,
     and it is one line for every position, so a call, a type and a bare read all say
-    the same thing.
-
-    `tables` says whether the unit `origin` belongs to a library. A library's unit is
-    named by the import of the library, `use <lib/<library>>`, and never by its unit
-    name. A bundled stdlib module is named by its stdlib import, `use <module>`.
+    the same thing. `import_target` spells the import.
     """
+    written = import_target(origin, stdlib=stdlib, tables=tables)
     library = getattr(tables.get(origin), "library", None) if tables else None
     if library is not None:
-        return (f"library '{library}' declares it; add `use <lib/{library}>` above "
-                f"to name it here")
-    # A bundled Sushi-source module is injected as an ordinary unit, and its unit name
-    # is its module path: it is still imported as a stdlib module.
-    from sushi_lang.semantics.stdlib_registry import is_source_stdlib_module
-    stdlib = stdlib or is_source_stdlib_module(origin)
-    written = f"<{origin}>" if stdlib else f'"{origin}"'
+        return f"library '{library}' declares it; add `use {written}` above to name it here"
     return f"'{origin}' declares it; add `use {written}` above to name it here"
 
 

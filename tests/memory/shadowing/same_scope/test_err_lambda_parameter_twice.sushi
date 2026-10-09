@@ -1,0 +1,8 @@
+# A lambda that declares one parameter name two times is an error, as a function is.
+# EXPECT_ERROR_CODES_EXACT: CE0102
+# EXPECT_STDERR_CONTAINS: test_err_lambda_parameter_twice.sushi:6:45: error [CE0102]
+# EXPECT_STDERR_CONTAINS: test_err_lambda_parameter_twice.sushi:6:38\n
+fn main() i32:
+    let fn(i32, i32) -> i32 g = |i32 x, i32 x| x
+    println(g(1, 2))
+    return 0

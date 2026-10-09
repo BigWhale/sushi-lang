@@ -1,0 +1,23 @@
+# The control for the ?? exit: the value of an element of a from([...]) literal is a temporary that owns
+# a string, and the later sibling operand is Ok. The position frees it once.
+# EXPECT_STDOUT_EXACT: "77z\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn fails() string | StdError:
+    return Result.Err(StdError.Error)
+
+fn ok() string | StdError:
+    return Result.Ok("z")
+
+fn mk(i32 a) string:
+    return "{a}{a}"
+
+fn c1(i32 a) string | StdError:
+    let string[] arr = from([mk(a), ok()??])
+    let string x = "{arr[0]}{arr[1]}"
+    return Result.Ok(x)
+
+fn main() i32:
+    println(c1(7).realise("err"))
+    return 0

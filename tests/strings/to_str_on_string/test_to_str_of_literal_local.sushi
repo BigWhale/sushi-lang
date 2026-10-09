@@ -1,0 +1,12 @@
+# A receiver bound from a literal owns no heap. The copy is an owned value all the
+# same, and the binding frees it once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "towel\ntowel\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let string s = "towel"
+    let string t = s.to_str()
+    println(t)
+    println(s)
+    return 0

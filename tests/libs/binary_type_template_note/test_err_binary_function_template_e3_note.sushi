@@ -1,0 +1,12 @@
+# A generic function of a binary library holds its type parameter `E` in its error
+# channel. The consumer calls it with `i32` for `E`, and `i32` is no error type. The
+# note names the template's source slice and shows the template's line.
+# BUILD_LIB_BINARY: template_note_lib.sushi
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: <template:template_note_lib:inner>:1:37
+# EXPECT_STDERR_CONTAINS: public fn inner@(T, E)(nom T x) T | E:
+use <lib/template_note_lib>
+
+fn main() i32:
+    println(inner@(i32, i32)(nom 5).is_ok())
+    return 0

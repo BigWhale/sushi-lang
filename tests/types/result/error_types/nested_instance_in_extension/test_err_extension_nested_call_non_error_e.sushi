@@ -1,0 +1,21 @@
+# E3 at a generic call inside the body of an extension on a generic type: the
+# consumer writes the type `Box@(i32)`, and the copy of `check` for it names
+# `inner@(i32, i32)`. The diagnostic stands at the nested call. The note stands at
+# the written type that started the chain, and it says that this site is a type.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: extension_nested_call_non_error_e.sushi:16:12
+# EXPECT_STDERR_CONTAINS: this instance is required by the type written here
+# EXPECT_STDERR_CONTAINS: extension_nested_call_non_error_e.sushi:19:9
+fn inner@(T, E)(nom T x) T | E:
+    return Result.Ok(x)
+
+struct Box@(E):
+    i32 v
+
+extend Box@(E) check() bool:
+    return inner@(i32, E)(nom self.v).is_ok()
+
+fn main() i32:
+    let Box@(i32) b = Box(5)
+    println(b.check())
+    return 0

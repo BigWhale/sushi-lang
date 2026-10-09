@@ -329,6 +329,12 @@ class Reporter:
         # names the slice by its label: the location of a diagnostic and of each note
         # alike. The program reporter renders, so the libraries step fills its map.
         self.slices: dict[str, str] = {}
+        # The note of each file whose code the user did not write, by its name: the unit
+        # of a source library or of the stdlib, and the slice of a binary library. A
+        # diagnostic at such a file carries the note when nothing else gave one. A stage
+        # that emits through the program reporter, at a site in a library body, then
+        # tells whose code it is, as a per-unit reporter does.
+        self.provenances: dict[str, str] = {}
         # Every error offered, by code, a dropped repeat included, so "did this walk
         # report that fault" has one answer in every copy of an instance body.
         self.errors_offered: Counter[str] = Counter()
@@ -369,15 +375,17 @@ class Reporter:
         check_spelling(d.code, d.message)
         for sub in d.sub:
             check_spelling(d.code, sub.message)
+        provenance = self.provenance
         if self.origin is not None:
             # An emit site that named a file of its own keeps it; `error()` fills the
             # reporter's own name in otherwise, and that is the one to replace.
             if d.filename == self.filename:
                 d.filename = self.origin.filename
-            if self.origin.provenance is not None:
-                d.sub.append(SubDiagnostic("note", self.origin.provenance))
-        elif self.provenance:
-            d.sub.append(SubDiagnostic("note", self.provenance))
+            provenance = self.origin.provenance
+        if not provenance and d.filename is not None:
+            provenance = self.provenances.get(d.filename)
+        if provenance:
+            d.sub.append(SubDiagnostic("note", provenance))
         if d.kind == "warning" and not self._author_compiles():
             return d
         if d.kind == "error":
@@ -451,6 +459,10 @@ class Reporter:
     def add_slice(self, label: str, source: str) -> None:
         """Record the text of a library slice under its label, for the renderer."""
         self.slices[label] = source
+
+    def add_provenance(self, filename: str, provenance: str) -> None:
+        """Record whose code `filename` is, for a diagnostic at it."""
+        self.provenances[filename] = provenance
 
     def _get_source_lines(self, filename: str, src_lines: Optional[List[str]]) -> Optional[List[str]]:
         """Get source lines for a file: a library slice, this reporter's source, or disk."""

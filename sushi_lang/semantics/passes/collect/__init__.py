@@ -221,10 +221,12 @@ class CollectorPass:
 
     @property
     def refused_pack_bodies(self) -> list[str]:
-        """The declarations that name a type pack as one type (CE0147) or hold a
-        misplaced `expand`."""
+        """The declarations that name a type pack as one type (CE0147), hold a
+        misplaced `expand`, or are a struct, an enum or a method with a type pack (CE0115)."""
         return [*self.function_collector.refused_pack_bodies,
-                *self.perk_collector.refused_pack_bodies]
+                *self.perk_collector.refused_pack_bodies,
+                *self.struct_collector.refused_pack_types,
+                *self.enum_collector.refused_pack_types]
 
     @property
     def _collectors(self) -> tuple:

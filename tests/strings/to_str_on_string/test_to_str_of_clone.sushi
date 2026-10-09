@@ -1,0 +1,14 @@
+# `to_str()` on a string answers a fresh owned copy. The clone temporary and the
+# binding each own one buffer, and each buffer is freed once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "towel\nafter\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn main() i32:
+    let string s = "tow".concat("el")
+    let string t = s.clone().to_str()
+    println(t)
+    println("after")
+    return 0

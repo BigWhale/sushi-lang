@@ -1,0 +1,14 @@
+# A type pack on a method of a generic target is refused at the method.
+# EXPECT_ERROR_CODES_EXACT: CE0115
+# EXPECT_STDERR_CONTAINS: extension method
+
+struct Box@(T):
+    T v
+
+extend Box@(T) m@(...Ts)() i32:
+    return 1
+
+fn main() i32:
+    let Box@(i32) b = Box(3)
+    println(b.m())
+    return 0

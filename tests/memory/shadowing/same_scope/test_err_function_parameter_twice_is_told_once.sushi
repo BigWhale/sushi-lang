@@ -1,0 +1,9 @@
+# A function that declares one parameter name two times gets one diagnostic.
+# EXPECT_ERROR_CODES_EXACT: CE0102
+# EXPECT_STDERR_CONTAINS: test_err_function_parameter_twice_is_told_once.sushi:4:20: error [CE0102]
+fn pick(i32 a, i32 a) i32:
+    return a
+
+fn main() i32:
+    println(pick(1, 2))
+    return 0

@@ -1,0 +1,11 @@
+# An error type is an enum, so a type pack on it is refused in the same way.
+# EXPECT_ERROR_CODES_EXACT: CE0115
+# EXPECT_STDERR_CONTAINS: type pack '...Ts' not allowed in an error type
+
+error Fault@(...Ts):
+    Bad(i32)
+
+fn main() i32:
+    let Fault@(i32, string) f = Fault.Bad(1)
+    println("Mostly Harmless")
+    return 0

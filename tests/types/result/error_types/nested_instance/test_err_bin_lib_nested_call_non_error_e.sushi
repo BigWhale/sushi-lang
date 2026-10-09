@@ -1,0 +1,13 @@
+# E3 at a generic call inside the body of a binary library template: the consumer names
+# `outer@(i32)`, and `outer` names `inner@(i32, i32)` in its body. The diagnostic
+# stands at the nested call in the library, and it carries the note that says whose code
+# it is. A note stands at the call in `main` that names `outer@(i32)`.
+# BUILD_LIB_BINARY: e3_nested_lib.sushi
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: ships this template; it is monomorphized here because of `use <lib/e3_nested_lib>`
+# EXPECT_STDERR_CONTAINS: bin_lib_nested_call_non_error_e.sushi:12:13
+use <lib/e3_nested_lib>
+
+fn main() i32:
+    println(outer@(i32)(5))
+    return 0

@@ -1,0 +1,27 @@
+# The `if` arm calls a `nom self` method on `t`, and the `else` arm rebinds `t`. The use
+# after the `if` is CE2435, and the note points at the call that consumed `t`.
+# EXPECT_ERROR_CODES_EXACT: CE2435
+# EXPECT_STDERR_CONTAINS: test_err_consume_in_if_rebind_in_else.sushi:23:13: error [CE2435]
+# EXPECT_STDERR_CONTAINS: 't' was consumed by 'finish' here
+# EXPECT_STDERR_CONTAINS: test_err_consume_in_if_rebind_in_else.sushi:20:14
+
+use <collections/strings>
+
+struct Text:
+    string s
+
+extend Text finish(nom self) i32:
+    return self.s.len()
+
+fn f(bool go) i32:
+    let Text t = Text("tow".concat("el"))
+    let i32 n = 0
+    if (go):
+        n := t.finish()
+    else:
+        t := Text("c".concat("d"))
+    println(t.s)
+    return n
+
+fn main() i32:
+    return f(true)

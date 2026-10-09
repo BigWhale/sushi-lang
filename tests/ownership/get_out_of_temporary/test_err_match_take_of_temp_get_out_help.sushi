@@ -1,0 +1,19 @@
+# The scrutinee `give().get(0)` reads through a temporary array, and no name owns that
+# array. The help cannot offer `match nom` here, because that spelling consumes a
+# borrow. The help offers a clone of the binding.
+# EXPECT_ERROR_CODE: CE2432
+# EXPECT_STDERR_CONTAINS: "drop the marker and call `.clone()` on the binding"
+fn give() string[]:
+    return from(["ford {1}", "arthur {2}"])
+
+fn keep(nom string s) string:
+    return s
+
+fn run() string:
+    match give().get(0):
+        Maybe.Some(nom s) -> return keep(nom s)
+        Maybe.None -> return "none"
+
+fn main() i32:
+    println(run())
+    return 0

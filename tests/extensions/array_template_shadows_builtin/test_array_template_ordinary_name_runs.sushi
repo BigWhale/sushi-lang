@@ -1,0 +1,10 @@
+# A template with a name that is not a built-in array method is accepted and runs.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "6\n"
+extend T[] doubled_len() i32:
+    return self.len() * 2
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println(xs.doubled_len())
+    return 0

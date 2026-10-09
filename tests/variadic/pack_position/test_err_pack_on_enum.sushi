@@ -1,0 +1,10 @@
+# A type pack in the type-parameter list of an enum is refused where it is written.
+# EXPECT_ERROR_CODES_EXACT: CE0115
+# EXPECT_STDERR_CONTAINS: type pack '...Ts' not allowed in an enum
+
+enum Choice@(...Ts):
+    One(i32)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

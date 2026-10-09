@@ -1,0 +1,25 @@
+# The control for the ?? exit: the value of a kept call argument that a number to_str() makes is a temporary that owns
+# a string, and the later sibling operand is Ok. The position frees it once.
+# EXPECT_STDOUT_EXACT: "7z\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn fails() string | StdError:
+    return Result.Err(StdError.Error)
+
+fn ok() string | StdError:
+    return Result.Ok("z")
+
+fn mk(i32 a) string:
+    return "{a}{a}"
+
+fn pair(string a, string b) string:
+    return "{a}{b}"
+
+fn c1(i32 a) string | StdError:
+    let string x = pair(a.to_str(), ok()??)
+    return Result.Ok(x)
+
+fn main() i32:
+    println(c1(7).realise("err"))
+    return 0

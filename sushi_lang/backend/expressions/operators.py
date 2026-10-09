@@ -79,9 +79,13 @@ def emit_binary_op(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Va
 
 
 def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Value:
-    """Emit comparison operations with string support."""
-    lhs = codegen.expressions.emit_expr(expr.left)
-    rhs = codegen.expressions.emit_expr(expr.right)
+    """Emit comparison operations with string support.
+
+    The comparison only reads each operand, so an owning temporary operand gets its owner
+    as soon as it is emitted: a `??` in the right operand frees the left one once.
+    """
+    lhs = _emit_compared_operand(codegen, expr, expr.left)
+    rhs = _emit_compared_operand(codegen, expr, expr.right)
     op = expr.op
 
     if expr.operand_type is not None:
@@ -90,7 +94,6 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
 
     if (codegen.types.is_string_type(lhs.type) and
         codegen.types.is_string_type(rhs.type)):
-        _own_string_operands(codegen, expr, lhs, rhs)
         if op in ("==", "!="):
             i1v = codegen.runtime.strings.emit_string_comparison(op, lhs, rhs)
         else:
@@ -121,17 +124,11 @@ def _emit_contract_comparison(codegen: 'LLVMCodegen', expr: BinaryOp,
                               lhs: ir.Value, rhs: ir.Value) -> ir.Value:
     """A struct or an enum operand: `==`/`!=` read `Eq`, the order operators `Ord`.
 
-    The typecheck pass stamped the operand type, and the comparison only reads each
-    operand, so a temporary that owns something gets an owner and is freed with it.
+    The typecheck pass stamped the operand type. Each operand is already loaded and
+    held, by `_emit_compared_operand`.
     """
-    from sushi_lang.backend.types.contracts import (
-        emit_value_compare, emit_value_eq, load_operand)
-    from .memory import own_temporary
+    from sushi_lang.backend.types.contracts import emit_value_compare, emit_value_eq
     ty = expr.operand_type
-    lhs = load_operand(codegen, lhs, ty)
-    rhs = load_operand(codegen, rhs, ty)
-    own_temporary(codegen, expr.left, lhs, ty)
-    own_temporary(codegen, expr.right, rhs, ty)
     if expr.op in ("==", "!="):
         equal = emit_value_eq(codegen, lhs, rhs, ty)
         return equal if expr.op == "==" else codegen.builder.not_(equal)
@@ -139,13 +136,18 @@ def _emit_contract_comparison(codegen: 'LLVMCodegen', expr: BinaryOp,
     return codegen.builder.icmp_signed(expr.op, order, ir.Constant(order.type, 0))
 
 
-def _own_string_operands(codegen: 'LLVMCodegen', expr: BinaryOp,
-                         lhs: ir.Value, rhs: ir.Value) -> None:
-    """Give each string operand that is a temporary an owner: the comparison only reads it."""
+def _emit_compared_operand(codegen: 'LLVMCodegen', expr: BinaryOp, operand) -> ir.Value:
+    """Emit one comparison operand, and give it an owner at once when it is a temporary."""
     from sushi_lang.semantics.typesys import BuiltinType
     from .memory import own_temporary
-    own_temporary(codegen, expr.left, lhs, BuiltinType.STRING)
-    own_temporary(codegen, expr.right, rhs, BuiltinType.STRING)
+    value = codegen.expressions.emit_expr(operand)
+    if expr.operand_type is not None:
+        from sushi_lang.backend.types.contracts import load_operand
+        value = load_operand(codegen, value, expr.operand_type)
+        own_temporary(codegen, operand, value, expr.operand_type)
+    elif codegen.types.is_string_type(value.type):
+        own_temporary(codegen, operand, value, BuiltinType.STRING)
+    return value
 
 
 def _require_one_width(op: str, left: ir.Value, right: ir.Value) -> None:

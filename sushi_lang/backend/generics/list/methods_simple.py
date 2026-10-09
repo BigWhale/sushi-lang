@@ -39,10 +39,8 @@ def emit_list_with_capacity(codegen: Any, expr: Any, list_type: StructType) -> i
         elif capacity_arg.type.width < 32:
             capacity_arg = codegen.builder.sext(capacity_arg, codegen.types.i32, name="capacity_i32")
 
-    element_size = memory.get_element_size_constant(codegen, element_llvm_type)
-    capacity_i64 = codegen.builder.zext(capacity_arg, codegen.types.i64, name="capacity_i64")
-    element_size_i64 = codegen.builder.zext(element_size, codegen.types.i64, name="element_size_i64")
-    alloc_size = codegen.builder.mul(capacity_i64, element_size_i64, name="alloc_size")
+    alloc_size = memory.emit_byte_size(codegen, capacity_arg, element_llvm_type,
+                                       name="alloc_size")
 
     data_void_ptr = emit_malloc(codegen, codegen.builder, alloc_size)
 

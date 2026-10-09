@@ -92,6 +92,13 @@ class _Snippet:
             return by_unit.get(self._unit, {}).get(name)
         return table.by_name.get(name)
 
+    def declared_span(self, table_name: str, name: str) -> Any:
+        """Where this snippet declared `name` in `table_name`, or None.
+
+        A flat table only: the span the collector filed for the declaration.
+        """
+        return getattr(self._tables, table_name).spans.get(name)
+
 
 class LibraryRegistration:
     """Registers what the loaded binary libraries declare into one program's tables.
@@ -136,15 +143,17 @@ class LibraryRegistration:
         """Whose code a library template is, and the text its spans index into.
 
         The program reporter records the slice under its label, so every location in
-        the slice renders its line: the location of a diagnostic and of each note.
+        the slice renders its line: the location of a diagnostic and of each note. It
+        records the provenance under the label too, so a diagnostic at the slice says
+        whose code it is also when no walk of a body set the origin: a site in the body
+        of a copy, read by the monomorphize stage.
         """
-        origin = Origin(
-            filename=label, source=source,
-            provenance=(f"'{lib_name}' {version or 'unknown'} "
-                        f"ships this template; it is monomorphized here because of "
-                        f"`use <lib/{lib_name}>`"))
+        provenance = (f"'{lib_name}' {version or 'unknown'} "
+                      f"ships this template; it is monomorphized here because of "
+                      f"`use <lib/{lib_name}>`")
         self.reporter.add_slice(label, source)
-        return origin
+        self.reporter.add_provenance(label, provenance)
+        return Origin(filename=label, source=source, provenance=provenance)
 
     # -- the entry points the analyzer calls --------------------------------------
 
@@ -1126,9 +1135,12 @@ class LibraryRegistration:
                 continue
 
             # A note at the declaration, a bound of its type parameter included, names
-            # the slice and renders its line (#1070).
-            self.reporter.add_slice(label, source)
+            # the slice and renders its line (#1070), and a diagnostic at the slice says
+            # whose code it is. The E3 note of an instance reads the declaration span
+            # from the table, as for a template of the program.
+            self._template_origin(lib_name, manifest.get("library_version"), label, source)
             table.files[type_name] = label
+            table.spans[type_name] = snippet.declared_span(key, type_name)
             table.by_name[type_name] = generic_type
             table.order.append(type_name)
             self.generic_type_owners[type_name] = lib_name

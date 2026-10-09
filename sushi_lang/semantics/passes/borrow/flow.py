@@ -24,25 +24,28 @@ class FlowFacts:
     join only if it held on every path; union would be unsound. Because intersection has no
     empty identity, paths go through `join()` over the surviving list, never a fold into a
     blank `FlowFacts()`.
+
+    `moved_at` and `invalidation` hold one `(name, span, cause)` entry per name, so a join
+    keeps the location with the flag. A path that rebinds the name has no entry, and the
+    join keeps the entry of the path that moved it.
     """
     moved: frozenset[str] = frozenset()
     destroyed: frozenset[str] = frozenset()
     owns_no_heap: frozenset[str] = frozenset()
-    # A tuple, not a frozenset: `Span` is an unfrozen dataclass and so unhashable. The
-    # span must travel with the flag, or CE2412 renders with no location.
+    # Tuples, not frozensets: `Span` is an unfrozen dataclass and so unhashable. The span
+    # must travel with the flag, or CE2405, CE2435 and CE2412 render with no location.
+    # A `moved_at` entry is (name, where it moved, the `nom self` method that took it).
+    moved_at: tuple = ()
     invalidation: tuple = ()
 
     def __or__(self, other: "FlowFacts") -> "FlowFacts":
         """Join two paths. Union for the monotone facts, intersection for permission."""
-        seen = {name for name, _span, _by in self.invalidation}
-        merged = self.invalidation + tuple(
-            entry for entry in other.invalidation if entry[0] not in seen
-        )
         return FlowFacts(
             moved=self.moved | other.moved,
             destroyed=self.destroyed | other.destroyed,
             owns_no_heap=self.owns_no_heap & other.owns_no_heap,
-            invalidation=merged,
+            moved_at=_union_by_name(self.moved_at, other.moved_at),
+            invalidation=_union_by_name(self.invalidation, other.invalidation),
         )
 
     def without(self, names: frozenset[str]) -> "FlowFacts":
@@ -58,6 +61,7 @@ class FlowFacts:
             moved=self.moved - names,
             destroyed=self.destroyed - names,
             owns_no_heap=self.owns_no_heap - names,
+            moved_at=tuple(e for e in self.moved_at if e[0] not in names),
             invalidation=tuple(e for e in self.invalidation if e[0] not in names),
         )
 
@@ -77,6 +81,12 @@ class FlowFacts:
         for facts in paths[1:]:
             result = result | facts
         return result
+
+
+def _union_by_name(first: tuple, second: tuple) -> tuple:
+    """The entries of both paths, one per name; the first path's entry wins."""
+    seen = {entry[0] for entry in first}
+    return first + tuple(entry for entry in second if entry[0] not in seen)
 
 
 def reinitialize(state: BorrowState) -> None:
@@ -129,6 +139,8 @@ def snapshot_flow(checker: 'BorrowChecker') -> FlowFacts:
         moved=frozenset(n for n, s in states if s.is_moved),
         destroyed=frozenset(n for n, s in states if s.is_destroyed),
         owns_no_heap=frozenset(n for n, s in states if s.owns_no_heap),
+        moved_at=tuple((n, s.moved_at_span, s.consumed_by_method)
+                       for n, s in states if s.is_moved),
         invalidation=tuple((n, s.invalidated_at, s.invalidated_by)
                            for n, s in states if s.invalidated_at is not None),
     )
@@ -136,9 +148,11 @@ def snapshot_flow(checker: 'BorrowChecker') -> FlowFacts:
 
 def restore_flow(checker: 'BorrowChecker', facts: FlowFacts) -> None:
     """Set every path-sensitive flag to exactly what `facts` says."""
+    moved_at = {name: (span, method) for name, span, method in facts.moved_at}
     invalidation = {name: (span, by) for name, span, by in facts.invalidation}
     for name, state in checker.borrow_state.items():
         state.is_moved = name in facts.moved
+        state.moved_at_span, state.consumed_by_method = moved_at.get(name, (None, None))
         state.is_destroyed = name in facts.destroyed
         state.owns_no_heap = name in facts.owns_no_heap
         span, by = invalidation.get(name, (None, ()))

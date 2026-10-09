@@ -1,0 +1,12 @@
+# A `let` in an `expand` body that repeats the expand binder is an error.
+# EXPECT_ERROR_CODES_EXACT: CE1006
+# EXPECT_STDERR_CONTAINS: test_err_let_repeats_the_expand_binder.sushi:7:9: error [CE1006]
+# EXPECT_STDERR_CONTAINS: test_err_let_repeats_the_expand_binder.sushi:6:12\n
+fn show@(...Ts: Display)(...Ts args) ~:
+    expand(v in args):
+        let i32 v = 5
+        println(v)
+
+fn main() i32:
+    show(1, "two")
+    return 0

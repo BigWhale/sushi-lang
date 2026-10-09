@@ -1,0 +1,10 @@
+# A destructure that binds a name an earlier `let` of the block declares is an error.
+# EXPECT_ERROR_CODES_EXACT: CE1006
+# EXPECT_STDERR_CONTAINS: test_err_destructure_repeats_an_earlier_let.sushi:8:10: error [CE1006]
+# EXPECT_STDERR_CONTAINS: test_err_destructure_repeats_an_earlier_let.sushi:6:5\n
+fn main() i32:
+    let i32 a = 0
+    let (i32, i32) t = (1, 2)
+    let (a, b) = t
+    println(a + b)
+    return 0

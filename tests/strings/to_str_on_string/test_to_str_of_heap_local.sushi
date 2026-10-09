@@ -1,0 +1,15 @@
+# The copy from `to_str()` is independent of its receiver. A rebind of the receiver
+# frees the old buffer, and the copy still holds its own text.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "spoon\ntowel\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn main() i32:
+    let string s = "tow".concat("el")
+    let string t = s.to_str()
+    s := "spoon"
+    println(s)
+    println(t)
+    return 0

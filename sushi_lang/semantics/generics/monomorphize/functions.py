@@ -127,6 +127,11 @@ class FunctionMonomorphizer:
         # And the file the walked body is written in: a nested instantiation records its
         # site there, so a constraint refusal of it has a location (#1070).
         self._asking_file: Optional[str] = None
+        # And the key of the instance whose copy is walked: a nested instantiation names
+        # it as its parent, so a refusal finds the written site that started the chain.
+        # The key of a function copy is a call key. The key of an extension or a perk
+        # method copy is the interned name of its target type.
+        self._asking_key: object = None
 
     def _generic_def(self, unit_name, func_name):
         """The generic `func_name` means inside `unit_name`: own unit, then flat.
@@ -239,7 +244,10 @@ class FunctionMonomorphizer:
             from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
             concrete_func.body = unroll_expands(concrete_func.body, pack_param_fanout)
 
-        self._collect_nested_instantiations(concrete_func.body, concrete_func.params, generic)
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        self._collect_nested_instantiations(
+            concrete_func.body, concrete_func.params, generic,
+            ("fn", instantiation_key(generic.name, tuple(type_args))))
         concrete_func.name = mangled_name
 
         self._collect_fn_value_instantiations(
@@ -402,28 +410,39 @@ class FunctionMonomorphizer:
         self,
         body: 'Block',
         params: list,
-        generic_func: 'GenericFuncDef'
+        generic_func: 'GenericFuncDef',
+        key: object = None,
     ) -> None:
         """Every generic call in one monomorphized function body, queued for monomorphization.
 
         The walk reads the SUBSTITUTED copy, as the extension walk does: a lambda's
         written `|T y|` and an explicit `f@(T)(...)` name the concrete type only there,
         and a template walk solved them against an unbound type parameter (#795).
+        `key` is the instantiation of the copy.
         """
         var_types = {param.name: param.ty for param in params if param.ty is not None}
-        saved_unit, saved_file = self._asking_unit, self._asking_file
+        saved = self._asking_unit, self._asking_file, self._asking_key
         self._asking_unit = getattr(generic_func, "unit_name", None)
         self._asking_file = generic_func.filename
+        self._asking_key = key
         self._collect_block_instantiations(body, var_types)
-        self._asking_unit, self._asking_file = saved_unit, saved_file
+        self._asking_unit, self._asking_file, self._asking_key = saved
 
     def _record_site(self, name: str, type_args, loc) -> None:
-        """The first site that names a nested function instantiation (#579, #1070)."""
+        """The first site that names a nested function instantiation (#579, #1070).
+
+        A written site stays first. A new site records the instance of the walked copy as
+        its parent.
+        """
         if loc is None or self._asking_file is None:
             return
         from sushi_lang.semantics.generics.extension_targets import instantiation_key
-        self.monomorphizer.sites.setdefault(
-            ("fn", instantiation_key(name, tuple(type_args))), (loc, self._asking_file))
+        key = ("fn", instantiation_key(name, tuple(type_args)))
+        if key in self.monomorphizer.sites:
+            return
+        self.monomorphizer.sites[key] = (loc, self._asking_file)
+        if self._asking_key is not None:
+            self.monomorphizer.parents[key] = self._asking_key
 
     def _collect_fn_value_instantiations(self, body: 'Block', unit_name: Optional[str],
                                          file: Optional[str] = None,
@@ -521,10 +540,12 @@ class FunctionMonomorphizer:
         saved = getattr(self.monomorphizer, 'pending_instantiations', None)
         self.monomorphizer.pending_instantiations = set()
         saved_unit, saved_file = self._asking_unit, self._asking_file
+        saved_key = self._asking_key
         self._asking_unit = None
         self._asking_file = extend_def.template_file
+        self._asking_key = getattr(extend_def.target_type, "name", None)
         self._collect_block_instantiations(extend_def.body, var_types)
-        self._asking_unit = saved_unit
+        self._asking_unit, self._asking_key = saved_unit, saved_key
         self._collect_fn_value_instantiations(extend_def.body, None, file=self._asking_file,
                                               extensions=[extend_def])
         self._asking_file = saved_file
@@ -548,10 +569,12 @@ class FunctionMonomorphizer:
         saved = getattr(self.monomorphizer, 'pending_instantiations', None)
         self.monomorphizer.pending_instantiations = set()
         saved_unit, saved_file = self._asking_unit, self._asking_file
+        saved_key = self._asking_key
         self._asking_unit = None
         self._asking_file = filename
+        self._asking_key = getattr(target_type, "name", None)
         self._collect_block_instantiations(method.body, var_types)
-        self._asking_unit = saved_unit
+        self._asking_unit, self._asking_key = saved_unit, saved_key
         from sushi_lang.semantics.ast import ExtendWithDef
         file = self._asking_file
         self._asking_file = saved_file

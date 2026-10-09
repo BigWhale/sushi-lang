@@ -67,7 +67,9 @@ fn main() i32:
 - [`CE0114`](../error-catalog.md#ce0114) — variadic parameter must be the last parameter; a function may declare at most one;
   its element type must not be a reference. A dynamic-array element (`...T[]`) is allowed. Also
   rejected in generic functions (use a type pack `...Ts` for a generic variadic, below).
-- [`CE0115`](../error-catalog.md#ce0115) — variadic parameter not allowed in a perk method or extension method.
+- [`CE0115`](../error-catalog.md#ce0115) — variadic parameter not allowed in a perk method or extension method;
+  a type pack `...Ts` not allowed in the type-parameter list of a struct, an enum, an error type,
+  an extension method or a static method.
 - [`CE0116`](../error-catalog.md#ce0116) — a public *native* variadic (`...T`) function cannot appear in a `.slib` public API. A
   native variadic collects its trailing args into a runtime `T[]` inside one concrete function, so
   there is no template to monomorphize at the consumer; analogous to the [CE5002](../error-catalog.md#ce5002) FFI boundary block.
@@ -228,6 +230,10 @@ fn main() i32:
   (a runtime array, not a template).
 - **Plain function definitions only**: perk methods and extension methods may not declare a value
   pack ([CE0115](../error-catalog.md#ce0115) applies to both native `...T` and type packs `...Ts`).
+  A struct, an enum and an error type may not declare a type pack in their type-parameter list
+  (CE0115 at the `...Ts`), because they have no parameter list for the value pack. An extension
+  method and a static method may not declare a method-level type pack either (CE0115 at the
+  `...Ts`, the same code for the same fault).
 - **No pack forwarding**: a value pack cannot be forwarded into another variadic (`g(pack...)`) —
   bloom (see "Spread / forwarding (bloom)" above) only spreads a single `...T` array, not a
   `...Ts` pack.

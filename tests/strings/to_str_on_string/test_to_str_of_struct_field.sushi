@@ -1,0 +1,17 @@
+# `to_str()` on a string field reads the field and answers a copy. The struct and the
+# binding each free their own buffer.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "towel\ntowel\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+struct Kit:
+    string item
+
+fn main() i32:
+    let Kit k = Kit("tow".concat("el"))
+    let string t = k.item.to_str()
+    println(t)
+    println(k.item)
+    return 0

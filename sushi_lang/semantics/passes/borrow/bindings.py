@@ -372,8 +372,14 @@ def _reject_take_from_a_borrow(checker: 'BorrowChecker', binding: NomBinding,
     if state is not None and state.declared_at_span is not None:
         diag.note_at(f"'{owner}' owns this value and still frees it",
                      state.declared_at_span)
-    diag.help(f"hand the value to the match -- `match nom {text}:` -- and it may be "
-              f"taken here; drop the marker to read through the borrow instead")
+    if owner is None and scrutinee is not None:
+        # The scrutinee reads through a temporary that no name owns. `match nom` cannot
+        # hand it over, because it consumes a borrow (CE2411).
+        diag.help("a temporary still owns this value and frees it at scope exit; drop "
+                  "the marker and call `.clone()` on the binding to keep a copy")
+    else:
+        diag.help(f"hand the value to the match -- `match nom {text}:` -- and it may be "
+                  f"taken here; drop the marker to read through the borrow instead")
     diag.emit()
 
 

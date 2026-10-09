@@ -1,0 +1,23 @@
+# A to_str() part of an interpolation is freed one time when a later part leaves through ??.
+# EXPECT_STDOUT_EXACT: "err\nerr\nafter\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn fails() string | StdError:
+    return Result.Err(StdError.Error)
+
+fn build(i32 a) string | StdError:
+    let string s = "{a.to_str()}{fails()??}"
+    return Result.Ok(s)
+
+fn build_float(f64 e) string | StdError:
+    let string s = "{e.to_str()}-{fails()??}"
+    return Result.Ok(s)
+
+fn main() i32:
+    let string r = build(7).realise("err")
+    println(r)
+    let string q = build_float(1.5).realise("err")
+    println(q)
+    println("after")
+    return 0

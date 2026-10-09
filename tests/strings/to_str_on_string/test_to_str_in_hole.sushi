@@ -1,0 +1,13 @@
+# `to_str()` in an interpolation hole answers a copy. The hole frees the copy, and
+# the local keeps its own buffer.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "[towel]\ntowel\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn main() i32:
+    let string s = "tow".concat("el")
+    println("[{s.to_str()}]")
+    println(s)
+    return 0

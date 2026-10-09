@@ -1,0 +1,20 @@
+# A generic-target template and an array template both shadow a built-in. Each written
+# declaration is reported once, and each help names the target as the source wrote it.
+# EXPECT_ERROR_CODES_EXACT: CE2097, CE2097
+# EXPECT_STDERR_CONTAINS: extend Tote@(T) with <Perk>
+# EXPECT_STDERR_CONTAINS: extend T[] with <Perk>
+struct Tote@(T):
+    T v
+
+extend Tote@(T) hash() u64:
+    return 7 as u64
+
+extend T[] len() i32:
+    return 99
+
+fn main() i32:
+    let Tote@(i32) a = Tote(1)
+    let Tote@(string) b = Tote("Mostly Harmless")
+    println(a.v)
+    println(b.v)
+    return 0

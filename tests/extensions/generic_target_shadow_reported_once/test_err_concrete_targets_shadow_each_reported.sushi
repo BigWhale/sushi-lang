@@ -1,0 +1,18 @@
+# Two written declarations on two concrete instances are two faults, and each is reported.
+# EXPECT_ERROR_CODES_EXACT: CE2097, CE2097
+# EXPECT_STDERR_CONTAINS: extend Pod@(string) with <Perk>
+struct Pod@(T):
+    T v
+
+extend Pod@(i32) hash() u64:
+    return 1 as u64
+
+extend Pod@(string) hash() u64:
+    return 2 as u64
+
+fn main() i32:
+    let Pod@(i32) a = Pod(1)
+    let Pod@(string) b = Pod("Mostly Harmless")
+    println(a.v)
+    println(b.v)
+    return 0

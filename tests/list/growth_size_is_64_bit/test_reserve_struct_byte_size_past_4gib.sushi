@@ -1,0 +1,28 @@
+# EXPECT_STDOUT_EXACT: "268435457\n2016\n14\n"
+# EXPECT_RUNTIME_EXIT: 0
+# A struct element of sixteen bytes reads its size from the data layout.
+# A reserve of 2^28 + 1 elements asks for 2^32 + 16 bytes.
+# The pushes write past the first sixteen bytes, and the second buffer must keep its values.
+struct Pair:
+    i64 a
+    i64 b
+
+fn main() i32:
+    let List@(Pair) xs = List.new()
+    xs.reserve(268435457)
+    let List@(i64) ys = List.new()
+    ys.reserve(2)
+    ys.push(7)
+    ys.push(7)
+    foreach(i in 0..64):
+        xs.push(Pair(i as i64, 0))
+    println(xs.capacity())
+    let i64 xsum = 0
+    foreach(p in xs.iter()):
+        xsum := xsum + p.a + p.b
+    let i64 ysum = 0
+    foreach(y in ys.iter()):
+        ysum := ysum + y
+    println(xsum)
+    println(ysum)
+    return 0

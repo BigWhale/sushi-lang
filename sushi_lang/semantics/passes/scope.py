@@ -171,16 +171,28 @@ class ScopeAnalyzer:
 
     def _declare_variable(self, name: str, span: Optional[Span],
                           written: Optional[WrittenLet] = None,
-                          kind: str = "variable") -> None:
+                          kind: str = "variable", told: bool = False) -> None:
         """Declare a variable in the current scope.
 
         The shadow check compares WRITTEN names, and names a written `expand`-body `let`
         once for all its copies (#1022). `kind` is what CW1001 calls the name.
+
+        A second declaration of one name in one scope is CE1006, or CE0102 for a second
+        parameter (#1197). The first keeps the name. A declaration with no span is
+        synthesized and is not checked. `told` is a parameter list that the collect pass
+        checked already.
         """
         if not self.scopes:
             return
 
         shown = written.name if written is not None else name
+        current_scope = self.scopes[-1]
+        earlier = _declared_as(current_scope, shown)
+        if earlier is not None and span is not None and not told:
+            self._reject_redeclaration(shown, span, earlier, kind)
+            current_scope.setdefault(name, VariableInfo(
+                name=name, declared_at=span, written=written, kind=kind))
+            return
         for outer_scope in self.scopes[:-1]:
             outer_var = _declared_as(outer_scope, shown)
             if outer_var is None:
@@ -194,9 +206,18 @@ class ScopeAnalyzer:
                     self._shadows_told.add(written)
             break
 
-        current_scope = self.scopes[-1]
         current_scope[name] = VariableInfo(name=name, declared_at=span, written=written,
                                            kind=kind)
+
+    def _reject_redeclaration(self, name: str, span: Span, earlier: VariableInfo,
+                              kind: str) -> None:
+        """CE1006, or CE0102 for two parameters: one name, two declarations, one scope."""
+        code = (er.ERR.CE0102 if kind == earlier.kind == "parameter"
+                else er.ERR.CE1006)
+        diag = self.err.emit_with(code, span, name=name)
+        if earlier.declared_at is not None:
+            diag.note_at("first declared here", earlier.declared_at)
+        diag.emit()
 
     def _is_bound_local(self, name: str) -> bool:
         """True if `name` is currently a variable in any active scope."""
@@ -459,7 +480,8 @@ class ScopeAnalyzer:
             # Synthesized pack fan-out params carry user-invisible names, so they are
             # declared with no span and the implicit-variable exemption suppresses CW1001.
             span = None if param.is_pack else param.name_span
-            self._declare_variable(param.name, span, kind="parameter")
+            self._declare_variable(param.name, span, kind="parameter",
+                                   told=True)
 
         self._check_block(func.body)
         self._loop_depth = saved_loop_depth
@@ -482,7 +504,8 @@ class ScopeAnalyzer:
         self._declare_variable("self", None)
 
         for param in ext.params:
-            self._declare_variable(param.name, param.name_span, kind="parameter")
+            self._declare_variable(param.name, param.name_span, kind="parameter",
+                                   told=True)
 
         self._check_block(ext.body)
         self._pop_scope()

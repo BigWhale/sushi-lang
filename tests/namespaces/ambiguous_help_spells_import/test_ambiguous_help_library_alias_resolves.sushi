@@ -1,0 +1,10 @@
+# The import that the help of CE3012 gives for a source library is valid:
+# `use <lib/amb_spell_lib> as u` makes `u.decode` name the library function.
+# BUILD_LIB: amb_spell_lib.sushi
+# EXPECT_STDOUT_EXACT: "3\n"
+use <lib/amb_spell_lib> as u
+
+fn main() i32:
+    let u8[] b = from([1])
+    println(u.decode(b))
+    return 0

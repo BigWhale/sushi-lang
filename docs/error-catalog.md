@@ -825,7 +825,7 @@ Two functions share the same name in a compilation unit.
 
 **Message:** `duplicate parameter '{name}'`
 
-A function declares the same parameter name more than once.
+A function, a method or a lambda declares the same parameter name more than once.
 
 ### CE0103 {#ce0103}
 
@@ -929,9 +929,9 @@ A variadic '...T' parameter must be the last parameter, a function may declare a
 
 **Error** · function
 
-**Message:** `variadic '...T' parameter not allowed in {context}`
+**Message:** `variadic {what} not allowed in {context}`
 
-Variadic parameters are only permitted in plain function definitions, not in perk methods or extension methods.
+Variadic parameters are only permitted in plain function definitions, not in perk methods or extension methods. A type pack `...Ts` is refused in the type-parameter list of a struct, an enum, an error type, an extension method and a static method: a pack has two halves, and only a free function has the parameter list for its value pack `...Ts name`. The caret is on the `...Ts`. When a method has a type pack and a value pack, the type pack is the one fault. The analysis stops after the refusal, so a written instance of the type or a call of the method adds no second diagnostic.
 
 ### CE0116 {#ce0116}
 
@@ -1246,6 +1246,14 @@ The check of a generic template builds its instances over an opaque type paramet
 
 A generic template is checked one time, where it is written. Its copies then report only what each instance decides: an error type for a type argument in an error position, and a lambda parameter that owns for this type argument. Every other rule ran on the template. A copy that reports another error has found a fault that the template check did not find. This is a fault in the compiler. The text holds the code and the message that the copy reported, so you can still see the fault. Please report the program.
 
+### CE0150 {#ce0150}
+
+**Error** · internal
+
+**Message:** `the borrow pass has no move location for the moved variable '{name}'`
+
+A use-after-move error ([CE2405](#ce2405), [CE2435](#ce2435)) is relational: it shows the use, and a note shows where the value moved. The borrow pass records the location with the moved flag, and every branch join and loop join keeps the two together. A moved variable with no location means that a path set the flag and lost the location. This is a fault in the compiler, not in the program; please report the program.
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.
@@ -1288,6 +1296,14 @@ Emitted when 'break' or 'continue' appear outside any loop.
 **Message:** `{kind} '{name}' already declared in this unit as {other}`
 
 In one unit, one name has one declaration, whatever its kind: `fn`, `const`, `var`, `struct`, `enum` and `perk` share one set of names. The SECOND declaration in source order is the error, and the note points at the first. The first keeps the name, and the refused declaration enters no table, so the uses of the first give no more errors. A use of the name that finds nothing under it -- a call of a refused function, a type position or a construction of a refused struct -- is a use of the refused declaration, and it gives no second diagnostic either. Two declarations of ONE kind keep that kind's code: [CE0004](#ce0004) (struct), [CE2046](#ce2046) (enum), [CE4001](#ce4001) (perk), [CE0101](#ce0101) (fn) and [CE0105](#ce0105) (const and var), and a struct beside an enum is [CE0006](#ce0006). Across units a name may be used again: the unit's own declaration wins over a name a flat `use` brings, and two imported public names of one spelling are reached with `use ... as` ([CE3012](#ce3012) at a bare use). Two TYPES of one name in two units stay refused, because a type is one per program. Rename one of the two declarations.
+
+### CE1006 {#ce1006}
+
+**Error** · scope
+
+**Message:** `'{name}' is already declared in this scope`
+
+One scope declares a local name one time. A `let`, a destructure binder, a pattern binding, a `foreach` item, an `expand` binder and a parameter share the scope of the body they start, so a `let` in a `foreach` body cannot repeat the item name, and a `let` in a function body cannot repeat a parameter name. The SECOND declaration is the error, and the note points at the first. The first keeps the name. To change the value, write `:=`. To use the name again for a different value, open a nested block: a declaration there shadows the outer one ([CW1002](#cw1002)). A repeated parameter name of a function or a lambda is [CE0102](#ce0102).
 
 ## CE20xx and CE21xx: Type, array and struct errors {#ce20xx}
 
@@ -3255,6 +3271,16 @@ A generic body is checked one time, where it is written. A type parameter is opa
 **Help:** `put the bound on the type ('struct {base}@({param}: {perk})'), or remove it`
 
 A `Drop` implementation says how each value of a type releases what it holds. A bound in its target gives `drop()` to some instances of the type and not to others, and an instance that the bound excludes releases nothing, with no diagnostic. So a `Drop` implementation inherits the bounds that its type declares and adds none. An array target is [CE4016](#ce4016).
+
+### CE4020 {#ce4020}
+
+**Error** · perk
+
+**Message:** `cannot call 'drop()' of the perk 'Drop' on '{type}': the compiler runs it at the scope exit`
+
+**Help:** `to end the value early, let it leave its scope, give it to a function with 'nom', or declare a 'nom self' method on the type (as 'close()' on a stdlib handle)`
+
+The compiler runs the `drop()` method of the predefined `Drop` perk at the scope exit of each value, one time. The contract takes `poke self`, so a written call does not end the life of its receiver: the value stays live, and the scope exit runs `drop()` again. Thus a written call of the `drop` method of `Drop` is an error in every position: on a value, through a `Drop` constraint, and on a field inside a destructor (the compiler destroys the owning fields after `drop()`). The rule reads the perk, not the name: a method `drop` of a user perk is an ordinary method. To end a value early, let it leave its scope, give it to a function with `nom`, or declare a `nom self` method on the type (the `close()` pattern of the stdlib handles). Rust refuses the same call (E0040, explicit use of a destructor method).
 
 ## CE5xxx: Foreign function interface errors {#ce5xxx}
 

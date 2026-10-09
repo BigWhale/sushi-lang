@@ -30,7 +30,7 @@ from sushi_lang.semantics.visibility import (
 
 from .utils import (
     extract_type_param_names, reject_duplicate_type_name, reject_reference_in,
-    type_name_rules)
+    reject_type_pack_param, type_name_rules)
 
 
 @dataclass
@@ -91,6 +91,9 @@ class EnumCollector:
         self.library_units: Set[str] = set()
         # The names this collector refused with CE3011 (#814): the analyzer stops on them.
         self.refused_library_types: list[str] = []
+        # The names whose type-parameter list holds a type pack (CE0115). No copy of
+        # one can be cut, so the analysis stops after the collect pass.
+        self.refused_pack_types: list[str] = []
         self.visibility: Optional[VisibilityTable] = None
         self.enums = enums
         self.generic_enums = generic_enums
@@ -145,6 +148,9 @@ class EnumCollector:
         ), library_clash=lambda n, at: self._reject_library_clash(n, at, word),
                 visibility=self.visibility, generic=bool(type_params)):
             return
+
+        if reject_type_pack_param(self.r, type_params_raw, name_span, f"an {word}"):
+            self.refused_pack_types.append(name)
 
         variants_list: List[EnumVariantInfo] = []
         variant_names: Set[str] = set()

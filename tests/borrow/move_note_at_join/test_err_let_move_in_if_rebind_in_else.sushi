@@ -1,0 +1,21 @@
+# The `if` arm moves `s` into a `let`, and the `else` arm rebinds it. The use after the
+# `if` is CE2405, and the note points at the move in the `let`.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: test_err_let_move_in_if_rebind_in_else.sushi:17:13: error [CE2405]
+# EXPECT_STDERR_CONTAINS: 's' was moved here
+# EXPECT_STDERR_CONTAINS: test_err_let_move_in_if_rebind_in_else.sushi:13:24
+
+use <collections/strings>
+
+fn f(bool go) i32:
+    let string s = "tow".concat("el")
+    if (go):
+        let string t = s
+        println(t)
+    else:
+        s := "c".concat("d")
+    println(s)
+    return 0
+
+fn main() i32:
+    return f(true)

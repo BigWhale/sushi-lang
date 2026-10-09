@@ -1,0 +1,13 @@
+# The print frame owns the copy that `to_str()` answers. The local keeps its own
+# buffer, so it prints again after the call.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "towel\ntowel\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn main() i32:
+    let string s = "tow".concat("el")
+    println(s.to_str())
+    println(s)
+    return 0

@@ -1,0 +1,53 @@
+# The to_str() result of a number is an operand of an order comparison inside print, println and an
+# interpolation part. A later sibling operand leaves through ??.
+# The buffer is freed one time, on the exit and on the normal path.
+# EXPECT_STDOUT_EXACT: "true\nok\nerr\ntrue\nok\nerr\n[true]\nok\nerr\ntrue\nok\nerr\ntrue\nok\nerr\n[true]\nok\nerr\nafter\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn get(bool fail) string | StdError:
+    if (fail):
+        return Result.Err(StdError.Error)
+    return Result.Ok("z")
+
+fn line_int(i32 a, bool fail) string | StdError:
+    println(a.to_str() < get(fail)??)
+    return Result.Ok("ok")
+
+fn bare_int(i32 a, bool fail) string | StdError:
+    print(a.to_str() < get(fail)??)
+    println("")
+    return Result.Ok("ok")
+
+fn hole_int(i32 a, bool fail) string | StdError:
+    println("[{a.to_str() < get(fail)??}]")
+    return Result.Ok("ok")
+
+fn line_float(f64 e, bool fail) string | StdError:
+    println(e.to_str() < get(fail)??)
+    return Result.Ok("ok")
+
+fn bare_float(f64 e, bool fail) string | StdError:
+    print(e.to_str() < get(fail)??)
+    println("")
+    return Result.Ok("ok")
+
+fn hole_float(f64 e, bool fail) string | StdError:
+    println("[{e.to_str() < get(fail)??}]")
+    return Result.Ok("ok")
+
+fn main() i32:
+    println(line_int(7, false).realise("err"))
+    println(line_int(7, true).realise("err"))
+    println(bare_int(7, false).realise("err"))
+    println(bare_int(7, true).realise("err"))
+    println(hole_int(7, false).realise("err"))
+    println(hole_int(7, true).realise("err"))
+    println(line_float(1.5, false).realise("err"))
+    println(line_float(1.5, true).realise("err"))
+    println(bare_float(1.5, false).realise("err"))
+    println(bare_float(1.5, true).realise("err"))
+    println(hole_float(1.5, false).realise("err"))
+    println(hole_float(1.5, true).realise("err"))
+    println("after")
+    return 0

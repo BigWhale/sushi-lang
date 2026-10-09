@@ -320,18 +320,24 @@ def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
                           f"position needs: `{name}.clone()`")
             diag.emit()
             return
-        # Handing the owner away leaves every binding reading out of it pointing at
-        # storage the new owner frees (#242).
-        check_owner_not_borrowed(checker, name, use_span, "move")
-        state.is_moved = True
-        state.moved_at_span = state.moved_at_span or use_span
-        state.move_reported_by = None
-        # A move deeper than the owner's declaration cannot dominate the scope exit,
-        # so the backend guards this owner's frees with a runtime drop flag (#414).
-        if checker.branch_depth > state.declared_branch_depth:
-            checker.conditional_moves.add(state.name)
+        _move_out(checker, state, use_span)
     elif decision is Ownership.REJECT:
         emit_consume_of_borrow(checker, name, use_span, state, use_of_copy)
+
+
+def _move_out(checker: 'BorrowChecker', state: BorrowState,
+             use_span: Optional[Span]) -> None:
+    """Hand a named owner away: a `nom` argument, a rebind and a `let` initializer alike."""
+    # Handing the owner away leaves every binding reading out of it pointing at
+    # storage the new owner frees (#242).
+    check_owner_not_borrowed(checker, state.name, use_span, "move")
+    state.is_moved = True
+    state.moved_at_span = state.moved_at_span or use_span
+    state.move_reported_by = None
+    # A move deeper than the owner's declaration cannot dominate the scope exit,
+    # so the backend guards this owner's frees with a runtime drop flag (#414).
+    if checker.branch_depth > state.declared_branch_depth:
+        checker.conditional_moves.add(state.name)
 
 
 def bind(checker: 'BorrowChecker', stmt: Let) -> None:
@@ -382,12 +388,7 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
                              kind="a unit variable")
         return
     if decision is Ownership.MOVE:
-        src_state.is_moved = True
-        src_state.moved_at_span = src_state.moved_at_span or expr.loc
-        src_state.move_reported_by = None
-        # Same rule as consume(): a conditional move needs a runtime drop flag (#414).
-        if checker.branch_depth > src_state.declared_branch_depth:
-            checker.conditional_moves.add(src_state.name)
+        _move_out(checker, src_state, expr.loc)
     elif decision is Ownership.REJECT:
         record_borrowed_binding(checker, stmt, dest)
 

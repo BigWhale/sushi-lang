@@ -1,0 +1,35 @@
+# The value of a struct comparison operand is a temporary that owns a string. A later sibling
+# operand leaves through ??. The exit frees the temporary once.
+# EXPECT_STDOUT_EXACT: "err\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn fails() string | StdError:
+    return Result.Err(StdError.Error)
+
+fn ok() string | StdError:
+    return Result.Ok("z")
+
+fn mk(i32 a) string:
+    return "{a}{a}"
+
+struct Tag:
+    string s
+
+fn tag(i32 a) Tag:
+    return Tag(mk(a))
+
+fn tag_fails() Tag | StdError:
+    return Result.Err(StdError.Error)
+
+fn tag_ok() Tag | StdError:
+    return Result.Ok(Tag("z"))
+
+fn c1(i32 a) string | StdError:
+    let bool b = tag(a) == tag_fails()??
+    let string x = "{b}"
+    return Result.Ok(x)
+
+fn main() i32:
+    println(c1(7).realise("err"))
+    return 0

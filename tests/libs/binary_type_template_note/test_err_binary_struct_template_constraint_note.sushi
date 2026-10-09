@@ -1,0 +1,14 @@
+# A generic struct of a binary library constrains its type parameter with a perk.
+# The consumer writes `Box@(i32)`, and `i32` does not implement the perk. The note
+# names the template's source slice and shows the template's line.
+# BUILD_LIB_BINARY: template_note_lib.sushi
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: <template:template_note_lib:Box>:1:20
+# EXPECT_STDERR_CONTAINS: public struct Box@(T: Named):
+use <lib/template_note_lib>
+
+fn take(Box@(i32) b) i32:
+    return 0
+
+fn main() i32:
+    return 0

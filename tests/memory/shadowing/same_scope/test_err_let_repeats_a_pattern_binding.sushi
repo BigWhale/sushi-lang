@@ -1,0 +1,12 @@
+# A `let` in a match arm that repeats a pattern binding is an error.
+# EXPECT_ERROR_CODES_EXACT: CE1006
+# EXPECT_STDERR_CONTAINS: test_err_let_repeats_a_pattern_binding.sushi:9:13: error [CE1006]
+# EXPECT_STDERR_CONTAINS: test_err_let_repeats_a_pattern_binding.sushi:8:9\n
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(4)
+    match m:
+        Maybe.Some(v) ->
+            let i32 v = 9
+            println(v)
+        Maybe.None -> println("none")
+    return 0

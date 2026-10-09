@@ -474,6 +474,13 @@ fn main() i32:
     return 0
 ```
 
+A block declares a name one time. A second `let` of a name in the same block is
+[CE1006](error-catalog.md#ce1006). The parameters of a function, a `foreach` item, an
+`expand` binder and the bindings of a match arm are in the scope of the body that they
+start, so a `let` in that body cannot repeat them. To change a variable, use `:=`. To use
+a name again, declare it in a nested block: that is a shadow
+([CW1002](error-catalog.md#cw1002)).
+
 ## Functions
 
 ### Declaration
@@ -2879,6 +2886,8 @@ Only the unit that declares the type may implement `Drop` for it ([`CE4012`](err
 declares a primitive, a `string`, an array, `List`, `HashMap`, `Own`, `Maybe`, `Result` or
 a predefined error type, so `Drop` on one of them is [`CE4016`](error-catalog.md#ce4016). A channel on `drop()` is
 [`CE0133`](error-catalog.md#ce0133). A generic target is legal: `extend Sink@(T) with Drop`.
+Only the compiler calls `drop()`: a written call is [`CE4020`](error-catalog.md#ce4020), on a value, through a `Drop`
+constraint and on a field in a destructor.
 
 **`Hashable`** is the constraint for a type that has a hash. Every type
 with a derived hash implements it with no declaration. `extend T with Hashable` replaces

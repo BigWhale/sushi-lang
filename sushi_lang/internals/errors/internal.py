@@ -506,3 +506,14 @@ _add(ErrorMessage("CE0149", Severity.ERROR,
     "that the template check did not find. This is a fault in the compiler. The text "
     "holds the code and the message that the copy reported, so the user can still see "
     "the fault."))
+
+_add(ErrorMessage("CE0150", Severity.ERROR,
+    "the borrow pass has no move location for the moved variable '{name}'",
+    Category.INTERNAL,
+    "A use-after-move error (CE2405, CE2435) is relational: it shows the use, and a note "
+    "shows where the value moved. The borrow pass records the location with the moved "
+    "flag, and every branch join and loop join keeps the two together. A moved variable "
+    "with no location means that a path set the flag and lost the location. Before "
+    "#1200, a join kept the flag and dropped the location when a later path rebound the "
+    "name, and the error showed no note. This is a fault in the compiler, not in the "
+    "program; please report the program."))

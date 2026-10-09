@@ -1,0 +1,16 @@
+# The to_str() result of a number is the argument of a call inside a println.
+# The call site owns the temporary and frees it one time.
+# EXPECT_STDOUT_EXACT: "7\n1.5\nafter\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn id(string s) string:
+    return s.clone()
+
+fn main() i32:
+    let i32 a = 7
+    let f64 e = 1.5
+    println(id(a.to_str()))
+    println(id(e.to_str()))
+    println("after")
+    return 0

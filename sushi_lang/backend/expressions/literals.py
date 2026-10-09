@@ -152,13 +152,17 @@ def _emit_interpolated_string(codegen: 'LLVMCodegen', expr: InterpolatedString) 
                         # reads the typecheck pass's stamp before falling back to its
                         # own reconstruction.
                         is_signed = not is_unsigned_type(part_type)
-                        string_values.append(codegen.runtime.formatting.emit_integer_to_string(expr_value, is_signed=is_signed, bit_width=width))
+                        text = codegen.runtime.formatting.emit_integer_to_string(expr_value, is_signed=is_signed, bit_width=width)
+                        codegen.print_frames.register_value(text)
+                        string_values.append(text)
                         fresh_flags.append(True)
                     else:
                         raise_internal_error("CE0022", type=f"i{width}")
                 elif isinstance(llvm_type, (ir.FloatType, ir.DoubleType)):
                     is_double = isinstance(llvm_type, ir.DoubleType)
-                    string_values.append(codegen.runtime.formatting.emit_float_to_string(expr_value, is_double=is_double))
+                    text = codegen.runtime.formatting.emit_float_to_string(expr_value, is_double=is_double)
+                    codegen.print_frames.register_value(text)
+                    string_values.append(text)
                     fresh_flags.append(True)
                 else:
                     raise_internal_error("CE0022", type=str(llvm_type))

@@ -1,0 +1,11 @@
+# A type pack after an ordinary type parameter of a struct is refused too.
+# EXPECT_ERROR_CODES_EXACT: CE0115
+# EXPECT_STDERR_CONTAINS: type pack '...Ts' not allowed in a struct
+
+struct Pairs@(T, ...Ts):
+    T first
+
+fn main() i32:
+    let Pairs@(i32, string, bool) p = Pairs(1)
+    println(p.first)
+    return 0

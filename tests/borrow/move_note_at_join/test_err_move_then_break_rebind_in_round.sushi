@@ -1,0 +1,27 @@
+# A loop round moves `s` and breaks on one path, and rebinds `s` on the other path. The
+# use after the loop is CE2405, and the note points at the move before the `break`.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: test_err_move_then_break_rebind_in_round.sushi:22:13: error [CE2405]
+# EXPECT_STDERR_CONTAINS: 's' was moved here
+# EXPECT_STDERR_CONTAINS: test_err_move_then_break_rebind_in_round.sushi:18:21
+
+use <collections/strings>
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn f(bool go) i32:
+    let string s = "tow".concat("el")
+    let i32 i = 0
+    while (i < 2):
+        if (go):
+            eat(nom s)
+            break
+        s := "c".concat("d")
+        i := i + 1
+    println(s)
+    return i
+
+fn main() i32:
+    println(f(true))
+    return 0

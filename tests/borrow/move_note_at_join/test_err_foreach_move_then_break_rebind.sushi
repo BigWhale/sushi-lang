@@ -1,0 +1,24 @@
+# A `foreach` round moves `s` and breaks on one path, and rebinds `s` on the other path.
+# The use after the loop is CE2405, and the note points at the move before the `break`.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: test_err_foreach_move_then_break_rebind.sushi:20:13: error [CE2405]
+# EXPECT_STDERR_CONTAINS: 's' was moved here
+# EXPECT_STDERR_CONTAINS: test_err_foreach_move_then_break_rebind.sushi:17:21
+
+use <collections/strings>
+
+fn eat(nom string s) ~:
+    println(s)
+
+fn f(bool go) i32:
+    let string s = "tow".concat("el")
+    foreach(_ in 0..2):
+        if (go):
+            eat(nom s)
+            break
+        s := "c".concat("d")
+    println(s)
+    return 0
+
+fn main() i32:
+    return f(true)

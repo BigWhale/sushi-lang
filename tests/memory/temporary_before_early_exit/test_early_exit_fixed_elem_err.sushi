@@ -1,0 +1,23 @@
+# The value of an element of a fixed array literal is a temporary that owns a string. A later sibling
+# operand leaves through ??. The exit frees the temporary once.
+# EXPECT_STDOUT_EXACT: "err\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn fails() string | StdError:
+    return Result.Err(StdError.Error)
+
+fn ok() string | StdError:
+    return Result.Ok("z")
+
+fn mk(i32 a) string:
+    return "{a}{a}"
+
+fn c1(i32 a) string | StdError:
+    let string[2] arr = [mk(a), fails()??]
+    let string x = "{arr[0]}{arr[1]}"
+    return Result.Ok(x)
+
+fn main() i32:
+    println(c1(7).realise("err"))
+    return 0

@@ -1,0 +1,20 @@
+# The to_str() result of a number is a println argument. The println frees the buffer one time.
+# EXPECT_STDOUT_EXACT: "1\n7\n200\n-9\n1.5\n2.25\nafter\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    let i32 a = 1
+    let u64 b = 7
+    let u8 c = 200
+    let i64 d = -9
+    let f64 e = 1.5
+    let f32 f = 2.25
+    println(a.to_str())
+    println(b.to_str())
+    println(c.to_str())
+    println(d.to_str())
+    println(e.to_str())
+    println(f.to_str())
+    println("after")
+    return 0

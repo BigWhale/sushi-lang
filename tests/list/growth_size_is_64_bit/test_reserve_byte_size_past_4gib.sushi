@@ -1,0 +1,24 @@
+# EXPECT_STDOUT_EXACT: "536870913\n2016\n14\n"
+# EXPECT_RUNTIME_EXIT: 0
+# A reserve of 2^29 + 1 elements of eight bytes asks for 2^32 + 8 bytes.
+# The buffer must hold every slot that the capacity promises.
+# The pushes write past the first eight bytes, and the second buffer must keep its values.
+fn main() i32:
+    let List@(i64) xs = List.new()
+    xs.reserve(536870913)
+    let List@(i64) ys = List.new()
+    ys.reserve(2)
+    ys.push(7)
+    ys.push(7)
+    foreach(i in 0..64):
+        xs.push(i as i64)
+    println(xs.capacity())
+    let i64 xsum = 0
+    foreach(x in xs.iter()):
+        xsum := xsum + x
+    let i64 ysum = 0
+    foreach(y in ys.iter()):
+        ysum := ysum + y
+    println(xsum)
+    println(ysum)
+    return 0

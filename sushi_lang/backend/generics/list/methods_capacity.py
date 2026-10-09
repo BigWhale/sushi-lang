@@ -80,8 +80,8 @@ def emit_list_shrink_to_fit(codegen: Any, list_ptr: ir.Value, list_type: StructT
         codegen.builder.cbranch(is_empty, after_empty_check, not_empty_block)
 
         codegen.builder.position_at_end(not_empty_block)
-        element_size = memory.get_element_size_constant(codegen, element_llvm_type)
-        new_total_size = codegen.builder.mul(current_len, element_size, name="new_total_size")
+        new_total_size = memory.emit_byte_size(codegen, current_len, element_llvm_type,
+                                               name="new_total_size")
 
         new_data_ptr = memory.emit_realloc_call(codegen, data_ptr, new_total_size)
         typed_new_data_ptr = codegen.builder.bitcast(

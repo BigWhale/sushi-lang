@@ -1,0 +1,9 @@
+# One destructure that binds one name two times is an error.
+# EXPECT_ERROR_CODES_EXACT: CE1006
+# EXPECT_STDERR_CONTAINS: test_err_destructure_repeats_a_name.sushi:7:13: error [CE1006]
+# EXPECT_STDERR_CONTAINS: test_err_destructure_repeats_a_name.sushi:7:10\n
+fn main() i32:
+    let (i32, i32) t = (1, 2)
+    let (a, a) = t
+    println(a)
+    return 0

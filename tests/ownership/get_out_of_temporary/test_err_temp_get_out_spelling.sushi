@@ -1,0 +1,14 @@
+# A get-out from a temporary container is a read through that temporary. The CE2411
+# message spells the temporary in a short form, and the help shows the same spelling.
+# EXPECT_ERROR_CODE: CE2411
+# EXPECT_STDERR_CONTAINS: "cannot consume 'give().last().or_err(nom StdError.Error)??'"
+# EXPECT_STDERR_CONTAINS: "`give().last().or_err(nom StdError.Error)??.clone()`"
+fn give() string[]:
+    return from(["ford {1}", "arthur {2}"])
+
+fn fetch() string | StdError:
+    return Result.Ok(give().last().or_err(nom StdError.Error)??)
+
+fn main() i32:
+    println(fetch().realise("none"))
+    return 0

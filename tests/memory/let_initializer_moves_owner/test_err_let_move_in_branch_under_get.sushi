@@ -1,0 +1,17 @@
+# A `let` initializer in a branch that moves an owner invalidates a `let`-borrow of it.
+#
+# `m` reads out of `xs`. The `if` arm hands `xs` to `ys`. The read of `m` inside the
+# arm, after the move, is CE2412.
+# EXPECT_ERROR_CODE: CE2412
+use <collections/strings>
+
+fn main() i32:
+    let string[] xs = from(["Mostly ".concat("Harmless")])
+    let Maybe@(string) m = xs.get(0)
+    if (xs.len() > 0):
+        let string[] ys = xs
+        ys.clear()
+        match m:
+            Maybe.Some(s) -> println(s)
+            Maybe.None() -> println("none")
+    return 0

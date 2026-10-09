@@ -1,0 +1,14 @@
+# A temporary receiver keeps its own owner. The binding owns the copy.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "towel\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn give() string:
+    return "tow".concat("el")
+
+fn main() i32:
+    let string t = give().to_str()
+    println(t)
+    return 0

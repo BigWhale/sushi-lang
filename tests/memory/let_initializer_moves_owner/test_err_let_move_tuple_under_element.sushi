@@ -1,0 +1,13 @@
+# A tuple destructure that moves the whole invalidates a `let`-borrow of an element.
+#
+# `first` reads out of `t`. `let (a, b) = t` hands `t` to the binders. The read of
+# `first` after the move is CE2412.
+# EXPECT_ERROR_CODE: CE2412
+use <collections/strings>
+
+fn main() i32:
+    let (string, string) t = ("Mostly ".concat("Harmless"), "b".concat("c"))
+    let string first = t.0
+    let (a, b) = t
+    println("{a} {b} {first}")
+    return 0

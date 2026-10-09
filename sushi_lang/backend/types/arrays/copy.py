@@ -69,8 +69,7 @@ def _emit_memcpy(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value, count
     """`count` elements, in one call. The stride is the ABI ALLOC size, never the data size."""
     from sushi_lang.backend.expressions import memory
 
-    element_size = memory.get_element_size_constant(codegen, element_llvm_type)
-    total_bytes = codegen.builder.mul(count, element_size, name="copy_bytes")
+    total_bytes = memory.emit_byte_size(codegen, count, element_llvm_type, name="copy_bytes")
     memory.emit_memcpy_bytes(codegen, dest, source, total_bytes)
 
 

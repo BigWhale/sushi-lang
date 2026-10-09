@@ -1,0 +1,17 @@
+# A `let` initializer that moves an owner invalidates each `let`-borrow of it.
+#
+# `m` reads out of `xs`. `let string[] ys = xs` hands `xs` to `ys`, and `ys` then frees
+# the element that `m` points at. The read of `m` after the move is CE2412.
+# EXPECT_ERROR_CODE: CE2412
+use <collections/strings>
+
+fn main() i32:
+    let string[] xs = from(["Mostly ".concat("Harmless")])
+    let Maybe@(string) m = xs.get(0)
+    let string[] ys = xs
+    ys.clear()
+    ys.push("XXXXXXXXXXXXXXXX".concat("YYYYYYYY"))
+    match m:
+        Maybe.Some(s) -> println(s)
+        Maybe.None() -> println("none")
+    return 0

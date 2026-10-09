@@ -1,0 +1,16 @@
+# Three instances of the target give one report for the one template.
+# EXPECT_ERROR_CODES_EXACT: CE2097
+struct Crate@(T):
+    T v
+
+extend Crate@(T) hash() u64:
+    return 7 as u64
+
+fn main() i32:
+    let Crate@(i32) a = Crate(1)
+    let Crate@(string) b = Crate("Mostly Harmless")
+    let Crate@(bool) c = Crate(true)
+    println(a.v)
+    println(b.v)
+    println(c.v)
+    return 0

@@ -1,0 +1,9 @@
+# A second `let` of one name in one block is an error at the second declaration.
+# EXPECT_ERROR_CODES_EXACT: CE1006
+# EXPECT_STDERR_CONTAINS: test_err_let_twice_in_one_block.sushi:7:5: error [CE1006]
+# EXPECT_STDERR_CONTAINS: test_err_let_twice_in_one_block.sushi:6:5\n
+fn main() i32:
+    let i32 a = 1
+    let i32 a = 2
+    println(a)
+    return 0

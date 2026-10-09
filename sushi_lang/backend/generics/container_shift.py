@@ -22,8 +22,8 @@ def _emit_shift(codegen: Any, data_ptr: ir.Value, dest_index: ir.Value,
     with codegen.builder.if_then(codegen.builder.icmp_signed(">", count, zero)):
         src_ptr = gep_utils.gep_array_element(codegen, data_ptr, src_index, "shift_src")
         dest_ptr = gep_utils.gep_array_element(codegen, data_ptr, dest_index, "shift_dest")
-        element_size = memory.get_element_size_constant(codegen, element_llvm_type)
-        bytes_to_move = codegen.builder.mul(count, element_size, name="shift_bytes")
+        bytes_to_move = memory.emit_byte_size(codegen, count, element_llvm_type,
+                                              name="shift_bytes")
         memory.emit_memmove_bytes(codegen, dest_ptr, src_ptr, bytes_to_move)
 
 
