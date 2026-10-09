@@ -93,6 +93,10 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "tests/unit/test_stdlib_signature_tables.py"),
     ("sushi_lang/sushi_stdlib/src/net/socket_funcs.py", "get_builtin_socket_function_return_type",
      "tests/unit/test_stdlib_signature_tables.py"),
+    # -- a reader in a later step of one branch -------------------------------------
+    ("sushi_lang/semantics/*", "unchecked",
+     "the dont_panic stamp (#1247): the backend reads it in a later step of the branch, "
+     "and this entry then matches no candidate and must go"),
     # -- kept by a maintainer ruling, one entry each (no pattern) --------------------
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SO_ERROR", _PLATFORM_ABI),
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "SOCKADDR_HAS_LEN", _PLATFORM_ABI),

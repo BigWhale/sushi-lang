@@ -7,6 +7,7 @@ from sushi_lang.semantics.ast import Lambda, Param, Block, Expr
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_name, first_tree, is_type_node)
 from sushi_lang.internals.report import span_of
+from sushi_lang.semantics.ast_builder.declarations.signatures import refuse_dont_panic
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -16,6 +17,7 @@ def parse_lambda(t: Tree, ast_builder: "ASTBuilder") -> Lambda:
     """Build a Lambda from a `lambda_expr` / `lambda_block` parse tree."""
     is_block = t.data == "lambda_block"
     params = _parse_lambda_params(t, ast_builder)
+    refuse_dont_panic(t.children, "lambda", ast_builder)
 
     ret: Optional[object] = None
     err_type: Optional[object] = None

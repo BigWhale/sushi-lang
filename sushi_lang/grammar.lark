@@ -36,11 +36,11 @@ enum_variant: NAME ["(" [enum_variant_fields] ")"] _NEWLINE
 enum_variant_fields: type ("," type)*
 
 perk_def: PUBLIC? PERK NAME [type_params] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | perk_method)+ _DEDENT
-perk_method: FN NAME "(" [parameters] ")" type ["|" type] _NEWLINE
+perk_method: FN NAME "(" [parameters] ")" type ["|" type] [dont_panic] _NEWLINE
 
 // Foreign Function Interface (FFI) - unsafe external blocks
 external_block: UNSAFE EXTERNAL STRING AS NAME [BECAUSE STRING] ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | extern_decl | extern_var)+ _DEDENT
-extern_decl: FN NAME "(" [ extern_params ] ")" type "=" (STRING | extern_link_name) _NEWLINE
+extern_decl: FN NAME "(" [ extern_params ] ")" type [dont_panic] "=" (STRING | extern_link_name) _NEWLINE
 // A C global variable, read-only from Sushi (#1090).
 extern_var: VAR type NAME "=" (STRING | extern_link_name) _NEWLINE
 // A link name that differs per platform is a string constant (#1089): `STAT_SYMBOL`
@@ -58,10 +58,10 @@ extend_stmt: EXTEND type extend_suffix
 // statement. `method_name` widens the declaration slot the call site always had, so
 # `extend Box static new(...)` is writable (ruling R3).
 extend_suffix: WITH implemented_perk ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | STATIC? function_def)+ _DEDENT  -> extend_with_def
-             | STATIC? method_name [type_params] "(" [parameters] ")" type ["|" type] ":" block  -> extend_def
+             | STATIC? method_name [type_params] "(" [parameters] ")" type ["|" type] [dont_panic] ":" block  -> extend_def
 // A conversion (docs/design/error-conversion.md section 3.1): the target type and a body.
 // It has no place for a `| E`, because the body is bare.
-             | AS type ":" block  -> extend_as_def
+             | AS type [dont_panic] ":" block  -> extend_as_def
 
 // The perk of an implementation, bare or behind an alias (`extend Dog with p.Named`).
 implemented_perk: NAME ("." NAME)?
@@ -69,7 +69,12 @@ implemented_perk: NAME ("." NAME)?
 block: _NEWLINE _INDENT (_NEWLINE | DOC_BLOCK | statement)+ _DEDENT
 
 
-function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ["|" type] ":" block
+function_def: PUBLIC? FN NAME [type_params] "(" [parameters] ")" type? ["|" type] [dont_panic] ":" block
+
+// The marker of a body whose `[]` emit no bounds check (docs/design/dont-panic.md). The
+// `because` text is required. A perk contract method, an extern and a lambda parse it
+// only so that the AST builder can refuse it (CE6111).
+dont_panic: DONT_PANIC BECAUSE STRING
 
 parameters: param ("," param)*
 param: typed_param | variadic_param
@@ -281,9 +286,9 @@ method_name: NAME | NEW | EXTEND
 // a `_DEDENT` with no trailing `_NEWLINE`, so it is admitted only in the specific
 // statement tails that can absorb a trailing block (currently a `let` RHS, see
 // let_stmt). This keeps the newline-delimited statement model intact.
-lambda_def: BIT_OR lambda_params BIT_OR expr       -> lambda_expr
+lambda_def: BIT_OR lambda_params BIT_OR [dont_panic] expr       -> lambda_expr
 
-lambda_block: BIT_OR lambda_params BIT_OR lambda_ret? ":" block
+lambda_block: BIT_OR lambda_params BIT_OR lambda_ret? [dont_panic] ":" block
 
 lambda_params: BITNOT                              -> lambda_no_params
              | lambda_param ("," lambda_param)*
@@ -326,6 +331,7 @@ PERK.2: /perk\b/
 UNSAFE.2: /unsafe\b/
 EXTERNAL.2: /external\b/
 BECAUSE.2: /because\b/
+DONT_PANIC.2: /dont_panic\b/
 FN: "fn"
 EXTEND.2: /extend\b/
 STATIC.2: /static\b/

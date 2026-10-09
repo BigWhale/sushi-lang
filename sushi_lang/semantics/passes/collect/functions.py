@@ -317,6 +317,10 @@ class GenericFuncDef:
     opaque: Dict[str, TypeParameter] = field(default_factory=dict)
     # On an instance: the template it is a copy of, as on `FuncDef`.
     template_id: Optional['TemplateId'] = None
+    # The `dont_panic` marker, as on `FuncDef`. An instance is a copy of this node, so
+    # it carries the marker of its template (docs/design/dont-panic.md, D6).
+    dont_panic: Optional[str] = None
+    dont_panic_span: Optional[Span] = None
 
 
 class Redeclaration(Enum):
@@ -956,6 +960,8 @@ class FunctionCollector:
             unit_name=self.current_unit_name,
             filename=self.current_unit_file,
             opaque=opaque,
+            dont_panic=fn.dont_panic,
+            dont_panic_span=fn.dont_panic_span,
         )
 
         self.generic_funcs.declare(name, generic_func)

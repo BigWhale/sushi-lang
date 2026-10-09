@@ -3661,6 +3661,20 @@ A destructuring rebind `(a, b) := v` evaluates all of `v` first and then assigns
 
 The target of an `extend` can put a bound on a type parameter: `extend List@(T: Clone) filter(...)`, `extend (T: Clone)[] filter(...)`. The grammar accepts `NAME: Perk` in every type-argument list, because the parser cannot know the position. The AST builder refuses it in every other position: a `let` type, a parameter type, a return type, a field, an explicit type argument of a call, a conversion source, and a position inside a target argument (`extend Box@(List@(T: Clone))`). A function, a struct and an enum write the bound in their own type-parameter list.
 
+### CE6111 {#ce6111}
+
+**Error** · syntax
+
+**Message:** `'dont_panic' cannot stand on {position}: {reason}`
+
+**Help:**
+
+- `write the marker on a named function that holds the loop`
+- `write the marker on the implementation method`
+- `remove the marker; a C function has no index for Sushi to uncheck`
+
+The `dont_panic because "<reason>"` marker removes the bounds check of each `[]` in the body of the declaration that carries it. So it stands only on a named declaration with a body: a free function, a static, an extension method, a perk implementation method and a conversion. A perk contract method and an extern have no body, and the marker on one would remove nothing. A lambda is refused because the lift pass makes it a function of its own, which can run after the marked function returned, outside the guards that the `because` text states. The marker also does not reach a lambda in a marked body: the indexes there keep their check. See [the dont_panic design](design/dont-panic.md).
+
 ## CE7xxx: Documentation block errors {#ce7xxx}
 
 These errors are about what a documentation block (`##: ... :##`) tells about its declaration.
