@@ -99,8 +99,9 @@ rules behind them are in
 `--dont-panic` lets the build accept functions marked `dont_panic because "<reason>"`. In a
 marked body, an index on an array or a string is not bounds-checked. Without the flag, the
 marker in a user unit is [CE0152](error-catalog.md#ce0152). The flag is also the consent of
-a consumer to the marked functions of a source library, and to the marked templates of any
-library kind. A bundled stdlib unit needs no flag. A build that compiles no marked
+a consumer to the marked functions of a source library, and to the marked generic templates
+of any library kind. A concrete marked body in a binary or hybrid library is compiled
+already and needs no consent. A bundled stdlib unit needs no flag. A build that compiles no marked
 function outside the stdlib gets [CW0003](error-catalog.md#cw0003) for the flag. The build
 prints no list of what it accepted. See the
 [language reference](language-reference.md#unchecked-indexes-dont_panic).
@@ -584,7 +585,7 @@ before code generation. It gives these diagnostics:
 | [CW0002](error-catalog.md#cw0002) | `cannot write LLVM IR to '<path>': <reason>` | `--write-ll` cannot write the `.ll` file. The build is written; the IR is not |
 | [CE0152](error-catalog.md#ce0152) | `<function> is marked dont_panic, and this build does not allow it` | A user unit writes the `dont_panic` marker and the build has no `--dont-panic`, or a library that the build uses has the marker and the build has no `--dont-panic` |
 | [CE6111](error-catalog.md#ce6111) | `'dont_panic' cannot stand on <position>: <reason>` | The marker is on a lambda, a perk contract method or an extern |
-| [CW0003](error-catalog.md#cw0003) | `'<flag>' has no effect <reason>` | The build does not read the flag: `--docs` without `--lib-info`, `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib`, `--write-ll` / `--keep-object` on the incremental build, or `--dont-panic` on a build that marks no function |
+| [CW0003](error-catalog.md#cw0003) | `'<flag>' has no effect <reason>` | The build does not read the flag: `--docs` without `--lib-info`, `--lib-kind` or `--lib-version` without `--lib`, `--keep-object` with `--lib`, `--write-ll` / `--keep-object` on the incremental build, or `--dont-panic` on a build with no function marked `dont_panic` outside the bundled stdlib |
 | [CW0004](error-catalog.md#cw0004) | `<function> is marked dont_panic, but its body has no index to uncheck` | The marker removes no check. For an author only: a user unit and a bundled stdlib unit |
 
 A warning makes the compiler exit 1; an error makes it exit 2.
