@@ -186,6 +186,7 @@ class MethodTypeRegistry:
         family = self.claim(receiver_type, call.method, validator)
         if family is None or family.beats_perk != beats_perk or family.validate is None:
             return False
+        call.callee_builtin_family = family.name
         if reject_builtin_miscount(validator.reporter, call,
                                    f"{display_type(receiver_type)}.{call.method}",
                                    family.arity):
@@ -231,8 +232,8 @@ class ArrayMethodInferrer:
             # `.get()`, `.first()` and `.last()` READ, and `.pop()` and `.remove()` REMOVE,
             # but all five answer "there is no such element" the same way, so each is
             # Maybe@(T) -- as `List@(T)` already was. A bare `T` had to invent a value for
-            # the empty case (#377).
-            if self.method_name in ("get", "first", "last", "pop", "remove"):
+            # the empty case (#377). `.min()` and `.max()` have the same empty case.
+            if self.method_name in ("get", "first", "last", "pop", "remove", "min", "max"):
                 element_type = actual_type.base_type
                 maybe_type = ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
                 return maybe_type

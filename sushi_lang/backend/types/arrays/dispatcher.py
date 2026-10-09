@@ -1,6 +1,6 @@
 """Array method dispatcher."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import DotCall, MethodCall
@@ -8,11 +8,12 @@ from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type, dere
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import gep_utils
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.method_effects import effect_of
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
-from .methods import core, iterators, hashing
+from .methods import core, iterators, hashing, reductions
 from .addressing import as_array_address
 from .fixed_addressing import as_fixed_array_address
 
@@ -26,6 +27,7 @@ def is_builtin_array_method(method_name: str) -> bool:
         "index_of_from",
         "clear", "truncate", "capacity", "destroy", "free",
         "iter", "to_string", "to_string_checked", "clone", "hash", "fill", "reverse",
+        "swap", "resize", "min", "max", "add_up",
         "extend", "extend_range", "extend_str", "extend_back", "s", "ss"
     }
 
@@ -91,6 +93,22 @@ def _index_arg(codegen: 'LLVMCodegen', arg) -> ir.Value:
     return codegen.utils.require_i32(codegen.expressions.emit_expr(arg))
 
 
+def _length_args(codegen: 'LLVMCodegen', expr: MethodCall | DotCall,
+                 element_type: 'Type') -> tuple[ir.Value, ir.Value | None]:
+    """The new length of `clear()`, `truncate(n)` or `resize(n, v)`, and the fill value.
+
+    Only `resize` has a fill value. It is a borrow, as for `fill`: each added slot takes
+    its own copy.
+    """
+    if expr.method == "clear":
+        return ir.Constant(codegen.types.i32, 0), None
+    new_len = _index_arg(codegen, expr.args[0])
+    if expr.method == "truncate":
+        return new_len, None
+    from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
+    return new_len, emit_borrowed_arg(codegen, expr.args[1], element_type)
+
+
 def _dynamic_data_and_len(codegen: 'LLVMCodegen', receiver: ir.Value,
                           prefix: str) -> tuple[ir.Value, ir.Value]:
     """A `T[]` receiver address as its (data pointer, length)."""
@@ -109,6 +127,36 @@ def _eq_range_operands(codegen: 'LLVMCodegen', expr) -> tuple[ir.Value, ir.Value
         start = _index_arg(codegen, expr.args[0])
     other_data, other_len, _ = _source_data_and_len(codegen, expr, expr.args[-1])
     return start, other_data, other_len
+
+
+def _emit_over_elements(codegen: 'LLVMCodegen', expr: MethodCall | DotCall,
+                        element_semantic_type: 'Type',
+                        reach: Callable[[str], tuple[ir.Value, ir.Value]]) -> ir.Value:
+    """The methods that work on `data[0..count)` alone, the same for either array kind.
+
+    `reverse` keeps an arm of its own in each half, which `test_array_method_twins_are_one`
+    reads.
+
+    `reach(prefix)` gives the receiver's (data pointer, count). It is called after the
+    arguments are emitted, as each half does for its other methods.
+    """
+    method_name = expr.method
+    match method_name:
+        case "swap":
+            first, second = (_index_arg(codegen, arg) for arg in expr.args)
+            data, count = reach("swap")
+            return core.emit_array_swap(codegen, data, count, first, second)
+        case "min" | "max":
+            data, count = reach(method_name)
+            return reductions.emit_array_extreme(codegen, data, count,
+                                                 element_semantic_type, method_name)
+        case "add_up":
+            data, count = reach("add_up")
+            return reductions.emit_array_add_up(codegen, data, count,
+                                                element_semantic_type)
+        case _:
+            raise_internal_error("CE0024", method=method_name,
+                                 type=display_type(element_semantic_type))
 
 
 def emit_array_method(
@@ -224,6 +272,12 @@ def emit_fixed_array_method(
 
         case "reverse":
             return core.emit_array_reverse(codegen, data("reverse", writable=True), count)
+
+        case "swap" | "min" | "max" | "add_up":
+            writes = effect_of(method_name).mutates
+            return _emit_over_elements(
+                codegen, expr, element_semantic_type,
+                lambda prefix: (data(prefix, writable=writes), count))
 
         case "s" | "ss":
             slice_data = data("slice_src")
@@ -355,12 +409,10 @@ def emit_dynamic_array_method(
             return core.emit_dynamic_array_pop(codegen, receiver_value, array_struct_type,
                                                element_semantic_type, to_i1)
 
-        case "clear" | "truncate":
-            new_len = (ir.Constant(codegen.types.i32, 0) if method_name == "clear"
-                       else _index_arg(codegen, expr.args[0]))
-            return core.emit_dynamic_array_truncate(codegen, receiver_value,
-                                                    array_struct_type, new_len,
-                                                    element_semantic_type)
+        case "clear" | "truncate" | "resize":
+            new_len, fill_value = _length_args(codegen, expr, element_semantic_type)
+            return core.emit_dynamic_array_resize(codegen, receiver_value, array_struct_type,
+                                                  new_len, fill_value, element_semantic_type)
 
         case "free":
             return core.emit_dynamic_array_free(codegen, receiver_value, array_struct_type,
@@ -405,6 +457,11 @@ def emit_dynamic_array_method(
         case "reverse":
             data, count = _dynamic_data_and_len(codegen, receiver_value, "reverse")
             return core.emit_array_reverse(codegen, data, count)
+
+        case "swap" | "min" | "max" | "add_up":
+            return _emit_over_elements(
+                codegen, expr, element_semantic_type,
+                lambda prefix: _dynamic_data_and_len(codegen, receiver_value, prefix))
 
         case "extend" | "extend_range":
             source_data, source_len, _ = _source_data_and_len(codegen, expr, expr.args[0])

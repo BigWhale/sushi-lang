@@ -1,6 +1,6 @@
 """Dynamic array core methods."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import DynamicArrayNew, DynamicArrayFrom
@@ -343,19 +343,63 @@ def emit_array_fill(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value,
 
 
 def _store_fill_element(codegen: 'LLVMCodegen', element_ptr: ir.Value,
-                        fill_value: ir.Value, element_type: 'Type') -> None:
+                        fill_value: ir.Value, element_type: 'Type', *,
+                        replaces: bool = True) -> None:
     """Put one copy of the fill value into one slot.
 
     The copy comes FIRST: it reads the source before the old element is freed, so a source
     that aliases the buffer about to go is still intact. `arr[i] := v` orders it the same
     way. Both steps are no-ops for a plain element type, where a shallow store IS the value.
+    A slot that `resize` adds holds no element yet, so it has nothing to free (`replaces`).
     """
     from sushi_lang.backend.destructors import destroy_old_value
     from sushi_lang.backend.ownership import copy_out
 
     copy = copy_out(codegen, fill_value, element_type)
-    destroy_old_value(codegen, element_ptr, element_type)
+    if replaces:
+        destroy_old_value(codegen, element_ptr, element_type)
     codegen.builder.store(codegen.utils.cast_for_param(copy, element_ptr.type.pointee), element_ptr)
+
+
+def emit_dynamic_array_resize(codegen: 'LLVMCodegen', array_value: ir.Value,
+                              array_type: ir.LiteralStructType, new_len: ir.Value,
+                              fill_value: Optional[ir.Value],
+                              element_type: 'Type') -> ir.Value:
+    """Set the length to `new_len`: cut the tail as `truncate` does, or add slots.
+
+    The one emitter of `clear()`, `truncate(n)` and `resize(n, v)`. With no fill value it
+    only cuts. Each added slot takes its own copy of the borrowed fill value, as a `fill`
+    slot does. A negative length counts as zero, which `truncate` already decides. The
+    growth is the one that bulk appends use, so a series of small growths takes linear time.
+    """
+    from sushi_lang.backend.expressions import memory
+    from sushi_lang.backend.generics.container_walk import emit_container_walk
+
+    emit_dynamic_array_truncate(codegen, array_value, array_type, new_len, element_type)
+    if fill_value is None:
+        return ir.Constant(codegen.types.i32, 0)
+
+    b = codegen.builder
+    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
+    current_len = b.load(len_ptr, name="resize_len")
+    with b.if_then(b.icmp_signed(">", new_len, current_len, name="resize_grows")):
+        cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
+        data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, array_value)
+        data_ptr = memory.emit_grow_to_fit(
+            codegen, data_ptr=b.load(data_ptr_ptr, name="resize_data"),
+            data_ptr_ptr=data_ptr_ptr, cap_ptr=cap_ptr,
+            current_cap=b.load(cap_ptr, name="resize_cap"), count=new_len,
+            element_llvm_type=array_type.elements[2].pointee,
+            policy=memory.GrowPolicy.AT_LEAST)
+        tail = gep_utils.gep_array_element(codegen, data_ptr, current_len, "resize_tail")
+        emit_container_walk(
+            codegen, tail, b.sub(new_len, current_len, name="resize_added"),
+            lambda element_ptr, _i: _store_fill_element(codegen, element_ptr, fill_value,
+                                                        element_type, replaces=False),
+            prefix="resize")
+        b.store(new_len, len_ptr)
+
+    return ir.Constant(codegen.types.i32, 0)
 
 
 def emit_array_reverse(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value) -> ir.Value:
@@ -390,8 +434,33 @@ def _swap_halves(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value,
     def swap(left_ptr: ir.Value, index: ir.Value) -> None:
         mirror = builder.sub(last, index, name="mirror_index")
         right_ptr = gep_utils.gep_array_element(codegen, data_ptr, mirror, "right_ptr")
-        builder.store(builder.load(left_ptr, name="left_val"), temp)
-        builder.store(builder.load(right_ptr, name="right_val"), left_ptr)
-        builder.store(builder.load(temp, name="temp_val"), right_ptr)
+        _swap_slots(codegen, left_ptr, right_ptr, temp)
 
     emit_container_walk(codegen, data_ptr, half, swap, prefix="reverse")
+
+
+def _swap_slots(codegen: 'LLVMCodegen', left_ptr: ir.Value, right_ptr: ir.Value,
+                temp: ir.Value) -> None:
+    """Exchange the bits of two slots through `temp`. No element is copied or dropped, so
+    an owning element keeps its one owner."""
+    builder = codegen.builder
+    builder.store(builder.load(left_ptr, name="left_val"), temp)
+    builder.store(builder.load(right_ptr, name="right_val"), left_ptr)
+    builder.store(builder.load(temp, name="temp_val"), right_ptr)
+
+
+def emit_array_swap(codegen: 'LLVMCodegen', data_ptr: ir.Value, count: ir.Value,
+                    first: ir.Value, second: ir.Value) -> ir.Value:
+    """Exchange `data_ptr[first]` and `data_ptr[second]`, for either array kind.
+
+    Each index is checked as the index of `arr[i]` is: one out of range is RE2020.
+    `swap(i, i)` stores each slot back unchanged.
+    """
+    from sushi_lang.backend.types.arrays.bounds import emit_bounds_check
+
+    emit_bounds_check(codegen, first, count, prefix="swap_first")
+    emit_bounds_check(codegen, second, count, prefix="swap_second")
+    temp = entry_alloca(codegen.builder, data_ptr.type.pointee, name="swap_temp")
+    _swap_slots(codegen, gep_utils.gep_array_element(codegen, data_ptr, first, "swap_left"),
+                gep_utils.gep_array_element(codegen, data_ptr, second, "swap_right"), temp)
+    return ir.Constant(codegen.types.i32, 0)

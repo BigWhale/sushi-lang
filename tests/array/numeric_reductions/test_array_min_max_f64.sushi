@@ -1,0 +1,9 @@
+# `.min()`, `.max()` and `.add_up()` of a float array.
+# EXPECT_STDOUT_EXACT: "-2.25 3 2.25\n"
+# EXPECT_RUNTIME_EXIT: 0
+fn main() i32:
+    let f64[] xs = from([1.5, -2.25, 3.0])
+    let f64 low = xs.min().realise(0.0)
+    let f64 high = xs.max().realise(0.0)
+    println("{low} {high} {xs.add_up()}")
+    return 0

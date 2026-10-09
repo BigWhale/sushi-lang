@@ -100,24 +100,35 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
             i1v = codegen.runtime.strings.emit_string_order(op, lhs, rhs)
         return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
 
+    sem = None
+    if isinstance(lhs.type, ir.IntType):
+        from .type_utils import infer_expr_semantic_type
+        sem = infer_expr_semantic_type(codegen, expr.left)
+        if sem is None:
+            sem = infer_expr_semantic_type(codegen, expr.right)
+    i1v = emit_number_comparison(codegen, op, lhs, rhs, sem)
+    return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
+
+
+def emit_number_comparison(codegen: 'LLVMCodegen', op: str, lhs: ir.Value, rhs: ir.Value,
+                           operand_type: 'Optional[Type]') -> ir.Value:
+    """The i1 answer of a comparison of two numbers of one type.
+
+    A float compares ordered, so a NaN operand answers false. An integer compares by the
+    sign of `operand_type`. The operator and the array reductions read this one rule.
+    """
     if isinstance(lhs.type, (ir.FloatType, ir.DoubleType)):
-        i1v = codegen.builder.fcmp_ordered(op, lhs, rhs)
-        return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
+        return codegen.builder.fcmp_ordered(op, lhs, rhs)
 
     for operand in (lhs, rhs):
         if not isinstance(operand.type, ir.IntType):
             raise_internal_error("CE0017", src=str(operand.type), dst="an integer comparison operand")
     _require_one_width(op, lhs, rhs)
 
-    from .type_utils import infer_expr_semantic_type, is_unsigned_type
-    sem = infer_expr_semantic_type(codegen, expr.left)
-    if sem is None:
-        sem = infer_expr_semantic_type(codegen, expr.right)
-    if sem is not None and is_unsigned_type(sem):
-        i1v = codegen.builder.icmp_unsigned(op, lhs, rhs)
-    else:
-        i1v = codegen.builder.icmp_signed(op, lhs, rhs)
-    return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
+    from .type_utils import is_unsigned_type
+    if operand_type is not None and is_unsigned_type(operand_type):
+        return codegen.builder.icmp_unsigned(op, lhs, rhs)
+    return codegen.builder.icmp_signed(op, lhs, rhs)
 
 
 def _emit_contract_comparison(codegen: 'LLVMCodegen', expr: BinaryOp,

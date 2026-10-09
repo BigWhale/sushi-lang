@@ -1,0 +1,15 @@
+# With duplicates, `.binary_search(v)` gives one of the matching indexes.
+# EXPECT_STDOUT_EXACT: "one of the matches\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/sort>
+
+fn main() i32:
+    let i32[] xs = from([1, 4, 4, 4, 4, 8])
+    match xs.binary_search(4):
+        Maybe.Some(i) ->
+            if (i >= 1 and i <= 4):
+                println("one of the matches")
+            else:
+                println("wrong index {i}")
+        Maybe.None() -> println("none")
+    return 0

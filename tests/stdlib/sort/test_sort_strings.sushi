@@ -1,0 +1,11 @@
+# `.sort()` moves owning strings by `.swap()`, so nothing is copied or lost.
+# EXPECT_STDOUT_EXACT: "["apple1", "banana2", "cherry3", "date4"]\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+use <collections/sort>
+
+fn main() i32:
+    let string[] words = from(["date{4}", "apple{1}", "cherry{3}", "banana{2}"])
+    words.sort()
+    println("{words}")
+    return 0

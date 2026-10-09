@@ -1,0 +1,9 @@
+# `.add_up()` follows the run-time rule of `+`: an integer total wraps.
+# EXPECT_STDOUT_EXACT: "44 200 100\n"
+# EXPECT_RUNTIME_EXIT: 0
+fn main() i32:
+    let u8[] bytes = from([])
+    bytes.push(200)
+    bytes.push(100)
+    println("{bytes.add_up()} {bytes.max().realise(0)} {bytes.min().realise(0)}")
+    return 0

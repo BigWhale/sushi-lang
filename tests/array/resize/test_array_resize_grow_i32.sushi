@@ -1,0 +1,8 @@
+# `.resize(n, v)` past the length adds `n - len()` slots that hold `v`.
+# EXPECT_STDOUT_EXACT: "[1, 2, 9, 9, 9] 5\n"
+# EXPECT_RUNTIME_EXIT: 0
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    xs.resize(5, 9)
+    println("{xs} {xs.len()}")
+    return 0

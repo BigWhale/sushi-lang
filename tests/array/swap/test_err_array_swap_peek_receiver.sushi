@@ -1,0 +1,9 @@
+# A `peek` parameter is read-only, so `.swap()` on it is refused, as `.reverse()` is.
+# EXPECT_ERROR_CODE: CE2408
+fn flip(peek i32[] xs) ~:
+    xs.swap(0, 1)
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    flip(peek xs)
+    return 0

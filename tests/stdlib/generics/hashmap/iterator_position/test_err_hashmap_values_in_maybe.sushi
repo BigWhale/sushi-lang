@@ -1,0 +1,16 @@
+# A HashMap iterator is walked only as the iterable of a foreach. Here the
+# value of .values() is put in a Maybe and matched, so the compiler refuses
+# the call.
+# EXPECT_ERROR_CODE: CE2127
+
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("a", 1)
+    match Maybe.Some(m.values()):
+        Maybe.Some(v) ->
+            foreach(x in v):
+                println(x)
+        Maybe.None -> println("none")
+    return 0

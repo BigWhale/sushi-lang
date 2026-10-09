@@ -1,0 +1,19 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "[x]\n[x--]\n[--x]\n[x]\n"
+# EXPECT_NO_LEAKS: true
+# Each of the four trims is called once on an owning string that is built at run time.
+# The receiver, the argument and each result are freed at the end of main.
+use <collections/strings>
+
+fn main() i32:
+    let string text = "-".repeat(2).concat("x").concat("-".repeat(2))
+    let string dash = "-".repeat(1)
+    let string a = text.trim_matches(dash)
+    let string b = text.trim_start_chars(dash)
+    let string c = text.trim_end_chars(dash)
+    let string d = text.trim_chars(dash)
+    println("[{a}]")
+    println("[{b}]")
+    println("[{c}]")
+    println("[{d}]")
+    return 0

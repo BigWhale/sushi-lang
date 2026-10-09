@@ -37,12 +37,13 @@ from sushi_lang.semantics.passes.types.arrays import (
 # What the module carried on the day the table replaced the three lists. A count is not a
 # rule, so these are not asserted as a target -- they are the control that says the reader
 # below found something to read.
-MEASURED_NAMES = 31
-MEASURED_FIXED_ARMS = 16
+MEASURED_NAMES = 36
+MEASURED_FIXED_ARMS = 20
 
-# The seven whose answer is a `Maybe` the CALLER interns (`ArrayMethodInferrer`), and
+# The nine whose answer is a `Maybe` the CALLER interns (`ArrayMethodInferrer`), and
 # which therefore carry the sentinel rather than a rule of their own.
-INTERNED_NAMES = {"get", "first", "last", "pop", "remove", "index_of", "index_of_from"}
+INTERNED_NAMES = {"get", "first", "last", "pop", "remove", "index_of", "index_of_from",
+                  "min", "max"}
 
 
 # --------------------------------------------------------------------------- the table

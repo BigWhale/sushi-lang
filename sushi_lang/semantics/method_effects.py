@@ -7,6 +7,7 @@ passes, so the typecheck pass never imports the borrow pass.
 
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -44,14 +45,29 @@ METHOD_EFFECTS: dict[str, MethodEffect] = {
     "rehash": _MUTATES,
     "destroy": _MUTATES,
     "free": _MUTATES,
+    "resize": _MUTATES,
     "fill": _REFILLS,
     "reverse": _WRITES_IN_PLACE,
+    "swap": _WRITES_IN_PLACE,
 }
 
 
 def effect_of(method: str) -> MethodEffect:
     """The effect of a method name; a name the table does not carry has none."""
     return METHOD_EFFECTS.get(method, _NO_EFFECT)
+
+
+# The built-in method families (`METHOD_TYPE_REGISTRY`) whose methods the table describes.
+# A row applies to a call only when one of these families answered it: `string.reverse()`
+# and a user extension named `push` are other methods with the same name.
+EFFECT_FAMILIES = frozenset({"array", "list", "hashmap", "own"})
+
+
+def callee_effect(method: str, family: Optional[str]) -> MethodEffect:
+    """The effect of a call whose callee the typecheck pass stamped as `family`."""
+    if family not in EFFECT_FAMILIES:
+        return _NO_EFFECT
+    return effect_of(method)
 
 
 def methods_where(flag: str) -> frozenset[str]:

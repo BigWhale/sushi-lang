@@ -1,0 +1,13 @@
+# `.swap(i, i)` changes nothing, also for an owning element.
+# EXPECT_STDOUT_EXACT: "["x1", "y2"]\n[7, 8]\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let string[] words = from(["x{1}", "y{2}"])
+    words.swap(1, 1)
+    println("{words}")
+    let i32[] xs = from([7, 8])
+    let i32 k = 0
+    xs.swap(k, k)
+    println("{xs}")
+    return 0

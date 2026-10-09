@@ -1,0 +1,13 @@
+# On an unsorted array the answer is not defined, but the method ends and never traps.
+# EXPECT_STDOUT_EXACT: "done\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/sort>
+
+fn main() i32:
+    let i32[] xs = from([9, 1, 8, 2, 7, 3])
+    foreach(v in -2..12):
+        let i32 at = xs.binary_search(v).realise(-1)
+        if (at < -1 or at >= xs.len()):
+            println("bad {at}")
+    println("done")
+    return 0

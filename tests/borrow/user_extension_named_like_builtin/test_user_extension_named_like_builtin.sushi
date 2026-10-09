@@ -1,0 +1,23 @@
+# A user extension that does not take `poke self` does not change its receiver. Its name
+# can be the name of a built-in array method, and a borrowed receiver still takes the call.
+# EXPECT_STDOUT_EXACT: "3\n4\n"
+
+struct Pair:
+    i32 a
+
+extend Pair reverse() i32:
+    return self.a
+
+extend Pair push(i32 x) i32:
+    return self.a + x
+
+fn look(Pair p) i32:
+    return p.reverse()
+
+fn grow(Pair p) i32:
+    return p.push(1)
+
+fn main() i32:
+    println("{look(Pair(3))}")
+    println("{grow(Pair(3))}")
+    return 0

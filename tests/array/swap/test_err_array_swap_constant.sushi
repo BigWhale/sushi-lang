@@ -1,0 +1,7 @@
+# A constant is read-only storage, so `.swap()` on it is refused.
+# EXPECT_ERROR_CODE: CE2096
+const i32[3] TABLE = [1, 2, 3]
+
+fn main() i32:
+    TABLE.swap(0, 1)
+    return 0

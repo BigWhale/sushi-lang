@@ -1,6 +1,6 @@
 # A method of the Sushi half of <collections/strings> needs the import, as a built-in
 # string method does. With no import, the method is not found.
-# EXPECT_ERROR_CODES_EXACT: CE2008
+# EXPECT_ERROR_CODES_EXACT: CE3015
 
 fn main() i32:
     println("Mostly\nHarmless".lines().len())

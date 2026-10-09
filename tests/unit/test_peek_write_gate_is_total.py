@@ -24,6 +24,8 @@ CASES = {
     "free":          ("HashMap@(i32, string)", "r.free()", _HASHMAP),
     "fill":          ("i32[]", "r.fill(7)", ""),
     "reverse":       ("i32[]", "r.reverse()", ""),
+    "swap":          ("i32[]", "r.swap(0, 1)", ""),
+    "resize":        ("i32[]", "r.resize(4, 0)", ""),
     "extend":        ("i32[]", "r.extend(from([1]))", ""),
     "extend_range":  ("i32[]", "r.extend_range(from([1]), 0, 1)", ""),
     "extend_str":    ("u8[]", "r.extend_str(\"x\")", ""),

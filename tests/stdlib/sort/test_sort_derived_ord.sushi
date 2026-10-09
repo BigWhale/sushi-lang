@@ -1,0 +1,14 @@
+# `.sort()` on a struct reads its derived `Ord`: the fields in order.
+# EXPECT_STDOUT_EXACT: "1,9 2,1 2,5 3,0\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/sort>
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point[] ps = from([Point(2, 5), Point(3, 0), Point(1, 9), Point(2, 1)])
+    ps.sort()
+    println("{ps[0].x},{ps[0].y} {ps[1].x},{ps[1].y} {ps[2].x},{ps[2].y} {ps[3].x},{ps[3].y}")
+    return 0

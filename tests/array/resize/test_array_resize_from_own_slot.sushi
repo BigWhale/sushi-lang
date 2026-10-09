@@ -1,0 +1,16 @@
+# The fill value may be a slot of the array itself. The value is read before the buffer
+# grows, so each added slot copies an intact value.
+# EXPECT_STDOUT_EXACT: "1000 t1 [1, 2]\n1 t1\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+struct Tag:
+    string name
+    i32[] marks
+
+fn main() i32:
+    let Tag[] xs = from([Tag("t{1}", from([1, 2]))])
+    xs.resize(1000, xs[0])
+    println("{xs.len()} {xs[999].name} {xs[999].marks}")
+    xs.resize(1, xs[500])
+    println("{xs.len()} {xs[0].name}")
+    return 0

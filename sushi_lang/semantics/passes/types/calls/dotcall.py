@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 #: The stamps a resolved callee leaves on the temporary node, in one place. The borrow
 #: pass and the backend read every one of them off the DotCall itself. The inference half
 #: writes `inferred_return_type` on the DotCall itself, so it is not copied (#769).
-CALLEE_STAMPS = ("resolved_enum_type", "callee_self_mode",
+CALLEE_STAMPS = ("resolved_enum_type", "callee_self_mode", "callee_builtin_family",
                  "callee_param_modes", "callee_param_names", "callee_param_types",
                  "callee_method_type_args", "callee_variadic_at")
 

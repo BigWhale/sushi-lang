@@ -1,0 +1,6 @@
+# The reductions need a numeric element type.
+# EXPECT_ERROR_CODE: CE2128
+fn main() i32:
+    let string[] words = from(["a", "b"])
+    println(words.min().realise(""))
+    return 0

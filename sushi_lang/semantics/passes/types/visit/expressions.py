@@ -1,12 +1,12 @@
 """Expression validation for the typecheck pass."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Expr
+    from sushi_lang.semantics.ast import Expr, Node
     from sushi_lang.semantics.passes.types import TypeValidator
     from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.passes.types.calls import (
@@ -37,14 +37,26 @@ class ExpressionValidator(RecursiveVisitor):
         """Initialize with reference to the main type validator."""
         self.type_validator = type_validator
 
+    def visit(self, node: 'Node') -> None:
+        """Validate one expression. The overflow check of a nest runs at its top.
+
+        Each validated expression comes here: from `validate_expression`, and from an
+        arm that visits its child. Thus no position skips the check (`operator_nest.py`).
+        """
+        from sushi_lang.semantics.passes.types.expressions import reject_overflowing_nest
+        from sushi_lang.semantics.passes.types.operator_nest import is_overflow_checked
+        expr = cast('Expr', node)
+        nests = self.type_validator.operator_nests
+        handed = nests.enter(expr)
+        try:
+            super().visit(expr)
+            if not handed and is_overflow_checked(expr):
+                reject_overflowing_nest(self.type_validator, expr)
+        finally:
+            nests.leave()
+
     def visit_unaryop(self, node: UnaryOp) -> None:
         """Validate unary operation."""
-        # CE5010: a foreign ptr is an opaque handle - no negation, NOT, or truthiness
-        operand_type = self.type_validator.infer_expression_type(node.expr)
-        if isinstance(operand_type, ForeignPtrType):
-            er.emit(self.type_validator.reporter, er.ERR.CE5010, node.loc, op=node.op)
-            return
-
         # A negated integer literal is range-checked as one signed value, so
         # that i32 min (-2147483648) stays legal while the positive literal
         # 2147483648 alone would not be. Only when it has no context type: a stamped
@@ -65,7 +77,14 @@ class ExpressionValidator(RecursiveVisitor):
                 self._emit_literal_overflow(node.expr)
             node.expr.range_checked = True
 
-        self.type_validator.validate_expression(node.expr)
+        # The operand is validated first, so its type is read one time and not inferred
+        # again from the whole operand.
+        operand_type = self.type_validator.validate_expression(node.expr)
+
+        # CE5010: a foreign ptr is an opaque handle - no negation, NOT, or truthiness
+        if isinstance(operand_type, ForeignPtrType):
+            er.emit(self.type_validator.reporter, er.ERR.CE5010, node.loc, op=node.op)
+            return
 
         if node.op == "~":
             from sushi_lang.semantics.passes.types.expressions import validate_bitwise_unary
@@ -77,36 +96,46 @@ class ExpressionValidator(RecursiveVisitor):
                 reject_non_bool_condition)
             reject_non_bool_condition(self.type_validator, node.expr, operand_type)
 
-        # Unary minus is arithmetic, so it takes a number like the binary half, and it
-        # is overflow-checked because the smallest signed value has no positive twin.
-        # `~` is width-defined and never reports.
+        # Unary minus is arithmetic, so it takes a number like the binary half. Its
+        # overflow check (the smallest signed value has no positive twin) runs at the top
+        # of its nest, in `validate_expression`. `~` is width-defined and never reports.
         if node.op == "neg":
             from sushi_lang.semantics.passes.types.expressions import (
-                reject_non_numeric_arithmetic, reject_overflowing_operation)
+                reject_non_numeric_arithmetic)
             reject_non_numeric_arithmetic(self.type_validator, "-",
                                           [(node.expr, operand_type)])
-            reject_overflowing_operation(self.type_validator, node, operand_type)
 
     def visit_binaryop(self, node: BinaryOp) -> None:
         """Validate binary operation."""
         from sushi_lang.semantics.passes.types.expressions import (
             ARITHMETIC_OPS, COMPARISON_OPS, DIVISION_OPS, is_string_plus,
             reject_mixed_numeric_operands, reject_non_bool_condition,
-            reject_non_numeric_arithmetic, reject_overflowing_operation,
-            reject_uncomparable_operands, reject_zero_divisor)
+            reject_non_numeric_arithmetic, reject_uncomparable_operands,
+            reject_zero_divisor)
 
         # Operand-driven literal typing: when one operand is a bare (unstamped)
         # numeric literal and the other a concrete numeric type, stamp the literal
         # to that type so `a + 1` (a: u8) is u8 + u8, not the mixed u8 + i32 below.
-        # BEFORE validation, so the range check reads the sibling's type and not the
-        # i32 default (#826); again after it, for a sibling only validation can type.
-        self._context_type_operand_from_sibling(node, self._infer_leaving_no_trace)
+        # The sibling is validated first, and the literal is stamped BEFORE its own
+        # validation, so the range check reads the sibling's type and not the i32
+        # default (#826). The type of the validated sibling is kept, so a nest of
+        # operators with a literal at each level is not inferred again at each level.
         if node.op in COMPARISON_OPS:
             self._type_enum_operand_from_sibling(node)
-        self.type_validator.validate_expression(node.left)
-        self.type_validator.validate_expression(node.right)
-        self._context_type_operand_from_sibling(
-            node, self.type_validator.infer_expression_type)
+        from sushi_lang.semantics.passes.types.propagation import lone_bare_literal
+        infer = self.type_validator.infer_expression_type
+        literal = lone_bare_literal(node.left, node.right)
+        if literal is None:
+            # Two bare literals, or none: the stamp infers nothing.
+            self._context_type_operand_from_sibling(node, infer)
+            self.type_validator.validate_expression(node.left)
+            self.type_validator.validate_expression(node.right)
+        else:
+            sibling = node.right if literal is node.left else node.left
+            self.type_validator.validate_expression(sibling)
+            self._context_type_operand_from_sibling(node, infer)
+            self.type_validator.validate_expression(literal)
+        self._context_type_operand_from_sibling(node, infer)
 
         left_type = self.type_validator.infer_expression_type(node.left)
         right_type = self.type_validator.infer_expression_type(node.right)
@@ -144,10 +173,9 @@ class ExpressionValidator(RecursiveVisitor):
             reject_non_bool_condition(self.type_validator, node.left, left_type)
             reject_non_bool_condition(self.type_validator, node.right, right_type)
 
-        # The overflow-checked operators. A width-defined one cannot leave its type,
-        # so it is not asked (Ruling 1 of docs/design/compile-time-evaluation.md).
-        if node.op in ARITHMETIC_OPS:
-            reject_overflowing_operation(self.type_validator, node, left_type)
+        # The overflow check of an arithmetic operator runs at the top of its nest, in
+        # `validate_expression`. A width-defined one cannot leave its type, so it is not
+        # asked (Ruling 1 of docs/design/compile-time-evaluation.md).
 
     def _infer_leaving_no_trace(self, expr) -> Optional[Type]:
         """The type of a value that is not validated yet, with no stamp and no diagnostic.

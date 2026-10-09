@@ -1,0 +1,9 @@
+# `.min()` and `.max()` of an i32 array with negative values, and `.add_up()`.
+# EXPECT_STDOUT_EXACT: "-7 12 6\n"
+# EXPECT_RUNTIME_EXIT: 0
+fn main() i32:
+    let i32[] xs = from([3, -7, 12, 0, -2])
+    let i32 low = xs.min().realise(100)
+    let i32 high = xs.max().realise(-100)
+    println("{low} {high} {xs.add_up()}")
+    return 0

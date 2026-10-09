@@ -1,0 +1,7 @@
+# A negation in an interpolation hole that leaves its type is CE2077.
+# EXPECT_ERROR_CODES_EXACT: CE2077
+const i8 SMALLEST = -128
+
+fn main() i32:
+    println("{-SMALLEST}")
+    return 0

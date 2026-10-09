@@ -7,6 +7,7 @@ formatters and `StringBuilder` ship as Sushi source. One import gives both halve
 method here is bare and total, so a call gives the value directly, with no `??`.
 :##
 use <collections/strings>
+use <text/ascii>
 
 ##:
 Gives the value of one digit byte: `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35.
@@ -268,6 +269,188 @@ extend string trim_end_matches(string t) string:
     return cut_bytes(self, 0, end)
 
 ##:
+Removes every repeat of `t` at the start and at the end of the text.
+
+The result is `trim_start_matches(t)` and then `trim_end_matches(t)`. An empty `t` gives
+the text unchanged.
+
+- Parameter t: The text to remove.
+- Returns: A new string without the leading and the trailing repeats of `t`.
+- Example:
+  ```sushi
+  println("abxab".trim_matches("ab"))
+  ```
+:##
+extend string trim_matches(string t) string:
+    return self.trim_start_matches(t).trim_end_matches(t)
+
+##:
+Tests if a byte is a UTF-8 continuation byte, `0x80` to `0xBF`.
+
+- Parameter b: The byte to test.
+- Returns: True when the byte continues a code point and does not start one.
+:##
+fn is_continuation_byte(u8 b) bool:
+    return (b & a'\xc0') == a'\x80'
+
+##:
+Gives the byte count of the code point that starts at a byte.
+
+- Parameter s: The text.
+- Parameter at: The offset of the first byte of the code point.
+- Returns: The width that the first byte states, 1 to 4, but not past the end of `s`.
+:##
+fn code_point_width(string s, i32 at) i32:
+    let u8 b = s[at]
+    let i32 w = 1
+    if (b >= a'\xf0'):
+        w := 4
+    elif (b >= a'\xe0'):
+        w := 3
+    elif (b >= a'\xc0'):
+        w := 2
+    if (at + w > s.size()):
+        return s.size() - at
+    return w
+
+##:
+Gives the offset of the first byte of the code point that ends at `end`.
+
+- Parameter s: The text.
+- Parameter end: The offset after the code point. It is more than 0.
+- Returns: The offset of the last byte before `end` that is not a continuation byte,
+  or 0.
+:##
+fn code_point_start_before(string s, i32 end) i32:
+    let i32 at = end - 1
+    while (at > 0 and is_continuation_byte(s[at])):
+        at := at - 1
+    return at
+
+##:
+Removes the code points of `set` at the start of the text.
+
+The text is read one whole code point at a time. A code point is removed when `set`
+holds it, and the removal stops at the first code point that `set` does not hold. An
+empty `set` gives the text unchanged.
+
+- Parameter set: The code points to remove, in any order.
+- Returns: A new string without the leading code points of `set`.
+- Example:
+  ```sushi
+  println("0042".trim_start_chars("0"))
+  ```
+:##
+extend string trim_start_chars(string set) string:
+    let i32 n = self.size()
+    let i32 start = 0
+    while (start < n):
+        let i32 w = code_point_width(self, start)
+        let string c = cut_bytes(self, start, start + w)
+        if (not set.contains(c)):
+            break
+        start := start + w
+    return cut_bytes(self, start, n)
+
+##:
+Removes the code points of `set` at the end of the text.
+
+The text is read one whole code point at a time, from the end. A code point is removed
+when `set` holds it, and the removal stops at the first code point that `set` does not
+hold. An empty `set` gives the text unchanged.
+
+- Parameter set: The code points to remove, in any order.
+- Returns: A new string without the trailing code points of `set`.
+- Example:
+  ```sushi
+  println("4200".trim_end_chars("0"))
+  ```
+:##
+extend string trim_end_chars(string set) string:
+    let i32 end = self.size()
+    while (end > 0):
+        let i32 at = code_point_start_before(self, end)
+        let string c = cut_bytes(self, at, end)
+        if (not set.contains(c)):
+            break
+        end := at
+    return cut_bytes(self, 0, end)
+
+##:
+Removes the code points of `set` at the start and at the end of the text.
+
+The result is `trim_start_chars(set)` and then `trim_end_chars(set)`. An empty `set`
+gives the text unchanged.
+
+- Parameter set: The code points to remove, in any order.
+- Returns: A new string without the leading and the trailing code points of `set`.
+- Example:
+  ```sushi
+  println("/a/b//".trim_chars("/"))
+  ```
+:##
+extend string trim_chars(string set) string:
+    return self.trim_start_chars(set).trim_end_chars(set)
+
+##:
+Finds the first match of `needle` at or after the character index `start`.
+
+`start` and the answer are UTF-8 character indexes, as for `find`, so
+`find_from(needle, 0)` gives the answer of `find(needle)`. A negative `start` counts as
+0. An empty `needle` matches at `start`. A `start` equal to the character count matches
+only an empty `needle`, and a `start` more than the character count gives no match.
+
+- Parameter needle: The text to find.
+- Parameter start: The character index where the search starts.
+- Returns: `Maybe.Some(index)` with the character index of the match, or `Maybe.None()`.
+- Example:
+  ```sushi
+  println("abcabc".find_from("bc", 2).realise(-1))
+  ```
+:##
+extend string find_from(string needle, i32 start) Maybe@(i32):
+    let i32 n = self.size()
+    let i32 at = 0
+    let i32 index = 0
+    while (index < start):
+        if (at >= n):
+            return Maybe.None()
+        at := at + 1
+        while (at < n and is_continuation_byte(self[at])):
+            at := at + 1
+        index := index + 1
+    while (at + needle.size() <= n):
+        if (bytes_match_at(self, needle, at)):
+            return Maybe.Some(index)
+        if (not is_continuation_byte(self[at])):
+            index := index + 1
+        at := at + 1
+    return Maybe.None()
+
+##:
+Compares two texts with the ASCII letters folded to lower case.
+
+Each byte from 65 to 90 (`A` to `Z`) compares as its lower-case letter, through
+`to_ascii_lower` of `<text/ascii>`. Every other byte compares as it is, so a non-ASCII
+letter is not folded, which is the rule of `lower()`. Two texts of different byte length
+are not equal, and no byte is read for them.
+
+- Parameter other: The text to compare with.
+- Returns: True when the two texts hold the same bytes after the fold.
+- Example:
+  ```sushi
+  println("HeLLo".eq_ignore_case("hello"))
+  ```
+:##
+extend string eq_ignore_case(string other) bool:
+    if (self.size() != other.size()):
+        return false
+    foreach(i in 0..self.size()):
+        if (self[i].to_ascii_lower() != other[i].to_ascii_lower()):
+            return false
+    return true
+
+##:
 Splits the text into lines.
 
 The text is split at each `\n`. A `\r` immediately before the `\n` is removed, and a
@@ -339,7 +522,7 @@ extend string chars() string[]:
     let i32 n = self.size()
     let i32 start = -1
     foreach(i in 0..n):
-        if ((self[i] & a'\xc0') != a'\x80'):
+        if (not is_continuation_byte(self[i])):
             if (start < 0):
                 start := 0
             else:

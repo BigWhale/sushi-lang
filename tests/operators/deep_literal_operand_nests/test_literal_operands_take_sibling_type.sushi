@@ -1,0 +1,20 @@
+# A bare literal operand takes the type of its sibling, on the left side and on
+# the right side, also under a negation, with and without a declared type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "255\n255\n255\n255\n-128\n-128\n4000000000\n"
+fn main() i32:
+    let u8 n = 250
+    let u8 a = n + 1 + 1 + 1 + 1 + 1
+    let u8 b = 1 + (1 + (1 + (1 + (1 + n))))
+    let i8 m = -100
+    let i8 c = m - 1 - 27
+    let i8 d = -27 + (-1 + m)
+    let u32 z = 1000000000
+    println(a)
+    println(b)
+    println(n + 1 + 1 + 1 + 1 + 1)
+    println(1 + (1 + (1 + (1 + (1 + n)))))
+    println(c)
+    println(d)
+    println(3000000000 + z)
+    return 0

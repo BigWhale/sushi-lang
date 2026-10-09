@@ -1,0 +1,21 @@
+# `.sort_by(cmp)` is stable: elements with equal keys keep their input order.
+# EXPECT_STDOUT_EXACT: "1a 1c 1f 2b 2e 3d 3g \n"
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/sort>
+
+struct Item:
+    i32 key
+    string tag
+
+fn by_key(Item a, Item b) i32:
+    return a.key - b.key
+
+fn main() i32:
+    let Item[] items = from([Item(2, "b"), Item(1, "a"), Item(3, "d"), Item(1, "c"),
+                             Item(2, "e"), Item(1, "f"), Item(3, "g")])
+    items.sort_by(by_key)
+    let string out = ""
+    foreach(it in items.iter()):
+        out := "{out}{it.key}{it.tag} "
+    println(out)
+    return 0

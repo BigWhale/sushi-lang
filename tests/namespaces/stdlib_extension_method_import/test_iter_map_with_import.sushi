@@ -1,0 +1,12 @@
+# With the import, the same call compiles and runs.
+# EXPECT_STDOUT_EXACT: "2\n"
+use <collections/iter>
+
+fn dbl(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let List@(i32) ys = xs.map(dbl)
+    println(ys.len())
+    return 0

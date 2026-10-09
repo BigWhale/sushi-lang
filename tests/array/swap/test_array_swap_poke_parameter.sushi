@@ -1,0 +1,11 @@
+# `.swap()` through a `poke` parameter reaches the caller's array.
+# EXPECT_STDOUT_EXACT: "[2, 1]\n"
+# EXPECT_RUNTIME_EXIT: 0
+fn flip(poke i32[] xs) ~:
+    xs.swap(0, 1)
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    flip(poke xs)
+    println("{xs}")
+    return 0

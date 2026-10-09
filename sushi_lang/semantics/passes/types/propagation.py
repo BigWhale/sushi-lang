@@ -66,31 +66,52 @@ def type_literal_from_sibling(validator: 'TypeValidator', first: 'Expr', second:
     """
     first_lit = unwrap_type_preserving_unary(first)
     second_lit = unwrap_type_preserving_unary(second)
-    first_bare = is_bare_numeric_literal(first_lit)
-    second_bare = is_bare_numeric_literal(second_lit)
-    if first_bare and second_bare:
+    if is_bare_numeric_literal(first_lit) and is_bare_numeric_literal(second_lit):
         first_byte, second_byte = is_byte_literal(first_lit), is_byte_literal(second_lit)
         if first_byte != second_byte:
             propagate_types_to_value(validator, second if first_byte else first,
                                      BuiltinType.U8)
         return
-    if first_bare == second_bare:
+    literal = lone_bare_literal(first, second)
+    if literal is None:
         return
-    literal, sibling = (first, second) if first_bare else (second, first)
+    sibling = second if literal is first else first
     sibling_type = infer(sibling)
     if isinstance(sibling_type, BuiltinType):
         propagate_types_to_value(validator, literal, sibling_type)
+
+
+def lone_bare_literal(first: 'Expr', second: 'Expr') -> 'Optional[Expr]':
+    """The operand that is a bare numeric literal when the other operand is not one.
+
+    Bareness is read through the unary operators that keep their operand's type.
+    """
+    first_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(first))
+    second_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(second))
+    if first_bare == second_bare:
+        return None
+    return first if first_bare else second
+
+
+def same_type_operands(expr: 'Expr') -> 'tuple[Expr, ...]':
+    """The operands of an operator that have the type of the operator itself."""
+    if isinstance(expr, BinaryOp):
+        if expr.op in _ARITH_BITWISE_OPS:
+            return (expr.left, expr.right)
+        if expr.op in _SHIFT_OPS:
+            return (expr.left,)
+        return ()
+    if isinstance(expr, UnaryOp) and expr.op in _TYPE_PRESERVING_UNARY:
+        return (expr.expr,)
+    return ()
 
 
 def _propagate_numeric_type(validator: 'TypeValidator', expr: 'Expr',
                             expected: BuiltinType) -> None:
     """Push an expected numeric type into a value's literal leaves."""
     if isinstance(expr, BinaryOp):
-        if expr.op in _ARITH_BITWISE_OPS:
-            _propagate_numeric_type(validator, expr.left, expected)
-            _propagate_numeric_type(validator, expr.right, expected)
-        elif expr.op in _SHIFT_OPS:
-            _propagate_numeric_type(validator, expr.left, expected)
+        for operand in same_type_operands(expr):
+            _propagate_numeric_type(validator, operand, expected)
         return
     if (isinstance(expr, UnaryOp) and expr.op in _TYPE_PRESERVING_UNARY
             and not _is_negated_literal(expr)):
@@ -432,6 +453,8 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
                             expected_type: 'Type') -> None:
     """Unified entry point for all type propagation."""
     from .utils import names_no_type
+    # A stamp can change the type of a node under the value that is validated already.
+    validator.operator_nests.forget_types_under(value_expr)
     if names_no_type(validator, expected_type):
         _note_refused_declared_type(validator, value_expr)
         return

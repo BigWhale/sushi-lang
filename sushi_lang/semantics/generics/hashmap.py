@@ -52,10 +52,32 @@ def validate_hashmap_method_with_validator(
         _validate_hashmap_insert(call, hashmap_type, reporter, validator)
     elif call.method in _KEY_METHODS:
         _validate_hashmap_key_method(call, hashmap_type, reporter, validator)
+    elif call.method in _ITERATOR_METHODS:
+        _reject_iterator_outside_foreach(call, reporter, validator)
 
 
 #: The methods whose one argument is a key.
 _KEY_METHODS = frozenset({"get", "contains_key", "remove"})
+
+#: The methods that answer an iterator over the buckets.
+_ITERATOR_METHODS = frozenset({"keys", "values", "entries", "pairs"})
+
+
+def _reject_iterator_outside_foreach(call: MethodCall, reporter: Any, validator: Any) -> None:
+    """CE2127: a bucket iterator is legal only as the iterable of a `foreach`.
+
+    The bucket walk needs K and V, and the loop reads them from the receiver of this
+    call. A value that left the call carries only `Iterator@(K)`, and the array walk
+    that a `foreach` gives it then walks zero entries. A dot call reaches here as a
+    view that shares the receiver node, so the test reads the receiver and the method.
+    """
+    walked = validator.walked_iterable
+    if (walked is not None and getattr(walked, "receiver", None) is call.receiver
+            and getattr(walked, "method", None) == call.method):
+        return
+    er.emit_with(reporter, er.ERR.CE2127, call.loc, method=call.method).help(
+        f"walk the map where the call is written, `foreach(x in map.{call.method}())`, "
+        f"or pass the map and call '.{call.method}()' in the function that walks it").emit()
 
 
 @overload

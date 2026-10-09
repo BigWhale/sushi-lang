@@ -1,0 +1,8 @@
+# An operation in a tuple element that leaves its type is CE2077.
+# EXPECT_ERROR_CODES_EXACT: CE2077
+const i8 SMALL = 127
+
+fn main() i32:
+    let (i8, i32) t = (SMALL + 1, 0)
+    println(t.1)
+    return 0

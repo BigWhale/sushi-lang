@@ -1,0 +1,11 @@
+# `.sort()` needs an element type with an order. A function value has none.
+# EXPECT_ERROR_CODE: CE4006
+use <collections/sort>
+
+fn one(i32 x) i32:
+    return x
+
+fn main() i32:
+    let (fn(i32) -> i32)[] fs = from([one])
+    fs.sort()
+    return 0

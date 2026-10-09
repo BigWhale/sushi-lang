@@ -1,0 +1,13 @@
+# Sort 200000 values in reverse order. A sort with a quadratic cost takes far too long.
+# EXPECT_STDOUT_EXACT: "200000 1 200000\n"
+# EXPECT_RUNTIME_EXIT: 0
+use <collections/sort>
+
+fn main() i32:
+    let i32 n = 200000
+    let i32[] xs = from([])
+    foreach(i in (1..=n).rev()):
+        xs.push(i)
+    xs.sort()
+    println("{xs.len()} {xs[0]} {xs[n - 1]}")
+    return 0

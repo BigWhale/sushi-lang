@@ -1,0 +1,11 @@
+# `.swap(i, j)` exchanges two elements in place, on a dynamic and on a fixed array.
+# EXPECT_STDOUT_EXACT: "[4, 2, 3, 1]\n[30, 20, 10]\n"
+# EXPECT_RUNTIME_EXIT: 0
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    xs.swap(0, 3)
+    println("{xs}")
+    let i32[3] fixed = [10, 20, 30]
+    fixed.swap(2, 0)
+    println("{fixed}")
+    return 0

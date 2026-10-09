@@ -1,0 +1,8 @@
+# `.to_hex()` on `i32` is an extension method of the Sushi half of <collections/strings>.
+# This unit does not import the module.
+# EXPECT_ERROR_CODES_EXACT: CE3015
+# EXPECT_STDERR_CONTAINS: add `use <collections/strings>`
+fn main() i32:
+    let i32 n = 255
+    println(n.to_hex())
+    return 0

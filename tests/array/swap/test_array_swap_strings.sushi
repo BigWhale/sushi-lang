@@ -1,0 +1,12 @@
+# `.swap(i, j)` moves two owning elements by their bits. No element is copied or dropped.
+# EXPECT_STDOUT_EXACT: "["Harmless 2", "Mostly 1"]\n["c3", "b2", "a1"]\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let string[] words = from(["Mostly {1}", "Harmless {2}"])
+    words.swap(0, 1)
+    println("{words}")
+    let string[3] fixed = ["a{1}", "b{2}", "c{3}"]
+    fixed.swap(0, 2)
+    println("{fixed}")
+    return 0

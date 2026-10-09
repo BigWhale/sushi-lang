@@ -1,0 +1,16 @@
+# The control: a user extension that takes `poke self` changes its receiver, whatever its
+# name, so a by-value parameter cannot take the call.
+# EXPECT_ERROR_CODE: CE2422
+
+struct Pair:
+    i32 a
+
+extend Pair reverse(poke self) ~:
+    self.a := 0 - self.a
+
+fn flip(Pair p) ~:
+    p.reverse()
+
+fn main() i32:
+    flip(Pair(3))
+    return 0

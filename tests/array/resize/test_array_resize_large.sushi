@@ -1,0 +1,9 @@
+# A growth past the capacity takes a new buffer and keeps the old elements.
+# EXPECT_STDOUT_EXACT: "1000 1 7 7\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let i32[] xs = from([1])
+    xs.resize(1000, 7)
+    println("{xs.len()} {xs[0]} {xs[1]} {xs[999]}")
+    return 0

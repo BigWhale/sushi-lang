@@ -40,7 +40,7 @@ PACKAGER_REFERENCE = re.compile(r"""["'](NE\d{4})["']""")
 # Why a code exists belongs in its module's `doc` field; what changed belongs in the
 # CHANGELOG and the git log. Neither belongs in this comment, which had grown to a
 # 5,000-character single line of per-code history.
-REGISTRY_SIZE = 461
+REGISTRY_SIZE = 463
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay
