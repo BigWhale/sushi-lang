@@ -277,7 +277,8 @@ def settle_receiver(checker: 'BorrowChecker', expr: MethodLike) -> None:
 
     The mode is DECLARATION-only, so nothing at the call site says `nom` and the
     diagnostic has to name the method instead (ruling R27). The name is recorded on the
-    state here, beside the span the move already records.
+    state here, beside the span the move already records, and only when this call is
+    that move: a receiver that an earlier move already took keeps that move's facts.
     """
     if not receiver_mode(expr.callee_self_mode).consumes:
         return
@@ -288,12 +289,12 @@ def settle_receiver(checker: 'BorrowChecker', expr: MethodLike) -> None:
         receiver.ownership_provenance = Provenance.BORROWED
         reject_read_through_outside_try(checker, expr)
         return
+    state = checker.borrow_state.get(receiver.id) if isinstance(receiver, Name) else None
+    already_moved = state is not None and state.is_moved
     consume(checker, receiver, CopyUse(f"call '{expr.method}' on the copy",
                                        f".{expr.method}({_arguments_text(expr.args)})"))
-    if isinstance(receiver, Name):
-        state = checker.borrow_state.get(receiver.id)
-        if state is not None and state.is_moved:
-            state.consumed_by_method = state.consumed_by_method or expr.method
+    if state is not None and state.is_moved and not already_moved:
+        state.consumed_by_method = expr.method
 
 
 def _arguments_text(args) -> str:

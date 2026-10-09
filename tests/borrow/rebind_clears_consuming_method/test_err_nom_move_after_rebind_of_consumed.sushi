@@ -1,0 +1,23 @@
+# A rebind re-initializes the name. The 'nom' argument move of the NEW value is a
+# move with a marker, so a later use of it is CE2405, not the CE2435 of the old value.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: 't' was moved here
+# EXPECT_STDERR_CONTAINS: test_err_nom_move_after_rebind_of_consumed.sushi:21:13
+use <collections/strings>
+
+struct Text:
+    string s
+
+extend Text finish(nom self) i32:
+    return self.s.len()
+
+fn eat(nom Text t) ~:
+    println(t.s)
+
+fn main() i32:
+    let Text t = Text("tow".concat("el"))
+    let i32 n = t.finish()
+    t := Text("c".concat("d"))
+    eat(nom t)
+    println(t.s)
+    return n

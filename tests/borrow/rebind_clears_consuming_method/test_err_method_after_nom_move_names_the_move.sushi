@@ -1,0 +1,22 @@
+# A consuming method call on a value that a 'nom' argument already moved is a use
+# after the move. The note names that move, and a later use names it again.
+# EXPECT_ERROR_CODES_EXACT: CE2405, CE2405
+# EXPECT_STDERR_CONTAINS: 't' was moved here
+# EXPECT_STDERR_CONTAINS: test_err_method_after_nom_move_names_the_move.sushi:19:13
+use <collections/strings>
+
+struct Text:
+    string s
+
+extend Text finish(nom self) i32:
+    return self.s.len()
+
+fn eat(nom Text t) ~:
+    println(t.s)
+
+fn main() i32:
+    let Text t = Text("tow".concat("el"))
+    eat(nom t)
+    let i32 n = t.finish()
+    println(t.s)
+    return n

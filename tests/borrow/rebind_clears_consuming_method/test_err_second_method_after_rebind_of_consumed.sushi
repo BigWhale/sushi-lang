@@ -1,0 +1,23 @@
+# A rebind re-initializes the name. A second consuming method on the NEW value is
+# the method that the diagnostic names, not the method that took the old value.
+# EXPECT_ERROR_CODES_EXACT: CE2435
+# EXPECT_STDERR_CONTAINS: 'close' consumed it
+# EXPECT_STDERR_CONTAINS: 't' was consumed by 'close' here
+use <collections/strings>
+
+struct Text:
+    string s
+
+extend Text finish(nom self) i32:
+    return self.s.len()
+
+extend Text close(nom self) i32:
+    return 0
+
+fn main() i32:
+    let Text t = Text("tow".concat("el"))
+    let i32 n = t.finish()
+    t := Text("c".concat("d"))
+    let i32 m = t.close()
+    println(t.s)
+    return n + m

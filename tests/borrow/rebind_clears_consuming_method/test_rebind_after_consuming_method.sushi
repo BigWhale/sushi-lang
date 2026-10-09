@@ -1,0 +1,19 @@
+# A rebind after a consuming method gives the name a new value, and the new value
+# is usable.
+# EXPECT_RUNTIME_EXIT: 5
+# EXPECT_STDOUT_EXACT: "cd\n"
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+struct Text:
+    string s
+
+extend Text finish(nom self) i32:
+    return self.s.len()
+
+fn main() i32:
+    let Text t = Text("tow".concat("el"))
+    let i32 n = t.finish()
+    t := Text("c".concat("d"))
+    println(t.s)
+    return n
