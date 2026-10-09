@@ -1,10 +1,11 @@
 """Type resolution utilities for UnknownType to StructType/EnumType conversion."""
 from __future__ import annotations
-from typing import Dict, Tuple, TYPE_CHECKING
+from typing import Dict, Optional, Tuple, TYPE_CHECKING
 from sushi_lang.semantics.generics.interned import interned_name
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type, StructType, EnumType
+    from sushi_lang.semantics.generics.types import GenericTypeRef
 
 
 class TypeResolver:
@@ -81,20 +82,36 @@ def resolve_unknown_type(
     # into a ResultType here, which is NOT an EnumType -- so a Result from an annotation and a
     # Result from a call compared unequal (#184).
     elif isinstance(ty, GenericTypeRef):
-        # NAME-level resolution only, so the shallow resolver rather than
-        # `resolve_type_recursively`: a named type's str() is its name, so walking fields
-        # cannot change the mangled name but CAN cycle (#240's RecursionError). The sibling
-        # mangling sites use a bare str(arg) for the same reason.
-        concrete_name = interned_name(
-            ty.base_name,
-            (_resolve_type_name(arg, struct_table, enum_table) for arg in ty.type_args))
-
-        if concrete_name in struct_table:
-            return struct_table[concrete_name]
-        if concrete_name in enum_table:
-            return enum_table[concrete_name]
+        entry, _ = _resolve_generic_ref(ty, struct_table, enum_table)
+        if entry is not None:
+            return entry
 
     return ty
+
+
+def _resolve_generic_ref(
+    ty: 'GenericTypeRef',
+    struct_table: Dict[str, 'StructType'],
+    enum_table: Dict[str, 'EnumType']
+) -> Tuple[Optional['Type'], Tuple['Type', ...]]:
+    """The table entry a `GenericTypeRef` names, and its arguments resolved by name.
+
+    NAME-level resolution only, so the shallow resolver rather than
+    `resolve_type_recursively`: a named type's str() is its name, so walking fields
+    cannot change the mangled name but CAN cycle (#240's RecursionError).
+
+    Each argument is resolved ONCE, and both callers use this one result. A second
+    descent into the same arguments doubles the work at each level of nesting, and the
+    time is then exponential in the depth of the written type.
+    """
+    args = tuple(_resolve_type_name(arg, struct_table, enum_table) for arg in ty.type_args)
+    concrete_name = interned_name(ty.base_name, args)
+
+    if concrete_name in struct_table:
+        return struct_table[concrete_name], args
+    if concrete_name in enum_table:
+        return enum_table[concrete_name], args
+    return None, args
 
 
 def _resolve_type_name(
@@ -106,6 +123,14 @@ def _resolve_type_name(
     from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
     from sushi_lang.semantics.generics.types import GenericTypeRef
 
+    if isinstance(ty, GenericTypeRef):
+        entry, args = _resolve_generic_ref(ty, struct_table, enum_table)
+        if entry is not None:
+            return entry
+        if args != ty.type_args:
+            return GenericTypeRef(base_name=ty.base_name, type_args=args)
+        return ty
+
     resolved = resolve_unknown_type(ty, struct_table, enum_table)
 
     if isinstance(resolved, ArrayType):
@@ -116,13 +141,6 @@ def _resolve_type_name(
         base = _resolve_type_name(resolved.base_type, struct_table, enum_table)
         if base != resolved.base_type:
             return DynamicArrayType(base_type=base)
-    elif isinstance(resolved, GenericTypeRef):
-        args = tuple(
-            _resolve_type_name(arg, struct_table, enum_table)
-            for arg in resolved.type_args
-        )
-        if args != resolved.type_args:
-            return GenericTypeRef(base_name=resolved.base_name, type_args=args)
 
     return resolved
 
