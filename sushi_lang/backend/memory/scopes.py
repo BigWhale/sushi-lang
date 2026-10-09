@@ -71,9 +71,10 @@ class ScopeManager:
         # borrows with a cleared owned bit.
         self._string_cleanup: Dict[str, List[tuple[int, ir.AllocaInstr]]] = {}
 
-        # id(expr) -> the name of the scope temporary that holds the value of expr. A
-        # consuming use of that expression reads it, so the temporary gives the value up.
-        self._held_by_temporary: Dict[int, str] = {}
+        # id(expr) -> the name of the scope temporary that holds the value of expr, and that
+        # value. A consuming use of that expression reads it, so the temporary gives the
+        # value up. A second request to own the same value reads the same temporary.
+        self._held_by_temporary: Dict[int, tuple[str, ir.Value]] = {}
 
     @staticmethod
     def _stack_pop_at_depth(reg: Dict[str, List], name: str, depth: int) -> None:
@@ -323,13 +324,21 @@ class ScopeManager:
             elif arrays.is_list_type(resolved):
                 arrays.register_list(name, resolved, slot)
 
-    def hold_in_temporary(self, expr, name: str) -> None:
-        """Record that the scope temporary `name` holds the value of `expr`."""
-        self._held_by_temporary[id(expr)] = name
+    def hold_in_temporary(self, expr, name: str, value: ir.Value) -> None:
+        """Record that the scope temporary `name` holds `value`, the value of `expr`."""
+        self._held_by_temporary[id(expr)] = (name, value)
 
     def temporary_holding(self, expr) -> Optional[str]:
         """The name of the scope temporary that holds the value of `expr`, or None."""
-        return self._held_by_temporary.get(id(expr))
+        held = self._held_by_temporary.get(id(expr))
+        return held[0] if held is not None else None
+
+    def slot_holding(self, expr, value: ir.Value) -> Optional[ir.AllocaInstr]:
+        """The slot of the scope temporary that already holds `value` of `expr`, or None."""
+        held = self._held_by_temporary.get(id(expr))
+        if held is None or held[1] is not value:
+            return None
+        return self.try_find_local_slot(held[0])
 
     def create_local_nostore(self, name: str, ty: ir.Type, semantic_ty: Optional['Type'] = None,
                              register_cleanup: bool = True) -> ir.AllocaInstr:

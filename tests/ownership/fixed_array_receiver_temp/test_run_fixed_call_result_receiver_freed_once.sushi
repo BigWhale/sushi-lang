@@ -1,0 +1,18 @@
+# A built-in method on a fixed array that a call returns. No name owns the array.
+# The scope frees each element one time.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nford 1\n1\narthur 1\narthur 1\n"
+fn give() string[2]:
+    let i32 k = 1
+    return ["ford {k}", "arthur {k}"]
+
+fn main() i32:
+    println(give().contains("arthur 1"))
+    println(give().get(0).realise(""))
+    println(give().index_of("arthur 1").realise(-1))
+    foreach(s in give().iter()):
+        if (s == "arthur 1"):
+            println(s)
+    let string[2] c = give().clone()
+    println(c[1])
+    return 0

@@ -300,6 +300,11 @@ def own_temporary(codegen: 'LLVMCodegen', expr, value: ir.Value,
 
     if value is None or semantic_type is None:
         return None
+    # A value that a scope temporary already holds keeps that one owner. The method
+    # receiver is owned first, and the fixed-array dispatcher then asks for its address.
+    held = codegen.memory.slot_holding(expr, value)
+    if held is not None:
+        return held
     resolved = resolve_named_type(codegen, semantic_type)
     if resolved is None or not needs_cleanup(codegen, resolved):
         return None
@@ -310,7 +315,7 @@ def own_temporary(codegen: 'LLVMCodegen', expr, value: ir.Value,
     slot = codegen.memory.create_local(name, slot_type or value.type, value, resolved,
                                        register_cleanup=False)
     codegen.memory.register_owning_value(name, resolved, slot)
-    codegen.memory.hold_in_temporary(expr, name)
+    codegen.memory.hold_in_temporary(expr, name, value)
     return slot
 
 

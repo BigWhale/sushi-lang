@@ -1,0 +1,13 @@
+# A built-in method on a temporary fixed array of structs that own a string.
+# The scope frees each field one time, also when the call is in a loop body.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nford 1\ntrue\nford 1\ntrue\nford 1\n"
+struct Crew:
+    string name
+
+fn main() i32:
+    let i32 k = 1
+    foreach(_ in 0..3):
+        println([Crew("ford {k}"), Crew("arthur {k}")].contains(Crew("arthur 1")))
+        println([Crew("ford {k}"), Crew("arthur {k}")].get(0).realise(Crew("")).name)
+    return 0
