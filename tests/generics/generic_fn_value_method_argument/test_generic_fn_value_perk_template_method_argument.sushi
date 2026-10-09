@@ -1,0 +1,20 @@
+# A generic function value is solved by the parameter type of a perk method on a
+# generic-target perk implementation.
+# EXPECT_STDOUT_EXACT: "true\n"
+struct Box@(T):
+    T v
+
+perk Applies:
+    fn apply(fn(i32) -> u64 f) u64
+
+fn hashit@(U: Hashable)(U x) u64:
+    return x.hash()
+
+extend Box@(T) with Applies:
+    fn apply(fn(i32) -> u64 f) u64:
+        return f(7)
+
+fn main() i32:
+    let Box@(bool) b = Box(true)
+    println(b.apply(hashit) == 7.hash())
+    return 0

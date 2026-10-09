@@ -1,0 +1,15 @@
+# E3 at a generic type instance that the field of another instance builds: the user
+# writes `Outer@(i32)`, and its field builds `Holder@(i32)`. The diagnostic stands at
+# the written `Outer@(i32)`, where the type argument is written.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: struct_field_non_error_e.sushi:13:9: error [CE2084]
+struct Holder@(E):
+    Result@(i32, E) r
+
+struct Outer@(E):
+    Holder@(E) h
+
+fn main() i32:
+    let Outer@(i32) o = Outer(Holder(Result.Ok(5)))
+    println(o.h.r.is_ok())
+    return 0

@@ -1254,6 +1254,14 @@ A generic template is checked one time, where it is written. Its copies then rep
 
 A use-after-move error ([CE2405](#ce2405), [CE2435](#ce2435)) is relational: it shows the use, and a note shows where the value moved. The borrow pass records the location with the moved flag, and every branch join and loop join keeps the two together. A moved variable with no location means that a path set the flag and lost the location. This is a fault in the compiler, not in the program; please report the program.
 
+### CE0151 {#ce0151}
+
+**Error** · function
+
+**Message:** `the copies of the {kind} '{name}' grow without end: this call names the copy '{instance}', which has a larger type argument`
+
+A generic function, or an extension method that the compiler copies at the call site (an `extend T[]` method, or a method with a method-level type parameter), gets one copy for each list of type arguments. When the body of a copy calls the same template, directly or through other templates, with a type argument that holds the earlier one (`grow(nom Box(x), n)` in `grow@(U)`), each copy names a new and larger copy, and the chain has no end. The value of a run-time argument has no effect, because the copies are made at compile time. The diagnostic is at the call in the template body that names the larger copy, and a note shows the first call that started the chain. A chain of different templates, and a template that calls itself with the same type argument, make no new copy and are not refused. [CE0122](#ce0122) is the same fault for a generic type. Call the template with a type argument that does not grow.
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.

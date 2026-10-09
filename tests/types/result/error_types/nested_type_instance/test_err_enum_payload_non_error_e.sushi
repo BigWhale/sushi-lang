@@ -1,0 +1,18 @@
+# E3 at a generic type instance that the payload of an enum instance builds: the user
+# writes `Wrap@(i32)`, and its payload builds `Holder@(i32)`. The diagnostic stands at
+# the written `Wrap@(i32)`, where the type argument is written.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: enum_payload_non_error_e.sushi:14:9: error [CE2084]
+struct Holder@(E):
+    Result@(i32, E) r
+
+enum Wrap@(E):
+    Has(Holder@(E))
+    Empty
+
+fn main() i32:
+    let Wrap@(i32) w = Wrap.Empty
+    match w:
+        Wrap.Has(_) -> println("has")
+        Wrap.Empty -> println("empty")
+    return 0

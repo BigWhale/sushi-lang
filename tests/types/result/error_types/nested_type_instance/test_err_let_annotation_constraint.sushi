@@ -1,0 +1,20 @@
+# A perk constraint at a generic type instance that a template copy builds from a `let`
+# annotation: the call names `outer@(i32)`, and the copy of `outer` builds `Box@(i32)`.
+# The diagnostic stands at the annotation in the template. A note stands at the call.
+# EXPECT_ERROR_CODES_EXACT: CE4006
+# EXPECT_STDERR_CONTAINS: let_annotation_constraint.sushi:15:9: error [CE4006]
+# EXPECT_STDERR_CONTAINS: this instance is required by the call here
+# EXPECT_STDERR_CONTAINS: let_annotation_constraint.sushi:19:13
+perk Named:
+    fn named() i32
+
+struct Box@(T: Named):
+    T v
+
+fn outer@(T)(nom T x) i32:
+    let Box@(T) b = Box(x)
+    return 0
+
+fn main() i32:
+    println(outer(nom 5))
+    return 0

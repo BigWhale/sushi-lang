@@ -1,0 +1,5 @@
+public error AmbPickErr:
+    Bad
+
+public fn pick(i32 x) i32 | AmbPickErr:
+    return Result.Ok(x)

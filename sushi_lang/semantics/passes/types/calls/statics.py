@@ -142,17 +142,18 @@ def _interned_static_target(validator: 'TypeValidator', call, template, base: st
     if (interner is not None and validator.queues_late_copies
             and validator.extension_table.get_method(target, call.method) is None
             and bounds_hold_for(template, tuple(type_args), validator.tables)):
-        _add_late_static_copy(validator, template, target, type_args)
+        _add_late_static_copy(validator, template, target, type_args, call.loc)
     return target
 
 
-def _add_late_static_copy(validator: 'TypeValidator', template, target, type_args) -> None:
+def _add_late_static_copy(validator: 'TypeValidator', template, target, type_args,
+                          site) -> None:
     """Enter the substituted signature and queue the body copy for the fixpoint round."""
     from sushi_lang.semantics.passes.types.calls.methods import (
         _queue_extension_instantiation)
 
     validator.extension_table.add_method(_late_static_signature(template, target, type_args))
-    _queue_extension_instantiation(validator, template, target, tuple(type_args), ())
+    _queue_extension_instantiation(validator, template, target, tuple(type_args), (), site)
 
 
 def _late_static_signature(template, target, type_args):

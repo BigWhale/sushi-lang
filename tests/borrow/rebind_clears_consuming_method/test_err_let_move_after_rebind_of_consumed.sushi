@@ -1,0 +1,21 @@
+# A rebind re-initializes the name. A 'let' that binds the NEW value moves it, so a
+# later use of the name is CE2405 with the note at the 'let'.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: 't' was moved here
+# EXPECT_STDERR_CONTAINS: test_err_let_move_after_rebind_of_consumed.sushi:18:18
+use <collections/strings>
+
+struct Text:
+    string s
+
+extend Text finish(nom self) i32:
+    return self.s.len()
+
+fn main() i32:
+    let Text t = Text("tow".concat("el"))
+    let i32 n = t.finish()
+    t := Text("c".concat("d"))
+    let Text u = t
+    println(t.s)
+    println(u.s)
+    return n

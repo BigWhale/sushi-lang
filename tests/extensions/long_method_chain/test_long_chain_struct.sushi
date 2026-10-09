@@ -1,0 +1,14 @@
+# A chain of 40 extension calls on a plain struct compiles in linear time and runs.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "40\n"
+struct Pt:
+    i32 x
+
+extend Pt inc() Pt:
+    return Pt(self.x + 1)
+
+fn main() i32:
+    let Pt p = Pt(0)
+    let Pt q = p.inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc().inc()
+    println(q.x)
+    return 0

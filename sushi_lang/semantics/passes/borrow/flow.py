@@ -99,6 +99,7 @@ def reinitialize(state: BorrowState) -> None:
     """
     state.is_moved = False
     state.moved_at_span = None
+    state.consumed_by_method = None
     state.move_reported_by = None
     state.is_destroyed = False
     state.invalidated_at = None

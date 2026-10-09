@@ -1,0 +1,10 @@
+# Two imports offer `pick`, with two return types. CE3012 refuses the name, and the
+# name then has no type, so the print check gives no second diagnostic.
+# EXPECT_ERROR_CODE: CE3012
+# EXPECT_ERROR_CODES_EXACT: CE3012
+use "helpers/amb_type_pick_a"
+use "helpers/amb_type_pick_b"
+
+fn main() i32:
+    println(pick(1))
+    return 0

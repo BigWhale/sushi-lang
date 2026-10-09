@@ -110,6 +110,9 @@ class TypeValidator:
         self.body_return_type: Optional[Type] = None
         # The conversion whose body this is (`ExtendDef.declared_conversion`), or None.
         self.body_conversion: Optional["Conversion"] = None
+        # The key of the copy whose body this is (`FuncDef.instance_key`), or None: a
+        # call-site copy that the body names records it as its parent.
+        self.body_instance_key: Optional[tuple] = None
         self.channel_result: Optional[Type] = None
         # True while the body is a copy of a template (`ast_walk.is_template_copy`): the
         # statement rules that need no type ran once on the written template (#1070).

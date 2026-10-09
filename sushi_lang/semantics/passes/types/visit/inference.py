@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
 from sushi_lang.semantics.passes.types.inference import (
     infer_array_literal_type, infer_dynamic_array_from_type, infer_index_access_type)
+from sushi_lang.semantics.passes.types.visibility import name_is_ambiguous
 from sushi_lang.semantics.visitors import NodeVisitor
 from sushi_lang.semantics.typesys import (
     Type, ArrayType, BuiltinType, DynamicArrayType, StructType)
@@ -242,7 +243,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             # bare constant or unit variable is typed.
             from sushi_lang.semantics.type_resolution import resolve_unknown_type
             const_sig = tv.const_sig(node.id)
-            if const_sig is None:
+            if const_sig is None or name_is_ambiguous(
+                    tv, "variable" if const_sig.is_var else "constant", node.id):
                 return None
             return resolve_unknown_type(const_sig.const_type,
                                         tv.struct_table.by_name,
@@ -259,6 +261,8 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             return self._materialize_wrapper(stdlib_const.get_return_type())
 
         if rung is BareName.FUNCTION:
+            if name_is_ambiguous(tv, "function", node.id):
+                return None
             fn_value_type = function_value_type_of(tv, node.id)
             if fn_value_type is not None:
                 return fn_value_type
@@ -372,6 +376,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
             return untyped_struct_instance(self.type_validator, function_name,
                                            node.args, node.field_names)
 
+        # A name that CE3012 refuses has no type here: the first candidate is not the
+        # one the user chose.
+        if name_is_ambiguous(self.type_validator, "function", function_name):
+            return None
+
         # A declaration answers before a name a flat `use` brought in, exactly as the
         # validating half decides it (section 8's ladder). Reading the standard library
         # first gave this unit's own `sin` the library's return type.
@@ -457,7 +466,12 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
                 # For now, return None and let the type be inferred from context
                 return None
 
-        receiver_type = self.type_validator.infer_expression_type(node.receiver)
+        return self._method_call_type(
+            node, self.type_validator.infer_expression_type(node.receiver))
+
+    def _method_call_type(self, node: MethodCall,
+                          receiver_type: Optional[Type]) -> Optional[Type]:
+        """The type a method call yields, over its receiver's type, and the stamp of it."""
         from sushi_lang.semantics.typesys import ReferenceType
 
         actual_type = receiver_type
@@ -525,7 +539,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if target.kind is not DotCallKind.METHOD:
             return target.type
 
-        inferred_type = self.visit_methodcall(target.method_call)
+        inferred_type = self._method_call_type(target.method_call, target.receiver_type)
         if inferred_type is not None:
             node.inferred_return_type = inferred_type
         copy_callee_stamps(node, target.method_call)

@@ -239,8 +239,8 @@ class TypeSubstitutor:
 
         if isinstance(stmt, Let):
             let_copy = copy.copy(stmt)
-            if stmt.ty:
-                let_copy.ty = self.substitute_type(stmt.ty, substitution)
+            let_copy.ty = self._substitute_written_type(stmt.ty, substitution,
+                                                        stmt.type_span)
             if stmt.value:
                 let_copy.value = self.substitute_expr(stmt.value, substitution)
             if stmt.targets is not None:
@@ -275,7 +275,8 @@ class TypeSubstitutor:
             result.body = self.substitute_body(stmt.body, substitution)
             # The item ANNOTATION is source-written and names the type parameter as any
             # other annotation does (#602).
-            result.item_type = self._substitute_optional_type(stmt.item_type, substitution)
+            result.item_type = self._substitute_written_type(stmt.item_type, substitution,
+                                                             stmt.item_type_span)
             result.item_try_let = _copied_try_let(stmt, result)
             return result
 
@@ -340,7 +341,8 @@ class TypeSubstitutor:
         result = []
         for target in targets:
             copied = copy.copy(target)
-            copied.ty = self._substitute_optional_type(target.ty, substitution)
+            copied.ty = self._substitute_written_type(target.ty, substitution,
+                                                      target.type_span)
             if target.nested is not None:
                 copied.nested = self._substitute_targets(target.nested, substitution)
             result.append(copied)
@@ -351,6 +353,13 @@ class TypeSubstitutor:
     ) -> 'Type | None':
         """A type field the source may leave empty."""
         return self.substitute_type(ty, substitution) if ty is not None else None
+
+    def _substitute_written_type(
+        self, ty: 'Type | None', substitution: Dict[str, "Type | TypePack"], span
+    ) -> 'Type | None':
+        """A local's annotation, written at `span`: an instance it builds has that site."""
+        with self.monomorphizer.written_at(span):
+            return self._substitute_optional_type(ty, substitution)
 
     def _substitute_array_element(
         self, element: 'ArrayElement', substitution: Dict[str, "Type | TypePack"]
@@ -372,7 +381,8 @@ class TypeSubstitutor:
         new_params = []
         for param in lam.params:
             new_param = copy.copy(param)
-            new_param.ty = self._substitute_optional_type(param.ty, substitution)
+            new_param.ty = self._substitute_written_type(param.ty, substitution,
+                                                         param.type_span)
             new_params.append(new_param)
         result.params = new_params
         result.ret = self._substitute_optional_type(lam.ret, substitution)

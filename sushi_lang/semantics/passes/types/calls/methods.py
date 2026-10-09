@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 def instantiate_array_extension(validator: 'TypeValidator',
                                 receiver_type: DynamicArrayType,
-                                method_name: str):
+                                method_name: str, site=None):
     """Resolve a method miss on a `T[]` receiver against the array templates (ruling 3).
 
     A dynamic-array receiver has no instantiation the monomorphize pass could have
@@ -59,7 +59,8 @@ def instantiate_array_extension(validator: 'TypeValidator',
     # A template check answers the signature and writes nothing (#1070).
     if not validator.in_template_check:
         validator.extension_table.add_method(concrete)
-        _queue_extension_instantiation(validator, template, receiver_type, (element,), ())
+        _queue_extension_instantiation(validator, template, receiver_type, (element,), (),
+                                       site)
     return concrete
 
 
@@ -111,13 +112,30 @@ def _resolved(validator: 'TypeValidator', ty):
                                     validator.enum_table.by_name)
 
 
+@dataclass
+class CopyRequest:
+    """One call-site extension copy that the analyzer's fixpoint round cuts.
+
+    `key` names the copy, `parent` is the key of the copy whose body made the call (None
+    for a written body), and `site` is the (span, file) of the call. The growth rule
+    reads the three (`generics/instance_growth.py`).
+    """
+    template: object
+    target_type: object
+    receiver_args: tuple
+    method_type_args: tuple
+    key: tuple
+    parent: object
+    site: tuple
+
+
 def _queue_extension_instantiation(validator: 'TypeValidator', template, target_type,
-                                   receiver_args, method_type_args) -> None:
+                                   receiver_args, method_type_args, site=None) -> None:
     """Queue one monomorphization request, deduped by (receiver, method, margs).
 
     The key holds the resolved TYPES, never their text: `P[]` with the element unknown
     and `P[]` with the element resolved print the same, and the first request hid the
-    correct one (#1161).
+    correct one (#1161). `site` is the span of the call.
     """
     key = (_resolved(validator, target_type), template.name,
            tuple(_resolved(validator, a) for a in method_type_args))
@@ -125,8 +143,10 @@ def _queue_extension_instantiation(validator: 'TypeValidator', template, target_
     if key in tables.queued_extension_keys:
         return
     tables.queued_extension_keys.add(key)
-    tables.pending_extension_instantiations.append(
-        (template, target_type, tuple(receiver_args), tuple(method_type_args)))
+    tables.pending_extension_instantiations.append(CopyRequest(
+        template, target_type, tuple(receiver_args), tuple(method_type_args),
+        key=("method", *key), parent=getattr(validator, "body_instance_key", None),
+        site=(site, validator.reporter.filename)))
 
 
 # Returned by resolve_method_generic_extension when it found the template but the
@@ -163,7 +183,8 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
     method = validator.extension_table.get_method(receiver_type, method_name)
 
     if method is None and isinstance(receiver_type, DynamicArrayType):
-        method = instantiate_array_extension(validator, receiver_type, method_name)
+        method = instantiate_array_extension(validator, receiver_type, method_name,
+                                             call.loc if call is not None else None)
 
     if method is None and call is not None:
         resolved = resolve_method_generic_extension(validator, receiver_type, call,
@@ -403,7 +424,7 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     # A template check cuts no copy (#1070).
     if not validator.in_template_check:
         _queue_extension_instantiation(validator, template, receiver_type,
-                                       receiver_args, margs)
+                                       receiver_args, margs, call.loc)
     return concrete
 
 

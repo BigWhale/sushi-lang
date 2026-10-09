@@ -1,0 +1,19 @@
+# A generic function value is solved by the parameter type of a method on a
+# generic enum target.
+# EXPECT_STDOUT_EXACT: "true\n"
+enum Slot@(T):
+    Full(T)
+    Empty
+
+fn hashit@(U: Hashable)(U x) u64:
+    return x.hash()
+
+extend Slot@(T: Hashable) apply(fn(T) -> u64 f) u64:
+    match self:
+        Slot.Full(v) -> return f(v)
+        Slot.Empty -> return 0
+
+fn main() i32:
+    let Slot@(i32) s = Slot.Full(7)
+    println(s.apply(hashit) == 7.hash())
+    return 0

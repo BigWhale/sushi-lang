@@ -1,0 +1,16 @@
+# A generic function that calls itself with a type argument that grows. Each copy
+# names a new copy with a larger type argument, so the chain has no end.
+# EXPECT_ERROR_CODES_EXACT: CE0151
+# EXPECT_STDERR_CONTAINS: test_err_function_type_argument_grows.sushi:12:12: error [CE0151]
+# EXPECT_STDERR_CONTAINS: test_err_function_type_argument_grows.sushi:15:13
+struct Box@(T):
+    T v
+
+fn grow@(U)(nom U x, i32 n) i32:
+    if (n == 0):
+        return 0
+    return grow(nom Box(x), n - 1) + 1
+
+fn main() i32:
+    println(grow(nom 1, 3))
+    return 0

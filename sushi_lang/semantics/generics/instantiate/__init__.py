@@ -65,6 +65,10 @@ class InstantiationCollector:
     # itself carries no location. The analyzer sets `current_file` per unit.
     sites: dict = field(default_factory=dict)
     current_file: Optional[str] = None
+    # The instantiation whose template writes a site, by key: a type that a generic
+    # call's substituted signature names has its site in the template, and the call
+    # that names the function is its parent (`Monomorphizer.parents`).
+    parents: dict = field(default_factory=dict)
 
     def _generic_enums_by_name(self) -> dict:
         """The generic enum templates, keyed by name. Empty when the tables are absent."""
@@ -98,6 +102,7 @@ class InstantiationCollector:
             generic_enums=self._generic_enums_by_name(),
             sites=self.sites,
             file_of=lambda: self.current_file,
+            parents=self.parents,
         )
 
         function_collector = FunctionCollector(
@@ -107,6 +112,7 @@ class InstantiationCollector:
             visited_types=self.visited_types,
             sites=self.sites,
             file_of=lambda: self.current_file,
+            parents=self.parents,
         )
 
         expression_scanner.scan_block = function_collector.collect_from_body

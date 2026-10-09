@@ -1,5 +1,6 @@
 """Generic Extension Method Monomorphization"""
 from __future__ import annotations
+from contextlib import nullcontext
 from dataclasses import replace
 from typing import Callable, Dict, Iterator, Optional, Tuple, Set, TYPE_CHECKING
 
@@ -56,6 +57,20 @@ def substitute_header(decl, substitution: Dict[str, Type], body):
     )
 
 
+def _cutting(substitutor: "TypeSubstitutor", filename: Optional[str], target):
+    """The copy of a method template in `filename` for the instance `target` is cut.
+
+    The key of the copy is the interned name of its target type, the key a nested call
+    of the copy names as its parent. A type instance that the body builds then has a
+    site in the template (`Monomorphizer.written_at`).
+    """
+    monomorphizer = getattr(substitutor, "monomorphizer", None)
+    if monomorphizer is None:
+        return nullcontext()
+    key = target.name if isinstance(target, (StructType, EnumType)) else None
+    return monomorphizer.cutting(filename, key)
+
+
 def _type_substitution(names, type_args: Tuple[Type, ...]) -> Dict[str, Type]:
     """Type parameter name -> argument. The collect pass refuses a wrong count (CE2062, #796)."""
     names = [getattr(name, "name", name) for name in names]
@@ -100,7 +115,8 @@ def monomorphize_extension_method(
     substitution = _type_substitution(generic_method.type_params, type_args)
     substitution.update(_type_substitution(generic_method.method_type_param_names,
                                            method_type_args))
-    concrete = substitute_signature(generic_method.decl, substitution, substitutor)
+    with _cutting(substitutor, generic_method.filename, concrete_target_type):
+        concrete = substitute_signature(generic_method.decl, substitution, substitutor)
     concrete.target_type = concrete_target_type
     concrete.method_type_args = tuple(method_type_args)
     concrete.home_unit = generic_method.unit_name
@@ -207,8 +223,9 @@ def monomorphize_perk_impl(
     person wrote (#657).
     """
     substitution = _type_substitution(template.type_params, type_args)
-    methods = [substitute_signature(method, substitution, substitutor)
-               for method in template.impl.methods]
+    with _cutting(substitutor, template.filename, concrete_target_type):
+        methods = [substitute_signature(method, substitution, substitutor)
+                   for method in template.impl.methods]
     # Each copy carries the template's spans, so a diagnostic in its body is told once
     # for all the instances, the rule of a generic function's instance (#648, #800).
     template_id = perk_template_id(template)

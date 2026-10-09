@@ -1,0 +1,17 @@
+# E3 at a generic type instance that a template copy builds from a parameter type: the
+# call names `outer@(i32)`, and the copy of `outer` takes a `Maybe@(Holder@(i32))`.
+# The caller writes no `Holder` type. The diagnostic stands at the parameter type in
+# the template. A note stands at the call.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: param_type_non_error_e.sushi:12:14: error [CE2084]
+# EXPECT_STDERR_CONTAINS: this instance is required by the call here
+# EXPECT_STDERR_CONTAINS: param_type_non_error_e.sushi:16:13
+struct Holder@(E):
+    Result@(i32, E) r
+
+fn outer@(E)(Maybe@(Holder@(E)) m) bool:
+    return m.is_some()
+
+fn main() i32:
+    println(outer@(i32)(Maybe.None))
+    return 0

@@ -104,6 +104,7 @@ def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> No
     validate_error_channel(self, ret, err_type, err_span)
     self.channel_result = channel_result(self, ret, err_type) if has_channel(node) else None
     self.body_conversion = getattr(node, "declared_conversion", None)
+    self.body_instance_key = getattr(node, "instance_key", None)
     self.variable_types = {}
     self.refused_bindings = set()
 
@@ -114,6 +115,7 @@ def _leave_body(self) -> None:
     self.body_return_type = None
     self.channel_result = None
     self.body_conversion = None
+    self.body_instance_key = None
     self.in_synthesized_body = False
 
 

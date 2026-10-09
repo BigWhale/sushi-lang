@@ -1,0 +1,17 @@
+# Two generic functions that call each other. One of the two calls makes the type
+# argument larger, so the chain of copies has no end.
+# EXPECT_ERROR_CODES_EXACT: CE0151
+struct Box@(T):
+    T v
+
+fn ping@(U)(nom U x, i32 n) i32:
+    if (n == 0):
+        return 0
+    return pong(nom Box(x), n - 1) + 1
+
+fn pong@(U)(nom U x, i32 n) i32:
+    return ping(nom x, n)
+
+fn main() i32:
+    println(ping(nom 1, 3))
+    return 0

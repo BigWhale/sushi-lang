@@ -1,0 +1,19 @@
+# A built-in method on a fixed array literal of strings. No name owns the array.
+# The scope frees each element one time.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "true\nford 1\nford 1\n1\narthur 1\n2\narthur 1\n"
+fn main() i32:
+    let i32 k = 1
+    println(["ford {k}", "arthur {k}"].contains("arthur 1"))
+    match ["ford {k}", "arthur {k}"].get(0):
+        Maybe.Some(s) -> println(s)
+        Maybe.None -> println("none")
+    println(["ford {k}", "arthur {k}"].get(0).realise(""))
+    println(["ford {k}", "arthur {k}"].index_of("arthur 1").realise(-1))
+    foreach(s in ["ford {k}", "arthur {k}"].iter()):
+        if (s == "arthur 1"):
+            println(s)
+    let string[2] c = ["ford {k}", "arthur {k}"].clone()
+    println(c.len())
+    println(c[1])
+    return 0

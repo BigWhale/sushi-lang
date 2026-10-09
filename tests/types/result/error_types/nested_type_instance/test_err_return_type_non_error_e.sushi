@@ -1,0 +1,17 @@
+# E3 at a generic type instance that a template copy builds from its return type: the
+# call names `outer@(i32)`, and the copy of `outer` answers `Holder@(i32)`. The
+# diagnostic stands at the return type in the template. A note stands at the call.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: return_type_non_error_e.sushi:11:21: error [CE2084]
+# EXPECT_STDERR_CONTAINS: this instance is required by the call here
+# EXPECT_STDERR_CONTAINS: return_type_non_error_e.sushi:15:18
+struct Holder@(E):
+    Result@(i32, E) r
+
+fn outer@(E)(i32 x) Holder@(E):
+    return Holder(Result.Ok(x))
+
+fn main() i32:
+    let bool b = outer@(i32)(5).r.is_ok()
+    println(b)
+    return 0

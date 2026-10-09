@@ -1,0 +1,26 @@
+# E3 at a generic type instance that the copy of a perk implementation builds from a
+# `let` annotation: the user writes `Box@(i32)`, and the copy of `check` for it builds
+# `Holder@(i32)`. The diagnostic stands at the annotation in the template. A note
+# stands at the written type that started the chain.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: perk_impl_let_non_error_e.sushi:20:13: error [CE2084]
+# EXPECT_STDERR_CONTAINS: this instance is required by the type written here
+# EXPECT_STDERR_CONTAINS: perk_impl_let_non_error_e.sushi:24:9
+perk Checks:
+    fn check() bool
+
+struct Holder@(E):
+    Result@(i32, E) r
+
+struct Box@(E):
+    i32 v
+
+extend Box@(E) with Checks:
+    fn check() bool:
+        let Holder@(E) h = Holder(Result.Ok(self.v))
+        return h.r.is_ok()
+
+fn main() i32:
+    let Box@(i32) b = Box(5)
+    println(b.check())
+    return 0

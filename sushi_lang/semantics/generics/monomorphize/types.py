@@ -88,6 +88,9 @@ class TypeMonomorphizer:
         concrete_name = self._generate_concrete_name(generic.name, type_args)
         if self._refuse_arity("enum", generic, type_args, concrete_name):
             return EnumType(name=interned_name(generic.name, ("error",)), variants=())
+        # The arity check reads no site of a copy: a count that a template writes is
+        # reported where it is written (`refuse_template_arity`).
+        self.monomorphizer.record_type_site(concrete_name)
 
         # A refused instantiation is built nowhere (#579, Ruling 4): not cached, not
         # published, so no template copy is ever cut for it. The shell keeps the caller
@@ -123,7 +126,8 @@ class TypeMonomorphizer:
         self.monomorphizer.cache[cache_key] = concrete
         self._publish(self.monomorphizer.enum_table, concrete, "enum")
 
-        with self.monomorphizer._monomorphize_depth_guard(generic.name):
+        with (self.monomorphizer._monomorphize_depth_guard(generic.name),
+              self.monomorphizer.held_by(concrete_name)):
             concrete_variants = []
             for variant in generic.variants:
                 concrete_associated_types = []
@@ -187,6 +191,9 @@ class TypeMonomorphizer:
         concrete_name = self._generate_concrete_name(generic.name, type_args)
         if self._refuse_arity("struct", generic, type_args, concrete_name):
             return StructType(name=interned_name(generic.name, ("error",)), fields=())
+        # The arity check reads no site of a copy: a count that a template writes is
+        # reported where it is written (`refuse_template_arity`).
+        self.monomorphizer.record_type_site(concrete_name)
 
         # A refused instantiation is built nowhere (#579, Ruling 4): not cached, not
         # published, so no template copy is ever cut for it. The shell keeps the caller
@@ -219,7 +226,8 @@ class TypeMonomorphizer:
         self.monomorphizer.struct_cache[cache_key] = concrete
         self._publish(self.monomorphizer.struct_table, concrete, "struct")
 
-        with self.monomorphizer._monomorphize_depth_guard(generic.name):
+        with (self.monomorphizer._monomorphize_depth_guard(generic.name),
+              self.monomorphizer.held_by(concrete_name)):
             concrete_fields = []
             for field_name, field_type in generic.fields:
                 concrete_type = self.monomorphizer.substitutor.substitute_type(

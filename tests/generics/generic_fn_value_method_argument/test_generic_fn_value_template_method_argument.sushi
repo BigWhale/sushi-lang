@@ -1,0 +1,22 @@
+# A generic function value is solved by the parameter type of a method on a
+# generic-target extension, at a generic-instance receiver and in a template body.
+# No other call names the instance.
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+struct Box@(T):
+    T v
+
+fn hashit@(U: Hashable)(U x) u64:
+    return x.hash()
+
+extend Box@(T: Hashable) apply(fn(T) -> u64 f) u64:
+    return f(self.v)
+
+extend Box@(T: Hashable) outer() u64:
+    return self.apply(hashit)
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    let Box@(string) s = Box("Mostly Harmless")
+    println(b.apply(hashit) == 7.hash())
+    println(s.outer() == "Mostly Harmless".hash())
+    return 0

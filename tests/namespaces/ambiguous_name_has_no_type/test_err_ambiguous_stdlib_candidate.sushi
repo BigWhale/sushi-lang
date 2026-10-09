@@ -1,0 +1,12 @@
+# A stdlib module and a user unit both offer `decode`, with two return types. The
+# refused name has no type, so the print check gives no second diagnostic. CW3002
+# is the shadow warning at the user declaration.
+# EXPECT_ERROR_CODE: CE3012
+# EXPECT_ERROR_CODES_EXACT: CW3002, CE3012
+use <encoding/msgpack>
+use "helpers/amb_type_decode"
+
+fn main() i32:
+    let u8[] b = from([1])
+    println(decode(b))
+    return 0

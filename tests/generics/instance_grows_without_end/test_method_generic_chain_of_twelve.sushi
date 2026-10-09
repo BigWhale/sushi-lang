@@ -1,0 +1,45 @@
+# A chain of twelve methods with a method-level type parameter, each one calls the
+# next with the same type argument. The chain makes no new type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n11\n"
+extend i32 m1@(U: Display)(U u) i32:
+    return self.m2(u) + 1
+
+extend i32 m2@(U: Display)(U u) i32:
+    return self.m3(u) + 1
+
+extend i32 m3@(U: Display)(U u) i32:
+    return self.m4(u) + 1
+
+extend i32 m4@(U: Display)(U u) i32:
+    return self.m5(u) + 1
+
+extend i32 m5@(U: Display)(U u) i32:
+    return self.m6(u) + 1
+
+extend i32 m6@(U: Display)(U u) i32:
+    return self.m7(u) + 1
+
+extend i32 m7@(U: Display)(U u) i32:
+    return self.m8(u) + 1
+
+extend i32 m8@(U: Display)(U u) i32:
+    return self.m9(u) + 1
+
+extend i32 m9@(U: Display)(U u) i32:
+    return self.m10(u) + 1
+
+extend i32 m10@(U: Display)(U u) i32:
+    return self.m11(u) + 1
+
+extend i32 m11@(U: Display)(U u) i32:
+    return self.m12(u) + 1
+
+extend i32 m12@(U: Display)(U u) i32:
+    println(u)
+    return 0
+
+fn main() i32:
+    let i32 x = 3
+    println(x.m1(7))
+    return 0

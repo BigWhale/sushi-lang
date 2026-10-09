@@ -207,21 +207,38 @@ class FunctionMonomorphizer:
 
         return type_param_substitution(generic, type_args)
 
+    def _grows_without_end(self, generic, type_args) -> bool:
+        """CE0151 when this instantiation makes its chain of copies grow without end."""
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        from sushi_lang.semantics.generics.type_display import display_type
+        unit_name = getattr(generic, "unit_name", None)
+        instance = f"{generic.name}@({', '.join(display_type(arg) for arg in type_args)})"
+        return self.monomorphizer.refuses_growth(
+            ("fn", instantiation_key(generic.name, tuple(type_args))),
+            ("fn", unit_name, generic.name),
+            tuple(type_args), "function", generic.name, instance)
+
     def monomorphize_function(
         self,
         generic: 'GenericFuncDef',
         type_args: Tuple[Type, ...]
     ) -> Optional['FuncDef']:
-        """Create concrete function from generic definition. None when a constraint refused."""
+        """Create concrete function from generic definition. None when a constraint refused,
+        or when the copy makes its chain grow without end (CE0151)."""
         cache_key = (getattr(generic, "unit_name", None), generic.name, type_args)
         if cache_key in self.monomorphizer.func_cache:
             return self.monomorphizer.func_cache[cache_key]
 
+        if self._grows_without_end(generic, type_args):
+            return None
         substitution = self.build_substitution(generic, type_args)
         if substitution is None:
             return None
 
-        concrete_func, pack_param_fanout = self._cut(generic, substitution)
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        key = ("fn", instantiation_key(generic.name, tuple(type_args)))
+        with self.monomorphizer.cutting(getattr(generic, "filename", None), key):
+            concrete_func, pack_param_fanout = self._cut(generic, substitution)
 
         # A trailing pack type-param passes its arity, so the symbol is distinct per pack
         # size and cannot collide with a regular generic of the same base.
@@ -244,10 +261,11 @@ class FunctionMonomorphizer:
             from sushi_lang.semantics.generics.monomorphize.unroll import unroll_expands
             concrete_func.body = unroll_expands(concrete_func.body, pack_param_fanout)
 
-        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        # The key names the copy as the parent of each copy its body names: here, and in
+        # the typecheck pass for a call-site method copy (`instance_growth.py`).
+        concrete_func.instance_key = key
         self._collect_nested_instantiations(
-            concrete_func.body, concrete_func.params, generic,
-            ("fn", instantiation_key(generic.name, tuple(type_args))))
+            concrete_func.body, concrete_func.params, generic, concrete_func.instance_key)
         concrete_func.name = mangled_name
 
         self._collect_fn_value_instantiations(
@@ -275,16 +293,19 @@ class FunctionMonomorphizer:
         # into N concrete params (one per pack element, possibly zero); a normal
         # param yields exactly one concrete param identical to the legacy result.
         substitutor = self.monomorphizer.substitutor
+        written_at = self.monomorphizer.written_at
         concrete_params = []
         pack_param_fanout: Dict[str, list] = {}
         for param in generic.params:
-            expanded = substitutor.expand_pack_param(param, substitution)
+            with written_at(getattr(param, "type_span", None)):
+                expanded = substitutor.expand_pack_param(param, substitution)
             if pack_binding_for(param, substitution) is not None:
                 pack_param_fanout[param.name] = [p.name for p in expanded]
             concrete_params.extend(expanded)
 
-        concrete_ret = substitutor.substitute_type(
-            generic.ret, substitution) if generic.ret else None
+        with written_at(getattr(generic, "ret_span", None)):
+            concrete_ret = substitutor.substitute_type(
+                generic.ret, substitution) if generic.ret else None
 
         concrete_body = substitutor.substitute_body(generic.body, substitution)
 
@@ -292,8 +313,9 @@ class FunctionMonomorphizer:
         # carries `err_type` through, so `fn f@(E)(T v) i32 | E` would otherwise reach
         # the backend with an unsubstituted type parameter in its error arm.
         # `generics/extensions.py` does the same for a method's channel.
-        concrete_err = substitutor.substitute_type(
-            generic.err_type, substitution) if getattr(generic, "err_type", None) else None
+        with written_at(getattr(generic, "err_span", None)):
+            concrete_err = substitutor.substitute_type(
+                generic.err_type, substitution) if getattr(generic, "err_type", None) else None
 
         from sushi_lang.semantics.channel import has_channel
         concrete_func = copy.copy(generic)
@@ -543,7 +565,8 @@ class FunctionMonomorphizer:
         saved_key = self._asking_key
         self._asking_unit = None
         self._asking_file = extend_def.template_file
-        self._asking_key = getattr(extend_def.target_type, "name", None)
+        self._asking_key = (getattr(extend_def, "instance_key", None)
+                            or getattr(extend_def.target_type, "name", None))
         self._collect_block_instantiations(extend_def.body, var_types)
         self._asking_unit, self._asking_key = saved_unit, saved_key
         self._collect_fn_value_instantiations(extend_def.body, None, file=self._asking_file,

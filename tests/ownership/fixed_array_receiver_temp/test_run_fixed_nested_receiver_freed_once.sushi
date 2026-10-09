@@ -1,0 +1,10 @@
+# A built-in method on a temporary fixed array of dynamic arrays.
+# The scope frees each inner array one time.
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "3\n2\n"
+fn main() i32:
+    let i32 k = 1
+    println([from([k, 2, 3]), from([4, 5])].get(0).realise(from([])).len())
+    let i32[][2] c = [from([k, 2, 3]), from([4, 5])].clone()
+    println(c[1].len())
+    return 0
