@@ -1,0 +1,14 @@
+# EXPECT_STDOUT_EXACT: "true\n"
+# A dynamic array parameter of an enum hashes as a local does.
+
+enum Color:
+    Red
+    Blue
+
+fn id(Color[] x) u64:
+    return x.hash()
+
+fn main() i32:
+    let Color[] cs = from([Color.Red, Color.Blue])
+    println(id(cs) == cs.hash())
+    return 0

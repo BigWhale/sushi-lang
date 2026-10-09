@@ -1,0 +1,14 @@
+# EXPECT_STDOUT_EXACT: "true\n"
+# A fixed array parameter of an enum hashes as a local does.
+
+enum Color:
+    Red
+    Blue
+
+fn id(Color[3] x) u64:
+    return x.hash()
+
+fn main() i32:
+    let Color[3] cs = [Color.Red, Color.Blue, Color.Red]
+    println(id(cs) == cs.hash())
+    return 0

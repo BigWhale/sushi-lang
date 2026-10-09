@@ -28,6 +28,7 @@ from sushi_lang.backend.lifecycle import lifecycle_symbol
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.contracts import CONTRACT_METHOD, EQ, ORD
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, StructType, Type)
@@ -77,7 +78,7 @@ def contract_override(codegen: 'LLVMCodegen', ty: Type, contract: str) -> Option
     method = CONTRACT_METHOD[contract]
     llvm_fn = codegen.funcs.get(impl_method_symbol(str(ty), method))
     if llvm_fn is None:
-        raise_internal_error("CE0024", method=method, type=str(ty))
+        raise_internal_error("CE0024", method=method, type=display_type(ty))
     return llvm_fn
 
 
@@ -266,7 +267,7 @@ def _emit_body(codegen: 'LLVMCodegen', fn: ir.Function, ty: Type, contract: str)
         _sequence_body(codegen, steps, ty.base_type, _fixed_view(codegen, a, ty),
                        _fixed_view(codegen, b, ty))
     else:
-        raise_internal_error("CE0052", type=str(ty))
+        raise_internal_error("CE0052", type=display_type(ty))
     steps.finish()
 
 
