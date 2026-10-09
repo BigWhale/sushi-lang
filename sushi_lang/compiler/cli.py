@@ -297,6 +297,16 @@ def _report(session: Session, exc: SushiError) -> int:
     return 2
 
 
+def _report_too_deep(session: Session) -> int:
+    """A nest that is deeper than the compiler stack is CE0001, never CE0000. Exit 2."""
+    from sushi_lang.internals import errors as er
+
+    er.emit_with(session.reporter, er.ERR.CE0001, None).help(
+        "split the nest into `let` steps: bind an inner part to a name, "
+        "then use the name in the outer part")
+    return 2
+
+
 def _flush(session: Session) -> None:
     """Print the collected diagnostics, then the Python traceback if asked for."""
     session.reporter.print()
@@ -317,8 +327,48 @@ def _enter_user_directory() -> None:
         os.chdir(user_cwd)
 
 
+# Every walk of the compiler (the AST builder, the semantic passes, the backend) recurses
+# once or more for each level of a source nest. The whole compile runs on one thread with
+# this stack and this Python recursion limit, so a deep nest has room in every walk.
+_COMPILER_STACK_BYTES = 512 * 1024 * 1024
+_COMPILER_RECURSION_LIMIT = 100_000
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Main compiler entry point."""
+    """Main compiler entry point: run the compile on a thread with a deep stack."""
+    import sys
+    import threading
+
+    outcome: list[int] = []
+    failure: list[BaseException] = []
+
+    def compile_on_deep_stack() -> None:
+        try:
+            outcome.append(_main(argv))
+        except BaseException as exc:  # a usage error is a SystemExit from argparse
+            failure.append(exc)
+
+    previous_limit = sys.getrecursionlimit()
+    previous_stack = threading.stack_size(_COMPILER_STACK_BYTES)
+    try:
+        sys.setrecursionlimit(max(previous_limit, _COMPILER_RECURSION_LIMIT))
+        worker = threading.Thread(target=compile_on_deep_stack, name="sushic", daemon=True)
+        worker.start()
+    finally:
+        threading.stack_size(previous_stack)
+    try:
+        worker.join()
+    except KeyboardInterrupt:
+        return 130
+    finally:
+        sys.setrecursionlimit(previous_limit)
+    if failure:
+        raise failure[0]
+    return outcome[0]
+
+
+def _main(argv: list[str] | None) -> int:
+    """The compile: parse the arguments, run the stages, print the diagnostics."""
     _enter_user_directory()
     # The banner is a coloured line, so it comes AFTER the flag that decides its colour.
     # A usage error now prints argparse's message alone, with no banner above it.
@@ -346,6 +396,9 @@ def main(argv: list[str] | None = None) -> int:
     except SushiError as exc:
         session.crash = exc
         rc = _report(session, exc)
+    except RecursionError as exc:
+        session.crash = exc
+        rc = _report_too_deep(session)
     except Exception as exc:
         session.crash = exc
         rc = _report(session, _as_ice(exc))
