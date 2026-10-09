@@ -120,11 +120,6 @@ def scan_text(text: str) -> tuple[list[tuple[int, str]], list[int]]:
     return named, unnamed
 
 
-def marked_names(text: str) -> list[str]:
-    """The name of every function in `text` whose header carries the marker."""
-    return [name for _line, name in scan_text(text)[0]]
-
-
 def scan() -> tuple[Counter[tuple[str, str]], list[str]]:
     found: Counter[tuple[str, str]] = Counter()
     problems: list[str] = []
