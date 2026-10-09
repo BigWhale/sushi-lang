@@ -1,0 +1,21 @@
+# A generic function and a method with a method-level type parameter call each other.
+# The method makes the type argument larger, so the chain of copies has no end.
+# EXPECT_ERROR_CODES_EXACT: CE0151
+struct Box@(T):
+    T v
+
+struct Walker:
+    i32 steps
+
+fn walk@(U)(nom U x, i32 n) i32:
+    if (n == 0):
+        return 0
+    let Walker w = Walker(0)
+    return w.step(nom x, n - 1) + 1
+
+extend Walker step@(U)(nom U x, i32 n) i32:
+    return walk(nom Box(x), n)
+
+fn main() i32:
+    println(walk(nom 1, 3))
+    return 0

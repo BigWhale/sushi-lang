@@ -207,16 +207,30 @@ class FunctionMonomorphizer:
 
         return type_param_substitution(generic, type_args)
 
+    def _grows_without_end(self, generic, type_args) -> bool:
+        """CE0151 when this instantiation makes its chain of copies grow without end."""
+        from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        from sushi_lang.semantics.generics.type_display import display_type
+        unit_name = getattr(generic, "unit_name", None)
+        instance = f"{generic.name}@({', '.join(display_type(arg) for arg in type_args)})"
+        return self.monomorphizer.refuses_growth(
+            ("fn", instantiation_key(generic.name, tuple(type_args))),
+            ("fn", unit_name, generic.name),
+            tuple(type_args), "function", generic.name, instance)
+
     def monomorphize_function(
         self,
         generic: 'GenericFuncDef',
         type_args: Tuple[Type, ...]
     ) -> Optional['FuncDef']:
-        """Create concrete function from generic definition. None when a constraint refused."""
+        """Create concrete function from generic definition. None when a constraint refused,
+        or when the copy makes its chain grow without end (CE0151)."""
         cache_key = (getattr(generic, "unit_name", None), generic.name, type_args)
         if cache_key in self.monomorphizer.func_cache:
             return self.monomorphizer.func_cache[cache_key]
 
+        if self._grows_without_end(generic, type_args):
+            return None
         substitution = self.build_substitution(generic, type_args)
         if substitution is None:
             return None
@@ -245,9 +259,11 @@ class FunctionMonomorphizer:
             concrete_func.body = unroll_expands(concrete_func.body, pack_param_fanout)
 
         from sushi_lang.semantics.generics.extension_targets import instantiation_key
+        # The key names the copy as the parent of each copy its body names: here, and in
+        # the typecheck pass for a call-site method copy (`instance_growth.py`).
+        concrete_func.instance_key = ("fn", instantiation_key(generic.name, tuple(type_args)))
         self._collect_nested_instantiations(
-            concrete_func.body, concrete_func.params, generic,
-            ("fn", instantiation_key(generic.name, tuple(type_args))))
+            concrete_func.body, concrete_func.params, generic, concrete_func.instance_key)
         concrete_func.name = mangled_name
 
         self._collect_fn_value_instantiations(
@@ -543,7 +559,8 @@ class FunctionMonomorphizer:
         saved_key = self._asking_key
         self._asking_unit = None
         self._asking_file = extend_def.template_file
-        self._asking_key = getattr(extend_def.target_type, "name", None)
+        self._asking_key = (getattr(extend_def, "instance_key", None)
+                            or getattr(extend_def.target_type, "name", None))
         self._collect_block_instantiations(extend_def.body, var_types)
         self._asking_unit, self._asking_key = saved_unit, saved_key
         self._collect_fn_value_instantiations(extend_def.body, None, file=self._asking_file,

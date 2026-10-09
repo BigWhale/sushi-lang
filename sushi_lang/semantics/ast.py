@@ -274,6 +274,10 @@ class FuncDef(Node):
     # The template this body is a copy of, by identity (#1070). The reporter mutes the
     # copies of a template whose check refused it: the template said the fault one time.
     template_id: Optional["TemplateId"] = None
+    # The key of the copy, which each copy its body names records as its parent: the
+    # growth rule reads that chain (`generics/instance_growth.py`). None on a written
+    # declaration. It holds no node.
+    instance_key: Optional[tuple] = None
 
 
 @dataclass(slots=True)
@@ -409,6 +413,8 @@ class ExtendDef(Node):
     # The target of the template of a copy as the source wrote it (`Box@(T)`), so a
     # diagnostic about the declaration names the declaration. None on a written one.
     template_target: Optional[str] = None
+    # The key of a call-site copy; see `FuncDef`. None on every other extension.
+    instance_key: Optional[tuple] = None
 
     @property
     def is_conversion(self) -> bool:

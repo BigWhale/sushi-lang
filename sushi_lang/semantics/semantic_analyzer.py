@@ -969,15 +969,20 @@ class SemanticAnalyzer:
         """Check each call-site-driven extension copy, to a fixpoint."""
         # An array-target template instantiates at the CALL SITE (the typecheck pass
         # queued it), and checking one monomorphized body can resolve a call that queues
-        # another. The bound mirrors MAX_EXPANSION_ROUNDS in the instantiate pass:
-        # reaching it drops an instantiation, which surfaces as the ordinary CE2008,
-        # never as a hang.
+        # another. The queue is drained until it is empty: a chain of copies that makes
+        # no new type is finite, and its length is not a bound. A chain that grows
+        # without end is CE0151 at the copy that the growth rule refuses
+        # (`generics/instance_growth.py`), and a refused copy queues nothing more.
         #
         # A function copy cut after the per-unit loop started -- a late request of the
         # typecheck pass, or a call in an extension copy -- is checked in the same round
         # (#1155). Checking it can request another, so it is part of the same fixpoint.
+        from sushi_lang.semantics.passes.finite_types import table_marks
+
         checked = 0
-        for _round in range(self.MAX_ARRAY_EXPANSION_ROUNDS):
+        growing_rounds = 0
+        while True:
+            marks = table_marks(self.tables.structs, self.tables.enums)
             self._drain_pending_array_extensions(monomorphizer, compilation_order)
             perk_copies = self._place_array_perk_copies(monomorphizer, compilation_order)
             batch = self.monomorphized_extensions[checked:]
@@ -992,16 +997,50 @@ class SemanticAnalyzer:
             copies += functions
             self._check_copies(copies, monomorphizer, libraries, destroy_effects,
                                enum_names)
+            if marks != table_marks(self.tables.structs, self.tables.enums):
+                growing_rounds += 1
+            if growing_rounds >= self.MAX_NEW_TYPE_ROUNDS:
+                self._refuse_pending_copies(monomorphizer)
+                break
 
-    # Rounds an expansion fixpoint may take before it drops the rest. The same shape
-    # and reasoning as InstantiationCollector.MAX_EXPANSION_ROUNDS. TWO readers, and
-    # they are one rule: `_check_array_extensions` drives the call-site-driven array
-    # extensions, and `_cut_templates_for_late_instantiations` drives the late
-    # instantiations (#555). Each round of either can name a new instantiation, so the
-    # bound answers the same question -- how deep a chain the compiler follows before
-    # it stops. Reaching it drops an instantiation, which surfaces as the ordinary
-    # CE2008 and never as a hang.
+    # Rounds of the call-site copy fixpoint that make a new type, before the copies
+    # still in the queue are refused. The growth rule refuses a chain that grows
+    # without end long before this (`instance_growth.MAX_GROWTH` copies of one
+    # template). This bound is for a chain whose parent link the rule cannot read.
+    MAX_NEW_TYPE_ROUNDS = 64
+
+    # Rounds `_cut_templates_for_late_instantiations` takes before it stops. The same
+    # shape as InstantiationCollector.MAX_EXPANSION_ROUNDS.
     MAX_ARRAY_EXPANSION_ROUNDS = 8
+
+    def _refuse_pending_copies(self, monomorphizer) -> None:
+        """CE0151 at the call of each copy still in the queue when the fixpoint stops."""
+        pending = self.tables.pending_extension_instantiations
+        self.tables.pending_extension_instantiations = []
+        for request in pending:
+            self._record_copy_request(monomorphizer, request)
+            self._refuses_copy(monomorphizer, request, force=True)
+
+    @staticmethod
+    def _record_copy_request(monomorphizer, request) -> None:
+        """Give the key of a queued copy its site and its parent, the first ones only."""
+        monomorphizer.sites.setdefault(request.key, request.site)
+        if request.parent is not None:
+            monomorphizer.parents.setdefault(request.key, request.parent)
+
+    @staticmethod
+    def _refuses_copy(monomorphizer, request, force: bool = False) -> bool:
+        """CE0151 when a queued copy makes its chain grow without end (or `force`)."""
+        from sushi_lang.semantics.generics.extension_targets import extension_template_id
+        from sushi_lang.semantics.generics.type_display import display_type
+        template = request.template
+        instance = f"{display_type(request.target_type)}.{template.name}"
+        if request.method_type_args:
+            instance += f"@({', '.join(display_type(a) for a in request.method_type_args)})"
+        return monomorphizer.refuses_growth(
+            request.key, ("method", extension_template_id(template)),
+            (*request.receiver_args, *request.method_type_args), "method", template.name,
+            instance, force=force)
 
     def _drain_pending_array_extensions(self, monomorphizer, compilation_order) -> None:
         """Monomorphize every queued call-site extension instantiation.
@@ -1020,11 +1059,15 @@ class SemanticAnalyzer:
         self.tables.pending_extension_instantiations = []
         fn_instantiations = set()
         new_defs = []
-        for template, target_type, receiver_args, method_type_args in pending:
+        for request in pending:
+            self._record_copy_request(monomorphizer, request)
+            if self._refuses_copy(monomorphizer, request):
+                continue
             extend_def = monomorphize_extension_method(
-                template, target_type, receiver_args,
+                request.template, request.target_type, request.receiver_args,
                 substitutor=monomorphizer.substitutor,
-                method_type_args=method_type_args)
+                method_type_args=request.method_type_args)
+            extend_def.instance_key = request.key
             new_defs.append(extend_def)
             self._adopt_extension_copy(extend_def, compilation_order)
         self._intern_late_type_instantiations(monomorphizer, new_defs)

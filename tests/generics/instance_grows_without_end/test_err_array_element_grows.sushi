@@ -1,0 +1,13 @@
+# An extend T[] method whose body calls itself on a T[][]. Each copy names a new copy
+# with a deeper element type, so the chain has no end.
+# EXPECT_ERROR_CODES_EXACT: CE0151
+extend T[] deepen(i32 n) i32:
+    if (n == 0):
+        return 0
+    let T[][] outer = from([])
+    return outer.deepen(n - 1) + 1
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println(xs.deepen(3))
+    return 0

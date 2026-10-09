@@ -65,6 +65,9 @@ class Monomorphizer:
     # chain goes up to a key that a written site named, so a refusal of a nested
     # instance has a note at the call that the user wrote.
     parents: dict = field(default_factory=dict)
+    # The template and the size of the type arguments of each copy that the growth rule
+    # judged, by key (`generics/instance_growth.py`).
+    instance_records: dict = field(default_factory=dict)
     # How many instantiations a constraint refused. The analyzer STOPS the whole-program
     # analysis after the monomorphize step when this is non-zero (Ruling 4, #579): no copy
     # was cut for a refused instantiation, and the per-unit passes would only read the
@@ -240,7 +243,9 @@ class Monomorphizer:
         if root is None:
             return None
         span, filename = self.sites[root]
-        site = "call" if isinstance(root, tuple) and root[0] == "fn" else "type written"
+        # A copy of a function or a call-site method copy is named by a call. A copy for
+        # each instance of a target type is named by the written type, keyed by its name.
+        site = "call" if isinstance(root, tuple) else "type written"
         return (f"this instance is required by the {site} here", span, filename)
 
     def _error_arguments_hold(self, type_params, type_args, error_params, span,
@@ -277,6 +282,39 @@ class Monomorphizer:
             return True
         self.constraint_violations += 1
         return False
+
+    def refuses_growth(self, key: object, template: object, type_args: Tuple[Type, ...],
+                       kind: str, name: str, instance: str, force: bool = False) -> bool:
+        """CE0151 when the copy `key` makes its chain grow without end. True when refused.
+
+        The one emitter of the rule in `generics/instance_growth.py`, for a function copy
+        and a call-site extension copy alike. The diagnostic is at the site that named
+        the copy (the call in the template body), with a note at the call that started
+        the chain. A refusal is recorded like a refused constraint: no copy is cut, a
+        later reach of the key is refused in silence, and the analysis stops. `instance`
+        is the copy as the user spells it. `force` refuses the copy with no count: the
+        call-site fixpoint stopped at its bound.
+        """
+        from sushi_lang.semantics.generics.instance_growth import (
+            grows_without_end, type_arguments_size)
+
+        if key in self._refused:
+            return True
+        size = type_arguments_size(type_args)
+        self.instance_records[key] = (template, size)
+        if not force and not grows_without_end(key, template, size, self.parents,
+                                               self.instance_records):
+            return False
+        span, filename = self.sites.get(key, (None, None))
+        builder = er.emit_with(self.reporter, er.ERR.CE0151, span, filename=filename,
+                               kind=kind, name=name, instance=instance)
+        note = self.required_by(key)
+        if note is not None:
+            builder.note_at(note[0], note[1], note[2])
+        builder.emit()
+        self.constraint_violations += 1
+        self.refuse(key, Counter({er.ERR.CE0151.code: 1}))
+        return True
 
     def was_refused(self, key: object) -> bool:
         """A constraint refused this instantiation, and it was reported one time."""
