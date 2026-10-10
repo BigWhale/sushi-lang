@@ -1,0 +1,8 @@
+public struct Crate@(T):
+    T value
+
+public extend Crate@(T) twice() i32:
+    return 42
+
+public extend Crate@(T) nest(nom self) Crate@(Crate@(T)):
+    return Crate(self)

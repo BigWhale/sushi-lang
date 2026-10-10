@@ -766,7 +766,7 @@ Current limitations of the library system:
    signature record in `templates.extensions`, with the symbol that the library bitcode
    defines. The consumer registers the method and declares the symbol. An extension
    template is a source record in `templates.generic_extensions`, and the consumer makes
-   a copy for each instance it names. A template body may call a private function of the
+   a copy for each instance and method that a call reaches. A template body may call a private function of the
    library, through the export closure below.
 
    **Private helpers ship automatically (the export closure)**: a public generic whose body

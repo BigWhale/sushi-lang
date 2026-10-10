@@ -1,0 +1,7 @@
+use "units/cut_c5_pack"
+
+extend Pack@(T) tag() i32:
+    return 1
+
+public fn left_tag(Pack@(i32) p) i32:
+    return p.tag()

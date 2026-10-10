@@ -512,7 +512,7 @@ is the authority, and the index is a cache of it.
         # Extension TEMPLATES: a generic target (`Box@(T)`), a concrete-instance target
         # (`Box@(i32)`), an array target (`T[]`) and a method type parameter
         # (`pick@(U)`). A template names no instance, so it ships as source, and the
-        # consumer makes one copy for each instance it names. It joins the export
+        # consumer makes one copy for each instance and method that a call reaches. It joins the export
         # closure, so its body may call a private function of the library. The whole
         # key is absent when there is no record.
         "generic_extensions": [

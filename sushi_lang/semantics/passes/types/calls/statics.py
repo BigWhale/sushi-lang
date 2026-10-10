@@ -124,10 +124,10 @@ def _interned_static_target(validator: 'TypeValidator', call, template, base: st
     """The interned instantiation for the solved type arguments, with its static's copy.
 
     The instantiate pass collected the instantiation when it could infer the same
-    arguments, and the monomorphize pass then cut every extension copy for it. When it
-    could not -- an argument the typecheck pass types and the collector does not -- the
-    instantiation is interned here (risk 1 of the UFCS epic, the same seam) and the
-    typecheck pass queues the static's copy, so the call still has a symbol to bind to.
+    arguments. When it could not -- an argument the typecheck pass types and the
+    collector does not -- the instantiation is interned here (risk 1 of the UFCS epic,
+    the same seam). The first call of the static enters its signature and queues its
+    copy, so the call has a symbol to bind to (#1196).
     """
     from sushi_lang.semantics.generics.extension_targets import instantiation_key
     from sushi_lang.semantics.generics.extensions import bounds_hold_for
@@ -164,38 +164,10 @@ def _add_late_static_copy(validator: 'TypeValidator', template, target, type_arg
                           site) -> None:
     """Enter the substituted signature and queue the body copy for the fixpoint round."""
     from sushi_lang.semantics.passes.types.calls.methods import (
-        _queue_extension_instantiation)
+        _queue_extension_instantiation, target_copy_signature)
 
-    validator.extension_table.add_method(_late_static_signature(template, target, type_args))
+    validator.extension_table.add_method(target_copy_signature(validator, template, target))
     _queue_extension_instantiation(validator, template, target, tuple(type_args), (), site)
-
-
-def _late_static_signature(template, target, type_args):
-    """The static's signature, substituted for one instantiation of its target."""
-    from sushi_lang.semantics.generics.types import substitute_type_params
-    from sushi_lang.semantics.passes.collect.functions import ExtensionMethod, Param
-
-    names = [p.name if hasattr(p, "name") else str(p) for p in template.type_params]
-    substitution = dict(zip(names, type_args, strict=True))
-
-    def subst(ty):
-        return substitute_type_params(ty, substitution) if ty is not None else None
-
-    params = [Param(
-        name=p.name, ty=subst(p.ty), name_span=p.name_span, type_span=p.type_span,
-        index=p.index, is_variadic=getattr(p, "is_variadic", False),
-        is_nom=getattr(p, "is_nom", False),
-    ) for p in template.params]
-    concrete = ExtensionMethod(
-        target_type=target, name=template.name, params=params,
-        ret_type=subst(template.ret_type), loc=template.loc,
-        target_type_span=template.target_type_span, name_span=template.name_span,
-        ret_span=template.ret_span, self_mode=template.self_mode,
-        filename=template.filename, unit_name=template.unit_name,
-        err_type=subst(getattr(template, "err_type", None)),
-        err_span=getattr(template, "err_span", None), is_static=True,
-        is_public=bool(getattr(template, "is_public", False)))
-    return concrete
 
 
 def _unentered_static(validator: 'TypeValidator', call, target):
@@ -204,14 +176,15 @@ def _unentered_static(validator: 'TypeValidator', call, target):
     An inference before the typecheck pass enters no copy, so the extension table can
     hold no row for an instance it reaches. It reads the substituted template instead.
     """
+    from sushi_lang.semantics.generics.extensions import target_copy_args
+    from sushi_lang.semantics.passes.types.calls.methods import target_copy_signature
     base = generic_base_of(target)
     if base is None:
         return None
     template = static_template_for(validator, base, call.method)
-    type_args = getattr(target, "generic_args", None)
-    if template is None or type_args is None or len(type_args) != len(template.type_params):
+    if template is None or target_copy_args(template, target) is None:
         return None
-    return _late_static_signature(template, target, type_args)
+    return target_copy_signature(validator, template, target)
 
 
 def resolve_static(validator: 'TypeValidator', call, report: bool = False):

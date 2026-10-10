@@ -1,0 +1,18 @@
+# A static on a generic target gets its copy at the call on the type name. No call
+# reaches wrap(), so it has no copy.
+# EXPECT_STDOUT_EXACT: "5\n"
+# EXPECT_IR_FUNCTION: Box__i32_of
+# EXPECT_IR_NO_FUNCTION: *_wrap
+struct Box@(T):
+    T v
+
+extend Box@(T) static of(nom T v) Box@(T):
+    return Box(v)
+
+extend Box@(T) wrap(nom self) Box@(Box@(T)):
+    return Box(self)
+
+fn main() i32:
+    let Box@(i32) b = Box.of(nom 5)
+    println(b.v)
+    return 0

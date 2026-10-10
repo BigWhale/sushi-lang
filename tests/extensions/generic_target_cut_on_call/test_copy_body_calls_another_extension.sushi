@@ -1,0 +1,22 @@
+# The body of a copy calls another extension of the same target. That call is read
+# when the copy is checked, and it gets its own copy. The Box@(i32) gets no copy,
+# because no call reaches a method on it.
+# EXPECT_STDOUT_EXACT: "11\n1\n"
+# EXPECT_IR_FUNCTION: Box__string_outer
+# EXPECT_IR_FUNCTION: Box__string_inner
+# EXPECT_IR_NO_FUNCTION: Box__i32_*
+struct Box@(T):
+    T v
+
+extend Box@(T) inner() i32:
+    return 10
+
+extend Box@(T) outer() i32:
+    return self.inner() + 1
+
+fn main() i32:
+    let Box@(string) b = Box("Mostly Harmless")
+    let Box@(i32) n = Box(1)
+    println(b.outer())
+    println(n.v)
+    return 0

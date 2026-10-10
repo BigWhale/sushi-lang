@@ -1,0 +1,24 @@
+# An enum target follows the struct rule: one copy for each instance that a call names.
+# No call reaches grow(), so it has no copy.
+# EXPECT_STDOUT_EXACT: "1\n0\n"
+# EXPECT_IR_FUNCTION: Slot__i32_count
+# EXPECT_IR_FUNCTION: Slot__string_count
+# EXPECT_IR_NO_FUNCTION: *_grow
+enum Slot@(T):
+    Full(T)
+    Empty
+
+extend Slot@(T) count() i32:
+    match self:
+        Slot.Full(_) -> return 1
+        Slot.Empty -> return 0
+
+extend Slot@(T) grow(nom self) Slot@(Slot@(T)):
+    return Slot.Full(self)
+
+fn main() i32:
+    let Slot@(i32) a = Slot.Full(4)
+    let Slot@(string) e = Slot.Empty()
+    println(a.count())
+    println(e.count())
+    return 0

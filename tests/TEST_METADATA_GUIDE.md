@@ -268,6 +268,39 @@ of the program cannot show, for example a bounds check that `dont_panic` removes
   proves that the text is there when the rule does not apply
 - The directive may be repeated. A fixture that does not compile has no IR, and fails
 
+#### EXPECT_IR_FUNCTION / EXPECT_IR_NO_FUNCTION
+
+Asserts that the emitted LLVM IR defines a function, or defines no function, whose symbol
+matches a pattern. Use it for a rule about which copies the compiler makes, for example
+that an extension copy is not made when no call reaches it.
+
+```sushi
+# EXPECT_IR_FUNCTION: Box__i32_tag
+# EXPECT_IR_NO_FUNCTION: Box__string_tag
+# EXPECT_IR_NO_FUNCTION: *_enumerate
+# EXPECT_IR_NO_FUNCTION: *left$Pack__string_tag
+```
+
+- The value is one glob pattern (`*` and `?`), matched with case. A value with a space
+  is refused
+- A pattern with no `$` is matched to the STEM of each symbol. The stem is the text after
+  the last `$`, so after the unit: `prog$Box__i32_tag` has the stem `Box__i32_tag`, and
+  `collections$iter$List__i32_enumerate` has the stem `List__i32_enumerate`
+- A pattern with a `$` is matched to the full symbol, so it can name the unit too. A `/`
+  in a unit name is a `$` in the symbol (`units/left` gives `units$left$...`). Use this
+  form when two units each have a copy with one stem
+- The stem of an extension copy is `<receiver>_<method>`, as `extension_symbol` spells it
+  (`sushi_lang/semantics/generics/name_mangling.py`): `Box@(string)` becomes
+  `Box__string`, `i32[]` becomes `arr__i32`. A method-level type argument adds
+  `__<argument>`. A free function and a generic function copy have the stem of their
+  name (`ident__i32`)
+- `EXPECT_IR_FUNCTION` asks for at least one match, `EXPECT_IR_NO_FUNCTION` for none.
+  An absence is true also for a spelling that is wrong. So put a twin
+  `EXPECT_IR_FUNCTION` beside an absence where you can, with the same spelling for an
+  instance that the program makes
+- The runner adds `--write-ll --no-incremental`, as for `EXPECT_IR_HOLDS`. The directive
+  may be repeated
+
 ### Advanced Metadata Directives
 
 #### TIMEOUT_SECONDS

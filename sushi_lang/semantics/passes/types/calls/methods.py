@@ -60,6 +60,39 @@ def instantiate_array_extension(validator: 'TypeValidator',
     return concrete
 
 
+def instantiate_target_extension(validator: 'TypeValidator', receiver_type, template,
+                                 call=None, report: bool = True):
+    """Resolve a call on an instance of a generic type against one generic-target template.
+
+    The `T[]` rung is the model (#1196). The substituted signature answers the call. The
+    first call that reaches the method files the signature in the extension table, so
+    the next call and the backend find it, and queues the body copy for the analyzer's
+    fixpoint round. A question with no call node (the `foreach` protocol asks for
+    `next()`) gets the signature and writes nothing; the call that `foreach` then
+    validates writes it. A template check and an early inference write nothing either.
+
+    An instance that fails a target bound gets no copy, and the last rung refuses the
+    call (CE4006). A type argument in an `E` position of the template is CE2084 at the
+    call (E3), told only with `report` and a call to point at.
+    """
+    from sushi_lang.semantics.generics.extensions import (
+        bounds_hold_for, target_copy_args, target_copy_substitution)
+    args = target_copy_args(template, receiver_type)
+    if args is None or not bounds_hold_for(template, args, validator.tables):
+        return None
+    substitution = target_copy_substitution(template, receiver_type)
+    site = call.loc if call is not None else None
+    report = report and call is not None
+    if _refuses_non_error_arguments(validator, template, receiver_type, substitution,
+                                    site, report):
+        return RESOLUTION_REPORTED if report else None
+    concrete = target_copy_signature(validator, template, receiver_type)
+    if call is not None and validator.queues_late_copies:
+        validator.extension_table.add_method(concrete)
+        _queue_extension_instantiation(validator, template, receiver_type, args, (), site)
+    return concrete
+
+
 def _array_templates(validator: 'TypeValidator', method_name: str) -> list:
     """The `T[]` templates of this method name with no method-level parameter.
 
@@ -127,6 +160,20 @@ def substituted_extension_signature(validator: 'TypeValidator', template, receiv
         err_type=err, err_span=getattr(template, "err_span", None),
         is_static=bool(getattr(template, "is_static", False)),
         is_public=bool(getattr(template, "is_public", False)))
+
+
+def target_copy_signature(validator: 'TypeValidator', template, instance):
+    """The signature of the copy of a generic-target template for `instance`.
+
+    `substituted_extension_signature` with the template identity that each copy carries
+    (`copy_identity`). The ONE builder for an instance method and a static alike.
+    """
+    from sushi_lang.semantics.generics.extensions import (
+        copy_identity, target_copy_substitution)
+    concrete = substituted_extension_signature(
+        validator, template, instance, target_copy_substitution(template, instance))
+    concrete.template_id, concrete.template_target = copy_identity(template)
+    return concrete
 
 
 def _resolved(validator: 'TypeValidator', ty):
@@ -207,7 +254,7 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
     (`docs/design/extension-visibility.md`): `_choose_visible` reads the one predicate.
     """
     records = validator.extension_table.declarations(receiver_type, method_name)
-    templates = _uncut_array_templates(validator, receiver_type, method_name, records)
+    templates = _uncut_templates(validator, receiver_type, method_name, records)
     method = None
     if records or templates:
         matching = [record for record in [*records, *templates]
@@ -218,8 +265,14 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
                                  report)
         if not isinstance(chosen, GenericExtensionMethod):
             return chosen
-        method = instantiate_array_extension(validator, receiver_type, chosen,
-                                             call.loc if call is not None else None)
+        if isinstance(receiver_type, DynamicArrayType):
+            method = instantiate_array_extension(validator, receiver_type, chosen,
+                                                 call.loc if call is not None else None)
+        else:
+            method = instantiate_target_extension(validator, receiver_type, chosen, call,
+                                                  report)
+            if method is RESOLUTION_REPORTED:
+                return method
         if method is not None:
             return method
 
@@ -244,18 +297,26 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
     return _choose_visible(validator, receiver_type, method_name, [method], call, report)
 
 
-def _uncut_array_templates(validator: 'TypeValidator', receiver_type, method_name: str,
-                           records: list) -> list:
-    """The `T[]` templates of a unit that has no copy for this receiver yet.
+def _uncut_templates(validator: 'TypeValidator', receiver_type, method_name: str,
+                     records: list) -> list:
+    """The templates of a unit that has no copy for this receiver yet.
 
-    A copy of an array template is cut at the call that names its element, so the
-    extension table holds only the copies that a call has cut. A unit with no copy yet
-    is still a candidate of the call (C5).
+    A `T[]` template, or a generic-target template of the receiver's base. A copy is cut
+    at the call that reaches it, so the extension table holds only the copies that a
+    call has cut. A unit with no copy yet is still a candidate of the call (C5). An
+    instance over an opaque parameter has no copy; the last rung answers it.
     """
-    if not isinstance(receiver_type, DynamicArrayType):
+    from sushi_lang.semantics.generics.extensions import target_templates_of
+    from sushi_lang.semantics.generics.opaque import holds_opaque
+    if isinstance(receiver_type, DynamicArrayType):
+        templates = _array_templates(validator, method_name)
+    elif isinstance(receiver_type, (StructType, EnumType)) and not holds_opaque(receiver_type):
+        templates = target_templates_of(validator.generic_extension_table, receiver_type,
+                                        method_name)
+    else:
         return []
     cut = {record.unit_name for record in records}
-    return [t for t in _array_templates(validator, method_name) if t.unit_name not in cut]
+    return [t for t in templates if t.unit_name not in cut]
 
 
 def _choose_visible(validator: 'TypeValidator', receiver_type, method_name: str,
@@ -330,25 +391,30 @@ def _template_for(validator: 'TypeValidator', receiver_type, method_name: str):
     """The template that gives this receiver the method: (template, its arguments, static).
 
     An extension template first, then a perk template of the same base. A
-    method-generic template is not one: its call solves the method arguments first.
+    method-generic template is not one: its call solves the method arguments first. A
+    generic-target template is the one lookup's (`target_templates_of`), in the order
+    that the calling unit reads them.
     """
     from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+    from sushi_lang.semantics.generics.extensions import target_copy_args, target_templates_of
     base: Optional[str] = None
     if isinstance(receiver_type, DynamicArrayType):
         base = ARRAY_BASE_KEY
         args: tuple = (receiver_type.base_type,)
         template = _array_template(validator, method_name)
+        if (template is not None and not template.method_type_params
+                and len(template.type_params) == len(args)):
+            return template, args, template.is_static
     else:
         base = getattr(receiver_type, "generic_base", None)
         args = tuple(getattr(receiver_type, "generic_args", None) or ())
         if base is None:
             return None
-        candidates = validator.generic_extension_table.applicable(
-            base, method_name, receiver_type.name)
+        candidates = target_templates_of(validator.generic_extension_table, receiver_type,
+                                         method_name)
         template = next(iter(in_reach_order(validator, candidates, receiver_type)), None)
-    if (template is not None and not template.method_type_params
-            and len(template.type_params) == len(args)):
-        return template, args, template.is_static
+        if template is not None:
+            return template, target_copy_args(template, receiver_type), template.is_static
     for perk_template in validator.tables.generic_perk_impls.templates(base):
         if (len(perk_template.type_params) == len(args)
                 and any(m.name == method_name for m in perk_template.impl.methods)):
@@ -507,8 +573,8 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     full_subst.update(dict(zip(margs_names, margs, strict=True)))
 
     # E3 at the call, which is the instance: no copy is cut for a refused argument.
-    if _refuses_non_error_arguments(validator, template, receiver_type, full_subst, call,
-                                    report):
+    if _refuses_non_error_arguments(validator, template, receiver_type, full_subst,
+                                    call.loc, report):
         return RESOLUTION_REPORTED if report else None
 
     receiver_names = [p.name if hasattr(p, "name") else p for p in template.type_params]
@@ -557,7 +623,7 @@ def _refuses_unmet_bounds(validator: 'TypeValidator', template, method_name: str
 
 
 def _refuses_non_error_arguments(validator: 'TypeValidator', template, receiver_type,
-                                 substitution, call, report: bool) -> bool:
+                                 substitution, site, report: bool) -> bool:
     """CE2084 for a type argument of this call in an `E` position of the template (E3).
 
     docs/design/error-conversion.md section 2.5, item 2: the call that solves the
@@ -587,7 +653,7 @@ def _refuses_non_error_arguments(validator: 'TypeValidator', template, receiver_
     for name, note_span in positions.items():
         note = (f"the template uses the type parameter '{name}' as an error type here",
                 note_span, template.filename)
-        if reject_non_error_type(validator.reporter, substitution[name], call.loc,
+        if reject_non_error_type(validator.reporter, substitution[name], site,
                                  structs, enums, note=note):
             refused = True
     if refused and refused_keys is not None:

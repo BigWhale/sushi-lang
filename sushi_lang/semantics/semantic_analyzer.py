@@ -23,16 +23,9 @@ from sushi_lang.semantics.passes.borrow import BorrowChecker
 from sushi_lang.semantics.passes.lift import LambdaLifter
 from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
-from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
 from sushi_lang.semantics.generics.monomorphize.order import diagnostics_in_site_order
 from sushi_lang.semantics.library_registration import (
     LibraryRegistration, LoadedLibraries)
-
-
-# What `monomorphize_all_extension_methods` answers: one concrete ExtendDef per
-# (target type, method name, type arguments).
-# A generic-target extension copy, by (target, method, type arguments, declaring unit).
-ExtensionCopies = dict[tuple[str, str, tuple, Optional[str]], ExtendDef]
 
 
 def enum_base_names(*tables) -> set[str]:
@@ -267,11 +260,6 @@ class SemanticAnalyzer:
         is the backstop (CE0148): no instance over an opaque parameter reached a program
         table.
 
-        One call in `_check_multi_file` carries no row, because it is not a pass:
-        `_register_monomorphized_extensions` merges the generic-target extension copies
-        into the extension table. It is the `monomorphize` stage's tail and both ends of
-        its placement -- after `derive`, before `shadowing` -- are load-bearing.
-
         `ffi-clash` has a second half with no row of its own: `_check_instance_clash`
         runs CE5013 over the monomorphized function instances, directly after
         `monomorphize`, because no instance exists before it (#1113).
@@ -349,8 +337,7 @@ class SemanticAnalyzer:
             return
 
         instantiations = self._collect_instantiations(compilation_order, libraries)
-        monomorphizer, concrete_extension_defs = self._monomorphize(
-            compilation_order, instantiations)
+        monomorphizer = self._monomorphize(compilation_order, instantiations)
         self._check_instance_clash(compilation_order)
 
         # A constraint violation STOPS the whole-program analysis here (#579, Ruling 4),
@@ -368,7 +355,6 @@ class SemanticAnalyzer:
         if self._check_finite_types():
             return
         self._derive()
-        self._register_monomorphized_extensions(concrete_extension_defs, compilation_order)
         self._check_extension_shadows_builtin(monomorphizer.sites)
         self._warn_hidden_imported_extensions()
 
@@ -630,30 +616,25 @@ class SemanticAnalyzer:
         # them (#543): `fn make_box(i32 v) Box@(i32)` is a manifest record here.
         if self.library_registry is not None:
             instantiation_collector.collect_from_signatures(libraries.signatures())
-        # AFTER every unit: an extension on a generic target is read per instantiation of
-        # that target, and the instantiation may come from another unit (#389).
-        instantiation_collector.collect_from_generic_extensions(
-            [unit.ast for unit in compilation_order if unit.ast is not None]
-        )
         return instantiation_collector
 
     def _monomorphize(self, compilation_order: list[Unit],
                       instantiations: 'InstantiationCollector',
-                      ) -> tuple['Monomorphizer', ExtensionCopies]:
+                      ) -> 'Monomorphizer':
         """monomorphize: every generic the program names becomes a concrete declaration.
 
         The work order is load-bearing, and it is not the order a user reads the faults
         in: the stage's diagnostics are put in site order once it ends (#927).
         """
         first = len(self.reporter.items)
-        copies = self._monomorphize_in_work_order(compilation_order, instantiations)
+        monomorphizer = self._monomorphize_in_work_order(compilation_order, instantiations)
         self.reporter.items[first:] = diagnostics_in_site_order(
             self.reporter.items[first:], instantiations.sites)
-        return copies
+        return monomorphizer
 
     def _monomorphize_in_work_order(self, compilation_order: list[Unit],
                                     instantiations: 'InstantiationCollector',
-                                    ) -> tuple['Monomorphizer', ExtensionCopies]:
+                                    ) -> 'Monomorphizer':
         type_instantiations = instantiations.instantiations
         func_instantiations = instantiations.function_instantiations
 
@@ -684,21 +665,22 @@ class SemanticAnalyzer:
 
         monomorphizer.monomorphize_all_functions(func_instantiations, compilation_order)
 
-        concrete_extension_defs = self._monomorphize_generic_extensions(
-            monomorphizer, compilation_order, struct_instantiations, concrete_structs,
-            enum_instantiations, concrete_enums, perk_impl_fn_instantiations)
+        if perk_impl_fn_instantiations:
+            monomorphizer.monomorphize_all_functions(perk_impl_fn_instantiations,
+                                                     compilation_order)
+        self._judge_extension_error_arguments(
+            monomorphizer, [*concrete_structs.values(), *concrete_enums.values()])
 
         # monomorphize (cont.): a LATE instantiation -- one the instantiate pass never
-        # saw, interned while a generic body was substituted -- gets its generic-target
-        # extension and perk-implementation copies exactly as an early one did (#555).
+        # saw, interned while a generic body was substituted -- gets its
+        # perk-implementation copies and its E3 judge exactly as an early one did (#555).
         self._cut_templates_for_late_instantiations(
-            monomorphizer, compilation_order, concrete_extension_defs,
-            struct_instantiations, enum_instantiations)
+            monomorphizer, compilation_order, struct_instantiations, enum_instantiations)
 
         # Every instantiation the program names now exists, so an implementation whose
         # target still names none is one the program never reached.
         self._drop_unreached_perk_impls(compilation_order)
-        return monomorphizer, concrete_extension_defs
+        return monomorphizer
 
     def _new_monomorphizer(self, instantiations: 'InstantiationCollector') -> 'Monomorphizer':
         """The monomorphizer, its constraint validator, and the late-intern seam."""
@@ -770,32 +752,15 @@ class SemanticAnalyzer:
                 instantiations.add((base, args))
                 concrete[ty.name] = ty
 
-    def _monomorphize_generic_extensions(self, monomorphizer, compilation_order,
-                                         struct_instantiations, concrete_structs,
-                                         enum_instantiations, concrete_enums,
-                                         fn_instantiations) -> ExtensionCopies:
-        """Cut every generic-target extension's copy, and monomorphize what its body names."""
-        # monomorphize (cont.): extensions on generic targets, BEFORE resolve and derive. A
-        # generic call in a substituted body has its argument types only now -- they come
-        # from `self` (#392) -- and what the second function round below interns must still
-        # receive field resolution and hash/clone derivation. The extension TABLE merge and
-        # the CE2097 check stay after derive, where their placement is load-bearing.
-        concrete_extension_defs = monomorphize_all_extension_methods(
-            self.tables.generic_extensions.by_type,
-            struct_instantiations,
-            concrete_structs,
-            enum_instantiations,
-            concrete_enums,
-            substitutor=monomorphizer.substitutor,
-        )
+    def _judge_extension_error_arguments(self, monomorphizer, instances) -> None:
+        """E3 for each generic-target extension template at each instance, with no copy.
 
-        extension_fn_instantiations = set(fn_instantiations)
-        for extend_def in concrete_extension_defs.values():
-            extension_fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
-
-        if extension_fn_instantiations:
-            monomorphizer.monomorphize_all_functions(extension_fn_instantiations, compilation_order)
-        return concrete_extension_defs
+        A call cuts the copy of a generic-target extension method (#1196), so no copy
+        is cut here.
+        """
+        from sushi_lang.semantics.generics.extensions import judge_error_arguments
+        judge_error_arguments(self.tables.generic_extensions, instances,
+                              monomorphizer.substitutor)
 
     def _resolve_types(self) -> None:
         """resolve: struct field, enum variant, constant and spelled Result return types."""
@@ -831,46 +796,6 @@ class SemanticAnalyzer:
         register_all_array_hashes(self.tables.structs, self.tables.enums, self.tables.derived_methods)
 
         register_all_clones(self.tables.structs, self.tables.enums, self.tables.derived_methods)
-
-    def _register_monomorphized_extensions(
-            self, concrete_extension_defs: ExtensionCopies,
-            compilation_order: list[Unit]) -> None:
-        """Hand every generic-target extension copy to the extension table and to codegen."""
-        for extend_def in concrete_extension_defs.values():
-            # The unit that DECLARED the template. Adoption may send the copy to another
-            # unit of the build, but method resolution reads who declared it.
-            declared_in = extend_def.home_unit
-            self._adopt_extension_copy(extend_def, compilation_order)
-            # Add to extension table for method lookup during type validation.
-            # The spans come along so a diagnostic about a monomorphized generic extension
-            # (CE2097) can still point at the source `extend Box@(T) ...` that produced it.
-            from sushi_lang.semantics.passes.collect import ExtensionMethod
-            extension_method = ExtensionMethod(
-                target_type=extend_def.target_type,
-                name=extend_def.name,
-                params=extend_def.params,
-                ret_type=extend_def.ret,
-                loc=getattr(extend_def, "loc", None),
-                name_span=getattr(extend_def, "name_span", None),
-                err_type=getattr(extend_def, "err_type", None),
-                err_span=getattr(extend_def, "err_span", None),
-                # The receiver's MODE, because the CALL SITE reads it off this record:
-                # a `poke self` receiver arrives by pointer and a `nom self` one is
-                # consumed. Dropped here, every generic-target method's receiver was a
-                # private copy -- a write was lost (#253's shape) and a consuming
-                # receiver was freed twice, in the method and again at the call site.
-                self_mode=getattr(extend_def, "self_mode", None),
-                # And whether there is a receiver at all (#542): without it the call
-                # site resolves a static as an instance method and CE2102 refuses the
-                # very declaration that answers it.
-                is_static=getattr(extend_def, "is_static", False),
-                unit_name=declared_in,
-                filename=getattr(extend_def, "template_file", None),
-                is_public=extend_def.is_public,
-                template_id=extend_def.template_id,
-                template_target=extend_def.template_target,
-            )
-            self.tables.extensions.add_method(extension_method)
 
     def _compute_effects(self, compilation_order: list[Unit]):
         """effects: which functions destroy a `poke` parameter, transitively (#168)."""
@@ -1030,8 +955,7 @@ class SemanticAnalyzer:
     # template). This bound is for a chain whose parent link the rule cannot read.
     MAX_NEW_TYPE_ROUNDS = 64
 
-    # Rounds `_cut_templates_for_late_instantiations` takes before it stops. The same
-    # shape as InstantiationCollector.MAX_EXPANSION_ROUNDS.
+    # Rounds `_cut_templates_for_late_instantiations` takes before it stops.
     MAX_ARRAY_EXPANSION_ROUNDS = 8
 
     def _refuse_pending_copies(self, monomorphizer) -> None:
@@ -1084,10 +1008,14 @@ class SemanticAnalyzer:
             self._record_copy_request(monomorphizer, request)
             if self._refuses_copy(monomorphizer, request):
                 continue
+            refused = monomorphizer.constraint_violations
             extend_def = monomorphize_extension_method(
                 request.template, request.target_type, request.receiver_args,
                 substitutor=monomorphizer.substitutor,
                 method_type_args=request.method_type_args)
+            # A body that names a refused instance is not checked: the refusal stands.
+            if monomorphizer.constraint_violations != refused:
+                continue
             extend_def.instance_key = request.key
             new_defs.append(extend_def)
             self._adopt_extension_copy(extend_def, compilation_order)
@@ -1253,39 +1181,39 @@ class SemanticAnalyzer:
         return home
 
     def _cut_templates_for_late_instantiations(self, monomorphizer, compilation_order,
-                                               concrete_extension_defs,
                                                struct_instantiations,
                                                enum_instantiations) -> None:
-        """Cut the template copies for every instantiation interned AFTER the collector ran.
+        """Cut the perk copies for every instantiation interned AFTER the collector ran.
 
-        The generic-target extension and perk-implementation copies are cut from the
-        instantiations the instantiate pass collected. A type a generic BODY names --
-        `let Box@(T) b` in `outer@(T)`, or the return of a generic it calls -- is
-        interned only while that body is substituted, so `Box<string>` existed and had
-        no `show()` (#555). The tables are the authority on what exists: every interned
-        instantiation with no copy yet gets one here. A copy's body can instantiate more
-        functions and those can intern more types, so this runs to a fixpoint; the bound
-        exists so a pathological program cannot spin, and reaching it drops an
-        instantiation, which surfaces as the ordinary CE2008, never as a hang.
+        The generic-target perk-implementation copies are cut from the instantiations
+        the instantiate pass collected, and each instance gets the E3 judge of the
+        generic-target extension templates. A type a generic BODY names -- `let Box@(T)
+        b` in `outer@(T)`, or the return of a generic it calls -- is interned only while
+        that body is substituted, so `Box<string>` existed and had no `show()` (#555).
+        The tables are the authority on what exists: every interned instantiation that
+        was not seen yet gets both here. A copy's body can instantiate more functions and
+        those can intern more types, so this runs to a fixpoint; the bound exists so a
+        pathological program cannot spin, and reaching it drops an instantiation, which
+        surfaces as the ordinary CE2008, never as a hang. A call cuts the copy of a
+        generic-target extension method (#1196).
         """
         from sushi_lang.semantics.generics.extension_targets import instantiation_key
-        from sushi_lang.semantics.generics.extensions import monomorphize_all_extension_methods
 
-        cut = {instantiation_key(base, args) for base, args in struct_instantiations}
-        cut |= {instantiation_key(base, args) for base, args in enum_instantiations}
+        seen = {instantiation_key(base, args) for base, args in struct_instantiations}
+        seen |= {instantiation_key(base, args) for base, args in enum_instantiations}
 
         def late(table) -> dict:
             return {name: ty for name, ty in table.by_name.items()
                     if getattr(ty, "generic_base", None) and getattr(ty, "generic_args", None)
-                    and name not in cut}
+                    and name not in seen}
 
         for _round in range(self.MAX_ARRAY_EXPANSION_ROUNDS):
             late_structs = late(self.tables.structs)
             late_enums = late(self.tables.enums)
             if not late_structs and not late_enums:
                 return
-            cut.update(late_structs)
-            cut.update(late_enums)
+            seen.update(late_structs)
+            seen.update(late_enums)
             struct_insts = {(ty.generic_base, ty.generic_args) for ty in late_structs.values()}
             enum_insts = {(ty.generic_base, ty.generic_args) for ty in late_enums.values()}
 
@@ -1293,24 +1221,10 @@ class SemanticAnalyzer:
             self._monomorphize_generic_perk_impls(
                 monomorphizer, compilation_order, struct_insts, late_structs,
                 enum_insts, late_enums, fn_instantiations)
-            copies = monomorphize_all_extension_methods(
-                self.tables.generic_extensions.by_type, struct_insts, late_structs,
-                enum_insts, late_enums, substitutor=monomorphizer.substitutor)
-            new_copies = []
-            for key, extend_def in copies.items():
-                if key in concrete_extension_defs:
-                    continue
-                concrete_extension_defs[key] = extend_def
-                new_copies.append(extend_def)
-                fn_instantiations |= monomorphizer.collect_from_extension_body(extend_def)
-            self._monomorphize_copy_signatures(monomorphizer, new_copies)
+            self._judge_extension_error_arguments(
+                monomorphizer, [*late_structs.values(), *late_enums.values()])
             if fn_instantiations:
                 monomorphizer.monomorphize_all_functions(fn_instantiations, compilation_order)
-
-    def _monomorphize_copy_signatures(self, monomorphizer, extend_defs) -> None:
-        """Monomorphize every type instantiation a late extension copy names (#1146)."""
-        from sushi_lang.semantics.generics.late_interning import intern_copy_signatures
-        intern_copy_signatures(self.tables, monomorphizer, extend_defs)
 
     def _intern_late_type_instantiations(self, monomorphizer, extend_defs) -> None:
         """Intern the type instantiations a call-site-solved copy names (risk 1).
@@ -1388,15 +1302,20 @@ class SemanticAnalyzer:
         declaration: the copies of one template share its identity and its spans, so
         they are one fault. An `extend T[]` template is judged where it is written, on
         the receiver `T[]`. It is not in the extension table, and no copy of it is ever
-        cut for a built-in name, because the built-in answers every call first.
+        cut for a built-in name, because the built-in answers every call first. For the
+        same reason a generic-target template is judged at each instance of its target
+        that exists, with or without a copy (#1196).
         """
         from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
         from sushi_lang.semantics.generics.extension_targets import (
             ARRAY_BASE_KEY, extension_template_id, written_target)
+        from sushi_lang.semantics.generics.extensions import (
+            copy_identity, templates_by_instance)
         from sushi_lang.semantics.generics.monomorphize.order import in_site_order
+        from sushi_lang.semantics.generics.opaque import holds_opaque
         from sushi_lang.semantics.generics.type_display import display_type
         from sushi_lang.semantics.generics.types import TypeParameter
-        from sushi_lang.semantics.typesys import DynamicArrayType
+        from sushi_lang.semantics.typesys import DynamicArrayType, Type
 
         collisions: dict = {}
 
@@ -1412,6 +1331,13 @@ class SemanticAnalyzer:
             target_type = method.target_type
             collide(target_type, method.name, method, method.template_id,
                     method.template_target or display_type(target_type))
+
+        types: list[Type] = [*self.tables.structs.by_name.values(),
+                             *self.tables.enums.by_name.values()]
+        instances = [ty for ty in types if not holds_opaque(ty)]
+        for instance, template in list(templates_by_instance(
+                self.tables.generic_extensions, instances, self.tables)):
+            collide(instance, template.name, template, *copy_identity(template))
 
         templates = self.tables.generic_extensions.by_type.get(ARRAY_BASE_KEY, {})
         for (method_name, _key, _unit), template in templates.items():
@@ -1476,10 +1402,17 @@ class SemanticAnalyzer:
 
         C2 for R1 (`docs/design/extension-visibility.md`): a public extension that a
         Sushi-source stdlib module declares on a built-in type is visible in every unit,
-        so an extension of its name in another unit could never be called.
+        so an extension of its name in another unit could never be called. A
+        generic-target stdlib method has no row until a call cuts its copy, so the one
+        lookup of the templates answers too (#1196).
         """
+        from sushi_lang.semantics.generics.extensions import target_methods_of
         from sushi_lang.semantics.visibility import is_stdlib_builtin_method
-        for other in self.tables.extensions.declarations(target_type, method_name):
+        tables = self.tables
+        others = [*tables.extensions.declarations(target_type, method_name),
+                  *target_methods_of(tables.generic_extensions, target_type, method_name,
+                                     tables)]
+        for other in others:
             if (other.unit_name != method.unit_name
                     and is_stdlib_builtin_method(other, target_type)):
                 return other

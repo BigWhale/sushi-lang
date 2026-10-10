@@ -516,8 +516,9 @@ Detect which generic instantiations are needed.
 
 A call to `fn wrap@(T)(nom T v) Box@(T)` with a string names `Box@(string)`, and the program
 may name that instantiation nowhere else: a `match` arm binds the payload, or the value is
-passed straight on. The generic-target extension and perk-implementation copies are cut from
-the set this pass collects, so the pass records the SUBSTITUTED signature of every generic
+passed straight on. The generic-target PERK-implementation copies are cut from
+the set this pass collects (a generic-target extension copy is cut at a call, see "A call
+cuts an extension copy"), so the pass records the SUBSTITUTED signature of every generic
 call it resolves -- the return, the `Result` the declaration wraps it in, and the parameters
 -- through the same type walk a concrete declaration gets.
 
@@ -620,14 +621,41 @@ instances back as instantiations for the copies below. An abstract instance, a
 method-level `U` still unbound while a generic-target template is cut per receiver, is
 not published.
 
-A late instance gets its generic-target extension copies in
-`_cut_templates_for_late_instantiations`, a fixpoint after the function round. The
-instantiate pass collects the signature of an EARLY instance's copy, but it ended before
-a late instance existed. So each round sends the types that its new copies name -- the
-return, the channel, the parameters and the `let` annotations -- through
-`collect_type_instantiations` and monomorphizes them, before `resolve` and `derive`. A
-method that no call names still has a signature of known types, and an instance found
-this way gets its own copies in the next round (#1146).
+### A call cuts an extension copy
+
+A copy of an extension method is cut where a call reaches it, for all three kinds of
+template: an array target (`extend T[] m()`), a method-generic (`extend List@(T) m@(U)()`)
+and a generic target (`extend Box@(T) m()`, a static, and a concrete-argument target
+`extend Box@(i32) m()`). It is one mechanism. The `typecheck` pass resolves the call, cuts
+ONE copy for the instance, the method and the declaring unit, and queues it. After the
+per-unit loop, `_check_array_extensions` puts the copy in its home unit and checks it
+(`_check_copies`), in the same fixpoint as the function copies above. `foreach` cuts the
+`next()` of its iterable in the same way.
+
+So a method that no call reaches has no copy: it is not checked as a copy and it is not
+emitted. The `instantiate` pass does not walk the signatures of generic-target extensions,
+and the `monomorphize` stage does not cut them. One lookup answers "which template gives
+this instance the method M": `target_templates_of`, `target_methods_of` and
+`templates_by_instance`, `semantics/generics/extensions.py`. CE2097, CE4007, the CE2106
+note and the `share()` help of CE2411 ask it. The call rung is
+`instantiate_target_extension`, `passes/types/calls/methods.py`, and it goes through
+`_choose_visible` (C3, C4, C5).
+
+An own template wins, also when its target bound fails for the instance: the call is
+CE4006 (the rule of `T[]`). A queued copy whose body names an instance that E3 refuses is
+dropped, so the program gets [CE2084](../error-catalog.md#ce2084) alone and no
+[CE0149](../error-catalog.md#ce0149). The "required by" note of that CE2084 points at the
+call that cut the copy.
+
+Two things stay per instance. A perk-implementation copy on a generic target is cut for
+each instance, because code that the compiler makes calls it. The E3 judge
+(`judge_error_arguments`) runs for each instance and makes no copy.
+
+A late instance gets its perk-implementation copies in
+`_cut_templates_for_late_instantiations`, a fixpoint after the function round. Each round
+sends the types that its new copies name -- the return, the channel, the parameters and the
+`let` annotations -- through `collect_type_instantiations` and monomorphizes them, before
+`resolve` and `derive`, and it runs the E3 judge for the new instances (#1146).
 
 ### One source, one report
 

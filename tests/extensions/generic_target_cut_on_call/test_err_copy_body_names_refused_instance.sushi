@@ -1,0 +1,16 @@
+# A call cuts the copy of a T[] template, and the body of the copy names Holder@(i32).
+# Holder uses its parameter as an error type, so the instance is CE2084 (E3). The copy
+# is not checked after the refusal, so no other fault follows.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: test_err_copy_body_names_refused_instance.sushi:10:9
+struct Holder@(E):
+    Result@(i32, E) r
+
+extend T[] check() bool:
+    let Holder@(T) h = Holder(Result.Ok(5))
+    return h.r.is_ok()
+
+fn main() i32:
+    let i32[] b = from([1])
+    println(b.check())
+    return 0

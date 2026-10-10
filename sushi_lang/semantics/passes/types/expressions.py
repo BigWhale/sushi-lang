@@ -768,10 +768,16 @@ def _is_a_method(validator: 'TypeValidator', receiver_type: 'Type', name: str) -
 
     `builtin_method_exists` is the one seam that knows a compiler-defined method, and the
     extension table holds what the program itself declares. A built-in target takes both.
+    A generic-target method has no row until a call cuts its copy, so the one lookup of
+    the templates answers too (#1196).
     """
     from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
+    from sushi_lang.semantics.generics.extensions import target_methods_of
 
     if validator.extension_table.get_method(receiver_type, name) is not None:
+        return True
+    if target_methods_of(validator.generic_extension_table, receiver_type, name,
+                         validator.tables):
         return True
     return builtin_method_exists(receiver_type, name, validator.derived_methods)
 

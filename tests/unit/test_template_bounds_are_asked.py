@@ -22,8 +22,8 @@ PREDICATES = {"target_bounds_hold", "bounds_hold_for", "_refuses_unmet_bounds"}
 
 # (module, function) -> what it decides. Each one must call a predicate.
 ASKERS = {
-    ("semantics/generics/extensions.py", "monomorphize_all_extension_methods"):
-        "the eager and late generic-target extension copies",
+    ("semantics/generics/extensions.py", "target_methods_of"):
+        "what an instance has: the E3 judge of each instance, the shadowing check",
     ("semantics/generics/extensions.py", "monomorphize_all_perk_impls"):
         "the eager and late perk-template copies",
     ("semantics/generics/array_perk_copies.py", "ArrayPerkCopies.__call__"):
@@ -34,6 +34,8 @@ ASKERS = {
         "the array extension copy, queued at a call",
     ("semantics/passes/types/calls/methods.py", "resolve_method_generic_extension"):
         "the method-generic copy, queued at a call",
+    ("semantics/passes/types/calls/methods.py", "instantiate_target_extension"):
+        "the generic-target extension copy, queued at a call",
     ("semantics/passes/types/calls/methods.py", "_answer_from_template"):
         "the call-site rung for every receiver",
     ("semantics/generics/contract_walk.py", "template_covers"):

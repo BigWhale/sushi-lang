@@ -1,0 +1,18 @@
+# The own template wins also when its target bound fails for the instance. This unit
+# declares label() on Bin@(T: Tagged), and it imports a public label() on Bin@(T). Bin@(i32)
+# does not implement Tagged, so the call is CE4006 at the call. The imported template
+# does not answer the call. CW3007 stands at the own declaration.
+# EXPECT_ERROR_CODES_EXACT: CW3007, CE4006
+use "units/own_wins_box"
+use "units/own_wins_label"
+
+perk Tagged:
+    fn tag() i32
+
+extend Bin@(T: Tagged) label() i32:
+    return 2
+
+fn main() i32:
+    let Bin@(i32) b = Bin(5)
+    println(b.label())
+    return 0

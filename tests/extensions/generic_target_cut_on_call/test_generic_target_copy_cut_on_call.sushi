@@ -1,0 +1,17 @@
+# An extension on a generic target gets its copy at a call. A Box@(string) exists and
+# no call reaches its tag(), so the program has the copy for Box@(i32) only.
+# EXPECT_STDOUT_EXACT: "3\nMostly Harmless\n"
+# EXPECT_IR_FUNCTION: Box__i32_tag
+# EXPECT_IR_NO_FUNCTION: Box__string_tag
+struct Box@(T):
+    T v
+
+extend Box@(T) tag() i32:
+    return 3
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    let Box@(string) s = Box("Mostly Harmless")
+    println(b.tag())
+    println(s.v)
+    return 0

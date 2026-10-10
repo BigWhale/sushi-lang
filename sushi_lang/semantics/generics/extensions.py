@@ -6,7 +6,7 @@ from typing import Callable, Dict, Iterator, Optional, Tuple, Set, TYPE_CHECKING
 
 from sushi_lang.semantics.ast import ExtendDef
 from sushi_lang.semantics.typesys import DynamicArrayType, EnumType, Type, StructType
-from sushi_lang.semantics.generics.types import substitute_type_params
+from sushi_lang.semantics.generics.types import TemplateId, substitute_type_params
 from sushi_lang.semantics.generics.monomorphize.transformer import substituted_param
 from sushi_lang.semantics.generics.extension_targets import (
     extension_template_id, instantiation_key, perk_template_id, written_target)
@@ -127,9 +127,7 @@ def monomorphize_extension_method(
     # An instance names its target in full; the bounds belong to the template.
     concrete.target_params = ()
     # A copy of a template whose check refused it reports nothing (#1070).
-    concrete.template_id = extension_template_id(generic_method)
-    concrete.template_target = written_target(generic_method.decl.target_type,
-                                              generic_method.decl.target_params)
+    concrete.template_id, concrete.template_target = copy_identity(generic_method)
     # Where the source wrote no name or no return, the collected record points a
     # diagnostic at the declaration instead.
     concrete.name_span = concrete.name_span or generic_method.name_span
@@ -164,54 +162,100 @@ def bounds_hold_for(template, type_args: Tuple[Type, ...], tables) -> bool:
     return target_bounds_hold(template.target_bounds, type_args, tables.holds_bound)
 
 
-def monomorphize_all_extension_methods(
-    generic_extensions: Dict[str, Dict[Tuple[str, str, Optional[str]], GenericExtensionMethod]],
-    struct_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
-    monomorphized_structs: Dict[str, StructType],
-    enum_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
-    monomorphized_enums: Dict[str, EnumType],
-    substitutor: "TypeSubstitutor",
-) -> Dict[Tuple[str, str, Tuple[Type, ...], Optional[str]], ExtendDef]:
-    """Monomorphize the generic extension methods that APPLY to each instantiation.
+def copy_identity(template: GenericExtensionMethod) -> Tuple[TemplateId, str]:
+    """The template identity and the written target that each copy of `template` carries.
 
-    A concrete target argument is a constraint, so `extend Box@(i32)` produces one copy, for
-    `Box<i32>` (#393). Every declaration used to be substituted positionally into every
-    instantiation of the base name, which is what made the declared `i32` constrain nothing:
-    the method answered a `Box@(string)` receiver, and its body reached the backend with a
-    string where it had written an integer.
-
-    A copy is keyed by its declaring unit too: two units can each declare a private
-    template of one name (`docs/design/extension-visibility.md` C5).
+    One written declaration is one fault, so a diagnostic groups the copies by these two.
     """
-    result: Dict[Tuple[str, str, Tuple[Type, ...], Optional[str]], ExtendDef] = {}
-    sources = ((struct_instantiations, monomorphized_structs),
-               (enum_instantiations, monomorphized_enums))
-    for type_args, concrete_type_name, concrete_target, declarations in (
-            for_each_instantiation(sources, generic_extensions.get)):
-        for (method_name, target_key, unit_name), generic_method in declarations.items():
-            if target_key and target_key != concrete_type_name:
-                continue
+    decl = template.decl
+    written = (written_target(decl.target_type, decl.target_params)
+               if decl is not None and decl.target_type is not None
+               else template.base_type_name)
+    return extension_template_id(template), written
 
-            # A method-generic template cannot be monomorphized from the target
-            # instantiation alone -- the CALL SITE names its method arguments, so
-            # the typecheck pass queues it instead.
-            if generic_method.method_type_params:
-                continue
 
-            # A concrete target has no type parameters, so it substitutes nothing -- its
-            # signature and body are already written in terms of the type it names.
-            substitution_args = () if target_key else type_args
-            if not bounds_hold_for(generic_method, substitution_args,
-                                   substitutor.monomorphizer.tables):
-                continue
-            if not _error_arguments_hold(generic_method, substitution_args,
-                                         concrete_type_name, substitutor):
-                continue
+def target_copy_args(template: GenericExtensionMethod, instance) -> Optional[Tuple[Type, ...]]:
+    """The type arguments that a copy of `template` for `instance` substitutes, or None.
 
-            result[(concrete_type_name, method_name, type_args, unit_name)] = monomorphize_extension_method(
-                generic_method, concrete_target, substitution_args, substitutor=substitutor)
+    The rules of the call-site rung (#1196). A method-generic template has no copy for
+    the instance alone, because its call solves the method arguments. A concrete target
+    substitutes nothing. A template whose parameter count is not the count of the
+    instance's arguments gives the instance no copy.
+    """
+    if template.method_type_params:
+        return None
+    args = () if template.target_key else tuple(getattr(instance, "generic_args", None) or ())
+    return args if len(template.type_params) == len(args) else None
 
-    return result
+
+def target_copy_substitution(template: GenericExtensionMethod, instance) -> Dict[str, Type]:
+    """Type parameter name -> argument, for the copy of `template` for `instance`."""
+    args = target_copy_args(template, instance)
+    if args is None:
+        raise_internal_error("CE0000", detail=(
+            f"no copy of '{template.name}' applies to '{getattr(instance, 'name', instance)}'"))
+    return _type_substitution(template.type_params, args)
+
+
+def target_templates_of(generic_extensions, instance, method_name: str) -> list:
+    """The generic-target templates that give `instance` the method, before the bounds.
+
+    The ONE lookup of "which template gives this instance method M" (#1196). A copy of a
+    generic-target method can be absent from the extension table, so each question about
+    the methods of an instance asks here too. A concrete target comes before a template.
+    Each unit gives one at most (C5); the calling unit chooses among them
+    (`docs/design/extension-visibility.md`). The target bounds are the caller's: a call
+    refuses a failed bound (CE4006), and a question about the type reads
+    `target_methods_of`.
+    """
+    base = getattr(instance, "generic_base", None)
+    if base is None:
+        return []
+    found = [template for template
+             in generic_extensions.applicable(base, method_name, instance.name)
+             if target_copy_args(template, instance) is not None]
+    return sorted(found, key=lambda template: not template.target_key)
+
+
+def target_methods_of(generic_extensions, instance, method_name: str, tables) -> list:
+    """The generic-target templates that give `instance` the method, bounds included.
+
+    What the instance HAS: a template whose target bound the instance fails gives it no
+    method. A reader with no calling unit takes the first.
+    """
+    return [template for template
+            in target_templates_of(generic_extensions, instance, method_name)
+            if bounds_hold_for(template, target_copy_args(template, instance) or (), tables)]
+
+
+def templates_by_instance(generic_extensions, instances, tables) -> Iterator[tuple]:
+    """(instance, template) for each generic-target template that an instance has.
+
+    The rule of `target_methods_of`, for each method name of each base. A check that
+    judges a template at each instance reads it, because no copy exists until a call.
+    """
+    for instance in instances:
+        base = getattr(instance, "generic_base", None)
+        if base is None:
+            continue
+        names = dict.fromkeys(name for name, _key, _unit
+                              in generic_extensions.by_type.get(base, {}))
+        for name in names:
+            for template in target_methods_of(generic_extensions, instance, name, tables):
+                yield instance, template
+
+
+def judge_error_arguments(generic_extensions, instances, substitutor: "TypeSubstitutor") -> None:
+    """E3 for each generic-target template at each instance that has its method.
+
+    No copy is cut here: a call cuts the copy (#1196). The judge stays per instance, so
+    a type argument in an `E` position of a template stops the analysis at the site
+    that named the instance, as a refused constraint does.
+    """
+    tables = substitutor.monomorphizer.tables
+    for instance, template in templates_by_instance(generic_extensions, instances, tables):
+        _error_arguments_hold(template, target_copy_args(template, instance) or (),
+                              instance.name, substitutor)
 
 
 def monomorphize_perk_impl(

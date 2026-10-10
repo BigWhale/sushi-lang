@@ -1,0 +1,24 @@
+# Each call of wrap() names the next instance, and each call gets its own copy. The
+# chain is 17 levels deep, and no round of the analysis stops it.
+# EXPECT_STDOUT_EXACT: "7\n"
+struct Box@(T):
+    T v
+
+extend Box@(T) wrap(nom self) Box@(Box@(T)):
+    return Box(self)
+
+extend Box@(T) peel(nom self) T:
+    return nom self.v
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    let Box@(Box@(Box@(Box@(Box@(i32))))) w1 = b.wrap().wrap().wrap().wrap()
+    let Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(i32))))))))) w2 = w1.wrap().wrap().wrap().wrap()
+    let Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(i32))))))))))))) w3 = w2.wrap().wrap().wrap().wrap()
+    let Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(i32))))))))))))))))) w4 = w3.wrap().wrap().wrap().wrap()
+    let Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(i32))))))))))))) p1 = w4.peel().peel().peel().peel()
+    let Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(Box@(i32))))))))) p2 = p1.peel().peel().peel().peel()
+    let Box@(Box@(Box@(Box@(Box@(i32))))) p3 = p2.peel().peel().peel().peel()
+    let Box@(i32) p4 = p3.peel().peel().peel().peel()
+    println(p4.peel())
+    return 0

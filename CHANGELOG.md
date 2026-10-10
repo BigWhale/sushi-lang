@@ -238,9 +238,27 @@ All notable changes to Sushi Lang will be documented in this file.
 - **A bulk array append grows geometrically.** `extend`, `extend_range` and `extend_str`
   grow the capacity to at least two times its size when the elements do not fit, so a
   sequence of appends takes linear time. They grew to the exact length before.
+- **A generic-target extension method gets its copy at the call.** `extend Box@(T) m()`, a
+  static and `extend Box@(i32) m()` are cut for an instance only when a call reaches the
+  method, as the copies of `T[]` and of a method-generic already were. A method that no
+  call reaches is not checked as a copy and is not emitted. `use <collections/iter>` with
+  one `List@(i32)` and no call made 51 copies and now makes none; six `List` element types
+  and one `partition` call made 306 copies and now make one. **Code generation changes**:
+  the object of a unit is smaller, the set of symbols is different, and the symbols and
+  the cache key of the home unit depend on the calls, not on the instances that exist.
+  An own template wins when its target bound fails for the instance: the call is `CE4006`.
+  A template that grows its own target (`wrap(nom self) Box@(Box@(T))`) and that nothing
+  calls no longer stops with `CE0149`. The "required by" note of `CE2084` for an instance
+  named in a copy body points at the call that cut the copy, not at the written type.
+- The test runner has two directives: `EXPECT_IR_FUNCTION: <pattern>` and
+  `EXPECT_IR_NO_FUNCTION: <pattern>` assert that the emitted IR defines, or does not
+  define, a function whose symbol matches a glob pattern.
 
 ### Fixed
 
+- A copy that names an instance that `CE2084` refuses gave `CE0149` after the `CE2084`. The
+  copy is now dropped, so the program gets `CE2084` alone (`T[]` and method-generic copies
+  too).
 - **A constraint on a method-level type parameter is checked.** In
   `extend Box@(T) pair_with@(U: Weigh)(U other)`, the compiler dropped the constraint of
   `U`: the call compiled, or the fault appeared inside the body of the copy. A call whose

@@ -1,0 +1,20 @@
+# A foreach asks for next() with no call node, and nothing else calls next(). The
+# template applies to Feed@(i32), so the foreach walks it.
+# EXPECT_STDOUT_EXACT: "4\n5\n"
+# EXPECT_IR_FUNCTION: Feed__i32_next
+struct Feed@(T):
+    T[] items
+    i32 at
+
+extend Feed@(T: Clone) next(poke self) Maybe@(T):
+    if (self.at >= self.items.len()):
+        return Maybe.None()
+    let i32 i = self.at
+    self.at := self.at + 1
+    return Maybe.Some(self.items[i].clone())
+
+fn main() i32:
+    let Feed@(i32) f = Feed(from([4, 5]), 0)
+    foreach(n in f):
+        println(n)
+    return 0

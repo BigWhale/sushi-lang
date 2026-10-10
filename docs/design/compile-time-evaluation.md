@@ -348,8 +348,7 @@ When one of these arrives, the cost is already known. Record it here so the deci
 - **It needs a budget and a cache.** The evaluator runs once per use and again in the back
   end, so a table would be computed several times. Recursion needs a limit. The precedents
   are `MONOMORPHIZE_MAX_DEPTH = 128` with [CE0122](../error-catalog.md#ce0122)
-  (`generics/monomorphize/__init__.py`) and `MAX_EXPANSION_ROUNDS = 8`
-  (`generics/instantiate/__init__.py`).
+  (`generics/monomorphize/__init__.py`).
 - **An interpreter is a second implementation of the language.** Every difference between it
   and the back end is a bug. Two such differences are known cases: floor division against
   truncating division, and a string constant matched by its shape.

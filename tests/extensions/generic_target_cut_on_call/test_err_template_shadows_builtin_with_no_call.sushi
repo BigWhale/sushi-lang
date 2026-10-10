@@ -1,0 +1,14 @@
+# A template method that a built-in of an instance shadows can never run. It is refused
+# for each instance, also when no call names it.
+# EXPECT_ERROR_CODES_EXACT: CE2097
+# EXPECT_STDERR_CONTAINS: 'Box@(i32).hash()' is defined by the compiler
+struct Box@(T):
+    T v
+
+extend Box@(T) hash() u64:
+    return 1 as u64
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println(b.v)
+    return 0

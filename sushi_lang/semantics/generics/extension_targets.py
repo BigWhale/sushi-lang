@@ -370,11 +370,6 @@ def reject_array_target(reporter, shape: Optional[ExtensionTarget], element: Typ
     return True
 
 
-def target_shape_of(ext) -> Optional[ExtensionTarget]:
-    """The shape the collect pass stamped on a declaration, if it stamped one."""
-    return getattr(ext, "target_shape", None)
-
-
 def _names_a_type(arg: Type, is_declared_type: Callable[[str], bool]) -> bool:
     """Whether one argument names a type rather than a type parameter.
 
