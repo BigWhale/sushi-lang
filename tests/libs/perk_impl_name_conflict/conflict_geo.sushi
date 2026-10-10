@@ -1,0 +1,9 @@
+public perk Show:
+    fn show() string
+
+public struct Point:
+    i32 x
+
+extend Point with Show:
+    fn show() string:
+        return "lib"

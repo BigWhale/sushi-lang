@@ -256,6 +256,13 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Fixed
 
+- **A perk implementation from a binary or hybrid library meets `CE4007`.** A consumer
+  extension method with the name of a method of that implementation, on the same type,
+  compiled, and every call ran the method of the library. It is now `CE4007` at the
+  extension method, as for a source library. A generic-target implementation
+  (`extend Box@(T) with Show`) is included.
+- The `CE4007` note at the extension method named the file of the perk implementation.
+  It now names the file of the extension method.
 - A copy that names an instance that `CE2084` refuses gave `CE0149` after the `CE2084`. The
   copy is now dropped, so the program gets `CE2084` alone (`T[]` and method-generic copies
   too).
