@@ -637,8 +637,10 @@ def is_builtin_type(ty: Any) -> bool:
 def home_unit_of(table: Optional[VisibilityTable], ty: Any) -> Optional[str]:
     """R5: the unit that declares the type `ty`, or None when it has no home unit.
 
-    The home of a generic type is the unit that declares its base. A built-in type, an
-    array type and a type that no unit declares have no home unit.
+    The home of a generic type is the unit that declares its base. The home of a
+    predefined enum is the stdlib module that its stamp names (`FileMode` and
+    `<io/fs>`). A built-in type, an array type and a type that no unit declares have no
+    home unit.
     """
     from sushi_lang.semantics.typesys import ArrayType, BuiltinType, DynamicArrayType
     if table is None or isinstance(ty, (BuiltinType, ArrayType, DynamicArrayType)):
@@ -650,7 +652,8 @@ def home_unit_of(table: Optional[VisibilityTable], ty: Any) -> Optional[str]:
         origin = table.origin(kind, name)
         if origin is not None:
             return origin.unit_name
-    return None
+    home_module = getattr(ty, "home_module", None)
+    return home_module if isinstance(home_module, str) else None
 
 
 def extension_reach(table: Optional[VisibilityTable], method: Any, target: Any,

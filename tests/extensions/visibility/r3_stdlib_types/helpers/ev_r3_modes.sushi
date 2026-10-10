@@ -1,0 +1,4 @@
+use <io/fs>
+
+public fn append_mode() FileMode:
+    return FileMode.Append()
