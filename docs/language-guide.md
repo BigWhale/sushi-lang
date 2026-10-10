@@ -788,6 +788,83 @@ See [Array Types](language-reference.md#array-types) for the full order table.
 
 **Memory Management**: Dynamic arrays use RAII - they're automatically deallocated when they go out of scope. The destructor recursively cleans up all elements, so arrays of structs or strings are properly freed. A dynamic array owns heap, so it MOVES: `let i32[] b = a` hands the buffer to `b`. Passing it to an unmarked parameter is a borrow, and the caller keeps it; only a `nom` parameter takes it (`f(nom a)`, and a later use of `a` is [`CE2405`](error-catalog.md#ce2405)).
 
+### Unchecked Indexes (`dont_panic`)
+
+Every `a[i]` and `s[i]` has a bounds check, and an index out of range stops the program
+with [`RE2020`](error-catalog.md#re2020). Usually the check costs almost nothing, because
+LLVM removes it from a simple loop. In some hot loops LLVM cannot prove the index is in
+range, and the check stays. A naive substring search is an example: `hay[i + j]` needs two
+facts for the proof. In such a loop, the checks can make the function more than two times
+slower.
+
+For that case, a function can carry the `dont_panic` marker. Put it after the return type
+(and after the error channel, if there is one), before the colon. The `because` text is
+required. Write in it the guards that keep every index in range:
+
+<!-- docs-sweep: error CE0152 -->
+```sushi
+use <collections/strings>
+
+fn contains_naive(string hay, string needle) bool dont_panic because "i + m <= n and j < m hold i + j < n":
+    let i32 n = hay.size()
+    let i32 m = needle.size()
+    let i32 i = 0
+    while (i + m <= n):
+        let i32 j = 0
+        while (j < m and hay[i + j] == needle[j]):
+            j := j + 1
+        if (j == m):
+            return true
+        i := i + 1
+    return false
+
+fn main() i32:
+    println(contains_naive("Mostly Harmless", "Harm"))   # true
+    println(contains_naive("Mostly Harmless", "Panic"))  # false
+    return 0
+```
+
+The marker is an opt-in for the whole build. Compile with `--dont-panic`:
+
+```bash
+./sushic --dont-panic search.sushi
+```
+
+Without the flag, the marker is [`CE0152`](error-catalog.md#ce0152), and the help names
+the flag.
+
+**What changes.** In the marked body, `a[i]` and `s[i]` emit no bounds check, for a read
+and for a write (`a[i] := v`). Nothing else changes: `.get(i)` still answers a `Maybe`,
+`.insert(i, v)` still checks its position, and `assert` still traps.
+
+**What you promise.** An index out of range in a marked body is undefined behaviour, not
+`RE2020`. The program can read the wrong memory or crash with no message. The `because`
+text is the record of why each index is in range. Read it again when you change the loop.
+
+**Where the marker stops.**
+- A function that the marked function calls keeps its checks.
+- A lambda in a marked body keeps its checks, because it can run after the marked function
+  has returned.
+- An instance of a marked generic function is marked, because it is the same body.
+- The marker may stand on a function, a static, an extension method, a perk implementation
+  method and a conversion. It may not stand on a lambda, a perk contract method or an
+  extern ([`CE6111`](error-catalog.md#ce6111)).
+
+**Warnings.** A marked function that has no `[]` in its body (indexes in a lambda do not
+count) gets [`CW0004`](error-catalog.md#cw0004), because the marker removes nothing.
+`--dont-panic` on a build that marks no function gets [`CW0003`](error-catalog.md#cw0003).
+
+**Libraries.** A source library that marks a function makes each consumer pass
+`--dont-panic` too, and the error names the library. `--lib-info` lists every marked
+function of a library with its `because` text. See
+[Unchecked Indexes and Consent](libraries.md#unchecked-indexes-and-consent).
+
+**When to use it.** Use the marker only for a hot loop that you measured. Measure before
+and after. Keep the marked function as small as the loop. Do not mark a function that is
+faster only on paper. For most code the check is correct and costs nothing, so do not use
+the marker. See the [Language Reference](language-reference.md#unchecked-indexes-dont_panic)
+for the full rules.
+
 ### List@(T)
 
 `List@(T)` is a generic growable collection that provides more flexibility than raw dynamic arrays. It is similar to a vector in Rust or an ArrayList in Java:

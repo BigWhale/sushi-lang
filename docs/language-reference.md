@@ -1491,6 +1491,8 @@ else changes: `get(i)` still answers a `Maybe`, `insert(i, v)` still checks its 
 
 <!-- docs-sweep: error CE0152 -->
 ```sushi
+use <collections/strings>
+
 fn contains_naive(string hay, string needle) bool dont_panic because "i + m <= n and j < m hold i + j < n":
     let i32 n = hay.size()
     let i32 m = needle.size()
