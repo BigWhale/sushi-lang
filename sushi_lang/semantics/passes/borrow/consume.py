@@ -20,7 +20,7 @@ from .diagnostics import (
 from .reads import (
     borrow_owner, constant_sig, namespaced_storage, read_type, reads_through_owner,
     unwrap_try)
-from .state import BorrowState
+from .state import BorrowState, record_owners
 from .takes import field_take, spend
 from .writes import check_owner_not_borrowed
 
@@ -403,9 +403,5 @@ def record_borrowed_binding(checker: 'BorrowChecker', stmt: Let,
     owner = borrow_owner(stmt.value)
     if owner is None:
         return
-    owner_state = checker.borrow_state.get(owner)
-    if owner_state is None:
-        return
-    dest.borrows_from = owner
-    owner_state.binding_borrows.append((stmt.name, stmt.loc))
-    checker._scope_binding_borrows[-1].append((owner, stmt.name))
+    record_owners(checker.borrow_state, dest, (owner,), stmt.loc,
+                  checker._scope_binding_borrows[-1])

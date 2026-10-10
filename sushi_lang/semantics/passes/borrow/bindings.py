@@ -18,7 +18,7 @@ from sushi_lang.semantics.typesys import ReferenceType, Type
 from .diagnostics import expr_to_string
 from .reads import borrow_owner, names_kept_storage, root_owner
 from sushi_lang.semantics.param_modes import borrow_mode
-from .state import BorrowState
+from .state import BorrowState, record_owners
 
 if TYPE_CHECKING:
     from . import BorrowChecker
@@ -155,15 +155,13 @@ class BindingScope:
         """Give a reference binding the owner freeze a `let`-borrow gets (#242)."""
         owner = borrow_owner(source)
         owner_state = self.checker.borrow_state.get(owner) if owner else None
-        if owner_state is None:
+        if owner is None or owner_state is None:
             return
         if _pokes_through_a_peek(state, owner_state):
             _reject_poke_through_peek(self.checker, owner, owner_state,
                                       poke_span or span)
             return
-        state.borrows_from = owner
-        owner_state.binding_borrows.append((state.name, span))
-        self._frozen.append((owner, state.name))
+        record_owners(self.checker.borrow_state, state, (owner,), span, self._frozen)
 
 
 def _own_payload_receiver(expr: Expr) -> Optional[Expr]:
@@ -198,7 +196,7 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
     checker.borrow_state[stmt.name] = state
 
     owner_state = checker.borrow_state.get(owner) if owner else None
-    if owner_state is None:
+    if owner is None or owner_state is None:
         # A constant (a `peek` binds it, #713; a `poke` was CE2400 upstream) or a
         # temporary (CE2404 upstream): no local owns it, so nothing is frozen.
         return
@@ -219,9 +217,8 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
         # `f(poke x)` does (#242).
         check_owner_not_borrowed(checker, owner, stmt.loc, "take `poke`", place=place)
 
-    state.borrows_from = owner
-    owner_state.binding_borrows.append((stmt.name, stmt.loc))
-    checker._scope_binding_borrows[-1].append((owner, stmt.name))
+    record_owners(checker.borrow_state, state, (owner,), stmt.loc,
+                  checker._scope_binding_borrows[-1])
 
 
 def reject_a_second_writer(checker: 'BorrowChecker', owner: str, owner_state: BorrowState,

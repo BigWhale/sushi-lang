@@ -6,8 +6,9 @@ is merely lost (CE2414, clone-mutate-store-back); an `is_let_borrow` shares the 
 DATA, so a reallocating write double-frees it (CE2426, #344, write to the owner instead);
 an `is_borrow_param` is a shallow copy aliasing the caller's heap (CE2421 / CE2422, #326,
 redeclare `poke`). `is_method_receiver` narrows the last to `self` for the same reason.
-`is_let_borrow` is NOT `borrows_from is not None` -- a binding out of a temporary records
-no owner name and is still one.
+`is_let_borrow` is NOT a non-empty `borrows_from` -- a binding out of a temporary records
+no owner name and is still one. `borrows_from` is a SET of owners: each one is frozen
+while the binding lives, and CE2412 names the one that changed.
 
 Every span here is the SECOND location of a relational diagnostic; without it the tier-3
 ladder renders a use-after-move with no move. `invalidated_at` is set rather than
@@ -23,7 +24,7 @@ a string subtype. Re-derived on every rebind, never inherited.
 """
 
 from __future__ import annotations
-from typing import Optional
+from typing import Iterable, Optional
 from dataclasses import dataclass, field
 
 from sushi_lang.semantics.ast import Expr
@@ -55,7 +56,7 @@ class BorrowState:
     moved_at_span: Optional[Span] = None      # where ownership was transferred away
     consumed_by_method: Optional[str] = None  # the `nom self` method that took it (R27)
     move_reported_by: Optional[str] = None    # the iterator whose CE2412 reports the move
-    borrows_from: Optional[str] = None        # the root owner a `let`-borrow reads out of
+    borrows_from: tuple[str, ...] = ()        # the root owners a `let`-borrow reads out of
     views_storage_of: Optional[Expr] = None   # a foreach iterator: the container it walks
     covered_by: Optional[str] = None          # the iterator whose freeze covers this one
     invalidated_at: Optional[Span] = None     # where that owner changed or was released
@@ -70,3 +71,20 @@ class BorrowState:
     def is_borrowed(self) -> bool:
         """Returns True if variable has any active borrows."""
         return self.poke_borrow_count > 0 or self.peek_borrow_count > 0
+
+
+def record_owners(borrow_state: dict[str, BorrowState], binding: BorrowState,
+                  owners: Iterable[str], span: Optional[Span],
+                  frame: list[tuple[str, str]]) -> None:
+    """Freeze each owner that `binding` reads out of, until `frame` is released.
+
+    The one writer of `borrows_from` and of the owner's `binding_borrows`. An owner
+    with no state (a constant, a name of another unit) is not recorded.
+    """
+    for owner in owners:
+        owner_state = borrow_state.get(owner)
+        if owner_state is None or owner in binding.borrows_from:
+            continue
+        binding.borrows_from = (*binding.borrows_from, owner)
+        owner_state.binding_borrows.append((binding.name, span))
+        frame.append((owner, binding.name))

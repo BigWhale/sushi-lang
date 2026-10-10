@@ -104,7 +104,7 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
         # alternatives. The write reaches storage the owner keeps, so a reallocating
         # `.push()` frees the owner's buffer twice.
         #
-        # Keyed on `is_let_borrow`, NOT `borrows_from is not None`: a binding out of a
+        # Keyed on `is_let_borrow`, NOT a non-empty `borrows_from`: a binding out of a
         # temporary records no owner name.
         code=er.ERR.CE2426,
         matches=lambda state: state.is_let_borrow,

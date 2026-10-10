@@ -69,7 +69,7 @@ from .flow import (
     terminates,
 )
 from .reads import borrow_owner
-from .state import BorrowState
+from .state import BorrowState, record_owners
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
 if TYPE_CHECKING:
@@ -191,8 +191,7 @@ def _split_destructure(checker: 'BorrowChecker', stmt: Let) -> None:
     """
     whole = checker.borrow_state.get(stmt.name)
     borrowed = whole is not None and whole.is_borrowed_binding
-    owner = whole.borrows_from if borrowed and whole is not None else None
-    owner_state = checker.borrow_state.get(owner) if owner is not None else None
+    owners = whole.borrows_from if borrowed and whole is not None else ()
     shown = _element_spellings(stmt) if stmt.rebinds else {}
     for binder in destructure_binders(stmt.targets):
         state = BorrowState(name=binder.name, var_type=binder.element_type,
@@ -206,10 +205,8 @@ def _split_destructure(checker: 'BorrowChecker', stmt: Let) -> None:
         state.is_borrowed_binding = True
         state.is_let_borrow = True
         state.bound_at_span = stmt.loc
-        if owner is not None and owner_state is not None:
-            state.borrows_from = owner
-            owner_state.binding_borrows.append((binder.name, stmt.loc))
-            checker._scope_binding_borrows[-1].append((owner, binder.name))
+        record_owners(checker.borrow_state, state, owners, stmt.loc,
+                      checker._scope_binding_borrows[-1])
 
 
 def _element_spellings(stmt: Let) -> dict[str, str]:
