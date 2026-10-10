@@ -149,7 +149,9 @@ def validate_template_header(validator, impl: ExtendWithDef) -> None:
     perk_def = validator.perk_table.by_name.get(impl.perk_name)
     if perk_def is not None and not reject_unnamable_implemented_perk(validator, impl):
         validate_perk_implementation(impl, perk_def, validator.reporter)
-        _reject_template_name_conflicts(validator, impl)
+        existing = _template_extensions_beside(impl, validator.tables)
+        if existing is not None:
+            _reject_name_conflicts(impl, existing, validator.reporter)
 
 
 def _answer(sig) -> tuple:
@@ -271,19 +273,62 @@ def check_no_conflicts_with_regular_methods(
     the templates that give the instance the method answers too (#1196), as it does in
     `validate_unreached_header`.
     """
+    return _reject_name_conflicts(
+        perk_impl, _extensions_beside(resolved_type, perk_impl, tables), reporter)
+
+
+def reject_extensions_beside_shipped_impl(impl: ExtendWithDef, tables: 'SymbolTables',
+                                          reporter: Reporter, template: bool) -> None:
+    """CE4007 for an extension method beside a perk implementation a library ships (#1255).
+
+    A binary or hybrid library ships its implementation as a manifest record, so no
+    written `extend ... with` in the build meets the check of a written one. Its methods
+    are visible in every unit all the same, so the extension method of that name on that
+    type can never be called, and the error stands at it. A `template` is judged as a
+    written template is, against every extension on its base.
+    """
+    if template:
+        existing = _template_extensions_beside(impl, tables)
+    else:
+        from sushi_lang.semantics.type_resolution import resolve_unknown_type
+        target = resolve_unknown_type(impl.target_type, tables.structs.by_name,
+                                      tables.enums.by_name)
+        existing = None if target is None else _extensions_beside(target, impl, tables)
+    if existing is not None:
+        _reject_name_conflicts(impl, existing, reporter, shipped=True)
+
+
+def _extensions_beside(target, perk_impl: ExtendWithDef, tables: 'SymbolTables') -> dict:
+    """The extension method of each perk method's name that applies to `target`.
+
+    A generic-target method has no row until a call cuts its copy, so the one lookup of
+    the templates that give the instance the method answers too (#1196). A target that
+    is still a `GenericTypeRef` names an instantiation no unit reaches (#898), and the
+    template that applies to its key answers.
+    """
+    from sushi_lang.semantics.generics.extension_targets import instantiation_key
     from sushi_lang.semantics.generics.extensions import target_methods_of
-    existing = dict(tables.extensions.first_by_name(resolved_type))
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    if isinstance(target, GenericTypeRef):
+        key = instantiation_key(target.base_name, tuple(target.type_args))
+        existing = {}
+        for method in perk_impl.methods:
+            found = tables.generic_extensions.find_applicable(target.base_name, method.name,
+                                                              key)
+            if found is not None:
+                existing[method.name] = found
+        return existing
+    existing = dict(tables.extensions.first_by_name(target))
     for method in perk_impl.methods:
         if method.name not in existing:
-            found = target_methods_of(tables.generic_extensions, resolved_type, method.name,
-                                      tables)
+            found = target_methods_of(tables.generic_extensions, target, method.name, tables)
             if found:
                 existing[method.name] = found[0]
-    return _reject_name_conflicts(perk_impl, existing, reporter)
+    return existing
 
 
-def _reject_template_name_conflicts(validator, impl: ExtendWithDef) -> None:
-    """CE4007 for a template implementation, judged on the template (#861, #699).
+def _template_extensions_beside(impl: ExtendWithDef, tables: 'SymbolTables') -> Optional[dict]:
+    """The extension methods a template implementation meets, by name (#861, #699).
 
     The template covers every instantiation of its base, so an extension method of the
     same name on that base -- a template or one concrete instantiation -- gives the name
@@ -295,18 +340,17 @@ def _reject_template_name_conflicts(validator, impl: ExtendWithDef) -> None:
     base_name = (ARRAY_BASE_KEY if is_array
                  else getattr(impl.target_type, "base_name", None))
     if base_name is None:
-        return
-    existing = {}
-    for (name, _key, _unit), method in validator.generic_extension_table.by_type.get(
+        return None
+    existing: dict = {}
+    for (name, _key, _unit), method in tables.generic_extensions.by_type.get(
             base_name, {}).items():
         existing.setdefault(name, method)
     if is_array:
-        for target in validator.extension_table.by_type:
+        for target in tables.extensions.by_type:
             if isinstance(target, DynamicArrayType):
-                for name, method in validator.extension_table.first_by_name(
-                        target).items():
+                for name, method in tables.extensions.first_by_name(target).items():
                     existing.setdefault(name, method)
-    _reject_name_conflicts(impl, existing, validator.reporter)
+    return existing
 
 
 def validate_unreached_header(tables, impl: ExtendWithDef, reporter: Reporter) -> None:
@@ -317,38 +361,44 @@ def validate_unreached_header(tables, impl: ExtendWithDef, reporter: Reporter) -
     method that applies to the same instantiation, a concrete one or a template. A
     reached one is judged in the typecheck pass, so the two answers agree.
     """
-    from sushi_lang.semantics.generics.extension_targets import instantiation_key
     perk_def = tables.perks.by_name.get(impl.perk_name)
     if perk_def is None:
         return
     validate_perk_implementation(impl, perk_def, reporter)
-    target = impl.target_type
-    key = instantiation_key(target.base_name, tuple(target.type_args))
-    existing = {}
-    for method in impl.methods:
-        found = tables.generic_extensions.find_applicable(target.base_name, method.name, key)
-        if found is not None:
-            existing[method.name] = found
-    _reject_name_conflicts(impl, existing, reporter)
+    _reject_name_conflicts(impl, _extensions_beside(impl.target_type, impl, tables), reporter)
 
 
 def _reject_name_conflicts(perk_impl: ExtendWithDef, existing_methods: dict,
-                           reporter: Reporter) -> bool:
-    """One CE4007 for each perk method that an extension method of one name meets."""
+                           reporter: Reporter, shipped: bool = False) -> bool:
+    """One CE4007 for each perk method that an extension method of one name meets.
+
+    A `shipped` implementation has no source in the build, so the error stands at the
+    extension method, and a prose note names the implementation (#1255).
+    """
     conflicts = {m.name for m in perk_impl.methods} & set(existing_methods)
     if not conflicts:
         return True
 
     for method in perk_impl.methods:
         if method.name in conflicts:
+            existing = existing_methods[method.name]
+            if shipped:
+                from sushi_lang.semantics.generics.type_display import display_type
+                er.emit_with(reporter, er.ERR.CE4007, existing.name_span or existing.loc,
+                             filename=getattr(existing, "filename", None),
+                             method=method.name, perk=perk_impl.perk_name).note(
+                    f"a compiled library implements '{perk_impl.perk_name}' for "
+                    f"'{display_type(perk_impl.target_type)}', and its method "
+                    f"'{method.name}' is visible in every unit").emit()
+                continue
             # Relational: the perk method is only a conflict BECAUSE the extension
             # exists. Point at it -- the table already carries its span.
-            existing = existing_methods[method.name]
             diag = er.emit_with(reporter, er.ERR.CE4007, method.loc,
                                 method=method.name, perk=perk_impl.perk_name)
             prev_span = existing.name_span or existing.loc
             if prev_span is not None:
-                diag.note_at(f"extension method '{method.name}' is defined here", prev_span)
+                diag.note_at(f"extension method '{method.name}' is defined here", prev_span,
+                             filename=getattr(existing, "filename", None))
             diag.emit()
 
     return False

@@ -1,0 +1,14 @@
+# A binary library ships a perk implementation with a method `show` on `Point`. The
+# consumer's extension method of the same name can never be called, so it is CE4007,
+# whatever the kind of the library (#1255).
+# BUILD_LIB_BINARY: conflict_geo.sushi
+# EXPECT_ERROR_CODES_EXACT: CE4007
+use <lib/conflict_geo>
+
+extend Point show() string:
+    return "own"
+
+fn main() i32:
+    let Point p = Point(1)
+    println(p.show())
+    return 0

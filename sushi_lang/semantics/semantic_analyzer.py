@@ -239,8 +239,10 @@ class SemanticAnalyzer:
             derive        auto-derived hash() and clone()        _derive                           passes/derive.py
             shadowing     reject an extension over a built-in    _check_extension_shadows_builtin  here
                           or a stdlib method on a built-in
-                          type (C2), then warn where an own      _warn_hidden_imported_extensions  here
-                          extension hides an imported one (C3)
+                          type (C2), and over a perk method a    _reject_extensions_beside_shipped_perk_impls  here
+                          compiled library ships, then warn
+                          where an own extension hides an        _warn_hidden_imported_extensions  here
+                          imported one (C3)
             effects       destroy-effect summary                 _compute_effects                  passes/borrow/destroy_effects.py
             scope         scope and variable analysis            _check_units                      passes/scope.py
             typecheck     type validation and inference          _check_units                      passes/types/
@@ -356,6 +358,7 @@ class SemanticAnalyzer:
             return
         self._derive()
         self._check_extension_shadows_builtin(monomorphizer.sites)
+        self._reject_extensions_beside_shipped_perk_impls()
         self._warn_hidden_imported_extensions()
 
         destroy_effects = self._compute_effects(compilation_order)
@@ -1355,6 +1358,23 @@ class SemanticAnalyzer:
                 found, sites, lambda item: getattr(item[0], "name", None),
                 lambda item: (display_type(item[0]),))[0]
             self._reject_builtin_shadow(*first)
+
+    def _reject_extensions_beside_shipped_perk_impls(self) -> None:
+        """CE4007 at an extension method beside a perk method a library ships (#1255).
+
+        A binary or hybrid library's implementation, a template included, has no
+        written declaration in the build, so the check of a written one never meets it.
+        """
+        from sushi_lang.semantics.passes.types.perks import (
+            reject_extensions_beside_shipped_impl)
+        for impl in self.library_perk_impls:
+            reject_extensions_beside_shipped_impl(impl, self.tables, self.reporter,
+                                                  template=False)
+        for templates in list(self.tables.generic_perk_impls.by_base.values()):
+            for found in templates:
+                if any(m.is_library_template for m in found.impl.methods):
+                    reject_extensions_beside_shipped_impl(found.impl, self.tables,
+                                                          self.reporter, template=True)
 
     def _warn_hidden_imported_extensions(self) -> None:
         """CW3007: a unit's own extension hides an imported public one (C3).

@@ -1,0 +1,10 @@
+# The CE4007 note at the extension method names the file of the extension method, not
+# the file of the perk implementation in the other unit (#1256).
+# EXPECT_ERROR_CODES_EXACT: CE4007
+# EXPECT_STDERR_CONTAINS: "test_err_perk_method_beside_extension_in_other_unit.sushi:9:14"
+use "show_geo"
+
+fn main() i32:
+    return 0
+extend Point show() string:
+    return "own"

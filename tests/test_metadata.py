@@ -595,12 +595,7 @@ def _apply_category_defaults(test_file: Path, metadata: TestMetadata) -> None:
     # "its behaviour is nobody's business". Shadowing is the motivating case (CW1002 is
     # unavoidable in a program whose whole subject is a shadowed binding).
     if filename.startswith('test_warn_'):
-        declares_runtime = (metadata.expect_runtime_exit is not None
-                            or metadata.expect_stdout_exact is not None
-                            or metadata.expect_stdout_contains is not None
-                            or metadata.expect_no_leaks
-                            or metadata.expect_no_open_fds)
-        if not declares_runtime:
+        if not declares_runtime(metadata):
             metadata.requires_runtime = False
             return
         metadata.requires_runtime = True
@@ -627,6 +622,19 @@ def get_test_category(test_file: Path) -> str:
         return 'success'
 
 
+def declares_runtime(metadata: TestMetadata) -> bool:
+    """A directive that only the program's run can check.
+
+    EXPECT_STDERR_CONTAINS is not one: on a warning fixture it reads the compiler's
+    stderr (#1253).
+    """
+    return (metadata.expect_runtime_exit is not None
+            or metadata.expect_stdout_exact is not None
+            or bool(metadata.expect_stdout_contains)
+            or metadata.expect_no_leaks
+            or metadata.expect_no_open_fds)
+
+
 def should_run_runtime_test(test_file: Path, metadata: TestMetadata) -> bool:
     """Determine if a test should have its compiled binary executed."""
     category = get_test_category(test_file)
@@ -635,7 +643,7 @@ def should_run_runtime_test(test_file: Path, metadata: TestMetadata) -> bool:
         return False
 
     if category == 'warning':
-        return metadata.expect_no_leaks or metadata.expect_no_open_fds
+        return declares_runtime(metadata)
 
     return metadata.requires_runtime
 

@@ -695,13 +695,8 @@ class LibraryRegistration:
                 continue
             if perk_impls.implements(type_name, perk_name):
                 continue
-            # CE4007 interplay: skip on a method-name clash with a local extension
-            # method on the same type.
-            existing_methods = self.tables.extensions.by_type.get(type_name, {})
-            method_names = [m.get("name") for m in record.get("methods", []) or []]
-            if any(name in existing_methods for name in method_names):
-                continue
-
+            # A consumer extension method of a perk method's name is CE4007, at the
+            # extension, in the `shadowing` pass (#1255).
             try:
                 impl = deserialize_perk_impl(record)
             except Exception:

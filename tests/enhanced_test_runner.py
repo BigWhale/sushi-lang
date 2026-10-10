@@ -1032,10 +1032,9 @@ class TestRunner:
                 if result.stdout:
                     message += f"\nSTDOUT: {result.stdout.strip()}"
 
-            # Diagnostic assertions on the compilation path. Only meaningful for
-            # error/warning tests, whose binaries are never executed (so stderr
-            # is the only signal). A missing/garbled diagnostic now fails the
-            # test instead of passing silently.
+            # Diagnostic assertions on the compilation path, for error and warning
+            # fixtures. On these two categories EXPECT_STDERR_CONTAINS reads the
+            # compiler's stderr alone; the runtime check does not read it again (#1253).
             if success and category in ('error', 'warning'):
                 diag_ok, diag_msg = self._check_compilation_diagnostics(result.stderr, metadata)
                 if not diag_ok:
@@ -1175,7 +1174,8 @@ class TestRunner:
             )
 
             # Validate runtime behavior
-            success, message = self._validate_runtime_result(result, metadata)
+            success, message = self._validate_runtime_result(
+                result, metadata, get_test_category(test_file))
 
             # Leak and descriptor assertions: opt-in per test, enforced whenever the
             # test runs. ONE re-run under the interposer answers both -- it reports the
@@ -1306,8 +1306,13 @@ class TestRunner:
             return True, "✓ Leak check: no leaks"
         return False, f"✗ Leak check: leaked {leaked} bytes in {blocks} blocks"
 
-    def _validate_runtime_result(self, result: subprocess.CompletedProcess, metadata: TestMetadata) -> Tuple[bool, str]:
-        """Validate runtime execution result against metadata expectations."""
+    def _validate_runtime_result(self, result: subprocess.CompletedProcess, metadata: TestMetadata,
+                                 category: str) -> Tuple[bool, str]:
+        """Validate runtime execution result against metadata expectations.
+
+        On a warning fixture EXPECT_STDERR_CONTAINS names the compiler's diagnostic, and
+        the compilation check reads it; the program's stderr is not read for it.
+        """
         messages = []
         success = True
 
@@ -1351,7 +1356,8 @@ class TestRunner:
         elif metadata.expect_stderr_empty:
             messages.append("✓ Stderr is empty")
 
-        for expected_content in metadata.expect_stderr_contains:
+        program_stderr = [] if category == 'warning' else metadata.expect_stderr_contains
+        for expected_content in program_stderr:
             if expected_content in result.stderr:
                 messages.append(f"✓ Stderr contains: {repr(expected_content)}")
             else:

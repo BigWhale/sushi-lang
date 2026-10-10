@@ -1,0 +1,14 @@
+# A binary library ships the perk implementation template `extend Box@(T) with Show`.
+# The consumer's extension method `show` on every instance of `Box` can never be called, so it is
+# CE4007, whatever the kind of the library (#1255).
+# BUILD_LIB_BINARY: conflict_box.sushi
+# EXPECT_ERROR_CODES_EXACT: CE4007
+use <lib/conflict_box>
+
+extend Box@(T) show() string:
+    return "own"
+
+fn main() i32:
+    let Box@(i32) b = Box(1)
+    println(b.show())
+    return 0

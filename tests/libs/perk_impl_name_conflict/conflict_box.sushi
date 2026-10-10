@@ -1,0 +1,9 @@
+public perk Show:
+    fn show() string
+
+public struct Box@(T):
+    T v
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "lib"
