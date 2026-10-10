@@ -27,9 +27,10 @@ close this gap.
 
 ### When NOT to add a stdout assertion
 
-- `test_err_*` and `test_warn_*` files — these test compilation failure/warnings only, and their binaries are
-  not executed in enhanced mode. The one exception is a `test_warn_*` file carrying `EXPECT_NO_LEAKS`, which
-  is executed so the leak assertion can be evaluated.
+- `test_err_*` files — their compilation fails, so there is no binary to run.
+- `test_warn_*` files, when the warning is the subject. A `test_warn_*` binary runs only when the file has a
+  runtime directive: `EXPECT_STDOUT_EXACT`, `EXPECT_STDOUT_CONTAINS`, `EXPECT_RUNTIME_EXIT`, `EXPECT_NO_LEAKS`
+  or `EXPECT_NO_OPEN_FDS`. Then the runner checks each of them (#1253).
 - Tests with no print statements (compilation-only is sufficient).
 - Tests that produce nondeterministic output: HashMap/`.keys()`/`.values()`/`.entries()` iteration order, pointer
   addresses, RAII debug addresses, platform-specific float formatting. For those, either choose a stable substring
@@ -123,9 +124,10 @@ Validates that stderr contains specific content.
 
 - Supports escape sequences
 - Can be specified multiple times
-- Enforced on both the runtime path and the compilation path. For `test_err_*`
-  / `test_warn_*` tests (whose binaries are never executed) it asserts against
-  the compiler's stderr, so you can pin a diagnostic's message text.
+- The stream depends on the category. For a `test_err_*` / `test_warn_*` test it
+  asserts against the COMPILER's stderr only, so you can pin a diagnostic's message
+  text; the runtime check does not read it, also when a `test_warn_*` binary runs.
+  For every other test it asserts against the program's stderr (#1253).
 
 #### EXPECT_STDERR_EMPTY
 
@@ -164,9 +166,9 @@ and any non-zero balance fails the test.
   **skipped and reported** (with the test name and the reason in the summary), never
   silently passed. **A skip FAILS the run**: a run that asserted nothing must not report a
   pass. `--allow-leak-skips` is the one escape, for a platform that cannot check at all.
-- A `test_warn_*` test may carry it: warning tests are not normally executed, but one that
-  declares a leak assertion is, because that is the only way to leak-check a
-  warned-but-legal construct such as shadowing an owning binding.
+- A `test_warn_*` test may carry it: a warning test that declares a runtime directive
+  runs its binary, and that is the only way to leak-check a warned-but-legal construct
+  such as shadowing an owning binding.
 
 #### EXPECT_NO_OPEN_FDS
 
@@ -647,7 +649,9 @@ fixture file itself, because the one set of directives describes both steps.
 Test files must follow naming conventions to indicate expected compilation behavior:
 
 - `test_<name>.sushi` - Must compile successfully (exit 0)
-- `test_warn_<name>.sushi` - Should compile with warnings (exit 1)
+- `test_warn_<name>.sushi` - Should compile with warnings (exit 1); the binary runs only
+  when the file has a runtime directive (`EXPECT_STDOUT_EXACT`, `EXPECT_STDOUT_CONTAINS`,
+  `EXPECT_RUNTIME_EXIT`, `EXPECT_NO_LEAKS`, `EXPECT_NO_OPEN_FDS`)
 - `test_err_<name>.sushi` - Should fail compilation (exit 2)
 - `test_run_<name>.sushi` - Always executed in enhanced mode
 
@@ -797,7 +801,8 @@ When a test runs in enhanced mode:
    - Exit code matches `EXPECT_RUNTIME_EXIT`
    - Stdout contains `EXPECT_STDOUT_CONTAINS` strings
    - Stdout matches `EXPECT_STDOUT_EXACT` (if specified)
-   - Stderr contains `EXPECT_STDERR_CONTAINS` strings
+   - Stderr contains `EXPECT_STDERR_CONTAINS` strings (not for a `test_warn_*` test,
+     whose `EXPECT_STDERR_CONTAINS` is checked against the compiler's stderr)
    - Stderr is empty if `EXPECT_STDERR_EMPTY: true`
 5. **Leak and descriptor checks** (if `EXPECT_NO_LEAKS` or `EXPECT_NO_OPEN_FDS` is
    declared): ONE re-run under the interposer, which reports both the outstanding byte
