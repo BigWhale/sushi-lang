@@ -50,7 +50,7 @@ All notable changes to Sushi Lang will be documented in this file.
 
 - **The Sushi half of `<collections/strings>`.** The module now has two halves: the
   built-in methods stay in the stdlib bitcode, and new methods are written in Sushi
-  (`src_sushi/collections/strings.sushi`). One `use <collections/strings>` loads both.
+  (`src_sushi/collections/strings.sushi`). A method of either half needs no import.
   The new methods are bare and total:
   - `s.parse_u8(base)`, `parse_u16`, `parse_u32`, `parse_u64`, `parse_i32`, `parse_i64`:
     a strict parse in a base from 2 to 36. The text holds the digits of the base and
@@ -136,6 +136,47 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **Breaking: the visibility of a method changed.** A method that comes with a type needs
+  no import, and an extension method is a name of its unit. The rules
+  (`docs/design/extension-visibility.md`):
+  - R1: every stdlib method on a built-in type (a primitive, `string`, `T[]`, `T[N]`,
+    `List@(T)`, `Own@(T)`, `Maybe@(T)`, `Result@(T, E)`) is available in every unit with
+    no import: `s.len()`, `s.lines()`, `n.to_hex()`, `xs.map(f)`, `xs.sort()`,
+    `buf.read_u16_le(0)`, `b.is_ascii_digit()`.
+  - R2: a stdlib import brings names (functions, constants, types, perks) and never a
+    method. Under `--warn-unused`, an import that only a method call reads is now `CW3006`.
+  - R3: a type that a stdlib module declares (`HashMap@(K, V)`, `File`, `BufReader@(R)`)
+    needs the import for its name and its static methods; its public methods travel with
+    it. `SeekFrom.whence()` moved from `<io/fs>` to `<io/contracts>`, the home of
+    `SeekFrom`, so it travels with the type.
+  - R4: a user extension with no marker is private to its unit. A call from another unit is
+    `CE3005`.
+  - R5: `public extend T name(...)` in the unit that declares `T` travels with the type:
+    any unit that holds a `T` calls it with no import.
+  - R6: a public extension on a type that its unit does not declare (a built-in type, an
+    array, the type of another unit) is visible in its unit and in each unit that imports
+    it, with `use`, `use ... as` or a `public use` chain. A call elsewhere is the new
+    `CE3022`, and the help names the import.
+  - R7: a static method follows R4 to R6.
+  - R8: a perk implementation and a conversion do not change. `public` before
+    `extend T with P:` or `extend A as B:` is a parse error (`CE6001`).
+  - R9: the syntax is `public extend T name(...)` and `public extend T static name(...)`.
+
+  Collisions: two extensions of one name on one type in one unit are `CE0101`. Two private
+  ones in two units are legal, and each unit calls its own. A unit's own extension wins
+  over an imported public one, with the new warning `CW3007`. Two imported public ones and
+  no own one are the new `CE3023` at the call. An extension with the name of a method that
+  is visible everywhere is refused at its declaration: a stdlib method on a built-in type
+  is `CE2097`, a public method of the home unit of the type is `CE0101`, and a method of a
+  perk implementation on the type is `CE4007`. So a new stdlib method on a built-in type
+  can refuse a user extension of the same name that compiled before. Under
+  `--warn-unused`, a private extension that nothing in its unit calls is `CW1004`. The
+  error `CE3015` (a missing stdlib import for a method) and the warning `CW3003` (a library
+  extends a type that it does not declare) are retired. A library records the marker and
+  the unit of each extension: the templates schema is 10, and a binary or hybrid library of
+  an older schema is refused (`CE3512`) and must be rebuilt. To migrate, write `public`
+  before each extension that another unit calls, and a `use` of its unit where R6 asks for
+  one.
 - **Breaking: a generic body is checked where it is written.** The compiler checks each
   template one time, also when no code calls it: a generic function, a generic or array
   extension, an extension with a method-level type parameter, a perk implementation on a
