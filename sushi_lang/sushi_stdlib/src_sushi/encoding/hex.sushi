@@ -4,7 +4,6 @@ encoding/hex -- hexadecimal text of bytes and back, opt in with `use <encoding/h
 `encode` writes two lower-case digits for each byte. `decode` reads upper and lower case
 digits, two for each byte.
 :##
-use <collections/strings>
 
 ##: The digits of `encode`, in the order of their values. :##
 const string DIGITS = "0123456789abcdef"

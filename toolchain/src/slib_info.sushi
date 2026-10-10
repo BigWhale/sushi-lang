@@ -8,7 +8,6 @@ are in `docs/design/slib-info.md`.
 :##
 
 use <io/fs>
-use <collections/strings>
 use <encoding/msgpack>
 use <sys/env>
 use <toolchain/slib>

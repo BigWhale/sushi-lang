@@ -670,13 +670,23 @@ def extension_reach(table: Optional[VisibilityTable], method: Any, target: Any,
         return MethodReach.VISIBLE
     if not getattr(method, "is_public", False):
         return MethodReach.PRIVATE
-    if declared_in == home_unit_of(table, target):
-        return MethodReach.VISIBLE
-    if is_stdlib_builtin_method(method, target):
-        return MethodReach.VISIBLE
-    if scope is None or scope.brings_methods_of(declared_in):
+    if (not needs_import(table, method, target) or scope is None
+            or scope.brings_methods_of(declared_in)):
         return MethodReach.VISIBLE
     return MethodReach.NOT_IMPORTED
+
+
+def needs_import(table: Optional[VisibilityTable], method: Any, target: Any) -> bool:
+    """R6: does another unit see the extension `method` only through an import of its unit?
+
+    It does when the method is public, its unit is not the home unit of `target` (R5),
+    and it is not a stdlib method on a built-in type (R1). Those two are visible in
+    every unit. `method` is any record that carries `unit_name` and `is_public`.
+    """
+    declared_in = getattr(method, "unit_name", None)
+    return (declared_in is not None and getattr(method, "is_public", False)
+            and declared_in != home_unit_of(table, target)
+            and not is_stdlib_builtin_method(method, target))
 
 
 def is_stdlib_builtin_method(method: Any, target: Any) -> bool:
@@ -729,12 +739,10 @@ def hides_import(table: Optional[VisibilityTable], own: Any, other: Any,
     if target is None:
         target = own.target_type
     declared_in = getattr(other, "unit_name", None)
-    return (declared_in is not None and declared_in != own.unit_name
+    return (declared_in != own.unit_name
             and bool(getattr(other, "is_static", False)) == bool(
                 getattr(own, "is_static", False))
-            and getattr(other, "is_public", False)
-            and declared_in != home_unit_of(table, target)
-            and not is_stdlib_builtin_method(other, target)
+            and needs_import(table, other, target)
             and scope is not None and scope.brings_methods_of(declared_in))
 
 

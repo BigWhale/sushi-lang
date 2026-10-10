@@ -18,11 +18,10 @@ takes a File, a TcpStream or a BufReader@(File) alike. The extra verbs only a bu
 offer -- read_line(), read_all(), lines(), fill() -- stay concrete methods; a contract for
 that direction (Rust's BufRead) is a separate, later question.
 
-Limitations: fill() is part of the surface because an extension method carries no
-visibility marker -- it is as visible as the type it extends.
+fill() and drain_if_full() are public, so a caller can refill or drain a buffer at a
+time that it chooses.
 :##
 
-use <collections/strings>
 public use <io/contracts>
 
 ##:

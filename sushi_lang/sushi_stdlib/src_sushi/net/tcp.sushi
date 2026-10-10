@@ -21,7 +21,6 @@ whatever one read gave, which may be less than the maximum asked for;
 recv_exact() is the loop for a caller that needs a count.
 :##
 
-use <collections/strings>
 public use <io/contracts>
 public use <net/error>
 public use <net/handle>

@@ -52,7 +52,7 @@ _add(ErrorMessage("CW1002", Severity.WARNING,
 
 _add(ErrorMessage("CW1004", Severity.WARNING,
     "private {kind} '{name}' is never used in this unit", Category.SCOPE,
-    "Behind `--warn-unused`, off by default. A private declaration is visible only in its own unit, so the unit is the whole question: the declaration is dead when nothing reachable from a ROOT of the unit names it. The roots are every `public` declaration, every `extend` block (an extension method and a perk implementation alike, because a call reaches it through a receiver and not through a name), the `unsafe external` blocks, and `fn main()`. A private declaration named only by another dead one is dead too, so both are reported. A bundled stdlib unit is checked only when the test runner sets SUSHI_STDLIB_DEAD_GATE; a library unit never is. Delete the declaration, or make it `public` when it is API."))
+    "Behind `--warn-unused`, off by default. A private declaration is visible only in its own unit, so the unit is the whole question: the declaration is dead when nothing reachable from a ROOT of the unit names it. The roots are every `public` declaration, every perk implementation and every conversion (no call names them: a perk implementation is global, and a conversion runs at `??` and `as`), the `unsafe external` blocks, and `fn main()`. A private extension method, an instance method or a static method, is checked as a private function is: only its own unit can call it (docs/design/extension-visibility.md R4), so it is dead when no live declaration of the unit calls it. A private declaration named only by another dead one is dead too, so both are reported. A bundled stdlib unit is checked only when the test runner sets SUSHI_STDLIB_DEAD_GATE; a library unit never is. Delete the declaration, or make it `public` when it is API."))
 
 # Unit/module warnings
 _add(ErrorMessage("CW3001", Severity.WARNING,
@@ -151,7 +151,7 @@ _add(ErrorMessage("CW3007", Severity.WARNING,
 
 _add(ErrorMessage("CW3006", Severity.WARNING,
     "'{import_}' brings nothing this unit names", Category.UNIT,
-    "Behind `--warn-unused`, off by default. The unit writes no name the import brings: no function, constant, type or perk it declares or re-exports, no member behind its alias, no extension or perk method it declares, and for `<collections/strings>` no string method the module enables (the per-unit rule CE3015 reads). A `public use` re-exports to the unit's own importers and is never reported, and neither is an import of a library. Delete the line."))
+    "Behind `--warn-unused`, off by default. The unit writes no name the import brings: no function, constant, type or perk it declares or re-exports, no member behind its alias, and no public extension method that it declares on a type that it does not declare (R6 of docs/design/extension-visibility.md: only an import brings such a method, flat or aliased), and no method of a perk implementation that it declares on such a type (the implementation is global, but the import can be what loads it). An import brings no other method: a stdlib method on a built-in type needs no import (R1, R2), and a public method of the home unit of a type travels with the type (R5). A unit that imports a stdlib module only to call its methods gets this warning. A `public use` re-exports to the unit's own importers and is never reported, and neither is an import of a library. Delete the line."))
 
 _add(ErrorMessage("CW3005", Severity.WARNING,
     "`public use` of '{origin}' re-exports nothing", Category.UNIT,

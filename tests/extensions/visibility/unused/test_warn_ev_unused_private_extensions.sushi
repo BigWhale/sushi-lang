@@ -9,8 +9,8 @@
 # EXPECT_STDERR_CONTAINS: "private extension method 'Crate.never_built' is never used"
 # EXPECT_STDERR_CONTAINS: "private extension method 'i32.by_dead' is never used"
 # EXPECT_STDERR_CONTAINS: "private function 'lonely' is never used"
-# EXPECT_STDERR_CONTAINS: "'never_listed' is never used"
-# EXPECT_STDERR_CONTAINS: "'never_arrayed' is never used"
+# EXPECT_STDERR_CONTAINS: "private extension method 'List@(T).never_listed' is never used"
+# EXPECT_STDERR_CONTAINS: "private extension method 'T[].never_arrayed' is never used"
 
 struct Crate:
     i32 weight

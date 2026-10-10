@@ -7,7 +7,6 @@ formatters and `StringBuilder` ship as Sushi source. One import gives both halve
 method here is bare and total, so a call gives the value directly, with no `??`.
 :##
 use <collections/strings>
-use <text/ascii>
 
 ##:
 Gives the value of one digit byte: `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35.

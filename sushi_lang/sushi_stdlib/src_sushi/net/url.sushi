@@ -18,9 +18,6 @@ percent decoding and no IDNA. A port is read as written and is not checked
 against the scheme.
 :##
 
-use <collections/strings>
-use <text/ascii>
-
 ##:
 One absolute URL, split into its parts.
 

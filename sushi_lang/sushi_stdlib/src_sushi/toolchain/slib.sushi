@@ -19,8 +19,6 @@ The four spare header fields are read and not validated.
 use <io/fs>
 public use <io/error>
 use <encoding/msgpack>
-use <encoding/binary>
-use <collections/strings>
 
 ##: The 16 bytes at the start of every `.slib` file. :##
 const u8[16] SLIB_MAGIC = [0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3]

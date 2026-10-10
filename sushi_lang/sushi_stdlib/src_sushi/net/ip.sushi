@@ -17,7 +17,6 @@ Only the IPv4-mapped form prints in the mixed `::ffff:a.b.c.d` notation; the
 deprecated IPv4-compatible form prints as hex.
 :##
 
-use <collections/strings>
 public use <net/error>
 
 ##:
