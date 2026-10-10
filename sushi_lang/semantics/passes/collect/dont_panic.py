@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Protocol, Union
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import ExtendDef, FuncDef
+from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef, FuncDef
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.unchecked_index import holds_an_unchecked_index
 
@@ -59,10 +59,26 @@ class MarkerGate:
         return cls(allowed=flag, library=library, counts=True)
 
 
+def marked_name(decl: MarkedDecl, owner: Optional[ExtendWithDef] = None) -> str:
+    """The name a reader finds a marked declaration by: `name` for a function,
+    `Type.name` for a method or a static, and `Source as Target` for a conversion.
+
+    `owner` is the perk implementation of a method, which gives the type. The manifest
+    record reads this name, and the diagnostics of the marker read it for a conversion.
+    """
+    if isinstance(decl, ExtendDef):
+        target = display_type(decl.target_type)
+        if decl.is_conversion:
+            return f"{target} as {display_type(decl.ret)}"
+        return f"{target}.{decl.name}"
+    if owner is not None:
+        return f"{display_type(owner.target_type)}.{decl.name}"
+    return decl.name
+
+
 def _subject(decl: MarkedDecl, library: Optional[str]) -> str:
     if isinstance(decl, ExtendDef) and decl.is_conversion:
-        name = (f"the conversion '{display_type(decl.target_type)} "
-                f"as {display_type(decl.ret)}'")
+        name = f"the conversion '{marked_name(decl)}'"
     else:
         name = f"'{decl.name}'"
     return name if library is None else f"{name} of the library '{library}'"
@@ -74,7 +90,7 @@ def judge_marker(reporter: 'Reporter', gate: MarkerGate, decl: MarkedDecl,
     of the flag."""
     if decl.dont_panic is None:
         return False
-    span = decl.dont_panic_span or decl.name_span
+    span = decl.dont_panic.span or decl.name_span
     subject = _subject(decl, gate.library)
     if not gate.allowed:
         help_text = (f"the library '{gate.library}' asks for unchecked indexes; "

@@ -1,0 +1,16 @@
+# A perk implementation method that carries the marker gives one CE0152 when the build has
+# no flag.
+# EXPECT_ERROR_CODES_EXACT: CE0152
+
+struct Crate:
+    i32 weight
+
+perk Pick:
+    fn pick(i32[] xs) i32
+
+extend Crate with Pick:
+    fn pick(i32[] xs) i32 dont_panic because "the caller passes a non-empty array":
+        return xs[0]
+
+fn main() i32:
+    return Crate(1).pick(from([1]))

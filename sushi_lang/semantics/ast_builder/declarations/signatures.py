@@ -10,10 +10,11 @@ The `dont_panic` marker stands after the pair, and its one reader lives here too
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Tuple
 
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import Span, span_of
+from sushi_lang.semantics.ast import DontPanicMarker
 from sushi_lang.semantics.ast_builder.utils.string_processing import strip_string_token
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_token, first_tree, ice, is_type_node)
@@ -61,14 +62,6 @@ def read_signature_types(children: List[object],
     )
 
 
-@dataclass(frozen=True, slots=True)
-class DontPanicMarker:
-    """The `dont_panic because "<reason>"` marker of a header (docs/design/dont-panic.md)."""
-
-    reason: str
-    span: Optional[Span]
-
-
 def read_dont_panic(children: List[object]) -> Optional[DontPanicMarker]:
     """Read the marker off a header's children; None when the header has none."""
     node = first_tree(children, "dont_panic")
@@ -80,22 +73,22 @@ def read_dont_panic(children: List[object]) -> Optional[DontPanicMarker]:
     return DontPanicMarker(reason=strip_string_token(reason_tok), span=span_of(node))
 
 
-def mark_body(children: List[object],
-              body: object) -> Tuple[Optional[str], Optional[Span]]:
+def mark_body(children: List[object], body: object) -> Optional[DontPanicMarker]:
     """Read the marker of a declaration with a body, and stamp the indexes of the body.
 
-    The answer is the reason and the span that the declaration stores, or two Nones.
+    The answer is the marker that the declaration stores, or None.
     """
     marker = read_dont_panic(children)
-    if marker is None:
-        return None, None
-    stamp_unchecked_indexes(body)
-    return marker.reason, marker.span
+    if marker is not None:
+        stamp_unchecked_indexes(body)
+    return marker
 
 
-# The positions that parse the marker only to refuse it (CE6111, ruling D4): what the
-# message names, why, and the help.
-_REFUSED_POSITIONS = {
+# The positions that parse the marker only to refuse it (CE6111, ruling D4).
+RefusedPosition = Literal["lambda", "perk_method", "extern"]
+
+# For each refused position: what the message names, why, and the help.
+_REFUSED_POSITIONS: Dict[RefusedPosition, Tuple[str, str, str]] = {
     "lambda": ("a lambda",
                "a lambda can outlive its function, so its indexes keep their check",
                "write the marker on a named function that holds the loop"),
@@ -108,7 +101,7 @@ _REFUSED_POSITIONS = {
 }
 
 
-def refuse_dont_panic(children: List[object], position: str,
+def refuse_dont_panic(children: List[object], position: RefusedPosition,
                       ast_builder: 'ASTBuilder') -> None:
     """CE6111 when the header holds a marker in a position that takes none.
 

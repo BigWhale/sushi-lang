@@ -279,6 +279,64 @@ class StickyBar:
         self.render()
 
 
+# The flags that make the compiler write the IR of a fixture with an EXPECT_IR_ directive.
+# A program of more than one unit builds incrementally and writes no IR, so the second
+# flag asks for the one-module build.
+IR_FLAGS = ("--write-ll", "--no-incremental")
+
+# The head of one function definition in the IR, and the symbol it defines.
+_IR_DEFINE = re.compile(r'^define [^@]*@(?:"([^"]+)"|([^\s(]+))\(')
+
+
+def ir_functions(ir_text: str) -> Dict[str, str]:
+    """The body of each function the IR defines, by symbol."""
+    bodies: Dict[str, str] = {}
+    symbol: Optional[str] = None
+    lines: List[str] = []
+    for line in ir_text.splitlines():
+        if symbol is None:
+            match = _IR_DEFINE.match(line)
+            if match is not None:
+                symbol, lines = match.group(1) or match.group(2), [line]
+            continue
+        lines.append(line)
+        if line == "}":
+            bodies[symbol] = "\n".join(lines)
+            symbol = None
+    return bodies
+
+
+def ir_function(bodies: Dict[str, str], function: str) -> List[str]:
+    """The symbols that define the source function `function`: the bare name, or the name
+    behind its unit (`unit$name`)."""
+    return [symbol for symbol in bodies
+            if symbol == function or symbol.endswith("$" + function)]
+
+
+def check_ir(ll_path: Path, metadata: TestMetadata, message: str) -> Tuple[bool, str]:
+    """EXPECT_IR_HOLDS and EXPECT_IR_LACKS, against the IR the compilation wrote.
+
+    A function that no symbol defines, or that two symbols define, fails the fixture: the
+    directive must name one body.
+    """
+    if not ll_path.is_file():
+        return False, f"✗ Compilation: the compiler wrote no IR at {ll_path}"
+    bodies = ir_functions(ll_path.read_text(encoding="utf-8"))
+    problems = []
+    for function, text, holds in metadata.ir_expectations or []:
+        symbols = ir_function(bodies, function)
+        if len(symbols) != 1:
+            problems.append(f"{function}: {len(symbols)} functions in the IR have this "
+                            f"name ({', '.join(symbols) or 'none'}); a directive names one")
+            continue
+        if (text in bodies[symbols[0]]) != holds:
+            problems.append(f"{function}: expected the IR to {'hold' if holds else 'lack'} "
+                            f"{text!r}")
+    if problems:
+        return False, "✗ Compilation: the IR differs\n  " + "\n  ".join(problems)
+    return True, message
+
+
 def stdout_contains(stdout: str, expected: str) -> bool:
     """Substring match for EXPECT_STDOUT_CONTAINS, with one exception."""
     if not _NUMERIC.fullmatch(expected.strip()):
@@ -779,7 +837,8 @@ class TestRunner:
             args = ["--clean-cache", *cache_flags]
         else:
             args = [*(["--clean-cache"] if clean else []), source, "-o", output,
-                    *metadata.compiler_flags, *cache_flags]
+                    *metadata.compiler_flags, *(IR_FLAGS if metadata.ir_expectations else ()),
+                    *cache_flags]
         if metadata.stdlib_modules and workspace is not None:
             # The bootstrap runs the compiler without the `sushic` wrapper, so it does what
             # the wrapper does: start in the checkout, and name the caller's directory.
@@ -962,6 +1021,9 @@ class TestRunner:
 
             if success and workspace is not None:
                 success, message = self._check_copy_paths(workspace, metadata, message)
+
+            if success and metadata.ir_expectations:
+                success, message = check_ir(binary_path.with_suffix(".ll"), metadata, message)
 
             return success, message
 

@@ -464,7 +464,9 @@ This is useful for:
   method, as it was declared (`extend Vec static at(i32 x, i32 y) Vec`), a template
   (`extend Box@(T) tag() i32`) beside the concrete ones
 - Seeing the unchecked code before the first build: `Unchecked Indexes` prints one line per
-  function marked `dont_panic`, as `  name dont_panic because "reason"`. The name is `name`
+  function marked `dont_panic`, as `  unit: name dont_panic because "reason"`. The unit is
+  the unit that declares the function, because two units can each declare a private
+  function of one name. The name is `name`
   for a function or a template, `Type.method` for an extension method, a static or a perk
   implementation method, and `Source as Target` for a conversion. The section is absent
   when nothing is marked, and it is the same in every library kind

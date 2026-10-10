@@ -12,9 +12,9 @@ from sushi_lang.semantics.library_templates import (
 from sushi_lang.semantics.type_predicates import contains_foreign_ptr
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
 from sushi_lang.semantics.ast import ExtendDef, Node, Program, VarDef
-from sushi_lang.semantics.ast_walk import is_written
-from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.ast_walk import bodied_with_owner, is_written
 from sushi_lang.semantics.generics.contracts import CONTRACTS
+from sushi_lang.semantics.passes.collect.dont_panic import marked_name
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
 
 if TYPE_CHECKING:
@@ -161,22 +161,9 @@ def _extension_target_name(target_type) -> str | None:
 
 def _marked_declarations(program: Program) -> Iterator[tuple[str, str]]:
     """`(name, reason)` for each written `dont_panic` declaration of one unit."""
-    for fn in program.functions:
-        if is_written(fn) and fn.dont_panic is not None:
-            yield fn.name, fn.dont_panic
-    for ext in [*program.extensions, *program.generic_extensions]:
-        if not is_written(ext) or ext.dont_panic is None:
-            continue
-        target = display_type(ext.target_type)
-        name = (f"{target} as {display_type(ext.ret)}" if ext.is_conversion
-                else f"{target}.{ext.name}")
-        yield name, ext.dont_panic
-    for impl in [*program.perk_impls, *program.generic_perk_impls]:
-        if not is_written(impl):
-            continue
-        for method in impl.methods:
-            if method.dont_panic is not None:
-                yield f"{display_type(impl.target_type)}.{method.name}", method.dont_panic
+    for _kind, decl, owner in bodied_with_owner(program):
+        if is_written(decl) and decl.dont_panic is not None:
+            yield marked_name(decl, owner), decl.dont_panic.reason
 
 
 def _binding_key(node, unit: str) -> tuple[str, str]:

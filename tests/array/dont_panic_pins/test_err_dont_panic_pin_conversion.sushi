@@ -1,0 +1,19 @@
+# A conversion that carries the marker gives one CE0152 when the build has no flag. The
+# message names the conversion by its two types.
+# EXPECT_ERROR_CODES_EXACT: CE0152
+# EXPECT_STDERR_CONTAINS: "the conversion 'EA as EB' is marked dont_panic"
+
+error EA:
+    One
+
+error EB:
+    Two
+
+extend EA as EB dont_panic because "the table is never read":
+    let i32[] t = from([1])
+    if (t[0] == 1):
+        return EB.Two
+    return EB.Two
+
+fn main() i32:
+    return 0

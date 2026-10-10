@@ -322,8 +322,10 @@ is the authority, and the index is a cache of it.
     # only: a monomorphized copy is not listed. `name` is `fn_name` for a function or a
     # generic template, `Type.method` for an extension method, a static and a perk
     # implementation method (the type in the `@(...)` spelling), and `Source as Target`
-    # for a conversion. `reason` is the raw text between the quotes. The whole key is
-    # absent when no declaration is marked.
+    # for a conversion. `reason` is the raw text between the quotes. `unit` is the unit
+    # that declares it; `--lib-info` prints it before `name`, because two units can each
+    # declare a private function of one name. The whole key is absent when no
+    # declaration is marked.
     "dont_panic": [
         {"unit": str, "name": str, "reason": str}
     ],

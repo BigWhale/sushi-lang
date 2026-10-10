@@ -248,6 +248,26 @@ or fewer times than it is listed.
 - The failure names each code whose count is different, with both counts
   (`CE0112: expected 1, printed 2`)
 
+#### EXPECT_IR_HOLDS / EXPECT_IR_LACKS
+
+Asserts a text in the emitted LLVM IR of ONE function. Use it for a rule that the output
+of the program cannot show, for example a bounds check that `dont_panic` removes.
+
+```sushi
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_IR_LACKS: read_dynamic _bounds_fail
+# EXPECT_IR_HOLDS: read_dynamic_checked _bounds_fail
+```
+
+- The value is `<function> <text>`. The text is a substring of the body of the function
+- The function is its source name. The runner finds the symbol that is the name, or the
+  name after its unit (`prog$read_dynamic`). No symbol, or two symbols, fail the fixture
+- The runner adds `--write-ll --no-incremental` to the compilation and reads the IR
+  before optimization. A program of more than one unit gets the one-module build too
+- Put a marked function and an unmarked twin in one fixture, and assert both. The twin
+  proves that the text is there when the rule does not apply
+- The directive may be repeated. A fixture that does not compile has no IR, and fails
+
 ### Advanced Metadata Directives
 
 #### TIMEOUT_SECONDS

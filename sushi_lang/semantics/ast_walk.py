@@ -138,27 +138,30 @@ def is_template_copy(body: object) -> bool:
     return not is_lifted_lambda(cast("FuncDef", body))
 
 
-def _bodied_kinds(program: 'Program') -> Iterator[Tuple[str, BodiedDecl]]:
-    """Every declaration with a body, with the word a diagnostic calls it by.
+def bodied_with_owner(program: 'Program') -> Iterator[Tuple[str, BodiedDecl,
+                                                            Optional['ExtendWithDef']]]:
+    """Every declaration with a body, with the word a diagnostic calls it by, and the
+    perk implementation that owns it (None for a declaration that no implementation owns).
 
     A body is what lets a declaration hold two blocks, one above it and one first
-    inside it, and it is why these come last in both walks.
+    inside it, and it is why these come last in both walks. The owner is for a reader
+    that names a method by its target type.
     """
     for func in program.functions:
         if is_written(func):
-            yield "function", func
+            yield "function", func, None
     for extension in [*program.extensions, *program.generic_extensions]:
-        yield "extension", extension
+        yield "extension", extension, None
     for impl in [*program.perk_impls, *program.generic_perk_impls]:
         if not is_written(impl):
             continue
         for method in impl.methods:
-            yield "perk method", method
+            yield "perk method", method, impl
 
 
 def bodied(program: 'Program') -> List[BodiedDecl]:
     """Every declaration with a body, in the one order both walks use."""
-    return [node for _kind, node in _bodied_kinds(program)]
+    return [node for _kind, node, _owner in bodied_with_owner(program)]
 
 
 def declarations(program: 'Program') -> Iterator[Declaration]:
@@ -190,7 +193,8 @@ def declarations(program: 'Program') -> Iterator[Declaration]:
             yield "external declaration", decl
         for var in block.variables:
             yield "external variable", var
-    yield from _bodied_kinds(program)
+    for kind, node, _owner in bodied_with_owner(program):
+        yield kind, node
 
 
 @dataclass(frozen=True)

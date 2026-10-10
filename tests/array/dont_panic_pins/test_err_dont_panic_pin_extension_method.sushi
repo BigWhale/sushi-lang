@@ -1,0 +1,9 @@
+# An extension method that carries the marker gives one CE0152 when the build has no flag.
+# EXPECT_ERROR_CODES_EXACT: CE0152
+
+extend i32[] head_of() i32 dont_panic because "the caller passes a non-empty array":
+    return self[0]
+
+fn main() i32:
+    let i32[] xs = from([1])
+    return xs.head_of()

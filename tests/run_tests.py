@@ -966,6 +966,16 @@ extend Colour static pick(i32[] codes) Colour dont_panic because "the caller pas
     return Colour.Blue("pick", codes[0])
 
 ##:
+The code at the last position of an array.
+
+- Parameter xs: The values.
+- Parameter codes: The codes.
+- Returns: The code.
+:##
+public fn code_at@(T)(T[] xs, i32[] codes) i32 dont_panic because "codes is as long as xs":
+    return codes[xs.len() - 1]
+
+##:
 Halves an even number.
 
 - Parameter n: The number.
@@ -1019,6 +1029,15 @@ Tells the crate of a clonable value.
 extend Crate@(T: Clone) clone_count() i32:
     return 1
 
+##:
+The first code.
+
+- Parameter codes: The codes.
+- Returns: The code.
+:##
+extend Crate@(T) first_code(i32[] codes) i32 dont_panic because "the caller passes a non-empty array":
+    return codes[0]
+
 ##: A crate of a hashable value has a name. :##
 extend Crate@(T: Hashable) with Named:
     ##:
@@ -1050,6 +1069,8 @@ fn main() i32:
     match Colour.pick(from([9])):
         Colour.Blue(s, n) -> println("{{s}} {{n}}")
         Colour.Red -> println("red")
+    println(code_at(from([true, false]), from([3, 4])))
+    println(Crate(1).first_code(from([8])))
     match wrapped(3):
         Result.Ok(v) -> println("ok {{v}}")
         Result.Err(e) -> println("{{e}}")
@@ -1061,8 +1082,9 @@ fn main() i32:
 # sixth and the seventh keep the `...` of a type pack (#1164), the eighth and the ninth
 # print the keyword `error` for a concrete and for a generic error type, the tenth is a
 # conversion, which the consumer calls through `??`, the next two put a bound in a
-# target (#1070), and the last two are `dont_panic` declarations with their reasons
-# (docs/design/dont-panic.md, D10).
+# target (#1070), and the last four are `dont_panic` declarations with their reasons
+# (docs/design/dont-panic.md, D10), each after its unit: a function, a static, a generic
+# function and a method of a generic type.
 REPORT_LINES = (
     "  fn both@(T: Hashable + Named)(T x) i32",
     "    Blue(string, i32)",
@@ -1076,16 +1098,18 @@ REPORT_LINES = (
     "  extend ReportFault as ReportWrap",
     "  extend Crate@(T: Clone) clone_count() i32",
     "  extend Crate@(T: Hashable) with Named:",
-    '  head dont_panic because "the caller passes a non-empty array"',
-    '  Colour.pick dont_panic because "the caller passes a \\"non-empty\\" array"',
+    '  report_lib: head dont_panic because "the caller passes a non-empty array"',
+    '  report_lib: Colour.pick dont_panic because "the caller passes a \\"non-empty\\" array"',
+    '  report_lib: code_at dont_panic because "codes is as long as xs"',
+    '  report_lib: Crate@(T).first_code dont_panic because "the caller passes a non-empty array"',
 )
 REPORT_KINDS = ("source", "hybrid", "binary")
-REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n"
+REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n"
                           "ReportWrap.Held(ReportFault.Bad(3))\n")
-# The kinds whose consumer re-parses the marked bodies of `_REPORT_LIBRARY`, and so must
-# consent with `--dont-panic` (D9). A hybrid or a binary library ships a concrete body as
-# bitcode, and the flag there marks nothing (CW0003).
-REPORT_CONSENT_KINDS = ("source",)
+# The consumer of each kind passes `--dont-panic` (D9). It instantiates the two marked
+# templates of `_REPORT_LIBRARY`, and every library kind ships a template as source, which
+# the consumer's build parses again.
+REPORT_CONSENT = ("--dont-panic",)
 
 
 def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = None,
@@ -1131,8 +1155,7 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
                             f"(exit {done.returncode})")
             program = kind_dir / "main.sushi"
             program.write_text(_REPORT_CONSUMER.format(name="report_lib"), encoding="utf-8")
-            consent = ["--dont-panic"] if kind in REPORT_CONSENT_KINDS else []
-            done = _gate_run([sushic, str(program), "-o", str(kind_dir / "main"), *consent,
+            done = _gate_run([sushic, str(program), "-o", str(kind_dir / "main"), *REPORT_CONSENT,
                               "--cache-dir", cache], kind_dir, {"SUSHI_LIB_PATH": str(kind_dir)})
             result.checks += 1
             if done.returncode != 0:
