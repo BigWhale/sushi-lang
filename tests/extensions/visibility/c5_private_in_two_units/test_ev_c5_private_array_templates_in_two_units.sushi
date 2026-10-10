@@ -1,0 +1,14 @@
+# C5 for an array template: two units each declare a private `tally` on `T[]`. That is
+# no fault, each unit calls its own copy, and the two copies are two symbols.
+# EXPECT_STDOUT_EXACT: "3\n30\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_c5_tpl_other"
+
+extend T[] tally() i32:
+    return self.len()
+
+fn main() i32:
+    let i32[] xs = from([4, 5, 6])
+    println(xs.tally())
+    println(other_tally(xs))
+    return 0

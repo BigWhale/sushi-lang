@@ -1,0 +1,13 @@
+# C1 for an array template: two templates of one name on `T[]` in ONE unit are the
+# duplicate error, as before.
+# EXPECT_ERROR_CODES_EXACT: CE0101
+extend T[] mark() i32:
+    return 1
+
+extend T[] mark() i32:
+    return 2
+
+fn main() i32:
+    let i32[] xs = from([1])
+    println(xs.mark())
+    return 0

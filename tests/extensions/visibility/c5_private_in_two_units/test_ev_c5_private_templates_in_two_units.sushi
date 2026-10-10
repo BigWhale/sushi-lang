@@ -1,0 +1,16 @@
+# C5 for a template: two units each declare a private template `tag` on `Crate@(T)`.
+# Neither unit declares `Crate`. That is no fault, each unit calls its own copy, and
+# the two copies are two symbols.
+# EXPECT_STDOUT_EXACT: "3\n30\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_c5_crates"
+use "helpers/ev_c5_tpl_other"
+
+extend Crate@(T) tag() i32:
+    return self.size
+
+fn main() i32:
+    let Crate@(i32) c = Crate(7, 3)
+    println(c.tag())
+    println(other_tag(c))
+    return 0

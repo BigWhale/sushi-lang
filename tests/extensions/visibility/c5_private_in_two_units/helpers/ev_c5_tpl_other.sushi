@@ -1,0 +1,13 @@
+use "helpers/ev_c5_crates"
+
+extend Crate@(T) tag() i32:
+    return self.size * 10
+
+extend T[] tally() i32:
+    return self.len() * 10
+
+public fn other_tag(Crate@(i32) c) i32:
+    return c.tag()
+
+public fn other_tally(i32[] xs) i32:
+    return xs.tally()
