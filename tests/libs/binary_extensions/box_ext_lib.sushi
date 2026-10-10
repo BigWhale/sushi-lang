@@ -7,28 +7,28 @@ public struct Pt:
 fn five() i32:
     return 5
 
-extend Box@(T) tag() i32:
+public extend Box@(T) tag() i32:
     return five()
 
-extend Box@(T) echo(nom T x) T:
+public extend Box@(T) echo(nom T x) T:
     return x
 
-extend Box@(i32) doubled() i32:
+public extend Box@(i32) doubled() i32:
     return self.item * 2
 
-extend Pt pick@(U: Clone)(U a) U:
+public extend Pt pick@(U: Clone)(U a) U:
     return a.clone()
 
 public error BoxError:
     Empty
 
-extend Box@(T) static wrap(nom T x) Box@(T):
+public extend Box@(T) static wrap(nom T x) Box@(T):
     return Box(x)
 
-extend Box@(i32) checked() i32 | BoxError:
+public extend Box@(i32) checked() i32 | BoxError:
     if (self.item == 0):
         return Result.Err(BoxError.Empty)
     return Result.Ok(self.item)
 
-extend Box@(T) put(poke self, nom T x) ~:
+public extend Box@(T) put(poke self, nom T x) ~:
     self.item := x

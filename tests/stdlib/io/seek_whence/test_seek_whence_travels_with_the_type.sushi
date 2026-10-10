@@ -1,0 +1,11 @@
+# SeekFrom.whence() is a public method of <io/contracts>, the home unit of SeekFrom, so
+# it travels with the type (R5 of docs/design/extension-visibility.md). This unit
+# receives a SeekFrom from another unit, imports no io module, and calls .whence().
+# EXPECT_STDOUT_EXACT: "0\n2\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/seek_origins"
+
+fn main() i32:
+    println(from_start().whence())
+    println(from_end().whence())
+    return 0

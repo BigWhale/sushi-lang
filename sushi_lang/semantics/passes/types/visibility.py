@@ -18,7 +18,10 @@ from sushi_lang.semantics.namespaces import (
 )
 from sushi_lang.semantics.typesys import EnumType, StructType
 from sushi_lang.semantics.visibility import (
+    EXTENSION_METHOD,
     DeclOrigin,
+    MethodReach,
+    extension_reach,
     origin_of,
     reject_private_cross_unit_use,
 )
@@ -26,8 +29,10 @@ from sushi_lang.semantics.visibility import (
 if TYPE_CHECKING:
     from . import TypeValidator
 
-__all__ = ["name_is_ambiguous", "name_is_contested", "out_of_scope_help",
-           "reject_ambiguous_name",
+__all__ = ["calling_unit", "extension_reaches", "name_is_ambiguous",
+           "name_is_contested", "out_of_scope_help",
+           "reject_ambiguous_extension", "reject_ambiguous_name",
+           "reject_unreachable_extension",
            "reject_out_of_scope_perk", "reject_out_of_scope_type",
            "reject_private_call", "reject_private_kept",
            "reject_private_kept_call", "reject_private_name",
@@ -323,3 +328,96 @@ def reject_private_type(validator: 'TypeValidator', name: str, loc: Any) -> bool
         if origin is not None:
             return _reject(validator, origin, loc)
     return False
+
+
+# --- Extension methods (`docs/design/extension-visibility.md`) -------------------------
+
+
+def calling_unit(validator: 'TypeValidator') -> Optional[str]:
+    """The unit whose code is being validated, for the method rule.
+
+    A copy of a compiled library's template is checked in a unit of the consumer and
+    reads the scope of the library unit that declares it (#1120). Its calls are that
+    unit's calls, so the scope says which unit asks.
+    """
+    unit = getattr(validator.scope, "unit", None)
+    return unit if unit is not None else validator.current_unit_name
+
+
+def extension_reaches(validator: 'TypeValidator', records: list, receiver_type: Any
+                      ) -> list[tuple[Any, MethodReach]]:
+    """What each extension record is to the unit being validated.
+
+    A transplanted library body may call its library's private methods, as it may call
+    its private functions (#468).
+    """
+    asker = calling_unit(validator)
+    escape = bool(getattr(validator, "in_library_body", False))
+    found = []
+    for record in records:
+        reach = extension_reach(validator.visibility, record, receiver_type, asker,
+                                validator.scope)
+        if reach is MethodReach.PRIVATE and escape:
+            reach = MethodReach.VISIBLE
+        found.append((record, reach))
+    return found
+
+
+def _method_name(receiver_type: Any, method_name: str) -> str:
+    from sushi_lang.semantics.generics.type_display import display_type
+    return f"{display_type(receiver_type)}.{method_name}"
+
+
+def _note_declared(validator: 'TypeValidator', diagnostic, record: Any, at: str):
+    """A note at a declaration, or a prose note where a record has no span: a compiled
+    library ships a signature and no source."""
+    if record.name_span is not None and record.filename is not None:
+        return diagnostic.note_at(at, record.name_span, record.filename)
+    tables = _unit_tables(validator) or {}
+    library = getattr(tables.get(record.unit_name), "library", None)
+    if library is not None:
+        return diagnostic.note(f"library '{library}' declares it")
+    return diagnostic.note(f"unit '{record.unit_name}' declares it")
+
+
+def reject_unreachable_extension(validator: 'TypeValidator', receiver_type: Any,
+                                 method_name: str,
+                                 reaches: list[tuple[Any, MethodReach]], loc: Any) -> None:
+    """Refuse a call of extension methods that this unit may not call.
+
+    A public method of a unit that this unit does not import is CE3022, and its help
+    names the import: that is the fault the user can correct here. Otherwise the method
+    is private to another unit, and that is CE3005.
+    """
+    name = _method_name(receiver_type, method_name)
+    for record, reach in reaches:
+        if reach is MethodReach.NOT_IMPORTED:
+            written = import_target(record.unit_name, tables=_unit_tables(validator))
+            diagnostic = er.emit_with(validator.reporter, er.ERR.CE3022, loc,
+                                      name=name, owner=record.unit_name)
+            _note_declared(validator, diagnostic, record, "declared here, with `public`") \
+                .help(f"add `use {written}` above the first declaration of this unit") \
+                .emit()
+            return
+    for record, reach in reaches:
+        if reach is MethodReach.PRIVATE:
+            reject_private_cross_unit_use(
+                validator.reporter,
+                DeclOrigin(kind=EXTENSION_METHOD, name=name, unit_name=record.unit_name,
+                           filename=record.filename, name_span=record.name_span,
+                           is_public=False),
+                loc, current_unit=calling_unit(validator))
+            return
+
+
+def reject_ambiguous_extension(validator: 'TypeValidator', receiver_type: Any,
+                               method_name: str, records: list, loc: Any) -> None:
+    """CE3023 at a call that two or more imported public extensions answer (C4)."""
+    diagnostic = er.emit_with(validator.reporter, er.ERR.CE3023, loc,
+                              name=_method_name(receiver_type, method_name))
+    for record in records:
+        diagnostic = _note_declared(validator, diagnostic, record,
+                                    f"unit '{record.unit_name}' declares it here")
+    diagnostic.help("a method call cannot name the unit it means: move the code that "
+                    "needs each method into a unit of its own, or rename one of the "
+                    "methods").emit()

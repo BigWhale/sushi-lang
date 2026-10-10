@@ -1,0 +1,11 @@
+# R6 through a `public use` chain: the bundle re-exports the unit that declares the
+# extensions, and this unit imports only the bundle.
+# EXPECT_STDOUT_EXACT: "42\n6\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_r6_bundle"
+
+fn main() i32:
+    println(21.twice_r6())
+    let i32[] xs = from([1, 2, 3])
+    println(xs.total())
+    return 0

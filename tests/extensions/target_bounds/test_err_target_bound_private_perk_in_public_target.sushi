@@ -1,5 +1,5 @@
-# A public target may not hand out a private perk in its bound (#1070): the leak rule of
-# a constraint, for an extension and for a perk implementation alike.
+# A public extension and a perk implementation on a public target may not hand out a
+# private perk in a bound (#1070): the leak rule of a constraint, for both alike.
 # EXPECT_ERROR_CODES_EXACT: CE3010, CE3010
 
 perk Loud:
@@ -11,7 +11,7 @@ public perk Show:
 public struct Crate@(T):
     T value
 
-extend Crate@(T: Loud) f() i32:
+public extend Crate@(T: Loud) f() i32:
     return 1
 
 extend Crate@(T: Loud) with Show:

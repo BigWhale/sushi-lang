@@ -67,17 +67,22 @@ def is_builtin_static(type_name: Optional[str], method: str) -> bool:
     return method in BUILTIN_STATICS.get(type_name, frozenset())
 
 
-def static_template(generic_extensions, base: str, method: str):
+def static_template(generic_extensions, base: str, method: str, order=None):
     """The generic-target TEMPLATE that declares `<base>.<method>` as a static, or None.
 
     A concrete-target static (`extend Box@(i32) static ...`) is not a template: it names
     no type parameter in its signature, so an argument can solve nothing from it and the
     stamp is its only source, as before #573.
+
+    Two units can each declare one (`docs/design/extension-visibility.md` C5). `order`
+    sorts them in the order the asking unit reads them (its own first, then the ones
+    it may call), and the first one answers.
     """
-    for declaration in generic_extensions.declarations(base, method):
-        if getattr(declaration, "is_static", False) and not declaration.target_key:
-            return declaration
-    return None
+    templates = [declaration for declaration in generic_extensions.declarations(base, method)
+                 if getattr(declaration, "is_static", False) and not declaration.target_key]
+    if order is not None:
+        templates = order(templates)
+    return templates[0] if templates else None
 
 
 def solve_target_type_args(template, arg_types, stamped_args):

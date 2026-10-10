@@ -962,7 +962,7 @@ A blue colour that carries the first code.
 - Parameter codes: The codes.
 - Returns: The colour.
 :##
-extend Colour static pick(i32[] codes) Colour dont_panic because "the caller passes a \\"non-empty\\" array":
+public extend Colour static pick(i32[] codes) Colour dont_panic because "the caller passes a \\"non-empty\\" array":
     return Colour.Blue("pick", codes[0])
 
 ##:
@@ -1035,7 +1035,7 @@ The first code.
 - Parameter codes: The codes.
 - Returns: The code.
 :##
-extend Crate@(T) first_code(i32[] codes) i32 dont_panic because "the caller passes a non-empty array":
+public extend Crate@(T) first_code(i32[] codes) i32 dont_panic because "the caller passes a non-empty array":
     return codes[0]
 
 ##: A crate of a hashable value has a name. :##
@@ -1082,9 +1082,11 @@ fn main() i32:
 # sixth and the seventh keep the `...` of a type pack (#1164), the eighth and the ninth
 # print the keyword `error` for a concrete and for a generic error type, the tenth is a
 # conversion, which the consumer calls through `??`, the next two put a bound in a
-# target (#1070), and the last four are `dont_panic` declarations with their reasons
-# (docs/design/dont-panic.md, D10), each after its unit: a function, a static, a generic
-# function and a method of a generic type.
+# target (#1070), the next two print the `public` marker of a static and of a template
+# that the consumer calls (docs/design/extension-visibility.md R9; the private
+# `clone_count` above prints none), and the last four are `dont_panic` declarations with
+# their reasons (docs/design/dont-panic.md, D10), each after its unit: a function, a
+# static, a generic function and a method of a generic type.
 REPORT_LINES = (
     "  fn both@(T: Hashable + Named)(T x) i32",
     "    Blue(string, i32)",
@@ -1098,6 +1100,8 @@ REPORT_LINES = (
     "  extend ReportFault as ReportWrap",
     "  extend Crate@(T: Clone) clone_count() i32",
     "  extend Crate@(T: Hashable) with Named:",
+    "  public extend Colour static pick(i32[] codes) Colour",
+    "  public extend Crate@(T) first_code(i32[] codes) i32",
     '  report_lib: head dont_panic because "the caller passes a non-empty array"',
     '  report_lib: Colour.pick dont_panic because "the caller passes a \\"non-empty\\" array"',
     '  report_lib: code_at dont_panic because "codes is as long as xs"',

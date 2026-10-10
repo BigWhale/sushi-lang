@@ -1,0 +1,18 @@
+# Public extensions on types that this unit does not declare: a built-in type, an
+# array type and the type of another unit.
+use "helpers/ev_r6_point"
+
+public extend i32 twice_r6() i32:
+    return self * 2
+
+public extend i32[] total() i32:
+    let i32 sum = 0
+    foreach(v in self.iter()):
+        sum := sum + v
+    return sum
+
+public extend Pt swapped() Pt:
+    return Pt(self.y, self.x)
+
+public fn bytes_marker() i32:
+    return 9

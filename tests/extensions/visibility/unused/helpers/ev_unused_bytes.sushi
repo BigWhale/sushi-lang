@@ -1,0 +1,9 @@
+# Public extensions on types that this unit does not declare (R6): an instance method
+# on a built-in type, and a static method on the type of another unit.
+use "helpers/ev_unused_vec"
+
+public extend i32 tripled_u() i32:
+    return self * 3
+
+public extend UVec static unit_y() UVec:
+    return UVec(0, 1)

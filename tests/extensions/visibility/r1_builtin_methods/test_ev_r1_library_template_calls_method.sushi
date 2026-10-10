@@ -1,0 +1,16 @@
+# R1 through a binary library: the library imports nothing, and its template calls
+# `.map()` of <collections/iter>. The consumer imports nothing and calls no method of
+# the module. The template is checked again in the consumer's build, and it finds
+# the method there too.
+# BUILD_LIB_BINARY: ev_r1_lib_counts.sushi
+# EXPECT_STDOUT_EXACT: "3\ntrue\n"
+# EXPECT_NO_LEAKS: true
+use <lib/ev_r1_lib_counts>
+
+fn bump(i32 x) i32:
+    return x + 1
+
+fn main() i32:
+    println(count_mapped(from([1, 2, 3]), bump))
+    println(digit(a'4'))
+    return 0

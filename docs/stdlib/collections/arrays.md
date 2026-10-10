@@ -13,13 +13,13 @@ let i32[5] fixed = [1, 2, 3, 4, 5]  # Fixed-size array
 let i32[] dynamic = from([1, 2, 3])  # Dynamic array
 ```
 
-The built-in array methods need no import. A string method in an example (for example
-`.upper()`) needs `use <collections/strings>` in the unit that calls it.
+The array methods need no import, and neither does a string method in an example (for
+example `.upper()`): every stdlib method on a built-in type is available in every unit.
 
-`.sort()`, `.sort_by()` and `.binary_search()` are not built in. They are extension methods
-on `T[]` in the module `<collections/sort>`, so a unit that calls them must
-`use <collections/sort>`, as `.map()` and `.filter()` need `<collections/iter>`. They do
-not reach a fixed array. See [Sorting](sort.md).
+`.sort()`, `.sort_by()` and `.binary_search()` are extension methods on `T[]` that the
+module `<collections/sort>` declares in Sushi source, as `.map()` and `.filter()` are in
+`<collections/iter>`. They need no import either. They do not reach a fixed array. See
+[Sorting](sort.md).
 
 ## Array Literals
 

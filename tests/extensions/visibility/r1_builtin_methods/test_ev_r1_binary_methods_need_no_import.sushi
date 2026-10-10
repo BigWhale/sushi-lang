@@ -1,0 +1,8 @@
+# R1 for <encoding/binary>, which declares its methods on `u8[]`, a built-in type.
+# EXPECT_STDOUT_EXACT: "513\n"
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let u8[] buf = from([])
+    buf.push_u16_be(0x0102)
+    println(buf.read_u16_le(0).realise(0))
+    return 0

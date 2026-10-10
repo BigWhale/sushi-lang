@@ -121,15 +121,20 @@ main.sushi:7:4: warning [CW1004]: private function 'helper' is never used in thi
 
 **[CW1004](error-catalog.md#cw1004)** is a private top-level declaration that nothing in its unit reaches. A private
 name is visible only in its own unit, so the lint checks each unit alone. The roots are
-every `public` declaration, every `extend` block (an extension method and a perk
-implementation), the `unsafe external` blocks, and `fn main()`. A private declaration that
+every `public` declaration, every perk implementation and every conversion, the
+`unsafe external` blocks, and `fn main()`. A private extension method (an instance method
+or a static method) is checked as a private function is, and the message names it
+`<type>.<method>`. A private declaration that
 only another dead declaration names is also dead, so the lint reports both. A public
 declaration is API, and the lint never reports it.
 
 **[CW3006](error-catalog.md#cw3006)** is a `use` line whose unit names nothing that the import brings. The import
-brings the names it declares or re-exports, the member names behind its alias, the
-extension and perk methods of the imported unit, and for `<collections/strings>` the
-string methods that the module enables. A `public use` re-exports to the importers of the
+brings the names it declares or re-exports, the member names behind its alias, and the
+public extension methods that the imported unit declares on a type that it does not
+declare (and the methods of its perk implementations on such a type). It brings no other
+method: a stdlib method on a built-in type needs no import, and a public method of the
+home unit of a type travels with the type. So an import of a stdlib module that only a
+method call reads is reported. A `public use` re-exports to the importers of the
 unit, so the lint never reports it. The lint does not report an import of a library.
 
 The lint does not check the units of a library, and it does not check the bundled stdlib

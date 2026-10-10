@@ -3,7 +3,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from sushi_lang.internals.report import Origin, Reporter, Span
 from sushi_lang.internals import errors as er
@@ -37,7 +37,12 @@ from sushi_lang.semantics.generics.types import (
 
 from sushi_lang.semantics.unit_symbols import UnitOwnedSymbols
 from sushi_lang.semantics.visibility import (
+    EXTENSION_METHOD,
+    ExtensionClaim,
     VisibilityTable,
+    extension_method_name,
+    extensions_collide,
+    home_unit_of,
     library_clash_origin,
     record_declaration,
     warn_shadowed_export,
@@ -415,6 +420,8 @@ class ExtensionMethod:
     # is what keeps the two callable shapes apart: an instance call may not reach a
     # static, and a type-name call may not reach an instance method.
     is_static: bool = False
+    # The `public` marker; the declaring unit is `unit_name`.
+    is_public: bool = False
     # A copy of a generic-target template: the template, and its target as written. One
     # written declaration is one fault, so a diagnostic groups the copies by these.
     template_id: Optional[TemplateId] = None
@@ -423,19 +430,53 @@ class ExtensionMethod:
 
 @dataclass
 class ExtensionTable:
-    """Table of extension methods organized by target type."""
-    by_type: Dict[Type, Dict[str, ExtensionMethod]] = field(default_factory=dict)
+    """Extension methods by target type, then by name: one record per declaring unit.
+
+    Two units may each declare one method name on one type
+    (`docs/design/extension-visibility.md` C5). Each unit calls its own, so the table
+    keeps both, and method resolution chooses through `visibility.extension_reach`.
+    """
+    by_type: Dict[Type, Dict[str, List[ExtensionMethod]]] = field(default_factory=dict)
 
     def add_method(self, method: ExtensionMethod) -> None:
-        """Add a method to the table, creating type entry if needed."""
-        if method.target_type is not None:
-            if method.target_type not in self.by_type:
-                self.by_type[method.target_type] = {}
-            self.by_type[method.target_type][method.name] = method
+        """File a method. A second record from the same unit replaces the first.
+
+        A call-site copy is filed again by each call that names it, and the collect pass
+        refuses a real duplicate of one unit (C1) before it files one.
+        """
+        if method.target_type is None:
+            return
+        records = self.by_type.setdefault(method.target_type, {}).setdefault(
+            method.name, [])
+        for index, record in enumerate(records):
+            if record.unit_name == method.unit_name:
+                records[index] = method
+                return
+        records.append(method)
+
+    def declarations(self, target_type: Type, method_name: str) -> List[ExtensionMethod]:
+        """Every declaration of one method name on one type, in the order they were filed."""
+        return list(self.by_type.get(target_type, {}).get(method_name, ()))
 
     def get_method(self, target_type: Type, method_name: str) -> Optional[ExtensionMethod]:
-        """Get a specific extension method."""
-        return self.by_type.get(target_type, {}).get(method_name)
+        """The first declaration of one method name on one type, or None.
+
+        It answers whether ANY unit declares the method. A call reads
+        `resolve_extension_method`, which chooses the one the calling unit may call.
+        """
+        records = self.by_type.get(target_type, {}).get(method_name)
+        return records[0] if records else None
+
+    def first_by_name(self, target_type: Type) -> Dict[str, ExtensionMethod]:
+        """The first declaration of each method name on one type."""
+        return {name: records[0]
+                for name, records in self.by_type.get(target_type, {}).items() if records}
+
+    def records(self) -> Iterator[ExtensionMethod]:
+        """Every record of the table."""
+        for methods in self.by_type.values():
+            for records in methods.values():
+                yield from records
 
 
 @dataclass
@@ -462,6 +503,7 @@ class GenericExtensionMethod:
     # `type_params`, whose CE0096 strict zip stays untouched. Solved at the call site.
     method_type_params: Tuple[BoundedTypeParam, ...] = ()
     is_static: bool = False          # no receiver, called on the type name (#542)
+    is_public: bool = False          # the `public` marker; the declaring unit is `unit_name`
     # The declaration as written. A copy is this node with its types substituted, so a
     # field the record does not spell is not lost (#803).
     decl: Optional[ExtendDef] = None
@@ -474,16 +516,22 @@ class GenericExtensionMethod:
         return tuple(tp.name for tp in self.method_type_params)
 
 
+# The key of one template under its base: the method name, the target key, and the
+# declaring unit.
+TemplateKey = Tuple[str, str, Optional[str]]
+
+
 @dataclass
 class GenericExtensionTable(RefusalRecord):
-    """Generic extension methods by base type name, then by (method, target key).
+    """Generic extension methods by base type name, then by (method, target key, unit).
 
     The target key is what makes `extend Box@(i32)` and `extend Box@(string)` two methods
     rather than one template declared twice (#393). Keying on the method name alone had
     nowhere to put the arguments, so the second declaration was a duplicate function and the
-    message elided the target as `Box@(...)`.
+    message elided the target as `Box@(...)`. The unit is what lets two units each declare
+    a private template of one name (`docs/design/extension-visibility.md` C5).
     """
-    by_type: Dict[str, Dict[Tuple[str, str], GenericExtensionMethod]] = field(default_factory=dict)
+    by_type: Dict[str, Dict[TemplateKey, GenericExtensionMethod]] = field(default_factory=dict)
 
     # The record of each written declaration, by the identity of its node (#1070): the
     # template check starts from the `ExtendDef` it walks.
@@ -492,7 +540,7 @@ class GenericExtensionTable(RefusalRecord):
     def add_method(self, method: GenericExtensionMethod) -> None:
         """Add a generic extension method to the table."""
         methods = self.by_type.setdefault(method.base_type_name, {})
-        methods[(method.name, method.target_key)] = method
+        methods[(method.name, method.target_key, method.unit_name)] = method
         if method.decl is not None:
             self._by_decl[id(method.decl)] = method
 
@@ -502,23 +550,33 @@ class GenericExtensionTable(RefusalRecord):
         return record if record is not None and record.decl is decl else None
 
     def declarations(self, base_type_name: str, method_name: str) -> List[GenericExtensionMethod]:
-        """Every declaration of one method name on one base type."""
+        """Every declaration of one method name on one base type, of every unit."""
         return [
-            method for (name, _key), method in self.by_type.get(base_type_name, {}).items()
+            method for (name, _key, _unit), method
+            in self.by_type.get(base_type_name, {}).items()
             if name == method_name
         ]
 
+    def applicable(self, base_type_name: str, method_name: str,
+                   instantiation: str) -> List[GenericExtensionMethod]:
+        """The declarations that apply to one instantiation of the base type.
+
+        A concrete target applies to its own instantiation; a template applies to all.
+        In one unit the two cannot coexist for one method name -- that overlap is
+        CE0101 -- so each unit gives at most one. Two units can each give one (C5).
+        """
+        return [method for method in self.declarations(base_type_name, method_name)
+                if method.target_key in ("", instantiation)]
+
     def find_applicable(self, base_type_name: str, method_name: str,
                         instantiation: str) -> Optional[GenericExtensionMethod]:
-        """The declaration that applies to one instantiation of the base type.
+        """The first declaration that applies to one instantiation, or None.
 
-        A concrete target applies to its own instantiation; a template applies to all. The
-        two cannot coexist for one method name -- that overlap is CE0101 -- so at most one
-        declaration answers.
+        It answers whether ANY unit declares one. A call chooses among `applicable`
+        through the visibility of the calling unit.
         """
-        methods = self.by_type.get(base_type_name, {})
-        return (methods.get((method_name, instantiation))
-                or methods.get((method_name, "")))
+        found = self.applicable(base_type_name, method_name, instantiation)
+        return found[0] if found else None
 
 
 
@@ -997,6 +1055,11 @@ class FunctionCollector:
         if header is None:
             return
 
+        if ext.target_type is not None:
+            record_declaration(
+                self.visibility, EXTENSION_METHOD, ext,
+                unit_name=self.current_unit_name, filename=self.current_unit_file,
+                name=extension_method_name(display_type(ext.target_type), ext.name))
         check_dont_panic(self, ext)
         self._reject_signature_faults(header)
         if reject_misplaced_expands(self.r, header.body, frozenset(), header.name_span):
@@ -1195,13 +1258,15 @@ class FunctionCollector:
             return None
 
         for existing in self.generic_extensions.declarations(ARRAY_BASE_KEY, h.name):
+            if not self._collides(target_type, existing, h):
+                continue
             self._emit_duplicate_extension(
                 f"extension method '{h.name}' for an array target",
                 h.name_span, existing.unit_name, existing.name_span,
                 existing.filename)
             return None
 
-        concrete = self._concrete_array_extension(h.name)
+        concrete = self._concrete_array_extension(h)
         if concrete is not None:
             self._emit_overlapping_extension(
                 f"extension method '{h.name}' for '{display_type(target_type)}'",
@@ -1230,6 +1295,8 @@ class FunctionCollector:
         if isinstance(resolved_type, DynamicArrayType):
             from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
             for template in self.generic_extensions.declarations(ARRAY_BASE_KEY, h.name):
+                if not self._collides(resolved_type, template, h):
+                    continue
                 self._emit_overlapping_extension(
                     f"extension method '{h.name}' for '{display_type(resolved_type)}'",
                     h.name_span, template.name_span, template.filename)
@@ -1242,15 +1309,7 @@ class FunctionCollector:
         if not isinstance(resolved_type, CONCRETE_EXTENSION_TARGETS):
             return
 
-        existing = self.extensions.get_method(resolved_type, h.name)
-        if existing is not None:
-            self._emit_duplicate_extension(
-                f"extension method '{h.name}' for '{display_type(resolved_type)}'",
-                h.name_span, existing.unit_name, existing.name_span,
-                existing.filename)
-            return
-
-        self.extensions.add_method(ExtensionMethod(
+        record = ExtensionMethod(
             target_type=resolved_type,
             name=h.name,
             loc=h.ext.loc,
@@ -1265,7 +1324,17 @@ class FunctionCollector:
             err_type=h.err_ty,
             err_span=h.err_span,
             is_static=h.is_static,
-        ))
+            is_public=h.ext.is_public,
+        )
+        for existing in self.extensions.declarations(resolved_type, h.name):
+            if extensions_collide(self.visibility, resolved_type, existing, record):
+                self._emit_duplicate_extension(
+                    f"extension method '{h.name}' for '{display_type(resolved_type)}'",
+                    h.name_span, existing.unit_name, existing.name_span,
+                    existing.filename,
+                    home=home_unit_of(self.visibility, resolved_type))
+                return
+        self.extensions.add_method(record)
 
     def _collect_method_generic(self, h: '_ExtensionHeader',
                                 resolved_type: Type) -> None:
@@ -1279,6 +1348,8 @@ class FunctionCollector:
         base = display_type(resolved_type)
 
         for existing in self.generic_extensions.declarations(base, h.name):
+            if not self._collides(resolved_type, existing, h):
+                continue
             self._emit_duplicate_extension(
                 f"extension method '{h.name}' for '{base}'",
                 h.name_span, existing.unit_name, existing.name_span,
@@ -1327,6 +1398,7 @@ class FunctionCollector:
             err_span=h.err_span,
             method_type_params=h.method_type_params,
             is_static=h.is_static,
+            is_public=h.ext.is_public,
             decl=h.ext,
             target_bounds=target_bounds,
         )
@@ -1360,13 +1432,17 @@ class FunctionCollector:
 
     def _emit_duplicate_extension(self, name_text, name_span: Optional[Span],
                                   other_unit, other_span: Optional[Span],
-                                  other_filename) -> None:
+                                  other_filename, *, home: Optional[str] = None) -> None:
         """CE0101 for a second extension of one method name on one target.
 
         One unit wrote both: the second is the duplicate, and the note points
         at the first. Two units wrote them: neither author is at fault and a
         consumer can edit neither, so the diagnostic is relational -- it names
         both units and it blames no side (`unit-namespaces.md` section 8).
+
+        `home` is the home unit of the target type. When one of the two is a public
+        method of the home unit, it is visible wherever the type is (C2), and the help
+        says so.
         """
         diag = er.emit_with(self.r, ERR.CE0101, name_span,
                             filename=self.current_unit_file, name=name_text)
@@ -1378,9 +1454,13 @@ class FunctionCollector:
             if name_span is not None:
                 diag.note_at(f"unit '{self.current_unit_name}' declares it here",
                              name_span, self.current_unit_file)
-            diag.help("a method is found on the receiver's type, so no alias "
-                      "can choose between the two; rename one of them, or put "
-                      "the method behind a perk")
+            if home is not None:
+                diag.help(f"unit '{home}' declares the type, so its public method is "
+                          "visible wherever a value of the type is; rename one of them")
+            else:
+                diag.help("a method is found on the receiver's type, so no alias "
+                          "can choose between the two; rename one of them, or put "
+                          "the method behind a perk")
         elif other_span is not None:
             diag.note_at("first defined here", other_span, other_filename)
         diag.emit()
@@ -1398,22 +1478,37 @@ class FunctionCollector:
                   "implementation outranks an extension method by design.")
         diag.emit()
 
-    def _concrete_array_extension(self, name: str) -> Optional[ExtensionMethod]:
-        """An extension method of this name on one concrete dynamic-array type, if any.
+    def _concrete_array_extension(self, h: '_ExtensionHeader') -> Optional[Any]:
+        """An extension method of this name on one concrete dynamic-array type, if any,
+        that the array template `h` collides with (`_collides`).
 
         A method-generic one (`extend i32[] pick@(U)`) is filed under the receiver's
         display name in the generic table, with the receiver kept on its declaration.
         """
-        for target, methods in self.extensions.by_type.items():
-            if isinstance(target, DynamicArrayType) and name in methods:
-                return methods[name]
+        for target in self.extensions.by_type:
+            if not isinstance(target, DynamicArrayType):
+                continue
+            for found in self.extensions.declarations(target, h.name):
+                if self._collides(target, found, h):
+                    return found
         for methods in self.generic_extensions.by_type.values():
-            for (method_name, _key), method in methods.items():
-                if (method_name == name and method.decl is not None
+            for (method_name, _key, _unit), method in methods.items():
+                if (method_name == h.name and method.decl is not None
                         and not method.type_params
-                        and isinstance(method.decl.target_type, DynamicArrayType)):
+                        and isinstance(method.decl.target_type, DynamicArrayType)
+                        and self._collides(method.decl.target_type, method, h)):
                     return method
         return None
+
+    def _collides(self, target: Any, existing: Any, h: '_ExtensionHeader') -> bool:
+        """Can the declaration `h` of this unit not stand beside `existing`?
+
+        The one rule of `visibility.extensions_collide`: one unit (C1), or a public
+        method of the home unit of the target (C2). Two units can each declare a method
+        of one name on one type otherwise (C5).
+        """
+        return extensions_collide(self.visibility, target, existing,
+                                  ExtensionClaim(self.current_unit_name, h.ext.is_public))
 
     def _reject_overlapping_target(self, method: GenericExtensionMethod,
                                    target_type: GenericTypeRef,
@@ -1426,8 +1521,14 @@ class FunctionCollector:
         specialization, whether the template's body is dead code would depend on which
         instantiations exist ELSEWHERE in the program, and `docs/design/method-resolution.md`
         rules that an unreachable declaration is a diagnostic.
+
+        The rule is per declaring unit (`visibility.extensions_collide`): a declaration of
+        another unit coexists (C5), unless one of the two is a public method of the home
+        unit of the base (C2).
         """
         for existing in self.generic_extensions.declarations(method.base_type_name, method.name):
+            if not extensions_collide(self.visibility, target_type, existing, method):
+                continue
             same_target = existing.target_key == method.target_key
             if not same_target and existing.target_key and method.target_key:
                 continue  # two distinct concrete targets: two types, two methods

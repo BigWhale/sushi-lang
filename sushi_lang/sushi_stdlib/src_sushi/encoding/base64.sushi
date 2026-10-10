@@ -4,7 +4,6 @@ encoding/base64 -- Base64 text of bytes and back, opt in with `use <encoding/bas
 The alphabet is the standard one of RFC 4648 section 4 (`A`-`Z`, `a`-`z`, `0`-`9`, `+`,
 `/`), with `=` padding. `encode` always pads, and `decode` requires the padding.
 :##
-use <collections/strings>
 
 ##: The alphabet of RFC 4648 section 4, in the order of the values. :##
 const string ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"

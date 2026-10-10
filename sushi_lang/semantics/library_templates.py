@@ -325,10 +325,13 @@ def serialize_extension(ext: "ExtendDef") -> dict:
 
     The body is in the bitcode, so the record carries no source. The consumer builds
     the method from the signature and declares the symbol that the library defines.
+    `public` is the marker: the consumer applies R4 to R6 of
+    `docs/design/extension-visibility.md` to the record and to the unit it names.
     """
     return with_doc(method_receiver_record({
         "type": type_string(ext.target_type),
         "name": ext.name,
+        "public": ext.is_public,
         **signature_record(ext),
     }, ext), ext)
 

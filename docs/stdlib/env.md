@@ -274,7 +274,6 @@ An empty name, or a name that contains `=`, causes `setenv` to return
 
 ```sushi
 use <sys/env>
-use <collections/strings>
 
 struct Config:
     string host

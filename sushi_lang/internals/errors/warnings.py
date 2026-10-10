@@ -52,7 +52,7 @@ _add(ErrorMessage("CW1002", Severity.WARNING,
 
 _add(ErrorMessage("CW1004", Severity.WARNING,
     "private {kind} '{name}' is never used in this unit", Category.SCOPE,
-    "Behind `--warn-unused`, off by default. A private declaration is visible only in its own unit, so the unit is the whole question: the declaration is dead when nothing reachable from a ROOT of the unit names it. The roots are every `public` declaration, every `extend` block (an extension method and a perk implementation alike, because a call reaches it through a receiver and not through a name), the `unsafe external` blocks, and `fn main()`. A private declaration named only by another dead one is dead too, so both are reported. A bundled stdlib unit is checked only when the test runner sets SUSHI_STDLIB_DEAD_GATE; a library unit never is. Delete the declaration, or make it `public` when it is API."))
+    "Behind `--warn-unused`, off by default. A private declaration is visible only in its own unit, so the unit is the whole question: the declaration is dead when nothing reachable from a ROOT of the unit names it. The roots are every `public` declaration, every perk implementation and every conversion (no call names them: a perk implementation is global, and a conversion runs at `??` and `as`), the `unsafe external` blocks, and `fn main()`. A private extension method, an instance method or a static method, is checked as a private function is: only its own unit can call it (docs/design/extension-visibility.md R4), so it is dead when no live declaration of the unit calls it. A private declaration named only by another dead one is dead too, so both are reported. A bundled stdlib unit is checked only when the test runner sets SUSHI_STDLIB_DEAD_GATE; a library unit never is. Delete the declaration, or make it `public` when it is API."))
 
 # Unit/module warnings
 _add(ErrorMessage("CW3001", Severity.WARNING,
@@ -67,22 +67,12 @@ _add(ErrorMessage("CW3002", Severity.WARNING,
     "'{name}' shadows the {kind} '{owner}' exports", Category.UNIT,
     "A program's own declaration takes priority over a name that a library of any kind (source, binary or hybrid) or a bundled stdlib module exports, and that is legal: a private function is emitted with internal linkage, so the two are separate symbols. The consumer's call binds to the consumer's declaration, the library's own body keeps calling its own, and both declarations being public is no longer a clash at all -- CE3003 retired, and an unqualified name with two candidates is CE3012 at the use. It warns because shadowing an export is rarely intended, and because the reader of the call site cannot see which of the two answers it. Rename your declaration, or keep it and accept that the library's body is unaffected. A name the library declares privately is shadowed the same way and says nothing, because each declaration carries the unit that declared it; a library TYPE is still one name for the program (CE3011). Write `use <lib/name> as alias` to put the export behind a dot and take the shadow away. The reason is the same for each library kind, so the warning is too (#1103): a source library's export is found in its unit, a binary or hybrid library's export in its manifest, which lists every public function and template."))
 
-_add(ErrorMessage("CW3003", Severity.WARNING,
-    "this library extends '{type}', a type it does not declare", Category.UNIT,
-    "The warning fires at `--lib` build time and nowhere else: shipping is when the "
-    "claim becomes other people's problem, and it is the moment the author is present. "
-    "A method is found on the receiver's type, so an extension puts its method name on "
-    "the type for every consumer of the library, and a second library that claims the "
-    "same name on the same type makes the two unusable together -- CE0101, at a "
-    "consumer who can edit neither. A builtin target is not exempt: `i32` is the most "
-    "collidable target of all, because every unit of every program can reach it. A perk "
-    "implementation does not warn, because the consumer's own implementation is the "
-    "sanctioned override, so that claim has an escape. A conversion (`extend IoError as "
-    "LibError:`) does not warn either: it puts no method name on its source, and only the "
-    "unit that declares the target may declare it. An extension inside an ordinary "
-    "program stays silent, `extend i32 squared()` is idiomatic Sushi there. To ship the "
-    "method without the claim, declare your own wrapper type and extend that; to accept "
-    "the claim, publish it -- `--lib-info` lists it under 'Foreign Extensions'."))
+# CW3003 ("this library extends '{type}', a type it does not declare") was RETIRED by
+# epic #1251. It warned at `--lib` build time that an extension on a type the library
+# does not declare put its method name on that type for every consumer. Under R6 of
+# `docs/design/extension-visibility.md`, such an extension is visible only in the units
+# that import its unit, and a private one only in its own unit, so the claim does not
+# exist any more. The `foreign_extensions` key of the manifest went with it.
 
 _add(ErrorMessage("CW3506", Severity.WARNING,
     "library perk implementation for '{type}' could not be loaded and was skipped",
@@ -153,12 +143,16 @@ _add(ErrorMessage("CW5001", Severity.WARNING,
 
 _add(ErrorMessage("CW3004", Severity.WARNING,
     "'{alias}' binds an empty namespace", Category.UNIT,
-    "The import brought no name that a qualified form could reach, so the `as` clause does nothing. It is a warning and not an error because a namespace is empty for three reasons and only one of them is a mistake: a method interface such as `<io/stdio>` can never bring a name; a unit that is nothing but `extend` blocks exports methods rather than names, and is load-bearing anyway; and a public surface that happens to be empty today is one declaration away from changing. Refusing the first two would refuse a good import for a redundant clause, and refusing the third would make an error appear and disappear as a library grew. The import still did its work. Drop the `as`."))
+    "The import brought no name that a qualified form could reach, so the `as` clause does nothing. Example: `<text/ascii>` declares only methods on `u8`, so `use <text/ascii> as ascii` binds an empty namespace. It is a warning and not an error because a namespace is empty for three reasons and only one of them is a mistake: a directory import such as `<collections>` brings no name; a unit of the program that is nothing but `extend` blocks exports methods rather than names, and an import of it still brings its public extensions on types that it does not declare, with or without `as`, because a method cannot stand behind a namespace dot (R6 of docs/design/extension-visibility.md); and a public surface that happens to be empty today is one declaration away from changing. Refusing the first two would refuse a good import for a redundant clause, and refusing the third would make an error appear and disappear as a library grew. A stdlib import brings no method (R2): a stdlib method on a built-in type needs no import. Drop the `as`."))
+
+_add(ErrorMessage("CW3007", Severity.WARNING,
+    "'{name}' hides the public extension method that '{owner}' declares", Category.UNIT,
+    "This unit declares an extension method, and it imports a unit that declares a public extension method of the same name on the same type (C3 of `docs/design/extension-visibility.md`). That is legal. A call in this unit calls the method of this unit, as a unit's own declaration wins over an imported name, and the other unit keeps calling its own. It is a warning because a reader of a call cannot see which of the two methods answers it. The model is CW3002, a declaration that shadows a library export. Rename the method of this unit to call the imported one, or keep it."))
 
 _add(ErrorMessage("CW3006", Severity.WARNING,
     "'{import_}' brings nothing this unit names", Category.UNIT,
-    "Behind `--warn-unused`, off by default. The unit writes no name the import brings: no function, constant, type or perk it declares or re-exports, no member behind its alias, no extension or perk method it declares, and for `<collections/strings>` no string method the module enables (the per-unit rule CE3015 reads). A `public use` re-exports to the unit's own importers and is never reported, and neither is an import of a library. Delete the line."))
+    "Behind `--warn-unused`, off by default. The unit writes no name the import brings: no function, constant, type or perk it declares or re-exports, no member behind its alias, and no public extension method that it declares on a type that it does not declare (R6 of docs/design/extension-visibility.md: only an import brings such a method, flat or aliased), and no method of a perk implementation that it declares on such a type (the implementation is global, but the import can be what loads it). An import brings no other method: a stdlib method on a built-in type needs no import (R1, R2), and a public method of the home unit of a type travels with the type (R5). A unit that imports a stdlib module only to call its methods gets this warning. A `public use` re-exports to the unit's own importers and is never reported, and neither is an import of a library. Delete the line."))
 
 _add(ErrorMessage("CW3005", Severity.WARNING,
     "`public use` of '{origin}' re-exports nothing", Category.UNIT,
-    "The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. It is a warning and not an error for the reasons CW3004 gives an empty alias: a method interface such as the directory import `<collections>` brings no name and never will (a `public use` of one still opens its methods to the importers), a unit of nothing but `extend` blocks exports methods rather than names, and an empty public surface is one declaration away from changing. The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something."))
+    "The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. It is a warning and not an error for the reasons CW3004 gives an empty alias: a directory import such as `<collections>` brings no name and never will, a unit of nothing but `extend` blocks exports methods rather than names (a `public use` of it still brings its public extensions on types that it does not declare to the importers, R6 of docs/design/extension-visibility.md), and an empty public surface is one declaration away from changing. The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something."))

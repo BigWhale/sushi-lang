@@ -1,0 +1,14 @@
+# The home unit of `Vec2`: a private static and a public static.
+public struct Vec2:
+    i32 x
+    i32 y
+
+extend Vec2 static hidden_origin() Vec2:
+    return Vec2(0, 0)
+
+public extend Vec2 static at(i32 x, i32 y) Vec2:
+    return Vec2(x, y)
+
+public fn origin_sum() i32:
+    let Vec2 o = Vec2.hidden_origin()
+    return o.x + o.y

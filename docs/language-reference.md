@@ -494,8 +494,6 @@ fn function_name(param1_type param1_name, param2_type param2_name) return_type:
 **Example:**
 
 ```sushi
-use <collections/strings>
-
 fn parse_age(string text) i32 | StdError:
     if (text.is_empty()):
         return Result.Err(StdError.Error)
@@ -1353,8 +1351,6 @@ consume -- a run has one value and N slots, so it has no single position to take
 ownership into. The source stays yours:
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     let string towel = "mostly harmless".upper()
     let string[3] t = [towel; 3]
@@ -1491,8 +1487,6 @@ else changes: `get(i)` still answers a `Maybe`, `insert(i, v)` still checks its 
 
 <!-- docs-sweep: error CE0152 -->
 ```sushi
-use <collections/strings>
-
 fn contains_naive(string hay, string needle) bool dont_panic because "i + m <= n and j < m hold i + j < n":
     let i32 n = hay.size()
     let i32 m = needle.size()
@@ -1806,7 +1800,6 @@ destructure, a `match` with a tuple pattern, or a `foreach`:
 
 ```sushi
 use <math>
-use <collections/strings>
 use <collections/hashmap>
 
 fn main() i32:
@@ -2768,8 +2761,56 @@ arguments.
   receiver: `T` is `i32[]` for an `i32[][]`.
 - A function type is not a target ([`CE2110`](error-catalog.md#ce2110)).
 
-A built-in method wins over an extension method: an extension method with the name of a
-built-in method of its target is [`CE2097`](error-catalog.md#ce2097). The design record is
+**Visibility.** An extension method is private to its unit. `public` before `extend` exports
+it, as `public` before `fn` exports a function. Who can call it:
+
+| Extension | Where it can be called |
+|---|---|
+| a method of a built-in type that the stdlib declares (`s.len()`, `s.lines()`, `xs.map(f)`, `b.is_ascii_digit()`) | in every unit, with no import |
+| `extend T name(...)`, no marker | only in its own unit ([`CE3005`](error-catalog.md#ce3005) elsewhere) |
+| `public extend T name(...)`, and the unit declares `T` | wherever there is a value of `T`, with no import: the method travels with the type |
+| `public extend T name(...)`, and the unit does not declare `T` (a built-in type, an array, the type of another unit) | in its own unit, and in each unit that imports it with `use`, with `use ... as`, or through a `public use` chain ([`CE3022`](error-catalog.md#ce3022) elsewhere, with a help that names the import) |
+
+A static method follows the same rules. A stdlib import brings names, never methods: the
+methods of a built-in type need no `use`, and a stdlib type such as `File` brings its
+public methods with it. An aliased import brings the public extensions of its unit too,
+because a method cannot stand behind a namespace dot.
+
+```sushi
+public struct Vec:
+    i32 x
+    i32 y
+
+public extend Vec length_sq() i32:      # travels with Vec
+    return self.x * self.x + self.y * self.y
+
+extend i32 twice() i32:                 # this unit only
+    return self * 2
+
+fn main() i32:
+    let Vec v = Vec(3, 4)
+    println("{v.length_sq()} {21.twice()}")         # 25 42
+    return 0
+```
+
+**Collisions.** A method name on one type has one home:
+
+- Two extensions of one name on one type in one unit are [`CE0101`](error-catalog.md#ce0101).
+- An extension with the name of a method that is visible everywhere is refused at its
+  declaration: a built-in or stdlib method of its target is
+  [`CE2097`](error-catalog.md#ce2097), a public method of the home unit of the type is
+  [`CE0101`](error-catalog.md#ce0101), and a method of a perk implementation on the type is
+  [`CE4007`](error-catalog.md#ce4007). A new stdlib method on a built-in type can thus
+  refuse an extension that compiled before.
+- A unit's own extension wins over an imported public one of the same name on the same
+  type, with the warning [`CW3007`](error-catalog.md#cw3007) at the own declaration.
+- Two imported public extensions of one name on one type, and no own one, are
+  [`CE3023`](error-catalog.md#ce3023) at the call. There is no qualified method call, so
+  split the unit.
+- Two private extensions of one name on one type in two units are legal. Each unit calls
+  its own.
+
+The design record is `docs/design/extension-visibility.md`. The combinators design is
 `docs/design/ufcs-combinators.md`, and the resolution order is
 `docs/design/method-resolution.md`.
 
@@ -2801,8 +2842,9 @@ never both. A local of the same name wins over the type.
 
 Everything but the receiver is as on an instance method. The parameters take the ordinary four modes
 and BORROW unless marked `nom`; an owning return belongs to the caller; `| E` opts into
-the error channel exactly as on an instance method; and the declaration carries no
-visibility marker, because a static is as visible as its target type.
+the error channel exactly as on an instance method; and the visibility rules are the
+same: a static is private to its unit unless it says `public extend T static ...`, and a
+public static travels with its type when its unit declares the type.
 
 `new` is a legal static name — `extend Box static new(i32 n) Box:` — which a free
 function cannot have ([`CE6001`](error-catalog.md#ce6001)).
@@ -3342,10 +3384,21 @@ that imports the aliasing unit does not see it.
 aliases for one import are legal and both work.
 
 **An empty namespace warns.** An import that brings no name a qualified form can reach
-makes its `as` clause useless: `use <collections/strings> as s` adds methods on `string`
-and declares no name, so it is [`CW3004`](error-catalog.md#cw3004), a warning. The import still does its work. A module
-that declares names binds them as usual: behind `use <io/fs> as io`, `io.open(...)`,
-`io.FileMode.Write()` and `io.File` all work.
+makes its `as` clause useless, and it is [`CW3004`](error-catalog.md#cw3004), a warning:
+
+```sushi
+use <text/ascii> as ascii           # CW3004: the module declares only methods on u8
+
+fn main() i32:
+    println(a'7'.is_ascii_digit())  # true: a method of a built-in type needs no import
+    return 0
+```
+
+An import of a unit of the program that holds only `extend` blocks can still do its
+work: it brings the public extensions of that unit on types that the unit does not
+declare, with or without `as`, because a method cannot stand behind a dot. Only the `as`
+is useless then. A module that declares names binds them as usual: behind
+`use <io/fs> as io`, `io.open(...)`, `io.FileMode.Write()` and `io.File` all work.
 
 A namespace holds a unit's declarations **whatever their visibility**, so naming a
 private one through the dot is [`CE3005`](error-catalog.md#ce3005) -- "not yours", never "no such name".
@@ -3354,9 +3407,9 @@ The full design is `docs/design/unit-namespaces.md`.
 
 ### Visibility
 
-**Private is the default.** Six declarations carry the marker -- `fn`, `const`, `var`,
-`struct`, `enum` and `perk` -- and each is private to the unit that declares it unless it says
-`public`. Naming another unit's private declaration is [`CE3005`](error-catalog.md#ce3005). A generic function is no
+**Private is the default.** Seven declarations carry the marker -- `fn`, `const`, `var`,
+`struct`, `enum`, `perk` and an extension method (`extend T name(...)`, a static
+included) -- and each is private to the unit that declares it unless it says `public`. Naming another unit's private declaration is [`CE3005`](error-catalog.md#ce3005). A generic function is no
 exception.
 
 ```sushi
@@ -3384,20 +3437,26 @@ fn private_helper() i32:
 An **enum variant** carries no marker: it is as visible as its enum, because a private
 variant would make a total `match` unwritable across a unit boundary.
 
-An **extension** and a **perk implementation** carry no marker either. Each is exactly as
-visible as the type it is attached to, so `extend Point doubled()` is public because
-`Point` is, and `extend Cursor step()` is unreachable elsewhere because `Cursor` is not.
-Writing `public` on an implementation method is [`CE6103`](error-catalog.md#ce6103).
+An **extension method** carries its own marker (see [Extension Methods](#extension-methods)):
+`extend Point doubled()` is private to its unit, and `public extend Point doubled()`
+travels with `Point` when the unit declares `Point`. A public extension on a type that the
+unit does not declare comes with an import of the unit.
+
+A **perk implementation** and a **conversion** carry no marker. A perk implementation is
+global, one for each pair of type and perk, and a conversion is as visible as its target
+type. `public` before `extend T with P:` or `extend A as B:` is a parse error
+([`CE6001`](error-catalog.md#ce6001)), and `public` on an implementation method is
+[`CE6103`](error-catalog.md#ce6103).
 
 A **private perk** hides the CONTRACT, not the method. Another unit may not implement it
 (`extend X with Loud`) and may not constrain a type parameter with it (`@(T: Loud)`) --
 both are [`CE4011`](error-catalog.md#ce4011) -- but a method it provides stays callable on any type you publish,
-because method resolution is keyed on the receiver and blind to the caller.
+because a perk implementation is global.
 
 **A public thing may not hand out a private one.** A public signature that names a private
 type is [`CE3009`](error-catalog.md#ce3009), and a public constraint that names a private perk is [`CE3010`](error-catalog.md#ce3010). The rule
-covers a return, an error arm, a parameter, a constant's type, a public struct's field and
-a public enum's variant payload -- privacy on a type is worth nothing if a signature hands
+covers a return, an error arm, a parameter, a constant's type, a public struct's field,
+a public enum's variant payload and the target type of a public extension -- privacy on a type is worth nothing if a signature hands
 the type out anyway.
 
 The full design, with the reasoning for each ruling, is `docs/design/visibility.md`.
@@ -3410,9 +3469,16 @@ Import stdlib modules with `use`:
 # List@(T) is built-in (no import needed)
 # HashMap requires explicit import:
 use <collections/hashmap>
-use <collections/strings> # String utilities
+use <collections/strings> # StringBuilder
 use <io/fs>           # File, open() and the console handles
 ```
+
+An import brings NAMES: functions, constants, types and perks. It never brings a method.
+Every stdlib method on a built-in type (`s.len()`, `s.lines()`, `xs.map(f)`,
+`xs.sort()`, `b.is_ascii_digit()`) is available in every unit with no import, and a
+stdlib type such as `File` or `HashMap@(K, V)` brings its public methods with it: a unit
+that receives a value of the type calls them with no import. The type NAME and its static
+methods (`HashMap.new()`) still need the import.
 
 ## Comments
 
@@ -3593,8 +3659,6 @@ fn main() i32:
 Use single-quote strings for string arguments inside interpolation expressions:
 
 ```sushi
-use <collections/strings>
-
 let string text = "hello"
 let string[] parts = from(["a", "b"])
 println("{text.pad_left(10, '*')}")       # Padding character

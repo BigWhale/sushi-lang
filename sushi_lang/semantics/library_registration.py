@@ -29,7 +29,8 @@ from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.passes.collect.dont_panic import MarkerGate, judge_marker
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
 from sushi_lang.semantics.visibility import (
-    TYPE_KINDS, DeclOrigin, reject_library_clash, warn_shadowed_export)
+    TYPE_KINDS, DeclOrigin, ExtensionClaim, extensions_collide, reject_library_clash,
+    warn_shadowed_export)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef, Program
@@ -865,13 +866,16 @@ class LibraryRegistration:
         """Register the CONCRETE extension methods the libraries ship.
 
         A record is a signature, because the body is in the library's bitcode: the
-        method enters the extension table, and its declaration goes to the backend,
-        which declares the symbol and never defines it. The types are read against a
+        method enters the extension table with its marker and its unit, and its
+        declaration goes to the backend, which declares the symbol that the record names
+        and never defines it. The types are read against a
         copy of the tables taken AFTER the private types, so a method on a type the
         export closure ships resolves too.
 
-        A method name the consumer already declares on the same type is CE0101, as for
-        a source library: the two bodies would be one symbol.
+        A method name another unit already declares on the same type is CE0101 when the
+        two cannot both stand (`visibility.extensions_collide`), as for a source library.
+        Otherwise both are kept, and the call chooses (`docs/design/extension-visibility.md`
+        C3 to C5).
         """
         from sushi_lang.semantics.ast import Block, ExtendDef, Param
         from sushi_lang.semantics.library_registry import parse_signature
@@ -884,7 +888,17 @@ class LibraryRegistration:
             lib_file = self._library_file(lib_name)
             target = parse_type_string(record["type"], struct_table, enum_table)
             sig = parse_signature(record, struct_table, enum_table, lib_path=lib_file)
-            existing = extensions.get_method(target, sig.name)
+            unit = library_unit(lib_name, record.get("unit"))
+            self_mode = record.get("self_mode")
+            is_static = bool(record.get("static", False))
+            method = ExtensionMethod(
+                target_type=target, name=sig.name, ret_type=sig.ret_type,
+                params=sig.params, self_mode=self_mode, filename=lib_file,
+                unit_name=unit, err_type=sig.err_type, is_static=is_static,
+                is_public=bool(record["public"]))
+            existing = next((other for other in extensions.declarations(target, sig.name)
+                             if extensions_collide(self.tables.visibility, target,
+                                                   other, method)), None)
             if existing is not None:
                 if existing.unit_name in build_units:
                     self._reject_extension_clash(lib_name, existing.name_span,
@@ -893,20 +907,14 @@ class LibraryRegistration:
                     self._reject_library_extension_clash(
                         existing.unit_name or "?", lib_name, lib_file, sig.name, target)
                 continue
-
-            unit = library_unit(lib_name, record.get("unit"))
-            self_mode = record.get("self_mode")
-            is_static = bool(record.get("static", False))
-            extensions.add_method(ExtensionMethod(
-                target_type=target, name=sig.name, ret_type=sig.ret_type,
-                params=sig.params, self_mode=self_mode, filename=lib_file,
-                unit_name=unit, err_type=sig.err_type, is_static=is_static))
+            extensions.add_method(method)
             self.shipped_extensions.append(ExtendDef(
                 loc=None, target_type=target, name=sig.name,
                 params=[Param(name=p.name, ty=p.ty, is_nom=p.is_nom) for p in sig.params],
                 ret=sig.ret_type, body=Block(loc=None, statements=[]),
                 self_mode=self_mode,
-                err_type=sig.err_type, is_static=is_static))
+                err_type=sig.err_type, is_static=is_static,
+                declaring_unit=unit, link_symbol=record.get("link_symbol")))
 
     def _register_conversions(self) -> None:
         """Register the conversions the libraries ship (docs/design/error-conversion.md 8.2).
@@ -989,20 +997,29 @@ class LibraryRegistration:
                 lib_name, [*program.extensions, *program.generic_extensions], label)
 
             reporter = Reporter(source=source, filename=label)
-            collector = self._function_collector(
-                reporter, library_unit(lib_name, record.get("unit")), label)
+            unit = library_unit(lib_name, record.get("unit"))
+            collector = self._function_collector(reporter, unit, label)
             collector.collect_extensions(program)
             if any(d.code == "CE0101" for d in reporter.items):
-                self._reject_template_clash(lib_name, record["name"], build_units)
+                for ext in [*program.extensions, *program.generic_extensions]:
+                    self._reject_template_clash(lib_name, unit, ext, build_units)
 
-    def _reject_template_clash(self, lib_name: str, method: str,
+    def _reject_template_clash(self, lib_name: str, unit: str, ext: 'ExtendDef',
                                build_units: set[str]) -> None:
         """CE0101 at the template, of the consumer or of another library, that a library
-        template of one name meets."""
+        template of one name meets.
+
+        Only a template that cannot stand beside it is the clash
+        (`visibility.extensions_collide`): a template of another unit coexists (C5),
+        unless one of the two is a public method of the home unit of the target (C2).
+        """
+        method = ext.name
         other = None
         for declarations in self.tables.generic_extensions.by_type.values():
-            for (name, _key), existing in declarations.items():
-                if name != method:
+            for (name, _key, _unit), existing in declarations.items():
+                if name != method or not extensions_collide(
+                        self.tables.visibility, ext.target_type, existing,
+                        ExtensionClaim(unit, ext.is_public)):
                     continue
                 if existing.unit_name in build_units:
                     self._reject_extension_clash(lib_name, existing.name_span,

@@ -1,0 +1,10 @@
+# R3 for a predefined enum whose home is a stdlib module: <io/fs> is the home of
+# `FileMode`, and declares the public method `intent()` on it. This unit does not
+# import <io/fs>, and it calls the method of a value that the helper makes.
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_r3_modes"
+
+fn main() i32:
+    println(append_mode().intent())
+    return 0

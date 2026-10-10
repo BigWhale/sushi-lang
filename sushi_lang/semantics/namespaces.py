@@ -72,6 +72,10 @@ class UnitScope:
     modules: Tuple[str, ...] = ()
     generics: Tuple[str, ...] = ()
     everything: bool = True
+    # The units an ALIASED import reaches. They put no name into the flat scope, but a
+    # method cannot stand behind a namespace dot, so their public extensions are
+    # callable here (`docs/design/extension-visibility.md` R6).
+    aliased_units: Tuple[str, ...] = ()
 
     @classmethod
     def unrestricted(cls) -> "UnitScope":
@@ -82,6 +86,13 @@ class UnitScope:
         """May a declaration of `unit_name` be written here without a qualifier?"""
         return (self.everything or unit_name is None
                 or unit_name == self.unit or unit_name in self.units)
+
+    def brings_methods_of(self, unit_name: Optional[str]) -> bool:
+        """R6: may a public extension that `unit_name` declares be called here?
+
+        A flat import, an aliased import, and the `public use` chain of either bring it.
+        """
+        return self.holds_unit(unit_name) or unit_name in self.aliased_units
 
     def holds_module(self, module_path: Optional[str]) -> bool:
         """May a registry stdlib module's function be written here bare?"""

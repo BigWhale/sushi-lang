@@ -27,7 +27,7 @@ each named for the stage it runs.
 | `resolve` | struct field, enum variant and constant types become concrete; a spelled Result return is interned | `semantics/passes/resolve.py` |
 | `finite-types` | reject a type that contains itself by value ([CE2095](../error-catalog.md#ce2095)) | `semantics/passes/finite_types.py` |
 | `derive` | auto-derive `hash()` and `clone()` (not `Eq`, `Ord` or `Display`: the contract walk answers those) | `semantics/passes/derive.py` |
-| `shadowing` | reject an extension method that collides with a built-in ([CE2097](../error-catalog.md#ce2097)) | `semantics/semantic_analyzer.py` |
+| `shadowing` | reject an extension method that collides with a built-in or with a stdlib method on a built-in type ([CE2097](../error-catalog.md#ce2097)); warn where a unit's own extension hides an imported public one ([CW3007](../error-catalog.md#cw3007)) | `semantics/semantic_analyzer.py` |
 | `effects` | which functions destroy a `poke` parameter, transitively | `semantics/passes/borrow/destroy_effects.py` |
 | `scope` | scope and variable analysis | `semantics/passes/scope.py` |
 | `typecheck` | type validation and inference; each generic template is checked one time, where it is written, with its type parameters opaque | `semantics/passes/types/` |
@@ -68,7 +68,11 @@ Collect global definitions before analyzing function bodies.
 4. **Symbol Table**: Build initial global scope
 5. **Visibility**: Record who declared what, and whether it says `public`
 6. **Extension methods**, instance and STATIC alike, with `is_static` carried on the
-   collected signature (`docs/design/method-resolution.md`). The two refusals a static
+   collected signature (`docs/design/method-resolution.md`). Each record keeps its
+   declaring unit and its `public` marker, and the visibility table files a `DeclOrigin`
+   of the kind "extension method" under `<target>.<method>`
+   (`docs/design/extension-visibility.md`). Two units can each declare one method name on
+   one type (C5); one unit cannot (C1, [`CE0101`](../error-catalog.md#ce0101)). The two refusals a static
    brings are structural and so are decided here: a receiver named in the signature or
    the body is [`CE0134`](../error-catalog.md#ce0134), and a static spelling a variant of the enum it extends is
    [`CE2103`](../error-catalog.md#ce2103). A `static` inside a perk implementation is [`CE4014`](../error-catalog.md#ce4014), in the perk collector.
@@ -322,17 +326,22 @@ alone. When the variable is not set, the pass skips every library unit.
 The pass runs only under `--warn-unused`. A private name is visible only in its own unit,
 so the pass checks each unit alone, over the WRITTEN declarations of the unit.
 
-**[CW1004](../error-catalog.md#cw1004).** The roots of a unit are every `public` declaration, every `extend` block (an
-extension method and a perk implementation, which a call reaches through a receiver and
-not through a name), the `unsafe external` blocks, and `fn main()`. The pass starts at the
-roots and follows each name that a reached declaration mentions. A private constant,
-variable, struct, enum, perk or function that it does not reach is dead.
+**[CW1004](../error-catalog.md#cw1004).** The roots of a unit are every `public` declaration, every perk implementation
+and every conversion (no call names them), the `unsafe external` blocks, and `fn main()`.
+The pass starts at the roots and follows each name that a reached declaration mentions.
+A private constant, variable, struct, enum, perk, function or extension method that it
+does not reach is dead. Only its own unit can call a private extension method (R4 of
+`docs/design/extension-visibility.md`), so the unit is the whole question for it too. A
+`foreach` calls `next()` with no written name, so a `foreach` mentions `next`.
 
 **[CW3006](../error-catalog.md#cw3006).** A `use` line is used when the unit mentions a name that the import brings: a
 name the imported unit declares or re-exports (`Provider.members`, the walk the
-`namespaces` pass reads), the alias of an `as` import, an extension or perk method of a
-unit it reaches, and for `<collections/strings>` a string method, which is the per-unit
-rule of [CE3015](../error-catalog.md#ce3015). A `public use` is a root and the pass never reports it. The pass does not
+`namespaces` pass reads), the alias of an `as` import, or a method that only the import
+makes callable: a public extension of a unit it reaches on a type that the unit does not
+declare (R6, the predicate `needs_import` in `semantics/visibility.py`), or a method of a
+perk implementation of that unit on such a type, because the import can be what loads it.
+A stdlib method on a built-in type (R1) and a public method of the home unit of a type
+(R5) need no import, so neither is a use. A `public use` is a root and the pass never reports it. The pass does not
 report an import of a library.
 
 The names that a declaration mentions are all the strings in its subtree, but not the doc
@@ -440,7 +449,9 @@ Five rules:
 - [`CE3013`](../error-catalog.md#ce3013) -- the alias is already bound in this unit: another alias, an FFI namespace,
   or one of its own declarations. `_` is refused too, as the discard name.
 - [`CW3004`](../error-catalog.md#cw3004) -- the `as` reached no name. A warning, because a namespace is empty for
-  three reasons and only one is a mistake (`unit-namespaces.md` section 4.4).
+  three reasons and only one is a mistake (`unit-namespaces.md` section 4.4). An aliased
+  import still brings the public extensions of its unit on types that the unit does not
+  declare (R6), so the import itself can still do its work.
 - [`CE3016`](../error-catalog.md#ce3016) -- `public use ... as`. A re-export is of names and not of a namespace; the
   alias still binds, so the one fault gets one diagnostic.
 - [`CW3005`](../error-catalog.md#cw3005) -- a `public use` whose import brings no PUBLIC name. The provider holds the
@@ -482,8 +493,9 @@ The ONE home of main's rule. It checks four things, in this order:
 The build kind reaches the analyzer as the `is_library` keyword, the way the library
 linker does. The `args` array is a BORROWED view of argv, so moving it is [`CE2410`](../error-catalog.md#ce2410).
 
-The [`CW3003`](../error-catalog.md#cw3003) foreign-extension warning is in the pipeline, because it is not about
-`main`.
+CW3003, the foreign-extension warning of the pipeline, is retired (epic #1251): under R6 of
+`docs/design/extension-visibility.md`, an extension on a type that a library does not
+declare is visible only where its unit is imported.
 
 ## The `instantiate` pass: generic instantiation collection
 
@@ -734,7 +746,7 @@ A FUNCTION instance gets a mangled symbol (`semantics/generics/name_mangling.py`
 | Instance | Symbol |
 |---|---|
 | `first_of@(i32, string)` in unit `main` | `main$first_of__i32_string` (`mangle_function_name`, with the unit prefix) |
-| `swapped` on `Pair@(i32, string)` | `Pair__i32_string_swapped` (`extension_symbol`) |
+| `swapped` on `Pair@(i32, string)`, declared in unit `main` | `main$Pair__i32_string_swapped` (`extension_symbol`, with the declaring unit) |
 
 An extension method with its own type parameters adds `__` and those type arguments to
 the extension symbol. A pack instance adds `.pack` and the pack arity, for example
@@ -950,6 +962,19 @@ Placement is load-bearing at BOTH ends: after `derive`, which registers the stru
 A perk implementation is unaffected by construction — an `ExtendWithDef` never enters the
 extension table. It is the sanctioned way to replace a built-in. See
 `docs/design/method-resolution.md`.
+
+A public method that a Sushi-source stdlib module declares on a built-in type is visible
+in every unit (R1 of `docs/design/extension-visibility.md`), so an extension of its name
+is [`CE2097`](../error-catalog.md#ce2097) too, with a note at the stdlib declaration.
+
+The same pass then gives [`CW3007`](../error-catalog.md#cw3007) where a unit's own extension
+hides a public extension that the unit imports (C3, `hides_import` in
+`semantics/visibility.py`). The own extension wins in its unit. Which extension a call
+can reach is the question of the `typecheck` pass: `extension_reach` answers it for the
+unit of the call, a private extension of another unit is
+[`CE3005`](../error-catalog.md#ce3005), a public extension of a unit that the caller does
+not import is [`CE3022`](../error-catalog.md#ce3022), and two imported public ones are
+[`CE3023`](../error-catalog.md#ce3023).
 
 ## The `effects` pass: the destroy-effect summary
 

@@ -1,0 +1,17 @@
+# C3 for an array template: this unit declares its own `stamp` on `T[]`, and it
+# imports a public `stamp` on `T[]`. The own template wins in this unit, and the helper
+# still calls its own. CW3007 stands at the own declaration.
+# EXPECT_ERROR_CODES_EXACT: CW3007
+# The leak check below makes the runner run the binary of this warning fixture.
+# EXPECT_STDOUT_EXACT: "2\n1\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_c3_tpl_labels"
+
+extend T[] stamp() i32:
+    return 2
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    println(xs.stamp())
+    println(stamp_there(xs))
+    return 0

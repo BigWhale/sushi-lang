@@ -1,0 +1,10 @@
+# C4 is an error at the CALL. Two imported public extensions of one name on one type
+# that this unit does not call are no fault, and each helper calls its own.
+# EXPECT_STDOUT_EXACT: "1\n2\n"
+use "helpers/ev_c4_red"
+use "helpers/ev_c4_blue"
+
+fn main() i32:
+    println(red_shade(5))
+    println(blue_shade(5))
+    return 0

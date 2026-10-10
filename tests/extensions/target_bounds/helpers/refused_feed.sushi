@@ -13,7 +13,7 @@ extend Res with Drop:
 public struct Feed@(T):
     T[] items
 
-extend Feed@(T: Clone) first() Result@(i32, Bad):
+public extend Feed@(T: Clone) first() Result@(i32, Bad):
     return Result.Ok(1)
 
 public fn g() i32:

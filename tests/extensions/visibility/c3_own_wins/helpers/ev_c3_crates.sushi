@@ -1,0 +1,2 @@
+public struct Hamper@(T):
+    T item

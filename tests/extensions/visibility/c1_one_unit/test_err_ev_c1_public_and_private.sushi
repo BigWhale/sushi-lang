@@ -1,0 +1,12 @@
+# C1 does not read the marker: a public and a private extension of one name on one
+# type in one unit are the duplicate error too.
+# EXPECT_ERROR_CODES_EXACT: CE0101
+public extend i32 mark() i32:
+    return 1
+
+extend i32 mark() i32:
+    return 2
+
+fn main() i32:
+    println(1.mark())
+    return 0

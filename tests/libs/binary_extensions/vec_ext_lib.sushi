@@ -11,18 +11,18 @@ public perk Area:
 perk Hidden:
     fn hidden() i32
 
-extend Vec sum() i32:
+public extend Vec sum() i32:
     return self.x + self.y
 
-extend Vec static at(i32 x, i32 y) Vec:
+public extend Vec static at(i32 x, i32 y) Vec:
     return Vec(x, y)
 
-extend Vec checked_x() i32 | VecError:
+public extend Vec checked_x() i32 | VecError:
     if (self.x < 0):
         return Result.Err(VecError.Negative)
     return Result.Ok(self.x)
 
-extend Vec grow(poke self, i32 n) ~:
+public extend Vec grow(poke self, i32 n) ~:
     self.x := self.x + n
     self.y := self.y + n
 

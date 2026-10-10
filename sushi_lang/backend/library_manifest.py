@@ -286,13 +286,6 @@ class LibraryManifestGenerator:
         if not_exported:
             manifest["not_exported"] = not_exported
 
-        # The types this library claims methods on and does not declare -- the
-        # consumer's half of CW3003. Absent when the library extends only what
-        # it declares, so most libraries grow by nothing.
-        foreign = self._extract_foreign_extensions(units)
-        if foreign:
-            manifest["foreign_extensions"] = foreign
-
         # Each conversion a consumer can use (docs/design/error-conversion.md 8.2).
         # Absent when there is none; a reader takes a missing key as an empty list.
         conversions = self._extract_conversions(units, templates_section)
@@ -427,20 +420,6 @@ class LibraryManifestGenerator:
 
         return [{"name": name, "kind": kept[(unit, name)], "unit": unit}
                 for unit, name in sorted(kept, key=lambda key: (key[1], key[0]))]
-
-    def _extract_foreign_extensions(self, units: list['Unit']) -> list[dict]:
-        """The foreign types this library claims methods on, in declaration order.
-
-        A record carries the bounds its target writes, as an extension record does, so
-        the report prints the target one way in both sections (#1070).
-        """
-        from sushi_lang.semantics.foreign_extensions import foreign_extension_claims
-        from sushi_lang.semantics.library_templates import target_bound_records
-
-        return [{"type": claim.target, "method": claim.method,
-                 "unit": claim.unit_name,
-                 "target_bounds": target_bound_records(claim.extension)}
-                for claim in foreign_extension_claims(own_units(units))]
 
     def _extract_public_bindings(self, units: list['Unit'], variables: bool) -> list[dict]:
         """The constants, or the unit variables, this library MARKS public.
@@ -832,6 +811,9 @@ class LibraryManifestGenerator:
         An extension on a private type that nothing ships is left out: no consumer can
         name the type, and no shipped body names it.
 
+        A private extension ships with its marker: a copy of a template of the library
+        can call it, and the consumer refuses a call of it from its own units (R4).
+
         The methods of an implementation of a perk that does not ship travel here too.
         The perk hides its CONTRACT, and the methods stay callable
         (`docs/design/visibility.md`); the consumer has no contract to register them
@@ -857,7 +839,7 @@ class LibraryManifestGenerator:
                 record = serialize_extension(ext)
                 record["unit"] = unit.name
                 record["link_symbol"] = extension_symbol(
-                    extension_receiver_name(ext.target_type), ext.name)
+                    extension_receiver_name(ext.target_type), ext.name, unit=unit.name)
                 records.append(record)
             for impl in unit.ast.perk_impls:
                 if (impl.perk_name in shipped_perks
@@ -876,6 +858,8 @@ class LibraryManifestGenerator:
                         **method_record(method),
                         "type": type_name,
                         "unit": unit.name,
+                        # A perk method is callable wherever its type is (R8).
+                        "public": True,
                         "link_symbol": impl_method_symbol(type_name, method.name),
                     })
         return records
@@ -1140,8 +1124,15 @@ class LibraryManifestGenerator:
         and the version check read the record whole; the consumer gives each unit of
         the library only the records that name it. A module that only a unit the
         library does not own uses has an empty list.
+
+        A module of the methods of the built-in types is recorded when the build holds
+        it, also with no `use`: such a method needs no import, and a template that calls
+        one is checked again in the consumer's build (`extension-visibility.md` R1).
         """
-        modules: dict[str, set[str]] = {}
+        from sushi_lang.semantics.stdlib_registry import BUILTIN_TYPE_METHOD_MODULES
+        modules: dict[str, set[str]] = {
+            unit.name: set() for unit in units
+            if unit.is_bundled_stdlib and unit.name in BUILTIN_TYPE_METHOD_MODULES}
         libraries: dict[str, dict] = {}
         writers: dict[str, set[str]] = {}
         own = {unit.name for unit in own_units(units)}

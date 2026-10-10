@@ -12,8 +12,6 @@ gzip (RFC 1952) is not handled, so there is no CRC-32. A preset dictionary gives
 negative count, and the read gives `ZError.Truncated`.
 :##
 
-use <encoding/binary>
-
 # On the casts: a bitwise operator rejects two different numeric types
 # (CE2510), so the `as u32` and `as i32` on the OPERANDS of a shift, an OR or
 # an AND are what the language requires and not defensive noise. A shift COUNT
@@ -859,7 +857,7 @@ The text does not include the payloads, so a caller can compare it.
 
 - Returns: The text.
 :##
-extend ZError text() string:
+public extend ZError text() string:
     match self:
         ZError.Truncated(_) -> return "truncated input"
         ZError.BadBlockType(_) -> return "reserved block type"

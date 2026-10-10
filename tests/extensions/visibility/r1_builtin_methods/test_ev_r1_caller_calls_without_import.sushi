@@ -1,0 +1,10 @@
+# The other direction: the helper imports <collections/strings> for itself, and this
+# unit calls a string method with no import.
+# EXPECT_STDOUT_EXACT: "true\ntrue\n"
+use "helpers/ev_r1_prefix_own"
+
+fn main() i32:
+    let string s = "a,b"
+    println(begins_with_a(s))
+    println(s.ends_with("b"))
+    return 0

@@ -8,7 +8,6 @@ are in `docs/design/slib-info.md`.
 :##
 
 use <io/fs>
-use <collections/strings>
 use <encoding/msgpack>
 use <sys/env>
 use <toolchain/slib>
@@ -1279,11 +1278,14 @@ fn print_extension_records(MsgValue exts, bool pending, Opts o) bool:
             foreach(e in items.iter()):
                 p := open_record(p)
                 let string target = render_extension_target(e)
+                let string export = ""
+                if (get_bool(e, "public")):
+                    export := "public "
                 let string marker = ""
                 if (get_bool(e, "static")):
                     marker := "static "
                 let string sig = render_callable(e, o)
-                println("  extend {target} {marker}{sig}")
+                println("  {export}extend {target} {marker}{sig}")
                 p := print_doc(e, "    ", o)
             return p
         _ ->
@@ -1338,40 +1340,6 @@ fn print_conversion_list(MsgValue convs, Opts o) ~:
                 let string target = to_surface(get_str(c, "target"))
                 println("  extend {source} as {target}")
                 p := print_doc(c, "    ", o)
-        _ ->
-            return ~
-    println("")
-
-##:
-Prints the section of the types that the library extends and does not declare.
-
-- Parameter meta: The metadata map.
-- Parameter o: The options of the run.
-:##
-fn print_foreign_extensions(MsgValue meta, Opts o) ~:
-    match meta:
-        MsgValue.Map(pairs) ->
-            match map_index(meta, "foreign_extensions"):
-                Maybe.Some(at) -> print_foreign_list(pairs[at].1, o)
-                Maybe.None() -> return ~
-        _ ->
-            return ~
-
-##:
-Prints each foreign extension record.
-
-- Parameter claims: The array of foreign extension records.
-- Parameter o: The options of the run.
-:##
-fn print_foreign_list(MsgValue claims, Opts o) ~:
-    if (not section("Foreign Extensions", len(claims), o)):
-        return ~
-    match claims:
-        MsgValue.Arr(items) ->
-            foreach(c in items.iter()):
-                let string target = render_extension_target(c)
-                let string method = get_str(c, "method")
-                println("  extend {target} {method}")
         _ ->
             return ~
     println("")
@@ -1577,7 +1545,6 @@ fn print_declarations(MsgValue meta, MsgValue templates, Opts o) ~:
     print_perk_impls(templates, o)
     print_extensions(templates, o)
     print_conversions(meta, o)
-    print_foreign_extensions(meta, o)
     print_dont_panic(meta, o)
 
 ##:

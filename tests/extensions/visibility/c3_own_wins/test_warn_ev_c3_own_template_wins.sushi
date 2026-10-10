@@ -1,0 +1,19 @@
+# C3 for a template: this unit declares its own template `badge` on `Hamper@(T)`, and
+# it imports a public template `badge` on `Hamper@(T)`. The own template wins in this
+# unit, and the helper still calls its own. CW3007 stands at the own declaration, with
+# a note at the imported one.
+# EXPECT_ERROR_CODES_EXACT: CW3007
+# The leak check below makes the runner run the binary of this warning fixture.
+# EXPECT_STDOUT_EXACT: "2\n1\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_c3_crates"
+use "helpers/ev_c3_tpl_labels"
+
+extend Hamper@(T) badge() i32:
+    return 2
+
+fn main() i32:
+    let Hamper@(i32) h = Hamper(5)
+    println(h.badge())
+    println(badge_there(h))
+    return 0

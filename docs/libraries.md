@@ -95,14 +95,20 @@ does **not** buy: a generic cannot be pre-compiled, because monomorphization nee
 consumer's concrete type arguments, so a binary library carries the source text of its
 generics in the index regardless. Binary distribution hides concrete bodies only.
 
-Every kind exports extension methods, instance and static. A consumer calls
+Every kind exports its PUBLIC extension methods, instance and static, and a private one
+stays in the library ([CE3005](error-catalog.md#ce3005) at the consumer). A consumer calls
 `Vec.at(3, 4)` and `v.sum()` on a binary library's `Vec` as it does on a source
-library's. A concrete method ships as a signature, and its body links from the bitcode.
+library's. The rules of `docs/design/extension-visibility.md` apply as for a unit of the
+program: a public extension on a type that the library unit declares travels with the
+type, and one on a type that it does not declare (`i32`, an array) is visible only in a
+unit that imports the library unit. A concrete method ships as a signature, and its body links from the bitcode.
 A template (`extend Box@(T)`, `extend Box@(i32)`, `extend T[]`, `pick@(U)`) ships as
 source, and the consumer makes its own copies. A method of an implementation of a
 private perk ships as an ordinary method of the type: the contract stays hidden, and the
-method stays callable. A consumer that declares the same method on the same type hears
-[`CE0101`](error-catalog.md#ce0101), on every kind.
+method stays callable. A consumer that declares the same method on a type of the library
+hears [`CE0101`](error-catalog.md#ce0101), on every kind; one that declares the same
+method on a type that the library does not declare wins in its own unit, with the warning
+[`CW3007`](error-catalog.md#cw3007).
 
 Every kind re-exports. A façade unit that says `public use` on each of the library's
 other units is the way to give a multi-unit library one namespace, and it works whichever
@@ -183,9 +189,10 @@ search finds `b` 0.2.0. The diagnostic names each version and the path that reac
 A dependency that the consumer's search cannot find is [CE3502](error-catalog.md#ce3502), with a note at the `use`
 that needs it, for a plain `use` and for a `public use` alike.
 
-Two libraries that declare one extension method on one type are [CE0101](error-catalog.md#ce0101) at the consumer,
-with a note for each library, for every kind: a method is found on its receiver's type,
-so no import can choose between the two bodies.
+Two libraries that declare one public extension method on one type can be used in one
+program. A unit that imports both and calls the method gets [CE3023](error-catalog.md#ce3023) at the call, with
+a note for each library, for every kind: there is no qualified method call, so move the
+code that needs each method into a unit of its own.
 
 ### Public Declarations
 

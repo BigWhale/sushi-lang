@@ -1,0 +1,15 @@
+# R1 in a program where no unit imports a stdlib module: the helper and this unit
+# call methods of every tier.
+# EXPECT_STDOUT_EXACT: "3\nMOSTLY\n1\ntrue\nfalse\n2\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_r1_bare"
+
+fn main() i32:
+    println(line_count("a\nb\nc"))
+    println(shout("mostly"))
+    println(smallest())
+    println(digit(a'7'))
+    println(blank("x"))
+    let i32[] xs = from([1, 2])
+    println(xs.map(|i32 x| x + 1).len())
+    return 0

@@ -112,7 +112,6 @@ A whole exchange, in one process. A blocking `connect()` to a listening socket c
 
 ```sushi
 use <net/tcp>
-use <collections/strings>
 
 fn exchange() ~ | NetError:
     let TcpListener listener = listen("127.0.0.1", 0, 8)??

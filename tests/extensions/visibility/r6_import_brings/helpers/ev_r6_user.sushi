@@ -1,0 +1,4 @@
+use "helpers/ev_r6_bytes"
+
+public fn doubled_by_user(i32 n) i32:
+    return n.twice_r6()

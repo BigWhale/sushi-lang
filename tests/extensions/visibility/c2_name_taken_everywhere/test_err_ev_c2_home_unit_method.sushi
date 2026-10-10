@@ -1,0 +1,14 @@
+# C2 against a public method from the home unit of the type (R5). That method is
+# visible wherever a `Gem` is, so an extension of its name in another unit is refused
+# at its declaration, with a note at the method in the home unit: CE0101.
+# EXPECT_ERROR_CODES_EXACT: CE0101
+# EXPECT_STDERR_CONTAINS: "ev_c2_gems.sushi"
+# EXPECT_STDERR_CONTAINS: "test_err_ev_c2_home_unit_method.sushi:9:"
+use "helpers/ev_c2_gems"
+
+extend Gem shine() i32:
+    return 0
+
+fn main() i32:
+    println(Gem(3).carat)
+    return 0

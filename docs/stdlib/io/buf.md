@@ -40,7 +40,6 @@ is declared `BufReader@(R: Reader)`, and `BufWriter@(W: Writer)` likewise ([CE40
 ```sushi
 use <io/fs>
 use <io/buf>
-use <collections/strings>
 
 fn longest_line(string path) i32 | IoError:
     let File f = open(path, FileMode.Read())??
@@ -89,8 +88,8 @@ Reads the next window, replacing the one held; answers whether any byte arrived.
 above goes through it, so end of input is decided in one place and stays decided: once a
 refill has answered nothing, no further call reads the handle again.
 
-A caller rarely needs `fill()`. It is part of the surface because an extension method
-carries no visibility marker -- it is as visible as the type it extends.
+A caller rarely needs `fill()`. It is public so that a caller can refill the window at a
+time that it chooses.
 
 A refill costs ONE allocation and no copy: the read primitive allocates its answer and the
 window takes it whole. Measured over a 512 MB file at an 8 KB window, that allocation is

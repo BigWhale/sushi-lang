@@ -1,0 +1,5 @@
+public extend i32 shade() i32:
+    return 2
+
+public fn blue_shade(i32 n) i32:
+    return n.shade()

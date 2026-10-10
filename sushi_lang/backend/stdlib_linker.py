@@ -11,6 +11,28 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Program
 
 
+def linked_stdlib_paths(programs: Iterable[Program],
+                        also: Iterable[str] = ()) -> list[str]:
+    """Every stdlib module that a build links, each once, in a stable order.
+
+    Each `use <...>` of the programs, the modules in `also`, then the bitcode of each
+    method of a built-in type that the programs name. Such a method needs no import
+    (`docs/design/extension-visibility.md` R1). A module under a directory in the list
+    is left out: the directory links its bitcode.
+    """
+    from sushi_lang.semantics.stdlib_registry import (
+        builtin_type_method_bitcode, named_methods)
+    programs = list(programs)
+    names = frozenset().union(*(named_methods(program) for program in programs))
+    paths = dict.fromkeys([
+        *(use_stmt.path for program in programs for use_stmt in program.uses
+          if use_stmt.is_stdlib),
+        *also, *sorted(builtin_type_method_bitcode(names))])
+    return [path for path in paths
+            if not any("/".join(path.split("/")[:depth]) in paths
+                       for depth in range(1, path.count("/") + 1))]
+
+
 class StdlibLinker:
     """Manages stdlib module linking."""
 
@@ -62,7 +84,7 @@ class StdlibLinker:
 
     def link_stdlib_modules(self, llmod: llvm.ModuleRef,
                             programs: Iterable[Program]) -> set[str]:
-        """Link the stdlib .bc files that `programs` import into one LLVM IR module.
+        """Link the stdlib .bc files that `programs` need into one LLVM IR module.
 
         The whole build's programs arrive together and each .bc is linked ONCE. The
         monolithic path gives every unit the SAME module, so linking per unit linked
@@ -76,14 +98,11 @@ class StdlibLinker:
 
         seen: set[Path] = set()
         bc_files: list[Path] = []
-        for program in programs:
-            for use_stmt in program.uses:
-                if not use_stmt.is_stdlib:
-                    continue
-                for bc_path in self._resolve_stdlib_unit(use_stmt.path):
-                    if bc_path not in seen:
-                        seen.add(bc_path)
-                        bc_files.append(bc_path)
+        for unit_path in linked_stdlib_paths(programs):
+            for bc_path in self._resolve_stdlib_unit(unit_path):
+                if bc_path not in seen:
+                    seen.add(bc_path)
+                    bc_files.append(bc_path)
 
         linked: set[str] = set()
         for bc_path in bc_files:

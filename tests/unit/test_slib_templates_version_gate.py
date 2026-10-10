@@ -52,9 +52,16 @@ def test_a_version_8_binary_library_is_refused():
     assert exc.value.code == "CE3512"
 
 
+def test_a_version_9_binary_library_is_refused():
+    """Version 10 gives an extension record its `public` marker and a symbol of its unit."""
+    with pytest.raises(LibraryError) as exc:
+        _check_library_templates_version(_metadata("binary", 9), "old.slib")
+    assert exc.value.code == "CE3512"
+
+
 def test_the_current_schema_passes():
     _check_library_templates_version(_metadata("binary", TEMPLATES_SCHEMA_VERSION), "new.slib")
-    assert TEMPLATES_SCHEMA_VERSION == 9
+    assert TEMPLATES_SCHEMA_VERSION == 10
 
 
 def test_a_source_library_is_never_gated():

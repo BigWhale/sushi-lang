@@ -224,7 +224,7 @@ compilation failed but *which* diagnostic fired.
 - Prefer this over `EXPECT_STDERR_CONTAINS` for error/warning tests: the code is
   stable, whereas message text is brittle.
 - It is a SUBSTRING check: a fixture that expects `CE2009` also passes when the
-  compiler prints `CE3015` beside it. Use `EXPECT_ERROR_CODES_EXACT` to pin the codes and their counts.
+  compiler prints `CE2001` beside it. Use `EXPECT_ERROR_CODES_EXACT` to pin the codes and their counts.
 
 #### EXPECT_ERROR_CODES_EXACT
 
@@ -564,15 +564,15 @@ fixture file itself, because the one set of directives describes both steps.
 #### BUILD_LIB_WARNS
 
 ```sushi
-# BUILD_LIB_WARNS: geolib.sushi -> CW3003
-# BUILD_LIB_WARNS: other.sushi -> CW3003, CW1001
-# BUILD_LIB_WARNS: third.sushi binary -> CW3003
+# BUILD_LIB_WARNS: geolib.sushi -> CW1001
+# BUILD_LIB_WARNS: other.sushi -> CW1002, CW1001
+# BUILD_LIB_WARNS: third.sushi binary -> CW1001
 ```
 
 - As `BUILD_LIB`, but the build must exit 1, and the SET of warning codes in its stderr
   must be equal to the named set (#1122). A missing code or a code that is not named
-  fails the fixture, and so does a build that exits 0. Use it for a library that extends
-  a type it does not declare (CW3003): that is a correct library, with a warning.
+  fails the fixture, and so does a build that exits 0. Use it for a library that is
+  correct and builds with a warning.
 - The library goes to the same directory as a `BUILD_LIB` library. It is a SOURCE
   `.slib`, unless a kind word follows the source: `binary` or `hybrid` (or `source`).
   It builds in written order with the other three directives.

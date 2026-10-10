@@ -2959,16 +2959,6 @@ An alias binds a name in the unit that wrote it, so it collides with anything el
 
 Every import stands at the top of the unit, after the unit's own doc block if it has one, and a namespace is bound for the whole unit rather than from its `use` downwards. So a reader sees the dependencies of a unit in one block, as in Go and Java. Move the `use` above the first declaration.
 
-### CE3015 {#ce3015}
-
-**Error** · unit
-
-**Message:** `{name} needs the stdlib module <{module}>`
-
-**Help:** `` add `use <{module}>` above the first declaration of this unit ``
-
-A method whose body lives in a stdlib module is callable only where that module is imported. This covers a built-in method that a module enables, and an extension method that a Sushi-source module declares (`.map()` on `T[]` from `<collections/iter>`, `.sort()` from `<collections/sort>`, `.is_ascii_digit()` on `u8` from `<text/ascii>`). A missing import is a mistake in the program. Add the import the message names. A DIRECTORY import covers every module under it; a SIBLING import does not. The import must be in the unit that holds the call: an import in another unit of the same program does not count, because scope is per unit.
-
 ### CE3016 {#ce3016}
 
 **Error** · unit
@@ -3016,6 +3006,22 @@ The compiler could not write a file that the command line asked for: the output 
 **Message:** `` `use <{module}>` has no file for this host '{host}' (the hosts are: {hosts}) ``
 
 A per-platform standard-library module is one bundled source file per platform and architecture, and the compiler selects the file of the host it compiles on. Sushi has no conditional compilation, so a host with no file cannot compile the module at all: every value in it (an `open` flag, a struct offset, an errno number) is a fact about one platform. The supported hosts are the ones the message lists. A new host needs its own file, made with `tests/platform_probe/probe.c` on that host.
+
+### CE3022 {#ce3022}
+
+**Error** · unit
+
+**Message:** `method '{name}' comes from unit '{owner}', and this unit does not import it`
+
+A public extension on a type that its unit does not declare (a built-in type, an array type, the type of another unit) is visible in its own unit and in each unit that imports that unit: with `use "u"`, with `use "u" as x`, or through a `public use` chain. It is not visible in another unit, even when a third unit of the program imports it. A public extension in the unit that declares its target type travels with the type and needs no import. Add the import that the help names.
+
+### CE3023 {#ce3023}
+
+**Error** · unit
+
+**Message:** `method '{name}' comes from more than one imported unit`
+
+This unit imports two or more units that each declare a public extension of this name on this type, and this unit declares none itself. A note points at each declaration. Sushi has no qualified method call, so the call cannot say which unit it means. The error stands at the call: an import that brings two such methods and no call of them is no fault. Move the code that needs each method into a unit of its own, or rename one of the methods. An extension that this unit declares itself always wins, and that is the warning [CW3007](#cw3007) instead.
 
 ## CE35xx: Library errors {#ce35xx}
 
@@ -3824,7 +3830,7 @@ A variable was declared with 'let' outside of this scope. A `foreach` item, an `
 
 **Message:** `private {kind} '{name}' is never used in this unit`
 
-Behind `--warn-unused`, off by default. A private declaration is visible only in its own unit, so the unit is the whole question: the declaration is dead when nothing reachable from a ROOT of the unit names it. The roots are every `public` declaration, every `extend` block (an extension method and a perk implementation alike, because a call reaches it through a receiver and not through a name), the `unsafe external` blocks, and `fn main()`. A private declaration named only by another dead one is dead too, so both are reported. A bundled stdlib unit is checked only when the test runner sets SUSHI\_STDLIB\_DEAD\_GATE; a library unit never is. Delete the declaration, or make it `public` when it is API.
+Behind `--warn-unused`, off by default. A private declaration is visible only in its own unit, so the unit is the whole question: the declaration is dead when nothing reachable from a ROOT of the unit names it. The roots are every `public` declaration, every perk implementation and every conversion (no call names them), the `unsafe external` blocks, and `fn main()`. A private extension method, an instance method or a static method, is checked as a private function is: only its own unit can call it, so it is dead when no live declaration of the unit calls it. The name in the message is `<type>.<method>`. A private declaration named only by another dead one is dead too, so both are reported. A bundled stdlib unit is checked only when the test runner sets SUSHI\_STDLIB\_DEAD\_GATE; a library unit never is. Delete the declaration, or make it `public` when it is API.
 
 ### CW2001 {#cw2001}
 
@@ -3850,21 +3856,13 @@ A unit was already imported earlier in this file. The duplicate use statement ha
 
 A program's own declaration takes priority over a name that a library of any kind (source, binary or hybrid) or a bundled stdlib module exports, and that is legal: a private function is emitted with internal linkage, so the two are separate symbols. The consumer's call binds to the consumer's declaration, and the library's own body keeps calling its own. Both declarations may be public: an unqualified name with two candidates is [CE3012](#ce3012) at the use. It warns because shadowing an export is rarely intended, and because the reader of the call site cannot see which of the two answers it. Rename your declaration, or keep it and accept that the library's body is unaffected. A name the library declares privately is shadowed the same way and says nothing, because each declaration carries the unit that declared it; a library TYPE is still one name for the program ([CE3011](#ce3011)). Write `use <lib/name> as alias` to put the export behind a dot and take the shadow away. The warning is the same for each library kind: a source library's export is found in its unit, a binary or hybrid library's export in its manifest, which lists every public function and template.
 
-### CW3003 {#cw3003}
-
-**Warning** · unit
-
-**Message:** `this library extends '{type}', a type it does not declare`
-
-The warning fires at `--lib` build time and nowhere else: shipping is when the claim becomes other people's problem, and it is the moment the author is present. A method is found on the receiver's type, so an extension puts its method name on the type for every consumer of the library, and a second library that claims the same name on the same type makes the two unusable together -- [CE0101](#ce0101), at a consumer who can edit neither. A builtin target is not exempt: `i32` is the most collidable target of all, because every unit of every program can reach it. A perk implementation does not warn, because the consumer's own implementation is the sanctioned override, so that claim has an escape. A conversion (`extend IoError as LibError:`) does not warn either: it puts no method name on its source, and only the unit that declares the target may declare it. An extension inside an ordinary program stays silent, `extend i32 squared()` is idiomatic Sushi there. To ship the method without the claim, declare your own wrapper type and extend that; to accept the claim, publish it -- `--lib-info` lists it under 'Foreign Extensions'.
-
 ### CW3004 {#cw3004}
 
 **Warning** · unit
 
 **Message:** `'{alias}' binds an empty namespace`
 
-The import brought no name that a qualified form could reach, so the `as` clause does nothing. The import still did its work: for example, a unit that is nothing but `extend` blocks exports methods rather than names. Drop the `as`.
+The import brought no name that a qualified form could reach, so the `as` clause does nothing. For example, `<text/ascii>` declares only methods on `u8`, so `use <text/ascii> as ascii` binds an empty namespace, and the methods need no import at all ([R1 and R2](design/extension-visibility.md#3-the-rules)). A unit of the program that is nothing but `extend` blocks exports methods rather than names: an import of it still brings its public extensions on types that it does not declare, with or without `as`, because a method cannot stand behind a namespace dot (R6). So the import can still do its work. Drop the `as`.
 
 ### CW3005 {#cw3005}
 
@@ -3872,7 +3870,7 @@ The import brought no name that a qualified form could reach, so the `as` clause
 
 **Message:** `` `public use` of '{origin}' re-exports nothing ``
 
-The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. A method interface such as the directory import `<collections>` brings no name (a `public use` of one still opens its methods to the importers), and a unit of nothing but `extend` blocks exports methods rather than names. The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something.
+The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. A directory import such as `<collections>` brings no name, and a unit of nothing but `extend` blocks exports methods rather than names (a `public use` of it still brings its public extensions on types that it does not declare to the importers). The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something.
 
 ### CW3006 {#cw3006}
 
@@ -3880,7 +3878,15 @@ The import brought no public name to hand on, so the `public` marker does nothin
 
 **Message:** `'{import_}' brings nothing this unit names`
 
-Behind `--warn-unused`, off by default. The unit writes no name the import brings: no function, constant, type or perk it declares or re-exports, no member behind its alias, no extension or perk method it declares, and for `<collections/strings>` no string method the module enables (the per-unit rule [CE3015](#ce3015) reads). A `public use` re-exports to the unit's own importers and is never reported, and neither is an import of a library. Delete the line.
+Behind `--warn-unused`, off by default. The unit writes no name the import brings: no function, constant, type or perk it declares or re-exports, no member behind its alias, and no public extension method that it declares on a type that it does not declare (only an import brings such a method, flat or aliased: [R6](design/extension-visibility.md#3-the-rules)). An import brings no other method: a stdlib method on a built-in type needs no import, and a public method of the home unit of a type travels with the type. So a unit that imports a stdlib module only to call its methods gets this warning. A `public use` re-exports to the unit's own importers and is never reported, and neither is an import of a library. Delete the line.
+
+### CW3007 {#cw3007}
+
+**Warning** · unit
+
+**Message:** `'{name}' hides the public extension method that '{owner}' declares`
+
+This unit declares an extension method, and it imports a unit that declares a public extension method of the same name on the same type. That is legal. A call in this unit calls the method of this unit, and the other unit keeps calling its own. It is a warning because a reader of a call cannot see which of the two methods answers it. Rename the method of this unit to call the imported one, or keep it.
 
 ### CW3506 {#cw3506}
 

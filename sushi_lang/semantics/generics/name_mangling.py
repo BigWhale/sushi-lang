@@ -2,6 +2,8 @@
 
 from typing import TYPE_CHECKING, Optional, Tuple
 
+from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
+
 if TYPE_CHECKING:
     from sushi_lang.semantics.types import Type
 
@@ -41,18 +43,25 @@ def mangle_function_name(
 
 
 def extension_symbol(receiver_display: str, method: str,
-                     method_type_args: Tuple['Type', ...] = ()) -> str:
+                     method_type_args: Tuple['Type', ...] = (),
+                     unit: Optional[str] = None) -> str:
     """The ONE symbol of an extension-method instance.
 
     Three consumers agree through this helper: the declaration, the call site, and the
     dedup of the copies. The `__{margs}` suffix appears only when method-level type
-    arguments exist, so every pre-existing extension symbol is unchanged -- and two
-    different solved U's on one receiver are two symbols, never one colliding body.
+    arguments exist, and two different solved U's on one receiver are two symbols,
+    never one colliding body.
+
+    `unit` is the unit that declares the extension method, or the unit that declares
+    the template of a copy. Two units can each declare a private method of one name on
+    one type (`docs/design/extension-visibility.md` C5), so the unit is part of the
+    symbol: `<unit>$<receiver>_<method>`. A perk-implementation method and a conversion
+    are unique in a program and have no unit.
     """
     base = f"{sanitize_extension_receiver(receiver_display)}_{method}"
     if method_type_args:
-        return f"{base}__{_join_sanitized(tuple(method_type_args))}"
-    return base
+        base = f"{base}__{_join_sanitized(tuple(method_type_args))}"
+    return mangle_unit_symbol(unit, base)
 
 
 def extension_receiver_name(target_type: Optional['Type']) -> str:

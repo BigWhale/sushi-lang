@@ -1,0 +1,13 @@
+# An import of <text/ascii> brings no method: a method of `u8` needs no import. A unit
+# that only calls methods of the module names nothing the import brings, so the
+# unused-use lint reports the import.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_ERROR_CODES_EXACT: CW3006
+# EXPECT_STDOUT_EXACT: "true\n"
+# EXPECT_NO_LEAKS: true
+
+use <text/ascii>
+
+fn main() i32:
+    println(a'7'.is_ascii_digit())
+    return 0

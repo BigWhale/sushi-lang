@@ -18,9 +18,6 @@ percent decoding and no IDNA. A port is read as written and is not checked
 against the scheme.
 :##
 
-use <collections/strings>
-use <text/ascii>
-
 ##:
 One absolute URL, split into its parts.
 
@@ -64,7 +61,7 @@ The one-line text of a URL error.
 
 - Returns: One line, with no trailing newline.
 :##
-extend UrlError text() string:
+public extend UrlError text() string:
     match self:
         UrlError.Empty -> return "empty"
         UrlError.NoScheme -> return "no scheme"
@@ -152,7 +149,7 @@ The known schemes are http 80, https 443, ws 80, wss 443, ftp 21 and ssh 22.
 - Returns: The written port, the scheme's default, or `Maybe.None()` when the text has no
   port and the scheme has no known default.
 :##
-extend Url port_or_default() Maybe@(i32):
+public extend Url port_or_default() Maybe@(i32):
     if (self.port != 0):
         return Maybe.Some(self.port)
     return default_port(self.scheme)
@@ -165,7 +162,7 @@ from a name after parsing.
 
 - Returns: True when the host was bracketed.
 :##
-extend Url host_is_ipv6_literal() bool:
+public extend Url host_is_ipv6_literal() bool:
     return self.host.contains(":")
 
 ##:
@@ -177,7 +174,7 @@ and an IPv6 host is bracketed again.
 
 - Returns: The URL as text.
 :##
-extend Url text() string:
+public extend Url text() string:
     # Every piece is an interpolated COPY. A field read is a borrow and push
     # consumes by position, so pushing self.scheme itself is CE2411.
     let string[] pieces = from([])

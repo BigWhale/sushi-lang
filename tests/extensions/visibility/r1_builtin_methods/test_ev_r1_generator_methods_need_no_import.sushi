@@ -1,0 +1,13 @@
+# R1, the tier of generator methods in the stdlib `.bc`: a method of a built-in type
+# needs no import.
+# EXPECT_STDOUT_EXACT: "15\nMOSTLY,HARMLESS\n2\ntrue\n"
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let string s = "  Mostly,Harmless  "
+    let string t = s.trim()
+    println(t.len())
+    println(t.upper())
+    let string[] parts = t.split(",")
+    println(parts.len())
+    println(t.starts_with("Mostly"))
+    return 0

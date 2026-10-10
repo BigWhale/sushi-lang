@@ -1,0 +1,15 @@
+# An import of <collections/strings> brings no method: a method of a built-in type
+# needs no import. A unit that only calls methods of the module names nothing the
+# import brings, so the unused-use lint reports the import.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_ERROR_CODES_EXACT: CW3006
+# EXPECT_STDOUT_EXACT: "2\nff\n"
+# EXPECT_NO_LEAKS
+
+use <collections/strings>
+
+fn main() i32:
+    println("Mostly\nHarmless".lines().len())
+    let u32 n = 255
+    println(n.to_hex())
+    return 0

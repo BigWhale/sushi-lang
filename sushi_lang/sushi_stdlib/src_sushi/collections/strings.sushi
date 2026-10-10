@@ -7,7 +7,6 @@ formatters and `StringBuilder` ship as Sushi source. One import gives both halve
 method here is bare and total, so a call gives the value directly, with no `??`.
 :##
 use <collections/strings>
-use <text/ascii>
 
 ##:
 Gives the value of one digit byte: `0`-`9`, then `a`-`z` or `A`-`Z` for 10 to 35.
@@ -79,7 +78,7 @@ A sign is refused: the text is digits only.
   println("ff".parse_u8(16).realise(0))
   ```
 :##
-extend string parse_u8(i32 base) Maybe@(u8):
+public extend string parse_u8(i32 base) Maybe@(u8):
     match strict_digits(self, 0, base, 255):
         Maybe.Some(v) -> return Maybe.Some(v as u8)
         Maybe.None -> return Maybe.None()
@@ -100,7 +99,7 @@ A sign is refused: the text is digits only.
   println("ff".parse_u16(16).realise(0))
   ```
 :##
-extend string parse_u16(i32 base) Maybe@(u16):
+public extend string parse_u16(i32 base) Maybe@(u16):
     match strict_digits(self, 0, base, 65535):
         Maybe.Some(v) -> return Maybe.Some(v as u16)
         Maybe.None -> return Maybe.None()
@@ -121,7 +120,7 @@ A sign is refused: the text is digits only.
   println("ff".parse_u32(16).realise(0))
   ```
 :##
-extend string parse_u32(i32 base) Maybe@(u32):
+public extend string parse_u32(i32 base) Maybe@(u32):
     match strict_digits(self, 0, base, 4294967295):
         Maybe.Some(v) -> return Maybe.Some(v as u32)
         Maybe.None -> return Maybe.None()
@@ -142,7 +141,7 @@ A sign is refused: the text is digits only.
   println("ff".parse_u64(16).realise(0))
   ```
 :##
-extend string parse_u64(i32 base) Maybe@(u64):
+public extend string parse_u64(i32 base) Maybe@(u64):
     match strict_digits(self, 0, base, 18446744073709551615):
         Maybe.Some(v) -> return Maybe.Some(v as u64)
         Maybe.None -> return Maybe.None()
@@ -163,7 +162,7 @@ One leading `-` is legal and nothing else: `+` is refused.
   println("-7f".parse_i32(16).realise(0))
   ```
 :##
-extend string parse_i32(i32 base) Maybe@(i32):
+public extend string parse_i32(i32 base) Maybe@(i32):
     match strict_signed(self, base, 2147483647):
         Maybe.Some(v) -> return Maybe.Some(v as i32)
         Maybe.None -> return Maybe.None()
@@ -184,7 +183,7 @@ One leading `-` is legal and nothing else: `+` is refused.
   println("-7f".parse_i64(16).realise(0))
   ```
 :##
-extend string parse_i64(i32 base) Maybe@(i64):
+public extend string parse_i64(i32 base) Maybe@(i64):
     match strict_signed(self, base, 9223372036854775807):
         Maybe.Some(v) -> return Maybe.Some(v as i64)
         Maybe.None -> return Maybe.None()
@@ -240,7 +239,7 @@ An empty `t` gives the text unchanged.
   println("xxabc".trim_start_matches("x"))
   ```
 :##
-extend string trim_start_matches(string t) string:
+public extend string trim_start_matches(string t) string:
     let i32 m = t.size()
     let i32 start = 0
     if (m > 0):
@@ -260,7 +259,7 @@ An empty `t` gives the text unchanged.
   println("a/b///".trim_end_matches("/"))
   ```
 :##
-extend string trim_end_matches(string t) string:
+public extend string trim_end_matches(string t) string:
     let i32 m = t.size()
     let i32 end = self.size()
     if (m > 0):
@@ -281,7 +280,7 @@ the text unchanged.
   println("abxab".trim_matches("ab"))
   ```
 :##
-extend string trim_matches(string t) string:
+public extend string trim_matches(string t) string:
     return self.trim_start_matches(t).trim_end_matches(t)
 
 ##:
@@ -341,7 +340,7 @@ empty `set` gives the text unchanged.
   println("0042".trim_start_chars("0"))
   ```
 :##
-extend string trim_start_chars(string set) string:
+public extend string trim_start_chars(string set) string:
     let i32 n = self.size()
     let i32 start = 0
     while (start < n):
@@ -366,7 +365,7 @@ hold. An empty `set` gives the text unchanged.
   println("4200".trim_end_chars("0"))
   ```
 :##
-extend string trim_end_chars(string set) string:
+public extend string trim_end_chars(string set) string:
     let i32 end = self.size()
     while (end > 0):
         let i32 at = code_point_start_before(self, end)
@@ -389,7 +388,7 @@ gives the text unchanged.
   println("/a/b//".trim_chars("/"))
   ```
 :##
-extend string trim_chars(string set) string:
+public extend string trim_chars(string set) string:
     return self.trim_start_chars(set).trim_end_chars(set)
 
 ##:
@@ -408,7 +407,7 @@ only an empty `needle`, and a `start` more than the character count gives no mat
   println("abcabc".find_from("bc", 2).realise(-1))
   ```
 :##
-extend string find_from(string needle, i32 start) Maybe@(i32):
+public extend string find_from(string needle, i32 start) Maybe@(i32):
     let i32 n = self.size()
     let i32 at = 0
     let i32 index = 0
@@ -442,7 +441,7 @@ are not equal, and no byte is read for them.
   println("HeLLo".eq_ignore_case("hello"))
   ```
 :##
-extend string eq_ignore_case(string other) bool:
+public extend string eq_ignore_case(string other) bool:
     if (self.size() != other.size()):
         return false
     foreach(i in 0..self.size()):
@@ -463,7 +462,7 @@ gives one line and `""` gives none.
   println("one\r\ntwo\n".lines().len())
   ```
 :##
-extend string lines() string[]:
+public extend string lines() string[]:
     let string[] out = from([])
     let i32 n = self.size()
     let i32 start = 0
@@ -490,7 +489,7 @@ text of white space alone gives no token.
   println(" Mostly \t Harmless ".split_whitespace().len())
   ```
 :##
-extend string split_whitespace() string[]:
+public extend string split_whitespace() string[]:
     let string[] out = from([])
     let i32 n = self.size()
     let i32 start = -1
@@ -517,7 +516,7 @@ rule of `len()`, so `s.chars().len()` equals `s.len()`.
   println("caf\u00e9".chars().len())
   ```
 :##
-extend string chars() string[]:
+public extend string chars() string[]:
     let string[] out = from([])
     let i32 n = self.size()
     let i32 start = -1
@@ -593,7 +592,7 @@ Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
   println(n.to_hex())
   ```
 :##
-extend u8 to_hex() string:
+public extend u8 to_hex() string:
     return radix_digits(self as u64, 16, 0)
 
 ##:
@@ -606,7 +605,7 @@ Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
   println(n.to_hex())
   ```
 :##
-extend u16 to_hex() string:
+public extend u16 to_hex() string:
     return radix_digits(self as u64, 16, 0)
 
 ##:
@@ -619,7 +618,7 @@ Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
   println(n.to_hex())
   ```
 :##
-extend u32 to_hex() string:
+public extend u32 to_hex() string:
     return radix_digits(self as u64, 16, 0)
 
 ##:
@@ -632,7 +631,7 @@ Writes the value in base 16, lower case, with no leading zero (`0` gives `"0"`).
   println(n.to_hex())
   ```
 :##
-extend u64 to_hex() string:
+public extend u64 to_hex() string:
     return radix_digits(self as u64, 16, 0)
 
 ##:
@@ -647,7 +646,7 @@ A negative value gives the two's complement bits of a `i8`.
   println(n.to_hex())
   ```
 :##
-extend i8 to_hex() string:
+public extend i8 to_hex() string:
     return radix_digits((self as u8) as u64, 16, 0)
 
 ##:
@@ -662,7 +661,7 @@ A negative value gives the two's complement bits of a `i16`.
   println(n.to_hex())
   ```
 :##
-extend i16 to_hex() string:
+public extend i16 to_hex() string:
     return radix_digits((self as u16) as u64, 16, 0)
 
 ##:
@@ -677,7 +676,7 @@ A negative value gives the two's complement bits of a `i32`.
   println(n.to_hex())
   ```
 :##
-extend i32 to_hex() string:
+public extend i32 to_hex() string:
     return radix_digits((self as u32) as u64, 16, 0)
 
 ##:
@@ -692,7 +691,7 @@ A negative value gives the two's complement bits of a `i64`.
   println(n.to_hex())
   ```
 :##
-extend i64 to_hex() string:
+public extend i64 to_hex() string:
     return radix_digits((self as u64) as u64, 16, 0)
 
 ##:
@@ -706,7 +705,7 @@ Writes the value in base 16, lower case, with leading zeros to `w` digits.
   println(n.to_hex_width(4))
   ```
 :##
-extend u8 to_hex_width(i32 w) string:
+public extend u8 to_hex_width(i32 w) string:
     return radix_digits(self as u64, 16, w)
 
 ##:
@@ -720,7 +719,7 @@ Writes the value in base 16, lower case, with leading zeros to `w` digits.
   println(n.to_hex_width(4))
   ```
 :##
-extend u16 to_hex_width(i32 w) string:
+public extend u16 to_hex_width(i32 w) string:
     return radix_digits(self as u64, 16, w)
 
 ##:
@@ -734,7 +733,7 @@ Writes the value in base 16, lower case, with leading zeros to `w` digits.
   println(n.to_hex_width(4))
   ```
 :##
-extend u32 to_hex_width(i32 w) string:
+public extend u32 to_hex_width(i32 w) string:
     return radix_digits(self as u64, 16, w)
 
 ##:
@@ -748,7 +747,7 @@ Writes the value in base 16, lower case, with leading zeros to `w` digits.
   println(n.to_hex_width(4))
   ```
 :##
-extend u64 to_hex_width(i32 w) string:
+public extend u64 to_hex_width(i32 w) string:
     return radix_digits(self as u64, 16, w)
 
 ##:
@@ -764,7 +763,7 @@ A negative value gives the two's complement bits of a `i8`.
   println(n.to_hex_width(4))
   ```
 :##
-extend i8 to_hex_width(i32 w) string:
+public extend i8 to_hex_width(i32 w) string:
     return radix_digits((self as u8) as u64, 16, w)
 
 ##:
@@ -780,7 +779,7 @@ A negative value gives the two's complement bits of a `i16`.
   println(n.to_hex_width(4))
   ```
 :##
-extend i16 to_hex_width(i32 w) string:
+public extend i16 to_hex_width(i32 w) string:
     return radix_digits((self as u16) as u64, 16, w)
 
 ##:
@@ -796,7 +795,7 @@ A negative value gives the two's complement bits of a `i32`.
   println(n.to_hex_width(4))
   ```
 :##
-extend i32 to_hex_width(i32 w) string:
+public extend i32 to_hex_width(i32 w) string:
     return radix_digits((self as u32) as u64, 16, w)
 
 ##:
@@ -812,7 +811,7 @@ A negative value gives the two's complement bits of a `i64`.
   println(n.to_hex_width(4))
   ```
 :##
-extend i64 to_hex_width(i32 w) string:
+public extend i64 to_hex_width(i32 w) string:
     return radix_digits((self as u64) as u64, 16, w)
 
 ##:
@@ -825,7 +824,7 @@ Writes the value in base 2, with no leading zero (`0` gives `"0"`).
   println(n.to_bin())
   ```
 :##
-extend u8 to_bin() string:
+public extend u8 to_bin() string:
     return radix_digits(self as u64, 2, 0)
 
 ##:
@@ -838,7 +837,7 @@ Writes the value in base 2, with no leading zero (`0` gives `"0"`).
   println(n.to_bin())
   ```
 :##
-extend u16 to_bin() string:
+public extend u16 to_bin() string:
     return radix_digits(self as u64, 2, 0)
 
 ##:
@@ -851,7 +850,7 @@ Writes the value in base 2, with no leading zero (`0` gives `"0"`).
   println(n.to_bin())
   ```
 :##
-extend u32 to_bin() string:
+public extend u32 to_bin() string:
     return radix_digits(self as u64, 2, 0)
 
 ##:
@@ -864,7 +863,7 @@ Writes the value in base 2, with no leading zero (`0` gives `"0"`).
   println(n.to_bin())
   ```
 :##
-extend u64 to_bin() string:
+public extend u64 to_bin() string:
     return radix_digits(self as u64, 2, 0)
 
 ##:
@@ -879,7 +878,7 @@ A negative value gives the two's complement bits of a `i8`.
   println(n.to_bin())
   ```
 :##
-extend i8 to_bin() string:
+public extend i8 to_bin() string:
     return radix_digits((self as u8) as u64, 2, 0)
 
 ##:
@@ -894,7 +893,7 @@ A negative value gives the two's complement bits of a `i16`.
   println(n.to_bin())
   ```
 :##
-extend i16 to_bin() string:
+public extend i16 to_bin() string:
     return radix_digits((self as u16) as u64, 2, 0)
 
 ##:
@@ -909,7 +908,7 @@ A negative value gives the two's complement bits of a `i32`.
   println(n.to_bin())
   ```
 :##
-extend i32 to_bin() string:
+public extend i32 to_bin() string:
     return radix_digits((self as u32) as u64, 2, 0)
 
 ##:
@@ -924,7 +923,7 @@ A negative value gives the two's complement bits of a `i64`.
   println(n.to_bin())
   ```
 :##
-extend i64 to_bin() string:
+public extend i64 to_bin() string:
     return radix_digits((self as u64) as u64, 2, 0)
 
 ##:
@@ -938,7 +937,7 @@ Writes the value in base 2, with leading zeros to `w` digits.
   println(n.to_bin_width(4))
   ```
 :##
-extend u8 to_bin_width(i32 w) string:
+public extend u8 to_bin_width(i32 w) string:
     return radix_digits(self as u64, 2, w)
 
 ##:
@@ -952,7 +951,7 @@ Writes the value in base 2, with leading zeros to `w` digits.
   println(n.to_bin_width(4))
   ```
 :##
-extend u16 to_bin_width(i32 w) string:
+public extend u16 to_bin_width(i32 w) string:
     return radix_digits(self as u64, 2, w)
 
 ##:
@@ -966,7 +965,7 @@ Writes the value in base 2, with leading zeros to `w` digits.
   println(n.to_bin_width(4))
   ```
 :##
-extend u32 to_bin_width(i32 w) string:
+public extend u32 to_bin_width(i32 w) string:
     return radix_digits(self as u64, 2, w)
 
 ##:
@@ -980,7 +979,7 @@ Writes the value in base 2, with leading zeros to `w` digits.
   println(n.to_bin_width(4))
   ```
 :##
-extend u64 to_bin_width(i32 w) string:
+public extend u64 to_bin_width(i32 w) string:
     return radix_digits(self as u64, 2, w)
 
 ##:
@@ -996,7 +995,7 @@ A negative value gives the two's complement bits of a `i8`.
   println(n.to_bin_width(4))
   ```
 :##
-extend i8 to_bin_width(i32 w) string:
+public extend i8 to_bin_width(i32 w) string:
     return radix_digits((self as u8) as u64, 2, w)
 
 ##:
@@ -1012,7 +1011,7 @@ A negative value gives the two's complement bits of a `i16`.
   println(n.to_bin_width(4))
   ```
 :##
-extend i16 to_bin_width(i32 w) string:
+public extend i16 to_bin_width(i32 w) string:
     return radix_digits((self as u16) as u64, 2, w)
 
 ##:
@@ -1028,7 +1027,7 @@ A negative value gives the two's complement bits of a `i32`.
   println(n.to_bin_width(4))
   ```
 :##
-extend i32 to_bin_width(i32 w) string:
+public extend i32 to_bin_width(i32 w) string:
     return radix_digits((self as u32) as u64, 2, w)
 
 ##:
@@ -1044,7 +1043,7 @@ A negative value gives the two's complement bits of a `i64`.
   println(n.to_bin_width(4))
   ```
 :##
-extend i64 to_bin_width(i32 w) string:
+public extend i64 to_bin_width(i32 w) string:
     return radix_digits((self as u64) as u64, 2, w)
 
 ##:
@@ -1060,7 +1059,7 @@ The value is rounded as C `printf("%.*f")` rounds it. A `p` below 0 is 0.
   println(x.to_fixed(2))
   ```
 :##
-extend f64 to_fixed(i32 p) string:
+public extend f64 to_fixed(i32 p) string:
     return fixed_digits(self, p)
 
 ##:
@@ -1076,7 +1075,7 @@ The value is rounded as C `printf("%.*f")` rounds it. A `p` below 0 is 0.
   println(x.to_fixed(2))
   ```
 :##
-extend f32 to_fixed(i32 p) string:
+public extend f32 to_fixed(i32 p) string:
     return fixed_digits(self as f64, p)
 
 ##:
@@ -1100,7 +1099,7 @@ Makes an empty builder.
   println(sb.is_empty())
   ```
 :##
-extend StringBuilder static new() StringBuilder:
+public extend StringBuilder static new() StringBuilder:
     return StringBuilder(from([]))
 
 ##:
@@ -1114,7 +1113,7 @@ Appends the bytes of a string.
   println(sb.finish())
   ```
 :##
-extend StringBuilder push(poke self, string s) ~:
+public extend StringBuilder push(poke self, string s) ~:
     self.bytes.extend_str(s)
 
 ##:
@@ -1128,7 +1127,7 @@ Appends one byte.
   println(sb.finish())
   ```
 :##
-extend StringBuilder push_byte(poke self, u8 b) ~:
+public extend StringBuilder push_byte(poke self, u8 b) ~:
     self.bytes.push(b)
 
 ##:
@@ -1142,7 +1141,7 @@ Counts the bytes collected so far.
   println(sb.size())
   ```
 :##
-extend StringBuilder size() i32:
+public extend StringBuilder size() i32:
     return self.bytes.len()
 
 ##:
@@ -1154,7 +1153,7 @@ Tests if the builder holds no byte.
   println(StringBuilder.new().is_empty())
   ```
 :##
-extend StringBuilder is_empty() bool:
+public extend StringBuilder is_empty() bool:
     return self.bytes.len() == 0
 
 ##:
@@ -1171,5 +1170,5 @@ The string takes the buffer: no byte is copied.
   println(sb.finish())
   ```
 :##
-extend StringBuilder finish(nom self) string:
+public extend StringBuilder finish(nom self) string:
     return string.from_bytes(nom self.bytes)

@@ -1,0 +1,8 @@
+# A method of the Sushi half of <collections/strings> is a method of `string`, a
+# built-in type, so it needs no import, as a built-in string method does.
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_NO_LEAKS: true
+
+fn main() i32:
+    println("Mostly\nHarmless".lines().len())
+    return 0

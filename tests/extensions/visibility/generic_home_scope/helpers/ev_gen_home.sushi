@@ -1,0 +1,14 @@
+# A generic function and a public extension template that call a private extension of
+# this unit.
+public struct Bag@(T):
+    T item
+    i32 n
+
+extend i32 scaled() i32:
+    return self * 10
+
+public fn bag_total@(T)(Bag@(T) b) i32:
+    return b.n.scaled()
+
+public extend Bag@(T) weight() i32:
+    return self.n.scaled() + 1

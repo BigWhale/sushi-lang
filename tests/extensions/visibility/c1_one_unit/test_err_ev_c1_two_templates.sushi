@@ -1,0 +1,15 @@
+# C1 for a template: two templates of one name on one generic base in ONE unit are the
+# duplicate error, as before.
+# EXPECT_ERROR_CODES_EXACT: CE0101
+struct Pod@(T):
+    T item
+
+extend Pod@(T) mark() i32:
+    return 1
+
+extend Pod@(T) mark() i32:
+    return 2
+
+fn main() i32:
+    println(Pod(5).mark())
+    return 0

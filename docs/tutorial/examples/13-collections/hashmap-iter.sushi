@@ -9,7 +9,6 @@
 # than relying on iteration order for our output.
 
 use <collections/hashmap>
-use <collections/strings>
 
 fn main() i32:
     let HashMap@(string, i32) scores = HashMap.new()

@@ -29,17 +29,26 @@ six collectors, that recorded the same four facts a second time (#691).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import AbstractSet, Any, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
 
 
+# An extension method or a static method (`docs/design/extension-visibility.md` R4 to
+# R7) carries its own marker. A conversion (`extend A as B:`) is written with `extend`
+# too, but it carries no marker and travels with its target (R8), so it is a kind of its
+# own. The declaration walk yields one of the two words for each `extend` block.
+EXTENSION_METHOD = "extension method"
+CONVERSION = "conversion"
+
 # Every kind `semantics/ast_walk.declarations()` yields, classified by where its answer
 # comes from. `docs/design/visibility.md` rules on all four groups, and
 # `tests/unit/test_visibility_seam_is_total.py` asserts the union is the whole walk, so a
 # new declaration kind cannot get half the rule.
-CARRIES_MARKER = frozenset({"constant", "variable", "struct", "enum", "perk", "function"})
+CARRIES_MARKER = frozenset({"constant", "variable", "struct", "enum", "perk", "function",
+                            EXTENSION_METHOD})
 
 # As visible as the declaration it is part of. A private enum variant would make a total
 # `match` unwritable across a unit boundary, so exhaustiveness decides this one.
@@ -47,8 +56,9 @@ FOLLOWS_DECLARATION = frozenset({"field", "variant", "perk method"})
 
 # As visible as the type it is attached to (Ruling 2). Self-enforcing: a private type
 # cannot be named, constructed or received elsewhere, so its methods are unreachable
-# already, and method resolution stays blind to the caller.
-FOLLOWS_TARGET_TYPE = frozenset({"extension", "perk implementation"})
+# already. A perk implementation is global and unique (R8), and a conversion can be
+# declared only in the home unit of its target.
+FOLLOWS_TARGET_TYPE = frozenset({CONVERSION, "perk implementation"})
 
 # No visibility at all. An `unsafe external` block is a unit's private implementation
 # detail by construction -- `ptr` is quarantined and CE5008 stops one crossing a boundary.
@@ -72,6 +82,7 @@ def declared_public(kind: str, marked: bool) -> bool:
 _VERB = {
     "function": "call",
     "generic_function": "call",
+    EXTENSION_METHOD: "call",
     "constant": "read",
     "variable": "read",
 }
@@ -91,8 +102,6 @@ def kind_word(kind: str, decl: Any) -> str:
     """
     if kind == "enum" and getattr(decl, "is_error", False):
         return "error type"
-    if kind == "extension" and getattr(decl, "is_conversion", False):
-        return "conversion"
     return kind
 
 
@@ -535,6 +544,15 @@ def reject_private_perk_constraints(
             current_unit=current_unit, filename=filename)
 
 
+def extension_method_name(target: str, method: str) -> str:
+    """The name an extension method is filed under: its target, then its own name.
+
+    The method name alone is not unique, because many targets can declare one method
+    name. The key `(EXTENSION_METHOD, "i32.twice")` holds one method on one target.
+    """
+    return f"{target}.{method}"
+
+
 def record_declaration(
     table: Optional[VisibilityTable],
     kind: str,
@@ -542,6 +560,7 @@ def record_declaration(
     *,
     unit_name: Optional[str],
     filename: Optional[str],
+    name: Optional[str] = None,
 ) -> None:
     """File one declaration from the collector that meets it.
 
@@ -549,11 +568,13 @@ def record_declaration(
     duplicate it refuses is exactly what `contested` has to remember, or the loser is
     later told the name is somebody else's (D2). The same declaration filed twice from
     one unit is a no-op. A collector built without a table -- a throwaway over a
-    library snippet -- files nothing, as it recorded nothing before.
+    library snippet -- files nothing, as it recorded nothing before. `name` replaces
+    the name of the node where the node name is not the key (`extension_method_name`).
     """
     if table is None or kind not in CARRIES_MARKER:
         return
-    name = getattr(node, "name", None)
+    if name is None:
+        name = getattr(node, "name", None)
     if not isinstance(name, str):
         return
     table.record(DeclOrigin(
@@ -565,3 +586,175 @@ def record_declaration(
         is_public=getattr(node, "is_public", True),
         is_error=getattr(node, "is_error", False),
     ))
+
+
+# --- Extension methods (`docs/design/extension-visibility.md`) -------------------------
+#
+# A method is found on the type of its receiver, so the question "may this unit call it"
+# cannot be answered by the flat scope of names. It has its own predicate, with the same
+# escapes as `_permitted`, and every caller of method resolution reads it through
+# `extension_reach`. The two diagnostics it can cause are in the pass adapter
+# (`passes/types/visibility.py`), because only a call site knows its span.
+
+
+class MethodReach(Enum):
+    """What one extension method is to one calling unit."""
+
+    VISIBLE = "visible"
+    # Another unit's extension with no marker (R4): CE3005.
+    PRIVATE = "private"
+    # A public extension on a type that its unit does not declare, and this unit does
+    # not import that unit (R6): CE3022.
+    NOT_IMPORTED = "not imported"
+
+
+# The built-in generic types of R1. Their name needs no import, and the stdlib is their
+# home. `HashMap@(K, V)` is not one: its name needs `use <collections/hashmap>` (R3).
+BUILTIN_GENERIC_BASES = frozenset({"List", "Own", "Maybe", "Result"})
+
+
+def _base_name(ty: Any) -> Optional[str]:
+    """The declared name of a type: the base of a generic, the name of anything else."""
+    for attr in ("generic_base", "base_name", "name"):
+        name = getattr(ty, attr, None)
+        if isinstance(name, str):
+            return name
+    return None
+
+
+def is_builtin_type(ty: Any) -> bool:
+    """R1: is `ty` a type whose name needs no import, so that the stdlib is its home?
+
+    A primitive, `string`, a fixed or a dynamic array, `List@(T)`, `Own@(T)`,
+    `Maybe@(T)` and `Result@(T, E)`.
+    """
+    from sushi_lang.semantics.typesys import ArrayType, BuiltinType, DynamicArrayType
+    if isinstance(ty, (BuiltinType, ArrayType, DynamicArrayType)):
+        return True
+    return _base_name(ty) in BUILTIN_GENERIC_BASES
+
+
+def home_unit_of(table: Optional[VisibilityTable], ty: Any) -> Optional[str]:
+    """R5: the unit that declares the type `ty`, or None when it has no home unit.
+
+    The home of a generic type is the unit that declares its base. The home of a
+    predefined enum is the stdlib module that its stamp names (`FileMode` and
+    `<io/fs>`). A built-in type, an array type and a type that no unit declares have no
+    home unit.
+    """
+    from sushi_lang.semantics.typesys import ArrayType, BuiltinType, DynamicArrayType
+    if table is None or isinstance(ty, (BuiltinType, ArrayType, DynamicArrayType)):
+        return None
+    name = _base_name(ty)
+    if name is None:
+        return None
+    for kind in TYPE_KINDS:
+        origin = table.origin(kind, name)
+        if origin is not None:
+            return origin.unit_name
+    home_module = getattr(ty, "home_module", None)
+    return home_module if isinstance(home_module, str) else None
+
+
+def extension_reach(table: Optional[VisibilityTable], method: Any, target: Any,
+                    asker: Optional[str], scope: Any) -> MethodReach:
+    """May the unit `asker` call the extension `method` on a receiver of type `target`?
+
+    The whole rule of `docs/design/extension-visibility.md`, in one place, for an
+    instance method and a static method alike (R7). `method` is any record that carries
+    `unit_name` and `is_public`. `scope` is the `UnitScope` of the calling unit. A
+    record with no unit, and a reader with no unit, take the escapes of `_permitted`.
+    """
+    declared_in = getattr(method, "unit_name", None)
+    if declared_in is None or asker is None or declared_in == asker:
+        return MethodReach.VISIBLE
+    if not getattr(method, "is_public", False):
+        return MethodReach.PRIVATE
+    if (not needs_import(table, method, target) or scope is None
+            or scope.brings_methods_of(declared_in)):
+        return MethodReach.VISIBLE
+    return MethodReach.NOT_IMPORTED
+
+
+def needs_import(table: Optional[VisibilityTable], method: Any, target: Any) -> bool:
+    """R6: does another unit see the extension `method` only through an import of its unit?
+
+    It does when the method is public, its unit is not the home unit of `target` (R5),
+    and it is not a stdlib method on a built-in type (R1). Those two are visible in
+    every unit. `method` is any record that carries `unit_name` and `is_public`.
+    """
+    declared_in = getattr(method, "unit_name", None)
+    return (declared_in is not None and getattr(method, "is_public", False)
+            and declared_in != home_unit_of(table, target)
+            and not is_stdlib_builtin_method(method, target))
+
+
+def is_stdlib_builtin_method(method: Any, target: Any) -> bool:
+    """R1: is `method` a public extension that a Sushi-source stdlib module declares on a
+    built-in type? Such a method is visible in every unit, with no import."""
+    from sushi_lang.semantics.stdlib_registry import is_source_stdlib_module
+    declared_in = getattr(method, "unit_name", None)
+    return (getattr(method, "is_public", False) and declared_in is not None
+            and is_source_stdlib_module(declared_in) and is_builtin_type(target))
+
+
+@dataclass(frozen=True)
+class ExtensionClaim:
+    """The unit and the marker of an extension declaration that no table holds yet.
+
+    `extensions_collide` reads a record and a claim alike.
+    """
+
+    unit_name: Optional[str]
+    is_public: bool
+
+
+def extensions_collide(table: Optional[VisibilityTable], target: Any,
+                       first: Any, second: Any) -> bool:
+    """Can two extensions of one name on one type not both be declared?
+
+    C1: one unit declares both. C2 for a home unit: one of them is a public extension in
+    the home unit of the type, so it is visible wherever the type is (R5), and the other
+    could never be called. Any other pair coexists: each unit calls its own (C5), and an
+    imported one is the warning or the error of the call (C3, C4).
+    """
+    if first.unit_name == second.unit_name:
+        return True
+    home = home_unit_of(table, target)
+    return home is not None and any(
+        getattr(each, "is_public", False) and each.unit_name == home
+        for each in (first, second))
+
+
+def hides_import(table: Optional[VisibilityTable], own: Any, other: Any,
+                 scope: Any, target: Any = None) -> bool:
+    """C3: does the unit's own extension `own` hide the imported public extension `other`?
+
+    Both are of one name on one type. `other` is visible in the unit of `own` through an
+    import alone (R6). A public method of the home unit (R5) and a stdlib method on a
+    built-in type (R1) are visible everywhere, and an own extension of their name is an
+    error at its declaration (C2), not this warning. `target` is the type of the two, as
+    written for a template; the default is the target of `own`.
+    """
+    if target is None:
+        target = own.target_type
+    declared_in = getattr(other, "unit_name", None)
+    return (declared_in != own.unit_name
+            and bool(getattr(other, "is_static", False)) == bool(
+                getattr(own, "is_static", False))
+            and needs_import(table, other, target)
+            and scope is not None and scope.brings_methods_of(declared_in))
+
+
+def warn_hidden_extension(reporter: Reporter, own: Any, other: Any, name: str) -> None:
+    """CW3007 at the own extension, with a note at the imported one it hides (C3).
+
+    `name` is the method as the reader writes it, `<type>.<method>`.
+    """
+    diagnostic = er.emit_with(reporter, er.ERR.CW3007, own.name_span or own.loc,
+                              filename=own.filename, name=name, owner=other.unit_name)
+    if other.name_span is not None and other.filename is not None:
+        diagnostic = diagnostic.note_at("the imported extension method is declared here",
+                                        other.name_span, other.filename)
+    diagnostic.help("a call in this unit calls the method of this unit; rename it to "
+                    "call the imported one").emit()

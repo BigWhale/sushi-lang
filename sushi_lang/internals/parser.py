@@ -299,6 +299,30 @@ def _inside_a_perk(stack: list) -> bool:
 # where an alternative `|` is legal.
 _DOUBLE_BAR_HINT = "put a space: '1 | 2'"
 
+# `public` before the two `extend` forms that carry no marker
+# (docs/design/extension-visibility.md R8, R9).
+_UNMARKED_EXTEND_HINTS = {
+    "WITH": "a perk implementation has no `public` marker: it is as visible as its "
+            "target type. Remove `public`",
+    "AS": "a conversion has no `public` marker: it goes with its target type. "
+          "Remove `public`",
+}
+
+
+def _public_extend_hint(e: UnexpectedInput) -> Optional[str]:
+    """The help for `public extend T with P:` and `public extend A as B:`, else None."""
+    token_type = getattr(getattr(e, "token", None), "type", None)
+    hint = _UNMARKED_EXTEND_HINTS.get(token_type) if isinstance(token_type, str) else None
+    if hint is None:
+        return None
+    parser = getattr(e, "interactive_parser", None)
+    stack = getattr(getattr(parser, "parser_state", None), "value_stack", None) or []
+    kinds = [getattr(value, "type", None) for value in stack]
+    if "EXTEND" not in kinds:
+        return None
+    at = len(kinds) - 1 - kinds[::-1].index("EXTEND")
+    return hint if at > 0 and kinds[at - 1] == "PUBLIC" else None
+
 
 def parse_error_hint(e: UnexpectedInput, src: str = "") -> Optional[str]:
     """Advice for a parse failure the grammar cannot phrase itself. None if none applies."""
@@ -312,6 +336,10 @@ def parse_error_hint(e: UnexpectedInput, src: str = "") -> Optional[str]:
     if (expected is not None and "BIT_OR" in expected
             and getattr(token, "type", None) == "OR" and str(token) == "||"):
         return _DOUBLE_BAR_HINT
+
+    hint = _public_extend_hint(e)
+    if hint is not None:
+        return hint
 
     line = getattr(e, "line", None)
     col = getattr(e, "column", None)

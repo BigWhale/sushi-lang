@@ -1,0 +1,17 @@
+# The home unit of `Vec` and `Wrap`, with a public extension on each.
+public struct Vec:
+    i32 x
+    i32 y
+
+public struct Wrap@(T):
+    T held
+    i32 n
+
+public extend Vec length_sq() i32:
+    return self.x * self.x + self.y * self.y
+
+public extend Wrap@(T) count() i32:
+    return self.n
+
+public extend Wrap@(i32) doubled() i32:
+    return self.held * 2

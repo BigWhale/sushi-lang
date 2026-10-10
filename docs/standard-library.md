@@ -61,14 +61,22 @@ Complete reference for Sushi's standard library modules and types.
 
 ### Importing Modules
 
+An import brings NAMES: functions, constants, types and perks. It never brings a method.
+Every stdlib method on a built-in type (a primitive, `string`, an array, `List@(T)`,
+`Own@(T)`, `Maybe@(T)`, `Result@(T, E)`) is available in every unit with no import:
+`s.len()`, `s.lines()`, `n.to_hex()`, `xs.map(f)`, `xs.sort()`, `buf.read_u16_le(0)`,
+`b.is_ascii_digit()`. A type that a module declares (`HashMap@(K, V)`, `File`,
+`BufReader@(R)`) needs the import for its NAME and its static methods (`HashMap.new()`),
+and its public methods travel with it: a unit that receives a value of the type calls
+them with no import. The design record is
+[Extension visibility](design/extension-visibility.md).
+
 ```sushi
-use <collections/strings>  # String methods, number formatters, StringBuilder
+use <collections/strings>  # StringBuilder
 use <collections/hashmap>  # HashMap@(K, V)
-use <collections/iter>     # Higher-order combinators (map/filter/fold/compose/enumerate/zip)
-use <collections/sort>     # sort, sort_by and binary_search on T[]
+use <collections/iter>     # The free combinators (map/filter/fold/compose/enumerate/zip)
 use <compression/zlib>     # DEFLATE and the zlib container
 use <encoding/base64>      # Base64 encode and decode
-use <encoding/binary>      # Fixed-width integers in bytes, in either byte order
 use <encoding/hex>         # Hex encode and decode
 use <encoding/msgpack>     # MessagePack decoder
 use <io/buf>               # BufReader, BufWriter: buffered over any handle
@@ -84,7 +92,6 @@ use <net/udp>              # UdpSocket
 use <net/dns>              # resolve a host name
 use <net/ip>               # IpAddr, parse and format
 use <net/url>              # split a URL
-use <text/ascii>           # ASCII classes and case maps on u8
 use <toolchain/slib>       # read the header and metadata of a .slib
 use <math>                 # Math functions
 use <random>               # Random number generation
@@ -118,8 +125,6 @@ let i32 port = parse_number(text).realise(8080)
 #### Optional Values
 
 ```sushi
-use <collections/strings>
-
 # Safe array access
 match arr.get(0):
     Maybe.Some(first) -> println("First: {first}")
@@ -158,8 +163,7 @@ foreach(n in arr.iter()):
 #### String Processing
 
 ```sushi
-use <collections/strings>
-
+# A string method needs no import.
 let string text = "  Hello World  "
 let string clean = text.trim().lower()  # "hello world"
 
@@ -248,7 +252,7 @@ fn greet() ~ | IoError:
   `capacity()`, `extend()`, `extend_range()`
 - In place: `fill()`, `reverse()`, `swap()`; `resize()` (dynamic only)
 - Numeric reductions: `min()`, `max()`, `add_up()`
-- Sorting (`use <collections/sort>`, dynamic only): `sort()`, `sort_by()`, `binary_search()`
+- Sorting (dynamic only): `sort()`, `sort_by()`, `binary_search()`
 - Copies: `clone()`, `s(start, end)`, `ss(start, count)`; the hash: `hash()`
 - Byte arrays (`u8[]`): `to_string()`, `to_string_checked()`
 - Memory (dynamic only): `free()`, `destroy()`
@@ -256,15 +260,14 @@ fn greet() ~ | IoError:
 - Unsafe direct indexing: `arr[i]`
 - Indexed assignment: `arr[i] := v` (bounds-checked; the element it replaces is freed)
 
-**Strings** - methods from `use <collections/strings>`:
+**Strings** - methods on `string`, with no import:
 - Inspection, slicing, transformation, padding, stripping
 - Splitting/joining (`split_once`, `rsplit_once` answer a `Maybe` of a pair), case conversion, parsing
 - UTF-8 aware where needed
-- Each unit that calls a string method must import the module itself ([CE3015](error-catalog.md#ce3015)).
-  `is_empty()` and `clone()` need no import
+- `use <collections/strings>` brings the `StringBuilder` type, not the methods
 
-**Iter combinators** - higher-order functions (`use <collections/iter>`):
-- Methods on `List@(T)` and on `T[]`: `xs.map(f)`, `xs.filter(pred)`, `xs.fold(init, f)`.
+**Iter combinators** - higher-order functions (the free functions need `use <collections/iter>`):
+- Methods on `List@(T)` and on `T[]`, with no import: `xs.map(f)`, `xs.filter(pred)`, `xs.fold(init, f)`.
   Each is bare: it takes bare functions and answers the value itself, not a `Result`, so
   no `??` follows the call. `filter` accepts an owning element type: it clones each
   element that it keeps
@@ -358,7 +361,7 @@ Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and
 - `decode(string text)` - Read the text back as bytes; a `HexError` or a `Base64Error` when it does not decode
 - Each module has `encode` and `decode`: import two of them with `as` (`use <encoding/base64> as b64`)
 
-### Encoding (`use <encoding/binary>`)
+### Encoding (`<encoding/binary>`: methods on `u8[]`, no import)
 
 - `read_u16_le(i32 at)` ... `read_u64_be(i32 at)` - Read a fixed-width unsigned integer from a `u8[]` at an offset, in either byte order; `Maybe.None()` when it does not fit
 - `push_u16_le(v)` ... `push_u64_be(v)` - Append the bytes of a fixed-width unsigned integer to a `u8[]`, in either byte order
@@ -378,7 +381,7 @@ Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and
 - `<io/contracts>` - The perks `Reader`, `Writer` and `Seek`. See
   [I/O contracts](stdlib/io/contracts.md)
 
-### Text (`use <text/ascii>`)
+### Text (`<text/ascii>`: methods on `u8`, no import)
 
 - `is_ascii_digit()`, `is_ascii_upper()`, `is_ascii_lower()`, `is_ascii_alpha()`,
   `is_ascii_alnum()`, `is_ascii_hex()`, `is_ascii_space()` - Byte classes on `u8`

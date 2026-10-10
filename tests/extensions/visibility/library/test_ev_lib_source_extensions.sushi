@@ -1,0 +1,13 @@
+# A source library: R4 to R6 apply as written. The public extension on the type of the
+# library travels with the type, the public extension on `i32` comes with the import,
+# and the private extension is called inside the library.
+# BUILD_LIB: ev_lib_gauge.sushi
+# EXPECT_STDOUT_EXACT: "4\n1005\n400\n"
+use <lib/ev_lib_gauge>
+
+fn main() i32:
+    let Gauge g = Gauge(4)
+    println(g.shown_level())
+    println(5.gauged())
+    println(read_hidden(g))
+    return 0

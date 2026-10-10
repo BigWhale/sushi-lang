@@ -1,7 +1,8 @@
 # FFI: the RECEIVER is exempt from the public `ptr` fence. `Handle` carries a foreign
-# handle in a field, which CE5008's own text sanctions, so an extension on it exposes
-# nothing the struct did not. A fence that read the target type would make the wrapper
-# struct unextendable, which is the pattern the error message recommends.
+# handle in a field, which CE5008's own text sanctions. The extension has no marker, so
+# it is private to this unit and promises nothing to another unit. A fence that read the
+# target type would make the wrapper struct unextendable, which is the pattern the error
+# message recommends.
 # EXPECT_STDOUT_EXACT: "size 16\n"
 unsafe external "C" as libc because "the receiver needs a field the fence would refuse":
     fn malloc(i64 n) ptr = "malloc"

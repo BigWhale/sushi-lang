@@ -1,0 +1,14 @@
+# --warn-unused: an import whose unit is the home of a type brings no method of the type.
+# A public method of the home unit travels with the type (R5), so a unit that only
+# calls it on a value it receives does not use the import of the home unit. An import
+# whose public extension on a built-in type (R6) the unit never calls is unused too.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_ERROR_CODES_EXACT: CW3006, CW3006
+# EXPECT_STDERR_CONTAINS: "'"helpers/ev_unused_vec"' brings nothing this unit names"
+# EXPECT_STDERR_CONTAINS: "'"helpers/ev_unused_tools"' brings nothing this unit names"
+use "helpers/ev_unused_vec"
+use "helpers/ev_unused_tools"
+use "helpers/ev_unused_vec_maker"
+
+fn main() i32:
+    return make_vec(3, 4).len_sq() - 25

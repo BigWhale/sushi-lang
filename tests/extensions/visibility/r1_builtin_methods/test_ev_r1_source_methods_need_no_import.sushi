@@ -1,0 +1,22 @@
+# R1, the tier of methods that a Sushi-source stdlib module declares on a built-in
+# type: <collections/strings>, <collections/iter>, <collections/sort> and
+# <text/ascii>. Each one needs no import.
+# EXPECT_STDOUT_EXACT: "2\nff\n1\n12\nfalse\n"
+# EXPECT_NO_LEAKS: true
+fn dbl(i32 x) i32:
+    return x * 2
+
+fn add(i32 a, i32 b) i32:
+    return a + b
+
+fn main() i32:
+    println("Mostly\nHarmless".lines().len())
+    let i32 n = 255
+    println(n.to_hex())
+    let i32[] xs = from([3, 1, 2])
+    xs.sort()
+    println(xs[0])
+    let List@(i32) ys = xs.map(dbl)
+    println(ys.fold(0, add))
+    println((65 as u8).is_ascii_digit())
+    return 0

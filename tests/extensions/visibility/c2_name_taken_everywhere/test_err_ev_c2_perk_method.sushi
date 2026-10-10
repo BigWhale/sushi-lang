@@ -1,0 +1,11 @@
+# C2 against a method of a perk implementation (R8). A name on one type has one home,
+# so an extension of that name in another unit is refused at its declaration.
+# EXPECT_ERROR_CODES_EXACT: CE4007
+use "helpers/ev_c2_bells"
+
+extend Bell ring() string:
+    return "dong"
+
+fn main() i32:
+    println(Bell(1).size)
+    return 0

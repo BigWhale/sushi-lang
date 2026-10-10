@@ -1,0 +1,5 @@
+# A method that no unit of the program declares is CE2008, as before.
+# EXPECT_ERROR_CODES_EXACT: CE2008
+fn main() i32:
+    println(5.nowhere())
+    return 0

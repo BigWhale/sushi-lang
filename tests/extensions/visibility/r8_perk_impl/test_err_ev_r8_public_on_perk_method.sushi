@@ -1,0 +1,16 @@
+# R8: a perk implementation carries no marker, and `public` on one of its methods is
+# still refused.
+# EXPECT_ERROR_CODES_EXACT: CE6103
+perk Loud:
+    fn shout() string
+
+struct Horn:
+    i32 level
+
+extend Horn with Loud:
+    public fn shout() string:
+        return "loud"
+
+fn main() i32:
+    println(Horn(1).shout())
+    return 0

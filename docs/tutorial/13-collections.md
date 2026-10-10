@@ -141,8 +141,8 @@ Total via entries: 277
 Notice the example accumulates totals (counts and sums) rather than printing each entry as it
 comes. That's deliberate: **a hash map has no defined iteration order**, so relying on the
 order things come out would be a bug. Aggregate, or sort afterwards, if you need determinism.
-(`.len()` on the string keys needs `use <collections/strings>`, which is why the example
-imports it too.)
+(`.len()` on the string keys needs no import: a method of a built-in type is available in
+every unit.)
 
 The receiver of `.keys()`, `.values()` and `.entries()` can be any expression that gives a
 map: a variable (`scores.entries()`), a field (`h.m.values()`) or the result of a call.

@@ -43,10 +43,11 @@ class FunctionDefinitions:
         self.codegen.body_scope_unit = saved
         helpers.end_function()
 
-    def emit_extension_method_def(self, ext: ExtendDef) -> ir.Function:
+    def emit_extension_method_def(self, ext: ExtendDef,
+                                  unit_name: str | None = None) -> ir.Function:
         """Define the body of an extension method."""
         helpers = self.codegen.functions.helpers
-        func_name = helpers.get_extension_method_name(ext)
+        func_name = helpers.get_extension_method_name(ext, unit_name)
         llvm_fn = self.codegen.funcs.get(func_name)
         if not llvm_fn:
             raise_internal_error("CE0025", name=func_name)

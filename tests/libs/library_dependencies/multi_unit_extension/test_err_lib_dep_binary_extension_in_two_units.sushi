@@ -1,8 +1,14 @@
-# Two binary libraries each declare `extend i32 doubled()`, and a consumer of two
-# units calls the method in both. The duplicate is refused before the link.
-# BUILD_LIB_WARNS: ld_mx_p.sushi binary -> CW3003
-# BUILD_LIB_WARNS: ld_mx_q.sushi binary -> CW3003
-# EXPECT_ERROR_CODES_EXACT: CE0101
+# Two binary libraries each declare `public extend i32 doubled()`, and each of the
+# two units of this program imports both and calls the method. Each call is an
+# error, with a note at each declaration. The code is CE3023, one time for each
+# call.
+# EXPECT_ERROR_CODES_EXACT: CE3023, CE3023
+# BUILD_LIB_BINARY: ld_mx_p.sushi
+# BUILD_LIB_BINARY: ld_mx_q.sushi
+# EXPECT_STDERR_CONTAINS: "ld_mx_helper.sushi:5:"
+# EXPECT_STDERR_CONTAINS: "ld_mx_p"
+# EXPECT_STDERR_CONTAINS: "ld_mx_q"
+# EXPECT_STDERR_CONTAINS: "test_err_lib_dep_binary_extension_in_two_units.sushi:18:"
 use <lib/ld_mx_p>
 use <lib/ld_mx_q>
 use "ld_mx_helper"

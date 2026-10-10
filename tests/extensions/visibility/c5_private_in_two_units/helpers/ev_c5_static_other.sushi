@@ -1,0 +1,8 @@
+use "helpers/ev_c5_crates"
+
+extend Crate@(T) static weigh(i32 extra, nom T item) i32:
+    let Crate@(T) c = Crate(nom item, 10)
+    return c.size + extra
+
+public fn other_weigh() i32:
+    return Crate.weigh(0, nom 5)

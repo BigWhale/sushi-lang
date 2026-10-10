@@ -273,7 +273,8 @@ class ExpressionScanner:
         already been collected.
         """
         from sushi_lang.semantics.ast import Name
-        from sushi_lang.semantics.statics import solve_target_type_args, static_template
+        from sushi_lang.semantics.passes.types.calls.statics import static_template_for
+        from sushi_lang.semantics.statics import solve_target_type_args
 
         receiver = call.receiver
         validator = self.type_validator
@@ -285,7 +286,7 @@ class ExpressionScanner:
         if (base not in validator.generic_struct_table.by_name
                 and base not in validator.generic_enum_table.by_name):
             return
-        template = static_template(validator.generic_extension_table, base, call.method)
+        template = static_template_for(validator, base, call.method)
         if template is None:
             return
 

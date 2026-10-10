@@ -1,0 +1,13 @@
+# C2 for a template: the home unit of `Vault` declares a public template `seal`, which is
+# visible wherever a `Vault` is. A template of its name in another unit is refused at
+# its declaration: CE0101.
+# EXPECT_ERROR_CODES_EXACT: CE0101
+# EXPECT_STDERR_CONTAINS: "ev_c2_vaults.sushi"
+use "helpers/ev_c2_vaults"
+
+extend Vault@(T) seal() i32:
+    return 2
+
+fn main() i32:
+    println(Vault(3).seal())
+    return 0

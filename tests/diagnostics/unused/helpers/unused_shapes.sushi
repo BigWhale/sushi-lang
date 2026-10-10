@@ -6,5 +6,5 @@ public struct Square:
 public fn square_of(i32 side) Square:
     return Square(side)
 
-extend i32 doubled() i32:
+public extend i32 doubled() i32:
     return self * 2

@@ -265,7 +265,7 @@ def check_no_conflicts_with_regular_methods(
 ) -> bool:
     """Ensure perk methods don't conflict with regular extension methods."""
     return _reject_name_conflicts(
-        perk_impl, extension_table.by_type.get(resolved_type, {}), reporter)
+        perk_impl, extension_table.first_by_name(resolved_type), reporter)
 
 
 def _reject_template_name_conflicts(validator, impl: ExtendWithDef) -> None:
@@ -283,13 +283,14 @@ def _reject_template_name_conflicts(validator, impl: ExtendWithDef) -> None:
     if base_name is None:
         return
     existing = {}
-    for (name, _key), method in validator.generic_extension_table.by_type.get(
+    for (name, _key, _unit), method in validator.generic_extension_table.by_type.get(
             base_name, {}).items():
         existing.setdefault(name, method)
     if is_array:
-        for target, methods in validator.extension_table.by_type.items():
+        for target in validator.extension_table.by_type:
             if isinstance(target, DynamicArrayType):
-                for name, method in methods.items():
+                for name, method in validator.extension_table.first_by_name(
+                        target).items():
                     existing.setdefault(name, method)
     _reject_name_conflicts(impl, existing, validator.reporter)
 

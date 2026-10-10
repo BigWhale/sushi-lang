@@ -26,8 +26,6 @@
 # user-defined types (structs, enums), built-in generics (List@(T)), generic
 # targets, and array types (`extend T[]`, `extend i32[]`).
 
-use <collections/strings>
-
 # Add method to i32 - checks if value is the answer to life, universe, and everything
 extend i32 is_answer() bool:
     return self == 42

@@ -12,6 +12,18 @@ if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
+def extension_owner(ext: ExtendDef, unit_name: str | None) -> str | None:
+    """The unit part of the symbol of an extension method, or None.
+
+    A conversion is unique for its pair of types and has no unit. Every other
+    extension takes the unit that declares it: the one it carries, or the unit whose
+    AST holds it.
+    """
+    if ext.is_conversion:
+        return None
+    return ext.declaring_unit if ext.declaring_unit is not None else unit_name
+
+
 def callee_owns_param(param) -> bool:
     """Does the CALLEE own this parameter, and therefore free it at scope exit?"""
     from sushi_lang.semantics.param_modes import param_mode
@@ -41,12 +53,18 @@ class FunctionHelpers:
             out.append((p.name, p.ty))
         return out
 
-    def get_extension_method_name(self, ext: ExtendDef) -> str:
-        """Generate unique function name for extension method."""
+    def get_extension_method_name(self, ext: ExtendDef, unit_name: str | None = None) -> str:
+        """The symbol of an extension method, as its call site names it.
+
+        `unit_name` is the unit whose AST holds a written extension. A copy and a
+        method that a library ships carry their declaring unit, and a conversion and a
+        perk-implementation method have none (`extension_symbol`).
+        """
         from sushi_lang.semantics.generics.name_mangling import (
             extension_receiver_name, extension_symbol)
         return extension_symbol(extension_receiver_name(ext.target_type), ext.name,
-                                getattr(ext, "method_type_args", None) or ())
+                                getattr(ext, "method_type_args", None) or (),
+                                unit=extension_owner(ext, unit_name))
 
     def emit_fall_off(self, fn: FuncDef | ExtendDef) -> None:
         """Close a body that left its last block open: one rule for every callable.

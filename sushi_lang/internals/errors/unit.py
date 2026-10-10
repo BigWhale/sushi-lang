@@ -66,9 +66,12 @@ _add(ErrorMessage("CE3014", Severity.ERROR,
     "a `use` must come before every declaration",
     Category.UNIT, "Every import stands at the top of the unit, after the unit's own doc block if it has one, and a namespace is bound for the whole unit rather than from its `use` downwards. The two halves answer one question today's grammar leaves open in both directions: a `use` is a toplevel, so it may sit anywhere, and a declaration is already order-independent. Go and Java both make the placement mandatory; Rust leaves it to convention. Sushi follows Go and Java, so a reader sees a unit's dependencies in one block. Move the `use` above the first declaration."))
 
-_add(ErrorMessage("CE3015", Severity.ERROR,
-    "{name} needs the stdlib module <{module}>",
-    Category.UNIT, "A method whose body lives in a stdlib module is callable only where that module is imported. This covers a built-in method that a module enables, and an extension method that a Sushi-source module declares (`.map()` on `T[]` from `<collections/iter>`, `.sort()` from `<collections/sort>`, `.is_ascii_digit()` on `u8` from `<text/ascii>`). Such an extension method used to be CE2008, \"undefined function\", with no help: the function is defined, and the fault is the missing import. The refusal used to be CE0096, an INTERNAL error: it told the reader their program was a bug in the compiler, carried no line, no column and no caret, and asked for a report -- for a missing `use`. A missing import is a mistake in the program and reads like one now. Add the import the message names. A DIRECTORY import covers every module under it, so `use <io>` opens both `<io/stdio>` and `<io/files>`; a SIBLING import does not, and `use <io/files>` alone never made `stdout.write()` legal (#501). The import must be in the unit that holds the call: an import in another unit of the same program does not count, because scope is per unit (#942)."))
+# CE3015 ("{name} needs the stdlib module <{module}>") was RETIRED by epic #1251. It
+# refused a call of a stdlib method when the unit of the call did not import the module
+# of the method. A method of a built-in type now needs no import, and a stdlib import
+# brings names, never methods (`docs/design/extension-visibility.md` R1 and R2). A
+# public method of a type that a stdlib module declares travels with the type (R3). So
+# no call of a method is refused for a missing import, and no other emit site was left.
 
 _add(ErrorMessage("CE3016", Severity.ERROR,
     "a `public use` takes no `as`",
@@ -93,3 +96,12 @@ _add(ErrorMessage("CE3020", Severity.ERROR,
 _add(ErrorMessage("CE3021", Severity.ERROR,
     "`use <{module}>` has no file for this host '{host}' (the hosts are: {hosts})",
     Category.UNIT, "A per-platform standard-library module (#1089) is one bundled source file per platform and architecture, and the compiler selects the file of the host it compiles on. Sushi has no conditional compilation, so a host with no file cannot compile the module at all: every value in it (an `open` flag, a struct offset, an errno number) is a fact about one platform. The supported hosts are the ones the message lists. A new host needs its own file, made with `tests/platform_probe/probe.c` on that host."))
+
+# Extension visibility (`docs/design/extension-visibility.md`, epic #1251).
+_add(ErrorMessage("CE3022", Severity.ERROR,
+    "method '{name}' comes from unit '{owner}', and this unit does not import it",
+    Category.UNIT, "A public extension on a type that its unit does not declare (a built-in type, an array type, the type of another unit) is visible in its own unit and in each unit that imports that unit: with `use \"u\"`, with `use \"u\" as x`, or through a `public use` chain (R6). It is not visible in another unit, even when a third unit of the program imports it, because a method that is visible through an import in another unit breaks when that import goes away. A public extension in the unit that declares its target type travels with the type and needs no import (R5). Add the import that the help names. A project with many such extensions can collect them in one unit with `public use`, so that each unit writes one `use` line."))
+
+_add(ErrorMessage("CE3023", Severity.ERROR,
+    "method '{name}' comes from more than one imported unit",
+    Category.UNIT, "This unit imports two or more units that each declare a public extension of this name on this type, and this unit declares none itself (C4). A note points at each declaration. Sushi has no qualified method call, so the call cannot say which unit it means, and the compiler does not choose. The error stands at the call: an import that brings two such methods and no call of them is no fault. Move the code that needs each method into a unit of its own, so that each unit imports one of them, or rename one of the methods. An extension that this unit declares itself always wins, and that is the warning CW3007 instead."))

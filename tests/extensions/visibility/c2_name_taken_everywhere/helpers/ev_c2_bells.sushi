@@ -1,0 +1,9 @@
+public perk Ring:
+    fn ring() string
+
+public struct Bell:
+    i32 size
+
+extend Bell with Ring:
+    fn ring() string:
+        return "ding"

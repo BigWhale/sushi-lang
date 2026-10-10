@@ -1,0 +1,12 @@
+# R6 behind an alias: `use "u" as x` brings the public extensions of the unit too,
+# because a method cannot stand behind a namespace dot.
+# EXPECT_STDOUT_EXACT: "42\n6\n9\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_r6_bytes" as b
+
+fn main() i32:
+    println(21.twice_r6())
+    let i32[] xs = from([1, 2, 3])
+    println(xs.total())
+    println(b.bytes_marker())
+    return 0

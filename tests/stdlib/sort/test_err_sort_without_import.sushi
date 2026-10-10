@@ -1,6 +1,0 @@
-# `.sort()` lives in `<collections/sort>`. A unit that does not import it cannot call it.
-# EXPECT_ERROR_CODE: CE3015
-fn main() i32:
-    let i32[] xs = from([3, 1, 2])
-    xs.sort()
-    return 0

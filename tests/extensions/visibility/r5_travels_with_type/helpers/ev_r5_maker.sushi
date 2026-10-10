@@ -1,0 +1,7 @@
+use "helpers/ev_r5_shapes"
+
+public fn make_vec() Vec:
+    return Vec(3, 4)
+
+public fn make_wrap() Wrap@(i32):
+    return Wrap(21, 7)

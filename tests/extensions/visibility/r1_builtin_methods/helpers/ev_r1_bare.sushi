@@ -1,0 +1,17 @@
+# A unit with no import that calls a method of each tier.
+public fn line_count(string s) i32:
+    return s.lines().len()
+
+public fn shout(string s) string:
+    return s.upper()
+
+public fn smallest() i32:
+    let i32[] xs = from([3, 1, 2])
+    xs.sort()
+    return xs[0]
+
+public fn digit(u8 b) bool:
+    return b.is_ascii_digit()
+
+public fn blank(string s) bool:
+    return s.is_empty()

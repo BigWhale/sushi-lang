@@ -7,15 +7,16 @@ on `u8[]`.
 
 ## Import
 
-```sushi
-use <encoding/binary>
-```
+None. The methods are on `u8[]`, a built-in type, so they are available in every unit with
+no import ([Extension visibility](../../design/extension-visibility.md), R1). The module
+declares no name of its own, so `use <encoding/binary>` brings nothing.
 
 ## Overview
 
 `encoding/binary` is a **Sushi-source** standard-library module: it ships as bundled
-`.sushi` source and is merged as a compilation unit when you import it. It adds twelve
-extension methods to `u8[]`: six reads and six writes, for `u16`, `u32` and `u64`.
+`.sushi` source, and the program loads it as a compilation unit when a unit calls one of
+its methods. It adds twelve extension methods to `u8[]`: six reads and six writes, for
+`u16`, `u32` and `u64`.
 
 Each method name gives the width and the byte order. `le` (little-endian) puts the least
 significant byte first. `be` (big-endian) puts the most significant byte first. A value
@@ -29,8 +30,6 @@ fit in the array gives `Maybe.None()`.
 A signed integer or a float goes through its unsigned bits:
 
 ```sushi
-use <encoding/binary>
-
 fn main() i32:
     let u8[] header = from([0x00, 0x2a, 0xff, 0xff])
     let u16 count = header.read_u16_be(0).realise(0)
@@ -43,16 +42,10 @@ fn main() i32:
 For a float, read the bits and use `f64.from_bits` (or `f32.from_bits`), and write
 `f.to_bits()`.
 
-**Import the module in each unit that calls a method.** An extension method is found on its
-type, so a call compiles in every unit of a program that loads the module, also in a unit
-that does not import it. Do not depend on that: the unused-use lint (`--warn-unused`)
-expects the import in the unit that calls the method, and a unit with no import of its own
-breaks when the other unit stops importing the module.
-
-A program that declares its own `extend u8[] read_u16_le(i32 at)` (or any other name of
-this module) and imports `<encoding/binary>` gets the duplicate-function error
-[CE0101](../../error-catalog.md#ce0101): an extension method of one name on one type is
-global. A program that does not import the module is not affected.
+A program that declares its own `extend u8[] read_u16_le(i32 at)` (or any other name of this
+module) gets [CE2097](../../error-catalog.md#ce2097), with a note at the method of this
+module: a stdlib method on a built-in type is visible in every unit, so an extension of
+its name could never be called. This holds with or without an import.
 
 ## Reads
 
@@ -79,8 +72,6 @@ A very large `at` (to the `i32` maximum) also gives `Maybe.None()`. It does not 
 negative offset.
 
 ```sushi
-use <encoding/binary>
-
 fn main() i32:
     let u8[] buf = from([0x01, 0x02, 0x03, 0x04, 0x05])
     println(buf.read_u16_le(0).realise(0))    # 513
@@ -131,8 +122,6 @@ Appends the 2 bytes of `v`. For `v = 0x0102`, `push_u16_le` appends `0x02 0x01` 
 `push_u16_be` appends `0x01 0x02`.
 
 ```sushi
-use <encoding/binary>
-
 fn main() i32:
     let u8[] buf = from([])
     buf.push_u16_le(0x0102)
@@ -149,8 +138,6 @@ Appends the 4 bytes of `v`. For `v = 0x0A0B0C0D`, `push_u32_le` appends
 pushes a signed value through `as u32`: `-2` is `0xFFFFFFFE`.
 
 ```sushi
-use <encoding/binary>
-
 fn main() i32:
     let u8[] le = from([])
     le.push_u32_le(0x0A0B_0C0D)
@@ -173,8 +160,6 @@ through a `poke` parameter, and pushes the bits of an `f64`: `1.0` is
 `0x3FF0000000000000`.
 
 ```sushi
-use <encoding/binary>
-
 fn put_header(poke u8[] out, u64 id, f64 score) ~:
     out.push_u64_be(id)
     out.push_u64_le(score.to_bits())

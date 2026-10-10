@@ -4,7 +4,8 @@ Chapters 17 and 18 gave you function values and closures. This chapter puts them
 three classic list combinators — `map`, `filter`, and `fold` — plus `compose`, all from the
 opt-in `collections/iter` module.
 
-Unlike `List` and `HashMap`, these are not always in scope: you bring them in with a `use`.
+The METHODS (`xs.map(f)`) are always available, as every method of a built-in type is. The
+free FUNCTIONS (`map(xs, f)`, `compose`) are names, and you bring them in with a `use`.
 
 ```sushi
 use <collections/iter>
@@ -161,8 +162,9 @@ methods return a `List` — a dynamic array has no empty generic constructor to 
 
 ## What you learned
 
-- `use <collections/iter>` brings in `map`, `filter`, `fold` — as methods on `List@(T)`
-  and `T[]` AND as free functions — plus `compose`.
+- `<collections/iter>` gives `map`, `filter`, `fold` as methods on `List@(T)` and `T[]`,
+  which need no import, AND as free functions, plus `compose`, which need
+  `use <collections/iter>`.
 - The combinators are bare, in both forms: chain the method calls directly
   (`xs.map(f).filter(p).fold(0, g)`), with no `??`.
 - `collections/iter` is a Sushi-source standard-library module; the combinators

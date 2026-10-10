@@ -19,7 +19,6 @@
 
 use <random>
 use <collections/hashmap>
-use <collections/strings>
 
 # Pick random word from vocabulary
 # vocab is read on every step -- borrow it peek so the caller keeps ownership.

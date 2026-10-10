@@ -1,0 +1,6 @@
+use <collections/strings>
+
+public fn greeting() StringBuilder:
+    let StringBuilder sb = StringBuilder.new()
+    sb.push("Mostly Harmless")
+    return sb

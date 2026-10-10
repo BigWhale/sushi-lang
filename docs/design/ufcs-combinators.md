@@ -53,8 +53,12 @@ lambda and a function type have a channel only when they write `| E` (or an expl
 ### 2. Name claim: accepted
 
 A stdlib extension is an ordinary extension. The resolution ladder — built-in > perk >
-extension, [CE0101](../error-catalog.md#ce0101) between extensions — is untouched. A user extension named `map` on
-another type coexists; a second `map` on the SAME target is the ordinary [CE0101](../error-catalog.md#ce0101).
+extension — is untouched. A user extension named `map` on another type coexists.
+
+The visibility half of this ruling is replaced by `extension-visibility.md` (ruled
+2026-10-10, built under epic #1251). A stdlib method on a built-in type, `map` on `T[]` and `List@(T)` included, is
+visible in every unit with no import. A user extension of the same name on the same type is
+an error at its declaration (`extension-visibility.md` C2).
 
 ### 3. Arrays: the element position binds
 
@@ -182,13 +186,18 @@ it. Each argument type is resolved recursively before the solve, so an annotated
 as `|i32 x|` does (#1135). A method-level name that repeats a receiver-target parameter
 is [CE2064](../error-catalog.md#ce2064).
 
-## Program-wide extension visibility (the stated asymmetry)
+## Extension visibility
 
-Extensions are program-wide and unit-blind: the ExtensionTable keys on the target type
-alone, so ONE unit's `use <collections/iter>` makes `.map()` callable in every unit.
-This is accepted (ruling 2) and stated rather than hidden. Consequence for API
-authors: an extension is as visible as its target type, so a module cannot keep
-private helper extensions on a public type — internals stay free functions.
+This section first stated an asymmetry: extensions were program-wide and unit-blind, so
+ONE unit's `use <collections/iter>` made `.map()` callable in every unit, and a module
+could not keep a private helper extension. That rule is replaced by
+`extension-visibility.md` (ruled 2026-10-10, built under epic #1251):
+
+- a stdlib method on a built-in type (`.map()`, `.filter()` and `.fold()` on `T[]` and
+  `List@(T)` included) is visible in every unit, with no import;
+- `use <collections/iter>` brings the free functions of the module, and no method;
+- a user extension is private unless it is marked `public`, and a public extension on a type
+  that its unit does not declare is visible only where that unit is imported.
 
 ## The footgun audit
 
@@ -218,7 +227,8 @@ each kept element, and `fold` clones `init` once, so an owning accumulator works
   diagnostic that says so: the primary at the implementation, a note at the contract
   method. `_validate_method_body` reads the channel, and the backend emits every perk
   method through the extension path.
-- **(c) Extension visibility.** See the stated asymmetry above; a visibility marker on
-  extensions is a separate decision nobody has asked for yet.
+- **(c) Extension visibility — SHIPPED.** An extension takes a `public` marker, and private
+  is the default (`extension-visibility.md`). The combinators of `<collections/iter>` are
+  `public extend`, so they are visible in every unit (R1).
 
 **HashMap combinators** come later, in a separate module (ruling 4).

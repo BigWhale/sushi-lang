@@ -1,0 +1,19 @@
+# The control: a private extension promises nothing to another unit, so its signature
+# may name a private type, on a public target too.
+# EXPECT_STDOUT_EXACT: "7\n1\n"
+struct Secret:
+    i32 code
+
+public struct Box:
+    i32 held
+
+extend Secret reveal() i32:
+    return self.code
+
+extend Box peel() Secret:
+    return Secret(1)
+
+fn main() i32:
+    println(Secret(7).reveal())
+    println(Box(3).peel().code)
+    return 0

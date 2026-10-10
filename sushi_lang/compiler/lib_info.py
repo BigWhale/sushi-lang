@@ -414,8 +414,11 @@ def _method_line(method: dict, p: Palette) -> str:
 
 
 def _extension_line(ext: dict, p: Palette) -> str:
+    """An extension method as it is declared, with its marker (extension-visibility.md R9)."""
+    public = "public " if ext.get('public') else ""
     static = "static " if ext.get('static') else ""
-    return f"  extend {_render_extension_target(ext)} {static}{_render_signature(ext, p)}"
+    return (f"  {public}extend {_render_extension_target(ext)} "
+            f"{static}{_render_signature(ext, p)}")
 
 
 def _conversion_line(conv: dict, _p: Palette) -> str:
@@ -429,10 +432,6 @@ def _dont_panic_line(record: dict, _p: Palette) -> str:
     Two units of one library can each declare a private function of one name.
     """
     return f"  {record['unit']}: {record['name']} dont_panic because \"{record['reason']}\""
-
-
-def _foreign_line(claim: dict, p: Palette) -> str:
-    return f"  extend {_render_extension_target(claim)} {claim['method']}"
 
 
 def _dependency_line(dep: dict, p: Palette) -> str:
@@ -519,7 +518,6 @@ _SECTIONS: tuple[_Section, ...] = (
     # A conversion is found by its pair of types and not by a method name, so it has a
     # section of its own (docs/design/error-conversion.md 8.2).
     _Section("Conversions", ("conversions",), _conversion_line),
-    _Section("Foreign Extensions", ("foreign_extensions",), _foreign_line, doc=None),
     # The unchecked code and its proof, for a reviewer (docs/design/dont-panic.md, D10).
     _Section("Unchecked Indexes", ("dont_panic",), _dont_panic_line, doc=None),
     _Section("Dependencies", ("dependencies",), _dependency_line, doc=None),

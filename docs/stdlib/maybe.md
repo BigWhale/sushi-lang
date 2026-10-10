@@ -120,8 +120,6 @@ type is any error type: the value is written at the site, so the compiler never 
 up. In a get-out of an owned payload, `??` binds a borrow:
 
 ```sushi
-use <collections/strings>
-
 error LookupError:
     Missing
 
@@ -139,8 +137,6 @@ fn main() i32:
 ## Pattern Matching
 
 ```sushi
-use <collections/strings>
-
 let string text = "a needle in a haystack"
 match text.find("needle"):
     Maybe.Some(pos) ->

@@ -19,8 +19,6 @@ The four spare header fields are read and not validated.
 use <io/fs>
 public use <io/error>
 use <encoding/msgpack>
-use <encoding/binary>
-use <collections/strings>
 
 ##: The 16 bytes at the start of every `.slib` file. :##
 const u8[16] SLIB_MAGIC = [0xf0, 0x9f, 0x8d, 0xa3, 0x53, 0x55, 0x53, 0x48, 0x49, 0x4c, 0x49, 0x42, 0xf0, 0x9f, 0x8d, 0xa3]
@@ -85,7 +83,7 @@ The text does not include the payloads, so a caller can compare it.
 
 - Returns: The text.
 :##
-extend SlibError text() string:
+public extend SlibError text() string:
     match self:
         SlibError.Io(_) -> return "the file cannot be read"
         SlibError.BadMagic() -> return "not a .slib file (bad magic)"
@@ -322,7 +320,7 @@ The shape of a manifest, one row per field that a reader uses.
 The Python reader has the same rows in `MANIFEST_SCHEMA`
 (`sushi_lang/backend/library_format.py`), and the two tables must agree.
 :##
-const SchemaRow[148] SLIB_MANIFEST_SCHEMA = [
+const SchemaRow[146] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('manifest', 'library_name', 'str', Presence.Required()),
     SchemaRow('manifest', 'library_version', 'str', Presence.Required()),
     SchemaRow('manifest', 'platform', 'str', Presence.Required()),
@@ -341,7 +339,6 @@ const SchemaRow[148] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('manifest', 'enums', '[]enum', Presence.Optional()),
     SchemaRow('manifest', 'templates', '@templates', Presence.Optional()),
     SchemaRow('manifest', 'not_exported', '[]not_exported', Presence.Optional()),
-    SchemaRow('manifest', 'foreign_extensions', '[]foreign_extension', Presence.Optional()),
     SchemaRow('manifest', 'conversions', '[]conversion', Presence.Optional()),
     SchemaRow('manifest', 'dont_panic', '[]dont_panic', Presence.Optional()),
     SchemaRow('manifest', 'dependencies', '[]dependency', Presence.Optional()),
@@ -431,6 +428,7 @@ const SchemaRow[148] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('method', 'doc', '@doc', Presence.Optional()),
     SchemaRow('extension', 'type', 'str', Presence.Required()),
     SchemaRow('extension', 'name', 'str', Presence.Required()),
+    SchemaRow('extension', 'public', 'bool', Presence.Required()),
     SchemaRow('extension', 'return_type', 'str', Presence.Required()),
     SchemaRow('extension', 'params', '[]param', Presence.Optional()),
     SchemaRow('extension', 'type_params', '[]type_param', Presence.Optional()),
@@ -468,9 +466,7 @@ const SchemaRow[148] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('dependency', 'kind', 'str', Presence.Required()),
     SchemaRow('dependency', 'library_name', 'str', Presence.Optional()),
     SchemaRow('dependency', 'library_version', 'str', Presence.Optional()),
-    SchemaRow('dependency', 'units', 'strs', Presence.Optional()),
-    SchemaRow('foreign_extension', 'type', 'str', Presence.Required()),
-    SchemaRow('foreign_extension', 'method', 'str', Presence.Required())
+    SchemaRow('dependency', 'units', 'strs', Presence.Optional())
 ]
 
 ##:

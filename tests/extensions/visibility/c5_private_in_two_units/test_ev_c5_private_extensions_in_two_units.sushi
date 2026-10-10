@@ -1,0 +1,12 @@
+# C5: two units each declare a private `mark5` on `i32`. That is no fault, and each
+# unit calls its own.
+# EXPECT_STDOUT_EXACT: "6\n50\n"
+use "helpers/ev_c5_other"
+
+extend i32 mark5() i32:
+    return self + 1
+
+fn main() i32:
+    println(5.mark5())
+    println(other_mark(5))
+    return 0

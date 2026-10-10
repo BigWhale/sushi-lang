@@ -1,0 +1,10 @@
+# The second reproduction of the epic. This unit imports the helper, and the helper
+# imports the unit that declares `twice`. The extension has no marker, so it is
+# private to its unit. The call here is refused, with a note at the declaration.
+# EXPECT_ERROR_CODES_EXACT: CE3005
+# EXPECT_STDERR_CONTAINS: "ev_why_other.sushi"
+use "helpers/ev_why_helper"
+
+fn main() i32:
+    println(21.twice())
+    return 0

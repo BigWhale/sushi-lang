@@ -1,0 +1,11 @@
+# R3 for a type that a Sushi-source stdlib module declares: this unit does not import
+# <collections/strings>, and it calls the methods of a `StringBuilder` that the
+# helper makes.
+# EXPECT_STDOUT_EXACT: "15\nMostly Harmless\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_r3_builder"
+
+fn main() i32:
+    println(greeting().size())
+    println(greeting().finish())
+    return 0

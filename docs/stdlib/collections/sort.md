@@ -7,18 +7,16 @@ Sorting and binary search over a dynamic array `T[]`: `.sort()`, `.sort_by(cmp)`
 
 ## Import
 
-```sushi
-use <collections/sort>
-```
-
-The built-in array methods need no import. These three are extension methods written in
-Sushi, so a unit that calls them must import the module, as for `.map()` and `<collections/iter>`.
-A call without the import is [CE3015](../../error-catalog.md#ce3015), and its help names the import.
+None. The three methods are on `T[]`, a built-in type, so they are available in every
+unit with no import, as every built-in array method is
+([Extension visibility](../../design/extension-visibility.md), R1). The module declares
+no name of its own, so `use <collections/sort>` brings nothing.
 
 ## Overview
 
 `collections/sort` is a **Sushi-source** standard-library module: it ships as bundled
-`.sushi` source, and it is merged as a compilation unit when you import it. The methods
+`.sushi` source, and the program loads it as a compilation unit when a unit calls one
+of its methods. The methods
 are generic extension methods, so the compiler emits code only for an instance that a
 program uses.
 
@@ -38,8 +36,6 @@ element type with no order is [CE4006](../../error-catalog.md#ce4006).
 The sort is **stable**: equal elements keep their order.
 
 ```sushi
-use <collections/sort>
-
 fn main() i32:
     let i32[] xs = from([3, -1, 42, 0, 3])
     xs.sort()
@@ -59,8 +55,6 @@ first, zero means equal, and a positive result puts `a` after `b`. This is the s
 the `compare` method of `Ord`. The sort is stable, and it is the algorithm of `.sort()`.
 
 ```sushi
-use <collections/sort>
-
 struct Item:
     i32 key
     string tag
@@ -89,8 +83,6 @@ On an array that is not sorted the answer is not defined. The method always ends
 never reads outside the array.
 
 ```sushi
-use <collections/sort>
-
 fn main() i32:
     let i32[] xs = from([1, 3, 5, 7])
     println(xs.binary_search(5).realise(-1))   # 2

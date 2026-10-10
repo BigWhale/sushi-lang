@@ -1,0 +1,4 @@
+use "helpers/ev_why_other"
+
+public fn helper_marker() i32:
+    return 1

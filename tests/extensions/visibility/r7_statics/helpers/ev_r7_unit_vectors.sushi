@@ -1,0 +1,5 @@
+# A public static on the type of another unit.
+use "helpers/ev_r7_geo"
+
+public extend Vec2 static unit_x() Vec2:
+    return Vec2(1, 0)

@@ -1,3 +1,0 @@
-# This unit extends a builtin with the method name 'tag'.
-extend i32 tag() i32:
-    return self * 10

@@ -169,8 +169,10 @@ def _skip_source_section(f: BinaryIO, path: str) -> int:
 # because a signature without `| E` is bare and no longer means `| StdError`
 # (docs/design/error-channel.md). 9: an `enum` row and a `generic_type` record of a
 # generic enum state `is_error` (docs/design/error-conversion.md section 8.1), and the
-# manifest lists its `conversions` (section 8.2).
-TEMPLATES_SCHEMA_VERSION = 9
+# manifest lists its `conversions` (section 8.2). 10: every extension record states
+# `public`, a concrete one names the symbol of its unit, and the manifest has no
+# `foreign_extensions` (docs/design/extension-visibility.md section 6).
+TEMPLATES_SCHEMA_VERSION = 10
 
 
 # The shape of a manifest: one row per field a reader relies on, as (record kind, key,
@@ -199,7 +201,6 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("manifest", "enums", "[]enum", "no"),
     ("manifest", "templates", "@templates", "no"),
     ("manifest", "not_exported", "[]not_exported", "no"),
-    ("manifest", "foreign_extensions", "[]foreign_extension", "no"),
     ("manifest", "conversions", "[]conversion", "no"),
     ("manifest", "dont_panic", "[]dont_panic", "no"),
     ("manifest", "dependencies", "[]dependency", "no"),
@@ -289,6 +290,7 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("method", "doc", "@doc", "no"),
     ("extension", "type", "str", "yes"),
     ("extension", "name", "str", "yes"),
+    ("extension", "public", "bool", "yes"),
     ("extension", "return_type", "str", "yes"),
     ("extension", "params", "[]param", "no"),
     ("extension", "type_params", "[]type_param", "no"),
@@ -327,8 +329,6 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("dependency", "library_name", "str", "no"),
     ("dependency", "library_version", "str", "no"),
     ("dependency", "units", "strs", "no"),
-    ("foreign_extension", "type", "str", "yes"),
-    ("foreign_extension", "method", "str", "yes"),
 )
 
 _SCALAR_TYPES = {"str": (str, "a string"), "bool": (bool, "a bool"),

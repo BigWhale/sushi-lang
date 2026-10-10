@@ -1,0 +1,15 @@
+# R1, the tier of methods that the backend emits: a method of a built-in type needs
+# no import.
+# EXPECT_STDOUT_EXACT: "false\n3\n2\nMostly\n"
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let string s = "Mostly"
+    println(s.is_empty())
+    let i32[] xs = from([1, 2, 3])
+    println(xs.len())
+    let List@(i32) ys = List.new()
+    ys.push(4)
+    ys.push(5)
+    println(ys.len())
+    println(s.clone())
+    return 0

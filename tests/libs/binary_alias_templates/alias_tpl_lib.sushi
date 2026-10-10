@@ -11,7 +11,7 @@ public enum Opt@(T):
     Has(T)
     Empty
 
-extend Box@(T: Clone) peekv() T:
+public extend Box@(T: Clone) peekv() T:
     return self.v.clone()
 
 public perk Named:

@@ -58,7 +58,6 @@ Wait for one datagram. A datagram longer than `max` is truncated and the rest is
 
 ```sushi
 use <net/udp>
-use <collections/strings>
 
 fn exchange() ~ | NetError:
     let UdpSocket a = bind("127.0.0.1", 0)??

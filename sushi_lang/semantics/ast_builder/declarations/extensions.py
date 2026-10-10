@@ -8,8 +8,9 @@ from sushi_lang.semantics.ast_builder.declarations.signatures import (
     mark_body, read_signature_types)
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     find_tree_recursive, first_token, first_tree, ice, is_type_node,
-    read_method_name)
+    read_method_name, read_public)
 from sushi_lang.internals.report import span_of
+from sushi_lang.semantics.visibility import EXTENSION_METHOD, declared_public
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -41,6 +42,7 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     name_tok = read_method_name(suffix)
 
     static_tok = first_token(suffix.children, "STATIC")
+    marked, public_span = read_public(t.children)
 
     from sushi_lang.semantics.ast_builder.declarations.functions import parse_params, strip_self_param
     from sushi_lang.semantics.ast_builder.types.generics import (
@@ -83,6 +85,8 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
         static_span=span_of(static_tok) if static_tok is not None else None,
         target_params=target_params,
         dont_panic=dont_panic,
+        is_public=declared_public(EXTENSION_METHOD, marked),
+        public_span=public_span,
     )
 
 

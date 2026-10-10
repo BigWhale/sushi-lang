@@ -12,7 +12,7 @@ public fn count_all@(...Ts)(...Ts xs) i32:
 public struct Holder:
     i32 n
 
-extend Holder pass@(U)(nom U x) U:
+public extend Holder pass@(U)(nom U x) U:
     return x
 
 public fn coll(...i32 xs) i32:

@@ -10,8 +10,6 @@ Limitations: the separator is '/' only. normalize() is lexical -- it resolves
 than the input on a tree that uses them. There is no canonicalize().
 :##
 
-use <collections/strings>
-
 ##:
 Joins two path segments with a single separator.
 

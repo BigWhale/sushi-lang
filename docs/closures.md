@@ -199,8 +199,9 @@ These work:
   and to a generic callee. Only a value that no position type solves is **[CE2093](error-catalog.md#ce2093)**.
 - A call through a fn-typed struct field, a container get-out, a call result, a parenthesized
   expression and a captured closure value.
-- The method form of the combinators: `use <collections/iter>` gives `.map`, `.filter` and
-  `.fold` as extension methods on `List@(T)` and `T[]`, beside the free functions. They are bare,
-  so you chain them directly (`xs.map(f).filter(p)`).
+- The method form of the combinators: `<collections/iter>` declares `.map`, `.filter` and
+  `.fold` as extension methods on `List@(T)` and `T[]`, beside the free functions. The methods
+  need no import, and the free functions need `use <collections/iter>`. They are bare, so you
+  chain them directly (`xs.map(f).filter(p)`).
 
 The [design note](design/closures.md) gives the fat-pointer ABI and the implementation anchors.

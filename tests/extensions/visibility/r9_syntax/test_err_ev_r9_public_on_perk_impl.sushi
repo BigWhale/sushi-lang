@@ -1,0 +1,16 @@
+# R9: `public` stands before an extension method and before a static, and never
+# before a perk implementation. The refusal is the parse error CE6001.
+# EXPECT_ERROR_CODES_EXACT: CE6001
+# EXPECT_STDERR_CONTAINS: error [CE6
+perk Loud:
+    fn shout() string
+
+struct Horn:
+    i32 level
+
+public extend Horn with Loud:
+    fn shout() string:
+        return "loud"
+
+fn main() i32:
+    return 0

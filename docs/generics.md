@@ -542,8 +542,9 @@ fn main() i32:
 ### String Extensions
 
 Strings do not support the `+` operator. Build a new string with interpolation, `"{...}"`.
-Interpolation and an extension on `string` need no import. The built-in string methods
-(`.len()`, `.upper()` and the others) need `use <collections/strings>`:
+Interpolation, an extension on `string` and the stdlib string methods (`.len()`,
+`.upper()` and the others) need no import. An extension of your own is private to its
+unit unless it says `public extend`:
 
 ```sushi
 extend string shout() string:
@@ -986,8 +987,6 @@ The body below calls `x.len()`, and no constraint of `T` gives `len`. The compil
 
 <!-- docs-sweep: error CE2008 -->
 ```sushi
-use <collections/strings>
-
 fn size@(T)(T x) i32:
     return x.len()          # CE2008: 'T' has no method 'len'
 

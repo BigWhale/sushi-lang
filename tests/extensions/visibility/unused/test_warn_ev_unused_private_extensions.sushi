@@ -1,0 +1,51 @@
+# --warn-unused: a private extension method that nothing in its unit calls is dead code
+# (CW1004), as a private function is. This holds for an instance method, a static
+# method and a template. An extension that only a dead function calls is dead too, and
+# so is the function. A called private extension, a public extension and a perk
+# implementation are not reported.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_ERROR_CODES_EXACT: CW1004, CW1004, CW1004, CW1004, CW1004, CW1004
+# EXPECT_STDERR_CONTAINS: "private extension method 'i32.never_called' is never used"
+# EXPECT_STDERR_CONTAINS: "private extension method 'Crate.never_built' is never used"
+# EXPECT_STDERR_CONTAINS: "private extension method 'i32.by_dead' is never used"
+# EXPECT_STDERR_CONTAINS: "private function 'lonely' is never used"
+# EXPECT_STDERR_CONTAINS: "private extension method 'List@(T).never_listed' is never used"
+# EXPECT_STDERR_CONTAINS: "private extension method 'T[].never_arrayed' is never used"
+
+struct Crate:
+    i32 weight
+
+perk Weighed:
+    fn weight_of() i32
+
+extend Crate with Weighed:
+    fn weight_of() i32:
+        return self.weight
+
+extend i32 called_once() i32:
+    return self + 1
+
+extend i32 never_called() i32:
+    return self - 1
+
+extend Crate static never_built() Crate:
+    return Crate(0)
+
+extend List@(T) never_listed() i32:
+    return self.len()
+
+extend T[] never_arrayed() i32:
+    return self.len()
+
+extend i32 by_dead() i32:
+    return self * 2
+
+fn lonely() i32:
+    return 4.by_dead()
+
+public extend i32 exported_ev() i32:
+    return self * 5
+
+fn main() i32:
+    let Crate c = Crate(5)
+    return 5.called_once() - 6 + c.weight - 5

@@ -5,7 +5,7 @@ public struct HeldBox@(T):
 public perk Counted:
     fn counted() i32
 
-extend HeldBox@(T) held() i32:
+public extend HeldBox@(T) held() i32:
     return self.n
 
 extend HeldBox@(T) with Counted:

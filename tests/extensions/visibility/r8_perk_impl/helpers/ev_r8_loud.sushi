@@ -1,0 +1,13 @@
+public perk Loud:
+    fn shout() string
+
+public struct Horn:
+    i32 level
+
+extend Horn with Loud:
+    fn shout() string:
+        return "Mostly Harmless"
+
+extend i32 with Loud:
+    fn shout() string:
+        return "{self}!"

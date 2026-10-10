@@ -1,0 +1,5 @@
+extend i32 mark5() i32:
+    return self * 10
+
+public fn other_mark(i32 n) i32:
+    return n.mark5()

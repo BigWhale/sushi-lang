@@ -2,9 +2,10 @@
 import whose unit names nothing it brings (CW3006).
 
 A private name is visible only in its own unit, so both questions are asked per unit, over
-the WRITTEN declarations. The names a declaration mentions are every string its nodes hold
-and every name the types in it spell, string literals left out. That over-approximates on
-purpose: a local that happens to spell a private function's name keeps the function
+the WRITTEN declarations. A private extension method is such a name: only its own unit
+can call it (docs/design/extension-visibility.md R4). The names a declaration mentions
+are every string its nodes hold and every name the types in it spell, string literals
+left out. That over-approximates on purpose: a local that happens to spell a private function's name keeps the function
 alive, so the lint can miss a dead declaration and never reports a live one.
 """
 from __future__ import annotations
@@ -14,20 +15,25 @@ from typing import Any, Callable, Dict, Iterable, List, Set, Tuple, cast
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import (
-    DestructureTarget, FuncDef, Node, Param, Program, StringLit, UseStatement)
+    DestructureTarget, Foreach, FuncDef, Node, Param, Program, StringLit, UseStatement)
 from sushi_lang.semantics.ast_walk import (
     DESCENDED_FIELD_KINDS, declarations, field_kind, node_fields, signature_constraints,
     signature_types, walk_nodes)
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.type_walk import spelled_names
 from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.units import Unit
-from sushi_lang.semantics.visibility import kind_word
+from sushi_lang.semantics.visibility import (
+    CONVERSION, EXTENSION_METHOD, ExtensionClaim, extension_method_name, home_unit_of,
+    kind_word, needs_import)
 
-# A kind that holds no name of its own and is reached through a receiver, so it is a root.
-_ROOT_KINDS = frozenset({"extension", "perk implementation", "external block"})
-_CHECKED_KINDS = frozenset({"constant", "variable", "struct", "enum", "perk", "function"})
-# The one stdlib-method import, as the per-unit CE3015 check reads it.
-_METHOD_MODULE = "collections/strings"
+# A kind that no call names, so each is a root: a conversion runs at `??` and `as`, a perk
+# implementation is global (R8), and an external block binds a namespace.
+_ROOT_KINDS = frozenset({CONVERSION, "perk implementation", "external block"})
+_CHECKED_KINDS = frozenset({"constant", "variable", "struct", "enum", "perk", "function",
+                            EXTENSION_METHOD})
+# The method that `foreach` calls on an iterator with no written name.
+_PROTOCOL_METHOD = "next"
 
 
 def check_unused(reporter: Reporter, unit: Unit, tables: SymbolTables,
@@ -63,7 +69,14 @@ def _report_dead(reporter: Reporter, written: List[Tuple[str, Any]],
         if id(decl) not in live:
             er.emit(reporter, er.ERR.CW1004,
                     getattr(decl, "name_span", None) or getattr(decl, "loc", None),
-                    kind=kind_word(kind, decl), name=decl.name)
+                    kind=kind_word(kind, decl), name=_spelled_name(kind, decl))
+
+
+def _spelled_name(kind: str, decl: Any) -> str:
+    """The name of a declaration as a reader writes it: `i32.twice` for an extension."""
+    if kind == EXTENSION_METHOD:
+        return extension_method_name(display_type(decl.target_type), decl.name)
+    return str(decl.name)
 
 
 def _is_written(decl: object) -> bool:
@@ -106,6 +119,8 @@ def _reader(names: Set[str]) -> Callable[[Node], bool]:
     def visit(node: Node) -> bool:
         if isinstance(node, StringLit):
             return False
+        if isinstance(node, Foreach):
+            names.add(_PROTOCOL_METHOD)
         for _field, value in node_fields(node):
             _read_value(value, names)
         return True
@@ -141,24 +156,29 @@ def _brings(use_stmt: UseStatement, unit: Unit, tables: SymbolTables,
     else:
         names = set(provider.members())
     for reached in provider.reaches():
-        names.update(_methods_of(reached.origin, units))
+        names.update(_methods_of(reached.origin, units, tables))
     return names
 
 
-def _methods_of(origin: str, units: Dict[str, Unit]) -> Set[str]:
-    """The method names a reached unit or module makes callable with no name to write."""
-    names: Set[str] = set()
-    if _METHOD_MODULE == origin or _METHOD_MODULE.startswith(origin + "/"):
-        from sushi_lang.sushi_stdlib.src.collections.strings import METHOD_SPECS
-        names.update(METHOD_SPECS)
+def _methods_of(origin: str, units: Dict[str, Unit], tables: SymbolTables) -> Set[str]:
+    """The method names that only an import of the unit `origin` makes callable.
+
+    A public extension on a type that the unit does not declare comes with the import
+    alone (R6). A perk implementation on such a type is global (R8), but the import can be
+    what loads it, so its methods count too. A method of the home unit of a type travels
+    with the type (R5), and a stdlib method on a built-in type needs no import (R1, R2),
+    so neither is a use of the import.
+    """
     program = getattr(units.get(origin), "ast", None)
     if program is None:
-        return names
-    names.update(ext.name for ext in [*program.extensions, *program.generic_extensions])
+        return set()
+    table = tables.visibility
+    names = {ext.name for ext in [*program.extensions, *program.generic_extensions]
+             if not ext.is_conversion and needs_import(
+                 table, ExtensionClaim(origin, ext.is_public), ext.target_type)}
     for impl in [*program.perk_impls, *program.generic_perk_impls]:
-        names.update(method.name for method in impl.methods)
-    for perk in program.perks:
-        names.update(method.name for method in perk.methods)
+        if home_unit_of(table, impl.target_type) != origin:
+            names.update(method.name for method in impl.methods)
     return names
 
 

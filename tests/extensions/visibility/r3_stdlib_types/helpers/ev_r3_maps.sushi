@@ -1,0 +1,7 @@
+use <collections/hashmap>
+
+public fn small_map() HashMap@(i32, string):
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(1, "one")
+    m.insert(2, "two")
+    return m

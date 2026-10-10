@@ -1,0 +1,3 @@
+public struct Crate@(T):
+    T item
+    i32 size
