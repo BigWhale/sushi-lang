@@ -35,11 +35,17 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter, Span
 
 
+# An extension method or a static method (`docs/design/extension-visibility.md` R4 to
+# R7). It is a kind of its own, and not the walk kind "extension", because a conversion
+# is an "extension" too and carries no marker.
+EXTENSION_METHOD = "extension method"
+
 # Every kind `semantics/ast_walk.declarations()` yields, classified by where its answer
 # comes from. `docs/design/visibility.md` rules on all four groups, and
 # `tests/unit/test_visibility_seam_is_total.py` asserts the union is the whole walk, so a
 # new declaration kind cannot get half the rule.
-CARRIES_MARKER = frozenset({"constant", "variable", "struct", "enum", "perk", "function"})
+CARRIES_MARKER = frozenset({"constant", "variable", "struct", "enum", "perk", "function",
+                            EXTENSION_METHOD})
 
 # As visible as the declaration it is part of. A private enum variant would make a total
 # `match` unwritable across a unit boundary, so exhaustiveness decides this one.
@@ -47,7 +53,8 @@ FOLLOWS_DECLARATION = frozenset({"field", "variant", "perk method"})
 
 # As visible as the type it is attached to (Ruling 2). Self-enforcing: a private type
 # cannot be named, constructed or received elsewhere, so its methods are unreachable
-# already, and method resolution stays blind to the caller.
+# already, and method resolution stays blind to the caller. The walk kind "extension"
+# stays here until method resolution reads `EXTENSION_METHOD` (#1251).
 FOLLOWS_TARGET_TYPE = frozenset({"extension", "perk implementation"})
 
 # No visibility at all. An `unsafe external` block is a unit's private implementation
@@ -535,6 +542,15 @@ def reject_private_perk_constraints(
             current_unit=current_unit, filename=filename)
 
 
+def extension_method_name(target: str, method: str) -> str:
+    """The name an extension method is filed under: its target, then its own name.
+
+    The method name alone is not unique, because many targets can declare one method
+    name. The key `(EXTENSION_METHOD, "i32.twice")` holds one method on one target.
+    """
+    return f"{target}.{method}"
+
+
 def record_declaration(
     table: Optional[VisibilityTable],
     kind: str,
@@ -542,6 +558,7 @@ def record_declaration(
     *,
     unit_name: Optional[str],
     filename: Optional[str],
+    name: Optional[str] = None,
 ) -> None:
     """File one declaration from the collector that meets it.
 
@@ -549,11 +566,13 @@ def record_declaration(
     duplicate it refuses is exactly what `contested` has to remember, or the loser is
     later told the name is somebody else's (D2). The same declaration filed twice from
     one unit is a no-op. A collector built without a table -- a throwaway over a
-    library snippet -- files nothing, as it recorded nothing before.
+    library snippet -- files nothing, as it recorded nothing before. `name` replaces
+    the name of the node where the node name is not the key (`extension_method_name`).
     """
     if table is None or kind not in CARRIES_MARKER:
         return
-    name = getattr(node, "name", None)
+    if name is None:
+        name = getattr(node, "name", None)
     if not isinstance(name, str):
         return
     table.record(DeclOrigin(

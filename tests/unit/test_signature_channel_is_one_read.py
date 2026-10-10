@@ -32,10 +32,7 @@ SIGNATURE_RULES = {
 
 def _rule_body(rule: str) -> str:
     text = GRAMMAR.read_text()
-    if rule == "extend_def":
-        line = re.search(r"^\s+\|\s+(STATIC\?.+)-> extend_def$", text, re.MULTILINE)
-    else:
-        line = re.search(rf"^{rule}: (.+)$", text, re.MULTILINE)
+    line = re.search(rf"^{rule}: (.+)$", text, re.MULTILINE)
     assert line is not None, f"no rule named {rule}"
     return line.group(1)
 

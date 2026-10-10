@@ -430,6 +430,10 @@ class ExtendDef(Node):
     instance_key: Optional[tuple] = None
     # The `dont_panic` marker; see `FuncDef`.
     dont_panic: Optional[DontPanicMarker] = None
+    # The `public` marker (docs/design/extension-visibility.md R4 to R7). A conversion
+    # and a synthesized node have none.
+    is_public: bool = False
+    public_span: Optional[Span] = None
 
     @property
     def is_conversion(self) -> bool:

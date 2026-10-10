@@ -856,6 +856,7 @@ class SemanticAnalyzer:
                 # site resolves a static as an instance method and CE2102 refuses the
                 # very declaration that answers it.
                 is_static=getattr(extend_def, "is_static", False),
+                is_public=extend_def.is_public,
                 template_id=extend_def.template_id,
                 template_target=extend_def.template_target,
             )

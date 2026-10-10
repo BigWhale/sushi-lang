@@ -37,7 +37,9 @@ from sushi_lang.semantics.generics.types import (
 
 from sushi_lang.semantics.unit_symbols import UnitOwnedSymbols
 from sushi_lang.semantics.visibility import (
+    EXTENSION_METHOD,
     VisibilityTable,
+    extension_method_name,
     library_clash_origin,
     record_declaration,
     warn_shadowed_export,
@@ -415,6 +417,8 @@ class ExtensionMethod:
     # is what keeps the two callable shapes apart: an instance call may not reach a
     # static, and a type-name call may not reach an instance method.
     is_static: bool = False
+    # The `public` marker; the declaring unit is `unit_name`.
+    is_public: bool = False
     # A copy of a generic-target template: the template, and its target as written. One
     # written declaration is one fault, so a diagnostic groups the copies by these.
     template_id: Optional[TemplateId] = None
@@ -462,6 +466,7 @@ class GenericExtensionMethod:
     # `type_params`, whose CE0096 strict zip stays untouched. Solved at the call site.
     method_type_params: Tuple[BoundedTypeParam, ...] = ()
     is_static: bool = False          # no receiver, called on the type name (#542)
+    is_public: bool = False          # the `public` marker; the declaring unit is `unit_name`
     # The declaration as written. A copy is this node with its types substituted, so a
     # field the record does not spell is not lost (#803).
     decl: Optional[ExtendDef] = None
@@ -997,6 +1002,11 @@ class FunctionCollector:
         if header is None:
             return
 
+        if ext.target_type is not None:
+            record_declaration(
+                self.visibility, EXTENSION_METHOD, ext,
+                unit_name=self.current_unit_name, filename=self.current_unit_file,
+                name=extension_method_name(display_type(ext.target_type), ext.name))
         check_dont_panic(self, ext)
         self._reject_signature_faults(header)
         if reject_misplaced_expands(self.r, header.body, frozenset(), header.name_span):
@@ -1265,6 +1275,7 @@ class FunctionCollector:
             err_type=h.err_ty,
             err_span=h.err_span,
             is_static=h.is_static,
+            is_public=h.ext.is_public,
         ))
 
     def _collect_method_generic(self, h: '_ExtensionHeader',
@@ -1327,6 +1338,7 @@ class FunctionCollector:
             err_span=h.err_span,
             method_type_params=h.method_type_params,
             is_static=h.is_static,
+            is_public=h.ext.is_public,
             decl=h.ext,
             target_bounds=target_bounds,
         )

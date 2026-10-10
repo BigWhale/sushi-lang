@@ -179,7 +179,8 @@ def _late_static_signature(template, target, type_args):
         ret_span=template.ret_span, self_mode=template.self_mode,
         filename=template.filename, unit_name=template.unit_name,
         err_type=subst(getattr(template, "err_type", None)),
-        err_span=getattr(template, "err_span", None), is_static=True)
+        err_span=getattr(template, "err_span", None), is_static=True,
+        is_public=bool(getattr(template, "is_public", False)))
     return concrete
 
 

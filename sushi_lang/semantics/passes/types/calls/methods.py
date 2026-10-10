@@ -102,7 +102,8 @@ def substituted_extension_signature(validator: 'TypeValidator', template, receiv
         self_mode=template.self_mode, filename=template.filename,
         unit_name=template.unit_name,
         err_type=err, err_span=getattr(template, "err_span", None),
-        is_static=bool(getattr(template, "is_static", False)))
+        is_static=bool(getattr(template, "is_static", False)),
+        is_public=bool(getattr(template, "is_public", False)))
 
 
 def _resolved(validator: 'TypeValidator', ty):

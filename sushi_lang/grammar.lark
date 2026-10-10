@@ -49,16 +49,20 @@ extern_link_name: NAME ("." NAME)?
 extern_params: typed_param ("," typed_param)* ["," ELLIPSIS]
              | ELLIPSIS
 
-// Extension statements - unified to avoid LALR ambiguity
-extend_stmt: EXTEND type extend_suffix
+// Extension statements - unified to avoid LALR ambiguity. Only an extension method and
+// a static method take `public` (docs/design/extension-visibility.md R9). A perk
+// implementation and a conversion have no marker, so `public` before them is a parse
+// error.
+extend_stmt: PUBLIC? EXTEND type extend_def
+           | EXTEND type extend_suffix
 // The `static` marker declares a receiver-less method (#542, ruling Q2). It is read
 // AFTER the target type, so a generic or namespaced target needs no lookahead. Inside
 // an implementation block the marker exists only to be refused (CE4014): it must not
 // ride the shared `function_def`, which also serves the top level and a nested
 // statement. `method_name` widens the declaration slot the call site always had, so
 # `extend Box static new(...)` is writable (ruling R3).
+extend_def: STATIC? method_name [type_params] "(" [parameters] ")" type ["|" type] [dont_panic] ":" block
 extend_suffix: WITH implemented_perk ":" _NEWLINE _INDENT (DOC_BLOCK _NEWLINE | STATIC? function_def)+ _DEDENT  -> extend_with_def
-             | STATIC? method_name [type_params] "(" [parameters] ")" type ["|" type] [dont_panic] ":" block  -> extend_def
 // A conversion (docs/design/error-conversion.md section 3.1): the target type and a body.
 // It has no place for a `| E`, because the body is bare.
              | AS type [dont_panic] ":" block  -> extend_as_def
