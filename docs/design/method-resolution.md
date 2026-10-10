@@ -225,6 +225,16 @@ base are the same fault. A library's implementation is the one exception: a cons
 replace it (decision 11 of `docs/design/visibility.md`), so the consumer's concrete
 implementation wins and the library template's copy for that type is not registered.
 
+**A generic-target extension copy is cut at the call.** `extend Box@(T) m()`, a static, and
+a concrete-argument target (`extend Box@(i32) m()`) get a copy only when a call reaches the
+method: one copy for each instance, method and declaring unit, the same mechanism as an
+array template and a method-generic. A method that no call reaches is not checked as a copy
+and is not emitted. One lookup answers which template gives an instance a method
+(`target_templates_of` / `target_methods_of` / `templates_by_instance`,
+`semantics/generics/extensions.py`), and CE2097, CE4007 and the other checks of the methods
+of an instance ask it. **An own template wins, also when its target bound fails for the
+instance**: the call is CE4006, as for `T[]`, and this agrees with CW3007 (C3).
+
 **A PERK IMPLEMENTATION reads the same table.** `extend Box@(T) with Show` is a template
 and `extend Box@(i32) with Show` is a constraint, exactly as above, and a partially
 concrete target is the same [CE2098](../error-catalog.md#ce2098). The template is re-filed out of `Program.perk_impls`
@@ -367,7 +377,7 @@ Both are **[CE0134](../error-catalog.md#ce0134)**, tier 2, with the caret on whi
 Every target an extension may name, **except an array**. A struct, an enum, a
 **primitive** (`extend f64 static of_int(i32 v) f64:`), a built-in generic
 (`extend List@(i32) static of_one(i32 v) List@(i32):`) and a **generic** target, which
-is a template like any other: one copy per instantiation. A generic static's type
+is a template like any other: one copy per instantiation that a call reaches. A generic static's type
 arguments are solved in two steps, as ONE resolution. First from the ARGUMENTS,
 for every target type parameter that a parameter names (`nom R src` names `R`), exactly
 as a generic free function solves its own. Then from the PROPAGATION STAMP at the
@@ -407,13 +417,12 @@ let Cage@(i32) a = Cage.holding(9)      # T from the argument; the declared type
 println("{Cage.holding(9).item}")       # T from the argument alone
 ```
 
-The instantiate pass collects what the arguments solve, through the same solver, so
-every copy is cut for `Cage<i32>` before the typecheck pass looks it up; an argument
-only the typecheck pass can type interns the instantiation late, through the seam the
-method-generic rung uses, with the static's own copy queued for the fixpoint round. An
-inference in an EARLY pass reads the substituted signature of the static and queues
-nothing: the copy of an instance that the monomorphize pass reaches is cut by that pass,
-and a second copy from the queue was a duplicate symbol (#1153).
+The instantiate pass collects what the arguments solve, through the same solver, so the
+instance `Cage<i32>` exists before the typecheck pass looks it up; an argument only the
+typecheck pass can type interns the instantiation late, through the seam the method-generic
+rung uses. In both cases the typecheck pass cuts the copy of the static at the call and
+queues it for the fixpoint round. An inference in an EARLY pass reads the substituted
+signature of the static and queues nothing.
 
 The stamp is the reason a static is not only ergonomics. A free function whose `T`
 names only the RETURN cannot be inferred ([CE2060](../error-catalog.md#ce2060)) and has to spell `box_new@(i32)()`; a

@@ -167,8 +167,15 @@ unit is not in the build goes to the entry unit. The rule has three consequences
 
 ## Call-site-driven monomorphization
 
+**A generic-target extension copy is cut at the call too.** `extend Box@(T) m()`, a static,
+and a concrete-argument target (`extend Box@(i32) m()`) get a copy only when a call reaches
+the method: one copy for each instance, method and declaring unit, the same mechanism as an
+array template and a method-generic. A method that no call reaches is not checked as a copy
+and is not emitted. An own template wins, also when its target bound fails for the
+instance: the call is CE4006, as for `T[]`.
+
 An array template's element and a method-generic's solved arguments exist only at the
-call, so the typecheck pass queues instantiations while it resolves calls, and the
+call (a generic-target copy is cut there too), so the typecheck pass queues instantiations while it resolves calls, and the
 analyzer monomorphizes and checks the copies in a bounded fixpoint round after the
 per-unit loop (checking one copy can resolve a call that queues another). A solved
 argument can name a type instantiation NOTHING else in the program names
