@@ -251,17 +251,6 @@ public extend FileMode intent() i32:
         FileMode.AppendB -> return 2
 
 ##:
-Which end of the file a seek counts from.
-
-- Returns: The whence: 0 the start, 1 the current position, 2 the end.
-:##
-public extend SeekFrom whence() i32:
-    match self:
-        SeekFrom.Start -> return 0
-        SeekFrom.Current -> return 1
-        SeekFrom.End -> return 2
-
-##:
 Opens a file and takes ownership of its descriptor.
 
 The handle closes itself when its owner leaves scope, so an explicit close() is only needed

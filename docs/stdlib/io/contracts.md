@@ -12,9 +12,10 @@ use <io/contracts>
 
 ## Overview
 
-The module declares three perks and one function over them, [`read_all`](#read_all) -- no
-struct and no constant. A consumer writes `@(R: Reader)` and takes a `File`, a `TcpStream`,
-or anything later that satisfies the contract.
+The module declares three perks, one function over them, [`read_all`](#read_all), and
+one method, [`SeekFrom.whence()`](#seekfromwhence-i32) -- no struct and no constant. A
+consumer writes `@(R: Reader)` and takes a `File`, a `TcpStream`, or anything later that
+satisfies the contract.
 
 It is also the HOME of one predefined enum, `SeekFrom`, the origin `Seek.seek` takes, and
 it re-exports [`<io/error>`](error.md), the home of `IoError` -- the one channel every
@@ -148,6 +149,31 @@ fn main() i32:
     match slurp("/no/such/file"):
         Result.Ok(text) -> println(text)
         Result.Err(_) -> println("Mostly Harmless: no such file")
+    return 0
+```
+
+## SeekFrom.whence() i32
+
+```sushi
+public extend SeekFrom whence() i32
+```
+
+The `whence` that [`fd_seek`](files.md#fd_seeki32-fd-i64-offset-i32-whence-i64-fileerror)
+takes: `0` from the start, `1` from the current position, `2` from the end. `File.seek`
+calls it.
+
+This module is the home of `SeekFrom`, so the method travels with the type: a unit that
+holds a `SeekFrom` calls `.whence()` with no import. To WRITE the name `SeekFrom`, a unit
+imports `<io/contracts>`, or a module that re-exports it (`<io/fs>`, `<io/buf>`,
+`<net/tcp>`). `<io/files>`, the module of `fd_seek`, does not bring the name. So a unit
+that calls `fd_seek(fd, offset, origin.whence())` with an origin that it writes imports
+`<io/files>` and `<io/contracts>`.
+
+```sushi
+use <io/contracts>
+
+fn main() i32:
+    println("the end is whence {SeekFrom.End().whence()}")
     return 0
 ```
 

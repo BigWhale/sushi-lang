@@ -171,20 +171,18 @@ fn main() i32:
 
 ## Extension methods
 
-Two extension methods on the predefined enums are public, because an extension is as
-visible as its target type. The stdlib uses them to talk to the descriptor layer; a
-program needs them only when it calls an `fd_*` primitive itself.
+One extension method on a predefined enum is public. This module is the home of
+`FileMode`, so the method travels with the type: a unit that holds a `FileMode` calls it
+with no import. The stdlib uses it to talk to the descriptor layer; a program needs it
+only when it calls an `fd_*` primitive itself. The twin for `SeekFrom`,
+[`SeekFrom.whence()`](contracts.md#seekfromwhence-i32), is in `<io/contracts>`, the home
+of `SeekFrom`.
 
 ### `FileMode.intent() i32`
 
 The intent that [`fd_open`](files.md#the-descriptor-layer)
 takes: `0` read, `1` write, `2` append. A `B` form answers the same number as its plain
 twin.
-
-### `SeekFrom.whence() i32`
-
-The `whence` that `fd_seek` takes: `0` from the start, `1` from the current position, `2`
-from the end.
 
 ```sushi
 use <io/fs>

@@ -3,9 +3,10 @@ io/contracts -- Reader, Writer and Seek: what a handle can do, named apart from 
 handle IS.
 
 The module ships as bundled .sushi source and is merged as a compilation unit when
-imported (`use <io/contracts>`). It declares three perks and one function over them,
-read_all(); no struct and no constant. A consumer writes `@(R: Reader)` and takes a File,
-a TcpStream or anything later that satisfies the contract.
+imported (`use <io/contracts>`). It declares three perks, one function over them,
+read_all(), and the method SeekFrom.whence(); no struct and no constant. A consumer
+writes `@(R: Reader)` and takes a File, a TcpStream or anything later that satisfies the
+contract.
 
 Every contract method answers IoError, and it has to: a perk contract carries ONE
 signature, and there is no Self type and no associated type, so a method cannot answer
@@ -132,3 +133,17 @@ public perk Seek:
     - Errors: IoError, when the handle cannot seek -- a pipe cannot.
     :##
     fn seek(poke self, i64 offset, SeekFrom origin) i64 | IoError
+
+##:
+Which end of the file a seek counts from, as the number that `fd_seek` takes.
+
+The method is declared beside the Seek contract, in the home unit of SeekFrom, so it
+travels with the type: a unit that holds a SeekFrom calls it with no import.
+
+- Returns: The whence: 0 the start, 1 the current position, 2 the end.
+:##
+public extend SeekFrom whence() i32:
+    match self:
+        SeekFrom.Start -> return 0
+        SeekFrom.Current -> return 1
+        SeekFrom.End -> return 2
