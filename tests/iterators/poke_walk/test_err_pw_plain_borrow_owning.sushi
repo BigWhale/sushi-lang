@@ -1,0 +1,23 @@
+# A foreach over a plain borrow of an owning walkable value cannot take it: `next()`
+# moves the cursor, and that is a write.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+struct Words:
+    string[] items
+    i32 pos
+
+extend Words next(poke self) Maybe@(string):
+    if (self.pos >= self.items.len()):
+        return Maybe.None
+    self.pos := self.pos + 1
+    return Maybe.Some(self.items[self.pos - 1].clone())
+
+fn first(Words w) ~:
+    foreach(s in w):
+        println(s)
+        break
+
+fn main() i32:
+    let Words w = Words(from(["a", "b", "c"]), 0)
+    first(w)
+    return 0

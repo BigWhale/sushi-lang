@@ -1,0 +1,25 @@
+# A walk in place moves the cursor of the value, so it changes the owner of a binding
+# that reads out of it: a use of the binding after the walk is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+struct Words:
+    string[] items
+    i32 pos
+
+extend Words next(poke self) Maybe@(string):
+    if (self.pos >= self.items.len()):
+        return Maybe.None
+    self.pos := self.pos + 1
+    return Maybe.Some(self.items[self.pos - 1].clone())
+
+fn first(poke Words w) ~:
+    let string[] all = w.items
+    foreach(s in w):
+        println(s)
+        break
+    println(all.len())
+
+fn main() i32:
+    let Words w = Words(from(["a", "b", "c"]), 0)
+    first(poke w)
+    return 0

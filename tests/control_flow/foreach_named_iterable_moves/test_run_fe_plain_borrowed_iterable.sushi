@@ -1,7 +1,7 @@
-# A foreach over a peek or a poke parameter whose type owns nothing walks a copy: the
-# value of the caller does not change.
+# A foreach over a peek parameter whose type owns nothing walks a copy, and a foreach
+# over a poke parameter walks the value of the caller in place.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "2\n1\n2\n1\n2\n"
+# EXPECT_STDOUT_EXACT: "2\n1\n2\n1\n0\n"
 # EXPECT_NO_LEAKS
 
 struct Countdown:

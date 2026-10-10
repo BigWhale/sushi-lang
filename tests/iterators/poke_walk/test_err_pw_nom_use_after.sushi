@@ -1,0 +1,23 @@
+# A foreach over a value given with nom still consumes it: a later use is a use after a
+# move.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+
+struct Words:
+    string[] items
+    i32 pos
+
+extend Words next(poke self) Maybe@(string):
+    if (self.pos >= self.items.len()):
+        return Maybe.None
+    self.pos := self.pos + 1
+    return Maybe.Some(self.items[self.pos - 1].clone())
+
+fn first(nom Words w) i32:
+    foreach(s in w):
+        println(s)
+        break
+    return w.pos
+
+fn main() i32:
+    let Words w = Words(from(["a", "b", "c"]), 0)
+    return first(nom w)

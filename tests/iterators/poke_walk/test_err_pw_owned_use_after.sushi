@@ -1,0 +1,21 @@
+# A foreach over an owned value with no poke still consumes it: a later use is a use
+# after a move.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+
+struct Words:
+    string[] items
+    i32 pos
+
+extend Words next(poke self) Maybe@(string):
+    if (self.pos >= self.items.len()):
+        return Maybe.None
+    self.pos := self.pos + 1
+    return Maybe.Some(self.items[self.pos - 1].clone())
+
+fn main() i32:
+    let Words w = Words(from(["a", "b", "c"]), 0)
+    foreach(s in w):
+        println(s)
+        break
+    println(w.pos)
+    return 0

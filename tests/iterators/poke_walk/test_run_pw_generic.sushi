@@ -1,0 +1,31 @@
+# A foreach over a poke value of a generic walkable type walks it in place, in every
+# instance.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\nx\n2\n3\ny\n"
+# EXPECT_NO_LEAKS
+
+struct Each@(T: Clone):
+    T[] items
+    i32 pos
+
+extend Each@(T) next(poke self) Maybe@(T):
+    if (self.pos >= self.items.len()):
+        return Maybe.None
+    self.pos := self.pos + 1
+    return Maybe.Some(self.items[self.pos - 1].clone())
+
+fn one@(T: Display + Clone)(poke Each@(T) e) ~:
+    foreach(v in e):
+        println(v)
+        break
+
+fn main() i32:
+    let Each@(i32) ns = Each(from([1, 2, 3]), 0)
+    let Each@(string) ss = Each(from(["x", "y"]), 0)
+    one(poke ns)
+    one(poke ss)
+    foreach(n in ns):
+        println(n)
+    foreach(s in ss):
+        println(s)
+    return 0
