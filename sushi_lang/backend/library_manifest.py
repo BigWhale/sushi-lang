@@ -1140,8 +1140,15 @@ class LibraryManifestGenerator:
         and the version check read the record whole; the consumer gives each unit of
         the library only the records that name it. A module that only a unit the
         library does not own uses has an empty list.
+
+        A module of the methods of the built-in types is recorded when the build holds
+        it, also with no `use`: such a method needs no import, and a template that calls
+        one is checked again in the consumer's build (`extension-visibility.md` R1).
         """
-        modules: dict[str, set[str]] = {}
+        from sushi_lang.semantics.stdlib_registry import BUILTIN_TYPE_METHOD_MODULES
+        modules: dict[str, set[str]] = {
+            unit.name: set() for unit in units
+            if unit.is_bundled_stdlib and unit.name in BUILTIN_TYPE_METHOD_MODULES}
         libraries: dict[str, dict] = {}
         writers: dict[str, set[str]] = {}
         own = {unit.name for unit in own_units(units)}

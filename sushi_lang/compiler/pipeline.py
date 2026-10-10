@@ -137,16 +137,27 @@ def _compiled_stdlib_modules(library_linker) -> set[str]:
 
 def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
                                 library_linker=None) -> bool:
-    """Merge bundled Sushi-source stdlib modules (e.g. <collections/iter>) as units."""
+    """Merge the bundled Sushi-source stdlib modules that the build needs, as units.
+
+    A module is needed when a unit imports it, when a compiled library uses it, and when
+    a unit names a method that the module declares on a built-in type. Such a method
+    needs no import (`docs/design/extension-visibility.md` R1), so its module is loaded
+    with no `use`. That load brings no name to a unit (R2).
+    """
     from sushi_lang.internals.parser import parse_to_ast
     from sushi_lang.semantics.stdlib_registry import (
-        PLATFORM_SOURCE_MODULES, SOURCE_STDLIB_MODULES, get_stdlib_registry,
-        platform_key, platform_source, resolve_source_stdlib_path,
+        BUILTIN_TYPE_METHOD_MODULES, PLATFORM_SOURCE_MODULES, SOURCE_STDLIB_MODULES,
+        builtin_type_method_names, get_stdlib_registry, keep_builtin_type_methods,
+        may_declare_methods, named_methods, platform_key, platform_source,
+        resolve_source_stdlib_path,
     )
 
     compiled = _compiled_stdlib_modules(library_linker)
+    texts: dict[str, str] = {}
+    sources: dict[str, tuple[Path, str, Program]] = {}
+    named: dict[str, frozenset[str]] = {}
 
-    def _needed(units) -> set:
+    def _imported(units) -> set:
         needed = set()
         paths = [use_stmt.path for unit in units if unit.ast is not None
                  for use_stmt in unit.ast.uses if use_stmt.is_stdlib]
@@ -162,41 +173,84 @@ def _inject_source_stdlib_units(unit_manager: UnitManager, reporter: Reporter,
                     needed.add(other)
         return needed
 
-    while True:
-        todo = _needed(list(unit_manager.units.values())) - set(unit_manager.units.keys())
-        if not todo:
-            return True
-        for module_path in sorted(todo):
-            src_path = resolve_source_stdlib_path(module_path)
-            if module_path in PLATFORM_SOURCE_MODULES and platform_source(module_path) is None:
-                from sushi_lang.internals import errors as er
-                er.emit(reporter, er.ERR.CE3021, None, module=module_path,
-                        host=platform_key(),
-                        hosts=", ".join(sorted(PLATFORM_SOURCE_MODULES[module_path])))
-                return False
-            if src_path is None or not src_path.exists():
-                from sushi_lang.internals import errors as er
-                er.emit(reporter, er.ERR.CE0007, None,
-                        detail=f"bundled stdlib module '{module_path}' not found at {src_path}")
-                return False
-            module_src = src_path.read_text(encoding="utf-8")
+    def _for_methods(units) -> set:
+        names = set().union(*(named.setdefault(unit.name, named_methods(unit.ast))
+                              for unit in units if unit.ast is not None))
+        return {module for module in BUILTIN_TYPE_METHOD_MODULES
+                if may_declare_methods(_text(module), names)
+                and builtin_type_method_names(_source(module)[2]) & names}
+
+    def _text(module_path: str) -> str:
+        if module_path not in texts:
+            texts[module_path] = SOURCE_STDLIB_MODULES[module_path].read_text(
+                encoding="utf-8")
+        return texts[module_path]
+
+    def _source(module_path: str) -> tuple[Path, str, Program]:
+        if module_path not in sources:
+            src_path = SOURCE_STDLIB_MODULES[module_path]
+            module_src = _text(module_path)
             try:
                 module_ast, _ = parse_to_ast(module_src, dump_parse=False,
                                              source_label=str(src_path))
             except SushiError as e:
                 e.filename = e.filename or str(src_path)
                 raise
-            # A provenance, the same way `_inject_library_source` sets one. A bundled
-            # module is code the user did not write: without this the `docs` pass
-            # reports OUR doc-block mistakes in every program that imports the module,
-            # and every other diagnostic against it arrives unattributed
-            # (documentation.md section 10, R24).
-            unit_manager.units[module_path] = Unit(
-                name=module_path, file_path=src_path, ast=module_ast,
-                dependencies=[], public_symbols={}, source=module_src,
-                provenance=(f"'{module_path}' is a bundled stdlib module written in "
-                            f"Sushi, compiled here because of `use <{module_path}>`"),
-            )
+            sources[module_path] = (src_path, module_src, module_ast)
+        return sources[module_path]
+
+    def _inject(module_path: str, for_methods: bool) -> bool:
+        src_path = resolve_source_stdlib_path(module_path)
+        if module_path in PLATFORM_SOURCE_MODULES and platform_source(module_path) is None:
+            from sushi_lang.internals import errors as er
+            er.emit(reporter, er.ERR.CE3021, None, module=module_path,
+                    host=platform_key(),
+                    hosts=", ".join(sorted(PLATFORM_SOURCE_MODULES[module_path])))
+            return False
+        if src_path is None or not src_path.exists():
+            from sushi_lang.internals import errors as er
+            er.emit(reporter, er.ERR.CE0007, None,
+                    detail=f"bundled stdlib module '{module_path}' not found at {src_path}")
+            return False
+        src_path, module_src, module_ast = _source(module_path)
+        reason = f"because of `use <{module_path}>`"
+        if for_methods:
+            keep_builtin_type_methods(module_ast)
+            reason = "for the methods that it declares on the built-in types"
+        # A provenance, the same way `_inject_library_source` sets one. A bundled
+        # module is code the user did not write: without this the `docs` pass
+        # reports OUR doc-block mistakes in every program that imports the module,
+        # and every other diagnostic against it arrives unattributed
+        # (documentation.md section 10, R24).
+        unit_manager.units[module_path] = Unit(
+            name=module_path, file_path=src_path, ast=module_ast,
+            dependencies=[], public_symbols={}, source=module_src,
+            provenance=(f"'{module_path}' is a bundled stdlib module written in "
+                        f"Sushi, compiled here {reason}"),
+        )
+        return True
+
+    # The imports first, to the end of their chain: an imported module is loaded whole.
+    # Then the modules of the methods of the built-in types, and what those use. Such a
+    # module is loaded for its methods alone, because no unit imported it.
+    for_methods: set[str] = set()
+    while True:
+        units = list(unit_manager.units.values())
+        todo = _imported(units) - set(unit_manager.units)
+        if not todo:
+            break
+        if not all(_inject(module_path, False) for module_path in sorted(todo)):
+            return False
+    while True:
+        units = list(unit_manager.units.values())
+        todo = (_for_methods(units)
+                | _imported([unit for unit in units if unit.name in for_methods])
+                ) - set(unit_manager.units)
+        if not todo:
+            return True
+        for_methods.update(todo)
+        if not all(_inject(module_path, True) for module_path in sorted(todo)):
+            return False
 
 
 _Origin = tuple[str, Optional[Span], Optional[str]]
@@ -603,12 +657,10 @@ def _stdlib_units(compilation_order: list[Unit], library_linker,
     the injection reads it (#585, #1120): the module's symbols are named, so its bitcode
     has to be on the link line even where no unit of the build wrote the import.
     """
-    stdlib_units = _compiled_stdlib_modules(library_linker)
-    for unit in compilation_order:
-        if unit.ast:
-            for use_stmt in unit.ast.uses:
-                if use_stmt.is_stdlib:
-                    stdlib_units.add(use_stmt.path)
+    from sushi_lang.backend.stdlib_linker import linked_stdlib_paths
+    stdlib_units = set(linked_stdlib_paths(
+        [unit.ast for unit in compilation_order if unit.ast],
+        also=sorted(_compiled_stdlib_modules(library_linker))))
 
     if len(compilation_order) > 1:
         print(f"Found {len(compilation_order)} units:")

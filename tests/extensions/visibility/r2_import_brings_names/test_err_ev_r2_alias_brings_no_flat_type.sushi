@@ -1,0 +1,11 @@
+# R2 behind an alias: `use <collections/strings> as cs` puts the names of the module
+# behind `cs.`, and no name in the flat scope. A method needs no import, so the alias
+# does not make the module a flat import either. `StringBuilder` with no `cs.` is an
+# unknown type.
+# EXPECT_ERROR_CODES_EXACT: CE2001
+use <collections/strings> as cs
+
+fn main() i32:
+    let StringBuilder b = StringBuilder.new()
+    println(b.size())
+    return 0

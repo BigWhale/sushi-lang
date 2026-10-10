@@ -1,12 +1,13 @@
 """Standard Library Function Registry"""
 from __future__ import annotations
 from dataclasses import dataclass, field
-from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Optional, Dict, Tuple, List
+from typing import TYPE_CHECKING, AbstractSet, Callable, Optional, Dict, Tuple, List
 import importlib
+import re
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.ast import Program
     from sushi_lang.sushi_stdlib.src.signatures import Signature
 
 
@@ -77,14 +78,113 @@ SOURCE_STDLIB_MODULES.update({
 })
 
 
-# The source modules that ALSO enable built-in methods from the stdlib bitcode: their
-# import is a method interface as well as a unit, also behind an alias.
-BUILTIN_METHOD_MODULES = frozenset({"collections/strings"})
+# The source modules that declare methods on the built-in types. A method of a built-in
+# type needs no import (`docs/design/extension-visibility.md` R1), so a program that
+# names one of these methods loads its module with no `use`. The load brings no name
+# (R2): a name of the module still needs the import.
+BUILTIN_TYPE_METHOD_MODULES = frozenset({
+    "collections/iter", "collections/sort", "collections/strings", "encoding/binary",
+    "text/ascii",
+})
 
 
-def enables_builtin_methods(module_path: str) -> bool:
-    """True if `use <module_path>` enables built-in methods, as well as any names."""
-    return module_path in BUILTIN_METHOD_MODULES
+def named_methods(program: 'Program') -> frozenset:
+    """Every method name that one unit calls, or declares as an extension.
+
+    A declaration counts, so that an extension which takes the name of a stdlib method
+    on a built-in type meets that method and its refusal (C2).
+    """
+    from sushi_lang.semantics.ast import DotCall, ExtendDef, MethodCall
+    from sushi_lang.semantics.ast_walk import walk_nodes
+
+    names: set = set()
+
+    def visit(node) -> bool:
+        if isinstance(node, (MethodCall, DotCall)):
+            names.add(node.method)
+        elif isinstance(node, ExtendDef):
+            names.add(node.name)
+        return True
+
+    walk_nodes(program, visit)
+    return frozenset(names)
+
+
+def builtin_type_method_bitcode(names: AbstractSet[str]) -> frozenset:
+    """The stdlib modules whose bitcode holds a method of a built-in type named in
+    `names`: the generator half of `<collections/strings>`. A build links such a module
+    with no `use`, for the reason of R1."""
+    from sushi_lang.sushi_stdlib.src.collections.strings import METHOD_SPECS
+    return (frozenset({"collections/strings"}) if not names.isdisjoint(METHOD_SPECS)
+            else frozenset())
+
+
+# One `public extend` line: the target as written, then the method name, after `static`.
+_DECLARED_METHOD = re.compile(
+    r"public extend\s+((?:[^\s(]*\([^)]*\)|[^\s(]+)(?:\[\w*\])*)"
+    r"\s+(?:static\s+)?([A-Za-z_]\w*)\s*[@(]")
+# A type that a module declares.
+_DECLARED_TYPE = re.compile(r"^(?:public )?(?:struct|enum|error) ([A-Za-z_]\w*)", re.M)
+
+
+def may_declare_methods(source: str, names: AbstractSet[str]) -> bool:
+    """Can the stdlib module with this source text declare a method on a built-in type
+    that is named in `names`? A quick answer that is never a wrong "no", so that a build
+    parses a module only when the answer can be "yes". `builtin_type_method_names`
+    gives the exact answer.
+
+    A public extension starts its line with `public extend`. A line whose method name
+    this does not find answers "yes". A line whose target is a type that the module
+    declares, with no type argument and no array suffix, is not on a built-in type.
+    """
+    own_types = set(_DECLARED_TYPE.findall(source))
+    for line in source.splitlines():
+        if not line.startswith("public extend"):
+            continue
+        declared = _DECLARED_METHOD.match(line)
+        if declared is None:
+            return True
+        target, method = declared.groups()
+        if target not in own_types and method in names:
+            return True
+    return False
+
+
+def builtin_type_method_names(module: 'Program') -> frozenset:
+    """The names of the public methods that one parsed stdlib module declares on the
+    built-in types (R1)."""
+    from sushi_lang.semantics.visibility import is_builtin_type
+    return frozenset(
+        extension.name
+        for extension in [*module.extensions, *module.generic_extensions]
+        if extension.is_public and is_builtin_type(extension.target_type))
+
+
+def keep_builtin_type_methods(module: 'Program') -> None:
+    """Reduce a parsed stdlib module to its methods on the built-in types (R1).
+
+    A build loads a module for its methods when no unit imports it. That load brings no
+    name (R2). So the types and the perks of the module are removed, with the methods,
+    the perk implementations and the conversions that are declared on them, and its
+    functions and constants become private. Nothing of the module then takes a name
+    from a unit of the program, or hides one.
+    """
+    from sushi_lang.semantics.type_walk import spelled_names
+    removed = {decl.name for decl in [*module.structs, *module.enums, *module.perks]}
+
+    def keeps(decl) -> bool:
+        spelled = {*spelled_names(decl.target_type),
+                   *(spelled_names(decl.ret) if getattr(decl, "is_conversion", False)
+                     else ())}
+        return removed.isdisjoint(spelled) and getattr(decl, "perk_name", None) not in removed
+
+    module.structs, module.enums, module.perks = [], [], []
+    module.extensions = [decl for decl in module.extensions if keeps(decl)]
+    module.generic_extensions = [decl for decl in module.generic_extensions if keeps(decl)]
+    module.perk_impls = [decl for decl in module.perk_impls if keeps(decl)]
+    module.generic_perk_impls = [decl for decl in module.generic_perk_impls if keeps(decl)]
+    for decl in [*module.functions, *module.constants]:
+        decl.is_public = False
 
 
 def is_source_stdlib_module(module_path: str) -> bool:
@@ -96,81 +196,6 @@ def resolve_source_stdlib_path(module_path: str) -> Optional[Path]:
     """Return the bundled .sushi Path for a source stdlib module, or None."""
     return SOURCE_STDLIB_MODULES.get(module_path)
 
-
-def source_extension_module(receiver_type, method_name: str) -> Optional[str]:
-    """The source stdlib module that declares the instance extension method
-    `receiver_type.method_name`, or None when no module declares it.
-
-    A program loads a source module only when a unit imports it, so a call in a unit
-    that does not import the module finds no method. This answer lets that refusal name
-    the import. The modules are read from their files on the first question, with the
-    one parser, so the answer covers every module, loaded or not.
-    """
-    keys = _receiver_keys(receiver_type)
-    for key, module in _source_extension_index().get(method_name, ()):
-        if key in keys:
-            return module
-    return None
-
-
-# The key of `extend T[]`: a template over every dynamic array.
-_ANY_DYNAMIC_ARRAY = "[]"
-
-
-@lru_cache(maxsize=None)
-def _source_extension_index() -> Dict[str, Tuple[Tuple[str, str], ...]]:
-    """method name -> ((target key, module), ...) over every source stdlib module.
-
-    An extension on a type that its own module declares is left out. A value of that
-    type exists only where the module is loaded, and then the method is found, so a
-    miss on a receiver of that name is a different type with the same name.
-    """
-    from sushi_lang.internals.parser import parse_to_ast
-    index: Dict[str, List[Tuple[str, str]]] = {}
-    for module, path in sorted(SOURCE_STDLIB_MODULES.items()):
-        if not path.exists():
-            continue
-        program, _tree = parse_to_ast(path.read_text(encoding="utf-8"),
-                                      source_label=str(path))
-        declared = {decl.name for decl in (program.structs or []) + (program.enums or [])}
-        for extension in (program.extensions or []) + (program.generic_extensions or []):
-            key = _target_key(extension.target_type)
-            if key is not None and key not in declared and not extension.is_static:
-                index.setdefault(extension.name, []).append((key, module))
-    return {name: tuple(rows) for name, rows in index.items()}
-
-
-def _target_key(target) -> Optional[str]:
-    """The key of a WRITTEN extension target: a built-in type's name, `[]` for `T[]`,
-    `u8[]` for a concrete array, or the base name of a declared type."""
-    from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, UnknownType
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-    if isinstance(target, BuiltinType):
-        return target.value
-    if isinstance(target, DynamicArrayType):
-        element = target.base_type
-        if isinstance(element, BuiltinType):
-            return f"{element.value}[]"
-        return _ANY_DYNAMIC_ARRAY if isinstance(element, UnknownType) else None
-    if isinstance(target, GenericTypeRef):
-        return target.base_name
-    if isinstance(target, UnknownType):
-        return target.name
-    return None
-
-
-def _receiver_keys(receiver_type) -> frozenset:
-    """The target keys that a RESOLVED receiver type answers to."""
-    from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType
-    if isinstance(receiver_type, BuiltinType):
-        return frozenset({receiver_type.value})
-    if isinstance(receiver_type, DynamicArrayType):
-        element = receiver_type.base_type
-        if isinstance(element, BuiltinType):
-            return frozenset({_ANY_DYNAMIC_ARRAY, f"{element.value}[]"})
-        return frozenset({_ANY_DYNAMIC_ARRAY})
-    base = getattr(receiver_type, "generic_base", None) or getattr(receiver_type, "name", None)
-    return frozenset({base}) if isinstance(base, str) else frozenset()
 
 @dataclass
 class StdlibFunction:

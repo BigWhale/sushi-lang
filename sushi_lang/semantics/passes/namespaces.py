@@ -168,12 +168,11 @@ def _dependency_use(record: dict) -> Optional[UseStatement]:
 
 
 class MethodInterfaceNamespace(UnitNamespace):
-    """A stdlib module that enables methods on a type and brings no name.
+    """A stdlib import that brings no name, for example the directory import `<collections>`.
 
-    A directory import such as `<collections>` is one. `<collections/strings>` is not: its
-    Sushi half is a unit, and `enables_builtin_methods` keeps its methods behind an alias.
-    It declares nothing, so its place in the scope decides no name: it
-    decides only whether this unit may call the methods it enables (#942).
+    It declares nothing, so its place in the scope decides no name. A method of a
+    built-in type needs no import (`docs/design/extension-visibility.md` R1), so it does
+    not decide a method either.
     """
 
     def __init__(self, module_path: str, homed: Optional[Dict[str, str]] = None) -> None:
@@ -195,13 +194,10 @@ def _scope_of(unit_name: str, flat: Iterable[Tuple[UseStatement, Provider]],
     library's second unit unreachable with no escape. A library unit importing its own
     sibling wrote an ordinary `use`, and gets the sibling and nothing more.
 
-    An ALIASED import puts no name here, but a method interface it reaches is still
-    this unit's import: the methods it enables have no name for the alias to gate. The
-    units it reaches are kept apart, because their public extensions are callable here
-    (`docs/design/extension-visibility.md` R6) and their names are not.
+    An ALIASED import puts no name here. The units it reaches are kept apart, because
+    their public extensions are callable here (`docs/design/extension-visibility.md` R6)
+    and their names are not.
     """
-    from sushi_lang.semantics.stdlib_registry import enables_builtin_methods
-
     scoped_units: list[str] = []
     modules: list[str] = []
     generics: list[str] = []
@@ -214,9 +210,6 @@ def _scope_of(unit_name: str, flat: Iterable[Tuple[UseStatement, Provider]],
         scoped_units.extend(_units_reached(use_stmt, provider, units, library_registry))
     aliased_units: list[str] = []
     for use_stmt, provider in aliased:
-        scoped_units.extend(reached.origin for reached in provider.reaches()
-                            if isinstance(reached, MethodInterfaceNamespace)
-                            or enables_builtin_methods(reached.origin))
         aliased_units.extend(_units_reached(use_stmt, provider, units, library_registry))
     return UnitScope(unit=unit_name, units=tuple(dict.fromkeys(scoped_units)),
                      modules=tuple(dict.fromkeys(modules)),

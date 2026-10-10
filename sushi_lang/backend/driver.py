@@ -138,13 +138,9 @@ class LLVMDriver:
 
         llmod = llvm.parse_assembly(str(mod_ir))
 
-        stdlib_units = set()
-
-        for unit in units:
-            if unit.ast is not None:
-                for use_stmt in unit.ast.uses:
-                    if use_stmt.is_stdlib:
-                        stdlib_units.add(use_stmt.path)
+        from sushi_lang.backend.stdlib_linker import linked_stdlib_paths
+        stdlib_units = linked_stdlib_paths(
+            [unit.ast for unit in units if unit.ast is not None])
 
         # Every COMPILED library of the graph, once, by its stamped name (#1120): the
         # pipeline loaded each one, the consumer's own imports, the dependencies and

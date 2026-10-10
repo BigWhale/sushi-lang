@@ -66,9 +66,12 @@ _add(ErrorMessage("CE3014", Severity.ERROR,
     "a `use` must come before every declaration",
     Category.UNIT, "Every import stands at the top of the unit, after the unit's own doc block if it has one, and a namespace is bound for the whole unit rather than from its `use` downwards. The two halves answer one question today's grammar leaves open in both directions: a `use` is a toplevel, so it may sit anywhere, and a declaration is already order-independent. Go and Java both make the placement mandatory; Rust leaves it to convention. Sushi follows Go and Java, so a reader sees a unit's dependencies in one block. Move the `use` above the first declaration."))
 
-_add(ErrorMessage("CE3015", Severity.ERROR,
-    "{name} needs the stdlib module <{module}>",
-    Category.UNIT, "A method whose body lives in a stdlib module is callable only where that module is imported. This covers a built-in method that a module enables, and an extension method that a Sushi-source module declares (`.map()` on `T[]` from `<collections/iter>`, `.sort()` from `<collections/sort>`, `.is_ascii_digit()` on `u8` from `<text/ascii>`). Such an extension method used to be CE2008, \"undefined function\", with no help: the function is defined, and the fault is the missing import. The refusal used to be CE0096, an INTERNAL error: it told the reader their program was a bug in the compiler, carried no line, no column and no caret, and asked for a report -- for a missing `use`. A missing import is a mistake in the program and reads like one now. Add the import the message names. A DIRECTORY import covers every module under it, so `use <io>` opens both `<io/stdio>` and `<io/files>`; a SIBLING import does not, and `use <io/files>` alone never made `stdout.write()` legal (#501). The import must be in the unit that holds the call: an import in another unit of the same program does not count, because scope is per unit (#942)."))
+# CE3015 ("{name} needs the stdlib module <{module}>") was RETIRED by epic #1251. It
+# refused a call of a stdlib method when the unit of the call did not import the module
+# of the method. A method of a built-in type now needs no import, and a stdlib import
+# brings names, never methods (`docs/design/extension-visibility.md` R1 and R2). A
+# public method of a type that a stdlib module declares travels with the type (R3). So
+# no call of a method is refused for a missing import, and no other emit site was left.
 
 _add(ErrorMessage("CE3016", Severity.ERROR,
     "a `public use` takes no `as`",

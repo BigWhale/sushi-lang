@@ -1,0 +1,21 @@
+# R2: a method of a built-in type loads its module with no import, and that load brings
+# no name. This unit declares its own `StringBuilder` and its own `map`, and calls
+# `.lines()` of <collections/strings> and `.map()` of <collections/iter>. The two
+# declarations do not meet the names of the modules: no duplicate type, and no warning.
+# EXPECT_STDOUT_EXACT: "3\n2\n2\n42\n"
+# EXPECT_STDERR_EMPTY: true
+# EXPECT_NO_LEAKS: true
+struct StringBuilder:
+    i32 size
+
+fn map(i32 x) i32:
+    return x + 1
+
+fn main() i32:
+    let StringBuilder b = StringBuilder(3)
+    println(b.size)
+    println("Mostly\nHarmless".lines().len())
+    let i32[] xs = from([1, 2])
+    println(xs.map(map).len())
+    println(map(41))
+    return 0

@@ -2959,16 +2959,6 @@ An alias binds a name in the unit that wrote it, so it collides with anything el
 
 Every import stands at the top of the unit, after the unit's own doc block if it has one, and a namespace is bound for the whole unit rather than from its `use` downwards. So a reader sees the dependencies of a unit in one block, as in Go and Java. Move the `use` above the first declaration.
 
-### CE3015 {#ce3015}
-
-**Error** · unit
-
-**Message:** `{name} needs the stdlib module <{module}>`
-
-**Help:** `` add `use <{module}>` above the first declaration of this unit ``
-
-A method whose body lives in a stdlib module is callable only where that module is imported. This covers a built-in method that a module enables, and an extension method that a Sushi-source module declares (`.map()` on `T[]` from `<collections/iter>`, `.sort()` from `<collections/sort>`, `.is_ascii_digit()` on `u8` from `<text/ascii>`). A missing import is a mistake in the program. Add the import the message names. A DIRECTORY import covers every module under it; a SIBLING import does not. The import must be in the unit that holds the call: an import in another unit of the same program does not count, because scope is per unit.
-
 ### CE3016 {#ce3016}
 
 **Error** · unit

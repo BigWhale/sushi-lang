@@ -1,0 +1,8 @@
+# A library that imports nothing and calls methods of the built-in types, in a
+# template and in a concrete function.
+public fn count_mapped@(T)(T[] xs, fn(T) -> T f) i32:
+    let List@(T) ys = xs.map(f)
+    return ys.len()
+
+public fn digit(u8 b) bool:
+    return b.is_ascii_digit()
