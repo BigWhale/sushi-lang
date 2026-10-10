@@ -110,6 +110,8 @@ def _propagate_numeric_type(validator: 'TypeValidator', expr: 'Expr',
                             expected: BuiltinType) -> None:
     """Push an expected numeric type into a value's literal leaves."""
     if isinstance(expr, BinaryOp):
+        # A literal under the node can change its type. The next inference stamps it again.
+        expr.inferred_type = None
         for operand in same_type_operands(expr):
             _propagate_numeric_type(validator, operand, expected)
         return
@@ -238,13 +240,7 @@ def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
 
     if not isinstance(node, (EnumConstructor, DotCall, MemberAccess)):
         return
-
-    enum_name = None
-    if isinstance(node, EnumConstructor):
-        enum_name = node.enum_name
-    else:
-        enum_name = _enum_receiver_name(validator, node.receiver)
-
+    enum_name = variant_spelling_enum(validator, node)
     if not (enum_name and isinstance(enum_type, EnumType)):
         return
 
@@ -261,6 +257,20 @@ def _propagate_generic_enum_type(validator: 'TypeValidator', node: Expr,
     # this enum's payload types.
     elif enum_name == enum_type.name:
         _propagate_to_enum_args(validator, node, enum_type)
+
+
+def variant_spelling_enum(validator: 'TypeValidator', node: Expr) -> Optional[str]:
+    """The enum that a variant spelling names, or None when the node spells no variant.
+
+    A propagation of a type into a value changes only such a node.
+    """
+    from sushi_lang.semantics.ast import MemberAccess
+
+    if isinstance(node, EnumConstructor):
+        return node.enum_name
+    if isinstance(node, (DotCall, MemberAccess)):
+        return _enum_receiver_name(validator, node.receiver)
+    return None
 
 
 def _enum_receiver_name(validator: 'TypeValidator', receiver: Expr) -> Optional[str]:
@@ -391,16 +401,10 @@ def _note_declared_position(validator: 'TypeValidator', node: Expr,
     Result.Ok(1)`) stamps nothing, and then the position's own mismatch check is the one
     diagnostic, not CE2112: the constructor asks `holds_declared_type`.
     """
-    from sushi_lang.semantics.ast import MemberAccess
     from sushi_lang.semantics.generics.types import GenericTypeRef
     from sushi_lang.semantics.type_predicates import is_abstract_type
 
-    if isinstance(node, EnumConstructor):
-        enum_name: Optional[str] = node.enum_name
-    elif isinstance(node, (DotCall, MemberAccess)):
-        enum_name = _enum_receiver_name(validator, node.receiver)
-    else:
-        return
+    enum_name = variant_spelling_enum(validator, node)
     if enum_name not in validator.generic_enum_table.by_name:
         return
     if expected_type is None or isinstance(expected_type, GenericTypeRef) or is_abstract_type(
@@ -418,13 +422,8 @@ def _note_refused_declared_type(validator: 'TypeValidator', node: Expr) -> None:
     walk follows the payload of a generic enum constructor only: that is where a
     declared type would go.
     """
-    from sushi_lang.semantics.ast import MemberAccess
-
-    if isinstance(node, EnumConstructor):
-        enum_name: Optional[str] = node.enum_name
-    elif isinstance(node, (DotCall, MemberAccess)):
-        enum_name = _enum_receiver_name(validator, node.receiver)
-    else:
+    enum_name = variant_spelling_enum(validator, node)
+    if enum_name is None:
         return
     if enum_name in validator.generic_struct_table.by_name:
         _declared_positions(validator).add(id(node))
@@ -454,7 +453,7 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
     """Unified entry point for all type propagation."""
     from .utils import names_no_type
     # A stamp can change the type of a node under the value that is validated already.
-    validator.operator_nests.forget_types_under(value_expr)
+    validator.operator_nests.forget_under(value_expr)
     if names_no_type(validator, expected_type):
         _note_refused_declared_type(validator, value_expr)
         return

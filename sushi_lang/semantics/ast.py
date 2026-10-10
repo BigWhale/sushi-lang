@@ -945,6 +945,9 @@ class BinaryOp(Node):
     # The struct or enum a comparison compares, stamped by the typecheck pass when the
     # operator reads a contract (`Eq` for `==`, `Ord` for `<`). The backend reads it.
     operand_type: Optional["Type"] = None
+    # The builtin type of an arithmetic or bitwise operator, stamped by the typecheck
+    # pass when it infers the node. The backend reads it through `stamped_semantic_type`.
+    inferred_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class TupleLiteral(Node):

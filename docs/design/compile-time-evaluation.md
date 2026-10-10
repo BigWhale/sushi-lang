@@ -33,13 +33,22 @@ so). Three callers reach it:
 
 | Caller | Purpose | Reporter |
 |---|---|---|
-| the `typecheck` pass, through `constant_evaluator` (`passes/types/__init__.py`) | validate a `const` declaration (`passes/types/constants.py`); read a shift count for [CE2512](../error-catalog.md#ce2512), a divisor for [CE0112](../error-catalog.md#ce0112) and a repeat count (`passes/types/expressions.py`) | the real one for a declaration, silent for the reads |
+| the `typecheck` pass, through `constant_evaluator` and `operand_evaluator` (`passes/types/__init__.py`) | validate a `const` declaration (`passes/types/constants.py`); read a shift count for [CE2512](../error-catalog.md#ce2512), a divisor for [CE0112](../error-catalog.md#ce0112) and a repeat count (`passes/types/expressions.py`) | the real one for a declaration, silent for the reads |
 | the backend, through `LLVMCodegen.constant_evaluator` (`backend/codegen_llvm.py`) | make the LLVM initializer | silent |
 | `ASTBuilder.integer_constant` (`ast_builder/builder.py`) | read a fixed array size | silent |
 
 The `typecheck` pass and the backend share the collect pass's constant table and its fold
 memo. The AST builder keeps a table of its own, because it runs while the compiler builds
 the AST, which is before any pass. This matters to every later decision in this document.
+
+The divisor read and the shift-count read occur at each level of a nest, and each one
+reads the whole right operand. Their evaluators (`operand_evaluator`) share one more
+table, `folds` in `passes/types/operator_nest.py`. It holds the value of each `BinaryOp`
+and `UnaryOp` that they folded, by the node and by the builtin type that the read asked
+for. Thus a level reads the value of its operand from the table, and a nest is folded
+one time. The table is not on the AST, and it lives until the outermost expression is
+validated. A propagation removes the value of each node under the value that it stamps.
+No other evaluator reads the table, because a read from it records no overflow.
 
 **The back end is not the blocker.** `_materialize_constant` (`backend/codegen_llvm.py`)
 builds an `ir.ArrayType` initializer of any length, and `_register_global_constant` (same
