@@ -8,7 +8,8 @@ from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     expect, find_tree_recursive, first_name, first_token, first_tree, ice,
     is_type_node, read_public)
 from sushi_lang.semantics.ast_builder.declarations.docs import lift_body_doc
-from sushi_lang.semantics.ast_builder.declarations.signatures import read_signature_types
+from sushi_lang.semantics.ast_builder.declarations.signatures import (
+    mark_body, read_signature_types)
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
@@ -38,7 +39,7 @@ if TYPE_CHECKING:
 
 
 def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
-    """Parse function_def: [PUBLIC] FN NAME [type_params] "(" [parameters] ")" type ":" block"""
+    """Parse function_def: [PUBLIC] FN NAME [type_params] "(" [parameters] ")" type [dont_panic] ":" block"""
     name_tok = first_name(t.children)
 
     if name_tok is None:
@@ -68,6 +69,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     self_mode, self_mode_span, params = strip_self_param(params)
     signature = read_signature_types(t.children, ast_builder)
     body = ast_builder._block(body_node)
+    dont_panic, dont_panic_span = mark_body(t.children, body)
 
     return FuncDef(
         name=str(name_tok),
@@ -85,6 +87,8 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
         self_mode_span=self_mode_span,
         doc=lift_body_doc(body, ast_builder),
         public_span=public_span,
+        dont_panic=dont_panic,
+        dont_panic_span=dont_panic_span,
     )
 
 

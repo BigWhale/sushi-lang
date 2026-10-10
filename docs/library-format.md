@@ -315,6 +315,19 @@ is the authority, and the index is a cache of it.
         }
     ],
 
+    # Each declaration of the library's own units that is marked `dont_panic`, with
+    # its `because` text (docs/design/dont-panic.md, D10). Every kind writes it, so
+    # `--lib-info` shows a reviewer the unchecked code before the first build; a
+    # source library carries the marker in its text as well. A written declaration
+    # only: a monomorphized copy is not listed. `name` is `fn_name` for a function or a
+    # generic template, `Type.method` for an extension method, a static and a perk
+    # implementation method (the type in the `@(...)` spelling), and `Source as Target`
+    # for a conversion. `reason` is the raw text between the quotes. The whole key is
+    # absent when no declaration is marked.
+    "dont_panic": [
+        {"unit": str, "name": str, "reason": str}
+    ],
+
     # What each unit RE-EXPORTS: one record per `public use`, in written order.
     # `public use X` makes X's public names the unit's own, so the unit's importers get
     # them where its own names land. A SOURCE library needs no record -- its units are

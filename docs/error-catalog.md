@@ -1272,6 +1272,19 @@ A use-after-move error ([CE2405](#ce2405), [CE2435](#ce2435)) is relational: it 
 
 A generic function, or an extension method that the compiler copies at the call site (an `extend T[]` method, or a method with a method-level type parameter), gets one copy for each list of type arguments. When the body of a copy calls the same template, directly or through other templates, with a type argument that holds the earlier one (`grow(nom Box(x), n)` in `grow@(U)`), each copy names a new and larger copy, and the chain has no end. The value of a run-time argument has no effect, because the copies are made at compile time. The diagnostic is at the call in the template body that names the larger copy, and a note shows the first call that started the chain. A chain of different templates, and a template that calls itself with the same type argument, make no new copy and are not refused. [CE0122](#ce0122) is the same fault for a generic type. Call the template with a type argument that does not grow.
 
+### CE0152 {#ce0152}
+
+**Error** · function
+
+**Message:** `{subject} is marked dont_panic, and this build does not allow it`
+
+**Help:**
+
+- `pass --dont-panic to allow the unchecked indexes of this build, or remove the marker`
+- `the library '{library}' asks for unchecked indexes; pass --dont-panic to consent`
+
+The `dont_panic because "<reason>"` marker removes the bounds check of each `[]` in the body that carries it, so an index out of range there is undefined behaviour and not the runtime error [RE2020](#re2020). Only three kinds of unit may write it. A bundled stdlib unit needs no flag. A unit of a build that passes `--dont-panic` may write it. A source library is parsed again in each build that uses it, so its marker meets this gate in the consumer's build, and the consumer must pass `--dont-panic` too: the consumer compiles the unchecked code, so the consumer consents. The message then names the library. A CONCRETE marked body of a binary or hybrid library is compiled into the shipped bitcode already, so its consumer needs no consent. A marked generic TEMPLATE of any library kind ships as source, so the consumer compiles it and must pass `--dont-panic`. Pass `--dont-panic`, or remove the marker. See [the dont_panic design](design/dont-panic.md).
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.
@@ -3661,6 +3674,20 @@ A destructuring rebind `(a, b) := v` evaluates all of `v` first and then assigns
 
 The target of an `extend` can put a bound on a type parameter: `extend List@(T: Clone) filter(...)`, `extend (T: Clone)[] filter(...)`. The grammar accepts `NAME: Perk` in every type-argument list, because the parser cannot know the position. The AST builder refuses it in every other position: a `let` type, a parameter type, a return type, a field, an explicit type argument of a call, a conversion source, and a position inside a target argument (`extend Box@(List@(T: Clone))`). A function, a struct and an enum write the bound in their own type-parameter list.
 
+### CE6111 {#ce6111}
+
+**Error** · syntax
+
+**Message:** `'dont_panic' cannot stand on {position}: {reason}`
+
+**Help:**
+
+- `write the marker on a named function that holds the loop`
+- `write the marker on the implementation method`
+- `remove the marker; a C function has no index for Sushi to uncheck`
+
+The `dont_panic because "<reason>"` marker removes the bounds check of each `[]` in the body of the declaration that carries it. So it stands only on a named declaration with a body: a free function, a static, an extension method, a perk implementation method and a conversion. A perk contract method and an extern have no body, and the marker on one would remove nothing. A lambda is refused because the lift pass makes it a function of its own, which can run after the marked function returned, outside the guards that the `because` text states. The marker also does not reach a lambda in a marked body: the indexes there keep their check. See [the dont_panic design](design/dont-panic.md).
+
 ## CE7xxx: Documentation block errors {#ce7xxx}
 
 These errors are about what a documentation block (`##: ... :##`) tells about its declaration.
@@ -3763,7 +3790,17 @@ Source file should end with a newline character.
 
 **Message:** `'{flag}' has no effect {reason}`
 
-The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-kind` and `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either. The build goes on without the flag.
+The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-kind` and `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either; `--dont-panic` is read only by a build that compiles a function marked `dont_panic` outside the bundled stdlib. The build goes on without the flag.
+
+### CW0004 {#cw0004}
+
+**Warning** · general
+
+**Message:** `{subject} is marked dont_panic, but its body has no index to uncheck`
+
+**Help:** `remove the marker; an index in a lambda keeps its check`
+
+The `dont_panic` marker removes the bounds check of each `[]` in the body that carries it. A marked body with no `[]` removes nothing, so the author believes that a check went and none did. An index in a lambda in the body does not count, because a lambda keeps its checks. The warning is always on, and it is for the author: a user unit and a bundled stdlib unit get it, and a source library's unit in a consumer's build does not. Remove the marker. See [the dont_panic design](design/dont-panic.md).
 
 ### CW1001 {#cw1001}
 

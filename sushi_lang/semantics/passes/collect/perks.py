@@ -17,6 +17,7 @@ from sushi_lang.semantics.typesys import (
     Type, BuiltinType, StructType, EnumType, FunctionType, ReceiverType)
 from sushi_lang.semantics.generics.extension_targets import RefusalRecord
 
+from .dont_panic import MarkerGate, check_dont_panic
 from .utils import (
     reject_misplaced_expands, reject_reference_in, reject_try_in_body, reject_variadic_param)
 
@@ -509,6 +510,10 @@ class PerkCollector:
         # The implementation methods that hold a misplaced `expand` (#1070): the
         # analysis stops after the collect pass.
         self.refused_pack_bodies: List[str] = []
+        # What the current unit may do with `dont_panic`, and the methods whose marker
+        # is a use of the flag (D13). With no gate, nothing judges the marker.
+        self.marker_gate: Optional[MarkerGate] = None
+        self.marked: List[str] = []
         # Who declared what, for the perk-contract rule (CE4011).
         self.visibility: Optional[VisibilityTable] = None
         # The first template and the first concrete implementation of each perk on
@@ -1053,6 +1058,7 @@ class PerkCollector:
         # rule every bare body has.
         from sushi_lang.semantics.channel import has_channel
         for method in impl.methods or []:
+            check_dont_panic(self, method)
             if not has_channel(method):
                 reject_try_in_body(self.r, method.body, "a perk method")
             if reject_misplaced_expands(self.r, method.body, frozenset(),

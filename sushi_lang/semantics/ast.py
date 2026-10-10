@@ -278,6 +278,10 @@ class FuncDef(Node):
     # growth rule reads that chain (`generics/instance_growth.py`). None on a written
     # declaration. It holds no node.
     instance_key: Optional[tuple] = None
+    # The `because` text of a `dont_panic` marker, None when the header has none
+    # (docs/design/dont-panic.md). The builder stamps the indexes of the body.
+    dont_panic: Optional[str] = None
+    dont_panic_span: Optional[Span] = None
 
 
 @dataclass(slots=True)
@@ -415,6 +419,9 @@ class ExtendDef(Node):
     template_target: Optional[str] = None
     # The key of a call-site copy; see `FuncDef`. None on every other extension.
     instance_key: Optional[tuple] = None
+    # The `dont_panic` marker; see `FuncDef`.
+    dont_panic: Optional[str] = None
+    dont_panic_span: Optional[Span] = None
 
     @property
     def is_conversion(self) -> bool:
@@ -919,6 +926,9 @@ class IndexAccess(Node):
                                             # as CE0019 (#286). Siblings:
                                             # `inferred_return_type`,
                                             # `inferred_unwrapped_type`.
+    # In the body of a `dont_panic` function, and not in a lambda there: the backend
+    # emits no bounds check (docs/design/dont-panic.md). Stamped by the AST builder.
+    unchecked: bool = False
 
 UnOp = Literal["neg", "not", "~"]
 @dataclass(slots=True)

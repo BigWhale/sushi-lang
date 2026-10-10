@@ -72,7 +72,7 @@ def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
 
     _reject_use_below_declaration(reporter, unit, program)
 
-    table = NamespaceTable(library=_library_of(unit))
+    table = NamespaceTable(library=unit.library_name)
 
     # The FFI namespaces THIS unit declares. An `unsafe external` block is declared in
     # one unit (section 3), so the namespace it binds is that unit's, exactly as a `use`
@@ -164,14 +164,6 @@ def _dependency_use(record: dict) -> Optional[UseStatement]:
     if record.get("kind") == "library":
         return UseStatement(loc=None, path=path, is_library=True,
                             library_name=record.get("library_name") or None)
-    return None
-
-
-def _library_of(unit: Unit) -> Optional[str]:
-    """The source library a unit was injected from, or None for any other unit."""
-    parts = unit.name.split("/")
-    if getattr(unit, "from_library", False) and parts[0] == "lib" and len(parts) > 2:
-        return parts[1]
     return None
 
 

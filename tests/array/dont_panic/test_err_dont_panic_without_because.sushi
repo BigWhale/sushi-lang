@@ -1,0 +1,9 @@
+# The marker with no `because` is a parse error: the parser reaches the colon where
+# it needs the word.
+# EXPECT_ERROR_CODE: CE6001
+
+fn first(i32[] xs) i32 dont_panic:
+    return xs[0]
+
+fn main() i32:
+    return 0

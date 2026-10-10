@@ -1,0 +1,17 @@
+# A marked copy loop: an indexed read and an indexed write, both unchecked.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1 2 3 4\n"
+
+fn copy_into(i32[] src, poke i32[] dst) ~ dont_panic because "dst has the length of src, and k < len holds k in range":
+    let i32 k = 0
+    while (k < src.len()):
+        dst[k] := src[k]
+        k := k + 1
+
+fn main() i32:
+    let i32[] src = from([1, 2, 3, 4])
+    let i32[] dst = from([0; 4])
+    copy_into(src, poke dst)
+    println("{dst[0]} {dst[1]} {dst[2]} {dst[3]}")
+    return 0

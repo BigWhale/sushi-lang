@@ -26,7 +26,7 @@ _KEYWORDS = (
     "fn", "let", "const", "var", "return", "if", "elif", "else", "while", "foreach",
     "expand", "in", "match", "struct", "enum", "error", "perk", "extend", "with", "use",
     "public", "unsafe", "external", "because", "break", "continue", "as", "new",
-    "peek", "poke", "nom", "static", "assert",
+    "peek", "poke", "nom", "static", "assert", "dont_panic",
 )
 
 # The match wildcard and the discard binding. A bare `_` only -- `_foo` is a name.

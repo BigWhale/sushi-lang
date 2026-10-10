@@ -1,0 +1,4 @@
+# A source library with a marked function that holds no index.
+
+public fn answer() i32 dont_panic because "there is nothing to check":
+    return 42

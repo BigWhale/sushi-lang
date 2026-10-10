@@ -1,0 +1,8 @@
+# --dont-panic on a build that has an error and marks no function: the error alone.
+# The flag warning is for a build that is otherwise clean.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_ERROR_CODES_EXACT: CE2002
+
+fn main() i32:
+    let i32 n = "Mostly Harmless"
+    return n

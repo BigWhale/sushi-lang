@@ -58,6 +58,9 @@ class TestMetadata:
     # Extra flags appended to the ./sushic command line. A diagnostic behind a compiler
     # flag has no other way to be exercised by a .sushi fixture.
     compiler_flags: Optional[List[str]] = None
+    # Extra flags for EVERY library build of the BUILD_LIB family, never for the
+    # compilation of the fixture itself.
+    lib_flags: Optional[List[str]] = None
 
     # A rebuild fixture (#988): a fixture whose directory holds a `v2/` directory. The
     # units the SECOND compilation reports `[rebuilt]` and `[cached]`, and the stdout of
@@ -114,6 +117,8 @@ class TestMetadata:
             self.test_env = {}
         if self.compiler_flags is None:
             self.compiler_flags = []
+        if self.lib_flags is None:
+            self.lib_flags = []
         if self.build_libs is None:
             self.build_libs = []
         if self.build_libs_binary is None:
@@ -170,6 +175,11 @@ class TestMetadata:
 RUNNER_OWNED_FLAGS = frozenset({
     '-o', '--lib', '--lib-info', '--clean-cache', '--build-stdlib', '--cache-dir',
 })
+
+# The two flags the runner writes for each library build. `LIB_FLAGS` refuses them, because
+# a later one would win silently; `COMPILER_FLAGS` may spell them, as a fixture's own
+# build is no library build.
+LIB_BUILD_FLAGS = frozenset({'--lib-kind', '--lib-version'})
 
 # The one runner-owned flag a fixture may spell once it names its own output (OUTPUT_PATH):
 # the build kind is then the fixture's, because the runner no longer picks the file.
@@ -279,15 +289,30 @@ def _exact_codes(metadata: TestMetadata, value: str, test_file: Path) -> None:
     metadata.expect_error_codes_exact = (metadata.expect_error_codes_exact or []) + codes
 
 
+def _refuses_runner_flag(token: str, directive: str, test_file: Path,
+                         owned: frozenset = RUNNER_OWNED_FLAGS) -> bool:
+    """A flag the runner owns, refused with a printed warning. One check for every
+    directive that passes flags to `sushic`."""
+    if token in owned:
+        _warn(f"{token} is the runner's to spell in {test_file}; {directive} ignored it")
+        return True
+    return False
+
+
 def _compiler_flags(metadata: TestMetadata, value: str, test_file: Path) -> None:
     for token in _split(value):
         if token == LIB_FLAG:
             metadata.held_lib_flag = len(metadata.compiler_flags)
             continue
-        if token in RUNNER_OWNED_FLAGS:
-            _warn(f"{token} is the runner's to spell in {test_file}; COMPILER_FLAGS ignored it")
-            continue
-        metadata.compiler_flags.append(token)
+        if not _refuses_runner_flag(token, "COMPILER_FLAGS", test_file):
+            metadata.compiler_flags.append(token)
+
+
+def _lib_flags(metadata: TestMetadata, value: str, test_file: Path) -> None:
+    owned = RUNNER_OWNED_FLAGS | LIB_BUILD_FLAGS
+    metadata.lib_flags.extend(
+        token for token in _split(value)
+        if not _refuses_runner_flag(token, "LIB_FLAGS", test_file, owned))
 
 
 def _test_env(metadata: TestMetadata, value: str, test_file: Path) -> None:
@@ -429,6 +454,7 @@ VALUED_DIRECTIVES = {
     'BUILD_LIB_BINARY': _library_build('build_libs_binary', 'binary'),
     'BUILD_LIB_HYBRID': _library_build('build_libs_hybrid', 'hybrid'),
     'BUILD_LIB_WARNS': _build_lib_warns,
+    'LIB_FLAGS': _lib_flags,
     'STDLIB_MODULE': _stdlib_module,
     'BUILD_LIB_AT': _build_lib_at,
     'FIXTURE_CACHE_DIR': _set('fixture_cache_dir', lambda v: _unquote(v).strip()),

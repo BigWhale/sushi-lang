@@ -423,6 +423,11 @@ def _conversion_line(conv: dict, _p: Palette) -> str:
     return f"  extend {_surface(conv['source'])} as {_surface(conv['target'])}"
 
 
+def _dont_panic_line(record: dict, _p: Palette) -> str:
+    """A marked declaration with its reason, as the header writes the marker."""
+    return f"  {record['name']} dont_panic because \"{record['reason']}\""
+
+
 def _foreign_line(claim: dict, p: Palette) -> str:
     return f"  extend {_render_extension_target(claim)} {claim['method']}"
 
@@ -512,6 +517,8 @@ _SECTIONS: tuple[_Section, ...] = (
     # section of its own (docs/design/error-conversion.md 8.2).
     _Section("Conversions", ("conversions",), _conversion_line),
     _Section("Foreign Extensions", ("foreign_extensions",), _foreign_line, doc=None),
+    # The unchecked code and its proof, for a reviewer (docs/design/dont-panic.md, D10).
+    _Section("Unchecked Indexes", ("dont_panic",), _dont_panic_line, doc=None),
     _Section("Dependencies", ("dependencies",), _dependency_line, doc=None),
 )
 

@@ -1,0 +1,9 @@
+# A marked body with no index at all: the marker removes nothing.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_ERROR_CODES_EXACT: CW0004
+
+fn twice(i32 n) i32 dont_panic because "there is nothing to check":
+    return n * 2
+
+fn main() i32:
+    return twice(0)

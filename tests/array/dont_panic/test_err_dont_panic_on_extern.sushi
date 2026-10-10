@@ -1,0 +1,8 @@
+# The marker on an extern is refused: an extern has no body.
+# EXPECT_ERROR_CODES_EXACT: CE6111
+
+unsafe external "C" as libc because "bootstrap: call libc for the self-hosted backend":
+    fn strlen(string s) i64 dont_panic because "libc has no body here" = "strlen"
+
+fn main() i32:
+    return 0

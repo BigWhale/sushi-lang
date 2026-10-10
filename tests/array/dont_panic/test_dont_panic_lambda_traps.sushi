@@ -1,0 +1,15 @@
+# The marker stops at a lambda body: an index inside a lambda is checked, and an
+# index out of range there still traps with RE2020.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2020"
+
+fn probe(i32 n) i32 dont_panic because "index 0 is in range of three elements":
+    let i32[3] a = [1, 2, 3]
+    let fn(i32) -> i32 f = |i32 i| a[i]
+    let i32 first = a[0]
+    return first + f(n)
+
+fn main() i32:
+    return probe(7)

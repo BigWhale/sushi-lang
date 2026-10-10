@@ -10,6 +10,7 @@ from sushi_lang.semantics.ast import Program, FuncDef, ConstDef
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.error_reporter import PassErrorReporter
+from sushi_lang.semantics.stdlib_registry import SOURCE_STDLIB_MODULES
 
 
 class SymbolType(Enum):
@@ -115,6 +116,30 @@ class Unit:
                 symbols[const.name] = symbol
 
         self.public_symbols = symbols
+
+    @property
+    def is_bundled_stdlib(self) -> bool:
+        """A bundled stdlib module written in Sushi: it has a provenance, it is not from
+        a library, and it is named in `SOURCE_STDLIB_MODULES`. The name alone does not
+        answer this, because a user unit can take a stdlib module name, and that unit
+        has no provenance. A provenance alone does not answer it either, because a
+        source library's unit carries one too."""
+        return (self.provenance is not None and not self.from_library
+                and self.name in SOURCE_STDLIB_MODULES)
+
+    @property
+    def is_authors_unit(self) -> bool:
+        """The unit of the program's own author: a unit with no provenance, or a bundled
+        stdlib module. A consumed library unit is another author's."""
+        return self.provenance is None or self.is_bundled_stdlib
+
+    @property
+    def library_name(self) -> Optional[str]:
+        """The source library this unit was injected from, or None for any other unit."""
+        parts = self.name.split("/")
+        if self.from_library and parts[0] == "lib" and len(parts) > 2:
+            return parts[1]
+        return None
 
     def read_source(self) -> str:
         """The file's text. Read from disk once; empty when it cannot be read."""

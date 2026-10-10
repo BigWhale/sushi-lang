@@ -694,9 +694,10 @@ class TestRunner:
         builds after them. Each build sees the directory on its own SUSHI_LIB_PATH, so a
         library may import one built before it. Each
         build has a cache outside the copy, so a library build leaves nothing in it but the
-        `.slib`. The version is the written one, else 0.0.0, unless a `nori.toml` in the
-        directory the build starts in states one: the compiler reads that file alone and
-        refuses a second version (CE3505).
+        `.slib`. Every build takes the LIB_FLAGS flags; the fixture's own build does not.
+        The version is the written one, else 0.0.0, unless a `nori.toml` in the directory
+        the build starts in states one: the compiler reads that file alone and refuses a
+        second version (CE3505).
         """
         workspace.libs.mkdir(parents=True, exist_ok=True)
         directive_of = {"source": "BUILD_LIB", "binary": "BUILD_LIB_BINARY",
@@ -715,7 +716,7 @@ class TestRunner:
             version = ([] if stated and written is None
                        else ["--lib-version", written or "0.0.0"])
             done = self._sushic(
-                ["--lib", *version, "--lib-kind", kind,
+                ["--lib", *version, "--lib-kind", kind, *metadata.lib_flags,
                  str(workspace.root / source), "-o", str(target),
                  "--cache-dir", str(workspace.home / "libcache")],
                 cwd=workspace.home, env=env, timeout=60)

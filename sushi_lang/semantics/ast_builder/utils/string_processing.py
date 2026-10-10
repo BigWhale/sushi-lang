@@ -9,6 +9,14 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
 
 
+def strip_string_token(tok: Token) -> str:
+    """Strip surrounding quotes from a STRING token (no interpolation)."""
+    raw = str(tok.value)
+    if len(raw) >= 2 and raw[0] in ("\"", "'") and raw[-1] == raw[0]:
+        raw = raw[1:-1]
+    return raw
+
+
 def process_string_escapes(raw_string: str) -> str:
     r"""Process escape sequences in a string literal."""
     simple_escapes = {

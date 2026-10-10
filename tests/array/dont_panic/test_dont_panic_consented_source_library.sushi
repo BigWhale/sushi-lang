@@ -1,0 +1,14 @@
+# A source library marks two functions. The library build and the consumer build both
+# pass --dont-panic: the consumer builds with no warning and runs.
+# BUILD_LIB: dp_consent_lib.sushi
+# LIB_FLAGS: --dont-panic
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4\n2\n"
+use <lib/dp_consent_lib>
+
+fn main() i32:
+    let i32[] xs = from([4, 2])
+    println(head(xs))
+    println(second(xs))
+    return 0

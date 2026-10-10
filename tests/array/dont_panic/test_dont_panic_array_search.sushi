@@ -1,0 +1,29 @@
+# A marked search over a dynamic array and over a fixed array: found and not found.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n-1\n3\n-1\n"
+
+fn index_in_dynamic(i32[] xs, i32 target) i32 dont_panic because "k < len holds k in range":
+    let i32 k = 0
+    while (k < xs.len()):
+        if (xs[k] == target):
+            return k
+        k := k + 1
+    return -1
+
+fn index_in_fixed(i32[4] xs, i32 target) i32 dont_panic because "k < 4 holds k in range":
+    let i32 k = 0
+    while (k < 4):
+        if (xs[k] == target):
+            return k
+        k := k + 1
+    return -1
+
+fn main() i32:
+    let i32[] dyn = from([42, 7, 11, 5])
+    println(index_in_dynamic(dyn, 11))
+    println(index_in_dynamic(dyn, 99))
+    let i32[4] fixed = [10, 20, 30, 40]
+    println(index_in_fixed(fixed, 40))
+    println(index_in_fixed(fixed, 99))
+    return 0

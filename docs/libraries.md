@@ -116,6 +116,30 @@ the consumer wrote `use <lib/other>`, and `other`'s public names are the consume
 write. If `other` is not on the path, the consumer gets [CE3502](error-catalog.md#ce3502) with a note that names the
 `public use`.
 
+### Unchecked Indexes and Consent
+
+A library function may carry the marker `dont_panic because "<reason>"`, which removes the
+bounds check of each `[]` in its body (see the
+[language reference](language-reference.md#unchecked-indexes-dont_panic)). Whether a
+consumer must consent depends on what the library ships:
+
+| What is marked | Ships as | The consumer must pass `--dont-panic` |
+|---|---|---|
+| A function, in a `source` library | text | yes |
+| A concrete function, in a `binary` or `hybrid` library | bitcode | no |
+| A generic template, in a library of any kind | source text | yes |
+
+The consumer compiles source text, so the consumer accepts the unchecked code. Without the
+flag the build stops with [CE0152](error-catalog.md#ce0152), and the message names the
+library. A concrete body in a binary or hybrid library is compiled already, as a C library's
+is, and needs no consent. A marked generic template ships as source in every kind, because
+the consumer makes the copies. Build the library itself with `--dont-panic` too.
+
+Every kind records its marked functions in the manifest, and `--lib-info` lists them (see
+[Inspecting Libraries](#the---lib-info-flag)). A library author who marks a function says
+so in the library's documentation. A marked function in a library unit gets no
+[CW0004](error-catalog.md#cw0004) in a consumer's build.
+
 ### Library Dependencies
 
 A library that writes `use <lib/b>` depends on `b`. Two rules apply, the same for every
@@ -439,6 +463,11 @@ This is useful for:
 - Reading the methods a library adds to a type: `Extension Methods` prints one line per
   method, as it was declared (`extend Vec static at(i32 x, i32 y) Vec`), a template
   (`extend Box@(T) tag() i32`) beside the concrete ones
+- Seeing the unchecked code before the first build: `Unchecked Indexes` prints one line per
+  function marked `dont_panic`, as `  name dont_panic because "reason"`. The name is `name`
+  for a function or a template, `Type.method` for an extension method, a static or a perk
+  implementation method, and `Source as Target` for a conversion. The section is absent
+  when nothing is marked, and it is the same in every library kind
 - Seeing what a unit hands on: `Re-exports` prints one line per `public use`, as the
   statement was written, so a façade unit's whole surface reads off the report
 - Verifying platform compatibility

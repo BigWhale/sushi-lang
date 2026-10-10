@@ -35,7 +35,11 @@ _add(ErrorMessage("CW0002", Severity.WARNING,
 
 _add(ErrorMessage("CW0003", Severity.WARNING,
     "'{flag}' has no effect {reason}", Category.GENERAL,
-    "The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-kind` and `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either. The build goes on without the flag. These flags used to be ignored with no word, so a user could believe a library was built as binary, or that its object was kept, when neither was true."))
+    "The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-kind` and `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either; `--dont-panic` is read only by a build that compiles a function marked `dont_panic` outside the bundled stdlib (docs/design/dont-panic.md, ruling D13). The build goes on without the flag. These flags used to be ignored with no word, so a user could believe a library was built as binary, or that its object was kept, when neither was true."))
+
+_add(ErrorMessage("CW0004", Severity.WARNING,
+    "{subject} is marked dont_panic, but its body has no index to uncheck", Category.GENERAL,
+    "The `dont_panic` marker removes the bounds check of each `[]` in the body that carries it (docs/design/dont-panic.md). A marked body with no `[]` removes nothing, so the author believes that a check went and none did (ruling D12). An index in a lambda in the body does not count: a lambda keeps its checks (ruling D5). The warning is always on, and it is for the author: a user unit and a bundled stdlib unit get it, and a source library's unit in a consumer's build does not. Remove the marker."))
 
 # Rebinding / scope warnings
 _add(ErrorMessage("CW1001", Severity.WARNING,

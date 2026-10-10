@@ -23,6 +23,7 @@ from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.typesys import EnumType, Type, UnknownType
 
+from .dont_panic import check_dont_panic
 from .utils import reject_misplaced_expands, reject_try_in_body
 
 if TYPE_CHECKING:
@@ -46,6 +47,7 @@ def collect_conversion(collector: 'FunctionCollector', ext: ExtendDef, *,
     """
     # The body is bare (C7), and the grammar has no place for a `| E`.
     if not refile:
+        check_dont_panic(collector, ext)
         reject_try_in_body(collector.r, ext.body, "a conversion",
                            help_text="a conversion is bare, so handle the Result in "
                                      "the body (match, .realise(default))")

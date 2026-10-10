@@ -1,0 +1,4 @@
+# A source library with a marked function.
+
+public fn head(i32[] xs) i32 dont_panic because "the caller passes a non-empty array":
+    return xs[0]

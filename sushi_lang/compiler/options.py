@@ -26,6 +26,7 @@ class BuildOptions:
     dump_ll: bool
     no_incremental: bool
     cache_dir: Optional[str]
+    dont_panic: bool
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "BuildOptions":
@@ -44,6 +45,7 @@ class BuildOptions:
             dump_ll=args.dump_ll,
             no_incremental=args.no_incremental,
             cache_dir=args.cache_dir,
+            dont_panic=args.dont_panic,
         )
 
     @property

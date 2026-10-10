@@ -8,20 +8,14 @@ from sushi_lang.semantics.ast import ExternalBlock, ExternalDecl, ExternalVar
 from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
 from sushi_lang.semantics.ast_builder.declarations.functions import parse_params
+from sushi_lang.semantics.ast_builder.declarations.signatures import refuse_dont_panic
+from sushi_lang.semantics.ast_builder.utils.string_processing import strip_string_token
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_tree, ice, is_type_node)
 from sushi_lang.internals.report import span_of
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
-
-
-def _strip_string_token(tok: Token) -> str:
-    """Strip surrounding quotes from a STRING token (no interpolation)."""
-    raw = str(tok.value)
-    if len(raw) >= 2 and raw[0] in ("\"", "'") and raw[-1] == raw[0]:
-        raw = raw[1:-1]
-    return raw
 
 
 def parse_external_block(t: Tree, ast_builder: 'ASTBuilder') -> ExternalBlock:
@@ -47,13 +41,13 @@ def parse_external_block(t: Tree, ast_builder: 'ASTBuilder') -> ExternalBlock:
                 has_because = True
 
     if string_tokens:
-        abi = _strip_string_token(string_tokens[0])
+        abi = strip_string_token(string_tokens[0])
         abi_span = span_of(string_tokens[0])
     if name_tokens:
         namespace = str(name_tokens[0].value)
         namespace_span = span_of(name_tokens[0])
     if has_because and len(string_tokens) >= 2:
-        reason = _strip_string_token(string_tokens[1])
+        reason = strip_string_token(string_tokens[1])
 
     decls: List[ExternalDecl] = []
     variables: List[ExternalVar] = []
@@ -89,7 +83,7 @@ def parse_extern_var(t: Tree, ast_builder: 'ASTBuilder') -> ExternalVar:
     return ExternalVar(
         name=str(name_tok.value),
         ty=ast_builder._parse_type(type_node),
-        link_name=_strip_string_token(link_tok) if link_tok is not None else "",
+        link_name=strip_string_token(link_tok) if link_tok is not None else "",
         link_expr=_link_name_expr(first_tree(t.children, "extern_link_name")),
         name_span=span_of(name_tok),
         type_span=span_of(type_node),
@@ -125,6 +119,7 @@ def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
     link_expr = _link_name_expr(first_tree(t.children, "extern_link_name"))
     if link_tok is None and link_expr is None:
         ice(t, "missing link-name STRING")
+    refuse_dont_panic(t.children, "extern", ast_builder)
 
     params_node = first_tree(t.children, "extern_params")
     params = parse_params(params_node, ast_builder) if params_node else []
@@ -145,7 +140,7 @@ def parse_extern_decl(t: Tree, ast_builder: 'ASTBuilder') -> ExternalDecl:
         name=str(name_tok.value),
         params=params,
         ret=ret_ty,
-        link_name=_strip_string_token(link_tok) if link_tok is not None else "",
+        link_name=strip_string_token(link_tok) if link_tok is not None else "",
         link_expr=link_expr,
         is_variadic=is_variadic,
         name_span=span_of(name_tok),

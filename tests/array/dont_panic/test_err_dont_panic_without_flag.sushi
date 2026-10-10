@@ -1,0 +1,11 @@
+# The marker in a user unit, and the build does not pass --dont-panic: one error at
+# the header, and the help names the flag.
+# EXPECT_ERROR_CODES_EXACT: CE0152
+# EXPECT_STDERR_CONTAINS: "--dont-panic"
+
+fn first(i32[] xs) i32 dont_panic because "the caller passes a non-empty array":
+    return xs[0]
+
+fn main() i32:
+    let i32[] xs = from([4, 2])
+    return first(xs) - 4

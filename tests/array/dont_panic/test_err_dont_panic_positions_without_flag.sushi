@@ -1,0 +1,34 @@
+# The gate reads every declaration position: an extension method, a static, a perk
+# implementation method and a conversion each give one CE0152 when the build has no flag.
+# EXPECT_ERROR_CODES_EXACT: CE0152, CE0152, CE0152, CE0152
+
+struct Crate:
+    i32 weight
+
+error EA:
+    One
+
+error EB:
+    Two
+
+perk Pick:
+    fn pick(i32[] xs) i32
+
+extend i32[] head_of() i32 dont_panic because "the caller passes a non-empty array":
+    return self[0]
+
+extend Crate static first_of(i32[] xs) Crate dont_panic because "the caller passes a non-empty array":
+    return Crate(xs[0])
+
+extend Crate with Pick:
+    fn pick(i32[] xs) i32 dont_panic because "the caller passes a non-empty array":
+        return xs[0]
+
+extend EA as EB dont_panic because "the table is never read":
+    let i32[] t = from([1])
+    if (t[0] == 1):
+        return EB.Two
+    return EB.Two
+
+fn main() i32:
+    return 0

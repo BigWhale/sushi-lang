@@ -1377,6 +1377,40 @@ fn print_foreign_list(MsgValue claims, Opts o) ~:
     println("")
 
 ##:
+Prints the section of the declarations that are marked `dont_panic`.
+
+- Parameter meta: The metadata map.
+- Parameter o: The options of the run.
+:##
+fn print_dont_panic(MsgValue meta, Opts o) ~:
+    match meta:
+        MsgValue.Map(pairs) ->
+            match map_index(meta, "dont_panic"):
+                Maybe.Some(at) -> print_dont_panic_list(pairs[at].1, o)
+                Maybe.None() -> return ~
+        _ ->
+            return ~
+
+##:
+Prints each marked declaration with its reason, as the header writes the marker.
+
+- Parameter records: The array of `dont_panic` records.
+- Parameter o: The options of the run.
+:##
+fn print_dont_panic_list(MsgValue records, Opts o) ~:
+    if (not section("Unchecked Indexes", len(records), o)):
+        return ~
+    match records:
+        MsgValue.Arr(items) ->
+            foreach(r in items.iter()):
+                let string name = get_str(r, "name")
+                let string reason = get_str(r, "reason")
+                println("  {name} dont_panic because \"{reason}\"")
+        _ ->
+            return ~
+    println("")
+
+##:
 Prints the section of the units that the library holds.
 
 - Parameter meta: The metadata map.
@@ -1542,6 +1576,7 @@ fn print_declarations(MsgValue meta, MsgValue templates, Opts o) ~:
     print_extensions(templates, o)
     print_conversions(meta, o)
     print_foreign_extensions(meta, o)
+    print_dont_panic(meta, o)
 
 ##:
 Prints each declaration section, with the `templates` map when the library has one.

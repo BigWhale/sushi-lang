@@ -130,6 +130,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Warn about a private declaration nothing in its unit reaches (CW1004) and "
              "an import whose unit names nothing it brings (CW3006)",
     )
+    build.add_argument(
+        "--dont-panic",
+        action="store_true",
+        help="Allow a function marked `dont_panic` in this build: each `[]` in its body "
+             "emits no bounds check (CE0152 without the flag)",
+    )
     library.add_argument(
         "--lib",
         action="store_true",
@@ -191,6 +197,8 @@ COMMAND_LINE = "<command line>"
 # (flag attribute, spelling, when it has no effect, why)
 _NO_EFFECT: tuple[tuple[str, str, Callable[[argparse.Namespace], bool], str], ...] = (
     ("docs", "--docs", lambda a: not a.lib_info, "without --lib-info"),
+    ("dont_panic", "--dont-panic", lambda a: a.lib_info,
+     "with --lib-info: a report compiles no function"),
     ("lib_kind", "--lib-kind", lambda a: not a.lib, "without --lib"),
     ("lib_version", "--lib-version", lambda a: not a.lib, "without --lib"),
     ("keep_object", "--keep-object", lambda a: a.lib,
@@ -383,8 +391,7 @@ def _main(argv: list[str] | None) -> int:
     if args.lib_info:
         # The library is named on the command line, and every diagnostic names its path.
         session.reporter.filename = COMMAND_LINE
-    else:
-        _validate_args(args, session.reporter)
+    _validate_args(args, session.reporter)
 
     try:
         if args.lib_info:
@@ -404,7 +411,11 @@ def _main(argv: list[str] | None) -> int:
         rc = _report(session, _as_ice(exc))
 
     if args.lib_info and session.crash is None:
-        # The report is the whole output: no diagnostic, and no blank line after it.
+        # The report is the whole output on stdout. A flag warning (CW0003) goes to
+        # stderr, and it makes the exit status 1, as on a build.
+        if session.reporter.has_warnings:
+            session.reporter.print()
+            return rc or 1
         return rc
     _flush(session)
     return rc

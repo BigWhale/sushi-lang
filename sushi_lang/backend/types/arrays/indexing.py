@@ -22,7 +22,8 @@ def emit_index_access(codegen: 'LLVMCodegen', expr: IndexAccess, to_i1: bool = F
 
 
 def _emit_string_byte(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
-    """`s[i]` (#1091): the byte at offset i of the string's data, bounds-checked.
+    """`s[i]` (#1091): the byte at offset i of the string's data. It is bounds-checked
+    unless the index carries the `dont_panic` stamp.
 
     A read in place. A temporary string gets an owner, so `"{n}"[0]` frees it.
     """
@@ -34,13 +35,15 @@ def _emit_string_byte(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
     string = codegen.expressions.emit_expr(expr.array)
     own_temporary(codegen, expr.array, string, BuiltinType.STRING)
     index = codegen.utils.require_i32(codegen.expressions.emit_expr(expr.index))
-    emit_bounds_check(codegen, index, builder.extract_value(string, 1), prefix="string")
+    if not expr.unchecked:
+        emit_bounds_check(codegen, index, builder.extract_value(string, 1), prefix="string")
     data = builder.extract_value(string, 0)
     return builder.load(builder.gep(data, [index], name="string_byte_at"), name="string_byte")
 
 
 def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
-    """Emit the bounds-checked POINTER to `expr`'s element, without loading it."""
+    """Emit the POINTER to `expr`'s element, without loading it. It is bounds-checked
+    unless the index carries the `dont_panic` stamp."""
     from sushi_lang.backend.expressions import type_utils
 
     require_builder(codegen)
@@ -113,7 +116,8 @@ def emit_element_pointer(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
         case _:
             raise_internal_error("CE0022", type=str(array_type))
 
-    emit_bounds_check(codegen, index_value, size_value, prefix=prefix)
+    if not expr.unchecked:
+        emit_bounds_check(codegen, index_value, size_value, prefix=prefix)
     # A single-index GEP off the base: llvmlite wants a constant index into an aggregate.
     return gep_utils.gep_array_element(codegen, base_of(codegen, array_slot), index_value,
                                        "elem_ptr")

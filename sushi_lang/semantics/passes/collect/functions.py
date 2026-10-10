@@ -51,6 +51,7 @@ from sushi_lang.semantics.generics.extension_targets import (
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.conversions import ConversionTable
 from .conversions import Filed, collect_conversion
+from .dont_panic import MarkerGate, check_dont_panic
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.tuples import is_tuple_type
 
@@ -317,6 +318,10 @@ class GenericFuncDef:
     opaque: Dict[str, TypeParameter] = field(default_factory=dict)
     # On an instance: the template it is a copy of, as on `FuncDef`.
     template_id: Optional['TemplateId'] = None
+    # The `dont_panic` marker, as on `FuncDef`. An instance is a copy of this node, so
+    # it carries the marker of its template (docs/design/dont-panic.md, D6).
+    dont_panic: Optional[str] = None
+    dont_panic_span: Optional[Span] = None
 
 
 class Redeclaration(Enum):
@@ -619,6 +624,10 @@ class FunctionCollector:
         self.is_declared_type = is_declared_type
         # The conversions (`extend A as B:`), which the extension table does not hold.
         self.conversions = conversions if conversions is not None else ConversionTable()
+        # What the current unit may do with `dont_panic`, and the declarations whose
+        # marker is a use of the flag (D13). With no gate, nothing judges the marker.
+        self.marker_gate: Optional[MarkerGate] = None
+        self.marked: List[str] = []
 
     def collect_functions(self, root: Program) -> None:
         """Collect all function definitions from program AST."""
@@ -771,6 +780,7 @@ class FunctionCollector:
         record_declaration(self.visibility, "function", fn,
                            unit_name=self.current_unit_name,
                            filename=self.current_unit_file)
+        check_dont_panic(self, fn)
 
         # A receiver parameter has no meaning on a plain top-level function (#327):
         # there is no receiver. The builder lifts the marker onto the FuncDef, so this
@@ -956,6 +966,8 @@ class FunctionCollector:
             unit_name=self.current_unit_name,
             filename=self.current_unit_file,
             opaque=opaque,
+            dont_panic=fn.dont_panic,
+            dont_panic_span=fn.dont_panic_span,
         )
 
         self.generic_funcs.declare(name, generic_func)
@@ -986,6 +998,7 @@ class FunctionCollector:
         if header is None:
             return
 
+        check_dont_panic(self, ext)
         self._reject_signature_faults(header)
         if reject_misplaced_expands(self.r, header.body, frozenset(), header.name_span):
             self.refused_pack_bodies.append(header.name)

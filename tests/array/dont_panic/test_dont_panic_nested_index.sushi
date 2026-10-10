@@ -1,0 +1,20 @@
+# A marked body with a nested index a[i][j]: the rows and the columns are in range.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "21\n"
+
+fn total(i32[2][3] g) i32 dont_panic because "i < 3 and j < 2 hold both indexes in range":
+    let i32 sum = 0
+    let i32 i = 0
+    while (i < 3):
+        let i32 j = 0
+        while (j < 2):
+            sum := sum + g[i][j]
+            j := j + 1
+        i := i + 1
+    return sum
+
+fn main() i32:
+    let i32[2][3] g = [[1, 2], [3, 4], [5, 6]]
+    println(total(g))
+    return 0

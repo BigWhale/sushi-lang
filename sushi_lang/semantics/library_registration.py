@@ -13,7 +13,7 @@ on the pass order). This module owns the registration and nothing about the orde
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional, Protocol
 
 import sushi_lang.internals.errors as er
 from sushi_lang.internals.diagnostics import SushiError
@@ -26,6 +26,7 @@ from sushi_lang.semantics.library_templates import (
 from sushi_lang.semantics.generics.extension_targets import DeclaredTypeNamer
 from sushi_lang.semantics.generics.type_display import display_type, display_type_name
 from sushi_lang.semantics.passes.collect import CollectorPass
+from sushi_lang.semantics.passes.collect.dont_panic import MarkerGate, judge_marker
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
 from sushi_lang.semantics.visibility import (
     TYPE_KINDS, DeclOrigin, reject_library_clash, warn_shadowed_export)
@@ -113,7 +114,7 @@ class LibraryRegistration:
 
     def __init__(self, reporter: Reporter, tables: 'SymbolTables',
                  linker: Optional[LoadedLibraries],
-                 registry: Optional[LibraryRegistry]) -> None:
+                 registry: Optional[LibraryRegistry], *, dont_panic: bool = False) -> None:
         self.reporter = reporter
         self.tables = tables
         self.linker = linker
@@ -137,6 +138,10 @@ class LibraryRegistration:
         # `CollectorPass` rebuilds the predefined type universe each time (#675).
         self._snippet_collector: Optional[CollectorPass] = None
         self._snippet_reporter = Reporter(filename="<library snippet>")
+        # `--dont-panic`, and each template whose marker it admits (D13). A template is
+        # source, so its marker meets the gate of a source library (D9).
+        self.dont_panic = dont_panic
+        self.marked: list[str] = []
 
     def _template_origin(self, lib_name: str, version: Optional[str], label: str,
                          source: str) -> Origin:
@@ -154,6 +159,14 @@ class LibraryRegistration:
         self.reporter.add_slice(label, source)
         self.reporter.add_provenance(label, provenance)
         return Origin(filename=label, source=source, provenance=provenance)
+
+    def _judge_markers(self, lib_name: str, decls: Iterable[Any], filename: str) -> None:
+        """The `dont_panic` gate over the declarations of one re-parsed template, through
+        the program reporter: a snippet's own reporter is a throwaway."""
+        gate = MarkerGate.for_library_template(lib_name, self.dont_panic)
+        for decl in decls:
+            if judge_marker(self.reporter, gate, decl, filename):
+                self.marked.append(decl.name)
 
     # -- the entry points the analyzer calls --------------------------------------
 
@@ -745,6 +758,7 @@ class LibraryRegistration:
                 for method in impl.methods:
                     method.is_library_template = True
                     method.library_origin = origin
+                self._judge_markers(lib_name, impl.methods, label)
 
             collector = PerkCollector(
                 Reporter(source=source, filename=label),
@@ -971,6 +985,8 @@ class LibraryRegistration:
                 ext.is_library_template = True
                 ext.library_origin = self._template_origin(
                     lib_name, manifest.get("library_version"), label, source)
+            self._judge_markers(
+                lib_name, [*program.extensions, *program.generic_extensions], label)
 
             reporter = Reporter(source=source, filename=label)
             collector = self._function_collector(
@@ -1086,6 +1102,7 @@ class LibraryRegistration:
             # everywhere.
             gfd.library_origin = self._template_origin(
                 lib_name, manifest.get("library_version"), label, source)
+            self._judge_markers(lib_name, [gfd], label)
             # The record is the one home of the file a note at the template names: the
             # slice, as the collector of an extension template files it (#1070).
             gfd.filename = label

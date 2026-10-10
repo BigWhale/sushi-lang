@@ -72,6 +72,16 @@ Collect global definitions before analyzing function bodies.
    brings are structural and so are decided here: a receiver named in the signature or
    the body is [`CE0134`](../error-catalog.md#ce0134), and a static spelling a variant of the enum it extends is
    [`CE2103`](../error-catalog.md#ce2103). A `static` inside a perk implementation is [`CE4014`](../error-catalog.md#ce4014), in the perk collector.
+6a. **The `dont_panic` gate.** `passes/collect/dont_panic.py` reads the marker once, at the
+   header of a function, a static, an extension method, a perk implementation method or a
+   conversion, so there is one [`CE0152`](../error-catalog.md#ce0152) per declaration and
+   not one per index. A bundled stdlib unit and a build with `--dont-panic` pass. In a
+   library unit the message names the library. An inert marker is
+   [`CW0004`](../error-catalog.md#cw0004), for the author's units only. The AST builder
+   sets `IndexAccess.unchecked` on each index under a marked body and stops at a lambda
+   (`semantics/unchecked_index.py`); a marker on a lambda, a perk contract method or an
+   extern is [`CE6111`](../error-catalog.md#ce6111), in the builder. The backend reads the
+   stamp at the two bounds-check sites (`backend/types/arrays/indexing.py`).
 7. **The error channel of a written body.** A callable has a channel only when its
    signature writes `| E` or returns an explicit `Result@(T, E)`; there is no default
    error type (`docs/design/error-channel.md`). The collect pass emits [`CE0131`](../error-catalog.md#ce0131) for a `??`

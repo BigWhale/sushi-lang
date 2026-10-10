@@ -1,0 +1,20 @@
+# A marked generic function: each instance is marked, because it is the same body.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n2\n-1\n"
+
+fn position_of@(T: Eq)(T[] xs, T target) i32 dont_panic because "k < len holds k in range":
+    let i32 k = 0
+    while (k < xs.len()):
+        if (xs[k] == target):
+            return k
+        k := k + 1
+    return -1
+
+fn main() i32:
+    let i32[] nums = from([5, 6, 7])
+    let string[] words = from(["arthur", "ford", "zaphod"])
+    println(position_of(nums, 6))
+    println(position_of(words, "zaphod"))
+    println(position_of(words, "marvin"))
+    return 0
