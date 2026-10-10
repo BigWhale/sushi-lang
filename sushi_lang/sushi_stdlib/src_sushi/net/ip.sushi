@@ -100,7 +100,7 @@ prints as `::ffff:a.b.c.d`.
 
 - Returns: The address as text.
 :##
-extend IpAddr text() string:
+public extend IpAddr text() string:
     match self:
         IpAddr.V4(bits) -> return v4_text(bits)
         IpAddr.V6(high, low) -> return v6_text(high, low)
@@ -110,7 +110,7 @@ Whether the address is of the IPv4 family.
 
 - Returns: True for a V4 address.
 :##
-extend IpAddr is_v4() bool:
+public extend IpAddr is_v4() bool:
     match self:
         IpAddr.V4(_) -> return true
         IpAddr.V6(_, _) -> return false
@@ -120,7 +120,7 @@ Whether the address is of the IPv6 family.
 
 - Returns: True for a V6 address.
 :##
-extend IpAddr is_v6() bool:
+public extend IpAddr is_v6() bool:
     return not self.is_v4()
 
 ##:
@@ -128,7 +128,7 @@ Whether the address is a loopback: 127.0.0.0/8, or ::1.
 
 - Returns: True when the address is a loopback.
 :##
-extend IpAddr is_loopback() bool:
+public extend IpAddr is_loopback() bool:
     match self:
         IpAddr.V4(bits) -> return (bits >> 24) == 127
         IpAddr.V6(high, low) ->
@@ -139,7 +139,7 @@ Whether the address is the unspecified one: 0.0.0.0, or ::.
 
 - Returns: True when the address is unspecified.
 :##
-extend IpAddr is_unspecified() bool:
+public extend IpAddr is_unspecified() bool:
     match self:
         IpAddr.V4(bits) -> return bits == 0
         IpAddr.V6(high, low) ->
@@ -153,7 +153,7 @@ IPv6.
 
 - Returns: True when the address is private.
 :##
-extend IpAddr is_private() bool:
+public extend IpAddr is_private() bool:
     match self:
         IpAddr.V4(bits) ->
             let u32 top = bits >> 24
@@ -173,7 +173,7 @@ Whether an IPv6 address carries an IPv4 one, as ::ffff:a.b.c.d.
 
 - Returns: True for a v4-mapped IPv6 address, false for anything else.
 :##
-extend IpAddr is_v4_mapped() bool:
+public extend IpAddr is_v4_mapped() bool:
     match self:
         IpAddr.V4(_) -> return false
         IpAddr.V6(high, low) ->

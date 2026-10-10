@@ -55,7 +55,7 @@ The text does not include the payloads, so a caller can compare it.
 
 - Returns: The text.
 :##
-extend MpError text() string:
+public extend MpError text() string:
     match self:
         MpError.Truncated(_) -> return "truncated input"
         MpError.Unsupported(_) -> return "unsupported tag"

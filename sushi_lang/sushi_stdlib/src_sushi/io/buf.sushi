@@ -54,7 +54,7 @@ into_inner() is how a caller gets it back.
 - Parameter cap: The refill size in bytes. Anything below 1 becomes 8192.
 - Returns: The buffered reader.
 :##
-extend BufReader@(R) static new(nom R src, i32 cap) BufReader@(R):
+public extend BufReader@(R) static new(nom R src, i32 cap) BufReader@(R):
     let i32 size = cap
     if (size < 1):
         size := 8192
@@ -76,7 +76,7 @@ length.
 - Returns: Whether any byte arrived. False means end of input.
 - Errors: IoError, when the underlying read failed.
 :##
-extend BufReader@(R) fill(poke self) bool | IoError:
+public extend BufReader@(R) fill(poke self) bool | IoError:
     if (self.at_end):
         return Result.Ok(false)
     let u8[] chunk = self.inner.read_bytes(self.cap)??
@@ -147,7 +147,7 @@ and a line longer than the window spans as many refills as it needs.
 - Returns: The line, or None at end of input.
 - Errors: IoError, when a refill failed.
 :##
-extend BufReader@(R) read_line(poke self) Maybe@(string) | IoError:
+public extend BufReader@(R) read_line(poke self) Maybe@(string) | IoError:
     let u8[] line = from([])
     let bool saw_any = false
     while (true):
@@ -179,7 +179,7 @@ read() in a loop instead.
 - Returns: Everything from the cursor to the end of input.
 - Errors: IoError, when a refill failed.
 :##
-extend BufReader@(R) read_all(poke self) string | IoError:
+public extend BufReader@(R) read_all(poke self) string | IoError:
     return Result.Ok(read_all(poke self)??)
 
 ##:
@@ -192,7 +192,7 @@ was.
 
 - Returns: The handle, now the caller's.
 :##
-extend BufReader@(R) into_inner(nom self) R:
+public extend BufReader@(R) into_inner(nom self) R:
     return nom self.inner
 
 ##:
@@ -225,7 +225,7 @@ refused while compiling.
           Result.Err(_) -> return 1
   ```
 :##
-extend BufReader@(R) into_parts(nom self) (R, u8[]):
+public extend BufReader@(R) into_parts(nom self) (R, u8[]):
     let u8[] unread = self.window.ss(self.pos, self.window.len() - self.pos)
     let R handle = nom self.inner
     return (handle, unread)
@@ -272,7 +272,7 @@ closes the descriptor. A later mention of the reader is refused while compiling.
           Result.Err(_) -> return 1
   ```
 :##
-extend BufReader@(R) lines(nom self) Lines@(R):
+public extend BufReader@(R) lines(nom self) Lines@(R):
     return Lines(self, false)
 
 ##:
@@ -280,7 +280,7 @@ Answers the next line, or nothing when the input has ended.
 
 - Returns: Some(Ok(line)) for a line, Some(Err(e)) for the ONE failure, None at the end.
 :##
-extend Lines@(R) next(poke self) Maybe@(Result@(string, IoError)):
+public extend Lines@(R) next(poke self) Maybe@(Result@(string, IoError)):
     if (self.stopped):
         let Maybe@(Result@(string, IoError)) ended = Maybe.None()
         return ended
@@ -323,7 +323,7 @@ into_inner() is how a caller gets it back.
   becomes 8192.
 - Returns: The buffered writer.
 :##
-extend BufWriter@(W) static new(nom W dst, i32 cap) BufWriter@(W):
+public extend BufWriter@(W) static new(nom W dst, i32 cap) BufWriter@(W):
     let i32 size = cap
     if (size < 1):
         size := 8192
@@ -389,7 +389,7 @@ Drains the buffer if it has reached its size. Every write goes through this one 
 - Returns: Nothing.
 - Errors: IoError, when the drain failed.
 :##
-extend BufWriter@(W) drain_if_full(poke self) ~ | IoError:
+public extend BufWriter@(W) drain_if_full(poke self) ~ | IoError:
     if (self.buf.len() >= self.cap):
         self.flush()??
     return Result.Ok(~)
@@ -404,7 +404,7 @@ costs no system call of its own.
 - Returns: Nothing.
 - Errors: IoError, when a drain failed.
 :##
-extend BufWriter@(W) write_line(poke self, string data) ~ | IoError:
+public extend BufWriter@(W) write_line(poke self, string data) ~ | IoError:
     self.buf.extend_str(data)
     self.buf.push(10)
     self.drain_if_full()??
@@ -423,7 +423,7 @@ the last drain's failure cannot be lost.
 - Returns: Nothing.
 - Errors: IoError, when the final drain failed.
 :##
-extend BufWriter@(W) finish(nom self) ~ | IoError:
+public extend BufWriter@(W) finish(nom self) ~ | IoError:
     self.flush()??
     return Result.Ok(~)
 
@@ -436,7 +436,7 @@ while compiling.
 - Returns: The handle, now the caller's.
 - Errors: IoError, when the final drain failed.
 :##
-extend BufWriter@(W) into_inner(nom self) W | IoError:
+public extend BufWriter@(W) into_inner(nom self) W | IoError:
     self.flush()??
     return Result.Ok(nom self.sink)
 

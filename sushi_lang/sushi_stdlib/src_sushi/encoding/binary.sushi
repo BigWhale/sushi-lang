@@ -60,7 +60,7 @@ Reads the 2 bytes at an offset as a little-endian `u16`, the least significant b
   println(buf.read_u16_le(0).realise(0))
   ```
 :##
-extend u8[] read_u16_le(i32 at) Maybe@(u16):
+public extend u8[] read_u16_le(i32 at) Maybe@(u16):
     if (not fits(self, at, 2)):
         return Maybe.None()
     return Maybe.Some(le_bits(self, at, 2) as u16)
@@ -76,7 +76,7 @@ Reads the 2 bytes at an offset as a big-endian `u16`, the most significant byte 
   println(buf.read_u16_be(0).realise(0))
   ```
 :##
-extend u8[] read_u16_be(i32 at) Maybe@(u16):
+public extend u8[] read_u16_be(i32 at) Maybe@(u16):
     if (not fits(self, at, 2)):
         return Maybe.None()
     return Maybe.Some(be_bits(self, at, 2) as u16)
@@ -92,7 +92,7 @@ Reads the 4 bytes at an offset as a little-endian `u32`, the least significant b
   println(buf.read_u32_le(0).realise(0))
   ```
 :##
-extend u8[] read_u32_le(i32 at) Maybe@(u32):
+public extend u8[] read_u32_le(i32 at) Maybe@(u32):
     if (not fits(self, at, 4)):
         return Maybe.None()
     return Maybe.Some(le_bits(self, at, 4) as u32)
@@ -108,7 +108,7 @@ Reads the 4 bytes at an offset as a big-endian `u32`, the most significant byte 
   println(buf.read_u32_be(0).realise(0))
   ```
 :##
-extend u8[] read_u32_be(i32 at) Maybe@(u32):
+public extend u8[] read_u32_be(i32 at) Maybe@(u32):
     if (not fits(self, at, 4)):
         return Maybe.None()
     return Maybe.Some(be_bits(self, at, 4) as u32)
@@ -124,7 +124,7 @@ Reads the 8 bytes at an offset as a little-endian `u64`, the least significant b
   println(buf.read_u64_le(0).realise(0))
   ```
 :##
-extend u8[] read_u64_le(i32 at) Maybe@(u64):
+public extend u8[] read_u64_le(i32 at) Maybe@(u64):
     if (not fits(self, at, 8)):
         return Maybe.None()
     return Maybe.Some(le_bits(self, at, 8) as u64)
@@ -140,7 +140,7 @@ Reads the 8 bytes at an offset as a big-endian `u64`, the most significant byte 
   println(buf.read_u64_be(0).realise(0))
   ```
 :##
-extend u8[] read_u64_be(i32 at) Maybe@(u64):
+public extend u8[] read_u64_be(i32 at) Maybe@(u64):
     if (not fits(self, at, 8)):
         return Maybe.None()
     return Maybe.Some(be_bits(self, at, 8) as u64)
@@ -156,7 +156,7 @@ Appends the 2 bytes of a `u16` in little-endian order, the least significant byt
   println("{buf[0]} {buf[1]}")
   ```
 :##
-extend u8[] push_u16_le(poke self, u16 v) ~:
+public extend u8[] push_u16_le(poke self, u16 v) ~:
     foreach(i in 0..2):
         self.push((v >> (8 * i)) as u8)
 
@@ -171,7 +171,7 @@ Appends the 2 bytes of a `u16` in big-endian order, the most significant byte fi
   println("{buf[0]} {buf[1]}")
   ```
 :##
-extend u8[] push_u16_be(poke self, u16 v) ~:
+public extend u8[] push_u16_be(poke self, u16 v) ~:
     foreach(i in 0..2):
         self.push((v >> (8 * (1 - i))) as u8)
 
@@ -186,7 +186,7 @@ Appends the 4 bytes of a `u32` in little-endian order, the least significant byt
   println("{buf[0]} {buf[3]}")
   ```
 :##
-extend u8[] push_u32_le(poke self, u32 v) ~:
+public extend u8[] push_u32_le(poke self, u32 v) ~:
     foreach(i in 0..4):
         self.push((v >> (8 * i)) as u8)
 
@@ -201,7 +201,7 @@ Appends the 4 bytes of a `u32` in big-endian order, the most significant byte fi
   println("{buf[0]} {buf[3]}")
   ```
 :##
-extend u8[] push_u32_be(poke self, u32 v) ~:
+public extend u8[] push_u32_be(poke self, u32 v) ~:
     foreach(i in 0..4):
         self.push((v >> (8 * (3 - i))) as u8)
 
@@ -216,7 +216,7 @@ Appends the 8 bytes of a `u64` in little-endian order, the least significant byt
   println("{buf[0]} {buf[7]}")
   ```
 :##
-extend u8[] push_u64_le(poke self, u64 v) ~:
+public extend u8[] push_u64_le(poke self, u64 v) ~:
     foreach(i in 0..8):
         self.push((v >> (8 * i)) as u8)
 
@@ -231,6 +231,6 @@ Appends the 8 bytes of a `u64` in big-endian order, the most significant byte fi
   println("{buf[0]} {buf[7]}")
   ```
 :##
-extend u8[] push_u64_be(poke self, u64 v) ~:
+public extend u8[] push_u64_be(poke self, u64 v) ~:
     foreach(i in 0..8):
         self.push((v >> (8 * (7 - i))) as u8)

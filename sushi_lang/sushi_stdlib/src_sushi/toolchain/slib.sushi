@@ -85,7 +85,7 @@ The text does not include the payloads, so a caller can compare it.
 
 - Returns: The text.
 :##
-extend SlibError text() string:
+public extend SlibError text() string:
     match self:
         SlibError.Io(_) -> return "the file cannot be read"
         SlibError.BadMagic() -> return "not a .slib file (bad magic)"

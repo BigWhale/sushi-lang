@@ -80,7 +80,7 @@ resolves that peer each time round.
 - Returns: How many bytes were sent.
 - Errors: NetError, when the destination is unknown or the send failed.
 :##
-extend UdpSocket send_to(u8[] data, string host, i32 port) i32 | NetError:
+public extend UdpSocket send_to(u8[] data, string host, i32 port) i32 | NetError:
     return Result.Ok(sock_udp_send_to(self.fd, data, host, port)??)
 
 ##:
@@ -94,7 +94,7 @@ receive: the bytes did arrive.
 - Returns: The bytes, and the address and port they came from.
 - Errors: NetError, when the receive failed or its bound expired.
 :##
-extend UdpSocket recv_from(i32 max) Datagram | NetError:
+public extend UdpSocket recv_from(i32 max) Datagram | NetError:
     return Result.Ok(sock_udp_recv_from(self.fd, max)??)
 
 ##:
@@ -106,7 +106,7 @@ that field empty, and this answers an error for it.
 - Returns: The address the datagram came from.
 - Errors: NetError.InvalidAddress, when the field holds no address.
 :##
-extend Datagram peer() IpAddr | NetError:
+public extend Datagram peer() IpAddr | NetError:
     return Result.Ok(parse_ip(self.peer_ip)??)
 
 ##:
@@ -117,7 +117,7 @@ This is the only way to learn the port after binding port 0.
 - Returns: The bound port.
 - Errors: NetError, when the socket is not bound.
 :##
-extend UdpSocket local_port() i32 | NetError:
+public extend UdpSocket local_port() i32 | NetError:
     return Result.Ok(sock_local_port(self.fd)??)
 
 ##:
@@ -130,7 +130,7 @@ A bound that expires answers NetError.TimedOut.
 - Returns: Nothing.
 - Errors: NetError, when the option could not be set.
 :##
-extend UdpSocket set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError:
+public extend UdpSocket set_timeouts(i32 recv_ms, i32 send_ms) ~ | NetError:
     sock_set_recv_timeout(self.fd, recv_ms)??
     sock_set_send_timeout(self.fd, send_ms)??
     return Result.Ok(~)
@@ -145,6 +145,6 @@ close. The same terms as TcpStream.
 - Returns: Nothing. The handle is spent.
 - Errors: NetError, when the descriptor could not be closed.
 :##
-extend UdpSocket close(nom self) ~ | NetError:
+public extend UdpSocket close(nom self) ~ | NetError:
     close_socket(poke self.fd)??
     return Result.Ok(~)

@@ -859,7 +859,7 @@ The text does not include the payloads, so a caller can compare it.
 
 - Returns: The text.
 :##
-extend ZError text() string:
+public extend ZError text() string:
     match self:
         ZError.Truncated(_) -> return "truncated input"
         ZError.BadBlockType(_) -> return "reserved block type"

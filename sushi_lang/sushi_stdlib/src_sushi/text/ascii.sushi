@@ -16,7 +16,7 @@ Tests if the byte is an ASCII decimal digit, `a'0'` to `a'9'` (48-57).
   println(a'7'.is_ascii_digit())
   ```
 :##
-extend u8 is_ascii_digit() bool:
+public extend u8 is_ascii_digit() bool:
     return self >= a'0' and self <= a'9'
 
 ##:
@@ -28,7 +28,7 @@ Tests if the byte is an ASCII uppercase letter, `a'A'` to `a'Z'` (65-90).
   println(a'Q'.is_ascii_upper())
   ```
 :##
-extend u8 is_ascii_upper() bool:
+public extend u8 is_ascii_upper() bool:
     return self >= a'A' and self <= a'Z'
 
 ##:
@@ -40,7 +40,7 @@ Tests if the byte is an ASCII lowercase letter, `a'a'` to `a'z'` (97-122).
   println(a'q'.is_ascii_lower())
   ```
 :##
-extend u8 is_ascii_lower() bool:
+public extend u8 is_ascii_lower() bool:
     return self >= a'a' and self <= a'z'
 
 ##:
@@ -52,7 +52,7 @@ Tests if the byte is an ASCII letter, `a'A'` to `a'Z'` (65-90) or `a'a'` to `a'z
   println(a'k'.is_ascii_alpha())
   ```
 :##
-extend u8 is_ascii_alpha() bool:
+public extend u8 is_ascii_alpha() bool:
     return (self >= a'A' and self <= a'Z') or (self >= a'a' and self <= a'z')
 
 ##:
@@ -64,7 +64,7 @@ Tests if the byte is an ASCII letter or decimal digit (48-57, 65-90 and 97-122).
   println(a'4'.is_ascii_alnum())
   ```
 :##
-extend u8 is_ascii_alnum() bool:
+public extend u8 is_ascii_alnum() bool:
     return (self >= a'0' and self <= a'9') or (self >= a'A' and self <= a'Z') or (self >= a'a' and self <= a'z')
 
 ##:
@@ -76,7 +76,7 @@ Tests if the byte is an ASCII hexadecimal digit: `a'0'` to `a'9'`, `a'A'` to `a'
   println(a'c'.is_ascii_hex())
   ```
 :##
-extend u8 is_ascii_hex() bool:
+public extend u8 is_ascii_hex() bool:
     return (self >= a'0' and self <= a'9') or (self >= a'A' and self <= a'F') or (self >= a'a' and self <= a'f')
 
 ##:
@@ -91,7 +91,7 @@ This is the set of C `isspace` in the C locale.
   println(a' '.is_ascii_space())
   ```
 :##
-extend u8 is_ascii_space() bool:
+public extend u8 is_ascii_space() bool:
     return (self >= a'\t' and self <= a'\r') or self == a' '
 
 ##:
@@ -105,7 +105,7 @@ A byte from 65 to 90 gives the byte plus 32. Every other byte is returned unchan
   println(a'G'.to_ascii_lower())
   ```
 :##
-extend u8 to_ascii_lower() u8:
+public extend u8 to_ascii_lower() u8:
     if (self >= a'A' and self <= a'Z'):
         return self + 32
     return self
@@ -121,7 +121,7 @@ A byte from 97 to 122 gives the byte minus 32. Every other byte is returned unch
   println(a'g'.to_ascii_upper())
   ```
 :##
-extend u8 to_ascii_upper() u8:
+public extend u8 to_ascii_upper() u8:
     if (self >= a'a' and self <= a'z'):
         return self - 32
     return self
@@ -137,7 +137,7 @@ Gives the value of an ASCII hexadecimal digit.
   println(a'F'.hex_value().realise(0))
   ```
 :##
-extend u8 hex_value() Maybe@(u8):
+public extend u8 hex_value() Maybe@(u8):
     if (self >= a'0' and self <= a'9'):
         return Maybe.Some(self - a'0')
     if (self >= a'A' and self <= a'F'):
