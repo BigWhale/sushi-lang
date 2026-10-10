@@ -1,13 +1,11 @@
 name: Tests
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
-  merge_group:
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:
@@ -72,8 +70,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$EVENT" != "pull_request" ]; then
-            # A push to main feeds the badges, and the merge queue is the last gate
-            # before main. Neither may be skipped on the strength of a diff.
+            # The nightly run feeds the badges and may not be skipped on the strength
+            # of a diff.
             answer=true
           elif [ "$CODE" = "true" ]; then
             answer=true
@@ -208,7 +206,7 @@ jobs:
         # event that publishes a badge but uploads nothing renders "unavailable" and
         # publishes that as red, and uploading where nothing publishes is dead weight.
         if: ${{ !cancelled() && github.ref == 'refs/heads/main'
-                && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+                && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
         uses: actions/upload-artifact@v7
         with:
           name: pytest-report
@@ -296,7 +294,7 @@ jobs:
         # event that publishes a badge but uploads nothing renders "unavailable" and
         # publishes that as red, and uploading where nothing publishes is dead weight.
         if: ${{ !cancelled() && github.ref == 'refs/heads/main'
-                && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+                && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
         uses: actions/upload-artifact@v7
         with:
           name: corpus-results
@@ -341,7 +339,7 @@ jobs:
   badges:
     needs: [pytest, test-linux, test-macos]
     if: ${{ !cancelled() && github.ref == 'refs/heads/main'
-            && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+            && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     # No container and no setup-sushi: make_badges.py is stdlib-only, so the runner's
     # system python3 is enough -- seconds instead of a full toolchain install.
