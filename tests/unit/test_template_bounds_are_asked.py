@@ -34,6 +34,8 @@ ASKERS = {
         "the array extension copy, queued at a call",
     ("semantics/passes/types/calls/methods.py", "resolve_method_generic_extension"):
         "the method-generic copy, queued at a call",
+    ("semantics/passes/types/calls/methods.py", "instantiate_target_extension"):
+        "the generic-target extension copy, queued at a call",
     ("semantics/passes/types/calls/methods.py", "_answer_from_template"):
         "the call-site rung for every receiver",
     ("semantics/generics/contract_walk.py", "template_covers"):
