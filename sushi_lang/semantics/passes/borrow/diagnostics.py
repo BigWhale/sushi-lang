@@ -22,7 +22,7 @@ from sushi_lang.semantics.ast import (
     TryExpr,
 )
 from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
-from sushi_lang.semantics.generics.types import TypeParameter
+from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
 from sushi_lang.semantics.typesys import ReferenceType
 
 from .reads import read_type, root_owner
@@ -203,23 +203,37 @@ def opaque_without_clone(checker: 'BorrowChecker', ty) -> Optional[TypeParameter
 def answers_share(checker: 'BorrowChecker', ty) -> bool:
     """Does `x.share()` compile on a value of `ty` and give a second `ty`? (#1023)
 
-    The one type test of every `.share()` escape. It reads the two table rungs the
-    typecheck pass reads for an instance call (`resolve_method`): a perk implementation
-    first, then an extension method. A static, a method with arguments, or one that
-    answers another type is no second owner.
+    The one type test of every `.share()` escape. It reads the rungs the typecheck pass
+    reads for an instance call (`resolve_method`): a perk implementation first, then an
+    extension method. A generic-target method has no row until a call cuts its copy, so
+    the template that gives the instance the method answers too, with its return type
+    substituted (#1196). A static, a method with arguments, or one that answers another
+    type is no second owner.
     """
+    from sushi_lang.semantics.generics.extensions import (
+        target_copy_substitution, target_methods_of)
+    tables = checker.tables
     types = checker.types
     if isinstance(ty, ReferenceType):
         ty = ty.referenced_type
     ty = types.resolve_named(ty)
     if ty is None:
         return False
-    perk_method = checker.tables.perk_impls.get_method(ty, "share")
+    perk_method = tables.perk_impls.get_method(ty, "share")
     if perk_method is not None:
         return not perk_method.params and types.resolve_named(perk_method.ret) == ty
-    method = checker.tables.extensions.get_method(ty, "share")
-    return (method is not None and not method.is_static and not method.params
-            and types.resolve_named(method.ret_type) == ty)
+    method = tables.extensions.get_method(ty, "share")
+    ret = method.ret_type if method is not None else None
+    if method is None:
+        found = target_methods_of(tables.generic_extensions, ty, "share", tables)
+        if not found:
+            return False
+        method = found[0]
+        ret = (substitute_type_params(method.ret_type,
+                                      target_copy_substitution(method, ty))
+               if method.ret_type is not None else None)
+    return (not method.is_static and not method.params
+            and types.resolve_named(ret) == ty)
 
 
 @dataclass(frozen=True)

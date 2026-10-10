@@ -1,12 +1,14 @@
 """Perk (trait) validation for Sushi compiler."""
 
 from sushi_lang.semantics.ast import ExtendWithDef, PerkDef, FuncDef, PerkMethodSignature
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.typesys import DynamicArrayType, ReceiverType, Type
-from sushi_lang.semantics.passes.collect import ExtensionTable
 from sushi_lang.internals.report import Reporter
 from sushi_lang.internals import errors as er
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.tables import SymbolTables
 
 
 def check_constraint_perks(validator, program) -> None:
@@ -260,12 +262,24 @@ def _signatures_match(impl: FuncDef, required: PerkMethodSignature,
 def check_no_conflicts_with_regular_methods(
     resolved_type: Type,
     perk_impl: ExtendWithDef,
-    extension_table: ExtensionTable,
+    tables: 'SymbolTables',
     reporter: Reporter
 ) -> bool:
-    """Ensure perk methods don't conflict with regular extension methods."""
-    return _reject_name_conflicts(
-        perk_impl, extension_table.first_by_name(resolved_type), reporter)
+    """Ensure perk methods don't conflict with regular extension methods.
+
+    A generic-target method has no row until a call cuts its copy, so the one lookup of
+    the templates that give the instance the method answers too (#1196), as it does in
+    `validate_unreached_header`.
+    """
+    from sushi_lang.semantics.generics.extensions import target_methods_of
+    existing = dict(tables.extensions.first_by_name(resolved_type))
+    for method in perk_impl.methods:
+        if method.name not in existing:
+            found = target_methods_of(tables.generic_extensions, resolved_type, method.name,
+                                      tables)
+            if found:
+                existing[method.name] = found[0]
+    return _reject_name_conflicts(perk_impl, existing, reporter)
 
 
 def _reject_template_name_conflicts(validator, impl: ExtendWithDef) -> None:

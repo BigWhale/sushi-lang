@@ -1388,15 +1388,20 @@ class SemanticAnalyzer:
         declaration: the copies of one template share its identity and its spans, so
         they are one fault. An `extend T[]` template is judged where it is written, on
         the receiver `T[]`. It is not in the extension table, and no copy of it is ever
-        cut for a built-in name, because the built-in answers every call first.
+        cut for a built-in name, because the built-in answers every call first. For the
+        same reason a generic-target template is judged at each instance of its target
+        that exists, with or without a copy (#1196).
         """
         from sushi_lang.semantics.generics.builtin_methods import builtin_method_exists
         from sushi_lang.semantics.generics.extension_targets import (
             ARRAY_BASE_KEY, extension_template_id, written_target)
+        from sushi_lang.semantics.generics.extensions import (
+            copy_identity, templates_by_instance)
         from sushi_lang.semantics.generics.monomorphize.order import in_site_order
+        from sushi_lang.semantics.generics.opaque import holds_opaque
         from sushi_lang.semantics.generics.type_display import display_type
         from sushi_lang.semantics.generics.types import TypeParameter
-        from sushi_lang.semantics.typesys import DynamicArrayType
+        from sushi_lang.semantics.typesys import DynamicArrayType, Type
 
         collisions: dict = {}
 
@@ -1412,6 +1417,13 @@ class SemanticAnalyzer:
             target_type = method.target_type
             collide(target_type, method.name, method, method.template_id,
                     method.template_target or display_type(target_type))
+
+        types: list[Type] = [*self.tables.structs.by_name.values(),
+                             *self.tables.enums.by_name.values()]
+        instances = [ty for ty in types if not holds_opaque(ty)]
+        for instance, template in list(templates_by_instance(
+                self.tables.generic_extensions, instances, self.tables)):
+            collide(instance, template.name, template, *copy_identity(template))
 
         templates = self.tables.generic_extensions.by_type.get(ARRAY_BASE_KEY, {})
         for (method_name, _key, _unit), template in templates.items():
@@ -1476,10 +1488,17 @@ class SemanticAnalyzer:
 
         C2 for R1 (`docs/design/extension-visibility.md`): a public extension that a
         Sushi-source stdlib module declares on a built-in type is visible in every unit,
-        so an extension of its name in another unit could never be called.
+        so an extension of its name in another unit could never be called. A
+        generic-target stdlib method has no row until a call cuts its copy, so the one
+        lookup of the templates answers too (#1196).
         """
+        from sushi_lang.semantics.generics.extensions import target_methods_of
         from sushi_lang.semantics.visibility import is_stdlib_builtin_method
-        for other in self.tables.extensions.declarations(target_type, method_name):
+        tables = self.tables
+        others = [*tables.extensions.declarations(target_type, method_name),
+                  *target_methods_of(tables.generic_extensions, target_type, method_name,
+                                     tables)]
+        for other in others:
             if (other.unit_name != method.unit_name
                     and is_stdlib_builtin_method(other, target_type)):
                 return other

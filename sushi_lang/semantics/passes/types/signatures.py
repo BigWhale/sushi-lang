@@ -360,7 +360,7 @@ def validate_perk_implementation_method(self, impl: ExtendWithDef) -> None:
     # is judged once, where it is written (#861).
     if resolved_type is not None and is_written(impl):
         check_no_conflicts_with_regular_methods(
-            resolved_type, impl, self.extension_table, self.reporter)
+            resolved_type, impl, self.tables, self.reporter)
 
     synthesized = not is_written(impl)
     _validate_target_type(self, resolved_type, impl.target_type_span, synthesized)
