@@ -467,7 +467,7 @@ def reject_zero_divisor(validator: 'TypeValidator', expr: BinaryOp,
     if left_type is None or not is_numeric_type(left_type):
         return
 
-    divisor = validator.constant_evaluator().evaluate(expr.right, left_type, None)
+    divisor = validator.operand_evaluator().evaluate(expr.right, left_type, None)
     if divisor is None or not is_numeric_constant(divisor) or divisor.value != 0:
         return
 
@@ -629,7 +629,7 @@ def _provable_shift_count(validator: 'TypeValidator', count: Expr) -> Optional[i
     """
     from sushi_lang.semantics.const_eval import ScalarConstant
 
-    value = validator.constant_evaluator().evaluate(count, BuiltinType.I64, None)
+    value = validator.operand_evaluator().evaluate(count, BuiltinType.I64, None)
     if (value is None or not isinstance(value, ScalarConstant)
             or not isinstance(value.value, int) or isinstance(value.value, bool)):
         return None

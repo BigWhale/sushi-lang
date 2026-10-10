@@ -102,6 +102,9 @@ class TestMetadata:
     # Where `--lib` stood in COMPILER_FLAGS, held until the parse knows whether OUTPUT_PATH
     # is there. None when the fixture does not spell it.
     held_lib_flag: Optional[int] = None
+    # What the emitted IR of one function must hold or lack: (function, text, holds), in
+    # written order. The runner asks the compiler for the IR when the list is not empty.
+    ir_expectations: Optional[List[Tuple[str, str, bool]]] = None
     # A directive value the parser could not read; the runner fails a fixture that has one.
     directive_errors: Optional[List[str]] = None
 
@@ -139,6 +142,8 @@ class TestMetadata:
             self.expect_paths_absent = []
         if self.expect_paths_exist_before_clean is None:
             self.expect_paths_exist_before_clean = []
+        if self.ir_expectations is None:
+            self.ir_expectations = []
         if self.directive_errors is None:
             self.directive_errors = []
 
@@ -415,6 +420,19 @@ def _output_path(metadata: TestMetadata, value: str, test_file: Path) -> None:
         metadata.output_path = path
 
 
+def _ir_expectation(directive: str, holds: bool):
+    """`EXPECT_IR_HOLDS: <function> <text>` / `EXPECT_IR_LACKS: <function> <text>`."""
+    def handle(metadata: TestMetadata, value: str, test_file: Path) -> None:
+        function, _, text = _unquote(value).strip().partition(' ')
+        text = _unquote(text.strip())
+        if not function or not text:
+            metadata.directive_errors.append(
+                f"{directive} takes `<function> <text>`, not {value!r}")
+            return
+        metadata.ir_expectations.append((function, text, holds))
+    return handle
+
+
 def _release_lib_flag(metadata: TestMetadata, test_file: Path) -> None:
     """`--lib` joins the flags beside OUTPUT_PATH, and is refused without it."""
     if metadata.held_lib_flag is None:
@@ -464,6 +482,8 @@ VALUED_DIRECTIVES = {
                                                lambda v: _split(_unquote(v))),
     'THEN_CLEAN_CACHE': _then_clean_cache,
     'OUTPUT_PATH': _output_path,
+    'EXPECT_IR_HOLDS': _ir_expectation('EXPECT_IR_HOLDS', True),
+    'EXPECT_IR_LACKS': _ir_expectation('EXPECT_IR_LACKS', False),
 }
 
 # Every directive that is a flag: bare `NAME` is true, `NAME: true|yes|1` sets it.

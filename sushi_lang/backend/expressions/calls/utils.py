@@ -19,12 +19,14 @@ def stamped_semantic_type(codegen: 'LLVMCodegen', expr: Expr) -> Optional['Type'
     The one reader of the typecheck pass's type stamps. A shape with no stamp -- or a stamp the typecheck pass
     left abstract -- answers None, so a caller can fall back to its own reconstruction.
     """
-    from sushi_lang.semantics.ast import IndexAccess, TryExpr, TupleLiteral
+    from sushi_lang.semantics.ast import BinaryOp, IndexAccess, TryExpr, TupleLiteral
     from sushi_lang.semantics.generics.types import GenericTypeRef
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
     from sushi_lang.semantics.typesys import UnknownType
 
-    if isinstance(expr, TryExpr):
+    if isinstance(expr, BinaryOp):
+        stamped = expr.inferred_type
+    elif isinstance(expr, TryExpr):
         stamped = getattr(expr, 'inferred_unwrapped_type', None)
     elif isinstance(expr, TupleLiteral):
         stamped = expr.resolved_type

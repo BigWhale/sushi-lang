@@ -18,7 +18,7 @@ from sushi_lang.semantics.param_modes import (
 from .borrows import register_implicit_borrow
 from .consume import consume, consume_each, read_through_receiver, source_provenance
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, expr_to_string
-from .methods import BULK_WRITE_METHODS, CONTAINER_INSERT_METHODS, effect_of
+from .methods import CONTAINER_INSERT_METHODS, callee_effect
 from .reads import OWNER_STEPS, called_on, read_type
 from .state import BorrowState
 
@@ -127,14 +127,16 @@ def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: MethodLike) -> Non
     dangling in the middle of the copy. The check compares PLACES rather than values,
     because `b.items.extend(b.items)` aliases exactly as `a.extend(a)` does. A refill
     (`a.fill(a[0])`) is the same fault one slot down; see `_reject_refill_from_own_slot`.
+    The callee decides, never the name alone: a user extension named `extend` or `fill`
+    is not the built-in method and writes nothing.
     """
-    if effect_of(expr.method).refills:
+    effect = callee_effect(expr.method, expr.callee_builtin_family)
+    if effect.refills:
         _reject_refill_from_own_slot(checker, expr)
         return
-    receiver = called_on(expr, *BULK_WRITE_METHODS)
-    if receiver is None or not expr.args:
+    if not effect.bulk_writes or not expr.args:
         return
-    place = _place_of(receiver)
+    place = _place_of(expr.receiver)
     if place is None or place != _place_of(expr.args[0]):
         return
     checker.err.emit(er.ERR.CE2430, expr.args[0].loc, name=place, target=place)

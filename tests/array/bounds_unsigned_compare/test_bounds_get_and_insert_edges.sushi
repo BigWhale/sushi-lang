@@ -1,0 +1,36 @@
+# The get method answers None outside 0 to size - 1. The insert method takes a position
+# from 0 to size, and refuses -1, the smallest i32 and size + 1.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "get: 10 30 none none none\ninsert end: ok 4 7\ninsert front: ok 5 1\ninsert -1: err 5\ninsert min: err 5\ninsert past: err 5\n"
+
+fn same(i32 x) i32:
+    return x
+
+fn show(Maybe@(i32) m) string:
+    match m:
+        Maybe.Some(v) -> return "{v}"
+        Maybe.None -> return "none"
+
+fn main() i32:
+    let i32[] xs = from([10, 20, 30])
+    let i32 lo = same(0)
+    let i32 hi = same(2)
+    let i32 at = same(3)
+    let i32 neg = same(-1)
+    let i32 min = same(-2147483647 - 1)
+    println("get: {show(xs.get(lo))} {show(xs.get(hi))} {show(xs.get(at))} {show(xs.get(neg))} {show(xs.get(min))}")
+
+    let i32 end = same(xs.len())
+    if (xs.insert(end, 7).is_ok()):
+        println("insert end: ok {xs.len()} {xs[3]}")
+    if (xs.insert(lo, 1).is_ok()):
+        println("insert front: ok {xs.len()} {xs[0]}")
+    if (xs.insert(neg, 2).is_err()):
+        println("insert -1: err {xs.len()}")
+    if (xs.insert(min, 2).is_err()):
+        println("insert min: err {xs.len()}")
+    let i32 past = same(xs.len() + 1)
+    if (xs.insert(past, 2).is_err()):
+        println("insert past: err {xs.len()}")
+    return 0

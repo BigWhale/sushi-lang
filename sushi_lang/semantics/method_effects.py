@@ -78,4 +78,3 @@ def methods_where(flag: str) -> frozenset[str]:
 
 MUTATING_METHODS = methods_where("mutates")
 CONTAINER_INSERT_METHODS = methods_where("consumes_args")
-BULK_WRITE_METHODS = methods_where("bulk_writes")

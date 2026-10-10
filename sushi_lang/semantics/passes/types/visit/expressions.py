@@ -198,10 +198,18 @@ class ExpressionValidator(RecursiveVisitor):
         """`m == Maybe.None`: a bare variant takes its enum from the other operand.
 
         The variant spells no type argument, so it has the type of its position, as
-        in a `let`; for a comparison that position is the other operand.
+        in a `let`; for a comparison that position is the other operand. The
+        propagation changes only a variant spelling. Thus a comparison with no variant
+        spelling infers no operand here, and a nest of comparisons does not infer each
+        subtree again at each level.
         """
-        from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
+        from sushi_lang.semantics.passes.types.propagation import (
+            propagate_types_to_value, variant_spelling_enum)
         from sushi_lang.semantics.typesys import EnumType, deref_type
+        tv = self.type_validator
+        if (variant_spelling_enum(tv, node.left) is None
+                and variant_spelling_enum(tv, node.right) is None):
+            return
         left = deref_type(self._infer_leaving_no_trace(node.left))
         right = deref_type(self._infer_leaving_no_trace(node.right))
         if left == right:

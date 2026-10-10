@@ -1,0 +1,15 @@
+# A repeated 7 fills a u8 array. Every slot reads 7.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "100 100 700\n"
+
+fn main() i32:
+    let u8[] b = from([7; 100])
+    let i32 hits = 0
+    let i32 sum = 0
+    foreach(x in b.iter()):
+        if (x == 7):
+            hits := hits + 1
+        sum := sum + (x as i32)
+    println("{b.len()} {hits} {sum}")
+    return 0

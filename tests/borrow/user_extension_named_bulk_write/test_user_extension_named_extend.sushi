@@ -1,0 +1,15 @@
+# A user extension named `extend` is not the built-in bulk write. It takes its own
+# receiver as its argument, writes nothing, and the call compiles.
+# EXPECT_STDOUT_EXACT: "6\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Pair:
+    i32 a
+
+extend Pair extend(Pair other) i32:
+    return self.a + other.a
+
+fn main() i32:
+    let Pair p = Pair(3)
+    println("{p.extend(p)}")
+    return 0

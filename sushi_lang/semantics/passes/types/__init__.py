@@ -255,6 +255,17 @@ class TypeValidator:
                                  self.const_table, self.current_unit_name,
                                  self.namespaces_of, self.struct_table, self.enum_table)
 
+    def operand_evaluator(self):
+        """A silent evaluator that shares the operator folds of the expression being validated.
+
+        A check that reads an operand at each level of a nest uses it, so the nest is
+        folded one time (`operator_nest.py`).
+        """
+        from sushi_lang.semantics.const_eval import ConstantEvaluator
+        return ConstantEvaluator(Reporter(), self.const_table, self.current_unit_name,
+                                 self.namespaces_of, self.struct_table, self.enum_table,
+                                 folds=self.operator_nests.folds)
+
     def validate_expression(self, expr: Expr) -> Optional[Type]:
         """Validate an expression and its subexpressions, and answer its type.
 

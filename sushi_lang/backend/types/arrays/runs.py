@@ -15,6 +15,8 @@ about the optimizer: llvmlite does not fold, so `builder.add` of two constants e
 | readable, `count > UNROLL_LIMIT` | one walk with a CONSTANT trip count |
 | not readable | the same walk, with computed `first`, `step` and `count` |
 
+A repeated value that would take a walk is one `llvm.memset` when it is a constant and
+every byte of it is the same byte (`0`, `-1`, `0.0`, `7` as a `u8`).
 
 A CURSOR, not a constant start: a run-time count makes every later start a run-time value,
 and the cursor is shorter than the constant arithmetic it replaces. It is also why a
@@ -26,6 +28,7 @@ runs through the same seam so the two never disagree about a count.
 """
 from __future__ import annotations
 
+import struct
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, List, Optional, Sequence
 
@@ -294,7 +297,36 @@ def _fill_repeated(codegen: 'LLVMCodegen', base: ir.Value, run: EmittedRun,
             store_one(slot, ir.Constant(i32, offset))
         return
 
+    byte = None if run.element_type is not None else _repeated_byte(value)
+    if byte is not None:
+        from sushi_lang.backend.expressions.memory import emit_byte_size, emit_memset_bytes
+        emit_memset_bytes(codegen, base, byte,
+                          emit_byte_size(codegen, run.count, element_llvm_type,
+                                         name=f"run{number}_bytes"))
+        return
+
     emit_container_walk(codegen, base, run.count, store_one, prefix=f"run{number}_fill")
+
+
+def _repeated_byte(value: ir.Value) -> Optional[int]:
+    """The one byte that every byte of `value` holds, or None.
+
+    Only a constant integer or float answers. Then a run of it is one `llvm.memset`.
+    """
+    if not isinstance(value, ir.Constant):
+        return None
+    if isinstance(value.type, ir.IntType) and isinstance(value.constant, int):
+        if value.type.width % 8 != 0:
+            return None
+        raw = (value.constant & ((1 << value.type.width) - 1)).to_bytes(
+            value.type.width // 8, "little")
+    elif isinstance(value.type, (ir.FloatType, ir.DoubleType)) \
+            and isinstance(value.constant, (int, float)):
+        raw = struct.pack("<f" if isinstance(value.type, ir.FloatType) else "<d",
+                          value.constant)
+    else:
+        return None
+    return raw[0] if raw == raw[:1] * len(raw) else None
 
 
 def fill_fixed_slot(codegen: 'LLVMCodegen', slot: ir.Value,

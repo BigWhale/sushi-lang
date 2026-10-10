@@ -1529,12 +1529,12 @@ it states the guards that hold every index in range.
 - **An inert marker.** A marked body with no `[]` to uncheck gets
   [CW0004](error-catalog.md#cw0004). The indexes in a lambda do not count.
 
-Guideline: a marked function is a measured hot loop and nothing else. Measure it before
-and after, and put the numbers in the pull request. The `because` states the guards that
-hold every index in range. Keep the function as small as the loop. Do not mark a function
-that is faster only on paper. A library author who marks a function says so in the
-library's documentation, because each consumer must pass `--dont-panic`. The design record
-is [dont_panic](design/dont-panic.md).
+Guideline: mark only a hot loop that you measured. Measure the loop before the change
+and after the change. Put the numbers in the pull request. Write the guards that keep each
+index in range in the `because` text. Keep the function as small as the loop. Do not mark
+a function if you did not measure a speed increase. If a library author marks a function,
+the author must tell this in the documentation of the library, because each consumer must
+pass `--dont-panic`. The design record is [dont_panic](design/dont-panic.md).
 
 ## Structs
 

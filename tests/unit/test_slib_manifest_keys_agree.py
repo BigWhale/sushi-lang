@@ -189,7 +189,7 @@ SUSHI_READER: dict[str, set[str]] = {
     "reexport": {"unit", "path", "kind"},
     "foreign_extension": {"type", "method", "target_bounds"},
     "conversion": {"source", "target", "doc"},
-    "dont_panic": {"name", "reason"},
+    "dont_panic": {"unit", "name", "reason"},
     "dependency": {"path", "kind", "library_name", "library_version", "units"},
 }
 

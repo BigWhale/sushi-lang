@@ -1,0 +1,48 @@
+# The marker removes the bounds check from the emitted code, and only in the marked body.
+# Each marked function has an unmarked twin with the same body. The twin keeps its check.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_IR_LACKS: read_dynamic _bounds_fail
+# EXPECT_IR_HOLDS: read_dynamic_checked _bounds_fail
+# EXPECT_IR_LACKS: read_fixed _bounds_fail
+# EXPECT_IR_HOLDS: read_fixed_checked _bounds_fail
+# EXPECT_IR_LACKS: write_dynamic _bounds_fail
+# EXPECT_IR_HOLDS: write_dynamic_checked _bounds_fail
+# EXPECT_IR_LACKS: read_byte _bounds_fail
+# EXPECT_IR_HOLDS: read_byte_checked _bounds_fail
+# EXPECT_STDOUT_EXACT: "4 4\n6 6\n9 9\n109 109\n"
+
+fn read_dynamic(i32[] xs, i32 i) i32 dont_panic because "the caller passes i < xs.len()":
+    return xs[i]
+
+fn read_dynamic_checked(i32[] xs, i32 i) i32:
+    return xs[i]
+
+fn read_fixed(i32[3] xs, i32 i) i32 dont_panic because "the caller passes i < 3":
+    return xs[i]
+
+fn read_fixed_checked(i32[3] xs, i32 i) i32:
+    return xs[i]
+
+fn write_dynamic(poke i32[] xs, i32 i) ~ dont_panic because "the caller passes i < xs.len()":
+    xs[i] := 9
+
+fn write_dynamic_checked(poke i32[] xs, i32 i) ~:
+    xs[i] := 9
+
+fn read_byte(string s, i32 i) u8 dont_panic because "the caller passes i < s.size()":
+    return s[i]
+
+fn read_byte_checked(string s, i32 i) u8:
+    return s[i]
+
+fn main() i32:
+    let i32[] xs = from([4, 2])
+    let i32[] ys = from([4, 2])
+    let i32[3] fixed = [5, 6, 7]
+    println("{read_dynamic(xs, 0)} {read_dynamic_checked(xs, 0)}")
+    println("{read_fixed(fixed, 1)} {read_fixed_checked(fixed, 1)}")
+    write_dynamic(poke xs, 1)
+    write_dynamic_checked(poke ys, 1)
+    println("{xs[1]} {ys[1]}")
+    println("{read_byte('mostly', 0)} {read_byte_checked('mostly', 0)}")
+    return 0

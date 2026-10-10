@@ -61,7 +61,7 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     self_mode, self_mode_span, params = strip_self_param(params)
     signature = read_signature_types(suffix.children, ast_builder)
     body = ast_builder._block(body_node)
-    dont_panic, dont_panic_span = mark_body(suffix.children, body)
+    dont_panic = mark_body(suffix.children, body)
 
     return ExtendDef(
         target_type=target_type,
@@ -83,7 +83,6 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
         static_span=span_of(static_tok) if static_tok is not None else None,
         target_params=target_params,
         dont_panic=dont_panic,
-        dont_panic_span=dont_panic_span,
     )
 
 
@@ -110,7 +109,7 @@ def parse_handle_extend_stmt_as(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDef
     # One type and no `| E`, so this is not the signature pair `read_signature_types` reads.
     target = ast_builder._parse_type(target_node)
     body = ast_builder._block(body_node)
-    dont_panic, dont_panic_span = mark_body(suffix.children, body)
+    dont_panic = mark_body(suffix.children, body)
 
     return ExtendDef(
         target_type=ast_builder._parse_type(source_node),
@@ -126,5 +125,4 @@ def parse_handle_extend_stmt_as(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDef
         method_type_args=(target,) if target is not None else None,
         doc=lift_body_doc(body, ast_builder),
         dont_panic=dont_panic,
-        dont_panic_span=dont_panic_span,
     )

@@ -69,7 +69,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     self_mode, self_mode_span, params = strip_self_param(params)
     signature = read_signature_types(t.children, ast_builder)
     body = ast_builder._block(body_node)
-    dont_panic, dont_panic_span = mark_body(t.children, body)
+    dont_panic = mark_body(t.children, body)
 
     return FuncDef(
         name=str(name_tok),
@@ -88,7 +88,6 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
         doc=lift_body_doc(body, ast_builder),
         public_span=public_span,
         dont_panic=dont_panic,
-        dont_panic_span=dont_panic_span,
     )
 
 

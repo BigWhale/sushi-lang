@@ -1,0 +1,12 @@
+# A repeated zero fills a large u8 array. Every slot reads zero.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "8192 0 0 0\n"
+
+fn main() i32:
+    let u8[] b = from([0; 8192])
+    let i32 sum = 0
+    foreach(x in b.iter()):
+        sum := sum + (x as i32)
+    println("{b.len()} {sum} {b[0]} {b[8191]}")
+    return 0

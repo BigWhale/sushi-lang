@@ -1,0 +1,14 @@
+# A write at index -1 fails the bounds check.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2020"
+
+fn same(i32 x) i32:
+    return x
+
+fn main() i32:
+    let i32[] xs = from([10, 20, 30])
+    let i32 i = same(-1)
+    xs[i] := 5
+    println(xs[0])
+    return 0

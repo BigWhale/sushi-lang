@@ -424,8 +424,11 @@ def _conversion_line(conv: dict, _p: Palette) -> str:
 
 
 def _dont_panic_line(record: dict, _p: Palette) -> str:
-    """A marked declaration with its reason, as the header writes the marker."""
-    return f"  {record['name']} dont_panic because \"{record['reason']}\""
+    """A marked declaration after its unit, with its reason as the header writes the marker.
+
+    Two units of one library can each declare a private function of one name.
+    """
+    return f"  {record['unit']}: {record['name']} dont_panic because \"{record['reason']}\""
 
 
 def _foreign_line(claim: dict, p: Palette) -> str:

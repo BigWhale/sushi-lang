@@ -1,0 +1,35 @@
+# A repeated float value fills f64 and f32 arrays. The bits of each slot are checked.
+# The value -0.0 has a sign bit, so its bytes are not all equal.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "f64 0.0: 50 50\nf32 0.0: 50 50\nf64 -0.0: 10 10\nf64 1.5: 10 10\n"
+
+fn main() i32:
+    let f64[] a = from([0.0; 50])
+    let i32 an = 0
+    foreach(x in a.iter()):
+        if (x.to_bits() == 0):
+            an := an + 1
+    println("f64 0.0: {a.len()} {an}")
+
+    let f32[] b = from([0.0; 50])
+    let i32 bn = 0
+    foreach(x in b.iter()):
+        if (x.to_bits() == 0):
+            bn := bn + 1
+    println("f32 0.0: {b.len()} {bn}")
+
+    let f64[] c = from([-0.0; 10])
+    let i32 cn = 0
+    foreach(x in c.iter()):
+        if (x.to_bits() == 0x8000_0000_0000_0000):
+            cn := cn + 1
+    println("f64 -0.0: {c.len()} {cn}")
+
+    let f64[] d = from([1.5; 10])
+    let i32 dn = 0
+    foreach(x in d.iter()):
+        if (x == 1.5):
+            dn := dn + 1
+    println("f64 1.5: {d.len()} {dn}")
+    return 0

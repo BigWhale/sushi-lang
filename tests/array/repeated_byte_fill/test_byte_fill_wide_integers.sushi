@@ -1,0 +1,65 @@
+# A repeated integer value fills each wider integer type. Some values have one byte
+# repeated (0, -1, 257 as u16). Other values do not (1, 258 as u16, 0x01000001 as i32).
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "i32 0: 20 20\ni32 -1: 20 20\ni32 1: 20 20\ni32 big: 20 20\nu16 257: 30 30\nu16 258: 30 30\ni64 -1: 12 12\nu64 0: 12 12\ni16 -1: 9 9\ni8 -1: 40 40\n"
+
+fn count_i32(i32[] xs, i32 v) i32:
+    let i32 n = 0
+    foreach(x in xs.iter()):
+        if (x == v):
+            n := n + 1
+    return n
+
+fn main() i32:
+    let i32[] a = from([0; 20])
+    println("i32 0: {a.len()} {count_i32(a, 0)}")
+    let i32[] b = from([-1; 20])
+    println("i32 -1: {b.len()} {count_i32(b, -1)}")
+    let i32[] c = from([1; 20])
+    println("i32 1: {c.len()} {count_i32(c, 1)}")
+    let i32[] d = from([0x01000001; 20])
+    println("i32 big: {d.len()} {count_i32(d, 0x01000001)}")
+
+    let u16[] e = from([257; 30])
+    let i32 en = 0
+    foreach(x in e.iter()):
+        if (x == 257):
+            en := en + 1
+    println("u16 257: {e.len()} {en}")
+
+    let u16[] f = from([258; 30])
+    let i32 fn_ = 0
+    foreach(x in f.iter()):
+        if (x == 258):
+            fn_ := fn_ + 1
+    println("u16 258: {f.len()} {fn_}")
+
+    let i64[] g = from([-1; 12])
+    let i32 gn = 0
+    foreach(x in g.iter()):
+        if (x == -1):
+            gn := gn + 1
+    println("i64 -1: {g.len()} {gn}")
+
+    let u64[] h = from([0; 12])
+    let i32 hn = 0
+    foreach(x in h.iter()):
+        if (x == 0):
+            hn := hn + 1
+    println("u64 0: {h.len()} {hn}")
+
+    let i16[] k = from([-1; 9])
+    let i32 kn = 0
+    foreach(x in k.iter()):
+        if (x == -1):
+            kn := kn + 1
+    println("i16 -1: {k.len()} {kn}")
+
+    let i8[] m = from([-1; 40])
+    let i32 mn = 0
+    foreach(x in m.iter()):
+        if (x == -1):
+            mn := mn + 1
+    println("i8 -1: {m.len()} {mn}")
+    return 0

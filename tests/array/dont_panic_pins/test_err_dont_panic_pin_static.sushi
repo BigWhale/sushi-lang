@@ -1,0 +1,11 @@
+# A static method that carries the marker gives one CE0152 when the build has no flag.
+# EXPECT_ERROR_CODES_EXACT: CE0152
+
+struct Crate:
+    i32 weight
+
+extend Crate static first_of(i32[] xs) Crate dont_panic because "the caller passes a non-empty array":
+    return Crate(xs[0])
+
+fn main() i32:
+    return Crate.first_of(from([1])).weight

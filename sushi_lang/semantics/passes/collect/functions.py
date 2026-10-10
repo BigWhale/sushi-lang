@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.structs import StructTable, GenericStructTable
     from sushi_lang.semantics.passes.collect.enums import EnumTable, GenericEnumTable
 from sushi_lang.semantics.ast import (
+    DontPanicMarker,
     Program,
     FuncDef,
     ExtendDef,
@@ -320,8 +321,7 @@ class GenericFuncDef:
     template_id: Optional['TemplateId'] = None
     # The `dont_panic` marker, as on `FuncDef`. An instance is a copy of this node, so
     # it carries the marker of its template (docs/design/dont-panic.md, D6).
-    dont_panic: Optional[str] = None
-    dont_panic_span: Optional[Span] = None
+    dont_panic: Optional[DontPanicMarker] = None
 
 
 class Redeclaration(Enum):
@@ -967,7 +967,6 @@ class FunctionCollector:
             filename=self.current_unit_file,
             opaque=opaque,
             dont_panic=fn.dont_panic,
-            dont_panic_span=fn.dont_panic_span,
         )
 
         self.generic_funcs.declare(name, generic_func)

@@ -32,6 +32,9 @@ from sushi_lang.semantics.passes.types.visit.helpers import (
 _REGISTRY_TYPED_STDLIB_MODULES = ("time", "sys/env", "sys/process", "random", "io/files",
                                   "net/socket")
 
+# The binary operators whose type the backend reads from the `inferred_type` stamp.
+_STAMPED_OPS = frozenset(("+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>"))
+
 
 def math_call_return_type(validator: 'TypeValidator', name: str,
                           args) -> Optional[Type]:
@@ -298,7 +301,19 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         return self.type_validator.infer_expression_type(node.expr)
 
     def visit_binaryop(self, node: BinaryOp) -> Optional[Type]:
-        """Infer binary operation type directly (no delegation)."""
+        """Infer binary operation type, and stamp it on an arithmetic or bitwise node.
+
+        The backend reads the stamp, so it does not infer the operand subtree again at
+        each level of a nest. Each inference writes the stamp again, and a numeric
+        propagation into the node removes it.
+        """
+        inferred = self._binaryop_type(node)
+        if node.op in _STAMPED_OPS:
+            node.inferred_type = inferred if isinstance(inferred, BuiltinType) else None
+        return inferred
+
+    def _binaryop_type(self, node: BinaryOp) -> Optional[Type]:
+        """The type of a binary operation, from the types of its operands."""
         if node.op in ["==", "!=", "<", "<=", ">", ">="]:
             return BuiltinType.BOOL
 

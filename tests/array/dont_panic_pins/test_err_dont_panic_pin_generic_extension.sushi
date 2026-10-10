@@ -1,0 +1,15 @@
+# An extension method on a generic type that carries the marker gives one CE0152 when the
+# build has no flag, and not one for each instance.
+# EXPECT_ERROR_CODES_EXACT: CE0152
+
+struct Box@(T):
+    i32[] codes
+    T tag
+
+extend Box@(T) first() i32 dont_panic because "the caller fills the codes first":
+    return self.codes[0]
+
+fn main() i32:
+    let Box@(i32) a = Box(from([1]), 0)
+    let Box@(u8) b = Box(from([2]), 0 as u8)
+    return a.first() + b.first()

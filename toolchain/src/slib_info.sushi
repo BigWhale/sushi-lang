@@ -1392,7 +1392,8 @@ fn print_dont_panic(MsgValue meta, Opts o) ~:
             return ~
 
 ##:
-Prints each marked declaration with its reason, as the header writes the marker.
+Prints each marked declaration after its unit, with its reason as the header writes the
+marker. Two units of one library can each declare a private function of one name.
 
 - Parameter records: The array of `dont_panic` records.
 - Parameter o: The options of the run.
@@ -1403,9 +1404,10 @@ fn print_dont_panic_list(MsgValue records, Opts o) ~:
     match records:
         MsgValue.Arr(items) ->
             foreach(r in items.iter()):
+                let string unit = get_str(r, "unit")
                 let string name = get_str(r, "name")
                 let string reason = get_str(r, "reason")
-                println("  {name} dont_panic because \"{reason}\"")
+                println("  {unit}: {name} dont_panic because \"{reason}\"")
         _ ->
             return ~
     println("")

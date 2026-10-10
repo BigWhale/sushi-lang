@@ -40,6 +40,16 @@ class Stmt(Node):
     expand_copies: Tuple[int, ...] = field(default=(), kw_only=True)
 
 
+@dataclass(frozen=True, slots=True)
+class DontPanicMarker:
+    """The `dont_panic because "<reason>"` marker of a header (docs/design/dont-panic.md).
+
+    A plain record and no node: it holds no expression, so the node walk does not enter it.
+    """
+    reason: str
+    span: Optional[Span]
+
+
 @dataclass(slots=True)
 class DocTag:
     """One recognised item of a doc block's Markdown list (documentation.md S3)."""
@@ -278,10 +288,9 @@ class FuncDef(Node):
     # growth rule reads that chain (`generics/instance_growth.py`). None on a written
     # declaration. It holds no node.
     instance_key: Optional[tuple] = None
-    # The `because` text of a `dont_panic` marker, None when the header has none
-    # (docs/design/dont-panic.md). The builder stamps the indexes of the body.
-    dont_panic: Optional[str] = None
-    dont_panic_span: Optional[Span] = None
+    # The `dont_panic` marker, None when the header has none (docs/design/dont-panic.md).
+    # The builder stamps the indexes of the body.
+    dont_panic: Optional[DontPanicMarker] = None
 
 
 @dataclass(slots=True)
@@ -420,8 +429,7 @@ class ExtendDef(Node):
     # The key of a call-site copy; see `FuncDef`. None on every other extension.
     instance_key: Optional[tuple] = None
     # The `dont_panic` marker; see `FuncDef`.
-    dont_panic: Optional[str] = None
-    dont_panic_span: Optional[Span] = None
+    dont_panic: Optional[DontPanicMarker] = None
 
     @property
     def is_conversion(self) -> bool:
@@ -945,6 +953,9 @@ class BinaryOp(Node):
     # The struct or enum a comparison compares, stamped by the typecheck pass when the
     # operator reads a contract (`Eq` for `==`, `Ord` for `<`). The backend reads it.
     operand_type: Optional["Type"] = None
+    # The builtin type of an arithmetic or bitwise operator, stamped by the typecheck
+    # pass when it infers the node. The backend reads it through `stamped_semantic_type`.
+    inferred_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class TupleLiteral(Node):
@@ -1226,7 +1237,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 
 __all__ = [
-    "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "ExternalVar", "Block", "Param",
+    "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "DontPanicMarker", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "ExternalVar", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "RangePattern", "WildcardPattern", "TuplePattern", "OrPattern", "alternatives_of", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda", "TupleLiteral", "DestructureTarget", "destructure_binders",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",
