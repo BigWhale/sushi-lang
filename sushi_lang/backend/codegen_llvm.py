@@ -408,7 +408,7 @@ class LLVMCodegen:
                 self.functions.emit_func_decl(fn, unit.name)
 
             for ext in unit.ast.extensions:
-                self.functions.emit_extension_method_decl(ext)
+                self.functions.emit_extension_method_decl(ext, unit.name)
 
             for perk_impl in unit.ast.perk_impls:
                 for method in perk_impl.methods:
@@ -438,7 +438,7 @@ class LLVMCodegen:
                 emitted.append(self.functions.emit_func_def(fn, unit.name))
 
             for ext in unit.ast.extensions:
-                emitted.append(self.functions.emit_extension_method_def(ext))
+                emitted.append(self.functions.emit_extension_method_def(ext, unit.name))
 
             for perk_impl in unit.ast.perk_impls:
                 for method in perk_impl.methods:

@@ -288,7 +288,8 @@ def _try_emit_static_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCal
 
     func_name = extension_symbol(
         str(target), expr.method,
-        getattr(expr, "callee_method_type_args", None) or ())
+        getattr(expr, "callee_method_type_args", None) or (),
+        unit=expr.callee_extension_unit)
     llvm_fn = codegen.funcs.get(func_name)
     if llvm_fn is None:
         llvm_fn = codegen.module.globals.get(func_name)
@@ -480,7 +481,8 @@ def _emit_extension_call(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall
 
     from sushi_lang.semantics.generics.name_mangling import extension_symbol
     func_name = extension_symbol(lang_type, expr.method,
-                                 getattr(expr, "callee_method_type_args", None) or ())
+                                 getattr(expr, "callee_method_type_args", None) or (),
+                                 unit=expr.callee_extension_unit)
     llvm_fn = codegen.funcs.get(func_name)
 
     if llvm_fn is None and func_name in codegen.module.globals:

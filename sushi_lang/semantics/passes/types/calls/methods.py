@@ -31,20 +31,16 @@ if TYPE_CHECKING:
 
 
 def instantiate_array_extension(validator: 'TypeValidator',
-                                receiver_type: DynamicArrayType,
-                                method_name: str, site=None):
-    """Resolve a method miss on a `T[]` receiver against the array templates (ruling 3).
+                                receiver_type: DynamicArrayType, template, site=None):
+    """Resolve a call on a `T[]` receiver against one array template (ruling 3).
 
     A dynamic-array receiver has no instantiation the monomorphize pass could have
-    collected -- the CALL SITE is what names the element type -- so a miss consults the
-    `$array` templates here. The substituted signature enters the extension table (the
-    next call site hits it directly, in this pass and in the backend), and the
-    instantiation is queued for the analyzer's fixpoint round, which monomorphizes and
-    checks the body copy after the per-unit loop.
+    collected -- the CALL SITE is what names the element type -- so the call cuts the
+    copy of the `$array` template that it chose. The substituted signature enters the
+    extension table (the next call site hits it directly, in this pass and in the
+    backend), and the instantiation is queued for the analyzer's fixpoint round, which
+    monomorphizes and checks the body copy after the per-unit loop.
     """
-    template = _array_template(validator, method_name)
-    if template is None:
-        return None
 
     # The element as the tables know it: a receiver typed from a written `P[]` still
     # holds the bare name, and a copy for it checks a body over an unknown type (#1161).
@@ -64,12 +60,35 @@ def instantiate_array_extension(validator: 'TypeValidator',
     return concrete
 
 
-def _array_template(validator: 'TypeValidator', method_name: str):
-    """The `T[]` template of this method name with no method-level parameter, or None."""
+def _array_templates(validator: 'TypeValidator', method_name: str) -> list:
+    """The `T[]` templates of this method name with no method-level parameter.
+
+    One for each unit that declares one (`docs/design/extension-visibility.md` C5).
+    """
     from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
     templates = validator.generic_extension_table.declarations(ARRAY_BASE_KEY, method_name)
-    return next((t for t in templates
-                 if not t.target_key and not t.method_type_params), None)
+    return [t for t in templates if not t.target_key and not t.method_type_params]
+
+
+def _array_template(validator: 'TypeValidator', method_name: str):
+    """The `T[]` template of this method name that the calling unit reads first, or None.
+
+    Its own unit's template first, then a template that it may call, then any.
+    """
+    return next(iter(_by_reach(validator, _array_templates(validator, method_name))), None)
+
+
+def _by_reach(validator: 'TypeValidator', templates: list) -> list:
+    """The templates in the order the calling unit reads them: its own, then the ones
+    that it may call, then the rest. A template of an array has no home unit, so no
+    receiver type is needed."""
+    from sushi_lang.semantics.passes.types.visibility import calling_unit, extension_reaches
+    from sushi_lang.semantics.visibility import MethodReach
+    asker = calling_unit(validator)
+    ranked = [(template.unit_name != asker, reach is not MethodReach.VISIBLE, index)
+              for index, (template, reach)
+              in enumerate(extension_reaches(validator, templates, None))]
+    return [templates[index] for *_, index in sorted(ranked)]
 
 
 def substituted_extension_signature(validator: 'TypeValidator', template, receiver_type,
@@ -139,7 +158,7 @@ def _queue_extension_instantiation(validator: 'TypeValidator', template, target_
     correct one (#1161). `site` is the span of the call.
     """
     key = (_resolved(validator, target_type), template.name,
-           tuple(_resolved(validator, a) for a in method_type_args))
+           tuple(_resolved(validator, a) for a in method_type_args), template.unit_name)
     tables = validator.tables
     if key in tables.queued_extension_keys:
         return
@@ -184,18 +203,21 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
     (`docs/design/extension-visibility.md`): `_choose_visible` reads the one predicate.
     """
     records = validator.extension_table.declarations(receiver_type, method_name)
-    if records:
-        matching = [record for record in records
+    templates = _uncut_array_templates(validator, receiver_type, method_name, records)
+    method = None
+    if records or templates:
+        matching = [record for record in [*records, *templates]
                     if bool(getattr(record, "is_static", False)) == static]
         if not matching:
             return None
-        return _choose_visible(validator, receiver_type, method_name, matching, call,
-                               report)
-
-    method = None
-    if isinstance(receiver_type, DynamicArrayType):
-        method = instantiate_array_extension(validator, receiver_type, method_name,
+        chosen = _choose_visible(validator, receiver_type, method_name, matching, call,
+                                 report)
+        if not isinstance(chosen, GenericExtensionMethod):
+            return chosen
+        method = instantiate_array_extension(validator, receiver_type, chosen,
                                              call.loc if call is not None else None)
+        if method is not None:
+            return method
 
     if method is None and call is not None:
         resolved = resolve_method_generic_extension(validator, receiver_type, call,
@@ -216,6 +238,20 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
     if bool(getattr(method, "is_static", False)) != static:
         return None
     return _choose_visible(validator, receiver_type, method_name, [method], call, report)
+
+
+def _uncut_array_templates(validator: 'TypeValidator', receiver_type, method_name: str,
+                           records: list) -> list:
+    """The `T[]` templates of a unit that has no copy for this receiver yet.
+
+    A copy of an array template is cut at the call that names its element, so the
+    extension table holds only the copies that a call has cut. A unit with no copy yet
+    is still a candidate of the call (C5).
+    """
+    if not isinstance(receiver_type, DynamicArrayType):
+        return []
+    cut = {record.unit_name for record in records}
+    return [t for t in _array_templates(validator, method_name) if t.unit_name not in cut]
 
 
 def _choose_visible(validator: 'TypeValidator', receiver_type, method_name: str,
@@ -303,8 +339,8 @@ def _template_for(validator: 'TypeValidator', receiver_type, method_name: str):
         args = tuple(getattr(receiver_type, "generic_args", None) or ())
         if base is None:
             return None
-        template = validator.generic_extension_table.find_applicable(
-            base, method_name, receiver_type.name)
+        template = next(iter(_by_reach(validator, validator.generic_extension_table.applicable(
+            base, method_name, receiver_type.name))), None)
     if (template is not None and not template.method_type_params
             and len(template.type_params) == len(args)):
         return template, args, template.is_static
@@ -357,7 +393,7 @@ def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
     from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
 
     def margs_template(declarations, target_key=""):
-        for t in declarations:
+        for t in _by_reach(validator, list(declarations)):
             if not getattr(t, "method_type_params", ()):
                 continue
             if t.target_key and t.target_key != target_key:
@@ -522,7 +558,8 @@ def _refuses_non_error_arguments(validator: 'TypeValidator', template, receiver_
         template.ret_type, template.err_type, template.err_span or template.ret_span,
         template.params, template.body, template.name_span, substitution)
     key = (_resolved(validator, receiver_type), template.name,
-           tuple(_resolved(validator, substitution[name]) for name in sorted(positions)))
+           tuple(_resolved(validator, substitution[name]) for name in sorted(positions)),
+           template.unit_name)
     refused_keys = getattr(validator.tables, "refused_extension_keys", None)
     if refused_keys is not None and key in refused_keys:
         return True
@@ -899,6 +936,7 @@ def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
         diag.emit()
         return
 
+    call.callee_extension_unit = method.unit_name
     _check_user_method(validator, call, receiver_type, method, stop_on_arity=False)
 
 

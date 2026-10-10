@@ -94,9 +94,14 @@ class FunctionDeclarations:
 
         return llvm_fn
 
-    def emit_extension_method_decl(self, ext: ExtendDef) -> ir.Function:
-        """Create LLVM function prototype for extension method."""
-        func_name = self.codegen.functions.helpers.get_extension_method_name(ext)
+    def emit_extension_method_decl(self, ext: ExtendDef,
+                                   unit_name: str | None = None) -> ir.Function:
+        """Create LLVM function prototype for extension method.
+
+        The method is filed under the symbol its call site names. A method that a
+        binary library ships keeps the name its bitcode gave it, `link_symbol`.
+        """
+        func_name = self.codegen.functions.helpers.get_extension_method_name(ext, unit_name)
 
         param_types = []
         param_names = []
@@ -121,7 +126,8 @@ class FunctionDeclarations:
                 param_names.append(param.name)
 
         func_type = ir.FunctionType(declared_return_ll(self.codegen, ext), param_types)
-        llvm_fn = ir.Function(self.codegen.module, func_type, name=func_name)
+        llvm_fn = ir.Function(self.codegen.module, func_type,
+                              name=ext.link_symbol or func_name)
 
         for i, name in enumerate(param_names):
             if i < len(llvm_fn.args):

@@ -857,7 +857,7 @@ class LibraryManifestGenerator:
                 record = serialize_extension(ext)
                 record["unit"] = unit.name
                 record["link_symbol"] = extension_symbol(
-                    extension_receiver_name(ext.target_type), ext.name)
+                    extension_receiver_name(ext.target_type), ext.name, unit=unit.name)
                 records.append(record)
             for impl in unit.ast.perk_impls:
                 if (impl.perk_name in shipped_perks

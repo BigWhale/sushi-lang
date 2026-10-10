@@ -31,7 +31,8 @@ from sushi_lang.semantics.library_registration import (
 
 # What `monomorphize_all_extension_methods` answers: one concrete ExtendDef per
 # (target type, method name, type arguments).
-ExtensionCopies = dict[tuple[str, str, tuple], ExtendDef]
+# A generic-target extension copy, by (target, method, type arguments, declaring unit).
+ExtensionCopies = dict[tuple[str, str, tuple, Optional[str]], ExtendDef]
 
 
 def enum_base_names(*tables) -> set[str]:
@@ -835,7 +836,7 @@ class SemanticAnalyzer:
             self, concrete_extension_defs: ExtensionCopies,
             compilation_order: list[Unit]) -> None:
         """Hand every generic-target extension copy to the extension table and to codegen."""
-        for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
+        for extend_def in concrete_extension_defs.values():
             # The unit that DECLARED the template. Adoption may send the copy to another
             # unit of the build, but method resolution reads who declared it.
             declared_in = extend_def.home_unit
@@ -1413,7 +1414,7 @@ class SemanticAnalyzer:
                     method.template_target or display_type(target_type))
 
         templates = self.tables.generic_extensions.by_type.get(ARRAY_BASE_KEY, {})
-        for (method_name, _key), template in templates.items():
+        for (method_name, _key, _unit), template in templates.items():
             receiver = DynamicArrayType(
                 base_type=TypeParameter(name=template.type_params[0]))
             decl = template.decl
@@ -1434,7 +1435,7 @@ class SemanticAnalyzer:
 
         The own extension wins in its unit, as an own declaration wins over an imported
         flat name, and the warning says so at the declaration. A copy of a template is
-        not asked: two units cannot declare one template of one name on one base.
+        not asked yet: its own template wins in its unit (C5), with no warning.
         """
         from sushi_lang.semantics.generics.type_display import display_type
         from sushi_lang.semantics.visibility import hides_import, warn_hidden_extension

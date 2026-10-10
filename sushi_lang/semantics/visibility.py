@@ -688,6 +688,17 @@ def is_stdlib_builtin_method(method: Any, target: Any) -> bool:
             and is_source_stdlib_module(declared_in) and is_builtin_type(target))
 
 
+@dataclass(frozen=True)
+class ExtensionClaim:
+    """The unit and the marker of an extension declaration that no table holds yet.
+
+    `extensions_collide` reads a record and a claim alike.
+    """
+
+    unit_name: Optional[str]
+    is_public: bool
+
+
 def extensions_collide(table: Optional[VisibilityTable], target: Any,
                        first: Any, second: Any) -> bool:
     """Can two extensions of one name on one type not both be declared?

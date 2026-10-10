@@ -37,13 +37,15 @@ class LLVMFunctionManager:
         """Define the body of a regular function."""
         return self.definitions.emit_func_def(fn, unit_name)
 
-    def emit_extension_method_decl(self, ext: ExtendDef) -> ir.Function:
+    def emit_extension_method_decl(self, ext: ExtendDef,
+                                   unit_name: str | None = None) -> ir.Function:
         """Create LLVM function prototype for extension method."""
-        return self.declarations.emit_extension_method_decl(ext)
+        return self.declarations.emit_extension_method_decl(ext, unit_name)
 
-    def emit_extension_method_def(self, ext: ExtendDef) -> ir.Function:
+    def emit_extension_method_def(self, ext: ExtendDef,
+                                  unit_name: str | None = None) -> ir.Function:
         """Define the body of an extension method."""
-        return self.definitions.emit_extension_method_def(ext)
+        return self.definitions.emit_extension_method_def(ext, unit_name)
 
     def extract_value_from_result_enum(self, result_enum: ir.Value, value_type: ir.Type,
                                        semantic_type: Ty) -> tuple[ir.Value, ir.Value]:

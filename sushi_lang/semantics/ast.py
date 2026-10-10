@@ -434,6 +434,13 @@ class ExtendDef(Node):
     # and a synthesized node have none.
     is_public: bool = False
     public_span: Optional[Span] = None
+    # The unit that declares the method, for its symbol (`extension_symbol`): the unit
+    # of the template of a copy, or the library unit of a method that a compiled
+    # library ships. None on a written one, whose unit is the unit that holds it.
+    declaring_unit: Optional[str] = None
+    # The symbol that the bitcode of a binary library gave the method. None on every
+    # other extension.
+    link_symbol: Optional[str] = None
 
     @property
     def is_conversion(self) -> bool:
@@ -1067,6 +1074,9 @@ class MethodCall(Node):
     # The SOLVED method-level type arguments of a method-generic extension call
     # (`name@(U)`); the backend composes them into the callee symbol.
     callee_method_type_args: Optional[Tuple] = None
+    # The unit that declares the extension method the call resolved to; the backend
+    # composes it into the callee symbol (`docs/design/extension-visibility.md` C5).
+    callee_extension_unit: Optional[str] = None
     # The names a call was written with. A method has no field names, so these are
     # carried only to be refused (CE6104); the builder used to drop them (#563).
     field_names: Optional[List[str]] = None
@@ -1113,6 +1123,7 @@ class DotCall(Node):
     # The SOLVED method-level type arguments of a method-generic extension call; see
     # MethodCall.
     callee_method_type_args: Optional[Tuple] = None
+    callee_extension_unit: Optional[str] = None  # see MethodCall
     # True when the callee is a STATIC method (#542): no receiver crosses, and the
     # backend emits the symbol with the argument list alone. Stamped by the typecheck
     # pass, exactly as the receiver mode beside it is.

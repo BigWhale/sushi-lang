@@ -120,6 +120,9 @@ def monomorphize_extension_method(
     concrete.target_type = concrete_target_type
     concrete.method_type_args = tuple(method_type_args)
     concrete.home_unit = generic_method.unit_name
+    # Adoption may send the copy to another unit; its symbol keeps the unit of the
+    # template, which is the unit that a call of it reads.
+    concrete.declaring_unit = generic_method.unit_name
     concrete.template_file = generic_method.filename
     # An instance names its target in full; the bounds belong to the template.
     concrete.target_params = ()
@@ -162,13 +165,13 @@ def bounds_hold_for(template, type_args: Tuple[Type, ...], tables) -> bool:
 
 
 def monomorphize_all_extension_methods(
-    generic_extensions: Dict[str, Dict[Tuple[str, str], GenericExtensionMethod]],
+    generic_extensions: Dict[str, Dict[Tuple[str, str, Optional[str]], GenericExtensionMethod]],
     struct_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
     monomorphized_structs: Dict[str, StructType],
     enum_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
     monomorphized_enums: Dict[str, EnumType],
     substitutor: "TypeSubstitutor",
-) -> Dict[Tuple[str, str, Tuple[Type, ...]], ExtendDef]:
+) -> Dict[Tuple[str, str, Tuple[Type, ...], Optional[str]], ExtendDef]:
     """Monomorphize the generic extension methods that APPLY to each instantiation.
 
     A concrete target argument is a constraint, so `extend Box@(i32)` produces one copy, for
@@ -176,13 +179,16 @@ def monomorphize_all_extension_methods(
     instantiation of the base name, which is what made the declared `i32` constrain nothing:
     the method answered a `Box@(string)` receiver, and its body reached the backend with a
     string where it had written an integer.
+
+    A copy is keyed by its declaring unit too: two units can each declare a private
+    template of one name (`docs/design/extension-visibility.md` C5).
     """
-    result: Dict[Tuple[str, str, Tuple[Type, ...]], ExtendDef] = {}
+    result: Dict[Tuple[str, str, Tuple[Type, ...], Optional[str]], ExtendDef] = {}
     sources = ((struct_instantiations, monomorphized_structs),
                (enum_instantiations, monomorphized_enums))
     for type_args, concrete_type_name, concrete_target, declarations in (
             for_each_instantiation(sources, generic_extensions.get)):
-        for (method_name, target_key), generic_method in declarations.items():
+        for (method_name, target_key, unit_name), generic_method in declarations.items():
             if target_key and target_key != concrete_type_name:
                 continue
 
@@ -202,7 +208,7 @@ def monomorphize_all_extension_methods(
                                          concrete_type_name, substitutor):
                 continue
 
-            result[(concrete_type_name, method_name, type_args)] = monomorphize_extension_method(
+            result[(concrete_type_name, method_name, type_args, unit_name)] = monomorphize_extension_method(
                 generic_method, concrete_target, substitution_args, substitutor=substitutor)
 
     return result

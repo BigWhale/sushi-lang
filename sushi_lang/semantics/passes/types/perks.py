@@ -283,7 +283,7 @@ def _reject_template_name_conflicts(validator, impl: ExtendWithDef) -> None:
     if base_name is None:
         return
     existing = {}
-    for (name, _key), method in validator.generic_extension_table.by_type.get(
+    for (name, _key, _unit), method in validator.generic_extension_table.by_type.get(
             base_name, {}).items():
         existing.setdefault(name, method)
     if is_array:
