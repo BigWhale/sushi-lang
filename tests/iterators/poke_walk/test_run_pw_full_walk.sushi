@@ -21,7 +21,7 @@ fn all(poke Words w) ~:
 fn main() i32:
     let Words w = Words(from(["a", "b"]), 0)
     all(poke w)
+    println(w.pos)
     foreach(s in w):
         println("again {s}")
-    println(w.pos)
     return 0
