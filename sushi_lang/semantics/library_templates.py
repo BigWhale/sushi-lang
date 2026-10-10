@@ -341,7 +341,7 @@ def serialize_generic_extension(ext: "ExtendDef", source_text: str) -> dict:
 
     A generic target (`Box@(T)`, `Box@(i32)`), an array target (`T[]`) and a method
     type parameter (`pick@(U)`) all name no single instance, so the consumer re-parses
-    the source and cuts one copy per instance it names, as for its own template.
+    the source and cuts a copy at each call that reaches it, as for its own template.
     """
     record = serialize_extension(ext)
     record["type_params"] = _type_param_records(ext)

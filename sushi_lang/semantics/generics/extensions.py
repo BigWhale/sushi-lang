@@ -245,54 +245,17 @@ def templates_by_instance(generic_extensions, instances, tables) -> Iterator[tup
                 yield instance, template
 
 
-def monomorphize_all_extension_methods(
-    generic_extensions: Dict[str, Dict[Tuple[str, str, Optional[str]], GenericExtensionMethod]],
-    struct_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
-    monomorphized_structs: Dict[str, StructType],
-    enum_instantiations: Set[Tuple[str, Tuple[Type, ...]]],
-    monomorphized_enums: Dict[str, EnumType],
-    substitutor: "TypeSubstitutor",
-) -> Dict[Tuple[str, str, Tuple[Type, ...], Optional[str]], ExtendDef]:
-    """Monomorphize the generic extension methods that APPLY to each instantiation.
+def judge_error_arguments(generic_extensions, instances, substitutor: "TypeSubstitutor") -> None:
+    """E3 for each generic-target template at each instance that has its method.
 
-    A concrete target argument is a constraint, so `extend Box@(i32)` produces one copy, for
-    `Box<i32>` (#393). Every declaration used to be substituted positionally into every
-    instantiation of the base name, which is what made the declared `i32` constrain nothing:
-    the method answered a `Box@(string)` receiver, and its body reached the backend with a
-    string where it had written an integer.
-
-    A copy is keyed by its declaring unit too: two units can each declare a private
-    template of one name (`docs/design/extension-visibility.md` C5).
+    No copy is cut here: a call cuts the copy (#1196). The judge stays per instance, so
+    a type argument in an `E` position of a template stops the analysis at the site
+    that named the instance, as a refused constraint does.
     """
-    result: Dict[Tuple[str, str, Tuple[Type, ...], Optional[str]], ExtendDef] = {}
-    sources = ((struct_instantiations, monomorphized_structs),
-               (enum_instantiations, monomorphized_enums))
-    for type_args, concrete_type_name, concrete_target, declarations in (
-            for_each_instantiation(sources, generic_extensions.get)):
-        for (method_name, target_key, unit_name), generic_method in declarations.items():
-            if target_key and target_key != concrete_type_name:
-                continue
-
-            # A method-generic template cannot be monomorphized from the target
-            # instantiation alone -- the CALL SITE names its method arguments, so
-            # the typecheck pass queues it instead.
-            if generic_method.method_type_params:
-                continue
-
-            # A concrete target has no type parameters, so it substitutes nothing -- its
-            # signature and body are already written in terms of the type it names.
-            substitution_args = () if target_key else type_args
-            if not bounds_hold_for(generic_method, substitution_args,
-                                   substitutor.monomorphizer.tables):
-                continue
-            if not _error_arguments_hold(generic_method, substitution_args,
-                                         concrete_type_name, substitutor):
-                continue
-
-            result[(concrete_type_name, method_name, type_args, unit_name)] = monomorphize_extension_method(
-                generic_method, concrete_target, substitution_args, substitutor=substitutor)
-
-    return result
+    tables = substitutor.monomorphizer.tables
+    for instance, template in templates_by_instance(generic_extensions, instances, tables):
+        _error_arguments_hold(template, target_copy_args(template, instance) or (),
+                              instance.name, substitutor)
 
 
 def monomorphize_perk_impl(
