@@ -1,0 +1,24 @@
+# The iter module declares three methods on List@(T). One of them, enumerate(), names
+# a larger List instance in its signature. The program calls partition() on a
+# List@(i32) alone, so that is the one copy of the three.
+# EXPECT_STDOUT_EXACT: "1 2\n1\n"
+# EXPECT_IR_FUNCTION: List__i32_partition
+# EXPECT_IR_NO_FUNCTION: List__string_partition
+# EXPECT_IR_NO_FUNCTION: *_enumerate
+# EXPECT_IR_NO_FUNCTION: *_filter
+use <collections/iter>
+
+fn even(i32 x) bool:
+    return x % 2 == 0
+
+fn main() i32:
+    let List@(i32) a = List.new()
+    a.push(1)
+    a.push(2)
+    a.push(3)
+    let List@(string) b = List.new()
+    b.push("Mostly Harmless")
+    let (evens, odds) = a.partition(even)
+    println("{evens.len()} {odds.len()}")
+    println(b.len())
+    return 0

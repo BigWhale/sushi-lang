@@ -1,0 +1,11 @@
+public struct LBox@(T):
+    T v
+
+public extend LBox@(T) tag() i32:
+    return 5
+
+public extend LBox@(T) wrap(nom self) LBox@(LBox@(T)):
+    return LBox(self)
+
+public fn lib_tag(LBox@(i32) b) i32:
+    return b.tag()

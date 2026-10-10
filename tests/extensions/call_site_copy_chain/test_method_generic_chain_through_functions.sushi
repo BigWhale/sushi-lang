@@ -1,0 +1,81 @@
+# Twelve extension methods with a method-level type parameter. The body of each copy
+# calls a generic free function, and that function calls the next method. Each round
+# of the copy fixpoint cuts a function copy at the same type arguments, so the chain
+# makes no new instance and every copy is cut.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "11\n"
+
+extend i32 m1@(U)(nom U u) U:
+    return h1(self, nom u)
+
+fn h1@(U)(i32 n, nom U u) U:
+    return n.m2(nom u)
+
+extend i32 m2@(U)(nom U u) U:
+    return h2(self, nom u)
+
+fn h2@(U)(i32 n, nom U u) U:
+    return n.m3(nom u)
+
+extend i32 m3@(U)(nom U u) U:
+    return h3(self, nom u)
+
+fn h3@(U)(i32 n, nom U u) U:
+    return n.m4(nom u)
+
+extend i32 m4@(U)(nom U u) U:
+    return h4(self, nom u)
+
+fn h4@(U)(i32 n, nom U u) U:
+    return n.m5(nom u)
+
+extend i32 m5@(U)(nom U u) U:
+    return h5(self, nom u)
+
+fn h5@(U)(i32 n, nom U u) U:
+    return n.m6(nom u)
+
+extend i32 m6@(U)(nom U u) U:
+    return h6(self, nom u)
+
+fn h6@(U)(i32 n, nom U u) U:
+    return n.m7(nom u)
+
+extend i32 m7@(U)(nom U u) U:
+    return h7(self, nom u)
+
+fn h7@(U)(i32 n, nom U u) U:
+    return n.m8(nom u)
+
+extend i32 m8@(U)(nom U u) U:
+    return h8(self, nom u)
+
+fn h8@(U)(i32 n, nom U u) U:
+    return n.m9(nom u)
+
+extend i32 m9@(U)(nom U u) U:
+    return h9(self, nom u)
+
+fn h9@(U)(i32 n, nom U u) U:
+    return n.m10(nom u)
+
+extend i32 m10@(U)(nom U u) U:
+    return h10(self, nom u)
+
+fn h10@(U)(i32 n, nom U u) U:
+    return n.m11(nom u)
+
+extend i32 m11@(U)(nom U u) U:
+    return h11(self, nom u)
+
+fn h11@(U)(i32 n, nom U u) U:
+    return n.m12(nom u)
+
+extend i32 m12@(U)(nom U u) U:
+    return u
+
+fn main() i32:
+    let i32 x = 5
+    let i32 v = 11
+    println(x.m1(nom v))
+    return 0

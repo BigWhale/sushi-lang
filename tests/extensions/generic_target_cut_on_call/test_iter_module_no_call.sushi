@@ -1,0 +1,13 @@
+# The program imports the iter module and has a List@(i32), and it calls no method of
+# the module. So no copy of filter(), enumerate() or partition() is made.
+# EXPECT_STDOUT_EXACT: "1\n"
+# EXPECT_IR_NO_FUNCTION: *_enumerate
+# EXPECT_IR_NO_FUNCTION: *_filter
+# EXPECT_IR_NO_FUNCTION: *_partition
+use <collections/iter>
+
+fn main() i32:
+    let List@(i32) a = List.new()
+    a.push(1)
+    println(a.len())
+    return 0

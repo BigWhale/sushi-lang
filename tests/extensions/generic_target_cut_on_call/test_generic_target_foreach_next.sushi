@@ -1,0 +1,24 @@
+# A foreach asks for next() with no call node. The copy of a generic-target next()
+# that only a foreach reaches is cut there. No call reaches nest(), so it has no copy.
+# EXPECT_STDOUT_EXACT: "0\n1\n2\n"
+# EXPECT_IR_FUNCTION: Feed__i32_next
+# EXPECT_IR_NO_FUNCTION: *_nest
+struct Feed@(T):
+    T[] items
+    i32 at
+
+extend Feed@(T: Clone) next(poke self) Maybe@(T):
+    if (self.at >= self.items.len()):
+        return Maybe.None()
+    let i32 i = self.at
+    self.at := self.at + 1
+    return Maybe.Some(self.items[i].clone())
+
+extend Feed@(T) nest(nom self) Feed@(Feed@(T)):
+    return Feed(from([self]), 0)
+
+fn main() i32:
+    let Feed@(i32) f = Feed(from([0, 1, 2]), 0)
+    foreach(n in f):
+        println(n)
+    return 0

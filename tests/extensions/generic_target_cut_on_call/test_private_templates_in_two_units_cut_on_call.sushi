@@ -1,0 +1,18 @@
+# C5 for a template that a call cuts: two units each declare a private tag() on
+# Pack@(T), and neither declares Pack. Each unit calls its own tag(), on its own
+# instance. Each call cuts the copy of its own unit's template, and of no other.
+# EXPECT_STDOUT_EXACT: "1\n2\n"
+# EXPECT_IR_FUNCTION: *cut_c5_left$Pack__i32_tag
+# EXPECT_IR_FUNCTION: *cut_c5_right$Pack__string_tag
+# EXPECT_IR_NO_FUNCTION: *cut_c5_left$Pack__string_tag
+# EXPECT_IR_NO_FUNCTION: *cut_c5_right$Pack__i32_tag
+use "units/cut_c5_pack"
+use "units/cut_c5_left"
+use "units/cut_c5_right"
+
+fn main() i32:
+    let Pack@(i32) a = Pack(7)
+    let Pack@(string) b = Pack("Mostly Harmless")
+    println(left_tag(a))
+    println(right_tag(b))
+    return 0

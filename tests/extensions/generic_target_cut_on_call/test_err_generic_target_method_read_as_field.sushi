@@ -1,0 +1,14 @@
+# A generic-target method is read as a field. No call cuts the copy for Box@(i32), but
+# the template applies to the instance, so the diagnostic says that tag is a method.
+# EXPECT_ERROR_CODES_EXACT: CE2106
+# EXPECT_STDERR_CONTAINS: 'Box@(i32).tag()' is a method, not a field
+struct Box@(T):
+    T v
+
+extend Box@(T) tag() i32:
+    return 3
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println(b.tag)
+    return 0

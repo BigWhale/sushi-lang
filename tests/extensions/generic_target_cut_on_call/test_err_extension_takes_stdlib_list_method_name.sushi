@@ -1,0 +1,15 @@
+# C2 for R1: <collections/iter> declares a public filter() on List@(T), and that method
+# is visible in every unit. An extension filter() on List@(i32) is refused at its
+# declaration, also when no call names it.
+# EXPECT_ERROR_CODES_EXACT: CE2097
+# EXPECT_STDERR_CONTAINS: the stdlib module <collections/iter> declares 'List@(i32).filter()' here
+extend List@(i32) filter(fn(i32) -> bool keep) i32:
+    if (keep(1)):
+        return 1
+    return 0
+
+fn main() i32:
+    let List@(i32) a = List.new()
+    a.push(1)
+    println(a.len())
+    return 0

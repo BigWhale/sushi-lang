@@ -1,0 +1,7 @@
+use "units/cut_c5_pack"
+
+extend Pack@(T) tag() i32:
+    return 2
+
+public fn right_tag(Pack@(string) p) i32:
+    return p.tag()

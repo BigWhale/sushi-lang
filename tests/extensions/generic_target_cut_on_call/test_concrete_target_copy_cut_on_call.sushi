@@ -1,0 +1,17 @@
+# A concrete target argument constrains the method to one instance. Its copy is cut at
+# the call on that instance, and another instance of the base gets none.
+# EXPECT_STDOUT_EXACT: "8\nMostly Harmless\n"
+# EXPECT_IR_FUNCTION: Box__i32_doubled
+# EXPECT_IR_NO_FUNCTION: Box__string_doubled
+struct Box@(T):
+    T v
+
+extend Box@(i32) doubled() i32:
+    return self.v * 2
+
+fn main() i32:
+    let Box@(i32) b = Box(4)
+    let Box@(string) s = Box("Mostly Harmless")
+    println(b.doubled())
+    println(s.v)
+    return 0

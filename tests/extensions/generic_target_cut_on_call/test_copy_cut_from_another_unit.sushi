@@ -1,0 +1,11 @@
+# The template is in another unit. The call here cuts the copy, and the copy goes home
+# to the unit of the template. No call reaches nest(), so it has no copy.
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_IR_FUNCTION: *cut_on_call_crate$Crate__i32_twice
+# EXPECT_IR_NO_FUNCTION: *_nest
+use "units/cut_on_call_crate"
+
+fn main() i32:
+    let Crate@(i32) c = Crate(21)
+    println(c.twice())
+    return 0

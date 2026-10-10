@@ -1,0 +1,23 @@
+# A generic-target extension gives every `Box` instance the method `tag`. A perk
+# implementation on `Box@(i32)` gives the same instance a second `tag`. No call cuts the
+# copy of the extension, but the name still has two homes on the instance.
+# EXPECT_ERROR_CODES_EXACT: CE4007
+# EXPECT_STDERR_CONTAINS: extension method 'tag' is defined here
+
+struct Box@(T):
+    T v
+
+perk Tagged:
+    fn tag() i32
+
+extend Box@(T) tag() i32:
+    return 1
+
+extend Box@(i32) with Tagged:
+    fn tag() i32:
+        return 2
+
+fn main() i32:
+    let Box@(i32) b = Box(7)
+    println(b.v)
+    return 0

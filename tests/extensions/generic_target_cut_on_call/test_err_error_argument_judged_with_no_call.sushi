@@ -1,0 +1,19 @@
+# A type parameter of a generic target in the `E` position is judged at each instance
+# (E3). No call reaches fail(), but the instance Box@(Color) exists, so the refused
+# type argument is still reported, and a note points at the template.
+# EXPECT_ERROR_CODES_EXACT: CE2084
+# EXPECT_STDERR_CONTAINS: test_err_error_argument_judged_with_no_call.sushi:17:9: error [CE2084]
+# EXPECT_STDERR_CONTAINS: test_err_error_argument_judged_with_no_call.sushi:13:29
+enum Color:
+    Red
+
+struct Box@(T):
+    T v
+
+extend Box@(T) fail() i32 | T:
+    return Result.Err(self.v)
+
+fn main() i32:
+    let Box@(Color) b = Box(Color.Red)
+    println(b.v == Color.Red)
+    return 0

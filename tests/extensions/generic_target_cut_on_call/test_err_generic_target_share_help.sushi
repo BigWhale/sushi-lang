@@ -1,0 +1,26 @@
+# A borrowed generic handle is consumed. Its type implements `Drop`, and a generic-target
+# extension gives it a `share()` that answers the same type. No call cuts that copy, but
+# the CE2411 help still offers `share()`, because the template applies to the instance.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: take a second owner with `s.share()`
+
+struct Sock@(T):
+    T fd
+
+extend Sock@(T) with Drop:
+    fn drop(poke self) ~:
+        println("drop")
+
+extend Sock@(T: Clone) share() Sock@(T):
+    return Sock(self.fd.clone())
+
+fn take(nom Sock@(i32) s) i32:
+    return s.fd
+
+fn f(Sock@(i32) s) i32:
+    return take(nom s)
+
+fn main() i32:
+    let Sock@(i32) s = Sock(7)
+    println(f(s))
+    return 0

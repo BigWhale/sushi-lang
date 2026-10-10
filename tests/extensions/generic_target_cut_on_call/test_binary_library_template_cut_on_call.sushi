@@ -1,0 +1,16 @@
+# A binary library ships a generic-target template. A body in the library calls it on
+# LBox@(i32), and the consumer calls it on LBox@(string). The library build makes the
+# copy its own call needs; the consumer cuts its own copy from the shipped template.
+# No call reaches wrap(), in the library or here.
+# BUILD_LIB_BINARY: cut_lib_box.sushi
+# EXPECT_STDOUT_EXACT: "5\n5\n"
+# EXPECT_IR_FUNCTION: LBox__string_tag
+# EXPECT_IR_NO_FUNCTION: *_wrap
+use <lib/cut_lib_box>
+
+fn main() i32:
+    let LBox@(i32) a = LBox(1)
+    let LBox@(string) s = LBox("Mostly Harmless")
+    println(lib_tag(a))
+    println(s.tag())
+    return 0
