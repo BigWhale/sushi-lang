@@ -195,7 +195,6 @@ fn main() i32:
 
 ```sushi
 use <io/fs>
-use <collections/strings>
 
 fn report(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -1066,7 +1065,6 @@ fn main() i32:
 ```sushi
 use <io/files>
 use <io/fs>
-use <collections/strings>
 
 fn show_csv(string path) ~ | IoError:
     let File f = open(path, FileMode.Read())??
@@ -1217,7 +1215,6 @@ Always validate file paths from user input:
 ```sushi
 use <io/files>
 use <io/fs>
-use <collections/strings>
 
 extend string is_safe_path() bool:
     # Reject paths with ..

@@ -1,5 +1,3 @@
-use <collections/strings>
-
 struct Stack@(T):
     List@(T) items
 

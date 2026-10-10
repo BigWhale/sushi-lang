@@ -147,7 +147,8 @@ for the same open file.
 `<io/files>` is the layer under `<io/fs>`: the path utilities (`exists`, `remove`,
 `read_dir`) and the `fd_*` descriptor primitives that `File` uses. It has no `open()`.
 Other modules you will use include `<sys/env>` for environment variables and
-`<collections/strings>` for UTF-8-aware string utilities. The
+`<collections/strings>` for the `StringBuilder` type. A method of a built-in type, such as
+a string method, needs no import. The
 [Standard Library reference](../standard-library.md)
 lists them all.
 

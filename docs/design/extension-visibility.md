@@ -1,6 +1,6 @@
 # Extension visibility
 
-**Status: RULED 2026-10-10, NOT YET BUILT.** Epic #1251. This document is normative. It
+**Status: RULED 2026-10-10, BUILT.** Epic #1251. This document is normative. It
 replaces three earlier rules:
 
 - `visibility.md` Ruling 2, for extension methods and static methods ("a method is as
@@ -74,7 +74,6 @@ unit that receives a value of the type can call them with no import.
 
 ### R4. A user extension with no marker is private
 
-<!-- docs-sweep: skip (ruled, not yet built: `public extend` does not parse yet) -->
 ```sushi
 extend i32 twice() i32:             # visible in this unit only
     return self * 2
@@ -84,7 +83,6 @@ Another unit cannot call it, even when it imports the declaring unit.
 
 ### R5. A public extension on a type that the unit declares travels with the type
 
-<!-- docs-sweep: skip (ruled, not yet built: `public extend` does not parse yet) -->
 ```sushi
 public struct Vec:
     i32 x
@@ -102,11 +100,12 @@ rule.
 
 ### R6. A public extension on a type that the unit does not declare is visible through `use`
 
-<!-- docs-sweep: skip (ruled, not yet built: `public extend` does not parse yet) -->
 ```sushi
 # unit "bytes"
 public extend u32 be_bytes() u8[]:
-    ...
+    let u8[] out = from([])
+    out.push_u32_be(self)
+    return out
 ```
 
 `u32` is built in, so the unit `bytes` is not its home. `x.be_bytes()` is visible:
@@ -142,12 +141,12 @@ travels with `B` (`error-conversion.md` section 3).
 
 `public` stands before `extend`, as it stands before `fn`:
 
-<!-- docs-sweep: skip (ruled, not yet built: `public extend` does not parse yet) -->
 ```sushi
 public extend string shout() string:
-    ...
+    return "{self}!"
+
 public extend Vec static at(i32 x, i32 y) Vec:
-    ...
+    return Vec(x, y)
 ```
 
 The grammar accepts the marker on an extension method and on a static method. It does not
@@ -186,7 +185,7 @@ own. This case is rare, and the rule stays until a real program needs more.
 | A unit's own extension that hides an imported public one (C3) | a warning at the own declaration, with a note at the imported one |
 | Two imported public extensions of one name, called in one unit (C4) | an error at the call, with a note at each declaration |
 | A private extension that nothing in its unit calls, under `--warn-unused` | the dead-code warning for a private declaration |
-| A missing stdlib import for a METHOD | none any more: R1 and R3 make the method visible. [CE3015](../error-catalog.md#ce3015) no longer applies to a method |
+| A missing stdlib import for a METHOD | none any more: R1 and R3 make the method visible. CE3015, the error that it was, is retired, because it had no other use |
 | `public` on a perk-implementation method | [CE6103](../error-catalog.md#ce6103), as before |
 | A `public` extension whose signature names a private type (the target type, a parameter, the return, the error arm) | the private-type leak error, through the leak fence (`visibility.md` section 5) |
 
@@ -200,9 +199,9 @@ own. This case is rare, and the rule stays until a real program needs more.
 - **A binary or hybrid library** records the marker and the declaring unit of each extension
   in its manifest. The consumer applies R4 to R6 to these records. A private extension is
   not exported.
-- **[CW3003](../error-catalog.md#cw3003)** warned that a library which extends a type it does not declare claims that
+- **CW3003** warned that a library which extends a type it does not declare claims that
   name for every consumer. Under R6 the extension is visible only where it is imported, so
-  that problem does not exist any more.
+  that problem does not exist any more. The code is retired.
 
 ## 7. The costs that this ruling accepts
 

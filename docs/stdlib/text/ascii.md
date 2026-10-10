@@ -6,15 +6,15 @@ ASCII character classes and case maps, as methods on `u8`.
 
 ## Import
 
-```sushi
-use <text/ascii>
-```
+None. The methods are on `u8`, a built-in type, so they are available in every unit with
+no import ([Extension visibility](../../design/extension-visibility.md), R1). The module
+declares no name of its own, so `use <text/ascii>` brings nothing.
 
 ## Overview
 
 `text/ascii` is a **Sushi-source** standard-library module: it ships as bundled `.sushi`
-source and is merged as a compilation unit when you import it. It adds ten extension
-methods to `u8`.
+source, and the program loads it as a compilation unit when a unit calls one of its
+methods. It adds ten extension methods to `u8`.
 
 Each method tests the byte VALUE alone. No character set and no locale is read. A byte from
 128 to 255 is never a digit, a letter, a hex digit or a space, and the two case maps return
@@ -27,16 +27,10 @@ write `??` on a call. Each method is total over the 256 byte values, and allocat
 A byte literal (`a'x'`) is a `u8` by default, so `a'7'.is_ascii_digit()` needs no cast, and a
 string byte `s[i]` is a `u8` too.
 
-**Import the module in each unit that calls a method.** An extension method is found on its
-type, so a call compiles in every unit of a program that loads the module, also in a unit
-that does not import it. Do not depend on that: the unused-use lint (`--warn-unused`)
-expects the import in the unit that calls the method, and a unit with no import of its own
-breaks when the other unit stops importing the module.
-
 A program that declares its own `extend u8 is_ascii_digit()` (or any other name of this
-module) and imports `<text/ascii>` gets the duplicate-function error
-[CE0101](../../error-catalog.md#ce0101): an extension method of one name on one type is
-global. A program that does not import the module is not affected.
+module) gets [CE2097](../../error-catalog.md#ce2097), with a note at the method of this
+module: a stdlib method on a built-in type is visible in every unit, so an extension of
+its name could never be called. This holds with or without an import.
 
 ## Methods
 
@@ -48,9 +42,6 @@ The answer is `true` for the bytes 48 to 57 (`a'0'` to `a'9'`). It is `false` fo
 byte.
 
 ```sushi
-use <text/ascii>
-use <collections/strings>
-
 fn main() i32:
     println(a'7'.is_ascii_digit())     # true
     println(a'x'.is_ascii_digit())     # false
@@ -70,8 +61,6 @@ The set is the bytes 65 to 90, `a'A'` to `a'Z'`. Every other byte gives `false`,
 from 128 to 255 too.
 
 ```sushi
-use <text/ascii>
-
 fn main() i32:
     println(a'Q'.is_ascii_upper())      # true
     println(a'q'.is_ascii_upper())      # false
@@ -87,8 +76,6 @@ The set is the bytes 97 to 122, `a'a'` to `a'z'`. Every other byte gives `false`
 from 128 to 255 too.
 
 ```sushi
-use <text/ascii>
-
 fn main() i32:
     println(a'q'.is_ascii_lower())      # true
     println(a'Q'.is_ascii_lower())      # false
@@ -104,8 +91,6 @@ The set is 65-90 (`a'A'` to `a'Z'`) and 97-122 (`a'a'` to `a'z'`). Every other b
 `false`.
 
 ```sushi
-use <text/ascii>
-
 fn main() i32:
     println(a'k'.is_ascii_alpha())    # true
     println(a'K'.is_ascii_alpha())    # true
@@ -122,8 +107,6 @@ The set is 48-57 (`a'0'` to `a'9'`), 65-90 (`a'A'` to `a'Z'`) and 97-122 (`a'a'`
 `a'z'`). Every other byte gives `false`.
 
 ```sushi
-use <text/ascii>
-
 fn main() i32:
     println(a'4'.is_ascii_alnum())    # true
     println(a'g'.is_ascii_alnum())    # true
@@ -140,9 +123,6 @@ The answer is `true` for the bytes 48 to 57 (`a'0'` to `a'9'`), 65 to 70 (`a'A'`
 and 97 to 102 (`a'a'` to `a'f'`). It is `false` for every other byte.
 
 ```sushi
-use <text/ascii>
-use <collections/strings>
-
 fn main() i32:
     println(a'c'.is_ascii_hex())       # true
     println(a'G'.is_ascii_hex())       # false
@@ -164,8 +144,6 @@ false. A byte from 128 to 255 gives false, so `a'\xa0'` (a no-break space in Lat
 white space.
 
 ```sushi
-use <text/ascii>
-
 fn main() i32:
     println(a' '.is_ascii_space())       # true
     println(a'\t'.is_ascii_space())      # true
@@ -184,8 +162,6 @@ the result is 97 to 122 (`a'a'` to `a'z'`). Every other byte, 128 to 255 include
 returned unchanged.
 
 ```sushi
-use <text/ascii>
-
 fn main() i32:
     println(a'G'.to_ascii_lower())      # 103 (a'g')
     println(a'g'.to_ascii_lower())      # 103 (unchanged)
@@ -204,8 +180,6 @@ so the result is 65 to 90 (`a'A'` to `a'Z'`). Every other byte, 128 to 255 inclu
 returned unchanged.
 
 ```sushi
-use <text/ascii>
-
 fn main() i32:
     println(a'g'.to_ascii_upper())      # 71 (a'G')
     println(a'G'.to_ascii_upper())      # 71 (unchanged)
@@ -228,8 +202,6 @@ digit". Use `match` when the two cases must do different things. In a `| E` body
 `b.hex_value().or_err(nom e)??` makes a missing digit an error.
 
 ```sushi
-use <text/ascii>
-
 fn main() i32:
     println(a'7'.hex_value().realise(255))    # 7
     println(a'b'.hex_value().realise(255))    # 11

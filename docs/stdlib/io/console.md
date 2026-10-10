@@ -171,7 +171,6 @@ fn main() i32:
 
 ```sushi
 use <io/fs>
-use <collections/strings>
 
 fn main() i32:
     println("Enter your age:")
@@ -296,7 +295,6 @@ fn main() i32:
 
 ```sushi
 use <io/fs>
-use <collections/strings>
 
 fn emit_text() ~ | IoError:
     # Write UTF-8 encoded text
@@ -332,7 +330,6 @@ fn File.write_bytes(u8[] data) ~ | IoError
 
 ```sushi
 use <io/fs>
-use <collections/strings>
 
 fn complain() ~ | IoError:
     let string message = "ERROR: Something went wrong\n"

@@ -275,9 +275,9 @@ Five declaration kinds, and only their `public` members are reachable from anoth
 | Shape | Modules | Aliasable |
 |---|---|---|
 | Registry free functions, already keyed by `(module, name)` | `<time>`, `<math>`, `<sys/env>`, `<sys/process>`, `<random>`, `<io/files>` | **yes** |
-| Sushi-source modules, injected as ordinary units | every module in `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`): `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<io/buf>`, `<io/contracts>`, `<io/error>`, `<io/fs>`, `<io/path>`, the six `<net/*>` modules, `<toolchain/slib>`, `<text/ascii>`, `<encoding/hex>`, `<encoding/base64>`, and the Sushi half of `<collections/strings>` | **yes** — a user unit in every respect. `<collections/strings>` has two halves: its unit brings `StringBuilder`, and its import also enables the built-in string methods, behind an alias too (`enables_builtin_methods`, `semantics/stdlib_registry.py`) |
+| Sushi-source modules, injected as ordinary units | every module in `SOURCE_STDLIB_MODULES` (`semantics/stdlib_registry.py`): `<collections/iter>`, `<compression/zlib>`, `<encoding/msgpack>`, `<io/buf>`, `<io/contracts>`, `<io/error>`, `<io/fs>`, `<io/path>`, the six `<net/*>` modules, `<toolchain/slib>`, `<text/ascii>`, `<encoding/hex>`, `<encoding/base64>`, and the Sushi half of `<collections/strings>` | **yes** — a user unit in every respect. `<collections/strings>` has two halves: its unit brings `StringBuilder`, and the generator half brings no name. No import enables a method: a stdlib method on a built-in type needs no import (R1 and R2 of `extension-visibility.md`), and the build loads the module of a method that a unit calls |
 | A built-in generic that the import activates | `<collections/hashmap>` (`GenericNamespace`, `semantics/namespaces.py`) | **yes** — `hm.HashMap@(i32, string)`. The import brings the name, so the namespace holds it — see 4.3.1 |
-| A method interface: the import enables methods on a type and brings **no name** | a directory import such as `<collections>` | pointless, and said so — see below |
+| A method interface: the import brings **no name** | a directory import such as `<collections>` | pointless, and said so — see below |
 | A predefined enum the import brings | `FileMode` → `<io/fs>`; `IoError`, `FileError` → `<io/error>`; `SeekFrom` → `<io/contracts>`; `NetError` → `<net/error>`; `ProcessError` → `<sys/process>`; `EnvError` → `<sys/env>`; `MathError` → `<math>` | **yes** — `fs.FileMode.Read()`. No unit declares one, so the synthesis stamps each with its HOME (`EnumType.home_module`, the table is `passes/collect/enums.py:PREDEFINED_ENUM_HOMES`); the `namespaces` pass reads the stamp to list it as a member of the home's provider, and the type-position gate (`reject_out_of_scope_type`) reads it to refuse the bare name where the home is not imported, the `HashMap` rule. **The home is reached through the modules that re-export it** (section 8.1): `<io/contracts>` says `public use <io/error>`, `<io/fs>` and `<io/buf>` say `public use <io/contracts>`, so `use <io/fs>` alone brings `IoError`, `FileError` and `SeekFrom` beside `FileMode`, and `fs.IoError` holds behind the alias. `StdError` is the general error enum and stays global. `SeekFrom` is `<io/contracts>`'s because `Seek.seek` takes it |
 
 `stdin`, `stdout` and `stderr` are ordinary names: each is a `public var File` that
@@ -308,18 +308,16 @@ reasons and only one of them is a mistake:
 | **by design** — the unit exports methods, not names | a unit that is nothing but `extend` blocks |
 | **incidental** — the public surface happens to be empty today | one `public fn` away from changing |
 
-The middle row is the one that decides it, and it is not hypothetical. An extension carries
-no marker: it is as visible as its target type (`visibility.md` Ruling 2). Under
-`extension-visibility.md` (ruled 2026-10-10, not yet built) the example below writes
-`public extend i32 squared()`, and the import stays load-bearing for the same reason: an R6
-extension is visible only where its unit is imported. So a unit may
-consist entirely of extensions, export **nothing nameable**, and still be the reason a
-program works:
+The middle row is the one that decides it, and it is not hypothetical. A public extension
+on a type that its unit does not declare is visible only where its unit is imported, flat
+or aliased (R6 of `extension-visibility.md`), because a method cannot stand behind a
+namespace dot. So a unit may consist entirely of extensions, export **nothing nameable**,
+and still be the reason a program works:
 
 <!-- docs-sweep: skip (two units; the sweep compiles one block) -->
 ```sushi
-# extonly.sushi -- zero public declarations     # main.sushi
-extend i32 squared() i32:                       use "extonly"
+# extonly.sushi -- zero nameable declarations   # main.sushi
+public extend i32 squared() i32:                use "extonly"
     return self * self                          # 7.squared() is 49
 ```
 
@@ -720,6 +718,16 @@ asking unit, and row 3 is a lookup in what it imported.
 A built-in's precedence is not in this ladder. `docs/design/method-resolution.md` owns that
 rule and this document does not restate it.
 
+> **Replaced (epic #1251).** `extension-visibility.md` makes an extension a name of its
+> unit. A private extension is visible only in its unit, so two units may each declare one
+> of one name on one type (C5). A public extension on a type that its unit does not declare
+> is visible only where its unit is imported (R6). Two of one name collide only at a call
+> in a unit that imports both: [`CE3023`](../error-catalog.md#ce3023) at the call, with a
+> note at each declaration (C4). A unit's own extension wins over an imported one, with
+> [`CW3007`](../error-catalog.md#cw3007) (C3). [`CE0101`](../error-catalog.md#ce0101) is
+> for two extensions of one name on one type in ONE unit (C1), or beside a public method of
+> the home unit of the type (C2). The text below records the old rule.
+
 **An extension on a foreign type collides globally, and a namespace cannot fix it.** An
 extension is not a namespace member (Ruling 3), because a method is found on the receiver's
 type. So two units may extend a third unit's type with one method name, and no alias can
@@ -766,7 +774,7 @@ consumer combining two libraries reads [`CE0101`](../error-catalog.md#ce0101) ab
 change; only a diagnostic at the declaration reaches somebody who can act. So there is a
 warning, and its scope is the whole of its design:
 
-> **[CW3003](../error-catalog.md#cw3003)**, at `--lib` build time only: this library extends a type it did not declare,
+> **CW3003**, at `--lib` build time only: this library extends a type it did not declare,
 > so the method name is claimed for every consumer, and a second library claiming it makes
 > the two unusable together.
 
@@ -790,19 +798,19 @@ cross-unit perk implementations in the tree — `tests/libs/`, `tests/perks/cros
 `tests/visibility/perk/` — is that shape, eight of them on a builtin and four on a type the
 implementing unit declares itself. That is why the foreign-target count is zero.
 
-**A perk implementation never warns, whatever its target.** The hazard [CW3003](../error-catalog.md#cw3003)
+**A perk implementation never warns, whatever its target.** The hazard CW3003
 names is a claim with no escape: a consumer holding two colliding plain extensions can edit
 neither. A perk implementation's claim has the escape built in — the consumer's OWN
 implementation is the sanctioned override and wins over a shipped one
 (`tests/libs/shipped_perks/test_lib_perk_impl_local_override.sushi` is the measured proof). So
 `extend i32 with Doubler` in a library stays quiet, and the two library fixtures of that
 shape keep building clean. The predicate was one function for both consumers: the
-[CW3003](../error-catalog.md#cw3003) emitter in the pipeline and the manifest extractor.
+CW3003 emitter in the pipeline and the manifest extractor.
 
 The source stdlib holds many extensions and perk implementations: the combinators in
 `src_sushi/collections/iter.sushi` are on builtin generic targets (`List@(T)`, `T[]`), and
 the `io/*` and `net/*` modules extend the types that each module declares. A bundled stdlib
-module is not a `--lib` build, so [CW3003](../error-catalog.md#cw3003) does not apply to it. [CW3003](../error-catalog.md#cw3003) fires nowhere in real
+module is not a `--lib` build, so CW3003 does not apply to it. CW3003 fires nowhere in real
 library code, which is what a warning aimed at a future hazard should do.
 
 **The consumer's half.** `--lib-info` lists the foreign types a library claims methods on,
@@ -1053,8 +1061,8 @@ This document owns these codes:
 | **[CE3012](../error-catalog.md#ce3012)** | an unqualified use | the name is offered by more than one flat import; names every candidate, and says `as` resolves it |
 | **[CE3013](../error-catalog.md#ce3013)** | the `use` statement | the alias is already bound in this unit; the note points at what bound it |
 | **[CE3014](../error-catalog.md#ce3014)** | the `use` statement | a `use` below a declaration; every import comes first (section 2.1) |
-| **[CW3003](../error-catalog.md#cw3003)** | an `extend` of a foreign type, at `--lib` build time ONLY | this library claims a method on a type it did not declare (section 8). Not gated on either phase: it needs the target's declaring unit and the `--lib` flag, and nothing else this document adds |
-| **[CW3004](../error-catalog.md#cw3004)** | the `use` statement | `as` bound an empty namespace (section 4.4). A warning because a namespace is empty for three reasons and only one is a mistake |
+| CW3003 (retired) | an `extend` of a foreign type, at `--lib` build time ONLY | RETIRED by epic #1251: under R6 of `extension-visibility.md` a library makes no claim on a type for every consumer (section 8) |
+| **[CW3004](../error-catalog.md#cw3004)** | the `use` statement | `as` bound an empty namespace (section 4.4). A warning because a namespace is empty for three reasons and only one is a mistake. The import still brings the R6 extensions of its unit |
 | **[CE1005](../error-catalog.md#ce1005)** | the second declaration | one unit declares one name twice, in two kinds (section 8); the note points at the first declaration |
 
 Reused rather than duplicated:

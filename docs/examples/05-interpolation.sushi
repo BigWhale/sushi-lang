@@ -14,8 +14,6 @@
 # arguments inside interpolation expressions. This is the primary way
 # to build strings in Sushi (no + operator for strings).
 
-use <collections/strings>
-
 fn main() i32:
     let i32 answer = 42
     let string name = "Arthur"

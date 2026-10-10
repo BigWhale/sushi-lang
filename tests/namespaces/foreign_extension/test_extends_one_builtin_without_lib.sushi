@@ -1,5 +1,5 @@
-# One unit extends a builtin. This is legal in a program build and it
-# causes no warning: CW3003 fires at --lib build time only.
+# One unit extends a builtin. This is legal and it causes no warning. CW3003, the
+# --lib warning for such an extension, is retired.
 # EXPECT_STDOUT_EXACT: "20\n"
 extend i32 doubled_up() i32:
     return self * 2

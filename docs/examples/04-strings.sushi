@@ -18,8 +18,6 @@
 # interpolation, not the + operator. Many string methods return Result@(T, E)
 # or Maybe@(T) for safe error handling.
 
-use <collections/strings>
-
 fn main() i32:
     let string message = "Don't Panic"
     let string guide_entry = "  Vogon poetry is the third worst in the Universe.  "

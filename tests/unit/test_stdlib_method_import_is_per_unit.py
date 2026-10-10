@@ -1,8 +1,10 @@
-"""CE3015 is a question about ONE unit, and the typecheck pass answers it (#942).
+"""The backend never decides whether a unit may call a stdlib method.
 
-The backend asked whether the module was linked into the PROGRAM, so an import in one
-unit opened the gate for every other unit. The refusal now comes from the typecheck pass,
-which reads the scope of the unit that holds the call, and the backend asks nothing.
+CE3015, the import gate for a stdlib method, is retired (epic #1251): a stdlib method on
+a built-in type needs no import (R1 of docs/design/extension-visibility.md), and how the
+compiler emits a method never decides whether a user may call it (R10). The backend once
+asked whether the module was linked into the PROGRAM (#942). No backend module may name
+the code again.
 """
 from __future__ import annotations
 

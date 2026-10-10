@@ -61,7 +61,6 @@ last group has one byte, the text ends with `==`; when it has two bytes, the tex
 `=`. An empty array gives `""`.
 
 ```sushi
-use <collections/strings>
 use <encoding/base64>
 
 fn main() i32:

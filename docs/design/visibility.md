@@ -1,7 +1,8 @@
 # Visibility
 
 **Status: IMPLEMENTED.** Every declaration kind that can carry a marker takes one -- `fn`,
-`const`, `var`, `struct`, `enum` and `perk`, and a `public use` re-exports. Private is the
+`const`, `var`, `struct`, `enum`, `perk` and an extension method (`extension-visibility.md`,
+built under epic #1251), and a `public use` re-exports. Private is the
 default for every one of them, and the leak fence is in place. Section 1 states the facts
 that every ruling below reads.
 
@@ -11,8 +12,8 @@ what the default is, and how a method attached to a type gets its answer.
 This document is normative for four things:
 
 1. Which declarations carry a `public` marker, and what the default is.
-2. How an extension and a perk implementation get their visibility. For an extension
-   method and a static method, `extension-visibility.md` replaces this (ruled 2026-10-10).
+2. How a perk implementation gets its visibility. For an extension method and a static
+   method, `extension-visibility.md` replaces this (ruled and built under epic #1251).
 3. The rule that stops a private type escaping through a public signature.
 4. What this does *not* decide, so a later reader does not think it did.
 
@@ -28,8 +29,11 @@ Read `docs/libraries.md` for what a `.slib` exports, and
 
 ### The marker in the grammar
 
-`function_def`, `const_def`, `var_def`, `struct_def`, `enum_def`, `perk_def` and
-`use_stmt` carry `PUBLIC?`. `extend_stmt` does not. A struct or an enum needs no flag in
+`function_def`, `const_def`, `var_def`, `struct_def`, `enum_def`, `perk_def`,
+`use_stmt` and `extend_stmt` carry `PUBLIC?`. On `extend_stmt` the marker is legal only
+before an extension method or a static method (`extend_def`); before a perk implementation
+(`extend T with P:`) or a conversion (`extend A as B:`) it is a parse error,
+[CE6001](../error-catalog.md#ce6001), with a help that tells the user to remove it. A struct or an enum needs no flag in
 the tables: the collect pass builds one table for the whole program, and the visibility
 seam answers who may name an entry.
 
@@ -138,10 +142,13 @@ its enum, and Sushi has a harder reason to agree: a private variant would make a
 ## 3. Ruling 2: a method is as visible as its type
 
 > **Replaced for extension methods and static methods** by `extension-visibility.md`
-> (ruled 2026-10-10, not yet built). An extension takes a `public` marker, private is the
-> default, and a public extension on a type that its unit does not declare is visible only
-> where that unit is imported. A perk implementation keeps this ruling. The text below is
-> the record of the earlier rule, and it describes the compiler until the epic lands.
+> (ruled 2026-10-10, built under epic #1251). An extension takes a `public` marker, private
+> is the default, a public extension on a type that its unit declares travels with the
+> type, and a public extension on a type that its unit does not declare is visible only
+> where that unit is imported. Method resolution reads the unit of the call
+> (`extension_reach`, `semantics/visibility.py`). A perk implementation keeps this ruling,
+> and a conversion follows its target type. The text below is the record of the earlier
+> rule for an extension method.
 
 An extension and a perk implementation carry no marker. Each is as visible as the type it
 is attached to.
@@ -185,8 +192,10 @@ is as visible as its target, program-wide, so internals stay free functions.
 
 The marker is inherited, and a method name is still claimed for every consumer: a namespace
 cannot stand in front of a method, because a method is found on the receiver's type.
-`docs/design/unit-namespaces.md` section 8 measures that cost. [CW3003](../error-catalog.md#cw3003) is the warning at
-`--lib` build time on a library that extends a type it did not declare.
+`docs/design/unit-namespaces.md` section 8 measures that cost. CW3003 was the warning at
+`--lib` build time on a library that extends a type it did not declare. It is retired:
+under `extension-visibility.md` R6 such an extension is visible only where its unit is
+imported, so the claim does not exist any more.
 
 The alternative was to give an extension its own marker. That makes a method's availability
 depend on the calling unit, which makes method resolution unit-dependent — and method
@@ -480,9 +489,9 @@ constraint answers one code or none, for every kind that carries one:
 | the perk's own unit | public | [CE3010](../error-catalog.md#ce3010) |
 | the perk's own unit | private, or an extension on a builtin | allowed |
 
-An extension's visibility in that table is its TARGET type's (Ruling 2; under
-`extension-visibility.md` it becomes the extension's own marker), a generic
-target's its BASE type's. The collect pass drives the use-site rule once per unit off
+An extension method's visibility in that table is its own marker
+(`extension-visibility.md`); a perk implementation's is its TARGET type's (Ruling 2), a
+generic target's its BASE type's. The collect pass drives the use-site rule once per unit off
 `signature_constraints()`, the same walk the leak rule reads, so the four kinds that carry
 a type parameter meet one call.
 

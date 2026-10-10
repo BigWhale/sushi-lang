@@ -12,10 +12,15 @@ methods and as free functions — `compose`, and the tuple combinators `enumerat
 use <collections/iter>
 ```
 
+The import brings the free functions. The methods need no import: they are on
+`List@(T)` and `T[]`, built-in types, so they are available in every unit
+([Extension visibility](../../design/extension-visibility.md), R1).
+
 ## Overview
 
 `collections/iter` is the first **Sushi-source** standard-library module: it ships as
-bundled `.sushi` source and is merged as a compilation unit when you import it. The
+bundled `.sushi` source and is merged as a compilation unit when you import it, or when a
+unit calls one of its methods. The
 combinators are ordinary generic free functions, so they monomorphize through the normal
 generic pipeline — there is no bitcode, and nothing is emitted unless your program
 actually instantiates a combinator.
@@ -34,9 +39,8 @@ The combinators exist in TWO forms. The **method form** chains left to right:
 let i32 total = xs.map(|i32 x| x * 2).filter(|i32 x| x > 2).fold(0, |i32 acc, i32 x| acc + x)
 ```
 
-The **free functions** stay, and are called as `map(xs, f)`. One unit's
-`use <collections/iter>` makes the methods callable in every unit — extensions are
-program-wide (see `docs/design/ufcs-combinators.md`).
+The **free functions** stay, and are called as `map(xs, f)`. They need
+`use <collections/iter>` in the unit that calls them; the methods need no import.
 
 **Element types**: every combinator, in both forms, takes an owning element type
 (`List@(string)`). `filter` clones each kept element, and `fold` clones `init` once, so
@@ -59,8 +63,6 @@ On `List@(T)` and on `T[]`. Applies `f` to every element, collecting the results
 a new list.
 
 ```sushi
-use <collections/iter>
-
 fn doubled_sum() i32:
     let List@(i32) xs = List.new()
     xs.push(1)

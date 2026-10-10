@@ -122,7 +122,7 @@ fn main() i32:
 
 A constant cannot be written ([`CE2096`](error-catalog.md#ce2096)). A `var` is never moved out of: `f(nom v)` or
 `let T x = v` on a `var` whose type owns a resource is [`CE2436`](error-catalog.md#ce2436). `public` works on `fn`,
-`const`, `var`, `struct`, `enum` and `perk`. See [Visibility](design/visibility.md) and
+`const`, `var`, `struct`, `enum`, `perk` and an extension method (`public extend ...`). See [Visibility](design/visibility.md) and
 [Unit Storage](design/unit-storage.md).
 
 ### Integer Overflow
@@ -181,8 +181,6 @@ fn main() i32:
 Strings have full UTF-8 support:
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     let string text = "Don't Panic"
     let string emoji = "🐬 🌍"
@@ -204,9 +202,8 @@ fn main() i32:
 - `.upper() -> string` - Convert to uppercase (ASCII only)
 - `.lower() -> string` - Convert to lowercase (ASCII only)
 
-Every built-in string method needs `use <collections/strings>` in the unit that calls it.
-Without the import, the call is [CE3015](error-catalog.md#ce3015). Interpolation and your own extensions on `string`
-need no import.
+A string method needs no import: every stdlib method on a built-in type is available in
+every unit. `use <collections/strings>` brings the `StringBuilder` type, not the methods.
 
 See [Standard Library: String Methods](standard-library.md) for detailed documentation.
 
@@ -232,8 +229,6 @@ Functions are the building blocks of Sushi programs. Every function has explicit
 ### Basic Functions
 
 ```sushi
-use <collections/strings>
-
 fn parse_count(string text) i32 | StdError:  # a channel: the call returns Result@(i32, StdError)
     if (text.is_empty()):
         return Result.Err(StdError.Error)
@@ -803,8 +798,6 @@ required. Write in it the guards that keep every index in range:
 
 <!-- docs-sweep: error CE0152 -->
 ```sushi
-use <collections/strings>
-
 fn contains_naive(string hay, string needle) bool dont_panic because "i + m <= n and j < m hold i + j < n":
     let i32 n = hay.size()
     let i32 m = needle.size()
@@ -1106,7 +1099,6 @@ them apart at the call:
 
 ```sushi
 use <math>
-use <collections/strings>
 use <collections/iter>
 
 fn main() i32:
@@ -1438,11 +1430,44 @@ fn main() i32:
 `Vec.at(3, 4)` reads like `List.new()` and `HashMap.new()`, and it is the same rule: a
 name behind a type's dot is a member of that type. A static has no `self` -- naming one
 in the signature or in the body is [CE0134](error-catalog.md#ce0134) -- and everything else about it is an ordinary
-method: the parameter modes, the owning return, the `| E` channel, and no visibility
-marker of its own.
+method: the parameter modes, the owning return, the `| E` channel, and the visibility
+rules below.
 
 `new` is a legal static name (`extend Box static new(i32 n) Box:`), which is one thing a
 free function cannot be called.
+
+**Who can call an extension method**: an extension method is private to its unit, as a
+function is. Write `public extend` to export it:
+
+<!-- docs-sweep: skip (two units) -->
+```sushi
+# geometry.sushi                          # main.sushi
+public struct Vec:                         use "geometry"
+    i32 x
+    i32 y                                  fn main() i32:
+                                               let Vec v = Vec(3, 4)
+public extend Vec length_squared() i32:        println(v.length_squared())
+    return self.x * self.x + self.y * self.y   println(5.cubed())      # CE3005
+                                               return 0
+extend i32 cubed() i32:
+    return self * self * self
+```
+
+- A public extension on a type that its unit declares travels with the type: any unit
+  that holds a `Vec` calls `length_squared()`, with no import of `geometry`.
+- A public extension on a type that its unit does not declare (`i32`, an array, the type
+  of another unit) is visible in its own unit and in each unit that imports it, with
+  `use`, with `use ... as`, or through a `public use` chain. A unit that does not import
+  it gets [CE3022](error-catalog.md#ce3022), and the help names the import.
+- An extension with no marker, such as `cubed` above, is callable only in its own unit
+  ([CE3005](error-catalog.md#ce3005) elsewhere). Two units can each keep a private extension of one name on one
+  type, and each calls its own.
+- A unit's own extension wins over an imported public one of the same name, with the
+  warning [CW3007](error-catalog.md#cw3007). Two imported ones and no own one are [CE3023](error-catalog.md#ce3023) at the call.
+- The stdlib methods of the built-in types (`s.len()`, `s.lines()`, `xs.map(f)`,
+  `b.is_ascii_digit()`) need no import in any unit.
+
+The full rule is [Extension visibility](design/extension-visibility.md).
 
 **No `??` in a BARE extension body**: an extension method with no `| E` is bare, as a
 function with no `| E` is. It returns a bare value, not a `Result@(T, E)` (a `Result.Ok(...)`
@@ -1589,7 +1614,7 @@ extend Box@(i32) tag() i32:
     return self.value * 10
 
 extend Box@(string) tag() i32:
-    return self.value.len()     # needs `use <collections/strings>`
+    return self.value.len()
 ```
 
 Two rules come with that. A **template and a concrete target for the same method name** overlap, and Sushi rejects the overlap rather than picking the more specific one — there is no specialization:
@@ -1622,7 +1647,7 @@ extend i32 hash() u64:      # error [CE2097]: extension method 'hash()' conflict
     return 1 as u64         #                 with the built-in 'i32.hash()'
 ```
 
-This covers every built-in family: the `hash()` and `clone()` the compiler derives for every struct and enum, the primitive and string methods (`to_str`, `to_bits`, `len`, `trim`, ...), the array methods, and the methods of `Result`, `Maybe`, `Own`, `List` and `HashMap`. Pick a different name, or use a perk.
+This covers every built-in family: the `hash()` and `clone()` the compiler derives for every struct and enum, the primitive and string methods (`to_str`, `to_bits`, `len`, `trim`, ...), the array methods, the methods of `Result`, `Maybe`, `Own`, `List` and `HashMap`, and the methods that a stdlib module written in Sushi declares on a built-in type (`lines`, `map`, `sort`, `is_ascii_digit`, ...). Pick a different name, or use a perk. When a new release adds a stdlib method on a built-in type, an extension of that name in your program becomes this error.
 
 **Perks are the way to replace a built-in**: a perk implementation takes precedence at every layer, by design. `Hashable` is predefined -- it is the contract of the derived `hash()`, and every type with a derived hash satisfies it -- so the implementation below is the override and nothing is declared.
 
@@ -1636,7 +1661,7 @@ extend Point with Hashable:       # allowed -- this is the supported override
         return 999999 as u64
 ```
 
-**Standard Library Use**: much of the Sushi standard library is exposed through this same method-call syntax. String methods like `.len()`, `.find()` and `.split()`, the collection methods on `List@(T)`, and the array methods all reach you as `receiver.method(...)`. They are built-in providers rather than ordinary extensions, though, which is why the names above are reserved -- your own extensions live alongside them, not on top of them.
+**Standard Library Use**: much of the Sushi standard library is exposed through this same method-call syntax. String methods like `.len()`, `.find()` and `.split()`, the collection methods on `List@(T)`, and the array methods all reach you as `receiver.method(...)`. They are visible in every unit with no import, which is why the names above are reserved -- your own extensions live alongside them, not on top of them.
 
 The full precedence chain and its rationale are in [docs/design/method-resolution.md](design/method-resolution.md).
 
@@ -1717,6 +1742,11 @@ file that wrote `use <math>`; the built-in `HashMap` is a name in the file that 
 `use <collections/hashmap>`; and an `unsafe external` block binds its namespace in the
 file that declares it. It also holds behind the dot: `geo.circle_area` reaches what
 `geometry` **declares**, never what `geometry` imported.
+
+A method follows the same rule where it has to, and only there. A stdlib method of a
+built-in type needs no import in any unit, and a public method of a type travels with the
+type. A public extension on a type that its unit does not declare comes with an import of
+that unit, flat or aliased, and with nothing else.
 
 One consequence is worth knowing before it surprises you. A function you can call may
 return a type you cannot write:

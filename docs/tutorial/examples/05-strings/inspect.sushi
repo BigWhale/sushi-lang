@@ -1,5 +1,3 @@
-use <collections/strings>
-
 fn main() i32:
     let string entry = "Don't Panic"
 

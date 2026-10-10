@@ -641,8 +641,9 @@ What a private perk hides is the CONTRACT:
 - A public declaration cannot constrain a type parameter with a private perk of its own unit
   ([CE3010](error-catalog.md#ce3010)), because the caller would have to name a perk that it cannot see.
 
-An implementation (`extend T with P`) carries no `public` marker. It is as visible as its
-target type.
+An implementation (`extend T with P`) carries no `public` marker. It is global: one for each
+pair of type and perk, and its methods are callable wherever there is a value of the type
+(R8 of [Extension visibility](design/extension-visibility.md)).
 
 ## Error Codes
 

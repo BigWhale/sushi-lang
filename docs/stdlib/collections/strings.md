@@ -26,23 +26,27 @@ println("{s1.pad_left(20, '*')}")    # Single quotes for args
 use <collections/strings>
 ```
 
-The import is checked PER UNIT. The unit that holds a string method call must import
-`<collections/strings>` itself, or get it through its own `public use` chain. An import
-in another unit of the program does not count. A missing import is **[CE3015](../../error-catalog.md#ce3015)**. The
-examples on this page leave out the `use` line; a complete program needs it.
+The import brings one name, the type `StringBuilder`. A string METHOD needs no import:
+every method on this page is available in every unit, as every stdlib method on a
+built-in type is ([Extension visibility](../../design/extension-visibility.md), R1 and
+R2). The program loads the methods that it calls. The examples on this page have no `use`
+line, except where they name `StringBuilder`.
 
-Some string methods need no import:
+Every string also has:
 
-- `is_empty()` and `clone()`
 - `hash() -> u64` and `to_str() -> string`, which every primitive type has
 - The comparisons `==`, `!=`, `<`, `<=`, `>`, `>=`. A string order compares the BYTES
   (`memcmp` over the common prefix, then the length), so a prefix is less than the
   longer string. It is not a collation.
 
+An extension of your own on `string` cannot take the name of one of these methods
+([CE2097](../../error-catalog.md#ce2097)). When a release adds a string method, an
+extension of that name in your program becomes this error.
+
 ## Overview
 
-String methods do not change their receiver; each one returns a new value. The module
-provides these methods (with `is_empty` and `clone`, which need no import):
+String methods do not change their receiver; each one returns a new value. These methods
+are built in:
 - **Inspection**: len, size, is_empty, contains, starts_with, ends_with, find, find_last, count
 - **Slicing**: s, ss, sleft, sright, char_at
 - **Transformation**: upper, lower, cap, reverse, repeat, replace, trim, tleft, tright
@@ -158,8 +162,6 @@ are UTF-8 character indexes, as for `find`, so `find_from(needle, 0)` gives the 
 - A `start` more than the character count gives `Maybe.None()`.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     let string text = "héllo héllo"
     println(text.find_from("llo", 3).realise(-1))   # 8
@@ -177,8 +179,6 @@ texts of different byte length give `false`, and no byte is read for them. No ne
 is made.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     println("HeLLo".eq_ignore_case("hello"))    # true
     println("a1".eq_ignore_case("A1"))          # true
@@ -336,8 +336,6 @@ to its own concatenation, `s := s.concat(x)`, the compiler appends to the buffer
 in place, so a loop of appends takes linear time:
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     let string csv = ""
     foreach(i in 0..5):
@@ -357,8 +355,6 @@ To build a string from many pieces in those forms, push the pieces to a `string[
 join them one time:
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     let string[] parts = from([])
     foreach(i in 0..5):
@@ -471,8 +467,6 @@ start for `split_once`, `Some(("", s))`, and at the end for `rsplit_once`, `Some
 The search is by bytes, so a multi-byte UTF-8 separator works.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     let (key, value) = "name=Arthur=Dent".split_once("=").realise(("", ""))
     println("{key} {value}")                             # name Arthur=Dent
@@ -535,8 +529,6 @@ string method can be an ordinary `extend string` method written in Sushi.
   No byte is copied and none is checked for UTF-8.
 
 ```sushi
-use <collections/strings>
-
 extend string upper_ascii() string:
     let u8[] out = from([0; self.size()])
     foreach(i in 0..self.size()):
@@ -593,9 +585,9 @@ match "3.14".to_f64():
 ## Methods written in Sushi
 
 The module has two halves. The methods above are built into the stdlib bitcode. The
-methods below are written in Sushi (`src_sushi/collections/strings.sushi`), and the same
-`use <collections/strings>` loads them. Each one is bare and total: a call gives the value
-itself, with no `??`.
+methods below are written in Sushi (`src_sushi/collections/strings.sushi`). They need no
+import either: the program loads the module when a unit calls one of them. Each one is
+bare and total: a call gives the value itself, with no `??`.
 
 ### Strict parses: `.parse_u8(i32 base)` to `.parse_i64(i32 base)`
 
@@ -624,8 +616,6 @@ strict:
 A refused text gives `Maybe.None()`; a correct text gives `Maybe.Some(value)`.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     println("ff".parse_u8(16).realise(0))
     println("-80000000".parse_i32(16).realise(0))
@@ -660,8 +650,6 @@ unchanged. A `t` that is longer than the text removes nothing, and a text of rep
 gives `""`. The compare is by bytes, so a multi-byte `t` works.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     println("0042".trim_start_matches("0"))      # 42
     println("ababx".trim_start_matches("ab"))    # x
@@ -677,8 +665,6 @@ the rules of `trim_start_matches`. The repeats are counted from the end, so a pa
 repeat stays: `"aaa".trim_end_matches("aa")` gives `"a"`.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     println("a/b///".trim_end_matches("/"))      # a/b
     println("babab".trim_end_matches("ab"))      # b
@@ -693,8 +679,6 @@ Removes every repeat of `t` at both ends of the text, and gives a new string. It
 gives the text unchanged.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     println("abxab".trim_matches("ab"))          # x
     println("aaa".trim_matches("aa"))            # a
@@ -710,8 +694,6 @@ text is read one whole code point at a time. A code point is removed when
 not in `set`. The order of `set` has no effect. An empty `set` gives the text unchanged.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     println("0042".trim_start_chars("0"))        # 42
     println("baXab".trim_start_chars("ab"))      # Xab
@@ -724,8 +706,6 @@ Removes the characters of `set` at the end of the text, and gives a new string. 
 are the rules of `trim_start_chars`, read from the end.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     println("4200".trim_end_chars("0"))          # 42
     println("éaé".trim_end_chars("é"))           # éa
@@ -740,8 +720,6 @@ not cut a character: `"èaé".trim_chars("é")` gives `"èa"`, because `è` is n
 although `è` and `é` start with the same byte.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     println("/a/b//".trim_chars("/"))            # a/b
     println("baXab".trim_chars("ab"))            # X
@@ -766,8 +744,6 @@ empty last line.
 | `"a\rb"` | `["a\rb"]` |
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     let string text = "Mostly\r\nHarmless\n"
     let string[] lines = text.lines()
@@ -784,8 +760,6 @@ token is empty, so `""` and `"   "` give `[]`. White space is the set of `trim()
 bytes 9, 10, 11, 12, 13 and 32. Every other byte is part of a token.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     let string[] words = " Mostly \t Harmless\n".split_whitespace()
     println(words.len())                         # 2
@@ -807,8 +781,6 @@ bytes at the start join the first character. A text of continuation bytes alone 
 character, so it gives `[]`, because its `len()` is 0.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     let string word = "café"
     let string[] cs = word.chars()
@@ -838,8 +810,6 @@ The methods write digits only, with no `0x` or `0b` prefix. For a width with spa
 for an alignment, use `pad_left` or `pad_right` on the result.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     let u8 b = 10
     let i8 m = -1
@@ -882,8 +852,6 @@ For a width with spaces, or for an alignment, use `pad_left` or `pad_right` on t
 result.
 
 ```sushi
-use <collections/strings>
-
 fn main() i32:
     let f64 pi = 3.14159
     let f64 half = 2.5

@@ -42,8 +42,6 @@ an explicit `Result@(T, E)`. The rule is the same for a free function, an extens
 perk method, a lambda and a function type. There is no default error type.
 
 ```sushi
-use <collections/strings>
-
 fn parse(string text) i32 | StdError:    # a channel: the call returns Result@(i32, StdError)
     if (text.is_empty()):
         return Result.Err(StdError.Error)
@@ -621,8 +619,6 @@ payload simply lands where it is taken. Over a NAMED `Result` that owns
 something -- a string, an array, a handle, in EITHER arm -- the `??` spends the local:
 
 ```sushi
-use <collections/strings>
-
 fn make() string | StdError:
     let string base = "Mostly"
     return Result.Ok(base.concat(" Harmless"))
@@ -707,8 +703,6 @@ value, and `??` on it is **[CE2507](error-catalog.md#ce2507)**. `m.or_err(nom e)
 `Some(v)` becomes `Ok(v)`, and `None` becomes `Err(e)`. Then `??` propagates it.
 
 ```sushi
-use <collections/strings>
-
 fn find_and_parse(string text) i32 | StdError:
     # or_err turns a None into an Err, and ?? propagates it
     let i32 pos = text.find("x").or_err(nom StdError.Error)??

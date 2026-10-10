@@ -68,8 +68,8 @@ literal argument never collides with the surrounding double quotes.
 ## Inspecting strings
 
 The methods that ask questions *about* a string — its length, whether it contains
-something, where a substring lives — live in the `<collections/strings>` standard library
-unit. Import it once at the top of your file with `use <collections/strings>`.
+something, where a substring lives — come from the `<collections/strings>` standard library
+module. A method of a built-in type needs no import, so you can call them in any file.
 
 ```sushi
 --8<-- "docs/tutorial/examples/05-strings/inspect.sushi"
@@ -137,11 +137,11 @@ Highlights:
 
 !!! note "What's in `<collections/strings>`?"
     The bare essentials — interpolation, escapes, the literal syntaxes — are built into the
-    language and need no import. The richer methods (`contains`, `find`, `count`, `upper`,
-    `lower`, `trim`, `pad_left`, `pad_right`, `split`, `join`, `replace`, `reverse`,
-    `repeat`, the slices `s` and `ss`, and more) come from `use <collections/strings>`. If the
-    compiler complains that a method needs a stdlib unit, that import is almost always the
-    fix.
+    language. The richer methods (`contains`, `find`, `count`, `upper`, `lower`, `trim`,
+    `pad_left`, `pad_right`, `split`, `join`, `replace`, `reverse`, `repeat`, the slices
+    `s` and `ss`, and more) need no import either: every method of a built-in type is
+    available in every unit. `use <collections/strings>` brings one name, the
+    `StringBuilder` type.
 
 ## Slices and comparison
 
@@ -178,7 +178,7 @@ Ford < Fordo: true
 - Interpolation `"{expr}"` is the one way to build and concatenate strings — there's no
   string `+`.
 - Escape sequences (`\n`, `\t`, `\\`, `\'`, `\"`) work in both quote styles.
-- `use <collections/strings>` unlocks the method library: `len`/`size`, `contains`,
+- The string methods need no import: `len`/`size`, `contains`,
   `starts_with`/`ends_with`, `find` (returns `Maybe@(i32)`), `count`, `trim`, `upper`/`lower`,
   `pad_left`/`pad_right`, `split`, `join`, and the slices `.s(start, end)` and
   `.ss(start, count)`.

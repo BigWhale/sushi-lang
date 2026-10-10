@@ -23,6 +23,19 @@ The consequence that motivates the error: because every layer resolves a built-i
 extension method whose name collides with one is *compiled and then never called*. It is not
 lower-priority; it is unreachable.
 
+A public method that a Sushi-source stdlib module declares on a built-in type (`s.lines()`,
+`xs.map(f)`, `b.is_ascii_digit()`) is in row 1 for this rule: it is visible in every unit
+(R1 of `extension-visibility.md`), so an extension of its name is [`CE2097`](../error-catalog.md#ce2097) too.
+
+**Which extensions a call can reach depends on the unit of the call**
+(`extension-visibility.md`). Row 3 holds the unit's own extensions, the public extensions
+of the home unit of the receiver type, the stdlib methods of row 1's kind, and the public
+extensions of the units that the calling unit imports. One predicate answers it,
+`extension_reach` in `semantics/visibility.py`. A private extension of another unit is
+[`CE3005`](../error-catalog.md#ce3005), a public one of a unit that the caller does not import is
+[`CE3022`](../error-catalog.md#ce3022), and two imported public ones are
+[`CE3023`](../error-catalog.md#ce3023) at the call.
+
 ## The three layers
 
 The same precedence is implemented three times, and all three must agree. Any disagreement is
@@ -336,7 +349,7 @@ a method named `static` are not writable.
 | call site | on the TYPE name: `Vec.at(3, 4)` | on a value: `v.sum()` |
 | parameters | ordinary, and the modes are the ordinary four | the same, plus the receiver's |
 | return | ordinary; `\| E` opts into the channel exactly as elsewhere | the same |
-| visibility | none of its own -- as visible as its target type; under `extension-visibility.md` (ruled, not yet built) its own `public` marker | the same |
+| visibility | its own `public` marker, private by default; a public one travels with a type that its unit declares, and comes with an import of its unit otherwise (`extension-visibility.md`) | the same |
 | in a perk | **never** -- a perk has no `Self` ([CE4014](../error-catalog.md#ce4014)) | that is what a perk contracts |
 
 Everything in the right column that is not about the receiver is the same for a static. A static's

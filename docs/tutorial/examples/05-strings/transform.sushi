@@ -1,5 +1,3 @@
-use <collections/strings>
-
 fn main() i32:
     # Trim whitespace, change case.
     let string padded = "   vogon poetry   "

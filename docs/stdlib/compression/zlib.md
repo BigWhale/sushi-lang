@@ -143,7 +143,6 @@ container starts.
 
 ```sushi
 use <compression/zlib>
-use <collections/strings>
 
 fn main() i32:
     let u8[] packed = deflate_raw("Mostly Harmless".to_bytes(), 6).realise(from([]))

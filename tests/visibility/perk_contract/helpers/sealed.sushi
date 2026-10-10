@@ -1,8 +1,8 @@
 # The perk's own unit. `Sealed` is private, so the CONTRACT stays here. `Vault`
 # is public and `Ledger` is private; both implement the perk. The two extensions
 # constrain a method-level type parameter with the private perk AT HOME: one on
-# the private target, one on a builtin target. Neither target carries a marker
-# to promise with, so the leak rule has nothing to fence (visibility.md, S5).
+# the private target, one on a builtin target. Neither extension says `public`,
+# so the leak rule has nothing to fence (visibility.md, S5).
 perk Sealed:
     fn code() i32
 

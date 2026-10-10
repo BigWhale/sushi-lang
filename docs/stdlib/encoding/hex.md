@@ -54,7 +54,6 @@ Writes each byte as two lower-case hex digits. The text has two digits for each 
 an empty array gives `""`.
 
 ```sushi
-use <collections/strings>
 use <encoding/hex>
 
 fn main() i32:

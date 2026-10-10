@@ -1,5 +1,3 @@
-use <collections/strings>
-
 perk Measured:
     fn measure() i32
 

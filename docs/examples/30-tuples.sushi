@@ -12,7 +12,6 @@
 #   `enumerate`, `zip` and `HashMap.pairs()`
 
 use <math>
-use <collections/strings>
 use <collections/iter>
 use <collections/hashmap>
 

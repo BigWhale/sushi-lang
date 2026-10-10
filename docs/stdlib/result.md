@@ -473,8 +473,6 @@ else:
 ### Basic Error Handling
 
 ```sushi
-use <collections/strings>
-
 error ValidationError:
     TooShort
     TooLong
