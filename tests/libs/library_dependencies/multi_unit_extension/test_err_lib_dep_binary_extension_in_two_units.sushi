@@ -1,8 +1,8 @@
 # Two binary libraries each declare `public extend i32 doubled()`, and each of the
 # two units of this program imports both and calls the method. Each call is an
-# error, with a note at each declaration. Phase 3 of the extension-visibility work
-# gives this error its code; until then the fixture reads the exit code and the
-# text.
+# error, with a note at each declaration. The code is CE3023, one time for each
+# call.
+# EXPECT_ERROR_CODES_EXACT: CE3023, CE3023
 # BUILD_LIB_BINARY: ld_mx_p.sushi
 # BUILD_LIB_BINARY: ld_mx_q.sushi
 # EXPECT_STDERR_CONTAINS: "ld_mx_helper.sushi:5:"

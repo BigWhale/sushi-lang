@@ -1,7 +1,7 @@
 # R6: the unit that declares the extension is in the program, because the helper
 # imports it, but this unit does not import it. The call is refused, and the help
-# names the import. Phase 3 of the extension-visibility work gives this error its
-# code; until then the fixture reads the exit code and the help.
+# names the import. The code is CE3022.
+# EXPECT_ERROR_CODES_EXACT: CE3022
 # EXPECT_STDERR_CONTAINS: use "helpers/ev_r6_bytes"
 # EXPECT_STDERR_CONTAINS: "test_err_ev_r6_not_imported_here.sushi:11:"
 use "helpers/ev_r6_user"

@@ -1,8 +1,8 @@
 # Two source libraries each declare `public extend i32 doubled()`, and this unit
 # imports both and calls the method. That is two imported public extensions of one
-# name on one type: an error at the call, with a note at each declaration. Phase 3
-# of the extension-visibility work gives this error its code; until then the
-# fixture reads the exit code and the text.
+# name on one type: an error at the call, with a note at each declaration. The
+# code is CE3023.
+# EXPECT_ERROR_CODES_EXACT: CE3023
 # BUILD_LIB: ld_ext_p.sushi
 # BUILD_LIB: ld_ext_q.sushi
 # EXPECT_STDERR_CONTAINS: "doubled"

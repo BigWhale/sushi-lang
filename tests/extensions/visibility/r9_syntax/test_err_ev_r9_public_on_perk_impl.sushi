@@ -1,6 +1,6 @@
 # R9: `public` stands before an extension method and before a static, and never
-# before a perk implementation. The design names no code for the refusal, only a
-# parse or syntax error, so the fixture reads the exit code and the code family.
+# before a perk implementation. The refusal is the parse error CE6001.
+# EXPECT_ERROR_CODES_EXACT: CE6001
 # EXPECT_STDERR_CONTAINS: error [CE6
 perk Loud:
     fn shout() string

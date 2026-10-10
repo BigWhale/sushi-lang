@@ -1,7 +1,7 @@
 # C3: this unit declares its own `label` on `i32`, and it imports a public `label` on
 # `i32`. The own extension wins in this unit, and the helper still calls its own. A
-# warning stands at the own declaration, with a note at the imported one. The design
-# names no code for the warning, so the fixture reads the exit code and the note.
+# warning (CW3007) stands at the own declaration, with a note at the imported one.
+# EXPECT_ERROR_CODES_EXACT: CW3007
 # EXPECT_NO_LEAKS makes the runner run the binary of this warning fixture.
 # EXPECT_STDERR_CONTAINS: "ev_c3_labels.sushi"
 # EXPECT_STDOUT_EXACT: "2\n1\n"

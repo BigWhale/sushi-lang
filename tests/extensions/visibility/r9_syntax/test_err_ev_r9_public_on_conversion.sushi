@@ -1,6 +1,6 @@
-# R9: `public` never stands before a conversion `extend A as B:`. The design names no
-# code for the refusal, only a parse or syntax error, so the fixture reads the exit
-# code and the code family.
+# R9: `public` never stands before a conversion `extend A as B:`. The refusal is the
+# parse error CE6001, with a help that tells the user to remove the marker.
+# EXPECT_ERROR_CODES_EXACT: CE6001
 # EXPECT_STDERR_CONTAINS: error [CE6
 error Low:
     Bad
