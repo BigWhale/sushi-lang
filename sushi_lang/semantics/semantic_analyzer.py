@@ -1434,22 +1434,42 @@ class SemanticAnalyzer:
         """CW3007: a unit's own extension hides an imported public one (C3).
 
         The own extension wins in its unit, as an own declaration wins over an imported
-        flat name, and the warning says so at the declaration. A copy of a template is
-        not asked yet: its own template wins in its unit (C5), with no warning.
+        flat name, and the warning says so at the declaration. A template is asked once,
+        as written, against the templates of the same base, name and target key; its
+        copies are not asked again.
         """
         from sushi_lang.semantics.generics.type_display import display_type
         from sushi_lang.semantics.visibility import hides_import, warn_hidden_extension
 
+        def scope_of(unit_name):
+            table = self.tables.namespaces.get(unit_name)
+            return table.scope if table is not None else None
+
         for own in list(self.tables.extensions.records()):
             if own.template_id is not None or own.unit_name is None:
                 continue
-            table = self.tables.namespaces.get(own.unit_name)
-            scope = table.scope if table is not None else None
+            scope = scope_of(own.unit_name)
             for other in self.tables.extensions.declarations(own.target_type, own.name):
                 if hides_import(self.tables.visibility, own, other, scope):
                     warn_hidden_extension(
                         self.reporter, own, other,
                         f"{display_type(own.target_type)}.{own.name}")
+
+        templates = self.tables.generic_extensions
+        for base, methods in list(templates.by_type.items()):
+            for own in list(methods.values()):
+                decl = own.decl
+                if (own.unit_name is None or decl is None or decl.target_type is None
+                        or decl.is_library_template):
+                    continue
+                scope = scope_of(own.unit_name)
+                for other in templates.declarations(base, own.name):
+                    if other.target_key == own.target_key and hides_import(
+                            self.tables.visibility, own, other, scope,
+                            target=decl.target_type):
+                        warn_hidden_extension(
+                            self.reporter, own, other,
+                            f"{display_type(decl.target_type)}.{own.name}")
 
     def _stdlib_method_beside(self, target_type, method_name: str, method):
         """The stdlib method on a built-in type that `method` takes the name of, or None.

@@ -75,19 +75,23 @@ def _array_template(validator: 'TypeValidator', method_name: str):
 
     Its own unit's template first, then a template that it may call, then any.
     """
-    return next(iter(_by_reach(validator, _array_templates(validator, method_name))), None)
+    return next(iter(in_reach_order(validator, _array_templates(validator, method_name))),
+                None)
 
 
-def _by_reach(validator: 'TypeValidator', templates: list) -> list:
+def in_reach_order(validator: 'TypeValidator', templates: list, target=None) -> list:
     """The templates in the order the calling unit reads them: its own, then the ones
-    that it may call, then the rest. A template of an array has no home unit, so no
-    receiver type is needed."""
+    that it may call (`extension_reach`), then the rest.
+
+    `target` is the type the templates extend; its home unit gives R5. A template of an
+    array has no home unit, so it needs none.
+    """
     from sushi_lang.semantics.passes.types.visibility import calling_unit, extension_reaches
     from sushi_lang.semantics.visibility import MethodReach
     asker = calling_unit(validator)
     ranked = [(template.unit_name != asker, reach is not MethodReach.VISIBLE, index)
               for index, (template, reach)
-              in enumerate(extension_reaches(validator, templates, None))]
+              in enumerate(extension_reaches(validator, templates, target))]
     return [templates[index] for *_, index in sorted(ranked)]
 
 
@@ -339,8 +343,9 @@ def _template_for(validator: 'TypeValidator', receiver_type, method_name: str):
         args = tuple(getattr(receiver_type, "generic_args", None) or ())
         if base is None:
             return None
-        template = next(iter(_by_reach(validator, validator.generic_extension_table.applicable(
-            base, method_name, receiver_type.name))), None)
+        candidates = validator.generic_extension_table.applicable(
+            base, method_name, receiver_type.name)
+        template = next(iter(in_reach_order(validator, candidates, receiver_type)), None)
     if (template is not None and not template.method_type_params
             and len(template.type_params) == len(args)):
         return template, args, template.is_static
@@ -382,29 +387,36 @@ def resolve_method(validator: 'TypeValidator', receiver_type, method_name: str,
 
 
 def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
-                                  method_name: str):
+                                  method_name: str, call, report: bool):
     """The method-generic template a receiver answers to, plus its receiver substitution.
 
     Three receiver shapes: a `T[]` (the `$array` templates, element substitution), an
     instantiation of a generic base (`List<i32>` -- base-name lookup, args from the
     interned type), and any concrete type (its display name is the base key, empty
     substitution). Returns (None, None) when no margs template answers.
+
+    Each unit can declare one template of a name (C5), so the calling unit chooses
+    among them through `_choose_visible`: its own, else the one it may call. Two that
+    it may call are CE3023 (C4), and the answer is (RESOLUTION_REPORTED, None).
     """
     from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
 
-    def margs_template(declarations, target_key=""):
-        for t in _by_reach(validator, list(declarations)):
-            if not getattr(t, "method_type_params", ()):
-                continue
-            if t.target_key and t.target_key != target_key:
-                continue
-            return t
-        return None
+    def margs_templates(declarations, target_key=""):
+        return [t for t in declarations
+                if getattr(t, "method_type_params", ())
+                and not (t.target_key and t.target_key != target_key)]
+
+    def choose(templates):
+        return _choose_visible(validator, receiver_type, method_name, templates, call,
+                               report)
 
     table = validator.generic_extension_table
     if isinstance(receiver_type, DynamicArrayType):
-        template = margs_template(table.declarations(ARRAY_BASE_KEY, method_name))
-        if template is not None:
+        templates = margs_templates(table.declarations(ARRAY_BASE_KEY, method_name))
+        if templates:
+            template = choose(templates)
+            if not isinstance(template, GenericExtensionMethod):
+                return template, None
             subst = ({template.type_params[0]: receiver_type.base_type}
                      if template.type_params else {})
             return template, subst
@@ -412,17 +424,22 @@ def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
 
     generic_base = getattr(receiver_type, "generic_base", None)
     if generic_base is not None:
-        template = margs_template(
-            table.declarations(generic_base, method_name),
-            target_key=getattr(receiver_type, "name", ""))
-        if template is not None:
+        templates = margs_templates(table.declarations(generic_base, method_name),
+                                    target_key=getattr(receiver_type, "name", ""))
+        if templates:
+            template = choose(templates)
+            if not isinstance(template, GenericExtensionMethod):
+                return template, None
             names = [p.name if hasattr(p, "name") else p for p in template.type_params]
             args = getattr(receiver_type, "generic_args", None) or ()
             subst = dict(zip(names, args, strict=False)) if not template.target_key else {}
             return template, subst
 
-    template = margs_template(table.declarations(display_type(receiver_type), method_name))
-    if template is not None:
+    templates = margs_templates(table.declarations(display_type(receiver_type), method_name))
+    if templates:
+        template = choose(templates)
+        if not isinstance(template, GenericExtensionMethod):
+            return template, None
         return template, {}
     return None, None
 
@@ -457,9 +474,9 @@ def resolve_method_generic_extension(validator: 'TypeValidator', receiver_type, 
     from sushi_lang.semantics.type_resolution import resolve_unknown_type
 
     template, receiver_subst = _find_method_generic_template(
-        validator, receiver_type, call.method)
-    if template is None:
-        return None
+        validator, receiver_type, call.method, call, report)
+    if template is None or template is RESOLUTION_REPORTED:
+        return template
 
     expected_params = [
         substitute_type_params(p.ty, receiver_subst) if p.ty is not None else None

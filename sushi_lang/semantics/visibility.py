@@ -717,15 +717,17 @@ def extensions_collide(table: Optional[VisibilityTable], target: Any,
 
 
 def hides_import(table: Optional[VisibilityTable], own: Any, other: Any,
-                 scope: Any) -> bool:
+                 scope: Any, target: Any = None) -> bool:
     """C3: does the unit's own extension `own` hide the imported public extension `other`?
 
     Both are of one name on one type. `other` is visible in the unit of `own` through an
     import alone (R6). A public method of the home unit (R5) and a stdlib method on a
     built-in type (R1) are visible everywhere, and an own extension of their name is an
-    error at its declaration (C2), not this warning.
+    error at its declaration (C2), not this warning. `target` is the type of the two, as
+    written for a template; the default is the target of `own`.
     """
-    target = own.target_type
+    if target is None:
+        target = own.target_type
     declared_in = getattr(other, "unit_name", None)
     return (declared_in is not None and declared_in != own.unit_name
             and bool(getattr(other, "is_static", False)) == bool(

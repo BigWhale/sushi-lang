@@ -54,6 +54,18 @@ def static_target_type(validator: 'TypeValidator', call) -> Optional[Type]:
     return builtin_type_named(name)
 
 
+def static_template_for(validator: 'TypeValidator', base: str, method: str):
+    """The static template of `<base>.<method>` that the calling unit reads, or None.
+
+    Its own unit's first, then one that it may call (`extension_reach`).
+    """
+    from sushi_lang.semantics.generics.types import GenericTypeRef
+    from sushi_lang.semantics.passes.types.calls.methods import in_reach_order
+    target = GenericTypeRef(base_name=base, type_args=())
+    return static_template(validator.generic_extension_table, base, method,
+                           order=lambda templates: in_reach_order(validator, templates, target))
+
+
 def _stamped_instantiation(call, base: str):
     """The instantiation of `base` the propagation stamp carries on this call, or None."""
     stamped = (getattr(call, "resolved_struct_type", None)
@@ -75,7 +87,7 @@ def _generic_static_target(validator: 'TypeValidator', call, base: str):
     uses, with the static's own copy queued for the fixpoint round.
     """
     stamped = _stamped_instantiation(call, base)
-    template = static_template(validator.generic_extension_table, base, call.method)
+    template = static_template_for(validator, base, call.method)
     if template is None:
         return stamped
 
@@ -140,7 +152,9 @@ def _interned_static_target(validator: 'TypeValidator', call, template, base: st
     # An instance that fails a target bound gets no copy (#1070); the call is refused by
     # the last rung of the method ladder.
     if (interner is not None and validator.queues_late_copies
-            and validator.extension_table.get_method(target, call.method) is None
+            and not any(record.is_static and record.unit_name == template.unit_name
+                        for record in validator.extension_table.declarations(
+                            target, call.method))
             and bounds_hold_for(template, tuple(type_args), validator.tables)):
         _add_late_static_copy(validator, template, target, type_args, call.loc)
     return target
@@ -193,7 +207,7 @@ def _unentered_static(validator: 'TypeValidator', call, target):
     base = generic_base_of(target)
     if base is None:
         return None
-    template = static_template(validator.generic_extension_table, base, call.method)
+    template = static_template_for(validator, base, call.method)
     type_args = getattr(target, "generic_args", None)
     if template is None or type_args is None or len(type_args) != len(template.type_params):
         return None
@@ -343,7 +357,7 @@ def _refuse_unstamped_generic(validator: 'TypeValidator', call) -> bool:
 
 def _unreached_type_params(validator: 'TypeValidator', call, base: str) -> tuple:
     """The target type parameters neither the arguments nor the stamp reached."""
-    template = static_template(validator.generic_extension_table, base, call.method)
+    template = static_template_for(validator, base, call.method)
     if template is not None:
         _args, unsolved = _solve_static(validator, call, template,
                                         _stamped_instantiation(call, base))
