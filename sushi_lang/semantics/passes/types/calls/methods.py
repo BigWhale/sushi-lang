@@ -176,14 +176,24 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
     arguments from the call's own arguments, and there are none to read.
 
     `static` says which of the two callable shapes is being asked for (#542). The two
-    share one table, keyed on (type, name), so ONE filter at the end keeps them apart:
-    an instance call may not reach a static, and a call on the type name may not reach
-    an instance method. Without it a static was called with a receiver it never
-    declared.
-    """
-    method = validator.extension_table.get_method(receiver_type, method_name)
+    share one table, keyed on (type, name), so ONE filter keeps them apart: an instance
+    call may not reach a static, and a call on the type name may not reach an instance
+    method. Without it a static was called with a receiver it never declared.
 
-    if method is None and isinstance(receiver_type, DynamicArrayType):
+    Whatever a rung answers, the calling unit must be allowed to call it
+    (`docs/design/extension-visibility.md`): `_choose_visible` reads the one predicate.
+    """
+    records = validator.extension_table.declarations(receiver_type, method_name)
+    if records:
+        matching = [record for record in records
+                    if bool(getattr(record, "is_static", False)) == static]
+        if not matching:
+            return None
+        return _choose_visible(validator, receiver_type, method_name, matching, call,
+                               report)
+
+    method = None
+    if isinstance(receiver_type, DynamicArrayType):
         method = instantiate_array_extension(validator, receiver_type, method_name,
                                              call.loc if call is not None else None)
 
@@ -201,10 +211,46 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
         if method is RESOLUTION_REPORTED:
             return RESOLUTION_REPORTED
 
-    if method is not None and bool(getattr(method, "is_static", False)) != static:
+    if method is None or method is RESOLUTION_REPORTED:
+        return method
+    if bool(getattr(method, "is_static", False)) != static:
         return None
+    return _choose_visible(validator, receiver_type, method_name, [method], call, report)
 
-    return method
+
+def _choose_visible(validator: 'TypeValidator', receiver_type, method_name: str,
+                    records: list, call, report: bool):
+    """The one extension of `records` that the calling unit calls, or a refusal.
+
+    An own extension wins (C3, C5). One visible extension answers. Two or more visible
+    ones are CE3023 at the call (C4). No visible one is CE3022 or CE3005. A refusal is
+    reported only with `report` and a call to point at, and answers RESOLUTION_REPORTED,
+    so the caller adds no CE2008. A reader with no unit of its own takes the first.
+    """
+    from sushi_lang.semantics.passes.types.visibility import (
+        calling_unit, extension_reaches, reject_ambiguous_extension,
+        reject_unreachable_extension)
+    from sushi_lang.semantics.visibility import MethodReach
+
+    asker = calling_unit(validator)
+    if asker is None:
+        return records[0]
+    reaches = extension_reaches(validator, records, receiver_type)
+    visible = [record for record, reach in reaches if reach is MethodReach.VISIBLE]
+    own = [record for record in visible if record.unit_name == asker]
+    if own:
+        return own[0]
+    if len(visible) == 1:
+        return visible[0]
+    if not (report and call is not None):
+        return None
+    if visible:
+        reject_ambiguous_extension(validator, receiver_type, method_name, visible,
+                                   call.loc)
+    else:
+        reject_unreachable_extension(validator, receiver_type, method_name, reaches,
+                                     call.loc)
+    return RESOLUTION_REPORTED
 
 
 def _answer_from_template(validator: 'TypeValidator', receiver_type, method_name: str,

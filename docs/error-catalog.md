@@ -3017,6 +3017,22 @@ The compiler could not write a file that the command line asked for: the output 
 
 A per-platform standard-library module is one bundled source file per platform and architecture, and the compiler selects the file of the host it compiles on. Sushi has no conditional compilation, so a host with no file cannot compile the module at all: every value in it (an `open` flag, a struct offset, an errno number) is a fact about one platform. The supported hosts are the ones the message lists. A new host needs its own file, made with `tests/platform_probe/probe.c` on that host.
 
+### CE3022 {#ce3022}
+
+**Error** · unit
+
+**Message:** `method '{name}' comes from unit '{owner}', and this unit does not import it`
+
+A public extension on a type that its unit does not declare (a built-in type, an array type, the type of another unit) is visible in its own unit and in each unit that imports that unit: with `use "u"`, with `use "u" as x`, or through a `public use` chain. It is not visible in another unit, even when a third unit of the program imports it. A public extension in the unit that declares its target type travels with the type and needs no import. Add the import that the help names.
+
+### CE3023 {#ce3023}
+
+**Error** · unit
+
+**Message:** `method '{name}' comes from more than one imported unit`
+
+This unit imports two or more units that each declare a public extension of this name on this type, and this unit declares none itself. A note points at each declaration. Sushi has no qualified method call, so the call cannot say which unit it means. The error stands at the call: an import that brings two such methods and no call of them is no fault. Move the code that needs each method into a unit of its own, or rename one of the methods. An extension that this unit declares itself always wins, and that is the warning [CW3007](#cw3007) instead.
+
 ## CE35xx: Library errors {#ce35xx}
 
 These errors are about libraries and the `.slib` format.
@@ -3881,6 +3897,14 @@ The import brought no public name to hand on, so the `public` marker does nothin
 **Message:** `'{import_}' brings nothing this unit names`
 
 Behind `--warn-unused`, off by default. The unit writes no name the import brings: no function, constant, type or perk it declares or re-exports, no member behind its alias, no extension or perk method it declares, and for `<collections/strings>` no string method the module enables (the per-unit rule [CE3015](#ce3015) reads). A `public use` re-exports to the unit's own importers and is never reported, and neither is an import of a library. Delete the line.
+
+### CW3007 {#cw3007}
+
+**Warning** · unit
+
+**Message:** `'{name}' hides the public extension method that '{owner}' declares`
+
+This unit declares an extension method, and it imports a unit that declares a public extension method of the same name on the same type. That is legal. A call in this unit calls the method of this unit, and the other unit keeps calling its own. It is a warning because a reader of a call cannot see which of the two methods answers it. Rename the method of this unit to call the imported one, or keep it.
 
 ### CW3506 {#cw3506}
 

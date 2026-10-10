@@ -21,10 +21,11 @@ from sushi_lang.semantics.ast_walk import (
 from sushi_lang.semantics.type_walk import spelled_names
 from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.units import Unit
-from sushi_lang.semantics.visibility import kind_word
+from sushi_lang.semantics.visibility import CONVERSION, EXTENSION_METHOD, kind_word
 
 # A kind that holds no name of its own and is reached through a receiver, so it is a root.
-_ROOT_KINDS = frozenset({"extension", "perk implementation", "external block"})
+_ROOT_KINDS = frozenset({EXTENSION_METHOD, CONVERSION, "perk implementation",
+                         "external block"})
 _CHECKED_KINDS = frozenset({"constant", "variable", "struct", "enum", "perk", "function"})
 # The one stdlib-method import, as the per-unit CE3015 check reads it.
 _METHOD_MODULE = "collections/strings"

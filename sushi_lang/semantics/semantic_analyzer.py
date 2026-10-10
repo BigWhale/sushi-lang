@@ -244,6 +244,9 @@ class SemanticAnalyzer:
             finite-types  reject by-value containment cycles     _check_finite_types               passes/finite_types.py
             derive        auto-derived hash() and clone()        _derive                           passes/derive.py
             shadowing     reject an extension over a built-in    _check_extension_shadows_builtin  here
+                          or a stdlib method on a built-in
+                          type (C2), then warn where an own      _warn_hidden_imported_extensions  here
+                          extension hides an imported one (C3)
             effects       destroy-effect summary                 _compute_effects                  passes/borrow/destroy_effects.py
             scope         scope and variable analysis            _check_units                      passes/scope.py
             typecheck     type validation and inference          _check_units                      passes/types/
@@ -366,6 +369,7 @@ class SemanticAnalyzer:
         self._derive()
         self._register_monomorphized_extensions(concrete_extension_defs, compilation_order)
         self._check_extension_shadows_builtin(monomorphizer.sites)
+        self._warn_hidden_imported_extensions()
 
         destroy_effects = self._compute_effects(compilation_order)
         # Enum type names for the borrow pass's ownership-sink test, stripped to their
@@ -832,6 +836,9 @@ class SemanticAnalyzer:
             compilation_order: list[Unit]) -> None:
         """Hand every generic-target extension copy to the extension table and to codegen."""
         for (_target_type_name, _method_name, _type_args), extend_def in concrete_extension_defs.items():
+            # The unit that DECLARED the template. Adoption may send the copy to another
+            # unit of the build, but method resolution reads who declared it.
+            declared_in = extend_def.home_unit
             self._adopt_extension_copy(extend_def, compilation_order)
             # Add to extension table for method lookup during type validation.
             # The spans come along so a diagnostic about a monomorphized generic extension
@@ -856,6 +863,8 @@ class SemanticAnalyzer:
                 # site resolves a static as an instance method and CE2102 refuses the
                 # very declaration that answers it.
                 is_static=getattr(extend_def, "is_static", False),
+                unit_name=declared_in,
+                filename=getattr(extend_def, "template_file", None),
                 is_public=extend_def.is_public,
                 template_id=extend_def.template_id,
                 template_target=extend_def.template_target,
@@ -1391,16 +1400,17 @@ class SemanticAnalyzer:
         collisions: dict = {}
 
         def collide(target_type, method_name: str, method, template_id, written) -> None:
-            if builtin_method_exists(target_type, method_name,
-                                     self.tables.derived_methods):
+            stdlib = self._stdlib_method_beside(target_type, method_name, method)
+            if stdlib is not None or builtin_method_exists(
+                    target_type, method_name, self.tables.derived_methods):
                 key = _written_declaration(method, template_id)
                 collisions.setdefault(key, []).append(
-                    (target_type, method_name, method, written))
+                    (target_type, method_name, method, written, stdlib))
 
-        for target_type, methods in self.tables.extensions.by_type.items():
-            for method_name, method in methods.items():
-                collide(target_type, method_name, method, method.template_id,
-                        method.template_target or display_type(target_type))
+        for method in list(self.tables.extensions.records()):
+            target_type = method.target_type
+            collide(target_type, method.name, method, method.template_id,
+                    method.template_target or display_type(target_type))
 
         templates = self.tables.generic_extensions.by_type.get(ARRAY_BASE_KEY, {})
         for (method_name, _key), template in templates.items():
@@ -1419,21 +1429,66 @@ class SemanticAnalyzer:
                 lambda item: (display_type(item[0]),))[0]
             self._reject_builtin_shadow(*first)
 
+    def _warn_hidden_imported_extensions(self) -> None:
+        """CW3007: a unit's own extension hides an imported public one (C3).
+
+        The own extension wins in its unit, as an own declaration wins over an imported
+        flat name, and the warning says so at the declaration. A copy of a template is
+        not asked: two units cannot declare one template of one name on one base.
+        """
+        from sushi_lang.semantics.generics.type_display import display_type
+        from sushi_lang.semantics.visibility import hides_import, warn_hidden_extension
+
+        for own in list(self.tables.extensions.records()):
+            if own.template_id is not None or own.unit_name is None:
+                continue
+            table = self.tables.namespaces.get(own.unit_name)
+            scope = table.scope if table is not None else None
+            for other in self.tables.extensions.declarations(own.target_type, own.name):
+                if hides_import(self.tables.visibility, own, other, scope):
+                    warn_hidden_extension(
+                        self.reporter, own, other,
+                        f"{display_type(own.target_type)}.{own.name}")
+
+    def _stdlib_method_beside(self, target_type, method_name: str, method):
+        """The stdlib method on a built-in type that `method` takes the name of, or None.
+
+        C2 for R1 (`docs/design/extension-visibility.md`): a public extension that a
+        Sushi-source stdlib module declares on a built-in type is visible in every unit,
+        so an extension of its name in another unit could never be called.
+        """
+        from sushi_lang.semantics.visibility import is_stdlib_builtin_method
+        for other in self.tables.extensions.declarations(target_type, method_name):
+            if (other.unit_name != method.unit_name
+                    and is_stdlib_builtin_method(other, target_type)):
+                return other
+        return None
+
     def _reject_builtin_shadow(self, target_type, method_name: str, method,
-                               written: str) -> None:
+                               written: str, stdlib=None) -> None:
         """CE2097 for one written declaration, at the instance `target_type`.
 
-        `written` is the target as the source wrote it (`Box@(T)`, `T[]`).
+        `written` is the target as the source wrote it (`Box@(T)`, `T[]`). `stdlib` is
+        the stdlib method it collides with, when a Sushi-source module declares it; the
+        note then points at that declaration.
         """
         from sushi_lang.semantics.generics.type_display import display_type
 
-        er.emit_with(
+        diagnostic = er.emit_with(
             self.reporter, er.ERR.CE2097,
             method.name_span or method.loc,
+            filename=getattr(method, "filename", None),
             name=method_name, type=written,
-        ).note(
-            f"'{display_type(target_type)}.{method_name}()' is defined by the compiler"
-        ).help(
+        )
+        if stdlib is not None and stdlib.name_span is not None:
+            diagnostic.note_at(
+                f"the stdlib module <{stdlib.unit_name}> declares "
+                f"'{display_type(target_type)}.{method_name}()' here, and it is "
+                "visible in every unit", stdlib.name_span, stdlib.filename)
+        else:
+            diagnostic.note(
+                f"'{display_type(target_type)}.{method_name}()' is defined by the compiler")
+        diagnostic.help(
             "a built-in method is always chosen before an extension method, so "
             f"this one could never be called -- rename it, or provide "
             f"'{method_name}()' through a perk implementation "

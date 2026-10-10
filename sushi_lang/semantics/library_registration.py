@@ -29,7 +29,8 @@ from sushi_lang.semantics.passes.collect import CollectorPass
 from sushi_lang.semantics.passes.collect.dont_panic import MarkerGate, judge_marker
 from sushi_lang.semantics.passes.collect.perks import PerkCollector
 from sushi_lang.semantics.visibility import (
-    TYPE_KINDS, DeclOrigin, reject_library_clash, warn_shadowed_export)
+    TYPE_KINDS, DeclOrigin, extensions_collide, reject_library_clash,
+    warn_shadowed_export)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import ExtendDef, ExtendWithDef, Program
@@ -66,6 +67,13 @@ def _slice_label(lib_name: str, what: str) -> str:
     """
     from sushi_lang.semantics.generics.type_display import display_type_name
     return f"<template:{lib_name}:{display_type_name(what)}>"
+
+
+# Whether a concrete extension that a binary or hybrid library ships is public. The
+# manifest does not record the marker of an extension yet (epic #1251, Phase 5), so a
+# record is read as public: before the marker existed, every extension was visible to
+# every consumer. This is the one place that decides it.
+_SHIPPED_EXTENSION_IS_PUBLIC = True
 
 
 class _Snippet:
@@ -870,8 +878,10 @@ class LibraryRegistration:
         copy of the tables taken AFTER the private types, so a method on a type the
         export closure ships resolves too.
 
-        A method name the consumer already declares on the same type is CE0101, as for
-        a source library: the two bodies would be one symbol.
+        A method name another unit already declares on the same type is CE0101 when the
+        two cannot both stand (`visibility.extensions_collide`), as for a source library.
+        Otherwise both are kept, and the call chooses (`docs/design/extension-visibility.md`
+        C3 to C5).
         """
         from sushi_lang.semantics.ast import Block, ExtendDef, Param
         from sushi_lang.semantics.library_registry import parse_signature
@@ -884,7 +894,17 @@ class LibraryRegistration:
             lib_file = self._library_file(lib_name)
             target = parse_type_string(record["type"], struct_table, enum_table)
             sig = parse_signature(record, struct_table, enum_table, lib_path=lib_file)
-            existing = extensions.get_method(target, sig.name)
+            unit = library_unit(lib_name, record.get("unit"))
+            self_mode = record.get("self_mode")
+            is_static = bool(record.get("static", False))
+            method = ExtensionMethod(
+                target_type=target, name=sig.name, ret_type=sig.ret_type,
+                params=sig.params, self_mode=self_mode, filename=lib_file,
+                unit_name=unit, err_type=sig.err_type, is_static=is_static,
+                is_public=_SHIPPED_EXTENSION_IS_PUBLIC)
+            existing = next((other for other in extensions.declarations(target, sig.name)
+                             if extensions_collide(self.tables.visibility, target,
+                                                   other, method)), None)
             if existing is not None:
                 if existing.unit_name in build_units:
                     self._reject_extension_clash(lib_name, existing.name_span,
@@ -893,14 +913,7 @@ class LibraryRegistration:
                     self._reject_library_extension_clash(
                         existing.unit_name or "?", lib_name, lib_file, sig.name, target)
                 continue
-
-            unit = library_unit(lib_name, record.get("unit"))
-            self_mode = record.get("self_mode")
-            is_static = bool(record.get("static", False))
-            extensions.add_method(ExtensionMethod(
-                target_type=target, name=sig.name, ret_type=sig.ret_type,
-                params=sig.params, self_mode=self_mode, filename=lib_file,
-                unit_name=unit, err_type=sig.err_type, is_static=is_static))
+            extensions.add_method(method)
             self.shipped_extensions.append(ExtendDef(
                 loc=None, target_type=target, name=sig.name,
                 params=[Param(name=p.name, ty=p.ty, is_nom=p.is_nom) for p in sig.params],

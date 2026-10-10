@@ -93,3 +93,12 @@ _add(ErrorMessage("CE3020", Severity.ERROR,
 _add(ErrorMessage("CE3021", Severity.ERROR,
     "`use <{module}>` has no file for this host '{host}' (the hosts are: {hosts})",
     Category.UNIT, "A per-platform standard-library module (#1089) is one bundled source file per platform and architecture, and the compiler selects the file of the host it compiles on. Sushi has no conditional compilation, so a host with no file cannot compile the module at all: every value in it (an `open` flag, a struct offset, an errno number) is a fact about one platform. The supported hosts are the ones the message lists. A new host needs its own file, made with `tests/platform_probe/probe.c` on that host."))
+
+# Extension visibility (`docs/design/extension-visibility.md`, epic #1251).
+_add(ErrorMessage("CE3022", Severity.ERROR,
+    "method '{name}' comes from unit '{owner}', and this unit does not import it",
+    Category.UNIT, "A public extension on a type that its unit does not declare (a built-in type, an array type, the type of another unit) is visible in its own unit and in each unit that imports that unit: with `use \"u\"`, with `use \"u\" as x`, or through a `public use` chain (R6). It is not visible in another unit, even when a third unit of the program imports it, because a method that is visible through an import in another unit breaks when that import goes away. A public extension in the unit that declares its target type travels with the type and needs no import (R5). Add the import that the help names. A project with many such extensions can collect them in one unit with `public use`, so that each unit writes one `use` line."))
+
+_add(ErrorMessage("CE3023", Severity.ERROR,
+    "method '{name}' comes from more than one imported unit",
+    Category.UNIT, "This unit imports two or more units that each declare a public extension of this name on this type, and this unit declares none itself (C4). A note points at each declaration. Sushi has no qualified method call, so the call cannot say which unit it means, and the compiler does not choose. The error stands at the call: an import that brings two such methods and no call of them is no fault. Move the code that needs each method into a unit of its own, so that each unit imports one of them, or rename one of the methods. An extension that this unit declares itself always wins, and that is the warning CW3007 instead."))

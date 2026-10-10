@@ -3,7 +3,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from sushi_lang.internals.report import Origin, Reporter, Span
 from sushi_lang.internals import errors as er
@@ -40,6 +40,8 @@ from sushi_lang.semantics.visibility import (
     EXTENSION_METHOD,
     VisibilityTable,
     extension_method_name,
+    extensions_collide,
+    home_unit_of,
     library_clash_origin,
     record_declaration,
     warn_shadowed_export,
@@ -427,19 +429,53 @@ class ExtensionMethod:
 
 @dataclass
 class ExtensionTable:
-    """Table of extension methods organized by target type."""
-    by_type: Dict[Type, Dict[str, ExtensionMethod]] = field(default_factory=dict)
+    """Extension methods by target type, then by name: one record per declaring unit.
+
+    Two units may each declare one method name on one type
+    (`docs/design/extension-visibility.md` C5). Each unit calls its own, so the table
+    keeps both, and method resolution chooses through `visibility.extension_reach`.
+    """
+    by_type: Dict[Type, Dict[str, List[ExtensionMethod]]] = field(default_factory=dict)
 
     def add_method(self, method: ExtensionMethod) -> None:
-        """Add a method to the table, creating type entry if needed."""
-        if method.target_type is not None:
-            if method.target_type not in self.by_type:
-                self.by_type[method.target_type] = {}
-            self.by_type[method.target_type][method.name] = method
+        """File a method. A second record from the same unit replaces the first.
+
+        A call-site copy is filed again by each call that names it, and the collect pass
+        refuses a real duplicate of one unit (C1) before it files one.
+        """
+        if method.target_type is None:
+            return
+        records = self.by_type.setdefault(method.target_type, {}).setdefault(
+            method.name, [])
+        for index, record in enumerate(records):
+            if record.unit_name == method.unit_name:
+                records[index] = method
+                return
+        records.append(method)
+
+    def declarations(self, target_type: Type, method_name: str) -> List[ExtensionMethod]:
+        """Every declaration of one method name on one type, in the order they were filed."""
+        return list(self.by_type.get(target_type, {}).get(method_name, ()))
 
     def get_method(self, target_type: Type, method_name: str) -> Optional[ExtensionMethod]:
-        """Get a specific extension method."""
-        return self.by_type.get(target_type, {}).get(method_name)
+        """The first declaration of one method name on one type, or None.
+
+        It answers whether ANY unit declares the method. A call reads
+        `resolve_extension_method`, which chooses the one the calling unit may call.
+        """
+        records = self.by_type.get(target_type, {}).get(method_name)
+        return records[0] if records else None
+
+    def first_by_name(self, target_type: Type) -> Dict[str, ExtensionMethod]:
+        """The first declaration of each method name on one type."""
+        return {name: records[0]
+                for name, records in self.by_type.get(target_type, {}).items() if records}
+
+    def records(self) -> Iterator[ExtensionMethod]:
+        """Every record of the table."""
+        for methods in self.by_type.values():
+            for records in methods.values():
+                yield from records
 
 
 @dataclass
@@ -1252,15 +1288,7 @@ class FunctionCollector:
         if not isinstance(resolved_type, CONCRETE_EXTENSION_TARGETS):
             return
 
-        existing = self.extensions.get_method(resolved_type, h.name)
-        if existing is not None:
-            self._emit_duplicate_extension(
-                f"extension method '{h.name}' for '{display_type(resolved_type)}'",
-                h.name_span, existing.unit_name, existing.name_span,
-                existing.filename)
-            return
-
-        self.extensions.add_method(ExtensionMethod(
+        record = ExtensionMethod(
             target_type=resolved_type,
             name=h.name,
             loc=h.ext.loc,
@@ -1276,7 +1304,16 @@ class FunctionCollector:
             err_span=h.err_span,
             is_static=h.is_static,
             is_public=h.ext.is_public,
-        ))
+        )
+        for existing in self.extensions.declarations(resolved_type, h.name):
+            if extensions_collide(self.visibility, resolved_type, existing, record):
+                self._emit_duplicate_extension(
+                    f"extension method '{h.name}' for '{display_type(resolved_type)}'",
+                    h.name_span, existing.unit_name, existing.name_span,
+                    existing.filename,
+                    home=home_unit_of(self.visibility, resolved_type))
+                return
+        self.extensions.add_method(record)
 
     def _collect_method_generic(self, h: '_ExtensionHeader',
                                 resolved_type: Type) -> None:
@@ -1372,13 +1409,17 @@ class FunctionCollector:
 
     def _emit_duplicate_extension(self, name_text, name_span: Optional[Span],
                                   other_unit, other_span: Optional[Span],
-                                  other_filename) -> None:
+                                  other_filename, *, home: Optional[str] = None) -> None:
         """CE0101 for a second extension of one method name on one target.
 
         One unit wrote both: the second is the duplicate, and the note points
         at the first. Two units wrote them: neither author is at fault and a
         consumer can edit neither, so the diagnostic is relational -- it names
         both units and it blames no side (`unit-namespaces.md` section 8).
+
+        `home` is the home unit of the target type. When one of the two is a public
+        method of the home unit, it is visible wherever the type is (C2), and the help
+        says so.
         """
         diag = er.emit_with(self.r, ERR.CE0101, name_span,
                             filename=self.current_unit_file, name=name_text)
@@ -1390,9 +1431,13 @@ class FunctionCollector:
             if name_span is not None:
                 diag.note_at(f"unit '{self.current_unit_name}' declares it here",
                              name_span, self.current_unit_file)
-            diag.help("a method is found on the receiver's type, so no alias "
-                      "can choose between the two; rename one of them, or put "
-                      "the method behind a perk")
+            if home is not None:
+                diag.help(f"unit '{home}' declares the type, so its public method is "
+                          "visible wherever a value of the type is; rename one of them")
+            else:
+                diag.help("a method is found on the receiver's type, so no alias "
+                          "can choose between the two; rename one of them, or put "
+                          "the method behind a perk")
         elif other_span is not None:
             diag.note_at("first defined here", other_span, other_filename)
         diag.emit()
@@ -1416,9 +1461,10 @@ class FunctionCollector:
         A method-generic one (`extend i32[] pick@(U)`) is filed under the receiver's
         display name in the generic table, with the receiver kept on its declaration.
         """
-        for target, methods in self.extensions.by_type.items():
-            if isinstance(target, DynamicArrayType) and name in methods:
-                return methods[name]
+        for target in self.extensions.by_type:
+            found = self.extensions.get_method(target, name)
+            if isinstance(target, DynamicArrayType) and found is not None:
+                return found
         for methods in self.generic_extensions.by_type.values():
             for (method_name, _key), method in methods.items():
                 if (method_name == name and method.decl is not None

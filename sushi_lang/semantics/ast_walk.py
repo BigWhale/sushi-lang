@@ -151,12 +151,23 @@ def bodied_with_owner(program: 'Program') -> Iterator[Tuple[str, BodiedDecl,
         if is_written(func):
             yield "function", func, None
     for extension in [*program.extensions, *program.generic_extensions]:
-        yield "extension", extension, None
+        yield extension_kind(extension), extension, None
     for impl in [*program.perk_impls, *program.generic_perk_impls]:
         if not is_written(impl):
             continue
         for method in impl.methods:
             yield "perk method", method, impl
+
+
+def extension_kind(extension: 'ExtendDef') -> str:
+    """The kind word of one `extend` block: an extension method, or a conversion.
+
+    The two are written with one keyword and follow two visibility rules
+    (`semantics/visibility.py`): a method carries its own marker, and a conversion
+    travels with its target.
+    """
+    from sushi_lang.semantics.visibility import CONVERSION, EXTENSION_METHOD
+    return CONVERSION if extension.is_conversion else EXTENSION_METHOD
 
 
 def bodied(program: 'Program') -> List[BodiedDecl]:
@@ -236,7 +247,7 @@ def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
         *(("function", func) for func in program.functions),
         *(("struct", struct) for struct in program.structs),
         *(("enum", enum) for enum in program.enums),
-        *(("extension", ext) for ext in
+        *((extension_kind(ext), ext) for ext in
           [*program.extensions, *program.generic_extensions]),
     )
     for kind, decl in declared:
@@ -245,7 +256,7 @@ def signature_constraints(program: 'Program') -> Iterator[ConstraintSite]:
     # The bounds a target puts on its type parameters (#1070). A copy is an instance and
     # carries none, so each written bound is read one time.
     targets: Tuple[Tuple[str, TargetDecl], ...] = (
-        *(("extension", ext) for ext in
+        *((extension_kind(ext), ext) for ext in
           [*program.extensions, *program.generic_extensions]),
         *(("perk implementation", impl) for impl in
           [*program.perk_impls, *program.generic_perk_impls]),
@@ -331,9 +342,10 @@ def signature_types(program: 'Program') -> Iterator[TypeSite]:
         yield from _callable_sites("function", func, func)
 
     for ext in [*program.extensions, *program.generic_extensions]:
-        yield TypeSite("extension", "receiver", ext, ext.target_type,
+        kind = extension_kind(ext)
+        yield TypeSite(kind, "receiver", ext, ext.target_type,
                        ext.target_type_span or ext.loc)
-        yield from _callable_sites("extension", ext, ext)
+        yield from _callable_sites(kind, ext, ext)
 
 
 # A node that holds no type and no sub-expression. Named rather than implied, so the

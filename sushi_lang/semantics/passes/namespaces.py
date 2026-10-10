@@ -84,7 +84,7 @@ def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
 
     declared = _names_declared_by(program)
     flat: list[Tuple[UseStatement, Provider]] = []
-    aliased: list[Provider] = []
+    aliased: list[Tuple[UseStatement, Provider]] = []
 
     for use_stmt in program.uses or ():
         provider = _provider_for(use_stmt, tables, units, library_registry, unit)
@@ -102,7 +102,7 @@ def build_namespaces(reporter: Reporter, unit: Unit, tables: SymbolTables, *,
         if _reject_alias_collision(reporter, table, declared, use_stmt, alias):
             continue
         table.bind(alias, provider, use_stmt.alias_span or use_stmt.loc)
-        aliased.append(provider)
+        aliased.append((use_stmt, provider))
         if not tuple(provider.members()):
             er.emit(reporter, er.ERR.CW3004,
                     use_stmt.alias_span or use_stmt.loc, alias=alias)
@@ -183,7 +183,7 @@ class MethodInterfaceNamespace(UnitNamespace):
 def _scope_of(unit_name: str, flat: Iterable[Tuple[UseStatement, Provider]],
               units: Dict[str, Unit],
               library_registry: Optional[LibraryRegistry] = None,
-              aliased: Iterable[Provider] = ()) -> UnitScope:
+              aliased: Iterable[Tuple[UseStatement, Provider]] = ()) -> UnitScope:
     """What this unit may write with no qualifier, from its FLAT imports alone.
 
     An import brings what it names AND what that re-exports (section 8.1): the walk is
@@ -196,7 +196,9 @@ def _scope_of(unit_name: str, flat: Iterable[Tuple[UseStatement, Provider]],
     sibling wrote an ordinary `use`, and gets the sibling and nothing more.
 
     An ALIASED import puts no name here, but a method interface it reaches is still
-    this unit's import: the methods it enables have no name for the alias to gate.
+    this unit's import: the methods it enables have no name for the alias to gate. The
+    units it reaches are kept apart, because their public extensions are callable here
+    (`docs/design/extension-visibility.md` R6) and their names are not.
     """
     from sushi_lang.semantics.stdlib_registry import enables_builtin_methods
 
@@ -209,24 +211,38 @@ def _scope_of(unit_name: str, flat: Iterable[Tuple[UseStatement, Provider]],
                 modules.append(reached.origin)
             elif reached.namespace_kind == "generic":
                 generics.extend(reached.members())
-            elif reached.namespace_kind == "unit":
-                scoped_units.append(reached.origin)
-                if reached.origin not in units:
-                    # A compiled library's unit, reached through a re-export: its
-                    # declarations are filed under `lib/<library>/<unit>`.
-                    scoped_units.extend(
-                        _binary_library_units(reached.origin, library_registry))
-        if use_stmt.is_library and provider.namespace_kind == "unit":
-            scoped_units.extend(_library_units(provider.origin, units))
-            scoped_units.extend(
-                _binary_library_units(provider.origin, library_registry))
-    for provider in aliased:
+        scoped_units.extend(_units_reached(use_stmt, provider, units, library_registry))
+    aliased_units: list[str] = []
+    for use_stmt, provider in aliased:
         scoped_units.extend(reached.origin for reached in provider.reaches()
                             if isinstance(reached, MethodInterfaceNamespace)
                             or enables_builtin_methods(reached.origin))
+        aliased_units.extend(_units_reached(use_stmt, provider, units, library_registry))
     return UnitScope(unit=unit_name, units=tuple(dict.fromkeys(scoped_units)),
                      modules=tuple(dict.fromkeys(modules)),
-                     generics=tuple(dict.fromkeys(generics)), everything=False)
+                     generics=tuple(dict.fromkeys(generics)), everything=False,
+                     aliased_units=tuple(dict.fromkeys(aliased_units)))
+
+
+def _units_reached(use_stmt: UseStatement, provider: Provider, units: Dict[str, Unit],
+                   library_registry: Optional[LibraryRegistry]) -> list[str]:
+    """Every compilation unit one import reaches: the unit, and its `public use` chain.
+
+    A LIBRARY import names the whole artifact, so it reaches every unit of the library.
+    """
+    found: list[str] = []
+    for reached in provider.reaches():
+        if reached.namespace_kind != "unit":
+            continue
+        found.append(reached.origin)
+        if reached.origin not in units:
+            # A compiled library's unit, reached through a re-export: its declarations
+            # are filed under `lib/<library>/<unit>`.
+            found.extend(_binary_library_units(reached.origin, library_registry))
+    if use_stmt.is_library and provider.namespace_kind == "unit":
+        found.extend(_library_units(provider.origin, units))
+        found.extend(_binary_library_units(provider.origin, library_registry))
+    return found
 
 
 def _binary_library_units(origin: str,

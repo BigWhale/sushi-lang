@@ -155,6 +155,10 @@ _add(ErrorMessage("CW3004", Severity.WARNING,
     "'{alias}' binds an empty namespace", Category.UNIT,
     "The import brought no name that a qualified form could reach, so the `as` clause does nothing. It is a warning and not an error because a namespace is empty for three reasons and only one of them is a mistake: a method interface such as `<io/stdio>` can never bring a name; a unit that is nothing but `extend` blocks exports methods rather than names, and is load-bearing anyway; and a public surface that happens to be empty today is one declaration away from changing. Refusing the first two would refuse a good import for a redundant clause, and refusing the third would make an error appear and disappear as a library grew. The import still did its work. Drop the `as`."))
 
+_add(ErrorMessage("CW3007", Severity.WARNING,
+    "'{name}' hides the public extension method that '{owner}' declares", Category.UNIT,
+    "This unit declares an extension method, and it imports a unit that declares a public extension method of the same name on the same type (C3 of `docs/design/extension-visibility.md`). That is legal. A call in this unit calls the method of this unit, as a unit's own declaration wins over an imported name, and the other unit keeps calling its own. It is a warning because a reader of a call cannot see which of the two methods answers it. The model is CW3002, a declaration that shadows a library export. Rename the method of this unit to call the imported one, or keep it."))
+
 _add(ErrorMessage("CW3006", Severity.WARNING,
     "'{import_}' brings nothing this unit names", Category.UNIT,
     "Behind `--warn-unused`, off by default. The unit writes no name the import brings: no function, constant, type or perk it declares or re-exports, no member behind its alias, no extension or perk method it declares, and for `<collections/strings>` no string method the module enables (the per-unit rule CE3015 reads). A `public use` re-exports to the unit's own importers and is never reported, and neither is an import of a library. Delete the line."))

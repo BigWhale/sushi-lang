@@ -76,7 +76,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/stdlib_registry.py", "get_function", "tests/unit/test_stdlib_rows_are_one.py"),
     ("sushi_lang/semantics/type_walk.py", "TERMINAL_KINDS", "tests/unit/test_type_walk_is_total.py"),
     ("sushi_lang/semantics/visibility.py", "FOLLOWS_DECLARATION", "tests/unit/test_visibility_seam_is_total.py"),
-    ("sushi_lang/semantics/visibility.py", "FOLLOWS_TARGET_TYPE", "tests/unit/test_visibility_seam_is_total.py"),
     ("sushi_lang/semantics/visibility.py", "NO_VISIBILITY", "tests/unit/test_visibility_seam_is_total.py"),
     ("sushi_lang/semantics/visitors.py", "WALKED_IN_PARENT", "tests/unit/test_visitor_dispatch_is_total.py"),
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "AI_CANONNAME_OFFSET",

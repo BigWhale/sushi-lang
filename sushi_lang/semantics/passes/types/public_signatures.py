@@ -23,7 +23,8 @@ from sushi_lang.semantics.ast import ExtendWithDef
 from sushi_lang.semantics.ast_walk import (
     ConstraintSite, TypeSite, is_written, signature_constraints, signature_types)
 from sushi_lang.semantics.type_predicates import contains_foreign_ptr
-from sushi_lang.semantics.visibility import kind_word
+from sushi_lang.semantics.visibility import (
+    CARRIES_MARKER, CONVERSION, EXTENSION_METHOD, FOLLOWS_TARGET_TYPE, kind_word)
 from .visibility import name_is_contested
 
 if TYPE_CHECKING:
@@ -38,29 +39,44 @@ if TYPE_CHECKING:
 # carries a `ptr` field exposes nothing the struct did not, and refusing it would make a
 # wrapper struct unextendable. A rule with a different answer brings its own sets rather
 # than widening these.
-_PTR_RULE_KINDS = frozenset({"function", "extension", "perk method"})
+_PTR_RULE_KINDS = frozenset({"function", EXTENSION_METHOD, CONVERSION, "perk method"})
 _PTR_RULE_POSITIONS = frozenset({"return", "error", "parameter"})
 
 
 # The leak rule polices what a public declaration HANDS OUT, so it reads a wider set than
 # the `ptr` rule and includes exactly the two positions that one excludes: a public
 # struct's field and a public enum's variant payload are part of the promise (decision 2
-# of `docs/design/visibility.md`). The RECEIVER is absent because it IS the gate -- an
-# extension is as visible as its target type, so asking whether the target is private
-# after asking whether it is public would answer itself.
+# of `docs/design/visibility.md`).
+#
+# A conversion is not here: it has no leak check (docs/design/error-conversion.md section
+# 3.8), because a private target makes it usable in its own unit only.
 _LEAK_RULE_KINDS = frozenset({
-    "constant", "variable", "struct", "enum", "function", "extension", "perk method",
-    "perk implementation",
+    "constant", "variable", "struct", "enum", "function", EXTENSION_METHOD,
+    "perk method", "perk implementation",
 })
 _LEAK_RULE_POSITIONS = frozenset({
     "type", "return", "error", "parameter", "field", "variant",
 })
 
 
+def _leak_position(site: TypeSite) -> bool:
+    """Is this position part of what the declaration promises?
+
+    The RECEIVER depends on the kind. A kind that follows its target type reads the
+    target's marker, so the target IS the gate, and asking whether it is private after
+    asking whether it is public would answer itself. A kind that carries its own marker
+    promises its target as much as its return (`docs/design/extension-visibility.md`,
+    section 5): a public extension on a private type hands out a type that another unit
+    cannot name.
+    """
+    if site.position == "receiver":
+        return site.kind in CARRIES_MARKER
+    return site.position in _LEAK_RULE_POSITIONS
+
+
 # What a diagnostic calls each declaration. `declarations()` words the AST walk; a user
 # reading an error wants the thing they wrote, so an extension is a method here.
 _KIND_WORD = {
-    "extension": "extension method",
     "variable": "unit variable",
 }
 
@@ -104,14 +120,15 @@ def _declared_public(validator: 'TypeValidator',
     """Whether the declaration owning this position is part of the unit's API.
 
     Three answers, one per group of `semantics/visibility.py`. A declaration that carries
-    its own marker reads it. An extension and a perk implementation read their TARGET
-    type's, which is Ruling 2. A perk's own method reads the perk's.
+    its own marker reads it, an extension method included. A conversion and a perk
+    implementation read their TARGET type's, which is Ruling 2. A perk's own method reads
+    the perk's.
 
     None is a fourth answer, and it belongs to the target alone: nothing in this program's
     source declares the type, so there is no marker to inherit. The two rules read that
     differently, which is why it is not folded into a bool here.
     """
-    if site.kind in ("extension", "perk implementation") or isinstance(site.decl, ExtendWithDef):
+    if site.kind in FOLLOWS_TARGET_TYPE or isinstance(site.decl, ExtendWithDef):
         return _type_visibility(validator, getattr(site.decl, "target_type", None))
     return bool(getattr(site.decl, "is_public", True))
 
@@ -220,13 +237,8 @@ def check_public_signatures(validator: 'TypeValidator', program: 'Program') -> N
         # (#702). The `ptr` rule keeps reading both, because the template's own signature
         # says `T`: the instance is the one position where a quarantined pointer crossing
         # a public boundary can be seen.
-        #
-        # A conversion has no leak check (docs/design/error-conversion.md section 3.8): a
-        # private target makes it usable in its own unit only.
         if (public is True and is_written(site.decl)
-                and not getattr(site.decl, "is_conversion", False)
-                and site.kind in _LEAK_RULE_KINDS
-                and site.position in _LEAK_RULE_POSITIONS):
+                and site.kind in _LEAK_RULE_KINDS and _leak_position(site)):
             origin = _leaked_type(validator, site.ty)
             if origin is not None:
                 _note_declaration(er.emit_with(
