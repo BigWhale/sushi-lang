@@ -1,0 +1,8 @@
+# Hands out a SeekFrom, so that another unit can receive one with no import of io.
+use <io/contracts>
+
+public fn from_start() SeekFrom:
+    return SeekFrom.Start()
+
+public fn from_end() SeekFrom:
+    return SeekFrom.End()

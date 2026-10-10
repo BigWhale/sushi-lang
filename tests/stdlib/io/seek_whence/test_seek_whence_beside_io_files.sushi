@@ -1,0 +1,21 @@
+# A unit that imports only <io/files> of the io modules gives fd_seek the whence of a
+# SeekFrom that it receives. The call of .whence() needs no import: the method travels
+# with SeekFrom. To WRITE the name SeekFrom, a unit imports <io/contracts>, or a module
+# that re-exports it (<io/fs>, <io/buf>, <net/tcp>); <io/files> does not bring it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "end 10\nstart 0\n"
+use <io/files>
+use "helpers/seek_origins"
+
+fn main() i32:
+    let i32 fd = fd_open("seek_whence_probe.txt", 3, 420).realise(-1)
+    if (fd < 0):
+        println("open failed")
+        return 1
+    fd_write_str(fd, "0123456789").realise(-1)
+    println("end {fd_seek(fd, 0 as i64, from_end().whence()).realise(-1 as i64)}")
+    println("start {fd_seek(fd, 0 as i64, from_start().whence()).realise(-1 as i64)}")
+    fd_close(fd).realise(-1)
+    return 0
