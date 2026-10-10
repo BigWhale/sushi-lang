@@ -2,6 +2,7 @@
 """Enhanced test runner for the Sushi language compiler."""
 
 import atexit
+import fnmatch
 from collections import Counter
 import io
 import re
@@ -313,16 +314,47 @@ def ir_function(bodies: Dict[str, str], function: str) -> List[str]:
             if symbol == function or symbol.endswith("$" + function)]
 
 
-def check_ir(ll_path: Path, metadata: TestMetadata, message: str) -> Tuple[bool, str]:
-    """EXPECT_IR_HOLDS and EXPECT_IR_LACKS, against the IR the compilation wrote.
+# How many matching symbols a failed EXPECT_IR_NO_FUNCTION names; it counts the rest.
+IR_SYMBOLS_SHOWN = 5
 
-    A function that no symbol defines, or that two symbols define, fails the fixture: the
-    directive must name one body.
+
+def ir_symbols_matching(bodies: Dict[str, str], pattern: str) -> List[str]:
+    """The symbols that the glob `pattern` matches.
+
+    A pattern with no `$` reads the STEM of a symbol, the text after its last `$`, so
+    after its unit (`collections$iter$List__i32_enumerate` has the stem
+    `List__i32_enumerate`). A type part of a symbol holds no `$`. A pattern with a `$`
+    reads the whole symbol, so it can name the unit too (`*left$Pack__i32_tag`).
+    """
+    if "$" in pattern:
+        return [symbol for symbol in bodies if fnmatch.fnmatchcase(symbol, pattern)]
+    return [symbol for symbol in bodies
+            if fnmatch.fnmatchcase(symbol.rpartition("$")[2], pattern)]
+
+
+def check_ir(ll_path: Path, metadata: TestMetadata, message: str) -> Tuple[bool, str]:
+    """The EXPECT_IR_ directives, against the IR the compilation wrote.
+
+    For EXPECT_IR_HOLDS and EXPECT_IR_LACKS, a function that no symbol defines, or that
+    two symbols define, fails the fixture: the directive must name one body.
+    EXPECT_IR_FUNCTION asks for at least one symbol that its pattern matches, and
+    EXPECT_IR_NO_FUNCTION for none.
     """
     if not ll_path.is_file():
         return False, f"✗ Compilation: the compiler wrote no IR at {ll_path}"
     bodies = ir_functions(ll_path.read_text(encoding="utf-8"))
     problems = []
+    for pattern, defined in metadata.ir_function_expectations or []:
+        symbols = ir_symbols_matching(bodies, pattern)
+        if defined and not symbols:
+            problems.append(f"{pattern}: expected the IR to define a function that the "
+                            f"pattern matches, and it defines none")
+        elif not defined and symbols:
+            shown = ", ".join(symbols[:IR_SYMBOLS_SHOWN])
+            more = len(symbols) - IR_SYMBOLS_SHOWN
+            problems.append(f"{pattern}: expected the IR to define no function that the "
+                            f"pattern matches, and it defines {shown}"
+                            + (f", and {more} more" if more > 0 else ""))
     for function, text, holds in metadata.ir_expectations or []:
         symbols = ir_function(bodies, function)
         if len(symbols) != 1:
@@ -837,7 +869,7 @@ class TestRunner:
             args = ["--clean-cache", *cache_flags]
         else:
             args = [*(["--clean-cache"] if clean else []), source, "-o", output,
-                    *metadata.compiler_flags, *(IR_FLAGS if metadata.ir_expectations else ()),
+                    *metadata.compiler_flags, *(IR_FLAGS if metadata.reads_the_ir else ()),
                     *cache_flags]
         if metadata.stdlib_modules and workspace is not None:
             # The bootstrap runs the compiler without the `sushic` wrapper, so it does what
@@ -1022,7 +1054,7 @@ class TestRunner:
             if success and workspace is not None:
                 success, message = self._check_copy_paths(workspace, metadata, message)
 
-            if success and metadata.ir_expectations:
+            if success and metadata.reads_the_ir:
                 success, message = check_ir(binary_path.with_suffix(".ll"), metadata, message)
 
             return success, message

@@ -105,6 +105,10 @@ class TestMetadata:
     # What the emitted IR of one function must hold or lack: (function, text, holds), in
     # written order. The runner asks the compiler for the IR when the list is not empty.
     ir_expectations: Optional[List[Tuple[str, str, bool]]] = None
+    # Which functions the emitted IR must define or must not define: (symbol pattern,
+    # defined), in written order. A pattern with no `$` reads the stem, the symbol after
+    # its unit.
+    ir_function_expectations: Optional[List[Tuple[str, bool]]] = None
     # A directive value the parser could not read; the runner fails a fixture that has one.
     directive_errors: Optional[List[str]] = None
 
@@ -144,6 +148,8 @@ class TestMetadata:
             self.expect_paths_exist_before_clean = []
         if self.ir_expectations is None:
             self.ir_expectations = []
+        if self.ir_function_expectations is None:
+            self.ir_function_expectations = []
         if self.directive_errors is None:
             self.directive_errors = []
 
@@ -160,6 +166,11 @@ class TestMetadata:
                     or self.expect_paths_exist_before_clean
                     or self.then_clean_cache is not None or self.directive_errors
                     or self.output_path is not None)
+
+    @property
+    def reads_the_ir(self) -> bool:
+        """A directive that reads the emitted IR, so the compilation must write it."""
+        return bool(self.ir_expectations or self.ir_function_expectations)
 
     @property
     def declares_a_rebuild(self) -> bool:
@@ -433,6 +444,24 @@ def _ir_expectation(directive: str, holds: bool):
     return handle
 
 
+# A symbol pattern: the symbol characters, the unit separator `$`, and the glob characters
+# `*` and `?`. No space, because the value is one pattern.
+_SYMBOL_PATTERN = re.compile(r"[A-Za-z0-9_.$*?]+")
+
+
+def _ir_function(directive: str, defined: bool):
+    """`EXPECT_IR_FUNCTION: <pattern>` / `EXPECT_IR_NO_FUNCTION: <pattern>`."""
+    def handle(metadata: TestMetadata, value: str, test_file: Path) -> None:
+        pattern = _unquote(value).strip()
+        if not _SYMBOL_PATTERN.fullmatch(pattern):
+            metadata.directive_errors.append(
+                f"{directive} takes one symbol pattern (`*` and `?` allowed), "
+                f"not {value!r}")
+            return
+        metadata.ir_function_expectations.append((pattern, defined))
+    return handle
+
+
 def _release_lib_flag(metadata: TestMetadata, test_file: Path) -> None:
     """`--lib` joins the flags beside OUTPUT_PATH, and is refused without it."""
     if metadata.held_lib_flag is None:
@@ -484,6 +513,8 @@ VALUED_DIRECTIVES = {
     'OUTPUT_PATH': _output_path,
     'EXPECT_IR_HOLDS': _ir_expectation('EXPECT_IR_HOLDS', True),
     'EXPECT_IR_LACKS': _ir_expectation('EXPECT_IR_LACKS', False),
+    'EXPECT_IR_FUNCTION': _ir_function('EXPECT_IR_FUNCTION', True),
+    'EXPECT_IR_NO_FUNCTION': _ir_function('EXPECT_IR_NO_FUNCTION', False),
 }
 
 # Every directive that is a flag: bare `NAME` is true, `NAME: true|yes|1` sets it.
