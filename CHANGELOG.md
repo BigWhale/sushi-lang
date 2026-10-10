@@ -136,6 +136,13 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ### Changed
 
+- **A `foreach` over a `poke` value walks it in place.** When the iterable is reached
+  through a `poke` reference (a `poke` parameter, a `poke self` receiver, a `let poke`
+  binding, or a field or an element of one), `next()` runs on the caller's value and the
+  loop does not take it. After the loop, a `break` or a `return`, the caller continues
+  where the walk stopped. Before, an owning value was `CE2411`, and a plain value was
+  copied, so the walk did not change the caller's value. A plain or a `peek` borrow keeps
+  the old rule (`docs/design/iteration.md`, ruling 6).
 - **Breaking: the visibility of a method changed.** A method that comes with a type needs
   no import, and an extension method is a name of its unit. The rules
   (`docs/design/extension-visibility.md`):

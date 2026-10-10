@@ -434,6 +434,25 @@ that its scrutinee keeps, and taking a payload is the marked spelling, `nom`. A 
 pattern in a `match` (phase 3 of the tuple design) takes the section 10b modes: bare,
 `poke`, `nom`.
 
+## 10f. A borrowed binding holds a SET of owners
+
+A `let`-borrow, a destructure binder of a borrowed tuple, a reference binding and a
+`foreach` view all read storage that another value keeps. The borrow pass records EVERY
+owner that such a binding reads out of (`BorrowState.borrows_from`, a set), and each owner
+is frozen until the last use of the binding (#1258):
+
+- a change of ANY owner in the set invalidates the binding, and a use after the change is
+  [CE2412](../error-catalog.md#ce2412);
+- the diagnostic names the owner that changed, not the first owner in the set;
+- a destructure binder of a borrowed tuple reads out of every owner of the whole.
+
+One function writes the set and freezes each owner: `record_owners`, in
+`semantics/passes/borrow/state.py`. The block exit releases each freeze.
+
+Today every binding reads out of one owner, so the set has one member and no program
+changes. The first value with two owners is a value that is built over two borrowed
+values, for example two iterators that are zipped into one.
+
 ## 11. Not designed
 
 - **A `nom` binding inside `Own(...)`** ([CE2434](../error-catalog.md#ce2434)). Taking the pointee out would leave the

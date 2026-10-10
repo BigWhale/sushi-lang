@@ -175,7 +175,7 @@ would otherwise hand the body an `Err` forever, and a loop whose body reports an
 on (the behaviour ruling 2 exists to allow) would never end. The sticky stop makes "report
 and carry on" safe by construction: the loop sees at most one failure per iterator.
 
-### 6. `foreach` consumes its iterable, and the loop owns the iterator
+### 6. `foreach` consumes its iterable, and the loop owns the iterator — except through `poke`
 
 The same as for every other iterable, and load-bearing here: a protocol iterator can own a
 resource. A `Lines@(R)` owns a `BufReader@(R)` that owns a `File`, so the loop holds a real
@@ -193,12 +193,36 @@ way. So the loop destroys the iterator and nothing else does (#1145):
 
 - a named local or a `nom` parameter is marked moved, so its scope exit skips it, and a
   later mention of it is **[CE2405](../error-catalog.md#ce2405)**;
-- a borrow that owns a resource (a parameter, a `peek` or `poke` parameter, a field read)
-  is **[CE2411](../error-catalog.md#ce2411)**, because another owner still frees it; `.clone()` gives the loop a value
-  of its own;
-- a value that owns nothing is copied, and the loop walks the copy, so the source does
-  not change;
+- a borrow that owns a resource (a plain or a `peek` parameter, a field read) is
+  **[CE2411](../error-catalog.md#ce2411)**, because another owner still frees it and
+  `next()` moves the cursor, which is a write; `.clone()` gives the loop a value of its
+  own;
+- a plain or a `peek` borrow of a value that owns nothing is copied, and the loop walks
+  the copy, so the source does not change;
 - a temporary (`foreach(line?? in r.lines())`) has no owner, and the loop adopts it.
+
+**The exception is a walk through `poke`** (#1258). When the iterable is a place whose root
+is a `poke` reference (a `poke` parameter, a `poke self` receiver, a `let poke` binding, a
+`poke` pattern or item binding, or a member or an index chain off one of them), the loop
+walks the value IN PLACE. It does not consume the value: `next()` runs on the caller's
+storage, and after the loop, a `break` or a `return`, the caller's value is where the walk
+stopped. This holds for every walkable value, an owning one and a plain one alike:
+
+```sushi
+fn first(poke Words w) ~:
+    foreach(s in w):          # walks the caller's `w`; it does not take it
+        println(s)
+        break
+```
+
+The caller then continues the walk where `first` stopped. The typecheck pass decides it
+once and stamps `Foreach.walks_in_place`; the borrow pass and the backend read that stamp.
+In the borrow pass the walk is a change of the walked value, the same as a call of
+`next()` on it, so a `let`-borrow that reads out of the same owner and is used after the
+loop is **[CE2412](../error-catalog.md#ce2412)**. In the backend the loop's hidden slot is a
+`poke` reference to the caller's storage, and the loop exit destroys nothing. The body may
+read or rebind the walked value: each round calls `next()` on the storage that the value
+holds at that time.
 
 The item of a protocol iterator is registered as an owner too: it is the payload of a
 fresh `Maybe@(T)` nobody else frees, so the iteration owns it, the body may hand it away,
