@@ -282,10 +282,13 @@ jobs:
           # pipefail so a failing runner is not masked by tee's exit status. This job is
           # the gate AND the source of the sushi badge, so both have to stay honest.
           set -o pipefail
-          # Guard 1 of the fork-server (#1059): this one corpus job starts a fresh
-          # `sushic` process for each compile, as a user does. Every other job compiles
-          # in children of the fork-server.
-          uv run python tests/run_tests.py --enhanced --fresh-processes --json | tee corpus-results.json
+          # Guard 1 of the fork-server (#1059): every run that is not a pull request
+          # (the nightly run and a manual one) starts a fresh `sushic` process for each
+          # compile, as a user does, on both platforms. A pull request compiles in
+          # children of the fork-server, which is faster.
+          flags=""
+          if [ "${{ github.event_name }}" != "pull_request" ]; then flags="--fresh-processes"; fi
+          uv run python tests/run_tests.py --enhanced $flags --json | tee corpus-results.json
 
       # if-no-files-found: error is load-bearing. A runner that died before emitting
       # anything must fail this job, not hand the badge step an empty file to guess at.
@@ -320,7 +323,9 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          uv run --python 3.13 python tests/run_tests.py --enhanced
+          flags=""
+          if [ "${{ github.event_name }}" != "pull_request" ]; then flags="--fresh-processes"; fi
+          uv run --python 3.13 python tests/run_tests.py --enhanced $flags
 
   # Badge publication. Three properties the job this replaced did not have:
   #   - it never runs a suite itself; it consumes THIS run's artifacts, so the badge
