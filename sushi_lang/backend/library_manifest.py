@@ -832,6 +832,9 @@ class LibraryManifestGenerator:
         An extension on a private type that nothing ships is left out: no consumer can
         name the type, and no shipped body names it.
 
+        A private extension ships with its marker: a copy of a template of the library
+        can call it, and the consumer refuses a call of it from its own units (R4).
+
         The methods of an implementation of a perk that does not ship travel here too.
         The perk hides its CONTRACT, and the methods stay callable
         (`docs/design/visibility.md`); the consumer has no contract to register them
@@ -876,6 +879,8 @@ class LibraryManifestGenerator:
                         **method_record(method),
                         "type": type_name,
                         "unit": unit.name,
+                        # A perk method is callable wherever its type is (R8).
+                        "public": True,
                         "link_symbol": impl_method_symbol(type_name, method.name),
                     })
         return records

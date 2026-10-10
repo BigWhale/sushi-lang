@@ -404,7 +404,7 @@ is the authority, and the index is a cache of it.
     # a template's own doc block stands OUTSIDE its source slice, so the record is the
     # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 9,                  # Templates schema version. A binary or
+        "version": 10,                 # Templates schema version. A binary or
                                        #   hybrid .slib with another schema is
                                        #   refused (CE3512) and must be rebuilt.
                                        #   The one constant is
@@ -499,13 +499,19 @@ is the authority, and the index is a cache of it.
         # the body is in the bitcode, and the consumer declares `link_symbol` and links
         # it. The methods of an implementation of a perk that does not ship are records
         # here too: the contract stays hidden, and each method is an ordinary method of
-        # the type. An extension on a private type that nothing ships is left out. The
-        # whole key is absent when there is no record.
+        # the type. An extension on a private type that nothing ships is left out. A
+        # private extension ships with `"public": false`: a copy of a template of the
+        # library can call it, and the consumer refuses a call of it from its own units
+        # (docs/design/extension-visibility.md R4 to R6). The `link_symbol` of a concrete
+        # one carries its unit, `<unit>$<receiver>_<name>`, so two units can each declare
+        # a private method of one name (C5); a perk method has no unit. The whole key is
+        # absent when there is no record.
         #
         #   EXTENSION = {
         #       "type": str,           # The target, in the internal spelling: "Vec",
         #                              #   "i32", "i32[]", "Box<T>", "T[]"
         #       "name": str,
+        #       "public": bool,        # The `public` marker; True for a perk method
         #       **SIG,
         #       "self_mode": str,      # "peek" | "poke", only when declared
         #       "static": bool,        # True, only for a static
@@ -651,7 +657,7 @@ There is **no scheme identifier**. A manifest records what is, not the recipe, a
 | [CE3510](error-catalog.md#ce3510) | Metadata section truncated |
 | [CE3511](error-catalog.md#ce3511) | Bitcode section truncated |
 | [CE3507](error-catalog.md#ce3507) | The bitcode of a binary or hybrid library does not link |
-| [CE3512](error-catalog.md#ce3512) | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, a `conversions` record whose sides are not two error types or whose `link_symbol` is not the symbol of the pair, or a binary or hybrid library's templates schema is not version 9 (a library built before schema 9 is rebuilt) |
+| [CE3512](error-catalog.md#ce3512) | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, a `conversions` record whose sides are not two error types or whose `link_symbol` is not the symbol of the pair, or a binary or hybrid library's templates schema is not version 10 (a library built before schema 10 is rebuilt) |
 | [CE3513](error-catalog.md#ce3513) | File exceeds maximum size (1GB) |
 | [CE3515](error-catalog.md#ce3515) | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
 | [CE3516](error-catalog.md#ce3516) | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |

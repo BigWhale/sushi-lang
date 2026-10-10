@@ -414,8 +414,11 @@ def _method_line(method: dict, p: Palette) -> str:
 
 
 def _extension_line(ext: dict, p: Palette) -> str:
+    """An extension method as it is declared, with its marker (extension-visibility.md R9)."""
+    public = "public " if ext.get('public') else ""
     static = "static " if ext.get('static') else ""
-    return f"  extend {_render_extension_target(ext)} {static}{_render_signature(ext, p)}"
+    return (f"  {public}extend {_render_extension_target(ext)} "
+            f"{static}{_render_signature(ext, p)}")
 
 
 def _conversion_line(conv: dict, _p: Palette) -> str:

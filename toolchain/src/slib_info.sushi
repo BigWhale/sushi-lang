@@ -1279,11 +1279,14 @@ fn print_extension_records(MsgValue exts, bool pending, Opts o) bool:
             foreach(e in items.iter()):
                 p := open_record(p)
                 let string target = render_extension_target(e)
+                let string export = ""
+                if (get_bool(e, "public")):
+                    export := "public "
                 let string marker = ""
                 if (get_bool(e, "static")):
                     marker := "static "
                 let string sig = render_callable(e, o)
-                println("  extend {target} {marker}{sig}")
+                println("  {export}extend {target} {marker}{sig}")
                 p := print_doc(e, "    ", o)
             return p
         _ ->

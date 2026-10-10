@@ -69,13 +69,6 @@ def _slice_label(lib_name: str, what: str) -> str:
     return f"<template:{lib_name}:{display_type_name(what)}>"
 
 
-# Whether a concrete extension that a binary or hybrid library ships is public. The
-# manifest does not record the marker of an extension yet (epic #1251, Phase 5), so a
-# record is read as public: before the marker existed, every extension was visible to
-# every consumer. This is the one place that decides it.
-_SHIPPED_EXTENSION_IS_PUBLIC = True
-
-
 class _Snippet:
     """One re-parsed manifest record: its AST, and what the shared collector filed.
 
@@ -873,8 +866,9 @@ class LibraryRegistration:
         """Register the CONCRETE extension methods the libraries ship.
 
         A record is a signature, because the body is in the library's bitcode: the
-        method enters the extension table, and its declaration goes to the backend,
-        which declares the symbol and never defines it. The types are read against a
+        method enters the extension table with its marker and its unit, and its
+        declaration goes to the backend, which declares the symbol that the record names
+        and never defines it. The types are read against a
         copy of the tables taken AFTER the private types, so a method on a type the
         export closure ships resolves too.
 
@@ -901,7 +895,7 @@ class LibraryRegistration:
                 target_type=target, name=sig.name, ret_type=sig.ret_type,
                 params=sig.params, self_mode=self_mode, filename=lib_file,
                 unit_name=unit, err_type=sig.err_type, is_static=is_static,
-                is_public=_SHIPPED_EXTENSION_IS_PUBLIC)
+                is_public=bool(record["public"]))
             existing = next((other for other in extensions.declarations(target, sig.name)
                              if extensions_collide(self.tables.visibility, target,
                                                    other, method)), None)
