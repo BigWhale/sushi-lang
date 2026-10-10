@@ -348,7 +348,8 @@ def _reject_name_conflicts(perk_impl: ExtendWithDef, existing_methods: dict,
                                 method=method.name, perk=perk_impl.perk_name)
             prev_span = existing.name_span or existing.loc
             if prev_span is not None:
-                diag.note_at(f"extension method '{method.name}' is defined here", prev_span)
+                diag.note_at(f"extension method '{method.name}' is defined here", prev_span,
+                             filename=getattr(existing, "filename", None))
             diag.emit()
 
     return False
