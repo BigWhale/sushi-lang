@@ -1,0 +1,5 @@
+public extend i32 pick@(U: Display)(U other) string:
+    return "blue {other}"
+
+public fn blue_pick(i32 n) string:
+    return n.pick(true)

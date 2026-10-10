@@ -1,0 +1,13 @@
+use "helpers/ev_c3_crates"
+
+public extend Hamper@(T) badge() i32:
+    return 1
+
+public extend T[] stamp() i32:
+    return 1
+
+public fn badge_there(Hamper@(i32) h) i32:
+    return h.badge()
+
+public fn stamp_there(i32[] xs) i32:
+    return xs.stamp()

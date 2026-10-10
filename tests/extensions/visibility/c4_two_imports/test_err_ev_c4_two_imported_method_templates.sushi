@@ -1,0 +1,9 @@
+# C4 for a template with a method-level type parameter: this unit imports two public
+# `pick@(U)` on `i32` and has no own one. The call is CE3023.
+# EXPECT_ERROR_CODES_EXACT: CE3023
+use "helpers/ev_c4_red_pick"
+use "helpers/ev_c4_blue_pick"
+
+fn main() i32:
+    println(5.pick(true))
+    return 0

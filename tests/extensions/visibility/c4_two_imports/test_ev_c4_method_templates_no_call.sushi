@@ -1,0 +1,10 @@
+# C4 is an error at the CALL. Two imported public `pick@(U)` on `i32` that this unit
+# does not call are no fault, and each helper calls its own copy.
+# EXPECT_STDOUT_EXACT: "red true\nblue true\n"
+use "helpers/ev_c4_red_pick"
+use "helpers/ev_c4_blue_pick"
+
+fn main() i32:
+    println(red_pick(5))
+    println(blue_pick(5))
+    return 0

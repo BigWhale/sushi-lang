@@ -1,0 +1,15 @@
+# C5 for a static template: two units each declare a private static `weigh` on
+# `Crate@(T)`, with other parameters. That is no fault, and each unit calls its own
+# copy, solved from its own parameters.
+# EXPECT_STDOUT_EXACT: "1\n10\n"
+use "helpers/ev_c5_crates"
+use "helpers/ev_c5_static_other"
+
+extend Crate@(T) static weigh(nom T item) i32:
+    let Crate@(T) c = Crate(nom item, 1)
+    return c.size
+
+fn main() i32:
+    println(Crate.weigh(nom 5))
+    println(other_weigh())
+    return 0
