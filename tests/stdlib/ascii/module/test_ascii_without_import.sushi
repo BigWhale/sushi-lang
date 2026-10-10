@@ -1,0 +1,7 @@
+# The methods of <text/ascii> are methods of `u8`, a built-in type, so they need no
+# import.
+# EXPECT_STDOUT_EXACT: "true\n"
+
+fn main() i32:
+    println(a'1'.is_ascii_digit())
+    return 0

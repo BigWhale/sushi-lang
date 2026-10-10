@@ -12,7 +12,7 @@ public struct EBox@(T):
 public perk EShow:
     fn show() i32
 
-extend EBox@(T) total() i32:
+public extend EBox@(T) total() i32:
     return e_private() + e_public() + E_BASE
 
 extend EBox@(T) with EShow:

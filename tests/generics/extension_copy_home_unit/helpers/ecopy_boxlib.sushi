@@ -4,5 +4,5 @@ fn plain(i32 x) i32:
 public struct LibBox@(T):
     T v
 
-extend LibBox@(T) run() i32:
+public extend LibBox@(T) run() i32:
     return plain(4)

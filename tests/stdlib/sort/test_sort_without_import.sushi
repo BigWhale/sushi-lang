@@ -1,0 +1,9 @@
+# `.sort()` lives in `<collections/sort>`. It is a method of `T[]`, a built-in type,
+# so a unit that does not import the module calls it.
+# EXPECT_STDOUT_EXACT: "1 2 3\n"
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let i32[] xs = from([3, 1, 2])
+    xs.sort()
+    println("{xs[0]} {xs[1]} {xs[2]}")
+    return 0

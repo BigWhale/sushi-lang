@@ -3,8 +3,8 @@
 # location names the template with the source spelling of its type (#1070).
 # BUILD_LIB_HYBRID: bounded_pair_hyb.sushi
 # EXPECT_ERROR_CODES_EXACT: CE4006
-# EXPECT_STDERR_CONTAINS: "<template:bounded_pair_hyb:Pair@(T) show>:1:14"
-# EXPECT_STDERR_CONTAINS: "| extend Pair@(T: Display) show() string:"
+# EXPECT_STDERR_CONTAINS: "<template:bounded_pair_hyb:Pair@(T) show>:1:21"
+# EXPECT_STDERR_CONTAINS: "| public extend Pair@(T: Display) show() string:"
 use <lib/bounded_pair_hyb>
 
 struct Holder:

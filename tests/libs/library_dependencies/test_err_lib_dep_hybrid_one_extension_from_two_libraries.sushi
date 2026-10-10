@@ -1,8 +1,14 @@
-# Two hybrid libraries each declare `extend i32 doubled()`. One method name on one
-# type from two libraries is a duplicate.
-# BUILD_LIB_WARNS: ld_ext_p.sushi hybrid -> CW3003
-# BUILD_LIB_WARNS: ld_ext_q.sushi hybrid -> CW3003
-# EXPECT_ERROR_CODES_EXACT: CE0101
+# Two hybrid libraries each declare `public extend i32 doubled()`, and this unit
+# imports both and calls the method. That is two imported public extensions of one
+# name on one type: an error at the call, with a note at each declaration. Phase 3
+# of the extension-visibility work gives this error its code; until then the
+# fixture reads the exit code and the text.
+# BUILD_LIB_HYBRID: ld_ext_p.sushi
+# BUILD_LIB_HYBRID: ld_ext_q.sushi
+# EXPECT_STDERR_CONTAINS: "doubled"
+# EXPECT_STDERR_CONTAINS: "ld_ext_p"
+# EXPECT_STDERR_CONTAINS: "ld_ext_q"
+# EXPECT_STDERR_CONTAINS: "test_err_lib_dep_hybrid_one_extension_from_two_libraries.sushi:17:"
 use <lib/ld_ext_p>
 use <lib/ld_ext_q>
 

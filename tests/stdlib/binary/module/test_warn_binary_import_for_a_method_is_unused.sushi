@@ -1,0 +1,15 @@
+# An import of <encoding/binary> brings no method: a method of `u8[]` needs no import.
+# A unit that only calls methods of the module names nothing the import brings, so the
+# unused-use lint reports the import, and the module itself has no dead declaration.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_ERROR_CODES_EXACT: CW3006
+# EXPECT_STDOUT_EXACT: "513\n"
+# EXPECT_NO_LEAKS: true
+
+use <encoding/binary>
+
+fn main() i32:
+    let u8[] buf = from([])
+    buf.push_u16_be(0x0102)
+    println(buf.read_u16_le(0).realise(0))
+    return 0

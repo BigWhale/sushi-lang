@@ -1,5 +1,5 @@
-# The ERROR ARM of the same fence, on a generic extension target. The `| E` channel
-# hands the enum out exactly as a return type does (#656).
+# The ERROR ARM of the same fence, on a public extension of a generic target. The
+# `| E` channel hands the enum out exactly as a return type does (#656).
 # EXPECT_ERROR_CODE: CE3009
 
 error Fault:
@@ -8,7 +8,7 @@ error Fault:
 public struct Box@(T):
     T held
 
-extend Box@(T) checked() i32 | Fault:
+public extend Box@(T) checked() i32 | Fault:
     return Result.Err(Fault.Bad)
 
 fn main() i32:

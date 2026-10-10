@@ -224,7 +224,7 @@ compilation failed but *which* diagnostic fired.
 - Prefer this over `EXPECT_STDERR_CONTAINS` for error/warning tests: the code is
   stable, whereas message text is brittle.
 - It is a SUBSTRING check: a fixture that expects `CE2009` also passes when the
-  compiler prints `CE3015` beside it. Use `EXPECT_ERROR_CODES_EXACT` to pin the codes and their counts.
+  compiler prints `CE2001` beside it. Use `EXPECT_ERROR_CODES_EXACT` to pin the codes and their counts.
 
 #### EXPECT_ERROR_CODES_EXACT
 

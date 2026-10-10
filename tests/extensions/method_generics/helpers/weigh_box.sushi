@@ -4,5 +4,5 @@ public perk Weigh:
 public struct Box@(T):
     T value
 
-extend Box@(T) pair_with@(U: Weigh)(U other) i32:
+public extend Box@(T) pair_with@(U: Weigh)(U other) i32:
     return other.weight()

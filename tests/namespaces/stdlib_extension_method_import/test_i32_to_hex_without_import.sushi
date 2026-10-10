@@ -1,0 +1,8 @@
+# `.to_hex()` on `i32` is a method of the Sushi half of <collections/strings>. A
+# method of a built-in type needs no import, so this unit calls it with none.
+# EXPECT_STDOUT_EXACT: "ff\n"
+# EXPECT_NO_LEAKS: true
+fn main() i32:
+    let i32 n = 255
+    println(n.to_hex())
+    return 0
