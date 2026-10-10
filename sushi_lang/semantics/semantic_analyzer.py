@@ -1084,10 +1084,14 @@ class SemanticAnalyzer:
             self._record_copy_request(monomorphizer, request)
             if self._refuses_copy(monomorphizer, request):
                 continue
+            refused = monomorphizer.constraint_violations
             extend_def = monomorphize_extension_method(
                 request.template, request.target_type, request.receiver_args,
                 substitutor=monomorphizer.substitutor,
                 method_type_args=request.method_type_args)
+            # A body that names a refused instance is not checked: the refusal stands.
+            if monomorphizer.constraint_violations != refused:
+                continue
             extend_def.instance_key = request.key
             new_defs.append(extend_def)
             self._adopt_extension_copy(extend_def, compilation_order)
