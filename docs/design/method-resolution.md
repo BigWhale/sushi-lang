@@ -336,7 +336,7 @@ a method named `static` are not writable.
 | call site | on the TYPE name: `Vec.at(3, 4)` | on a value: `v.sum()` |
 | parameters | ordinary, and the modes are the ordinary four | the same, plus the receiver's |
 | return | ordinary; `\| E` opts into the channel exactly as elsewhere | the same |
-| visibility | none of its own -- as visible as its target type | the same |
+| visibility | none of its own -- as visible as its target type; under `extension-visibility.md` (ruled, not yet built) its own `public` marker | the same |
 | in a perk | **never** -- a perk has no `Self` ([CE4014](../error-catalog.md#ce4014)) | that is what a perk contracts |
 
 Everything in the right column that is not about the receiver is the same for a static. A static's

@@ -11,7 +11,8 @@ what the default is, and how a method attached to a type gets its answer.
 This document is normative for four things:
 
 1. Which declarations carry a `public` marker, and what the default is.
-2. How an extension and a perk implementation get their visibility.
+2. How an extension and a perk implementation get their visibility. For an extension
+   method and a static method, `extension-visibility.md` replaces this (ruled 2026-10-10).
 3. The rule that stops a private type escaping through a public signature.
 4. What this does *not* decide, so a later reader does not think it did.
 
@@ -135,6 +136,12 @@ its enum, and Sushi has a harder reason to agree: a private variant would make a
 `match` unwritable across a unit boundary, so exhaustiveness checking would break.
 
 ## 3. Ruling 2: a method is as visible as its type
+
+> **Replaced for extension methods and static methods** by `extension-visibility.md`
+> (ruled 2026-10-10, not yet built). An extension takes a `public` marker, private is the
+> default, and a public extension on a type that its unit does not declare is visible only
+> where that unit is imported. A perk implementation keeps this ruling. The text below is
+> the record of the earlier rule, and it describes the compiler until the epic lands.
 
 An extension and a perk implementation carry no marker. Each is as visible as the type it
 is attached to.
@@ -473,7 +480,8 @@ constraint answers one code or none, for every kind that carries one:
 | the perk's own unit | public | [CE3010](../error-catalog.md#ce3010) |
 | the perk's own unit | private, or an extension on a builtin | allowed |
 
-An extension's visibility in that table is its TARGET type's (Ruling 2), a generic
+An extension's visibility in that table is its TARGET type's (Ruling 2; under
+`extension-visibility.md` it becomes the extension's own marker), a generic
 target's its BASE type's. The collect pass drives the use-site rule once per unit off
 `signature_constraints()`, the same walk the leak rule reads, so the four kinds that carry
 a type parameter meet one call.
@@ -491,6 +499,9 @@ the type. No fence is needed there.
 ## 6. What this costs, measured
 
 ### A private helper method on a public type is not possible
+
+> **Replaced** by `extension-visibility.md` R4: an extension with no marker is private to
+> its unit. This section is the record of the earlier cost.
 
 That is the only capability Ruling 2 withholds. The cost is zero:
 

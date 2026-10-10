@@ -309,7 +309,10 @@ reasons and only one of them is a mistake:
 | **incidental** — the public surface happens to be empty today | one `public fn` away from changing |
 
 The middle row is the one that decides it, and it is not hypothetical. An extension carries
-no marker: it is as visible as its target type (`visibility.md` Ruling 2). So a unit may
+no marker: it is as visible as its target type (`visibility.md` Ruling 2). Under
+`extension-visibility.md` (ruled 2026-10-10, not yet built) the example below writes
+`public extend i32 squared()`, and the import stays load-bearing for the same reason: an R6
+extension is visible only where its unit is imported. So a unit may
 consist entirely of extensions, export **nothing nameable**, and still be the reason a
 program works:
 
