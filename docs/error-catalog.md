@@ -3830,7 +3830,7 @@ A variable was declared with 'let' outside of this scope. A `foreach` item, an `
 
 **Message:** `private {kind} '{name}' is never used in this unit`
 
-Behind `--warn-unused`, off by default. A private declaration is visible only in its own unit, so the unit is the whole question: the declaration is dead when nothing reachable from a ROOT of the unit names it. The roots are every `public` declaration, every `extend` block (an extension method and a perk implementation alike, because a call reaches it through a receiver and not through a name), the `unsafe external` blocks, and `fn main()`. A private declaration named only by another dead one is dead too, so both are reported. A bundled stdlib unit is checked only when the test runner sets SUSHI\_STDLIB\_DEAD\_GATE; a library unit never is. Delete the declaration, or make it `public` when it is API.
+Behind `--warn-unused`, off by default. A private declaration is visible only in its own unit, so the unit is the whole question: the declaration is dead when nothing reachable from a ROOT of the unit names it. The roots are every `public` declaration, every perk implementation and every conversion (no call names them), the `unsafe external` blocks, and `fn main()`. A private extension method, an instance method or a static method, is checked as a private function is: only its own unit can call it, so it is dead when no live declaration of the unit calls it. The name in the message is `<type>.<method>`. A private declaration named only by another dead one is dead too, so both are reported. A bundled stdlib unit is checked only when the test runner sets SUSHI\_STDLIB\_DEAD\_GATE; a library unit never is. Delete the declaration, or make it `public` when it is API.
 
 ### CW2001 {#cw2001}
 
@@ -3862,7 +3862,7 @@ A program's own declaration takes priority over a name that a library of any kin
 
 **Message:** `'{alias}' binds an empty namespace`
 
-The import brought no name that a qualified form could reach, so the `as` clause does nothing. The import still did its work: for example, a unit that is nothing but `extend` blocks exports methods rather than names. Drop the `as`.
+The import brought no name that a qualified form could reach, so the `as` clause does nothing. For example, `<text/ascii>` declares only methods on `u8`, so `use <text/ascii> as ascii` binds an empty namespace, and the methods need no import at all ([R1 and R2](design/extension-visibility.md#3-the-rules)). A unit of the program that is nothing but `extend` blocks exports methods rather than names: an import of it still brings its public extensions on types that it does not declare, with or without `as`, because a method cannot stand behind a namespace dot (R6). So the import can still do its work. Drop the `as`.
 
 ### CW3005 {#cw3005}
 
@@ -3870,7 +3870,7 @@ The import brought no name that a qualified form could reach, so the `as` clause
 
 **Message:** `` `public use` of '{origin}' re-exports nothing ``
 
-The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. A method interface such as the directory import `<collections>` brings no name (a `public use` of one still opens its methods to the importers), and a unit of nothing but `extend` blocks exports methods rather than names. The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something.
+The import brought no public name to hand on, so the `public` marker does nothing: the unit's importers get exactly what they would get without it. A directory import such as `<collections>` brings no name, and a unit of nothing but `extend` blocks exports methods rather than names (a `public use` of it still brings its public extensions on types that it does not declare to the importers). The import itself still did its work for this unit. Drop the `public`, or make the imported unit export something.
 
 ### CW3006 {#cw3006}
 
@@ -3878,7 +3878,7 @@ The import brought no public name to hand on, so the `public` marker does nothin
 
 **Message:** `'{import_}' brings nothing this unit names`
 
-Behind `--warn-unused`, off by default. The unit writes no name the import brings: no function, constant, type or perk it declares or re-exports, no member behind its alias, no extension or perk method it declares, and for `<collections/strings>` no string method the module enables (the per-unit rule [CE3015](#ce3015) reads). A `public use` re-exports to the unit's own importers and is never reported, and neither is an import of a library. Delete the line.
+Behind `--warn-unused`, off by default. The unit writes no name the import brings: no function, constant, type or perk it declares or re-exports, no member behind its alias, and no public extension method that it declares on a type that it does not declare (only an import brings such a method, flat or aliased: [R6](design/extension-visibility.md#3-the-rules)). An import brings no other method: a stdlib method on a built-in type needs no import, and a public method of the home unit of a type travels with the type. So a unit that imports a stdlib module only to call its methods gets this warning. A `public use` re-exports to the unit's own importers and is never reported, and neither is an import of a library. Delete the line.
 
 ### CW3007 {#cw3007}
 
