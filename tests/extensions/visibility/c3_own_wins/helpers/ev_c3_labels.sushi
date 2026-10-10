@@ -1,0 +1,5 @@
+public extend i32 label() i32:
+    return 1
+
+public fn label_there(i32 n) i32:
+    return n.label()

@@ -1,0 +1,5 @@
+public struct Gem:
+    i32 carat
+
+public extend Gem shine() i32:
+    return self.carat * 2

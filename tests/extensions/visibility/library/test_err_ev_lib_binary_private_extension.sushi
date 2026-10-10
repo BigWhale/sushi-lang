@@ -1,0 +1,10 @@
+# A binary library does not export a private extension, and its consumer cannot call
+# it.
+# BUILD_LIB_BINARY: ev_lib_gauge.sushi
+# EXPECT_ERROR_CODES_EXACT: CE3005
+use <lib/ev_lib_gauge>
+
+fn main() i32:
+    let Gauge g = Gauge(4)
+    println(g.hidden_level())
+    return 0

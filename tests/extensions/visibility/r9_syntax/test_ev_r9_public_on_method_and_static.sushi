@@ -1,0 +1,17 @@
+# R9: `public` stands before `extend`, as it stands before `fn`, on an extension
+# method and on a static.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless!\n7\n"
+# EXPECT_NO_LEAKS: true
+public struct Crate:
+    i32 weight
+
+public extend string shout() string:
+    return "{self}!"
+
+public extend Crate static weighing(i32 weight) Crate:
+    return Crate(weight)
+
+fn main() i32:
+    println("Mostly Harmless".shout())
+    println(Crate.weighing(7).weight)
+    return 0

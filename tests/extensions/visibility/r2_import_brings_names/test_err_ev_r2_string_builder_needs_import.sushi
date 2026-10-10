@@ -1,0 +1,7 @@
+# R2: <collections/strings> declares the type `StringBuilder`. A type of a stdlib
+# module needs the import. Only the methods of the built-in types need none.
+# EXPECT_ERROR_CODE: CE2001
+fn main() i32:
+    let StringBuilder sb = StringBuilder.new()
+    println(sb.size())
+    return 0

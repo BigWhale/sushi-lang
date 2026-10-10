@@ -1,0 +1,10 @@
+# R1 is a rule of the unit that holds the call. This unit imports
+# <collections/strings>, the helper imports nothing, and the call in the helper
+# compiles.
+# EXPECT_STDOUT_EXACT: "true\n"
+use "helpers/ev_r1_prefix"
+use <collections/strings>
+
+fn main() i32:
+    println(starts_with_a("a,b"))
+    return 0

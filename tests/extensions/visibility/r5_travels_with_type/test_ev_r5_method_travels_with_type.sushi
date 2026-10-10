@@ -1,0 +1,12 @@
+# R5: a public extension in the unit that declares its target travels with the type.
+# This unit does not import the home unit. It receives the values from another unit
+# and calls the methods: on a plain type, on a generic target and on a concrete
+# instance of the generic type.
+# EXPECT_STDOUT_EXACT: "25\n7\n42\n"
+use "helpers/ev_r5_maker"
+
+fn main() i32:
+    println(make_vec().length_sq())
+    println(make_wrap().count())
+    println(make_wrap().doubled())
+    return 0

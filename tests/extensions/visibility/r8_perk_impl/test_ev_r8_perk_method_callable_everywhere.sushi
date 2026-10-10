@@ -1,0 +1,10 @@
+# R8: a perk implementation is global. This unit imports neither the perk nor the unit
+# that implements it, and it calls the methods.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n7!\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_r8_maker"
+
+fn main() i32:
+    println(make_horn().shout())
+    println(level().shout())
+    return 0

@@ -1,0 +1,11 @@
+# R4: an extension with no marker is private to its unit. This unit imports the
+# helper, and it still cannot call the private extension on `i32`, or the private
+# extension on the public type of the helper.
+# EXPECT_ERROR_CODES_EXACT: CE3005, CE3005
+use "helpers/ev_r4_tools"
+
+fn main() i32:
+    let Crate c = Crate(4)
+    println(5.tripled())
+    println(c.heavier())
+    return 0

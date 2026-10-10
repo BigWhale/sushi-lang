@@ -1,0 +1,8 @@
+# R7: a static with no marker is private to its unit, as an instance method is.
+# EXPECT_ERROR_CODES_EXACT: CE3005
+use "helpers/ev_r7_geo"
+
+fn main() i32:
+    let Vec2 o = Vec2.hidden_origin()
+    println(o.x)
+    return 0

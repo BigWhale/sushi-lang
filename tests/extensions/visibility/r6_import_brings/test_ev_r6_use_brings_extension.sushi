@@ -1,0 +1,15 @@
+# R6: a public extension on a type that its unit does not declare is visible in every
+# unit that imports its unit. The targets are a built-in type, an array type and the
+# type of another unit.
+# EXPECT_STDOUT_EXACT: "42\n6\n4 3\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_r6_point"
+use "helpers/ev_r6_bytes"
+
+fn main() i32:
+    println(21.twice_r6())
+    let i32[] xs = from([1, 2, 3])
+    println(xs.total())
+    let Pt p = Pt(3, 4).swapped()
+    println("{p.x} {p.y}")
+    return 0

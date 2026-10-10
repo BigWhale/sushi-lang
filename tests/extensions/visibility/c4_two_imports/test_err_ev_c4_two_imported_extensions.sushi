@@ -1,0 +1,12 @@
+# C4: this unit imports two public extensions of one name on one type and has no own
+# one. The call is an error, with a note at each declaration. The design names no
+# code, so the fixture reads the exit code and the notes.
+# EXPECT_STDERR_CONTAINS: "ev_c4_red.sushi"
+# EXPECT_STDERR_CONTAINS: "ev_c4_blue.sushi"
+# EXPECT_STDERR_CONTAINS: "test_err_ev_c4_two_imported_extensions.sushi:11:"
+use "helpers/ev_c4_red"
+use "helpers/ev_c4_blue"
+
+fn main() i32:
+    println(5.shade())
+    return 0

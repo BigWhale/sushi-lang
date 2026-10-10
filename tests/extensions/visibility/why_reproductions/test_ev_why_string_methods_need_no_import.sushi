@@ -1,0 +1,8 @@
+# The first reproduction of the epic: one unit and no import. A method of a built-in
+# type needs no import in any tier, so both calls compile.
+# EXPECT_STDOUT_EXACT: "false\n15\n"
+fn main() i32:
+    let string s = "Mostly Harmless"
+    println(s.is_empty())
+    println(s.len())
+    return 0

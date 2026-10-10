@@ -1,0 +1,18 @@
+# C3: this unit declares its own `label` on `i32`, and it imports a public `label` on
+# `i32`. The own extension wins in this unit, and the helper still calls its own. A
+# warning stands at the own declaration, with a note at the imported one. The design
+# names no code for the warning, so the fixture reads the exit code and the note.
+# EXPECT_NO_LEAKS makes the runner run the binary of this warning fixture.
+# EXPECT_STDERR_CONTAINS: "ev_c3_labels.sushi"
+# EXPECT_STDOUT_EXACT: "2\n1\n"
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDERR_CONTAINS: "test_warn_ev_c3_own_extension_wins.sushi:12:"
+use "helpers/ev_c3_labels"
+
+extend i32 label() i32:
+    return 2
+
+fn main() i32:
+    println(5.label())
+    println(label_there(5))
+    return 0

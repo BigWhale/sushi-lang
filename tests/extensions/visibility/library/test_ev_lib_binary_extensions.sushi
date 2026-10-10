@@ -1,0 +1,12 @@
+# A binary library records the marker and the declaring unit of each extension, and
+# the consumer applies R4 to R6 to the records, as for a source library.
+# BUILD_LIB_BINARY: ev_lib_gauge.sushi
+# EXPECT_STDOUT_EXACT: "4\n1005\n400\n"
+use <lib/ev_lib_gauge>
+
+fn main() i32:
+    let Gauge g = Gauge(4)
+    println(g.shown_level())
+    println(5.gauged())
+    println(read_hidden(g))
+    return 0

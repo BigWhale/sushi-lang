@@ -1,0 +1,12 @@
+# C1: two extensions of one name on one type in ONE unit are the duplicate error, as
+# before.
+# EXPECT_ERROR_CODES_EXACT: CE0101
+extend i32 mark() i32:
+    return 1
+
+extend i32 mark() i32:
+    return 2
+
+fn main() i32:
+    println(1.mark())
+    return 0

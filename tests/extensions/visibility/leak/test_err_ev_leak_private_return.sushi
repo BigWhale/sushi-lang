@@ -1,0 +1,11 @@
+# The leak fence on the return type of a public extension on a built-in type.
+# EXPECT_ERROR_CODES_EXACT: CE3009
+struct Secret:
+    i32 code
+
+public extend i32 secret() Secret:
+    return Secret(self)
+
+fn main() i32:
+    println(7.secret().code)
+    return 0

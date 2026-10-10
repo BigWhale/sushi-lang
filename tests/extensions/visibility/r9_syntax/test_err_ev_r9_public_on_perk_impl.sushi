@@ -1,0 +1,16 @@
+# R9: `public` stands before an extension method and before a static, and never
+# before a perk implementation. The design names no code for the refusal, only a
+# parse or syntax error, so the fixture reads the exit code and the code family.
+# EXPECT_STDERR_CONTAINS: error [CE6
+perk Loud:
+    fn shout() string
+
+struct Horn:
+    i32 level
+
+public extend Horn with Loud:
+    fn shout() string:
+        return "loud"
+
+fn main() i32:
+    return 0

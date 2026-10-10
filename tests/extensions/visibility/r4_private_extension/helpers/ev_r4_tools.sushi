@@ -1,0 +1,15 @@
+# Two private extensions: one on `i32`, one on the public type of this unit.
+public struct Crate:
+    i32 weight
+
+extend i32 tripled() i32:
+    return self * 3
+
+extend Crate heavier() i32:
+    return self.weight + 1
+
+public fn triple_at_home(i32 n) i32:
+    return n.tripled()
+
+public fn heavier_at_home(Crate c) i32:
+    return c.heavier()

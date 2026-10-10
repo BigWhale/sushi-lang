@@ -1,0 +1,7 @@
+use "helpers/ev_r8_loud"
+
+public fn make_horn() Horn:
+    return Horn(3)
+
+public fn level() i32:
+    return 7

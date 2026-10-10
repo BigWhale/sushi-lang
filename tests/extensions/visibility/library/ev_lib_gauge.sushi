@@ -1,0 +1,16 @@
+# A library with a private extension, a public extension on its own type and a public
+# extension on a built-in type.
+public struct Gauge:
+    i32 level
+
+extend Gauge hidden_level() i32:
+    return self.level * 100
+
+public extend Gauge shown_level() i32:
+    return self.level
+
+public extend i32 gauged() i32:
+    return self + 1000
+
+public fn read_hidden(Gauge g) i32:
+    return g.hidden_level()

@@ -1,0 +1,8 @@
+# R4, the control: the unit that declares a private extension calls it.
+# EXPECT_STDOUT_EXACT: "15\n5\n"
+use "helpers/ev_r4_tools"
+
+fn main() i32:
+    println(triple_at_home(5))
+    println(heavier_at_home(Crate(4)))
+    return 0

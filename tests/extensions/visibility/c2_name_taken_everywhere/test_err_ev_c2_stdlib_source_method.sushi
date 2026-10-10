@@ -1,0 +1,13 @@
+# C2 against a method that a Sushi-source stdlib module declares on a built-in type.
+# That method is visible everywhere (R1), so an extension of its name is refused at
+# its declaration, private or public, with no import of the module.
+# EXPECT_ERROR_CODES_EXACT: CE2097, CE2097
+extend string lines() i32:
+    return 0
+
+public extend u8 is_ascii_digit() bool:
+    return false
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -1,0 +1,12 @@
+# C2 against a method that the backend emits (`is_empty`) and against a generator
+# method (`len`): an extension of that name on `string` is refused at its declaration.
+# EXPECT_ERROR_CODES_EXACT: CE2097, CE2097
+extend string is_empty() bool:
+    return false
+
+extend string len() i32:
+    return 0
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

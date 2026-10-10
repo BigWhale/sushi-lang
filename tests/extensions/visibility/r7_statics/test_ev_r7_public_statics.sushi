@@ -1,0 +1,14 @@
+# R7: a static follows R4 to R6. The public static in the home unit of `Vec2` travels
+# with the type (R5). The public static in another unit comes with the import of that
+# unit (R6). The private static is called at home.
+# EXPECT_STDOUT_EXACT: "3 4\n1 0\n0\n"
+use "helpers/ev_r7_geo"
+use "helpers/ev_r7_unit_vectors"
+
+fn main() i32:
+    let Vec2 a = Vec2.at(3, 4)
+    println("{a.x} {a.y}")
+    let Vec2 u = Vec2.unit_x()
+    println("{u.x} {u.y}")
+    println(origin_sum())
+    return 0

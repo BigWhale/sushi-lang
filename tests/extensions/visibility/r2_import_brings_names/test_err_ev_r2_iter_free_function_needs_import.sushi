@@ -1,0 +1,12 @@
+# R2: `map` is a free function of <collections/iter>, and a free function needs the
+# import. The method `.map()` needs none, and that does not change this rule.
+# EXPECT_ERROR_CODES_EXACT: CE2008
+fn dbl(i32 x) i32:
+    return x * 2
+
+fn main() i32:
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    let List@(i32) ys = map(xs, dbl)
+    println(ys.len())
+    return 0

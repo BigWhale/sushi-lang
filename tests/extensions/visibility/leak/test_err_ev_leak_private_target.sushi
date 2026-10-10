@@ -1,0 +1,12 @@
+# The leak fence reads the signature of a public extension, the target included. A
+# public extension on a private type hands out a type that another unit cannot name.
+# EXPECT_ERROR_CODES_EXACT: CE3009
+struct Secret:
+    i32 code
+
+public extend Secret reveal() i32:
+    return self.code
+
+fn main() i32:
+    println(Secret(7).reveal())
+    return 0
