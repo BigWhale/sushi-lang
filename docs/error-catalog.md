@@ -3856,14 +3856,6 @@ A unit was already imported earlier in this file. The duplicate use statement ha
 
 A program's own declaration takes priority over a name that a library of any kind (source, binary or hybrid) or a bundled stdlib module exports, and that is legal: a private function is emitted with internal linkage, so the two are separate symbols. The consumer's call binds to the consumer's declaration, and the library's own body keeps calling its own. Both declarations may be public: an unqualified name with two candidates is [CE3012](#ce3012) at the use. It warns because shadowing an export is rarely intended, and because the reader of the call site cannot see which of the two answers it. Rename your declaration, or keep it and accept that the library's body is unaffected. A name the library declares privately is shadowed the same way and says nothing, because each declaration carries the unit that declared it; a library TYPE is still one name for the program ([CE3011](#ce3011)). Write `use <lib/name> as alias` to put the export behind a dot and take the shadow away. The warning is the same for each library kind: a source library's export is found in its unit, a binary or hybrid library's export in its manifest, which lists every public function and template.
 
-### CW3003 {#cw3003}
-
-**Warning** · unit
-
-**Message:** `this library extends '{type}', a type it does not declare`
-
-The warning fires at `--lib` build time and nowhere else: shipping is when the claim becomes other people's problem, and it is the moment the author is present. A method is found on the receiver's type, so an extension puts its method name on the type for every consumer of the library, and a second library that claims the same name on the same type makes the two unusable together -- [CE0101](#ce0101), at a consumer who can edit neither. A builtin target is not exempt: `i32` is the most collidable target of all, because every unit of every program can reach it. A perk implementation does not warn, because the consumer's own implementation is the sanctioned override, so that claim has an escape. A conversion (`extend IoError as LibError:`) does not warn either: it puts no method name on its source, and only the unit that declares the target may declare it. An extension inside an ordinary program stays silent, `extend i32 squared()` is idiomatic Sushi there. To ship the method without the claim, declare your own wrapper type and extend that; to accept the claim, publish it -- `--lib-info` lists it under 'Foreign Extensions'.
-
 ### CW3004 {#cw3004}
 
 **Warning** · unit

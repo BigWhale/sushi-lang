@@ -375,7 +375,7 @@ LIBRARY_KINDS = ("source", "binary", "hybrid")
 
 
 def _build_lib_warns(metadata: TestMetadata, value: str, test_file: Path) -> None:
-    """`x.sushi -> CW3003`, or `x.sushi binary -> CW3003` for another library kind."""
+    """`x.sushi -> CW1001`, or `x.sushi binary -> CW1001` for another library kind."""
     head, sep, codes = _unquote(value).partition('->')
     words, codes = _split(head), _split(codes)
     kind = words[1] if len(words) == 2 else "source"

@@ -730,18 +730,6 @@ def _analyse(unit_manager: UnitManager, compilation_order: list[Unit], library_l
     return analyzer
 
 
-def _warn_foreign_extensions(compilation_order: list[Unit], reporter: Reporter) -> None:
-    """A library that extends a type it does not declare claims the method name for
-    every consumer (CW3003). Main's rule -- CE3007 and CE3501 among it -- is the
-    `entrypoint` pass's and is already answered by here (#674)."""
-    from sushi_lang.internals import errors as er
-    from sushi_lang.backend.library_manifest import own_units
-    from sushi_lang.semantics.foreign_extensions import foreign_extension_claims
-    for claim in foreign_extension_claims(own_units(compilation_order)):
-        er.emit_with(reporter, er.ERR.CW3003, claim.span,
-                     filename=claim.filename, type=claim.target).emit()
-
-
 def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                        options: BuildOptions) -> int:
     """Compile a program or a library: load, resolve libraries, analyse, gate, emit."""
@@ -772,8 +760,6 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
 
     analyzer = _analyse(unit_manager, compilation_order, library_linker, reporter,
                         src_path.stem, options)
-    if options.lib:
-        _warn_foreign_extensions(compilation_order, reporter)
     if reporter.has_errors:
         return 2
 

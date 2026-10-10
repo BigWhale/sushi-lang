@@ -157,9 +157,10 @@ above the first member, so one `pending` flag covers the owner and its members.
   template holds the base name and the parameters as written, so the tool builds the header
   again, and never parses it from the source slice. `perk` is a reserved word, so the tool
   cannot bind the name of the contract to a variable called `perk`.
-- **Foreign extensions** are the types that the library adds methods to and does not
-  declare: the consumer half of [CW3003](../error-catalog.md#cw3003). A library that extends only what it declares has
-  no key, and the section prints nothing.
+- **Extension methods.** The concrete records, then the templates, in one section. Each
+  line starts with `public` when the record is public, as the declaration writes it
+  (`docs/design/extension-visibility.md` R9). The section of foreign extensions was
+  retired with CW3003.
 - **Re-exports.** One record for each `public use`, printed as the statement that made it:
   a unit target is in quotes, and a stdlib or library target is in angle brackets. A library
   that re-exports nothing has no key, and the section prints nothing.

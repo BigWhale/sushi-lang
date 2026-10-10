@@ -1346,40 +1346,6 @@ fn print_conversion_list(MsgValue convs, Opts o) ~:
     println("")
 
 ##:
-Prints the section of the types that the library extends and does not declare.
-
-- Parameter meta: The metadata map.
-- Parameter o: The options of the run.
-:##
-fn print_foreign_extensions(MsgValue meta, Opts o) ~:
-    match meta:
-        MsgValue.Map(pairs) ->
-            match map_index(meta, "foreign_extensions"):
-                Maybe.Some(at) -> print_foreign_list(pairs[at].1, o)
-                Maybe.None() -> return ~
-        _ ->
-            return ~
-
-##:
-Prints each foreign extension record.
-
-- Parameter claims: The array of foreign extension records.
-- Parameter o: The options of the run.
-:##
-fn print_foreign_list(MsgValue claims, Opts o) ~:
-    if (not section("Foreign Extensions", len(claims), o)):
-        return ~
-    match claims:
-        MsgValue.Arr(items) ->
-            foreach(c in items.iter()):
-                let string target = render_extension_target(c)
-                let string method = get_str(c, "method")
-                println("  extend {target} {method}")
-        _ ->
-            return ~
-    println("")
-
-##:
 Prints the section of the declarations that are marked `dont_panic`.
 
 - Parameter meta: The metadata map.
@@ -1580,7 +1546,6 @@ fn print_declarations(MsgValue meta, MsgValue templates, Opts o) ~:
     print_perk_impls(templates, o)
     print_extensions(templates, o)
     print_conversions(meta, o)
-    print_foreign_extensions(meta, o)
     print_dont_panic(meta, o)
 
 ##:

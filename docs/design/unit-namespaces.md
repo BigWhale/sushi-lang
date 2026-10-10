@@ -755,6 +755,12 @@ the second one IS the duplicate.
 
 #### The warning belongs to `--lib`, and to nothing else
 
+> **Retired (epic #1251).** CW3003, its predicate and the `foreign_extensions` key of the
+> manifest are retired. Under R6 of `docs/design/extension-visibility.md`, an extension
+> on a type that its unit does not declare is visible only in the units that import its
+> unit, and a private extension only in its own unit, so a library makes no claim on a
+> type for every consumer. The text below records the old rule.
+
 The person who can fix a foreign-extension collision is never the person who sees it. A
 consumer combining two libraries reads [`CE0101`](../error-catalog.md#ce0101) about code they did not write and cannot
 change; only a diagnostic at the declaration reaches somebody who can act. So there is a
@@ -790,8 +796,8 @@ neither. A perk implementation's claim has the escape built in — the consumer'
 implementation is the sanctioned override and wins over a shipped one
 (`tests/libs/shipped_perks/test_lib_perk_impl_local_override.sushi` is the measured proof). So
 `extend i32 with Doubler` in a library stays quiet, and the two library fixtures of that
-shape keep building clean. The predicate lives in `semantics/foreign_extensions.py`, one
-function for both consumers: the [CW3003](../error-catalog.md#cw3003) emitter in the pipeline and the manifest extractor.
+shape keep building clean. The predicate was one function for both consumers: the
+[CW3003](../error-catalog.md#cw3003) emitter in the pipeline and the manifest extractor.
 
 The source stdlib holds many extensions and perk implementations: the combinators in
 `src_sushi/collections/iter.sushi` are on builtin generic targets (`List@(T)`, `T[]`), and

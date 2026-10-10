@@ -322,7 +322,7 @@ The shape of a manifest, one row per field that a reader uses.
 The Python reader has the same rows in `MANIFEST_SCHEMA`
 (`sushi_lang/backend/library_format.py`), and the two tables must agree.
 :##
-const SchemaRow[149] SLIB_MANIFEST_SCHEMA = [
+const SchemaRow[146] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('manifest', 'library_name', 'str', Presence.Required()),
     SchemaRow('manifest', 'library_version', 'str', Presence.Required()),
     SchemaRow('manifest', 'platform', 'str', Presence.Required()),
@@ -341,7 +341,6 @@ const SchemaRow[149] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('manifest', 'enums', '[]enum', Presence.Optional()),
     SchemaRow('manifest', 'templates', '@templates', Presence.Optional()),
     SchemaRow('manifest', 'not_exported', '[]not_exported', Presence.Optional()),
-    SchemaRow('manifest', 'foreign_extensions', '[]foreign_extension', Presence.Optional()),
     SchemaRow('manifest', 'conversions', '[]conversion', Presence.Optional()),
     SchemaRow('manifest', 'dont_panic', '[]dont_panic', Presence.Optional()),
     SchemaRow('manifest', 'dependencies', '[]dependency', Presence.Optional()),
@@ -469,9 +468,7 @@ const SchemaRow[149] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('dependency', 'kind', 'str', Presence.Required()),
     SchemaRow('dependency', 'library_name', 'str', Presence.Optional()),
     SchemaRow('dependency', 'library_version', 'str', Presence.Optional()),
-    SchemaRow('dependency', 'units', 'strs', Presence.Optional()),
-    SchemaRow('foreign_extension', 'type', 'str', Presence.Required()),
-    SchemaRow('foreign_extension', 'method', 'str', Presence.Required())
+    SchemaRow('dependency', 'units', 'strs', Presence.Optional())
 ]
 
 ##:

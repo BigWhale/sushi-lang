@@ -170,8 +170,8 @@ def _skip_source_section(f: BinaryIO, path: str) -> int:
 # (docs/design/error-channel.md). 9: an `enum` row and a `generic_type` record of a
 # generic enum state `is_error` (docs/design/error-conversion.md section 8.1), and the
 # manifest lists its `conversions` (section 8.2). 10: every extension record states
-# `public`, and a concrete one names the symbol of its unit
-# (docs/design/extension-visibility.md section 6).
+# `public`, a concrete one names the symbol of its unit, and the manifest has no
+# `foreign_extensions` (docs/design/extension-visibility.md section 6).
 TEMPLATES_SCHEMA_VERSION = 10
 
 
@@ -201,7 +201,6 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("manifest", "enums", "[]enum", "no"),
     ("manifest", "templates", "@templates", "no"),
     ("manifest", "not_exported", "[]not_exported", "no"),
-    ("manifest", "foreign_extensions", "[]foreign_extension", "no"),
     ("manifest", "conversions", "[]conversion", "no"),
     ("manifest", "dont_panic", "[]dont_panic", "no"),
     ("manifest", "dependencies", "[]dependency", "no"),
@@ -330,8 +329,6 @@ MANIFEST_SCHEMA: Tuple[Tuple[str, str, str, str], ...] = (
     ("dependency", "library_name", "str", "no"),
     ("dependency", "library_version", "str", "no"),
     ("dependency", "units", "strs", "no"),
-    ("foreign_extension", "type", "str", "yes"),
-    ("foreign_extension", "method", "str", "yes"),
 )
 
 _SCALAR_TYPES = {"str": (str, "a string"), "bool": (bool, "a bool"),

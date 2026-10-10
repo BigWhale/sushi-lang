@@ -303,8 +303,8 @@ is the authority, and the index is a cache of it.
     # from the pair (`conversion_symbol`, `<Source>_as__<Target>`); the consumer
     # declares it and files the pair, so its `??` and `as` call it. A record whose
     # sides are not two error types, or whose symbol is another one, is refused
-    # (CE3512). A conversion is not an `extension` record and makes no
-    # `foreign_extensions` claim. The whole key is absent when there is no record.
+    # (CE3512). A conversion is not an `extension` record. The whole key is absent
+    # when there is no record.
     "conversions": [
         {
             "source": str,             # The source error type: "LowError"
@@ -368,19 +368,6 @@ is the authority, and the index is a cache of it.
     # name, over the library's own units only, so a bundled stdlib module cannot leak
     # in. The whole key is absent when no unit carries a block.
     "unit_docs": {str: DOC},
-
-    # The types this library claims methods on and does not declare -- the consumer's
-    # half of CW3003. One record per extension method, in declaration order; the whole
-    # key is absent when the library extends only what it declares. A perk
-    # implementation makes no record: the consumer's own implementation is the
-    # sanctioned override, so that claim has an escape. `target_bounds` holds the
-    # bounds the target writes, one entry for each parameter of the target in order,
-    # and is empty when no parameter has a bound (#1070). The report prints the target
-    # with them, `extend (T: Clone)[] head`, as it does for an extension method.
-    "foreign_extensions": [
-        {"type": str, "method": str, "unit": str,
-         "target_bounds": [{"param": str, "perks": [str]}]}
-    ],
 
     # What a consumer's build must load (#1120): one record per stdlib module that the
     # build uses, and one per `use <lib/...>` of the library's OWN units, plain or
