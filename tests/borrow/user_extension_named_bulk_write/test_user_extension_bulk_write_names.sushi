@@ -1,0 +1,33 @@
+# The other bulk-write names on a user type: `extend_range` and `extend_str` on a
+# struct, and `extend` on a field path and on an integer. Each call takes its own
+# receiver as its argument and writes nothing.
+# EXPECT_STDOUT_EXACT: "8\n10\n10\n14\n"
+# EXPECT_RUNTIME_EXIT: 0
+
+struct Pair:
+    i32 a
+
+struct Box:
+    Pair inner
+
+extend Pair extend_range(Pair other, i32 start, i32 count) i32:
+    return self.a + other.a + start + count
+
+extend Pair extend_str(Pair other) i32:
+    return self.a + other.a + 4
+
+extend Pair extend(Pair other) i32:
+    return self.a + other.a + 6
+
+extend i32 extend(i32 other) i32:
+    return self + other
+
+fn main() i32:
+    let Pair p = Pair(3)
+    let Box b = Box(Pair(2))
+    let i32 n = 7
+    println(p.extend_range(p, 1, 1))
+    println(p.extend_str(p))
+    println(b.inner.extend(b.inner))
+    println(n.extend(n))
+    return 0

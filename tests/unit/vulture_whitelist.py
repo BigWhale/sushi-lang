@@ -38,8 +38,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "compiler/lib_info.py reads a style by name from _MARKS with getattr"),
     ("sushi_lang/semantics/method_effects.py", "consumes_args",
      "methods_where() reads a MethodEffect flag by name with getattr"),
-    ("sushi_lang/semantics/method_effects.py", "bulk_writes",
-     "methods_where() reads a MethodEffect flag by name with getattr"),
     # -- protocols of another library ------------------------------------------------
     ("sushi_lang/internals/indenter.py", "*_type",
      "the Lark Indenter protocol reads these class attributes"),

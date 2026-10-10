@@ -1,0 +1,24 @@
+# A user extension named `fill` is not the built-in refill. A struct that owns a
+# string takes itself as the argument, and the call compiles.
+# EXPECT_STDOUT_EXACT: "6\nzaphodzaphod\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+struct Pair:
+    i32 a
+
+struct Tag:
+    string name
+
+extend Pair fill(Pair other) i32:
+    return self.a + other.a
+
+extend Tag fill(Tag other) string:
+    return "{self.name}{other.name}"
+
+fn main() i32:
+    let Pair p = Pair(3)
+    let Tag t = Tag("zaphod".clone())
+    println(p.fill(p))
+    println(t.fill(t))
+    return 0
