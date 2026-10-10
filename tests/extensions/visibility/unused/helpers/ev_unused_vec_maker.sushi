@@ -1,0 +1,5 @@
+# A unit that makes a `UVec`, so that another unit can receive one.
+use "helpers/ev_unused_vec"
+
+public fn make_vec(i32 x, i32 y) UVec:
+    return UVec(x, y)

@@ -1,0 +1,42 @@
+# --warn-unused reports nothing here. A private extension that main calls, one that only
+# a called private extension calls, a private static and a private template that main
+# calls are live. An import whose only use is a call of its public extension on a type
+# that it does not declare (R6) is a used import, flat or aliased. The first import is
+# used by an instance method and by a static method on `UVec`, whose name the import of
+# its home unit brings.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_STDERR_EMPTY: true
+# EXPECT_STDOUT_EXACT: "12\n0 1\n10\n5\n3\n"
+# EXPECT_NO_LEAKS: true
+use "helpers/ev_unused_bytes"
+use "helpers/ev_unused_tools" as t
+use "helpers/ev_unused_vec_maker"
+use "helpers/ev_unused_vec"
+
+struct Crate:
+    i32 weight
+
+extend i32 inner_step() i32:
+    return self + 1
+
+extend i32 outer_step() i32:
+    return self.inner_step() * 3
+
+extend Crate static light() Crate:
+    return Crate(5)
+
+extend List@(T) size_ev() i32:
+    return self.len()
+
+fn main() i32:
+    println(3.outer_step())
+    let UVec u = UVec.unit_y()
+    println("{u.x} {u.y}")
+    println(make_vec(1, 3).len_sq())
+    println(Crate.light().weight)
+    let List@(i32) xs = List.new()
+    xs.push(1)
+    xs.push(2)
+    xs.push(3)
+    println(xs.size_ev() + 0.tripled_u() - 6.halved_u() + 3)
+    return 0

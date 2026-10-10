@@ -1,0 +1,7 @@
+# A public extension on a built-in type (R6), and a public function, so that an alias of
+# this unit binds a name.
+public extend i32 halved_u() i32:
+    return self / 2
+
+public fn tools_marker() i32:
+    return 7

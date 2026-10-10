@@ -1,0 +1,11 @@
+# The home unit of `UVec`. Its public extension and its public static travel with the
+# type (R5), so a unit that receives a `UVec` calls them with no import.
+public struct UVec:
+    i32 x
+    i32 y
+
+public extend UVec len_sq() i32:
+    return self.x * self.x + self.y * self.y
+
+public extend UVec static zero() UVec:
+    return UVec(0, 0)
