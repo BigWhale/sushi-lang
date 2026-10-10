@@ -1,0 +1,15 @@
+# Byte index 0 and byte index size - 1 pass the bounds check.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "77 115\n"
+use <collections/strings>
+
+fn same(i32 x) i32:
+    return x
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let i32 first = same(0)
+    let i32 last = same(s.size() - 1)
+    println("{s[first]} {s[last]}")
+    return 0

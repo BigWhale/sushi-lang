@@ -1,0 +1,22 @@
+# A repeated owning value and a repeated run-time value each fill every slot.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "12 towel towel\n12 42 42 504\n"
+
+use <collections/strings>
+
+fn pick(i32 x) u8:
+    return x as u8
+
+fn main() i32:
+    let string word = "towelling".s(0, 5)
+    let string[] words = from([word; 12])
+    println("{words.len()} {words[0]} {words[11]}")
+
+    let u8 v = pick(42)
+    let u8[] bytes = from([v; 12])
+    let i32 sum = 0
+    foreach(x in bytes.iter()):
+        sum := sum + (x as i32)
+    println("{bytes.len()} {bytes[0]} {bytes[11]} {sum}")
+    return 0

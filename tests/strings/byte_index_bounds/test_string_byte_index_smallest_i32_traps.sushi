@@ -1,0 +1,14 @@
+# The smallest i32 fails the byte bounds check.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2020: array index -2147483648 out of bounds for array of size 15"
+use <collections/strings>
+
+fn same(i32 x) i32:
+    return x
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let u8 b = s[same(-2147483647 - 1)]
+    println(b)
+    return 0

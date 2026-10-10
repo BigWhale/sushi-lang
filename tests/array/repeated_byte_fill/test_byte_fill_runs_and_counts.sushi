@@ -1,0 +1,34 @@
+# A constant run sits between other elements, so it starts at an offset. A run-time
+# count of zero and a negative run-time count give an empty run. A fixed array takes a
+# repeated run after a run-time element.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "22 1 0 0 2 0\n0 0\n20 9 0 0 0\n3 3 0\n"
+
+fn same(i32 x) i32:
+    return x
+
+fn main() i32:
+    let u8[] a = from([1, 0; 20, 2])
+    let i32 sum = 0
+    foreach(x in a.iter()):
+        sum := sum + (x as i32)
+    println("{a.len()} {a[0]} {a[1]} {a[20]} {a[21]} {sum - 3}")
+
+    let i32 zero = same(0)
+    let i32 minus = same(-5)
+    let u8[] e = from([0; zero])
+    let u8[] f = from([0; minus])
+    println("{e.len()} {f.len()}")
+
+    let i32 nine = same(9)
+    let i32[20] g = [nine, 0; 19]
+    let i32 gs = 0
+    foreach(x in g.iter()):
+        gs := gs + x
+    println("20 {g[0]} {g[1]} {g[19]} {gs - 9}")
+
+    let i32 n = same(3)
+    let u8[] h = from([0; n, 3])
+    println("{h.len() - 1} {h[3]} {h[0]}")
+    return 0

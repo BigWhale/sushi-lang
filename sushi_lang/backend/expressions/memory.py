@@ -471,16 +471,28 @@ def _declare_memmove(codegen: 'LLVMCodegen'):
     )
 
 
+def _declare_memset(codegen: 'LLVMCodegen'):
+    """Declare the i64-length llvm.memset intrinsic (see #149)."""
+    i8_ptr = ir.PointerType(codegen.types.i8)
+    return codegen.module.declare_intrinsic(
+        'llvm.memset', [i8_ptr, ir.IntType(INT64_BIT_WIDTH)]
+    )
+
+
+def _byte_count_i64(codegen: 'LLVMCodegen', byte_count: ir.Value) -> ir.Value:
+    if byte_count.type == ir.IntType(INT64_BIT_WIDTH):
+        return byte_count
+    return codegen.builder.zext(byte_count, ir.IntType(INT64_BIT_WIDTH),
+                                name="copy_bytes_i64")
+
+
 def _emit_mem_transfer(codegen: 'LLVMCodegen', intrinsic, dest: ir.Value, source: ir.Value,
                        byte_count: ir.Value) -> None:
     b = codegen.builder
     i8_ptr = ir.PointerType(codegen.types.i8)
-    count_i64 = byte_count
-    if byte_count.type != ir.IntType(INT64_BIT_WIDTH):
-        count_i64 = b.zext(byte_count, ir.IntType(INT64_BIT_WIDTH), name="copy_bytes_i64")
     b.call(intrinsic,
-           [b.bitcast(dest, i8_ptr), b.bitcast(source, i8_ptr), count_i64,
-            ir.Constant(ir.IntType(1), 0)])
+           [b.bitcast(dest, i8_ptr), b.bitcast(source, i8_ptr),
+            _byte_count_i64(codegen, byte_count), ir.Constant(ir.IntType(1), 0)])
 
 
 def emit_memcpy_bytes(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
@@ -497,6 +509,16 @@ def emit_memmove_bytes(codegen: 'LLVMCodegen', dest: ir.Value, source: ir.Value,
                        byte_count: ir.Value) -> None:
     """`emit_memcpy_bytes` for two ranges that can overlap (an element shift)."""
     _emit_mem_transfer(codegen, _declare_memmove(codegen), dest, source, byte_count)
+
+
+def emit_memset_bytes(codegen: 'LLVMCodegen', dest: ir.Value, byte: int,
+                      byte_count: ir.Value) -> None:
+    """`byte_count` bytes at `dest` set to `byte`, with the i64 length of the other two."""
+    b = codegen.builder
+    i8_ptr = ir.PointerType(codegen.types.i8)
+    b.call(_declare_memset(codegen),
+           [b.bitcast(dest, i8_ptr), ir.Constant(codegen.types.i8, byte),
+            _byte_count_i64(codegen, byte_count), ir.Constant(ir.IntType(1), 0)])
 
 
 class GrowPolicy(enum.Enum):

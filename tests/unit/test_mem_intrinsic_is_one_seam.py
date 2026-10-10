@@ -1,6 +1,6 @@
 """The `llvm.mem*` intrinsics have one home: `backend/expressions/memory.py` (#874).
 
-`emit_memcpy_bytes` and `emit_memmove_bytes` are the entries. Each one declares the
+`emit_memcpy_bytes`, `emit_memmove_bytes` and `emit_memset_bytes` are the entries. Each one declares the
 i64-length form and zero-extends the byte count, so a caller cannot pass a raw i32 length
 (#149, #151, #152). A second declaration beside them is a copy that can lose that rule,
 so a `declare_intrinsic('llvm.mem...')` anywhere else under `sushi_lang/backend/` is
@@ -57,7 +57,7 @@ def test_no_mem_intrinsic_declared_outside_the_seam():
              if rel.startswith("backend/") and rel != SEAM_MODULE]
     assert not found, (
         "declare llvm.mem* only in backend/expressions/memory.py; call "
-        "emit_memcpy_bytes / emit_memmove_bytes:\n" + "\n".join(found))
+        "emit_memcpy_bytes / emit_memmove_bytes / emit_memset_bytes:\n" + "\n".join(found))
 
 
 def test_mem_intrinsics_declare_i64_length():
@@ -69,10 +69,11 @@ def test_mem_intrinsics_declare_i64_length():
         + "\n".join(found))
 
 
-def test_the_seam_declares_both_intrinsics():
+def test_the_seam_declares_the_three_intrinsics():
     source = (PACKAGE / SEAM_MODULE).read_text()
     assert "'llvm.memcpy'" in source and "'llvm.memmove'" in source
-    assert len(_mem_intrinsic_declarations(source)) == 2
+    assert "'llvm.memset'" in source
+    assert len(_mem_intrinsic_declarations(source)) == 3
 
 
 def test_the_gate_sees_a_declaration():

@@ -1,0 +1,17 @@
+# Index 0 and index size - 1 pass the bounds check, on a read and on a write.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "10 30\n11 33\n"
+
+fn same(i32 x) i32:
+    return x
+
+fn main() i32:
+    let i32[] xs = from([10, 20, 30])
+    let i32 first = same(0)
+    let i32 last = same(xs.len() - 1)
+    println("{xs[first]} {xs[last]}")
+    xs[first] := 11
+    xs[last] := 33
+    println("{xs[first]} {xs[last]}")
+    return 0

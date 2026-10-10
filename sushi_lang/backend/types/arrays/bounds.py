@@ -20,15 +20,15 @@ def emit_bounds_check(
 ) -> None:
     """Emit an `index >= 0 && index < size` guard around the current position.
 
+    One unsigned compare is the guard: a size is a non-negative i32, and a negative index
+    read as unsigned is above every such size.
+
     `inclusive` admits `index == size` too: an insert position may be one past the end.
     """
     builder = codegen.builder
-    zero = ir.Constant(codegen.i32, 0)
 
-    index_not_negative = builder.icmp_signed(">=", index_value, zero, name=f"{prefix}_not_negative")
-    index_in_bounds = builder.icmp_unsigned("<=" if inclusive else "<", index_value, size_value,
-                                            name=f"{prefix}_in_bounds")
-    bounds_ok = builder.and_(index_not_negative, index_in_bounds, name=f"{prefix}_bounds_ok")
+    bounds_ok = builder.icmp_unsigned("<=" if inclusive else "<", index_value, size_value,
+                                      name=f"{prefix}_in_bounds")
 
     ok_block = builder.append_basic_block(name=f"{prefix}_bounds_ok")
     fail_block = builder.append_basic_block(name=f"{prefix}_bounds_fail")
