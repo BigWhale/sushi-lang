@@ -330,25 +330,30 @@ def _template_for(validator: 'TypeValidator', receiver_type, method_name: str):
     """The template that gives this receiver the method: (template, its arguments, static).
 
     An extension template first, then a perk template of the same base. A
-    method-generic template is not one: its call solves the method arguments first.
+    method-generic template is not one: its call solves the method arguments first. A
+    generic-target template is the one lookup's (`target_templates_of`), in the order
+    that the calling unit reads them.
     """
     from sushi_lang.semantics.generics.extension_targets import ARRAY_BASE_KEY
+    from sushi_lang.semantics.generics.extensions import target_copy_args, target_templates_of
     base: Optional[str] = None
     if isinstance(receiver_type, DynamicArrayType):
         base = ARRAY_BASE_KEY
         args: tuple = (receiver_type.base_type,)
         template = _array_template(validator, method_name)
+        if (template is not None and not template.method_type_params
+                and len(template.type_params) == len(args)):
+            return template, args, template.is_static
     else:
         base = getattr(receiver_type, "generic_base", None)
         args = tuple(getattr(receiver_type, "generic_args", None) or ())
         if base is None:
             return None
-        candidates = validator.generic_extension_table.applicable(
-            base, method_name, receiver_type.name)
+        candidates = target_templates_of(validator.generic_extension_table, receiver_type,
+                                         method_name)
         template = next(iter(in_reach_order(validator, candidates, receiver_type)), None)
-    if (template is not None and not template.method_type_params
-            and len(template.type_params) == len(args)):
-        return template, args, template.is_static
+        if template is not None:
+            return template, target_copy_args(template, receiver_type), template.is_static
     for perk_template in validator.tables.generic_perk_impls.templates(base):
         if (len(perk_template.type_params) == len(args)
                 and any(m.name == method_name for m in perk_template.impl.methods)):
