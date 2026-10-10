@@ -76,7 +76,7 @@ def instantiate_target_extension(validator: 'TypeValidator', receiver_type, temp
     call (E3), told only with `report` and a call to point at.
     """
     from sushi_lang.semantics.generics.extensions import (
-        bounds_hold_for, copy_identity, target_copy_args, target_copy_substitution)
+        bounds_hold_for, target_copy_args, target_copy_substitution)
     args = target_copy_args(template, receiver_type)
     if args is None or not bounds_hold_for(template, args, validator.tables):
         return None
@@ -86,9 +86,7 @@ def instantiate_target_extension(validator: 'TypeValidator', receiver_type, temp
     if _refuses_non_error_arguments(validator, template, receiver_type, substitution,
                                     site, report):
         return RESOLUTION_REPORTED if report else None
-    concrete = substituted_extension_signature(validator, template, receiver_type,
-                                               substitution)
-    concrete.template_id, concrete.template_target = copy_identity(template)
+    concrete = target_copy_signature(validator, template, receiver_type)
     if call is not None and validator.queues_late_copies:
         validator.extension_table.add_method(concrete)
         _queue_extension_instantiation(validator, template, receiver_type, args, (), site)
@@ -162,6 +160,20 @@ def substituted_extension_signature(validator: 'TypeValidator', template, receiv
         err_type=err, err_span=getattr(template, "err_span", None),
         is_static=bool(getattr(template, "is_static", False)),
         is_public=bool(getattr(template, "is_public", False)))
+
+
+def target_copy_signature(validator: 'TypeValidator', template, instance):
+    """The signature of the copy of a generic-target template for `instance`.
+
+    `substituted_extension_signature` with the template identity that each copy carries
+    (`copy_identity`). The ONE builder for an instance method and a static alike.
+    """
+    from sushi_lang.semantics.generics.extensions import (
+        copy_identity, target_copy_substitution)
+    concrete = substituted_extension_signature(
+        validator, template, instance, target_copy_substitution(template, instance))
+    concrete.template_id, concrete.template_target = copy_identity(template)
+    return concrete
 
 
 def _resolved(validator: 'TypeValidator', ty):
