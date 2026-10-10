@@ -133,13 +133,19 @@ def changes_its_receiver(expr: MethodLike) -> bool:
             or receiver_mode(expr.callee_self_mode) is ParamMode.POKE)
 
 
-def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike) -> None:
-    """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242)."""
+def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike,
+                          receiver: Optional[Expr] = None,
+                          what: Optional[str] = None) -> None:
+    """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242).
+
+    `receiver` replaces the call's own receiver: a `foreach` that walks a value in place
+    calls `next()` on the walked place, not on its hidden slot (#1258).
+    """
     if not changes_its_receiver(expr):
         return
-    receiver = expr.receiver
+    receiver = receiver if receiver is not None else expr.receiver
     root = borrow_owner(receiver)
-    what = f"call `.{expr.method}()`"
+    what = what or f"call `.{expr.method}()`"
     if reject_readonly_write(checker, root, expr.loc, what, receiver=receiver):
         return
     # A `poke self` method the table does not carry is taken to move storage.

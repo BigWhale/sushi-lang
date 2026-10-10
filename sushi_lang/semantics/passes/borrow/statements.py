@@ -70,7 +70,7 @@ from .flow import (
 )
 from .reads import borrow_owner
 from .state import BorrowState, record_owners
-from .writes import check_owner_not_borrowed, reject_readonly_write
+from .writes import check_owner_not_borrowed, maybe_reject_mutation, reject_readonly_write
 
 if TYPE_CHECKING:
     from . import BorrowChecker
@@ -425,10 +425,15 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
     Over a container the item BORROWS the element. Over a `next()` protocol iterator
     the item is the value `next()` answered, and the iteration OWNS it. The loop also
     takes the protocol iterator itself, as `f(nom it)` does: CE2411 for a borrow, and
-    CE2405 at a later mention of a local (#1145).
+    CE2405 at a later mention of a local (#1145). A place reached through a `poke`
+    reference is walked in place and not taken (#1258): each `next()` changes it, as a
+    call of `next()` on it does.
     """
     check_expr(checker, stmt.iterable)
-    if stmt.protocol_next is not None:
+    if stmt.protocol_next is not None and stmt.walks_in_place:
+        maybe_reject_mutation(checker, stmt.protocol_next, receiver=stmt.iterable,
+                              what=f"walk '{expr_to_string(stmt.iterable)}'")
+    elif stmt.protocol_next is not None:
         consume(checker, stmt.iterable)
     clear_borrows(checker)
     # A value binding matches the backend's `register_cleanup=False`. A reference binding

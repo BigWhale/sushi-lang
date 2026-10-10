@@ -611,7 +611,22 @@ def resolve_protocol_iterator(validator: 'TypeValidator', stmt: Foreach, iterabl
         else:
             validator.variable_types[iter_name] = previous
     stmt.protocol_next = call
+    stmt.walks_in_place = _reached_through_poke(validator, stmt.iterable)
     return element_type
+
+
+def _reached_through_poke(validator: 'TypeValidator', iterable) -> bool:
+    """Is the iterable a place whose root is a `poke` reference (#1258)?
+
+    A `poke` parameter or receiver, a `let poke` binding and a `poke` pattern or item
+    binding all register their `ReferenceType`, so the root's registered type answers.
+    """
+    from sushi_lang.semantics.typesys import ReferenceType
+    root = walk_place(iterable, Step.MEMBER | Step.INDEX).name
+    if root is None:
+        return False
+    root_type = validator.variable_types.get(root.id)
+    return isinstance(root_type, ReferenceType) and root_type.is_poke()
 
 
 def _foreach_iterable_is_addressable(iterable) -> bool:

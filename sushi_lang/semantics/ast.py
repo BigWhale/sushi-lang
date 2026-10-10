@@ -654,6 +654,10 @@ class Foreach(Stmt):
     # the iterator lives in. Both None for an `Iterator@(T)`, which is the buffer walk.
     protocol_next: "Optional[MethodCall]" = None
     protocol_iter_name: Optional[str] = None
+    # The typecheck pass sets it for a `next()` walk of a place reached through a `poke`
+    # reference: the loop calls `next()` on the caller's storage and does not take the
+    # value (#1258). The borrow pass and the backend read this one stamp.
+    walks_in_place: bool = False
 
 @dataclass(slots=True)
 class Expand(Stmt):

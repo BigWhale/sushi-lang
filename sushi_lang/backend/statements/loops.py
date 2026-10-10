@@ -139,15 +139,10 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
         raise_internal_error("CE0015", message="the typecheck pass named no iterator slot "
                              "for a protocol foreach")
 
-    iterator_value = codegen.expressions.emit_expr(node.iterable)
     iterator_type = infer_expr_semantic_type(codegen, node.iterable)
     if isinstance(iterator_type, ReferenceType):
         # A `peek`/`poke` parameter reads as its value; the slot holds a copy of it.
         iterator_type = iterator_type.referenced_type
-    # The slot is the loop's hidden `let`, and it takes the iterable: a named local is
-    # marked moved, so its own scope exit does not destroy it again (#1145).
-    iterator_value = ownership.consume(codegen, node.iterable, iterator_value,
-                                       iterator_type, ownership.ConsumingUse.LET)
 
     cond_bb = codegen.func.append_basic_block(name="foreach.next_cond")
     body_bb = codegen.func.append_basic_block(name="foreach.next_body")
@@ -156,12 +151,26 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     # The iterator's scope is the loop's, so the slot goes in a scope of its own that
     # closes after the end block: `break` and `return` both leave through the loop-exit
     # cleanup, which walks exactly these scopes.
-    codegen.memory.push_scope()
-    iter_slot = codegen.memory.create_local(
-        iter_name, iterator_value.type, iterator_value, iterator_type,
-        register_cleanup=False)
-    if iterator_type is not None:
-        codegen.memory.register_owning_value(iter_name, iterator_type, iter_slot)
+    if node.walks_in_place:
+        # A place reached through `poke` (#1258): the slot is a `poke` reference to the
+        # caller's storage, so `next()` moves the caller's cursor, and the loop exit
+        # destroys nothing.
+        from sushi_lang.backend.expressions.borrow import emit_place_address
+        address = emit_place_address(codegen, node.iterable, writable=True)
+        codegen.memory.push_scope()
+        bind_element_reference(codegen, iter_name, "poke", iterator_type, address)
+    else:
+        # The slot is the loop's hidden `let`, and it takes the iterable: a named local
+        # is marked moved, so its own scope exit does not destroy it again (#1145).
+        iterator_value = ownership.consume(
+            codegen, node.iterable, codegen.expressions.emit_expr(node.iterable),
+            iterator_type, ownership.ConsumingUse.LET)
+        codegen.memory.push_scope()
+        iter_slot = codegen.memory.create_local(
+            iter_name, iterator_value.type, iterator_value, iterator_type,
+            register_cleanup=False)
+        if iterator_type is not None:
+            codegen.memory.register_owning_value(iter_name, iterator_type, iter_slot)
 
     codegen.builder.branch(cond_bb)
     codegen.builder.position_at_end(cond_bb)
@@ -437,7 +446,8 @@ def _emit_range_foreach(codegen: 'LLVMCodegen', node: 'Foreach', range_expr: 'Ra
 
 def bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
                             element_type, element_ptr) -> None:
-    """Bind a foreach item as a REFERENCE to the container's element (#300 phase 1)."""
+    """Bind a local as a REFERENCE to storage it does not own: a foreach item (#300), or
+    the slot of a walk in place (#1258)."""
     from sushi_lang.semantics.param_modes import borrow_mode as read_borrow_mode
     from sushi_lang.semantics.typesys import ReferenceType
     ref_type = ReferenceType(element_type, read_borrow_mode(borrow_mode))
