@@ -1,0 +1,13 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\ntrue\nfalse\nfalse\ntrue\n"
+# EXPECT_NO_LEAKS: true
+# `eq(other)` is the `Eq` contract method of a string. It compares bytes and answers as
+# `==` does, so a case difference is not equal. `ieq(other)` folds the ASCII letters.
+fn main() i32:
+    let string owned = "ab".repeat(2)
+    println("x".eq("x"))
+    println(owned.eq("abab"))
+    println("HeLLo".eq("hello"))
+    println("HeLLo".eq("hello") != ("HeLLo" == "hello"))
+    println("HeLLo".ieq("hello"))
+    return 0
