@@ -1,0 +1,13 @@
+# An adapter over a borrowed iterator cannot leave its function, as the borrowed iterator
+# cannot.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+use <collections/iter>
+
+fn doubled(i32[] xs) Iterator@(i32):
+    return xs.iter().map(nom |i32 x| x * 2)
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    foreach(x in doubled(xs)):
+        println(x)
+    return 0

@@ -1,0 +1,26 @@
+# `clone_each` over each source: an array, a List, a range and a HashMap. It turns
+# `Iterator@(peek T)` into `Iterator@(T)`, one `.clone()` for each item. On a plain item it
+# is legal and gives no warning.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 x y\n2 a bb\n3\nseven\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+use <collections/hashmap>
+
+fn main() i32:
+    let string[] xs = from(["x", "y"])
+    let List@(string) copies = xs.iter().clone_each().collect()
+    println("{copies.len()} {copies.get(0).realise("")} {copies.get(1).realise("")}")
+    let List@(string) words = List.new()
+    words.push("a")
+    words.push("bb")
+    let Iterator@(string) owned = words.iter().clone_each()
+    let List@(string) kept = owned.collect()
+    println("{kept.len()} {kept.get(0).realise("")} {kept.get(1).realise("")}")
+    let Iterator@(i32) r = 0..3
+    println(r.clone_each().collect().len())
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("seven", 7)
+    foreach(k in m.keys().clone_each()):
+        println(k)
+    return 0

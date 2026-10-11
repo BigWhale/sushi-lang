@@ -1,0 +1,37 @@
+# `map` over each source: an array, a List, a range and a HashMap. The function reads
+# each item as a borrow and answers an owned value, and `collect` keeps the results.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 4 6\n1 2 3\na! bb!\n0 10 20\n7\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+use <collections/hashmap>
+
+fn show(List@(i32) xs) ~:
+    let i32 i = 0
+    foreach(x in xs.iter()):
+        if (i > 0):
+            print(" ")
+        print("{x}")
+        i := i + 1
+    println("")
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let List@(i32) doubled = xs.iter().map(nom |i32 x| x * 2).collect()
+    show(doubled)
+    let List@(string) words = List.new()
+    words.push("a")
+    words.push("bb")
+    words.push("ccc")
+    let List@(i32) lengths = words.iter().map(nom |string w| w.len()).collect()
+    show(lengths)
+    let List@(string) loud = words.iter().filter(nom |string w| w.len() < 3).map(nom |string w| "{w}!").collect()
+    println("{loud.get(0).realise("")} {loud.get(1).realise("")}")
+    let Iterator@(i32) r = 0..3
+    let List@(i32) tens = r.map(nom |i32 x| x * 10).collect()
+    show(tens)
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("seven", 7)
+    let List@(i32) values = m.values().map(nom |i32 v| v).collect()
+    show(values)
+    return 0

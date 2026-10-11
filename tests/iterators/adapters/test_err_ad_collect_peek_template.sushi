@@ -1,0 +1,11 @@
+# A template is checked where it is written, with `T` opaque: an opaque `T` may own, so
+# `collect` over `peek T` items is an error.
+# EXPECT_ERROR_CODES_EXACT: CE2129
+
+fn all@(T)(T[] xs) List@(T):
+    return xs.iter().collect()
+
+fn main() i32:
+    let i32[] xs = from([1])
+    println(all(xs).len())
+    return 0

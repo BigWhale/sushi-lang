@@ -1,0 +1,14 @@
+# An import of <collections/iter> brings no adapter method: the methods travel with the
+# type. A unit that only calls adapters names nothing the import brings, so the
+# unused-use lint reports the import.
+# COMPILER_FLAGS: --warn-unused
+# EXPECT_ERROR_CODES_EXACT: CW3006
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_NO_LEAKS
+
+use <collections/iter>
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println(xs.iter().map(nom |i32 x| x * 2).filter(nom |i32 x| x > 2).collect().len())
+    return 0

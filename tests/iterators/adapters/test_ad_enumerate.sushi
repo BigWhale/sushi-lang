@@ -1,0 +1,31 @@
+# `enumerate` over each source: an array, a List, a range and a HashMap. Over `peek
+# string` items the result is `Iterator@((i32, peek string))`: the index is owned, and the
+# item stays a borrow, so nothing is copied.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0:10 1:20\n0: a\n1: bb\n0=a\n1=bb\n0 5\n1 6\n0 seven\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+use <collections/hashmap>
+
+fn main() i32:
+    let i32[] xs = from([10, 20])
+    let List@((i32, i32)) numbered = xs.iter().enumerate().collect()
+    let (i0, x0) = numbered.get(0).realise((0, 0))
+    let (i1, x1) = numbered.get(1).realise((0, 0))
+    println("{i0}:{x0} {i1}:{x1}")
+    let List@(string) words = List.new()
+    words.push("a")
+    words.push("bb")
+    let Iterator@((i32, peek string)) it = words.iter().enumerate()
+    foreach(p in it):
+        println("{p.0}: {p.1}")
+    foreach((i, w) in words.iter().enumerate()):
+        println("{i}={w}")
+    let Iterator@(i32) r = 5..7
+    foreach(q in r.enumerate()):
+        println("{q.0} {q.1}")
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(7, "seven")
+    foreach(e in m.values().enumerate()):
+        println("{e.0} {e.1}")
+    return 0

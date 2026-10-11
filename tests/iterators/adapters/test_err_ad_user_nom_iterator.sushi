@@ -1,0 +1,15 @@
+# Only a built-in adapter takes a borrowed iterator. A user function with a `nom` iterator
+# parameter refuses one, because its type does not show the borrow.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+use <collections/iter>
+
+fn f(nom Iterator@(i32) it) i32:
+    let i32 n = 0
+    foreach(x in it):
+        n := n + x
+    return n
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    println(f(nom xs.iter()))
+    return 0

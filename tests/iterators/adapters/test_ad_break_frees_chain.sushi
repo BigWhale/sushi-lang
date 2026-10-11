@@ -1,0 +1,22 @@
+# A `break` out of a `foreach` over a chain frees the whole chain: the state of each
+# adapter, each closure with what it captured, and an owned source.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a:1\nx:1\n0\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let string tag = "a"
+    let string[] names = from(["a", "bb", "ccc"])
+    foreach(s in names.iter().map(nom |string n| "{tag}:{n.len()}").filter(nom |string t| t.len() > 0)):
+        println(s)
+        break
+    let string other = "x"
+    foreach(s in from(["a", "bb"]).iter().clone_each().map(nom |string n| "{other}:{n.len()}").enumerate()):
+        println(s.1)
+        break
+    let i32 found = 0
+    foreach(z in names.iter().zip(nom from(["p", "q"]).iter().clone_each())):
+        found := z.0.len() - 1
+        break
+    println(found)
+    return 0

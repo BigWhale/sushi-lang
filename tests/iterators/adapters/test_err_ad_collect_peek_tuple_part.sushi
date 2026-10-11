@@ -1,0 +1,9 @@
+# A lent part of a tuple item is a `peek` item too: `collect` over
+# `Iterator@((i32, peek string))` is an error.
+# EXPECT_ERROR_CODES_EXACT: CE2129
+
+fn main() i32:
+    let string[] names = from(["a", "bb"])
+    let List@((i32, string)) all = names.iter().enumerate().collect()
+    println(all.len())
+    return 0
