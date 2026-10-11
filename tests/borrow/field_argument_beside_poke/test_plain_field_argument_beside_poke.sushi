@@ -1,0 +1,18 @@
+# A field read that owns nothing is a copy. A `poke` of its owner in the same call
+# stays legal.
+# EXPECT_STDOUT_EXACT: "7\n2\n"
+# EXPECT_NO_LEAKS
+
+struct H:
+    i32[] items
+    i32 count
+
+fn g(poke H h, i32 n) i32:
+    h.items.push(n)
+    return n
+
+fn main() i32:
+    let H h = H(from([1]), 7)
+    println(g(poke h, h.count))
+    println(h.items.len())
+    return 0

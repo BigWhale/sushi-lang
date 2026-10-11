@@ -47,7 +47,7 @@ extension of that name in your program becomes this error.
 
 String methods do not change their receiver; each one returns a new value. These methods
 are built in:
-- **Inspection**: len, size, is_empty, contains, starts_with, ends_with, find, find_last, count
+- **Inspection**: len, size, is_empty, contains, starts_with, ends_with, find, find_last, count, eq
 - **Slicing**: s, ss, sleft, sright, char_at
 - **Transformation**: upper, lower, cap, reverse, repeat, replace, trim, tleft, tright
 - **Padding**: pad_left, pad_right
@@ -58,7 +58,7 @@ are built in:
 
 These are written in Sushi (see [Methods written in Sushi](#methods-written-in-sushi)):
 - **Strict parses**: parse_u8, parse_u16, parse_u32, parse_u64, parse_i32, parse_i64
-- **Searches and compares**: find_from, eq_ignore_case
+- **Searches and compares**: find_from, ieq
 - **Trims of a given text**: trim_start_matches, trim_end_matches, trim_matches,
   trim_start_chars, trim_end_chars, trim_chars
 - **Lines, tokens and characters**: lines, split_whitespace, chars
@@ -170,19 +170,33 @@ fn main() i32:
     return 0
 ```
 
-### `.eq_ignore_case(string other) -> bool`
+### `.eq(string other) -> bool`
 
-Compares two texts with the ASCII letters folded to lower case (written in Sushi). Each
-byte from 65 to 90 (`A` to `Z`) compares as its lower-case letter. Every other byte
-compares as it is, so a non-ASCII letter is not folded: this is the rule of `lower()`. Two
-texts of different byte length give `false`, and no byte is read for them. No new string
-is made.
+Compares two texts byte for byte. `.eq()` is the method of the `Eq` contract, which every
+string has with no import. It gives the same answer as `==`. The comparison reads bytes,
+so a case difference or a different byte length gives `false`. No new string is made.
 
 ```sushi
 fn main() i32:
-    println("HeLLo".eq_ignore_case("hello"))    # true
-    println("a1".eq_ignore_case("A1"))          # true
-    println("É".eq_ignore_case("é"))            # false
+    println("Mostly".eq("Mostly"))     # true
+    println("HeLLo".eq("hello"))       # false
+    println("abc".eq("abcd"))          # false
+    return 0
+```
+
+### `.ieq(string other) -> bool`
+
+Compares two texts with the ASCII letters folded to lower case (written in Sushi). This is
+the case-insensitive twin of [`.eq()`](#eqstring-other---bool). Each byte from 65 to 90
+(`A` to `Z`) compares as its lower-case letter. Every other byte compares as it is, so a
+non-ASCII letter is not folded: this is the rule of `lower()`. Two texts of different byte
+length give `false`, and no byte is read for them. No new string is made.
+
+```sushi
+fn main() i32:
+    println("HeLLo".ieq("hello"))      # true
+    println("a1".ieq("A1"))            # true
+    println("É".ieq("é"))              # false
     return 0
 ```
 

@@ -1,0 +1,13 @@
+# A `poke` item over a `poke` parameter writes into the caller's storage. It is legal.
+# EXPECT_STDOUT_EXACT: "0\n"
+# EXPECT_NO_LEAKS
+
+fn zero_poked(poke i32[] xs) ~:
+    foreach(poke r in xs.iter()):
+        r := 0
+
+fn main() i32:
+    let i32[] d = from([1, 2])
+    zero_poked(poke d)
+    println(d[0])
+    return 0

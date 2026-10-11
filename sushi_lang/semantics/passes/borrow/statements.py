@@ -470,12 +470,13 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
         elif stmt.value_iterator is not None and walked_view is None:
             iterator = scope.bind_lent_walk(stmt.iterable)
         if stmt.item_borrow is not None:
-            _reject_poke_item_of_a_slice(checker, stmt, stmt.item_borrow_span or span)
             owner: Optional[Expr] = stmt.iterable
             # An item over an owned temporary has no named owner to conflict with.
-            if not walks_a_temporary(checker, stmt.iterable) and reject_a_second_reference(
-                    checker, stmt.iterable, stmt.item_borrow,
-                    stmt.item_borrow_span or span):
+            if _reject_poke_item_of_a_view(checker, stmt, stmt.item_borrow_span or span) \
+                    or (not walks_a_temporary(checker, stmt.iterable)
+                        and reject_a_second_reference(checker, stmt.iterable,
+                                                      stmt.item_borrow,
+                                                      stmt.item_borrow_span or span)):
                 owner = None
             scope.bind_ref(stmt.item_name, stmt.item_type, stmt.item_borrow, span,
                            owner=owner, declared_at=stmt.item_borrow_span)
@@ -497,16 +498,28 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
             emit_change_under_iterator(checker, change, stmt.iterable, stmt.loc)
 
 
-def _reject_poke_item_of_a_slice(checker: 'BorrowChecker', stmt: Foreach,
-                                 span) -> None:
-    """`foreach(poke r in data[a..b].iter())` writes through a slice (S4): CE2426."""
+def _reject_poke_item_of_a_view(checker: 'BorrowChecker', stmt: Foreach,
+                                span) -> bool:
+    """A `poke` item is a write position: the walked container must be writable.
+
+    A slice is CE2426 (S4), and the loop still binds the item. A read-only root (a
+    let-borrow, a match binding, a by-value parameter or receiver, a `peek` reference)
+    is the answer of the read-only gate, and the item then freezes nothing. True only
+    for the second refusal.
+    """
     from sushi_lang.semantics.param_modes import borrow_mode
     from sushi_lang.semantics.typesys import BorrowMode
     if stmt.item_borrow is None or borrow_mode(stmt.item_borrow) is not BorrowMode.POKE:
-        return
-    if isinstance(stmt.iterable, (MethodCall, DotCall)):
-        reject_write_through_slice(checker, stmt.iterable.receiver, span,
-                                   "take a `poke` item")
+        return False
+    if not isinstance(stmt.iterable, (MethodCall, DotCall)):
+        return False
+    receiver = stmt.iterable.receiver
+    what = "take a `poke` item"
+    if reject_write_through_slice(checker, receiver, span, what):
+        return False
+    if walks_a_temporary(checker, stmt.iterable):
+        return False
+    return reject_readonly_write(checker, borrow_owner(receiver), span, what)
 
 
 def _settle_value_walk(checker: 'BorrowChecker', stmt: Foreach) -> Optional[str]:

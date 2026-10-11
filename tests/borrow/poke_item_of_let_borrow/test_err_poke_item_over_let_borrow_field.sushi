@@ -1,0 +1,16 @@
+# A `poke` item over a field of a let-borrow is a write through the let-borrow.
+# EXPECT_ERROR_CODE: CE2426
+
+struct H:
+    i32[] items
+
+struct Wrap:
+    H h
+
+fn main() i32:
+    let Wrap w = Wrap(H(from([1, 2, 3])))
+    let H v = w.h
+    foreach(poke r in v.items.iter()):
+        r := 0
+    println(w.h.items[0])
+    return 0

@@ -1,0 +1,14 @@
+# The same rule with the two arguments in the other order.
+# EXPECT_ERROR_CODE: CE2407
+
+struct H:
+    i32[] items
+
+fn g(i32[] b, poke H h) i32:
+    h.items.push(1)
+    return b.len()
+
+fn main() i32:
+    let H h = H(from([1]))
+    println(g(h.items, poke h))
+    return 0

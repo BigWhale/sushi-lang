@@ -350,7 +350,8 @@ extend BufWriter@(W) with Writer:
     fn flush(poke self) ~ | IoError:
         if (self.buf.len() == 0):
             return Result.Ok(~)
-        self.sink.write_bytes(self.buf)??
+        let u8[] pending = self.buf.clone()
+        self.sink.write_bytes(pending)??
         self.buf.clear()
         self.sink.flush()??
         return Result.Ok(~)

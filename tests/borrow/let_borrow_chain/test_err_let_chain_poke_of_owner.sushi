@@ -1,0 +1,17 @@
+# A change of the first owner through a `poke` argument is refused while the last
+# binding of the chain lives.
+# EXPECT_ERROR_CODE: CE2412
+
+struct H:
+    i32[] items
+
+fn grow(poke i32[] xs) ~:
+    xs.push(9)
+
+fn main() i32:
+    let H h = H(from([1, 2]))
+    let i32[] a = h.items
+    let i32[] b = a
+    grow(poke h.items)
+    println(b.len())
+    return 0

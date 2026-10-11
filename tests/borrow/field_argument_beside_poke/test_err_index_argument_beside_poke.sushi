@@ -1,0 +1,12 @@
+# An element read of an owning element is a shared borrow of the array. A `poke` of
+# the array in the same call is refused.
+# EXPECT_ERROR_CODE: CE2407
+
+fn g(poke string[] xs, string s) i32:
+    xs.push("more")
+    return s.len()
+
+fn main() i32:
+    let string[] xs = from(["a".upper()])
+    println(g(poke xs, xs[0]))
+    return 0

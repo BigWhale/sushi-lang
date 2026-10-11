@@ -429,7 +429,7 @@ public extend string find_from(string needle, i32 start) Maybe@(i32):
 ##:
 Compares two texts with the ASCII letters folded to lower case.
 
-Each byte from 65 to 90 (`A` to `Z`) compares as its lower-case letter, through
+This is the case-insensitive twin of `eq`. Each byte from 65 to 90 (`A` to `Z`) compares as its lower-case letter, through
 `to_ascii_lower` of `<text/ascii>`. Every other byte compares as it is, so a non-ASCII
 letter is not folded, which is the rule of `lower()`. Two texts of different byte length
 are not equal, and no byte is read for them.
@@ -438,10 +438,10 @@ are not equal, and no byte is read for them.
 - Returns: True when the two texts hold the same bytes after the fold.
 - Example:
   ```sushi
-  println("HeLLo".eq_ignore_case("hello"))
+  println("HeLLo".ieq("hello"))
   ```
 :##
-public extend string eq_ignore_case(string other) bool:
+public extend string ieq(string other) bool:
     if (self.size() != other.size()):
         return false
     foreach(i in 0..self.size()):

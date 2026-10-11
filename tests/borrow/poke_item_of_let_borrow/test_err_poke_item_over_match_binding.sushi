@@ -1,0 +1,12 @@
+# A `poke` item over a bare match binding writes through a read-only view. It is
+# refused, as a direct element write is.
+# EXPECT_ERROR_CODE: CE2414
+
+fn main() i32:
+    let Maybe@(i32[]) m = Maybe.Some(from([1, 2]))
+    match m:
+        Maybe.Some(xs) ->
+            foreach(poke r in xs.iter()):
+                r := 0
+        Maybe.None -> println("none")
+    return 0

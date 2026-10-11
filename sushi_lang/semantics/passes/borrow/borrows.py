@@ -12,7 +12,7 @@ from sushi_lang.semantics.param_modes import borrow_mode
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode
 from .diagnostics import emit_use_after_move, expr_to_string
-from .reads import borrow_owner, captured_variable
+from .reads import borrow_owner, captured_variable, read_type
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -130,9 +130,11 @@ def register_implicit_borrow(checker: 'BorrowChecker', arg: Expr) -> None:
     """Count an unmarked argument as the shared borrow it now is.
 
     A slice is a shared borrow of its array's owner, so a `poke` of that owner in the
-    same call is CE2407: the callee could grow the array under the view.
+    same call is CE2407: the callee could grow the array under the view. A field or an
+    element read whose value owns a resource is a shared borrow of its ROOT owner by the
+    same rule: the callee's copy reads storage that a `poke` of the owner can move.
     """
-    if isinstance(arg, IndexAccess) and arg.is_slice:
+    if (isinstance(arg, IndexAccess) and arg.is_slice) or _owning_read(checker, arg):
         owner = borrow_owner(arg)
         owner_state = checker.borrow_state.get(owner) if owner is not None else None
         if owner_state is not None and not owner_state.is_moved:
@@ -146,6 +148,14 @@ def register_implicit_borrow(checker: 'BorrowChecker', arg: Expr) -> None:
     if checker.types.type_class_of_source(state, state.var_type) is not TypeClass.MOVE:
         return
     acquire_borrow(checker, state, arg.loc, is_poke=False)
+
+
+def _owning_read(checker: 'BorrowChecker', arg: Expr) -> bool:
+    """Is `arg` a field or element read off a local, and does its value own a resource?"""
+    walked = walk_place(arg, Step.MEMBER | Step.INDEX, stop=captured_variable)
+    if walked.stop is None and (walked.name is None or not walked.path):
+        return False
+    return checker.types.type_class(read_type(checker, arg)) is TypeClass.MOVE
 
 
 def clear_borrows(checker: 'BorrowChecker') -> None:

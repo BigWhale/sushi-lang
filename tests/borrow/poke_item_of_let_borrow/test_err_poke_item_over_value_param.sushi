@@ -1,0 +1,13 @@
+# A `poke` item over a by-value parameter writes through a read-only borrow. It is
+# refused, as a direct element write is.
+# EXPECT_ERROR_CODE: CE2422
+
+fn zero_all(i32[] xs) ~:
+    foreach(poke r in xs.iter()):
+        r := 0
+
+fn main() i32:
+    let i32[] d = from([1, 2])
+    zero_all(d)
+    println(d[0])
+    return 0
