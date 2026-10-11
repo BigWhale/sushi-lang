@@ -15,7 +15,8 @@ from typing import Any, Callable, Dict, Iterable, List, Set, Tuple, cast
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.ast import (
-    DestructureTarget, Foreach, FuncDef, Node, Param, Program, StringLit, UseStatement)
+    DestructureTarget, DotCall, Foreach, FuncDef, MethodCall, Node, Param, Program, StringLit,
+    UseStatement)
 from sushi_lang.semantics.ast_walk import (
     DESCENDED_FIELD_KINDS, declarations, field_kind, node_fields, signature_constraints,
     signature_types, walk_nodes)
@@ -42,12 +43,15 @@ def check_unused(reporter: Reporter, unit: Unit, tables: SymbolTables,
     program = cast(Program, unit.ast)
     written = [(kind, decl) for kind, decl in declarations(program)
                if kind in _ROOT_KINDS or (kind in _CHECKED_KINDS and _is_written(decl))]
-    mentions = _mentions(program, written)
+    called: Set[str] = set()
+    mentions = _mentions(program, written, called)
     _report_dead(reporter, written, mentions)
     used = set().union(*mentions.values())
     for use_stmt in program.uses or ():
-        if not (use_stmt.is_public or use_stmt.is_library) and not (
-                _brings(use_stmt, unit, tables, units) & used):
+        if use_stmt.is_public or use_stmt.is_library:
+            continue
+        members, methods = _brings(use_stmt, unit, tables, units)
+        if not (members & (used - called) or methods & used):
             er.emit(reporter, er.ERR.CW3006, use_stmt.loc, import_=_spelled(use_stmt))
 
 
@@ -92,16 +96,21 @@ def _is_root(kind: str, decl: object) -> bool:
     return isinstance(decl, FuncDef) and decl.name == "main"
 
 
-def _mentions(program: Program, written: List[Tuple[str, Any]]) -> Dict[int, Set[str]]:
+def _mentions(program: Program, written: List[Tuple[str, Any]],
+              called: Set[str]) -> Dict[int, Set[str]]:
     """The names each written declaration mentions, keyed by the declaration.
 
     Three seams, and nothing else: the node walk for what a node holds (a name, a type, a
     parameter), and the two signature walks for the records a declaration keeps outside
-    any node (a field, a variant, a perk method, a constraint).
+    any node (a field, a variant, a perk method, a constraint). `called` receives each
+    name that stands only behind a dot as a called method (`it.map(f)`): it keeps a
+    method alive, and it is no use of an import's function of the same name (#1228).
     """
     mentions: Dict[int, Set[str]] = {id(decl): set() for _, decl in written}
+    plain: Set[str] = set()
     for _, decl in written:
-        walk_nodes(decl, _reader(mentions[id(decl)]))
+        walk_nodes(decl, _reader(mentions[id(decl)], plain, called))
+    called.difference_update(plain)
     for site in signature_types(program):
         if id(site.decl) in mentions:
             mentions[id(site.decl)].update(spelled_names(site.ty))
@@ -114,15 +123,26 @@ def _mentions(program: Program, written: List[Tuple[str, Any]]) -> Dict[int, Set
     return mentions
 
 
-def _reader(names: Set[str]) -> Callable[[Node], bool]:
-    """A node-walk visitor that reads the names each node's fields hold."""
+def _reader(names: Set[str], plain: Set[str], called: Set[str]) -> Callable[[Node], bool]:
+    """A node-walk visitor that reads the names each node's fields hold.
+
+    The method of a method call goes to `called` as well as to `names`; every other name
+    goes to `plain` as well.
+    """
     def visit(node: Node) -> bool:
         if isinstance(node, StringLit):
             return False
         if isinstance(node, Foreach):
             names.add(_PROTOCOL_METHOD)
-        for _field, value in node_fields(node):
-            _read_value(value, names)
+        read: Set[str] = set()
+        for field_name, value in node_fields(node):
+            if isinstance(node, (MethodCall, DotCall)) and field_name == "method":
+                called.add(node.method)
+                names.add(node.method)
+                continue
+            _read_value(value, read)
+        names.update(read)
+        plain.update(read)
         return True
     return visit
 
@@ -147,17 +167,19 @@ def _read_value(value: object, names: Set[str]) -> None:
 
 
 def _brings(use_stmt: UseStatement, unit: Unit, tables: SymbolTables,
-            units: Dict[str, Unit]) -> Set[str]:
-    """Every name that, written in `unit`, would be answered through this import."""
+            units: Dict[str, Unit]) -> Tuple[Set[str], Set[str]]:
+    """What, written in `unit`, would be answered through this import: the names it
+    brings, and the methods it makes callable (R6)."""
     from sushi_lang.semantics.passes.namespaces import _provider_for
     provider = _provider_for(use_stmt, tables, units, None, unit)
     if use_stmt.alias is not None:
         names = {use_stmt.alias}
     else:
         names = set(provider.members())
+    methods: Set[str] = set()
     for reached in provider.reaches():
-        names.update(_methods_of(reached.origin, units, tables))
-    return names
+        methods.update(_methods_of(reached.origin, units, tables))
+    return names, methods
 
 
 def _methods_of(origin: str, units: Dict[str, Unit], tables: SymbolTables) -> Set[str]:
