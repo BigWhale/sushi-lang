@@ -68,3 +68,13 @@ _add(ErrorMessage("RE2025", Severity.ERROR,
     "`strlen` or to the next C call. Declare the return `Maybe@(string)` or `Maybe@(ptr)` when "
     "C can answer NULL: the call then answers `Maybe.None` (docs/ffi.md, \"Null at the "
     "boundary\")."))
+
+# The clone of an iterator over a value that holds a resource (#1259)
+_add(ErrorMessage("RE2027", Severity.ERROR,
+    "an iterator that walks a value holding a resource cannot be cloned",
+    Category.RUNTIME, "`it.clone()` copies the cursor of an iterator, and for an iterator made "
+    "with `Iterator.new(nom x)` the cursor is the value `x` itself. A value that holds a "
+    "resource (a type that implements `Drop`, or one that holds such a type) has no deep copy "
+    "(CE2431), so its iterator has none either. The type of the iterator does not show what "
+    "it walks, so the compiler cannot refuse the clone, and the program stops at it instead. "
+    "Make a second iterator over a second value, or walk the one iterator through `poke`."))

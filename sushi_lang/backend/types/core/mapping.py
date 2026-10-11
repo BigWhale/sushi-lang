@@ -167,8 +167,12 @@ class TypeMapper:
         ])
 
     def get_iterator_struct_type(self, iterator_type: IteratorType) -> ir.LiteralStructType:
-        """LLVM struct type for Iterator<T>: {i32 index, i32 length, T* data}, the `T[]` shape."""
-        return self.get_dynamic_array_struct_type(self.ll_type(iterator_type.element_type))
+        """LLVM struct type for Iterator<T>: `{next_fn, state, drop_fn, clone_fn}` (#1259).
+
+        The four fields of a closure. The two are told apart by the SEMANTIC type, never by
+        this layout (`backend/runtime/iterators.py`).
+        """
+        return self.closure_struct
 
     def get_struct_type(self, struct_type: StructType) -> ir.LiteralStructType:
         """Create LLVM struct type for user-defined structs with caching."""

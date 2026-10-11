@@ -422,6 +422,7 @@ PRE_RECEIVER_HANDLERS = (
     # variant) and the receiver, because a type NAME is not a value.
     _try_emit_static_call,
     intrinsics.try_emit_enum_constructor,
+    intrinsics.try_emit_iterator_new,
     intrinsics.try_emit_struct_constructor,
     # One handler for Result and Maybe: emitting the receiver once per family
     # attempt was #199.

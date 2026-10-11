@@ -288,18 +288,61 @@ def try_emit_contract_method(codegen: 'LLVMCodegen', expr: Union[MethodCall, Dot
 def try_emit_function_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                             receiver_value: ir.Value, receiver_type: ir.Type,
                             semantic_type, to_i1: bool) -> Optional[ir.Value]:
-    """Try to emit clone() on a function value. None if not applicable."""
-    from sushi_lang.semantics.typesys import FunctionType, deref_type
+    """Try to emit clone() on a function value or an iterator value. None if not applicable.
+
+    Both clone through the type's own `clone_ptr` field (an iterator's `clone_fn`, #1259),
+    and `copy_out` reads the semantic type to tell the two apart.
+    """
+    from sushi_lang.semantics.typesys import FunctionType, IteratorType, deref_type
 
     if expr.method != "clone":
         return None
 
     resolved = deref_type(semantic_type)
-    if not isinstance(resolved, FunctionType):
+    if not isinstance(resolved, (FunctionType, IteratorType)):
         return None
 
     from sushi_lang.backend.ownership import copy_out
     return copy_out(codegen, receiver_value, resolved)
+
+
+def try_emit_iterator_new(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                          to_i1: bool) -> Optional[ir.Value]:
+    """`Iterator.new(nom x)`: `x` moves into a heap state, walked by its `next()` (#1259)."""
+    next_call = getattr(expr, "iterator_next", None)
+    if next_call is None:
+        return None
+    from sushi_lang.backend.expressions.calls.dispatcher import (
+        emit_method_call_arguments, settle_method_call_arguments)
+    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
+    from sushi_lang.backend.runtime.iterators import emit_new_iterator
+    from sushi_lang.semantics.param_modes import receiver_mode
+    from sushi_lang.semantics.typesys import IteratorType
+
+    iterator_type = expr.inferred_return_type
+    if not isinstance(iterator_type, IteratorType):
+        raise_internal_error("CE0015", message="`Iterator.new` reached the backend untyped")
+    value_type = infer_expr_semantic_type(codegen, expr.args[0])
+    args = emit_method_call_arguments(codegen, expr)
+    settle_method_call_arguments(codegen, expr, args)
+    by_pointer = receiver_mode(next_call.callee_self_mode).by_pointer
+    return emit_new_iterator(codegen, args[0], value_type, iterator_type.element_type,
+                             _next_method(codegen, next_call, value_type), by_pointer)
+
+
+def _next_method(codegen: 'LLVMCodegen', call, value_type) -> ir.Function:
+    """The function a checked `next()` call reaches: a perk method, or an extension."""
+    from sushi_lang.semantics.generics.name_mangling import extension_symbol
+    type_name = str(value_type)
+    if codegen.perk_impl_table.get_method(value_type, call.method) is not None:
+        symbol = extension_symbol(type_name, call.method, ())
+    else:
+        symbol = extension_symbol(type_name, call.method, (),
+                                  unit=call.callee_extension_unit)
+    llvm_fn = codegen.funcs.get(symbol) or codegen.module.globals.get(symbol)
+    if not isinstance(llvm_fn, ir.Function):
+        raise_internal_error("CE0024", method=call.method, type=type_name)
+    return llvm_fn
 
 
 def try_emit_enum_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],

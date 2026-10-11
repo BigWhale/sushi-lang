@@ -51,6 +51,11 @@ def bind(codegen: 'LLVMCodegen', source, value: ir.Value,
 
     `consume()` with one answer mapped differently: REJECT means the source is a borrow, so
     the binding owns nothing rather than being CE0129 (#242).
+
+    A lent iterator is the one REJECT that owns its value (#1259): it BORROWS its source,
+    so it may not leave, and it OWNS its state, so the binding destroys it. The two facts
+    are kept apart here: the borrow pass stamped the producer LENT, and the decision about
+    the source stays REJECT.
     """
     provenance = _provenance_of(source, ConsumingUse.LET)
     decision = classify(provenance, type_class_of(target_type, drops_of(codegen), resolver_for(codegen)))
@@ -60,7 +65,13 @@ def bind(codegen: 'LLVMCodegen', source, value: ir.Value,
         return value, True
     if decision is Ownership.ADOPT:
         return value, True
-    return value, False
+    return value, _makes_a_lent_iterator(source)
+
+
+def _makes_a_lent_iterator(source) -> bool:
+    """Is `source` a call that makes a NEW iterator value over a borrowed source?"""
+    from sushi_lang.semantics.generics.iterators import LENT
+    return getattr(source, "iterator_state", None) == LENT
 
 
 def consume(codegen: 'LLVMCodegen', source, value: ir.Value,

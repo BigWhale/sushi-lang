@@ -274,7 +274,8 @@ class ScopeManager:
     def register_local_cleanup(self, name: str, semantic_ty: 'Type',
                                slot: ir.AllocaInstr) -> None:
         """Register a local in the cleanup registry its type belongs to."""
-        from sushi_lang.semantics.typesys import StructType, EnumType, ArrayType, FunctionType, BuiltinType
+        from sushi_lang.semantics.typesys import (
+            StructType, EnumType, ArrayType, FunctionType, BuiltinType, IteratorType)
         from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
         self.codegen.moves.arm_if_conditional(name, slot)
         semantic_ty = resolve_named_type(self.codegen, semantic_ty)
@@ -297,7 +298,9 @@ class ScopeManager:
         elif isinstance(semantic_ty, ArrayType):
             if needs_cleanup(self.codegen, semantic_ty):
                 self._struct_cleanup.setdefault(name, []).append((self._scope_depth, semantic_ty, slot))
-        elif isinstance(semantic_ty, FunctionType):
+        elif isinstance(semantic_ty, (FunctionType, IteratorType)):
+            # An iterator value frees its state through its `drop_fn`, the field a closure
+            # keeps its drop in (#1259).
             self._closure_cleanup.setdefault(name, []).append((self._scope_depth, slot))
         # Track string locals for owned-bit-guarded free at scope exit (#145).
         elif semantic_ty == BuiltinType.STRING:

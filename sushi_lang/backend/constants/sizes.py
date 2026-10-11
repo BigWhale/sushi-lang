@@ -13,7 +13,8 @@ CLOSURE_FAT_POINTER_SIZE_BYTES = 32
 
 DYNAMIC_ARRAY_SIZE_BYTES = 16
 
-ITERATOR_SIZE_BYTES = 16
+# An iterator value has the closure's four words: {next_fn, state, drop_fn, clone_fn}.
+ITERATOR_SIZE_BYTES = CLOSURE_FAT_POINTER_SIZE_BYTES
 
 # Enum payload base offset: the i32 tag plus 4 bytes of struct padding before the
 # [K x i64] data member (#300 phase 2). The payload therefore starts 8-aligned, which
