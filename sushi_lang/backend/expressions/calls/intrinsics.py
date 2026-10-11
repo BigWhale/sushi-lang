@@ -306,6 +306,28 @@ def try_emit_function_clone(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotC
     return copy_out(codegen, receiver_value, resolved)
 
 
+def try_emit_iterator_adapter(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
+                              to_i1: bool) -> Optional[ir.Value]:
+    """An adapter of an iterator value (#1228): `map`, `filter`, `collect` and the rest.
+
+    The typecheck pass stamped the family, so the call is known before its receiver is
+    emitted."""
+    from sushi_lang.semantics.generics.iterators import ADAPTERS
+    from sushi_lang.semantics.typesys import IteratorType, deref_type
+
+    if expr.method not in ADAPTERS or getattr(expr, "callee_builtin_family", None) != "iterator":
+        return None
+    from sushi_lang.backend.expressions.calls.utils import emit_receiver_value
+    from sushi_lang.backend.runtime.iterator_adapters import emit_adapter_call
+    value, _ll_type, semantic_type = emit_receiver_value(codegen, expr.receiver)
+    resolved = deref_type(semantic_type)
+    if not isinstance(resolved, IteratorType):
+        raise_internal_error("CE0015", message=f"the receiver of `.{expr.method}()` is no "
+                                               f"iterator in the backend")
+    result = emit_adapter_call(codegen, expr, value, resolved)
+    return codegen.utils.as_i1(result) if to_i1 else result
+
+
 def try_emit_iterator_new(codegen: 'LLVMCodegen', expr: Union[MethodCall, DotCall],
                           to_i1: bool) -> Optional[ir.Value]:
     """`Iterator.new(nom x)`: `x` moves into a heap state, walked by its `next()` (#1259)."""

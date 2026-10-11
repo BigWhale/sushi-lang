@@ -142,8 +142,9 @@ def _emit_value_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
 
     codegen.builder.position_at_end(body_bb)
     with loop_frame(codegen, continue_bb=cond_bb, break_bb=end_bb, back_edge=cond_bb):
-        _bind_protocol_item(codegen, node, answer,
-                            owned=not getattr(iterator_type, "peeks", ()))
+        item = _bind_protocol_item(codegen, node, answer,
+                                   owned=not getattr(iterator_type, "peeks", ()))
+        _own_item_parts(codegen, node, item)
         _emit_block(codegen, node.body)
 
     codegen.builder.position_at_end(end_bb)
@@ -226,8 +227,29 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     codegen.memory.pop_scope()
 
 
+def _own_item_parts(codegen: 'LLVMCodegen', node: 'Foreach', item: 'ir.Value') -> None:
+    """A tuple item whose parts differ in mode (#1228): the loop owns each owned part.
+
+    The item is bound as a borrow, because a part of it is lent. Each owned part gets a
+    hidden local of its own, so the body's scope frees it at the end of each round and on
+    every early exit, as it frees an owned item.
+    """
+    from sushi_lang.backend.runtime.iterator_adapters import owned_parts
+    from sushi_lang.semantics.hidden_names import hidden_name
+    from sushi_lang.semantics.typesys import IteratorType
+
+    if not isinstance(node.value_iterator, IteratorType):
+        return
+    for index, part in owned_parts(node.value_iterator):
+        name = hidden_name(f"fe_part{index}", id(node))
+        value = codegen.builder.extract_value(item, index, name="item_part")
+        slot = codegen.memory.create_local(name, value.type, value, part,
+                                           register_cleanup=False)
+        codegen.memory.register_owning_value(name, part, slot)
+
+
 def _bind_protocol_item(codegen: 'LLVMCodegen', node: 'Foreach', answer: 'ir.Value',
-                        owned: bool) -> None:
+                        owned: bool) -> 'ir.Value':
     """Bind the item of a `foreach` to the payload of the `Maybe` that `next()` answered.
 
     A lent item (`Iterator@(peek T)`) is a view of storage its source keeps, so it is bound
@@ -249,6 +271,7 @@ def _bind_protocol_item(codegen: 'LLVMCodegen', node: 'Foreach', answer: 'ir.Val
         register_cleanup=False)
     if owned and node.item_type is not None:
         codegen.memory.register_owning_value(node.item_name, node.item_type, item_slot)
+    return item_value
 
 
 def _emit_array_foreach(codegen: 'LLVMCodegen', node: 'Foreach',

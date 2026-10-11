@@ -10,18 +10,34 @@ from sushi_lang.backend.types.arrays.bounds import emit_checked_maybe
 
 def emit_list_push(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
     """Emit LLVM IR for list.push(element) - append element with auto-growth."""
+    element_type = extract_element_type(list_type, codegen)
+
+    def element() -> ir.Value:
+        # The list stores the element shallowly and frees it on `.destroy()`/scope exit,
+        # so this is a consuming use: the seam decides whether the source hands
+        # ownership over, detaches with a copy, or is rejected outright.
+        from sushi_lang.backend.ownership import ConsumingUse, consume
+        value = codegen.expressions.emit_expr(expr.args[0])
+        return consume(codegen, expr.args[0], value, element_type,
+                       ConsumingUse.CONTAINER_INSERT)
+
+    emit_list_append(codegen, list_ptr, element)
+    return codegen.builder.load(list_ptr, name="updated_list")
+
+
+def emit_list_append(codegen: Any, list_ptr: ir.Value, element: Callable[[], ir.Value]) -> None:
+    """Grow the list at `list_ptr` to fit one more element, then store `element()` last.
+
+    `element` is emitted after the growth, so a push evaluates its argument there. The
+    list owns the element from here: the caller has settled its ownership.
+    """
     from sushi_lang.backend.expressions import memory
     from sushi_lang.backend import gep_utils
 
-    element_type = extract_element_type(list_type, codegen)
-    list_llvm_type = list_ptr.type.pointee
-    element_llvm_type = get_list_element_type(codegen, list_llvm_type)
-
-    list_alloca = list_ptr
-
-    len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
-    capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
+    element_llvm_type = get_list_element_type(codegen, list_ptr.type.pointee)
+    len_ptr = get_list_len_ptr(codegen.builder, list_ptr)
+    capacity_ptr = get_list_capacity_ptr(codegen.builder, list_ptr)
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_ptr)
 
     current_len = codegen.builder.load(len_ptr, name="current_len")
     current_cap = codegen.builder.load(capacity_ptr, name="current_cap")
@@ -32,21 +48,12 @@ def emit_list_push(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: Struc
         current_cap=current_cap, count=current_len, element_llvm_type=element_llvm_type,
         policy=memory.GrowPolicy.DOUBLE)
 
-    # Evaluate element to push. The list stores it shallowly and frees it on
-    # `.destroy()`/scope exit, so this is a consuming use: the seam decides whether the
-    # source hands ownership over, detaches with a copy, or is rejected outright.
-    from sushi_lang.backend.ownership import ConsumingUse, consume
-    element_value = codegen.expressions.emit_expr(expr.args[0])
-    element_value = consume(codegen, expr.args[0], element_value, element_type,
-                            ConsumingUse.CONTAINER_INSERT)
-
+    element_value = element()
     element_ptr = gep_utils.gep_array_element(codegen, data_ptr, current_len, "element_ptr")
     codegen.builder.store(element_value, element_ptr)
 
     new_len = codegen.builder.add(current_len, ir.Constant(codegen.types.i32, 1), name="new_len")
     codegen.builder.store(new_len, len_ptr)
-
-    return codegen.builder.load(list_alloca, name="updated_list")
 
 
 def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
