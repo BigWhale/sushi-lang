@@ -666,8 +666,8 @@ one body.
 | `Take` | `place: Expr`; a marked field take `nom s.out` in a `let` or a `return` |
 | `Try` | `inner: Expr`; `??`, kept whole for `borrow` and for G7 |
 | `Lambda` | `params`, `body: ShirBlock`; the captures are in `Bindings`. It stays in the tree through `borrow`; `lift` describes it in `LiftResults` (Q8) |
-| `StructInit` | `decl: DeclId`, `fields: [Expr]`; positional after lowering |
-| `EnumInit` | `decl: DeclId`, `variant: str`, `payload: [Expr]` |
+| `StructInit` | `decl: DeclId`, `fields: [Arg]`, `written_order: [int]`; `fields` in the declaration order |
+| `EnumInit` | `decl: DeclId`, `variant: str`, `payload: [Arg]` |
 | `TupleInit` | `parts: [Expr]` |
 | `ArrayInit` | `kind: Fixed \| Dynamic`, `runs: [ArrayRun]` |
 | `Range` | `start: Expr`, `end: Expr`, `inclusive: bool`, `reverse: bool` |
@@ -680,12 +680,13 @@ CallTarget = Named(ref: Expr)                # a scope-resolved name, or any cal
            | BuiltinFn(name: str)            # print, println: no declaration, no receiver
 
 Arg      = (value: Expr, marker: Convention | None)
-ArrayRun = Single(Expr) | Repeat(value: Expr, count: Expr) | Span(Range)
+ArrayRun = Single(Expr) | Repeat(value: Expr, count: Expr) | RangeRun(Range)
 ```
 
 A `Repeat` run `[v; n]` evaluates its value first and then its count, in the written order.
-Today the backend evaluates the count first. Lowering evaluates each into a temp in the
-written order, so the old order goes. Ruled 2026-10-11.
+Today the backend evaluates the count first. The value is the first field of `Repeat` and
+the count the second, and SHIR-to-SLIR lowering evaluates each into a temp in the field
+order, so the old order goes. Ruled 2026-10-11.
 
 A `TypeRef` is a type as WRITTEN: the `typesys.Type` the AST builder made from the
 annotation, concrete in an instance and opaque in a template check copy (4.3). It is
@@ -703,16 +704,27 @@ convention is `typecheck`'s: an unmarked argument in a consuming position (const
 container insert, array element) resolves to `Owned` with no marker, and
 [CE2427](../error-catalog.md#ce2427) compares `marker` against the declared parameter. A
 marked field take in a call argument (`take(nom w.inner)`) is an `Arg` with an `Owned`
-marker on a `Field`; in a `let` or a `return` it is `Take`.
+marker on a `Field`; in a `let` or a `return` it is `Take`. A struct or a variant
+construction is a consuming position, and its arguments are `Arg`s too, so the written
+marker of `Result.Ok(nom s)` stays in SHIR.
 
 `StructInit` and `EnumInit` name the declaration, because the binding table knows it at
-lowering. The instance of a generic struct or enum is `typecheck`'s answer (S5). Named
-struct construction is all-or-nothing, so lowering reorders named fields into declaration
-order and `StructInit` is always positional. Reordering must not reorder EVALUATION:
-lowering evaluates each field expression into a temp in the WRITTEN order, then builds the
-aggregate in declaration order. Today `typecheck` puts the arguments into declaration order
-and the backend evaluates them in that order. That order goes when lowering keeps the
-written order through the temps. Ruled 2026-10-11.
+lowering: the written name, with its alias (`geo.Vec`), as a pattern names an enum. The
+instance of a generic struct or enum is `typecheck`'s answer (S5). Named struct
+construction is all-or-nothing, so lowering puts named fields into declaration order and
+`fields` is always positional. It reads the field names from the struct declaration, not
+from a type. Reordering must not reorder EVALUATION: `written_order` gives the positions
+of `fields` in the WRITTEN order, and SHIR-to-SLIR lowering evaluates each field
+expression into a temp in that order, then builds the aggregate in declaration order. SHIR
+has no temp, so the rule holds in every expression position: a `while` condition, an
+operand of `and`, a lambda body. Today `typecheck` puts the arguments into declaration
+order and the backend evaluates them in that order. That order goes at the switch. Ruled
+2026-10-11.
+
+`T.m(...)` and the bare `T.m` on a type name are an `EnumInit` when the enum declaration of
+`T` has the variant `m`; else `T.m(...)` is a `Static` call (#542). A member `ns.m` behind
+an alias is a `ConstRef`, a `StorageRef` or a `GlobalRef`, by what the namespace holds.
+`from([...])` and `new()` are an `ArrayInit` of the kind `Dynamic`, never a `Call`.
 
 **A readable value inside a body.** `typecheck` needs the value of some sub-expressions
 that the compiler can read: a divisor and a shift count, the operands of an overflow fold,
@@ -720,7 +732,10 @@ the count of an array run, a range bound, a constant index. Lowering evaluates e
 sub-expression with the AST constant evaluator and records the value on the SHIR node. The
 value is syntax: it comes from the source alone, as `unchecked` does (4.9). `typecheck`
 reads the recorded value and does not call the evaluator, so the evaluator has no SHIR
-reader (Q5). Ruled 2026-10-11.
+reader (Q5). Ruled 2026-10-11. A sub-expression that holds a call, a field read, a member
+behind an alias, or a construction other than a fixed array literal records no value: the
+evaluator writes on the AST for a member access, and the value of such a construction is
+never a number that `typecheck` reads.
 
 **`expect(msg)` keeps its lazy message.** The message is evaluated only when the call
 fails, as the message of an `Assert` is. A `Builtin` call with an operand that is
@@ -943,7 +958,7 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 |---|---|
 | `Name` | `LocalRef` / `ConstRef` / `StorageRef` / `GlobalRef`, from `Bindings` |
 | `IntLit`, `FloatLit`, `BoolLit`, `BlankLit`, `StringLit` | `Lit` |
-| `Call`, `MethodCall`, `DotCall` | `Call` with a `CallTarget`; a struct name gives `StructInit` |
+| `Call`, `MethodCall`, `DotCall` | `Call` with a `CallTarget`; a struct name gives `StructInit`, also behind an alias; a variant of an enum gives `EnumInit` |
 | `Print`, `PrintLn` | `ExprStmt` of a `Call` with a `BuiltinFn` target |
 | `Let`, `Rebind` | `Assign` with `is_init`; a `Let` with targets gives `Destructure` |
 | `If` | `If`; each `elif` is an `If`, the one statement of the `otherwise` block of the arm before it |
@@ -951,10 +966,10 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 | `Assert` | `Assert` |
 | `While` | `Loop` with a `Cond` source |
 | `Foreach` | `Loop` with an `Items` source; the walk kind is one of five `typecheck` answers. The `let` of a `??` binder and the destructure of a tuple binder stay the first statement of the body, as the AST builder made them |
-| `ArrayLiteral`, `DynamicArrayNew`, `DynamicArrayFrom`, `ArrayElement` | `ArrayInit` with runs |
+| `ArrayLiteral`, `DynamicArrayNew`, `DynamicArrayFrom`, `ArrayElement` | `ArrayInit` with runs: `Fixed` for `[...]`, `Dynamic` for `from([...])` and `new()` |
 | `EnumConstructor` | `EnumInit` |
 | `TupleLiteral` | `TupleInit` |
-| `MemberAccess` | `Field`, or `StorageRef` / `ConstRef` through a namespace |
+| `MemberAccess` | `Field`; `ConstRef` / `StorageRef` / `GlobalRef` through a namespace; `EnumInit` for a unit variant (`Sign.Plus`) |
 | `IndexAccess` | `Index`, or `Slice` when the index is a range |
 | `CastExpr` | `Cast` |
 | `TryExpr` | `Try`, **kept** |
