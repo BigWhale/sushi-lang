@@ -1,0 +1,36 @@
+# A marked field take of an owned adapter-chain field: `nom s.it` moves the chain out of
+# a value this function owns, in a `let`, in a `return` and in a `nom` argument. The
+# other owning field is destroyed at the take, and the chain with each closure and what
+# it captured is destroyed once by its new owner.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "let t1:a\nlet t1:bb\nreturn t2:a\nreturn t2:bb\nate t3:a\nate t3:bb\n"
+use <collections/iter>
+
+struct Feed:
+    Iterator@(string) it
+    string label
+
+fn make(i32 n) Feed:
+    let string tag = "t{n}"
+    let Iterator@(string) it = from(["a", "bb", "ccc"]).iter().clone_each().map(nom |string s| "{tag}:{s}").filter(nom |string s| s.len() < 6)
+    return Feed(it, "label {n}")
+
+fn take_out(nom Feed s) Iterator@(string):
+    return nom s.it
+
+fn eat(nom Iterator@(string) it) ~:
+    foreach(s in it):
+        println("ate {s}")
+
+fn main() i32:
+    let Feed a = make(1)
+    let Iterator@(string) got = nom a.it
+    foreach(s in got):
+        println("let {s}")
+    let Iterator@(string) back = take_out(nom make(2))
+    foreach(s in back):
+        println("return {s}")
+    let Feed c = make(3)
+    eat(nom c.it)
+    return 0

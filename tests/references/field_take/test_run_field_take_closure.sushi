@@ -1,0 +1,30 @@
+# A marked field take of a capturing closure field: `nom s.f` moves the function value
+# out of a value this function owns, in a `let`, in a `return` and in a `nom` argument.
+# The other owning field is destroyed at the take, and the environment with the string
+# it captured is destroyed once by its new owner.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "let 18\nreturn 28\nate 35\n"
+struct Action:
+    fn(i32) -> i32 f
+    string label
+
+fn make(i32 n) Action:
+    let string tag = "tag {n}"
+    return Action(|i32 x| x * n + tag.len(), "label {n}")
+
+fn take_out(nom Action s) fn(i32) -> i32:
+    return nom s.f
+
+fn eat(nom fn(i32) -> i32 f) ~:
+    println("ate {f(10)}")
+
+fn main() i32:
+    let Action a = make(1)
+    let fn(i32) -> i32 got = nom a.f
+    println("let {got(10) + 3}")
+    let fn(i32) -> i32 back = take_out(nom make(2))
+    println("return {back(10) + 3}")
+    let Action c = make(3)
+    eat(nom c.f)
+    return 0

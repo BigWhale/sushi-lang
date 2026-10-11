@@ -1,0 +1,36 @@
+# A marked field take of a `HashMap@(K, V)` field: `nom s.m` moves the map out of a
+# value this function owns, in a `let`, in a `return` and in a `nom` argument. The other
+# owning field is destroyed at the take, and the map with its owning entries is destroyed
+# once by its new owner.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "let value 1\nreturn value 2\nate value 3\n"
+use <collections/hashmap>
+
+struct Index:
+    HashMap@(string, string) m
+    string label
+
+fn make(i32 n) Index:
+    let HashMap@(string, string) m = HashMap.new()
+    m.insert("k{n}", "value {n}")
+    return Index(m, "label {n}")
+
+fn take_out(nom Index s) HashMap@(string, string):
+    return nom s.m
+
+fn eat(nom HashMap@(string, string) m) ~:
+    let string v = m.get("k3").realise("none")
+    println("ate {v}")
+
+fn main() i32:
+    let Index a = make(1)
+    let HashMap@(string, string) got = nom a.m
+    let string v1 = got.get("k1").realise("none")
+    println("let {v1}")
+    let HashMap@(string, string) back = take_out(nom make(2))
+    let string v2 = back.get("k2").realise("none")
+    println("return {v2}")
+    let Index c = make(3)
+    eat(nom c.m)
+    return 0

@@ -1,0 +1,31 @@
+# A marked field take of an `Own@(T)` field: `nom s.o` moves the box out of a value
+# this function owns, in a `let`, in a `return` and in a `nom` argument. The other
+# owning field is destroyed at the take, and the box is destroyed once by its new owner.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "let box 1\nreturn box 2\nate box 3\n"
+struct Note:
+    string text
+
+struct Slot:
+    Own@(Note) o
+    string label
+
+fn make(i32 n) Slot:
+    return Slot(Own.alloc(Note("box {n}")), "label {n}")
+
+fn take_out(nom Slot s) Own@(Note):
+    return nom s.o
+
+fn eat(nom Own@(Note) o) ~:
+    println("ate {o.get().text}")
+
+fn main() i32:
+    let Slot a = make(1)
+    let Own@(Note) got = nom a.o
+    println("let {got.get().text}")
+    let Own@(Note) back = take_out(nom make(2))
+    println("return {back.get().text}")
+    let Slot c = make(3)
+    eat(nom c.o)
+    return 0
