@@ -1,0 +1,65 @@
+# A plain and a `peek` parameter of an iterator value are borrows. The callee walks a
+# clone and destroys nothing it was lent; the caller then walks its own iterator and
+# destroys it once. Owned iterators (a range, `Iterator.new`, an iterator over a
+# temporary array) and a lent iterator over a local array are lent alike.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "plain 3\npeek 3\n0\n1\n2\nplain 6\npeek 6\n3\n2\n1\nplain 2\npeek 2\nx\ny\nplain 3\npeek 3\na\nbb\n"
+use <collections/iter>
+
+struct Countdown:
+    i32 left
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.left == 0):
+        return Maybe.None
+    self.left := self.left - 1
+    return Maybe.Some(self.left + 1)
+
+fn sum_plain(Iterator@(i32) it) ~:
+    let i32 n = 0
+    foreach(x in it.clone()):
+        n := n + x
+    println("plain {n}")
+
+fn sum_peek(peek Iterator@(i32) it) ~:
+    let i32 n = 0
+    foreach(x in it.clone()):
+        n := n + x
+    println("peek {n}")
+
+fn length_plain(Iterator@(peek string) it) ~:
+    let i32 n = 0
+    foreach(w in it.clone()):
+        n := n + w.len()
+    println("plain {n}")
+
+fn length_peek(peek Iterator@(peek string) it) ~:
+    let i32 n = 0
+    foreach(w in it.clone()):
+        n := n + w.len()
+    println("peek {n}")
+
+fn main() i32:
+    let Iterator@(i32) r = 0..3
+    sum_plain(r)
+    sum_peek(peek r)
+    foreach(x in r):
+        println(x)
+    let Iterator@(i32) c = Iterator.new(nom Countdown(3))
+    sum_plain(c)
+    sum_peek(peek c)
+    foreach(x in c):
+        println(x)
+    let Iterator@(peek string) w = from(["x", "y"]).iter()
+    length_plain(w)
+    length_peek(peek w)
+    foreach(s in w):
+        println(s)
+    let string[] names = from(["a", "bb"])
+    let Iterator@(peek string) lent = names.iter()
+    length_plain(lent)
+    length_peek(peek lent)
+    foreach(s in lent):
+        println(s)
+    return 0
