@@ -1,0 +1,13 @@
+# A HashMap iterator freezes its map until its last use.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+use <collections/iter>
+use <collections/hashmap>
+
+fn main() i32:
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("a", 1)
+    let Iterator@(i32) v = m.values()
+    m.insert("b", 2)
+    foreach(x in v):
+        println(x)
+    return 0

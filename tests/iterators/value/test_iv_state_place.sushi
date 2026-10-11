@@ -1,0 +1,48 @@
+# A borrowed iterator keeps its state on the stack and an owned one keeps it on the
+# heap. A direct walk calls no `next_fn` and allocates nothing; a walk of a value calls
+# `next_fn`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "6\n6\n6\n6\n"
+# EXPECT_NO_LEAKS
+# EXPECT_IR_LACKS: walk_direct iter_next_fn
+# EXPECT_IR_LACKS: walk_direct malloc
+# EXPECT_IR_LACKS: walk_range iter_next_fn
+# EXPECT_IR_LACKS: walk_range malloc
+# EXPECT_IR_HOLDS: walk_lent iter_next_fn
+# EXPECT_IR_LACKS: walk_lent malloc
+# EXPECT_IR_HOLDS: walk_owned malloc
+use <collections/iter>
+
+fn walk_direct(i32[] xs) i32:
+    let i32 sum = 0
+    foreach(x in xs.iter()):
+        sum := sum + x
+    return sum
+
+fn walk_range() i32:
+    let i32 sum = 0
+    foreach(x in 0..3):
+        sum := sum + x + 1
+    return sum
+
+fn walk_lent(i32[] xs) i32:
+    let i32 sum = 0
+    let Iterator@(i32) it = xs.iter()
+    foreach(x in it):
+        sum := sum + x
+    return sum
+
+fn walk_owned() i32:
+    let i32 sum = 0
+    let Iterator@(i32) it = 1..4
+    foreach(x in it):
+        sum := sum + x
+    return sum
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println(walk_direct(xs))
+    println(walk_lent(xs))
+    println(walk_range())
+    println(walk_owned())
+    return 0

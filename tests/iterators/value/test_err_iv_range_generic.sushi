@@ -1,0 +1,9 @@
+# A generic `T` that nothing else solves does not make a range a value.
+# EXPECT_ERROR_CODES_EXACT: CE2122
+fn keep@(T)(nom T x) T:
+    return x
+
+fn main() i32:
+    foreach(x in keep(nom 0..3)):
+        println(x)
+    return 0

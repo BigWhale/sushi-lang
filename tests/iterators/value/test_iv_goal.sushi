@@ -1,0 +1,21 @@
+# The goal of the iterator value: a borrowed iterator over a `string[]` walked in place
+# by a callee through `poke`, and a range bound to a `let`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n0\n1\n2\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+
+fn count(poke Iterator@(peek string) it) i32:
+    let i32 n = 0
+    foreach(s in it):
+        n := n + s.len()
+    return n
+
+fn main() i32:
+    let string[] names = from(["a", "b"])
+    let Iterator@(peek string) it = names.iter()
+    println(count(poke it))
+    let Iterator@(i32) r = 0..3
+    foreach(x in r):
+        println(x)
+    return 0

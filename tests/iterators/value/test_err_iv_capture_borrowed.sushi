@@ -1,0 +1,14 @@
+# A lambda cannot capture a borrowed iterator.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+use <collections/iter>
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let Iterator@(i32) it = xs.iter()
+    let fn() -> i32 f = |~|:
+        let i32 n = 0
+        foreach(x in it):
+            n := n + x
+        return n
+    println(f())
+    return 0

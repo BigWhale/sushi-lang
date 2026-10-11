@@ -1,0 +1,28 @@
+# `Entry@(K, V)` is not a writable type name, so the iterator of `.entries()` is reached
+# through a generic: a `let` with no written type, and a generic callee that walks it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\nb=2\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+use <collections/hashmap>
+
+fn skip_one@(T)(poke Iterator@(peek T) it) i32:
+    let i32 n = 0
+    foreach(_ in it):
+        n := n + 1
+        break
+    return n
+
+fn main() i32:
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("b", 2)
+    m.insert("a", 1)
+    let e = m.entries()
+    let i32 skipped = skip_one(poke e)
+    println(skipped)
+    let HashMap@(string, i32) one = HashMap.new()
+    one.insert("b", 2)
+    let only = one.entries()
+    foreach(x in only):
+        println("{x.key}={x.value}")
+    return 0

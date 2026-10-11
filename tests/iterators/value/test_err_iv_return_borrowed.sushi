@@ -1,0 +1,13 @@
+# An iterator over a place borrows the owner of the place, so it cannot leave the
+# function through a `return`.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+use <collections/iter>
+
+fn names() Iterator@(peek string):
+    let string[] xs = from(["a"])
+    return xs.iter()
+
+fn main() i32:
+    foreach(s in names()):
+        println(s)
+    return 0
