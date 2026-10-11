@@ -593,9 +593,10 @@ a written type is checked against it, and a binder with none (a `foreach` item, 
 binding, a destructuring target, a bare lambda parameter) is inferred into it. `declared`
 is syntax, like `ShirParam.ty`: the user wrote it.
 
-A hidden local is a local the AST builder made: the binder of a `foreach(x?? in ...)`, the
-whole value of a destructuring `let`, the `_` binder. It has no source name and no span,
-and no diagnostic names it.
+A hidden local is a local the AST builder made: the binder of a `foreach(x?? in ...)` or of
+a `foreach((a, b) in ...)`, the whole value of a destructuring `let`, the `let` of a
+`foreach(_?? in ...)`. It has no source name and no span, and no diagnostic names it. The
+`_` binder of a `foreach` with no `??` binds nothing: its source holds `Discard` (7.5).
 
 ### 7.3 Everything `typecheck` decides lives in a side table
 
@@ -750,11 +751,15 @@ forwards the array operand itself, as a `Move`.
 
 ```
 LoopSource = Cond(cond: Expr)                                              # `while`
-           | Items(iterable: Expr, binder: LocalId, by: Bare | Ref(BorrowMode))  # `foreach`
+           | Items(iterable: Expr, binder: LocalId | Discard, by: Bare | Ref(BorrowMode))
+                                                                           # `foreach`
 ```
 
 `LoopSource` is what the SOURCE says: a condition, or an iterable with its binder and the
-binder's written mode. Which WALK the iterable gets is `typecheck`'s answer (7.7), and it
+binder's written mode. The binder `_` is `Discard`, and `peek _` keeps its mode. A type
+written on a plain binder is the `declared` type of its local. A type written on a `??`
+binder names the value that the `let` at the top of the body unwraps, so it is the
+`declared` type of the local of that `let`. Which WALK the iterable gets is `typecheck`'s answer (7.7), and it
 holds no operand of its own.
 
 `is_init` carries the one semantic difference between `Let` and `Rebind`: a rebind
@@ -836,6 +841,13 @@ applies.
 A `while(true)` loop is a `Cond` source with a constant condition. A `foreach(x?? in ...)` reaches
 lowering already desugared by the AST builder: a hidden binder, and a `let` with `??` at
 the top of the body.
+
+The iterator of a `Protocol` or an `IteratorValue` walk has no SHIR local. Today the
+typecheck pass makes a hidden local for it (`Foreach.protocol_iter_name`) and the `next()`
+call on it (`Foreach.protocol_next`), after `scope`, so lowering cannot read either. The
+`next()` callee is the `Protocol` answer, keyed by the loop's `shir_id`, and SHIR-to-SLIR
+lowering makes the SLIR local that holds the iterator. No pass before it names that local:
+`borrow` keys its facts on the loop's `shir_id`.
 
 Whether a `Protocol` or an `IteratorValue` walk takes its iterator or walks it in place,
 through a `poke` root, is NOT here: it is a borrow fact (4.4), in `OwnershipResults` (S6).
@@ -931,7 +943,7 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 | `Return`, `ExprStmt`, `Break`, `Continue` | the node of the same name |
 | `Assert` | `Assert` |
 | `While` | `Loop` with a `Cond` source |
-| `Foreach` | `Loop` with an `Items` source; the walk kind is one of five `typecheck` answers |
+| `Foreach` | `Loop` with an `Items` source; the walk kind is one of five `typecheck` answers. The `let` of a `??` binder and the destructure of a tuple binder stay the first statement of the body, as the AST builder made them |
 | `ArrayLiteral`, `DynamicArrayNew`, `DynamicArrayFrom`, `ArrayElement` | `ArrayInit` with runs |
 | `EnumConstructor` | `EnumInit` |
 | `TupleLiteral` | `TupleInit` |
