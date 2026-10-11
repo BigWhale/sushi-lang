@@ -857,29 +857,36 @@ The item mode, owned or lent, follows from the type (`IteratorType.peeks`).
 
 ```
 Pattern = Wildcard
-        | Literal(value: Constant)               # an integer or a string
-        | Range(low: Constant, high: Constant, inclusive: bool)   # 0x80..=0x8f
+        | Literal(value: Constant)               # an integer, a byte or a string
+        | IntRange(low: Constant, high: Constant, inclusive: bool)   # 0x80..=0x8f
         | Variant(decl: DeclId, variant: str, items: [Pattern | PatBinding])
         | Tuple(elements: [Pattern | PatBinding])
         | Own(inner: Pattern | PatBinding)       # Own(poke h) -- unwraps Own@(T)
         | Or(alternatives: [Pattern | PatBinding])   # 1 | 2 -- two or more, same bindings
 
-PatBinding = (local: LocalId, by: Bare | Ref(BorrowMode) | Take)
+PatBinding = (local: LocalId, by: Bare | Ref(BorrowMode) | Nom)
 
 Arm = (pattern: Pattern, body: ShirBlock)
 ```
 
 A payload binding is required, and `_` discards (it lowers to `Wildcard`). A binding has
 three modes (`borrow-model.md` §10b): `Bare` is a shallow read-only view, `Ref` points into
-the payload, and `Take` (`nom`) takes it, which needs a scrutinee the match owns: a
-temporary, or `Match.consumes`.
+the payload, and `Nom` takes it, which needs a scrutinee the match owns: a
+temporary, or `Match.consumes`. `consumes` is the written `match nom r:`; whether the match
+owns a temporary scrutinee is an answer of `borrow`. A bare name in a pattern is a
+`PatBinding` with the mode `Bare`. The mode of `Own(poke h)` is in the `PatBinding` that
+`Own` holds. Two alternatives of `|` that bind one name bind one local. An arm body that
+the source writes as one expression is a block of one `ExprStmt`.
 
 An INTEGER scrutinee and a STRING scrutinee use `Literal` arms; the kinds never mix
-([CE2076](../error-catalog.md#ce2076)), and that is checked on SHIR. `Range` is an INTEGER
-pattern only: the AST's `RangePattern` (`a..b` or `a..=b`) lowers to its written bounds and
-`inclusive`. Lowering has no types, so `typecheck` reads the bounds as values of the type at
-the position: `0..10` matches 0 to 9, and `0x80..=0xff` on an i8 matches -128 to -1. A
-`Literal` integer is a value of that type in the same way.
+([CE2076](../error-catalog.md#ce2076)), and that is checked on SHIR. `IntRange` is an
+INTEGER pattern only: the AST's `RangePattern` (`a..b` or `a..=b`) lowers to its written
+bounds and `inclusive`. Lowering has no types, so `typecheck` reads the bounds as values of
+the type at the position: `0..10` matches 0 to 9, and `0x80..=0xff` on an i8 matches -128
+to -1. A `Literal` integer is a value of that type in the same way. A bound is a literal and
+not an expression, so lowering does not call the constant evaluator for it, and a constant
+keeps its spelling (a radix, a byte). `Variant` names its enum by the written name, the
+alias included: a name that is not an enum is an error of `typecheck`, not of lowering.
 `Tuple` mirrors `TuplePattern`, `Own` mirrors `OwnPattern`, and `Or` mirrors `OrPattern`:
 it stands at the top of an arm and in every pattern position. Each alternative binds the
 same locals, with the same types and the same mode ([CE2126](../error-catalog.md#ce2126)),
