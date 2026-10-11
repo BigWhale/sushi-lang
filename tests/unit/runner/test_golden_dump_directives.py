@@ -4,7 +4,9 @@ A fixture names a golden file beside it. The runner adds the dump flag to the co
 the fixture, reads the dump that the compile wrote, and compares it with the golden file.
 The comparison is exact. The runner owns the dump flags, so COMPILER_FLAGS refuses them.
 
-`--dump-shir` and `--dump-slir` do not exist yet. So these tests name a stub in
+The compiler has `--dump-shir`, and it does not have `--dump-slir` yet. These tests need a
+dump of each kind whose text they choose: a dump that matches, a dump that does not, a
+dump that changes with the hash seed, and no dump. So they name a stub in
 SUSHI_COMPILER_STUB (`fixtures/dump_stub.py`): it writes the dumps and runs the real
 compiler with the other arguments. Each directive is run red and green through the real
 runner, as a fresh process and as a child of the fork-server.
