@@ -7,7 +7,10 @@ from sushi_lang.semantics.ast import Lambda, Param, Block, Expr
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_name, first_tree, is_type_node)
 from sushi_lang.internals.report import span_of
-from sushi_lang.semantics.ast_builder.declarations.signatures import refuse_dont_panic
+from sushi_lang.semantics.ast_builder.declarations.signatures import (
+    refuse_borrowed_return, refuse_dont_panic)
+from sushi_lang.semantics.borrowed_return import record_of
+from sushi_lang.semantics.param_modes import ReturnMode, split_return_mode
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast_builder.builder import ASTBuilder
@@ -21,6 +24,7 @@ def parse_lambda(t: Tree, ast_builder: "ASTBuilder") -> Lambda:
 
     ret: Optional[object] = None
     err_type: Optional[object] = None
+    borrowed_return = None
     body: Union[Expr, Block]
 
     if is_block:
@@ -28,7 +32,11 @@ def parse_lambda(t: Tree, ast_builder: "ASTBuilder") -> Lambda:
         if ret_node is not None:
             type_children = [c for c in ret_node.children if is_type_node(c)]
             if type_children:
-                ret = ast_builder._parse_type(type_children[0])
+                mode, ret = split_return_mode(ast_builder._parse_type(type_children[0]))
+                if mode is ReturnMode.PEEK:
+                    span = span_of(type_children[0])
+                    refuse_borrowed_return(span, "lambda", ast_builder)
+                    borrowed_return = record_of(span, params).refuse()
             if len(type_children) > 1:
                 err_type = ast_builder._parse_type(type_children[1])
         block_node = first_tree(t.children, "block")
@@ -42,6 +50,7 @@ def parse_lambda(t: Tree, ast_builder: "ASTBuilder") -> Lambda:
         ret=ret,
         err_type=err_type,
         loc=span_of(t),
+        borrowed_return=borrowed_return,
     )
 
 

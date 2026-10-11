@@ -299,3 +299,89 @@ _add(ErrorMessage("CE2437", Severity.ERROR,
     "`.ss(start, count)` or `.s(start, end)`, which make a new array that the binding "
     "owns. An index of a temporary is different: `let string s = make()[1]` reads one "
     "element out, and that stays legal."))
+
+_add(ErrorMessage("CE2438", Severity.ERROR,
+    "the borrowed return of '{name}' has no source: no borrowed receiver, and no borrowed parameter whose type owns a resource",
+    Category.BORROW,
+    "A `peek T` return gives the caller a view of storage that a SOURCE keeps (#1229, "
+    "docs/design/borrow-model.md S11). The source set is `self` when the receiver is a "
+    "borrow (`self`, `peek self`, `poke self`), and each parameter that is not `nom` and "
+    "whose type owns a resource (`T[]`, `List@(T)`, `string`, a struct that owns, a "
+    "`Drop` type). A plain parameter (`i32 n`, `poke Cursor cur` when `Cursor` holds an "
+    "`i32`) keeps no storage that a view could read, and a `nom` parameter is freed when "
+    "the function returns. With no source, every answer would view the frame of the "
+    "function, so the declaration is refused at its return type. A generic template is "
+    "judged where it is written, and a bare type parameter counts as a type that owns: "
+    "`fn first@(T)(T[] xs) peek T` has the source `xs` at every type argument. Take the "
+    "value that the answer views as a borrowed parameter, or drop `peek` and return an "
+    "owned value."))
+
+_add(ErrorMessage("CE2439", Severity.ERROR,
+    "a borrowed return is not valid on {position}",
+    Category.BORROW,
+    "A `peek T` return is legal only on a named function or method with a body: a free "
+    "function, an extension method and a static (#1229, docs/design/borrow-model.md "
+    "S11). A LAMBDA is a value that can outlive the call that made it, and its type, "
+    "`fn(A) -> B`, has no place to say what the answer borrows, so the caller could not "
+    "freeze the source. A PERK contract states one signature for every implementer, and "
+    "the source set of an implementation depends on its own target and parameters, so a "
+    "contract cannot promise one; for the same reason an implementation method cannot "
+    "answer a borrow that its contract does not state. Return an owned value, or move the "
+    "borrowed return to a named function or an extension method."))
+
+_add(ErrorMessage("CE2440", Severity.ERROR,
+    "a `nom self` method cannot have a borrowed return: it consumes the receiver that the answer would view",
+    Category.BORROW,
+    "A `nom self` method takes its receiver, and the receiver is freed when the method "
+    "returns (HANDLES.md ruling R25). A view of it would outlive the storage it reads "
+    "(#1229, docs/design/borrow-model.md S11). Borrow the receiver (`self`, `peek self`) "
+    "to return a view of it, or keep `nom self` and return an owned value: `io/buf.sushi` "
+    "`into_parts` is such a method."))
+
+_add(ErrorMessage("CE2441", Severity.ERROR,
+    "'{name}' has a borrowed return, so it cannot be a function value",
+    Category.BORROW,
+    "A function value has the type `fn(A) -> B`, and that type has no place to say what "
+    "the answer borrows (#1229, docs/design/borrow-model.md S11). A call through the value "
+    "could not freeze the owners of the source arguments, and the answer could be kept "
+    "after its source is freed. So a function with a `peek T` return is refused where it "
+    "is named as a value. Call it directly, or wrap the call in a lambda that returns an "
+    "owned value (`|i32[] xs| head(xs).clone()`)."))
+
+_add(ErrorMessage("CE2442", Severity.ERROR,
+    "a borrowed return `peek T | E` needs a plain error type: '{err}' owns a resource",
+    Category.BORROW,
+    "In `peek T | E` the mode applies to the `Ok` payload, and the whole `Result` is a "
+    "borrow: its holder frees nothing in it (#1229, docs/design/borrow-model.md S11). An "
+    "error that owns a resource (a payload with a `string`, an array, a container) would "
+    "then never be freed. Give the error a plain payload, such as a code or an offset: "
+    "`MpError.Truncated(i32)`. No error type of the stdlib owns a resource. A type "
+    "parameter as `E` counts as a type that owns, because the template is judged where it "
+    "is written."))
+
+_add(ErrorMessage("CE2443", Severity.ERROR,
+    "cannot return '{value}' from a borrowed return: {reason}",
+    Category.BORROW,
+    "Each value that a `peek T` function returns must be a borrow whose owner is a source "
+    "of the function (#1229, docs/design/borrow-model.md S11): `self` when the receiver is "
+    "a borrow, or a borrowed parameter whose type owns a resource. The owner of a place "
+    "is the root of the place (`walk_place`): `xs[a..b]`, `self.data`, `xs[0]`, a `let` "
+    "of such a view, an iterator over a source, and the answer of another borrowed return "
+    "over the sources are legal. Four shapes are refused: a borrow of a LOCAL, which the "
+    "function frees at the return; a borrow of a parameter that is NOT A SOURCE (a `nom` "
+    "parameter, or a parameter of a plain type); a borrow of a TEMPORARY, which is freed "
+    "at the end of the statement; and an OWNED value (`from([1])`, a literal, the answer "
+    "of an owned call), which has no owner after the return. In `peek T | E` the rule "
+    "holds for the payload of `Result.Ok(...)`. Return a view of a source, or drop `peek` "
+    "and return an owned value."))
+
+_add(ErrorMessage("CE2444", Severity.ERROR,
+    "cannot bind the answer of '{callee}': it borrows a temporary argument that is freed at the end of the statement",
+    Category.BORROW,
+    "The answer of a borrowed return views the arguments in its source set (#1229, "
+    "docs/design/borrow-model.md S11). When such an argument is a temporary (a call "
+    "result, a `from([...])`), the temporary lives until the end of the statement, so the "
+    "answer is legal inside that statement: an argument, the iterable of a `foreach`. A "
+    "`let` keeps the answer after the statement, and it would view freed storage. Bind "
+    "the argument first and give the binding, or copy the answer with `.clone()`. This is "
+    "rule S8 of the slice (CE2437) at a call."))

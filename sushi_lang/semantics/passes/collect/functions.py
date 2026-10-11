@@ -10,6 +10,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import ERR
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.borrowed_return import BorrowedReturn
     from sushi_lang.semantics.passes.collect.structs import StructTable, GenericStructTable
     from sushi_lang.semantics.passes.collect.enums import EnumTable, GenericEnumTable
 from sushi_lang.semantics.ast import (
@@ -290,6 +291,7 @@ class FuncSig:
                                          # function. Read from the manifest and never
                                          # derived: a producer's `<unit>$<name>` is not a
                                          # name the consumer can compute (section 9).
+    borrowed_return: Optional['BorrowedReturn'] = None  # A `peek T` return (#1229)
 
 
 @dataclass
@@ -327,6 +329,9 @@ class GenericFuncDef:
     # The `dont_panic` marker, as on `FuncDef`. An instance is a copy of this node, so
     # it carries the marker of its template (docs/design/dont-panic.md, D6).
     dont_panic: Optional[DontPanicMarker] = None
+    # A `peek T` return (#1229). An instance is a copy of this node, so it shares the
+    # record, and its source set is the one of the template as written.
+    borrowed_return: Optional['BorrowedReturn'] = None
 
 
 class Redeclaration(Enum):
@@ -426,6 +431,8 @@ class ExtensionMethod:
     # written declaration is one fault, so a diagnostic groups the copies by these.
     template_id: Optional[TemplateId] = None
     template_target: Optional[str] = None
+    # A `peek T` return (#1229); a copy of a template shares the record of the template.
+    borrowed_return: Optional['BorrowedReturn'] = None
 
 
 @dataclass
@@ -510,6 +517,8 @@ class GenericExtensionMethod:
     # The bound the target puts on each receiver parameter (`extend List@(T: Clone)`,
     # #1070), index-aligned with `type_params`. () for a concrete target.
     target_bounds: Tuple[BoundedTypeParam, ...] = ()
+    # A `peek T` return (#1229), as on `ExtensionMethod`.
+    borrowed_return: Optional['BorrowedReturn'] = None
 
     @property
     def method_type_param_names(self) -> Tuple[str, ...]:
@@ -927,6 +936,7 @@ class FunctionCollector:
             is_public=is_public,
             unit_name=self.current_unit_name,
             err_type=fn.err_type,
+            borrowed_return=fn.borrowed_return,
         )
 
         self.funcs.declare(name, sig)
@@ -1025,6 +1035,7 @@ class FunctionCollector:
             filename=self.current_unit_file,
             opaque=opaque,
             dont_panic=fn.dont_panic,
+            borrowed_return=fn.borrowed_return,
         )
 
         self.generic_funcs.declare(name, generic_func)
@@ -1325,6 +1336,7 @@ class FunctionCollector:
             err_span=h.err_span,
             is_static=h.is_static,
             is_public=h.ext.is_public,
+            borrowed_return=h.ext.borrowed_return,
         )
         for existing in self.extensions.declarations(resolved_type, h.name):
             if extensions_collide(self.visibility, resolved_type, existing, record):
@@ -1401,6 +1413,7 @@ class FunctionCollector:
             is_public=h.ext.is_public,
             decl=h.ext,
             target_bounds=target_bounds,
+            borrowed_return=h.ext.borrowed_return,
         )
 
     def _reject_variant_collision(self, target_type: Optional[Type], name: str,

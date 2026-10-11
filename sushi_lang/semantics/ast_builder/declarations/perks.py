@@ -7,7 +7,7 @@ from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     expect, first_name, first_tree, ice, is_type_node, name_tokens, read_public)
 from sushi_lang.semantics.ast_builder.declarations.docs import attach_docs
 from sushi_lang.semantics.ast_builder.declarations.signatures import (
-    read_signature_types, refuse_dont_panic)
+    read_signature_types, refuse_borrowed_return, refuse_dont_panic)
 from sushi_lang.semantics.ast_builder.types.generics import parse_bounded_type_params
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.internals.report import span_of
@@ -102,6 +102,8 @@ def parse_perk_method_signature(t: Tree, ast_builder: 'ASTBuilder') -> PerkMetho
 
     signature = read_signature_types(t.children, ast_builder)
     refuse_dont_panic(t.children, "perk_method", ast_builder)
+    if signature.borrows:
+        refuse_borrowed_return(signature.ret_span, "perk_method", ast_builder)
 
     # A contract has no body, so the grammar makes its return type mandatory.
     if not signature.declares_return:
@@ -150,6 +152,11 @@ def parse_handle_extend_stmt_with(t: Tree, ast_builder: 'ASTBuilder') -> ExtendW
 
     if not methods:
         ice(suffix, "must have at least one method implementation")
+    for method in methods:
+        if method.borrowed_return is not None:
+            refuse_borrowed_return(method.borrowed_return.span, "perk_implementation",
+                                   ast_builder)
+            method.borrowed_return = method.borrowed_return.refuse()
 
     attach_docs(suffix.children, methods, ast_builder)
     from sushi_lang.semantics.ast_builder.types.generics import parse_extension_target

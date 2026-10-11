@@ -11,6 +11,7 @@ from lark import Token
 ALIAS = {"alias": True}
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.borrowed_return import BorrowedReturn
     from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
     from sushi_lang.semantics.generics.types import TemplateId
@@ -268,6 +269,9 @@ class FuncDef(Node):
     # Where a `static` marker was written on a perk-implementation method. The
     # grammar admits it in that position only so the perk pass can refuse it (CE4014).
     static_span: Optional[Span] = None
+    # A `peek T` return (#1229): the written candidates for its source set. None for an
+    # owned return. A copy shares the record of its template.
+    borrowed_return: Optional["BorrowedReturn"] = None
     # A spelled `Result@(T, E)` return as the interned enum, stamped by the resolve
     # pass (#857). `ret` keeps the type as written for the typecheck pass.
     resolved_result: Optional[Type] = None
@@ -441,6 +445,8 @@ class ExtendDef(Node):
     # The symbol that the bitcode of a binary library gave the method. None on every
     # other extension.
     link_symbol: Optional[str] = None
+    # A `peek T` return; see `FuncDef`.
+    borrowed_return: Optional["BorrowedReturn"] = None
 
     @property
     def is_conversion(self) -> bool:
@@ -1016,6 +1022,9 @@ class Lambda(Node):
     resolved_type: Optional[FunctionType] = None
     expected_type: Optional[Type] = None
     env_struct: Optional[Type] = None
+    # A `peek T` return written on a lambda: refused (CE2439), and kept so that the lifted
+    # body is not judged again.
+    borrowed_return: Optional["BorrowedReturn"] = None
 
 
 @dataclass(slots=True)
@@ -1055,6 +1064,11 @@ class Call(Node):
     namespace_ref: Optional["NamespaceRef"] = None  # a call through a `use ... as` alias
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type
     resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type
+    # The callee has a borrowed return (#1229): where its sources stand in the call (an
+    # argument index, or -1 for the receiver). None for an owned return. See MethodCall.
+    callee_borrows: Optional[Tuple[int, ...]] = None
+    # LENT when the answer is an iterator that borrows the sources; see MethodCall.
+    iterator_state: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -1099,9 +1113,16 @@ class MethodCall(Node):
     # How a built-in iterator producer keeps its state (`generics/iterators.py`, #1259):
     # the bare cursor of a direct walk, a lent value, or an owned value.
     iterator_state: Optional[str] = None
+    # A LENT iterator that leaves its function through a `peek` return (#1229): its state
+    # is on the heap. Stamped by the borrow pass on each link of the chain.
+    iterator_leaves: bool = False
     # `Iterator.new(nom x)`: the `next()` call on the value, built and checked by the
     # typecheck pass. The backend reads its stamps; no pass walks it as code.
     iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)
+    # The callee has a borrowed return (#1229): where its sources stand in the call (an
+    # argument index, or -1 for the receiver). None for an owned return. The answer is a
+    # borrow of the owners of those arguments.
+    callee_borrows: Optional[Tuple[int, ...]] = None
 
 
 @dataclass(slots=True)
@@ -1148,6 +1169,8 @@ class DotCall(Node):
     callee_extension_unit: Optional[str] = None  # see MethodCall
     iterator_state: Optional[str] = None  # see MethodCall
     iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)  # see MethodCall
+    iterator_leaves: bool = False  # see MethodCall
+    callee_borrows: Optional[Tuple[int, ...]] = None  # see MethodCall
     # True when the callee is a STATIC method (#542): no receiver crosses, and the
     # backend emits the symbol with the argument list alone. Stamped by the typecheck
     # pass, exactly as the receiver mode beside it is.

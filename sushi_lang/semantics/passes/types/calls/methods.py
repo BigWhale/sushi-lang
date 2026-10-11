@@ -15,6 +15,7 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.generics.constraints import target_bounds_hold
 from sushi_lang.semantics.passes.collect.functions import GenericExtensionMethod
 from ..arguments import check_arguments
+from ..borrowed_returns import stamp_call_sources
 from sushi_lang.semantics.generics.iterators import ITERATOR_BASE
 from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family, stamp_builtin_modes
 from ..utils import call_constraint_check, intern_signature, reject_spread_args
@@ -161,7 +162,8 @@ def substituted_extension_signature(validator: 'TypeValidator', template, receiv
         unit_name=template.unit_name,
         err_type=err, err_span=getattr(template, "err_span", None),
         is_static=bool(getattr(template, "is_static", False)),
-        is_public=bool(getattr(template, "is_public", False)))
+        is_public=bool(getattr(template, "is_public", False)),
+        borrowed_return=getattr(template, "borrowed_return", None))
 
 
 def target_copy_signature(validator: 'TypeValidator', template, instance):
@@ -1143,6 +1145,7 @@ def _run_method_steps(validator: 'TypeValidator', call: MethodCall, receiver_typ
         if method is None:
             return False
     _stamp_param_modes(call, method)
+    stamp_call_sources(validator, call, method)
     return check_arguments(
         validator, f"{display_type(receiver_type)}.{call.method}",
         [p.ty for p in method.params], call.args, call.loc,

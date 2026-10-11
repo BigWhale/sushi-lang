@@ -14,6 +14,7 @@ from sushi_lang.semantics.passes.collect.functions import is_explicit_result_typ
 from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS)
 
+from .borrowed_returns import reject_borrowed_return_faults
 from .control_flow import block_always_returns, reject_dead_statements
 from .utils import validate_type_name, validate_and_register_parameters
 from .perks import (
@@ -143,6 +144,7 @@ def _reject_path_faults(self, node) -> None:
         return
     reject_dead_statements(self, node.body)
     _reject_fall_off(self, node.body, node.ret, has_channel(node), node.name_span)
+    reject_borrowed_return_faults(self, node)
 
 
 def check_template_statements(self, program, checked) -> None:
