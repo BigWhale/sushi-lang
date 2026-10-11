@@ -1,0 +1,35 @@
+# A `nom` pattern binding takes an owning struct with no `Drop` out of the variant whole.
+# `match nom s:` hands a local over and the arm gives the struct to a `nom` parameter; a
+# temporary scrutinee keeps the struct to the end of the arm. Each string is destroyed
+# once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate person 1\nheld person 2\nempty\n"
+struct Person:
+    string name
+    string[] tags
+
+enum Shape:
+    Named(Person)
+    Blank
+
+fn make(i32 n) Shape:
+    if (n == 0):
+        return Shape.Blank
+    return Shape.Named(Person("person {n}", from(["a {n}", "b {n}"])))
+
+fn eat(nom Person p) ~:
+    println("ate {p.name}")
+
+fn main() i32:
+    let Shape s = make(1)
+    match nom s:
+        Shape.Named(nom p) -> eat(nom p)
+        Shape.Blank -> println("empty")
+    match make(2):
+        Shape.Named(nom p) -> println("held {p.name}")
+        Shape.Blank -> println("empty")
+    match make(0):
+        Shape.Named(nom p) -> println("held {p.name}")
+        Shape.Blank -> println("empty")
+    return 0

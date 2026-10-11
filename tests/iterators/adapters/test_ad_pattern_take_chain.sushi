@@ -1,0 +1,37 @@
+# A `nom` pattern binding takes an owned adapter-chain payload out of the variant whole.
+# `match nom slot:` hands a local over and the arm gives the chain to a `nom` parameter; a
+# temporary scrutinee walks it in the arm. Each chain, each closure and what it captured
+# are destroyed once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate t1:a\nate t1:bb\nheld t2:a\nheld t2:bb\nempty\n"
+use <collections/iter>
+
+enum Slot:
+    Full(Iterator@(string))
+    Empty
+
+fn make(i32 n) Slot:
+    if (n == 0):
+        return Slot.Empty
+    let string tag = "t{n}"
+    return Slot.Full(from(["a", "bb", "ccc"]).iter().clone_each().map(nom |string s| "{tag}:{s}").filter(nom |string s| s.len() < 6))
+
+fn eat(nom Iterator@(string) it) ~:
+    foreach(s in it):
+        println("ate {s}")
+
+fn main() i32:
+    let Slot slot = make(1)
+    match nom slot:
+        Slot.Full(nom it) -> eat(nom it)
+        Slot.Empty -> println("empty")
+    match make(2):
+        Slot.Full(nom it) ->
+            foreach(s in it):
+                println("held {s}")
+        Slot.Empty -> println("empty")
+    match make(0):
+        Slot.Full(nom it) -> eat(nom it)
+        Slot.Empty -> println("empty")
+    return 0
