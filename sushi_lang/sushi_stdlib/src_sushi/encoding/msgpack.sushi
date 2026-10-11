@@ -138,23 +138,23 @@ fn signed(u64 v, i32 nbytes) i64:
     return sv
 
 ##:
-Copies the next bytes into a new array.
+Gives a view of the next bytes, with no copy.
 
-`.ss()` clamps a range that goes past the end, so this function does the bounds check
-itself. The fixstr path gets here with no `len` check.
+The answer borrows `buf`. A caller that keeps the bytes takes `.clone()`. The fixstr
+path gets here with no `len` check, so this function does the bounds check itself.
 
 - Parameter buf: The buffer.
 - Parameter cur: The cursor. The read moves it `count` bytes.
-- Parameter count: The number of bytes to copy.
-- Returns: The bytes.
+- Parameter count: The number of bytes to give.
+- Returns: A view of the bytes in `buf`.
 - Errors: `MpError.Truncated` at the end of the buffer when it is too short.
 :##
-fn take_bytes(peek u8[] buf, poke MpCursor cur, i32 count) u8[] | MpError:
+fn take_bytes(peek u8[] buf, poke MpCursor cur, i32 count) peek u8[] | MpError:
     if (count > buf.len() - cur.pos):
         return Result.Err(MpError.Truncated(cur.pos))
-    let u8[] out = buf.ss(cur.pos, count)
+    let i32 start = cur.pos
     cur.pos := cur.pos + count
-    return Result.Ok(out)
+    return Result.Ok(buf[start..start + count])
 
 ##:
 Reads a string payload and validates it as UTF-8.
@@ -238,13 +238,13 @@ fn decode_value(peek u8[] buf, poke MpCursor cur) MsgValue | MpError:
             return Result.Ok(MsgValue.Bool(true))
         0xc4 ->
             let i32 n8 = len(peek buf, poke cur, 1)??
-            return Result.Ok(MsgValue.Bin(take_bytes(peek buf, poke cur, n8)??))
+            return Result.Ok(MsgValue.Bin(take_bytes(peek buf, poke cur, n8)??.clone()))
         0xc5 ->
             let i32 n16 = len(peek buf, poke cur, 2)??
-            return Result.Ok(MsgValue.Bin(take_bytes(peek buf, poke cur, n16)??))
+            return Result.Ok(MsgValue.Bin(take_bytes(peek buf, poke cur, n16)??.clone()))
         0xc6 ->
             let i32 n32 = len(peek buf, poke cur, 4)??
-            return Result.Ok(MsgValue.Bin(take_bytes(peek buf, poke cur, n32)??))
+            return Result.Ok(MsgValue.Bin(take_bytes(peek buf, poke cur, n32)??.clone()))
         0xca ->
             let u64 bits32 = be_uint(peek buf, poke cur, 4)??
             let f32 single = f32.from_bits(bits32 as u32)
