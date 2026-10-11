@@ -1,0 +1,17 @@
+# `s := s.concat(x)` grows the buffer of `s` in place: the rebind calls `string_append`
+# and not the general concat. The target is the receiver, and `s` owns its buffer.
+# EXPECT_IR_HOLDS: build @string_append(
+# EXPECT_STDOUT_EXACT: "Mostly Harmless, mostly\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+fn build(string tail) string:
+    let string s = "Mostly".concat(" Harmless")
+    s := s.concat(", ")
+    s := s.concat(tail)
+    return s
+
+fn main() i32:
+    println(build("mostly"))
+    return 0

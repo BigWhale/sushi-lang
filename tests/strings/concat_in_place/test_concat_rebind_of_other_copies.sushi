@@ -1,0 +1,40 @@
+# When the target of the rebind is not the receiver of `concat`, the rebind takes the
+# general path: it calls `string_concat`, frees the old value, and does not call
+# `string_append`. `to_other` rebinds a name that is not the receiver (`t := s.concat(x)`),
+# and `from_other` rebinds `s` to a concat of another string (`s := other.concat(x)`).
+# `grow` is the twin: its target is the receiver, so it calls `string_append`. The twin
+# proves the spelling of the text.
+# EXPECT_IR_LACKS: to_other @string_append(
+# EXPECT_IR_HOLDS: to_other @string_concat(
+# EXPECT_IR_LACKS: from_other @string_append(
+# EXPECT_IR_HOLDS: from_other @string_concat(
+# EXPECT_IR_HOLDS: grow @string_append(
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nMostly\nHarmless!\nHarmless\nMostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+use <collections/strings>
+
+fn to_other(string tail) ~:
+    let string s = "Mostly".concat("")
+    let string t = "".concat("none")
+    t := s.concat(tail)
+    println(t)
+    println(s)
+
+fn from_other(string tail) ~:
+    let string s = "Mostly".concat("")
+    let string other = "Harmless".concat("")
+    s := other.concat(tail)
+    println(s)
+    println(other)
+
+fn grow(string tail) ~:
+    let string s = "Mostly".concat("")
+    s := s.concat(tail)
+    println(s)
+
+fn main() i32:
+    to_other(" Harmless")
+    from_other("!")
+    grow(" Harmless")
+    return 0

@@ -4909,6 +4909,8 @@ tests/strings/byte_access/test_string_upper_ascii_extension.sushi
 tests/strings/byte_index_bounds/test_string_byte_index_edges_pass.sushi
 tests/strings/byte_index_bounds/test_string_byte_index_minus_one_traps.sushi
 tests/strings/byte_index_bounds/test_string_byte_index_smallest_i32_traps.sushi
+tests/strings/concat_in_place/test_concat_rebind_of_other_copies.sushi
+tests/strings/concat_in_place/test_concat_rebind_of_receiver_appends.sushi
 tests/strings/dont_panic/test_dont_panic_naive_search.sushi
 tests/strings/find_from/test_string_find_from.sushi
 tests/strings/ieq/test_string_eq_contract_twin.sushi
