@@ -7,6 +7,10 @@ a migration must keep. The phases, the risks and the progress tracking are not p
 document; a migration plan comes from it. Nothing in the language changes: every behaviour
 test passes before and after, unchanged.
 
+Amended on 2026-10-11 by the rulings on the migration plan: 6.3 (initializer bodies), 6.4
+(the gate reads the body modules), 7.4 (evaluation order, recorded values, `expect`), 10.3
+and 11.9.
+
 ## The decisions, in one place
 
 | # | Decision | Where |
@@ -458,6 +462,16 @@ declarations(program)                -> DeclTable  # declarations, whole-program
 Anything that needs a third entry point is a design smell and must be argued for in this
 document first.
 
+**The one third entry point: an initializer body.** Lowering makes a one-expression
+`ShirBody`, with an origin of its own, from each constant initializer and each `var`
+initializer. The argument: `typecheck` checks an initializer with the same helpers that
+check a body expression (the propagation of the declared type, the assignment check), and
+for a `var` it decides the element type of an empty container (`List.new()`, `from([])`).
+After the move those helpers read SHIR. The other two choices put the same rule in two
+places: type checks of its own in the constant evaluator, or AST copies of the helpers. The
+VALUE of a constant stays the evaluator's (Q5). The body only gives `typecheck` a SHIR node
+to check. Ruled 2026-10-11.
+
 ### 6.4 Enforcement, not convention
 
 Three gates. All are cheap, and a rule with no gate does not survive a deadline.
@@ -465,13 +479,18 @@ Three gates. All are cheap, and a rule with no gate does not survive a deadline.
 | Gate | Mechanism | When |
 |---|---|---|
 | No node may take a stamp | `@dataclass(slots=True)` on all 77 classes. A stray write raises `AttributeError` | **In force**: `tests/unit/test_ast_nodes_are_slotted.py` |
-| A per-body pass may not read the AST | `typecheck`, `lift` and `borrow` import `shir`, not `ast` | when the passes move to SHIR |
+| A per-body pass may not read the AST | the BODY modules of `typecheck`, `lift` and `borrow` import `shir`, not `ast` | when the passes move to SHIR |
 | The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty (64 files match today) | when the old backend is deleted |
 
 Two sibling gates are in force. The ruff rule `TID251` (`pyproject.toml`) allows no
 `llvmlite` import outside `backend/` and `sushi_stdlib/`, so `semantics` names no LLVM
 type, which is the precondition for both IRs living there. `tests/unit/test_layering_gate.py`
 holds the rule that `semantics` never imports `backend`.
+
+The second gate reads the BODY modules only. The declaration half of `typecheck` and
+`borrow` stays on the AST: a module that reads declarations only, and the declaration half
+of a driver module. SHIR has no declaration, and question 4 of 6.1 allows a read of a
+declaration. Ruled 2026-10-11.
 
 ---
 
@@ -658,6 +677,10 @@ Arg      = (value: Expr, marker: Convention | None)
 ArrayRun = Single(Expr) | Repeat(value: Expr, count: Expr) | Span(Range)
 ```
 
+A `Repeat` run `[v; n]` evaluates its value first and then its count, in the written order.
+Today the backend evaluates the count first. Lowering evaluates each into a temp in the
+written order, so the old order goes. Ruled 2026-10-11.
+
 A `TypeRef` is a type as WRITTEN: the `typesys.Type` the AST builder made from the
 annotation, concrete in an instance and opaque in a template check copy (4.3). It is
 syntax, so it may stand on a node (`Cast.target`, `Static.ty`, `ShirLocal.declared`,
@@ -681,7 +704,23 @@ lowering. The instance of a generic struct or enum is `typecheck`'s answer (S5).
 struct construction is all-or-nothing, so lowering reorders named fields into declaration
 order and `StructInit` is always positional. Reordering must not reorder EVALUATION:
 lowering evaluates each field expression into a temp in the WRITTEN order, then builds the
-aggregate in declaration order.
+aggregate in declaration order. Today `typecheck` puts the arguments into declaration order
+and the backend evaluates them in that order. That order goes when lowering keeps the
+written order through the temps. Ruled 2026-10-11.
+
+**A readable value inside a body.** `typecheck` needs the value of some sub-expressions
+that the compiler can read: a divisor and a shift count, the operands of an overflow fold,
+the count of an array run, a range bound, a constant index. Lowering evaluates each such
+sub-expression with the AST constant evaluator and records the value on the SHIR node. The
+value is syntax: it comes from the source alone, as `unchecked` does (4.9). `typecheck`
+reads the recorded value and does not call the evaluator, so the evaluator has no SHIR
+reader (Q5). Ruled 2026-10-11.
+
+**`expect(msg)` keeps its lazy message.** The message is evaluated only when the call
+fails, as the message of an `Assert` is. A `Builtin` call with an operand that is
+evaluated first cannot keep this. So SHIR-to-SLIR lowering lowers `expect` as it lowers
+`Assert` (8.9): `Discriminant`, `SwitchInt`, and the message on the failing edge before the
+exit. `expect` is not a row of the `Result`/`Maybe` method family (Q7). Ruled 2026-10-11.
 
 A native variadic call is NOT collapsed here. Which parameter is `...T` is a fact about
 the callee, and `typecheck` resolves the callee. So the trailing arguments stay a flat list
@@ -1437,11 +1476,14 @@ again when its area moves.
 
 The Python unit layer is different: the mandated seam gates
 (`test_consuming_use_coverage`, `test_borrow_dispatch_is_total`,
-`test_callee_mode_matrix`, `test_owning_binding_uses_the_router`,
-`test_scope_exit_walk_is_one`, `test_method_call_dispatch_is_a_table`, ...) assert on the
-OLD structure by name. Each guarded seam has a named replacement (8.12), so each gate is
-ported when its seam moves. The gates of the emitter families (Q7) stay. This is a real,
-planned cost.
+`test_callee_mode_matrix`, `test_scope_exit_walk_is_one`,
+`test_method_call_dispatch_is_a_table`, ...) assert on the OLD structure by name. Each
+guarded seam has a named replacement (8.12), so each gate is ported when its seam moves.
+The gates of the emitter families (Q7) stay. This is a real, planned cost.
+
+`test_owning_binding_uses_the_router` is dropped, not ported. Its replacement is the one
+drop-placement gate that `test_scope_exit_walk_is_one` ports to, and two ports of one rule
+are two gates for one rule. Ruled 2026-10-11.
 
 ---
 
@@ -1489,4 +1531,9 @@ The plan is written elsewhere; these are the design-level invariants it must hon
    emitter that evaluates an argument through a callback chooses when the argument runs:
    `List.push` evaluates its element AFTER the buffer grows. Under SLIR every operand is
    evaluated before the call. For each family with such a callback, the plan shows that
-   the order is not visible to a program, or it keeps the order.
+   the order is not visible to a program, or it keeps the order, or a ruling changes it.
+   Ruled 2026-10-11 for each visible order: where the old order is a defect (a receiver
+   that is read before an argument changes it, a receiver or an argument that is evaluated
+   two times), SHIR lowering gives the SHIR order by construction and the old order is not
+   kept. A named struct construction takes the written order, and a repeat run takes the
+   value first (7.4). `expect` keeps its lazy message (7.4).
