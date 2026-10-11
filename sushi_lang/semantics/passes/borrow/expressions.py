@@ -37,6 +37,7 @@ from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.generics.type_display import display_type
 
 from .iterators import settle_iterator_source
+from .borrowed_returns import settle_borrowed_call
 from .borrows import check_borrow
 from .calls import (
     apply_destroy_effects,
@@ -177,6 +178,7 @@ def _check_call(checker: 'BorrowChecker', expr: Call) -> None:
     # consume. The callee's kind decides where the declaration is read from
     # (docs/design/borrow-model.md S5); the mode decides what happens.
     consume_call_args(checker, expr)
+    settle_borrowed_call(checker, expr)
     reject_borrow_read_by_the_change(checker, expr, unchanged)
     # A callee that destroys its `poke` parameter destroys the CALLER's value (#168).
     # CE2406 still fires from the Name arm above -- no new emit site.
@@ -192,6 +194,7 @@ def _check_method_call(checker: 'BorrowChecker', expr: MethodCall) -> None:
     settle_iterator_source(checker, expr)
     settle_receiver(checker, expr)
     settle_method_args(checker, expr)
+    settle_borrowed_call(checker, expr)
     maybe_mark_container_insert(checker, expr)
     maybe_mark_own_alloc_move(checker, expr)
     reject_borrow_read_by_the_change(checker, expr, unchanged)
@@ -219,10 +222,12 @@ def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
         # `geo.eat(nom s)` is a FUNCTION written behind a dot, not a method: the
         # receiver names a namespace and takes no argument position.
         settle_namespaced_args(checker, expr)
+        settle_borrowed_call(checker, expr)
     else:
         settle_iterator_source(checker, expr)
         settle_receiver(checker, expr)
         settle_method_args(checker, expr)
+        settle_borrowed_call(checker, expr)
         maybe_mark_container_insert(checker, expr)
     maybe_mark_own_alloc_move(checker, expr)
     reject_borrow_read_by_the_change(checker, expr, unchanged)

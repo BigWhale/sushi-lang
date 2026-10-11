@@ -23,6 +23,7 @@ from sushi_lang.semantics.ast import (
     TryExpr,
 )
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.borrowed_return import is_borrowed_call
 from sushi_lang.semantics.places import Step, unwrap_try, walk_place
 from sushi_lang.semantics.ownership import is_get_out_container
 from sushi_lang.semantics.passes.lift import ENV_PARAM_NAME
@@ -208,6 +209,9 @@ def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
 
     if isinstance(expr, (MethodCall, DotCall)) and expr.iterator_state is not None:
         # A lent iterator: the value it makes is the type the call answers (#1259).
+        return checker.types.resolve_named(expr.inferred_return_type)
+    if is_borrowed_call(expr):
+        # The answer of a borrowed return is a view of the type it answers (#1229).
         return checker.types.resolve_named(expr.inferred_return_type)
     receiver = called_on(expr, "get", "first", "last")
     if receiver is None:

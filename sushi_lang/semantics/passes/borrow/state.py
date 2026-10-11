@@ -60,6 +60,7 @@ class BorrowState:
     move_reported_by: Optional[str] = None    # the iterator whose CE2412 reports the move
     borrows_from: tuple[str, ...] = ()        # the root owners a `let`-borrow reads out of
     is_lent_iterator: bool = False            # a `let`-borrow that owns its iterator value
+    lent_value: Optional[Expr] = None         # the value a lent iterator `let` was bound to
     views_storage_of: Optional[Expr] = None   # a foreach iterator: the container it walks
     covered_by: Optional[str] = None          # the iterator whose freeze covers this one
     invalidated_at: Optional[Span] = None     # where that owner changed or was released

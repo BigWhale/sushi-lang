@@ -22,6 +22,8 @@ from .reads import (
     borrow_owner, constant_sig, names_kept_storage, namespaced_storage, read_type,
     reads_through_owner, unwrap_try)
 from .iterators import lent_owners
+from .borrowed_returns import call_owners, reject_view_of_temporary
+from sushi_lang.semantics.borrowed_return import is_borrowed_call
 from .state import BorrowState, record_owners
 from .takes import field_take, spend
 from .writes import check_owner_not_borrowed
@@ -60,6 +62,11 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
     """Where the value at a consuming use came from -- the half only semantics knows."""
     if isinstance(expr, Name):
         return name_provenance(checker, expr.id)
+
+    # The answer of a borrowed return views its sources (#1229), a `??` over it too. A
+    # call behind an alias is one too, so this comes before the function value below.
+    if is_borrowed_call(expr):
+        return Provenance.BORROWED
 
     # `alias.fn` is a function value, built new at each read as the bare `fn` is: it
     # reads no storage (#1013).
@@ -352,7 +359,7 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
     provenance = source_provenance(checker, expr)
     expr.ownership_provenance = provenance
 
-    if reject_slice_of_temporary(checker, expr):
+    if reject_slice_of_temporary(checker, expr) or reject_view_of_temporary(checker, expr):
         return
 
     dest = checker.borrow_state.get(stmt.name)
@@ -400,6 +407,11 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
         _move_out(checker, src_state, expr.loc)
     elif decision is Ownership.REJECT:
         record_borrowed_binding(checker, stmt, dest)
+    elif is_borrowed_call(expr):
+        # A plain answer is a copy, and it still freezes the owners of its sources: the
+        # source set of a template is the same at every type argument (#1229).
+        record_owners(checker.borrow_state, dest, call_owners(checker, expr)[0], stmt.loc,
+                      checker._scope_binding_borrows[-1])
 
 
 def record_borrowed_binding(checker: 'BorrowChecker', stmt: Let,
@@ -412,8 +424,14 @@ def record_borrowed_binding(checker: 'BorrowChecker', stmt: Let,
     owners = lent_owners(checker, stmt.value)
     if owners is not None:
         dest.is_lent_iterator = True
+        dest.lent_value = stmt.value
         record_owners(checker.borrow_state, dest, owners, stmt.loc,
                       checker._scope_binding_borrows[-1])
+        return
+
+    if is_borrowed_call(stmt.value):
+        record_owners(checker.borrow_state, dest, call_owners(checker, stmt.value)[0],
+                      stmt.loc, checker._scope_binding_borrows[-1])
         return
 
     owner = borrow_owner(stmt.value)

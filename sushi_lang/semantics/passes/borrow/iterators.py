@@ -11,12 +11,13 @@ still destroyed at scope exit, because it owns its value.
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
-from sushi_lang.semantics.ast import DotCall, Expr, MethodCall, Name
+from sushi_lang.semantics.ast import Call, DotCall, Expr, MethodCall, Name, TryExpr
+from sushi_lang.semantics.borrowed_return import is_borrowed_call
 from sushi_lang.semantics.generics.iterators import (
     ADAPTERS, CONTAINER_ITERATORS, CURSOR, LAZY_ADAPTERS, LENT, OWNED)
 from sushi_lang.semantics.ownership import Provenance
 
-from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.places import Step, unwrap_try, walk_place
 
 from .reads import borrow_owner, names_kept_storage
 
@@ -87,11 +88,18 @@ def lent_owners(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[tupl
     A clone borrows what its receiver borrows, so the walk crosses every lent clone and
     asks the source: a `let` that holds a lent iterator, or a producer over a place.
     """
-    if isinstance(expr, (MethodCall, DotCall)) and expr.iterator_state != LENT:
+    if isinstance(expr, TryExpr) and is_borrowed_call(expr):
+        # `f(xs)??` over a borrowed return whose `Ok` is an iterator (#1229).
+        return lent_owners(checker, unwrap_try(expr))
+    if isinstance(expr, (Call, MethodCall, DotCall)) and expr.iterator_state != LENT:
         return None
     if isinstance(expr, (MethodCall, DotCall)) and is_adapter(expr):
         return _adapter_owners(checker, expr)
     source = walk_place(expr, Step.CALL, crosses_call=_is_lent_clone).node
+    if is_borrowed_call(source) and getattr(source, "iterator_state", None) == LENT:
+        # The answer of a borrowed return that is an iterator (#1229).
+        from .borrowed_returns import call_owners
+        return call_owners(checker, source)[0]
     if isinstance(source, Name):
         state = checker.borrow_state.get(source.id)
         if state is not None and state.is_lent_iterator:

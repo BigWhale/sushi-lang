@@ -49,6 +49,7 @@ from .bindings import (
 )
 from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet, written_let
 from .borrows import clear_borrows
+from .borrowed_returns import check_borrowed_return
 from .diagnostics import emit_change_under_iterator, expr_to_string
 from .consume import (
     bind,
@@ -106,6 +107,10 @@ def check_stmt(checker: 'BorrowChecker', stmt: Stmt) -> None:
                 state.written = written_let(stmt)
         case Rebind():
             _check_rebind(checker, stmt)
+        case Return() if checker.borrowed_return is not None:
+            # A `peek` body hands a VIEW to the caller (#1229): nothing is consumed.
+            check_borrowed_return(checker, stmt.value)
+            clear_borrows(checker)
         case Return():
             check_expr(checker, stmt.value)
             # A return hands the value to the caller. `return Result.Ok(x)` consumes `x`
