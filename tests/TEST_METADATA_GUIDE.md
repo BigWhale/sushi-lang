@@ -790,6 +790,22 @@ Runs just the tests declaring `EXPECT_NO_LEAKS`, with the same enforcement `--en
 python tests/run_tests.py --enhanced --filter constants/
 ```
 
+### Run the fixtures of a list
+
+```bash
+python tests/run_tests.py --list tests/ir/ratchet.txt
+```
+
+- The file holds one repository-relative path for each line
+  (`tests/arrays/fixed/test_fixed_basic.sushi`). A blank line and a line that starts with
+  `#` are not paths
+- `--list` is a selector, like `--filter`: it goes through `select_fixtures` and checks
+  each listed fixture in full. It composes with the other selectors
+- A listed path that names no fixture fails the run before the build, and no fixture runs.
+  A list that selects nothing fails the run too
+- A list names fixtures only. So the stdlib doc-block gate, the library-reader gate, the
+  library-report gate and the dead-code gate print their skip
+
 ## Metadata Validation Workflow
 
 When a test runs in enhanced mode:

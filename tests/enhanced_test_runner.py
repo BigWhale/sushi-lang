@@ -24,13 +24,15 @@ from tqdm import tqdm
 
 from test_metadata import (parse_test_metadata, get_test_category, should_run_runtime_test,
                           TestMetadata, fixture_binary_name, fixture_id,
-                          select_fixtures, is_rebuild_fixture, LIB_FLAG, REBUILD_DIR)
+                          select_fixtures, is_rebuild_fixture, LIB_FLAG, REBUILD_DIR,
+                          FixtureListError, read_fixture_list)
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        helpers_for_selection,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
                        arm_spelling_gate, spelling_gate_tripped,
-                       DocGateResult, stdlib_doc_gate, stdlib_override_command)
+                       DocGateResult, stdlib_doc_gate, stdlib_override_command,
+                       fixtures_only)
 from fork_server import ForkServer
 
 
@@ -428,9 +430,13 @@ class TestRunner:
                  parallel_jobs: Optional[int] = None, json_output: bool = False,
                  leaks_only: bool = False, allow_leak_skips: bool = False,
                  compile_only: bool = False, project_root: Optional[Path] = None,
-                 fresh_processes: bool = True):
+                 fresh_processes: bool = True, list_file: Optional[str] = None):
         """Initialize the test runner."""
         self.tests_dir = tests_dir
+        # `--list FILE`: the fixtures the file names. The caller has read it once already,
+        # so a bad list fails before the build.
+        self.list_file = list_file
+        self.listed = read_fixture_list(Path(list_file)) if list_file else None
         # The checkout whose `sushic` the run starts. It is the parent of `tests/` for
         # every real run; a runner test that selects from a temporary directory names it.
         self.project_root = project_root or tests_dir.parent
@@ -502,6 +508,8 @@ class TestRunner:
     def _describe_selection(self, filter_pattern: Optional[str]) -> str:
         """The flags that narrowed this run, for the message an empty one prints."""
         parts = []
+        if self.list_file:
+            parts.append(f"--list {self.list_file}")
         if filter_pattern:
             parts.append(f"--filter {filter_pattern!r}")
         if self.leaks_only:
@@ -527,13 +535,13 @@ class TestRunner:
     def run_all_tests(self, filter_pattern: str = None) -> Dict[str, TestResult]:
         """Run every fixture this run selected.
 
-        `select_fixtures` is the one selector: `--filter`, `--leaks-only` and
+        `select_fixtures` is the one selector: `--list`, `--filter`, `--leaks-only` and
         `--compile-only` all narrow the same list there, so a flag cannot select a
         corpus a gate has never seen.
         """
         test_files = select_fixtures(self.tests_dir, filter_pattern=filter_pattern,
                                      leaks_only=self.leaks_only,
-                                     compile_only=self.compile_only)
+                                     compile_only=self.compile_only, listed=self.listed)
 
         if not test_files:
             self.selected_nothing = True
@@ -1521,6 +1529,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--list",
+        metavar="FILE",
+        help="Run only the fixtures that FILE names: one repository-relative path for "
+             "each line; a blank line and a # line are not paths. A path that names no "
+             "fixture fails the run"
+    )
+
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Output results in JSON format"
@@ -1573,6 +1589,19 @@ def main():
     tests_dir = Path(__file__).parent
     project_root = tests_dir.parent
 
+    try:
+        selection = select_fixtures(
+            tests_dir, filter_pattern=args.filter, leaks_only=args.leaks_only,
+            compile_only=args.compile_only,
+            listed=read_fixture_list(Path(args.list)) if args.list else None)
+    except FixtureListError as e:
+        if args.json:
+            print(json.dumps({"list_error": str(e), "total_tests": 0, "passed": 0,
+                              "failed": 0}, indent=2))
+        else:
+            print(f"The fixture list is refused: {e}")
+        return 1
+
     # Build stdlib and test helpers unless skipped
     if not args.skip_build:
         if not args.json:
@@ -1582,10 +1611,8 @@ def main():
                 print("Failed to build stdlib, aborting tests")
             return 1
         # A whole run builds every helper; a narrowed one, the helpers it can import.
-        narrowed = args.filter or args.leaks_only or args.compile_only
-        needed = (helpers_for_selection(tests_dir, select_fixtures(
-            tests_dir, filter_pattern=args.filter, leaks_only=args.leaks_only,
-            compile_only=args.compile_only)) if narrowed else None)
+        narrowed = args.filter or args.leaks_only or args.compile_only or args.list
+        needed = helpers_for_selection(tests_dir, selection) if narrowed else None
         if not build_test_helpers(project_root, args.verbose, jobs=args.jobs, only=needed):
             if not args.json:
                 print("Failed to build test helpers, aborting tests")
@@ -1611,10 +1638,11 @@ def main():
 
     with TestRunner(tests_dir, args.verbose, args.jobs, args.json,
                     args.leaks_only, args.allow_leak_skips, args.compile_only,
-                    fresh_processes=args.fresh_processes) as runner:
+                    fresh_processes=args.fresh_processes, list_file=args.list) as runner:
         # Ruling 3 on #953: the doc blocks of the bundled stdlib are a runner step.
         runner.doc_gate = stdlib_doc_gate(project_root, filter_pattern=args.filter,
-                                          leaks_only=args.leaks_only)
+                                          leaks_only=args.leaks_only,
+                                          fixtures_only=fixtures_only(args))
         results = runner.run_all_tests(filter_pattern=args.filter)
 
     # Exit with appropriate code. Two things besides a failed test count here, and both

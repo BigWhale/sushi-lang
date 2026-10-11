@@ -720,14 +720,36 @@ def corpus_text(path: Path) -> str:
         raise CorpusReadError(f"{path}: {e}") from None
 
 
+class FixtureListError(ValueError):
+    """A `--list` file that cannot be read, or that names a path that is not a fixture."""
+
+
+def read_fixture_list(path: Path) -> List[str]:
+    """The paths of a `--list` file: one repository-relative path for each line.
+
+    A blank line and a line that starts with `#` are not paths.
+    """
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise FixtureListError(f"the fixture list {path} cannot be read: {e}") from None
+    return [line.strip() for line in text.splitlines()
+            if line.strip() and not line.strip().startswith('#')]
+
+
 def select_fixtures(tests_dir: Path, *, filter_pattern: Optional[str] = None,
                     leaks_only: bool = False,
-                    compile_only: bool = False) -> List[Path]:
+                    compile_only: bool = False,
+                    listed: Optional[List[str]] = None) -> List[Path]:
     """The fixtures THIS run covers: `collect_fixtures`, narrowed by each flag.
 
     ONE selector. `collect_fixtures` answers what the corpus holds; this answers what a
     run was asked for, and every flag narrows the same list here rather than filtering a
     copy of its own somewhere in a runner.
+
+    `listed` is the content of a `--list` file: paths relative to the parent of
+    `tests_dir`. A listed path that names no collected fixture raises FixtureListError,
+    because a list that names a deleted fixture would otherwise shrink in silence.
 
     The flags compose, and a combination may legitimately select nothing -- a leak
     assertion needs a run, so `--leaks-only --compile-only` is empty. An empty selection
@@ -736,6 +758,16 @@ def select_fixtures(tests_dir: Path, *, filter_pattern: Optional[str] = None,
     """
     tests_dir = Path(tests_dir)
     selected = collect_fixtures(tests_dir)
+
+    if listed is not None:
+        root = tests_dir.resolve().parent
+        by_path = {f.resolve(): f for f in selected}
+        unknown = [p for p in listed if (root / p).resolve() not in by_path]
+        if unknown:
+            raise FixtureListError("the fixture list names no fixture at: "
+                                   + ", ".join(unknown))
+        wanted = {(root / p).resolve() for p in listed}
+        selected = [f for f in selected if f.resolve() in wanted]
 
     if filter_pattern:
         selected = [f for f in selected
