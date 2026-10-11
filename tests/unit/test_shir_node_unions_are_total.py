@@ -9,7 +9,10 @@ is then not total over the nodes. So this gate holds three rules:
 1. The node classes are the classes that `ir.md` names, with the fields that it gives,
    in its order. The tables below are copied from 7.4, 7.5 and 7.8; a change of the design
    changes them first.
-2. Each node class is in the union of its level, and the unions hold nothing else.
+2. Each node class is in the union of its level, and the unions hold nothing else. The
+   one exception is the `Hole` of `nodes.py`: a construct that lowering does not handle
+   yet. It is in the expression union and in the statement union, and in no table of
+   ir.md.
 3. Each AST body class has a row of `ir.md` 7.10, and each node of the row is in a
    union. So lowering has a node for every class that it must lower.
 
@@ -210,6 +213,10 @@ _NO_NODE_OF_ITS_OWN = {"Spread"}
 #: The node classes that are in no union: the bases, and the block, which a node holds.
 _OUTSIDE_EVERY_UNION = {"ShirNode", "ExprNode", "ShirBlock"}
 
+#: The node that stands for a construct that lowering does not handle yet. It is in the
+#: expression union and in the statement union (`nodes.py`).
+_HOLE = {"Hole"}
+
 #: level -> (module, union, node fields, part fields, base fields)
 _LEVELS: dict[str, tuple[types.ModuleType, object, dict[str, tuple[str, ...]],
                          dict[str, tuple[str, ...]], tuple[str, ...]]] = {
@@ -318,7 +325,13 @@ def test_the_union_is_the_nodes_of_its_level(level: str) -> None:
     module, union, fields, _parts, _base = _LEVELS[level]
     nodes = {name for name, cls in _classes_of(module).items()
              if issubclass(cls, ShirNode) and name not in _OUTSIDE_EVERY_UNION}
-    assert _union_members(union) == set(fields) == nodes
+    assert _union_members(union) - _HOLE == set(fields) == nodes
+
+
+@pytest.mark.parametrize("union", [exprs.ShirExpr, stmts.ShirStmt], ids=["ShirExpr", "ShirStmt"])
+def test_the_hole_is_in_the_expression_and_the_statement_union(union: object) -> None:
+    assert _HOLE <= _union_members(union)
+    assert not _HOLE & _union_members(patterns.ShirPattern)
 
 
 def test_every_node_of_the_package_is_in_a_union() -> None:
@@ -331,7 +344,8 @@ def test_no_node_is_in_two_unions() -> None:
     unions = sorted(_LEVELS)
     for index, first in enumerate(unions):
         for second in unions[index + 1:]:
-            shared = _union_members(_LEVELS[first][1]) & _union_members(_LEVELS[second][1])
+            shared = (_union_members(_LEVELS[first][1]) & _union_members(_LEVELS[second][1])
+                      - _HOLE)
             assert not shared, f"{first} and {second} share these nodes: {shared}"
 
 

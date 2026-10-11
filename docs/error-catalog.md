@@ -1301,6 +1301,14 @@ The scope pass writes the binding table of each body: what each name denotes, th
 
 The SHIR printer writes the text of `--dump-shir` through one table, with one row for each class that a body can hold. A value of a class with no row means that a node or a part was added and the table was not. This is a fault in the compiler, not in the program; please report the program.
 
+### CE0155 {#ce0155}
+
+**Error** · internal
+
+**Message:** `the new pipeline does not emit this program yet: {stage}, {construct}`
+
+The compiler moves to a new pipeline ([the IR design](design/ir.md)): a body is lowered to SHIR, and later stages read SHIR. While the move is in progress, a stage can meet a construct that it does not handle yet. The message names the stage and the construct. Today the one stage is `lowering`, and the code comes only when the variable `SUSHI_SHIR_STRICT` is `1`: with no variable, lowering records the construct as a hole and the compile goes on through the old pipeline (see [Dump SHIR](compiler-reference.md#dump-shir)). The code goes when the move is complete. This is a limit of the compiler, not a fault in the program.
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.

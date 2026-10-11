@@ -1,10 +1,11 @@
 """Lowering: the AST of one body and its `Bindings` give a `ShirBody` (docs/design/ir.md 6.3, 7.9).
 
-`lower_body` is the one entry point of body lowering. Today it builds the FRAME of a body
-alone: its declaration, its origin, its parameters with their conventions, the locals of
-the parameters, and an empty block. The statements of the block, and the locals that
-their binders declare, come from `_lower_block`, the one place that fills the block
-(P1.6 and on).
+`lower_body` is the one entry point of body lowering. It builds the FRAME of a body: its
+declaration, its origin, its parameters with their conventions and the locals of the
+parameters. `_lower_block` fills the block, one statement at a time, through the table of
+`lower_nodes.py`. A construct that the table does not lower yet is a hole, and
+`LoweredProgram.holes` records each one. The locals that the binders of the block declare
+come with the lowering of each binder.
 
 `lower_unit` calls `lower_body` for each body that the scope pass checked in one unit,
 except a template as written: SHIR is built from the specialized bodies (ir.md 7), and
@@ -35,7 +36,8 @@ from sushi_lang.semantics.shir.body import (
 )
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
-from sushi_lang.semantics.shir.nodes import ShirBlock, TypeRef
+from sushi_lang.semantics.shir.lower_nodes import BodyLowerer
+from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import ReferenceType
 
 if TYPE_CHECKING:
@@ -53,10 +55,12 @@ AnyParam: TypeAlias = Param | SignatureParam
 class LoweringContext:
     """What a body needs beside its `Bindings`.
 
-    `decls` gives each declaration its id. `owner` is the perk implementation that holds
-    a perk method, because the method has no field that names its receiver type.
+    `decls` gives each declaration its id, and `holes` records each hole of the program.
+    `owner` is the perk implementation that holds a perk method, because the method has
+    no field that names its receiver type.
     """
     decls: DeclNames
+    holes: list[Hole]
     owner: Optional[ExtendWithDef] = None
 
 
@@ -68,14 +72,17 @@ def lower_body(bindings: Bindings, ctx: LoweringContext) -> ShirBody:
     ids: IdAllocator[ShirId] = IdAllocator(ShirId)
     params, locals_ = _frame(decl, bindings, ctx)
     return ShirBody(ctx.decls.declare(_written_name(decl, ctx)), _origin(decl), params,
-                    locals_, _lower_block(decl, ids))
+                    locals_, _lower_block(decl, BodyLowerer(ids, ctx.decls, bindings, ctx.holes,
+                                                            _span(decl.loc))))
 
 
 @dataclass(slots=True)
 class LoweredProgram:
-    """The bodies of each unit, in the compilation order, and the names of their ids."""
+    """The bodies of each unit, in the compilation order, the names of their ids, and the
+    holes of every body in the order of the walk."""
     decls: DeclNames = field(default_factory=DeclNames)
     units: list[tuple[Unit, list[ShirBody]]] = field(default_factory=list)
+    holes: list[Hole] = field(default_factory=list)
 
 
 def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings]) -> None:
@@ -90,7 +97,8 @@ def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings]) 
     owners = _perk_owners(program)
     templates = _written_template_members(program)
     lowered.units.append((unit, [
-        lower_body(table, LoweringContext(lowered.decls, owners.get(id(table.body))))
+        lower_body(table, LoweringContext(lowered.decls, lowered.holes,
+                                          owners.get(id(table.body))))
         for table in tables if not _is_written_template(table.body, templates)]))
 
 
@@ -115,10 +123,15 @@ def _perk_owners(program: Program) -> dict[int, ExtendWithDef]:
     return {id(method): impl for impl in program.perk_impls for method in impl.methods}
 
 
-def _lower_block(decl: Declaration, ids: IdAllocator[ShirId]) -> ShirBlock:
-    """The block of the body. No statement is lowered yet: the block is empty."""
+def _lower_block(decl: Declaration, lowerer: BodyLowerer) -> ShirBlock:
+    """The block of the body, each statement in the written order.
+
+    The initializer of a constant is not lowered yet, so its block is empty.
+    """
     block = None if isinstance(decl, ConstDef) else decl.body
-    return ShirBlock(ids.allocate(), _span(getattr(block, "loc", None), decl.loc), [])
+    ident = lowerer.ids.allocate()
+    statements = [] if block is None else [lowerer.stmt(stmt) for stmt in block.statements]
+    return ShirBlock(ident, _span(getattr(block, "loc", None), decl.loc), statements)
 
 
 def _origin(decl: Declaration) -> BodyOrigin:

@@ -19,6 +19,7 @@ The rules of the text, from the example of ir.md 8.11:
 - An argument with a written mode prints as `(value, Convention)`; a bloom adds `...`.
 - An expression with a recorded value (ruling E3) prints the value after it: `... = 3`.
 - No `shir_id` and no span: the example of ir.md 8.11 shows neither.
+- A hole prints as `<hole: AstClass>`, with the name of the AST class that it stands for.
 """
 from __future__ import annotations
 
@@ -35,7 +36,7 @@ from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import DeclId, LocalId
-from sushi_lang.semantics.shir.nodes import ShirBlock, TypeRef
+from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import BorrowMode
 
 #: The names of ir.md 8.3.
@@ -198,8 +199,9 @@ PRINTERS: dict[type, Render] = {
     e.Repeat: lambda pr, r: _node("Repeat", pr.show(r.value), pr.show(r.count)),
     e.RangeRun: lambda pr, r: _node("RangeRun", pr.show(r.range)),
     e.LambdaParam: _lambda_param,
-    # the block
+    # the block, and a construct that lowering does not handle yet
     ShirBlock: lambda pr, blk: pr.each(blk.statements),
+    Hole: lambda _pr, n: f"<hole: {n.ast_class}>",
     # statements
     s.Assign: lambda pr, n: _node("Assign", pr.show(n.target), pr.show(n.value),
                                   _flag("is_init", n.is_init)),

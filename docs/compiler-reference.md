@@ -525,7 +525,8 @@ Write the SHIR (the Sushi High-level IR, `docs/design/ir.md`) of each body to a 
 **Output includes:**
 - Each unit of the program, then each body of the unit: a function, a method, an instance of a generic function, and the initializer of a constant
 - The parameters of each body, with the convention of each (`Owned`, `Guaranteed`, `InGuaranteed`, `Inout`), and its other locals
-- The block of each body. Lowering does not fill a block yet, so each block prints as `[]`
+- The block of each body, one statement on each line
+- A hole, `<hole: AstClass>`, for each construct that lowering does not handle yet. The name is the AST class of the construct, for example `<hole: Let>`
 
 **Rules:**
 - The text is the same on every run and under every `PYTHONHASHSEED`, so a test can compare it with a golden file (`EXPECT_DUMP_SHIR`, `tests/TEST_METADATA_GUIDE.md`)
@@ -533,6 +534,14 @@ Write the SHIR (the Sushi High-level IR, `docs/design/ir.md`) of each body to a 
 - A template as written is not in the dump. Its instances are
 - The compile goes on as usual: the exit status and the output do not change. A dump that cannot be written is the warning [CW0005](error-catalog.md#cw0005)
 - With `--lib-info` the flag has no effect ([CW0003](error-catalog.md#cw0003))
+
+**Lowering on every compile:** the compiler lowers each body to SHIR on every compile, also with no `--dump-shir`. The result is not used yet, so a hole does not stop the compile: the old pipeline compiles the program, and the output does not change. Set the variable `SUSHI_SHIR_STRICT=1` to stop the compile at the first hole with the internal error [CE0155](error-catalog.md#ce0155), which names the stage and the construct:
+
+```bash
+SUSHI_SHIR_STRICT=1 ./sushic program.sushi
+```
+
+The variable is for the work on the new pipeline. With it, most programs stop at a hole today.
 
 ### Print LLVM IR
 

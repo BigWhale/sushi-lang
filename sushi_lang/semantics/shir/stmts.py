@@ -2,7 +2,7 @@
 
 Data only. A node holds what the source says; which walk a loop gets and what a
 destructure owns are answers of the passes, in their own tables (rulings S5, S6). The
-union `ShirStmt` is every statement node, and a dispatch reads it (gate:
+union `ShirStmt` is every statement node and the hole, and a dispatch reads it (gate:
 `tests/unit/test_shir_node_unions_are_total.py`).
 """
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional, TypeAlias
 
 from sushi_lang.semantics.shir.exprs import ShirExpr
 from sushi_lang.semantics.shir.ids import LocalId
-from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode
+from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, ShirNode
 from sushi_lang.semantics.typesys import BorrowMode
 
 if TYPE_CHECKING:
@@ -140,5 +140,5 @@ class Expand(ShirNode):
 
 ShirStmt: TypeAlias = (
     Assign | Destructure | ExprStmt | Return | If | Loop | Match | Assert | Break
-    | Continue | Expand
+    | Continue | Expand | Hole
 )

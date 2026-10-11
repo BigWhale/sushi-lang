@@ -2,8 +2,8 @@
 
 Data only. A node holds what the source says; what an expression IS (its type, its
 callee, the index of a field) is an answer of the `typecheck` pass, in its own table
-(ruling S5). The union `ShirExpr` is every expression node, and a dispatch reads it
-(gate: `tests/unit/test_shir_node_unions_are_total.py`).
+(ruling S5). The union `ShirExpr` is every expression node and the hole, and a
+dispatch reads it (gate: `tests/unit/test_shir_node_unions_are_total.py`).
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Optional, TypeAlias
 from sushi_lang.semantics.operators import BinOp, UnOp
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.ids import DeclId, LocalId
-from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode, TypeRef
+from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, ShirNode, TypeRef
 from sushi_lang.semantics.typesys import BorrowMode
 
 # -- a literal value --------------------------------------------------------------
@@ -321,5 +321,5 @@ class Interp(ExprNode):
 ShirExpr: TypeAlias = (
     Lit | LocalRef | ConstRef | StorageRef | GlobalRef | Field | Index | Slice | Call
     | Unary | Binary | Cast | Borrow | Take | Try | Lambda | StructInit | EnumInit
-    | TupleInit | ArrayInit | Range | Interp
+    | TupleInit | ArrayInit | Range | Interp | Hole
 )

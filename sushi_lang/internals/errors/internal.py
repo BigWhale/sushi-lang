@@ -554,3 +554,15 @@ _add(ErrorMessage("CE0154", Severity.ERROR,
     "no row means that a node or a part was added and the table was not. "
     "tests/unit/test_shir_printer_is_total.py is the gate; this is the backstop. "
     "This is a fault in the compiler, not in the program; please report the program."))
+
+_add(ErrorMessage("CE0155", Severity.ERROR,
+    "the new pipeline does not emit this program yet: {stage}, {construct}",
+    Category.INTERNAL,
+    "The compiler moves to a new pipeline (docs/design/ir.md): a body is lowered to SHIR, "
+    "and later stages read SHIR. While the move is in progress, a stage can meet a "
+    "construct that it does not handle yet. The message names the stage and the "
+    "construct. Today the one stage is `lowering`, and the code comes only when the "
+    "variable SUSHI_SHIR_STRICT is 1: with no variable, lowering records the construct "
+    "as a hole and the compile goes on through the old pipeline "
+    "(docs/compiler-reference.md, Dump SHIR). The code goes when the move is complete. "
+    "This is a limit of the compiler, not a fault in the program."))
