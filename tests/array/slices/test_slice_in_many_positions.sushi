@@ -1,0 +1,68 @@
+# A slice in the positions that read an array: a foreach, a lent iterator, a bulk-copy
+# source, a generic argument, a `let` from a poke parameter, a peek argument, a field, a
+# nested array, a loop, a hole, and a built-in method. A constant is sliced too.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 3 4 \n1 2 \n3\n2\n2\n195\n9\n5\n2\n2\n2\ntrue\n2\ntrue\n3\n[1, 2]\n8\n3\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+
+const i32[4] PRIMES = [2, 3, 5, 7]
+
+struct Holder:
+    i32[] items
+
+fn count@(T)(T[] xs) i32:
+    return xs.len()
+
+fn view(poke i32[] xs) i32:
+    let i32[] part = xs[1..3]
+    return part.len()
+
+fn sum_peek(peek u8[] bytes) i32:
+    let i32 total = 0
+    foreach(b in bytes.iter()):
+        total := total + (b as i32)
+    return total
+
+fn total(i32[] xs) i32:
+    let i32 sum = 0
+    foreach(x in xs.iter()):
+        sum := sum + x
+    return sum
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3, 4, 5])
+    foreach(x in data[1..4].iter()):
+        print("{x} ")
+    println("")
+    let Iterator@(peek i32) it = data[0..2].iter()
+    foreach(y in it):
+        print("{y} ")
+    println("")
+    let i32[] out = from([9])
+    out.extend(data[3..5])
+    println(out.len())
+    println(count(data[2..4]))
+    println(view(poke data))
+    let u8[] bytes = from([a'a', a'b', a'c'])
+    println(sum_peek(peek bytes[0..2]))
+    let Holder h = Holder(from([7, 8, 9]))
+    let i32[] tail = h.items[1..3]
+    println(tail[1])
+    let i32[2][] grid = from([[1, 2], [3, 4], [5, 6]])
+    println(grid[1..3][1][0])
+    let i32 k = 0
+    while (k < 3):
+        println(data[k..k + 2].len())
+        k := k + 1
+    println(data[0..2].hash() == from([1, 2]).hash())
+    println(data[0..2].get(1).realise(0))
+    println(data[0..2].contains(2))
+    let i32[] copy = data[1..3].clone()
+    copy.push(99)
+    println(copy.len())
+    println("{data[0..2]}")
+    println(total(PRIMES[1..3]))
+    let string[] names = from(["a", "b", "c"])
+    println(count(names[0..=2]))
+    return 0
