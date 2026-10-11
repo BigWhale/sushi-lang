@@ -95,6 +95,18 @@ def chain_call_boundary(expr: Optional[Expr]) -> Optional[Span]:
     return end.loc
 
 
+def slice_on_path(expr: Optional[Expr]) -> Optional[IndexAccess]:
+    """The slice a write through `expr` crosses, or None (S4, docs/design/slices.md).
+
+    A slice is a read-only view: a write through it is lost from no one, but a growth
+    through it would move storage that the array keeps.
+    """
+    for node in walk_place(expr, Step.MEMBER | Step.INDEX).path:
+        if isinstance(node, IndexAccess) and node.is_slice:
+            return node
+    return None
+
+
 def reads_through_owner(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
     """Does `expr` read a value out of storage something else still owns?"""
     expr = unwrap_try(expr)
@@ -188,6 +200,9 @@ def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
             return constant_type(checker, expr.id)
         case MemberAccess():
             return _field_type(checker, expr)
+        case IndexAccess() if expr.is_slice:
+            # A slice is a `T[]` of the array it views (#1226): the typecheck pass's stamp.
+            return expr.inferred_element_type
         case IndexAccess():
             return checker.types.element_type(read_type(checker, expr.array))
 

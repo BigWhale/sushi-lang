@@ -71,7 +71,9 @@ from .flow import (
 from .iterators import is_lent_name, lent_owners
 from .reads import borrow_owner
 from .state import BorrowState, record_owners
-from .writes import check_owner_not_borrowed, maybe_reject_mutation, reject_readonly_write
+from .writes import (
+    check_owner_not_borrowed, maybe_reject_mutation, reject_readonly_write,
+    reject_write_through_slice)
 
 if TYPE_CHECKING:
     from . import BorrowChecker
@@ -270,8 +272,9 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
     elif isinstance(target, IndexAccess):
         # An element rebind mutates in place too, and `borrow_owner` already walks an
         # index, so the same gate answers for all five read-only receiver kinds.
+        # A store to a slice itself is a write through the view (S4).
         reject_readonly_write(checker, owner, stmt.loc, "assign to an array element",
-                              receiver=target.array)
+                              receiver=target if target.is_slice else target.array)
         check_expr(checker, target)
 
     check_expr(checker, stmt.value)
@@ -462,6 +465,7 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
         elif stmt.value_iterator is not None and walked_view is None:
             iterator = scope.bind_lent_walk(stmt.iterable)
         if stmt.item_borrow is not None:
+            _reject_poke_item_of_a_slice(checker, stmt, stmt.item_borrow_span or span)
             owner: Optional[Expr] = stmt.iterable
             # An item over an owned temporary has no named owner to conflict with.
             if not walks_a_temporary(checker, stmt.iterable) and reject_a_second_reference(
@@ -486,6 +490,18 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
         change = flow.back_edge.invalidation_of(view) if view is not None else None
         if change is not None:
             emit_change_under_iterator(checker, change, stmt.iterable, stmt.loc)
+
+
+def _reject_poke_item_of_a_slice(checker: 'BorrowChecker', stmt: Foreach,
+                                 span) -> None:
+    """`foreach(poke r in data[a..b].iter())` writes through a slice (S4): CE2426."""
+    from sushi_lang.semantics.param_modes import borrow_mode
+    from sushi_lang.semantics.typesys import BorrowMode
+    if stmt.item_borrow is None or borrow_mode(stmt.item_borrow) is not BorrowMode.POKE:
+        return
+    if isinstance(stmt.iterable, (MethodCall, DotCall)):
+        reject_write_through_slice(checker, stmt.iterable.receiver, span,
+                                   "take a `poke` item")
 
 
 def _settle_value_walk(checker: 'BorrowChecker', stmt: Foreach) -> Optional[str]:

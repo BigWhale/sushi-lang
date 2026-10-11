@@ -19,6 +19,7 @@ from sushi_lang.semantics.ast import (
     MemberAccess,
     MethodCall,
     Name,
+    RangeExpr,
     TryExpr,
 )
 from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
@@ -429,6 +430,11 @@ def expr_to_string(expr: Expr, *, temporaries: bool = False) -> str:
                     f"[{expr_to_string(expr.index, temporaries=t)}]")
         case TryExpr():
             return f"{expr_to_string(expr.expr, temporaries=t)}??"
+        case RangeExpr():
+            operator = "..=" if expr.inclusive else ".."
+            text = (f"{expr_to_string(expr.start, temporaries=t)}{operator}"
+                    f"{expr_to_string(expr.end, temporaries=t)}")
+            return f"({text}).rev()" if expr.reverse else text
         case Call() if temporaries and isinstance(expr.callee, Name):
             return f"{expr.callee.id}({'...' if expr.args else ''})"
         case ArrayLiteral() if temporaries:

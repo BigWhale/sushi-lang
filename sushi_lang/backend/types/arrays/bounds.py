@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, Callable, Optional
 
 from llvmlite import ir
 
+from sushi_lang.backend.utils import require_builder
+
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.typesys import Type
@@ -44,6 +46,34 @@ def emit_bounds_check(
         builder.unreachable()
     else:
         on_fail()
+
+    builder.position_at_end(ok_block)
+
+
+def emit_slice_check(
+    codegen: 'LLVMCodegen',
+    start: ir.Value,
+    end: ir.Value,
+    size_value: ir.Value,
+) -> None:
+    """Emit the range check of a slice: `0 <= start <= end <= size`, else RE2028.
+
+    `end` is exclusive. Two unsigned compares are the guard: `end <= size` holds `end` in
+    `[0, size]`, and then `start <= end` holds `start` in `[0, end]`. The `dont_panic`
+    marker does not remove this check (docs/design/slices.md, S7).
+    """
+    builder = require_builder(codegen)
+    end_ok = builder.icmp_unsigned("<=", end, size_value, name="slice_end_ok")
+    start_ok = builder.icmp_unsigned("<=", start, end, name="slice_start_ok")
+    in_range = builder.and_(end_ok, start_ok, name="slice_in_bounds")
+
+    ok_block = builder.append_basic_block(name="slice_bounds_ok")
+    fail_block = builder.append_basic_block(name="slice_bounds_fail")
+    builder.cbranch(in_range, ok_block, fail_block)
+
+    builder.position_at_end(fail_block)
+    codegen.runtime.errors.emit_runtime_error_with_values("RE2028", start, end, size_value)
+    builder.unreachable()
 
     builder.position_at_end(ok_block)
 

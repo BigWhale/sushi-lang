@@ -6,13 +6,13 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Borrow, Expr, Name
+from sushi_lang.semantics.ast import Borrow, Expr, IndexAccess, Name
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.param_modes import borrow_mode
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode
 from .diagnostics import emit_use_after_move, expr_to_string
-from .reads import captured_variable
+from .reads import borrow_owner, captured_variable
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -23,6 +23,9 @@ if TYPE_CHECKING:
 def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
     """Check a borrow expression: `peek x`, `poke x`, `peek x.field`, `poke x.field`."""
     is_poke = borrow_mode(borrow.mutability) is BorrowMode.POKE
+    if isinstance(borrow.expr, IndexAccess) and borrow.expr.is_slice:
+        _check_slice_borrow(checker, borrow, is_poke)
+        return
     # A field borrow is tracked against the BASE variable: this pass tracks whole
     # variables, not sub-places, so the two spellings differ in exactly one thing --
     # where the name comes from. A captured variable is a whole variable (#1129).
@@ -65,6 +68,25 @@ def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
                                  place=borrow.expr)
 
     acquire_borrow(checker, state, borrow.loc, is_poke=is_poke)
+
+
+def _check_slice_borrow(checker: 'BorrowChecker', borrow: Borrow, is_poke: bool) -> None:
+    """`peek data[a..b]`: a pointer to the slice descriptor (docs/design/slices.md).
+
+    A `peek` reads the array: it is a shared borrow of the array's owner, so a `poke` of
+    the same owner in one call is CE2407. A `poke` is refused (S4): a callee could grow
+    the view and move storage that the array keeps.
+    """
+    from .expressions import check_expr
+    check_expr(checker, borrow.expr)
+    owner = borrow_owner(borrow.expr)
+    if is_poke:
+        reject_readonly_write(checker, owner, borrow.loc, "take a `poke` borrow",
+                              receiver=borrow.expr)
+        return
+    state = checker.borrow_state.get(owner) if owner is not None else None
+    if state is not None:
+        acquire_borrow(checker, state, borrow.loc, is_poke=False)
 
 
 def acquire_borrow(checker: 'BorrowChecker', state: BorrowState, span: Optional[Span],

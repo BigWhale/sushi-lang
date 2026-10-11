@@ -6,7 +6,8 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr, Lambda, Let, Name, Spread, StringLit, TryExpr
+from sushi_lang.semantics.ast import (
+    Expr, IndexAccess, Lambda, Let, Name, Spread, StringLit, TryExpr)
 from sushi_lang.semantics.ownership import Ownership, Provenance, TypeClass, classify
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
@@ -18,8 +19,8 @@ from .diagnostics import (
     refuses_clone,
 )
 from .reads import (
-    borrow_owner, constant_sig, namespaced_storage, read_type, reads_through_owner,
-    unwrap_try)
+    borrow_owner, constant_sig, names_kept_storage, namespaced_storage, read_type,
+    reads_through_owner, unwrap_try)
 from .iterators import lent_owners
 from .state import BorrowState, record_owners
 from .takes import field_take, spend
@@ -351,6 +352,9 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
     provenance = source_provenance(checker, expr)
     expr.ownership_provenance = provenance
 
+    if reject_slice_of_temporary(checker, expr):
+        return
+
     dest = checker.borrow_state.get(stmt.name)
     if dest is None:
         return
@@ -415,5 +419,37 @@ def record_borrowed_binding(checker: 'BorrowChecker', stmt: Let,
     owner = borrow_owner(stmt.value)
     if owner is None:
         return
-    record_owners(checker.borrow_state, dest, (owner,), stmt.loc,
+    owners = (slice_owners(checker, owner) if is_slice(stmt.value) else (owner,))
+    record_owners(checker.borrow_state, dest, owners, stmt.loc,
                   checker._scope_binding_borrows[-1])
+
+
+def is_slice(expr: Optional[Expr]) -> bool:
+    """Is `expr` a slice, `data[a..b]` (docs/design/slices.md)?"""
+    return isinstance(expr, IndexAccess) and expr.is_slice
+
+
+def slice_owners(checker: 'BorrowChecker', owner: str) -> tuple[str, ...]:
+    """The owners a slice of `owner` freezes: `owner`, and the owners it borrows from.
+
+    A slice of a `let` of a slice views the storage of the first array, so a change of
+    that array must reach the second slice too.
+    """
+    state = checker.borrow_state.get(owner)
+    if state is not None and state.is_let_borrow and not state.is_lent_iterator:
+        return (owner, *state.borrows_from)
+    return (owner,)
+
+
+def reject_slice_of_temporary(checker: 'BorrowChecker', expr: Expr) -> bool:
+    """CE2437 for a `let` of a slice of a temporary array (S8). True when refused.
+
+    The temporary is freed at the end of the statement, and the binding lives on. Inside
+    one statement a slice of a temporary is legal, so only the `let` asks.
+    """
+    if not is_slice(expr) or names_kept_storage(checker, expr):
+        return False
+    checker.err.emit_with(er.ERR.CE2437, expr.loc) \
+        .help("bind the array first, or copy the part with `.ss(start, count)`") \
+        .emit()
+    return True

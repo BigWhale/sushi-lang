@@ -2233,11 +2233,11 @@ An index, a count and a range bound are i32 positions: an array index `a[i]`, a 
 
 **Error** · type
 
-**Message:** `` a range is a value only where `Iterator@(i32)` is expected ``
+**Message:** `` a range is a value only where `Iterator@(i32)` is expected, and a slice only in the index of an array ``
 
 **Help:** `` walk it with `foreach`, spell it into an array (`from([a..b])`), or give it to a position of the type `Iterator@(i32)` ``
 
-A range (`a..b`, `a..=b`) has three positions. It is the iterable of a `foreach` (`foreach(i in 0..3):`), which walks it directly. It is an element of an array literal (`[0..3]`, `from([0..n])`), where it is a run of elements. And it is a VALUE, an owned `Iterator@(i32)`, in every position where `Iterator@(i32)` is expected, written or propagated: a `let` of that type, an argument, a `return`, a constructor field, an enum payload and a container element. In every other position a range is this error: an `i32` position, an operand, a `let` of another type, and a generic `T` that nothing else solves (`f(nom 0..3)` over `fn f@(T)(nom T x)`). Walk it with `foreach`, spell it into an array with `from([a..b])`, or give it to a position of the type `Iterator@(i32)`. `.rev()` is the one method a range takes, and the result is a range again, with the same positions: `foreach(i in (0..3).rev()):`, `[(0..3).rev()]` and `let Iterator@(i32) d = (0..3).rev()`. Any other method on a range is this error. See [the iteration design](design/iteration.md), ruling 10.
+A range (`a..b`, `a..=b`) has four positions. It is the iterable of a `foreach` (`foreach(i in 0..3):`), which walks it directly. It is an element of an array literal (`[0..3]`, `from([0..n])`), where it is a run of elements. It is the index of an array (`data[1..3]`), where it is a slice: a borrowed `T[]` view of a part of a `T[]` or a `T[N]` (see [the slice design](design/slices.md)). A string has no slice, and a reversed range (`data[(0..3).rev()]`) has no slice, so a range in those two index positions is this error: copy a part of a string with `s.s(a, b)`. And it is a VALUE, an owned `Iterator@(i32)`, in every position where `Iterator@(i32)` is expected, written or propagated: a `let` of that type, an argument, a `return`, a constructor field, an enum payload and a container element. In every other position a range is this error: an `i32` position, an operand, a `let` of another type, and a generic `T` that nothing else solves (`f(nom 0..3)` over `fn f@(T)(nom T x)`). Walk it with `foreach`, spell it into an array with `from([a..b])`, or give it to a position of the type `Iterator@(i32)`. `.rev()` is the one method a range takes, and the result is a range again, with the same positions: `foreach(i in (0..3).rev()):`, `[(0..3).rev()]` and `let Iterator@(i32) d = (0..3).rev()`. Any other method on a range is this error. See [the iteration design](design/iteration.md), ruling 10.
 
 ### CE2123 {#ce2123}
 
@@ -2267,7 +2267,7 @@ An extension target and a perk-implementation target can put a bound on a type p
 
 **Help:** `` to count down from {high} to {low}, write `({low}..={high}).rev()` ``
 
-A range always goes up: `a..b` yields a, a+1, ..., b-1 and is empty when a >= b; `a..=b` yields a to b and is empty when a > b. A countdown is written `(a..b).rev()`, which yields the same values, last first: `(1..=10).rev()` is 10 down to 1, and `(0..n).rev()` is n-1 down to 0 and empty when n is 0. This error is for a range whose two bounds the compiler can read and whose start is above its end, in a `foreach` iterable and in an array literal element (a constant and a fixed array included), with or without `.rev()`. The help gives the countdown that yields the values the bounds name: `10..0` is `(1..=10).rev()`, `10..=0` is `(0..=10).rev()`. A range with a computed bound gets no diagnostic: it is empty when it does not go up. Before this rule the values gave the direction, so `10..0` counted down. That made the empty case run backward when a bound was computed: the countdown `(n - 1)..=0` visited -1 and 0 when n was 0, where it must visit nothing. An inclusive range could never be empty. The countdown is `(0..n).rev()` now, and it is empty when n is 0. Rust, Kotlin and Python write the direction in the code, never in the data, and Sushi does the same. `3..3` in a `foreach` is legal and empty; in an array literal it is [CE2019](#ce2019), because it spells no slot. A range in a match PATTERN (`0x80..=0x8f ->`) goes up by the same rule, and `0x8f..=0x80` or `5..3` there is this error. Its help gives the written order to use (`0x80..=0x8f`), because a pattern has no direction to keep. The bounds are read as values of the scrutinee type, so on an i8 `0x80..=0xff` is -128 to -1 and goes up. `5..5` in a pattern goes nowhere: it matches no value, which is the dead-arm error [CE2118](#ce2118).
+A range always goes up: `a..b` yields a, a+1, ..., b-1 and is empty when a >= b; `a..=b` yields a to b and is empty when a > b. A countdown is written `(a..b).rev()`, which yields the same values, last first: `(1..=10).rev()` is 10 down to 1, and `(0..n).rev()` is n-1 down to 0 and empty when n is 0. This error is for a range whose two bounds the compiler can read and whose start is above its end, in a `foreach` iterable, in an array literal element (a constant and a fixed array included) and in a slice (`data[3..1]`), with or without `.rev()`. A slice whose computed bounds go down stops the program with [RE2028](#re2028), because a slice is not empty when its bounds are out of order. The help gives the countdown that yields the values the bounds name: `10..0` is `(1..=10).rev()`, `10..=0` is `(0..=10).rev()`. A range with a computed bound gets no diagnostic: it is empty when it does not go up. Before this rule the values gave the direction, so `10..0` counted down. That made the empty case run backward when a bound was computed: the countdown `(n - 1)..=0` visited -1 and 0 when n was 0, where it must visit nothing. An inclusive range could never be empty. The countdown is `(0..n).rev()` now, and it is empty when n is 0. Rust, Kotlin and Python write the direction in the code, never in the data, and Sushi does the same. `3..3` in a `foreach` is legal and empty; in an array literal it is [CE2019](#ce2019), because it spells no slot. A range in a match PATTERN (`0x80..=0x8f ->`) goes up by the same rule, and `0x8f..=0x80` or `5..3` there is this error. Its help gives the written order to use (`0x80..=0x8f`), because a pattern has no direction to keep. The bounds are read as values of the scrutinee type, so on an i8 `0x80..=0xff` is -128 to -1 and goes up. `5..5` in a pattern goes nowhere: it matches no value, which is the dead-arm error [CE2118](#ce2118).
 
 ### CE2126 {#ce2126}
 
@@ -2639,6 +2639,16 @@ A `nom self` method takes ownership of what it was called on, so the binding is 
 **Message:** `cannot move '{name}': it is {kind}, storage the program keeps for its whole run; borrow it instead, or take an independent value`
 
 This is the rule for UNIT-LEVEL STORAGE, and both kinds read it. A `var` declaration is storage in the data segment and a `const` is one object in `.rodata`: one per program, initialized before `main`, never destroyed at exit (see [the unit-storage design](design/unit-storage.md)). Neither has an owner that can hand the value away. Moving it out -- a `nom` argument, a `let` bound straight from it, a `return` of it, a `nom self` method such as `close()` -- would give a callee or a binding the right to free storage nothing re-initializes, so the same rule that fences `main`'s argv view ([CE2410](#ce2410)) fences both. A plain value copies out freely; only a type that owns a resource is refused, so `nom` of a `const i32` is a harmless copy. Pass it as a borrow (`f(v)`, `peek v`, `poke v`), or take an independent value: `.clone()` for a plain owner, `.share()` for a handle. A REBIND is the one way to change what a `var` holds, and it frees the old value. [CE2400](#ce2400) is the WRITE rule. A name behind an alias (`c.GREETING`) is the same declaration as the flat name and reads the same rule.
+
+### CE2437 {#ce2437}
+
+**Error** · borrow
+
+**Message:** `cannot bind a slice of a temporary array: the array is freed at the end of the statement`
+
+**Help:** `` bind the array first, or copy the part with `.ss(start, count)` ``
+
+A slice `data[a..b]` is a borrowed view of a part of an array, and it never copies (see [the slice design](design/slices.md), rule S8). A temporary array (a call result, a `from([...])`, a `.clone()`) lives until the end of the statement that makes it. Inside that statement a slice of it is legal: `send(make()[0..4])` reads the bytes while the call runs, and the array is freed after it. A `let` keeps the slice after the statement, so it would view storage that is freed already. Bind the array first (`let u8[] all = make()`, then `all[0..4]`), or copy the part with `.ss(start, count)` or `.s(start, end)`, which make a new array that the binding owns. An index of a temporary is different: `let string s = make()[1]` reads one element out, and that stays legal.
 
 ## CE25xx: Result, Maybe and conversion errors {#ce25xx}
 
@@ -4019,6 +4029,14 @@ An `assert(cond)` or `assert(cond, message)` found its condition false. `{where}
 **Message:** `an iterator that walks a value holding a resource cannot be cloned`
 
 `it.clone()` copies the cursor of an iterator, and for an iterator made with `Iterator.new(nom x)` the cursor is the value `x` itself. A value that holds a resource (a type that implements `Drop`, or one that holds such a type) has no deep copy ([CE2431](#ce2431)), so its iterator has none either. The type of the iterator does not show what it walks, so the compiler cannot refuse the clone, and the program stops at it instead. Make a second iterator over a second value, or walk the one iterator through `poke`.
+
+### RE2028 {#re2028}
+
+**Error** · runtime
+
+**Message:** `slice %d..%d is out of bounds for an array of size %d`
+
+A slice `data[a..b]` views the elements a to b-1 of an array, and `data[a..=b]` the elements a to b (see [the slice design](design/slices.md)). The range must hold `0 <= a <= b <= len()`, and a range outside that stops the program, as an index out of range does ([RE2020](#re2020)). This is not the clamp rule of `.s()` and `.ss()`, which are the copies. The text gives the end as an exclusive end, so `data[1..=3]` on an array of size 3 prints `1..4`. `a == b` is an empty view and is legal. Readable bounds that go down are the compile error [CE2125](#ce2125); computed bounds that go down are this error, and not an empty view. The `dont_panic` marker does not remove this check: a bad slice is a descriptor with a wrong length that leaves the marked body, and every callee checks against that length. The check runs once, when the slice is made.
 
 ## NExxxx: Nori package manager errors {#nexxxx}
 

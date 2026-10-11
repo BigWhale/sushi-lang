@@ -64,6 +64,16 @@ def infer_index_access_type(validator: 'TypeValidator', expr: IndexAccess) -> Op
     if array_type is None:
         return None
 
+    if expr.is_slice:
+        # A slice is a borrowed `T[]` of either array kind (#1226). A reversed range
+        # and a string have no slice (CE2122), so they yield no type.
+        if (not isinstance(array_type, (ArrayType, DynamicArrayType))
+                or getattr(expr.index, "reverse", False)):
+            return None
+        slice_type = DynamicArrayType(base_type=array_type.base_type)
+        expr.inferred_element_type = slice_type
+        return slice_type
+
     if isinstance(array_type, (ArrayType, DynamicArrayType)):
         expr.inferred_element_type = array_type.base_type
         return array_type.base_type

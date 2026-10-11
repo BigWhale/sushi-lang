@@ -285,3 +285,17 @@ _add(ErrorMessage("CE2434", Severity.ERROR,
     "value out, take the `Own@(T)` itself -- a `nom` binding on the payload that holds "
     "it -- and read through it at the new owner. Freeing the box alone needs an owner "
     "for the cell that survives the move, which is a later change."))
+
+_add(ErrorMessage("CE2437", Severity.ERROR,
+    "cannot bind a slice of a temporary array: the array is freed at the end of the statement",
+    Category.BORROW,
+    "A slice `data[a..b]` is a borrowed view of a part of an array, and it never copies "
+    "(#1226, docs/design/slices.md, rule S8). A temporary array -- a call result, a "
+    "`from([...])`, a `.clone()` -- lives until the end of the statement that makes it. "
+    "Inside that statement a slice of it is legal: `send(make()[0..4])` reads the bytes "
+    "while the call runs, and the array is freed after it. A `let` keeps the slice after "
+    "the statement, so it would view storage that is freed already. Bind the array "
+    "first (`let u8[] all = make()`, then `all[0..4]`), or copy the part with "
+    "`.ss(start, count)` or `.s(start, end)`, which make a new array that the binding "
+    "owns. An index of a temporary is different: `let string s = make()[1]` reads one "
+    "element out, and that stays legal."))

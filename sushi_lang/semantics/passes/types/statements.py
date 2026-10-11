@@ -150,6 +150,10 @@ def place_root(validator: 'TypeValidator', expr) -> Optional[PlaceRoot]:
         return (call.method == "get" and not call.args
                 and is_own_type(validator.infer_expression_type(call.receiver)))
 
+    if isinstance(expr, IndexAccess) and expr.is_slice:
+        # A slice is a new descriptor and not storage (docs/design/slices.md).
+        return None
+
     walked = walk_place(expr, Step.MEMBER | Step.INDEX | Step.CALL,
                         crosses_call=owns_payload,
                         stop=lambda member: _alias_origin(validator, member))

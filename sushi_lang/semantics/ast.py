@@ -947,7 +947,9 @@ class ArrayLiteral(Node):
 class IndexAccess(Node):
     array: "Expr"
     index: "Expr"
-    inferred_element_type: Optional["Type"] = None  # Element type inferred by the typecheck pass.
+    # The type the access yields, inferred by the typecheck pass: the element, or the
+    # `T[]` of a slice.
+    inferred_element_type: Optional["Type"] = None
     reads_a_string_byte: bool = False  # `s[i]` on a string (#1091), stamped by the typecheck pass
                                             # The backend reads the typecheck pass's stamp rather than
                                             # re-deriving; with none, `rows[0].hash()` died
@@ -958,7 +960,12 @@ class IndexAccess(Node):
     # emits no bounds check (docs/design/dont-panic.md). Stamped by the AST builder.
     unchecked: bool = False
 
-UnOp = Literal["neg", "not", "~"]
+    @property
+    def is_slice(self) -> bool:
+        """`data[a..b]`: a range in the index position is a slice (docs/design/slices.md)."""
+        return isinstance(self.index, RangeExpr)
+
+UnOp =Literal["neg", "not", "~"]
 @dataclass(slots=True)
 class UnaryOp(Node):
     op: UnOp
