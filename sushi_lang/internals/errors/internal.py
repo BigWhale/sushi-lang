@@ -545,3 +545,12 @@ _add(ErrorMessage("CE0153", Severity.ERROR,
     "the body, or that it did not record what it found. "
     "tests/unit/test_scope_binder_walk_is_total.py is the gate; this is the backstop. "
     "This is a fault in the compiler, not in the program; please report the program."))
+
+_add(ErrorMessage("CE0154", Severity.ERROR,
+    "the SHIR printer has no text for the class '{name}'",
+    Category.INTERNAL,
+    "The SHIR printer writes the text of --dump-shir through one table, with one row for "
+    "each class that a body can hold (docs/design/ir.md 11.3). A value of a class with "
+    "no row means that a node or a part was added and the table was not. "
+    "tests/unit/test_shir_printer_is_total.py is the gate; this is the backstop. "
+    "This is a fault in the compiler, not in the program; please report the program."))

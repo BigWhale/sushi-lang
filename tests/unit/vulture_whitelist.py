@@ -23,9 +23,7 @@ IGNORE_DECORATORS: dict[str, str] = {
 
 _PLATFORM_ABI = "platform ABI reference table"
 _LLVMLITE = "llvmlite reads this attribute when it prints the module"
-_P1_5_PRINTER = "kept for P1.5, the SHIR printer reads it"
-_P1_6_CONVENTION = "kept for P1.6, lowering writes the convention of each parameter"
-_P1_LOWERING = "kept for P1.6 to P1.14, lowering builds it"
+_P2_SIDE_TABLES = "kept for P2.2 and P2.5, a side table keys each answer on it"
 
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
@@ -100,18 +98,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "a reserved bit of the .slib header format; the library design defines it and "
      "the writer keeps it zero"),
     # -- kept for a later chunk of the IR migration (docs/design/ir.md) --------------
-    ("sushi_lang/semantics/param_modes.py", "GUARANTEED", _P1_6_CONVENTION),
-    ("sushi_lang/semantics/param_modes.py", "IN_GUARANTEED", _P1_6_CONVENTION),
-    ("sushi_lang/semantics/param_modes.py", "INOUT", _P1_6_CONVENTION),
-    ("sushi_lang/semantics/shir/body.py", "ShirBody", _P1_5_PRINTER),
-    ("sushi_lang/semantics/shir/body.py", "fn_id", _P1_5_PRINTER),
-    ("sushi_lang/semantics/shir/body.py", "locals", _P1_5_PRINTER),
-    ("sushi_lang/semantics/shir/body.py", "convention", _P1_5_PRINTER),
-    ("sushi_lang/semantics/shir/nodes.py", "shir_id", _P1_5_PRINTER),
-    *(("sushi_lang/semantics/shir/exprs.py", name, _P1_LOWERING)
-      for name in ("readable", "const_id", "bloom", "convention", "written_order")),
-    *(("sushi_lang/semantics/shir/stmts.py", name, _P1_LOWERING)
-      for name in ("is_init", "then", "otherwise")),
+    ("sushi_lang/semantics/shir/nodes.py", "shir_id", _P2_SIDE_TABLES),
 )
 
 RATCHET: tuple[tuple[str, str, str], ...] = ()

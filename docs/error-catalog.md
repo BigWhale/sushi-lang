@@ -1293,6 +1293,14 @@ The `dont_panic because "<reason>"` marker removes the bounds check of each `[]`
 
 The scope pass writes the binding table of each body: what each name denotes, the local of each binder, and the captures of each lambda. When a body ends, a check walks it again and finds each name, binder and lambda that the pass did not record. This is a fault in the compiler, not in the program; please report the program.
 
+### CE0154 {#ce0154}
+
+**Error** · internal
+
+**Message:** `the SHIR printer has no text for the class '{name}'`
+
+The SHIR printer writes the text of `--dump-shir` through one table, with one row for each class that a body can hold. A value of a class with no row means that a node or a part was added and the table was not. This is a fault in the compiler, not in the program; please report the program.
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.
@@ -3899,6 +3907,7 @@ The command line names a flag that the build it asks for does not read, so the f
 **Help:** `remove the marker; an index in a lambda keeps its check`
 
 The `dont_panic` marker removes the bounds check of each `[]` in the body that carries it. A marked body with no `[]` removes nothing, so the author believes that a check went and none did. An index in a lambda in the body does not count, because a lambda keeps its checks. The warning is always on, and it is for the author: a user unit and a bundled stdlib unit get it, and a source library's unit in a consumer's build does not. Remove the marker. See [the dont_panic design](design/dont-panic.md).
+
 
 ### CW1001 {#cw1001}
 
