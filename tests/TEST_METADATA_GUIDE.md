@@ -321,7 +321,8 @@ Compares a dump of the program with a golden file beside the fixture:
   (`--dump-shir <path>`), and the compiler writes the dump to that path. The compile goes
   on as usual, so every other directive of the fixture still holds
 - The runner owns the two flags: `COMPILER_FLAGS` refuses `--dump-shir` and `--dump-slir`
-- A missing golden file fails the fixture
+- A missing golden file fails the fixture. Run it with `--bless` to write the file, and
+  read the new file in the diff as you read code
 
 ### Advanced Metadata Directives
 
@@ -825,6 +826,21 @@ python tests/run_tests.py --list tests/ir/ratchet.txt
   A list that selects nothing fails the run too
 - A list names fixtures only. So the stdlib doc-block gate, the library-reader gate, the
   library-report gate and the dead-code gate print their skip
+
+### Write the golden files
+
+```bash
+python tests/run_tests.py --bless --filter ir/
+```
+
+- `--bless` selects the fixtures that carry `EXPECT_DUMP_SHIR` or `EXPECT_DUMP_SLIR`, and
+  it composes with the other selectors. It checks each fixture in full, and writes each
+  dump to its golden file in place of the comparison
+- It prints each file it wrote (`Blessed: tests/ir/.../main.shir`) and the count of the
+  files that did not change. A run with no other fault exits 0
+- A run without `--bless` never writes a golden file
+- `--bless` selects no stdlib module, so the four runner steps of the stdlib, the library
+  reader and the toolchain programs print their skip
 
 ## Metadata Validation Workflow
 

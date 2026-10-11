@@ -32,7 +32,7 @@ from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
                        arm_spelling_gate, spelling_gate_tripped,
                        DocGateResult, stdlib_doc_gate, stdlib_override_command,
-                       fixtures_only)
+                       fixtures_only, _spelled_path)
 from fork_server import COMPILER_STUB_ENV, ForkServer, wrapper_env
 from golden_dumps import check_dumps, dump_flags
 
@@ -431,13 +431,18 @@ class TestRunner:
                  parallel_jobs: Optional[int] = None, json_output: bool = False,
                  leaks_only: bool = False, allow_leak_skips: bool = False,
                  compile_only: bool = False, project_root: Optional[Path] = None,
-                 fresh_processes: bool = True, list_file: Optional[str] = None):
+                 fresh_processes: bool = True, list_file: Optional[str] = None,
+                 bless: bool = False):
         """Initialize the test runner."""
         self.tests_dir = tests_dir
         # `--list FILE`: the fixtures the file names. The caller has read it once already,
         # so a bad list fails before the build.
         self.list_file = list_file
         self.listed = read_fixture_list(Path(list_file)) if list_file else None
+        # `--bless`: the run selects the golden fixtures and writes each dump to its golden
+        # file. Each golden file it reached, and whether its content changed.
+        self.bless = bless
+        self.blessed: List[Tuple[Path, bool]] = []
         # The checkout whose `sushic` the run starts. It is the parent of `tests/` for
         # every real run; a runner test that selects from a temporary directory names it.
         self.project_root = project_root or tests_dir.parent
@@ -492,6 +497,18 @@ class TestRunner:
         if self.temp_dir and Path(self.temp_dir).exists():
             shutil.rmtree(self.temp_dir)
 
+    def blessed_files(self) -> List[Path]:
+        """The golden files this run wrote, sorted."""
+        return sorted(path for path, changed in self.blessed if changed)
+
+    def _bless_report(self) -> List[str]:
+        if not self.bless:
+            return []
+        lines = [f"Blessed: {_spelled_path(path, self.project_root)}"
+                 for path in self.blessed_files()]
+        unchanged = sum(1 for _, changed in self.blessed if not changed)
+        return lines + [f"Bless: {len(lines)} golden file(s) written, {unchanged} unchanged"]
+
     def unexcused_leak_skips(self) -> List[Tuple[str, str]]:
         """The leak assertions this run did not evaluate and was not told to excuse.
 
@@ -517,6 +534,8 @@ class TestRunner:
             parts.append("--leaks-only")
         if self.compile_only:
             parts.append("--compile-only")
+        if self.bless:
+            parts.append("--bless")
         return ", ".join(parts) if parts else "the whole corpus"
 
     def doc_gate_failed(self) -> bool:
@@ -542,7 +561,8 @@ class TestRunner:
         """
         test_files = select_fixtures(self.tests_dir, filter_pattern=filter_pattern,
                                      leaks_only=self.leaks_only,
-                                     compile_only=self.compile_only, listed=self.listed)
+                                     compile_only=self.compile_only, listed=self.listed,
+                                     golden_only=self.bless)
 
         if not test_files:
             self.selected_nothing = True
@@ -1076,7 +1096,8 @@ class TestRunner:
                 success, message = check_ir(binary_path.with_suffix(".ll"), metadata, message)
 
             if success and metadata.golden_dumps:
-                success, message = check_dumps(test_file, metadata, binary_path, message)
+                success, message = check_dumps(test_file, metadata, binary_path, message,
+                                               self.blessed if self.bless else None)
 
             return success, message
 
@@ -1460,8 +1481,11 @@ class TestRunner:
                 ],
                 "leak_skips_allowed": self.allow_leak_skips,
                 "stdlib_doc_gate": self._doc_gate_json(),
+                "blessed": [_spelled_path(p, self.project_root) for p in self.blessed_files()],
             }
             print(json.dumps(json_output, indent=2))
+            for line in self._bless_report():
+                print(line, file=sys.stderr)
         else:
             print(f"\n{tint(f'Test Results ({duration:.2f}s):', BOLD)}")
             print(f"  Total tests: {total_tests}")
@@ -1492,6 +1516,8 @@ class TestRunner:
                 else:
                     print("    " + tint("Excused by --allow-leak-skips.", YELLOW))
             self._print_doc_gate()
+            for line in self._bless_report():
+                print(line)
 
             if self.doc_gate_failed():
                 print("\n" + tint("The stdlib doc-block gate failed!", RED, BOLD))
@@ -1551,6 +1577,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--bless",
+        action="store_true",
+        help="Run only the fixtures that compare a golden dump, check each in full, and "
+             "write each dump to its golden file. A run without it never writes one"
+    )
+
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Output results in JSON format"
@@ -1607,7 +1640,8 @@ def main():
         selection = select_fixtures(
             tests_dir, filter_pattern=args.filter, leaks_only=args.leaks_only,
             compile_only=args.compile_only,
-            listed=read_fixture_list(Path(args.list)) if args.list else None)
+            listed=read_fixture_list(Path(args.list)) if args.list else None,
+            golden_only=args.bless)
     except FixtureListError as e:
         if args.json:
             print(json.dumps({"list_error": str(e), "total_tests": 0, "passed": 0,
@@ -1625,7 +1659,8 @@ def main():
                 print("Failed to build stdlib, aborting tests")
             return 1
         # A whole run builds every helper; a narrowed one, the helpers it can import.
-        narrowed = args.filter or args.leaks_only or args.compile_only or args.list
+        narrowed = (args.filter or args.leaks_only or args.compile_only or args.list
+                    or args.bless)
         needed = helpers_for_selection(tests_dir, selection) if narrowed else None
         if not build_test_helpers(project_root, args.verbose, jobs=args.jobs, only=needed):
             if not args.json:
@@ -1652,7 +1687,8 @@ def main():
 
     with TestRunner(tests_dir, args.verbose, args.jobs, args.json,
                     args.leaks_only, args.allow_leak_skips, args.compile_only,
-                    fresh_processes=args.fresh_processes, list_file=args.list) as runner:
+                    fresh_processes=args.fresh_processes, list_file=args.list,
+                    bless=args.bless) as runner:
         # Ruling 3 on #953: the doc blocks of the bundled stdlib are a runner step.
         runner.doc_gate = stdlib_doc_gate(project_root, filter_pattern=args.filter,
                                           leaks_only=args.leaks_only,

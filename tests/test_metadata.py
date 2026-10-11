@@ -781,12 +781,15 @@ def read_fixture_list(path: Path) -> List[str]:
 def select_fixtures(tests_dir: Path, *, filter_pattern: Optional[str] = None,
                     leaks_only: bool = False,
                     compile_only: bool = False,
-                    listed: Optional[List[str]] = None) -> List[Path]:
+                    listed: Optional[List[str]] = None,
+                    golden_only: bool = False) -> List[Path]:
     """The fixtures THIS run covers: `collect_fixtures`, narrowed by each flag.
 
     ONE selector. `collect_fixtures` answers what the corpus holds; this answers what a
     run was asked for, and every flag narrows the same list here rather than filtering a
     copy of its own somewhere in a runner.
+
+    `golden_only` (`--bless`) keeps the fixtures that compare a golden dump.
 
     `listed` is the content of a `--list` file: paths relative to the parent of
     `tests_dir`. A listed path that names no collected fixture raises FixtureListError,
@@ -816,6 +819,9 @@ def select_fixtures(tests_dir: Path, *, filter_pattern: Optional[str] = None,
 
     if leaks_only:
         selected = [f for f in selected if parse_test_metadata(f).expect_no_leaks]
+
+    if golden_only:
+        selected = [f for f in selected if parse_test_metadata(f).golden_dumps]
 
     # `--compile-only` is a SELECTOR over the rule that already decides whether a binary
     # runs, never a second rule and never a weaker check: what it selects is asserted in

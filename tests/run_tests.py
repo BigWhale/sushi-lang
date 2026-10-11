@@ -340,11 +340,14 @@ def _spelled_path(path: Path, project_root: Path) -> str:
 def fixtures_only(args: argparse.Namespace) -> Optional[str]:
     """The spelling of a selector that names fixtures and nothing else, or None.
 
-    `--list` names fixtures by path, so it selects no stdlib module, no library-reader
-    check and no toolchain program: each of those runner steps prints its skip.
+    `--list` names fixtures by path, and `--bless` selects the golden fixtures, so each
+    selects no stdlib module, no library-reader check and no toolchain program: each of
+    those runner steps prints its skip.
     """
     if getattr(args, "list", None):
         return f"--list {args.list}"
+    if getattr(args, "bless", False):
+        return "--bless"
     return None
 
 
@@ -1330,6 +1333,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--enhanced", action="store_true",
                        help="Accepted and does nothing: every run is the enhanced run. "
                             "Kept so the CI lines and a typed habit keep working")
+    parser.add_argument("--bless", action="store_true",
+                       help="Run only the fixtures that compare a golden dump, and write "
+                            "each dump to its golden file. A run without it never writes one")
     parser.add_argument("--json", action="store_true",
                        help="Output results in JSON format")
     parser.add_argument("--skip-build", action="store_true",
@@ -1381,6 +1387,8 @@ def main():
     sys.argv.extend(["--jobs", str(args.jobs)])
     if args.json:
         sys.argv.append("--json")
+    if args.bless:
+        sys.argv.append("--bless")
     if args.skip_build:
         sys.argv.append("--skip-build")
     if args.leaks_only:

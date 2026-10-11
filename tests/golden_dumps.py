@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import difflib
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from test_metadata import GOLDEN_DUMPS, GoldenDump, TestMetadata
 
@@ -46,13 +46,22 @@ def _difference(golden: str, actual: str, name: str) -> str:
     return "\n    ".join(shown + ([f"... and {more} more line(s)"] if more > 0 else []))
 
 
-def check_dumps(test_file: Path, metadata: TestMetadata, binary_path: Path,
-                message: str) -> tuple[bool, str]:
-    """Each dump the fixture names, against its golden file beside the fixture."""
+def check_dumps(test_file: Path, metadata: TestMetadata, binary_path: Path, message: str,
+                blessed: Optional[List[Tuple[Path, bool]]] = None) -> Tuple[bool, str]:
+    """Each dump the fixture names, against its golden file beside the fixture.
+
+    With `blessed` (a `--bless` run) each dump is written to its golden file instead, and
+    each golden file goes on the list with whether its content changed. A dump that the
+    compiler did not write fails the fixture in both modes.
+    """
     problems = []
     for dump in dumps_of(metadata):
-        problem = _check_one(test_file, metadata.golden_dumps[dump.kind], dump,
-                             dump_path(binary_path, dump))
+        golden = Path(test_file).parent / metadata.golden_dumps[dump.kind]
+        written = dump_path(binary_path, dump)
+        if blessed is not None and written.is_file():
+            blessed.append((golden, _bless_one(golden, written)))
+            continue
+        problem = _check_one(golden, dump, written)
         if problem is not None:
             problems.append(problem)
     if problems:
@@ -60,16 +69,24 @@ def check_dumps(test_file: Path, metadata: TestMetadata, binary_path: Path,
     return True, message
 
 
-def _check_one(test_file: Path, name: str, dump: GoldenDump,
-               written: Path) -> Optional[str]:
+def _bless_one(golden: Path, written: Path) -> bool:
+    """Write one dump to its golden file. True when the content of the file changed."""
+    actual = written.read_bytes()
+    if golden.is_file() and golden.read_bytes() == actual:
+        return False
+    golden.write_bytes(actual)
+    return True
+
+
+def _check_one(golden: Path, dump: GoldenDump, written: Path) -> Optional[str]:
     if not written.is_file():
         return f"{dump.directive}: the compiler wrote no dump at {written}"
-    golden = Path(test_file).parent / name
     if not golden.is_file():
-        return f"{dump.directive}: the golden file {golden} is missing"
+        return (f"{dump.directive}: the golden file {golden} is missing; run the fixture "
+                f"with --bless to write it")
     expected = golden.read_text(encoding="utf-8")
     actual = written.read_text(encoding="utf-8")
     if actual == expected:
         return None
-    return f"{dump.directive}: the dump differs from {name}\n    " + _difference(
-        expected, actual, name)
+    return f"{dump.directive}: the dump differs from {golden.name}\n    " + _difference(
+        expected, actual, golden.name)

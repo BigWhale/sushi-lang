@@ -26,6 +26,9 @@ REPORTS = {"-h", "--help", "-v", "--verbose", "-j", "--jobs", "--json"}
 PREPARES = {"--skip-build"}
 # `--enhanced` is accepted and does nothing: every run is the enhanced run.
 NO_EFFECT = {"--enhanced"}
+# `--bless` selects the fixtures that compare a golden dump, checks each in full, and
+# writes each dump to its golden file. A run without it never writes one.
+BLESSES = {"--bless"}
 # The one escape, and the only one: a platform with no interposer cannot check a leak,
 # and a skip fails the run without it (#605).
 ESCAPES = {"--allow-leak-skips"}
@@ -33,7 +36,7 @@ ESCAPES = {"--allow-leak-skips"}
 # be the same, and `test_fork_server_gives_the_fresh_answer.py` holds that (#1059).
 STRATEGIES = {"--fresh-processes"}
 
-KNOWN = SELECTS | REPORTS | PREPARES | NO_EFFECT | ESCAPES | STRATEGIES
+KNOWN = SELECTS | REPORTS | PREPARES | NO_EFFECT | ESCAPES | STRATEGIES | BLESSES
 
 
 def _options(parser) -> set[str]:
