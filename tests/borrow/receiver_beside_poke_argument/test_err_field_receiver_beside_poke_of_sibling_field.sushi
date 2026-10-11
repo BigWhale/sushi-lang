@@ -1,0 +1,16 @@
+# A plain receiver that is a field borrows the root owner. A `poke` of a second field
+# of the same owner is refused.
+# EXPECT_ERROR_CODE: CE2407
+
+struct W:
+    i32[] sink
+    u8[] buf
+
+extend u8[] send_to(poke i32[] sink) ~:
+    sink.push(1)
+
+fn main() i32:
+    let W w = W(from([1]), from([2 as u8]))
+    w.buf.send_to(poke w.sink)
+    println(w.sink.len())
+    return 0
