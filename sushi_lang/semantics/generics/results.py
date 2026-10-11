@@ -266,12 +266,14 @@ def intern_wrapper_enum(
     names has not been built yet, so storing over one parks an unresolved payload under a
     name whose resolved form arrives later.
     """
+    from sushi_lang.semantics.generics.iterators import settle_in_tables
     from sushi_lang.semantics.type_resolution import resolve_type_recursively
     from sushi_lang.semantics.type_predicates import is_abstract_type
 
     enums = enum_table.by_name
     structs = struct_table if struct_table is not None else {}
-    resolved = tuple(resolve_type_recursively(t, structs, enums) for t in payloads)
+    resolved = tuple(settle_in_tables(resolve_type_recursively(t, structs, enums), enum_table)
+                     for t in payloads)
 
     name = interned_name(base, resolved)
     variants = make_variants(*resolved)

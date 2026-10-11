@@ -12,7 +12,7 @@ name and the display), and the identity rule for a plain item (`settle_item_mode
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Callable, Optional, Tuple
+from typing import AbstractSet, Any, Callable, Dict, Mapping, Optional, Tuple, cast
 
 from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements, tuple_ref
 from sushi_lang.semantics.typesys import BorrowMode, IteratorType, ReferenceType, Type
@@ -118,6 +118,50 @@ def settle_item_modes(ty: Optional[Type], owns: Callable[[Type], bool]) -> Optio
         return held if peeks == held.peeks else replace(held, peeks=peeks)
 
     return map_named_types(ty, settle)
+
+
+def item_owner(drops: Callable[[], AbstractSet[str]], structs: Mapping[str, Any],
+               enums: Mapping[str, Any]) -> Callable[[Type], bool]:
+    """Does a part of an item own a resource: `owns_resource` over the tables.
+
+    `drops` reads the program's `Drop` set when it is asked, so one owner serves a pass
+    that runs while the perk table still grows. The one builder of the answer for every
+    caller of `settle_item_modes`.
+    """
+    from sushi_lang.semantics.type_resolution import resolve_unknown_type
+    from sushi_lang.semantics.typesys import owns_resource
+
+    def owns(part: Type) -> bool:
+        return owns_resource(part, drops(), resolve=lambda held: resolve_unknown_type(
+            held, cast(Dict[str, Any], structs), cast(Dict[str, Any], enums)))
+
+    return owns
+
+
+def install_item_owner(tables: Any) -> None:
+    """Give the program's enum table the owner of an item, for the interning seams.
+
+    An instance that holds an iterator is interned with its items in their one form
+    (`settle_in_tables`), so `Maybe@(Iterator@(peek i32))` and `Maybe@(Iterator@(i32))`
+    are one instance. The owner is carried on the table, as `EnumTable.derived` is,
+    because those seams hold the table and nothing more.
+    """
+    from sushi_lang.semantics.drop_set import drop_type_names
+
+    tables.enums.item_owner = item_owner(lambda: drop_type_names(tables.perk_impls),
+                                         tables.structs.by_name, tables.enums.by_name)
+
+
+def settle_in_tables(ty: Type, enum_table: Any) -> Type:
+    """`ty` with its items in their one form, by the owner the table carries.
+
+    A table with no owner (a scratch table, the stdlib build) leaves every mode as it is.
+    """
+    owner = getattr(enum_table, "item_owner", None)
+    if owner is None:
+        return ty
+    settled = settle_item_modes(ty, owner)
+    return ty if settled is None else settled
 
 
 def _lent(part: Type) -> ReferenceType:

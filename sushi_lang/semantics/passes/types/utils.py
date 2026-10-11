@@ -12,7 +12,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.tuples import TUPLE_BASE
 from sushi_lang.semantics.typesys import (
     Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType,
-    ReferenceType, ForeignPtrType, IteratorType, owns_resource)
+    ReferenceType, ForeignPtrType, IteratorType)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.passes.types.visibility import (
     built_in_generic_unreachable, name_was_refused, reject_private_kept,
@@ -35,7 +35,8 @@ def validate_type_name(validator: 'TypeValidator', type_obj: Optional[Type], spa
 
     Answers whether the type is REFUSED: it holds a name that is not a type (#991).
     """
-    _check_type_names(validator, type_obj, span)
+    # An instance is named with its iterator items in their one form (#1227).
+    _check_type_names(validator, settle_item_modes(validator, type_obj), span)
     reject_unusable_hashmap_keys(validator, type_obj, span)
     reject_non_error_channels(validator, type_obj, span)
     reject_unpromised_arguments(validator, type_obj, span)
@@ -462,7 +463,10 @@ def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Opt
     structs = validator.struct_table.by_name
     enums = validator.enum_table.by_name
 
-    if isinstance(ty, (UnknownType, GenericTypeRef)):
+    if isinstance(ty, GenericTypeRef):
+        # The instance holds its iterator items in their one form (#1227).
+        return resolve_unknown_type(settle_item_modes(validator, ty) or ty, structs, enums)
+    if isinstance(ty, UnknownType):
         return resolve_unknown_type(ty, structs, enums)
     if isinstance(ty, (FunctionType, ArrayType, DynamicArrayType, IteratorType)):
         return settle_item_modes(validator, resolve_type_recursively(ty, structs, enums))
@@ -475,10 +479,11 @@ def settle_item_modes(validator: 'TypeValidator', ty: Optional[Type]) -> Optiona
     The pass's reader of `generics/iterators.py:settle_item_modes`, with the program's
     `Drop` set: a type that implements `Drop` owns, also when no field owns heap.
     """
+    from sushi_lang.semantics.generics.iterators import item_owner
     from sushi_lang.semantics.generics.iterators import settle_item_modes as settle
-    drops = validator.drop_type_names
-    return settle(ty, lambda part: owns_resource(
-        part, drops, resolve=lambda held: resolve_declared_type(validator, held)))
+    return settle(ty, item_owner(lambda: validator.drop_type_names,
+                                 validator.struct_table.by_name,
+                                 validator.enum_table.by_name))
 
 
 def intern_declared_wrapper(validator: 'TypeValidator',
@@ -503,6 +508,9 @@ def intern_declared_wrapper(validator: 'TypeValidator',
 
     if not isinstance(ty, GenericTypeRef):
         return None
+    settled = settle_item_modes(validator, ty)
+    if isinstance(settled, GenericTypeRef):
+        ty = settled
 
     from sushi_lang.semantics.generics.tuples import TUPLE_BASE, intern_tuple, is_tuple_type
     from sushi_lang.semantics.type_walk import map_named_types

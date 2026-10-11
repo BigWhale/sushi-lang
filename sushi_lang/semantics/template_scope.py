@@ -41,7 +41,8 @@ def overlay_enums(base: EnumTable) -> EnumTable:
     """The enum table of a template check, with derived methods of its own."""
     return EnumTable(by_name=_overlay(base.by_name), order=[],
                      spans=_overlay(base.spans), files=_overlay(base.files),
-                     derived=OverlayDerivedMethods(base.derived), admits_opaque=True)
+                     derived=OverlayDerivedMethods(base.derived), admits_opaque=True,
+                     item_owner=base.item_owner)
 
 
 @dataclass

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, TYPE_CHECKING
+from typing import Callable, Dict, List, Optional, Set, TYPE_CHECKING
 
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.internals import errors as er
@@ -16,6 +16,7 @@ from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.predefined_types import PREDEFINED_ENUMS, predefined_enums
 from sushi_lang.semantics.typesys import (
     EnumType,
+    Type,
     EnumVariantInfo,
 )
 from sushi_lang.semantics.generics.types import GenericEnumType
@@ -48,6 +49,11 @@ class EnumTable:
     # this table -- so the alternative was a parameter on all 33 of their call sites.
     derived: DerivedMethodTable = field(default_factory=DerivedMethodTable,
                                         compare=False, repr=False)
+    # Does a part of an iterator item own a resource (#1227)? Installed by the analyzer
+    # (`generics/iterators.py:install_item_owner`), stored HERE for the reason `derived`
+    # is: the interning seams hold this table. None leaves every item mode as written.
+    item_owner: Optional[Callable[[Type], bool]] = field(default=None, compare=False,
+                                                         repr=False)
     # True only for the overlay of a template check (#1070), as on `StructTable`.
     admits_opaque: bool = False
 

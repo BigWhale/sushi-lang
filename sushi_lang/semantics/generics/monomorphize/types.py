@@ -13,6 +13,7 @@ from sushi_lang.semantics.generics.tuples import (
     TUPLE_BASE, holds_written_tuple, intern_tuple, intern_tuples_in)
 from sushi_lang.semantics.type_predicates import is_abstract_type
 from sushi_lang.semantics.type_resolution import TypeResolver
+from sushi_lang.semantics.generics.iterators import settle_in_tables
 
 from .order import types_in_site_order
 
@@ -401,7 +402,9 @@ class TypeMonomorphizer:
         mono = self.monomorphizer
         type_args = tuple(intern_tuples_in(arg, mono.struct_table, mono.enum_table)
                           if holds_written_tuple(arg) else arg for arg in type_args)
-        return TypeResolver(structs, enums).resolve_type_args(type_args)
+        # An iterator item in its one form: a plain item makes one instance (#1227).
+        return tuple(settle_in_tables(arg, mono.enum_table)
+                     for arg in TypeResolver(structs, enums).resolve_type_args(type_args))
 
     @staticmethod
     def _published(table, name: str):

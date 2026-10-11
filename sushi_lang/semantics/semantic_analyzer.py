@@ -450,6 +450,8 @@ class SemanticAnalyzer:
         self._refused_pack_bodies = collector.refused_pack_bodies
         self.marked.extend(collector.marked)
         self.tables = global_tables
+        from sushi_lang.semantics.generics.iterators import install_item_owner
+        install_item_owner(self.tables)
         return libraries
 
     def _check_docs(self, compilation_order: list[Unit]) -> None:
