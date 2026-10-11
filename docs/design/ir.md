@@ -594,9 +594,12 @@ binding, a destructuring target, a bare lambda parameter) is inferred into it. `
 is syntax, like `ShirParam.ty`: the user wrote it.
 
 A hidden local is a local the AST builder made: the binder of a `foreach(x?? in ...)` or of
-a `foreach((a, b) in ...)`, the whole value of a destructuring `let`, the `let` of a
+a `foreach((a, b) in ...)`, a binder of a tuple rebind `(a, b) := v`, the `let` of a
 `foreach(_?? in ...)`. It has no source name and no span, and no diagnostic names it. The
-`_` binder of a `foreach` with no `??` binds nothing: its source holds `Discard` (7.5).
+`_` binder of a `foreach` with no `??` binds nothing: its source holds `Discard` (7.5). The
+AST builder also binds the whole value of a destructuring `let` to a hidden name, but no
+SHIR node reads it, so it is not a local of the body: `Destructure` holds the value, and
+SHIR-to-SLIR lowering makes its place.
 
 ### 7.3 Everything `typecheck` decides lives in a side table
 
@@ -665,7 +668,7 @@ one body.
 | `Borrow` | `place: Expr`, `mode: BorrowMode` |
 | `Take` | `place: Expr`; a marked field take `nom s.out` in a `let` or a `return` |
 | `Try` | `inner: Expr`; `??`, kept whole for `borrow` and for G7 |
-| `Lambda` | `params`, `body: ShirBlock`; the captures are in `Bindings`. It stays in the tree through `borrow`; `lift` describes it in `LiftResults` (Q8) |
+| `Lambda` | `params: [LambdaParam]`, `ret: TypeRef \| None`, `err: TypeRef \| None`, `body: ShirBlock`, `expr_body: bool`; the captures are in `Bindings`. It stays in the tree through `borrow`; `lift` describes it in `LiftResults` (Q8) |
 | `StructInit` | `decl: DeclId`, `fields: [Arg]`, `written_order: [int]`; `fields` in the declaration order |
 | `EnumInit` | `decl: DeclId`, `variant: str`, `payload: [Arg]` |
 | `TupleInit` | `parts: [Expr]` |
@@ -680,6 +683,7 @@ CallTarget = Named(ref: Expr)                # a scope-resolved name, or any cal
            | BuiltinFn(name: str)            # print, println: no declaration, no receiver
 
 Arg      = (value: Expr, marker: Convention | None)
+LambdaParam = (local: LocalId, convention: Convention)
 ArrayRun = Single(Expr) | Repeat(value: Expr, count: Expr) | RangeRun(Range)
 ```
 
@@ -739,9 +743,9 @@ value is syntax: it comes from the source alone, as `unchecked` does (4.9). `typ
 reads the recorded value and does not call the evaluator, so the evaluator has no SHIR
 reader (Q5). Ruled 2026-10-11. A sub-expression that holds a call, a field read, a member
 behind an alias, a construction other than a fixed array literal, a `Borrow`, a `Take`, a
-`Try` or a `Slice` records no value: the evaluator writes on the AST for a member access,
+`Try`, a `Slice` or a `Lambda` records no value: the evaluator writes on the AST for a member access,
 the value of such a construction is never a number that `typecheck` reads, and the
-evaluator has no value for an ownership node or a view. A `Cast`, an `Index`, a `Range` and
+evaluator has no value for an ownership node, a view or a closure. A `Cast`, an `Index`, a `Range` and
 an `Interp` are read through: the evaluator folds `4 as i32`, `[4, 2][0]` and a hole of
 constants with no write on the AST.
 
@@ -750,6 +754,15 @@ fails, as the message of an `Assert` is. A `Builtin` call with an operand that i
 evaluated first cannot keep this. So SHIR-to-SLIR lowering lowers `expect` as it lowers
 `Assert` (8.9): `Discriminant`, `SwitchInt`, and the message on the failing edge before the
 exit. `expect` is not a row of the `Result`/`Maybe` method family (Q7). Ruled 2026-10-11.
+
+**A lambda body.** The body of a `Lambda` is a block of the enclosing `ShirBody`, lowered
+where the lambda stands: its parameters and its locals take ids from the counter of that
+body, as the scope pass gives them (7.1), and the body lists them. An expression body
+`|x| e` is a block of one `Return(e)`, and `expr_body` is true. The written shape is syntax
+that two answers need: the typecheck pass infers the return type from an expression body
+and never from a block body, and a lambda with a channel returns the value of an
+expression body in `Result.Ok`, where a block body spells both constructors
+(`closures.md`, section 2).
 
 A native variadic call is NOT collapsed here. Which parameter is `...T` is a fact about
 the callee, and `typecheck` resolves the callee. So the trailing arguments stay a flat list
@@ -762,7 +775,7 @@ forwards the array operand itself, as a `Move`.
 | Node | Fields |
 |---|---|
 | `Assign` | `target: Expr`, `value: Expr`, `is_init: bool`; `Let` and `Rebind` collapse here |
-| `Destructure` | `targets: [LocalId \| Discard]`, `value: Expr`; `let (a, b) = v` |
+| `Destructure` | `targets: [LocalId \| Discard \| Nested]`, `value: Expr`; `let (a, b) = v`, and `Nested(targets)` for `let ((a, b), c) = v` |
 | `ExprStmt` | `value: Expr` |
 | `Return` | `value: Expr` |
 | `If` | `cond: Expr`, `then: ShirBlock`, `otherwise: ShirBlock \| None` |
@@ -788,16 +801,18 @@ holds no operand of its own.
 `is_init` carries the one semantic difference between `Let` and `Rebind`: a rebind
 RE-INITIALIZES, which clears a moved flag. A reference binding (`let poke T x = place`) is
 an `Assign` with `is_init` whose value is a `Borrow`, and its local has the reference type.
-A tuple rebind `(a, b) := v` reaches lowering already split by the AST builder into a hidden
-binder and one `Rebind` per place.
+A tuple rebind `(a, b) := v` reaches lowering already split by the AST builder: a
+`Destructure` of `v` into hidden binders, then one `Assign` per place from its binder, from
+left to right.
 
 `Destructure` stays one statement, because its ownership is not that of a field read: it
 OWNS from an owned value and BORROWS from a borrow (`tuples.md`). `borrow` decides which,
 and SLIR lowering writes the field moves or the field views.
 
 `Assert` keeps its message as an expression, because the message is evaluated only when
-the condition fails (`assert.md`). `label` is the source text of the condition, set by the
-AST builder.
+the condition fails (`assert.md`). `label` is the file name that a diagnostic of the unit
+shows, set by the AST builder: the program prints it with the line and the column of the
+`assert` when the condition fails ([RE2026](../error-catalog.md#re2026)).
 
 ### 7.6 `Callee`: a closed set
 
@@ -988,7 +1003,7 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 | a `nom`-marked field read | `Take`, or an `Owned` marker on the `Arg` |
 | `RangeExpr` | `Range`, a run of an `ArrayInit`, or a `Slice` bound |
 | `UnaryOp`, `BinaryOp` | `Unary`, `Binary` |
-| `Lambda` | `Lambda` |
+| `Lambda` | `Lambda`; a parameter is a `LambdaParam`, with its name, written type and span on its local. A block body is the body; an expression body is a block of one `Return`, with `expr_body` |
 | `Match`, `MatchArm` and the 9 pattern classes | `Match`, `Arm`, `Pattern`, `PatBinding` |
 
 The 52 body classes of the AST become 40 SHIR nodes: 22 expressions, 11 statements and 7
