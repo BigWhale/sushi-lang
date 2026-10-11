@@ -9,8 +9,10 @@ the `nom` marker is a hole too: it is a take (ir.md 7.4), and no row lowers a ta
 
 A call argument has a second table, `ARGUMENTS`: the classes that are the FORM of an
 argument there, and no value of their own. `nom x`, `peek x` and `poke x` are the written
-marker of the `Arg`, and `xs...` is a bloom. A pattern has a third table, `PATTERNS` in
-`lower_patterns.py`, and the `Match` row lowers each arm through it.
+marker of the `Arg`, and `xs...` is a bloom. The argument of a struct or a variant
+construction is an `Arg` too. A pattern has a third table, `PATTERNS` in
+`lower_patterns.py`, and the `Match` row lowers each arm through it. The constructions and
+the member read are rows of `LOWERING`, and `lower_aggregates.py` holds their lowering.
 
 A name lowers to the answer that the scope pass recorded for it (ir.md 7.1): a local, a
 constant, a unit `var` or a function. A name with no declaration (`Unresolved`), and a
@@ -46,7 +48,10 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import ShirLocal
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
-from sushi_lang.semantics.shir.lookup import DeclLookup
+from sushi_lang.semantics.shir.lookup import CALLABLE_KINDS, TYPE_KINDS, DeclLookup
+from sushi_lang.semantics.shir.lower_aggregates import (
+    enum_init, lower_array, lower_from, lower_member, lower_new, lower_tuple, struct_init,
+)
 from sushi_lang.semantics.shir.lower_patterns import lower_match
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, UnknownType
@@ -65,12 +70,6 @@ STAGE = "lowering"
 #: alone the typecheck pass reads (a divisor, a shift count). Ruling E3.
 _READ_BOTH = frozenset({"+", "-", "*"})
 _READ_RIGHT = frozenset({"/", "%", "<<", ">>"})
-
-#: The kinds of declaration behind a namespace that a call calls (`namespaces.Binding`).
-_CALLABLE_KINDS = frozenset({"function", "generic function", "extern"})
-
-#: The kinds of declaration behind a namespace that name a type.
-_TYPE_KINDS = frozenset({"struct", "enum", "type"})
 
 
 def strict() -> bool:
@@ -152,6 +151,20 @@ class BodyLowerer:
     def binder(self, owner: object, name: str) -> LocalId:
         """The local that the scope pass recorded for the binder `name` of `owner`."""
         return binder_local(self.bindings, owner, name)
+
+    def arguments(self, args: list[Any]) -> list[e.Arg]:
+        """Each argument in the written order, which is the order of evaluation."""
+        return _arguments(self, args)
+
+    def type_before_dot(self, receiver: Any) -> Optional[BuiltinType | UnknownType]:
+        """The type that `receiver` writes before a dot, or None when it is no type.
+
+        A type name (`Sign`, `i32`), or a type behind an alias (`hm.HashMap`).
+        """
+        found = self.bindings.resolution_of(receiver)
+        if isinstance(found, bd.TypeName):
+            return _written_type(found.name)
+        return _qualified_type(self, receiver)
 
     def made_opaque(self) -> ShirId:
         """The id of a node whose value the compiler cannot read."""
@@ -255,12 +268,16 @@ def _binary(lw: BodyLowerer, node: a.BinaryOp) -> e.Binary:
 def _call(lw: BodyLowerer, node: a.Call) -> e.ShirExpr:
     """`f(...)`: the callee is `Named`, a name or any expression that gives a function.
 
-    A struct name as the callee is a construction, and a named argument names a field of
-    one; SHIR has no field for written type arguments (`identity@(i32)(5)`). Each is a
-    hole until its lowering exists.
+    A struct name as the callee is a construction (`StructInit`), and only a construction
+    takes a named argument. SHIR has no field for written type arguments
+    (`identity@(i32)(5)`), so such a call is a hole.
     """
-    if (node.field_names is not None or node.type_args
-            or isinstance(lw.bindings.resolution_of(node.callee), bd.TypeName)):
+    if node.type_args:
+        return lw.hole(node)
+    found = lw.bindings.resolution_of(node.callee)
+    if isinstance(found, bd.TypeName):
+        return struct_init(lw, node, found.name, found.name, node.args, node.field_names)
+    if node.field_names is not None:
         return lw.hole(node)
     ident = lw.made_opaque()
     return e.Call(ident, lw.span(node), e.Named(lw.expr(node.callee)),
@@ -278,21 +295,20 @@ def _method_call(lw: BodyLowerer, node: a.MethodCall) -> e.ShirExpr:
 def _dotted(lw: BodyLowerer, node: a.DotCall | a.MethodCall) -> e.ShirExpr:
     """`x.f(...)`: what the scope pass resolved the name before the dot to decides it.
 
-    A namespace gives the function that it holds, and a type name gives a static, also
-    behind an alias (`hm.HashMap.new()`). Any other receiver is a value, and the target
-    is `Dotted`: which method it calls is an answer of the typecheck pass (ir.md 7.4). A
-    named argument is a hole, as in `_call`.
+    A namespace gives what it holds: a function, or a struct to construct. A type name
+    gives a variant or a static, also behind an alias (`hm.HashMap.new()`). Any other
+    receiver is a value, and the target is `Dotted`: which method it calls is an answer of
+    the typecheck pass (ir.md 7.4). A named argument outside a struct construction is a
+    hole, as in `_call`.
     """
+    found = lw.bindings.resolution_of(node.receiver)
+    if isinstance(found, bd.Namespace):
+        return _qualified_call(lw, node, found.name)
     if node.field_names is not None:
         return lw.hole(node)
-    match lw.bindings.resolution_of(node.receiver):
-        case bd.Namespace(alias):
-            return _qualified_call(lw, node, alias)
-        case bd.TypeName(name):
-            return _static_call(lw, node, _written_type(name))
-    qualified = _qualified_type(lw, node.receiver)
-    if qualified is not None:
-        return _static_call(lw, node, qualified)
+    ty = lw.type_before_dot(node.receiver)
+    if ty is not None:
+        return _static_call(lw, node, ty)
     ident = lw.made_opaque()
     return e.Call(ident, lw.span(node), e.Dotted(lw.expr(node.receiver), node.method),
                   _arguments(lw, node.args))
@@ -302,11 +318,15 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
                     alias: str) -> e.ShirExpr:
     """`ns.f(...)`: the alias folds into the written name of the function that it holds.
 
-    Anything else that the namespace holds under the name, a struct included, is a hole.
+    A struct that the namespace holds is a construction, named with the alias. Anything
+    else that the namespace holds under the name is a hole.
     """
     kind = None if lw.lookup is None else lw.lookup.member_kind(lw.bindings.body, alias,
                                                                 node.method)
-    if kind not in _CALLABLE_KINDS:
+    if kind == "struct":
+        return struct_init(lw, node, f"{alias}.{node.method}", node.method, node.args,
+                           node.field_names)
+    if node.field_names is not None or kind not in CALLABLE_KINDS:
         return lw.hole(node)
     ident = lw.made_opaque()
     ref = e.GlobalRef(lw.made_opaque(), lw.span(node), lw.decls.refer(f"{alias}.{node.method}"))
@@ -315,9 +335,11 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
 
 def _static_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
                  ty: BuiltinType | UnknownType) -> e.ShirExpr:
-    """`T.m(...)`: a static method of `T`, or a variant of the enum `T`, which is a hole."""
-    if lw.lookup is None or lw.lookup.is_variant(str(ty), node.method):
+    """`T.m(...)`: a variant of the enum `T` (`EnumInit`), or a static method of `T`."""
+    if lw.lookup is None:
         return lw.hole(node)
+    if lw.lookup.is_variant(str(ty), node.method):
+        return enum_init(lw, node, ty, node.method, node.args)
     ident = lw.made_opaque()
     return e.Call(ident, lw.span(node), e.Static(ty, node.method), _arguments(lw, node.args))
 
@@ -331,7 +353,7 @@ def _qualified_type(lw: BodyLowerer, receiver: Any) -> Optional[UnknownType]:
     def behind_alias(member: a.MemberAccess) -> Optional[UnknownType]:
         found = lw.bindings.resolution_of(member.receiver)
         if not (isinstance(found, bd.Namespace) and lookup.member_kind(
-                lw.bindings.body, found.name, member.member) in _TYPE_KINDS):
+                lw.bindings.body, found.name, member.member) in TYPE_KINDS):
             return None
         return UnknownType(member.member, namespace=found.name)
 
@@ -532,6 +554,11 @@ LOWERING: dict[type, Lower] = {
     a.Call: _call,
     a.DotCall: _dot_call,
     a.MethodCall: _method_call,
+    a.MemberAccess: lower_member,
+    a.TupleLiteral: lower_tuple,
+    a.ArrayLiteral: lower_array,
+    a.DynamicArrayFrom: lower_from,
+    a.DynamicArrayNew: lower_new,
     a.ExprStmt: _expr_stmt,
     a.Return: _return,
     a.Print: _print,

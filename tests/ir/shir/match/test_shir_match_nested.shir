@@ -20,10 +20,10 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [<hole: DotCall>])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [<hole: DotCall>])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [<hole: DotCall>])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [<hole: MemberAccess>])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@size)), [<hole: DotCall>])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Has", [EnumInit(@Shape, "Circle", [Lit(2)])])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Has", [EnumInit(@Shape, "Square", [Lit(2)])])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Has", [EnumInit(@Shape, "Square", [Lit(3)])])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Nothing", [])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@size)), [EnumInit(@Shape, "Square", [Lit(6)])])]))
     ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
     Return(Lit(0))

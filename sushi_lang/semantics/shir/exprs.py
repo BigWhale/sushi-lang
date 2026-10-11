@@ -247,18 +247,20 @@ class StructInit(ExprNode):
     """`fields` is in the declaration order. `written_order` is the evaluation order.
 
     It gives the positions of `fields` in the order that the source writes them
-    (ruling R1): a named construction evaluates its fields as written.
+    (ruling R1): a named construction evaluates its fields as written. A field is an
+    `Arg`, because a constructor argument keeps its written marker (`Box(nom s)`).
     """
     decl: DeclId
-    fields: list[ShirExpr]
+    fields: list[Arg]
     written_order: tuple[int, ...]
 
 
 @dataclass(slots=True)
 class EnumInit(ExprNode):
+    """A payload value is an `Arg` with its written marker (`Result.Ok(nom s)`)."""
     decl: DeclId
     variant: str
-    payload: list[ShirExpr]
+    payload: list[Arg]
 
 
 @dataclass(slots=True)

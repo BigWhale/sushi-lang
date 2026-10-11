@@ -4,8 +4,8 @@ ShirBody half
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    If(Binary(==, Binary(%, LocalRef(_0), Lit(2) = 2), Lit(1)), then: [Return(<hole: DotCall>)])
-    Return(<hole: DotCall>)
+    If(Binary(==, Binary(%, LocalRef(_0), Lit(2) = 2), Lit(1)), then: [Return(EnumInit(@Result, "Err", [EnumInit(@Bad, "Odd", [])]))])
+    Return(EnumInit(@Result, "Ok", [Binary(/, LocalRef(_0), Lit(2) = 2)]))
 
 ShirBody main
   params : []

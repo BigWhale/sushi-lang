@@ -3,9 +3,9 @@
 #
 # the SHIR dump of a call on a type name: a static of a struct, of an enum, of a
 # built-in generic and of a primitive type is `Static`, with the type as written. A
-# variant of an enum is no static: `Maybe.Some(1)` and the struct construction
-# `Vec(x, y)` are holes until their own lowering exists. A static call is not a value
-# that the compiler reads, so the divisor `Vec.seven()` has no value after it.
+# variant of an enum is no static: `Maybe.Some(1)` is an `EnumInit`, and the struct
+# construction `Vec(x, y)` is a `StructInit`. A static call is not a value that the
+# compiler reads, so the divisor `Vec.seven()` has no value after it.
 
 struct Vec:
     i32 x

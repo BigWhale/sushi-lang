@@ -4,8 +4,8 @@ ShirBody make
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    If(Binary(==, LocalRef(_0), Lit(0)), then: [Return(<hole: MemberAccess>)])
-    Return(<hole: DotCall>)
+    If(Binary(==, LocalRef(_0), Lit(0)), then: [Return(EnumInit(@Slot, "Empty", []))])
+    Return(EnumInit(@Slot, "Full", [StructInit(@Note, [<hole: InterpolatedString>], written_order: [0]), LocalRef(_0)]))
 
 ShirBody show
   params : [(_0 "note": Note, InGuaranteed), (_1 "n": i32, Guaranteed)]

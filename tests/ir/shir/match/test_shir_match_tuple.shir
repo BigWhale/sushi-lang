@@ -12,8 +12,8 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@describe)), [<hole: TupleLiteral>])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@describe)), [<hole: TupleLiteral>])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@describe)), [<hole: TupleLiteral>])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@describe)), [TupleInit([EnumInit(@Color, "Red", []), Lit(0)])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@describe)), [TupleInit([EnumInit(@Color, "Red", []), Lit(5)])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@describe)), [TupleInit([EnumInit(@Color, "Green", []), Lit(3)])])]))
     ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
     Return(Lit(0))

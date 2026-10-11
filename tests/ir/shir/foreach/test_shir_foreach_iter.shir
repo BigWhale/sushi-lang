@@ -4,7 +4,7 @@ ShirBody main
   params : []
   locals : [_0 "xs": i32[], _1 "n", _2 "total": i32, _3 "m": i32]
   block  :
-    Assign(LocalRef(_0), <hole: DynamicArrayFrom>, is_init: true)
+    Assign(LocalRef(_0), ArrayInit(Dynamic, [Single(Lit(1)), Single(Lit(2)), Single(Lit(3))]), is_init: true)
     Loop(Items(Call(Dotted(LocalRef(_0), "iter"), []), _1, Bare), [ExprStmt(Call(BuiltinFn("println"), [LocalRef(_1)]))])
     Assign(LocalRef(_2), Lit(0), is_init: true)
     Loop(Items(Call(Dotted(LocalRef(_0), "iter"), []), _3, Bare), [Assign(LocalRef(_2), Binary(+, LocalRef(_2), LocalRef(_3)), is_init: false)])

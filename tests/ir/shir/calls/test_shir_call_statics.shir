@@ -22,7 +22,7 @@ ShirBody some
   params : []
   locals : []
   block  :
-    Return(<hole: DotCall>)
+    Return(EnumInit(@Maybe, "Some", [Lit(1)]))
 
 ShirBody ratio
   params : []
@@ -40,7 +40,7 @@ ShirBody Vec.at
   params : [(_1 "x": i32, Guaranteed), (_2 "y": i32, Guaranteed)]
   locals : []
   block  :
-    Return(<hole: Call>)
+    Return(StructInit(@Vec, [LocalRef(_1), LocalRef(_2)], written_order: [0, 1]))
 
 ShirBody Vec.seven
   params : []
@@ -52,4 +52,4 @@ ShirBody Sign.plus
   params : []
   locals : []
   block  :
-    Return(<hole: MemberAccess>)
+    Return(EnumInit(@Sign, "Plus", []))

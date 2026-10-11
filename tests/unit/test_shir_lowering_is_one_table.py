@@ -30,7 +30,7 @@ import typing
 from pathlib import Path
 
 from sushi_lang.semantics import ast as a
-from sushi_lang.semantics.shir import lower_nodes, lower_patterns, lowering
+from sushi_lang.semantics.shir import lower_aggregates, lower_nodes, lower_patterns, lowering
 
 #: The AST classes that lowering handles. A chunk that lowers a class adds it here.
 LOWERED: frozenset[str] = frozenset({
@@ -40,13 +40,14 @@ LOWERED: frozenset[str] = frozenset({
     "ExprStmt", "Return", "Print", "PrintLn",
     "Let", "Rebind", "If", "While", "Break", "Continue",
     "Foreach", "Match",
+    "MemberAccess", "TupleLiteral", "ArrayLiteral", "DynamicArrayFrom", "DynamicArrayNew",
 })
 
 #: The AST classes that are the form of a call argument (`ARGUMENTS`). The set only grows.
 ARGUMENT_FORMS: frozenset[str] = frozenset({"Spread", "Borrow"})
 
 #: The modules of body lowering.
-_MODULES = (lowering, lower_nodes, lower_patterns)
+_MODULES = (lowering, lower_nodes, lower_patterns, lower_aggregates)
 
 
 def _statement_classes() -> set[type]:

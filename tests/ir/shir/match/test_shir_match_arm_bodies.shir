@@ -19,7 +19,7 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@pick)), [<hole: DotCall>])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@pick)), [<hole: MemberAccess>])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@pick)), [EnumInit(@Maybe, "Some", [Lit(4)])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@pick)), [EnumInit(@Maybe, "None", [])])]))
     ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
     Return(Lit(0))

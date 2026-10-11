@@ -7,7 +7,7 @@ ShirBody first
     Assign(LocalRef(_0), Call(Static(BufReader, "new"), [(<hole: TryExpr>, Owned), Lit(64)]), is_init: true)
     Assign(LocalRef(_1), Lit(0), is_init: true)
     Loop(Items(Call(Dotted(LocalRef(_0), "lines"), []), _2, Bare), [Assign(LocalRef(_3), <hole: TryExpr>, is_init: true), ExprStmt(Call(BuiltinFn("println"), [LocalRef(_3)])), Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1) = 1), is_init: false)])
-    Return(<hole: DotCall>)
+    Return(EnumInit(@Result, "Ok", [LocalRef(_1)]))
 
 ShirBody typed
   params : []
@@ -16,7 +16,7 @@ ShirBody typed
     Assign(LocalRef(_0), Call(Static(BufReader, "new"), [(<hole: TryExpr>, Owned), Lit(64)]), is_init: true)
     Assign(LocalRef(_1), Lit(0), is_init: true)
     Loop(Items(Call(Dotted(LocalRef(_0), "lines"), []), _2, Bare), [Assign(LocalRef(_3), <hole: TryExpr>, is_init: true), Assign(LocalRef(_1), Binary(+, LocalRef(_1), Call(Dotted(LocalRef(_3), "len"), [])), is_init: false)])
-    Return(<hole: DotCall>)
+    Return(EnumInit(@Result, "Ok", [LocalRef(_1)]))
 
 ShirBody skipped
   params : []
@@ -25,7 +25,7 @@ ShirBody skipped
     Assign(LocalRef(_0), Call(Static(BufReader, "new"), [(<hole: TryExpr>, Owned), Lit(64)]), is_init: true)
     Assign(LocalRef(_1), Lit(0), is_init: true)
     Loop(Items(Call(Dotted(LocalRef(_0), "lines"), []), _2, Bare), [Assign(LocalRef(_3), <hole: TryExpr>, is_init: true), Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1) = 1), is_init: false)])
-    Return(<hole: DotCall>)
+    Return(EnumInit(@Result, "Ok", [LocalRef(_1)]))
 
 ShirBody main
   params : []

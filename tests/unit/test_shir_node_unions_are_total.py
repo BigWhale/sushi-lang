@@ -72,7 +72,7 @@ EXPRESSION_FIELDS: dict[str, tuple[str, ...]] = {
 
 #: The parts of an expression that are not nodes (ir.md 7.4): a call target, an
 #: argument, an array kind and an array run, a lambda parameter, and a literal value.
-#: `RangeRun` is the `Span(Range)` run of ir.md; the name `Span` is the source span.
+#: The range run is `RangeRun`, not `Span`: the name `Span` is the source span.
 EXPRESSION_PARTS: dict[str, tuple[str, ...]] = {
     "Named": ("ref",),
     "Dotted": ("recv", "name"),

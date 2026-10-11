@@ -836,6 +836,8 @@ class SemanticAnalyzer:
             passes.scope.run(unit.ast)
             lower_unit(self.shir, unit, passes.scope.bindings, self._operand_reader(unit),
                        DeclLookup(self.tables.enums.by_name, self.tables.generic_enums.by_name,
+                                  self.tables.structs.by_name,
+                                  self.tables.generic_structs.by_name,
                                   self.tables.namespaces, unit.name))
             passes.typecheck.run(unit.ast)
             passes.lifter.run()

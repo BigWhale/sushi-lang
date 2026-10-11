@@ -1,0 +1,186 @@
+"""Aggregate lowering: the constructions and the field read (docs/design/ir.md 7.4, 7.10).
+
+The rows of a struct, an enum, a tuple and an array construction, and of a member read
+`x.m`, are in the one table `LOWERING` of `lower_nodes.py`; this module holds their
+lowering. A call shape gives a construction through `_call` and `_dotted` there, and
+calls `struct_init` and `enum_init` here.
+
+What a written name before a dot denotes decides each node, and lowering reads it from
+`Bindings` and from the declaration tables (`DeclLookup`), never from a type:
+
+- A struct name as the callee is a `StructInit`. A named construction gives `fields` in
+  the declaration order of the struct, and `written_order` keeps the order that the source
+  writes, which is the order of evaluation (ruling R1). SHIR has no temporary for it:
+  SHIR-to-SLIR lowering evaluates the fields in `written_order` where it lowers the
+  expression. A named construction whose names are not the fields of a struct is a hole:
+  the program has an error, and SHIR has no node that keeps the written names.
+- `T.m(...)` and `T.m` on an enum `T` with a variant `m` are an `EnumInit`, also behind an
+  alias. The declaration is the written name, the alias included (`geo.Sign`), as a pattern
+  names it.
+- `ns.m` on a namespace is the `ConstRef`, the `StorageRef` or the `GlobalRef` of what the
+  namespace holds under `m`, with the qualified name as written. A type, a C global and a
+  name that the namespace does not hold are holes.
+- Any other `x.m` is a `Field` of `x`. Which field it is, and its index, are answers of the
+  typecheck pass (ruling S5).
+
+`from([...])` and `new()` are an `ArrayInit` of the kind `Dynamic`, and `[...]` one of the
+kind `Fixed`, with a run for each element: `Single`, `Repeat` (the value, then the count:
+ruling R2) and `RangeRun`. The count of a repeat and the bounds of a range record their
+value when the compiler can read it (ruling E3).
+
+Ruling E3 also decides which node is opaque. A field read, a member behind an alias, a
+struct, a variant, a tuple and a dynamic array take their id from `made_opaque`: the
+constant evaluator writes on the AST for a member access (it stamps `namespace_ref` and
+folds an alias out of the receiver), and the value of a construction is never a number
+that the typecheck pass reads. A fixed array is not opaque, because the evaluator reads a
+fixed literal of constants with no write on the AST (`[4, 2][0]` as a divisor).
+"""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Optional, Sequence, cast
+
+from sushi_lang.semantics import ast as a
+from sushi_lang.semantics.array_runs import is_range_element
+from sushi_lang.semantics.shir import bindings as bd
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.lookup import CALLABLE_KINDS, VARIABLE_KIND, DeclLookup
+from sushi_lang.semantics.typesys import BuiltinType, UnknownType
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.lower_nodes import BodyLowerer
+
+#: A type as written before a dot: a type name, or a type behind an alias.
+WrittenType = BuiltinType | UnknownType
+
+
+def written_name(ty: WrittenType) -> str:
+    """The name of a type as the source writes it, with its alias (`geo.Sign`)."""
+    namespace = ty.namespace if isinstance(ty, UnknownType) else None
+    return str(ty) if namespace is None else f"{namespace}.{ty}"
+
+
+# -- constructions ---------------------------------------------------------------------
+
+
+def struct_init(lw: BodyLowerer, node: Any, written: str, declared: str, args: list[Any],
+                names: Optional[list[str]]) -> e.ShirExpr:
+    """`S(...)`, `S(f: ...)` or `ns.S(...)`: the struct `written`, which the table calls `declared`.
+
+    A positional construction keeps its arguments as written. A named one puts them in the
+    declaration order, and `written_order` keeps the order of evaluation (ruling R1).
+    """
+    positions = list(range(len(args))) if names is None else _declared_positions(
+        lw.lookup, declared, names)
+    if positions is None:
+        return lw.hole(node)
+    ident = lw.made_opaque()
+    written_args = lw.arguments(args)
+    fields = [arg for _position, arg in sorted(zip(positions, written_args, strict=True),
+                                               key=lambda pair: pair[0])]
+    return e.StructInit(ident, lw.span(node), lw.decls.refer(written), fields, tuple(positions))
+
+
+def _declared_positions(lookup: Optional[DeclLookup], declared: str,
+                        names: Sequence[str]) -> Optional[list[int]]:
+    """The declaration position of each written name, or None when the names are not the
+    fields of the struct: a name that it does not declare, a repeated or a missing one."""
+    fields = None if lookup is None else lookup.field_names(declared)
+    if fields is None or sorted(names) != sorted(fields):
+        return None
+    return [fields.index(name) for name in names]
+
+
+def enum_init(lw: BodyLowerer, node: Any, ty: WrittenType, variant: str,
+              args: list[Any]) -> e.EnumInit:
+    """The variant `variant` of the enum that `ty` writes, with the payload as written."""
+    ident = lw.made_opaque()
+    return e.EnumInit(ident, lw.span(node), lw.decls.refer(written_name(ty)), variant,
+                      lw.arguments(args))
+
+
+def lower_tuple(lw: BodyLowerer, node: a.TupleLiteral) -> e.TupleInit:
+    ident = lw.made_opaque()
+    return e.TupleInit(ident, lw.span(node), [lw.expr(part) for part in node.elements])
+
+
+# -- arrays ----------------------------------------------------------------------------
+
+
+def lower_array(lw: BodyLowerer, node: a.ArrayLiteral) -> e.ArrayInit:
+    """`[...]`: a fixed array."""
+    ident = lw.ident()
+    return e.ArrayInit(ident, lw.span(node), e.Fixed(), _runs(lw, node.elements))
+
+
+def lower_from(lw: BodyLowerer, node: a.DynamicArrayFrom) -> e.ArrayInit:
+    """`from([...])`: a dynamic array with the runs of its literal (ir.md 7.10)."""
+    ident = lw.made_opaque()
+    return e.ArrayInit(ident, lw.span(node), e.Dynamic(), _runs(lw, node.elements.elements))
+
+
+def lower_new(lw: BodyLowerer, node: a.DynamicArrayNew) -> e.ArrayInit:
+    """`new()`: a dynamic array with no run."""
+    return e.ArrayInit(lw.made_opaque(), lw.span(node), e.Dynamic(), [])
+
+
+def _runs(lw: BodyLowerer, elements: list[a.ArrayElement]) -> list[e.ArrayRun]:
+    return [_run(lw, element) for element in elements]
+
+
+def _run(lw: BodyLowerer, element: a.ArrayElement) -> e.ArrayRun:
+    """One element. A repeat lowers its value first and then its count (ruling R2).
+
+    A range with a count (`[0..3; 2]`) is a repeat as written, and the typecheck pass
+    refuses it.
+    """
+    if element.count is not None:
+        value = lw.expr(element.value)
+        return e.Repeat(value, lw.operand(element.count, True))
+    if is_range_element(element):
+        return e.RangeRun(lower_range(lw, cast(a.RangeExpr, element.value)))
+    return e.Single(lw.expr(element.value))
+
+
+def lower_range(lw: BodyLowerer, node: a.RangeExpr) -> e.Range:
+    """`a..b`, `a..=b` and `(a..b).rev()`, with the value of each bound that the compiler reads."""
+    ident = lw.ident()
+    start = lw.operand(node.start, True)
+    end = lw.operand(node.end, True)
+    return e.Range(ident, lw.span(node), start, end, node.inclusive, node.reverse)
+
+
+# -- a member read ---------------------------------------------------------------------
+
+
+def lower_member(lw: BodyLowerer, node: a.MemberAccess) -> e.ShirExpr:
+    """`x.m`: a member of a namespace, a unit variant of an enum, or a field of a value."""
+    found = lw.bindings.resolution_of(node.receiver)
+    if isinstance(found, bd.Namespace):
+        return _namespace_member(lw, node, found.name)
+    ty = lw.type_before_dot(node.receiver)
+    if ty is not None:
+        return _unit_variant(lw, node, ty)
+    ident = lw.made_opaque()
+    return e.Field(ident, lw.span(node), lw.expr(node.receiver), node.member)
+
+
+def _namespace_member(lw: BodyLowerer, node: a.MemberAccess, alias: str) -> e.ShirExpr:
+    """`ns.m`: what the namespace holds under `m`, by the qualified name as written."""
+    lookup = lw.lookup
+    kind = None if lookup is None else lookup.member_kind(lw.bindings.body, alias, node.member)
+    loc = lw.span(node)
+    written = f"{alias}.{node.member}"
+    if kind == "constant":
+        return e.ConstRef(lw.made_opaque(), loc, lw.decls.refer(written))
+    if kind == VARIABLE_KIND:
+        return e.StorageRef(lw.made_opaque(), loc, lw.decls.refer(written))
+    if kind in CALLABLE_KINDS:
+        return e.GlobalRef(lw.made_opaque(), loc, lw.decls.refer(written))
+    return lw.hole(node)
+
+
+def _unit_variant(lw: BodyLowerer, node: a.MemberAccess, ty: WrittenType) -> e.ShirExpr:
+    """`T.V`: a variant with no payload. Any other member of a type is a hole."""
+    if lw.lookup is None or not lw.lookup.is_variant(str(ty), node.member):
+        return lw.hole(node)
+    return enum_init(lw, node, ty, node.member, [])
