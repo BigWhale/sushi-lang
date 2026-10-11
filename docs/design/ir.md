@@ -706,7 +706,12 @@ container insert, array element) resolves to `Owned` with no marker, and
 marked field take in a call argument (`take(nom w.inner)`) is an `Arg` with an `Owned`
 marker on a `Field`; in a `let` or a `return` it is `Take`. A struct or a variant
 construction is a consuming position, and its arguments are `Arg`s too, so the written
-marker of `Result.Ok(nom s)` stays in SHIR.
+marker of `Result.Ok(nom s)` stays in SHIR. Lowering records the written shape of a
+`Take`: that the place is one step off a name that the body owns is a rule of `borrow`. In
+the same way, `peek x` and `poke x` are the `marker` of an `Arg` in a call argument, and a
+`Borrow` in every other position (a tuple part, an operand). The value of a reference `let`
+(`let poke T x = place`) is a `Borrow` too, from the same lowering. A `Borrow` that is not
+legal in its position is refused by `typecheck`, not by lowering.
 
 `StructInit` and `EnumInit` name the declaration, because the binding table knows it at
 lowering: the written name, with its alias (`geo.Vec`), as a pattern names an enum. The
@@ -733,9 +738,12 @@ sub-expression with the AST constant evaluator and records the value on the SHIR
 value is syntax: it comes from the source alone, as `unchecked` does (4.9). `typecheck`
 reads the recorded value and does not call the evaluator, so the evaluator has no SHIR
 reader (Q5). Ruled 2026-10-11. A sub-expression that holds a call, a field read, a member
-behind an alias, or a construction other than a fixed array literal records no value: the
-evaluator writes on the AST for a member access, and the value of such a construction is
-never a number that `typecheck` reads.
+behind an alias, a construction other than a fixed array literal, a `Borrow`, a `Take`, a
+`Try` or a `Slice` records no value: the evaluator writes on the AST for a member access,
+the value of such a construction is never a number that `typecheck` reads, and the
+evaluator has no value for an ownership node or a view. A `Cast`, an `Index`, a `Range` and
+an `Interp` are read through: the evaluator folds `4 as i32`, `[4, 2][0]` and a hole of
+constants with no write on the AST.
 
 **`expect(msg)` keeps its lazy message.** The message is evaluated only when the call
 fails, as the message of an `Assert` is. A `Builtin` call with an operand that is
@@ -970,13 +978,13 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 | `EnumConstructor` | `EnumInit` |
 | `TupleLiteral` | `TupleInit` |
 | `MemberAccess` | `Field`; `ConstRef` / `StorageRef` / `GlobalRef` through a namespace; `EnumInit` for a unit variant (`Sign.Plus`) |
-| `IndexAccess` | `Index`, or `Slice` when the index is a range |
+| `IndexAccess` | `Index` with the `unchecked` mark of the builder (4.9), or `Slice` when the index is a range; a reversed range (`data[(0..3).rev()]`, CE2122) is a hole, because `Slice` has no field for it |
 | `CastExpr` | `Cast` |
 | `TryExpr` | `Try`, **kept** |
-| `InterpolatedString` | `Interp`, **kept** |
+| `InterpolatedString` | `Interp`, **kept**: each text part as written, an empty one too, and each hole as an expression |
 | `Expand` | `Expand` in a template check body; nothing in an instance (4.5) |
-| `Spread` (bloom `arr...`) | the array operand, forwarded whole; SLIR lowering makes it a `Move` |
-| `Borrow` | `Borrow` |
+| `Spread` (bloom `arr...`) | the array operand, forwarded whole: an `Arg` with `bloom`; SLIR lowering makes it a `Move` |
+| `Borrow` | `Borrow`; in a call argument, the `marker` of the `Arg` |
 | a `nom`-marked field read | `Take`, or an `Owned` marker on the `Arg` |
 | `RangeExpr` | `Range`, a run of an `ArrayInit`, or a `Slice` bound |
 | `UnaryOp`, `BinaryOp` | `Unary`, `Binary` |
