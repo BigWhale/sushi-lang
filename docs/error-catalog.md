@@ -1428,7 +1428,7 @@ Variable declaration with 'let' requires an explicit type annotation.
 - `an iterator has no methods: walk it with 'foreach', or call the method on the collection it comes from`
 - `did you mean '{namespace}.{closest}'?`
 
-Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` has no method at all: `foreach` walks it, and `next()` is the protocol of a user type, not a method of an iterator. A range has one method, `.rev()`; any other method on a range is [CE2122](#ce2122). `0..n.rev()` is the range `0..(n.rev())`, so its method is on the i32 `n`, and that is this error. In a generic body, a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
+Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` has one method, `.clone()`, which copies its cursor: `foreach` walks it, and `next()` is the protocol of a user type, not a method of an iterator. A range has one method, `.rev()`; any other method on a range is [CE2122](#ce2122). `0..n.rev()` is the range `0..(n.rev())`, so its method is on the i32 `n`, and that is this error. In a generic body, a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
 
 ### CE2009 {#ce2009}
 
@@ -2233,11 +2233,11 @@ An index, a count and a range bound are i32 positions: an array index `a[i]`, a 
 
 **Error** · type
 
-**Message:** `` a range is not a value: it is walked by `foreach` or spelled into an array ``
+**Message:** `` a range is a value only where `Iterator@(i32)` is expected ``
 
-**Help:** `` walk it with `foreach`, or spell it into an array: `from([a..b])` ``
+**Help:** `` walk it with `foreach`, spell it into an array (`from([a..b])`), or give it to a position of the type `Iterator@(i32)` ``
 
-A range (`a..b`, `a..=b`) has two positions, and only two: the iterable of a `foreach` (`foreach(i in 0..3):`) and an element of an array literal (`[0..3]`, `from([0..n])`). Sushi has no range type and no range object, as Rust (`Range`) and Python (`range`) have, so a range cannot be a function or a method argument, a constructor argument, a `return` value, a `let` initializer or an operand. Walk it with `foreach`, or spell it into an array with `from([a..b])` and use the array. `.rev()` is the one method a range takes, and the result is a range again, with the same two positions: `foreach(i in (0..3).rev()):` and `[(0..3).rev()]`. Any other method on a range is this error.
+A range (`a..b`, `a..=b`) has three positions. It is the iterable of a `foreach` (`foreach(i in 0..3):`), which walks it directly. It is an element of an array literal (`[0..3]`, `from([0..n])`), where it is a run of elements. And it is a VALUE, an owned `Iterator@(i32)`, in every position where `Iterator@(i32)` is expected, written or propagated: a `let` of that type, an argument, a `return`, a constructor field, an enum payload and a container element. In every other position a range is this error: an `i32` position, an operand, a `let` of another type, and a generic `T` that nothing else solves (`f(nom 0..3)` over `fn f@(T)(nom T x)`). Walk it with `foreach`, spell it into an array with `from([a..b])`, or give it to a position of the type `Iterator@(i32)`. `.rev()` is the one method a range takes, and the result is a range again, with the same positions: `foreach(i in (0..3).rev()):`, `[(0..3).rev()]` and `let Iterator@(i32) d = (0..3).rev()`. Any other method on a range is this error. See [the iteration design](design/iteration.md), ruling 10.
 
 ### CE2123 {#ce2123}
 
@@ -2276,16 +2276,6 @@ A range always goes up: `a..b` yields a, a+1, ..., b-1 and is empty when a >= b;
 **Message:** `alternative '{alternative}' binds differently from the first alternative: {detail}`
 
 The alternatives of a pattern (`Shape.Circle(r) | Shape.Ring(r) -> ...`) bind the same names, with the same types and the same modes (bare, `peek`, `poke`, `nom`), as in Rust and Python. The arm body reads one binding, whatever alternative matched, so a name that only one alternative binds has no value on the other path, a name with two types has no one type, and a name with two modes is a copy on one path and a reference or a take on the other. The `{detail}` slot names the first difference: a name that is not bound, a name the first alternative does not bind, a different type, or a different mode. The note is at the first alternative, which every other alternative is held to. A nested list of alternatives (`Maybe.Some(Shape.Circle(r) | Shape.Ring(r))`) takes the same rule. Write two arms when the alternatives must bind different things.
-
-### CE2127 {#ce2127}
-
-**Error** · type
-
-**Message:** `the iterator of HashMap '.{method}()' must be the iterable of a foreach`
-
-**Help:** `` walk the map where the call is written, `foreach(x in map.{method}())`, or pass the map and call '.{method}()' in the function that walks it ``
-
-A HashMap iterator (`.keys()`, `.values()`, `.entries()`, `.pairs()`) walks the buckets of the map, and the loop must know the key type and the value type to step over them. The loop knows them only when the call is the iterable itself: `foreach(k in m.keys())`. In every other position the value leaves the call with the type `Iterator@(K)` alone -- an argument of a generic function, an element of a tuple, the payload of a `Maybe` -- and a later `foreach` over it cannot find the buckets. Before this error that loop walked zero entries and gave no diagnostic. An array or a List iterator (`.iter()`) has no such limit. The fix is to walk the map where the call is written, or to pass the map and call the method in the function that walks it.
 
 ### CE2128 {#ce2128}
 
@@ -4009,6 +3999,14 @@ An `unsafe external` function declared to return a plain `string` or `ptr` answe
 **Message:** `assertion failed at {where}`
 
 An `assert(cond)` or `assert(cond, message)` found its condition false. `{where}` is the file, the line and the column of the `assert`, with the file named as a compile-time diagnostic names it; a message, when there is one, follows after `: `. An assert states an invariant, so a failure is a defect and not data: the program stops with exit code 1, and no error channel catches it. A failure that a caller can handle belongs in the channel, `| E`. See [the assert design](design/assert.md).
+
+### RE2027 {#re2027}
+
+**Error** · runtime
+
+**Message:** `an iterator that walks a value holding a resource cannot be cloned`
+
+`it.clone()` copies the cursor of an iterator, and for an iterator made with `Iterator.new(nom x)` the cursor is the value `x` itself. A value that holds a resource (a type that implements `Drop`, or one that holds such a type) has no deep copy ([CE2431](#ce2431)), so its iterator has none either. The type of the iterator does not show what it walks, so the compiler cannot refuse the clone, and the program stops at it instead. Make a second iterator over a second value, or walk the one iterator through `poke`.
 
 ## NExxxx: Nori package manager errors {#nexxxx}
 

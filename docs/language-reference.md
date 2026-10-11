@@ -1082,10 +1082,13 @@ range is. Or **any type carrying `next()` answering `Maybe@(T)`**: the loop call
 it answers `None`, and that is the whole protocol. There is no type to implement and no
 perk to name, so a struct becomes walkable by gaining one method.
 
-**A range is not a value.** It has two positions: a `foreach` iterable and an element of
-an array literal (`from([0..n])`). A range anywhere else -- a function, method or
-constructor argument, a `return`, a `let` initializer, an operand -- is [`CE2122`](error-catalog.md#ce2122). Spell it
-into an array to keep it.
+**A range is a value only where `Iterator@(i32)` is expected.** It has three positions: a
+`foreach` iterable, an element of an array literal (`from([0..n])`, a run of elements),
+and a position of the type `Iterator@(i32)`, written or propagated: a `let`, an argument,
+a `return`, a constructor field, a payload, a container element. There it is an owned
+iterator (see [The Iterator Type](#the-iterator-type)). A range anywhere else -- an `i32`
+position, an operand, a generic `T` that nothing else solves -- is
+[`CE2122`](error-catalog.md#ce2122). Spell it into an array to keep its elements.
 
 **A range always goes up.** `a..b` is empty when `a >= b`, and `a..=b` is empty when
 `a > b`. A countdown is `(a..b).rev()`: the same values, last first. `.rev()` is the one
@@ -1217,6 +1220,45 @@ of one element of a tuple item. `List@(peek T)`, `Maybe@(peek T)`, `Result@(peek
 implements `Drop`), they are two types, and a mix is
 **[CE2006](error-catalog.md#ce2006)**. A generic template keeps the mode of its `T`;
 each instance decides it.
+
+**An iterator is a value.** It can be stored, passed and walked, and an iterator over a
+container copies nothing. `.iter()` on `T[]`, `T[N]` and `List@(T)`, and `.keys()`,
+`.values()`, `.entries()`, `.pairs()` on a `HashMap`, answer `Iterator@(peek T)`.
+
+```sushi
+use <collections/iter>
+
+fn count(poke Iterator@(peek string) it) i32:
+    let i32 n = 0
+    foreach(s in it):                  # walks the caller's iterator in place
+        n := n + 1
+    return n
+
+fn main() i32:
+    let string[] names = from(["a", "b"])
+    let Iterator@(peek string) it = names.iter()     # borrows names, no copy
+    println(count(poke it))                          # 2
+    let Iterator@(i32) r = 0..3                      # a range is a value here
+    foreach(x in r):
+        println(x)
+    return 0
+```
+
+| Source | The iterator |
+|---|---|
+| `xs.iter()`, `m.keys()` over a place | BORROWS the owner of the place: the owner is frozen until the last use of the iterator ([CE2412](error-catalog.md#ce2412)), and the iterator cannot be given with `nom`, returned, stored or captured ([CE2411](error-catalog.md#ce2411)) |
+| `from([1, 2]).iter()`, `make().keys()` over a temporary | OWNS the temporary, and moves freely |
+| a range in an `Iterator@(i32)` position | owns its state, and moves freely |
+| `Iterator.new(nom x)` | owns `x`; `x` has `next()` answering `Maybe@(T)`, and the items are owned |
+
+A borrowed iterator is still destroyed at the end of its scope, because it owns its own
+state. A callee walks an iterator through `poke`, and a `foreach` over a `let` that
+borrows walks it in place. `it.clone()` copies the cursor and not the container; the
+clone of a borrowed iterator borrows the same owner. `Iterator.new` names the type, so it
+needs `use <collections/iter>`. There is no implicit conversion from a type with `next()`.
+
+A `foreach` over `xs.iter()`, `m.keys()` or a range written as the iterable walks the
+source directly, with no call per item and no allocation.
 
 ### Assertions
 

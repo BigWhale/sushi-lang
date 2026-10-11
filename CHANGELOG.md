@@ -143,9 +143,25 @@ All notable changes to Sushi Lang will be documented in this file.
   is not an item mode, and `peek` in every other type position keeps its error (CE2419,
   CE2415, CE6107). A binary library's manifest carries the mode, and `--lib-info` prints it
   (`docs/design/iteration.md`, ruling 9).
+- **An `Iterator@(T)` is a value.** It can be stored, passed, returned and walked. `.iter()`
+  on `T[]`, `T[N]` and `List@(T)`, and the four HashMap iterators, answer
+  `Iterator@(peek T)` and copy nothing. An iterator over a place borrows the owner of the
+  place: the owner is frozen until its last use (CE2412), and it cannot be given with
+  `nom`, returned, stored or captured (CE2411). An iterator over a temporary, a range and
+  `Iterator.new(nom x)` own what they walk. A range is a value where `Iterator@(i32)` is
+  expected; CE2122 holds in every other position. `Iterator.new(nom x)` makes an iterator
+  of any value with `next()` answering `Maybe@(T)`. `it.clone()` copies the cursor; the
+  clone of an iterator over a value that holds a resource stops with the new RE2027. A
+  `foreach` over `xs.iter()`, `m.keys()` or a range stays a direct walk with no
+  allocation (`docs/design/iteration.md`, ruling 10).
 
 ### Changed
 
+- **CE2127 is retired.** A HashMap iterator is a value with its own `next_fn`, so it is
+  legal outside the iterable of a `foreach`. A borrowed HashMap iterator given to a `nom`
+  parameter, a constructor or a payload is CE2411, as every borrowed iterator is. An
+  iterator over a place given to a user function with `nom` (`h(nom xs.iter())`) is CE2411
+  too; an iterator over a temporary (`h(nom make().iter())`) is legal.
 - **A `foreach` over a `poke` value walks it in place.** When the iterable is reached
   through a `poke` reference (a `poke` parameter, a `poke self` receiver, a `let poke`
   binding, or a field or an element of one), `next()` runs on the caller's value and the

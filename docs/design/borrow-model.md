@@ -453,6 +453,33 @@ Today every binding reads out of one owner, so the set has one member and no pro
 changes. The first value with two owners is a value that is built over two borrowed
 values, for example two iterators that are zipped into one.
 
+## 10g. A borrowed value that owns its state: the lent iterator
+
+An iterator over a place (`xs.iter()`, `m.keys()`) is a NEW value, and it reads storage that
+another value keeps (#1259). It is two things at one time, and the two are kept apart:
+
+- **It borrows its source.** The `let` that holds it is a let-borrow of the owners of the
+  place (§10f): each owner is frozen until the last use of the iterator
+  ([CE2412](../error-catalog.md#ce2412)). Its provenance is BORROWED, so a position that
+  takes it is the consuming use of a borrow ([CE2411](../error-catalog.md#ce2411)): a `nom`
+  argument, a `return`, a constructor field, a payload, a container element and a capture.
+  The help names the escape: clone the container first, so that the iterator owns the copy
+  it walks.
+- **It owns its value.** Its state, its cursor and what a later adapter keeps, belongs to
+  it and to nothing else. So a write through the `let` is legal (a `poke` argument, an
+  in-place `foreach`), a rebind is refused as for every let-borrow, and the scope exit
+  DESTROYS the iterator.
+
+The borrow pass stamps the producer `LENT` (`MethodCall.iterator_state`) and marks the
+`let` `BorrowState.is_lent_iterator`. In the backend, `ownership.bind` keeps the decision
+about the source (REJECT, the binding owns no source) and answers that the binding owns
+its value when the initializer is stamped `LENT`. The clone of a lent iterator is lent too:
+it borrows the same owners, and a borrow of a lent `let` (a `foreach` item, for example)
+freezes those owners and not the `let`.
+
+An iterator over a TEMPORARY owns everything it walks, a range and `Iterator.new` too. Its
+provenance is FRESH, and it moves like any owned value.
+
 ## 11. Not designed
 
 - **A `nom` binding inside `Own(...)`** ([CE2434](../error-catalog.md#ce2434)). Taking the pointee out would leave the

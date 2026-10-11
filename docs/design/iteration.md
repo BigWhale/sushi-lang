@@ -217,6 +217,8 @@ fn first(poke Words w) ~:
 
 The caller then continues the walk where `first` stopped. The typecheck pass decides it
 once and stamps `Foreach.walks_in_place`; the borrow pass and the backend read that stamp.
+The borrow pass also sets the stamp for a `let` that holds a LENT iterator (ruling 10): that
+`let` cannot give its value away, so the loop walks it in place and does not take it.
 In the borrow pass the walk is a change of the walked value, the same as a call of
 `next()` on it, so a `let`-borrow that reads out of the same owner and is used after the
 loop is **[CE2412](../error-catalog.md#ce2412)**. In the backend the loop's hidden slot is a
@@ -326,6 +328,103 @@ item, one flag per element for a tuple item. A diagnostic and an interned name s
 item as written (`Iterator@(peek string)`, `Iterator<$Tuple<i32, peek string>>`), so a
 binary library's manifest carries the mode and `--lib-info` prints it.
 
+### 10. An `Iterator@(T)` is a value
+
+An iterator can be stored, passed and walked, and an iterator over a container copies
+nothing (#1259).
+
+```sushi
+use <collections/iter>
+
+fn count(poke Iterator@(peek string) it) i32:
+    let i32 n = 0
+    foreach(s in it):                  # walks the caller's iterator in place
+        n := n + s.len()
+    return n
+
+fn main() i32:
+    let string[] names = from(["a", "b"])
+    let Iterator@(peek string) it = names.iter()     # borrows names, no copy
+    println(count(poke it))
+    let Iterator@(i32) r = 0..3                      # a range is a value here
+    foreach(x in r):
+        println(x)
+    return 0
+```
+
+**The value has the shape of a closure:** `{next_fn, state, drop_fn, clone_fn}`.
+`next_fn(state)` answers `Maybe@(T)`: the next item, or `None` at the end. `drop_fn(state)`
+frees what the state owns; it is null when the state owns nothing. `clone_fn(state)`
+answers a whole new value. A function value `fn() -> Maybe@(T)` has the same four fields,
+so the backend reads the SEMANTIC type, never the layout, to know which one it has.
+
+**Each source supplies its own three functions**: a cursor over contiguous elements (`T[]`,
+`T[N]` and `List@(T)` share it), a cursor over the buckets of a HashMap for each of
+`keys()`, `values()`, `entries()` and `pairs()` (a bucket with no entry is stepped over), a
+range, and `Iterator.new`. A function is emitted once per module, with a name made from
+the source and its types (`__sushi_iter_next_...`).
+
+**The producers lend their items.** `xs.iter()` on `T[]`, `T[N]` and `List@(T)`, and the
+four HashMap methods, answer `Iterator@(peek T)`. For a plain `T` that is the type
+`Iterator@(T)` (ruling 9). `Entry@(K, V)` is not a writable type name, so the iterator of
+`.entries()` is reached through a generic or walked where it is made; `.pairs()` is the
+writable alternative.
+
+**The state.** A producer over a PLACE (`xs.iter()`, `self.items.iter()`, `m.keys()`)
+makes a LENT iterator: its state is a stack slot of the function (an `entry_alloca`, no
+`malloc`), because a lent iterator can never leave its function, and its `drop_fn` is
+null. A producer over a TEMPORARY (`from([1, 2]).iter()`, `make_map().keys()`) makes an
+OWNED iterator: the iterator takes the temporary, and its state holds the cursor and the
+container on the heap. A range and `Iterator.new` are owned too. The `drop_fn` of an owned
+state destroys the container or the value it holds, and then frees the state. A `drop_fn`
+never frees a stack slot. The borrow pass chooses, and stamps the producer with
+`MethodCall.iterator_state` (`CURSOR`, `LENT` or `OWNED`, `semantics/generics/iterators.py`).
+
+**The walk.** A `foreach` over an iterator VALUE calls `next_fn` until it answers `None`. A
+`foreach` over a source the compiler can read keeps its DIRECT walk, with no call through
+`next_fn` and no allocation: `foreach(x in xs.iter())`, `foreach(i in 0..n)`,
+`foreach(k in m.keys())`, `foreach(poke r in xs.iter())`. The typecheck pass decides it:
+it stamps the producer of a direct walk `CURSOR`, so the producer answers its bare cursor,
+and it stamps `Foreach.value_iterator` for a walk of a value. The loop owns the item of an
+`Iterator@(T)` (it is the payload of a fresh `Maybe`, as for a protocol walk), and it
+borrows the item of an `Iterator@(peek T)`, as it borrows an array element.
+
+**The borrow.** A lent iterator is a let-borrow of the owners of its place: the owners are
+frozen until the last use of the iterator (**[CE2412](../error-catalog.md#ce2412)**), and
+the iterator cannot be given with `nom`, returned, stored in a field or a container, or
+captured (**[CE2411](../error-catalog.md#ce2411)**). It is still DESTROYED at scope exit,
+because it owns its value: "it borrows its source" and "it owns its value" are two facts,
+and `ownership.bind` keeps them apart (`borrow-model.md` §10g). A write through a lent
+`let` is legal: `count(poke it)` moves its own cursor, and a `foreach` walks it in place.
+An owned iterator owns everything it walks, and it moves freely.
+
+**`.clone()` copies the cursor, not the container.** The clone of a lent iterator borrows
+the same owners, and its cursor is a heap copy that its `drop_fn` frees. The clone of an
+owned iterator deep-copies what its state holds, so the two walk alone. The clone of an
+iterator made by `Iterator.new` over a value that holds a resource has no deep copy, and
+the type of the iterator does not show it: the program stops there with
+**[RE2027](../error-catalog.md#re2027)**. `clone()` is the one method of an iterator.
+
+**A range is a value** in every position where `Iterator@(i32)` is expected, written or
+propagated: a `let`, an argument, a `return`, a constructor field, a payload, a container
+element. The propagation phase stamps `RangeExpr.is_value`, and the backend makes an owned
+iterator over the formula of `emit_range`. In an array literal a range keeps its meaning
+as a run of elements (`from([0..3])` is 0, 1, 2). A generic `T` that nothing else solves
+stays **[CE2122](../error-catalog.md#ce2122)**, and so does every other position.
+
+**`Iterator.new(nom x)`** is a static in the built-in statics table. `x` is a value of a
+type with `next()` answering `Maybe@(T)` (the protocol of ruling 1;
+**[CE2033](../error-catalog.md#ce2033)** otherwise), and the result is `Iterator@(T)` with
+owned items. It names the type, so it needs `use <collections/iter>`
+(**[CE2001](../error-catalog.md#ce2001)** without it). There is no implicit conversion. The
+typecheck pass builds and checks the `next()` call, as for a protocol `foreach`, and the
+backend reads the symbol and the receiver mode from it.
+
+**CE2127 is retired.** It refused a HashMap iterator outside the iterable of a `foreach`,
+because the walk found the bucket layout only from the receiver of the call. The value now
+carries its own `next_fn`. A borrowed HashMap iterator in a position that takes it is
+CE2411, as every other lent iterator is.
+
 ## A `File` has no line loop
 
 **A `File` has no line loop**, and that is a decision rather than an omission: an
@@ -346,6 +445,13 @@ exists to remove. `File.readln()` stays as the one-line unbuffered read.
 | the plain-item rule in the typecheck pass | `settle_item_modes`, `semantics/passes/types/utils.py` |
 | the plain-item rule where an instance is interned | `settle_in_tables` over `EnumTable.item_owner`, `semantics/generics/iterators.py` |
 | the reserved name | `_compiler_type_names`, `semantics/passes/collect/utils.py` |
+| the choice of the walk (direct, or a value) | `_choose_the_walk`, `semantics/passes/types/statements.py` |
+| the range value | `propagate_types_to_value`, `semantics/passes/types/propagation.py` |
+| `Iterator.new` | `_validate_iterator_new`, `semantics/passes/types/calls/methods.py`; `try_emit_iterator_new`, `backend/expressions/calls/intrinsics.py` |
+| the lent and the owned iterator in the borrow pass | `semantics/passes/borrow/iterators.py` |
+| the value, the state and the three functions of each source | `backend/runtime/iterators.py` |
+| the HashMap cursor | `bucket_source`, `backend/generics/hashmap/methods/iterators.py` |
+| the walk of a value | `_emit_value_foreach`, `backend/statements/loops.py` |
 
 ## See also
 
