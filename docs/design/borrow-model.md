@@ -480,13 +480,110 @@ freezes those owners and not the `let`.
 An iterator over a TEMPORARY owns everything it walks, a range and `Iterator.new` too. Its
 provenance is FRESH, and it moves like any owned value.
 
+## 10h. A borrowed return: `peek T`
+
+A named function or method can return a value that BORROWS one of its arguments (#1229).
+The return type says so with `peek`:
+
+```sushi
+fn head(i32[] xs, i32 n) peek i32[]:
+    return xs[0..n]                     # a view of `xs`, no copy
+
+fn longer(string a, string b) peek string:
+    if (a.len() >= b.len()):
+        return a
+    return b
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3])
+    let i32[] h = head(data, 2)         # `h` borrows `data`
+    println(h.len())
+    println(longer("alpha", "bob"))
+    return 0
+```
+
+`peek T | E` writes a channel: the mode applies to the `Ok` payload. There is no `poke`
+return. The answer has no lifetime name: the SOURCE SET of the callable says what it
+borrows.
+
+**Where it is legal.** On a named function or method with a body: a free function, an
+extension method and a static. Each refused position has one error:
+
+| Position | Error |
+|---|---|
+| a function value of a callable with a borrowed return, bare or behind an alias, at the reference | [CE2441](../error-catalog.md#ce2441) |
+| a lambda, a perk contract method, a perk implementation method | [CE2439](../error-catalog.md#ce2439) |
+| a `nom self` method: it frees the receiver that the answer would view | [CE2440](../error-catalog.md#ce2440) |
+
+A function value has the type `fn(A) -> B`, and that type has no place for the source set,
+so a call through it could not freeze the owners. A perk contract states one signature for
+every implementer, so it cannot state a source.
+
+**The source set.** `self` when the receiver is a borrow (`self`, `peek self`, `poke self`),
+plus each parameter that is not `nom` and whose type owns a resource (`T[]`, `List@(T)`,
+`string`, an owning struct, a `Drop` type). A plain parameter (`poke Cursor cur` when
+`Cursor` holds an `i32`) is not a member, and a `nom` parameter is freed at the return. An
+empty set is [CE2438](../error-catalog.md#ce2438) at the return type. Two or more members are
+legal. A generic template is judged where it is WRITTEN: a bare type parameter counts as
+owning, so `fn first@(T)(T[] xs) peek T` has one member and `fn pick@(T)(T a, T b, bool left)
+peek T` has two, at every type argument. The set is computed in one place
+(`semantics/borrowed_return.py`) from the declaration as written; a copy of a template
+shares the record of its template.
+
+**A plain `E`.** In `peek T | E` the whole `Result` is a borrow, and its holder frees nothing
+in it. So `E` must own nothing: an `E` with a `string`, an array or a container in a
+payload is [CE2442](../error-catalog.md#ce2442). A type parameter as `E` counts as owning.
+
+**The body.** Each returned value, and the payload of `Result.Ok(...)`, must be a borrow whose
+owner (the root of the place, `walk_place`) is a member of the source set:
+`xs[a..b]`, `self.data`, `xs[0]`, a `let` of such a view, an iterator over a source, and the
+answer of another borrowed return over the sources. A borrow of a local, of a parameter that
+is not a member, or of a temporary, and an owned value (`from([1])`), are
+[CE2443](../error-catalog.md#ce2443). The return consumes nothing: the value goes to the
+caller as it is. `Result.Err(...)` is an ordinary return.
+
+**The call.** The answer is a let-borrow (§10f) of the owners of EVERY argument in the source
+set. Each owner is frozen while the answer lives ([CE2412](../error-catalog.md#ce2412)); a
+consuming use, a store, a return and a `nom` of the answer are the consuming use of a borrow
+([CE2411](../error-catalog.md#ce2411)); `??` over the answer reads through it, as for every
+borrowed wrapper (§10d). `longer(a, b)` freezes `a` and `b` even when the function returns
+only from `a`: to avoid that, the caller gives `b` with `nom`, or the function takes a plain
+value. A plain answer (an `i32` from a template at `T = i32`) is a copy, and it still freezes
+the owners, because the source set is the same at every type argument. The typecheck pass
+stamps where the sources stand on the call (`callee_borrows`), and the borrow pass reads the
+owners there.
+
+**A temporary source.** When an argument in the source set is a temporary (a call result, a
+`from([...])`), the answer is legal inside that one statement: an argument, the iterable of a
+`foreach`. A `let` of it is [CE2444](../error-catalog.md#ce2444), because the temporary is
+freed at the end of the statement. A string literal is not a temporary: it is storage the
+program keeps.
+
+**An iterator answer.** `fn evens(i32[] xs) peek Iterator@(i32)` returns a lent iterator
+(§10g). The answer borrows the owners of the sources and owns its state, so the caller
+destroys it and may adapt it. The state of a lent iterator is on the stack of its function,
+so a lent iterator that leaves through a `peek` return moves its state to the HEAP: the borrow
+pass stamps each link of the chain (`iterator_leaves`), through each `let` that it was bound
+to, and `state_on_heap` is the one answer that the backend reads. `peek Iterator@(T) | E` is
+legal: the `Result` owns the iterator in its `Ok`, and `??` gives the iterator to its holder.
+
+**Libraries.** A binary or hybrid `.slib` records `return_mode: "peek"` on the record of the
+function, helper or extension (templates schema 11), and a consumer reads it. A source
+`.slib` carries the `peek` as text. `--lib-info` prints it.
+
+**Not in this design.** A user function that adapts a borrowed iterator (a `nom
+Iterator@(...)` parameter that takes a lent iterator): a function takes the container
+instead, or walks an iterator through `poke`.
+
 ## 11. Not designed
 
 - **A `nom` binding inside `Own(...)`** ([CE2434](../error-catalog.md#ce2434)). Taking the pointee out would leave the
   heap cell with nothing to free it.
 - **A consuming variadic** (`nom ...T`). It is rejected.
 - **Lifetimes.** Nothing relates a borrow to the value it names, so a borrow still cannot
-  be returned or stored ([CE2415](../error-catalog.md#ce2415), [CE2416](../error-catalog.md#ce2416), [CE2417](../error-catalog.md#ce2417), [CE2419](../error-catalog.md#ce2419)).
+  be stored ([CE2415](../error-catalog.md#ce2415), [CE2416](../error-catalog.md#ce2416), [CE2419](../error-catalog.md#ce2419)), and a `poke` borrow cannot be
+  returned ([CE2417](../error-catalog.md#ce2417)). A `peek` return names no lifetime: its
+  source set is the relation (§10h).
 - **Mode inference at a call site.** The marker is written, never deduced. A deduced marker
   would put the visibility of a consume back inside the callee, which is the property this
   ruling exists to give.

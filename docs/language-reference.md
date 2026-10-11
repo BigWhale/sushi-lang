@@ -620,6 +620,56 @@ fn read_value(peek i32 x) i32:
 
 The rule and its reasoning are [docs/design/borrow-model.md](design/borrow-model.md).
 
+### Borrowed Returns
+
+A named function or method can return a VIEW of one of its arguments, with no copy. The
+return type writes `peek`: `peek T`, or `peek T | E` with a channel (the mode applies to the
+`Ok` payload).
+
+```sushi
+struct Store:
+    i32[] data
+
+extend Store head(i32 n) peek i32[]:
+    return self.data[0..n]              # a slice of the receiver
+
+fn longer(string a, string b) peek string:
+    if (a.len() >= b.len()):
+        return a
+    return b
+
+fn main() i32:
+    let Store s = Store(from([1, 2, 3]))
+    let i32[] h = s.head(2)             # h borrows s
+    println(h.len())
+    println(longer("alpha", "bob"))
+    return 0
+```
+
+- **The sources.** The answer may borrow `self` when the receiver is a borrow, and each
+  parameter that is not `nom` and whose type owns a resource (`T[]`, `string`, an owning
+  struct). A function with no source is [`CE2438`](error-catalog.md#ce2438). In a generic
+  template a type parameter counts as a type that owns.
+- **The body.** Each returned value must be a borrow of a source: a slice, a field, an
+  element, a `let` of one, an iterator over a source, or the answer of another borrowed
+  return. A borrow of a local, of a temporary or of another parameter, and an owned value,
+  are [`CE2443`](error-catalog.md#ce2443).
+- **The caller.** The answer borrows the owners of every source argument: they are frozen
+  while it lives ([`CE2412`](error-catalog.md#ce2412)), and the answer cannot be stored,
+  returned or given with `nom` ([`CE2411`](error-catalog.md#ce2411)); `.clone()` takes an
+  independent value. A temporary source argument is legal inside one statement, and a
+  `let` of its answer is [`CE2444`](error-catalog.md#ce2444).
+- **Where it is legal.** On a free function, an extension method and a static. A lambda and
+  a perk method are [`CE2439`](error-catalog.md#ce2439), a `nom self` method is
+  [`CE2440`](error-catalog.md#ce2440), and a function value of such a function is
+  [`CE2441`](error-catalog.md#ce2441). In `peek T | E`, the error type owns nothing
+  ([`CE2442`](error-catalog.md#ce2442)).
+- **An iterator.** `fn evens(i32[] xs) peek Iterator@(i32)` returns an iterator that
+  borrows `xs`; its state moves to the heap at the return, and the caller destroys it.
+
+There is no `poke` return. The design is section 10h of
+[docs/design/borrow-model.md](design/borrow-model.md).
+
 ## Operators
 
 ### Operand types

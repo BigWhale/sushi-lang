@@ -1,4 +1,4 @@
-"""The borrowed return `peek T` (#1229, docs/design/borrow-model.md S11).
+"""The borrowed return `peek T` (#1229, docs/design/borrow-model.md S10h).
 
 A named function or method returns a view of a SOURCE. The source set is `self` when the
 receiver is a borrow, and each borrowed parameter whose type owns a resource. The set is

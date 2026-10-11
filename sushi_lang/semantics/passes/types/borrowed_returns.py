@@ -1,4 +1,4 @@
-"""The typecheck half of the borrowed return `peek T` (#1229, docs/design/borrow-model.md S11).
+"""The typecheck half of the borrowed return `peek T` (#1229, docs/design/borrow-model.md S10h).
 
 The faults of a declaration (no source, an `E` that owns), a function value of a callable
 with a borrowed return, and the stamp on each call: where the sources stand in it. The

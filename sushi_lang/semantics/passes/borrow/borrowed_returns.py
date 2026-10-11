@@ -1,4 +1,4 @@
-"""The borrow half of the borrowed return `peek T` (#1229, docs/design/borrow-model.md S11).
+"""The borrow half of the borrowed return `peek T` (#1229, docs/design/borrow-model.md S10h).
 
 Two sides of one rule. In the BODY of a `peek` function, each returned value must be a
 borrow whose owner is a source of the function (CE2443). At a CALL, the answer is a

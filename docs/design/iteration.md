@@ -398,6 +398,35 @@ and `ownership.bind` keeps them apart (`borrow-model.md` §10g). A write through
 `let` is legal: `count(poke it)` moves its own cursor, and a `foreach` walks it in place.
 An owned iterator owns everything it walks, and it moves freely.
 
+**A returned iterator.** A lent iterator leaves its function in one form: a function or a
+method with a borrowed return, `peek Iterator@(T)` (#1229, `borrow-model.md` §10h).
+
+```sushi
+use <collections/iter>
+
+fn evens(i32[] xs) peek Iterator@(i32):
+    return xs.iter().filter(nom |i32 x| x % 2 == 0)
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    foreach(x in evens(xs)):           # the answer borrows xs and owns its state
+        println(x)
+    return 0
+```
+
+Its state cannot stay in a stack slot of the function, so it moves to the HEAP at that
+return. The two facts stay apart: `iterator_state` says what the value borrows (`LENT`),
+and `state_on_heap` (`semantics/generics/iterators.py`) says where its state is. The borrow
+pass stamps `iterator_leaves` on each link of the chain that the return gives (a producer
+and each lazy adapter, through each `let` that held a link), so EVERY link moves: an
+adapter state holds its inner iterator by value, and the state pointer of that inner value
+must not point into the frame. A heap lent cursor frees its block in its `drop_fn`, and a
+heap adapter state destroys what it holds and frees its block. The caller holds a lent
+iterator (§10g): the owners of the source arguments are frozen, and the caller destroys the
+answer. `peek Iterator@(T) | E` gives the iterator in the `Ok` payload. A user function that
+ADAPTS a borrowed iterator (a `nom Iterator@(...)` parameter) is still not in this design:
+a function takes the container instead.
+
 **`.clone()` copies the cursor, not the container.** The clone of a lent iterator borrows
 the same owners, and its cursor is a heap copy that its `drop_fn` frees. The clone of an
 owned iterator deep-copies what its state holds, so the two walk alone. The clone of an

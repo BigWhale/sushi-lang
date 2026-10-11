@@ -30,7 +30,7 @@ there was no other spelling.
 | **S2** | Outside `0 <= a <= b <= len()` is a run-time trap. This is the rule of `arr[i]`, not the clamp rule of `.s()` and `.ss()`. `a == b` is an empty view. A range whose readable bounds go down is CE2125, as in every other range position |
 | **S3** | The receivers are `T[]` and `T[N]`. The value is always a `T[]`. A `List@(T)` receiver is not in this design |
 | **S4** | A slice is read-only. It is not a `poke` view: a callee could `push` on a `poke T[]` and move the storage that an interior pointer points into. A writable view needs its own no-growth rule, and that is not in this design |
-| **S5** | A slice does not escape. It cannot be returned, stored in a field or a container, captured, or given with `nom`. A borrowed return is a separate design (#1229): it adds `peek T` on a return type |
+| **S5** | A slice does not escape. It cannot be returned, stored in a field or a container, captured, or given with `nom`. One exception: a function or a method with a borrowed return (`peek T`, #1229) returns a slice of a SOURCE of it (`return xs[a..b]`), and the caller's answer is a let-borrow of the owners of the source arguments (`borrow-model.md` §10h) |
 | **S6** | A string view is not in this design |
 | **S7** | The `dont_panic` marker removes the bounds check of an element access `[]` (D2 of [dont_panic](dont-panic.md)), and NOT the range check of a slice. A bad slice is a descriptor with a wrong length that leaves the marked body, and every callee checks against that length, so the undefined behaviour would reach code that is not marked (against D6). The check runs once, when the slice is made, not in the inner loop |
 | **S8** | A slice of a temporary lives for one statement. `send(make()[0..4])` is legal: the temporary lives until the end of the statement. `let u8[] h = make()[0..4]` is an error, because the array is freed at the end of the statement. A slice never copies, in any position. An index of a temporary is different: `let string s = make()[1]` takes the one element, and that stays |
@@ -60,7 +60,8 @@ an interpolation hole, and the array of another index or slice (`data[1..4][0]`,
 | Fault | Code |
 |---|---|
 | A write through a slice: an element write, a method that changes the array (`push`, `sort`), a `poke` argument, a `poke` item of a `foreach`, a rebind of a `let` of a slice | CE2426 |
-| A `nom` argument, a `return`, a constructor field, a container insert, a capture | CE2411 |
+| A `nom` argument, a `return` from an owned return, a constructor field, a container insert, a capture | CE2411 |
+| A `return` of a slice of a local, of a temporary or of a parameter that is not a source, from a `peek` return | CE2443 |
 | A change of the array while a `let` of a slice of it lives | CE2412 |
 | A `poke` of the array and a slice of it in one call | CE2407 |
 | A bulk copy into the array from a slice of the same array (`data.extend(data[0..2])`) | CE2430 |
@@ -122,5 +123,5 @@ inclusive end at the length), the `dont_panic` body, and each refusal of section
 
 ## 6. Not in this design
 
-A `List@(T)` slice, a string view, a writable slice, and a slice that a function returns
-(#1229).
+A `List@(T)` slice, a string view, and a writable slice. A function returns a slice
+through a borrowed return (`peek T`, `borrow-model.md` §10h, #1229).

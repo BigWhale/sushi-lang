@@ -41,7 +41,7 @@ class ParamMode(Enum):
 
 
 class ReturnMode(Enum):
-    """How a callable gives its answer (#1229, docs/design/borrow-model.md S11)."""
+    """How a callable gives its answer (#1229, docs/design/borrow-model.md S10h)."""
 
     OWNED = "owned"   # unmarked -- the caller owns the answer
     PEEK = "peek"     # `peek T` -- the answer borrows the sources of the callable

@@ -2454,7 +2454,7 @@ A `peek` / `poke` enum payload has no tracking of any kind, so the enum may outl
 
 **Message:** `a function cannot return a reference type ('{ty}')`
 
-Returning a `peek` / `poke` would let a function hand out a borrow of its own local, and the caller would read it after the frame is gone -- a dangling read. A borrow ends when the function returns. Return an owned value, or `.clone()` what you borrowed.
+Returning a `poke` would let a function hand out a borrow of its own local, and the caller would read it after the frame is gone -- a dangling read. A borrow ends when the function returns. Return an owned value, or `.clone()` what you borrowed. A `peek T` return on a named function or method is the borrowed return, which views a source of the function (see [the borrow model](design/borrow-model.md), S10h, and [CE2438](#ce2438)).
 
 ### CE2418 {#ce2418}
 
@@ -2658,7 +2658,7 @@ A slice `data[a..b]` is a borrowed view of a part of an array, and it never copi
 
 **Help:** `` take the value that the answer views as a borrowed parameter, or drop `peek` and return an owned value ``
 
-A `peek T` return gives the caller a view of storage that a SOURCE keeps (see [the borrow model](design/borrow-model.md), S11). The source set is `self` when the receiver is a borrow (`self`, `peek self`, `poke self`), and each parameter that is not `nom` and whose type owns a resource (`T[]`, `List@(T)`, `string`, a struct that owns, a `Drop` type). A plain parameter keeps no storage that a view could read, and a `nom` parameter is freed when the function returns. With no source, every answer would view the frame of the function, so the declaration is refused at its return type. A generic template is judged where it is written: a bare type parameter counts as a type that owns, so `fn first@(T)(T[] xs) peek T` has the source `xs` at every type argument.
+A `peek T` return gives the caller a view of storage that a SOURCE keeps (see [the borrow model](design/borrow-model.md), S10h). The source set is `self` when the receiver is a borrow (`self`, `peek self`, `poke self`), and each parameter that is not `nom` and whose type owns a resource (`T[]`, `List@(T)`, `string`, a struct that owns, a `Drop` type). A plain parameter keeps no storage that a view could read, and a `nom` parameter is freed when the function returns. With no source, every answer would view the frame of the function, so the declaration is refused at its return type. A generic template is judged where it is written: a bare type parameter counts as a type that owns, so `fn first@(T)(T[] xs) peek T` has the source `xs` at every type argument.
 
 ### CE2439 {#ce2439}
 
@@ -2668,7 +2668,7 @@ A `peek T` return gives the caller a view of storage that a SOURCE keeps (see [t
 
 **Help:** `return an owned value, or use a named function`
 
-A `peek T` return is legal only on a named function or method with a body: a free function, an extension method and a static (see [the borrow model](design/borrow-model.md), S11). A lambda is a value, and its type `fn(A) -> B` cannot say what the answer borrows. A perk contract states one signature for every implementer, so it cannot state a source, and an implementation method cannot answer a borrow that its contract does not state.
+A `peek T` return is legal only on a named function or method with a body: a free function, an extension method and a static (see [the borrow model](design/borrow-model.md), S10h). A lambda is a value, and its type `fn(A) -> B` cannot say what the answer borrows. A perk contract states one signature for every implementer, so it cannot state a source, and an implementation method cannot answer a borrow that its contract does not state.
 
 ### CE2440 {#ce2440}
 
@@ -2678,7 +2678,7 @@ A `peek T` return is legal only on a named function or method with a body: a fre
 
 **Help:** `` borrow the receiver (`self`, `peek self`) to return a view of it, or return an owned value ``
 
-A `nom self` method takes its receiver, and the receiver is freed when the method returns, so a view of it would outlive the storage it reads (see [the borrow model](design/borrow-model.md), S11). Borrow the receiver to return a view of it, or keep `nom self` and return an owned value.
+A `nom self` method takes its receiver, and the receiver is freed when the method returns, so a view of it would outlive the storage it reads (see [the borrow model](design/borrow-model.md), S10h). Borrow the receiver to return a view of it, or keep `nom self` and return an owned value.
 
 ### CE2441 {#ce2441}
 
@@ -2688,7 +2688,7 @@ A `nom self` method takes its receiver, and the receiver is freed when the metho
 
 **Help:** `call 'head' directly, or wrap the call in a lambda that returns an owned value`
 
-A function value has the type `fn(A) -> B`, and that type has no place to say what the answer borrows (see [the borrow model](design/borrow-model.md), S11). A call through the value could not freeze the owners of the source arguments, so a function with a `peek T` return is refused where it is named as a value, bare or behind an alias.
+A function value has the type `fn(A) -> B`, and that type has no place to say what the answer borrows (see [the borrow model](design/borrow-model.md), S10h). A call through the value could not freeze the owners of the source arguments, so a function with a `peek T` return is refused where it is named as a value, bare or behind an alias.
 
 ### CE2442 {#ce2442}
 
@@ -2698,7 +2698,7 @@ A function value has the type `fn(A) -> B`, and that type has no place to say wh
 
 **Help:** `give the error a plain payload, such as a code or an offset`
 
-In `peek T | E` the mode applies to the `Ok` payload, and the whole `Result` is a borrow: its holder frees nothing in it (see [the borrow model](design/borrow-model.md), S11). An error that owns a resource would never be freed. Give the error a plain payload. A type parameter as `E` counts as a type that owns.
+In `peek T | E` the mode applies to the `Ok` payload, and the whole `Result` is a borrow: its holder frees nothing in it (see [the borrow model](design/borrow-model.md), S10h). An error that owns a resource would never be freed. Give the error a plain payload. A type parameter as `E` counts as a type that owns.
 
 ### CE2443 {#ce2443}
 
@@ -2708,7 +2708,7 @@ In `peek T | E` the mode applies to the `Ok` payload, and the whole `Result` is 
 
 **Help:** `` return a view of 'xs', or drop `peek` and return an owned value ``
 
-Each value that a `peek T` function returns must be a borrow whose owner is a source of the function (see [the borrow model](design/borrow-model.md), S11). `xs[a..b]`, `self.data`, `xs[0]`, a `let` of such a view, an iterator over a source and the answer of another borrowed return over the sources are legal. A borrow of a local, a borrow of a parameter that is not a source, a borrow of a temporary and an owned value are refused. In `peek T | E` the rule holds for the payload of `Result.Ok(...)`.
+Each value that a `peek T` function returns must be a borrow whose owner is a source of the function (see [the borrow model](design/borrow-model.md), S10h). `xs[a..b]`, `self.data`, `xs[0]`, a `let` of such a view, an iterator over a source and the answer of another borrowed return over the sources are legal. A borrow of a local, a borrow of a parameter that is not a source, a borrow of a temporary and an owned value are refused. In `peek T | E` the rule holds for the payload of `Result.Ok(...)`.
 
 ### CE2444 {#ce2444}
 
@@ -2718,7 +2718,7 @@ Each value that a `peek T` function returns must be a borrow whose owner is a so
 
 **Help:** `` bind the argument first and give the binding, or copy the answer with `.clone()` ``
 
-The answer of a borrowed return views the arguments in its source set (see [the borrow model](design/borrow-model.md), S11). A temporary argument lives until the end of the statement, so the answer is legal inside that statement: an argument, the iterable of a `foreach`. A `let` keeps the answer after the statement, and it would view freed storage. This is rule S8 of the slice ([CE2437](#ce2437)) at a call.
+The answer of a borrowed return views the arguments in its source set (see [the borrow model](design/borrow-model.md), S10h). A temporary argument lives until the end of the statement, so the answer is legal inside that statement: an argument, the iterable of a `foreach`. A `let` keeps the answer after the statement, and it would view freed storage. This is rule S8 of the slice ([CE2437](#ce2437)) at a call.
 
 ## CE25xx: Result, Maybe and conversion errors {#ce25xx}
 

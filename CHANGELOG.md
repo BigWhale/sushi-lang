@@ -176,6 +176,19 @@ All notable changes to Sushi Lang will be documented in this file.
   A string has no slice, and neither has a reversed range (CE2122). `send_all` and the
   zlib decoder now give a slice where they copied a part of an array
   (`docs/design/slices.md`).
+- **A borrowed return: `peek T`.** A named function or method returns a view of one of
+  its arguments, with no copy: `fn head(i32[] xs, i32 n) peek i32[]: return xs[0..n]`, and
+  `peek T | E` with a channel. The answer may borrow `self` (when the receiver borrows) and
+  each borrowed parameter whose type owns a resource; in a generic template a type
+  parameter counts as owning. The caller's answer borrows the owners of every source
+  argument: each one is frozen while it lives (CE2412), and the answer cannot be stored,
+  returned or given with `nom` (CE2411). New errors: no source (CE2438), a lambda or a perk
+  method (CE2439), a `nom self` method (CE2440), a function value of such a function
+  (CE2441), an `E` that owns (CE2442), a body that returns no borrow of a source (CE2443),
+  and a `let` of an answer over a temporary argument (CE2444). `peek Iterator@(T)` returns
+  a borrowed iterator; its state moves to the heap at the return. A binary library records
+  the mode (templates schema 11), and `--lib-info` prints it. `<encoding/msgpack>` reads a
+  string payload with no copy (`docs/design/borrow-model.md`, section 10h).
 
 ### Changed
 
