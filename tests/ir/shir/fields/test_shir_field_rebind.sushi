@@ -1,0 +1,32 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "15\n40\n60\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_field_rebind.shir
+#
+# the SHIR dump of a rebind of a field: the target of the `Assign` is a `Field`, also when
+# the base is a `Field`, a tuple element or `self`. Whether the place may be written is an
+# answer of the borrow pass.
+
+struct Vec:
+    i32 x
+    i32 y
+
+struct Line:
+    Vec start
+    Vec stop
+
+extend Vec shift(poke self, i32 d) ~:
+    self.x := self.x + d
+
+fn main() i32:
+    let Vec v = Vec(1, 2)
+    v.x := 10
+    v.shift(5)
+    let Line l = Line(Vec(1, 2), Vec(3, 4))
+    l.stop.y := 40
+    let (i32, i32) t = (5, 6)
+    t.1 := 60
+    println(v.x)
+    println(l.stop.y)
+    println(t.1)
+    println("Mostly Harmless")
+    return 0

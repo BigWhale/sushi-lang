@@ -1,0 +1,28 @@
+unit test_shir_ctor_struct
+
+ShirBody calls (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))
+
+ShirBody count
+  params : [(_0 "v": i32, Guaranteed)]
+  locals : []
+  block  :
+    Assign(StorageRef(@calls), Binary(+, StorageRef(@calls), Lit(1) = 1), is_init: false)
+    Return(LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : [_0 "a": Vec, _1 "b": Vec]
+  block  :
+    Assign(LocalRef(_0), StructInit(@Vec, [Lit(3), Lit(4)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_1), StructInit(@Vec, [Call(Named(GlobalRef(@count)), [Lit(7)]), Call(Named(GlobalRef(@count)), [Lit(9)])], written_order: [1, 0]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_0), "x")]))
+    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_0), "y")]))
+    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_1), "x")]))
+    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_1), "y")]))
+    ExprStmt(Call(BuiltinFn("println"), [StorageRef(@calls)]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

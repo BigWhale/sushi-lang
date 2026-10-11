@@ -1,0 +1,24 @@
+unit test_shir_field_rebind
+
+ShirBody main
+  params : []
+  locals : [_0 "v": Vec, _1 "l": Line, _2 "t": (i32, i32)]
+  block  :
+    Assign(LocalRef(_0), StructInit(@Vec, [Lit(1), Lit(2)], written_order: [0, 1]), is_init: true)
+    Assign(Field(LocalRef(_0), "x"), Lit(10), is_init: false)
+    ExprStmt(Call(Dotted(LocalRef(_0), "shift"), [Lit(5)]))
+    Assign(LocalRef(_1), StructInit(@Line, [StructInit(@Vec, [Lit(1), Lit(2)], written_order: [0, 1]), StructInit(@Vec, [Lit(3), Lit(4)], written_order: [0, 1])], written_order: [0, 1]), is_init: true)
+    Assign(Field(Field(LocalRef(_1), "stop"), "y"), Lit(40), is_init: false)
+    Assign(LocalRef(_2), TupleInit([Lit(5), Lit(6)]), is_init: true)
+    Assign(Field(LocalRef(_2), "1"), Lit(60), is_init: false)
+    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_0), "x")]))
+    ExprStmt(Call(BuiltinFn("println"), [Field(Field(LocalRef(_1), "stop"), "y")]))
+    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_2), "1")]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))
+
+ShirBody Vec.shift
+  params : [(_0 "self": Vec, Inout), (_1 "d": i32, Guaranteed)]
+  locals : []
+  block  :
+    Assign(Field(LocalRef(_0), "x"), Binary(+, Field(LocalRef(_0), "x"), LocalRef(_1)), is_init: false)

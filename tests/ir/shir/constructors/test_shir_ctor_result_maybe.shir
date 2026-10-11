@@ -1,0 +1,33 @@
+unit test_shir_ctor_result_maybe
+
+ShirBody half
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, Binary(%, LocalRef(_0), Lit(2) = 2), Lit(1)), then: [Return(EnumInit(@Result, "Err", [EnumInit(@Odd, "Found", [])]))])
+    Return(EnumInit(@Result, "Ok", [Binary(/, LocalRef(_0), Lit(2) = 2)]))
+
+ShirBody maybe
+  params : [(_0 "has": bool, Guaranteed)]
+  locals : []
+  block  :
+    If(LocalRef(_0), then: [Return(EnumInit(@Maybe, "Some", [Lit(7)]))])
+    Return(EnumInit(@Maybe, "None", []))
+
+ShirBody keep
+  params : [(_0 "s": string, Owned)]
+  locals : []
+  block  :
+    Return(EnumInit(@Result, "Ok", [(LocalRef(_0), Owned)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "s": string]
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@half)), [Lit(8)]), "realise"), [Lit(0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@half)), [Lit(3)]), "realise"), [Lit(0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@maybe)), [Lit(true)]), "realise"), [Lit(0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@maybe)), [Lit(false)]), "realise"), [Lit(0)])]))
+    Assign(LocalRef(_0), Lit("Mostly Harmless"), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@keep)), [(LocalRef(_0), Owned)]), "realise"), [Lit("none")])]))
+    Return(Lit(0))

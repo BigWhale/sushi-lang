@@ -1,0 +1,33 @@
+unit test_shir_ctor_array_dynamic
+
+ShirBody calls (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))
+
+ShirBody mark
+  params : [(_0 "v": i32, Guaranteed)]
+  locals : []
+  block  :
+    Assign(StorageRef(@calls), Binary(+, StorageRef(@calls), Lit(1) = 1), is_init: false)
+    Return(LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i32, _1 "listed": i32[], _2 "empty": i32[], _3 "filled": i32[], _4 "ranged": i32[], _5 "marked": i32[]]
+  block  :
+    Assign(LocalRef(_0), Lit(3), is_init: true)
+    Assign(LocalRef(_1), ArrayInit(Dynamic, [Single(Lit(1)), Single(Lit(2)), Single(Lit(3))]), is_init: true)
+    Assign(LocalRef(_2), ArrayInit(Dynamic, []), is_init: true)
+    Assign(LocalRef(_3), ArrayInit(Dynamic, [Repeat(Lit(0), LocalRef(_0))]), is_init: true)
+    Assign(LocalRef(_4), ArrayInit(Dynamic, [RangeRun(Range(Lit(0) = 0, LocalRef(_0), inclusive: false, reverse: false))]), is_init: true)
+    Assign(LocalRef(_5), ArrayInit(Dynamic, [Repeat(Call(Named(GlobalRef(@mark)), [Lit(7)]), Call(Named(GlobalRef(@mark)), [Lit(2)]))]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_1), "len"), [])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_2), "len"), [])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_3), "len"), [])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_4), "len"), [])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_5), "len"), [])]))
+    ExprStmt(Call(BuiltinFn("println"), [StorageRef(@calls)]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))
