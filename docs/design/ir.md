@@ -471,7 +471,9 @@ for a `var` it decides the element type of an empty container (`List.new()`, `fr
 After the move those helpers read SHIR. The other two choices put the same rule in two
 places: type checks of its own in the constant evaluator, or AST copies of the helpers. The
 VALUE of a constant stays the evaluator's (Q5). The body only gives `typecheck` a SHIR node
-to check. Ruled 2026-10-11.
+to check. Ruled 2026-10-11. The block of the body holds one statement: a `Return` of the
+initializer, because the initializer gives the value of the body as a `return` gives the
+value of a function.
 
 ### 6.4 Enforcement, not convention
 
@@ -925,6 +927,8 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 | `Call`, `MethodCall`, `DotCall` | `Call` with a `CallTarget`; a struct name gives `StructInit` |
 | `Print`, `PrintLn` | `ExprStmt` of a `Call` with a `BuiltinFn` target |
 | `Let`, `Rebind` | `Assign` with `is_init`; a `Let` with targets gives `Destructure` |
+| `If` | `If`; each `elif` is an `If`, the one statement of the `otherwise` block of the arm before it |
+| `Return`, `ExprStmt`, `Break`, `Continue` | the node of the same name |
 | `Assert` | `Assert` |
 | `While` | `Loop` with a `Cond` source |
 | `Foreach` | `Loop` with an `Items` source; the walk kind is one of five `typecheck` answers |
