@@ -1,0 +1,15 @@
+unit test_shir_destructure_call
+
+ShirBody split
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(TupleInit([Binary(/, LocalRef(_0), Lit(10) = 10), Binary(%, LocalRef(_0), Lit(10) = 10)]))
+
+ShirBody main
+  params : []
+  locals : [_1 "tens": i32, _2 "ones": i32]
+  block  :
+    Destructure([_1, _2], Call(Named(GlobalRef(@split)), [Lit(42)]))
+    ExprStmt(Call(BuiltinFn("println"), [Binary(+, Binary(*, LocalRef(_1), Lit(10) = 10), LocalRef(_2))]))
+    Return(Lit(0))

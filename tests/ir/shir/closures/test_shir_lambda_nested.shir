@@ -1,0 +1,9 @@
+unit test_shir_lambda_nested
+
+ShirBody main
+  params : []
+  locals : [_0 "outer": fn(i32) -> i32, _1 "n": i32, _2 "inner": fn(i32) -> i32, _3 "x": i32]
+  block  :
+    Assign(LocalRef(_0), Lambda([(_1, Guaranteed)], [Assign(LocalRef(_2), Lambda([(_3, Guaranteed)], [Return(Binary(*, LocalRef(_3), LocalRef(_1)))], expr_body: true), is_init: true), Return(Call(Named(LocalRef(_2)), [Lit(2)]))], expr_body: false), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(LocalRef(_0)), [Lit(21)])]))
+    Return(Lit(0))

@@ -1,0 +1,23 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n0\n3\n"
+# EXPECT_DUMP_SHIR: test_shir_lambda_channel.shir
+#
+# the SHIR dump of a lambda with an error channel. `-> i32 | OddError` after the closing
+# pipe is the written return type `ret` and the written error type `err`. A lambda with no
+# annotation takes its channel from the type of its position (`third`), and that is an
+# answer of the typecheck pass: its `Lambda` has no `ret` and no `err`, and its
+# expression body is a block of one `Return` with `expr_body: true`.
+
+error OddError:
+    TooOdd
+
+fn main() i32:
+    let fn(i32) -> i32 | OddError half = |i32 x| -> i32 | OddError:
+        if (x % 2 == 1):
+            return Result.Err(OddError.TooOdd)
+        return Result.Ok(x / 2)
+    let fn(i32) -> i32 | OddError third = |i32 x| x / 3
+    println(half(84).realise(0))
+    println(half(7).realise(0))
+    println(third(9).realise(0))
+    return 0

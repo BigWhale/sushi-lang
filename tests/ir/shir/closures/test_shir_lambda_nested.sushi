@@ -1,0 +1,15 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_DUMP_SHIR: test_shir_lambda_nested.shir
+#
+# the SHIR dump of a nested lambda. The inner lambda is a statement of the block of the
+# outer one, and it captures `n`, a parameter of the outer lambda: its body reads `n` as
+# `LocalRef(_1)`. Every local of the two lambdas comes from the counter of `main`, so the
+# `locals` line of `main` lists them all, in id order.
+
+fn main() i32:
+    let fn(i32) -> i32 outer = |i32 n|:
+        let fn(i32) -> i32 inner = |i32 x| x * n
+        return inner(2)
+    println(outer(21))
+    return 0

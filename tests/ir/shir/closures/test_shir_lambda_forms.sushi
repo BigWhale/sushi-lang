@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "9\n"
+# EXPECT_DUMP_SHIR: test_shir_lambda_forms.shir
+#
+# the SHIR dump of the forms of a lambda: `|~|` with no parameter, typed parameters, an
+# expression body and a block body. A parameter is a `LambdaParam`: its local and its
+# convention. The name, the written type and the span are on the local, which the
+# `locals` line of the enclosing body lists, because a lambda takes its locals from the
+# counter of that body. The body is a block. An expression body is a block of one
+# `Return`, and `expr_body: true` keeps the written shape: the typecheck pass infers the
+# return type from an expression body, and a lambda with a channel wraps it in
+# `Result.Ok`.
+
+fn main() i32:
+    let fn() -> i32 zero = |~| 0
+    let fn(i32, i32) -> i32 add = |i32 a, i32 b| a + b
+    let fn(i32) -> i32 twice = |i32 x|:
+        let i32 y = x * 2
+        return y
+    println(zero() + add(1, 2) + twice(3))
+    return 0
