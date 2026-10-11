@@ -228,6 +228,24 @@ receiver (`a.fill(a[0])`) is destroyed by the first store, and every later slot 
 freed storage. It is refused when the element type owns a resource; a plain element is a
 copy and has no alias.
 
+## A slice
+
+A slice `data[a..b]` is a `T[]` and needs no new representation: its descriptor is
+`{b - a, b - a, data + a}`, a length, a capacity equal to the length, and a pointer into the
+storage of the array ([Slices](slices.md)). The capacity is the length, so nothing can read
+it as room to grow; the borrow pass refuses every growth through a slice anyway.
+
+`emit_slice_address` (`backend/types/arrays/indexing.py`) is the one emitter. It finds the
+base array as an element access does, checks `0 <= a <= b <= len()` (RE2028), and writes the
+descriptor into an `entry_alloca` slot through the `gep_utils` trio. A read loads the slot,
+and `emit_element_pointer` answers the slot for a slice, so a method receiver
+(`data[1..3].len()`), a chained index (`data[1..3][0]`) and a `peek` argument use the one
+address path that every element uses. The slice is BORROWED: no scope frees the slot or the
+storage it points into.
+
+The bulk copy reads a slice like any other source. A slice of the destination itself is
+CE2430, as `a.extend(a)` is: the alias check sees through a slice to the array it views.
+
 ## The type-argument reader
 
 A container reads its element types from the `generic_args` of its instance, and never

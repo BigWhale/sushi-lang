@@ -166,6 +166,16 @@ All notable changes to Sushi Lang will be documented in this file.
   `zip` of two borrowed iterators borrows both. `collect` and `partition` over a `peek` item
   of an owning type are the new CE2129, with the help `.clone_each().collect()`
   (`docs/design/iteration.md`, ruling 11).
+- **A slice: `data[a..b]` and `data[a..=b]`.** A range in an index position is a borrowed
+  `T[]` view of a part of a `T[]` or a `T[N]`, and nothing is copied. The range must hold
+  `0 <= a <= b <= len()`, else the program stops with the new RE2028; readable bounds that
+  go down are CE2125. The `dont_panic` marker keeps this check. A `let` of a slice borrows
+  the array, which is frozen while the slice lives (CE2412). A write through a slice is
+  CE2426, and a slice cannot be returned, stored, captured or given with `nom` (CE2411).
+  A slice of a temporary is legal in one statement, and a `let` of one is the new CE2437.
+  A string has no slice, and neither has a reversed range (CE2122). `send_all` and the
+  zlib decoder now give a slice where they copied a part of an array
+  (`docs/design/slices.md`).
 
 ### Changed
 

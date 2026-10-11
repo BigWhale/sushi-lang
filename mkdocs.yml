@@ -169,6 +169,7 @@ nav:
       - "Derived Contracts (design)": design/derived-contracts.md
       - "Checked Generics (design)": design/checked-generics.md
       - "Array Representation (design)": design/array-representation.md
+      - "Slices (design)": design/slices.md
       - "Compile-Time Evaluation (design)": design/compile-time-evaluation.md
       - "Documentation Blocks (design)": design/documentation.md
       - "Intermediate Representation (design)": design/ir.md

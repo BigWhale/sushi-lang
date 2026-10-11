@@ -1575,13 +1575,59 @@ The write must be able to reach the owner. It is rejected through a `peek` param
 from an owner (**[CE2426](error-catalog.md#ce2426)**), an unbound chained receiver such as `o.get().items`
 (**[CE2429](error-catalog.md#ce2429)**), and a constant (**[CE2096](error-catalog.md#ce2096)**).
 
+### Slices
+
+A range in an index position is a SLICE: `data[a..b]` is a view of the elements a to b-1,
+and `data[a..=b]` a view of the elements a to b. A slice does not copy. It is a borrowed
+`T[]` that points into the storage of the array, on a `T[]` and on a `T[N]` alike.
+
+```sushi
+fn total(i32[] xs) i32:
+    let i32 sum = 0
+    foreach(x in xs.iter()):
+        sum := sum + x
+    return sum
+
+fn main() i32:
+    let i32[] data = from([10, 20, 30, 40])
+    println(total(data[1..3]))     # 50: the call reads data[1] and data[2]
+    let i32[] head = data[0..=1]   # a view of 10 and 20
+    println(head.len())            # 2
+    return 0
+```
+
+- **Bounds.** The range must hold `0 <= a <= b <= len()`. A range outside that stops the
+  program with [RE2028](error-catalog.md#re2028), as an index out of range does. `a == b` is
+  an empty view. Readable bounds that go down are [CE2125](error-catalog.md#ce2125). This is
+  not the clamp rule of `.s()` and `.ss()`: those two are the copies, and they stay.
+- **A borrow.** A `let` of a slice borrows the array, as `let i32[] v = holder.items` does.
+  The array is frozen while the slice lives ([CE2412](error-catalog.md#ce2412)), and a slice
+  of a slice freezes the first array too.
+- **Read-only.** A write through a slice is [CE2426](error-catalog.md#ce2426): an element
+  write, a method that changes the array (`push`, `sort`), a `poke` argument and a `poke`
+  item of a `foreach`. A growth through a view would move storage that the array keeps.
+  Write to the array directly, or copy the part with `.ss(start, count)`.
+- **No escape.** A slice cannot be returned, stored in a field or a container, captured by
+  a lambda, or given with `nom` ([CE2411](error-catalog.md#ce2411)). A plain argument and a
+  `peek` argument are legal.
+- **A temporary array.** A slice of a temporary is legal inside one statement:
+  `total(make()[0..2])`. A `let` of one is [CE2437](error-catalog.md#ce2437), because the
+  array is freed at the end of the statement. An index of a temporary (`make()[1]`) reads
+  one element out, and that stays legal.
+- **Not a slice.** A string has no slice (`s[0..3]` is [CE2122](error-catalog.md#ce2122);
+  copy the part with `s.s(a, b)`), a `List@(T)` has no slice, and a reversed range
+  (`data[(0..3).rev()]`) is [CE2122](error-catalog.md#ce2122).
+
+The design record is [Slices](design/slices.md).
+
 ### Unchecked Indexes: `dont_panic`
 
 A function header may carry the marker `dont_panic because "<reason>"`. It follows the
 return type and the error channel, and it comes before the colon. In the body, `a[i]` on an
 array and `s[i]` on a string emit no bounds check, for a read and for a write. Nothing
 else changes: `get(i)` still answers a `Maybe`, `insert(i, v)` still checks its position,
-`assert` still traps, and every diagnostic stays.
+the range of a slice `a[i..j]` is still checked, `assert` still traps, and every diagnostic
+stays.
 
 <!-- docs-sweep: error CE0152 -->
 ```sushi
@@ -1619,7 +1665,8 @@ it states the guards that hold every index in range.
   inside a marked body is checked, because it can run after the marked function returned.
   An instance of a marked generic function is marked, because it is the same body.
 - **An inert marker.** A marked body with no `[]` to uncheck gets
-  [CW0004](error-catalog.md#cw0004). The indexes in a lambda do not count.
+  [CW0004](error-catalog.md#cw0004). The indexes in a lambda do not count, and a slice
+  does not count, because it keeps its check.
 
 Guideline: mark only a hot loop that you measured. Measure the loop before the change
 and after the change. Put the numbers in the pull request. Write the guards that keep each
