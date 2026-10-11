@@ -25,8 +25,8 @@ Two things are walkable, and they are walked by different machinery.
 An **iterator** is `{i32 index, i32 length, T* data}` — a cursor over contiguous storage.
 `.iter()` answers one on an array or a `List@(T)`, `.keys()` / `.values()` / `.entries()`
 answer one on a `HashMap`, and a range is one. It has no `next` to call: the loop reads the
-length and indexes. `Iterator@(T)` is deliberately not a nameable type (**[CE2001](../error-catalog.md#ce2001)**), so an
-iterator only ever appears as the iterable of the loop that consumes it. It has no method
+length and indexes. Its type is `Iterator@(T)`, and a program can write that name after
+`use <collections/iter>` (ruling 9). It has no method
 either: `a.iter().len()` and `a.iter().next()` are each **[CE2008](../error-catalog.md#ce2008)** at the call. A range is
 not a value, so `(0..3).len()` is **[CE2122](../error-catalog.md#ce2122)**. `.rev()` is the one method a range takes:
 the AST builder folds it into the range, which then yields the same values, last first.
@@ -262,6 +262,58 @@ foreach(_?? in it):           →     foreach(#fe_itemN in it):
                                           BODY
 ```
 
+### 9. `Iterator@(T)` is a type a program can write, and its item has a mode
+
+`Iterator@(T)` is the compiler's own type, as `HashMap@(K, V)` is: one `IteratorType`
+answers the written name, `xs.iter()` and a range (epic #1230, #1227).
+
+**The import gates the name only.** Writing `Iterator@(...)` needs
+`use <collections/iter>`. With no import, the name is
+**[CE2001](../error-catalog.md#ce2001)**, and the help names the import. Behind
+`use <collections/iter> as it`, the name is `it.Iterator`. A value, a `foreach`, `.iter()`
+and a range need no import. `<collections/iter>` is also a Sushi-source module, and it
+brings the name as a re-export of its unit: one provider holds both roles
+(`passes/namespaces.py:_stdlib_provider`).
+
+**The item has a mode.** `Iterator@(T)` gives OWNED items. `Iterator@(peek T)` gives
+BORROWED items. A tuple item takes the mode on each element:
+`Iterator@((i32, peek string))`. `poke` is not an item mode.
+
+```sushi
+use <collections/iter>
+
+fn total(poke Iterator@(peek i32) numbers) i32:
+    let i32 sum = 0
+    foreach(n in numbers):
+        sum := sum + n
+    return sum
+
+fn main() i32:
+    return 0
+```
+
+**`peek` is a type argument only here.** It stands at the top of the item, or at the top
+of one element of a tuple item, and nowhere deeper. Every other position keeps its error:
+`List@(peek T)`, `Maybe@(peek T)`, `Result@(peek T, E)`, `Iterator@(poke T)`,
+`Iterator@(peek (i32, string))` and `Iterator@(List@(peek T))` are
+**[CE2419](../error-catalog.md#ce2419)**, a `peek` field is
+**[CE2415](../error-catalog.md#ce2415)**, and a `peek` in a tuple deeper in the item is
+**[CE6107](../error-catalog.md#ce6107)**.
+
+**A plain item makes one type.** For an item that holds no resource,
+`Iterator@(peek T)` and `Iterator@(T)` are one type: equal, one hash and one interned
+name. The rule reads `owns_resource` with the program's `Drop` set, so a type that
+implements `Drop` owns, also when no field owns heap. Each element of a tuple item is
+decided alone. The rule is decided at each INSTANCE and never in a template, because a
+template does not know whether its `T` holds a resource: in a template,
+`Iterator@(peek T)` and `Iterator@(T)` stay two types.
+
+**How it is stored.** `IteratorType.element_type` is the value type, with no `peek` in it.
+`IteratorType.peeks` is the mode: empty when every item is owned, one flag for the whole
+item, one flag per element for a tuple item. A diagnostic and an interned name show the
+item as written (`Iterator@(peek string)`, `Iterator<$Tuple<i32, peek string>>`), so a
+binary library's manifest carries the mode and `--lib-info` prints it.
+
 ## A `File` has no line loop
 
 **A `File` has no line loop**, and that is a decision rather than an omission: an
@@ -277,6 +329,9 @@ exists to remove. `File.readln()` stays as the one-line unbuffered read.
 | the method ladder it resolves through | `resolve_method`, `semantics/passes/types/calls/methods.py` |
 | the loop arm | `_emit_protocol_foreach`, `backend/statements/loops.py` |
 | `Lines@(R)` and `lines()` | `sushi_stdlib/src_sushi/io/buf.sushi` |
+| the written `Iterator@(...)` and its item mode | `semantics/ast_builder/types/iterators.py` |
+| the item mode: the written item, the manifest string, one type for a plain item | `semantics/generics/iterators.py` |
+| the plain-item rule in the typecheck pass | `settle_item_modes`, `semantics/passes/types/utils.py` |
 
 ## See also
 

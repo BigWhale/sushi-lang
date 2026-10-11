@@ -2472,6 +2472,8 @@ Both grammar rules for a borrow are recursive, so `peek peek i32` parses -- in a
 
 A container of borrows -- `List@(peek T)`, `HashMap@(peek K, V)`, `Maybe@(peek T)` -- has no defined semantics: nothing relates the stored borrows to the values they point at, and the backend cannot lay one out. Store owned values, or indices into a container that outlives the uses. There is NO `Maybe` / `Result` exemption: those two are how a returned borrow would escape ([CE2417](#ce2417)). Foreign `ptr` carries the same restriction, as [CE5012](#ce5012).
 
+The one exception is the item of an iterator: `Iterator@(peek T)` gives borrowed items, and `Iterator@((i32, peek string))` borrows one element of a tuple item. Only `peek`, and only at the top of the item or of one tuple element. `Iterator@(poke T)`, `Iterator@(peek (i32, string))` and `Iterator@(List@(peek T))` are this error ([Iteration](design/iteration.md), ruling 9).
+
 ### CE2420 {#ce2420}
 
 **Error** · borrow
@@ -3658,7 +3660,7 @@ A tuple element is read with `.N`, where N is a plain decimal number that starts
 - `a tuple holds values; write the element type alone`
 - `a binder owns its element from an owned value and borrows it from a borrow; remove the mode`
 
-A destructure element is a name, a typed name, a `_` or a nested destructure, and it carries no `peek`, `poke` or `nom`: a binder OWNS its element when the destructure takes an owned value (a temporary, or an owned local, which the destructure spends), and BORROWS it when the value is a borrow (a parameter, a field, a binding). So `let (peek i32 a, b) = t` is refused. A tuple TYPE takes no mode on an element either: a tuple holds values, and a reference is a parameter or a `let` mode. See [the tuple design](design/tuples.md).
+A destructure element is a name, a typed name, a `_` or a nested destructure, and it carries no `peek`, `poke` or `nom`: a binder OWNS its element when the destructure takes an owned value (a temporary, or an owned local, which the destructure spends), and BORROWS it when the value is a borrow (a parameter, a field, a binding). So `let (peek i32 a, b) = t` is refused. A tuple TYPE takes no mode on an element either: a tuple holds values, and a reference is a parameter or a `let` mode. The one exception is the tuple item of an iterator: `Iterator@((i32, peek string))` borrows that element, at the top of the item only, so a tuple deeper in the item takes no mode ([Iteration](design/iteration.md), ruling 9). See [the tuple design](design/tuples.md).
 
 ### CE6109 {#ce6109}
 

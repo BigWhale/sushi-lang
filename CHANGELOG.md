@@ -133,6 +133,14 @@ All notable changes to Sushi Lang will be documented in this file.
   at the top level, nested and as an alternative, on an integer scrutinee. A bound is an
   integer literal in any form. A bound outside the type is CE2073, a range whose bounds go
   down is CE2125, an empty range is CE2118, and two arms that share a value are CE2075.
+- **`Iterator@(T)` is a type a program can write.** After `use <collections/iter>`, a
+  signature names `Iterator@(T)` (owned items) or `Iterator@(peek T)` (borrowed items), and
+  a tuple item takes `peek` on an element: `Iterator@((i32, peek string))`. With no import
+  the name is CE2001, and behind `use <collections/iter> as it` it is `it.Iterator`. For an
+  item that holds no resource, `Iterator@(peek T)` and `Iterator@(T)` are one type. `poke`
+  is not an item mode, and `peek` in every other type position keeps its error (CE2419,
+  CE2415, CE6107). A binary library's manifest carries the mode, and `--lib-info` prints it
+  (`docs/design/iteration.md`, ruling 9).
 
 ### Changed
 

@@ -1173,6 +1173,51 @@ The argument behind all of this -- why the failure rides in the ITEM rather than
 loop head, why the protocol is not a perk, and why a line iterator's stop is sticky -- is
 [Iteration (design)](design/iteration.md).
 
+### The Iterator Type
+
+`Iterator@(T)` is the type of an iterator. It is the compiler's own type, as
+`HashMap@(K, V)` is. To write the name, import `<collections/iter>`. A value, a `foreach`,
+`.iter()` and a range need no import.
+
+```sushi
+use <collections/iter>
+
+fn total(poke Iterator@(i32) numbers) i32:
+    let i32 sum = 0
+    foreach(n in numbers):
+        sum := sum + n
+    return sum
+
+fn main() i32:
+    return 0
+```
+
+With no import, `Iterator` is **[CE2001](error-catalog.md#ce2001)**, and the help names
+the import. Behind `use <collections/iter> as it`, the name is `it.Iterator`.
+
+**The item has a mode.** `Iterator@(T)` gives OWNED items, and `Iterator@(peek T)` gives
+BORROWED items. A tuple item takes the mode on each element, as in
+`Iterator@((i32, peek string))`. `poke` is not an item mode.
+
+| Written | Item |
+|---|---|
+| `Iterator@(string)` | an owned `string` |
+| `Iterator@(peek string)` | a borrowed `string` |
+| `Iterator@((i32, peek string))` | an `i32`, and a borrowed `string` |
+
+`peek` is a type argument only of `Iterator@(...)`: at the top of the item, or at the top
+of one element of a tuple item. `List@(peek T)`, `Maybe@(peek T)`, `Result@(peek T, E)`,
+`Iterator@(poke T)`, `Iterator@(peek (i32, string))` and `Iterator@(List@(peek T))` are
+**[CE2419](error-catalog.md#ce2419)**. A `peek` field is
+**[CE2415](error-catalog.md#ce2415)**.
+
+**A plain item makes one type.** For an item that holds no resource,
+`Iterator@(peek T)` and `Iterator@(T)` are one type, so `Iterator@(peek i32)` goes where
+`Iterator@(i32)` is expected. For an item that owns (a `string`, a `T[]`, a type that
+implements `Drop`), they are two types, and a mix is
+**[CE2006](error-catalog.md#ce2006)**. A generic template keeps the mode of its `T`;
+each instance decides it.
+
 ### Assertions
 
 `assert(cond)` and `assert(cond, message)` state an invariant: a state that a correct
