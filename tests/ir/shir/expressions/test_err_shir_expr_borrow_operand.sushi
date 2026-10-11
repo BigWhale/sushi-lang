@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODE: CE2518
+# EXPECT_DUMP_SHIR: test_err_shir_expr_borrow_operand.shir
+#
+# the SHIR dump of a borrow outside a call argument. `peek K` in the position of an
+# operand is a `Borrow` of the place, with the mode `Peek`. A `Borrow` is opaque
+# (ruling E3): the right operand of `+` has no value after it, though the constant `K`
+# has one. The typecheck pass refuses the operand (CE2518) after the dump is written.
+
+const i32 K = 4
+
+fn main() i32:
+    return 1 + peek K

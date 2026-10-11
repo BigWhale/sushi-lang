@@ -1,0 +1,34 @@
+unit test_shir_expr_try
+
+ShirBody parse
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, LocalRef(_0), Lit("")), then: [Return(EnumInit(@Result, "Err", [EnumInit(@ParseError, "Empty", [])]))])
+    Return(EnumInit(@Result, "Ok", [Lit(42)]))
+
+ShirBody bump
+  params : [(_0 "s": string, Guaranteed)]
+  locals : [_1 "n": i32]
+  block  :
+    Assign(LocalRef(_1), Try(Call(Named(GlobalRef(@parse)), [LocalRef(_0)])), is_init: true)
+    Return(EnumInit(@Result, "Ok", [Binary(+, LocalRef(_1), Lit(1) = 1)]))
+
+ShirBody first
+  params : [(_0 "xs": i32[], Guaranteed)]
+  locals : []
+  block  :
+    Return(EnumInit(@Result, "Ok", [Try(Call(Dotted(Call(Dotted(LocalRef(_0), "get"), [Lit(0)]), "or_err"), [(EnumInit(@ParseError, "Empty", []), Owned)]))]))
+
+ShirBody main
+  params : []
+  locals : [_0 "full": i32[], _1 "none": i32[]]
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@bump)), [Lit("x")]), "realise"), [Lit(0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@bump)), [Lit("")]), "realise"), [Lit(0)])]))
+    Assign(LocalRef(_0), ArrayInit(Dynamic, [Single(Lit(7))]), is_init: true)
+    Assign(LocalRef(_1), ArrayInit(Dynamic, []), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@first)), [LocalRef(_0)]), "realise"), [Lit(0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@first)), [LocalRef(_1)]), "realise"), [Lit(0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

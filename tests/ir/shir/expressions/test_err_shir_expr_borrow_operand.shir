@@ -1,0 +1,13 @@
+unit test_err_shir_expr_borrow_operand
+
+ShirBody K (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit(4))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Binary(+, Lit(1) = 1, Borrow(ConstRef(@K), Peek)))

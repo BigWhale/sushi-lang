@@ -2659,6 +2659,15 @@ tests/ir/shir/constructors/test_shir_ctor_result_maybe.sushi
 tests/ir/shir/constructors/test_shir_ctor_struct.sushi
 tests/ir/shir/constructors/test_shir_ctor_tuple.sushi
 tests/ir/shir/empty_body/test_shir_empty_body.sushi
+tests/ir/shir/expressions/test_err_shir_expr_borrow_operand.sushi
+tests/ir/shir/expressions/test_err_shir_expr_slice_reversed.sushi
+tests/ir/shir/expressions/test_shir_expr_cast.sushi
+tests/ir/shir/expressions/test_shir_expr_dont_panic.sushi
+tests/ir/shir/expressions/test_shir_expr_index.sushi
+tests/ir/shir/expressions/test_shir_expr_interp.sushi
+tests/ir/shir/expressions/test_shir_expr_range.sushi
+tests/ir/shir/expressions/test_shir_expr_take.sushi
+tests/ir/shir/expressions/test_shir_expr_try.sushi
 tests/ir/shir/fields/test_shir_field_alias.sushi
 tests/ir/shir/fields/test_shir_field_read.sushi
 tests/ir/shir/fields/test_shir_field_rebind.sushi
