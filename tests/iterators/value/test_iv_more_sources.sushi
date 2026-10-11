@@ -1,0 +1,81 @@
+# More sources of a value: the clone of a lent temporary, a `peek` parameter, a `peek self`
+# field, an owned `T[N]`, `List` and HashMap temporary, `Iterator.new` over a perk
+# method, and an owned iterator given to a generic function by `nom`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n2\n3\n6\n3\np\nq\nl1\nl2\nv\n2\n1\n0\n3\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+use <collections/hashmap>
+
+struct Bag:
+    string[] items
+
+extend Bag first_two(peek self) i32:
+    let Iterator@(peek string) it = self.items.iter()
+    let i32 n = 0
+    foreach(s in it):
+        n := n + s.len()
+    return n
+
+struct Counter:
+    i32 n
+
+perk Stepper:
+    fn next(poke self) Maybe@(i32)
+
+extend Counter with Stepper:
+    fn next(poke self) Maybe@(i32):
+        if (self.n == 0):
+            return Maybe.None
+        self.n := self.n - 1
+        return Maybe.Some(self.n)
+
+fn fixed() string[2]:
+    return ["p", "q"]
+
+fn names() List@(string):
+    let List@(string) l = List.new()
+    l.push("l1".clone())
+    l.push("l2".clone())
+    return l
+
+fn mapped() HashMap@(string, string):
+    let HashMap@(string, string) m = HashMap.new()
+    m.insert("k".clone(), "v".clone())
+    return m
+
+fn total@(T)(nom Iterator@(T) it) i32:
+    let i32 n = 0
+    foreach(_ in it):
+        n := n + 1
+    return n
+
+fn sum(peek i32[] xs) i32:
+    let Iterator@(i32) it = xs.iter()
+    let i32 s = 0
+    foreach(x in it):
+        s := s + x
+    return s
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    foreach(x in xs.iter().clone()):
+        println(x)
+    println(sum(peek xs))
+    let Bag b = Bag(from(["ab", "c"]))
+    println(b.first_two())
+    let Iterator@(peek string) f = fixed().iter()
+    foreach(s in f):
+        println(s)
+    let Iterator@(peek string) l = names().iter()
+    foreach(s in l):
+        println(s)
+    let Iterator@(peek string) v = mapped().values()
+    foreach(s in v):
+        println(s)
+    let Iterator@(i32) c = Iterator.new(nom Counter(3))
+    let Iterator@(i32) c2 = c.clone()
+    foreach(x in c):
+        println(x)
+    println(total(nom c2))
+    return 0

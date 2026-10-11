@@ -2,7 +2,7 @@
 # `T[N]` and a `List@(T)`. A callee takes two items through `poke`, and the caller walks
 # the rest of the same iterator.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "3\n4\n5\n30\n40\n7\nb c\n"
+# EXPECT_STDOUT_EXACT: "3\n4\n5\n30\n40\n3\nb c\n"
 # EXPECT_NO_LEAKS
 use <collections/iter>
 

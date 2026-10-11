@@ -1,0 +1,10 @@
+# An item of `Iterator@(peek string)` is a borrow: the loop body cannot give it away.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+use <collections/iter>
+fn main() i32:
+    let string[] xs = from(["a"])
+    let List@(string) keep = List.new()
+    let Iterator@(peek string) it = xs.iter()
+    foreach(s in it):
+        keep.push(s)
+    return 0

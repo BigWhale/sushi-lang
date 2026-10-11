@@ -1,8 +1,7 @@
-# A range is a value only where `Iterator@(i32)` is expected. A `let` with no written
-# type expects nothing.
+# A range is a value only where `Iterator@(i32)` is expected. An `i32` position expects
+# no iterator.
 # EXPECT_ERROR_CODES_EXACT: CE2122
 fn main() i32:
-    let r = 0..3
-    foreach(x in r):
-        println(x)
+    let i32 r = 0..3
+    println(r)
     return 0

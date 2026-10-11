@@ -1,0 +1,10 @@
+# A walk of a lent iterator in place freezes its owner for the whole loop: one report.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+use <collections/iter>
+fn main() i32:
+    let string[] xs = from(["a"])
+    let Iterator@(peek string) it = xs.iter()
+    foreach(s in it):
+        xs.push("b")
+        println(s)
+    return 0

@@ -242,10 +242,11 @@ def test_the_derive_pass_writes_only_hash_and_clone():
         + ", ".join(sorted(set(registered))))
 
 
-def test_no_family_answers_an_iterator():
-    """An `Iterator@(T)` has no built-in method, so a call on one is CE2008 (#1136)."""
+def test_only_the_iterator_family_answers_an_iterator():
+    """An `Iterator@(T)` has one built-in method, `clone()` (#1259); any other call on one
+    is CE2008 (#1136)."""
     receiver = IteratorType(BuiltinType.I32)
     claimed = [f"{name}() -> {', '.join(_claims(receiver, name))}"
                for name in _NAMES if _claims(receiver, name)]
-    assert not claimed, ("a family claims a method of an iterator:\n  "
-                         + "\n  ".join(claimed))
+    assert claimed == ["clone() -> iterator"], (
+        "a family claims a method of an iterator:\n  " + "\n  ".join(claimed))

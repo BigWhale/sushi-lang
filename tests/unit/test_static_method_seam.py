@@ -46,4 +46,5 @@ def test_the_builtin_statics_are_named_in_one_table():
     assert not is_builtin_static("List", "push")
     assert not is_builtin_static("Box", "new")
     assert not is_builtin_static(None, "new")
-    assert set(BUILTIN_STATICS) == {"List", "HashMap", "Own", "f64", "f32", "string"}
+    assert set(BUILTIN_STATICS) == {"List", "HashMap", "Own", "Iterator", "f64", "f32",
+                                    "string"}
