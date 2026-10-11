@@ -1,0 +1,31 @@
+# The clone of an iterator over a value that holds a resource has no deep copy, and the
+# type of the iterator does not show it: the program stops at the clone with RE2027.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2027"
+use <collections/iter>
+
+struct Handle:
+    i32 fd
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        self.fd := -1
+
+struct Reads:
+    Handle h
+    i32 left
+
+extend Reads next(poke self) Maybe@(i32):
+    if (self.left == 0):
+        return Maybe.None
+    self.left := self.left - 1
+    return Maybe.Some(self.left)
+
+fn main() i32:
+    let Iterator@(i32) it = Iterator.new(nom Reads(Handle(3), 1))
+    foreach(x in it.clone()):
+        println(x)
+    foreach(x in it):
+        println(x)
+    return 0

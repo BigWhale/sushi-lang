@@ -1,0 +1,14 @@
+# An iterator value crosses the boundary of a binary library: the library answers a
+# range value, and it takes an iterator over the consumer's array by `nom`.
+# BUILD_LIB_BINARY: iv_value_bin_lib.sushi
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0\n1\n2\n6\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+use <lib/iv_value_bin_lib>
+
+fn main() i32:
+    foreach(x in upto(3)):
+        println(x)
+    println(total(nom from([1, 2, 3]).iter()))
+    return 0
