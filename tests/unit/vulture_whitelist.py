@@ -25,6 +25,7 @@ _PLATFORM_ABI = "platform ABI reference table"
 _LLVMLITE = "llvmlite reads this attribute when it prints the module"
 _P1_5_PRINTER = "kept for P1.5, the SHIR printer reads it"
 _P1_6_CONVENTION = "kept for P1.6, lowering writes the convention of each parameter"
+_P1_LOWERING = "kept for P1.6 to P1.14, lowering builds it"
 
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
@@ -107,6 +108,8 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/body.py", "locals", _P1_5_PRINTER),
     ("sushi_lang/semantics/shir/body.py", "convention", _P1_5_PRINTER),
     ("sushi_lang/semantics/shir/nodes.py", "shir_id", _P1_5_PRINTER),
+    *(("sushi_lang/semantics/shir/exprs.py", name, _P1_LOWERING)
+      for name in ("readable", "const_id", "bloom", "convention", "written_order")),
 )
 
 RATCHET: tuple[tuple[str, str, str], ...] = ()

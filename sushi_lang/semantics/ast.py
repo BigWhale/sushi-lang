@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union, Literal, TYPE_CHECKING
 from sushi_lang.internals.report import Origin, Span
+from sushi_lang.semantics.operators import BinOp, UnOp
 from sushi_lang.semantics.typesys import FunctionType, Type
 
 from lark import Token
@@ -971,13 +972,11 @@ class IndexAccess(Node):
         """`data[a..b]`: a range in the index position is a slice (docs/design/slices.md)."""
         return isinstance(self.index, RangeExpr)
 
-UnOp =Literal["neg", "not", "~"]
 @dataclass(slots=True)
 class UnaryOp(Node):
     op: UnOp
     expr: "Expr"
 
-BinOp = Literal["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=", "and", "or", "xor", "&", "|", "^", "<<", ">>"]
 @dataclass(slots=True)
 class BinaryOp(Node):
     op: BinOp
