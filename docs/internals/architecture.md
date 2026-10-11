@@ -415,6 +415,7 @@ compiler; it checks the Python source (the seam gates), the registries and the r
 ./sushic --traceback program.sushi     # the Python traceback after the diagnostic
 ./sushic --dump-parse program.sushi    # the parse tree
 ./sushic --dump-ast program.sushi      # the AST
+./sushic --dump-shir - program.sushi  # the SHIR of each body, printed
 ./sushic --dump-ll program.sushi       # the IR, printed
 ./sushic --write-ll program.sushi      # the IR, written beside the output
 ```

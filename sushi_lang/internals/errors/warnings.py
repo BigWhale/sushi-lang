@@ -35,11 +35,15 @@ _add(ErrorMessage("CW0002", Severity.WARNING,
 
 _add(ErrorMessage("CW0003", Severity.WARNING,
     "'{flag}' has no effect {reason}", Category.GENERAL,
-    "The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-kind` and `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either; `--dont-panic` is read only by a build that compiles a function marked `dont_panic` outside the bundled stdlib (docs/design/dont-panic.md, ruling D13). The build goes on without the flag. These flags used to be ignored with no word, so a user could believe a library was built as binary, or that its object was kept, when neither was true."))
+    "The command line names a flag that the build it asks for does not read, so the flag is ignored. `--docs` is read only by `--lib-info`; `--lib-kind` and `--lib-version` only by a `--lib` build; `--keep-object` only by a build that writes one object file, which a `--lib` build and the incremental build of a program of more than one unit do not (add `--no-incremental` to keep the object); `--write-ll` is not written by the incremental build either; `--dont-panic` is read only by a build that compiles a function marked `dont_panic` outside the bundled stdlib (docs/design/dont-panic.md, ruling D13); `--dump-shir` is not read by `--lib-info`. The build goes on without the flag. These flags used to be ignored with no word, so a user could believe a library was built as binary, or that its object was kept, when neither was true."))
 
 _add(ErrorMessage("CW0004", Severity.WARNING,
     "{subject} is marked dont_panic, but its body has no index to uncheck", Category.GENERAL,
     "The `dont_panic` marker removes the bounds check of each `[]` in the body that carries it (docs/design/dont-panic.md). A marked body with no `[]` removes nothing, so the author believes that a check went and none did (ruling D12). An index in a lambda in the body does not count: a lambda keeps its checks (ruling D5). The warning is always on, and it is for the author: a user unit and a bundled stdlib unit get it, and a source library's unit in a consumer's build does not. Remove the marker."))
+
+_add(ErrorMessage("CW0005", Severity.WARNING,
+    "cannot write the SHIR dump to '{path}': {reason}", Category.GENERAL,
+    "`--dump-shir PATH` asked for the SHIR of each body in a file, and the file could not be written, for example because the path is a directory or a directory on it does not exist. The compile goes on as usual and its output is written; only the dump is missing. Fix the path, or write `-` to print the dump on the terminal."))
 
 # Rebinding / scope warnings
 _add(ErrorMessage("CW1001", Severity.WARNING,

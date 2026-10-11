@@ -61,6 +61,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--dump-parse`      | Print the raw Lark parse tree                      |
 | `--dump-ast`        | Print abstract syntax tree                         |
 | `--dump-ll`         | Print LLVM IR to terminal                          |
+| `--dump-shir PATH`  | Write the SHIR of each body to `PATH` (`-` prints it); the compile goes on as usual |
 | `--write-ll`        | Write LLVM IR to `<output>.ll` file                |
 | `--no-incremental`  | Force full rebuild, ignoring cached object files   |
 | `--clean-cache`     | Remove `__sushi_cache__/` directory and exit       |
@@ -511,6 +512,27 @@ Print the abstract syntax tree:
 - Understanding parsing
 - Debugging grammar issues
 - Compiler development
+
+### Dump SHIR
+
+Write the SHIR (the Sushi High-level IR, `docs/design/ir.md`) of each body to a file:
+
+```bash
+./sushic --dump-shir program.shir program.sushi
+./sushic --dump-shir - program.sushi    # print the dump on the terminal
+```
+
+**Output includes:**
+- Each unit of the program, then each body of the unit: a function, a method, an instance of a generic function, and the initializer of a constant
+- The parameters of each body, with the convention of each (`Owned`, `Guaranteed`, `InGuaranteed`, `Inout`), and its other locals
+- The block of each body. Lowering does not fill a block yet, so each block prints as `[]`
+
+**Rules:**
+- The text is the same on every run and under every `PYTHONHASHSEED`, so a test can compare it with a golden file (`EXPECT_DUMP_SHIR`, `tests/TEST_METADATA_GUIDE.md`)
+- A unit of the bundled stdlib and a unit of a source library are not in the dump
+- A template as written is not in the dump. Its instances are
+- The compile goes on as usual: the exit status and the output do not change. A dump that cannot be written is the warning [CW0005](error-catalog.md#cw0005)
+- With `--lib-info` the flag has no effect ([CW0003](error-catalog.md#cw0003))
 
 ### Print LLVM IR
 

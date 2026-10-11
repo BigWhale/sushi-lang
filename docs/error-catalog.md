@@ -3909,6 +3909,13 @@ The command line names a flag that the build it asks for does not read, so the f
 The `dont_panic` marker removes the bounds check of each `[]` in the body that carries it. A marked body with no `[]` removes nothing, so the author believes that a check went and none did. An index in a lambda in the body does not count, because a lambda keeps its checks. The warning is always on, and it is for the author: a user unit and a bundled stdlib unit get it, and a source library's unit in a consumer's build does not. Remove the marker. See [the dont_panic design](design/dont-panic.md).
 
 
+### CW0005 {#cw0005}
+
+**Warning** · general
+
+**Message:** `cannot write the SHIR dump to '{path}': {reason}`
+
+`--dump-shir PATH` asked for the SHIR of each body in a file, and the file could not be written, for example because the path is a directory or a directory on it does not exist. The compile goes on as usual and its output is written; only the dump is missing. Fix the path, or write `-` to print the dump on the terminal.
 ### CW1001 {#cw1001}
 
 **Warning** · scope

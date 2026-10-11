@@ -730,6 +730,33 @@ def _analyse(unit_manager: UnitManager, compilation_order: list[Unit], library_l
     return analyzer
 
 
+def _write_shir_dump(analyzer: SemanticAnalyzer, target: str, reporter: Reporter) -> None:
+    """`--dump-shir`: the SHIR of each body that the scope pass checked, as UTF-8 text.
+
+    Every unit is lowered. The dump prints the units of the program and leaves out each
+    unit that has a provenance (a bundled stdlib unit, a source library unit), so a golden
+    file does not change when the stdlib changes. `-` prints the dump on stdout.
+    """
+    from sushi_lang.compiler.cli import COMMAND_LINE
+    from sushi_lang.internals import errors as er
+    from sushi_lang.semantics.shir.decls import DeclNames
+    from sushi_lang.semantics.shir.lowering import lower_units
+    from sushi_lang.semantics.shir.printer import print_units
+
+    decls = DeclNames()
+    units = [(unit.name, bodies) for unit, bodies in lower_units(analyzer.unit_bindings, decls)
+             if unit.provenance is None]
+    text = print_units(units, decls)
+    if target == "-":
+        print(text, end="")
+        return
+    try:
+        Path(target).write_text(text, encoding="utf-8")
+    except OSError as exc:
+        er.emit(reporter, er.ERR.CW0005, None, filename=COMMAND_LINE, path=target,
+                reason=exc.strerror or str(exc))
+
+
 def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                        options: BuildOptions) -> int:
     """Compile a program or a library: load, resolve libraries, analyse, gate, emit."""
@@ -760,6 +787,8 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
 
     analyzer = _analyse(unit_manager, compilation_order, library_linker, reporter,
                         src_path.stem, options)
+    if options.dump_shir is not None:
+        _write_shir_dump(analyzer, options.dump_shir, reporter)
     if reporter.has_errors:
         return 2
 
