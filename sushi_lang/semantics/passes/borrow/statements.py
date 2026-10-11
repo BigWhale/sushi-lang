@@ -456,9 +456,11 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
     owns_item = stmt.protocol_next is not None or (
         stmt.value_iterator is not None and _owns_its_items(stmt.value_iterator))
     with BindingScope(checker) as scope:
-        iterator = (scope.bind_iterator(stmt.iterable)
-                    if stmt.protocol_next is None and stmt.value_iterator is None
-                    else None)
+        iterator = None
+        if stmt.protocol_next is None and stmt.value_iterator is None:
+            iterator = scope.bind_iterator(stmt.iterable)
+        elif stmt.value_iterator is not None and walked_view is None:
+            iterator = scope.bind_lent_walk(stmt.iterable)
         if stmt.item_borrow is not None:
             owner: Optional[Expr] = stmt.iterable
             # An item over an owned temporary has no named owner to conflict with.

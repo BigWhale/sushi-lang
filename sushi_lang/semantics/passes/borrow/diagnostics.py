@@ -21,6 +21,7 @@ from sushi_lang.semantics.ast import (
     Name,
     TryExpr,
 )
+from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
 from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
 from sushi_lang.semantics.typesys import ReferenceType
@@ -162,8 +163,10 @@ def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
                                  owner=owner, name=text)
     if header is not None:
         diag.note_at(f"the loop walks '{text}' from here to the loop exit", header)
-    if not isinstance(iterable, MethodLikeNodes):
-        # A lent iterator held by a `let` (#1259): the change is to one of its owners.
+    if (not isinstance(iterable, MethodLikeNodes)
+            or iterable.method not in CONTAINER_ITERATORS):
+        # A lent iterator held by a `let` (#1259), or a lent value such as an adapter
+        # chain (#1228): the change is to one of its owners.
         diag.help(f"{what} after the loop")
         diag.emit()
         return
