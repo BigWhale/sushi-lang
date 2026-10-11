@@ -1,0 +1,19 @@
+# A `break` leaves a loop body that holds a `List@(string)` local. The exit destroys the
+# list and each string in it once.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "round 0 has 2\nround 1 has 3\nround 2 has 4\nbreak at 2\n"
+fn main() i32:
+    let i32 i = 0
+    while (i < 10):
+        let List@(string) words = List.new()
+        words.push("Mostly")
+        words.push("Harmless {i}")
+        foreach(k in 0..i):
+            words.push("extra {k}")
+        println("round {i} has {words.len()}")
+        if (i == 2):
+            println("break at {i}")
+            break
+        i := i + 1
+    return i - 2
