@@ -63,6 +63,23 @@ def type_clash_note(other: str) -> str:
     return f"already defined as {article(other)} {other} here"
 
 
+@dataclass
+class _CompilerTypeNames:
+    """The compiler's own generic types that have no template in a table: `Iterator`.
+
+    A user type of one of these names is refused as one named `HashMap` is: the name is
+    held as a generic struct the compiler defines, with no span.
+    """
+    by_name: Dict[str, Any]
+    spans: Dict[str, Optional[Span]]
+    files: Dict[str, Optional[str]]
+
+
+def _compiler_type_names() -> _CompilerTypeNames:
+    from sushi_lang.semantics.generics.iterators import ITERATOR_BASE
+    return _CompilerTypeNames(by_name={ITERATOR_BASE: None}, spans={}, files={})
+
+
 def type_name_rules(kind: str, *, structs: 'TypeNameTable',
                     generic_structs: 'TypeNameTable', enums: 'TypeNameTable',
                     generic_enums: 'TypeNameTable') -> tuple[TakenName, ...]:
@@ -79,11 +96,14 @@ def type_name_rules(kind: str, *, structs: 'TypeNameTable',
                         else (enums, generic_enums))
     theirs, theirs_generic = ((enums, generic_enums) if kind == "struct"
                               else (structs, generic_structs))
+    compiler = TakenName(_compiler_type_names(), duplicate if kind == "struct"
+                         else ERR.CE0006, "struct", generic=True, same=kind == "struct")
     return (
         TakenName(own, duplicate, same),
         TakenName(own_generic, duplicate, same, generic=True),
         TakenName(theirs, ERR.CE0006, other, same=False),
         TakenName(theirs_generic, ERR.CE0006, other, generic=True, same=False),
+        compiler,
     )
 
 
