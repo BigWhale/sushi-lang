@@ -1,0 +1,15 @@
+# A borrowed return needs a source: a borrowed receiver, or a borrowed parameter whose
+# type owns a resource. A plain parameter, a `poke` of a plain struct and a `nom`
+# parameter are not sources, so the set is empty.
+# EXPECT_ERROR_CODES_EXACT: CE2438
+
+struct Cursor:
+    i32 pos
+
+fn pick(i32 n, poke Cursor cur, nom string s) peek i32:
+    return n
+
+fn main() i32:
+    let Cursor c = Cursor(0)
+    println(pick(1, poke c, nom "a"))
+    return 0

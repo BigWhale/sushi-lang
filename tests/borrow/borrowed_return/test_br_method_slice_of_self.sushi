@@ -1,0 +1,30 @@
+# A method returns a view of its receiver with `peek T`: a slice of a field, and a field
+# itself. The receiver is a borrow (`self`, `peek self`), so it is the source of the view.
+# The caller binds the view and reads it while the owner lives.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n10\n20\nbox\n3\n30\n"
+# EXPECT_NO_LEAKS
+
+struct Store:
+    string name
+    i32[] data
+
+extend Store head(i32 n) peek i32[]:
+    return self.data[0..n]
+
+extend Store label(peek self) peek string:
+    return self.name
+
+extend Store tail(peek self, i32 from_index) peek i32[]:
+    return self.data[from_index..self.data.len()]
+
+fn main() i32:
+    let Store s = Store("box", from([10, 20, 30]))
+    let i32[] h = s.head(2)
+    println(h.len())
+    println(h[0])
+    println(h[1])
+    println(s.label())
+    println(s.head(3).len())
+    println(s.tail(2)[0])
+    return 0

@@ -1,0 +1,13 @@
+# The answer of a borrowed-return method from a binary library is a borrow: the
+# consumer cannot give it with `nom`.
+# BUILD_LIB_BINARY: br_bin_lib.sushi
+# EXPECT_ERROR_CODES_EXACT: CE2411
+use <lib/br_bin_lib>
+
+fn eat(nom i32[] xs) i32:
+    return xs.len()
+
+fn main() i32:
+    let Store s = Store(from([1, 2, 3]))
+    println(eat(nom s.head(2)))
+    return 0

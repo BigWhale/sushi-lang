@@ -1,0 +1,31 @@
+# A temporary may be the source argument inside one statement: as an argument, and as
+# the iterable of a `foreach`. The temporary is freed after the statement.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n3\n2\n4\nbb\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+
+fn make() i32[]:
+    return from([1, 2, 3, 4])
+
+fn names() string[]:
+    let string[] out = from(["aa"])
+    out.push("bb")
+    return out
+
+fn head(i32[] xs, i32 n) peek i32[]:
+    return xs[0..n]
+
+fn evens(i32[] xs) peek Iterator@(i32):
+    return xs.iter().filter(nom |i32 x| x % 2 == 0)
+
+fn last(string[] xs) peek string:
+    return xs[xs.len() - 1]
+
+fn main() i32:
+    println(head(make(), 2).len())
+    println(head(make(), 3)[2])
+    foreach(x in evens(make())):
+        println(x)
+    println(last(names()))
+    return 0

@@ -1,0 +1,42 @@
+# A borrowed return passes on a view it got: from a `let` of a slice of a source, from a
+# call of another borrowed return, and from a `??` over a `peek T | E` answer.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n1\n2\n4\n"
+# EXPECT_NO_LEAKS
+
+error ReadError:
+    Short
+
+struct Store:
+    i32[] data
+
+extend Store front() peek i32[]:
+    let i32[] part = self.data[0..2]
+    return part
+
+fn head(i32[] xs, i32 n) peek i32[]:
+    return xs[0..n]
+
+fn first_one(i32[] xs) peek i32[]:
+    return head(xs, 1)
+
+fn checked(i32[] xs, i32 n) peek i32[] | ReadError:
+    if (n > xs.len()):
+        return Result.Err(ReadError.Short)
+    return Result.Ok(xs[0..n])
+
+fn checked_twice(i32[] xs) peek i32[] | ReadError:
+    let i32[] part = checked(xs, 3)??
+    return Result.Ok(checked(part, 2)??)
+
+fn main() i32:
+    let Store s = Store(from([1, 2, 3]))
+    println(s.front().len())
+    let i32[] data = from([1, 2, 3, 4])
+    println(first_one(data)[0])
+    match checked_twice(data):
+        Result.Ok(v) -> println(v.len())
+        Result.Err(_) -> println("short")
+    data.push(5)
+    println(data.len() - 1)
+    return 0

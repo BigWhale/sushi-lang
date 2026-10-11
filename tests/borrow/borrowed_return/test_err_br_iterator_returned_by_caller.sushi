@@ -1,0 +1,15 @@
+# A caller with an owned return cannot return an iterator that borrows its argument.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+use <collections/iter>
+
+fn evens(i32[] xs) peek Iterator@(i32):
+    return xs.iter().filter(nom |i32 x| x % 2 == 0)
+
+fn again(i32[] xs) Iterator@(i32):
+    return evens(xs)
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    foreach(x in again(xs)):
+        println(x)
+    return 0

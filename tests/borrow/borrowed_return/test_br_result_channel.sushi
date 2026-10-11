@@ -1,0 +1,44 @@
+# `peek T | E` with a plain error type: the `Ok` payload is a view of the buffer, and the
+# caller takes it with `??`. The view is read through and never copied; a caller that
+# keeps the bytes clones them.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n3\n2\nshort at 4\n"
+# EXPECT_NO_LEAKS
+
+error ReadError:
+    Short(i32)
+
+struct Cursor:
+    i32 pos
+
+fn take(peek u8[] buf, poke Cursor cur, i32 count) peek u8[] | ReadError:
+    if (cur.pos + count > buf.len()):
+        return Result.Err(ReadError.Short(cur.pos))
+    let i32 start = cur.pos
+    cur.pos := cur.pos + count
+    return Result.Ok(buf[start..start + count])
+
+fn first_two(peek u8[] buf, poke Cursor cur) i32 | ReadError:
+    let u8[] part = take(peek buf, poke cur, 2)??
+    return Result.Ok(part[1] as i32)
+
+fn kept(peek u8[] buf, poke Cursor cur) u8[] | ReadError:
+    return Result.Ok(take(peek buf, poke cur, 2)??.clone())
+
+fn main() i32:
+    let u8[] bytes = from([1, 2, 3, 4, 5])
+    let Cursor cur = Cursor(0)
+    match first_two(peek bytes, poke cur):
+        Result.Ok(v) -> println(v)
+        Result.Err(_) -> println("error")
+    match first_two(peek bytes, poke cur):
+        Result.Ok(v) -> println(v + 1)
+        Result.Err(_) -> println("error")
+    let Cursor other = Cursor(0)
+    match kept(peek bytes, poke other):
+        Result.Ok(nom copy) -> println(copy.len())
+        Result.Err(_) -> println("error")
+    match take(peek bytes, poke cur, 2):
+        Result.Ok(_) -> println("ok")
+        Result.Err(ReadError.Short(at)) -> println("short at {at}")
+    return 0

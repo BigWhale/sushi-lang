@@ -1,0 +1,17 @@
+# A perk implementation method cannot have a borrowed return.
+# EXPECT_ERROR_CODES_EXACT: CE2439
+
+perk Named:
+    fn name() string
+
+struct Robot:
+    string id
+
+extend Robot with Named:
+    fn name() peek string:
+        return self.id
+
+fn main() i32:
+    let Robot r = Robot("r2")
+    println(r.name())
+    return 0

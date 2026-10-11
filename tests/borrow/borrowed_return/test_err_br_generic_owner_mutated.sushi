@@ -1,0 +1,12 @@
+# The answer of a generic borrowed return at an owning type freezes the owner too.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+fn first@(T)(T[] xs) peek T:
+    return xs[0]
+
+fn main() i32:
+    let string[] names = from(["ant", "bee"])
+    let string f = first(names)
+    names.push("cat")
+    println(f)
+    return 0

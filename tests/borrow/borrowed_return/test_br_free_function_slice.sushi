@@ -1,0 +1,26 @@
+# A free function returns a slice of its one array parameter. The answer is used in a
+# `let`, inline in one statement, and as the argument of a second call to the function.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n1\n2\n3\n1\n6\n"
+# EXPECT_NO_LEAKS
+
+fn head(i32[] xs, i32 n) peek i32[]:
+    return xs[0..n]
+
+fn total(i32[] xs) i32:
+    let i32 sum = 0
+    foreach(x in xs.iter()):
+        sum := sum + x
+    return sum
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3, 4])
+    let i32[] h = head(data, 2)
+    println(h.len())
+    println(h[0])
+    println(h[1])
+    println(head(data, 3).len())
+    println(head(head(data, 3), 1)[0])
+    println(total(head(data, 3)))
+    data.push(5)
+    return 0

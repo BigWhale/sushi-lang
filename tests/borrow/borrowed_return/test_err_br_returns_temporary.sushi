@@ -1,0 +1,14 @@
+# A slice of a temporary is not a borrow of a source: the temporary is freed at the end
+# of the statement.
+# EXPECT_ERROR_CODES_EXACT: CE2443
+
+fn make() i32[]:
+    return from([1, 2, 3])
+
+fn head(i32[] xs) peek i32[]:
+    return make()[0..1]
+
+fn main() i32:
+    let i32[] data = from([1, 2])
+    println(head(data).len())
+    return 0

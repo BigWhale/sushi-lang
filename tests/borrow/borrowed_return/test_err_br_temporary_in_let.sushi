@@ -1,0 +1,14 @@
+# A `let` of an answer whose source argument is a temporary is refused: the temporary
+# is freed at the end of the statement, and the binding lives on.
+# EXPECT_ERROR_CODES_EXACT: CE2444
+
+fn make() i32[]:
+    return from([1, 2, 3])
+
+fn head(i32[] xs) peek i32[]:
+    return xs[0..1]
+
+fn main() i32:
+    let i32[] h = head(make())
+    println(h.len())
+    return 0

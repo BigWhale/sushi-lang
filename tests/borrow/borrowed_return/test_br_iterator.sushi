@@ -1,0 +1,39 @@
+# A function returns `peek Iterator@(i32)`: an iterator that borrows its array argument.
+# Its state leaves the function, so the state is on the heap, every link of a chain of
+# adapters included. The caller walks it, adapts it, and walks it through a `let`.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n4\n6\n40\n60\n2\n3\n12\n5\n7\n"
+# EXPECT_NO_LEAKS
+# EXPECT_IR_HOLDS: evens malloc
+# EXPECT_IR_HOLDS: scaled_odds malloc
+use <collections/iter>
+
+fn evens(i32[] xs) peek Iterator@(i32):
+    return xs.iter().filter(nom |i32 x| x % 2 == 0)
+
+fn scaled_odds(i32[] xs) peek Iterator@(i32):
+    let Iterator@(i32) all = xs.iter()
+    let Iterator@(i32) odds = all.filter(nom |i32 x| x % 2 == 1)
+    return odds.map(nom |i32 x| x + 1)
+
+fn pairs(i32[] a, i32[] b) peek Iterator@((i32, i32)):
+    return a.iter().zip(nom b.iter())
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4, 5, 6])
+    foreach(x in evens(xs)):
+        println(x)
+    foreach(y in evens(xs).map(nom |i32 x| x * 10).filter(nom |i32 x| x > 20)):
+        println(y)
+    let Iterator@(i32) it = scaled_odds(xs)
+    let i32 count = 0
+    foreach(z in it):
+        if (count < 2):
+            println(z)
+        count := count + 1
+    println(scaled_odds(xs).fold(0, nom |i32 acc, i32 x| acc + x))
+    let i32[] ys = from([4, 6])
+    foreach(p in pairs(xs, ys)):
+        println(p.0 + p.1)
+    xs.push(7)
+    return 0
