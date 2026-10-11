@@ -79,31 +79,40 @@ class LoweredProgram:
 
 
 def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings]) -> None:
-    """The body of each declaration of `unit` that the scope pass checked, in order."""
+    """The body of each declaration of `unit` that the scope pass checked, in order.
+
+    The perk owners and the written templates of the unit are found once, so the cost
+    of a unit is linear in its declarations.
+    """
     program = unit.ast
     if program is None:
         return
+    owners = _perk_owners(program)
+    templates = _written_template_members(program)
     lowered.units.append((unit, [
-        lower_body(table, LoweringContext(lowered.decls, _perk_owner(program, table)))
-        for table in tables if not _is_written_template(program, table.body)]))
+        lower_body(table, LoweringContext(lowered.decls, owners.get(id(table.body))))
+        for table in tables if not _is_written_template(table.body, templates)]))
 
 
-def _is_written_template(program: Program, decl: object) -> bool:
+def _written_template_members(program: Program) -> set[int]:
+    """The generic extensions and the methods of the generic perk implementations."""
+    members = {id(ext) for ext in program.generic_extensions}
+    members.update(id(method) for impl in program.generic_perk_impls for method in impl.methods)
+    return members
+
+
+def _is_written_template(decl: object, members: set[int]) -> bool:
     """A template as the source writes it. Its copies are the bodies that SHIR holds."""
-    if any(decl is ext for ext in program.generic_extensions):
-        return True
-    if any(decl is method for impl in program.generic_perk_impls for method in impl.methods):
+    if id(decl) in members:
         return True
     if isinstance(decl, ExtendDef):
         return bool(decl.type_params) and not decl.method_type_args
     return bool(getattr(decl, "type_params", None)) and getattr(decl, "instance_of", None) is None
 
 
-def _perk_owner(program: Program, bindings: Bindings) -> Optional[ExtendWithDef]:
-    if not isinstance(bindings.body, FuncDef):
-        return None
-    return next((impl for impl in program.perk_impls
-                 if any(method is bindings.body for method in impl.methods)), None)
+def _perk_owners(program: Program) -> dict[int, ExtendWithDef]:
+    """The perk implementation of each perk method of the unit, keyed by the method."""
+    return {id(method): impl for impl in program.perk_impls for method in impl.methods}
 
 
 def _lower_block(decl: Declaration, ids: IdAllocator[ShirId]) -> ShirBlock:
