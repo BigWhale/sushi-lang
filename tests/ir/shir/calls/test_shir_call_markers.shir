@@ -3,7 +3,8 @@ unit test_shir_call_markers
 ShirBody count (Initializer)
   params : []
   locals : []
-  block  : []
+  block  :
+    Return(Lit(0))
 
 ShirBody size
   params : [(_0 "s": string, Guaranteed)]

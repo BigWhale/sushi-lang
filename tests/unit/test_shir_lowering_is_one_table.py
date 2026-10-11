@@ -33,6 +33,7 @@ LOWERED: frozenset[str] = frozenset({
     "Name", "UnaryOp", "BinaryOp",
     "Call", "MethodCall", "DotCall",
     "ExprStmt", "Return", "Print", "PrintLn",
+    "Let", "Rebind", "If", "While", "Break", "Continue",
 })
 
 #: The AST classes that are the form of a call argument (`ARGUMENTS`). The set only grows.

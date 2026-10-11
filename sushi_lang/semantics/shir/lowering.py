@@ -5,7 +5,8 @@ declaration, its origin, its parameters with their conventions and the locals of
 parameters. `_lower_block` fills the block, one statement at a time, through the table of
 `lower_nodes.py`. A construct that the table does not lower yet is a hole, and
 `LoweredProgram.holes` records each one. The locals that the binders of the block declare
-come with the lowering of each binder.
+come with the lowering of each binder, and `ShirBody.locals` holds every local in id order.
+The block of a constant or a `var` is its initializer, as one `Return` (ir.md 6.3).
 
 `lower_unit` calls `lower_body` for each body that the scope pass checked in one unit,
 except a template as written: SHIR is built from the specialized bodies (ir.md 7), and
@@ -35,9 +36,9 @@ from sushi_lang.semantics.shir.body import (
     BodyOrigin, Initializer, Instance, ShirBody, ShirLocal, ShirParam,
 )
 from sushi_lang.semantics.shir.decls import DeclNames
-from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
+from sushi_lang.semantics.shir.ids import IdAllocator, ShirId
 from sushi_lang.semantics.shir.lookup import DeclLookup
-from sushi_lang.semantics.shir.lower_nodes import BodyLowerer
+from sushi_lang.semantics.shir.lower_nodes import BodyLowerer, binder_local
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import ReferenceType
 
@@ -77,10 +78,12 @@ def lower_body(bindings: Bindings, ctx: LoweringContext) -> ShirBody:
         er.raise_internal_error("CE0000", detail=f"no lowering for a body of {type(decl).__name__}")
     ids: IdAllocator[ShirId] = IdAllocator(ShirId)
     params, locals_ = _frame(decl, bindings, ctx)
-    return ShirBody(ctx.decls.declare(_written_name(decl, ctx)), _origin(decl), params,
-                    locals_, _lower_block(decl, BodyLowerer(ids, ctx.decls, bindings, ctx.holes,
-                                                            _span(decl.loc), ctx.evaluator,
-                                                            ctx.lookup)))
+    fn_id = ctx.decls.declare(_written_name(decl, ctx))
+    lowerer = BodyLowerer(ids, ctx.decls, bindings, ctx.holes, _span(decl.loc), ctx.evaluator,
+                          ctx.lookup)
+    block = _lower_block(decl, lowerer)
+    every_local = sorted([*locals_, *lowerer.locals], key=lambda local: local.id)
+    return ShirBody(fn_id, _origin(decl), params, every_local, block)
 
 
 @dataclass(slots=True)
@@ -134,14 +137,10 @@ def _perk_owners(program: Program) -> dict[int, ExtendWithDef]:
 
 
 def _lower_block(decl: Declaration, lowerer: BodyLowerer) -> ShirBlock:
-    """The block of the body, each statement in the written order.
-
-    The initializer of a constant is not lowered yet, so its block is empty.
-    """
-    block = None if isinstance(decl, ConstDef) else decl.body
-    ident = lowerer.ids.allocate()
-    statements = [] if block is None else [lowerer.stmt(stmt) for stmt in block.statements]
-    return ShirBlock(ident, _span(getattr(block, "loc", None), decl.loc), statements)
+    """The block of the body, or the initializer of a constant or a `var`."""
+    if isinstance(decl, ConstDef):
+        return lowerer.initializer(decl)
+    return lowerer.block(decl.body)
 
 
 def _origin(decl: Declaration) -> BodyOrigin:
@@ -176,12 +175,12 @@ def _frame(decl: Declaration, bindings: Bindings,
     receiver = _owner_type(decl, ctx)
     if isinstance(decl, (FuncDef, ExtendDef)) and receiver is not None and not (
             isinstance(decl, ExtendDef) and decl.is_static):
-        local = _local_of(bindings, decl, "self")
+        local = binder_local(bindings, decl, "self")
         params.append(ShirParam(local, receiver, receiver_mode(decl.self_mode).convention,
                                 _span(decl.self_mode_span, decl.name_span, decl.loc)))
         locals_.append(ShirLocal(local, "self", None, None))
     for param in decl.params:
-        local = _local_of(bindings, param, param.name)
+        local = binder_local(bindings, param, param.name)
         ty = _param_type(param)
         params.append(ShirParam(local, ty, param_mode(param).convention,
                                 _span(getattr(param, "loc", None), param.name_span, decl.loc)))
@@ -195,14 +194,6 @@ def _param_type(param: AnyParam) -> TypeRef:
     if ty is None:
         er.raise_internal_error("CE0000", detail=f"the parameter '{param.name}' has no type")
     return ty.referenced_type if isinstance(ty, ReferenceType) else ty
-
-
-def _local_of(bindings: Bindings, owner: object, name: str) -> LocalId:
-    local = bindings.local_of(owner, name)
-    if local is None:
-        er.raise_internal_error("CE0153", span=getattr(owner, "loc", None), what="binder",
-                                name=name)
-    return local
 
 
 def _span(*candidates: Optional[Span]) -> Span:

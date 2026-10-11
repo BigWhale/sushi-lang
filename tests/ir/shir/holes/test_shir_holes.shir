@@ -2,9 +2,10 @@ unit test_shir_holes
 
 ShirBody main
   params : []
-  locals : []
+  locals : [_0 "total": i32]
   block  :
-    <hole: Let>
-    <hole: If>
+    Assign(LocalRef(_0), Binary(+, Lit(40) = 40, Lit(2) = 2), is_init: true)
+    If(Binary(>, LocalRef(_0), Lit(100)), then: [Return(Lit(1))])
+    <hole: Assert>
     ExprStmt(Call(Dotted(LocalRef(_0), "hash"), []))
     Return(Binary(-, LocalRef(_0), Lit(42) = 42))

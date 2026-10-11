@@ -3,12 +3,14 @@ unit test_shir_names
 ShirBody LIMIT (Initializer)
   params : []
   locals : []
-  block  : []
+  block  :
+    Return(Lit(10))
 
 ShirBody counter (Initializer)
   params : []
   locals : []
-  block  : []
+  block  :
+    Return(Lit(7))
 
 ShirBody double
   params : [(_0 "x": i32, Guaranteed)]

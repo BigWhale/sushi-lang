@@ -14,7 +14,8 @@ marker of the `Arg`, and `xs...` is a bloom.
 A name lowers to the answer that the scope pass recorded for it (ir.md 7.1): a local, a
 constant, a unit `var` or a function. A name with no declaration (`Unresolved`), and a
 type or a namespace written as a value, is a hole: the program has an error, and SHIR has
-no node for such a name.
+no node for such a name. The binder of a `let` gives a `ShirLocal`, with the `LocalId`
+that the scope pass recorded for it.
 
 Ruling E3 (ir.md 7.4): an operand whose value the typecheck pass reads is read here, with
 the AST constant evaluator, and the value is recorded on its node (`readable`). These are
@@ -41,11 +42,12 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import bindings as bd
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
+from sushi_lang.semantics.shir.body import ShirLocal
 from sushi_lang.semantics.shir.decls import DeclNames
-from sushi_lang.semantics.shir.ids import IdAllocator, ShirId
+from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
 from sushi_lang.semantics.shir.lookup import DeclLookup
-from sushi_lang.semantics.shir.nodes import Hole
-from sushi_lang.semantics.typesys import BuiltinType, UnknownType
+from sushi_lang.semantics.shir.nodes import Hole, ShirBlock
+from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, UnknownType
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.const_eval import ConstantEvaluator
@@ -83,6 +85,7 @@ class BodyLowerer:
     value of an operand (ruling E3); with no evaluator, no value is recorded. `lookup`
     reads the declaration tables; with no lookup, a call on a type name or a namespace is
     a hole. `opaque` counts the nodes made so far whose value the compiler cannot read.
+    `locals` holds the local of each binder that the body declares, in the order of the walk.
     """
     ids: IdAllocator[ShirId]
     decls: DeclNames
@@ -92,6 +95,7 @@ class BodyLowerer:
     evaluator: Optional[ConstantEvaluator] = None
     lookup: Optional[DeclLookup] = None
     opaque: int = field(default=0, init=False)
+    locals: list[ShirLocal] = field(default_factory=list, init=False)
 
     def stmt(self, node: Any) -> s.ShirStmt:
         row = LOWERING.get(type(node))
@@ -124,6 +128,18 @@ class BodyLowerer:
             return None
         return _constant(value.value)
 
+    def block(self, node: Optional[a.Block]) -> ShirBlock:
+        """A block, each statement in the written order. No block gives an empty one."""
+        ident = self.ident()
+        statements = [] if node is None else [self.stmt(stmt) for stmt in node.statements]
+        return ShirBlock(ident, self.span(node), statements)
+
+    def initializer(self, decl: a.ConstDef) -> ShirBlock:
+        """The block of a constant or a `var` initializer: one `Return` of the value (ir.md 6.3)."""
+        ident = self.ident()
+        returned = s.Return(self.ident(), self.span(decl.value), self.expr(decl.value))
+        return ShirBlock(ident, self.span(decl), [returned])
+
     def span(self, node: Any) -> Span:
         loc = getattr(node, "loc", None)
         return self.fallback if loc is None else loc
@@ -144,6 +160,15 @@ class BodyLowerer:
                                     construct=made.ast_class)
         self.holes.append(made)
         return made
+
+
+def binder_local(bindings: bd.Bindings, owner: object, name: str) -> LocalId:
+    """The local that the scope pass recorded for a binder. CE0153 when it recorded none."""
+    local = bindings.local_of(owner, name)
+    if local is None:
+        er.raise_internal_error("CE0153", span=getattr(owner, "loc", None), what="binder",
+                                name=name)
+    return local
 
 
 def _constant(value: object) -> Optional[e.Constant]:
@@ -356,6 +381,74 @@ def _return(lw: BodyLowerer, node: a.Return) -> s.Return:
     return s.Return(ident, lw.span(node), lw.expr(node.value))
 
 
+def _let(lw: BodyLowerer, node: a.Let) -> s.ShirStmt:
+    """`let T x = v`: an `Assign` that initializes the local of the binder.
+
+    The local keeps the type as written, or none. A binder that the AST builder made has no
+    name span, and its local has no name (ir.md 7.2). A reference binding
+    (`let poke T x = place`) takes a `Borrow` of the place, with the written mode (ir.md 7.5).
+    A destructure (`let (a, b) = v`) is a hole until its lowering exists.
+    """
+    if node.targets is not None:
+        return lw.hole(node)
+    ident = lw.ident()
+    local = binder_local(lw.bindings, node, node.name)
+    hidden = node.name_span is None
+    lw.locals.append(ShirLocal(local, None if hidden else node.name, node.ty, node.name_span))
+    target = e.LocalRef(lw.made_opaque(), node.name_span or lw.span(node), local)
+    return s.Assign(ident, lw.span(node), target, _initial_value(lw, node), is_init=True)
+
+
+def _initial_value(lw: BodyLowerer, node: a.Let) -> e.ShirExpr:
+    if not isinstance(node.ty, ReferenceType):
+        return lw.expr(node.value)
+    ident = lw.ident()
+    return e.Borrow(ident, lw.span(node.value), lw.expr(node.value), node.ty.mutability)
+
+
+def _rebind(lw: BodyLowerer, node: a.Rebind) -> s.Assign:
+    """`place := v`: an `Assign` that frees the old value of the place (ir.md 4.6)."""
+    ident = lw.ident()
+    target = lw.expr(node.target)
+    return s.Assign(ident, lw.span(node), target, lw.expr(node.value), is_init=False)
+
+
+def _if(lw: BodyLowerer, node: a.If) -> s.If:
+    return _arm(lw, node, 0)
+
+
+def _arm(lw: BodyLowerer, node: a.If, index: int) -> s.If:
+    """The arm `index` of an `if`. An `elif` is an `If` in the `otherwise` of the arm before it."""
+    cond, block = node.arms[index]
+    ident = lw.ident()
+    loc = lw.span(node) if index == 0 else lw.span(cond)
+    test = lw.expr(cond)
+    then = lw.block(block)
+    return s.If(ident, loc, test, then, _otherwise(lw, node, index + 1))
+
+
+def _otherwise(lw: BodyLowerer, node: a.If, index: int) -> Optional[ShirBlock]:
+    if index < len(node.arms):
+        ident = lw.ident()
+        return ShirBlock(ident, lw.span(node.arms[index][0]), [_arm(lw, node, index)])
+    return None if node.else_block is None else lw.block(node.else_block)
+
+
+def _while(lw: BodyLowerer, node: a.While) -> s.Loop:
+    """`while (cond)`: a `Loop` with a `Cond` source (ir.md 7.5)."""
+    ident = lw.ident()
+    source = s.Cond(lw.expr(node.cond))
+    return s.Loop(ident, lw.span(node), source, lw.block(node.body))
+
+
+def _break(lw: BodyLowerer, node: a.Break) -> s.Break:
+    return s.Break(lw.ident(), lw.span(node))
+
+
+def _continue(lw: BodyLowerer, node: a.Continue) -> s.Continue:
+    return s.Continue(lw.ident(), lw.span(node))
+
+
 def _print(lw: BodyLowerer, node: a.Print) -> s.ExprStmt:
     return _builtin_statement(lw, node, "print")
 
@@ -391,6 +484,12 @@ LOWERING: dict[type, Lower] = {
     a.Return: _return,
     a.Print: _print,
     a.PrintLn: _println,
+    a.Let: _let,
+    a.Rebind: _rebind,
+    a.If: _if,
+    a.While: _while,
+    a.Break: _break,
+    a.Continue: _continue,
 }
 
 LowerArg: TypeAlias = Callable[[BodyLowerer, Any], e.Arg]
