@@ -445,8 +445,9 @@ Only these may be asked of the AST once the migration completes:
   rewriter (ruling Q1 keeps it there). The template check works on a deep copy and leaves
   the written template as it is. Every other pass treats the AST as immutable.
 - **Be read by the backend.** The new backend reads SLIR and nothing else.
-- **Be read by a per-body pass.** Once the passes move, `typecheck`, `lift` and
-  `borrow` read SHIR only. Every WHOLE-PROGRAM pass, `collect` to `effects`, reads the
+- **Be read by a per-body pass.** Once the passes move, the BODY modules of `typecheck`,
+  `lift` and `borrow` read SHIR only. The declaration half of `typecheck` and `borrow`
+  stays on the AST (6.4). Every WHOLE-PROGRAM pass, `collect` to `effects`, reads the
   AST, bodies included: each runs before any SHIR exists, and asks question 4. `scope` is
   the one per-body pass that stays on the AST (ruling S3), and 7.1 says why.
 
@@ -565,7 +566,8 @@ The pass order and every pass name are unchanged (N5).
 ```
 ShirBody
   fn_id   : DeclId                 # the declaration this body belongs to
-  origin  : Instance | TemplateCheck(TemplateId)
+  origin  : Instance | TemplateCheck(TemplateId) | Initializer
+                                   # Initializer: a constant or `var` initializer (6.3)
   params  : [ShirParam]
   locals  : [ShirLocal]            # from the `scope` pass
   block   : ShirBlock
