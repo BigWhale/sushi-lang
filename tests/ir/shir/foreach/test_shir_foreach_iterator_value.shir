@@ -8,11 +8,11 @@ ShirBody upto
 
 ShirBody main
   params : []
-  locals : [_0 "total": i32, _1 "v", _2 "xs": i32[], _3]
+  locals : [_0 "total": i32, _1 "v", _2 "xs": i32[], _3, _5 "i", _6 "x"]
   block  :
     Assign(LocalRef(_0), Lit(0), is_init: true)
     Loop(Items(Call(Named(GlobalRef(@upto)), [Lit(4)]), _1, Bare), [Assign(LocalRef(_0), Binary(+, LocalRef(_0), LocalRef(_1)), is_init: false)])
     Assign(LocalRef(_2), ArrayInit(Dynamic, [Single(Lit(5)), Single(Lit(6))]), is_init: true)
-    Loop(Items(Call(Dotted(Call(Dotted(LocalRef(_2), "iter"), []), "enumerate"), []), _3, Bare), [<hole: Let>, Assign(LocalRef(_0), Binary(+, LocalRef(_0), Binary(*, LocalRef(_5), LocalRef(_6))), is_init: false)])
+    Loop(Items(Call(Dotted(Call(Dotted(LocalRef(_2), "iter"), []), "enumerate"), []), _3, Bare), [Destructure([_5, _6], LocalRef(_3)), Assign(LocalRef(_0), Binary(+, LocalRef(_0), Binary(*, LocalRef(_5), LocalRef(_6))), is_init: false)])
     ExprStmt(Call(BuiltinFn("println"), [LocalRef(_0)]))
     Return(Lit(0))

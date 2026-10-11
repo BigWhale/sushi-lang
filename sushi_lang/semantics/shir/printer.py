@@ -126,7 +126,7 @@ def _lambda(pr: ShirPrinter, lam: e.Lambda) -> str:
     ret = None if lam.ret is None else _type(lam.ret)
     err = None if lam.err is None else _type(lam.err)
     return _node("Lambda", pr.each(lam.params), *_optional("ret", ret),
-                 *_optional("err", err), pr.show(lam.body))
+                 *_optional("err", err), pr.show(lam.body), _flag("expr_body", lam.expr_body))
 
 
 # -- the parts of a statement --------------------------------------------------------

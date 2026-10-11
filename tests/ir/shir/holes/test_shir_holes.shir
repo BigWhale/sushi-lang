@@ -6,6 +6,12 @@ ShirBody main
   block  :
     Assign(LocalRef(_0), Binary(+, Lit(40) = 40, Lit(2) = 2), is_init: true)
     If(Binary(>, LocalRef(_0), Lit(100)), then: [Return(Lit(1))])
-    <hole: Assert>
+    Assert(Binary(==, LocalRef(_0), Lit(42)), label: "./tests/ir/shir/holes/test_shir_holes.sushi")
     ExprStmt(Call(Dotted(LocalRef(_0), "hash"), []))
-    Return(Binary(-, LocalRef(_0), Lit(42) = 42))
+    Return(Binary(-, <hole: Call>, Lit(42) = 42))
+
+ShirBody identity__i32
+  params : [(_0 "x": i32, Owned)]
+  locals : []
+  block  :
+    Return(LocalRef(_0))

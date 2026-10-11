@@ -38,9 +38,9 @@ from sushi_lang.semantics.shir.body import (
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, ShirId
 from sushi_lang.semantics.shir.lookup import DeclLookup
+from sushi_lang.semantics.shir.lower_binders import written_param_type
 from sushi_lang.semantics.shir.lower_nodes import BodyLowerer, binder_local
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
-from sushi_lang.semantics.typesys import ReferenceType
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.const_eval import ConstantEvaluator
@@ -190,10 +190,10 @@ def _frame(decl: Declaration, bindings: Bindings,
 
 def _param_type(param: AnyParam) -> TypeRef:
     """The declared type with no `peek` or `poke`: the convention says how it crosses."""
-    ty = param.ty
+    ty = written_param_type(param.ty)
     if ty is None:
         er.raise_internal_error("CE0000", detail=f"the parameter '{param.name}' has no type")
-    return ty.referenced_type if isinstance(ty, ReferenceType) else ty
+    return ty
 
 
 def _span(*candidates: Optional[Span]) -> Span:

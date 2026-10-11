@@ -6,8 +6,8 @@ holds no OPAQUE node. The evaluator writes on the AST when it reaches a call or 
 access (it stamps `namespace_ref`, and it folds an alias out of the receiver), so such a
 node in the subtree must stop the read. A node whose value is never a number that the
 typecheck pass reads (a struct, a variant, a tuple, a dynamic array) is opaque too, and
-so is a node of ownership (a borrow, a take, a `??`) and a slice: the evaluator has no
-value for one, and its value is a place, a wrapper or a view. `BodyLowerer.operand` sees
+so is a node of ownership (a borrow, a take, a `??`), a slice and a lambda: the evaluator
+has no value for one, and its value is a place, a wrapper, a view or a closure. `BodyLowerer.operand` sees
 an opaque node through the count that `made_opaque` keeps. So this gate holds three rules:
 
 1. Each node of `OPAQUE` that a lowering module makes takes its id from `made_opaque`, as
@@ -30,17 +30,17 @@ import ast
 import inspect
 from pathlib import Path
 
-from sushi_lang.semantics.shir import lower_aggregates, lower_nodes, lower_patterns
+from sushi_lang.semantics.shir import lower_aggregates, lower_binders, lower_nodes, lower_patterns
 
 #: The modules of body lowering that make a node.
-_MODULES = (lower_nodes, lower_patterns, lower_aggregates)
+_MODULES = (lower_nodes, lower_patterns, lower_aggregates, lower_binders)
 
 #: The SHIR nodes whose value the compiler cannot read: a local, a unit `var`, a
 #: function, a call, a field read, a struct, a variant, a tuple, a borrow, a take, a
-#: `??`, a slice and a hole.
+#: `??`, a slice, a lambda and a hole.
 OPAQUE: frozenset[str] = frozenset({
     "LocalRef", "StorageRef", "GlobalRef", "Call", "Field", "StructInit", "EnumInit",
-    "TupleInit", "Borrow", "Take", "Try", "Slice", "Hole",
+    "TupleInit", "Borrow", "Take", "Try", "Slice", "Lambda", "Hole",
 })
 
 #: The SHIR nodes that are never opaque: the evaluator folds each one with no write on

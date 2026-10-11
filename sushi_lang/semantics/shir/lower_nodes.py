@@ -15,13 +15,17 @@ construction is an `Arg` too. In any other position, `peek x` and `poke x` are a
 (a reference `let` gives one too, from the same function). A pattern has a third table,
 `PATTERNS` in `lower_patterns.py`, and the `Match` row lowers each arm through it. The
 constructions, the member read, the index, the slice and the range are rows of
-`LOWERING`, and `lower_aggregates.py` holds their lowering.
+`LOWERING`, and `lower_aggregates.py` holds their lowering. A lambda and a destructure
+declare locals; they are rows of `LOWERING` too, and `lower_binders.py` holds their
+lowering. An `assert` keeps its message as an expression, because the message is
+evaluated only when the condition is false (ir.md 7.5).
 
 A name lowers to the answer that the scope pass recorded for it (ir.md 7.1): a local, a
 constant, a unit `var` or a function. A name with no declaration (`Unresolved`), and a
 type or a namespace written as a value, is a hole: the program has an error, and SHIR has
 no node for such a name. The binder of a `let` gives a `ShirLocal`, with the `LocalId`
-that the scope pass recorded for it.
+that the scope pass recorded for it. A binder with no name span is one that the AST
+builder made: its local is hidden, with no name (ir.md 7.2).
 
 Ruling E3 (ir.md 7.4): an operand whose value the typecheck pass reads is read here, with
 the AST constant evaluator, and the value is recorded on its node (`readable`). These are
@@ -29,8 +33,8 @@ the divisor of `/` and `%`, the count of `<<` and `>>`, and each operand of the 
 that the overflow check folds (`+`, `-`, `*` and the negation). Lowering has no types, so
 the evaluator reads at `i64`, the widest signed type; the typecheck pass applies the type
 of the position. An operand is read only when it holds no opaque node: a local, a `var`, a
-function, a call, a field read, a construction, a borrow, a take, a `??`, a slice or a
-hole has no value that the compiler can read. A cast and an interpolated string are not
+function, a call, a field read, a construction, a borrow, a take, a `??`, a slice, a
+lambda or a hole has no value that the compiler can read. A cast and an interpolated string are not
 opaque: the evaluator folds them with no write on the AST.
 
 Every id comes from the counter of the body in the order of the walk, a node before its
@@ -58,6 +62,7 @@ from sushi_lang.semantics.shir.lower_aggregates import (
     enum_init, lower_array, lower_from, lower_index, lower_member, lower_new, lower_range,
     lower_tuple, struct_init,
 )
+from sushi_lang.semantics.shir.lower_binders import lower_destructure, lower_lambda
 from sushi_lang.semantics.shir.lower_patterns import lower_match
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, ReferenceType, UnknownType
@@ -152,9 +157,13 @@ class BodyLowerer:
 
     def initializer(self, decl: a.ConstDef) -> ShirBlock:
         """The block of a constant or a `var` initializer: one `Return` of the value (ir.md 6.3)."""
+        return self.returned(decl.value, self.span(decl))
+
+    def returned(self, value: Any, loc: Span) -> ShirBlock:
+        """A block of one `Return` of `value`: an initializer, or the expression body of a lambda."""
         ident = self.ident()
-        returned = s.Return(self.ident(), self.span(decl.value), self.expr(decl.value))
-        return ShirBlock(ident, self.span(decl), [returned])
+        statement = s.Return(self.ident(), self.span(value), self.expr(value))
+        return ShirBlock(ident, loc, [statement])
 
     def span(self, node: Any) -> Span:
         loc = getattr(node, "loc", None)
@@ -166,6 +175,12 @@ class BodyLowerer:
     def binder(self, owner: object, name: str) -> LocalId:
         """The local that the scope pass recorded for the binder `name` of `owner`."""
         return binder_local(self.bindings, owner, name)
+
+    def declare(self, local: LocalId, name: str, declared: Optional[TypeRef],
+                name_span: Optional[Span]) -> None:
+        """List the local of a binder. With no name span, the AST builder made it: hidden."""
+        self.locals.append(ShirLocal(local, None if name_span is None else name, declared,
+                                     name_span))
 
     def arguments(self, args: list[Any]) -> list[e.Arg]:
         """Each argument in the written order, which is the order of evaluation."""
@@ -463,14 +478,13 @@ def _let(lw: BodyLowerer, node: a.Let) -> s.ShirStmt:
     The local keeps the type as written, or none. A binder that the AST builder made has no
     name span, and its local has no name (ir.md 7.2). A reference binding
     (`let poke T x = place`) takes a `Borrow` of the place, with the written mode (ir.md 7.5).
-    A destructure (`let (a, b) = v`) is a hole until its lowering exists.
+    A destructure (`let (a, b) = v`) is a `Destructure` (`lower_binders.py`).
     """
     if node.targets is not None:
-        return lw.hole(node)
+        return lower_destructure(lw, node)
     ident = lw.ident()
     local = binder_local(lw.bindings, node, node.name)
-    hidden = node.name_span is None
-    lw.locals.append(ShirLocal(local, None if hidden else node.name, node.ty, node.name_span))
+    lw.declare(local, node.name, node.ty, node.name_span)
     target = e.LocalRef(lw.made_opaque(), node.name_span or lw.span(node), local)
     return s.Assign(ident, lw.span(node), target, _initial_value(lw, node), is_init=True)
 
@@ -562,6 +576,14 @@ def _item_mode(marker: Optional[str]) -> s.ItemMode:
     return s.Bare() if marker is None else s.Ref(borrow_mode(marker))
 
 
+def _assert(lw: BodyLowerer, node: a.Assert) -> s.Assert:
+    """`assert(cond, message)`. `label` is the file name that the AST builder gives the unit."""
+    ident = lw.ident()
+    cond = lw.expr(node.cond)
+    message = None if node.message is None else lw.expr(node.message)
+    return s.Assert(ident, lw.span(node), cond, message, node.source_label)
+
+
 def _break(lw: BodyLowerer, node: a.Break) -> s.Break:
     return s.Break(lw.ident(), lw.span(node))
 
@@ -612,6 +634,7 @@ LOWERING: dict[type, Lower] = {
     a.DynamicArrayNew: lower_new,
     a.RangeExpr: lower_range,
     a.IndexAccess: lower_index,
+    a.Lambda: lower_lambda,
     a.ExprStmt: _expr_stmt,
     a.Return: _return,
     a.Print: _print,
@@ -622,6 +645,7 @@ LOWERING: dict[type, Lower] = {
     a.While: _while,
     a.Foreach: _foreach,
     a.Match: lower_match,
+    a.Assert: _assert,
     a.Break: _break,
     a.Continue: _continue,
 }

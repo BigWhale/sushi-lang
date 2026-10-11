@@ -1,10 +1,15 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_DUMP_SHIR: test_shir_holes.shir
 #
-# the SHIR dump of a body with a hole: lowering does not handle an `assert` yet, so it is
-# a `<hole: Assert>` with the name of its AST class, and the compile goes on through the
-# old pipeline. The `let`, the `if`, the method call and the `return` lower, and their
-# local is the binder of the `let`.
+# the SHIR dump of a body with a hole: SHIR `Call` has no field for written type
+# arguments yet, so `identity@(i32)(nom total)` is a `<hole: Call>` with the name of its
+# AST class, and the compile goes on through the old pipeline. The `let`, the `if`, the
+# `assert`, the method call and the `return` lower, and their local is the binder of the
+# `let`. The copy of `identity` for `i32` is a body of its own, after `main`. When
+# lowering has no hole left, the totality gate of Phase 1 deletes this fixture.
+
+fn identity@(T)(nom T x) T:
+    return x
 
 fn main() i32:
     let i32 total = 40 + 2
@@ -12,4 +17,4 @@ fn main() i32:
         return 1
     assert(total == 42)
     total.hash()
-    return total - 42
+    return identity@(i32)(nom total) - 42

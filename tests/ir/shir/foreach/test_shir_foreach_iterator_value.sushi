@@ -5,8 +5,7 @@
 # the SHIR dump of a `foreach` over an iterator value: the result of a call, and the
 # result of an adapter chain. The iterable is the call. A tuple binder `(i, x)` is a
 # binder that the AST builder made: the loop binds a hidden local, with no name, and the
-# body starts with the destructure of it. A destructure is a hole until its lowering
-# exists (P1.13), so `i` and `x` are not in the `locals` line yet.
+# body starts with the `Destructure` of it into `i` and `x`.
 
 use <collections/iter>
 
