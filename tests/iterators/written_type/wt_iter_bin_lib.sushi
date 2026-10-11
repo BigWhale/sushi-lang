@@ -1,0 +1,7 @@
+# A binary library with a public function that names `Iterator@(peek string)`.
+use <collections/iter>
+
+public fn walk(poke Iterator@(peek string) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return walk(poke it, depth - 1)

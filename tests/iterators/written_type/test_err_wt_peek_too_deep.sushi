@@ -1,0 +1,12 @@
+# `peek` stands at the top of the item and nowhere deeper: a `List` of borrows inside
+# the item is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2419
+use <collections/iter>
+
+fn count(poke Iterator@(List@(peek string)) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return count(poke it, depth - 1)
+
+fn main() i32:
+    return 0

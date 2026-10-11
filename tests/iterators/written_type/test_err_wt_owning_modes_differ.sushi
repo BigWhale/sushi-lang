@@ -1,0 +1,15 @@
+# For an item that owns a resource, `Iterator@(peek string)` and `Iterator@(string)`
+# are two types.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+use <collections/iter>
+
+fn owned(poke Iterator@(string) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return owned(poke it, depth - 1)
+
+fn lent(poke Iterator@(peek string) it, i32 depth) i32:
+    return owned(poke it, depth)
+
+fn main() i32:
+    return 0

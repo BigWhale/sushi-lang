@@ -1,0 +1,15 @@
+# A template does not know whether `T` holds a resource, so in a template
+# `Iterator@(peek T)` and `Iterator@(T)` stay two types.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+use <collections/iter>
+
+fn owned@(T)(poke Iterator@(T) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return owned@(T)(poke it, depth - 1)
+
+fn lent@(T)(poke Iterator@(peek T) it, i32 depth) i32:
+    return owned@(T)(poke it, depth)
+
+fn main() i32:
+    return 0

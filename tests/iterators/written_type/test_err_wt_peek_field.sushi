@@ -1,0 +1,8 @@
+# A struct field cannot borrow. `peek` in a type is legal only inside `Iterator@(...)`.
+# EXPECT_ERROR_CODES_EXACT: CE2415
+
+struct Holder:
+    peek string name
+
+fn main() i32:
+    return 0

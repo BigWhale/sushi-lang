@@ -1,0 +1,44 @@
+# For an item that holds no resource, `Iterator@(peek T)` and `Iterator@(T)` are one
+# type: an argument of one goes to a parameter of the other, in both directions. This
+# holds for a primitive, a plain struct, and each element of a tuple item.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+use <collections/iter>
+
+struct Point:
+    i32 x
+    i32 y
+
+fn owned(poke Iterator@(i32) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return lent(poke it, depth - 1)
+
+fn lent(poke Iterator@(peek i32) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return owned(poke it, depth - 1)
+
+fn owned_points(Iterator@(Point) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return lent_points(it, depth - 1)
+
+fn lent_points(Iterator@(peek Point) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return owned_points(it, depth - 1)
+
+fn one_lent(poke Iterator@((i32, peek string)) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return two_lent(poke it, depth - 1)
+
+fn two_lent(poke Iterator@((peek i32, peek string)) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return one_lent(poke it, depth - 1)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

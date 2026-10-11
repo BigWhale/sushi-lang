@@ -1,0 +1,11 @@
+# The name `Iterator` needs `use <collections/iter>`. With no import it is not a type
+# here, and the help names the import.
+# EXPECT_ERROR_CODES_EXACT: CE2001
+
+fn count(poke Iterator@(i32) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return count(poke it, depth - 1)
+
+fn main() i32:
+    return 0
