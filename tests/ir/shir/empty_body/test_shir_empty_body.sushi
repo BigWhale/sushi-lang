@@ -1,0 +1,8 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SHIR: test_shir_empty_body.shir
+#
+# the SHIR dump of a body that lowering does not fill yet: the header of `main`, no
+# parameter, no local and an empty block.
+
+fn main() i32:
+    return 0

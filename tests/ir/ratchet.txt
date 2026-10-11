@@ -2644,6 +2644,7 @@ tests/io/lines/test_run_no_trailing_newline.sushi
 tests/io/lines/test_run_only_blank_lines.sushi
 tests/io/lines/test_stdin_lines.sushi
 tests/io/lines/test_stdin_lines_demo.sushi
+tests/ir/shir/empty_body/test_shir_empty_body.sushi
 tests/iterators/adapters/test_ad_borrowed_params.sushi
 tests/iterators/adapters/test_ad_break_frees_chain.sushi
 tests/iterators/adapters/test_ad_chain.sushi

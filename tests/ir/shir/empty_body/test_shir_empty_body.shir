@@ -1,0 +1,6 @@
+unit test_shir_empty_body
+
+ShirBody main
+  params : []
+  locals : []
+  block  : []
