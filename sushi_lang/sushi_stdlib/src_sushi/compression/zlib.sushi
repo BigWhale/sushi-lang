@@ -405,13 +405,13 @@ fn inflate_dynamic(peek u8[] src, poke ZBits s, poke u8[] out) ~ | ZError:
     let ZHuff clencode = inflate_clen(peek src, poke s, ncode)??
     let i32[] lengths = inflate_lengths(peek src, poke s, peek clencode, nlen + ndist)??
 
-    let i32[] litlen = lengths.ss(0, nlen)
+    let i32[] litlen = lengths[0..nlen]
     let ZHuff lencode = huff_build(peek litlen, nlen)??
     if (lencode.left != 0):
         if (nlen != (lencode.count[0] + lencode.count[1])):
             return Result.Err(ZError.BadCode())
 
-    let i32[] distlen = lengths.ss(nlen, ndist)
+    let i32[] distlen = lengths[nlen..nlen + ndist]
     let ZHuff distcode = huff_build(peek distlen, ndist)??
     if (distcode.left != 0):
         if (ndist != (distcode.count[0] + distcode.count[1])):
@@ -841,7 +841,7 @@ public fn zlib_uncompress(u8[] src) u8[] | ZError:
         return Result.Err(ZError.DictNeeded())
 
     let i32 endp = src.len() - 4
-    let u8[] body = src.s(2, endp)
+    let u8[] body = src[2..endp]
 
     let u8[] out = inflate_raw(body)??
     let u32 want = src.read_u32_be(endp).or_err(nom ZError.Truncated(src.len()))??
