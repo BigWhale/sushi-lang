@@ -1,6 +1,6 @@
 # Random Module
 
-[← Back to Standard Library](../standard-library.md)
+[← Back to Standard Library](../../standard-library.md)
 
 Provides basic pseudo-random number generation for non-cryptographic use cases.
 
@@ -208,4 +208,4 @@ fn main() i32:
 
 - [Math Module](math.md) - Mathematical operations
 - [Time Module](time.md) - Sleep and clocks
-- [Arrays](collections/arrays.md) - Array operations
+- [Arrays](../collections/arrays.md) - Array operations

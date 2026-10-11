@@ -37,7 +37,7 @@ FROZEN = {"tests/unit/test_path_references_exist.py"}
 # References that do not name a real file ON PURPOSE. Each entry carries its reason;
 # adding one is deliberate, which is the point of listing them here.
 ALLOWED = {
-    # Placeholders in how-to-extend documentation (docs/stdlib/platform.md and peers):
+    # Placeholders in how-to-extend documentation (docs/stdlib/system/platform.md and peers):
     # the path teaches where a NEW file would go.
     "darwin/myfeature.py",
     "linux/myfeature.py",

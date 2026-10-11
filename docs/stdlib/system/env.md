@@ -1,6 +1,6 @@
 # Environment Variables Module
 
-[← Back to Standard Library](../standard-library.md)
+[← Back to Standard Library](../../standard-library.md)
 
 System environment variable access and manipulation.
 
@@ -331,6 +331,6 @@ fn main() i32:
 
 ## See Also
 
-- [Standard Library Reference](../standard-library.md) - Complete stdlib reference
-- [Error Handling](../error-handling.md) - Result and Maybe types
-- [String Methods](collections/strings.md) - String operations for parsing env values
+- [Standard Library Reference](../../standard-library.md) - Complete stdlib reference
+- [Error Handling](../../error-handling.md) - Result and Maybe types
+- [String Methods](../collections/strings.md) - String operations for parsing env values

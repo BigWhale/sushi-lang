@@ -1,6 +1,6 @@
 # Process Control Module
 
-[← Back to Standard Library](../standard-library.md)
+[← Back to Standard Library](../../standard-library.md)
 
 System process control and information functions.
 
@@ -274,7 +274,7 @@ run(string cmd, ...string args) Result@(ProcessOutput, ProcessError)
 ```
 
 `args` is variadic: pass individual arguments directly (`run("echo", "hello")`), or forward an
-already-built `string[]` with a [bloom](../variadics.md#spread-forwarding-bloom) (`run("sh",
+already-built `string[]` with a [bloom](../../variadics.md#spread-forwarding-bloom) (`run("sh",
 argv...)`) when the argument list is computed at runtime. A bloom moves the source array into the
 call, so don't reuse it afterward.
 
@@ -424,7 +424,7 @@ Windows support is not yet implemented. The module requires POSIX compatibility.
 
 Run an operation in another directory and always restore the original. `with_directory` takes
 the operation as a **function value** (`fn() -> i32`) and calls through it — see
-[First-Class Functions](../first-class-functions.md).
+[First-Class Functions](../../first-class-functions.md).
 
 ```sushi
 use <sys/process>
@@ -634,7 +634,7 @@ fn main() i32:
 
 ## See Also
 
-- [Standard Library Reference](../standard-library.md) - Complete stdlib reference
+- [Standard Library Reference](../../standard-library.md) - Complete stdlib reference
 - [Environment Variables](env.md) - Working with environment variables
-- [Error Handling](../error-handling.md) - Result and Maybe types
-- [I/O Operations](io/files.md) - File system operations
+- [Error Handling](../../error-handling.md) - Result and Maybe types
+- [I/O Operations](../io/files.md) - File system operations

@@ -1,6 +1,6 @@
 # Time Module
 
-[← Back to Standard Library](../standard-library.md)
+[← Back to Standard Library](../../standard-library.md)
 
 Sleep functions that use POSIX `nanosleep()`, and two clock reads.
 
@@ -26,7 +26,7 @@ The sleep functions have the `StdError` error channel. They return `Result@(i32,
 
 A literal argument takes its type from the parameter, so `msleep(500)` needs no cast. The
 examples use `match` or `.realise(...)` in `main`. `main` is bare, so `??` in `main` is
-[CE0131](../error-catalog.md#ce0131).
+[CE0131](../../error-catalog.md#ce0131).
 
 ## Functions
 
@@ -247,4 +247,4 @@ foreach(frame in 0..60):
 
 - [Random Module](random.md) - For random delays
 - [Environment Module](env.md) - For environment-based configuration
-- [I/O Console](io/console.md) - For progress indicators
+- [I/O Console](../io/console.md) - For progress indicators
