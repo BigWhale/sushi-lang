@@ -19,15 +19,19 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
+import importlib
+import pkgutil
 import re
 import types
 import typing
+from typing import Iterator
 
 import pytest
 
+import sushi_lang.semantics.shir as shir_pkg
 from sushi_lang.semantics import ast as a
-from sushi_lang.semantics.shir import exprs
-from sushi_lang.semantics.shir.nodes import ShirNode
+from sushi_lang.semantics.shir import exprs, stmts
+from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode
 
 #: The fields that every node has (ir.md 7.3), and the recorded value of an expression
 #: that the compiler can read (ruling E3, ir.md 7.4).
@@ -115,7 +119,67 @@ AST_EXPRESSION_ROWS: dict[str, tuple[str, ...]] = {
     "TupleLiteral": ("TupleInit",),
 }
 
+#: ir.md 7.5, the statement nodes and their fields in the written order.
+STATEMENT_FIELDS: dict[str, tuple[str, ...]] = {
+    "Assign": ("target", "value", "is_init"),
+    "Destructure": ("targets", "value"),
+    "ExprStmt": ("value",),
+    "Return": ("value",),
+    "If": ("cond", "then", "otherwise"),
+    "Loop": ("source", "body"),
+    "Match": ("scrutinee", "arms", "consumes"),
+    "Assert": ("cond", "message", "label"),
+    "Break": (),
+    "Continue": (),
+    "Expand": ("binder", "pack", "body"),
+}
+
+#: The parts of a statement that are not nodes (ir.md 7.5): a loop source and the mode
+#: of its binder, and a target of a destructure. `Nested` is a nested destructure,
+#: `let ((a, b), c) = v`, which the list of 7.5 leaves out.
+STATEMENT_PARTS: dict[str, tuple[str, ...]] = {
+    "Cond": ("cond",),
+    "Items": ("iterable", "binder", "by"),
+    "Bare": (),
+    "Ref": ("mode",),
+    "Discard": (),
+    "Nested": ("targets",),
+}
+
+#: ir.md 7.10, one row per AST statement class. 7.10 leaves out the classes that keep
+#: their name. A `print` is an `ExprStmt` that holds a `Call`.
+AST_STATEMENT_ROWS: dict[str, tuple[str, ...]] = {
+    "Let": ("Assign", "Destructure"),
+    "Rebind": ("Assign",),
+    "ExprStmt": ("ExprStmt",),
+    "Return": ("Return",),
+    "Print": ("ExprStmt", "Call"),
+    "PrintLn": ("ExprStmt", "Call"),
+    "Assert": ("Assert",),
+    "If": ("If",),
+    "While": ("Loop",),
+    "Foreach": ("Loop",),
+    "Expand": ("Expand",),
+    "Match": ("Match",),
+    "Break": ("Break",),
+    "Continue": ("Continue",),
+}
+
 _NO_NODE_OF_ITS_OWN = {"Spread"}
+
+#: The node classes that are in no union: the bases, and the block, which a node holds.
+_OUTSIDE_EVERY_UNION = {"ShirNode", "ExprNode", "ShirBlock"}
+
+#: level -> (module, union, node fields, part fields, base fields)
+_LEVELS: dict[str, tuple[types.ModuleType, object, dict[str, tuple[str, ...]],
+                         dict[str, tuple[str, ...]], tuple[str, ...]]] = {
+    "expression": (exprs, exprs.ShirExpr, EXPRESSION_FIELDS, EXPRESSION_PARTS,
+                   _EXPR_BASE_FIELDS),
+    "statement": (stmts, stmts.ShirStmt, STATEMENT_FIELDS, STATEMENT_PARTS, _BASE_FIELDS),
+}
+
+_NODES = [(level, name) for level, row in _LEVELS.items() for name in sorted(row[2])]
+_PARTS = [(level, name) for level, row in _LEVELS.items() for name in sorted(row[3])]
 
 
 def _classes_of(module: types.ModuleType) -> dict[str, type]:
@@ -123,39 +187,63 @@ def _classes_of(module: types.ModuleType) -> dict[str, type]:
             if obj.__module__ == module.__name__}
 
 
+def _package_classes() -> Iterator[type]:
+    for info in pkgutil.walk_packages(shir_pkg.__path__, shir_pkg.__name__ + "."):
+        yield from _classes_of(importlib.import_module(info.name)).values()
+
+
 def _union_members(alias: object) -> set[str]:
     return {member.__name__ for member in typing.get_args(alias)}
+
+
+def _all_nodes() -> set[str]:
+    return _union_members(exprs.ShirExpr) | _union_members(stmts.ShirStmt)
 
 
 def _field_names(cls: type) -> tuple[str, ...]:
     return tuple(item.name for item in dataclasses.fields(cls))  # type: ignore[arg-type]
 
 
+def _ast_subclasses(root: type) -> set[str]:
+    found, pending = set(), [root]
+    while pending:
+        for sub in pending.pop().__subclasses__():
+            if sub.__name__ not in found:
+                found.add(sub.__name__)
+                pending.append(sub)
+    return found
+
+
+def _ids(pair: tuple[str, str]) -> str:
+    return f"{pair[0]}-{pair[1]}"
+
+
 # --- 1. the classes are the classes of ir.md ----------------------------------------
 
 
-def test_every_expression_node_of_ir_md_exists() -> None:
-    missing = set(EXPRESSION_FIELDS) - set(_classes_of(exprs))
-    assert not missing, f"ir.md 7.4 names these expression nodes; none exists: {missing}"
+@pytest.mark.parametrize("level", sorted(_LEVELS))
+def test_every_node_and_part_of_ir_md_exists(level: str) -> None:
+    module, _union, fields, parts, _base = _LEVELS[level]
+    missing = (set(fields) | set(parts)) - set(_classes_of(module))
+    assert not missing, f"ir.md names these {level} classes; none exists: {missing}"
 
 
-def test_every_expression_part_of_ir_md_exists() -> None:
-    missing = set(EXPRESSION_PARTS) - set(_classes_of(exprs))
-    assert not missing, f"ir.md 7.4 names these parts of an expression: {missing}"
+@pytest.mark.parametrize("pair", _NODES, ids=_ids)
+def test_a_node_has_the_fields_of_ir_md(pair: tuple[str, str]) -> None:
+    level, name = pair
+    module, _union, fields, _parts, base = _LEVELS[level]
+    cls = getattr(module, name)
+    assert issubclass(cls, ShirNode)
+    assert _field_names(cls) == base + fields[name]
 
 
-@pytest.mark.parametrize("name", sorted(EXPRESSION_FIELDS))
-def test_an_expression_node_has_the_fields_of_ir_md(name: str) -> None:
-    cls = getattr(exprs, name)
-    assert issubclass(cls, exprs.ExprNode)
-    assert _field_names(cls) == _EXPR_BASE_FIELDS + EXPRESSION_FIELDS[name]
-
-
-@pytest.mark.parametrize("name", sorted(EXPRESSION_PARTS))
-def test_an_expression_part_has_the_fields_of_ir_md(name: str) -> None:
-    cls = getattr(exprs, name)
+@pytest.mark.parametrize("pair", _PARTS, ids=_ids)
+def test_a_part_has_the_fields_of_ir_md(pair: tuple[str, str]) -> None:
+    level, name = pair
+    module, _union, _fields, parts, _base = _LEVELS[level]
+    cls = getattr(module, name)
     assert not issubclass(cls, ShirNode), f"{name} is a part of a node, not a node"
-    assert _field_names(cls) == EXPRESSION_PARTS[name]
+    assert _field_names(cls) == parts[name]
 
 
 def test_the_recorded_value_is_on_every_expression_and_takes_no_position() -> None:
@@ -164,32 +252,52 @@ def test_the_recorded_value_is_on_every_expression_and_takes_no_position() -> No
     assert readable.kw_only and readable.default is None
 
 
+def test_a_block_holds_statements() -> None:
+    statements = {item.name: item for item in dataclasses.fields(ShirBlock)}["statements"]
+    assert statements.type == "list[ShirStmt]"
+
+
 # --- 2. each node is in its union, and the union holds nothing else -----------------
 
 
-def test_the_expression_union_is_the_expression_nodes() -> None:
-    assert _union_members(exprs.ShirExpr) == set(EXPRESSION_FIELDS)
+@pytest.mark.parametrize("level", sorted(_LEVELS))
+def test_the_union_is_the_nodes_of_its_level(level: str) -> None:
+    module, union, fields, _parts, _base = _LEVELS[level]
+    nodes = {name for name, cls in _classes_of(module).items()
+             if issubclass(cls, ShirNode) and name not in _OUTSIDE_EVERY_UNION}
+    assert _union_members(union) == set(fields) == nodes
 
 
-def test_every_expression_class_is_in_the_union() -> None:
-    nodes = {name for name, cls in _classes_of(exprs).items()
-             if issubclass(cls, exprs.ExprNode) and cls is not exprs.ExprNode}
-    assert nodes == _union_members(exprs.ShirExpr), (
-        "an expression node that is not in ShirExpr is a node no dispatch reaches")
+def test_every_node_of_the_package_is_in_a_union() -> None:
+    outside = {cls.__name__ for cls in _package_classes() if issubclass(cls, ShirNode)}
+    outside -= _all_nodes() | _OUTSIDE_EVERY_UNION
+    assert not outside, f"no dispatch reaches these nodes, because no union holds them: {outside}"
+
+
+def test_no_node_is_in_two_unions() -> None:
+    assert not _union_members(exprs.ShirExpr) & _union_members(stmts.ShirStmt)
 
 
 # --- 3. lowering has a node for every AST body class --------------------------------
 
 
-def test_every_ast_expression_class_has_a_row() -> None:
+def test_every_ast_body_class_has_a_row() -> None:
     assert set(AST_EXPRESSION_ROWS) == {cls.__name__ for cls in typing.get_args(a.Expr)}
+    assert set(AST_STATEMENT_ROWS) == _ast_subclasses(a.Stmt)
 
 
 @pytest.mark.parametrize("ast_name", sorted(AST_EXPRESSION_ROWS))
-def test_the_nodes_of_a_row_are_expression_nodes(ast_name: str) -> None:
+def test_an_ast_expression_lowers_to_expression_nodes(ast_name: str) -> None:
     row = AST_EXPRESSION_ROWS[ast_name]
     assert (not row) == (ast_name in _NO_NODE_OF_ITS_OWN)
     assert set(row) <= _union_members(exprs.ShirExpr)
+
+
+@pytest.mark.parametrize("ast_name", sorted(AST_STATEMENT_ROWS))
+def test_an_ast_statement_lowers_to_nodes(ast_name: str) -> None:
+    row = AST_STATEMENT_ROWS[ast_name]
+    assert row and set(row) <= _all_nodes()
+    assert set(row) & _union_members(stmts.ShirStmt), "a statement lowers to a statement"
 
 
 # --- a later walk reaches every node that a field holds -----------------------------
@@ -200,9 +308,9 @@ _WRAPPERS_THAT_HOLD_A_NODE = {"Optional", "Union", "list", "tuple"}
 
 
 def test_no_field_wraps_a_node_in_a_container_that_a_walk_skips() -> None:
-    held = set(EXPRESSION_FIELDS) | {"ShirExpr", "ShirNode", "ShirBlock", "ExprNode"}
+    held = _all_nodes() | {"ShirExpr", "ShirStmt"} | _OUTSIDE_EVERY_UNION
     offenders = []
-    for name, cls in sorted(_classes_of(exprs).items()):
+    for cls in sorted(_package_classes(), key=lambda c: f"{c.__module__}.{c.__name__}"):
         if not dataclasses.is_dataclass(cls):
             continue
         for item in dataclasses.fields(cls):
@@ -211,5 +319,5 @@ def test_no_field_wraps_a_node_in_a_container_that_a_walk_skips() -> None:
                 continue
             unknown = set(re.findall(r"(\w+)\s*\[", annotation)) - _WRAPPERS_THAT_HOLD_A_NODE
             if unknown:
-                offenders.append(f"{name}.{item.name}: {annotation} ({unknown})")
+                offenders.append(f"{cls.__name__}.{item.name}: {annotation} ({unknown})")
     assert not offenders, f"these fields hold a node where a walk does not look: {offenders}"

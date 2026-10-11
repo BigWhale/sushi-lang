@@ -110,6 +110,8 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/nodes.py", "shir_id", _P1_5_PRINTER),
     *(("sushi_lang/semantics/shir/exprs.py", name, _P1_LOWERING)
       for name in ("readable", "const_id", "bloom", "convention", "written_order")),
+    *(("sushi_lang/semantics/shir/stmts.py", name, _P1_LOWERING)
+      for name in ("is_init", "then", "otherwise")),
 )
 
 RATCHET: tuple[tuple[str, str, str], ...] = ()

@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import TYPE_CHECKING, TypeAlias
 
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.typesys import Type
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.stmts import ShirStmt
 
 #: A type as WRITTEN (ir.md 7.4). It is syntax, so a node may hold it.
 TypeRef: TypeAlias = Type
@@ -22,4 +25,4 @@ class ShirNode:
 @dataclass(slots=True)
 class ShirBlock(ShirNode):
     """The statements of one block, in the written order."""
-    statements: list[ShirNode]
+    statements: list[ShirStmt]
