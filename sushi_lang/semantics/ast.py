@@ -660,10 +660,10 @@ class Foreach(Stmt):
     # the iterator lives in. Both None for an `Iterator@(T)`, which is the buffer walk.
     protocol_next: "Optional[MethodCall]" = None
     protocol_iter_name: Optional[str] = None
-    # The typecheck pass sets it for a `next()` walk of a place reached through a `poke`
-    # reference: the loop calls `next()` on the caller's storage and does not take the
-    # value (#1258). The borrow pass and the backend read this one stamp. The borrow pass
-    # also sets it for an iterator value that a `let` borrows (#1259).
+    # The borrow pass is the one writer (ruling S6, docs/design/ir.md). It sets it for a
+    # `next()` walk or a value walk of a place reached through a `poke` reference: the
+    # loop moves the caller's state and does not take the value (#1258). It also sets it
+    # for an iterator value that a `let` borrows (#1259). The backend reads it.
     walks_in_place: bool = False
     # The typecheck pass sets it for a walk of an `Iterator@(T)` VALUE: the loop calls
     # the value's `next_fn` (#1259). None for a range, for a built-in producer that the

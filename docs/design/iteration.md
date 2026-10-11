@@ -215,10 +215,10 @@ fn first(poke Words w) ~:
         break
 ```
 
-The caller then continues the walk where `first` stopped. The typecheck pass decides it
-once and stamps `Foreach.walks_in_place`; the borrow pass and the backend read that stamp.
-The borrow pass also sets the stamp for a `let` that holds a LENT iterator (ruling 10): that
-`let` cannot give its value away, so the loop walks it in place and does not take it.
+The caller then continues the walk where `first` stopped. The borrow pass decides it once
+and stamps `Foreach.walks_in_place`; the backend reads that stamp. The borrow pass also sets
+the stamp for a `let` that holds a LENT iterator (ruling 10): that `let` cannot give its
+value away, so the loop walks it in place and does not take it.
 In the borrow pass the walk is a change of the walked value, the same as a call of
 `next()` on it, so a `let`-borrow that reads out of the same owner and is used after the
 loop is **[CE2412](../error-catalog.md#ce2412)**. In the backend the loop's hidden slot is a
@@ -383,9 +383,10 @@ never frees a stack slot. The borrow pass chooses, and stamps the producer with
 **The walk.** A `foreach` over an iterator VALUE calls `next_fn` until it answers `None`. A
 `foreach` over a source the compiler can read keeps its DIRECT walk, with no call through
 `next_fn` and no allocation: `foreach(x in xs.iter())`, `foreach(i in 0..n)`,
-`foreach(k in m.keys())`, `foreach(poke r in xs.iter())`. The typecheck pass decides it:
-it stamps the producer of a direct walk `CURSOR`, so the producer answers its bare cursor,
-and it stamps `Foreach.value_iterator` for a walk of a value. The loop owns the item of an
+`foreach(k in m.keys())`, `foreach(poke r in xs.iter())`. The typecheck pass decides it,
+and it stamps `Foreach.value_iterator` for a walk of a value. The borrow pass reads that
+choice and stamps the producer of a direct walk `CURSOR`, so the producer answers its bare
+cursor. The loop owns the item of an
 `Iterator@(T)` (it is the payload of a fresh `Maybe`, as for a protocol walk), and it
 borrows the item of an `Iterator@(peek T)`, as it borrows an array element.
 

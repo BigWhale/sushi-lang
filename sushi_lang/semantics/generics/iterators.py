@@ -24,9 +24,25 @@ ITERATOR_BASE = "Iterator"
 # `List@(T)`, and the four HashMap walks. Each answers `Iterator@(peek T)`.
 CONTAINER_ITERATORS = frozenset({"iter", "keys", "values", "entries", "pairs"})
 
+# The built-in families whose iterator methods are producers over a container.
+_PRODUCER_FAMILIES = frozenset({"array", "list", "hashmap"})
+
+
+def is_producer(expr: Any) -> bool:
+    """Is `expr` a built-in iterator method of a container: `xs.iter()`, `m.keys()`?
+
+    A `foreach` walks such a producer DIRECTLY when it is the iterable.
+    """
+    from sushi_lang.semantics.ast import DotCall, MethodCall
+    return (isinstance(expr, (MethodCall, DotCall)) and not expr.args
+            and expr.method in CONTAINER_ITERATORS
+            and expr.callee_builtin_family in _PRODUCER_FAMILIES)
+
+
 # How a producer call keeps the state of its iterator (`MethodCall.iterator_state`). The
-# typecheck pass stamps CURSOR on the iterable of a direct walk; the borrow pass stamps
-# LENT or OWNED on every other producer, and LENT on the clone of a lent iterator.
+# borrow pass is the one writer (ruling S6, docs/design/ir.md): CURSOR on the iterable of
+# a direct walk, LENT or OWNED on every other producer, and LENT on the clone of a lent
+# iterator.
 CURSOR = "cursor"   # the bare cursor a direct `foreach` walk reads; no value is made
 LENT = "lent"       # a value that borrows the owners of its source; stack state
 OWNED = "owned"     # a value that takes its source (a temporary); heap state

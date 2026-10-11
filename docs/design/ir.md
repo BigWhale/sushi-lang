@@ -82,6 +82,8 @@ completeness check. Three faults follow from that shape, and each one is in the 
   `iterator_state` is written by `typecheck` (`CURSOR`) and by `borrow` (`LENT`, `OWNED`).
   `Lambda.captures` is written by `scope` (the names) and by `typecheck` (each capture's
   `ty`, `passes/types/visit/helpers.py:72`). No pass can say that the field is final.
+  On the old pipeline, ruling S6 now makes `borrow` the one writer of `walks_in_place`
+  and of `iterator_state`.
 - **One set that is not one set.** `CallLike` says that each call class carries the whole
   set of callee fields. `Call` carries 7 `callee_*` fields, `MethodCall` 11 and `DotCall`
   13.
@@ -850,8 +852,8 @@ there: it never lowers to SLIR (4.3).
 | whether a lent iterator's state goes to the heap, because the iterator leaves through a `peek` return | the producer's or adapter's `shir_id` |
 | whether a loop walks its iterator in place | the loop's `shir_id` |
 
-**Ruling S6: one fact, one writer.** Today `typecheck` and `borrow` both write the walk in
-place and the iterator state (1.2). Each of those facts is a question about ownership, and
+**Ruling S6: one fact, one writer.** Before this ruling, `typecheck` and `borrow` both
+wrote the walk in place and the iterator state (1.2). Each of those facts is a question about ownership, and
 `borrow` sees every input that `typecheck` sees. So `borrow` writes them, and `typecheck`
 writes nothing about them. A `Cursor` walk needs no state, because its `LoopKind` says so.
 

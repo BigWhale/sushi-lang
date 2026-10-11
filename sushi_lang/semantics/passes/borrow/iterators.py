@@ -11,10 +11,10 @@ still destroyed at scope exit, because it owns its value.
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
-from sushi_lang.semantics.ast import Call, DotCall, Expr, MethodCall, Name, TryExpr
+from sushi_lang.semantics.ast import Call, DotCall, Expr, Foreach, MethodCall, Name, TryExpr
 from sushi_lang.semantics.borrowed_return import is_borrowed_call
 from sushi_lang.semantics.generics.iterators import (
-    ADAPTERS, CONTAINER_ITERATORS, CURSOR, LAZY_ADAPTERS, LENT, OWNED)
+    ADAPTERS, CURSOR, LAZY_ADAPTERS, LENT, OWNED, is_producer)
 from sushi_lang.semantics.ownership import Provenance
 
 from sushi_lang.semantics.places import Step, unwrap_try, walk_place
@@ -24,15 +24,33 @@ from .reads import borrow_owner, names_kept_storage
 if TYPE_CHECKING:
     from . import BorrowChecker
 
-# The built-in families whose iterator methods are producers over a container.
-_PRODUCER_FAMILIES = frozenset({"array", "list", "hashmap"})
+
+def settle_walk(checker: 'BorrowChecker', stmt: Foreach) -> None:
+    """Stamp the two walk facts of a `foreach` from the walk that the typecheck pass chose.
+
+    A direct walk (no protocol call, no iterator value) makes no value, so its producer
+    answers its bare cursor (CURSOR). A protocol walk or a value walk of a place whose root
+    is a `poke` reference is walked IN PLACE (#1258). A `let` that holds a lent iterator is
+    walked in place too, and `_settle_value_walk` stamps it (#1259).
+    """
+    if stmt.protocol_next is None and stmt.value_iterator is None:
+        if is_producer(stmt.iterable):
+            stmt.iterable.iterator_state = CURSOR
+        return
+    stmt.walks_in_place = _reached_through_poke(checker, stmt.iterable)
 
 
-def is_producer(expr: Optional[Expr]) -> bool:
-    """Is `expr` a built-in iterator method of a container: `xs.iter()`, `m.keys()`?"""
-    return (isinstance(expr, (MethodCall, DotCall)) and not expr.args
-            and expr.method in CONTAINER_ITERATORS
-            and expr.callee_builtin_family in _PRODUCER_FAMILIES)
+def _reached_through_poke(checker: 'BorrowChecker', iterable: Expr) -> bool:
+    """Is the iterable a place whose root is a `poke` reference?
+
+    A `poke` parameter or receiver, a `let poke` binding, a `poke` pattern or item
+    binding, and the environment of a lifted lambda all register a `ReferenceType`.
+    """
+    from sushi_lang.semantics.typesys import ReferenceType
+    root = walk_place(iterable, Step.MEMBER | Step.INDEX).name
+    state = checker.borrow_state.get(root.id) if root is not None else None
+    return (state is not None and isinstance(state.var_type, ReferenceType)
+            and state.var_type.is_poke())
 
 
 def _is_iterator_clone(expr: Optional[Expr]) -> bool:

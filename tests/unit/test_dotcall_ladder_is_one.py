@@ -35,11 +35,12 @@ _WRITTEN_ON_THE_DOTCALL = ("inferred_return_type",)
 #: Shared fields the method rung never writes. `callee_fn_type` belongs to the fn-field
 #: rung, which stamps the DotCall itself; the rest are written by the other call shapes
 #: (a plain call, an FFI extern) on their own nodes, and the borrow pass writes
-#: `iterator_leaves` on the node it walks (#1229). A field added to BOTH node kinds and
-#: named in none of the three tables is a stamp the ladder would drop in silence.
+#: `iterator_leaves` (#1229) and `iterator_state` (ruling S6) on the node it walks. A field
+#: added to BOTH node kinds and named in none of the three tables is a stamp the ladder
+#: would drop in silence.
 _NOT_A_METHOD_STAMP = ("receiver", "method", "args", "field_names", "callee_fn_type",
                        "callee_unresolved", "external_ref", "variadic_arg_types",
-                       "iterator_leaves")
+                       "iterator_leaves", "iterator_state")
 
 #: Every `MethodCall(...)` construction under the typecheck pass, with why it is there.
 #: A third one is a second view of a call, which is what this file exists to refuse.

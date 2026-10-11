@@ -69,7 +69,7 @@ from .flow import (
     snapshot_flow,
     terminates,
 )
-from .iterators import is_lent_name, lent_owners
+from .iterators import is_lent_name, lent_owners, settle_walk
 from .reads import borrow_owner
 from .state import BorrowState, record_owners
 from .writes import (
@@ -443,6 +443,7 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
     reference is walked in place and not taken (#1258): each `next()` changes it, as a
     call of `next()` on it does.
     """
+    settle_walk(checker, stmt)
     check_expr(checker, stmt.iterable)
     walked_view = None
     if stmt.value_iterator is not None:
