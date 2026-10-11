@@ -2655,6 +2655,12 @@ tests/ir/shir/holes/test_shir_holes.sushi
 tests/ir/shir/literals/test_shir_literals.sushi
 tests/ir/shir/names/test_shir_names.sushi
 tests/ir/shir/operators/test_shir_operators.sushi
+tests/ir/shir/statements/test_err_shir_stmt_let_untyped.sushi
+tests/ir/shir/statements/test_shir_stmt_if.sushi
+tests/ir/shir/statements/test_shir_stmt_let.sushi
+tests/ir/shir/statements/test_shir_stmt_let_ref.sushi
+tests/ir/shir/statements/test_shir_stmt_while.sushi
+tests/ir/shir/statements/test_warn_shir_stmt_shadow.sushi
 tests/iterators/adapters/test_ad_borrowed_params.sushi
 tests/iterators/adapters/test_ad_break_frees_chain.sushi
 tests/iterators/adapters/test_ad_chain.sushi

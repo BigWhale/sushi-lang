@@ -1,0 +1,31 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0\n1\n2\n3\n4\n"
+# EXPECT_DUMP_SHIR: test_shir_stmt_if.shir
+#
+# the SHIR dump of `if`, `elif` and `else`: each `elif` is an `If`, the one statement of
+# the `otherwise` block of the arm before it, and the `else` block is the `otherwise`
+# block of the last `If`. A `return` in a branch is a statement of its block. Two `let`
+# statements of one name in two blocks give two locals, each with its own id.
+
+fn classify(i32 n) i32:
+    if (n < 0):
+        return 0
+    elif (n == 0):
+        let i32 code = 1
+        return code
+    elif (n < 10):
+        let i32 code = 2
+        return code
+    else:
+        let i32 big = n * 3
+        if (big > 100):
+            return 4
+    return 3
+
+fn main() i32:
+    println(classify(-5))
+    println(classify(0))
+    println(classify(7))
+    println(classify(20))
+    println(classify(50))
+    return 0

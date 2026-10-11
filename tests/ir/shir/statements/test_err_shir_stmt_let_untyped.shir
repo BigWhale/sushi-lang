@@ -1,0 +1,8 @@
+unit test_err_shir_stmt_let_untyped
+
+ShirBody main
+  params : []
+  locals : [_0 "total"]
+  block  :
+    Assign(LocalRef(_0), Binary(+, Lit(40) = 40, Lit(2) = 2), is_init: true)
+    Return(LocalRef(_0))

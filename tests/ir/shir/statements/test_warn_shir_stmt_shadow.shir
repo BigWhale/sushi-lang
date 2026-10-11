@@ -1,0 +1,10 @@
+unit test_warn_shir_stmt_shadow
+
+ShirBody main
+  params : []
+  locals : [_0 "x": i32, _1 "x": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(1), is_init: true)
+    If(Binary(>, LocalRef(_0), Lit(0)), then: [Assign(LocalRef(_1), Lit(2), is_init: true), ExprStmt(Call(BuiltinFn("println"), [LocalRef(_1)]))])
+    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_0)]))
+    Return(Lit(0))
