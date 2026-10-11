@@ -1,0 +1,17 @@
+# A plain field receiver beside a `poke` of a field of a different owner is legal.
+# EXPECT_STDOUT_EXACT: "2\n"
+# EXPECT_NO_LEAKS
+
+struct W:
+    i32[] sink
+    u8[] buf
+
+extend u8[] send_to(poke i32[] sink) ~:
+    sink.push(self.len())
+
+fn main() i32:
+    let W w = W(from([1]), from([2 as u8]))
+    let W v = W(from([3]), from([4 as u8]))
+    w.buf.send_to(poke v.sink)
+    println(v.sink.len())
+    return 0

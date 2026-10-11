@@ -1,0 +1,15 @@
+# A plain receiver beside a `poke` argument of a different local is legal.
+# EXPECT_STDOUT_EXACT: "3 4\n"
+# EXPECT_NO_LEAKS
+
+extend i32[] copy_into(poke i32[] dst) i32:
+    foreach(x in self.iter()):
+        dst.push(x)
+    return self.len()
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let i32[] ys = from([0])
+    let i32 n = xs.copy_into(poke ys)
+    println("{n} {ys.len()}")
+    return 0

@@ -1,0 +1,19 @@
+# The plain receiver of a perk method is a shared borrow of its owner. A `poke` of a
+# field of the same owner is refused.
+# EXPECT_ERROR_CODE: CE2407
+
+perk Refill:
+    fn refill(poke i32[] dst) i32
+
+struct Bag:
+    i32[] items
+
+extend Bag with Refill:
+    fn refill(poke i32[] dst) i32:
+        dst.clear()
+        return self.items.len()
+
+fn main() i32:
+    let Bag b = Bag(from([1, 2]))
+    println(b.refill(poke b.items))
+    return 0

@@ -1,0 +1,13 @@
+# A plain receiver whose type owns nothing is a copy. A `poke` of the same local is
+# legal.
+# EXPECT_STDOUT_EXACT: "5 6\n"
+
+extend i32 bump(poke i32 n) i32:
+    n := n + 1
+    return self
+
+fn main() i32:
+    let i32 k = 5
+    let i32 old = k.bump(poke k)
+    println("{old} {k}")
+    return 0

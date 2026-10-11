@@ -342,17 +342,26 @@ def reject_read_through_outside_try(checker: 'BorrowChecker', expr: MethodLike) 
 def settle_method_args(checker: 'BorrowChecker', expr: MethodLike) -> None:
     """Apply the declared modes of an extension or perk method to its arguments.
 
-    A `poke self` receiver is a `poke` borrow of its owner for the call, as a `poke`
-    argument is, so an argument that reads the same owner is CE2407.
+    The receiver is a borrow of its owner for the call, by the rule of an argument in
+    the same mode: a `poke self` is exclusive, a `peek self` is shared, and a plain one
+    is the implicit shared borrow of an unmarked argument. So a receiver and an argument
+    that reach the same owner conflict exactly as two arguments do (CE2407). The shared
+    receiver borrow is for a user extension or perk method: a built-in method declares
+    no receiver mode.
     """
     modes = expr.callee_param_modes
     if modes is None:
         return
-    if receiver_mode(expr.callee_self_mode) is ParamMode.POKE:
+    self_mode = receiver_mode(expr.callee_self_mode)
+    if self_mode is ParamMode.POKE or (self_mode is ParamMode.PEEK
+                                       and expr.callee_builtin_family is None):
         owner = borrow_owner(expr.receiver)
         state = checker.borrow_state.get(owner) if owner is not None else None
         if state is not None and not state.is_moved:
-            acquire_borrow(checker, state, expr.receiver.loc, is_poke=True)
+            acquire_borrow(checker, state, expr.receiver.loc,
+                           is_poke=self_mode is ParamMode.POKE)
+    elif self_mode is ParamMode.BORROW and expr.callee_builtin_family is None:
+        register_implicit_borrow(checker, expr.receiver)
     for i, arg in enumerate(expr.args):
         apply_mode(checker, expr, arg, i, modes, CalleeKind.METHOD)
 
