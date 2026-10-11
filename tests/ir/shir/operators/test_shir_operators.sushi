@@ -1,0 +1,28 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SHIR: test_shir_operators.shir
+#
+# the SHIR dump of the unary and binary operators: arithmetic, bitwise, shifts,
+# comparison and the logical operators, in both spellings. A divisor, a shift count and
+# each operand of an overflow-checked operator carry the value that the compiler can
+# read (`= 6`); a nest of constants carries the value of the nest.
+
+fn arithmetic(i32 a, i32 b) i32:
+    return (a + b) * 2 - -a
+
+fn division(i32 a) i32:
+    return a / (2 * 3) + a % 4
+
+fn bits(u32 a, u32 b) u32:
+    return (a & 0xFF) | (b << 3) ^ ~a >> 1
+
+fn compare(i32 a, i32 b) bool:
+    return a < b or a <= b and a > b xor a >= b
+
+fn equal(i32 a, bool p) bool:
+    return a == 4 && !p || a != 5 ^^ not p
+
+fn folded() i32:
+    return 2 * 3 + 1
+
+fn main() i32:
+    return 0

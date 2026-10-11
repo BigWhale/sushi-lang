@@ -833,12 +833,22 @@ class SemanticAnalyzer:
             passes = self._unit_passes(unit, unit_reporter, monomorphizer,
                                        libraries, destroy_effects, enum_names)
             passes.scope.run(unit.ast)
-            lower_unit(self.shir, unit, passes.scope.bindings)
+            lower_unit(self.shir, unit, passes.scope.bindings, self._operand_reader(unit))
             passes.typecheck.run(unit.ast)
             passes.lifter.run()
             passes.borrow.run(unit.ast, skip=passes.typecheck.checked_template_ids)
 
             self._merge_unit(unit_reporter)
+
+    def _operand_reader(self, unit: Unit):
+        """A silent evaluator for lowering, in the scope of `unit` (ruling E3, ir.md 7.4).
+
+        It has its own store of reported cycles, so a cycle that it reads in silence is
+        still reported by the reader that speaks (#710). Its operator folds are its own.
+        """
+        from sushi_lang.semantics.const_eval import ConstantEvaluator
+        return ConstantEvaluator(Reporter(), self.tables.constants, unit.name,
+                                 self.tables.namespaces.get, reported_cycles=set(), folds={})
 
     def _unit_passes(self, unit: Unit, reporter: Reporter,
                      monomorphizer, libraries: LibraryRegistration, destroy_effects,

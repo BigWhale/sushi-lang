@@ -41,6 +41,7 @@ from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import ReferenceType
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.const_eval import ConstantEvaluator
     from sushi_lang.semantics.units import Unit
 
 #: A declaration that owns a body: a function or a perk method, an instance of a generic
@@ -56,11 +57,13 @@ class LoweringContext:
     """What a body needs beside its `Bindings`.
 
     `decls` gives each declaration its id, and `holes` records each hole of the program.
-    `owner` is the perk implementation that holds a perk method, because the method has
-    no field that names its receiver type.
+    `evaluator` reads the value of an operand (ruling E3, ir.md 7.4), in the scope of the
+    unit of the body. `owner` is the perk implementation that holds a perk method, because
+    the method has no field that names its receiver type.
     """
     decls: DeclNames
     holes: list[Hole]
+    evaluator: Optional[ConstantEvaluator] = None
     owner: Optional[ExtendWithDef] = None
 
 
@@ -73,7 +76,7 @@ def lower_body(bindings: Bindings, ctx: LoweringContext) -> ShirBody:
     params, locals_ = _frame(decl, bindings, ctx)
     return ShirBody(ctx.decls.declare(_written_name(decl, ctx)), _origin(decl), params,
                     locals_, _lower_block(decl, BodyLowerer(ids, ctx.decls, bindings, ctx.holes,
-                                                            _span(decl.loc))))
+                                                            _span(decl.loc), ctx.evaluator)))
 
 
 @dataclass(slots=True)
@@ -85,11 +88,13 @@ class LoweredProgram:
     holes: list[Hole] = field(default_factory=list)
 
 
-def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings]) -> None:
+def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings],
+               evaluator: Optional[ConstantEvaluator] = None) -> None:
     """The body of each declaration of `unit` that the scope pass checked, in order.
 
-    The perk owners and the written templates of the unit are found once, so the cost
-    of a unit is linear in its declarations.
+    `evaluator` is a silent evaluator in the scope of `unit`. The perk owners and the
+    written templates of the unit are found once, so the cost of a unit is linear in its
+    declarations.
     """
     program = unit.ast
     if program is None:
@@ -97,7 +102,7 @@ def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings]) 
     owners = _perk_owners(program)
     templates = _written_template_members(program)
     lowered.units.append((unit, [
-        lower_body(table, LoweringContext(lowered.decls, lowered.holes,
+        lower_body(table, LoweringContext(lowered.decls, lowered.holes, evaluator,
                                           owners.get(id(table.body))))
         for table in tables if not _is_written_template(table.body, templates)]))
 

@@ -4,4 +4,4 @@ ShirBody main
   params : []
   locals : []
   block  :
-    <hole: Return>
+    Return(Lit(0))

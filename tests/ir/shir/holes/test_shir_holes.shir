@@ -1,0 +1,10 @@
+unit test_shir_holes
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    <hole: Let>
+    <hole: If>
+    ExprStmt(<hole: DotCall>)
+    Return(Binary(-, LocalRef(_0), Lit(42) = 42))
