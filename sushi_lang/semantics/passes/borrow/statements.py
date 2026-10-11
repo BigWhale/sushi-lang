@@ -237,6 +237,7 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
     """`x := v` or `obj.field := v`: the target takes ownership of a new value."""
     target = stmt.target
     owner = borrow_owner(target)
+    refused_lent = False
 
     # No "rebind while borrowed" check here, deliberately: this runs BEFORE the value
     # walk, and moving it after would reject `x := f(peek x)`. CE2401 lives at the
@@ -250,6 +251,9 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
             # pointer, which is what the mode is for.
             refused = reject_readonly_write(checker, target.id, stmt.loc,
                                             "rebind the name", rebind=True)
+            # A refused rebind of a lent iterator is the one fault: the value it would
+            # store is not judged as a second one (#1259).
+            refused_lent = refused and state.is_lent_iterator
             # The store goes through the pointer, so it is a USE of the reference: after
             # a change of its owner it writes into storage the owner no longer holds.
             if not refused and isinstance(state.var_type, ReferenceType):
@@ -276,7 +280,8 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
     check_owner_not_borrowed(checker, owner, stmt.loc, "assign", place=target)
 
     if isinstance(target, Name):
-        consume(checker, stmt.value)
+        if not refused_lent:
+            consume(checker, stmt.value)
         # A rebind RE-INITIALIZES, so a previous move no longer holds. The value was
         # checked above, so `s := "{s}-x"` still reports the moved `s`.
         target_state = checker.borrow_state.get(target.id)
