@@ -23,6 +23,9 @@ IGNORE_DECORATORS: dict[str, str] = {
 
 _PLATFORM_ABI = "platform ABI reference table"
 _LLVMLITE = "llvmlite reads this attribute when it prints the module"
+_P1_2_LOCAL_IDS = "kept for P1.2, the scope pass gives each binder its LocalId"
+_P1_5_PRINTER = "kept for P1.5, the SHIR printer reads it"
+_P1_6_CONVENTION = "kept for P1.6, lowering writes the convention of each parameter"
 
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
@@ -96,6 +99,17 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/backend/library_format.py", "FLAG_SOURCE_COMPRESSED",
      "a reserved bit of the .slib header format; the library design defines it and "
      "the writer keeps it zero"),
+    # -- kept for a later chunk of the IR migration (docs/design/ir.md) --------------
+    ("sushi_lang/semantics/param_modes.py", "GUARANTEED", _P1_6_CONVENTION),
+    ("sushi_lang/semantics/param_modes.py", "IN_GUARANTEED", _P1_6_CONVENTION),
+    ("sushi_lang/semantics/param_modes.py", "INOUT", _P1_6_CONVENTION),
+    ("sushi_lang/semantics/shir/ids.py", "IdAllocator", _P1_2_LOCAL_IDS),
+    ("sushi_lang/semantics/shir/ids.py", "allocate", _P1_2_LOCAL_IDS),
+    ("sushi_lang/semantics/shir/body.py", "ShirBody", _P1_5_PRINTER),
+    ("sushi_lang/semantics/shir/body.py", "fn_id", _P1_5_PRINTER),
+    ("sushi_lang/semantics/shir/body.py", "locals", _P1_5_PRINTER),
+    ("sushi_lang/semantics/shir/body.py", "convention", _P1_5_PRINTER),
+    ("sushi_lang/semantics/shir/nodes.py", "shir_id", _P1_5_PRINTER),
 )
 
 RATCHET: tuple[tuple[str, str, str], ...] = ()
@@ -144,6 +158,8 @@ TEST_WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("tests/unit/test_stdlib_build_is_one_table.py", "stdlib_dir",
      "StdlibLinker._resolve_stdlib_unit reads the field"),
     ("tests/unit/test_ast_nodes_are_slotted.py", "some_analysis_result",
+     "the test writes it to show that __slots__ refuses it"),
+    ("tests/unit/test_shir_nodes_are_slotted.py", "inferred_type",
      "the test writes it to show that __slots__ refuses it"),
     # -- read by name ----------------------------------------------------------------
     ("tests/unit/test_bare_name_ladder_is_one.py", "is_*",

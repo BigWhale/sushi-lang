@@ -40,6 +40,15 @@ class ParamMode(Enum):
         return BorrowMode(self.value)
 
 
+class Convention(Enum):
+    """How ONE value crosses a call boundary in SHIR and SLIR (docs/design/ir.md 8.3)."""
+
+    OWNED = "owned"                  # `nom`   -- the callee frees
+    GUARANTEED = "guaranteed"        # unmarked -- the caller owns, the callee borrows by value
+    IN_GUARANTEED = "in_guaranteed"  # `peek`  -- by address, read only, many at once
+    INOUT = "inout"                  # `poke`  -- by address, read and write, exclusive
+
+
 class ReturnMode(Enum):
     """How a callable gives its answer (#1229, docs/design/borrow-model.md S10h)."""
 
