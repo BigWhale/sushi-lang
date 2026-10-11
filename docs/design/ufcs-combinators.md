@@ -12,15 +12,32 @@ The headline: the `<collections/iter>` combinators exist in method form, written
 Sushi, shipped in the stdlib, on a general language feature users can also write:
 
 ```sushi
-extend List@(T) map@(U)(fn(T) -> U f) List@(U):
+extend List@(T) mapv@(U)(fn(T) -> U f) List@(U):
     let List@(U) out = List.new()
     foreach(x in self.iter()):
         out.push(f(x))
     return out              # bare: no `| E`, so the body returns the value
 ```
 
-Call site: `xs.map(|i32 x| x * 2)`. Targets: `List@(T)` and `T[]`. The free
+Call site: `xs.mapv(|i32 x| x * 2)`. Targets: `List@(T)` and `T[]`. The free
 functions stay.
+
+Since #1228 the stdlib methods do not hold this loop. The logic lives in ONE place, the
+lazy adapters of `Iterator@(T)` (`docs/design/iteration.md`), which are compiler code. Each
+eager method is a one-line forwarder over them, with the same signature and the same
+promise:
+
+```sushi
+public extend List@(T) map@(U)(fn(T) -> U f) List@(U):
+    return self.iter().map(nom f.clone()).collect()
+```
+
+The adapter takes its function with `nom`, and the eager method borrows its `f`, so the
+forwarder gives a clone. `filter`, `enumerate`, `zip` and `partition` keep their
+`T: Clone` bound and clone the items before `collect` keeps them
+(`.clone_each().collect()`): in the template `T` is opaque and may own, and `collect`
+refuses a borrowed item of an owning type (CE2129). The `T[]` twin of each method is the
+same line.
 
 A bare combinator is correct here because it is total over its inputs: it cannot fail
 unless its function argument fails, and a bare function argument cannot. A bare function
@@ -223,6 +240,11 @@ Every unhandled-Result position has a gate:
 
 **Owned elements**: every combinator is general over the element type. `filter` clones
 each kept element, and `fold` clones `init` once, so an owning accumulator works too.
+
+**Lazy chains**: an eager method builds a whole `List`, so a chain of three eager calls
+allocates three collections. The lazy form is a chain of adapters on `Iterator@(T)`
+(`xs.iter().filter(nom p).map(nom f).collect()`), which walks its source one time and
+allocates one result (#1228, `docs/design/iteration.md`).
 
 **Parked open questions**, recorded and not expanded here:
 

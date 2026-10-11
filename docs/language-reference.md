@@ -1260,6 +1260,17 @@ needs `use <collections/iter>`. There is no implicit conversion from a type with
 A `foreach` over `xs.iter()`, `m.keys()` or a range written as the iterable walks the
 source directly, with no call per item and no allocation.
 
+**Adapters.** An iterator has eight built-in adapters, and they need no import. `map`,
+`filter`, `enumerate`, `zip` and `clone_each` answer a new iterator and are lazy; `fold`,
+`partition` and `collect` walk the iterator to its end. Each takes its receiver and its
+arguments with `nom`: `xs.iter().filter(nom |i32 x| x > 0).map(nom |i32 x| x * 2).collect()`.
+`filter` keeps the item mode, `map` answers the owned result of its function, `enumerate`
+and `zip` keep the mode of each side, and `clone_each` clones each borrowed item. An
+adapter over a borrowed iterator borrows the same owners. `collect` and `partition` over a
+`peek` item of an owning type are [CE2129](error-catalog.md#ce2129): write
+`.clone_each().collect()`. The table is in [Iter combinators](stdlib/collections/iter.md),
+and the design is ruling 11 of `docs/design/iteration.md`.
+
 ### Assertions
 
 `assert(cond)` and `assert(cond, message)` state an invariant: a state that a correct

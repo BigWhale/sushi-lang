@@ -154,9 +154,30 @@ All notable changes to Sushi Lang will be documented in this file.
   clone of an iterator over a value that holds a resource stops with the new RE2027. A
   `foreach` over `xs.iter()`, `m.keys()` or a range stays a direct walk with no
   allocation (`docs/design/iteration.md`, ruling 10).
+- **Lazy adapters on `Iterator@(T)`.** `it.map(nom f)`, `it.filter(nom pred)`,
+  `it.enumerate()`, `it.zip(nom other)` and `it.clone_each()` answer a new iterator and do
+  no work until a `foreach` or a consumer asks for an item; `it.fold(nom init, nom f)`,
+  `it.partition(nom pred)` and `it.collect()` walk the iterator to its end. A chain walks
+  its source one time and allocates one result:
+  `xs.iter().filter(nom p).map(nom f).collect()`. The adapters need no import. `filter`
+  keeps the item mode, `map` answers the owned result of its function, `enumerate` and
+  `zip` keep the mode of each side (`Iterator@((i32, peek string))`), and `clone_each`
+  makes each item owned. An adapter over a borrowed iterator borrows the same owners, and
+  `zip` of two borrowed iterators borrows both. `collect` and `partition` over a `peek` item
+  of an owning type are the new CE2129, with the help `.clone_each().collect()`
+  (`docs/design/iteration.md`, ruling 11).
 
 ### Changed
 
+- **The eager combinators are forwarders over the adapters.** `xs.map(f)`, `xs.filter(p)`,
+  `xs.fold(init, f)`, `xs.enumerate()`, `xs.zip(ys)` and `xs.partition(p)` on `List@(T)`
+  and `T[]` keep their signatures and their answers; each body is one call of the built-in
+  adapters. An import of `<collections/iter>` that a unit uses only for a method call
+  gets CW3006 under `--warn-unused`, also when the import has a free function of the same
+  name.
+- **A `foreach` over a borrowed iterator value freezes its owners for the loop.** A change
+  of the container in the body of `foreach(x in xs.iter().clone())` or of a loop over an
+  adapter chain is CE2412, as for `foreach(x in xs.iter())`.
 - **CE2127 is retired.** A HashMap iterator is a value with its own `next_fn`, so it is
   legal outside the iterable of a `foreach`. A borrowed HashMap iterator given to a `nom`
   parameter, a constructor or a payload is CE2411, as every borrowed iterator is. An

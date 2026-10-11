@@ -403,7 +403,7 @@ the same owners, and its cursor is a heap copy that its `drop_fn` frees. The clo
 owned iterator deep-copies what its state holds, so the two walk alone. The clone of an
 iterator made by `Iterator.new` over a value that holds a resource has no deep copy, and
 the type of the iterator does not show it: the program stops there with
-**[RE2027](../error-catalog.md#re2027)**. `clone()` is the one method of an iterator.
+**[RE2027](../error-catalog.md#re2027)**. Beside `clone()`, an iterator has the adapters of ruling 11.
 
 **A range is a value** in every position where `Iterator@(i32)` is expected, written or
 propagated: a `let`, an argument, a `return`, a constructor field, a payload, a container
@@ -424,6 +424,100 @@ backend reads the symbol and the receiver mode from it.
 because the walk found the bucket layout only from the receiver of the call. The value now
 carries its own `next_fn`. A borrowed HashMap iterator in a position that takes it is
 CE2411, as every other lent iterator is.
+
+### 11. The adapters are compiler code
+
+An iterator has eight built-in adapters (#1228). The LAZY ones answer a new iterator:
+`map`, `filter`, `enumerate`, `zip` and `clone_each`. The CONSUMERS walk their receiver to
+the end at the call: `fold`, `partition` and `collect` (into a `List@(T)`). `take`, `skip`,
+`chain` and the others are not built.
+
+```sushi
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    let List@(i32) squares = xs.iter().filter(nom |i32 x| x % 2 == 0).map(nom |i32 x| x * x).collect()
+    let string[] names = from(["a", "bb"])
+    foreach(p in names.iter().zip(nom squares.iter())):
+        println("{p.0} {p.1}")                 # a 4, then bb 16: nothing is copied
+    return 0
+```
+
+**Why the compiler.** A Sushi body cannot hold a `peek` item: `peek` is a legal type
+argument only in `Iterator@(...)`, so there is no `Maybe@(peek T)`. And a Sushi function
+cannot adapt a borrowed iterator (below). So the adapters are a method family of the
+compiler (`"iterator"` in `METHOD_TYPE_REGISTRY`), and they travel with the type: no import.
+`use <collections/iter>` is necessary only to write the name. An import used only for an
+adapter gets [CW3006](../error-catalog.md#cw3006): a name that stands only behind a dot as
+a called method is no use of a function of the same name that the import brings.
+
+**The signature.** Each adapter is written as a built-in signature
+(`ITERATOR_METHOD_SIGNATURES`, `semantics/generics/iterators.py`), as a generic extension
+of `Iterator@(T)` would be: `map@(U)(nom fn(T) -> U f)`, `filter(nom fn(T) -> bool pred)`,
+`zip@(U)(nom Iterator@(U) other)`, `fold@(A)(nom A init, nom fn(A, T) -> A f)`,
+`partition(nom fn(T) -> bool pred)`, and no argument for the other three. Every receiver is
+`nom self`. `T` is the VALUE type of the item, with no `peek`: a function reads the item as
+a borrow, whatever its mode. The one solver of a built-in signature solves the method-level
+type parameter from the arguments.
+
+**The item mode of the result** follows the receiver (`adapter_result`,
+`semantics/passes/types/iterator_adapters.py`):
+
+| Adapter | Item of the result |
+|---|---|
+| `map` | the owned result `U` of the function |
+| `filter` | the item of the receiver, in its mode |
+| `enumerate` | `(i32, item)`, the item in its mode: `Iterator@((i32, peek string))` |
+| `zip` | `(left item, right item)`, each in its mode: `Iterator@((peek string, i32))` |
+| `clone_each` | the item, owned: one `.clone()` for each lent part (the rule of `.clone()`) |
+
+`peek` stands only at the top of an item or of one tuple element. So `enumerate` or `zip`
+over a tuple item whose parts have two modes is refused with
+[CE2419](../error-catalog.md#ce2419): the `peek` would stand deeper. A tuple item whose
+parts are all lent is lent whole in its element.
+
+**`collect` and `partition` over a borrowed item.** There is no `List@(peek T)`, and the
+compiler inserts no deep copy. So `collect` and `partition` over an item with a `peek` part
+of an owning type are [CE2129](../error-catalog.md#ce2129), with the help
+`.clone_each().collect()`. Over a plain item they are legal. In a template `T` is opaque and
+may own, so the check holds where the template is written.
+
+**The borrow.** Each adapter takes its receiver with `nom self`. A built-in adapter accepts
+a LENT iterator as its receiver, and `zip` accepts one as its argument
+(`take_lent_iterator`, `semantics/passes/borrow/iterators.py`): a `let` that held it is
+spent, as `f(nom it)` spends a local. The result borrows the owners of each lent input, so
+`zip` of two lent iterators borrows both. This holds ONLY for a built-in adapter: a user
+function with a `nom Iterator@(...)` parameter refuses a lent iterator
+([CE2411](../error-catalog.md#ce2411)), because its type does not show the borrow. A
+`foreach` over a lent value that a `let` does not hold (an adapter chain, `it.clone()`)
+freezes its owners for the whole loop, as a direct walk freezes its container.
+
+**The state.** A lazy adapter over a lent input is LENT: its state is a stack slot of the
+function, as the state of its input is. Over owned inputs it is OWNED: its state is on the
+heap. The borrow pass stamps `MethodCall.iterator_state`. The state holds the inner iterator
+and the function (`map`, `filter`), the count (`enumerate`) or the second iterator (`zip`).
+Its `next_fn` asks the inner iterator for an item and changes it. Its `drop_fn` destroys the
+inner iterator and the function, and frees the state only when it is on the heap. Its
+`clone_fn` makes a heap state with a clone of each held value. So a `break` out of a
+`foreach` over a chain frees the whole chain: the loop destroys the outer value, and each
+`drop_fn` destroys the value it holds.
+
+**Items that are not passed on.** `map` destroys each item after its function reads it,
+`filter` destroys an item that its predicate refuses, `zip` destroys a left item when the
+right side ends, and `fold` destroys each item after its step. Each destroys only the parts
+that the item OWNS (`destroy_owned_parts`, `backend/runtime/iterator_adapters.py`); a lent
+part is left to its owner. A `foreach` over a tuple item whose parts have two modes binds
+the item as a borrow, and gives each owned part a hidden local that the body frees.
+
+**The consumers** run in the caller's function: a loop over `next_fn` that fills a
+`List@(T)` (`collect`, `partition`) or carries the accumulator (`fold`). The consumer took
+the iterator and the function, so it destroys both after the last item. `fold` gives the
+accumulator and the item to its function as borrows, and destroys each accumulator that a
+step replaces.
+
+**The eager methods stay.** `xs.map(f)`, `xs.filter(p)`, `xs.fold(...)`,
+`xs.enumerate()`, `xs.zip(...)` and `xs.partition(p)` on `List@(T)` and `T[]` keep their
+signatures. Each is a one-line forwarder over the adapters
+(`docs/design/ufcs-combinators.md`).
 
 ## A `File` has no line loop
 
@@ -452,6 +546,10 @@ exists to remove. `File.readln()` stays as the one-line unbuffered read.
 | the value, the state and the three functions of each source | `backend/runtime/iterators.py` |
 | the HashMap cursor | `bucket_source`, `backend/generics/hashmap/methods/iterators.py` |
 | the walk of a value | `_emit_value_foreach`, `backend/statements/loops.py` |
+| the adapter signatures and the item mode of `enumerate` and `zip` | `ITERATOR_METHOD_SIGNATURES`, `enumerated`, `zipped`, `semantics/generics/iterators.py` |
+| the result of an adapter, and CE2129 | `adapter_result`, `semantics/passes/types/iterator_adapters.py` |
+| an adapter that takes a lent iterator | `take_lent_iterator`, `semantics/passes/borrow/iterators.py` |
+| the state and the three functions of each adapter, and the consumers | `backend/runtime/iterator_adapters.py` |
 
 ## See also
 
