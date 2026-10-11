@@ -843,11 +843,11 @@ The item mode, owned or lent, follows from the type (`IteratorType.peeks`).
 ```
 Pattern = Wildcard
         | Literal(value: Constant)               # an integer or a string
-        | Range(low: Constant, high: Constant)   # 0x80..=0x8f -- both bounds included
+        | Range(low: Constant, high: Constant, inclusive: bool)   # 0x80..=0x8f
         | Variant(decl: DeclId, variant: str, items: [Pattern | PatBinding])
         | Tuple(elements: [Pattern | PatBinding])
         | Own(inner: Pattern | PatBinding)       # Own(poke h) -- unwraps Own@(T)
-        | Or(alternatives: [Pattern])            # 1 | 2 -- two or more, same bindings
+        | Or(alternatives: [Pattern | PatBinding])   # 1 | 2 -- two or more, same bindings
 
 PatBinding = (local: LocalId, by: Bare | Ref(BorrowMode) | Take)
 
@@ -861,9 +861,10 @@ temporary, or `Match.consumes`.
 
 An INTEGER scrutinee and a STRING scrutinee use `Literal` arms; the kinds never mix
 ([CE2076](../error-catalog.md#ce2076)), and that is checked on SHIR. `Range` is an INTEGER
-pattern only: the AST's `RangePattern` (`a..b` or `a..=b`) lowers to the inclusive bounds
-as values of the type at its position, so `0..10` is `Range(0, 9)` and `0x80..=0xff` on an
-i8 is `Range(-128, -1)`. A `Literal` integer is a value of that type in the same way.
+pattern only: the AST's `RangePattern` (`a..b` or `a..=b`) lowers to its written bounds and
+`inclusive`. Lowering has no types, so `typecheck` reads the bounds as values of the type at
+the position: `0..10` matches 0 to 9, and `0x80..=0xff` on an i8 matches -128 to -1. A
+`Literal` integer is a value of that type in the same way.
 `Tuple` mirrors `TuplePattern`, `Own` mirrors `OwnPattern`, and `Or` mirrors `OrPattern`:
 it stands at the top of an arm and in every pattern position. Each alternative binds the
 same locals, with the same types and the same mode ([CE2126](../error-catalog.md#ce2126)),
