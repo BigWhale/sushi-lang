@@ -223,7 +223,7 @@ PRINTERS: dict[type, Render] = {
     s.Discard: lambda _pr, _t: "_",
     s.Nested: lambda pr, t: pr.each(t.targets),
     s.Cond: lambda pr, src: _node("Cond", pr.show(src.cond)),
-    s.Items: lambda pr, src: _node("Items", pr.show(src.iterable), _local(src.binder),
+    s.Items: lambda pr, src: _node("Items", pr.show(src.iterable), pr.show(src.binder),
                                    pr.show(src.by)),
     s.Bare: lambda _pr, _m: "Bare",
     s.Ref: lambda _pr, m: _node("Ref", _BORROW_MODES[m.mode]),

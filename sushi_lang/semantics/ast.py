@@ -656,6 +656,9 @@ class Foreach(Stmt):
     # field is an ALIAS and the node walk does not descend it (#1174).
     item_try_let: "Optional[Let]" = field(default=None, metadata=ALIAS)
     item_try_span: Optional[Span] = None
+    # The binder is `_` with no `??`: the loop binds nothing that the body can read. The
+    # AST builder sets it from the source; `item_name` is then a hidden name.
+    item_discarded: bool = False
     # A `next()` protocol iterator (HANDLES.md ruling R21): the synthetic
     # `<hidden>.next()` call the typecheck pass built and stamped, and the hidden local
     # the iterator lives in. Both None for an `Iterator@(T)`, which is the buffer walk.

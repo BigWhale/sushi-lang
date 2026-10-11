@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, TypeAlias, cast
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics import ast as a
-from sushi_lang.semantics.param_modes import Convention, receiver_mode
+from sushi_lang.semantics.param_modes import Convention, borrow_mode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import bindings as bd
 from sushi_lang.semantics.shir import exprs as e
@@ -46,7 +46,7 @@ from sushi_lang.semantics.shir.body import ShirLocal
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
 from sushi_lang.semantics.shir.lookup import DeclLookup
-from sushi_lang.semantics.shir.nodes import Hole, ShirBlock
+from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, UnknownType
 
 if TYPE_CHECKING:
@@ -441,6 +441,52 @@ def _while(lw: BodyLowerer, node: a.While) -> s.Loop:
     return s.Loop(ident, lw.span(node), source, lw.block(node.body))
 
 
+def _foreach(lw: BodyLowerer, node: a.Foreach) -> s.Loop:
+    """`foreach (x in it)`: a `Loop` with an `Items` source (ir.md 7.5).
+
+    The source holds what the source says: the iterable, the binder and its written mode.
+    The walk kind is an answer of the typecheck pass (ir.md 7.7), and lowering records
+    nothing about it. The `let` that the AST builder put at the top of the body of a `??`
+    binder is the first statement of the body, and it lowers as every `let` does.
+    """
+    ident = lw.ident()
+    iterable = lw.expr(node.iterable)
+    source = s.Items(iterable, _loop_binder(lw, node), _item_mode(node.item_borrow))
+    body = lw.block(node.body)
+    if node.item_try_let is not None and node.item_type is not None:
+        _write_type(lw, node.item_try_let, node.item_type)
+    return s.Loop(ident, lw.span(node), source, body)
+
+
+def _loop_binder(lw: BodyLowerer, node: a.Foreach) -> LocalId | s.Discard:
+    """The binder of a loop: `Discard` for `_`, else its local.
+
+    A binder that the AST builder made, for a `??` binder or a tuple binder, is a hidden
+    local (ir.md 7.2). A type written on a `??` binder names the value of the `let`, not
+    the item, so the hidden local has no type.
+    """
+    if node.item_discarded:
+        return s.Discard()
+    local = binder_local(lw.bindings, node, node.item_name)
+    if node.item_try_let is not None or node.item_name_span is None:
+        lw.locals.append(ShirLocal(local, None, None, None))
+    else:
+        lw.locals.append(ShirLocal(local, node.item_name, node.item_type, node.item_name_span))
+    return local
+
+
+def _write_type(lw: BodyLowerer, let: a.Let, ty: TypeRef) -> None:
+    """The written type of a `??` binder, on the local of the `let` that unwraps the item."""
+    local = binder_local(lw.bindings, let, let.name)
+    for made in lw.locals:
+        if made.id == local:
+            made.declared = ty
+
+
+def _item_mode(marker: Optional[str]) -> s.ItemMode:
+    return s.Bare() if marker is None else s.Ref(borrow_mode(marker))
+
+
 def _break(lw: BodyLowerer, node: a.Break) -> s.Break:
     return s.Break(lw.ident(), lw.span(node))
 
@@ -488,6 +534,7 @@ LOWERING: dict[type, Lower] = {
     a.Rebind: _rebind,
     a.If: _if,
     a.While: _while,
+    a.Foreach: _foreach,
     a.Break: _break,
     a.Continue: _continue,
 }

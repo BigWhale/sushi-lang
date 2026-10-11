@@ -29,7 +29,7 @@ class Assign(ShirNode):
 
 @dataclass(frozen=True, slots=True)
 class Discard:
-    """`_` in a destructure."""
+    """`_` in a destructure, or as the binder of a loop: nothing is bound."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,9 +88,9 @@ class Cond:
 
 @dataclass(frozen=True, slots=True)
 class Items:
-    """`foreach (binder in iterable)`, with the written mode of the binder."""
+    """`foreach (binder in iterable)`, with the written mode of the binder. `_` is `Discard`."""
     iterable: ShirExpr
-    binder: LocalId
+    binder: LocalId | Discard
     by: ItemMode
 
 

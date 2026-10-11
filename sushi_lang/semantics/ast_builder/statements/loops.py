@@ -160,6 +160,7 @@ def parse_foreach_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
         item_borrow_span=item_borrow_span,
         item_try_let=item_try_let,
         item_try_span=item_try_span,
+        item_discarded=discard and try_token is None,
         loc=span_of(node)
     )
 
@@ -210,6 +211,7 @@ def parse_foreach_ref(node: Tree, ast_builder: 'ASTBuilder') -> Foreach:
         item_type_span=None,
         item_borrow=mode_tok.value,
         item_borrow_span=span_of(mode_tok),
+        item_discarded=discard,
         loc=span_of(node)
     )
 
