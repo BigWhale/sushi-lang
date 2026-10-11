@@ -1,0 +1,11 @@
+# A tuple item takes `peek` on an element, not on the whole tuple.
+# EXPECT_ERROR_CODES_EXACT: CE2419
+use <collections/iter>
+
+fn count(poke Iterator@(peek (i32, string)) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return count(poke it, depth - 1)
+
+fn main() i32:
+    return 0

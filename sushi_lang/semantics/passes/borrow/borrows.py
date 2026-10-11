@@ -6,13 +6,13 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Borrow, Expr, Name
+from sushi_lang.semantics.ast import Borrow, Expr, IndexAccess, Name
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.param_modes import borrow_mode
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode
 from .diagnostics import emit_use_after_move, expr_to_string
-from .reads import captured_variable
+from .reads import borrow_owner, captured_variable
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -23,6 +23,9 @@ if TYPE_CHECKING:
 def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
     """Check a borrow expression: `peek x`, `poke x`, `peek x.field`, `poke x.field`."""
     is_poke = borrow_mode(borrow.mutability) is BorrowMode.POKE
+    if isinstance(borrow.expr, IndexAccess) and borrow.expr.is_slice:
+        _check_slice_borrow(checker, borrow, is_poke)
+        return
     # A field borrow is tracked against the BASE variable: this pass tracks whole
     # variables, not sub-places, so the two spellings differ in exactly one thing --
     # where the name comes from. A captured variable is a whole variable (#1129).
@@ -48,6 +51,12 @@ def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
         emit_use_after_move(checker, name, borrow.loc, state)
         return
 
+    if state.is_lent_iterator:
+        # A borrow of a lent iterator reads its owners' storage: a use (#1259).
+        from .expressions import reject_a_use_after_the_change
+        if reject_a_use_after_the_change(checker, name, borrow.loc):
+            return
+
     if is_poke:
         # A `poke` of a read-only receiver hands the write to a callee, which upgrades
         # the borrow (CE2408 / CE2414 / CE2421). A `peek` stays legal.
@@ -59,6 +68,25 @@ def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
                                  place=borrow.expr)
 
     acquire_borrow(checker, state, borrow.loc, is_poke=is_poke)
+
+
+def _check_slice_borrow(checker: 'BorrowChecker', borrow: Borrow, is_poke: bool) -> None:
+    """`peek data[a..b]`: a pointer to the slice descriptor (docs/design/slices.md).
+
+    A `peek` reads the array: it is a shared borrow of the array's owner, so a `poke` of
+    the same owner in one call is CE2407. A `poke` is refused (S4): a callee could grow
+    the view and move storage that the array keeps.
+    """
+    from .expressions import check_expr
+    check_expr(checker, borrow.expr)
+    owner = borrow_owner(borrow.expr)
+    if is_poke:
+        reject_readonly_write(checker, owner, borrow.loc, "take a `poke` borrow",
+                              receiver=borrow.expr)
+        return
+    state = checker.borrow_state.get(owner) if owner is not None else None
+    if state is not None:
+        acquire_borrow(checker, state, borrow.loc, is_poke=False)
 
 
 def acquire_borrow(checker: 'BorrowChecker', state: BorrowState, span: Optional[Span],
@@ -99,7 +127,17 @@ def _conflict(checker: 'BorrowChecker', code: ErrorMessage, state: BorrowState,
 
 
 def register_implicit_borrow(checker: 'BorrowChecker', arg: Expr) -> None:
-    """Count an unmarked argument as the shared borrow it now is."""
+    """Count an unmarked argument as the shared borrow it now is.
+
+    A slice is a shared borrow of its array's owner, so a `poke` of that owner in the
+    same call is CE2407: the callee could grow the array under the view.
+    """
+    if isinstance(arg, IndexAccess) and arg.is_slice:
+        owner = borrow_owner(arg)
+        owner_state = checker.borrow_state.get(owner) if owner is not None else None
+        if owner_state is not None and not owner_state.is_moved:
+            acquire_borrow(checker, owner_state, arg.loc, is_poke=False)
+        return
     if not isinstance(arg, Name):
         return
     state = checker.borrow_state.get(arg.id)

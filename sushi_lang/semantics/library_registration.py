@@ -882,15 +882,16 @@ class LibraryRegistration:
         for lib_name, _manifest, record in self._template_records("extensions"):
             lib_file = self._library_file(lib_name)
             target = parse_type_string(record["type"], struct_table, enum_table)
-            sig = parse_signature(record, struct_table, enum_table, lib_path=lib_file)
             unit = library_unit(lib_name, record.get("unit"))
             self_mode = record.get("self_mode")
             is_static = bool(record.get("static", False))
+            sig = parse_signature(record, struct_table, enum_table, lib_path=lib_file,
+                                  receiver=not is_static and self_mode != "nom")
             method = ExtensionMethod(
                 target_type=target, name=sig.name, ret_type=sig.ret_type,
                 params=sig.params, self_mode=self_mode, filename=lib_file,
                 unit_name=unit, err_type=sig.err_type, is_static=is_static,
-                is_public=bool(record["public"]))
+                is_public=bool(record["public"]), borrowed_return=sig.borrowed_return)
             existing = next((other for other in extensions.declarations(target, sig.name)
                              if extensions_collide(self.tables.visibility, target,
                                                    other, method)), None)
@@ -909,7 +910,8 @@ class LibraryRegistration:
                 ret=sig.ret_type, body=Block(loc=None, statements=[]),
                 self_mode=self_mode,
                 err_type=sig.err_type, is_static=is_static,
-                declaring_unit=unit, link_symbol=record.get("link_symbol")))
+                declaring_unit=unit, link_symbol=record.get("link_symbol"),
+                borrowed_return=sig.borrowed_return))
 
     def _register_conversions(self) -> None:
         """Register the conversions the libraries ship (docs/design/error-conversion.md 8.2).

@@ -112,37 +112,59 @@ nav:
       - Library Format: library-format.md
       - Package Manager (Nori): package-manager.md
   - Standard library:
-      - Result: stdlib/result.md
-      - Maybe: stdlib/maybe.md
-      - Arrays: stdlib/collections/arrays.md
-      - List: stdlib/collections/list.md
-      - HashMap: stdlib/collections/hashmap.md
-      - Strings: stdlib/collections/strings.md
-      - Iter combinators: stdlib/collections/iter.md
-      - Sorting: stdlib/collections/sort.md
-      - MessagePack: stdlib/encoding/msgpack.md
-      - Compression (zlib): stdlib/compression/zlib.md
-      - Slib reader: stdlib/toolchain/slib.md
-      - Console: stdlib/io/console.md
-      - Files: stdlib/io/files.md
-      - IO errors: stdlib/io/error.md
-      - Contracts: stdlib/io/contracts.md
-      - Buffered: stdlib/io/buf.md
-      - Path algebra: stdlib/io/path.md
-      - File-system ops: stdlib/io/fs.md
-      - Network errors: stdlib/net/error.md
-      - Socket primitives: stdlib/net/socket.md
-      - TCP: stdlib/net/tcp.md
-      - UDP: stdlib/net/udp.md
-      - DNS: stdlib/net/dns.md
-      - IP addresses: stdlib/net/ip.md
-      - URLs: stdlib/net/url.md
-      - Math: stdlib/math.md
-      - Time: stdlib/time.md
-      - Random: stdlib/random.md
-      - Environment: stdlib/env.md
-      - Process: stdlib/process.md
-      - Platform: stdlib/platform.md
+      - stdlib/index.md
+      - Core types:
+          - stdlib/core/index.md
+          - Result: stdlib/core/result.md
+          - Maybe: stdlib/core/maybe.md
+      - Collections:
+          - stdlib/collections/index.md
+          - Arrays: stdlib/collections/arrays.md
+          - List: stdlib/collections/list.md
+          - HashMap: stdlib/collections/hashmap.md
+          - Strings: stdlib/collections/strings.md
+          - Sorting: stdlib/collections/sort.md
+          - Iter combinators: stdlib/collections/iter.md
+      - Text:
+          - stdlib/text/index.md
+          - ASCII bytes: stdlib/text/ascii.md
+      - Encoding and compression:
+          - stdlib/encoding/index.md
+          - Base64: stdlib/encoding/base64.md
+          - Binary: stdlib/encoding/binary.md
+          - Hex: stdlib/encoding/hex.md
+          - MessagePack: stdlib/encoding/msgpack.md
+          - Compression (zlib): stdlib/compression/zlib.md
+      - Files and I/O:
+          - stdlib/io/index.md
+          - Console: stdlib/io/console.md
+          - Files: stdlib/io/files.md
+          - Buffered: stdlib/io/buf.md
+          - Contracts: stdlib/io/contracts.md
+          - IO errors: stdlib/io/error.md
+          - Path algebra: stdlib/io/path.md
+          - File-system ops: stdlib/io/fs.md
+      - Networking:
+          - stdlib/net/index.md
+          - Network errors: stdlib/net/error.md
+          - Socket primitives: stdlib/net/socket.md
+          - Socket handles: stdlib/net/handle.md
+          - IP addresses: stdlib/net/ip.md
+          - DNS: stdlib/net/dns.md
+          - URLs: stdlib/net/url.md
+          - TCP: stdlib/net/tcp.md
+          - UDP: stdlib/net/udp.md
+      - System:
+          - stdlib/system/index.md
+          - Math: stdlib/system/math.md
+          - Random: stdlib/system/random.md
+          - Time: stdlib/system/time.md
+          - Environment: stdlib/system/env.md
+          - Process: stdlib/system/process.md
+          - Platform: stdlib/system/platform.md
+      - Toolchain:
+          - stdlib/toolchain/index.md
+          - Slib reader: stdlib/toolchain/slib.md
   - Internals:
       - Architecture: internals/architecture.md
       - Semantic Passes: internals/semantic-passes.md
@@ -169,6 +191,7 @@ nav:
       - "Derived Contracts (design)": design/derived-contracts.md
       - "Checked Generics (design)": design/checked-generics.md
       - "Array Representation (design)": design/array-representation.md
+      - "Slices (design)": design/slices.md
       - "Compile-Time Evaluation (design)": design/compile-time-evaluation.md
       - "Documentation Blocks (design)": design/documentation.md
       - "Intermediate Representation (design)": design/ir.md

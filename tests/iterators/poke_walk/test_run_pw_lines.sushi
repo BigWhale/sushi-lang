@@ -1,0 +1,35 @@
+# A foreach over a poke `Lines@(File)` walks it in place: the callee reads the first
+# line, and the caller reads the rest from the same reader. The file closes one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_NO_OPEN_FDS: true
+# EXPECT_STDOUT_EXACT: "header alpha\nbeta\ngamma\n"
+use <io/fs>
+use <io/buf>
+
+fn setup(string path) ~ | IoError:
+    let File w = open(path, FileMode.Write())??
+    w.write("alpha\nbeta\ngamma\n")??
+    w.close()??
+    return Result.Ok(~)
+
+fn header(poke Lines@(File) ls) string | IoError:
+    foreach(line?? in ls):
+        return Result.Ok(line)
+    return Result.Ok("")
+
+fn read(string path) ~ | IoError:
+    setup(path)??
+    let File f = open(path, FileMode.Read())??
+    let Lines@(File) ls = BufReader.new(nom f, 8).lines()
+    let string first = header(poke ls)??
+    println("header {first}")
+    foreach(line?? in ls):
+        println(line)
+    return Result.Ok(~)
+
+fn main() i32:
+    match read("/tmp/sushi_poke_walk_lines.txt"):
+        Result.Ok(_) -> return 0
+        Result.Err(_) -> println("failed")
+    return 1

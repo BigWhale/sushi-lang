@@ -1,0 +1,11 @@
+# `Iterator.new` takes a value of a type with `next()` answering `Maybe@(T)`.
+# EXPECT_ERROR_CODES_EXACT: CE2033
+use <collections/iter>
+
+struct Plain:
+    i32 n
+
+fn main() i32:
+    foreach(x in Iterator.new(nom Plain(3))):
+        println(x)
+    return 0

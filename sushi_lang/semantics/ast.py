@@ -11,6 +11,7 @@ from lark import Token
 ALIAS = {"alias": True}
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.borrowed_return import BorrowedReturn
     from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.generics.extension_targets import ExtensionTarget
     from sushi_lang.semantics.generics.types import TemplateId
@@ -268,6 +269,9 @@ class FuncDef(Node):
     # Where a `static` marker was written on a perk-implementation method. The
     # grammar admits it in that position only so the perk pass can refuse it (CE4014).
     static_span: Optional[Span] = None
+    # A `peek T` return (#1229): the written candidates for its source set. None for an
+    # owned return. A copy shares the record of its template.
+    borrowed_return: Optional["BorrowedReturn"] = None
     # A spelled `Result@(T, E)` return as the interned enum, stamped by the resolve
     # pass (#857). `ret` keeps the type as written for the typecheck pass.
     resolved_result: Optional[Type] = None
@@ -441,6 +445,8 @@ class ExtendDef(Node):
     # The symbol that the bitcode of a binary library gave the method. None on every
     # other extension.
     link_symbol: Optional[str] = None
+    # A `peek T` return; see `FuncDef`.
+    borrowed_return: Optional["BorrowedReturn"] = None
 
     @property
     def is_conversion(self) -> bool:
@@ -654,6 +660,15 @@ class Foreach(Stmt):
     # the iterator lives in. Both None for an `Iterator@(T)`, which is the buffer walk.
     protocol_next: "Optional[MethodCall]" = None
     protocol_iter_name: Optional[str] = None
+    # The typecheck pass sets it for a `next()` walk of a place reached through a `poke`
+    # reference: the loop calls `next()` on the caller's storage and does not take the
+    # value (#1258). The borrow pass and the backend read this one stamp. The borrow pass
+    # also sets it for an iterator value that a `let` borrows (#1259).
+    walks_in_place: bool = False
+    # The typecheck pass sets it for a walk of an `Iterator@(T)` VALUE: the loop calls
+    # the value's `next_fn` (#1259). None for a range, for a built-in producer that the
+    # loop walks directly (`xs.iter()`, `m.keys()`), and for a `next()` protocol walk.
+    value_iterator: Optional[Type] = None
 
 @dataclass(slots=True)
 class Expand(Stmt):
@@ -938,7 +953,9 @@ class ArrayLiteral(Node):
 class IndexAccess(Node):
     array: "Expr"
     index: "Expr"
-    inferred_element_type: Optional["Type"] = None  # Element type inferred by the typecheck pass.
+    # The type the access yields, inferred by the typecheck pass: the element, or the
+    # `T[]` of a slice.
+    inferred_element_type: Optional["Type"] = None
     reads_a_string_byte: bool = False  # `s[i]` on a string (#1091), stamped by the typecheck pass
                                             # The backend reads the typecheck pass's stamp rather than
                                             # re-deriving; with none, `rows[0].hash()` died
@@ -949,7 +966,12 @@ class IndexAccess(Node):
     # emits no bounds check (docs/design/dont-panic.md). Stamped by the AST builder.
     unchecked: bool = False
 
-UnOp = Literal["neg", "not", "~"]
+    @property
+    def is_slice(self) -> bool:
+        """`data[a..b]`: a range in the index position is a slice (docs/design/slices.md)."""
+        return isinstance(self.index, RangeExpr)
+
+UnOp =Literal["neg", "not", "~"]
 @dataclass(slots=True)
 class UnaryOp(Node):
     op: UnOp
@@ -1000,6 +1022,9 @@ class Lambda(Node):
     resolved_type: Optional[FunctionType] = None
     expected_type: Optional[Type] = None
     env_struct: Optional[Type] = None
+    # A `peek T` return written on a lambda: refused (CE2439), and kept so that the lifted
+    # body is not judged again.
+    borrowed_return: Optional["BorrowedReturn"] = None
 
 
 @dataclass(slots=True)
@@ -1039,6 +1064,11 @@ class Call(Node):
     namespace_ref: Optional["NamespaceRef"] = None  # a call through a `use ... as` alias
     resolved_enum_type: Optional["Type"] = None  # Resolved concrete enum type
     resolved_struct_type: Optional["Type"] = None  # Resolved concrete struct type
+    # The callee has a borrowed return (#1229): where its sources stand in the call (an
+    # argument index, or -1 for the receiver). None for an owned return. See MethodCall.
+    callee_borrows: Optional[Tuple[int, ...]] = None
+    # LENT when the answer is an iterator that borrows the sources; see MethodCall.
+    iterator_state: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -1080,6 +1110,19 @@ class MethodCall(Node):
     # The names a call was written with. A method has no field names, so these are
     # carried only to be refused (CE6104); the builder used to drop them (#563).
     field_names: Optional[List[str]] = None
+    # How a built-in iterator producer keeps its state (`generics/iterators.py`, #1259):
+    # the bare cursor of a direct walk, a lent value, or an owned value.
+    iterator_state: Optional[str] = None
+    # A LENT iterator that leaves its function through a `peek` return (#1229): its state
+    # is on the heap. Stamped by the borrow pass on each link of the chain.
+    iterator_leaves: bool = False
+    # `Iterator.new(nom x)`: the `next()` call on the value, built and checked by the
+    # typecheck pass. The backend reads its stamps; no pass walks it as code.
+    iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)
+    # The callee has a borrowed return (#1229): where its sources stand in the call (an
+    # argument index, or -1 for the receiver). None for an owned return. The answer is a
+    # borrow of the owners of those arguments.
+    callee_borrows: Optional[Tuple[int, ...]] = None
 
 
 @dataclass(slots=True)
@@ -1124,6 +1167,10 @@ class DotCall(Node):
     # MethodCall.
     callee_method_type_args: Optional[Tuple] = None
     callee_extension_unit: Optional[str] = None  # see MethodCall
+    iterator_state: Optional[str] = None  # see MethodCall
+    iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)  # see MethodCall
+    iterator_leaves: bool = False  # see MethodCall
+    callee_borrows: Optional[Tuple[int, ...]] = None  # see MethodCall
     # True when the callee is a STATIC method (#542): no receiver crosses, and the
     # backend emits the symbol with the argument list alone. Stamped by the typecheck
     # pass, exactly as the receiver mode beside it is.
@@ -1208,6 +1255,9 @@ class RangeExpr(Node):
     end: "Expr"             # End expression (must evaluate to integer)
     inclusive: bool         # True for ..=, False for ..
     reverse: bool = False   # True after an odd number of `.rev()` calls
+    # The typecheck pass sets it where the position expects `Iterator@(i32)`: the range is
+    # then a VALUE, an owned iterator (#1259).
+    is_value: bool = False
 
 Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda, TupleLiteral]
 # The three call shapes; each carries the whole set of callee stamps.

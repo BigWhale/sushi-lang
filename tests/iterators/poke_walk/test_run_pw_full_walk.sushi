@@ -1,0 +1,27 @@
+# A foreach over a poke value that walks to the end leaves the caller's value spent but
+# alive: the caller reads it and frees it one time, at its own scope exit.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a\nb\n2\n"
+# EXPECT_NO_LEAKS
+
+struct Words:
+    string[] items
+    i32 pos
+
+extend Words next(poke self) Maybe@(string):
+    if (self.pos >= self.items.len()):
+        return Maybe.None
+    self.pos := self.pos + 1
+    return Maybe.Some(self.items[self.pos - 1].clone())
+
+fn all(poke Words w) ~:
+    foreach(s in w):
+        println(s)
+
+fn main() i32:
+    let Words w = Words(from(["a", "b"]), 0)
+    all(poke w)
+    println(w.pos)
+    foreach(s in w):
+        println("again {s}")
+    return 0

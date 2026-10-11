@@ -233,13 +233,14 @@ settles Q1. It also explains [CE2061](../error-catalog.md#ce2061), which is regi
 monomorphized function that is missing is a compiler-internal failure, because nothing
 verified the generic body on its own.
 
-### 4.4 An iterator is not a value
+### 4.4 An iterator is a value (#1259)
 
-`let Iterator@(i32) it = arr.iter()` fails with [CE2001](../error-catalog.md#ce2001): `Iterator` is not a nameable
-type. An iterator exists only as the iterable of a `foreach`. So `typecheck` always
-sees the source expression that produced it, and the static `LoopKind` pick of 7.7 is
-safe. This is a language fact worth guarding: the day an iterator becomes bindable,
-`LoopKind` needs a dynamic variant.
+Until #1259 an iterator existed only as the iterable of a `foreach`, so `typecheck` always
+saw the source expression that produced it, and the static `LoopKind` pick of 7.7 was
+safe. An `Iterator@(T)` is a value now (`iteration.md`, ruling 10). The loop kind is still
+chosen statically, from a stamp: a range or a built-in producer written as the iterable
+is a direct walk, and every other iterator is a walk of a value through its `next_fn`
+(`Foreach.value_iterator`). `LoopKind` needs that variant.
 
 ### 4.5 `expand` dies in `monomorphize`
 

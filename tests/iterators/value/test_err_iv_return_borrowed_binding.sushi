@@ -1,0 +1,13 @@
+# A `let` that holds a borrowed iterator cannot give it to a `return` either.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+use <collections/iter>
+
+fn first_half(i32[] xs) Iterator@(i32):
+    let Iterator@(i32) it = xs.iter()
+    return it
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    foreach(x in first_half(xs)):
+        println(x)
+    return 0

@@ -1,0 +1,18 @@
+use <collections/iter>
+
+public struct Store:
+    i32[] data
+
+public extend Store head(i32 n) peek i32[]:
+    return self.data[0..n]
+
+public fn wider(i32[] a, i32[] b) peek i32[]:
+    if (a.len() >= b.len()):
+        return a
+    return b
+
+public fn first@(T)(T[] xs) peek T:
+    return xs[0]
+
+public fn evens(i32[] xs) peek Iterator@(i32):
+    return xs.iter().filter(nom |i32 x| x % 2 == 0)

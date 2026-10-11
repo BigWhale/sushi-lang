@@ -5,8 +5,8 @@ Complete reference for Sushi's standard library modules and types.
 ## Table of Contents
 
 ### Core Types
-- [Result@(T, E)](stdlib/result.md) - Error handling for fallible operations
-- [Maybe@(T)](stdlib/maybe.md) - Optional values
+- [Result@(T, E)](stdlib/core/result.md) - Error handling for fallible operations
+- [Maybe@(T)](stdlib/core/maybe.md) - Optional values
 - `Own@(T)` - One value on the heap, with one owner (`Own.alloc`, `get`, `destroy`,
   `clone`). No import is necessary. See [Memory Management](memory-management.md).
 
@@ -50,12 +50,12 @@ Complete reference for Sushi's standard library modules and types.
 - [URLs](stdlib/net/url.md) - lexical URL splitting
 
 ### System Modules
-- [Math](stdlib/math.md) - Mathematical operations (abs, min, max, divmod, sqrt, pow, trig)
-- [Random](stdlib/random.md) - Pseudo-random number generation (rand, rand_range, rand_f64, srand)
-- [Time](stdlib/time.md) - Sleep functions, the wall clock and the monotonic clock
-- [Environment](stdlib/env.md) - Environment variables and system information
-- [Process Control](stdlib/process.md) - Process management (getcwd, chdir, exit, getpid, getuid)
-- [Platform](stdlib/platform.md) - Platform detection and OS-specific utilities
+- [Math](stdlib/system/math.md) - Mathematical operations (abs, min, max, divmod, sqrt, pow, trig)
+- [Random](stdlib/system/random.md) - Pseudo-random number generation (rand, rand_range, rand_f64, srand)
+- [Time](stdlib/system/time.md) - Sleep functions, the wall clock and the monotonic clock
+- [Environment](stdlib/system/env.md) - Environment variables and system information
+- [Process Control](stdlib/system/process.md) - Process management (getcwd, chdir, exit, getpid, getuid)
+- [Platform](stdlib/system/platform.md) - Platform detection and OS-specific utilities
 
 ## Quick Reference
 
@@ -347,7 +347,7 @@ Each sleep function answers `Result@(i32, StdError)`. The clocks cannot fail and
 - `rand_range(i32 min, i32 max)` - A pseudo-random `i32` in `[min, max)`
 - `rand_f64()` - A pseudo-random `f64`
 - `srand(u64 seed)` - Seed the generator
-- Each function answers a bare value, not a `Result`. See [Random](stdlib/random.md)
+- Each function answers a bare value, not a `Result`. See [Random](stdlib/system/random.md)
   for the ranges that the functions give today
 
 ### Environment (`use <sys/env>`)

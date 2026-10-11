@@ -1,0 +1,11 @@
+# A chain over `Iterator@(peek string)` copies nothing until `clone_each`, which makes the
+# owned items that `collect` keeps.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 bb ccc\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let string[] names = from(["a", "bb", "ccc"])
+    let List@(string) long = names.iter().filter(nom |string s| s.len() > 1).clone_each().collect()
+    println("{long.len()} {long.get(0).realise('')} {long.get(1).realise('')}")
+    return 0

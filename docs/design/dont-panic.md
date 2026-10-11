@@ -110,7 +110,9 @@ and a string alike. A read and an indexed assignment alike, because a copy loop 
 often as it reads, and the two go through one emitter.
 
 Everything else stays. `get(i)` still answers `Maybe`. `insert(i, v)` still checks its
-position. `assert` still traps. Division by a zero still traps. The borrow pass, the
+position. The range check of a slice `a[i..j]` stays, because a bad slice is a descriptor
+with a wrong length that leaves the marked body and takes the undefined behaviour into
+callees that are not marked, against D6 (rule S7 of [Slices](slices.md)). `assert` still traps. Division by a zero still traps. The borrow pass, the
 overflow rules and every diagnostic are unchanged. The marker unlocks one operation, as
 Rust's `unsafe` unlocks five and changes nothing else.
 

@@ -49,7 +49,7 @@ class ExpressionEmitter:
             IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString,
             ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Name, Call, MethodCall,
             MemberAccess, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow,
-            EnumConstructor, DotCall, TryExpr, Lambda, TupleLiteral
+            EnumConstructor, DotCall, TryExpr, Lambda, TupleLiteral, RangeExpr
         )
 
         match expr:
@@ -154,6 +154,11 @@ class ExpressionEmitter:
             case TupleLiteral():
                 from sushi_lang.backend.expressions import structs
                 return structs.emit_tuple_literal(self.codegen, expr)
+
+            case RangeExpr() if expr.is_value:
+                # A range where `Iterator@(i32)` is expected: an owned iterator (#1259).
+                from sushi_lang.backend.runtime.iterators import emit_range_iterator
+                return emit_range_iterator(self.codegen, expr)
 
             case _:
                 raise NotImplementedError(f"Expression type not supported: {type(expr).__name__}")

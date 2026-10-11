@@ -1,0 +1,26 @@
+# A template returns a `let` of a view, and a `let` of the answer of another borrowed
+# return. At an owning type the `let` borrows; at a plain type it is a copy, and the copy
+# of the template is judged as the template was.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\na\n7\na\n"
+# EXPECT_NO_LEAKS
+
+fn first@(T)(T[] xs) peek T:
+    return xs[0]
+
+fn through_let@(T)(T[] xs) peek T:
+    let T v = xs[0]
+    return v
+
+fn through_call@(T)(T[] xs) peek T:
+    let T v = first(xs)
+    return v
+
+fn main() i32:
+    let i32[] nums = from([7])
+    let string[] names = from(["a"])
+    println(through_let(nums))
+    println(through_let(names))
+    println(through_call(nums))
+    println(through_call(names))
+    return 0

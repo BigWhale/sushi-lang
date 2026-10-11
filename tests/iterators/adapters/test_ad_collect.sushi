@@ -1,0 +1,25 @@
+# `collect` over each source: an array, a List, a range and a HashMap. Over plain items it
+# copies the values, and over owned items it takes them.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n2\n4\n1\nx! y!\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+use <collections/hashmap>
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let List@(i32) a = xs.iter().collect()
+    println(a.len())
+    let List@(f64) floats = List.new()
+    floats.push(1.5)
+    floats.push(2.5)
+    println(floats.iter().collect().len())
+    let Iterator@(i32) r = 0..4
+    println(r.collect().len())
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("seven", 7)
+    println(m.values().collect().len())
+    let string[] names = from(["x", "y"])
+    let List@(string) loud = names.iter().map(nom |string s| "{s}!").collect()
+    println("{loud.get(0).realise('')} {loud.get(1).realise('')}")
+    return 0

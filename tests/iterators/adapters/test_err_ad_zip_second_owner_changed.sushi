@@ -1,0 +1,13 @@
+# `zip` of two borrowed iterators borrows both owners: a change of the second owner while
+# the result lives is an error.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+use <collections/iter>
+
+fn main() i32:
+    let string[] a = from(["a"])
+    let string[] b = from(["b"])
+    let Iterator@((peek string, peek string)) z = a.iter().zip(nom b.iter())
+    b.push("c")
+    foreach(p in z):
+        println(p.1)
+    return 0

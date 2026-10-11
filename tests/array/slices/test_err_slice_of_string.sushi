@@ -1,0 +1,7 @@
+# S6: a string has no slice. The copy of a part is `s.s(a, b)`.
+# EXPECT_ERROR_CODES_EXACT: CE2122
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    println(s[0..6])
+    return 0

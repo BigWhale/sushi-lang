@@ -1,0 +1,11 @@
+# The adapter methods travel with the type: a program that never writes the name
+# `Iterator` needs no import to call them.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n6\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println(xs.iter().map(nom |i32 x| x * 2).filter(nom |i32 x| x > 0).collect().len())
+    println(xs.iter().fold(nom 0, nom |i32 acc, i32 x| acc + x))
+    return 0

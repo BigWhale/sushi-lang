@@ -1,0 +1,15 @@
+# `Iterator.new` names the type, so it needs `use <collections/iter>`.
+# EXPECT_ERROR_CODES_EXACT: CE2001
+struct Countdown:
+    i32 left
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.left == 0):
+        return Maybe.None
+    self.left := self.left - 1
+    return Maybe.Some(self.left)
+
+fn main() i32:
+    foreach(x in Iterator.new(nom Countdown(3))):
+        println(x)
+    return 0

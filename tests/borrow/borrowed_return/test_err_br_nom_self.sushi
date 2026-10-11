@@ -1,0 +1,14 @@
+# A `nom self` method consumes its receiver, so a view of the receiver cannot outlive
+# the call.
+# EXPECT_ERROR_CODES_EXACT: CE2440
+
+struct Store:
+    i32[] data
+
+extend Store take_head(nom self) peek i32[]:
+    return self.data[0..1]
+
+fn main() i32:
+    let Store s = Store(from([1, 2]))
+    println(s.take_head().len())
+    return 0

@@ -16,6 +16,7 @@ from sushi_lang.semantics.param_modes import (
 )
 
 from .borrows import register_implicit_borrow
+from .iterators import take_lent_iterator
 from .consume import consume, consume_each, read_through_receiver, source_provenance
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, expr_to_string
 from .methods import CONTAINER_INSERT_METHODS, callee_effect
@@ -137,9 +138,23 @@ def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: MethodLike) -> Non
     if not effect.bulk_writes or not expr.args:
         return
     place = _place_of(expr.receiver)
-    if place is None or place != _place_of(expr.args[0]):
+    if place is None or place != _place_of(_viewed_array(expr.args[0])):
         return
-    checker.err.emit(er.ERR.CE2430, expr.args[0].loc, name=place, target=place)
+    checker.err.emit(er.ERR.CE2430, expr.args[0].loc, name=expr_to_string(expr.args[0]),
+                     target=place)
+
+
+def _viewed_array(expr: Expr) -> Expr:
+    """The array a slice views: `a[0..2]` reads the storage of `a` (docs/design/slices.md).
+
+    Only slice steps are seen through; an element step names no storage a second
+    expression can share.
+    """
+    walked = walk_place(expr, Step.INDEX)
+    if walked.node is not None and all(
+            isinstance(step, IndexAccess) and step.is_slice for step in walked.path):
+        return walked.node
+    return expr
 
 
 def _reject_refill_from_own_slot(checker: 'BorrowChecker', expr: MethodLike) -> None:
@@ -232,7 +247,8 @@ def apply_mode(checker: 'BorrowChecker', call: CallLike, arg: Expr, index: int,
     mode = checker.callee_modes.mode_at(modes, index, kind)
     check_nom_marker(checker, call, arg, index, mode, kind)
     if mode.consumes:
-        consume(checker, arg)
+        if not take_lent_iterator(checker, call, arg):
+            consume(checker, arg)
     elif not mode.by_pointer:
         register_implicit_borrow(checker, arg)
 
@@ -290,6 +306,8 @@ def settle_receiver(checker: 'BorrowChecker', expr: MethodLike) -> None:
             and source_provenance(checker, receiver) is Provenance.BORROWED):
         receiver.ownership_provenance = Provenance.BORROWED
         reject_read_through_outside_try(checker, expr)
+        return
+    if take_lent_iterator(checker, expr, receiver):
         return
     state = checker.borrow_state.get(receiver.id) if isinstance(receiver, Name) else None
     already_moved = state is not None and state.is_moved

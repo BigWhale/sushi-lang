@@ -1,0 +1,9 @@
+# `collect` over `peek` items of an owning type is an error: there is no `List@(peek T)`,
+# and the compiler inserts no deep copy. The help names `.clone_each().collect()`.
+# EXPECT_ERROR_CODES_EXACT: CE2129
+
+fn main() i32:
+    let string[] names = from(["a", "bb"])
+    let List@(string) all = names.iter().collect()
+    println(all.len())
+    return 0

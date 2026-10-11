@@ -70,6 +70,12 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
     signature = read_signature_types(t.children, ast_builder)
     body = ast_builder._block(body_node)
     dont_panic = mark_body(t.children, body)
+    borrowed_return = None
+    if signature.borrows:
+        from sushi_lang.semantics.borrowed_return import record_of
+        borrowed_return = record_of(
+            signature.ret_span, params, receiver=self_mode not in (None, "nom"),
+            type_params=[tp.name for tp in type_params or ()])
 
     return FuncDef(
         name=str(name_tok),
@@ -88,6 +94,7 @@ def parse_funcdef(t: Tree, ast_builder: 'ASTBuilder') -> FuncDef:
         doc=lift_body_doc(body, ast_builder),
         public_span=public_span,
         dont_panic=dont_panic,
+        borrowed_return=borrowed_return,
     )
 
 

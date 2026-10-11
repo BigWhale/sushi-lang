@@ -49,6 +49,7 @@ from .bindings import (
 )
 from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet, written_let
 from .borrows import clear_borrows
+from .borrowed_returns import check_borrowed_return
 from .diagnostics import emit_change_under_iterator, expr_to_string
 from .consume import (
     bind,
@@ -68,9 +69,12 @@ from .flow import (
     snapshot_flow,
     terminates,
 )
+from .iterators import is_lent_name, lent_owners
 from .reads import borrow_owner
-from .state import BorrowState
-from .writes import check_owner_not_borrowed, reject_readonly_write
+from .state import BorrowState, record_owners
+from .writes import (
+    check_owner_not_borrowed, maybe_reject_mutation, reject_readonly_write,
+    reject_write_through_slice)
 
 if TYPE_CHECKING:
     from . import BorrowChecker
@@ -103,6 +107,10 @@ def check_stmt(checker: 'BorrowChecker', stmt: Stmt) -> None:
                 state.written = written_let(stmt)
         case Rebind():
             _check_rebind(checker, stmt)
+        case Return() if checker.borrowed_return is not None:
+            # A `peek` body hands a VIEW to the caller (#1229): nothing is consumed.
+            check_borrowed_return(checker, stmt.value)
+            clear_borrows(checker)
         case Return():
             check_expr(checker, stmt.value)
             # A return hands the value to the caller. `return Result.Ok(x)` consumes `x`
@@ -191,8 +199,7 @@ def _split_destructure(checker: 'BorrowChecker', stmt: Let) -> None:
     """
     whole = checker.borrow_state.get(stmt.name)
     borrowed = whole is not None and whole.is_borrowed_binding
-    owner = whole.borrows_from if borrowed and whole is not None else None
-    owner_state = checker.borrow_state.get(owner) if owner is not None else None
+    owners = whole.borrows_from if borrowed and whole is not None else ()
     shown = _element_spellings(stmt) if stmt.rebinds else {}
     for binder in destructure_binders(stmt.targets):
         state = BorrowState(name=binder.name, var_type=binder.element_type,
@@ -206,10 +213,8 @@ def _split_destructure(checker: 'BorrowChecker', stmt: Let) -> None:
         state.is_borrowed_binding = True
         state.is_let_borrow = True
         state.bound_at_span = stmt.loc
-        if owner is not None and owner_state is not None:
-            state.borrows_from = owner
-            owner_state.binding_borrows.append((binder.name, stmt.loc))
-            checker._scope_binding_borrows[-1].append((owner, binder.name))
+        record_owners(checker.borrow_state, state, owners, stmt.loc,
+                      checker._scope_binding_borrows[-1])
 
 
 def _element_spellings(stmt: Let) -> dict[str, str]:
@@ -239,6 +244,7 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
     """`x := v` or `obj.field := v`: the target takes ownership of a new value."""
     target = stmt.target
     owner = borrow_owner(target)
+    refused_lent = False
 
     # No "rebind while borrowed" check here, deliberately: this runs BEFORE the value
     # walk, and moving it after would reject `x := f(peek x)`. CE2401 lives at the
@@ -252,6 +258,9 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
             # pointer, which is what the mode is for.
             refused = reject_readonly_write(checker, target.id, stmt.loc,
                                             "rebind the name", rebind=True)
+            # A refused rebind of a lent iterator is the one fault: the value it would
+            # store is not judged as a second one (#1259).
+            refused_lent = refused and state.is_lent_iterator
             # The store goes through the pointer, so it is a USE of the reference: after
             # a change of its owner it writes into storage the owner no longer holds.
             if not refused and isinstance(state.var_type, ReferenceType):
@@ -268,8 +277,9 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
     elif isinstance(target, IndexAccess):
         # An element rebind mutates in place too, and `borrow_owner` already walks an
         # index, so the same gate answers for all five read-only receiver kinds.
+        # A store to a slice itself is a write through the view (S4).
         reject_readonly_write(checker, owner, stmt.loc, "assign to an array element",
-                              receiver=target.array)
+                              receiver=target if target.is_slice else target.array)
         check_expr(checker, target)
 
     check_expr(checker, stmt.value)
@@ -278,7 +288,8 @@ def _check_rebind(checker: 'BorrowChecker', stmt: Rebind) -> None:
     check_owner_not_borrowed(checker, owner, stmt.loc, "assign", place=target)
 
     if isinstance(target, Name):
-        consume(checker, stmt.value)
+        if not refused_lent:
+            consume(checker, stmt.value)
         # A rebind RE-INITIALIZES, so a previous move no longer holds. The value was
         # checked above, so `s := "{s}-x"` still reports the moved `s`.
         target_state = checker.borrow_state.get(target.id)
@@ -428,10 +439,18 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
     Over a container the item BORROWS the element. Over a `next()` protocol iterator
     the item is the value `next()` answered, and the iteration OWNS it. The loop also
     takes the protocol iterator itself, as `f(nom it)` does: CE2411 for a borrow, and
-    CE2405 at a later mention of a local (#1145).
+    CE2405 at a later mention of a local (#1145). A place reached through a `poke`
+    reference is walked in place and not taken (#1258): each `next()` changes it, as a
+    call of `next()` on it does.
     """
     check_expr(checker, stmt.iterable)
-    if stmt.protocol_next is not None:
+    walked_view = None
+    if stmt.value_iterator is not None:
+        walked_view = _settle_value_walk(checker, stmt)
+    elif stmt.protocol_next is not None and stmt.walks_in_place:
+        maybe_reject_mutation(checker, stmt.protocol_next, receiver=stmt.iterable,
+                              what=f"walk '{expr_to_string(stmt.iterable)}'")
+    elif stmt.protocol_next is not None:
         consume(checker, stmt.iterable)
     clear_borrows(checker)
     # A value binding matches the backend's `register_cleanup=False`. A reference binding
@@ -442,10 +461,16 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
     # storage, for the whole loop (#956). The item's freeze stays for an in-place change;
     # a change that hits both is the iterator's to report.
     span = stmt.item_name_span or stmt.loc
+    owns_item = stmt.protocol_next is not None or (
+        stmt.value_iterator is not None and _owns_its_items(stmt.value_iterator))
     with BindingScope(checker) as scope:
-        iterator = (scope.bind_iterator(stmt.iterable)
-                    if stmt.protocol_next is None else None)
+        iterator = None
+        if stmt.protocol_next is None and stmt.value_iterator is None:
+            iterator = scope.bind_iterator(stmt.iterable)
+        elif stmt.value_iterator is not None and walked_view is None:
+            iterator = scope.bind_lent_walk(stmt.iterable)
         if stmt.item_borrow is not None:
+            _reject_poke_item_of_a_slice(checker, stmt, stmt.item_borrow_span or span)
             owner: Optional[Expr] = stmt.iterable
             # An item over an owned temporary has no named owner to conflict with.
             if not walks_a_temporary(checker, stmt.iterable) and reject_a_second_reference(
@@ -454,23 +479,62 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
                 owner = None
             scope.bind_ref(stmt.item_name, stmt.item_type, stmt.item_borrow, span,
                            owner=owner, declared_at=stmt.item_borrow_span)
-        elif stmt.protocol_next is not None:
+        elif owns_item:
             scope.bind_item(stmt.item_name, stmt.item_type, span)
         else:
             scope.bind_value(stmt.item_name, stmt.item_type, span)
             if not walks_a_temporary(checker, stmt.iterable):
                 freeze_for_a_view(checker, scope, stmt.item_name, stmt.item_type, span,
                                   stmt.iterable, ScrutineeKind.BORROWED)
-        if iterator is not None:
-            checker.borrow_state[stmt.item_name].covered_by = iterator.name
+        view = iterator.name if iterator is not None else walked_view
+        if view is not None:
+            checker.borrow_state[stmt.item_name].covered_by = view
         flow = check_loop_body(checker, stmt.body,
-                               per_iteration=frozenset({stmt.item_name}),
-                               view=iterator.name if iterator is not None else None)
+                               per_iteration=frozenset({stmt.item_name}), view=view)
         # Only a change that reaches the next round meets the iterator again (#993).
-        change = (flow.back_edge.invalidation_of(iterator.name)
-                  if iterator is not None else None)
+        change = flow.back_edge.invalidation_of(view) if view is not None else None
         if change is not None:
             emit_change_under_iterator(checker, change, stmt.iterable, stmt.loc)
+
+
+def _reject_poke_item_of_a_slice(checker: 'BorrowChecker', stmt: Foreach,
+                                 span) -> None:
+    """`foreach(poke r in data[a..b].iter())` writes through a slice (S4): CE2426."""
+    from sushi_lang.semantics.param_modes import borrow_mode
+    from sushi_lang.semantics.typesys import BorrowMode
+    if stmt.item_borrow is None or borrow_mode(stmt.item_borrow) is not BorrowMode.POKE:
+        return
+    if isinstance(stmt.iterable, (MethodCall, DotCall)):
+        reject_write_through_slice(checker, stmt.iterable.receiver, span,
+                                   "take a `poke` item")
+
+
+def _settle_value_walk(checker: 'BorrowChecker', stmt: Foreach) -> Optional[str]:
+    """A walk of an iterator VALUE: in place, or the loop takes the value (#1259).
+
+    A value reached through `poke` and a `let` that holds a lent iterator are walked IN
+    PLACE: each step moves their cursor, a write through the place. A lent temporary
+    (`it.clone()`) is the loop's own value and cannot leave the loop. Any other value is
+    taken, as `f(nom it)` takes it. Answers the name of a walked lent `let`, whose owners
+    a change in the body must not move under it.
+    """
+    iterable = stmt.iterable
+    if is_lent_name(checker, iterable):
+        stmt.walks_in_place = True
+    if stmt.walks_in_place:
+        reject_readonly_write(checker, borrow_owner(iterable), iterable.loc,
+                              f"walk '{expr_to_string(iterable)}'", receiver=iterable)
+        return iterable.id if is_lent_name(checker, iterable) else None
+    if lent_owners(checker, iterable) is None:
+        consume(checker, iterable)
+    else:
+        iterable.ownership_provenance = Provenance.BORROWED
+    return None
+
+
+def _owns_its_items(iterator) -> bool:
+    """Does a walk of this iterator OWN each item: `Iterator@(T)`, no `peek` in it?"""
+    return not getattr(iterator, "peeks", ())
 
 
 def _check_expand(checker: 'BorrowChecker', stmt: Expand) -> None:

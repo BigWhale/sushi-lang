@@ -12,7 +12,7 @@ from sushi_lang.semantics.generics.tuples import TUPLE_BASE, intern_tuple
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter, TypePack
 from sushi_lang.semantics.typesys import (
     Type, EnumType, StructType, UnknownType,
-    PointerType, ArrayType, DynamicArrayType, ReferenceType
+    PointerType, ArrayType, DynamicArrayType, ReferenceType, IteratorType
 )
 
 if TYPE_CHECKING:
@@ -153,6 +153,11 @@ class TypeSubstitutor:
             return DynamicArrayType(
                 base_type=self.substitute_type(ty.base_type, substitution)
             )
+
+        # The item mode and the written spelling ride along. The mode of a plain item is
+        # settled where the instance is checked (`generics/iterators.py`).
+        if isinstance(ty, IteratorType):
+            return replace(ty, element_type=self.substitute_type(ty.element_type, substitution))
 
         # A NAMED type is terminal: its interned name already IS (declaration, type
         # arguments). It is looked up, never rebuilt (docs/design/type-identity.md, #802).

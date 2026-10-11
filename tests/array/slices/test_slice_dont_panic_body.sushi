@@ -1,0 +1,15 @@
+# S7: a valid slice in a marked body gives its view, and the element access of the
+# body is still unchecked.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_NO_LEAKS
+
+fn tail_len(i32[] xs, i32 end) i32 dont_panic because "the caller passes a non-empty array":
+    let i32 first = xs[0]
+    return xs[1..end].len() + first
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3])
+    println(tail_len(data, 3))
+    return 0

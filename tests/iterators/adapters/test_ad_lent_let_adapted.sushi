@@ -1,0 +1,16 @@
+# A borrowed iterator in a `let` is adapted later. The result borrows the same owner, and
+# the owner is free again after the last use of the result.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "bb\nccc\n4\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+
+fn main() i32:
+    let string[] names = from(["a", "bb", "ccc"])
+    let Iterator@(peek string) it = names.iter()
+    let Iterator@(peek string) long = it.filter(nom |string s| s.len() > 1)
+    foreach(s in long):
+        println(s)
+    names.push("dddd")
+    println(names.len())
+    return 0

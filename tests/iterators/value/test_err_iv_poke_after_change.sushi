@@ -1,0 +1,15 @@
+# A `poke` borrow of a lent iterator is a use: after a change of its owner it is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+use <collections/iter>
+fn count(poke Iterator@(i32) it) i32:
+    let i32 n = 0
+    foreach(x in it):
+        n := n + x
+    return n
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let Iterator@(i32) it = xs.iter()
+    xs.push(4)
+    println(count(poke it))
+    return 0

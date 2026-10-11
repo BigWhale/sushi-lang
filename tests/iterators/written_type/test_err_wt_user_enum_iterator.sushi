@@ -1,0 +1,10 @@
+# `Iterator` is the name of the compiler's own type, as `HashMap` is: a user enum of
+# that name is refused.
+# EXPECT_ERROR_CODES_EXACT: CE0006
+
+enum Iterator:
+    Start
+    Stop
+
+fn main() i32:
+    return 0

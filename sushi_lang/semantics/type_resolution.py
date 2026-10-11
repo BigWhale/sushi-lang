@@ -299,8 +299,11 @@ def parse_type_string(
         from sushi_lang.semantics.generics.types import GenericTypeRef
         open_at = type_str.index("<")
         args = split_type_arguments(type_str[open_at + 1:-1])
-        return GenericTypeRef(
-            base_name=type_str[:open_at].strip(),
-            type_args=tuple(parse_type_string(a, struct_table, enum_table) for a in args))
+        base_name = type_str[:open_at].strip()
+        type_args = tuple(parse_type_string(a, struct_table, enum_table) for a in args)
+        from sushi_lang.semantics.generics.iterators import ITERATOR_BASE, iterator_of
+        if base_name == ITERATOR_BASE and len(type_args) == 1:
+            return iterator_of(type_args[0])
+        return GenericTypeRef(base_name=base_name, type_args=type_args)
 
     return UnknownType(name=type_str)

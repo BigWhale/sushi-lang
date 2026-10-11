@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
     """Emit borrow expression (peek expr or poke expr) as pointer to expression."""
-    from sushi_lang.semantics.ast import Name, MemberAccess
+    from sushi_lang.semantics.ast import IndexAccess, Name, MemberAccess
     from sushi_lang.semantics.typesys import ReferenceType
 
     if isinstance(expr.expr, Name):
@@ -40,6 +40,12 @@ def emit_borrow(codegen: 'LLVMCodegen', expr: Borrow) -> ir.Value:
         if storage is not None:
             return storage[1]  # `poke geo.count`: the variable's own address
         return emit_member_access_borrow(codegen, expr.expr)
+
+    elif isinstance(expr.expr, IndexAccess) and expr.expr.is_slice:
+        # `peek data[a..b]`: the slot that holds the slice descriptor. A `poke` of a
+        # slice is refused by the borrow pass (docs/design/slices.md, S4).
+        from sushi_lang.backend.types.arrays.indexing import emit_slice_address
+        return emit_slice_address(codegen, expr.expr)
 
     else:
         # Should never reach here (borrow checker validates this)

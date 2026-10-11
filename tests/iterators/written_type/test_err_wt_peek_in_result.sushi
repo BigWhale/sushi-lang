@@ -1,0 +1,8 @@
+# `peek` is a type argument only of `Iterator@(...)`. There is no `Result@(peek T, E)`.
+# EXPECT_ERROR_CODES_EXACT: CE2419
+
+fn fine(Result@(peek string, StdError) r) bool:
+    return r.is_ok()
+
+fn main() i32:
+    return 0

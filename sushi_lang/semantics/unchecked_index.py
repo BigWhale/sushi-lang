@@ -17,7 +17,8 @@ def stamp_unchecked_indexes(body: object) -> None:
     def stamp(node: Node) -> bool:
         if isinstance(node, Lambda):
             return False
-        if isinstance(node, IndexAccess):
+        if isinstance(node, IndexAccess) and not node.is_slice:
+            # A slice keeps its range check (S7, docs/design/slices.md).
             node.unchecked = True
         return True
 

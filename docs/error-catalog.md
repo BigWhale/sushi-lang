@@ -1425,10 +1425,10 @@ Variable declaration with 'let' requires an explicit type annotation.
 - `` '{unit}' declares it; add `use "{unit}"` above to name it here ``
 - `` '{module}' declares it; add `use <{module}>` above to name it here ``
 - `` library '{library}' declares it; add `use <lib/{library}>` above to name it here ``
-- `an iterator has no methods: walk it with 'foreach', or call the method on the collection it comes from`
+- `an iterator has the methods 'clone' and the adapters 'map', 'filter', 'enumerate', 'zip', 'clone_each', 'fold', 'partition' and 'collect': walk it with 'foreach', or call the method on the collection it comes from`
 - `did you mean '{namespace}.{closest}'?`
 
-Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` has no method at all: `foreach` walks it, and `next()` is the protocol of a user type, not a method of an iterator. A range has one method, `.rev()`; any other method on a range is [CE2122](#ce2122). `0..n.rev()` is the range `0..(n.rev())`, so its method is on the i32 `n`, and that is this error. In a generic body, a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
+Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` has the method `.clone()`, which copies its cursor, and the adapters `map`, `filter`, `enumerate`, `zip`, `clone_each`, `fold`, `partition` and `collect`; every other method on an iterator is this error. `foreach` walks an iterator, and `next()` is the protocol of a user type, not a method of an iterator. A range has one method, `.rev()`; any other method on a range is [CE2122](#ce2122). `0..n.rev()` is the range `0..(n.rev())`, so its method is on the i32 `n`, and that is this error. In a generic body, a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
 
 ### CE2009 {#ce2009}
 
@@ -2233,11 +2233,11 @@ An index, a count and a range bound are i32 positions: an array index `a[i]`, a 
 
 **Error** · type
 
-**Message:** `` a range is not a value: it is walked by `foreach` or spelled into an array ``
+**Message:** `` a range is a value only where `Iterator@(i32)` is expected, and a slice only in the index of an array ``
 
-**Help:** `` walk it with `foreach`, or spell it into an array: `from([a..b])` ``
+**Help:** `` walk it with `foreach`, spell it into an array (`from([a..b])`), or give it to a position of the type `Iterator@(i32)` ``
 
-A range (`a..b`, `a..=b`) has two positions, and only two: the iterable of a `foreach` (`foreach(i in 0..3):`) and an element of an array literal (`[0..3]`, `from([0..n])`). Sushi has no range type and no range object, as Rust (`Range`) and Python (`range`) have, so a range cannot be a function or a method argument, a constructor argument, a `return` value, a `let` initializer or an operand. Walk it with `foreach`, or spell it into an array with `from([a..b])` and use the array. `.rev()` is the one method a range takes, and the result is a range again, with the same two positions: `foreach(i in (0..3).rev()):` and `[(0..3).rev()]`. Any other method on a range is this error.
+A range (`a..b`, `a..=b`) has four positions. It is the iterable of a `foreach` (`foreach(i in 0..3):`), which walks it directly. It is an element of an array literal (`[0..3]`, `from([0..n])`), where it is a run of elements. It is the index of an array (`data[1..3]`), where it is a slice: a borrowed `T[]` view of a part of a `T[]` or a `T[N]` (see [the slice design](design/slices.md)). A string has no slice, and a reversed range (`data[(0..3).rev()]`) has no slice, so a range in those two index positions is this error: copy a part of a string with `s.s(a, b)`. And it is a VALUE, an owned `Iterator@(i32)`, in every position where `Iterator@(i32)` is expected, written or propagated: a `let` of that type, an argument, a `return`, a constructor field, an enum payload and a container element. In every other position a range is this error: an `i32` position, an operand, a `let` of another type, and a generic `T` that nothing else solves (`f(nom 0..3)` over `fn f@(T)(nom T x)`). Walk it with `foreach`, spell it into an array with `from([a..b])`, or give it to a position of the type `Iterator@(i32)`. `.rev()` is the one method a range takes, and the result is a range again, with the same positions: `foreach(i in (0..3).rev()):`, `[(0..3).rev()]` and `let Iterator@(i32) d = (0..3).rev()`. Any other method on a range is this error. See [the iteration design](design/iteration.md), ruling 10.
 
 ### CE2123 {#ce2123}
 
@@ -2267,7 +2267,7 @@ An extension target and a perk-implementation target can put a bound on a type p
 
 **Help:** `` to count down from {high} to {low}, write `({low}..={high}).rev()` ``
 
-A range always goes up: `a..b` yields a, a+1, ..., b-1 and is empty when a >= b; `a..=b` yields a to b and is empty when a > b. A countdown is written `(a..b).rev()`, which yields the same values, last first: `(1..=10).rev()` is 10 down to 1, and `(0..n).rev()` is n-1 down to 0 and empty when n is 0. This error is for a range whose two bounds the compiler can read and whose start is above its end, in a `foreach` iterable and in an array literal element (a constant and a fixed array included), with or without `.rev()`. The help gives the countdown that yields the values the bounds name: `10..0` is `(1..=10).rev()`, `10..=0` is `(0..=10).rev()`. A range with a computed bound gets no diagnostic: it is empty when it does not go up. Before this rule the values gave the direction, so `10..0` counted down. That made the empty case run backward when a bound was computed: the countdown `(n - 1)..=0` visited -1 and 0 when n was 0, where it must visit nothing. An inclusive range could never be empty. The countdown is `(0..n).rev()` now, and it is empty when n is 0. Rust, Kotlin and Python write the direction in the code, never in the data, and Sushi does the same. `3..3` in a `foreach` is legal and empty; in an array literal it is [CE2019](#ce2019), because it spells no slot. A range in a match PATTERN (`0x80..=0x8f ->`) goes up by the same rule, and `0x8f..=0x80` or `5..3` there is this error. Its help gives the written order to use (`0x80..=0x8f`), because a pattern has no direction to keep. The bounds are read as values of the scrutinee type, so on an i8 `0x80..=0xff` is -128 to -1 and goes up. `5..5` in a pattern goes nowhere: it matches no value, which is the dead-arm error [CE2118](#ce2118).
+A range always goes up: `a..b` yields a, a+1, ..., b-1 and is empty when a >= b; `a..=b` yields a to b and is empty when a > b. A countdown is written `(a..b).rev()`, which yields the same values, last first: `(1..=10).rev()` is 10 down to 1, and `(0..n).rev()` is n-1 down to 0 and empty when n is 0. This error is for a range whose two bounds the compiler can read and whose start is above its end, in a `foreach` iterable, in an array literal element (a constant and a fixed array included) and in a slice (`data[3..1]`), with or without `.rev()`. A slice whose computed bounds go down stops the program with [RE2028](#re2028), because a slice is not empty when its bounds are out of order. The help gives the countdown that yields the values the bounds name: `10..0` is `(1..=10).rev()`, `10..=0` is `(0..=10).rev()`. A range with a computed bound gets no diagnostic: it is empty when it does not go up. Before this rule the values gave the direction, so `10..0` counted down. That made the empty case run backward when a bound was computed: the countdown `(n - 1)..=0` visited -1 and 0 when n was 0, where it must visit nothing. An inclusive range could never be empty. The countdown is `(0..n).rev()` now, and it is empty when n is 0. Rust, Kotlin and Python write the direction in the code, never in the data, and Sushi does the same. `3..3` in a `foreach` is legal and empty; in an array literal it is [CE2019](#ce2019), because it spells no slot. A range in a match PATTERN (`0x80..=0x8f ->`) goes up by the same rule, and `0x8f..=0x80` or `5..3` there is this error. Its help gives the written order to use (`0x80..=0x8f`), because a pattern has no direction to keep. The bounds are read as values of the scrutinee type, so on an i8 `0x80..=0xff` is -128 to -1 and goes up. `5..5` in a pattern goes nowhere: it matches no value, which is the dead-arm error [CE2118](#ce2118).
 
 ### CE2126 {#ce2126}
 
@@ -2277,16 +2277,6 @@ A range always goes up: `a..b` yields a, a+1, ..., b-1 and is empty when a >= b;
 
 The alternatives of a pattern (`Shape.Circle(r) | Shape.Ring(r) -> ...`) bind the same names, with the same types and the same modes (bare, `peek`, `poke`, `nom`), as in Rust and Python. The arm body reads one binding, whatever alternative matched, so a name that only one alternative binds has no value on the other path, a name with two types has no one type, and a name with two modes is a copy on one path and a reference or a take on the other. The `{detail}` slot names the first difference: a name that is not bound, a name the first alternative does not bind, a different type, or a different mode. The note is at the first alternative, which every other alternative is held to. A nested list of alternatives (`Maybe.Some(Shape.Circle(r) | Shape.Ring(r))`) takes the same rule. Write two arms when the alternatives must bind different things.
 
-### CE2127 {#ce2127}
-
-**Error** · type
-
-**Message:** `the iterator of HashMap '.{method}()' must be the iterable of a foreach`
-
-**Help:** `` walk the map where the call is written, `foreach(x in map.{method}())`, or pass the map and call '.{method}()' in the function that walks it ``
-
-A HashMap iterator (`.keys()`, `.values()`, `.entries()`, `.pairs()`) walks the buckets of the map, and the loop must know the key type and the value type to step over them. The loop knows them only when the call is the iterable itself: `foreach(k in m.keys())`. In every other position the value leaves the call with the type `Iterator@(K)` alone -- an argument of a generic function, an element of a tuple, the payload of a `Maybe` -- and a later `foreach` over it cannot find the buckets. Before this error that loop walked zero entries and gave no diagnostic. An array or a List iterator (`.iter()`) has no such limit. The fix is to walk the map where the call is written, or to pass the map and call the method in the function that walks it.
-
 ### CE2128 {#ce2128}
 
 **Error** · type
@@ -2294,6 +2284,18 @@ A HashMap iterator (`.keys()`, `.values()`, `.entries()`, `.pairs()`) walks the 
 **Message:** `'{method}' needs a numeric element type, and '{element}' is not numeric`
 
 The array reductions `.min()`, `.max()` and `.add_up()` read each element as a number: `.min()` and `.max()` compare with the `<` of a number, and `.add_up()` adds with the `+` of a number. The element type must be an integer type or a float type. A `bool`, a `string`, a struct, an enum, an array and a function value are refused, on a fixed and on a dynamic array alike. For an order over other element types, sort the array with `.sort()` from `<collections/sort>`, or reduce it with `.fold()` from `<collections/iter>`. The reduction that adds is named `add_up` and not `sum`, so a user extension named `sum` or `total` on an array does not collide with a built-in ([CE2097](#ce2097)).
+
+### CE2129 {#ce2129}
+
+**Error** · type
+
+**Message:** `'{method}' cannot keep the borrowed items of '{type}'`
+
+**Help:**
+
+- `` there is no `List@(peek T)`, and the compiler makes no copy: clone each item first, `.clone_each().{call}` ``
+
+`collect` and `partition` keep each item in a `List@(T)`. An item of `Iterator@(peek T)` is a borrow of a value that the source keeps, and there is no `List@(peek T)`: a list of borrows has no owner for its elements ([CE2419](#ce2419)). The compiler inserts no deep copy. So `collect` and `partition` over a `peek` item of an owning type (a `string`, a `List`, a struct that holds one) are this error. An item whose tuple element is a `peek` of an owning type (`Iterator@((i32, peek string))`) is this error too. Clone each item first: `.clone_each().collect()` gives `Iterator@(T)`, with owned items and one `.clone()` for each item. Over a plain item (an `i32`, a struct of numbers) the two modes are one type, and `collect` is legal. In a generic body a type parameter can own, so `collect` over `Iterator@(peek T)` is this error where the template is written; write `.clone_each()` with `T: Clone`.
 
 ## CE24xx: Borrow and reference errors {#ce24xx}
 
@@ -2452,7 +2454,7 @@ A `peek` / `poke` enum payload has no tracking of any kind, so the enum may outl
 
 **Message:** `a function cannot return a reference type ('{ty}')`
 
-Returning a `peek` / `poke` would let a function hand out a borrow of its own local, and the caller would read it after the frame is gone -- a dangling read. A borrow ends when the function returns. Return an owned value, or `.clone()` what you borrowed.
+Returning a `poke` would let a function hand out a borrow of its own local, and the caller would read it after the frame is gone -- a dangling read. A borrow ends when the function returns. Return an owned value, or `.clone()` what you borrowed. A `peek T` return on a named function or method is the borrowed return, which views a source of the function (see [the borrow model](design/borrow-model.md), S10h, and [CE2438](#ce2438)).
 
 ### CE2418 {#ce2418}
 
@@ -2471,6 +2473,8 @@ Both grammar rules for a borrow are recursive, so `peek peek i32` parses -- in a
 **Message:** `a reference type cannot be a generic type argument ('{ty}')`
 
 A container of borrows -- `List@(peek T)`, `HashMap@(peek K, V)`, `Maybe@(peek T)` -- has no defined semantics: nothing relates the stored borrows to the values they point at, and the backend cannot lay one out. Store owned values, or indices into a container that outlives the uses. There is NO `Maybe` / `Result` exemption: those two are how a returned borrow would escape ([CE2417](#ce2417)). Foreign `ptr` carries the same restriction, as [CE5012](#ce5012).
+
+The one exception is the item of an iterator: `Iterator@(peek T)` gives borrowed items, and `Iterator@((i32, peek string))` borrows one element of a tuple item. Only `peek`, and only at the top of the item or of one tuple element. `Iterator@(poke T)`, `Iterator@(peek (i32, string))` and `Iterator@(List@(peek T))` are this error ([Iteration](design/iteration.md), ruling 9).
 
 ### CE2420 {#ce2420}
 
@@ -2635,6 +2639,86 @@ A `nom self` method takes ownership of what it was called on, so the binding is 
 **Message:** `cannot move '{name}': it is {kind}, storage the program keeps for its whole run; borrow it instead, or take an independent value`
 
 This is the rule for UNIT-LEVEL STORAGE, and both kinds read it. A `var` declaration is storage in the data segment and a `const` is one object in `.rodata`: one per program, initialized before `main`, never destroyed at exit (see [the unit-storage design](design/unit-storage.md)). Neither has an owner that can hand the value away. Moving it out -- a `nom` argument, a `let` bound straight from it, a `return` of it, a `nom self` method such as `close()` -- would give a callee or a binding the right to free storage nothing re-initializes, so the same rule that fences `main`'s argv view ([CE2410](#ce2410)) fences both. A plain value copies out freely; only a type that owns a resource is refused, so `nom` of a `const i32` is a harmless copy. Pass it as a borrow (`f(v)`, `peek v`, `poke v`), or take an independent value: `.clone()` for a plain owner, `.share()` for a handle. A REBIND is the one way to change what a `var` holds, and it frees the old value. [CE2400](#ce2400) is the WRITE rule. A name behind an alias (`c.GREETING`) is the same declaration as the flat name and reads the same rule.
+
+### CE2437 {#ce2437}
+
+**Error** · borrow
+
+**Message:** `cannot bind a slice of a temporary array: the array is freed at the end of the statement`
+
+**Help:** `` bind the array first, or copy the part with `.ss(start, count)` ``
+
+A slice `data[a..b]` is a borrowed view of a part of an array, and it never copies (see [the slice design](design/slices.md), rule S8). A temporary array (a call result, a `from([...])`, a `.clone()`) lives until the end of the statement that makes it. Inside that statement a slice of it is legal: `send(make()[0..4])` reads the bytes while the call runs, and the array is freed after it. A `let` keeps the slice after the statement, so it would view storage that is freed already. Bind the array first (`let u8[] all = make()`, then `all[0..4]`), or copy the part with `.ss(start, count)` or `.s(start, end)`, which make a new array that the binding owns. An index of a temporary is different: `let string s = make()[1]` reads one element out, and that stays legal.
+
+### CE2438 {#ce2438}
+
+**Error** · borrow
+
+**Message:** `the borrowed return of '{name}' has no source: no borrowed receiver, and no borrowed parameter whose type owns a resource`
+
+**Help:** `` take the value that the answer views as a borrowed parameter, or drop `peek` and return an owned value ``
+
+A `peek T` return gives the caller a view of storage that a SOURCE keeps (see [the borrow model](design/borrow-model.md), S10h). The source set is `self` when the receiver is a borrow (`self`, `peek self`, `poke self`), and each parameter that is not `nom` and whose type owns a resource (`T[]`, `List@(T)`, `string`, a struct that owns, a `Drop` type). A plain parameter keeps no storage that a view could read, and a `nom` parameter is freed when the function returns. With no source, every answer would view the frame of the function, so the declaration is refused at its return type. A generic template is judged where it is written: a bare type parameter counts as a type that owns, so `fn first@(T)(T[] xs) peek T` has the source `xs` at every type argument.
+
+### CE2439 {#ce2439}
+
+**Error** · borrow
+
+**Message:** `a borrowed return is not valid on {position}`
+
+**Help:** `return an owned value, or use a named function`
+
+A `peek T` return is legal only on a named function or method with a body: a free function, an extension method and a static (see [the borrow model](design/borrow-model.md), S10h). A lambda is a value, and its type `fn(A) -> B` cannot say what the answer borrows. A perk contract states one signature for every implementer, so it cannot state a source, and an implementation method cannot answer a borrow that its contract does not state.
+
+### CE2440 {#ce2440}
+
+**Error** · borrow
+
+**Message:** `` a `nom self` method cannot have a borrowed return: it consumes the receiver that the answer would view ``
+
+**Help:** `` borrow the receiver (`self`, `peek self`) to return a view of it, or return an owned value ``
+
+A `nom self` method takes its receiver, and the receiver is freed when the method returns, so a view of it would outlive the storage it reads (see [the borrow model](design/borrow-model.md), S10h). Borrow the receiver to return a view of it, or keep `nom self` and return an owned value.
+
+### CE2441 {#ce2441}
+
+**Error** · borrow
+
+**Message:** `'{name}' has a borrowed return, so it cannot be a function value`
+
+**Help:** `call 'head' directly, or wrap the call in a lambda that returns an owned value`
+
+A function value has the type `fn(A) -> B`, and that type has no place to say what the answer borrows (see [the borrow model](design/borrow-model.md), S10h). A call through the value could not freeze the owners of the source arguments, so a function with a `peek T` return is refused where it is named as a value, bare or behind an alias.
+
+### CE2442 {#ce2442}
+
+**Error** · borrow
+
+**Message:** `` a borrowed return `peek T | E` needs a plain error type: '{err}' owns a resource ``
+
+**Help:** `give the error a plain payload, such as a code or an offset`
+
+In `peek T | E` the mode applies to the `Ok` payload, and the whole `Result` is a borrow: its holder frees nothing in it (see [the borrow model](design/borrow-model.md), S10h). An error that owns a resource would never be freed. Give the error a plain payload. A type parameter as `E` counts as a type that owns.
+
+### CE2443 {#ce2443}
+
+**Error** · borrow
+
+**Message:** `cannot return '{value}' from a borrowed return: {reason}`
+
+**Help:** `` return a view of 'xs', or drop `peek` and return an owned value ``
+
+Each value that a `peek T` function returns must be a borrow whose owner is a source of the function (see [the borrow model](design/borrow-model.md), S10h). `xs[a..b]`, `self.data`, `xs[0]`, a `let` of such a view, an iterator over a source and the answer of another borrowed return over the sources are legal. A borrow of a local, a borrow of a parameter that is not a source, a borrow of a temporary and an owned value are refused. In `peek T | E` the rule holds for the payload of `Result.Ok(...)`.
+
+### CE2444 {#ce2444}
+
+**Error** · borrow
+
+**Message:** `cannot bind the answer of '{callee}': it borrows a temporary argument that is freed at the end of the statement`
+
+**Help:** `` bind the argument first and give the binding, or copy the answer with `.clone()` ``
+
+The answer of a borrowed return views the arguments in its source set (see [the borrow model](design/borrow-model.md), S10h). A temporary argument lives until the end of the statement, so the answer is legal inside that statement: an argument, the iterable of a `foreach`. A `let` keeps the answer after the statement, and it would view freed storage. This is rule S8 of the slice ([CE2437](#ce2437)) at a call.
 
 ## CE25xx: Result, Maybe and conversion errors {#ce25xx}
 
@@ -3658,7 +3742,7 @@ A tuple element is read with `.N`, where N is a plain decimal number that starts
 - `a tuple holds values; write the element type alone`
 - `a binder owns its element from an owned value and borrows it from a borrow; remove the mode`
 
-A destructure element is a name, a typed name, a `_` or a nested destructure, and it carries no `peek`, `poke` or `nom`: a binder OWNS its element when the destructure takes an owned value (a temporary, or an owned local, which the destructure spends), and BORROWS it when the value is a borrow (a parameter, a field, a binding). So `let (peek i32 a, b) = t` is refused. A tuple TYPE takes no mode on an element either: a tuple holds values, and a reference is a parameter or a `let` mode. See [the tuple design](design/tuples.md).
+A destructure element is a name, a typed name, a `_` or a nested destructure, and it carries no `peek`, `poke` or `nom`: a binder OWNS its element when the destructure takes an owned value (a temporary, or an owned local, which the destructure spends), and BORROWS it when the value is a borrow (a parameter, a field, a binding). So `let (peek i32 a, b) = t` is refused. A tuple TYPE takes no mode on an element either: a tuple holds values, and a reference is a parameter or a `let` mode. The one exception is the tuple item of an iterator: `Iterator@((i32, peek string))` borrows that element, at the top of the item only, so a tuple deeper in the item takes no mode ([Iteration](design/iteration.md), ruling 9). See [the tuple design](design/tuples.md).
 
 ### CE6109 {#ce6109}
 
@@ -4007,6 +4091,22 @@ An `unsafe external` function declared to return a plain `string` or `ptr` answe
 **Message:** `assertion failed at {where}`
 
 An `assert(cond)` or `assert(cond, message)` found its condition false. `{where}` is the file, the line and the column of the `assert`, with the file named as a compile-time diagnostic names it; a message, when there is one, follows after `: `. An assert states an invariant, so a failure is a defect and not data: the program stops with exit code 1, and no error channel catches it. A failure that a caller can handle belongs in the channel, `| E`. See [the assert design](design/assert.md).
+
+### RE2027 {#re2027}
+
+**Error** · runtime
+
+**Message:** `an iterator that walks a value holding a resource cannot be cloned`
+
+`it.clone()` copies the cursor of an iterator, and for an iterator made with `Iterator.new(nom x)` the cursor is the value `x` itself. A value that holds a resource (a type that implements `Drop`, or one that holds such a type) has no deep copy ([CE2431](#ce2431)), so its iterator has none either. The type of the iterator does not show what it walks, so the compiler cannot refuse the clone, and the program stops at it instead. Make a second iterator over a second value, or walk the one iterator through `poke`.
+
+### RE2028 {#re2028}
+
+**Error** · runtime
+
+**Message:** `slice %d..%d is out of bounds for an array of size %d`
+
+A slice `data[a..b]` views the elements a to b-1 of an array, and `data[a..=b]` the elements a to b (see [the slice design](design/slices.md)). The range must hold `0 <= a <= b <= len()`, and a range outside that stops the program, as an index out of range does ([RE2020](#re2020)). This is not the clamp rule of `.s()` and `.ss()`, which are the copies. The text gives the end as an exclusive end, so `data[1..=3]` on an array of size 3 prints `1..4`. `a == b` is an empty view and is legal. Readable bounds that go down are the compile error [CE2125](#ce2125); computed bounds that go down are this error, and not an empty view. The `dont_panic` marker does not remove this check: a bad slice is a descriptor with a wrong length that leaves the marked body, and every callee checks against that length. The check runs once, when the slice is made.
 
 ## NExxxx: Nori package manager errors {#nexxxx}
 

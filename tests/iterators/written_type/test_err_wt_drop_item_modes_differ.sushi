@@ -1,0 +1,22 @@
+# A type that implements `Drop` owns a resource, also when no field owns heap, so
+# `Iterator@(peek Handle)` and `Iterator@(Handle)` are two types.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+use <collections/iter>
+
+struct Handle:
+    i32 fd
+
+extend Handle with Drop:
+    fn drop(poke self) ~:
+        println(self.fd)
+
+fn owned(poke Iterator@(Handle) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return owned(poke it, depth - 1)
+
+fn lent(poke Iterator@(peek Handle) it, i32 depth) i32:
+    return owned(poke it, depth)
+
+fn main() i32:
+    return 0

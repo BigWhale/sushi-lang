@@ -113,7 +113,7 @@ _add(ErrorMessage("CE6106", Severity.ERROR,
 
 _add(ErrorMessage("CE6107", Severity.ERROR,
     "a tuple element takes no mode: '{mode}'",
-    Category.SYNTAX, "A destructure element is a name, a typed name, a `_` or a nested destructure, and it carries no `peek`, `poke` or `nom`: a binder OWNS its element when the destructure takes an owned value (a temporary, or an owned local, which the destructure spends), and BORROWS it when the value is a borrow (a parameter, a field, a binding). So `let (peek i32 a, b) = t` is refused (spec decision D1 of the tuple design; a later change can add a mode). A tuple TYPE takes no mode on an element either: a tuple holds values, and a reference is a parameter or a `let` mode. Added with tuples (docs/design/tuples.md)."))
+    Category.SYNTAX, "A destructure element is a name, a typed name, a `_` or a nested destructure, and it carries no `peek`, `poke` or `nom`: a binder OWNS its element when the destructure takes an owned value (a temporary, or an owned local, which the destructure spends), and BORROWS it when the value is a borrow (a parameter, a field, a binding). So `let (peek i32 a, b) = t` is refused (spec decision D1 of the tuple design; a later change can add a mode). A tuple TYPE takes no mode on an element either: a tuple holds values, and a reference is a parameter or a `let` mode. The one exception is the tuple ITEM of an iterator: `Iterator@((i32, peek string))` lends that element, at the top of the item only, so a tuple nested in the item takes no mode (#1227, docs/design/iteration.md). Added with tuples (docs/design/tuples.md)."))
 
 _add(ErrorMessage("CE6109", Severity.ERROR,
     "'{place}' is written twice in one destructuring rebind",

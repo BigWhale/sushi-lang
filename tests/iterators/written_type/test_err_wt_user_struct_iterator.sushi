@@ -1,0 +1,9 @@
+# `Iterator` is the name of the compiler's own type, as `HashMap` is: a user struct of
+# that name is a duplicate.
+# EXPECT_ERROR_CODES_EXACT: CE0004
+
+struct Iterator@(T):
+    T item
+
+fn main() i32:
+    return 0

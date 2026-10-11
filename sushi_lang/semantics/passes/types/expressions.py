@@ -82,6 +82,10 @@ def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None
     validator.validate_expression(expr.array)
     array_type = validator.infer_expression_type(expr.array)
 
+    if expr.is_slice:
+        validate_slice(validator, expr, array_type)
+        return
+
     reject_non_i32(validator, expr.index, validator.validate_expression(expr.index),
                    position=STRING_INDEX if array_type == BuiltinType.STRING else ARRAY_INDEX)
 
@@ -91,6 +95,39 @@ def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None
 
     if isinstance(array_type, ArrayType):
         validate_constant_array_index(validator, expr.index, array_type.size)
+
+
+def validate_slice(validator: 'TypeValidator', expr: IndexAccess,
+                   array_type: Optional['Type']) -> None:
+    """`data[a..b]`: a borrowed view of a part of a `T[]` or a `T[N]` (#1226, S1-S3, S6).
+
+    The range is the index position of a range: its bounds are i32 and readable bounds
+    must go up (CE2125), as in a `foreach`. A reversed range has no slice, and a string
+    has no slice (S6), so the range is in no position of its own there (CE2122).
+    """
+    rng = expr.index
+    if not isinstance(rng, RangeExpr):
+        return
+    if rng.reverse:
+        _refuse_range_in_index(validator, rng, "a slice takes its range in order: write "
+                               "`data[a..b]`, and walk the view with an index that "
+                               "counts down")
+        return
+    if array_type == BuiltinType.STRING:
+        _refuse_range_in_index(validator, rng, "a string has no slice: copy the part with "
+                               "`s.s(a, b)`, or index one byte with `s[i]`")
+        return
+    validate_range_value(validator, rng)
+    if array_type is not None and not isinstance(array_type, (ArrayType, DynamicArrayType)):
+        er.emit(validator.reporter, er.ERR.CE2114, expr.array.loc,
+                type=display_type(array_type))
+
+
+def _refuse_range_in_index(validator: 'TypeValidator', expr: RangeExpr, help_text: str) -> None:
+    """CE2122 for a range in an index that cannot be a slice. The bounds are still checked."""
+    er.emit_with(validator.reporter, er.ERR.CE2122, expr.loc).help(help_text).emit()
+    validator.refused_ranges.add(id(expr))
+    validate_range_expression(validator, expr)
 
 
 def _reject_self_conversion(validator: 'TypeValidator', expr: CastExpr,
@@ -160,15 +197,31 @@ def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None
         note_opaque(diag, source_type, resolved_target).emit()
 
 
-def refuse_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
-    """CE2122: a range in a position that is not a `foreach` iterable or an array element.
+def validate_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
+    """A range in a position that expects `Iterator@(i32)`: an owned iterator (#1259).
 
-    The two legal positions validate their range with `validate_range_expression`
-    directly, so a range that reaches the general dispatch is in any other position
-    (#1165). The bounds are still checked.
+    The bounds are i32, and readable bounds must go up, as in a `foreach`.
+    """
+    from sushi_lang.semantics.array_runs import const_int_reader
+    from sushi_lang.semantics.ranges import read_range, reject_a_range_that_goes_down
+    validate_range_expression(validator, expr)
+    reject_a_range_that_goes_down(
+        read_range(expr, const_int_reader(validator.constant_evaluator()),
+                   validator.reporter),
+        validator.reporter)
+
+
+def refuse_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
+    """CE2122: a range in a position that expects no `Iterator@(i32)`.
+
+    A `foreach` iterable and an array element validate their range directly, and a
+    position that expects `Iterator@(i32)` stamps it a value, so a range that reaches the
+    general dispatch unstamped is in any other position (#1165, #1259). The bounds are
+    still checked.
     """
     er.emit_with(validator.reporter, er.ERR.CE2122, expr.loc) \
-        .help("walk it with `foreach`, or spell it into an array: `from([a..b])`") \
+        .help("walk it with `foreach`, spell it into an array (`from([a..b])`), or give "
+              "it to a position of the type `Iterator@(i32)`") \
         .emit()
     validator.refused_ranges.add(id(expr))
     validate_range_expression(validator, expr)

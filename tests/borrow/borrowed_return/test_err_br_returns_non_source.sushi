@@ -1,0 +1,12 @@
+# The body returns a borrow of a parameter that is not a source: a `nom` parameter is
+# owned by the function, and it is freed at the return.
+# EXPECT_ERROR_CODES_EXACT: CE2443
+
+fn head(i32[] xs, nom i32[] ys) peek i32[]:
+    println(xs.len())
+    return ys[0..1]
+
+fn main() i32:
+    let i32[] data = from([1, 2])
+    println(head(data, nom from([3, 4])).len())
+    return 0

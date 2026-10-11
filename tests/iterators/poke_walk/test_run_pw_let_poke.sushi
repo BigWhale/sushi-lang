@@ -1,0 +1,25 @@
+# A foreach over a `let poke` binding walks the owner in place.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a\nb\nc\n"
+# EXPECT_NO_LEAKS
+
+struct Words:
+    string[] items
+    i32 pos
+
+extend Words next(poke self) Maybe@(string):
+    if (self.pos >= self.items.len()):
+        return Maybe.None
+    self.pos := self.pos + 1
+    return Maybe.Some(self.items[self.pos - 1].clone())
+
+fn main() i32:
+    let Words w = Words(from(["a", "b", "c"]), 0)
+    if (true):
+        let poke Words r = w
+        foreach(s in r):
+            println(s)
+            break
+    foreach(s in w):
+        println(s)
+    return 0

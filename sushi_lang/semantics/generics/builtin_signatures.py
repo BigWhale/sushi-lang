@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
 
 from sushi_lang.semantics.generics.types import GenericTypeRef, substitute_type_params
-from sushi_lang.semantics.typesys import EnumType, StructType, Type
+from sushi_lang.semantics.typesys import EnumType, IteratorType, StructType, Type
 
 
 @dataclass(frozen=True)
@@ -101,6 +101,8 @@ def receiver_type_arguments(receiver_type: Any) -> Optional[tuple[Type, ...]]:
     """The type arguments of an interned instance or of a written generic reference."""
     if isinstance(receiver_type, (EnumType, StructType)):
         return tuple(receiver_type.generic_args) if receiver_type.generic_args else None
+    if isinstance(receiver_type, IteratorType):
+        return (receiver_type.element_type,)
     if isinstance(receiver_type, GenericTypeRef):
         return tuple(receiver_type.type_args)
     return None

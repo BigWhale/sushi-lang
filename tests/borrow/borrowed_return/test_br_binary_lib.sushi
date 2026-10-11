@@ -1,0 +1,24 @@
+# A binary library exports functions and a method with a borrowed return. The manifest
+# records the return mode, and the consumer reads it.
+# BUILD_LIB_BINARY: br_bin_lib.sushi
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n3\n7\nant\n2\n4\n"
+# EXPECT_NO_LEAKS
+use <lib/br_bin_lib>
+
+fn main() i32:
+    let Store s = Store(from([1, 2, 3]))
+    println(s.head(2).len())
+    let i32[] a = from([1, 2, 3])
+    let i32[] b = from([1])
+    println(wider(a, b).len())
+    let i32[] nums = from([7])
+    println(first(nums))
+    let string[] names = from(["ant"])
+    println(first(names))
+    foreach(x in evens(a.clone())):
+        println(x)
+    let i32[] c = from([4, 5])
+    foreach(y in evens(c)):
+        println(y)
+    return 0

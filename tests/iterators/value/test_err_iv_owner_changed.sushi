@@ -1,0 +1,11 @@
+# The owner of a borrowed iterator is frozen until the last use of the iterator.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+use <collections/iter>
+
+fn main() i32:
+    let string[] names = from(["a", "b"])
+    let Iterator@(peek string) it = names.iter()
+    names.push("c")
+    foreach(s in it):
+        println(s)
+    return 0

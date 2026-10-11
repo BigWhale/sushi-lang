@@ -1,0 +1,17 @@
+# A slice argument is a shared borrow of its array. A `poke` of the same array in the
+# same call is refused: the callee could grow the array under the view.
+# EXPECT_ERROR_CODES_EXACT: CE2407, CE2407
+
+fn grow_and_count(poke i32[] all, i32[] part) i32:
+    all.push(4)
+    return part.len()
+
+fn count_and_grow(i32[] part, poke i32[] all) i32:
+    all.push(4)
+    return part.len()
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3])
+    println(grow_and_count(poke data, data[0..2]))
+    println(count_and_grow(data[0..2], poke data))
+    return 0

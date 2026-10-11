@@ -15,6 +15,21 @@ _add(ErrorMessage("RE2020", Severity.ERROR,
     "array index %d out of bounds for array of size %d",
     Category.RUNTIME, "Array access with index outside valid range [0, size)."))
 
+# A slice range outside the array. The text is the printf format: three %d, matching the
+# (start, exclusive end, size) triple the range check passes.
+_add(ErrorMessage("RE2028", Severity.ERROR,
+    "slice %d..%d is out of bounds for an array of size %d",
+    Category.RUNTIME, "A slice `data[a..b]` views the elements a to b-1 of an array, and "
+    "`data[a..=b]` the elements a to b (#1226, docs/design/slices.md). The range must hold "
+    "`0 <= a <= b <= len()`, and a range outside that stops the program, as an index out of "
+    "range does (RE2020). This is not the clamp rule of `.s()` and `.ss()`, which are the "
+    "copies. The text gives the end as an exclusive end, so `data[1..=3]` on an array of "
+    "size 3 prints `1..4`. `a == b` is an empty view and is legal. Readable bounds that go "
+    "down are the compile error CE2125; computed bounds that go down are this error, and "
+    "not an empty view. The `dont_panic` marker does not remove this check (S7): a bad "
+    "slice is a descriptor with a wrong length that leaves the marked body, and every "
+    "callee checks against that length. The check runs once, when the slice is made."))
+
 # Memory allocation errors
 _add(ErrorMessage("RE2021", Severity.ERROR,
     "memory allocation failed",
@@ -68,3 +83,13 @@ _add(ErrorMessage("RE2025", Severity.ERROR,
     "`strlen` or to the next C call. Declare the return `Maybe@(string)` or `Maybe@(ptr)` when "
     "C can answer NULL: the call then answers `Maybe.None` (docs/ffi.md, \"Null at the "
     "boundary\")."))
+
+# The clone of an iterator over a value that holds a resource (#1259)
+_add(ErrorMessage("RE2027", Severity.ERROR,
+    "an iterator that walks a value holding a resource cannot be cloned",
+    Category.RUNTIME, "`it.clone()` copies the cursor of an iterator, and for an iterator made "
+    "with `Iterator.new(nom x)` the cursor is the value `x` itself. A value that holds a "
+    "resource (a type that implements `Drop`, or one that holds such a type) has no deep copy "
+    "(CE2431), so its iterator has none either. The type of the iterator does not show what "
+    "it walks, so the compiler cannot refuse the clone, and the program stops at it instead. "
+    "Make a second iterator over a second value, or walk the one iterator through `poke`."))

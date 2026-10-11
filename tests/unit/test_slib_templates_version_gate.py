@@ -59,9 +59,16 @@ def test_a_version_9_binary_library_is_refused():
     assert exc.value.code == "CE3512"
 
 
+def test_a_version_10_binary_library_is_refused():
+    """Version 11 states the return mode of a borrowed return (#1229)."""
+    with pytest.raises(LibraryError) as exc:
+        _check_library_templates_version(_metadata("binary", 10), "old.slib")
+    assert exc.value.code == "CE3512"
+
+
 def test_the_current_schema_passes():
     _check_library_templates_version(_metadata("binary", TEMPLATES_SCHEMA_VERSION), "new.slib")
-    assert TEMPLATES_SCHEMA_VERSION == 10
+    assert TEMPLATES_SCHEMA_VERSION == 11
 
 
 def test_a_source_library_is_never_gated():

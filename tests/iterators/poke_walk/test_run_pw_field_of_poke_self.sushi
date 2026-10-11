@@ -1,0 +1,29 @@
+# A foreach over a field of a `poke self` receiver walks the field in place.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a\nb\nc\n"
+# EXPECT_NO_LEAKS
+
+struct Words:
+    string[] items
+    i32 pos
+
+extend Words next(poke self) Maybe@(string):
+    if (self.pos >= self.items.len()):
+        return Maybe.None
+    self.pos := self.pos + 1
+    return Maybe.Some(self.items[self.pos - 1].clone())
+
+struct Reader:
+    Words words
+
+extend Reader first(poke self) ~:
+    foreach(s in self.words):
+        println(s)
+        break
+
+fn main() i32:
+    let Reader r = Reader(Words(from(["a", "b", "c"]), 0))
+    r.first()
+    r.first()
+    r.first()
+    return 0

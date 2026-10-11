@@ -1,0 +1,31 @@
+# A generic template is judged where it is written: a bare type parameter counts as a
+# type that owns, so `first` has one source and `pick` has two. The template is used at
+# a plain type and at an owning type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\nant\nbee\n9\nant\n"
+# EXPECT_NO_LEAKS
+
+fn first@(T)(T[] xs) peek T:
+    return xs[0]
+
+fn pick@(T)(T a, T b, bool left) peek T:
+    if (left):
+        return a
+    return b
+
+fn main() i32:
+    let i32[] nums = from([7, 8])
+    let string[] names = from(["ant", "bee"])
+    println(first(nums))
+    let string f = first(names)
+    println(f)
+    println(pick(names[0], names[1], false))
+    let i32 a = 9
+    let i32 b = 10
+    println(pick(a, b, true))
+    let string ant = "ant"
+    let string bee = "bee"
+    let string p = pick(ant, bee, true)
+    println(p)
+    names.push("cat")
+    return 0

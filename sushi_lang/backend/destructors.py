@@ -11,7 +11,8 @@ import llvmlite.ir as ir
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import (
-    Type, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, FunctionType)
+    Type, BuiltinType, ArrayType, DynamicArrayType, StructType, EnumType, FunctionType,
+    IteratorType)
 from sushi_lang.backend.constants import INT8_BIT_WIDTH
 from sushi_lang.backend import gep_utils
 from sushi_lang.backend.constants.llvm_values import ZERO_I32, ONE_I32, make_i32_const
@@ -49,6 +50,13 @@ def emit_value_destructor(
     # drop pointer. Capture is erased from the type, so ownership is resolved at runtime:
     # a non-capturing value carries drop_ptr = null, making the free a no-op.
     elif isinstance(value_type, FunctionType):
+        emit_function_value_destructor(codegen, value_ptr)
+
+    # An iterator value (#1259) frees its state through its own `drop_fn`, which is null
+    # for a state that owns nothing (a lent cursor on the stack). Its `{next_fn, state,
+    # drop_fn, clone_fn}` puts the drop and the state where a closure puts them, so the
+    # same guarded call frees it; the arm is chosen by the semantic type.
+    elif isinstance(value_type, IteratorType):
         emit_function_value_destructor(codegen, value_ptr)
 
 

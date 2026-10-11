@@ -29,6 +29,7 @@ from sushi_lang.semantics.typesys import (
     DynamicArrayType,
     EnumType,
     FunctionType,
+    IteratorType,
     ReferenceType,
     StructType,
 )
@@ -107,6 +108,7 @@ RECEIVERS = (
     _POINT, _BARE, _COLOUR, _PLAIN,
     FunctionType(param_types=(BuiltinType.I32,), ok_type=BuiltinType.I32,
                  err_type=BuiltinType.I32),
+    IteratorType(BuiltinType.I32),
     ReferenceType(referenced_type=DynamicArrayType(BuiltinType.I32)),
     ReferenceType(referenced_type=_POINT),
     ReferenceType(referenced_type=_LIST),

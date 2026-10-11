@@ -64,6 +64,11 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
     signature = read_signature_types(suffix.children, ast_builder)
     body = ast_builder._block(body_node)
     dont_panic = mark_body(suffix.children, body)
+    borrowed_return = None
+    if signature.borrows:
+        borrowed_return = _borrowed_return(signature.ret_span, params, self_mode,
+                                           static_tok is not None, type_params,
+                                           target_params, ast_builder)
 
     return ExtendDef(
         target_type=target_type,
@@ -87,7 +92,31 @@ def parse_handle_extend_stmt_def(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDe
         dont_panic=dont_panic,
         is_public=declared_public(EXTENSION_METHOD, marked),
         public_span=public_span,
+        borrowed_return=borrowed_return,
     )
+
+
+def _borrowed_return(span, params, self_mode, is_static: bool, type_params,
+                     target_params, ast_builder: 'ASTBuilder'):
+    """The record of a `peek` return on an extension method (#1229).
+
+    The receiver is a source when it is a borrow. A `nom self` method frees its receiver,
+    so a view of it cannot leave (CE2440): the record is kept, refused, and judged no
+    further. The type parameters are the method's own and the target's.
+    """
+    from sushi_lang.internals.diagnostics import SyntaxDiagnostic
+    from sushi_lang.semantics.borrowed_return import record_of
+    names = [tp.name for tp in type_params or ()]
+    names += [tp.name for tp in target_params if tp is not None]
+    record = record_of(span, params, receiver=not is_static and self_mode != "nom",
+                       type_params=names)
+    if self_mode == "nom":
+        ast_builder.recover(
+            SyntaxDiagnostic("CE2440", span=span).help(
+                "borrow the receiver (`self`, `peek self`) to return a view of it, or "
+                "return an owned value"), None)
+        return record.refuse()
+    return record
 
 
 def parse_handle_extend_stmt_as(t: Tree, ast_builder: 'ASTBuilder') -> ExtendDef:

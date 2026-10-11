@@ -40,6 +40,28 @@ class ParamMode(Enum):
         return BorrowMode(self.value)
 
 
+class ReturnMode(Enum):
+    """How a callable gives its answer (#1229, docs/design/borrow-model.md S10h)."""
+
+    OWNED = "owned"   # unmarked -- the caller owns the answer
+    PEEK = "peek"     # `peek T` -- the answer borrows the sources of the callable
+
+
+def split_return_mode(ret: Optional[Type]) -> Tuple[ReturnMode, Optional[Type]]:
+    """THE reading of a written return type: its mode, and the answer with no `peek`.
+
+    A `poke` return is not a mode: it stays a reference type, which CE2417 refuses.
+    """
+    if isinstance(ret, ReferenceType) and not ret.is_poke():
+        return ReturnMode.PEEK, ret.referenced_type
+    return ReturnMode.OWNED, ret
+
+
+def return_mode(marker: Optional[str]) -> ReturnMode:
+    """THE reading of a recorded return mode (a library manifest). Absent is OWNED."""
+    return ReturnMode.OWNED if marker is None else ReturnMode(marker)
+
+
 class CalleeKind(Enum):
     """Every kind of thing a call argument can be handed to. A CLOSED set."""
 

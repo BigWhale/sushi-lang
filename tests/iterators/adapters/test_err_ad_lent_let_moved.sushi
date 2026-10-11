@@ -1,0 +1,14 @@
+# An adapter takes its receiver with `nom self`, also a borrowed iterator in a `let`: a
+# later use of the `let` is an error.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+use <collections/iter>
+
+fn main() i32:
+    let string[] names = from(["a", "bb"])
+    let Iterator@(peek string) it = names.iter()
+    let Iterator@(peek string) long = it.filter(nom |string s| s.len() > 1)
+    foreach(s in it):
+        println(s)
+    foreach(s in long):
+        println(s)
+    return 0

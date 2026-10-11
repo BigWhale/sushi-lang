@@ -184,7 +184,7 @@ that re-exports the home module brings the name too: `use <io/fs>` brings `IoErr
 - **ProcessError** (`<sys/process>`) - Process management (`SpawnFailed`, `ExitFailure`, `SignalReceived`)
 - **EnvError** (`<sys/env>`) - Environment variables (`NotFound`, `InvalidValue`, `PermissionDenied`)
 
-See [Result@(T, E) API Reference](stdlib/result.md) for complete details.
+See [Result@(T, E) API Reference](stdlib/core/result.md) for complete details.
 
 ### Creating Results
 
@@ -364,7 +364,7 @@ let i32 value = result.expect("Division should succeed")
 Convert the error with the function `f`, and keep the Ok value. `f` takes the error `nom`.
 See [`map_err`](#map_err) under Error Conversion.
 
-See [Result@(T, E) API Reference](stdlib/result.md) for complete method documentation.
+See [Result@(T, E) API Reference](stdlib/core/result.md) for complete method documentation.
 
 ### Compiler Enforcement
 

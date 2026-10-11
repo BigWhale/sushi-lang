@@ -1,0 +1,22 @@
+# An item with an owned part and a lent part: the walk frees each owned part and leaves
+# each lent part to its owner. A filter frees an owned item that it drops, and a zip frees
+# the item of one side when the other side ends.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a=a\nbb=bb\n0 a!\n1 bb!\n2\nbb!\n1\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+
+fn main() i32:
+    let string[] names = from(["a", "bb"])
+    let Iterator@((string, peek string)) pairs = names.iter().clone_each().zip(nom names.iter())
+    foreach(p in pairs):
+        println("{p.0}={p.1}")
+    let Iterator@((i32, string)) numbered = names.iter().map(nom |string w| "{w}!").enumerate()
+    foreach((i, s) in numbered):
+        println("{i} {s}")
+    println(names.iter().map(nom |string w| "{w}!").enumerate().collect().len())
+    foreach(s in names.iter().map(nom |string w| "{w}!").filter(nom |string t| t.len() > 2)):
+        println(s)
+    let string[] one = from(["z"])
+    println(names.iter().map(nom |string w| "{w}!").zip(nom one.iter().clone_each()).collect().len())
+    return 0

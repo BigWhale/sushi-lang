@@ -1,0 +1,33 @@
+# A HashMap iterator value walks every entry: the sum of the values and the count of
+# the keys do not depend on the order.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4\n10\n4\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+use <collections/hashmap>
+
+fn count_keys(poke Iterator@(peek string) it) i32:
+    let i32 n = 0
+    foreach(k in it):
+        n := n + k.len()
+    return n
+
+fn main() i32:
+    let HashMap@(string, i32) m = HashMap.new()
+    m.insert("a", 1)
+    m.insert("b", 2)
+    m.insert("c", 3)
+    m.insert("d", 4)
+    let Iterator@(peek string) k = m.keys()
+    println(count_keys(poke k))
+    let i32 total = 0
+    let Iterator@(i32) v = m.values()
+    foreach(x in v):
+        total := total + x
+    println(total)
+    let i32 pairs = 0
+    let Iterator@((peek string, i32)) p = m.pairs()
+    foreach(e in p):
+        pairs := pairs + e.1 - e.1 + 1
+    println(pairs)
+    return 0

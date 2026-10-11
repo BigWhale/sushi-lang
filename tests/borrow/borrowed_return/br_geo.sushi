@@ -1,0 +1,16 @@
+use <collections/iter>
+
+public fn head(i32[] xs, i32 n) peek i32[]:
+    return xs[0..n]
+
+public struct Box@(T):
+    T value
+
+public extend Box@(T) get() peek T:
+    return self.value
+
+public struct Store:
+    i32[] data
+
+public extend Store items(peek self) peek Iterator@(i32):
+    return self.data.iter()

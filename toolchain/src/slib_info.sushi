@@ -666,6 +666,8 @@ fn render_callable(MsgValue f, Opts o) string:
     let string generic = render_type_params(f)
     let string params = render_params(f)
     let string ret = to_surface(get_str(f, "return_type"))
+    if (get_str(f, "return_mode") == "peek"):
+        ret := "peek {ret}"
     let string err = get_str(f, "error_type")
     if (err == ""):
         return "{name}{generic}({params}) {ret}"

@@ -711,6 +711,10 @@ gives an empty array.
 
 Every row is what `string.s` and `string.ss` answer for the same arguments.
 
+To READ a part of an array with no copy, use a slice: `src[2..5]` is a borrowed view of the
+same three elements. A slice traps on a range outside the source (RE2028) and does not
+clamp. See [Slices](../../language-reference.md#slices).
+
 ### The rules the three share
 
 **The source is a borrow**, so it stays yours and both arrays end up independent. For a

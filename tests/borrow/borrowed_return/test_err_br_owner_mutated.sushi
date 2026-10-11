@@ -1,0 +1,13 @@
+# The answer of a borrowed return freezes the owner of its source argument while it
+# lives.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+fn head(i32[] xs) peek i32[]:
+    return xs[0..1]
+
+fn main() i32:
+    let i32[] data = from([1, 2])
+    let i32[] h = head(data)
+    data.push(3)
+    println(h.len())
+    return 0

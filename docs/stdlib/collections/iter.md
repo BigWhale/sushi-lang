@@ -4,7 +4,8 @@
 
 Higher-order combinators over `List@(T)` and `T[]`: `map`, `filter`, `fold` — as
 methods and as free functions — `compose`, and the tuple combinators `enumerate`, `zip`,
-`partition` and `unzip`.
+`partition` and `unzip`. The module also gives the name `Iterator`, whose lazy adapters
+are built into the compiler ([Lazy adapters](#lazy-adapters-on-iteratort)).
 
 ## Import
 
@@ -51,9 +52,65 @@ a handle such as a `File` is not.
 **function reference**. A bare-param lambda (`|x| ...`) cannot be inferred against a
 generic parameter ([CE2063](../../error-catalog.md#ce2063)) — annotate the parameter or use a function reference instead.
 
+## Lazy adapters on `Iterator@(T)`
+
+An iterator value (`xs.iter()`, `m.keys()`, a range in a `let`) has eight built-in
+adapters. They are compiler code, so they need no import: `use <collections/iter>` is
+necessary only to WRITE the name `Iterator`. An import that a unit uses only for an
+adapter gets [CW3006](../../error-catalog.md#cw3006) under `--warn-unused`.
+
+| Adapter | Answer |
+|---|---|
+| `it.map(nom f)` | `Iterator@(U)`: the answer of `f` for each item. `f` reads the item as a borrow |
+| `it.filter(nom pred)` | The same iterator type: the items for which `pred` answers `true` |
+| `it.enumerate()` | `Iterator@((i32, T))`: each item with its count, from 0 |
+| `it.zip(nom other)` | `Iterator@((T, U))`: the items of the two iterators side by side, to the end of the shorter one |
+| `it.clone_each()` | `Iterator@(T)`: one `.clone()` for each borrowed item |
+| `it.fold(nom init, nom f)` | The last accumulator. `f` reads each item as a borrow |
+| `it.partition(nom pred)` | `(List@(T), List@(T))`: the items that `pred` keeps, then the others |
+| `it.collect()` | `List@(T)`: each item, in order |
+
+The first five are **lazy**: they answer a new iterator and do no work until a `foreach`
+or a consumer asks for an item. A chain walks its source one time, and only the consumer
+at its end allocates a result. Each adapter takes its receiver and its function with
+`nom`.
+
+**Item modes.** `xs.iter()` gives `Iterator@(peek T)`: each item is a borrow, and nothing
+is copied. `filter` keeps the mode. `map` answers the owned result of its function.
+`enumerate` and `zip` keep the mode of each side in its tuple element, so
+`names.iter().enumerate()` is `Iterator@((i32, peek string))`. `clone_each` makes each
+item owned. For a plain item (an `i32`) the two modes are one type.
+
+`collect` and `partition` keep each item in a `List`, and there is no `List@(peek T)`. So
+over a `peek` item of an owning type (a `string`) they are
+[CE2129](../../error-catalog.md#ce2129). Clone the items first:
+`.clone_each().collect()`.
+
+**Borrow.** An adapter over a borrowed iterator borrows the same owners: the container is
+frozen until the last use of the chain, and the chain cannot leave its function
+([CE2411](../../error-catalog.md#ce2411)). `zip` of two borrowed iterators borrows both
+owners. A user function with a `nom Iterator@(...)` parameter refuses a borrowed iterator;
+only a built-in adapter takes one.
+
+```sushi
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    let List@(i32) squares = xs.iter().filter(nom |i32 x| x % 2 == 0).map(nom |i32 x| x * x).collect()
+    println(squares.len())                  # 2
+
+    let string[] names = from(["a", "bb", "ccc"])
+    foreach(p in names.iter().enumerate()):
+        println("{p.0}: {p.1}")             # the names are not copied
+    let List@(string) long = names.iter().filter(nom |string s| s.len() > 1).clone_each().collect()
+    println(long.len())                     # 2
+    println(xs.iter().fold(nom 0, nom |i32 acc, i32 x| acc + x))    # 10
+    return 0
+```
+
 ## Methods
 
-Each method is a bare extension method. On a `T[]` receiver
+Each method is a bare extension method, and a one-line forwarder over the built-in
+adapters: `xs.map(f)` is `xs.iter().map(nom f.clone()).collect()`. On a `T[]` receiver
 the collecting methods return a `List` — a dynamic array has no empty generic
 constructor to fill.
 

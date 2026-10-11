@@ -1,0 +1,10 @@
+# A `let` that holds a lent iterator is a let-borrow: a rebind of it is refused, one time.
+# EXPECT_ERROR_CODES_EXACT: CE2426
+use <collections/iter>
+fn main() i32:
+    let string[] xs = from(["a"])
+    let Iterator@(peek string) it = xs.iter()
+    it := xs.iter()
+    foreach(s in it):
+        println(s)
+    return 0

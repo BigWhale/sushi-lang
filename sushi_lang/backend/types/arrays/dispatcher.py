@@ -249,7 +249,7 @@ def emit_fixed_array_method(
 
         case "iter":
             return iterators.emit_fixed_array_iter(codegen, expr, address(writable=False),
-                                                   fixed_ir_type, element_semantic_type, to_i1)
+                                                   fixed_ir_type, element_semantic_type)
 
         case "hash":
             return hashing.emit_fixed_array_hash_direct(codegen, expr, address(writable=False),
@@ -423,8 +423,7 @@ def emit_dynamic_array_method(
 
         case "iter":
             return iterators.emit_dynamic_array_iter(codegen, expr, receiver_value,
-                                                     array_struct_type, element_semantic_type,
-                                                     to_i1)
+                                                     element_semantic_type)
 
         case "clone":
             from .methods.transforms import emit_dynamic_array_clone

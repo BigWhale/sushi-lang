@@ -1,0 +1,21 @@
+# A chain over an owned source owns everything it walks, so it leaves its function: over
+# a range, and over an iterator that owns its temporary array.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0\n2\n4\n1\n2\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+
+fn evens(i32 n) Iterator@(i32):
+    let Iterator@(i32) r = 0..n
+    return r.filter(nom |i32 x| x % 2 == 0)
+
+fn lengths() Iterator@(i32):
+    return from(["a", "bb"]).iter().map(nom |string s| s.len())
+
+fn main() i32:
+    foreach(x in evens(5)):
+        println(x)
+    let Iterator@(i32) l = lengths()
+    foreach(x in l):
+        println(x)
+    return 0

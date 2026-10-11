@@ -1,0 +1,11 @@
+# A binary library whose public functions answer and take an iterator value.
+use <collections/iter>
+
+public fn upto(i32 n) Iterator@(i32):
+    return 0..n
+
+public fn total(nom Iterator@(i32) it) i32:
+    let i32 sum = 0
+    foreach(x in it):
+        sum := sum + x
+    return sum

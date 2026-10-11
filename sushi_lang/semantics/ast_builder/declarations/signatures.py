@@ -37,6 +37,9 @@ class SignatureTypes:
     # parser gives None for a malformed one too. Only `function_def` may omit the
     # return type; the two positions that make it mandatory refuse a missing one.
     declares_return: bool = False
+    # A `peek T` return (#1229): the mode is read off, and `ret` is the answer with no
+    # `peek`. Each declaration decides whether its position takes one.
+    borrows: bool = False
 
 
 def read_signature_types(children: List[object],
@@ -49,17 +52,44 @@ def read_signature_types(children: List[object],
     signature, because an extension's TARGET type stands one level up and is not read
     here.
     """
+    from sushi_lang.semantics.param_modes import ReturnMode, split_return_mode
+
     type_nodes = [child for child in children if is_type_node(child)]
     ret_node = type_nodes[0] if type_nodes else None
     err_node = type_nodes[1] if len(type_nodes) >= 2 else None
+    mode, ret = split_return_mode(
+        ast_builder._parse_type(ret_node) if ret_node is not None else None)
 
     return SignatureTypes(
-        ret=ast_builder._parse_type(ret_node) if ret_node is not None else None,
+        ret=ret,
         ret_span=span_of(ret_node),
         err=ast_builder._parse_type(err_node) if err_node is not None else None,
         err_span=span_of(err_node),
         declares_return=ret_node is not None,
+        borrows=mode is ReturnMode.PEEK,
     )
+
+
+# The positions that parse a borrowed return only to refuse it (CE2439, #1229).
+_REFUSED_BORROWED_RETURNS: Dict[str, Tuple[str, str]] = {
+    "lambda": ("a lambda",
+               "a lambda is a value, and its type cannot say what the answer borrows; "
+               "return an owned value, or use a named function"),
+    "perk_method": ("a perk contract method",
+                    "a contract cannot state a source for every implementer; return an "
+                    "owned value"),
+    "perk_implementation": ("a perk implementation method",
+                            "the contract states an owned answer for every implementer; "
+                            "return an owned value"),
+}
+
+
+def refuse_borrowed_return(span: Optional[Span], position: str,
+                           ast_builder: 'ASTBuilder') -> None:
+    """CE2439 for a `peek` return in a position that takes none."""
+    named, help_text = _REFUSED_BORROWED_RETURNS[position]
+    ast_builder.recover(
+        SyntaxDiagnostic("CE2439", span=span, position=named).help(help_text), None)
 
 
 def read_dont_panic(children: List[object]) -> Optional[DontPanicMarker]:

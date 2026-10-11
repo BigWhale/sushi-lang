@@ -63,8 +63,10 @@ def intern_tuple(struct_table: Any, enum_table: Any, elements: Iterable[Type]) -
 
     structs = struct_table.by_name if struct_table is not None else {}
     enums = enum_table.by_name if enum_table is not None else {}
+    from sushi_lang.semantics.generics.iterators import settle_in_tables
     resolved = tuple(
-        resolve_type_recursively(intern_tuples_in(t, struct_table, enum_table), structs, enums)
+        settle_in_tables(resolve_type_recursively(
+            intern_tuples_in(t, struct_table, enum_table), structs, enums), enum_table)
         for t in elements)
     name = interned_name(TUPLE_BASE, resolved)
 

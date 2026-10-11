@@ -1,0 +1,18 @@
+# `peek T | E` needs a plain error type: the whole Result is a borrow, and its holder
+# frees nothing in it.
+# EXPECT_ERROR_CODES_EXACT: CE2442
+
+error Bad:
+    Message(string)
+
+fn head(i32[] xs) peek i32[] | Bad:
+    if (xs.len() == 0):
+        return Result.Err(Bad.Message("empty"))
+    return Result.Ok(xs[0..1])
+
+fn main() i32:
+    let i32[] data = from([1, 2])
+    match head(data):
+        Result.Ok(h) -> println(h.len())
+        Result.Err(_) -> println("error")
+    return 0

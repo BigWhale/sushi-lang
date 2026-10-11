@@ -1,0 +1,26 @@
+# A foreach over a poke value of a plain type walks it in place too: the caller
+# continues where the callee stopped.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n2\n3\n4\n"
+
+struct Count:
+    i32 n
+
+extend Count next(poke self) Maybe@(i32):
+    if (self.n >= 4):
+        return Maybe.None
+    self.n := self.n + 1
+    return Maybe.Some(self.n)
+
+fn take_two(poke Count c) ~:
+    foreach(k in c):
+        println(k)
+        if (k == 2):
+            break
+
+fn main() i32:
+    let Count c = Count(0)
+    take_two(poke c)
+    foreach(k in c):
+        println(k)
+    return 0

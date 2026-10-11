@@ -12,9 +12,9 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.typesys import ReferenceType
 
-from .diagnostics import parameter_escape, write_escape
+from .diagnostics import expr_to_string, parameter_escape, write_escape
 from .methods import MethodEffect, callee_effect
-from .reads import borrow_owner, chain_call_boundary
+from .reads import borrow_owner, chain_call_boundary, slice_on_path
 from .state import BorrowState
 
 if TYPE_CHECKING:
@@ -104,7 +104,7 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
         # alternatives. The write reaches storage the owner keeps, so a reallocating
         # `.push()` frees the owner's buffer twice.
         #
-        # Keyed on `is_let_borrow`, NOT `borrows_from is not None`: a binding out of a
+        # Keyed on `is_let_borrow`, NOT a non-empty `borrows_from`: a binding out of a
         # temporary records no owner name.
         code=er.ERR.CE2426,
         matches=lambda state: state.is_let_borrow,
@@ -133,13 +133,19 @@ def changes_its_receiver(expr: MethodLike) -> bool:
             or receiver_mode(expr.callee_self_mode) is ParamMode.POKE)
 
 
-def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike) -> None:
-    """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242)."""
+def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike,
+                          receiver: Optional[Expr] = None,
+                          what: Optional[str] = None) -> None:
+    """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242).
+
+    `receiver` replaces the call's own receiver: a `foreach` that walks a value in place
+    calls `next()` on the walked place, not on its hidden slot (#1258).
+    """
     if not changes_its_receiver(expr):
         return
-    receiver = expr.receiver
+    receiver = receiver if receiver is not None else expr.receiver
     root = borrow_owner(receiver)
-    what = f"call `.{expr.method}()`"
+    what = what or f"call `.{expr.method}()`"
     if reject_readonly_write(checker, root, expr.loc, what, receiver=receiver):
         return
     # A `poke self` method the table does not carry is taken to move storage.
@@ -173,10 +179,17 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
                   "`Own` sits in an enum payload")
         diag.emit()
         return True
+    if receiver is not None and reject_write_through_slice(checker, receiver, span, what):
+        return True
     if name is None:
         return False
     state = checker.borrow_state.get(name)
     if state is None:
+        return False
+    if state.is_lent_iterator and not rebind:
+        # The binding owns its iterator value, so a write through it moves its own cursor
+        # and nothing its owners keep (#1259). A rebind would drop the value and borrow
+        # another source, so it stays refused.
         return False
     for kind in READONLY_RECEIVERS:
         if not kind.matches(state):
@@ -194,6 +207,28 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
         diag.emit()
         return True
     return False
+
+
+def reject_write_through_slice(checker: 'BorrowChecker', receiver: Expr,
+                                span: Optional[Span], what: str) -> bool:
+    """CE2426 for a write whose receiver crosses a slice (S4). True when refused.
+
+    The let-borrow row of the table answers a slice bound by a `let`; this is the same
+    rule for a slice that no name holds: `data[1..3][0] := 9`, `data[1..3].push(9)`.
+    """
+    view = slice_on_path(receiver)
+    if view is None:
+        return False
+    text = expr_to_string(view)
+    diag = checker.err.emit_with(er.ERR.CE2426, span, name=text)
+    if view.loc is not None:
+        diag.note_at(f"'{text}' is a slice, a read-only view of the storage of "
+                     f"'{expr_to_string(view.array)}'", view.loc)
+    diag.help(f"the write ({what}) would go through a view, and a growth would move "
+              "storage that the array keeps; write to the array directly, or copy the "
+              "part with `.ss(start, count)`")
+    diag.emit()
+    return True
 
 
 def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[str],

@@ -63,6 +63,7 @@ def register_synthesized_function(
         # The channel is part of the signature, not decoration on the declaration. A
         # `FuncSig` that drops it types every call site as a bare call (#538).
         err_type=funcdef.err_type,
+        borrowed_return=getattr(funcdef, "borrowed_return", None),
     )
     func_table.declare(name, sig)
 

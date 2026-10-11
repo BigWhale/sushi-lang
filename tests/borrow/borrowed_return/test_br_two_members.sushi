@@ -1,0 +1,32 @@
+# Two borrowed parameters that own a resource are both sources of the answer, and either
+# may be returned. After the last use of the answer both owners may change again.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "alpha\nbravo!\nalpha\n3\n"
+# EXPECT_NO_LEAKS
+
+fn longer(string a, string b) peek string:
+    if (a.len() >= b.len()):
+        return a
+    return b
+
+fn wider(i32[] a, i32[] b) peek i32[]:
+    if (a.len() >= b.len()):
+        return a
+    return b
+
+fn main() i32:
+    let string s = "alpha"
+    let string t = "bravo!"
+    let string first = longer(s, "bob")
+    println(first)
+    println(longer(s, t))
+    println(longer(s, t.s(0, 2)))
+    s := "x"
+    t := "y"
+    let i32[] a = from([1, 2, 3])
+    let i32[] b = from([1])
+    let i32[] w = wider(a, b)
+    println(w.len())
+    a.push(4)
+    b.push(2)
+    return 0

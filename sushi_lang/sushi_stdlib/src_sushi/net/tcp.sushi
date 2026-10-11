@@ -293,7 +293,7 @@ public extend TcpStream send_all(u8[] data) ~ | NetError:
     let i32 total = data.len()
     let i32 done = 0
     while (done < total):
-        let u8[] rest = data.ss(done, total - done)
+        let u8[] rest = data[done..total]
         let i32 sent = sock_send(self.fd, rest)??
         if (sent <= 0):
             return Result.Err(NetError.Closed)

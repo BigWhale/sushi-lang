@@ -1,0 +1,14 @@
+# The answer of a borrowed return is a borrow: a caller cannot store it in a struct.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+struct Holder:
+    i32[] part
+
+fn head(i32[] xs) peek i32[]:
+    return xs[0..1]
+
+fn main() i32:
+    let i32[] data = from([1, 2])
+    let Holder h = Holder(head(data))
+    println(h.part.len())
+    return 0

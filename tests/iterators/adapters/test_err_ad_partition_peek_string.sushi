@@ -1,0 +1,9 @@
+# `partition` over `peek` items of an owning type is an error, as `collect` is.
+# EXPECT_ERROR_CODES_EXACT: CE2129
+
+fn main() i32:
+    let List@(string) words = List.new()
+    words.push("a")
+    let (long, short) = words.iter().partition(nom |string s| s.len() > 1)
+    println("{long.len()} {short.len()}")
+    return 0

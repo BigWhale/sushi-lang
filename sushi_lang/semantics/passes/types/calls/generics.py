@@ -15,6 +15,7 @@ from sushi_lang.semantics.generics.explicit_type_args import (
 from ..visibility import name_is_contested, reject_private_call
 from ..arguments import check_arguments, reject_misplaced_spread
 from .user_defined import validate_call_arguments
+from ..borrowed_returns import stamp_call_sources
 
 if TYPE_CHECKING:
     from .. import TypeValidator
@@ -134,6 +135,7 @@ def validate_generic_function_call(
     # The WRITTEN name, not the instance's symbol: the user never wrote `pair__i32` (#766).
     validate_call_arguments(validator, written, func_sig,
                             call.args, call.callee.loc)
+    stamp_call_sources(validator, call, func_sig)
 
 
 def _validate_call_in_template(validator: 'TypeValidator', call: Call, generic_func,
@@ -153,6 +155,7 @@ def _validate_call_in_template(validator: 'TypeValidator', call: Call, generic_f
         _walk_unchecked_arguments(validator, call)
         return
     validate_call_arguments(validator, written, func_sig, call.args, call.callee.loc)
+    stamp_call_sources(validator, call, func_sig)
 
 
 def _constraints_hold_in_template(validator: 'TypeValidator', loc, generic_func,
@@ -196,7 +199,8 @@ def _substituted_sig(validator: 'TypeValidator', generic_func, type_args, name: 
         if param.ty is not None:
             param.ty = resolve_type_recursively(param.ty, structs, enums)
     return FuncSig(name=name, params=params,
-                   ret_type=resolve_type_recursively(ret, structs, enums), err_type=err)
+                   ret_type=resolve_type_recursively(ret, structs, enums), err_type=err,
+                   borrowed_return=getattr(generic_func, "borrowed_return", None))
 
 
 def _request_late_instance(validator: 'TypeValidator', call_generic, type_args,

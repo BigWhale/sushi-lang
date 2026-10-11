@@ -1,0 +1,31 @@
+# `partition` over each source: an array, a List, a range and a HashMap. It answers two
+# Lists, the items for which the predicate answers true and then the others.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 2\n1 2\n5 5\n1 0\nbb\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+use <collections/hashmap>
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    let (even, odd) = xs.iter().partition(nom |i32 x| x % 2 == 0)
+    println("{even.len()} {odd.len()}")
+    let List@(i32) nums = List.new()
+    nums.push(5)
+    nums.push(15)
+    nums.push(25)
+    let (small, big) = nums.iter().partition(nom |i32 x| x < 10)
+    println("{small.len()} {big.len()}")
+    let Iterator@(i32) r = 0..10
+    let (low, high) = r.partition(nom |i32 x| x < 5)
+    println("{low.len()} {high.len()}")
+    let HashMap@(i32, string) m = HashMap.new()
+    m.insert(4, "four")
+    let (four, other) = m.keys().partition(nom |i32 k| k == 4)
+    println("{four.len()} {other.len()}")
+    let List@(string) words = List.new()
+    words.push("a")
+    words.push("bb")
+    let (long, short) = words.iter().clone_each().partition(nom |string w| w.len() > 1)
+    println("{long.get(0).realise('')}{short.get(1).realise('')}")
+    return 0

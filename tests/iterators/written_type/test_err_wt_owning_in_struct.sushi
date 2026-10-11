@@ -1,0 +1,18 @@
+# In an instance whose iterator item owns, the item keeps its mode:
+# `Box@(Iterator@(peek string))` and `Box@(Iterator@(string))` are two instances.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+use <collections/iter>
+
+struct Box@(T):
+    T item
+
+fn owned(Box@(Iterator@(string)) held, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return owned(held, depth - 1)
+
+fn lent(Box@(Iterator@(peek string)) held, i32 depth) i32:
+    return owned(held, depth)
+
+fn main() i32:
+    return 0

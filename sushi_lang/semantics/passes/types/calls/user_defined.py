@@ -12,6 +12,7 @@ from ..visibility import (name_is_contested, name_was_refused, out_of_scope_help
                           reject_ambiguous_name, reject_private_call,
                           reject_private_kept_call)
 from ..arguments import check_arguments
+from ..borrowed_returns import stamp_call_sources
 from ..compatibility import types_compatible
 from ..propagation import propagate_types_to_value, type_literal_from_sibling
 
@@ -233,6 +234,7 @@ def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
 
     validate_call_arguments(validator, function_name, func_sig, call.args,
                             call.callee.loc)
+    stamp_call_sources(validator, call, func_sig)
 
 
 def validate_errno_call(validator: 'TypeValidator', call: Call) -> None:

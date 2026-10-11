@@ -1,0 +1,18 @@
+# Computed bounds in range give the view they name, and a slice of a slice binding
+# views the same storage.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n40\n1\n50\n0\n"
+# EXPECT_NO_LEAKS
+
+fn main() i32:
+    let i32[] data = from([10, 20, 30, 40, 50, 60])
+    let i32 a = 1
+    let i32 b = a + 3
+    let i32[] mid = data[a..b]
+    println(mid.len())
+    println(mid[2])
+    let i32[] inner = mid[2..=2]
+    println(inner.len())
+    println(data[b..data.len()][0])
+    println(data[data.len()..data.len()].len())
+    return 0

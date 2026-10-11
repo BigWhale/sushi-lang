@@ -1,0 +1,20 @@
+# The mode of a plain item is decided at each instance: `count@(i32)` takes
+# `Iterator@(peek i32)`, which is `Iterator@(i32)`. The call infers `T` through the item.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+use <collections/iter>
+
+fn count@(T)(poke Iterator@(peek T) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return count@(T)(poke it, depth - 1)
+
+fn explicit(poke Iterator@(i32) it) i32:
+    return count@(i32)(poke it, 1)
+
+fn inferred(poke Iterator@(i32) it) i32:
+    return count(poke it, 1)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

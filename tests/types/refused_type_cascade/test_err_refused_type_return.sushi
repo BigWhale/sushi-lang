@@ -1,8 +1,8 @@
 # A returned value is not compared against a refused return type.
 # EXPECT_ERROR_CODES_EXACT: CE2001
 
-fn mk(i32[] a) Iterator@(i32):
-    return a.iter()
+fn mk() Iterator@(i32):
+    return from([1, 2, 3]).iter()
 
 fn main() i32:
     return 0

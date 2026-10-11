@@ -357,8 +357,12 @@ class ExpressionValidator(RecursiveVisitor):
         validate_try_expression(self.type_validator, node)
 
     def visit_rangeexpr(self, node: RangeExpr) -> None:
-        """A range reached through the dispatch is in neither of its two positions."""
-        from sushi_lang.semantics.passes.types.expressions import refuse_range_value
+        """A range reached through the dispatch is a value, or in no position of its own."""
+        from sushi_lang.semantics.passes.types.expressions import (
+            refuse_range_value, validate_range_value)
+        if node.is_value:
+            validate_range_value(self.type_validator, node)
+            return
         refuse_range_value(self.type_validator, node)
 
     def visit_name(self, node: Name) -> None:
@@ -382,7 +386,13 @@ class ExpressionValidator(RecursiveVisitor):
         if reject_private_kept(tv, node.id, node.loc, kinds={"constant", "variable"}):
             return
         from sushi_lang.semantics.passes.types.calls.user_defined import own_concrete_function
-        if own_concrete_function(tv.func_table, node.id, tv.current_unit_name) is not None:
+        from sushi_lang.semantics.passes.types.borrowed_returns import (
+            reject_borrowed_function_value)
+        own = own_concrete_function(tv.func_table, node.id, tv.current_unit_name)
+        if own is not None:
+            reject_borrowed_function_value(tv, own, node.id, node.loc)
+            return
+        if reject_borrowed_function_value(tv, tv.generic_sig(node.id), node.id, node.loc):
             return
         if tv.generic_sig(node.id) is not None:
             # A generic-fn reference is allowed WITH an explicit expected fn type: solve
@@ -405,7 +415,8 @@ class ExpressionValidator(RecursiveVisitor):
         func_sig = tv.func_sig(node.id)
         if func_sig is not None and not reject_private_name(
                 tv, "function", func_sig, node.loc, verb=VALUE_VERB):
-            reject_ambiguous_name(tv, "function", node.id, node.loc)
+            if not reject_ambiguous_name(tv, "function", node.id, node.loc):
+                reject_borrowed_function_value(tv, func_sig, node.id, node.loc)
 
     def visit_intlit(self, node: IntLit) -> None:
         """Range-check a bare integer literal (CE2070)."""

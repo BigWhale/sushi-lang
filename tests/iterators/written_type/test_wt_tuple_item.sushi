@@ -1,0 +1,18 @@
+# `peek` stands at the top of one element of a tuple item.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+use <collections/iter>
+
+fn pairs(poke Iterator@((i32, peek string)) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return pairs(poke it, depth - 1)
+
+fn both(poke Iterator@((peek string, peek string)) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return both(poke it, depth - 1)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

@@ -6,7 +6,8 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr, Lambda, Let, Name, Spread, StringLit, TryExpr
+from sushi_lang.semantics.ast import (
+    Expr, IndexAccess, Lambda, Let, Name, Spread, StringLit, TryExpr)
 from sushi_lang.semantics.ownership import Ownership, Provenance, TypeClass, classify
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
@@ -18,9 +19,12 @@ from .diagnostics import (
     refuses_clone,
 )
 from .reads import (
-    borrow_owner, constant_sig, namespaced_storage, read_type, reads_through_owner,
-    unwrap_try)
-from .state import BorrowState
+    borrow_owner, constant_sig, names_kept_storage, namespaced_storage, read_type,
+    reads_through_owner, unwrap_try)
+from .iterators import lent_owners
+from .borrowed_returns import call_owners, reject_view_of_temporary
+from sushi_lang.semantics.borrowed_return import is_borrowed_call
+from .state import BorrowState, record_owners
 from .takes import field_take, spend
 from .writes import check_owner_not_borrowed
 
@@ -59,6 +63,11 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
     if isinstance(expr, Name):
         return name_provenance(checker, expr.id)
 
+    # The answer of a borrowed return views its sources (#1229), a `??` over it too. A
+    # call behind an alias is one too, so this comes before the function value below.
+    if is_borrowed_call(expr):
+        return Provenance.BORROWED
+
     # `alias.fn` is a function value, built new at each read as the bare `fn` is: it
     # reads no storage (#1013).
     ref = getattr(expr, "namespace_ref", None)
@@ -95,6 +104,10 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
         return Provenance.FRESH
 
     if reads_through_owner(checker, expr):
+        return Provenance.BORROWED
+
+    # A lent iterator is a new value that borrows its owners (#1259): it may not leave.
+    if lent_owners(checker, expr) is not None:
         return Provenance.BORROWED
 
     return Provenance.FRESH
@@ -346,6 +359,9 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
     provenance = source_provenance(checker, expr)
     expr.ownership_provenance = provenance
 
+    if reject_slice_of_temporary(checker, expr) or reject_view_of_temporary(checker, expr):
+        return
+
     dest = checker.borrow_state.get(stmt.name)
     if dest is None:
         return
@@ -391,6 +407,11 @@ def bind(checker: 'BorrowChecker', stmt: Let) -> None:
         _move_out(checker, src_state, expr.loc)
     elif decision is Ownership.REJECT:
         record_borrowed_binding(checker, stmt, dest)
+    elif is_borrowed_call(expr):
+        # A plain answer is a copy, and it still freezes the owners of its sources: the
+        # source set of a template is the same at every type argument (#1229).
+        record_owners(checker.borrow_state, dest, call_owners(checker, expr)[0], stmt.loc,
+                      checker._scope_binding_borrows[-1])
 
 
 def record_borrowed_binding(checker: 'BorrowChecker', stmt: Let,
@@ -400,12 +421,53 @@ def record_borrowed_binding(checker: 'BorrowChecker', stmt: Let,
     dest.is_let_borrow = True
     dest.bound_at_span = stmt.loc
 
+    owners = lent_owners(checker, stmt.value)
+    if owners is not None:
+        dest.is_lent_iterator = True
+        dest.lent_value = stmt.value
+        record_owners(checker.borrow_state, dest, owners, stmt.loc,
+                      checker._scope_binding_borrows[-1])
+        return
+
+    if is_borrowed_call(stmt.value):
+        record_owners(checker.borrow_state, dest, call_owners(checker, stmt.value)[0],
+                      stmt.loc, checker._scope_binding_borrows[-1])
+        return
+
     owner = borrow_owner(stmt.value)
     if owner is None:
         return
-    owner_state = checker.borrow_state.get(owner)
-    if owner_state is None:
-        return
-    dest.borrows_from = owner
-    owner_state.binding_borrows.append((stmt.name, stmt.loc))
-    checker._scope_binding_borrows[-1].append((owner, stmt.name))
+    owners = (slice_owners(checker, owner) if is_slice(stmt.value) else (owner,))
+    record_owners(checker.borrow_state, dest, owners, stmt.loc,
+                  checker._scope_binding_borrows[-1])
+
+
+def is_slice(expr: Optional[Expr]) -> bool:
+    """Is `expr` a slice, `data[a..b]` (docs/design/slices.md)?"""
+    return isinstance(expr, IndexAccess) and expr.is_slice
+
+
+def slice_owners(checker: 'BorrowChecker', owner: str) -> tuple[str, ...]:
+    """The owners a slice of `owner` freezes: `owner`, and the owners it borrows from.
+
+    A slice of a `let` of a slice views the storage of the first array, so a change of
+    that array must reach the second slice too.
+    """
+    state = checker.borrow_state.get(owner)
+    if state is not None and state.is_let_borrow and not state.is_lent_iterator:
+        return (owner, *state.borrows_from)
+    return (owner,)
+
+
+def reject_slice_of_temporary(checker: 'BorrowChecker', expr: Expr) -> bool:
+    """CE2437 for a `let` of a slice of a temporary array (S8). True when refused.
+
+    The temporary is freed at the end of the statement, and the binding lives on. Inside
+    one statement a slice of a temporary is legal, so only the `let` asks.
+    """
+    if not is_slice(expr) or names_kept_storage(checker, expr):
+        return False
+    checker.err.emit_with(er.ERR.CE2437, expr.loc) \
+        .help("bind the array first, or copy the part with `.ss(start, count)`") \
+        .emit()
+    return True

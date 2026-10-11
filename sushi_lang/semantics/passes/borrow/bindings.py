@@ -18,12 +18,12 @@ from sushi_lang.semantics.typesys import ReferenceType, Type
 from .diagnostics import expr_to_string
 from .reads import borrow_owner, names_kept_storage, root_owner
 from sushi_lang.semantics.param_modes import borrow_mode
-from .state import BorrowState
+from .state import BorrowState, record_owners
 
 if TYPE_CHECKING:
     from . import BorrowChecker
 
-CONTAINER_ITERATORS = frozenset({"iter", "keys", "values", "entries", "pairs"})
+from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 
 
 def release_binding_borrow(owner_state: Optional[BorrowState], binding: str) -> None:
@@ -150,20 +150,38 @@ class BindingScope:
         frozen = any(binding == state.name for _owner, binding in self._frozen)
         return state if frozen else None
 
+    def bind_lent_walk(self, iterable: Expr) -> Optional[BorrowState]:
+        """Freeze the owners of a lent iterator value that a `foreach` walks (#1228).
+
+        A lent temporary (`xs.iter().map(f)`, `it.clone()`) reads the storage of its
+        owners on every round, as a direct walk reads its container, so the loop is a
+        `let`-borrow of each owner with a name no source can spell.
+        """
+        from .iterators import lent_owners
+        owners = lent_owners(self.checker, iterable)
+        if not owners:
+            return None
+        state = BorrowState(name=f"<iterator {id(iterable)}>", bound_at_span=iterable.loc)
+        self.register(state)
+        record_owners(self.checker.borrow_state, state, owners, iterable.loc, self._frozen)
+        frozen = any(binding == state.name for _owner, binding in self._frozen)
+        return state if frozen else None
+
     def freeze_owner(self, state: BorrowState, source: Expr, span: Optional[Span],
                      poke_span: Optional[Span] = None) -> None:
         """Give a reference binding the owner freeze a `let`-borrow gets (#242)."""
         owner = borrow_owner(source)
         owner_state = self.checker.borrow_state.get(owner) if owner else None
-        if owner_state is None:
+        if owner is None or owner_state is None:
             return
         if _pokes_through_a_peek(state, owner_state):
             _reject_poke_through_peek(self.checker, owner, owner_state,
                                       poke_span or span)
             return
-        state.borrows_from = owner
-        owner_state.binding_borrows.append((state.name, span))
-        self._frozen.append((owner, state.name))
+        # An item of a lent iterator views its owners' storage, not the iterator (#1259).
+        from .iterators import owners_through
+        record_owners(self.checker.borrow_state, state,
+                      owners_through(self.checker, owner), span, self._frozen)
 
 
 def _own_payload_receiver(expr: Expr) -> Optional[Expr]:
@@ -198,7 +216,7 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
     checker.borrow_state[stmt.name] = state
 
     owner_state = checker.borrow_state.get(owner) if owner else None
-    if owner_state is None:
+    if owner is None or owner_state is None:
         # A constant (a `peek` binds it, #713; a `poke` was CE2400 upstream) or a
         # temporary (CE2404 upstream): no local owns it, so nothing is frozen.
         return
@@ -219,9 +237,8 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
         # `f(poke x)` does (#242).
         check_owner_not_borrowed(checker, owner, stmt.loc, "take `poke`", place=place)
 
-    state.borrows_from = owner
-    owner_state.binding_borrows.append((stmt.name, stmt.loc))
-    checker._scope_binding_borrows[-1].append((owner, stmt.name))
+    record_owners(checker.borrow_state, state, (owner,), stmt.loc,
+                  checker._scope_binding_borrows[-1])
 
 
 def reject_a_second_writer(checker: 'BorrowChecker', owner: str, owner_state: BorrowState,

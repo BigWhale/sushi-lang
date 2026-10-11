@@ -1,0 +1,11 @@
+# S5: a `let` of a slice cannot be returned either.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn head() i32[]:
+    let i32[] data = from([1, 2, 3, 4])
+    let i32[] part = data[0..2]
+    return part
+
+fn main() i32:
+    println(head().len())
+    return 0

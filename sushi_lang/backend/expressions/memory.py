@@ -271,6 +271,10 @@ def expression_is_temporary(codegen: 'LLVMCodegen', expr) -> bool:
     from sushi_lang.semantics.ast import Name, MemberAccess, IndexAccess
     if isinstance(expr, (Name, MemberAccess, IndexAccess)):
         return False
+    from sushi_lang.semantics.borrowed_return import lends_a_view
+    if lends_a_view(expr):
+        # The answer of a borrowed return views storage that a source keeps (#1229).
+        return False
     if reads_a_borrow_through(codegen, expr):
         return False
     return not is_container_get_call(codegen, expr)
@@ -394,7 +398,7 @@ def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
 def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> ir.Value:
     """Return a deep copy of `value` that owns independent heap buffers."""
     from sushi_lang.semantics.typesys import (
-        UnknownType, BuiltinType, ForeignPtrType, EnumType, FunctionType
+        UnknownType, BuiltinType, ForeignPtrType, EnumType, FunctionType, IteratorType
     )
 
     if isinstance(value_type, UnknownType):
@@ -413,6 +417,11 @@ def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) 
     # A non-capturing value carries a null clone_ptr and passes through unchanged.
     if isinstance(value_type, FunctionType):
         return _clone_function_value(codegen, value)
+
+    # An iterator value copies its cursor through its own `clone_fn` (#1259).
+    if isinstance(value_type, IteratorType):
+        from sushi_lang.backend.runtime.iterators import emit_iterator_clone
+        return emit_iterator_clone(codegen, value)
 
     if isinstance(value_type, BuiltinType):
         if value_type == BuiltinType.STRING:

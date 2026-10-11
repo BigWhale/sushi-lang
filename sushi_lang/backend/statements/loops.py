@@ -56,10 +56,7 @@ def loop_frame(codegen: 'LLVMCodegen', continue_bb: 'ir.Block', break_bb: 'ir.Bl
 
 
 def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
-    """Emit foreach loop with iterator protocol."""
-    from llvmlite import ir
-    from sushi_lang.semantics.typesys import IteratorType
-
+    """Emit a foreach loop: a direct walk, a `next()` protocol walk, or a walk of a value."""
     builder, func = require_both_initialized(codegen)
     if node.item_type is None:
         raise_internal_error("CE0015", message="foreach item_type not resolved by semantic analysis")
@@ -77,39 +74,81 @@ def emit_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
         _emit_protocol_foreach(codegen, node)
         return
 
-    iterator_value = codegen.expressions.emit_expr(node.iterable)
-    iterator_type = IteratorType(element_type=node.item_type)
-    iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
+    # An `Iterator@(T)` VALUE (#1259): the loop calls its `next_fn`.
+    if node.value_iterator is not None:
+        _emit_value_foreach(codegen, node)
+        return
 
-    iterator_slot = entry_alloca(codegen.builder, iterator_struct_type, name="__iter")
-    codegen.builder.store(iterator_value, iterator_slot)
+    # A direct walk: the producer answers its bare cursor (`iterator_state` CURSOR).
+    cursor = codegen.expressions.emit_expr(node.iterable)
+    iterator_slot = entry_alloca(codegen.builder, cursor.type, name="__iter")
+    codegen.builder.store(cursor, iterator_slot)
 
-    zero = ir.Constant(codegen.types.i32, 0)
-
-    from sushi_lang.semantics.ast import DotCall
+    from sushi_lang.semantics.ast import DotCall, MethodCall
     from sushi_lang.semantics.typesys import StructType
-    is_hashmap_keys_or_values = False
     hashmap_type = None
-    hashmap_method = None
+    method = getattr(node.iterable, "method", "")
+    if isinstance(node.iterable, (MethodCall, DotCall)) and method in (
+            "keys", "values", "entries", "pairs"):
+        # The SAME helper the HashMap emitters use, so this loop and
+        # `try_emit_hashmap_method` cannot disagree about what a HashMap receiver is.
+        from sushi_lang.backend.expressions.calls.utils import infer_generic_struct_type
+        receiver_type = infer_generic_struct_type(
+            codegen, node.iterable.receiver, "HashMap")
+        if isinstance(receiver_type, StructType) and is_instance_of(receiver_type, "HashMap"):
+            hashmap_type = receiver_type
 
-    if isinstance(node.iterable, DotCall):
-        if node.iterable.method in ("keys", "values", "entries", "pairs"):
-            # The SAME helper the HashMap emitters use, so this loop and
-            # `try_emit_hashmap_method` cannot disagree about what a HashMap receiver is.
-            # Asking by variable NAME made `get_map()??.keys()` fall through to the array
-            # foreach and iterate zero entries with no diagnostic.
-            from sushi_lang.backend.expressions.calls.utils import infer_generic_struct_type
-            receiver_type = infer_generic_struct_type(
-                codegen, node.iterable.receiver, "HashMap")
-            if isinstance(receiver_type, StructType) and is_instance_of(receiver_type, "HashMap"):
-                is_hashmap_keys_or_values = True
-                hashmap_type = receiver_type
-                hashmap_method = node.iterable.method
-
-    if is_hashmap_keys_or_values:
-        _emit_hashmap_foreach(codegen, node, iterator_slot, zero, hashmap_type, hashmap_method)
+    if hashmap_type is not None:
+        _emit_hashmap_foreach(codegen, node, iterator_slot, hashmap_type, method)
     else:
-        _emit_array_foreach(codegen, node, iterator_slot, zero)
+        _emit_array_foreach(codegen, node, iterator_slot)
+
+
+def _emit_value_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
+    """Emit `foreach(item in it)` over an `Iterator@(T)` value: call `next_fn` until None.
+
+    A value walked IN PLACE (a `poke` reference, a `let` that holds a lent iterator) is
+    read and not taken: its state is the caller's, so each `next_fn` call moves the
+    caller's cursor, and the loop destroys nothing. Any other value is the loop's: the
+    loop binds it like a `let`, through the ownership seam, and destroys it at the loop's
+    exit on every path.
+    """
+    from sushi_lang.backend.constants.error_codes import MAYBE_SOME_TAG
+    from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check
+    from sushi_lang.backend.runtime.iterators import emit_next
+    from sushi_lang.backend import ownership
+    from sushi_lang.semantics.hidden_names import hidden_name
+
+    iterator_type = node.value_iterator
+    value = codegen.expressions.emit_expr(node.iterable)
+    codegen.memory.push_scope()
+    if not node.walks_in_place:
+        value, owns = ownership.bind(codegen, node.iterable, value, iterator_type)
+        name = hidden_name("fe_value", id(node))
+        slot = codegen.memory.create_local(name, value.type, value, iterator_type,
+                                           register_cleanup=False)
+        if owns and iterator_type is not None:
+            codegen.memory.register_owning_value(name, iterator_type, slot)
+
+    cond_bb = codegen.func.append_basic_block(name="foreach.value_cond")
+    body_bb = codegen.func.append_basic_block(name="foreach.value_body")
+    end_bb = codegen.func.append_basic_block(name="foreach.value_end")
+    codegen.builder.branch(cond_bb)
+    codegen.builder.position_at_end(cond_bb)
+
+    answer = emit_next(codegen, value, node.item_type)
+    has_next = emit_enum_tag_check(codegen, answer, MAYBE_SOME_TAG, "has_next")
+    codegen.builder.cbranch(has_next, body_bb, end_bb)
+
+    codegen.builder.position_at_end(body_bb)
+    with loop_frame(codegen, continue_bb=cond_bb, break_bb=end_bb, back_edge=cond_bb):
+        item = _bind_protocol_item(codegen, node, answer,
+                                   owned=not getattr(iterator_type, "peeks", ()))
+        _own_item_parts(codegen, node, item)
+        _emit_block(codegen, node.body)
+
+    codegen.builder.position_at_end(end_bb)
+    codegen.memory.pop_scope()
 
 
 def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
@@ -139,15 +178,10 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
         raise_internal_error("CE0015", message="the typecheck pass named no iterator slot "
                              "for a protocol foreach")
 
-    iterator_value = codegen.expressions.emit_expr(node.iterable)
     iterator_type = infer_expr_semantic_type(codegen, node.iterable)
     if isinstance(iterator_type, ReferenceType):
         # A `peek`/`poke` parameter reads as its value; the slot holds a copy of it.
         iterator_type = iterator_type.referenced_type
-    # The slot is the loop's hidden `let`, and it takes the iterable: a named local is
-    # marked moved, so its own scope exit does not destroy it again (#1145).
-    iterator_value = ownership.consume(codegen, node.iterable, iterator_value,
-                                       iterator_type, ownership.ConsumingUse.LET)
 
     cond_bb = codegen.func.append_basic_block(name="foreach.next_cond")
     body_bb = codegen.func.append_basic_block(name="foreach.next_body")
@@ -156,12 +190,26 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
     # The iterator's scope is the loop's, so the slot goes in a scope of its own that
     # closes after the end block: `break` and `return` both leave through the loop-exit
     # cleanup, which walks exactly these scopes.
-    codegen.memory.push_scope()
-    iter_slot = codegen.memory.create_local(
-        iter_name, iterator_value.type, iterator_value, iterator_type,
-        register_cleanup=False)
-    if iterator_type is not None:
-        codegen.memory.register_owning_value(iter_name, iterator_type, iter_slot)
+    if node.walks_in_place:
+        # A place reached through `poke` (#1258): the slot is a `poke` reference to the
+        # caller's storage, so `next()` moves the caller's cursor, and the loop exit
+        # destroys nothing.
+        from sushi_lang.backend.expressions.borrow import emit_place_address
+        address = emit_place_address(codegen, node.iterable, writable=True)
+        codegen.memory.push_scope()
+        bind_element_reference(codegen, iter_name, "poke", iterator_type, address)
+    else:
+        # The slot is the loop's hidden `let`, and it takes the iterable: a named local
+        # is marked moved, so its own scope exit does not destroy it again (#1145).
+        iterator_value = ownership.consume(
+            codegen, node.iterable, codegen.expressions.emit_expr(node.iterable),
+            iterator_type, ownership.ConsumingUse.LET)
+        codegen.memory.push_scope()
+        iter_slot = codegen.memory.create_local(
+            iter_name, iterator_value.type, iterator_value, iterator_type,
+            register_cleanup=False)
+        if iterator_type is not None:
+            codegen.memory.register_owning_value(iter_name, iterator_type, iter_slot)
 
     codegen.builder.branch(cond_bb)
     codegen.builder.position_at_end(cond_bb)
@@ -172,15 +220,41 @@ def _emit_protocol_foreach(codegen: 'LLVMCodegen', node: 'Foreach') -> None:
 
     codegen.builder.position_at_end(body_bb)
     with loop_frame(codegen, continue_bb=cond_bb, break_bb=end_bb, back_edge=cond_bb):
-        _bind_protocol_item(codegen, node, answer)
+        _bind_protocol_item(codegen, node, answer, owned=True)
         _emit_block(codegen, node.body)
 
     codegen.builder.position_at_end(end_bb)
     codegen.memory.pop_scope()
 
 
-def _bind_protocol_item(codegen: 'LLVMCodegen', node: 'Foreach', answer: 'ir.Value') -> None:
-    """Bind the item of a protocol `foreach` to the payload of the `Maybe` that `next()` answered."""
+def _own_item_parts(codegen: 'LLVMCodegen', node: 'Foreach', item: 'ir.Value') -> None:
+    """A tuple item whose parts differ in mode (#1228): the loop owns each owned part.
+
+    The item is bound as a borrow, because a part of it is lent. Each owned part gets a
+    hidden local of its own, so the body's scope frees it at the end of each round and on
+    every early exit, as it frees an owned item.
+    """
+    from sushi_lang.backend.runtime.iterator_adapters import owned_parts
+    from sushi_lang.semantics.hidden_names import hidden_name
+    from sushi_lang.semantics.typesys import IteratorType
+
+    if not isinstance(node.value_iterator, IteratorType):
+        return
+    for index, part in owned_parts(node.value_iterator):
+        name = hidden_name(f"fe_part{index}", id(node))
+        value = codegen.builder.extract_value(item, index, name="item_part")
+        slot = codegen.memory.create_local(name, value.type, value, part,
+                                           register_cleanup=False)
+        codegen.memory.register_owning_value(name, part, slot)
+
+
+def _bind_protocol_item(codegen: 'LLVMCodegen', node: 'Foreach', answer: 'ir.Value',
+                        owned: bool) -> 'ir.Value':
+    """Bind the item of a `foreach` to the payload of the `Maybe` that `next()` answered.
+
+    A lent item (`Iterator@(peek T)`) is a view of storage its source keeps, so it is bound
+    with no cleanup, as an array item is.
+    """
     # The payload is read HERE and not in the condition block: on the last iteration the
     # answer is a None, whose payload bytes are zeroed and mean nothing.
     item_ll_type = codegen.types.ll_type(node.item_type)
@@ -195,31 +269,19 @@ def _bind_protocol_item(codegen: 'LLVMCodegen', node: 'Foreach', answer: 'ir.Val
     item_slot = codegen.memory.create_local(
         node.item_name, item_ll_type, item_value, node.item_type,
         register_cleanup=False)
-    if node.item_type is not None:
+    if owned and node.item_type is not None:
         codegen.memory.register_owning_value(node.item_name, node.item_type, item_slot)
+    return item_value
 
 
-def _emit_array_foreach(codegen: 'LLVMCodegen', node: 'Foreach', iterator_slot: 'ir.Value', zero: 'ir.Constant') -> None:
-    """Emit foreach for regular array iterators (non-string types)."""
+def _emit_array_foreach(codegen: 'LLVMCodegen', node: 'Foreach',
+                        iterator_slot: 'ir.Value') -> None:
+    """Emit the direct walk of a cursor over contiguous elements: an array or a List."""
+    from llvmlite import ir
     from sushi_lang.backend import gep_utils
 
     end_bb = codegen.func.append_basic_block(name="foreach.end")
     length_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 1, "length_ptr")
-    _emit_array_foreach_body(codegen, node, iterator_slot, zero, length_ptr, end_bb)
-
-
-def _emit_array_foreach_body(
-    codegen: 'LLVMCodegen',
-    node: 'Foreach',
-    iterator_slot: 'ir.Value',
-    zero: 'ir.Constant',
-    length_ptr: 'ir.Value',
-    end_bb: 'ir.Block'
-) -> None:
-    """Emit the array iteration loop body."""
-    from llvmlite import ir
-    from sushi_lang.backend import gep_utils
-
     cond_bb = codegen.func.append_basic_block(name="foreach.cond")
     body_bb = codegen.func.append_basic_block(name="foreach.body")
 
@@ -270,7 +332,6 @@ def _emit_hashmap_foreach(
     codegen: 'LLVMCodegen',
     node: 'Foreach',
     iterator_slot: 'ir.Value',
-    zero: 'ir.Constant',
     hashmap_type: 'StructType',
     method: str
 ) -> None:
@@ -313,12 +374,9 @@ def _emit_hashmap_foreach(
     current_index = codegen.builder.load(index_ptr, name="current_index")
 
     capacity_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 1, "capacity_ptr")
-    marked_capacity = codegen.builder.load(capacity_ptr, name="marked_capacity")
+    capacity = codegen.builder.load(capacity_ptr, name="capacity")
 
-    capacity_mask = ir.Constant(codegen.types.i32, 0x1FFFFFFF)
-    actual_capacity = codegen.builder.and_(marked_capacity, capacity_mask, name="actual_capacity")
-
-    has_more = codegen.builder.icmp_signed("<", current_index, actual_capacity, name="has_more")
+    has_more = codegen.builder.icmp_signed("<", current_index, capacity, name="has_more")
     codegen.builder.cbranch(has_more, check_occupied_bb, end_bb)
 
     codegen.builder.position_at_end(check_occupied_bb)
@@ -437,7 +495,8 @@ def _emit_range_foreach(codegen: 'LLVMCodegen', node: 'Foreach', range_expr: 'Ra
 
 def bind_element_reference(codegen: 'LLVMCodegen', name: str, borrow_mode: str,
                             element_type, element_ptr) -> None:
-    """Bind a foreach item as a REFERENCE to the container's element (#300 phase 1)."""
+    """Bind a local as a REFERENCE to storage it does not own: a foreach item (#300), or
+    the slot of a walk in place (#1258)."""
     from sushi_lang.semantics.param_modes import borrow_mode as read_borrow_mode
     from sushi_lang.semantics.typesys import ReferenceType
     ref_type = ReferenceType(element_type, read_borrow_mode(borrow_mode))

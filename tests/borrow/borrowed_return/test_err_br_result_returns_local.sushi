@@ -1,0 +1,18 @@
+# In a `peek T | E` body the `Ok` payload must be a borrow of a source too.
+# EXPECT_ERROR_CODES_EXACT: CE2443
+
+error Bad:
+    Empty
+
+fn head(i32[] xs) peek i32[] | Bad:
+    if (xs.len() == 0):
+        return Result.Err(Bad.Empty)
+    let i32[] local = from([1, 2, 3])
+    return Result.Ok(local[0..2])
+
+fn main() i32:
+    let i32[] data = from([1, 2])
+    match head(data):
+        Result.Ok(h) -> println(h.len())
+        Result.Err(_) -> println("error")
+    return 0

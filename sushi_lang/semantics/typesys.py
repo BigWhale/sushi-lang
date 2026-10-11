@@ -125,17 +125,39 @@ class StructType:
 
 @dataclass(frozen=True)
 class IteratorType:
-    """Represents an Iterator<T> type for iteration over sequences."""
-    element_type: "Type"  # The type of elements yielded by this iterator
+    """`Iterator@(T)`: a walk that yields items of `element_type`.
+
+    `peeks` is the ITEM MODE (docs/design/iteration.md). Empty: every item is owned. One
+    flag: the whole item is lent (`Iterator@(peek T)`). One flag per element: a tuple
+    item, `(i32, peek string)` is `(False, True)`. `element_type` is always the value
+    type, with no `peek` in it. A plain item has one type for both modes, and the seam
+    `generics/iterators.py:settle_item_modes` decides that at each instance.
+
+    `base_name` and `namespace` are the WRITTEN spelling (`it.Iterator`), for the import
+    gate and the alias. A type the compiler makes has no `base_name`. Identity ignores
+    both, as `GenericTypeRef.namespace` is ignored.
+    """
+    element_type: "Type"
+    peeks: tuple[bool, ...] = ()
+    base_name: Optional[str] = None
+    namespace: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        # One spelling of "every item is owned", so identity needs no second rule.
+        if self.peeks and not any(self.peeks):
+            object.__setattr__(self, "peeks", ())
 
     def __str__(self) -> str:
-        return interned_name("Iterator", (self.element_type,))
+        from sushi_lang.semantics.generics.iterators import ITERATOR_BASE, written_item
+        return interned_name(ITERATOR_BASE, (written_item(self),))
 
     def __hash__(self) -> int:
-        return hash(("iterator", self.element_type))
+        return hash(("iterator", self.element_type, self.peeks))
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, IteratorType) and self.element_type == other.element_type
+        return (isinstance(other, IteratorType)
+                and self.element_type == other.element_type
+                and self.peeks == other.peeks)
 
 @dataclass(frozen=True)
 class ReferenceType:
@@ -242,7 +264,8 @@ def _container_bases() -> tuple[str, ...]:
 
 
 # Where each predicate stops. A pointer, an iterator, a fn value and a template hold what
-# they name somewhere else, so neither predicate enters them. `owns_resource` also stops
+# they name somewhere else, so neither predicate enters them. An iterator owns its own
+# value (the state its `drop_fn` frees), so `owns_resource` answers True at it. `owns_resource` also stops
 # at a borrow, because a borrow names storage that another value owns.
 _HOLDS_STOPS = frozenset({"PointerType", "IteratorType", "FunctionType", "TypePack",
                           "GenericStructType", "GenericEnumType"})
@@ -255,8 +278,8 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
     """True if a value of this type owns something RAII must release and a sink must transfer.
 
     Two ways to own. Most types own HEAP, and the answer is structural: a `string`, a
-    `T[]`, an `Own`, a `List`, a `HashMap`, a capturing closure, or a composite holding
-    one. A type may also DECLARE that it owns a resource, by implementing the `Drop`
+    `T[]`, an `Own`, a `List`, a `HashMap`, a capturing closure, an `Iterator@(T)`, or a
+    composite holding one. A type may also DECLARE that it owns a resource, by implementing the `Drop`
     perk -- a file or a socket holds one `i32` descriptor, so no field walk can find it
     (HANDLES.md ruling R2).
 
@@ -284,6 +307,8 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
             return True
         if isinstance(ty, FunctionType):
             return ty.captures != ()
+        if isinstance(ty, IteratorType):
+            return True
         if isinstance(ty, GenericTypeRef):
             return ty.base_name in bases
         if isinstance(ty, (StructType, EnumType)):

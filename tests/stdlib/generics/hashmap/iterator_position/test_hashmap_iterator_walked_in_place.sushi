@@ -1,6 +1,6 @@
 # A HashMap iterator that is the iterable of a foreach walks every entry, for
-# each of the four iterator methods. An array iterator can still go through a
-# generic function. Each map holds one entry, so the order is fixed.
+# each of the four iterator methods. An iterator over a temporary array owns
+# what it walks, so it can still go through a generic function. Each map holds one entry, so the order is fixed.
 # EXPECT_STDOUT_EXACT: "a\n1\na=1\na:1\n10\n20\n"
 # EXPECT_RUNTIME_EXIT: 0
 
@@ -20,7 +20,6 @@ fn main() i32:
         println("{e.key}={e.value}")
     foreach(p in m.pairs()):
         println("{p.0}:{p.1}")
-    let i32[] xs = from([10, 20])
-    foreach(x in h(nom xs.iter())):
+    foreach(x in h(nom from([10, 20]).iter())):
         println(x)
     return 0

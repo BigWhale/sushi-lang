@@ -1,0 +1,35 @@
+# An OWNED iterator leaves its function: a range, an iterator over a temporary array
+# (it owns the array), and `Iterator.new` over a protocol value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "0\n1\n2\nx\ny\n3\n2\n1\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+
+struct Countdown:
+    i32 left
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.left == 0):
+        return Maybe.None
+    self.left := self.left - 1
+    return Maybe.Some(self.left + 1)
+
+fn upto(i32 n) Iterator@(i32):
+    return 0..n
+
+fn letters() Iterator@(peek string):
+    return from(["x", "y"]).iter()
+
+fn countdown(i32 n) Iterator@(i32):
+    return Iterator.new(nom Countdown(n))
+
+fn main() i32:
+    foreach(x in upto(3)):
+        println(x)
+    let Iterator@(peek string) l = letters()
+    foreach(s in l):
+        println(s)
+    let Iterator@(i32) c = countdown(3)
+    foreach(x in c):
+        println(x)
+    return 0

@@ -1,0 +1,16 @@
+# S7: the `dont_panic` marker removes the check of an element access, and not the
+# range check of a slice. A bad slice in a marked body still traps.
+# COMPILER_FLAGS: --dont-panic
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2028"
+# EXPECT_STDERR_CONTAINS: "slice 1..9 is out of bounds for an array of size 3"
+
+fn tail_len(i32[] xs, i32 end) i32 dont_panic because "the caller passes a non-empty array":
+    let i32 first = xs[0]
+    return xs[1..end].len() + first
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3])
+    println(tail_len(data, 9))
+    return 0

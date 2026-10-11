@@ -41,6 +41,7 @@ from sushi_lang.semantics.generics.cloning import DERIVED_CLONE_ARITY
 from sushi_lang.semantics.generics.contracts import CONTRACT_METHOD_ARITY
 from sushi_lang.semantics.generics.hashing import DERIVED_HASH_ARITY
 from sushi_lang.semantics.generics.hashmap import HASHMAP_METHOD_ARITY, HASHMAP_METHOD_MODES
+from sushi_lang.semantics.generics.iterators import ITERATOR_METHOD_ARITY, iterator_method_modes
 from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY, LIST_METHOD_MODES
 from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_ARITY, MAYBE_METHOD_MODES
 from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY, OWN_METHOD_MODES
@@ -53,7 +54,7 @@ from sushi_lang.semantics.foreign_memory import (
 
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
-    StructType)
+    IteratorType, StructType)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.derived_methods import DerivedMethodTable
@@ -207,6 +208,12 @@ def stamp_builtin_modes(call: 'MethodCall', modes: BuiltinModes) -> None:
 
 
 METHOD_TYPE_REGISTRY = MethodTypeRegistry()
+
+
+def producer_iterator(validator: 'TypeValidator', item: Optional['Type']) -> Optional['Type']:
+    """What a container's iterator method answers: `Iterator@(peek T)` (#1259)."""
+    from sushi_lang.semantics.passes.types.utils import producer_iterator as answer
+    return answer(validator, item)
 
 
 def arity_of_family(name: str) -> Mapping[str, int]:
@@ -390,25 +397,21 @@ class HashMapMethodInferrer:
                 elif self.method_name in ("new", "insert", "rehash", "debug", "free", "destroy"):
                     return BuiltinType.BLANK
                 elif self.method_name == "keys":
-                    from sushi_lang.semantics.typesys import IteratorType
-                    return IteratorType(element_type=key_type)
+                    return producer_iterator(self.validator, key_type)
                 elif self.method_name == "values":
-                    from sushi_lang.semantics.typesys import IteratorType
-                    return IteratorType(element_type=value_type)
+                    return producer_iterator(self.validator, value_type)
                 elif self.method_name == "entries":
-                    from sushi_lang.semantics.typesys import IteratorType
                     from sushi_lang.semantics.generics.hashmap import ensure_entry_type_in_struct_table
                     entry_type = ensure_entry_type_in_struct_table(
                         self.validator.struct_table, self.validator.derived_methods,
                         key_type, value_type
                     )
-                    return IteratorType(element_type=entry_type)
+                    return producer_iterator(self.validator, entry_type)
                 elif self.method_name == "pairs":
-                    from sushi_lang.semantics.typesys import IteratorType
                     from sushi_lang.semantics.generics.tuples import intern_tuple
                     pair_type = intern_tuple(self.validator.struct_table,
                                              self.validator.enum_table, (key_type, value_type))
-                    return IteratorType(element_type=pair_type)
+                    return producer_iterator(self.validator, pair_type)
         return None
 
 
@@ -449,8 +452,7 @@ class ListMethodInferrer:
                     return ensure_result_type_in_table(self.validator.enum_table, BuiltinType.BLANK, std_error,
                                        struct_table=self.validator.struct_table.by_name)
                 elif self.method_name == "iter":
-                    from sushi_lang.semantics.typesys import IteratorType
-                    return IteratorType(element_type=element_type)
+                    return producer_iterator(self.validator, element_type)
                 elif self.method_name in ("new", "with_capacity", "push", "clear",
                                          "reserve", "shrink_to_fit", "destroy", "free", "debug"):
                     return BuiltinType.BLANK
@@ -620,6 +622,43 @@ def _answers_function(receiver_type, method_name, derived_methods):
             and is_builtin_function_method(method_name))
 
 
+def _answers_iterator(receiver_type, method_name, derived_methods):
+    # `clone()` copies the cursor (#1259), and the adapters (#1228). No perk can name an
+    # `Iterator@(T)`: it is no extension target.
+    from sushi_lang.semantics.generics.iterators import ADAPTERS
+    return isinstance(receiver_type, IteratorType) and (
+        method_name == "clone" or method_name in ADAPTERS)
+
+
+@dataclass
+class IteratorMethodInferrer:
+    """Type inferrer for the built-in methods on an iterator value: `.clone()` and the
+    adapters, whose result the arguments solve (`iterator_adapters.adapter_result`)."""
+    receiver_type: 'Type'
+    call: 'MethodCall'
+    validator: 'TypeValidator'
+
+    def infer_return_type(self) -> Optional['Type']:
+        from sushi_lang.semantics.generics.iterators import ITERATOR_METHOD_SIGNATURES
+        if self.call.method == "clone":
+            return self.receiver_type
+        signature = ITERATOR_METHOD_SIGNATURES.get(self.call.method)
+        if signature is None:
+            return None
+        from sushi_lang.semantics.passes.types.calls.builtin_signature import (
+            solve_builtin_call)
+        from sushi_lang.semantics.passes.types.iterator_adapters import (
+            adapter_result, settle_adapter_instance)
+        from sushi_lang.semantics.typesys import deref_type
+        receiver = deref_type(self.receiver_type)
+        instance, _unsolved = solve_builtin_call(self.validator, signature, receiver,
+                                                 self.call)
+        if instance is None:
+            return None
+        instance = settle_adapter_instance(self.validator, self.call, instance)
+        return adapter_result(self.validator, self.call, receiver, instance, report=False)
+
+
 def _answers_foreign_ptr(receiver_type, method_name, derived_methods):
     # No perk can name a `ptr`, so which side of the perk the family stands on decides
     # nothing; it is written with the other families that answer first.
@@ -660,6 +699,10 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="list", beats_perk=True, answers=_answers_list, arity=LIST_METHOD_ARITY,
     modes=LIST_METHOD_MODES,
     infer=lambda rt, call, v: ListMethodInferrer(rt, call.method, v)))
+METHOD_TYPE_REGISTRY.register(MethodFamily(
+    name="iterator", beats_perk=True, answers=_answers_iterator,
+    arity=ITERATOR_METHOD_ARITY, modes=iterator_method_modes(),
+    infer=lambda rt, call, v: IteratorMethodInferrer(rt, call, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="foreign_ptr", beats_perk=True, answers=_answers_foreign_ptr,
     arity=FOREIGN_PTR_METHOD_ARITY,

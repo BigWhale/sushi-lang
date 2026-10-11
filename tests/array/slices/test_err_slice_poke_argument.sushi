@@ -1,0 +1,11 @@
+# S4: a slice is not a `poke` view. A callee could grow it and move the storage.
+# EXPECT_ERROR_CODES_EXACT: CE2426
+
+fn grow(poke i32[] xs) ~:
+    xs.push(9)
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3, 4])
+    grow(poke data[1..3])
+    println(data.len())
+    return 0

@@ -15,13 +15,16 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.generics.constraints import target_bounds_hold
 from sushi_lang.semantics.passes.collect.functions import GenericExtensionMethod
 from ..arguments import check_arguments
+from ..borrowed_returns import stamp_call_sources
+from sushi_lang.semantics.generics.iterators import ITERATOR_BASE
 from ..method_registry import METHOD_TYPE_REGISTRY, arity_of_family, stamp_builtin_modes
 from ..utils import call_constraint_check, intern_signature, reject_spread_args
 
 # A receiver whose method calls this pass judges. `Own@(T)`, `List@(T)` and
 # `HashMap@(K, V)` are named StructTypes, so the tuple covers them with every other
-# struct. An `Iterator@(T)` (a range too) answers no method, and it is here so that a
-# call on one is CE2008 at the call and not an internal error in the backend (#1136).
+# struct. An `Iterator@(T)` (a range too) answers `clone()` alone, and it is here so that
+# any other call on one is CE2008 at the call and not an internal error in the backend
+# (#1136).
 # An opaque type parameter answers what its constraints promise, and nothing else (#1070).
 RECEIVERS_WITH_METHODS = (BuiltinType, ArrayType, DynamicArrayType, EnumType,
                           FunctionType, IteratorType, StructType, TypeParameter)
@@ -159,7 +162,8 @@ def substituted_extension_signature(validator: 'TypeValidator', template, receiv
         unit_name=template.unit_name,
         err_type=err, err_span=getattr(template, "err_span", None),
         is_static=bool(getattr(template, "is_static", False)),
-        is_public=bool(getattr(template, "is_public", False)))
+        is_public=bool(getattr(template, "is_public", False)),
+        borrowed_return=getattr(template, "borrowed_return", None))
 
 
 def target_copy_signature(validator: 'TypeValidator', template, instance):
@@ -684,9 +688,18 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
     refusal comes before them too (#770); only a perk implementation that answers the
     call is the sanctioned override.
     """
-    from sushi_lang.semantics.typesys import holds_declared_resource
     if call.method != "clone":
         return False
+    return reject_uncloneable(validator, call, receiver_type)
+
+
+def reject_uncloneable(validator: 'TypeValidator', call: MethodCall, value_type) -> bool:
+    """CE4018 or CE2431 when a value of `value_type` has no deep copy. True when refused.
+
+    The one rule of `.clone()`, read by `.clone()` itself and by `clone_each`, which
+    clones each lent item of an iterator (#1228).
+    """
+    from sushi_lang.semantics.typesys import holds_declared_resource
 
     def resolve(ty):
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
@@ -696,16 +709,16 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
     # One predicate (`holds_declared_resource`), and the type that answers it picks the
     # code: an opaque type parameter with no `Clone` (CE4018, #1070), or a handle.
     held: list = []
-    if not holds_declared_resource(receiver_type, validator.drop_type_names,
+    if not holds_declared_resource(value_type, validator.drop_type_names,
                                    resolve=resolve, found=held):
         return False
     unpromised = [ty for ty in held if isinstance(ty, TypeParameter)]
     if unpromised:
-        _reject_clone_of_opaque(validator, call, receiver_type, unpromised[0])
+        _reject_clone_of_opaque(validator, call, value_type, unpromised[0])
         return True
 
     er.emit_with(validator.reporter, er.ERR.CE2431, call.loc,
-                 type=display_type(receiver_type)) \
+                 type=display_type(value_type)) \
         .help("a second owner of a handle is '.share()'; for a value that holds "
               "handles, build a new one from a '.share()' of each handle") \
         .emit()
@@ -915,6 +928,8 @@ def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
             reject_non_i32(validator, count, validator.validate_expression(count), argument=1)
         elif call.method == "alloc":
             _validate_own_alloc_payload(validator, call)
+        elif type_name == ITERATOR_BASE:
+            _validate_iterator_new(validator, call)
         stamp_builtin_modes(call, METHOD_TYPE_REGISTRY.family(family).modes)
 
 
@@ -922,10 +937,50 @@ def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
 #: row each one reads (`MethodFamily.arity`).
 _CONTAINER_STATICS = {"List": ("list", ("new", "with_capacity")),
                       "HashMap": ("hashmap", ("new",)),
-                      "Own": ("own", ("alloc",))}
+                      "Own": ("own", ("alloc",)),
+                      ITERATOR_BASE: ("iterator", ("new",))}
 
 #: The container statics whose one argument is a count, an i32 position (#870).
 _CONTAINER_STATIC_COUNTS = frozenset({"with_capacity"})
+
+
+def _validate_iterator_new(validator: 'TypeValidator', call: MethodCall) -> None:
+    """`Iterator.new(nom x)`: `x` is walkable, and the result owns `x` and its items.
+
+    The `next()` call on the value is built and checked here, as a protocol `foreach`
+    builds its own, so the backend reads the receiver mode and the symbol from its
+    stamps (#1259).
+    """
+    from sushi_lang.semantics.passes.types.statements import (
+        protocol_item_type, protocol_next_call)
+    from sushi_lang.semantics.hidden_names import hidden_name
+
+    argument = call.args[0]
+    argument_type = validator.validate_expression(argument)
+    if argument_type is None:
+        argument_type = validator.infer_expression_type(argument)
+    if argument_type is None:
+        return
+    if protocol_item_type(validator, argument_type) is None:
+        er.emit(validator.reporter, er.ERR.CE2033, argument.loc,
+                got=display_type(argument_type))
+        return
+    item, next_call = protocol_next_call(validator, argument_type,
+                                         hidden_name("iter_new", id(call)), argument.loc)
+    call.iterator_next = next_call
+    call.inferred_return_type = iterator_new_type(validator, call)
+
+
+def iterator_new_type(validator: 'TypeValidator', call) -> Optional[IteratorType]:
+    """What `Iterator.new(nom x)` answers: `Iterator@(T)` with owned items, or None."""
+    from sushi_lang.semantics.passes.types.statements import protocol_item_type
+    if len(call.args) != 1:
+        return None
+    argument_type = validator.infer_expression_type(call.args[0])
+    if argument_type is None:
+        return None
+    item = protocol_item_type(validator, argument_type)
+    return IteratorType(element_type=item) if item is not None else None
 
 
 def _validate_own_alloc_payload(validator: 'TypeValidator', call: MethodCall) -> None:
@@ -1013,8 +1068,10 @@ def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
         diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.loc,
                             name=f"{display_type(receiver_type)}.{call.method}")
         if isinstance(receiver_type, IteratorType):
-            diag.help("an iterator has no methods: walk it with 'foreach', or call the "
-                      "method on the collection it comes from")
+            diag.help("an iterator has the methods 'clone' and the adapters 'map', "
+                      "'filter', 'enumerate', 'zip', 'clone_each', 'fold', 'partition' "
+                      "and 'collect': walk it with 'foreach', or call the method on the "
+                      "collection it comes from")
         _explain_unpromised_method(validator, diag, receiver_type, call.method)
         diag.emit()
         return
@@ -1088,6 +1145,7 @@ def _run_method_steps(validator: 'TypeValidator', call: MethodCall, receiver_typ
         if method is None:
             return False
     _stamp_param_modes(call, method)
+    stamp_call_sources(validator, call, method)
     return check_arguments(
         validator, f"{display_type(receiver_type)}.{call.method}",
         [p.ty for p in method.params], call.args, call.loc,
@@ -1273,13 +1331,43 @@ def _validate_contract_method(validator: 'TypeValidator', call: MethodCall,
                     arity_code=er.ERR.CE2009)
 
 
+@METHOD_TYPE_REGISTRY.validator("iterator")
+def _validate_iterator_family(validator: 'TypeValidator', call: MethodCall,
+                              receiver_type) -> None:
+    """`it.clone()`, or an adapter (#1228): the steps of a built-in signature, then the
+    result in the item mode that the receiver gives it."""
+    from sushi_lang.semantics.generics.iterators import ITERATOR_METHOD_SIGNATURES
+    from sushi_lang.semantics.typesys import deref_type
+    from ..iterator_adapters import adapter_result, settle_adapter_instance
+    signature = ITERATOR_METHOD_SIGNATURES.get(call.method)
+    if signature is None:
+        _validate_function_family(validator, call, receiver_type)
+        return
+    receiver_type = deref_type(receiver_type)
+    solved: list = []
+
+    def solve():
+        instance = _solve_builtin_instance(validator, call, receiver_type, signature)
+        if instance is not None:
+            instance = settle_adapter_instance(validator, call, instance)
+            solved.append(instance)
+        return instance
+
+    _run_method_steps(validator, call, receiver_type, signature, stop_on_arity=False,
+                      solve=solve)
+    if solved:
+        call.inferred_return_type = adapter_result(validator, call, receiver_type,
+                                                   solved[0], report=True)
+
+
 @METHOD_TYPE_REGISTRY.validator("function")
 def _validate_function_family(validator: 'TypeValidator', call: MethodCall,
                               receiver_type) -> None:
     # A closure read out of a struct field or a container is a borrow, so consuming it is
     # CE2411 and `.clone()` is the escape the diagnostic names -- it has to resolve here,
     # or dispatch falls through to the extension path and mangles the type name into a
-    # symbol nobody defines.
+    # symbol nobody defines. An iterator value has the one method `clone()` as well, with
+    # the same rule (#1259).
     from sushi_lang.semantics.generics.closures import (
         validate_function_method_with_validator)
     validate_function_method_with_validator(

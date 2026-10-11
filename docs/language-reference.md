@@ -620,6 +620,56 @@ fn read_value(peek i32 x) i32:
 
 The rule and its reasoning are [docs/design/borrow-model.md](design/borrow-model.md).
 
+### Borrowed Returns
+
+A named function or method can return a VIEW of one of its arguments, with no copy. The
+return type writes `peek`: `peek T`, or `peek T | E` with a channel (the mode applies to the
+`Ok` payload).
+
+```sushi
+struct Store:
+    i32[] data
+
+extend Store head(i32 n) peek i32[]:
+    return self.data[0..n]              # a slice of the receiver
+
+fn longer(string a, string b) peek string:
+    if (a.len() >= b.len()):
+        return a
+    return b
+
+fn main() i32:
+    let Store s = Store(from([1, 2, 3]))
+    let i32[] h = s.head(2)             # h borrows s
+    println(h.len())
+    println(longer("alpha", "bob"))
+    return 0
+```
+
+- **The sources.** The answer may borrow `self` when the receiver is a borrow, and each
+  parameter that is not `nom` and whose type owns a resource (`T[]`, `string`, an owning
+  struct). A function with no source is [`CE2438`](error-catalog.md#ce2438). In a generic
+  template a type parameter counts as a type that owns.
+- **The body.** Each returned value must be a borrow of a source: a slice, a field, an
+  element, a `let` of one, an iterator over a source, or the answer of another borrowed
+  return. A borrow of a local, of a temporary or of another parameter, and an owned value,
+  are [`CE2443`](error-catalog.md#ce2443).
+- **The caller.** The answer borrows the owners of every source argument: they are frozen
+  while it lives ([`CE2412`](error-catalog.md#ce2412)), and the answer cannot be stored,
+  returned or given with `nom` ([`CE2411`](error-catalog.md#ce2411)); `.clone()` takes an
+  independent value. A temporary source argument is legal inside one statement, and a
+  `let` of its answer is [`CE2444`](error-catalog.md#ce2444).
+- **Where it is legal.** On a free function, an extension method and a static. A lambda and
+  a perk method are [`CE2439`](error-catalog.md#ce2439), a `nom self` method is
+  [`CE2440`](error-catalog.md#ce2440), and a function value of such a function is
+  [`CE2441`](error-catalog.md#ce2441). In `peek T | E`, the error type owns nothing
+  ([`CE2442`](error-catalog.md#ce2442)).
+- **An iterator.** `fn evens(i32[] xs) peek Iterator@(i32)` returns an iterator that
+  borrows `xs`; its state moves to the heap at the return, and the caller destroys it.
+
+There is no `poke` return. The design is section 10h of
+[docs/design/borrow-model.md](design/borrow-model.md).
+
 ## Operators
 
 ### Operand types
@@ -1082,10 +1132,13 @@ range is. Or **any type carrying `next()` answering `Maybe@(T)`**: the loop call
 it answers `None`, and that is the whole protocol. There is no type to implement and no
 perk to name, so a struct becomes walkable by gaining one method.
 
-**A range is not a value.** It has two positions: a `foreach` iterable and an element of
-an array literal (`from([0..n])`). A range anywhere else -- a function, method or
-constructor argument, a `return`, a `let` initializer, an operand -- is [`CE2122`](error-catalog.md#ce2122). Spell it
-into an array to keep it.
+**A range is a value only where `Iterator@(i32)` is expected.** It has three positions: a
+`foreach` iterable, an element of an array literal (`from([0..n])`, a run of elements),
+and a position of the type `Iterator@(i32)`, written or propagated: a `let`, an argument,
+a `return`, a constructor field, a payload, a container element. There it is an owned
+iterator (see [The Iterator Type](#the-iterator-type)). A range anywhere else -- an `i32`
+position, an operand, a generic `T` that nothing else solves -- is
+[`CE2122`](error-catalog.md#ce2122). Spell it into an array to keep its elements.
 
 **A range always goes up.** `a..b` is empty when `a >= b`, and `a..=b` is empty when
 `a > b`. A countdown is `(a..b).rev()`: the same values, last first. `.rev()` is the one
@@ -1172,6 +1225,101 @@ item. See [Destructuring in a For-Each Loop](#destructuring-in-a-for-each-loop).
 The argument behind all of this -- why the failure rides in the ITEM rather than on the
 loop head, why the protocol is not a perk, and why a line iterator's stop is sticky -- is
 [Iteration (design)](design/iteration.md).
+
+### The Iterator Type
+
+`Iterator@(T)` is the type of an iterator. It is the compiler's own type, as
+`HashMap@(K, V)` is. To write the name, import `<collections/iter>`. A value, a `foreach`,
+`.iter()` and a range need no import.
+
+```sushi
+use <collections/iter>
+
+fn total(poke Iterator@(i32) numbers) i32:
+    let i32 sum = 0
+    foreach(n in numbers):
+        sum := sum + n
+    return sum
+
+fn main() i32:
+    return 0
+```
+
+With no import, `Iterator` is **[CE2001](error-catalog.md#ce2001)**, and the help names
+the import. Behind `use <collections/iter> as it`, the name is `it.Iterator`.
+
+**The item has a mode.** `Iterator@(T)` gives OWNED items, and `Iterator@(peek T)` gives
+BORROWED items. A tuple item takes the mode on each element, as in
+`Iterator@((i32, peek string))`. `poke` is not an item mode.
+
+| Written | Item |
+|---|---|
+| `Iterator@(string)` | an owned `string` |
+| `Iterator@(peek string)` | a borrowed `string` |
+| `Iterator@((i32, peek string))` | an `i32`, and a borrowed `string` |
+
+`peek` is a type argument only of `Iterator@(...)`: at the top of the item, or at the top
+of one element of a tuple item. `List@(peek T)`, `Maybe@(peek T)`, `Result@(peek T, E)`,
+`Iterator@(poke T)`, `Iterator@(peek (i32, string))` and `Iterator@(List@(peek T))` are
+**[CE2419](error-catalog.md#ce2419)**. A `peek` field is
+**[CE2415](error-catalog.md#ce2415)**.
+
+**A plain item makes one type.** For an item that holds no resource,
+`Iterator@(peek T)` and `Iterator@(T)` are one type, so `Iterator@(peek i32)` goes where
+`Iterator@(i32)` is expected. For an item that owns (a `string`, a `T[]`, a type that
+implements `Drop`), they are two types, and a mix is
+**[CE2006](error-catalog.md#ce2006)**. A generic template keeps the mode of its `T`;
+each instance decides it.
+
+**An iterator is a value.** It can be stored, passed and walked, and an iterator over a
+container copies nothing. `.iter()` on `T[]`, `T[N]` and `List@(T)`, and `.keys()`,
+`.values()`, `.entries()`, `.pairs()` on a `HashMap`, answer `Iterator@(peek T)`.
+
+```sushi
+use <collections/iter>
+
+fn count(poke Iterator@(peek string) it) i32:
+    let i32 n = 0
+    foreach(s in it):                  # walks the caller's iterator in place
+        n := n + 1
+    return n
+
+fn main() i32:
+    let string[] names = from(["a", "b"])
+    let Iterator@(peek string) it = names.iter()     # borrows names, no copy
+    println(count(poke it))                          # 2
+    let Iterator@(i32) r = 0..3                      # a range is a value here
+    foreach(x in r):
+        println(x)
+    return 0
+```
+
+| Source | The iterator |
+|---|---|
+| `xs.iter()`, `m.keys()` over a place | BORROWS the owner of the place: the owner is frozen until the last use of the iterator ([CE2412](error-catalog.md#ce2412)), and the iterator cannot be given with `nom`, returned, stored or captured ([CE2411](error-catalog.md#ce2411)) |
+| `from([1, 2]).iter()`, `make().keys()` over a temporary | OWNS the temporary, and moves freely |
+| a range in an `Iterator@(i32)` position | owns its state, and moves freely |
+| `Iterator.new(nom x)` | owns `x`; `x` has `next()` answering `Maybe@(T)`, and the items are owned |
+
+A borrowed iterator is still destroyed at the end of its scope, because it owns its own
+state. A callee walks an iterator through `poke`, and a `foreach` over a `let` that
+borrows walks it in place. `it.clone()` copies the cursor and not the container; the
+clone of a borrowed iterator borrows the same owner. `Iterator.new` names the type, so it
+needs `use <collections/iter>`. There is no implicit conversion from a type with `next()`.
+
+A `foreach` over `xs.iter()`, `m.keys()` or a range written as the iterable walks the
+source directly, with no call per item and no allocation.
+
+**Adapters.** An iterator has eight built-in adapters, and they need no import. `map`,
+`filter`, `enumerate`, `zip` and `clone_each` answer a new iterator and are lazy; `fold`,
+`partition` and `collect` walk the iterator to its end. Each takes its receiver and its
+arguments with `nom`: `xs.iter().filter(nom |i32 x| x > 0).map(nom |i32 x| x * 2).collect()`.
+`filter` keeps the item mode, `map` answers the owned result of its function, `enumerate`
+and `zip` keep the mode of each side, and `clone_each` clones each borrowed item. An
+adapter over a borrowed iterator borrows the same owners. `collect` and `partition` over a
+`peek` item of an owning type are [CE2129](error-catalog.md#ce2129): write
+`.clone_each().collect()`. The table is in [Iter combinators](stdlib/collections/iter.md),
+and the design is ruling 11 of `docs/design/iteration.md`.
 
 ### Assertions
 
@@ -1477,13 +1625,59 @@ The write must be able to reach the owner. It is rejected through a `peek` param
 from an owner (**[CE2426](error-catalog.md#ce2426)**), an unbound chained receiver such as `o.get().items`
 (**[CE2429](error-catalog.md#ce2429)**), and a constant (**[CE2096](error-catalog.md#ce2096)**).
 
+### Slices
+
+A range in an index position is a SLICE: `data[a..b]` is a view of the elements a to b-1,
+and `data[a..=b]` a view of the elements a to b. A slice does not copy. It is a borrowed
+`T[]` that points into the storage of the array, on a `T[]` and on a `T[N]` alike.
+
+```sushi
+fn total(i32[] xs) i32:
+    let i32 sum = 0
+    foreach(x in xs.iter()):
+        sum := sum + x
+    return sum
+
+fn main() i32:
+    let i32[] data = from([10, 20, 30, 40])
+    println(total(data[1..3]))     # 50: the call reads data[1] and data[2]
+    let i32[] head = data[0..=1]   # a view of 10 and 20
+    println(head.len())            # 2
+    return 0
+```
+
+- **Bounds.** The range must hold `0 <= a <= b <= len()`. A range outside that stops the
+  program with [RE2028](error-catalog.md#re2028), as an index out of range does. `a == b` is
+  an empty view. Readable bounds that go down are [CE2125](error-catalog.md#ce2125). This is
+  not the clamp rule of `.s()` and `.ss()`: those two are the copies, and they stay.
+- **A borrow.** A `let` of a slice borrows the array, as `let i32[] v = holder.items` does.
+  The array is frozen while the slice lives ([CE2412](error-catalog.md#ce2412)), and a slice
+  of a slice freezes the first array too.
+- **Read-only.** A write through a slice is [CE2426](error-catalog.md#ce2426): an element
+  write, a method that changes the array (`push`, `sort`), a `poke` argument and a `poke`
+  item of a `foreach`. A growth through a view would move storage that the array keeps.
+  Write to the array directly, or copy the part with `.ss(start, count)`.
+- **No escape.** A slice cannot be returned, stored in a field or a container, captured by
+  a lambda, or given with `nom` ([CE2411](error-catalog.md#ce2411)). A plain argument and a
+  `peek` argument are legal.
+- **A temporary array.** A slice of a temporary is legal inside one statement:
+  `total(make()[0..2])`. A `let` of one is [CE2437](error-catalog.md#ce2437), because the
+  array is freed at the end of the statement. An index of a temporary (`make()[1]`) reads
+  one element out, and that stays legal.
+- **Not a slice.** A string has no slice (`s[0..3]` is [CE2122](error-catalog.md#ce2122);
+  copy the part with `s.s(a, b)`), a `List@(T)` has no slice, and a reversed range
+  (`data[(0..3).rev()]`) is [CE2122](error-catalog.md#ce2122).
+
+The design record is [Slices](design/slices.md).
+
 ### Unchecked Indexes: `dont_panic`
 
 A function header may carry the marker `dont_panic because "<reason>"`. It follows the
 return type and the error channel, and it comes before the colon. In the body, `a[i]` on an
 array and `s[i]` on a string emit no bounds check, for a read and for a write. Nothing
 else changes: `get(i)` still answers a `Maybe`, `insert(i, v)` still checks its position,
-`assert` still traps, and every diagnostic stays.
+the range of a slice `a[i..j]` is still checked, `assert` still traps, and every diagnostic
+stays.
 
 <!-- docs-sweep: error CE0152 -->
 ```sushi
@@ -1521,7 +1715,8 @@ it states the guards that hold every index in range.
   inside a marked body is checked, because it can run after the marked function returned.
   An instance of a marked generic function is marked, because it is the same body.
 - **An inert marker.** A marked body with no `[]` to uncheck gets
-  [CW0004](error-catalog.md#cw0004). The indexes in a lambda do not count.
+  [CW0004](error-catalog.md#cw0004). The indexes in a lambda do not count, and a slice
+  does not count, because it keeps its check.
 
 Guideline: mark only a hot loop that you measured. Measure the loop before the change
 and after the change. Put the numbers in the pull request. Write the guards that keep each

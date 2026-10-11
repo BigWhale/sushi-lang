@@ -1,0 +1,13 @@
+# `Iterator@(peek string)` gives borrowed items. The item mode is part of the type.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+use <collections/iter>
+
+fn count(poke Iterator@(peek string) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return count(poke it, depth - 1)
+
+fn main() i32:
+    println("Mostly Harmless")
+    return 0

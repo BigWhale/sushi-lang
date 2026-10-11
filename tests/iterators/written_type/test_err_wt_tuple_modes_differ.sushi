@@ -1,0 +1,15 @@
+# Each element of a tuple item keeps its own mode: `(i32, peek string)` and
+# `(i32, string)` are two items, because a `string` owns.
+# EXPECT_ERROR_CODES_EXACT: CE2006
+use <collections/iter>
+
+fn owned(poke Iterator@((i32, string)) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return owned(poke it, depth - 1)
+
+fn lent(poke Iterator@((i32, peek string)) it, i32 depth) i32:
+    return owned(poke it, depth)
+
+fn main() i32:
+    return 0

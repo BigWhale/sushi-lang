@@ -1,0 +1,12 @@
+# An adapter over a borrowed iterator borrows the same owner: the owner is frozen until
+# the last use of the result.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+use <collections/iter>
+
+fn main() i32:
+    let string[] names = from(["a", "bb"])
+    let Iterator@(peek string) long = names.iter().filter(nom |string s| s.len() > 1)
+    names.push("ccc")
+    foreach(s in long):
+        println(s)
+    return 0

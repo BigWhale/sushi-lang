@@ -12,6 +12,7 @@ from sushi_lang.semantics.typesys import (
     FunctionType,
     ArrayType,
     DynamicArrayType,
+    IteratorType,
     ReferenceType,
 )
 from sushi_lang.semantics.generics.types import TypeParameter, GenericTypeRef
@@ -97,6 +98,11 @@ def unify_types(param_type: Type, arg_type: Type, type_param_map: Dict[str, Type
             if not unify_types(p_param, a_param, type_param_map, why):
                 return False
         return unify_types(param_type.ok_type, arg_type.ok_type, type_param_map, why)
+
+    # An iterator binds through its item. The item MODE is an argument-validation
+    # question (CE2006), as a borrow's mutability is in case 0.
+    if isinstance(param_type, IteratorType) and isinstance(arg_type, IteratorType):
+        return unify_types(param_type.element_type, arg_type.element_type, type_param_map, why)
 
     # Case 5: array types - unify the element type (issue #137: T[] -> T inference);
     # fixed-size arrays additionally require equal size.

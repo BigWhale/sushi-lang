@@ -19,8 +19,10 @@ from sushi_lang.semantics.ast import (
     MemberAccess,
     MethodCall,
     Name,
+    RangeExpr,
     TryExpr,
 )
+from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
 from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
 from sushi_lang.semantics.typesys import ReferenceType
@@ -162,6 +164,13 @@ def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
                                  owner=owner, name=text)
     if header is not None:
         diag.note_at(f"the loop walks '{text}' from here to the loop exit", header)
+    if (not isinstance(iterable, MethodLikeNodes)
+            or iterable.method not in CONTAINER_ITERATORS):
+        # A lent iterator held by a `let` (#1259), or a lent value such as an adapter
+        # chain (#1228): the change is to one of its owners.
+        diag.help(f"{what} after the loop")
+        diag.emit()
+        return
     walked = cast(MethodCall, iterable).receiver
     receiver = expr_to_string(walked)
     receiver_type = read_type(checker, walked)
@@ -172,6 +181,9 @@ def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
         diag.help(f"{what} after the loop, or walk an independent value: "
                   f"`{receiver}.clone().{iterable.method}()`")
     diag.emit()
+
+
+MethodLikeNodes = (MethodCall, DotCall)
 
 
 def refuses_clone(checker: 'BorrowChecker', ty) -> bool:
@@ -350,6 +362,11 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr,
     # hold the branch honest until it is fixed.
     value_type = read_type(checker, expr)
     _note_opaque_mover(checker, diag, value_type)
+    from .iterators import lent_iterator_help, lent_owners
+    owners = lent_owners(checker, expr)
+    if owners is not None:
+        diag.help(lent_iterator_help(owners)).emit()
+        return
     diag.help(escape_help(checker, text, owner_type, value_type,
                           use_of_copy=use_of_copy,
                           through_receiver=state is not None and state.is_method_receiver))
@@ -369,6 +386,10 @@ def emit_consume_of_borrow(checker: 'BorrowChecker', name: str,
                 diag.note_at(kind.note.format(name=name, mode=mode), note_span)
             break
     _note_opaque_mover(checker, diag, state.var_type)
+    if state.is_lent_iterator:
+        from .iterators import lent_iterator_help
+        diag.help(lent_iterator_help(state.borrows_from)).emit()
+        return
     diag.help(escape_help(checker, name, state.var_type, use_of_copy=use_of_copy,
                           through_receiver=state.is_method_receiver))
     diag.emit()
@@ -409,6 +430,11 @@ def expr_to_string(expr: Expr, *, temporaries: bool = False) -> str:
                     f"[{expr_to_string(expr.index, temporaries=t)}]")
         case TryExpr():
             return f"{expr_to_string(expr.expr, temporaries=t)}??"
+        case RangeExpr():
+            operator = "..=" if expr.inclusive else ".."
+            text = (f"{expr_to_string(expr.start, temporaries=t)}{operator}"
+                    f"{expr_to_string(expr.end, temporaries=t)}")
+            return f"({text}).rev()" if expr.reverse else text
         case Call() if temporaries and isinstance(expr.callee, Name):
             return f"{expr.callee.id}({'...' if expr.args else ''})"
         case ArrayLiteral() if temporaries:

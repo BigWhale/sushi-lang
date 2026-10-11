@@ -1,0 +1,9 @@
+# A `foreach` over an adapter chain that borrows an owner freezes the owner for the whole
+# loop: a change of the owner in the body is an error.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    foreach(x in xs.iter().map(nom |i32 v| v * 2)):
+        xs.push(x)
+    return 0

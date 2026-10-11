@@ -208,7 +208,7 @@ compilation: a platform file holds `public const` declarations only, and a modul
 needs a value writes `use <sys/platform>` and names the constant. A symbol that differs
 per platform is a `public const string` too, because the link name after `=` in an
 `unsafe external` declaration accepts a string constant (`docs/ffi.md`, "Link-name
-separation"). `docs/stdlib/platform.md` lists what the files hold, how the probe makes
+separation"). `docs/stdlib/system/platform.md` lists what the files hold, how the probe makes
 them, and how the fixtures under `tests/stdlib/platform/` test each value against the
 host's C library.
 

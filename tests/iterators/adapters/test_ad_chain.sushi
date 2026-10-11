@@ -1,0 +1,23 @@
+# A chain of three adapters walks its source one time. The chain over a borrowed array
+# keeps its state on the stack; the chain over a range owns everything it walks.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4 16\n0:4\n1:16\n0 6 12 18 24\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    let List@(i32) squares = xs.iter().filter(nom |i32 x| x % 2 == 0).map(nom |i32 x| x * x).collect()
+    println("{squares.get(0).realise(0)} {squares.get(1).realise(0)}")
+    foreach(p in xs.iter().filter(nom |i32 x| x % 2 == 0).map(nom |i32 x| x * x).enumerate()):
+        println("{p.0}:{p.1}")
+    let Iterator@(i32) r = 0..10
+    let List@(i32) sixes = r.filter(nom |i32 x| x % 2 == 0).map(nom |i32 x| x * 3).filter(nom |i32 x| x % 6 == 0).collect()
+    let i32 i = 0
+    foreach(x in sixes.iter()):
+        if (i > 0):
+            print(" ")
+        print("{x}")
+        i := i + 1
+    println("")
+    return 0

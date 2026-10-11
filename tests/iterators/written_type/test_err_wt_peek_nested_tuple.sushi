@@ -1,0 +1,12 @@
+# `peek` stands at the top of one element of a tuple item and nowhere deeper: a tuple
+# inside the item holds values.
+# EXPECT_ERROR_CODES_EXACT: CE6107
+use <collections/iter>
+
+fn count(poke Iterator@((i32, (peek string, i32))) it, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return count(poke it, depth - 1)
+
+fn main() i32:
+    return 0

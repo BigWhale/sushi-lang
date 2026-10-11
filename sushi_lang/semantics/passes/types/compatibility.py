@@ -6,7 +6,7 @@ from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics import array_runs
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.typesys import Type, UnknownType, ArrayType, DynamicArrayType, ReferenceType, BorrowMode
+from sushi_lang.semantics.typesys import Type, UnknownType, ArrayType, DynamicArrayType, ReferenceType, BorrowMode, IteratorType
 from sushi_lang.semantics.ast import Expr, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
@@ -257,10 +257,28 @@ def types_compatible(validator: 'TypeValidator', actual: Type, expected: Type) -
         else:
             return False  # peek -> poke not allowed
 
+    if isinstance(actual, IteratorType) and isinstance(expected, IteratorType):
+        return _iterators_compatible(validator, actual, expected)
+
     resolved_actual = resolve_generic_type_ref(validator, actual)
     resolved_expected = resolve_generic_type_ref(validator, expected)
 
     return compare_resolved_types(validator, resolved_actual, resolved_expected)
+
+
+def _iterators_compatible(validator: 'TypeValidator', actual: IteratorType,
+                          expected: IteratorType) -> bool:
+    """One item, one mode. Each side is in its one form first: a plain item is one type."""
+    from .utils import resolve_declared_type
+
+    settled_actual = resolve_declared_type(validator, actual)
+    settled_expected = resolve_declared_type(validator, expected)
+    if not (isinstance(settled_actual, IteratorType)
+            and isinstance(settled_expected, IteratorType)):
+        return False
+    return (settled_actual.peeks == settled_expected.peeks
+            and types_compatible(validator, settled_actual.element_type,
+                                 settled_expected.element_type))
 
 
 def is_valid_cast(source_type: Type, target_type: Type,

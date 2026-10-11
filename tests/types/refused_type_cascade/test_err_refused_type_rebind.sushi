@@ -2,8 +2,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2001
 
 fn main() i32:
-    let i32[] a = from([1, 2, 3])
-    let Iterator@(i32) it = a.iter()
-    it := a.iter()
+    let Iterator@(i32) it = from([1, 2, 3]).iter()
+    it := from([4, 5]).iter()
     println(it)
     return 0

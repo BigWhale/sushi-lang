@@ -133,9 +133,86 @@ All notable changes to Sushi Lang will be documented in this file.
   at the top level, nested and as an alternative, on an integer scrutinee. A bound is an
   integer literal in any form. A bound outside the type is CE2073, a range whose bounds go
   down is CE2125, an empty range is CE2118, and two arms that share a value are CE2075.
+- **`Iterator@(T)` is a type a program can write.** After `use <collections/iter>`, a
+  signature names `Iterator@(T)` (owned items) or `Iterator@(peek T)` (borrowed items), and
+  a tuple item takes `peek` on an element: `Iterator@((i32, peek string))`. With no import
+  the name is CE2001, and behind `use <collections/iter> as it` it is `it.Iterator`. For an
+  item that holds no resource, `Iterator@(peek T)` and `Iterator@(T)` are one type, also
+  inside a generic instance (`Maybe@(Iterator@(peek i32))` is `Maybe@(Iterator@(i32))`).
+  A user struct or enum named `Iterator` is CE0004 or CE0006, as for `HashMap`. `poke`
+  is not an item mode, and `peek` in every other type position keeps its error (CE2419,
+  CE2415, CE6107). A binary library's manifest carries the mode, and `--lib-info` prints it
+  (`docs/design/iteration.md`, ruling 9).
+- **An `Iterator@(T)` is a value.** It can be stored, passed, returned and walked. `.iter()`
+  on `T[]`, `T[N]` and `List@(T)`, and the four HashMap iterators, answer
+  `Iterator@(peek T)` and copy nothing. An iterator over a place borrows the owner of the
+  place: the owner is frozen until its last use (CE2412), and it cannot be given with
+  `nom`, returned, stored or captured (CE2411). An iterator over a temporary, a range and
+  `Iterator.new(nom x)` own what they walk. A range is a value where `Iterator@(i32)` is
+  expected; CE2122 holds in every other position. `Iterator.new(nom x)` makes an iterator
+  of any value with `next()` answering `Maybe@(T)`. `it.clone()` copies the cursor; the
+  clone of an iterator over a value that holds a resource stops with the new RE2027. A
+  `foreach` over `xs.iter()`, `m.keys()` or a range stays a direct walk with no
+  allocation (`docs/design/iteration.md`, ruling 10).
+- **Lazy adapters on `Iterator@(T)`.** `it.map(nom f)`, `it.filter(nom pred)`,
+  `it.enumerate()`, `it.zip(nom other)` and `it.clone_each()` answer a new iterator and do
+  no work until a `foreach` or a consumer asks for an item; `it.fold(nom init, nom f)`,
+  `it.partition(nom pred)` and `it.collect()` walk the iterator to its end. A chain walks
+  its source one time and allocates one result:
+  `xs.iter().filter(nom p).map(nom f).collect()`. The adapters need no import. `filter`
+  keeps the item mode, `map` answers the owned result of its function, `enumerate` and
+  `zip` keep the mode of each side (`Iterator@((i32, peek string))`), and `clone_each`
+  makes each item owned. An adapter over a borrowed iterator borrows the same owners, and
+  `zip` of two borrowed iterators borrows both. `collect` and `partition` over a `peek` item
+  of an owning type are the new CE2129, with the help `.clone_each().collect()`
+  (`docs/design/iteration.md`, ruling 11).
+- **A slice: `data[a..b]` and `data[a..=b]`.** A range in an index position is a borrowed
+  `T[]` view of a part of a `T[]` or a `T[N]`, and nothing is copied. The range must hold
+  `0 <= a <= b <= len()`, else the program stops with the new RE2028; readable bounds that
+  go down are CE2125. The `dont_panic` marker keeps this check. A `let` of a slice borrows
+  the array, which is frozen while the slice lives (CE2412). A write through a slice is
+  CE2426, and a slice cannot be returned, stored, captured or given with `nom` (CE2411).
+  A slice of a temporary is legal in one statement, and a `let` of one is the new CE2437.
+  A string has no slice, and neither has a reversed range (CE2122). `send_all` and the
+  zlib decoder now give a slice where they copied a part of an array
+  (`docs/design/slices.md`).
+- **A borrowed return: `peek T`.** A named function or method returns a view of one of
+  its arguments, with no copy: `fn head(i32[] xs, i32 n) peek i32[]: return xs[0..n]`, and
+  `peek T | E` with a channel. The answer may borrow `self` (when the receiver borrows) and
+  each borrowed parameter whose type owns a resource; in a generic template a type
+  parameter counts as owning. The caller's answer borrows the owners of every source
+  argument: each one is frozen while it lives (CE2412), and the answer cannot be stored,
+  returned or given with `nom` (CE2411). New errors: no source (CE2438), a lambda or a perk
+  method (CE2439), a `nom self` method (CE2440), a function value of such a function
+  (CE2441), an `E` that owns (CE2442), a body that returns no borrow of a source (CE2443),
+  and a `let` of an answer over a temporary argument (CE2444). `peek Iterator@(T)` returns
+  a borrowed iterator; its state moves to the heap at the return. A binary library records
+  the mode (templates schema 11), and `--lib-info` prints it. `<encoding/msgpack>` reads a
+  string payload with no copy (`docs/design/borrow-model.md`, section 10h).
 
 ### Changed
 
+- **The eager combinators are forwarders over the adapters.** `xs.map(f)`, `xs.filter(p)`,
+  `xs.fold(init, f)`, `xs.enumerate()`, `xs.zip(ys)` and `xs.partition(p)` on `List@(T)`
+  and `T[]` keep their signatures and their answers; each body is one call of the built-in
+  adapters. An import of `<collections/iter>` that a unit uses only for a method call
+  gets CW3006 under `--warn-unused`, also when the import has a free function of the same
+  name.
+- **A `foreach` over a borrowed iterator value freezes its owners for the loop.** A change
+  of the container in the body of `foreach(x in xs.iter().clone())` or of a loop over an
+  adapter chain is CE2412, as for `foreach(x in xs.iter())`.
+- **CE2127 is retired.** A HashMap iterator is a value with its own `next_fn`, so it is
+  legal outside the iterable of a `foreach`. A borrowed HashMap iterator given to a `nom`
+  parameter, a constructor or a payload is CE2411, as every borrowed iterator is. An
+  iterator over a place given to a user function with `nom` (`h(nom xs.iter())`) is CE2411
+  too; an iterator over a temporary (`h(nom make().iter())`) is legal.
+- **A `foreach` over a `poke` value walks it in place.** When the iterable is reached
+  through a `poke` reference (a `poke` parameter, a `poke self` receiver, a `let poke`
+  binding, or a field or an element of one), `next()` runs on the caller's value and the
+  loop does not take it. After the loop, a `break` or a `return`, the caller continues
+  where the walk stopped. Before, an owning value was `CE2411`, and a plain value was
+  copied, so the walk did not change the caller's value. A plain or a `peek` borrow keeps
+  the old rule (`docs/design/iteration.md`, ruling 6).
 - **Breaking: the visibility of a method changed.** A method that comes with a type needs
   no import, and an extension method is a name of its unit. The rules
   (`docs/design/extension-visibility.md`):

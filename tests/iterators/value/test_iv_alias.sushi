@@ -1,0 +1,23 @@
+# Behind an alias, `iters.Iterator.new` and a range in an `iters.Iterator@(i32)` position.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n0\n5\n6\n"
+# EXPECT_NO_LEAKS
+use <collections/iter> as iters
+
+struct Countdown:
+    i32 left
+
+extend Countdown next(poke self) Maybe@(i32):
+    if (self.left == 0):
+        return Maybe.None
+    self.left := self.left - 1
+    return Maybe.Some(self.left)
+
+fn main() i32:
+    let iters.Iterator@(i32) c = iters.Iterator.new(nom Countdown(2))
+    foreach(x in c):
+        println(x)
+    let iters.Iterator@(i32) r = 5..7
+    foreach(x in r):
+        println(x)
+    return 0

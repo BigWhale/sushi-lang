@@ -243,6 +243,7 @@ def _build_lifted_function(lam: Lambda, lifted_name: str, env_struct: StructType
         written_channel=err_type is not None,
         name_span=lam.loc,
         loc=lam.loc,
+        borrowed_return=lam.borrowed_return,
     )
 
 

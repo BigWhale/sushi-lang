@@ -113,15 +113,16 @@ def reject_a_range_that_goes_down(plan: Optional[RangePlan], reporter: Reporter)
 
 
 def holds_a_range_value(root: object) -> bool:
-    """True when a range under `root` is in neither of its two positions (CE2122, #1165).
+    """True when a range under `root` is in none of its own positions (CE2122, #1165).
 
-    The typecheck pass's rule, read off the shape: a range is a `foreach` iterable or an
-    array-literal element, and anything else is refused. A pass that types an expression
+    The typecheck pass's rule, read off the shape: a range is a `foreach` iterable, an
+    array-literal element or the index of a slice (#1226), and anything else is refused.
+    A pass that types an expression
     before the typecheck pass reports the range reads this, so it solves nothing from a
     range -- a constraint judged against `Iterator@(i32)` was CE4006 in place of the
     range's own error.
     """
-    from sushi_lang.semantics.ast import ArrayElement, Foreach
+    from sushi_lang.semantics.ast import ArrayElement, Foreach, IndexAccess
     from sushi_lang.semantics.ast_walk import children, walk_nodes
 
     found = False
@@ -133,7 +134,8 @@ def holds_a_range_value(root: object) -> bool:
         if found:
             return False
         legal = (node.value if isinstance(node, ArrayElement)
-                 else node.iterable if isinstance(node, Foreach) else None)
+                 else node.iterable if isinstance(node, Foreach)
+                 else node.index if isinstance(node, IndexAccess) else None)
         if not isinstance(legal, RangeExpr):
             return True
         walk_nodes([legal.start, legal.end], visit)

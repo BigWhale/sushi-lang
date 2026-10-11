@@ -139,9 +139,6 @@ class TypeValidator:
         # The ranges refused outside their two positions (#1165): each answers no type
         # after the refusal, so the position that holds it adds no second error.
         self.refused_ranges: set[int] = set()
-        # The iterable of the `foreach` whose iterable is being validated, or None. A
-        # HashMap iterator is legal only in that position (CE2127).
-        self.walked_iterable: Optional[Expr] = None
 
         # The kept types and the handed overflow checks of the expression being validated.
         self.operator_nests = OperatorNests()

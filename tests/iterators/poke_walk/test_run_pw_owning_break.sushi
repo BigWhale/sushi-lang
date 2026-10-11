@@ -1,0 +1,27 @@
+# A foreach over a poke value walks it in place: the callee stops after one item, and
+# the caller continues where the walk stopped.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "a\nb\nc\n"
+# EXPECT_NO_LEAKS
+
+struct Words:
+    string[] items
+    i32 pos
+
+extend Words next(poke self) Maybe@(string):
+    if (self.pos >= self.items.len()):
+        return Maybe.None
+    self.pos := self.pos + 1
+    return Maybe.Some(self.items[self.pos - 1].clone())
+
+fn first(poke Words w) ~:
+    foreach(s in w):
+        println(s)
+        break
+
+fn main() i32:
+    let Words w = Words(from(["a", "b", "c"]), 0)
+    first(poke w)
+    foreach(s in w):
+        println(s)
+    return 0

@@ -241,6 +241,8 @@ def validate_static_call(validator: 'TypeValidator', call) -> bool:
     call.callee_is_static = True
     call.callee_static_target = target
     call.callee_extension_unit = method.unit_name
+    from ..borrowed_returns import stamp_call_sources
+    stamp_call_sources(validator, call, method)
 
     check_arguments(validator, f"{display_type(target)}.{call.method}",
                     [p.ty for p in params], call.args, call.loc,

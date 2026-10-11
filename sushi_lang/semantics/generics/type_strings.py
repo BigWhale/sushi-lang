@@ -144,6 +144,11 @@ def resolve_type_from_string(type_str: str, tables: Any) -> Type:
     if type_str in _BUILTIN_TYPES:
         return _BUILTIN_TYPES[type_str]
 
+    from sushi_lang.semantics.generics.iterators import read_iterator_string
+    iterator = read_iterator_string(type_str, lambda text: resolve_type_from_string(text, tables))
+    if iterator is not None:
+        return iterator
+
     if '<' in type_str and type_str.endswith('>'):
         if type_str in tables.enum_table.by_name:
             return tables.enum_table.by_name[type_str]

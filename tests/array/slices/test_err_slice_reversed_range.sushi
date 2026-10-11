@@ -1,0 +1,7 @@
+# A slice takes its range in order. A reversed range has no slice.
+# EXPECT_ERROR_CODES_EXACT: CE2122
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3, 4])
+    println(data[(0..2).rev()].len())
+    return 0

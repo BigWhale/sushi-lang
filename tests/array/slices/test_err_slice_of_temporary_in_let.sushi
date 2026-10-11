@@ -1,0 +1,11 @@
+# S8: a `let` of a slice of a temporary is refused: the array is freed at the end of
+# the statement, and the slice would view freed storage.
+# EXPECT_ERROR_CODES_EXACT: CE2437
+
+fn make() i32[]:
+    return from([1, 2, 3, 4])
+
+fn main() i32:
+    let i32[] head = make()[0..2]
+    println(head.len())
+    return 0

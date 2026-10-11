@@ -1,0 +1,26 @@
+# A static method has no receiver: its sources are its borrowed parameters that own a
+# resource. An extension method on an array returns a view of its receiver.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n2\n30\n"
+# EXPECT_NO_LEAKS
+
+struct Shelf:
+    i32[] items
+
+extend Shelf static fuller(Shelf a, Shelf b) peek i32[]:
+    if (a.items.len() >= b.items.len()):
+        return a.items
+    return b.items
+
+extend i32[] last_two() peek i32[]:
+    return self[self.len() - 2..self.len()]
+
+fn main() i32:
+    let Shelf x = Shelf(from([1, 2, 3]))
+    let Shelf y = Shelf(from([4]))
+    println(Shelf.fuller(x, y).len())
+    let i32[] data = from([10, 20, 30])
+    let i32[] t = data.last_two()
+    println(t.len())
+    println(t[1])
+    return 0

@@ -67,7 +67,7 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
         return
 
     _stamp(node, binding)
-    _stamp_param_modes(node, binding.record)
+    _stamp_param_modes(node, binding.record, validator)
     from .user_defined import validate_call_arguments
     validate_call_arguments(validator, _written(node.receiver, node.method),
                             binding.record, node.args, node.loc)
@@ -149,7 +149,7 @@ def _validate_generic_call(validator: 'TypeValidator', node: 'DotCall',
     instance = getattr(stand_in.callee, "id", name)
     if instance != name:
         _stamp(node, binding, name=instance)
-        _stamp_param_modes(node, validator.func_table.by_name.get(instance))
+        _stamp_param_modes(node, validator.func_table.by_name.get(instance), validator)
 
 
 def _generic_stand_in(node: 'DotCall', name: str) -> 'Call':
@@ -229,6 +229,10 @@ def _infer_namespaced_function_value(validator: 'TypeValidator', node: 'MemberAc
             return None
         if reject_private_name(validator, "function", binding.record, loc,
                                verb=VALUE_VERB):
+            return None
+        from ..borrowed_returns import reject_borrowed_function_value
+        if reject_borrowed_function_value(validator, binding.record,
+                                          _written(node.receiver, node.member), loc):
             return None
         _stamp(node, binding)
     return function_type_of_sig(binding.record)
@@ -339,7 +343,7 @@ def _stamp(node, binding: 'Binding', *, name: Optional[str] = None,
     node.namespace_ref = binding.ref(name=name, kind=kind)
 
 
-def _stamp_param_modes(node, func_sig) -> None:
+def _stamp_param_modes(node, func_sig, validator=None) -> None:
     """The callee's declared modes and its `...T` slot, for the borrow pass.
 
     A FUNCTION, not a method: the same answers the flat call reads from the resolver.
@@ -350,6 +354,9 @@ def _stamp_param_modes(node, func_sig) -> None:
     node.callee_param_names = tuple(p.name for p in params)
     node.callee_param_types = tuple(p.ty for p in params)
     node.callee_variadic_at = variadic_index(func_sig)
+    if func_sig is not None and validator is not None:
+        from ..borrowed_returns import stamp_call_sources
+        stamp_call_sources(validator, node, func_sig)
 
 
 def _stamp_stdlib_param_modes(node, stdlib_func) -> None:

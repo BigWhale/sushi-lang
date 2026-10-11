@@ -1,13 +1,11 @@
-"""List<T> iterator method implementation."""
+"""The `iter()` producer of a `List@(T)` (#1259)."""
 
 from typing import Any
 import llvmlite.ir as ir
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType
-from sushi_lang.backend import gep_utils
 from .types import get_list_len_ptr, get_list_data_ptr, extract_element_type
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.backend.memory.allocas import entry_alloca
 
 
 def emit_list_iter(
@@ -16,32 +14,33 @@ def emit_list_iter(
     list_value: ir.Value,
     list_type: StructType
 ) -> ir.Value:
-    """Emit List<T>.iter() -> Iterator<T>"""
+    """`l.iter()`: the cursor is the length and the data of the List."""
+    from sushi_lang.backend.runtime.iterators import (
+        OwnedContainer, array_source, emit_cursor_iterator)
+
     if len(call.args) != 0:
         raise_internal_error("CE0071", got=len(call.args))
 
     element_semantic_type = extract_element_type(list_type, codegen)
+    address = list_value
+    if not isinstance(list_value.type, ir.PointerType):
+        from sushi_lang.backend.memory.allocas import entry_alloca
+        address = entry_alloca(codegen.builder, list_value.type, name="list_receiver")
+        codegen.builder.store(list_value, address)
+    length, data = list_slots(codegen, address)
 
-    len_ptr = get_list_len_ptr(codegen.builder, list_value)
-    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_value)
+    def owned() -> OwnedContainer:
+        from sushi_lang.backend.expressions.calls.dispatcher import consume_receiver
+        value = consume_receiver(codegen, call, codegen.builder.load(address, name="list"))
+        return OwnedContainer(value=value, semantic_type=list_type, slots=list_slots)
 
-    length = codegen.builder.load(len_ptr, name="list_len")
-    data_ptr = codegen.builder.load(data_ptr_ptr, name="list_data")
+    return emit_cursor_iterator(codegen, call, array_source(codegen, element_semantic_type),
+                                length, data, owned)
 
-    from sushi_lang.semantics.typesys import IteratorType
 
-    iterator_type = IteratorType(element_type=element_semantic_type)
-    iterator_struct_type = codegen.types.get_iterator_struct_type(iterator_type)
-
-    iterator_slot = entry_alloca(codegen.builder, iterator_struct_type, name="list_iterator")
-
-    index_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 0, "index_ptr")
-    codegen.builder.store(ir.Constant(codegen.types.i32, 0), index_ptr)
-
-    length_ptr = gep_utils.gep_struct_field(codegen, iterator_slot, 1, "length_ptr")
-    codegen.builder.store(length, length_ptr)
-
-    data_ptr_ptr_out = gep_utils.gep_struct_field(codegen, iterator_slot, 2, "data_ptr_ptr")
-    codegen.builder.store(data_ptr, data_ptr_ptr_out)
-
-    return codegen.builder.load(iterator_slot, name="iterator")
+def list_slots(codegen: Any, list_ptr: ir.Value) -> tuple[ir.Value, ir.Value]:
+    """The length and the data of a List at an address."""
+    b = codegen.builder
+    length = b.load(get_list_len_ptr(b, list_ptr), name="list_len")
+    data = b.load(get_list_data_ptr(b, list_ptr), name="list_data")
+    return length, data

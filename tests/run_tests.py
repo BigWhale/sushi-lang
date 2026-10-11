@@ -1038,6 +1038,23 @@ The first code.
 public extend Crate@(T) first_code(i32[] codes) i32 dont_panic because "the caller passes a non-empty array":
     return codes[0]
 
+##:
+The first two numbers of an array, with no copy.
+
+- Parameter xs: The numbers.
+- Returns: A view of `xs`.
+:##
+public fn front(i32[] xs) peek i32[]:
+    return xs[0..2]
+
+##:
+The value of the crate, with no copy.
+
+- Returns: A view of the value.
+:##
+public extend Crate@(T) value_view() peek T:
+    return self.value
+
 ##: A crate of a hashable value has a name. :##
 extend Crate@(T: Hashable) with Named:
     ##:
@@ -1071,6 +1088,8 @@ fn main() i32:
         Colour.Red -> println("red")
     println(code_at(from([true, false]), from([3, 4])))
     println(Crate(1).first_code(from([8])))
+    println(front(from([1, 2, 3])).len())
+    println(Crate("view").value_view())
     match wrapped(3):
         Result.Ok(v) -> println("ok {{v}}")
         Result.Err(e) -> println("{{e}}")
@@ -1086,7 +1105,8 @@ fn main() i32:
 # that the consumer calls (docs/design/extension-visibility.md R9; the private
 # `clone_count` above prints none), and the last four are `dont_panic` declarations with
 # their reasons (docs/design/dont-panic.md, D10), each after its unit: a function, a
-# static, a generic function and a method of a generic type.
+# static, a generic function and a method of a generic type. The two lines after them
+# print the mode of a borrowed return (#1229), on a function and on a template method.
 REPORT_LINES = (
     "  fn both@(T: Hashable + Named)(T x) i32",
     "    Blue(string, i32)",
@@ -1106,9 +1126,11 @@ REPORT_LINES = (
     '  report_lib: Colour.pick dont_panic because "the caller passes a \\"non-empty\\" array"',
     '  report_lib: code_at dont_panic because "codes is as long as xs"',
     '  report_lib: Crate@(T).first_code dont_panic because "the caller passes a non-empty array"',
+    "  fn front(i32[] xs) peek i32[]",
+    "  public extend Crate@(T) value_view() peek T",
 )
 REPORT_KINDS = ("source", "hybrid", "binary")
-REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n"
+REPORT_CONSUMER_STDOUT = ("blue 42\nmade 7\n4\n-1\n5\npick 9\n4\n8\n2\nview\n"
                           "ReportWrap.Held(ReportFault.Bad(3))\n")
 # The consumer of each kind passes `--dont-panic` (D9). It instantiates the two marked
 # templates of `_REPORT_LIBRARY`, and every library kind ships a template as source, which

@@ -144,7 +144,18 @@ def reject_misplaced_bound(node: Tree) -> NoReturn:
 
 
 def parse_generic_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
-    """Parse a generic type instantiation, bare or behind an alias (`_read_generic`)."""
+    """Parse a generic type instantiation, bare or behind an alias (`_read_generic`).
+
+    `Iterator@(...)` is the compiler's own type, and its item takes a mode.
+    """
+    from sushi_lang.semantics.ast_builder.types.iterators import (
+        is_iterator_node, parse_iterator_type)
+    if is_iterator_node(node):
+        type_list = first_tree(node.children, "type_list")
+        if type_list is None:
+            ice(node, "a generic type without a type list")
+        args = [child for child in type_list.children if _is_type_arg(child)]
+        return parse_iterator_type(node, args, ast_builder)
     return _read_generic(node, _plain_reader(ast_builder))[0]
 
 

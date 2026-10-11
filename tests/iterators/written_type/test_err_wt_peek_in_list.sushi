@@ -1,0 +1,8 @@
+# `peek` is a type argument only of `Iterator@(...)`. A `List` of borrows is refused.
+# EXPECT_ERROR_CODES_EXACT: CE2419
+
+fn size(List@(peek string) xs) i32:
+    return xs.len()
+
+fn main() i32:
+    return 0

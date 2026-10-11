@@ -23,6 +23,7 @@ from sushi_lang.semantics.ast import (
     TryExpr,
 )
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.borrowed_return import is_borrowed_call
 from sushi_lang.semantics.places import Step, unwrap_try, walk_place
 from sushi_lang.semantics.ownership import is_get_out_container
 from sushi_lang.semantics.passes.lift import ENV_PARAM_NAME
@@ -93,6 +94,18 @@ def chain_call_boundary(expr: Optional[Expr]) -> Optional[Span]:
     if end is None or isinstance(end, Name):
         return None
     return end.loc
+
+
+def slice_on_path(expr: Optional[Expr]) -> Optional[IndexAccess]:
+    """The slice a write through `expr` crosses, or None (S4, docs/design/slices.md).
+
+    A slice is a read-only view: a write through it is lost from no one, but a growth
+    through it would move storage that the array keeps.
+    """
+    for node in walk_place(expr, Step.MEMBER | Step.INDEX).path:
+        if isinstance(node, IndexAccess) and node.is_slice:
+            return node
+    return None
 
 
 def reads_through_owner(checker: 'BorrowChecker', expr: Optional[Expr]) -> bool:
@@ -188,9 +201,18 @@ def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
             return constant_type(checker, expr.id)
         case MemberAccess():
             return _field_type(checker, expr)
+        case IndexAccess() if expr.is_slice:
+            # A slice is a `T[]` of the array it views (#1226): the typecheck pass's stamp.
+            return expr.inferred_element_type
         case IndexAccess():
             return checker.types.element_type(read_type(checker, expr.array))
 
+    if isinstance(expr, (MethodCall, DotCall)) and expr.iterator_state is not None:
+        # A lent iterator: the value it makes is the type the call answers (#1259).
+        return checker.types.resolve_named(expr.inferred_return_type)
+    if is_borrowed_call(expr):
+        # The answer of a borrowed return is a view of the type it answers (#1229).
+        return checker.types.resolve_named(expr.inferred_return_type)
     receiver = called_on(expr, "get", "first", "last")
     if receiver is None:
         return None
