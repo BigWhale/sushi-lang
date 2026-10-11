@@ -138,9 +138,17 @@ def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: MethodLike) -> Non
     if not effect.bulk_writes or not expr.args:
         return
     place = _place_of(expr.receiver)
-    if place is None or place != _place_of(expr.args[0]):
+    if place is None or place != _place_of(_viewed_array(expr.args[0])):
         return
-    checker.err.emit(er.ERR.CE2430, expr.args[0].loc, name=place, target=place)
+    checker.err.emit(er.ERR.CE2430, expr.args[0].loc, name=expr_to_string(expr.args[0]),
+                     target=place)
+
+
+def _viewed_array(expr: Expr) -> Expr:
+    """The array a slice views: `a[0..2]` reads the storage of `a` (docs/design/slices.md)."""
+    while isinstance(expr, IndexAccess) and expr.is_slice:
+        expr = expr.array
+    return expr
 
 
 def _reject_refill_from_own_slot(checker: 'BorrowChecker', expr: MethodLike) -> None:
