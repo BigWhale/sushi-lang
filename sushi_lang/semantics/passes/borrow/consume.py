@@ -20,6 +20,7 @@ from .diagnostics import (
 from .reads import (
     borrow_owner, constant_sig, namespaced_storage, read_type, reads_through_owner,
     unwrap_try)
+from .iterators import lent_owners
 from .state import BorrowState, record_owners
 from .takes import field_take, spend
 from .writes import check_owner_not_borrowed
@@ -95,6 +96,10 @@ def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
         return Provenance.FRESH
 
     if reads_through_owner(checker, expr):
+        return Provenance.BORROWED
+
+    # A lent iterator is a new value that borrows its owners (#1259): it may not leave.
+    if lent_owners(checker, expr) is not None:
         return Provenance.BORROWED
 
     return Provenance.FRESH
@@ -399,6 +404,13 @@ def record_borrowed_binding(checker: 'BorrowChecker', stmt: Let,
     dest.is_borrowed_binding = True
     dest.is_let_borrow = True
     dest.bound_at_span = stmt.loc
+
+    owners = lent_owners(checker, stmt.value)
+    if owners is not None:
+        dest.is_lent_iterator = True
+        record_owners(checker.borrow_state, dest, owners, stmt.loc,
+                      checker._scope_binding_borrows[-1])
+        return
 
     owner = borrow_owner(stmt.value)
     if owner is None:

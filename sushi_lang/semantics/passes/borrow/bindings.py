@@ -23,7 +23,7 @@ from .state import BorrowState, record_owners
 if TYPE_CHECKING:
     from . import BorrowChecker
 
-CONTAINER_ITERATORS = frozenset({"iter", "keys", "values", "entries", "pairs"})
+from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 
 
 def release_binding_borrow(owner_state: Optional[BorrowState], binding: str) -> None:
@@ -161,7 +161,10 @@ class BindingScope:
             _reject_poke_through_peek(self.checker, owner, owner_state,
                                       poke_span or span)
             return
-        record_owners(self.checker.borrow_state, state, (owner,), span, self._frozen)
+        # An item of a lent iterator views its owners' storage, not the iterator (#1259).
+        from .iterators import owners_through
+        record_owners(self.checker.borrow_state, state,
+                      owners_through(self.checker, owner), span, self._frozen)
 
 
 def _own_payload_receiver(expr: Expr) -> Optional[Expr]:

@@ -48,6 +48,12 @@ def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
         emit_use_after_move(checker, name, borrow.loc, state)
         return
 
+    if state.is_lent_iterator:
+        # A borrow of a lent iterator reads its owners' storage: a use (#1259).
+        from .expressions import reject_a_use_after_the_change
+        if reject_a_use_after_the_change(checker, name, borrow.loc):
+            return
+
     if is_poke:
         # A `poke` of a read-only receiver hands the write to a callee, which upgrades
         # the borrow (CE2408 / CE2414 / CE2421). A `peek` stays legal.

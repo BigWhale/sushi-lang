@@ -68,6 +68,7 @@ from .flow import (
     snapshot_flow,
     terminates,
 )
+from .iterators import is_lent_name, lent_owners
 from .reads import borrow_owner
 from .state import BorrowState, record_owners
 from .writes import check_owner_not_borrowed, maybe_reject_mutation, reject_readonly_write
@@ -430,7 +431,10 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
     call of `next()` on it does.
     """
     check_expr(checker, stmt.iterable)
-    if stmt.protocol_next is not None and stmt.walks_in_place:
+    walked_view = None
+    if stmt.value_iterator is not None:
+        walked_view = _settle_value_walk(checker, stmt)
+    elif stmt.protocol_next is not None and stmt.walks_in_place:
         maybe_reject_mutation(checker, stmt.protocol_next, receiver=stmt.iterable,
                               what=f"walk '{expr_to_string(stmt.iterable)}'")
     elif stmt.protocol_next is not None:
@@ -444,9 +448,12 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
     # storage, for the whole loop (#956). The item's freeze stays for an in-place change;
     # a change that hits both is the iterator's to report.
     span = stmt.item_name_span or stmt.loc
+    owns_item = stmt.protocol_next is not None or (
+        stmt.value_iterator is not None and _owns_its_items(stmt.value_iterator))
     with BindingScope(checker) as scope:
         iterator = (scope.bind_iterator(stmt.iterable)
-                    if stmt.protocol_next is None else None)
+                    if stmt.protocol_next is None and stmt.value_iterator is None
+                    else None)
         if stmt.item_borrow is not None:
             owner: Optional[Expr] = stmt.iterable
             # An item over an owned temporary has no named owner to conflict with.
@@ -456,23 +463,50 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
                 owner = None
             scope.bind_ref(stmt.item_name, stmt.item_type, stmt.item_borrow, span,
                            owner=owner, declared_at=stmt.item_borrow_span)
-        elif stmt.protocol_next is not None:
+        elif owns_item:
             scope.bind_item(stmt.item_name, stmt.item_type, span)
         else:
             scope.bind_value(stmt.item_name, stmt.item_type, span)
             if not walks_a_temporary(checker, stmt.iterable):
                 freeze_for_a_view(checker, scope, stmt.item_name, stmt.item_type, span,
                                   stmt.iterable, ScrutineeKind.BORROWED)
-        if iterator is not None:
-            checker.borrow_state[stmt.item_name].covered_by = iterator.name
+        view = iterator.name if iterator is not None else walked_view
+        if view is not None:
+            checker.borrow_state[stmt.item_name].covered_by = view
         flow = check_loop_body(checker, stmt.body,
-                               per_iteration=frozenset({stmt.item_name}),
-                               view=iterator.name if iterator is not None else None)
+                               per_iteration=frozenset({stmt.item_name}), view=view)
         # Only a change that reaches the next round meets the iterator again (#993).
-        change = (flow.back_edge.invalidation_of(iterator.name)
-                  if iterator is not None else None)
+        change = flow.back_edge.invalidation_of(view) if view is not None else None
         if change is not None:
             emit_change_under_iterator(checker, change, stmt.iterable, stmt.loc)
+
+
+def _settle_value_walk(checker: 'BorrowChecker', stmt: Foreach) -> Optional[str]:
+    """A walk of an iterator VALUE: in place, or the loop takes the value (#1259).
+
+    A value reached through `poke` and a `let` that holds a lent iterator are walked IN
+    PLACE: each step moves their cursor, a write through the place. A lent temporary
+    (`it.clone()`) is the loop's own value and cannot leave the loop. Any other value is
+    taken, as `f(nom it)` takes it. Answers the name of a walked lent `let`, whose owners
+    a change in the body must not move under it.
+    """
+    iterable = stmt.iterable
+    if is_lent_name(checker, iterable):
+        stmt.walks_in_place = True
+    if stmt.walks_in_place:
+        reject_readonly_write(checker, borrow_owner(iterable), iterable.loc,
+                              f"walk '{expr_to_string(iterable)}'", receiver=iterable)
+        return iterable.id if is_lent_name(checker, iterable) else None
+    if lent_owners(checker, iterable) is None:
+        consume(checker, iterable)
+    else:
+        iterable.ownership_provenance = Provenance.BORROWED
+    return None
+
+
+def _owns_its_items(iterator) -> bool:
+    """Does a walk of this iterator OWN each item: `Iterator@(T)`, no `peek` in it?"""
+    return not getattr(iterator, "peeks", ())
 
 
 def _check_expand(checker: 'BorrowChecker', stmt: Expand) -> None:

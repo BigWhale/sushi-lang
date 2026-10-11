@@ -36,6 +36,7 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.generics.type_display import display_type
 
+from .iterators import settle_iterator_source
 from .borrows import check_borrow
 from .calls import (
     apply_destroy_effects,
@@ -188,6 +189,7 @@ def _check_method_call(checker: 'BorrowChecker', expr: MethodCall) -> None:
     _check_receiver_and_args(checker, expr)
     maybe_reject_mutation(checker, expr)
     reject_self_aliasing_copy(checker, expr)
+    settle_iterator_source(checker, expr)
     settle_receiver(checker, expr)
     settle_method_args(checker, expr)
     maybe_mark_container_insert(checker, expr)
@@ -218,6 +220,7 @@ def _check_dot_call(checker: 'BorrowChecker', expr: DotCall) -> None:
         # receiver names a namespace and takes no argument position.
         settle_namespaced_args(checker, expr)
     else:
+        settle_iterator_source(checker, expr)
         settle_receiver(checker, expr)
         settle_method_args(checker, expr)
         maybe_mark_container_insert(checker, expr)

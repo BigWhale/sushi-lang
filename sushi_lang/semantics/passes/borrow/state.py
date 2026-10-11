@@ -7,7 +7,9 @@ DATA, so a reallocating write double-frees it (CE2426, #344, write to the owner 
 an `is_borrow_param` is a shallow copy aliasing the caller's heap (CE2421 / CE2422, #326,
 redeclare `poke`). `is_method_receiver` narrows the last to `self` for the same reason.
 `is_let_borrow` is NOT a non-empty `borrows_from` -- a binding out of a temporary records
-no owner name and is still one. `borrows_from` is a SET of owners: each one is frozen
+no owner name and is still one. `is_lent_iterator` marks a let-borrow that holds a lent
+iterator (#1259): it borrows its owners and OWNS its value, so a write through it (a
+`poke`, an in-place walk) is legal, and it is destroyed at scope exit. `borrows_from` is a SET of owners: each one is frozen
 while the binding lives, and CE2412 names the one that changed.
 
 Every span here is the SECOND location of a relational diagnostic; without it the tier-3
@@ -57,6 +59,7 @@ class BorrowState:
     consumed_by_method: Optional[str] = None  # the `nom self` method that took it (R27)
     move_reported_by: Optional[str] = None    # the iterator whose CE2412 reports the move
     borrows_from: tuple[str, ...] = ()        # the root owners a `let`-borrow reads out of
+    is_lent_iterator: bool = False            # a `let`-borrow that owns its iterator value
     views_storage_of: Optional[Expr] = None   # a foreach iterator: the container it walks
     covered_by: Optional[str] = None          # the iterator whose freeze covers this one
     invalidated_at: Optional[Span] = None     # where that owner changed or was released

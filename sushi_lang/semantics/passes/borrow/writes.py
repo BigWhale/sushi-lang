@@ -184,6 +184,11 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
     state = checker.borrow_state.get(name)
     if state is None:
         return False
+    if state.is_lent_iterator and not rebind:
+        # The binding owns its iterator value, so a write through it moves its own cursor
+        # and nothing its owners keep (#1259). A rebind would drop the value and borrow
+        # another source, so it stays refused.
+        return False
     for kind in READONLY_RECEIVERS:
         if not kind.matches(state):
             continue

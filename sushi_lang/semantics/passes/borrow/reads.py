@@ -191,6 +191,9 @@ def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
         case IndexAccess():
             return checker.types.element_type(read_type(checker, expr.array))
 
+    if isinstance(expr, (MethodCall, DotCall)) and expr.iterator_state is not None:
+        # A lent iterator: the value it makes is the type the call answers (#1259).
+        return checker.types.resolve_named(expr.inferred_return_type)
     receiver = called_on(expr, "get", "first", "last")
     if receiver is None:
         return None
