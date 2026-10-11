@@ -137,7 +137,7 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          uv run mypy sushi_lang/internals sushi_lang/compiler sushi_lang/packager sushi_lang/sushi_stdlib
+          uv run mypy sushi_lang/internals sushi_lang/compiler sushi_lang/packager sushi_lang/sushi_stdlib sushi_lang/semantics/shir
 
       # Full-tree count, never blocking: makes backlog drift visible in the log.
       - name: Run mypy (full tree, informational)
