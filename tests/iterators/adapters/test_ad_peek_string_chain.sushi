@@ -7,5 +7,5 @@
 fn main() i32:
     let string[] names = from(["a", "bb", "ccc"])
     let List@(string) long = names.iter().filter(nom |string s| s.len() > 1).clone_each().collect()
-    println("{long.len()} {long.get(0).realise("")} {long.get(1).realise("")}")
+    println("{long.len()} {long.get(0).realise('')} {long.get(1).realise('')}")
     return 0

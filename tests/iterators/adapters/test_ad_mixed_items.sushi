@@ -18,5 +18,5 @@ fn main() i32:
     foreach(s in names.iter().map(nom |string w| "{w}!").filter(nom |string t| t.len() > 2)):
         println(s)
     let string[] one = from(["z"])
-    println(names.iter().map(nom |string w| "{w}!").zip(nom one.iter()).collect().len())
+    println(names.iter().map(nom |string w| "{w}!").zip(nom one.iter().clone_each()).collect().len())
     return 0

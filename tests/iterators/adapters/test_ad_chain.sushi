@@ -1,7 +1,7 @@
 # A chain of three adapters walks its source one time. The chain over a borrowed array
 # keeps its state on the stack; the chain over a range owns everything it walks.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "4 16\n0:4\n1:16\n0 6 12 18\n"
+# EXPECT_STDOUT_EXACT: "4 16\n0:4\n1:16\n0 6 12 18 24\n"
 # EXPECT_NO_LEAKS
 use <collections/iter>
 

@@ -10,13 +10,13 @@ use <collections/hashmap>
 fn main() i32:
     let string[] xs = from(["x", "y"])
     let List@(string) copies = xs.iter().clone_each().collect()
-    println("{copies.len()} {copies.get(0).realise("")} {copies.get(1).realise("")}")
+    println("{copies.len()} {copies.get(0).realise('')} {copies.get(1).realise('')}")
     let List@(string) words = List.new()
     words.push("a")
     words.push("bb")
     let Iterator@(string) owned = words.iter().clone_each()
     let List@(string) kept = owned.collect()
-    println("{kept.len()} {kept.get(0).realise("")} {kept.get(1).realise("")}")
+    println("{kept.len()} {kept.get(0).realise('')} {kept.get(1).realise('')}")
     let Iterator@(i32) r = 0..3
     println(r.clone_each().collect().len())
     let HashMap@(string, i32) m = HashMap.new()

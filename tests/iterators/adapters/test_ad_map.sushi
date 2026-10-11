@@ -26,7 +26,7 @@ fn main() i32:
     let List@(i32) lengths = words.iter().map(nom |string w| w.len()).collect()
     show(lengths)
     let List@(string) loud = words.iter().filter(nom |string w| w.len() < 3).map(nom |string w| "{w}!").collect()
-    println("{loud.get(0).realise("")} {loud.get(1).realise("")}")
+    println("{loud.get(0).realise('')} {loud.get(1).realise('')}")
     let Iterator@(i32) r = 0..3
     let List@(i32) tens = r.map(nom |i32 x| x * 10).collect()
     show(tens)

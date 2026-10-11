@@ -21,5 +21,5 @@ fn main() i32:
     println(m.values().collect().len())
     let string[] names = from(["x", "y"])
     let List@(string) loud = names.iter().map(nom |string s| "{s}!").collect()
-    println("{loud.get(0).realise("")} {loud.get(1).realise("")}")
+    println("{loud.get(0).realise('')} {loud.get(1).realise('')}")
     return 0

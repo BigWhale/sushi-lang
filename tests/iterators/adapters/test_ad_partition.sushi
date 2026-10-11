@@ -27,5 +27,5 @@ fn main() i32:
     words.push("a")
     words.push("bb")
     let (long, short) = words.iter().clone_each().partition(nom |string w| w.len() > 1)
-    println("{long.get(0).realise("")}{short.get(1).realise("")}")
+    println("{long.get(0).realise('')}{short.get(1).realise('')}")
     return 0
