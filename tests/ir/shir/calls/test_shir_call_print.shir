@@ -1,0 +1,15 @@
+unit test_shir_call_print
+
+ShirBody greet
+  params : [(_0 "name": string, Guaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [<hole: InterpolatedString>]))
+    ExprStmt(Call(BuiltinFn("print"), [LocalRef(_0)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Named(GlobalRef(@greet)), [Lit("Arthur")]))
+    Return(Lit(0))

@@ -1,0 +1,43 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SHIR: test_shir_call_statics.shir
+#
+# the SHIR dump of a call on a type name: a static of a struct, of an enum, of a
+# built-in generic and of a primitive type is `Static`, with the type as written. A
+# variant of an enum is no static: `Maybe.Some(1)` and the struct construction
+# `Vec(x, y)` are holes until their own lowering exists. A static call is not a value
+# that the compiler reads, so the divisor `Vec.seven()` has no value after it.
+
+struct Vec:
+    i32 x
+    i32 y
+
+enum Sign:
+    Plus
+    Minus
+
+extend Vec static at(i32 x, i32 y) Vec:
+    return Vec(x, y)
+
+extend Vec static seven() i32:
+    return 7
+
+extend Sign static plus() Sign:
+    return Sign.Plus
+
+fn sign() Sign:
+    return Sign.plus()
+
+fn empty() List@(i32):
+    return List.new()
+
+fn bits(u64 b) f64:
+    return f64.from_bits(b)
+
+fn some() Maybe@(i32):
+    return Maybe.Some(1)
+
+fn ratio() i32:
+    return 70 / Vec.seven()
+
+fn main() i32:
+    return 0

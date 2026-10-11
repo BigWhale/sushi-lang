@@ -1,0 +1,25 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SHIR: test_shir_call_namespace.shir
+#
+# the SHIR dump of a call through a namespace: a stdlib module behind `use ... as`, and
+# a C function behind an `unsafe external` block. The alias folds into the name of the
+# function, so the target is `Named` with the written qualified name. A static on a type
+# behind an alias is `Static`, as on a bare type name.
+
+use <math> as m
+use <collections/hashmap> as hm
+
+unsafe external "C" as libc because "the SHIR dump of an extern call":
+    fn abs(i32 x) i32 = "abs"
+
+fn root(f64 x) f64:
+    return m.sqrt(x)
+
+fn magnitude(i32 x) i32:
+    return libc.abs(x)
+
+fn table() hm.HashMap@(i32, i32):
+    return hm.HashMap.new()
+
+fn main() i32:
+    return 0

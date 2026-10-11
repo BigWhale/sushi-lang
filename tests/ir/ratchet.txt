@@ -2644,6 +2644,12 @@ tests/io/lines/test_run_no_trailing_newline.sushi
 tests/io/lines/test_run_only_blank_lines.sushi
 tests/io/lines/test_stdin_lines.sushi
 tests/io/lines/test_stdin_lines_demo.sushi
+tests/ir/shir/calls/test_shir_call_bloom.sushi
+tests/ir/shir/calls/test_shir_call_markers.sushi
+tests/ir/shir/calls/test_shir_call_methods.sushi
+tests/ir/shir/calls/test_shir_call_namespace.sushi
+tests/ir/shir/calls/test_shir_call_print.sushi
+tests/ir/shir/calls/test_shir_call_statics.sushi
 tests/ir/shir/empty_body/test_shir_empty_body.sushi
 tests/ir/shir/holes/test_shir_holes.sushi
 tests/ir/shir/literals/test_shir_literals.sushi

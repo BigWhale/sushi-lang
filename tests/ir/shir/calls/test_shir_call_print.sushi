@@ -1,0 +1,15 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless, Arthur\nArthur"
+# EXPECT_DUMP_SHIR: test_shir_call_print.shir
+#
+# the SHIR dump of `print` and `println`: each is a `Call` with a built-in target, in an
+# `ExprStmt`, and the value is its one argument. An interpolated string is a hole until
+# its own lowering exists.
+
+fn greet(string name) ~:
+    println("Mostly Harmless, {name}")
+    print(name)
+
+fn main() i32:
+    greet("Arthur")
+    return 0

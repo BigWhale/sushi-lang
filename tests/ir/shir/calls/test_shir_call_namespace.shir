@@ -1,0 +1,25 @@
+unit test_shir_call_namespace
+
+ShirBody root
+  params : [(_0 "x": f64, Guaranteed)]
+  locals : []
+  block  :
+    Return(Call(Named(GlobalRef(@m.sqrt)), [LocalRef(_0)]))
+
+ShirBody magnitude
+  params : [(_0 "x": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(Call(Named(GlobalRef(@libc.abs)), [LocalRef(_0)]))
+
+ShirBody table
+  params : []
+  locals : []
+  block  :
+    Return(Call(Static(HashMap, "new"), []))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))
