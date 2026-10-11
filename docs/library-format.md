@@ -203,14 +203,18 @@ is the authority, and the index is a cache of it.
     # the declaration writes `| E` or returns an explicit `Result@(T, E)`, and false
     # when the callable is bare (`docs/design/error-channel.md`). There is no default
     # error type. `error_type` is present only when the declaration writes `| E`; an
-    # explicit `Result@(T, E)` return carries its arms in `return_type`.
+    # explicit `Result@(T, E)` return carries its arms in `return_type`. `return_mode`
+    # is present only for a borrowed return, `peek T` (templates schema 11, #1229):
+    # `return_type` holds `T`, and the consumer reads the source set from the
+    # parameters (`docs/design/borrow-model.md` section 10h).
     #
     #   SIG = {
     #       "params": [{"name": str, "type": str, "mode": str,
     #                   "is_pack": bool}],  # Present (true) for `...Ts args` alone
     #       "return_type": str,
     #       "has_channel": bool,       # Required: does a call answer a Result
-    #       "error_type": str          # If the declaration says `| E`
+    #       "error_type": str,         # If the declaration says `| E`
+    #       "return_mode": "peek"      # If the declaration says `peek T`
     #   }
     #
     # Every `type`, `return_type` and `error_type` is the INTERNAL identity spelling,
@@ -391,7 +395,7 @@ is the authority, and the index is a cache of it.
     # a template's own doc block stands OUTSIDE its source slice, so the record is the
     # only place it can travel.
     "templates": {                     # Instantiable cross-library templates
-        "version": 10,                 # Templates schema version. A binary or
+        "version": 11,                 # Templates schema version. A binary or
                                        #   hybrid .slib with another schema is
                                        #   refused (CE3512) and must be rebuilt.
                                        #   The one constant is
@@ -644,7 +648,7 @@ There is **no scheme identifier**. A manifest records what is, not the recipe, a
 | [CE3510](error-catalog.md#ce3510) | Metadata section truncated |
 | [CE3511](error-catalog.md#ce3511) | Bitcode section truncated |
 | [CE3507](error-catalog.md#ce3507) | The bitcode of a binary or hybrid library does not link |
-| [CE3512](error-catalog.md#ce3512) | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, a `conversions` record whose sides are not two error types or whose `link_symbol` is not the symbol of the pair, or a binary or hybrid library's templates schema is not version 10 (a library built before schema 10 is rebuilt) |
+| [CE3512](error-catalog.md#ce3512) | Invalid metadata: the MessagePack does not decode, a manifest field is missing or has the wrong type, a template does not parse or holds more than one declaration, a variant with `has_data` has no `data_types`, a function, helper or method record has no `has_channel`, a `conversions` record whose sides are not two error types or whose `link_symbol` is not the symbol of the pair, or a binary or hybrid library's templates schema is not version 11 (a library built before schema 11 is rebuilt) |
 | [CE3513](error-catalog.md#ce3513) | File exceeds maximum size (1GB) |
 | [CE3515](error-catalog.md#ce3515) | The file cannot be opened or read (a directory, no read permission, an I/O failure) |
 | [CE3516](error-catalog.md#ce3516) | The path does not name a library file (the name of a `.slib` file ends in `.slib`) |

@@ -13,6 +13,7 @@ from sushi_lang.semantics.typesys import (
 )
 from sushi_lang.semantics.passes.lift import ENV_PARAM_NAME
 from sushi_lang.semantics.namespaces import body_namespaces
+from sushi_lang.semantics.ast_walk import is_template_copy
 from sushi_lang.semantics.borrowed_return import BorrowedReturn
 from sushi_lang.semantics.param_modes import CalleeModes, param_mode, receiver_mode
 from sushi_lang.internals.report import Reporter, Span
@@ -199,7 +200,8 @@ class BorrowChecker:
                                      self_type=perk_impl.target_type,
                                      self_span=perk_impl.target_type_span,
                                      self_mode=getattr(method, "self_mode", None),
-                                     borrowed_return=method.borrowed_return)
+                                     borrowed_return=method.borrowed_return,
+                                     template_copy=is_template_copy(method))
 
     @contextmanager
     def _body_scope(self, node) -> Iterator[None]:
@@ -220,7 +222,8 @@ class BorrowChecker:
         """Check borrow safety for a single plain function."""
         with self._body_scope(func):
             self._check_callable(func.params, func.body, fn_name=func.name,
-                                 borrowed_return=getattr(func, "borrowed_return", None))
+                                 borrowed_return=getattr(func, "borrowed_return", None),
+                                 template_copy=is_template_copy(func))
 
     def _check_extension(self, ext: ExtendDef) -> None:
         """Check borrow safety for an extension method."""
@@ -231,16 +234,18 @@ class BorrowChecker:
                                  self_type=ext.target_type,
                                  self_span=ext.target_type_span,
                                  self_mode=getattr(ext, "self_mode", None),
-                                 borrowed_return=ext.borrowed_return)
+                                 borrowed_return=ext.borrowed_return,
+                                 template_copy=is_template_copy(ext))
 
     def _check_callable(self, params: List[Param], body: Block, *,
                         fn_name: Optional[str] = None,
                         self_type: Optional[Type] = None,
                         self_span: Optional[Span] = None,
                         self_mode: Optional[str] = None,
-                        borrowed_return: Optional[BorrowedReturn] = None) -> None:
+                        borrowed_return: Optional[BorrowedReturn] = None,
+                        template_copy: bool = False) -> None:
         """Set up the state for one callable body and check it. THE entry point."""
-        self.borrowed_return = body_return(self, borrowed_return, params)
+        self.borrowed_return = body_return(self, borrowed_return, params, template_copy)
         self.borrow_state = {}
         self.err.enter_body()
         self.active_borrows = set()

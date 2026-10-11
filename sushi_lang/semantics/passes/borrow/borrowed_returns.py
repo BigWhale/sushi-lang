@@ -33,19 +33,25 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class BodyReturn:
-    """The borrowed return of the body being checked: its record, sources and parameters."""
+    """The borrowed return of the body being checked: its record, sources and parameters.
+
+    `template_copy` is True for a copy of a template that the template check read. A value
+    that owns nothing in the copy may be a value of a type parameter in the template, and
+    the template check judged it there.
+    """
     record: BorrowedReturn
     sources: tuple[str, ...]
     params: frozenset[str]
+    template_copy: bool = False
 
 
 def body_return(checker: 'BorrowChecker', record: Optional[BorrowedReturn],
-                params) -> Optional[BodyReturn]:
+                params, template_copy: bool = False) -> Optional[BodyReturn]:
     """The borrowed return of a body, with its source set judged over the tables."""
     if record is None:
         return None
     return BodyReturn(record, sources_in(record, checker.tables),
-                      frozenset(param.name for param in params))
+                      frozenset(param.name for param in params), template_copy)
 
 
 # ---------------------------------------------------------------------------------------
@@ -181,9 +187,17 @@ def check_borrowed_return(checker: 'BorrowChecker', value: Expr) -> None:
         _hand_over(checker, value)
         return
     reason = _why_not_a_view(checker, returned, value)
-    if reason is not None:
+    if reason is not None and not (returned.template_copy and _owns_nothing(checker, value)):
         _emit_not_a_view(checker, returned, value, reason)
     _hand_over(checker, value)
+
+
+def _owns_nothing(checker: 'BorrowChecker', value: Expr) -> bool:
+    """Is `value` of a type that owns nothing? A copy of it can dangle from nothing."""
+    from sushi_lang.semantics.ownership import TypeClass
+    from .reads import read_type
+    ty = read_type(checker, value)
+    return ty is not None and checker.types.type_class(ty) is TypeClass.PLAIN
 
 
 def _result_variant(value: Expr) -> Optional[str]:
@@ -212,6 +226,10 @@ def _why_not_a_view(checker: 'BorrowChecker', returned: BodyReturn,
         if state is not None and (state.is_let_borrow or state.is_lent_iterator):
             return _TEMPORARY if not state.borrows_from else _outside(
                 checker, returned, state.borrows_from)
+        if state is not None and state.borrows_from:
+            # A plain copy of an answer still holds the freeze of its sources, so a
+            # template judges it alike at every type argument.
+            return _outside(checker, returned, state.borrows_from)
         if isinstance(value, Name) and owner not in returned.params:
             return _OWNED
         return _outside(checker, returned, (owner,))
