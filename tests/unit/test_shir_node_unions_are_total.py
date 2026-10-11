@@ -77,6 +77,7 @@ EXPRESSION_PARTS: dict[str, tuple[str, ...]] = {
     "Named": ("ref",),
     "Dotted": ("recv", "name"),
     "Static": ("ty", "name"),
+    "BuiltinFn": ("name",),
     "Arg": ("value", "marker", "bloom"),
     "Fixed": (),
     "Dynamic": (),
@@ -90,6 +91,9 @@ EXPRESSION_PARTS: dict[str, tuple[str, ...]] = {
     "BlankConst": (),
     "StrConst": ("value",),
 }
+
+#: ir.md 7.4, the targets of a call: what the source calls, before `typecheck` resolves it.
+CALL_TARGETS = {"Named", "Dotted", "Static", "BuiltinFn"}
 
 #: ir.md 7.10, one row per AST expression class: the SHIR nodes that lowering can make
 #: of it. The rows add what 7.10 leaves out: a unit variant (`Sign.Plus`) and a
@@ -299,6 +303,10 @@ def test_a_part_has_the_fields_of_ir_md(pair: tuple[str, str]) -> None:
     cls = getattr(module, name)
     assert not issubclass(cls, ShirNode), f"{name} is a part of a node, not a node"
     assert _field_names(cls) == parts[name]
+
+
+def test_the_call_target_union_is_the_targets_of_ir_md() -> None:
+    assert _union_members(exprs.CallTarget) == CALL_TARGETS
 
 
 def test_the_recorded_value_is_on_every_expression_and_takes_no_position() -> None:

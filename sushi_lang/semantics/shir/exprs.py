@@ -148,7 +148,13 @@ class Static:
     name: str
 
 
-CallTarget: TypeAlias = Named | Dotted | Static
+@dataclass(frozen=True, slots=True)
+class BuiltinFn:
+    """A function that the language gives with no declaration: `print`, `println`."""
+    name: str
+
+
+CallTarget: TypeAlias = Named | Dotted | Static | BuiltinFn
 
 
 @dataclass(frozen=True, slots=True)

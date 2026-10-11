@@ -674,6 +674,7 @@ one body.
 CallTarget = Named(ref: Expr)                # a scope-resolved name, or any callable expr
            | Dotted(recv: Expr, name: str)   # x.f(...) -- built-in, extension, perk, adapter
            | Static(ty: TypeRef, name: str)  # Vec.at, List.new, Iterator.new, f64.from_bits
+           | BuiltinFn(name: str)            # print, println: no declaration, no receiver
 
 Arg      = (value: Expr, marker: Convention | None)
 ArrayRun = Single(Expr) | Repeat(value: Expr, count: Expr) | Span(Range)
@@ -922,7 +923,7 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 | `Name` | `LocalRef` / `ConstRef` / `StorageRef` / `GlobalRef`, from `Bindings` |
 | `IntLit`, `FloatLit`, `BoolLit`, `BlankLit`, `StringLit` | `Lit` |
 | `Call`, `MethodCall`, `DotCall` | `Call` with a `CallTarget`; a struct name gives `StructInit` |
-| `Print`, `PrintLn` | `Call` with a built-in target |
+| `Print`, `PrintLn` | `ExprStmt` of a `Call` with a `BuiltinFn` target |
 | `Let`, `Rebind` | `Assign` with `is_init`; a `Let` with targets gives `Destructure` |
 | `Assert` | `Assert` |
 | `While` | `Loop` with a `Cond` source |

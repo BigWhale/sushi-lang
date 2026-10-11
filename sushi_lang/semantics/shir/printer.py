@@ -192,6 +192,7 @@ PRINTERS: dict[type, Render] = {
     e.Named: lambda pr, t: _node("Named", pr.show(t.ref)),
     e.Dotted: lambda pr, t: _node("Dotted", pr.show(t.recv), _quoted(t.name)),
     e.Static: lambda _pr, t: _node("Static", _type(t.ty), _quoted(t.name)),
+    e.BuiltinFn: lambda _pr, t: _node("BuiltinFn", _quoted(t.name)),
     e.Arg: _arg,
     e.Fixed: lambda _pr, _k: "Fixed",
     e.Dynamic: lambda _pr, _k: "Dynamic",
