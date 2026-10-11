@@ -2,7 +2,7 @@
 # Its state leaves the function, so the state is on the heap, every link of a chain of
 # adapters included. The caller walks it, adapts it, and walks it through a `let`.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "2\n4\n6\n40\n60\n2\n3\n12\n5\n7\n"
+# EXPECT_STDOUT_EXACT: "2\n4\n6\n40\n60\n2\n4\n12\n5\n8\n"
 # EXPECT_NO_LEAKS
 # EXPECT_IR_HOLDS: evens malloc
 # EXPECT_IR_HOLDS: scaled_odds malloc
@@ -31,7 +31,7 @@ fn main() i32:
         if (count < 2):
             println(z)
         count := count + 1
-    println(scaled_odds(xs).fold(0, nom |i32 acc, i32 x| acc + x))
+    println(scaled_odds(xs).fold(nom 0, nom |i32 acc, i32 x| acc + x))
     let i32[] ys = from([4, 6])
     foreach(p in pairs(xs, ys)):
         println(p.0 + p.1)

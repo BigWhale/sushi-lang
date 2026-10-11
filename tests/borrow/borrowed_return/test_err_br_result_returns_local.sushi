@@ -5,6 +5,8 @@ error Bad:
     Empty
 
 fn head(i32[] xs) peek i32[] | Bad:
+    if (xs.len() == 0):
+        return Result.Err(Bad.Empty)
     let i32[] local = from([1, 2, 3])
     return Result.Ok(local[0..2])
 

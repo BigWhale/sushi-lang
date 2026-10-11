@@ -6,6 +6,7 @@ fn make() i32[]:
     return from([1, 2, 3])
 
 fn head(i32[] xs) peek i32[]:
+    println(xs.len())
     return make()[0..1]
 
 fn main() i32:

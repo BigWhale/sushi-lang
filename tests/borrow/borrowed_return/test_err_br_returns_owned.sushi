@@ -2,6 +2,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2443
 
 fn head(i32[] xs) peek i32[]:
+    println(xs.len())
     return from([1])
 
 fn main() i32:

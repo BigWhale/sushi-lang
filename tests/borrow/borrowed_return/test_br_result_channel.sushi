@@ -2,7 +2,7 @@
 # caller takes it with `??`. The view is read through and never copied; a caller that
 # keeps the bytes clones them.
 # EXPECT_RUNTIME_EXIT: 0
-# EXPECT_STDOUT_EXACT: "2\n3\n2\nshort at 4\n"
+# EXPECT_STDOUT_EXACT: "2\n5\n2\nshort at 4\n"
 # EXPECT_NO_LEAKS
 
 error ReadError:

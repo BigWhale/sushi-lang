@@ -3,6 +3,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2443
 
 fn head(i32[] xs, nom i32[] ys) peek i32[]:
+    println(xs.len())
     return ys[0..1]
 
 fn main() i32:

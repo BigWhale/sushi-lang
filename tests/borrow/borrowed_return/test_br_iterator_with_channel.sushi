@@ -1,0 +1,37 @@
+# `peek Iterator@(i32) | E`: the `Ok` payload is an iterator that borrows the argument.
+# `??` gives it to a `foreach` and to a `let`, and the holder of the Result frees its
+# state.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "12\nok\nempty\n"
+# EXPECT_NO_LEAKS
+use <collections/iter>
+
+error Bad:
+    Empty
+
+fn evens(i32[] xs) peek Iterator@(i32) | Bad:
+    if (xs.len() == 0):
+        return Result.Err(Bad.Empty)
+    return Result.Ok(xs.iter().filter(nom |i32 x| x % 2 == 0))
+
+fn total(i32[] xs) i32 | Bad:
+    let i32 sum = 0
+    foreach(x in evens(xs)??):
+        sum := sum + x
+    let Iterator@(i32) it = evens(xs)??
+    foreach(y in it):
+        sum := sum + y
+    return Result.Ok(sum)
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3, 4])
+    println(total(xs).realise(0))
+    match evens(xs):
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("err")
+    let i32[] none = from([])
+    let Result@(Iterator@(i32), Bad) r = evens(none)
+    match r:
+        Result.Ok(_) -> println("ok")
+        Result.Err(_) -> println("empty")
+    return 0

@@ -7,6 +7,7 @@ struct Pair:
     i32 b
 
 fn pick(i32[] xs, Pair p) peek i32:
+    println(xs.len())
     return p.a
 
 fn main() i32:

@@ -20,8 +20,7 @@ fn main() i32:
     let string first = longer(s, "bob")
     println(first)
     println(longer(s, t))
-    let string pick = longer(s, t.s(0, 2))
-    println(pick)
+    println(longer(s, t.s(0, 2)))
     s := "x"
     t := "y"
     let i32[] a = from([1, 2, 3])

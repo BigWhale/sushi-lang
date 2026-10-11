@@ -7,6 +7,8 @@ struct Cursor:
     i32 pos
 
 fn pick(i32 n, poke Cursor cur, nom string s) peek i32:
+    cur.pos := n
+    println(s)
     return n
 
 fn main() i32:

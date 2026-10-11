@@ -2,6 +2,7 @@
 # EXPECT_ERROR_CODES_EXACT: CE2443
 
 fn head(i32[] xs) peek i32[]:
+    println(xs.len())
     let i32[] local = from([1, 2, 3])
     return local[0..2]
 

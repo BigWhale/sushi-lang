@@ -1,0 +1,31 @@
+# A borrowed return behind a `use ... as` alias: a function, a method of a generic
+# template at an owning and at a plain type, and a method that answers an iterator over
+# its receiver. A local function passes that iterator on through an adapter.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\nhi\n5\n4\n5\n8\n10\n8\n10\n"
+# EXPECT_NO_LEAKS
+use "br_geo" as g
+use <collections/iter>
+
+fn pass_on(g.Store s) peek Iterator@(i32):
+    let Iterator@(i32) it = s.items()
+    return it.map(nom |i32 x| x * 2)
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3])
+    let i32[] h = g.head(data, 2)
+    println(h.len())
+    let g.Box@(string) b = g.Box("hi")
+    let string v = b.get()
+    println(v)
+    let g.Box@(i32) c = g.Box(5)
+    println(c.get())
+    let g.Store s = g.Store(from([4, 5]))
+    foreach(x in s.items()):
+        println(x)
+    foreach(y in pass_on(s)):
+        println(y)
+    let Iterator@(i32) kept = pass_on(s)
+    foreach(z in kept):
+        println(z)
+    return 0
