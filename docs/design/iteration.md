@@ -308,6 +308,18 @@ decided alone. The rule is decided at each INSTANCE and never in a template, bec
 template does not know whether its `T` holds a resource: in a template,
 `Iterator@(peek T)` and `Iterator@(T)` stay two types.
 
+The rule holds inside a generic instance too: `Maybe@(Iterator@(peek i32))` and
+`Maybe@(Iterator@(i32))` are one instance, and so are a `List`, a `Result` payload, a user
+struct instance and a tuple that hold the iterator. After the collect pass the analyzer
+gives the enum table the owner of an item (`install_item_owner`), as the table carries the
+derived methods, and every seam that interns an instance settles its arguments by it: the
+monomorphizer entry, the `Result` and `Maybe` interning, and the tuple interning. The
+typecheck pass settles a declared generic type before it names the instance.
+
+**The name is reserved.** As for `HashMap`, a user struct named `Iterator` is
+**[CE0004](../error-catalog.md#ce0004)**, and a user enum of that name is
+**[CE0006](../error-catalog.md#ce0006)**.
+
 **How it is stored.** `IteratorType.element_type` is the value type, with no `peek` in it.
 `IteratorType.peeks` is the mode: empty when every item is owned, one flag for the whole
 item, one flag per element for a tuple item. A diagnostic and an interned name show the
@@ -332,6 +344,8 @@ exists to remove. `File.readln()` stays as the one-line unbuffered read.
 | the written `Iterator@(...)` and its item mode | `semantics/ast_builder/types/iterators.py` |
 | the item mode: the written item, the manifest string, one type for a plain item | `semantics/generics/iterators.py` |
 | the plain-item rule in the typecheck pass | `settle_item_modes`, `semantics/passes/types/utils.py` |
+| the plain-item rule where an instance is interned | `settle_in_tables` over `EnumTable.item_owner`, `semantics/generics/iterators.py` |
+| the reserved name | `_compiler_type_names`, `semantics/passes/collect/utils.py` |
 
 ## See also
 

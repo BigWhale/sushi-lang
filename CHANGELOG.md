@@ -137,7 +137,9 @@ All notable changes to Sushi Lang will be documented in this file.
   signature names `Iterator@(T)` (owned items) or `Iterator@(peek T)` (borrowed items), and
   a tuple item takes `peek` on an element: `Iterator@((i32, peek string))`. With no import
   the name is CE2001, and behind `use <collections/iter> as it` it is `it.Iterator`. For an
-  item that holds no resource, `Iterator@(peek T)` and `Iterator@(T)` are one type. `poke`
+  item that holds no resource, `Iterator@(peek T)` and `Iterator@(T)` are one type, also
+  inside a generic instance (`Maybe@(Iterator@(peek i32))` is `Maybe@(Iterator@(i32))`).
+  A user struct or enum named `Iterator` is CE0004 or CE0006, as for `HashMap`. `poke`
   is not an item mode, and `peek` in every other type position keeps its error (CE2419,
   CE2415, CE6107). A binary library's manifest carries the mode, and `--lib-info` prints it
   (`docs/design/iteration.md`, ruling 9).
