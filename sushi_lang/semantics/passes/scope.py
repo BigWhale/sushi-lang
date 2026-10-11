@@ -23,6 +23,11 @@ from sushi_lang.semantics.name_ladder import BareName, classify
 from sushi_lang.semantics.namespaces import in_body_scope
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.passes.scope_bindings import DECLARED_ANSWERS, BindingsWriter
+from sushi_lang.semantics.shir.bindings import (
+    Bindings, Capture, Const, Local, Resolution, Storage,
+)
+from sushi_lang.semantics.shir.ids import LocalId
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import NamespaceTable
@@ -49,6 +54,7 @@ def _declared_as(scope: Dict[str, 'VariableInfo'], name: str) -> Optional['Varia
 class VariableInfo:
     name: str
     declared_at: Optional[Span]
+    local: LocalId
     used: bool = False
     # The binder as written in an `expand` body, when this is one of its copies
     # (#1019, #1031).
@@ -103,6 +109,11 @@ class ScopeAnalyzer:
         # True while checking a `poke self` method body (#327): `self := v` is then
         # the store-through write, not the forbidden receiver rebind.
         self._self_is_poke: bool = False
+        # The binding table of each body, in the order of the walk (ir.md 7.1, S3), and
+        # the writer of the body in progress. Outside a body, a direct call of one arm
+        # writes into a table that nothing reads.
+        self.bindings: List[Bindings] = []
+        self._out = BindingsWriter(None)
 
     def run(self, program: Program) -> None:
         """Entry point for scope analysis.
@@ -140,6 +151,17 @@ class ScopeAnalyzer:
         finally:
             self.err.suppressed = muted
 
+    @contextmanager
+    def _bindings_of(self, body, receiver: bool = False) -> Iterator[None]:
+        """Write the `Bindings` of one body, and keep it once the backstop finds no gap."""
+        outer = self._out
+        self._out = BindingsWriter(body, receiver)
+        try:
+            yield
+            self.bindings.append(self._out.finish())
+        finally:
+            self._out = outer
+
     def _push_scope(self) -> None:
         """Enter a new scope."""
         self.scopes.append({})
@@ -169,10 +191,10 @@ class ScopeAnalyzer:
         self._copies = {}
         self._shadows_told = set()
 
-    def _declare_variable(self, name: str, span: Optional[Span],
+    def _declare_variable(self, owner: object, name: str, span: Optional[Span],
                           written: Optional[WrittenLet] = None,
                           kind: str = "variable", told: bool = False) -> None:
-        """Declare a variable in the current scope.
+        """Declare a variable in the current scope. `owner` is the node of the binder.
 
         The shadow check compares WRITTEN names, and names a written `expand`-body `let`
         once for all its copies (#1022). `kind` is what CW1001 calls the name.
@@ -185,13 +207,14 @@ class ScopeAnalyzer:
         if not self.scopes:
             return
 
+        local = self._out.binder(owner, name)
         shown = written.name if written is not None else name
         current_scope = self.scopes[-1]
         earlier = _declared_as(current_scope, shown)
         if earlier is not None and span is not None and not told:
             self._reject_redeclaration(shown, span, earlier, kind)
             current_scope.setdefault(name, VariableInfo(
-                name=name, declared_at=span, written=written, kind=kind))
+                name=name, declared_at=span, local=local, written=written, kind=kind))
             return
         for outer_scope in self.scopes[:-1]:
             outer_var = _declared_as(outer_scope, shown)
@@ -206,8 +229,8 @@ class ScopeAnalyzer:
                     self._shadows_told.add(written)
             break
 
-        current_scope[name] = VariableInfo(name=name, declared_at=span, written=written,
-                                           kind=kind)
+        current_scope[name] = VariableInfo(name=name, declared_at=span, local=local,
+                                           written=written, kind=kind)
 
     def _reject_redeclaration(self, name: str, span: Span, earlier: VariableInfo,
                               kind: str) -> None:
@@ -328,6 +351,36 @@ class ScopeAnalyzer:
         """Which rung of section 8's ladder `name` reaches here."""
         return classify(name, self)
 
+    def _callee_rung(self, name: str) -> BareName:
+        """The rung of the name of a callee.
+
+        A call asks the function rung before the constant rung, as
+        `name_ladder.call_constructs_struct` does: a `fn` and a `const` of one name can
+        both be in scope. A callee that no rung claims is a function that the typecheck
+        pass resolves, a stdlib function included.
+        """
+        if self.is_local(name):
+            return BareName.LOCAL
+        if self.is_function(name):
+            return BareName.FUNCTION
+        rung = self._rung_of(name)
+        return BareName.FUNCTION if rung is BareName.NOTHING else rung
+
+    def _answer(self, name: str, rung: BareName) -> Resolution:
+        """What `name` denotes at the rung that it reaches (ir.md 7.1)."""
+        if rung is BareName.LOCAL:
+            return Local(next(scope[name] for scope in reversed(self.scopes)
+                              if name in scope).local)
+        if rung is BareName.CONSTANT:
+            sig = self._const_sig(name)
+            return Storage(name) if sig is not None and sig.is_var else Const(name)
+        return DECLARED_ANSWERS[rung](name)
+
+    def _resolve(self, node: Any, name: str, rung: Optional[BareName] = None) -> None:
+        """Record in `Bindings` what the name occurrence `node` denotes."""
+        self._out.resolve(node, self._answer(name, self._rung_of(name) if rung is None
+                                             else rung))
+
     def _reject_type_as_value(self, name: str, span: Optional[Span]) -> None:
         """CE2105: a type name where a value belongs, with the spelling that IS one.
 
@@ -434,15 +487,17 @@ class ScopeAnalyzer:
         for col in self._capture_collectors:
             if resolved_index < col['boundary'] and name not in col['names']:
                 col['names'][name] = Param(name=name, ty=None, name_span=span, loc=span)
+                col['captures'].append(
+                    Capture(name, self.scopes[resolved_index][name].local))
 
     def _check_lambda(self, lam: Lambda) -> None:
         """Scope-check a lambda body and record its captured free names."""
         boundary = len(self.scopes)
-        collector = {'boundary': boundary, 'names': {}}
+        collector: dict = {'boundary': boundary, 'names': {}, 'captures': []}
         self._capture_collectors.append(collector)
         self._push_scope()
         for p in lam.params:
-            self._declare_variable(p.name, p.name_span, written_binder(lam, p.name),
+            self._declare_variable(p, p.name, p.name_span, written_binder(lam, p.name),
                                    kind="parameter")
         if isinstance(lam.body, Block):
             self._check_block(lam.body)
@@ -451,16 +506,18 @@ class ScopeAnalyzer:
         self._pop_scope()
         self._capture_collectors.pop()
         lam.captures = list(collector['names'].values())
+        self._out.captures(lam, tuple(collector['captures']))
 
     def _check_constant(self, const: ConstDef) -> None:
         """Check a constant definition - validate the value expression."""
-        with in_body_scope(self, "namespaces", const, self.unit_namespaces):
+        with in_body_scope(self, "namespaces", const, self.unit_namespaces), \
+                self._bindings_of(const):
             self._check_expression(const.value)
 
     def _check_function(self, func: FuncDef) -> None:
         """Check a function definition, in the scope its names resolve in."""
         with in_body_scope(self, "namespaces", func, self.unit_namespaces), \
-                self._reports_of(func):
+                self._reports_of(func), self._bindings_of(func):
             self._check_function_body(func)
 
     def _check_function_body(self, func: FuncDef) -> None:
@@ -484,7 +541,7 @@ class ScopeAnalyzer:
             # Synthesized pack fan-out params carry user-invisible names, so they are
             # declared with no span and the implicit-variable exemption suppresses CW1001.
             span = None if param.is_pack else param.name_span
-            self._declare_variable(param.name, span, kind="parameter",
+            self._declare_variable(param, param.name, span, kind="parameter",
                                    told=True)
 
         self._check_block(func.body)
@@ -494,7 +551,7 @@ class ScopeAnalyzer:
     def _check_extension_method(self, ext: ExtendDef) -> None:
         """Check an extension method definition, in the scope its names resolve in."""
         with in_body_scope(self, "namespaces", ext, self.unit_namespaces), \
-                self._reports_of(ext):
+                self._reports_of(ext), self._bindings_of(ext, receiver=True):
             self._check_extension_body(ext)
 
     def _check_extension_body(self, ext: ExtendDef) -> None:
@@ -505,10 +562,10 @@ class ScopeAnalyzer:
         # It should not be declared explicitly by the user. A `poke self` receiver
         # (#327) is rebindable (`self := 0` writes the caller's primitive).
         self._self_is_poke = receiver_mode(ext.self_mode) is ParamMode.POKE
-        self._declare_variable("self", None)
+        self._declare_variable(ext, "self", None)
 
         for param in ext.params:
-            self._declare_variable(param.name, param.name_span, kind="parameter",
+            self._declare_variable(param, param.name, param.name_span, kind="parameter",
                                    told=True)
 
         self._check_block(ext.body)
@@ -517,7 +574,7 @@ class ScopeAnalyzer:
     def _check_perk_implementation(self, perk_impl: ExtendWithDef) -> None:
         """Check all methods in a perk implementation."""
         for method in perk_impl.methods:
-            with self._reports_of(method):
+            with self._reports_of(method), self._bindings_of(method, receiver=True):
                 self._check_perk_method(method)
 
     def _check_perk_method(self, method: FuncDef) -> None:
@@ -528,10 +585,10 @@ class ScopeAnalyzer:
         # Add implicit 'self' parameter - represents the target type instance.
         # `poke self` (#327) makes it rebindable, as in extension methods.
         self._self_is_poke = receiver_mode(method.self_mode) is ParamMode.POKE
-        self._declare_variable("self", None)
+        self._declare_variable(method, "self", None)
 
         for param in method.params:
-            self._declare_variable(param.name, param.name_span, kind="parameter")
+            self._declare_variable(param, param.name, param.name_span, kind="parameter")
 
         with in_body_scope(self, "namespaces", method, self.unit_namespaces):
             self._check_block(method.body)
@@ -584,11 +641,12 @@ class ScopeAnalyzer:
 
     def _check_let(self, stmt: Let) -> None:
         """Check a let statement. A synthesized `Let` with no written name is never CW1001."""
-        self._declare_variable(stmt.name, stmt.loc if stmt.name_span is not None else None,
+        self._declare_variable(stmt, stmt.name,
+                               stmt.loc if stmt.name_span is not None else None,
                                written_let(stmt))
         self._check_expression(stmt.value)
         for binder in destructure_binders(stmt.targets):
-            self._declare_variable(binder.name,
+            self._declare_variable(binder, binder.name,
                                    binder.loc if binder.name_span is not None else None)
 
     def _check_rebind(self, stmt: Rebind) -> None:
@@ -606,6 +664,7 @@ class ScopeAnalyzer:
                 self.err.emit(er.ERR.CE1002, stmt.loc, name=var_name)
             else:
                 self._use_variable(var_name, stmt.loc, is_rebind=True)
+            self._resolve(stmt.target, var_name)
         elif isinstance(stmt.target, MemberAccess):
             self._check_expression(stmt.target)
         else:
@@ -671,7 +730,7 @@ class ScopeAnalyzer:
                     no_frame_slot=True)
 
         self._push_scope()
-        self._declare_variable(stmt.item_name, stmt.item_name_span,
+        self._declare_variable(stmt, stmt.item_name, stmt.item_name_span,
                                written_binder(stmt, stmt.item_name))
         self._loop_depth += 1
         self._check_block(stmt.body)
@@ -682,7 +741,7 @@ class ScopeAnalyzer:
         """Check an expand statement (compile-time pack expansion)."""
         self._check_expression(stmt.iterable)
         self._push_scope()
-        self._declare_variable(stmt.var, stmt.var_span)
+        self._declare_variable(stmt, stmt.var, stmt.var_span)
         self._check_block(stmt.body)
         self._pop_scope()
 
@@ -698,13 +757,16 @@ class ScopeAnalyzer:
         self._push_scope()
 
         for name, owner, span in pattern_bindings(arm.pattern):
-            self._declare_variable(name, span, written_binder(owner, name))
+            self._declare_variable(owner, name, span, written_binder(owner, name))
         # A name that only a later `|` alternative binds is the fault CE2126 reports. It
-        # is declared here as read, so that one fault gives one diagnostic.
+        # is declared here as read, so that one fault gives one diagnostic. A name that
+        # the first alternative binds is the same local in each alternative.
         for name, owner, span in pattern_bindings(arm.pattern, every_alternative=True):
             if name not in self.scopes[-1]:
-                self._declare_variable(name, span, written_binder(owner, name))
+                self._declare_variable(owner, name, span, written_binder(owner, name))
                 self.scopes[-1][name].used = True
+            else:
+                self._out.same_local(owner, name, self.scopes[-1][name].local)
 
         if isinstance(arm.body, Block):
             self._check_block(arm.body)
@@ -766,6 +828,7 @@ class ScopeAnalyzer:
             self._use_variable(expr.id, expr.loc)   # CE1001 when it is NOTHING
         elif rung is BareName.TYPE:
             self._reject_type_as_value(expr.id, expr.loc)
+        self._resolve(expr, expr.id, rung)
 
     def _check_interpolated_string(self, expr: InterpolatedString) -> None:
         """Walk every hole; the literal parts between them are plain strings."""
@@ -805,6 +868,7 @@ class ScopeAnalyzer:
         if isinstance(expr.callee, Name):
             if self._is_bound_local(expr.callee.id):
                 self._use_variable(expr.callee.id, expr.callee.loc)
+            self._resolve(expr.callee, expr.callee.id, self._callee_rung(expr.callee.id))
         else:
             self._check_expression(expr.callee)
         for arg in expr.args:
@@ -816,8 +880,9 @@ class ScopeAnalyzer:
         The call is then a variant construction (`Result.Ok()`) or a static. The same
         test the `DotCall` arm applies, and for the same reason.
         """
-        if not (isinstance(expr.receiver, Name)
-                and self._names_a_type(expr.receiver.id)):
+        if isinstance(expr.receiver, Name) and self._names_a_type(expr.receiver.id):
+            self._resolve(expr.receiver, expr.receiver.id, BareName.TYPE)
+        else:
             self._check_expression(expr.receiver)
 
         for arg in expr.args:
@@ -832,14 +897,14 @@ class ScopeAnalyzer:
             if self._is_bound_local(receiver_name):
                 self._check_expression(expr.receiver)
             elif self._is_namespace(receiver_name):
-                pass
+                self._resolve(expr.receiver, receiver_name, BareName.NAMESPACE)
             elif self._names_a_type(receiver_name):
                 # A TYPE name in a receiver position: the call is a variant
                 # construction or a static method (#542, ruling Q1). Whether
                 # this type has one is the typecheck pass's answer (CE2102 /
                 # CE2045) -- "undeclared identifier" was wrong about the one
                 # thing it named, because the fault is the POSITION.
-                pass
+                self._resolve(expr.receiver, receiver_name, BareName.TYPE)
             else:
                 self._check_expression(expr.receiver)
         else:
@@ -866,10 +931,13 @@ class ScopeAnalyzer:
         so `Point.x` is a value position after all, and letting it through reached the
         emitter as CE0056.
         """
-        if not (isinstance(expr.receiver, Name)
-                and (self._is_namespace(expr.receiver.id)
-                     or self._names_an_enum(expr.receiver.id))):
-            self._check_expression(expr.receiver)
+        receiver = expr.receiver
+        if isinstance(receiver, Name) and self._is_namespace(receiver.id):
+            self._resolve(receiver, receiver.id, BareName.NAMESPACE)
+        elif isinstance(receiver, Name) and self._names_an_enum(receiver.id):
+            self._resolve(receiver, receiver.id, BareName.TYPE)
+        else:
+            self._check_expression(receiver)
 
     def _check_enum_constructor(self, expr: EnumConstructor) -> None:
         """The AST builder spells `Result.Ok(42)` and `x.realise(0)` with one node.
@@ -879,6 +947,9 @@ class ScopeAnalyzer:
         """
         if self._is_bound_local(expr.enum_name):
             self._use_variable(expr.enum_name, expr.enum_name_span)
+            self._resolve(expr, expr.enum_name, BareName.LOCAL)
+        else:
+            self._resolve(expr, expr.enum_name, BareName.TYPE)
 
         for arg in expr.args:
             self._check_expression(arg)
@@ -896,6 +967,7 @@ class ScopeAnalyzer:
         base = walked.name
         if base is not None and not (walked.path and self._is_namespace(base.id)):
             self._borrow_variable(base.id, expr.mutability, base.loc)
+            self._resolve(base, base.id)
         else:
             # `poke geo.count` reads a namespace: the MemberAccess arm resolves
             # it, and the typecheck pass says whether the member has an address.

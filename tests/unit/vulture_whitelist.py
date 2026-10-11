@@ -23,7 +23,6 @@ IGNORE_DECORATORS: dict[str, str] = {
 
 _PLATFORM_ABI = "platform ABI reference table"
 _LLVMLITE = "llvmlite reads this attribute when it prints the module"
-_P1_2_LOCAL_IDS = "kept for P1.2, the scope pass gives each binder its LocalId"
 _P1_5_PRINTER = "kept for P1.5, the SHIR printer reads it"
 _P1_6_CONVENTION = "kept for P1.6, lowering writes the convention of each parameter"
 
@@ -103,8 +102,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/param_modes.py", "GUARANTEED", _P1_6_CONVENTION),
     ("sushi_lang/semantics/param_modes.py", "IN_GUARANTEED", _P1_6_CONVENTION),
     ("sushi_lang/semantics/param_modes.py", "INOUT", _P1_6_CONVENTION),
-    ("sushi_lang/semantics/shir/ids.py", "IdAllocator", _P1_2_LOCAL_IDS),
-    ("sushi_lang/semantics/shir/ids.py", "allocate", _P1_2_LOCAL_IDS),
     ("sushi_lang/semantics/shir/body.py", "ShirBody", _P1_5_PRINTER),
     ("sushi_lang/semantics/shir/body.py", "fn_id", _P1_5_PRINTER),
     ("sushi_lang/semantics/shir/body.py", "locals", _P1_5_PRINTER),
