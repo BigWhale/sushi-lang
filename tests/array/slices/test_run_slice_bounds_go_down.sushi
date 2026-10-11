@@ -1,0 +1,12 @@
+# S2: computed bounds that go down trap at run time. They are not an empty view.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "RE2028"
+# EXPECT_STDERR_CONTAINS: "slice 2..1 is out of bounds for an array of size 4"
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3, 4])
+    let i32 a = 2
+    let i32 b = a - 1
+    println(data[a..b].len())
+    return 0

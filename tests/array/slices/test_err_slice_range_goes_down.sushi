@@ -1,0 +1,7 @@
+# S2: a slice range whose readable bounds go down is CE2125, as in every range position.
+# EXPECT_ERROR_CODES_EXACT: CE2125
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3, 4])
+    println(data[3..1].len())
+    return 0

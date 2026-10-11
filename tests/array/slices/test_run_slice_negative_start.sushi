@@ -1,0 +1,10 @@
+# S2: a negative start traps at run time.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "slice -1..2 is out of bounds for an array of size 4"
+
+fn main() i32:
+    let i32[4] data = [1, 2, 3, 4]
+    let i32 a = 0 - 1
+    println(data[a..2].len())
+    return 0

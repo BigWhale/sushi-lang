@@ -1,0 +1,11 @@
+# S2: an inclusive end at the length is one past the last element. The message gives
+# the end as an exclusive end.
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: ""
+# EXPECT_STDERR_CONTAINS: "slice 1..4 is out of bounds for an array of size 3"
+
+fn main() i32:
+    let i32[3] data = [1, 2, 3]
+    let i32 n = 3
+    println(data[1..=n].len())
+    return 0

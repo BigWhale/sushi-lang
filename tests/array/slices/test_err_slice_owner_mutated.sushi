@@ -1,0 +1,9 @@
+# The array is frozen while a slice of it lives: a growth would move the viewed storage.
+# EXPECT_ERROR_CODES_EXACT: CE2412
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3, 4])
+    let i32[] part = data[1..3]
+    data.push(5)
+    println(part.len())
+    return 0

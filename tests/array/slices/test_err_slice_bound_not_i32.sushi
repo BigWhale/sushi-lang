@@ -1,0 +1,8 @@
+# A bound of a slice is an i32 position, as in every range.
+# EXPECT_ERROR_CODES_EXACT: CE2121
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3, 4])
+    let i64 n = 2
+    println(data[0..n].len())
+    return 0

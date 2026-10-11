@@ -1,0 +1,10 @@
+# S5: a slice cannot be returned. The array that it views stays with the caller.
+# EXPECT_ERROR_CODES_EXACT: CE2411
+
+fn head(i32[] xs) i32[]:
+    return xs[0..2]
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3, 4])
+    println(head(data).len())
+    return 0
