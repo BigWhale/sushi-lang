@@ -1285,6 +1285,14 @@ A generic function, or an extension method that the compiler copies at the call 
 
 The `dont_panic because "<reason>"` marker removes the bounds check of each `[]` in the body that carries it, so an index out of range there is undefined behaviour and not the runtime error [RE2020](#re2020). Only three kinds of unit may write it. A bundled stdlib unit needs no flag. A unit of a build that passes `--dont-panic` may write it. A source library is parsed again in each build that uses it, so its marker meets this gate in the consumer's build, and the consumer must pass `--dont-panic` too: the consumer compiles the unchecked code, so the consumer consents. The message then names the library. A CONCRETE marked body of a binary or hybrid library is compiled into the shipped bitcode already, so its consumer needs no consent. A marked generic TEMPLATE of any library kind ships as source, so the consumer compiles it and must pass `--dont-panic`. Pass `--dont-panic`, or remove the marker. See [the dont_panic design](design/dont-panic.md).
 
+### CE0153 {#ce0153}
+
+**Error** · internal
+
+**Message:** `the scope pass recorded no binding for the {what} '{name}'`
+
+The scope pass writes the binding table of each body: what each name denotes, the local of each binder, and the captures of each lambda. When a body ends, a check walks it again and finds each name, binder and lambda that the pass did not record. This is a fault in the compiler, not in the program; please report the program.
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.

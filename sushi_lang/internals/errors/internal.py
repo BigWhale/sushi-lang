@@ -534,3 +534,14 @@ _add(ErrorMessage("CE0150", Severity.ERROR,
     "#1200, a join kept the flag and dropped the location when a later path rebound the "
     "name, and the error showed no note. This is a fault in the compiler, not in the "
     "program; please report the program."))
+
+_add(ErrorMessage("CE0153", Severity.ERROR,
+    "the scope pass recorded no binding for the {what} '{name}'",
+    Category.INTERNAL,
+    "The scope pass writes the binding table of each body (docs/design/ir.md 7.1): what "
+    "each name denotes, the local of each binder, and the captures of each lambda. When "
+    "a body ends, a check walks it again and finds each name, binder and lambda that the "
+    "pass did not record. Such a gap means that an arm of the pass did not walk a part of "
+    "the body, or that it did not record what it found. "
+    "tests/unit/test_scope_binder_walk_is_total.py is the gate; this is the backstop. "
+    "This is a fault in the compiler, not in the program; please report the program."))
