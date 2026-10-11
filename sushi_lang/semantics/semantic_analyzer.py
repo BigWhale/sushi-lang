@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.generics.monomorphize import Monomorphizer
     from sushi_lang.semantics.generics.array_perk_copies import ArrayPerkCopies
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
-from sushi_lang.semantics.shir.bindings import Bindings
+from sushi_lang.semantics.shir.lowering import LoweredProgram, lower_unit
 from sushi_lang.semantics.passes.types import (
     TypeValidator, validate_perk_implementation_method)
 from sushi_lang.semantics.passes.borrow import BorrowChecker
@@ -211,9 +211,9 @@ class SemanticAnalyzer:
         self.array_perk_copies: Optional['ArrayPerkCopies'] = None
         self.library_extensions: list[ExtendDef] = []  # Library-shipped extension methods, declare-only too
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
-        # The `Bindings` of each body that the scope pass checked, per unit, in the
-        # compilation order. Lowering reads them (docs/design/ir.md 7.1, S3).
-        self.unit_bindings: list[tuple[Unit, list[Bindings]]] = []
+        # The SHIR of each body that the scope pass checked, per unit, in the compilation
+        # order (docs/design/ir.md 6.3). Only `--dump-shir` reads it yet.
+        self.shir = LoweredProgram()
 
     def check(self) -> None:
         """Entry point for semantic analysis. Runs every pass in sequence.
@@ -818,7 +818,11 @@ class SemanticAnalyzer:
     def _check_units(self, compilation_order: list[Unit], monomorphizer,
                      libraries: LibraryRegistration, destroy_effects,
                      enum_names: set[str]) -> None:
-        """scope, typecheck, lift and borrow, per unit, in one loop."""
+        """scope, typecheck, lift and borrow, per unit, in one loop.
+
+        Lowering runs after scope, because it reads the `Bindings` that scope writes. Its
+        result goes to `self.shir`, and the passes after it read the AST as before.
+        """
         # Every unit is analysed with the global context, because units reference each
         # other, but each gets its own reporter so a diagnostic names the right file.
         for unit in compilation_order:
@@ -829,7 +833,7 @@ class SemanticAnalyzer:
             passes = self._unit_passes(unit, unit_reporter, monomorphizer,
                                        libraries, destroy_effects, enum_names)
             passes.scope.run(unit.ast)
-            self.unit_bindings.append((unit, passes.scope.bindings))
+            lower_unit(self.shir, unit, passes.scope.bindings)
             passes.typecheck.run(unit.ast)
             passes.lifter.run()
             passes.borrow.run(unit.ast, skip=passes.typecheck.checked_template_ids)

@@ -733,20 +733,17 @@ def _analyse(unit_manager: UnitManager, compilation_order: list[Unit], library_l
 def _write_shir_dump(analyzer: SemanticAnalyzer, target: str, reporter: Reporter) -> None:
     """`--dump-shir`: the SHIR of each body that the scope pass checked, as UTF-8 text.
 
-    Every unit is lowered. The dump prints the units of the program and leaves out each
+    The analyzer lowers every unit. The dump prints the units of the program and leaves out each
     unit that has a provenance (a bundled stdlib unit, a source library unit), so a golden
     file does not change when the stdlib changes. `-` prints the dump on stdout.
     """
     from sushi_lang.compiler.cli import COMMAND_LINE
     from sushi_lang.internals import errors as er
-    from sushi_lang.semantics.shir.decls import DeclNames
-    from sushi_lang.semantics.shir.lowering import lower_units
     from sushi_lang.semantics.shir.printer import print_units
 
-    decls = DeclNames()
-    units = [(unit.name, bodies) for unit, bodies in lower_units(analyzer.unit_bindings, decls)
+    units = [(unit.name, bodies) for unit, bodies in analyzer.shir.units
              if unit.provenance is None]
-    text = print_units(units, decls)
+    text = print_units(units, analyzer.shir.decls)
     if target == "-":
         print(text, end="")
         return

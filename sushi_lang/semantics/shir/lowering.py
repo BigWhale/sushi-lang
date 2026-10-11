@@ -6,16 +6,18 @@ the parameters, and an empty block. The statements of the block, and the locals 
 their binders declare, come from `_lower_block`, the one place that fills the block
 (P1.6 and on).
 
-`lower_units` calls `lower_body` for each body that the scope pass checked, except a
-template as written: SHIR is built from the specialized bodies (ir.md 7), and the check
-copy of a template (ir.md 4.3) is lowered on its own (P1.14).
+`lower_unit` calls `lower_body` for each body that the scope pass checked in one unit,
+except a template as written: SHIR is built from the specialized bodies (ir.md 7), and
+the check copy of a template (ir.md 4.3) is lowered on its own. The analyzer calls it for
+each unit, after the scope pass, on every compile; `LoweredProgram` keeps the bodies for
+`--dump-shir`, and no pass reads them yet.
 
 Every id comes from a counter in the order of the walk, so a body gives the same ids on
 every run (ir.md 11.3).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional, Sequence, TypeAlias
 
 from sushi_lang.internals import errors as er
@@ -69,18 +71,21 @@ def lower_body(bindings: Bindings, ctx: LoweringContext) -> ShirBody:
                     locals_, _lower_block(decl, ids))
 
 
-def lower_units(unit_bindings: Sequence[tuple[Unit, Sequence[Bindings]]],
-                decls: DeclNames) -> list[tuple[Unit, list[ShirBody]]]:
-    """Each unit, with the body of each declaration that the scope pass checked, in order."""
-    lowered = []
-    for unit, tables in unit_bindings:
-        program = unit.ast
-        if program is None:
-            continue
-        lowered.append((unit, [lower_body(table, LoweringContext(decls, _perk_owner(program, table)))
-                               for table in tables
-                               if not _is_written_template(program, table.body)]))
-    return lowered
+@dataclass(slots=True)
+class LoweredProgram:
+    """The bodies of each unit, in the compilation order, and the names of their ids."""
+    decls: DeclNames = field(default_factory=DeclNames)
+    units: list[tuple[Unit, list[ShirBody]]] = field(default_factory=list)
+
+
+def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings]) -> None:
+    """The body of each declaration of `unit` that the scope pass checked, in order."""
+    program = unit.ast
+    if program is None:
+        return
+    lowered.units.append((unit, [
+        lower_body(table, LoweringContext(lowered.decls, _perk_owner(program, table)))
+        for table in tables if not _is_written_template(program, table.body)]))
 
 
 def _is_written_template(program: Program, decl: object) -> bool:
