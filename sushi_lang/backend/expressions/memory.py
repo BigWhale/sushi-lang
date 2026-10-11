@@ -271,6 +271,10 @@ def expression_is_temporary(codegen: 'LLVMCodegen', expr) -> bool:
     from sushi_lang.semantics.ast import Name, MemberAccess, IndexAccess
     if isinstance(expr, (Name, MemberAccess, IndexAccess)):
         return False
+    from sushi_lang.semantics.borrowed_return import lends_a_view
+    if lends_a_view(expr):
+        # The answer of a borrowed return views storage that a source keeps (#1229).
+        return False
     if reads_a_borrow_through(codegen, expr):
         return False
     return not is_container_get_call(codegen, expr)

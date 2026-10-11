@@ -10,7 +10,8 @@ Every adapter takes its receiver and its arguments. The state of an adapter over
 iterator is a stack slot of the caller (an `entry_alloca`), as the state of its input is,
 and its `drop_fn` destroys what the state holds and frees nothing. The state of an adapter
 over an OWNED iterator is on the heap, and its `drop_fn` destroys what it holds and frees
-the block. The borrow pass chose (`MethodCall.iterator_state`).
+the block. A LENT state that leaves through a `peek` return is on the heap too (#1229).
+The borrow pass chose (`state_on_heap`).
 
 An item that an adapter does not pass on is destroyed in the parts that the item OWNS
 (`destroy_owned_parts`): a lent part is a view of storage that the source keeps.
@@ -27,7 +28,7 @@ from sushi_lang.backend.runtime.iterators import (
     _clone_type, _drop_type, _function, _heap_state, _next_type, emit_iterator_clone,
     emit_next, iterator_value)
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.generics.iterators import LENT, OWNED, item_parts
+from sushi_lang.semantics.generics.iterators import LENT, OWNED, item_parts, state_on_heap
 from sushi_lang.semantics.typesys import FunctionType, IteratorType, StructType
 
 if TYPE_CHECKING:
@@ -209,20 +210,20 @@ def _emit_lazy(codegen: 'LLVMCodegen', kind: LazyKind, expr, fields: Sequence[ir
                types: Sequence['Type'], context: tuple) -> ir.Value:
     """The value of a lazy adapter: `fields` in a stack or a heap state."""
     state_type = kind.state_type(codegen)
-    placement = getattr(expr, "iterator_state", None)
-    if placement == LENT:
-        state = codegen.memory.entry_alloca(state_type, f"iter_{kind.name}_state")
-        raw = state
-    elif placement == OWNED:
-        raw, state = _heap_state(codegen, state_type)
-    else:
+    if getattr(expr, "iterator_state", None) not in (LENT, OWNED):
         raise_internal_error("CE0015", message=f"the adapter `.{expr.method}()` reached "
                                                f"the backend with no state")
+    on_heap = state_on_heap(expr)
+    if on_heap:
+        raw, state = _heap_state(codegen, state_type)
+    else:
+        state = codegen.memory.entry_alloca(state_type, f"iter_{kind.name}_state")
+        raw = state
     for index, value in enumerate(fields):
         codegen.builder.store(value, gep_utils.gep_struct_field(
             codegen, state, index, f"iter_{kind.name}_field"))
     next_fn = _lazy_next(codegen, kind, types, context)
-    return iterator_value(codegen, next_fn, raw, _lazy_drop(codegen, kind, placement == OWNED),
+    return iterator_value(codegen, next_fn, raw, _lazy_drop(codegen, kind, on_heap),
                           _lazy_clone(codegen, kind, types, context))
 
 

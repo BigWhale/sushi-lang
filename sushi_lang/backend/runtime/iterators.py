@@ -31,7 +31,7 @@ from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.memory.heap import emit_free, emit_malloc
 from sushi_lang.backend.runtime.closures import build_closure_value
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.generics.iterators import CURSOR, LENT, OWNED
+from sushi_lang.semantics.generics.iterators import CURSOR, LENT, OWNED, state_on_heap
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -174,9 +174,10 @@ def emit_cursor_iterator(codegen: 'LLVMCodegen', call, source: CursorSource,
                          owned: Optional[Callable[[], OwnedContainer]] = None) -> ir.Value:
     """What a producer call answers, by the state the borrow pass chose for it.
 
-    CURSOR: the bare cursor, for a direct walk. LENT: a value over a stack cursor. OWNED: a
-    value that takes the container (`owned()` takes the receiver and gives it) and keeps it
-    with the cursor on the heap.
+    CURSOR: the bare cursor, for a direct walk. LENT: a value over a stack cursor, or over a
+    heap cursor when it leaves through a `peek` return (#1229). OWNED: a value that takes
+    the container (`owned()` takes the receiver and gives it) and keeps it with the cursor
+    on the heap.
     """
     b = codegen.builder
     cursor_type = source.cursor_type(codegen)
@@ -187,6 +188,12 @@ def emit_cursor_iterator(codegen: 'LLVMCodegen', call, source: CursorSource,
         cursor = b.insert_value(cursor, length, _LENGTH)
         return b.insert_value(cursor, b.bitcast(data, ir.PointerType(source.data_type)),
                               _DATA, name="cursor")
+    if state == LENT and state_on_heap(call):
+        raw, cursor = _heap_state(codegen, cursor_type)
+        _store_cursor(codegen, cursor, ir.Constant(codegen.types.i32, 0), length, data,
+                      source)
+        return iterator_value(codegen, _cursor_next(codegen, source), raw,
+                              _free_state(codegen), _lent_cursor_clone(codegen, source))
     if state == LENT:
         slot = entry_alloca(b, cursor_type, name="iter_cursor")
         _store_cursor(codegen, slot, ir.Constant(codegen.types.i32, 0), length, data,

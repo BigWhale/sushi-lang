@@ -70,7 +70,10 @@ def bind(codegen: 'LLVMCodegen', source, value: ir.Value,
 
 def _makes_a_lent_iterator(source) -> bool:
     """Is `source` a call that makes a NEW iterator value over a borrowed source?"""
+    from sushi_lang.semantics.ast import TryExpr
     from sushi_lang.semantics.generics.iterators import LENT
+    while isinstance(source, TryExpr):
+        source = source.expr
     return getattr(source, "iterator_state", None) == LENT
 
 

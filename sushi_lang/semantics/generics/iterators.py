@@ -32,6 +32,18 @@ LENT = "lent"       # a value that borrows the owners of its source; stack state
 OWNED = "owned"     # a value that takes its source (a temporary); heap state
 
 
+def state_on_heap(call: Any) -> bool:
+    """Does a producer or a lazy adapter keep its state on the heap?
+
+    The two facts of a value are kept apart: LENT and OWNED say what it borrows, and this
+    says where its state is. An OWNED state is on the heap, and a LENT state is on the
+    stack of its function, except a LENT state that leaves through a `peek` return
+    (`iterator_leaves`, #1229): it is on the heap, and it still borrows its owners.
+    """
+    state = getattr(call, "iterator_state", None)
+    return state == OWNED or (state == LENT and bool(getattr(call, "iterator_leaves", False)))
+
+
 # The adapters of an iterator (#1228, docs/design/iteration.md): compiler code, no import.
 # A LAZY adapter answers a new iterator over its receiver; a CONSUMER walks its receiver
 # to the end at the call. Each takes its receiver with `nom self`.
