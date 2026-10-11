@@ -189,7 +189,8 @@ def substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
     used to survive monomorphization untouched and report CE2001 on `T`.
     """
     from sushi_lang.semantics.typesys import (PointerType, ArrayType, DynamicArrayType,
-                                              ReferenceType, FunctionType, UnknownType)
+                                              ReferenceType, FunctionType, UnknownType,
+                                              IteratorType)
 
     if isinstance(ty, (TypeParameter, UnknownType)):
         return substitution.get(ty.name, ty)
@@ -215,6 +216,10 @@ def substitute_type_params(ty: Type, substitution: dict[str, Type]) -> Type:
     elif isinstance(ty, ReferenceType):
         substituted_ref = substitute_type_params(ty.referenced_type, substitution)
         return ReferenceType(referenced_type=substituted_ref, mutability=ty.mutability)
+
+    elif isinstance(ty, IteratorType):
+        # `replace`, so the item mode and the written spelling ride along.
+        return replace(ty, element_type=substitute_type_params(ty.element_type, substitution))
 
     elif isinstance(ty, FunctionType):
         # `replace`, so `param_modes` rides along beside `captures` (#368).

@@ -80,6 +80,7 @@ _SPELLING_KINDS = frozenset(COMPOSITE_KINDS) | DECLARATION_KINDS | {"UnknownType
 SPELLED_NAME_SLOTS: dict[str, tuple[str, ...]] = {
     "UnknownType": ("name", "namespace"),
     "GenericTypeRef": ("base_name", "namespace"),
+    "IteratorType": ("base_name", "namespace"),
     "ArrayType": ("size_name",),
     "StructType": ("name", "generic_base"),
     "EnumType": ("name", "generic_base"),

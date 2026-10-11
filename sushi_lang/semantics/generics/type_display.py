@@ -46,7 +46,8 @@ def display_type(ty) -> str:
         return f"{ty.base_name}@({args})"
 
     if isinstance(ty, IteratorType):
-        return f"Iterator@({display_type(ty.element_type)})"
+        from sushi_lang.semantics.generics.iterators import ITERATOR_BASE, written_item
+        return f"{ITERATOR_BASE}@({display_type(written_item(ty))})"
 
     if isinstance(ty, ArrayType):
         return f"{element_text(ty.base_type, display_type)}[{ty.size}]"

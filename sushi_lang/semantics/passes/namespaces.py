@@ -392,12 +392,14 @@ def _unit_provider(unit_name: str, tables: SymbolTables,
                    homed: Optional[Dict[str, str]] = None, *,
                    units: Optional[Dict[str, Unit]] = None,
                    library_registry: Optional[LibraryRegistry] = None,
-                   visited: AbstractSet[str] = frozenset()) -> UnitNamespace:
+                   visited: AbstractSet[str] = frozenset(),
+                   generics: Tuple[Provider, ...] = ()) -> UnitNamespace:
     """A compilation unit's own declarations, from the collect pass's tables.
 
     `homed` is the predefined enums a STDLIB unit is the home of (#574): no unit
     declares `FileMode`, so the visibility table has no record to read it from. The
-    unit's `public use` statements become its re-exports (section 8.1).
+    unit's `public use` statements become its re-exports (section 8.1), and so does the
+    built-in generic a stdlib unit activates (`generics`, `<collections/iter>`).
     """
     declared = [
         (kind, name, origin.is_public)
@@ -412,7 +414,8 @@ def _unit_provider(unit_name: str, tables: SymbolTables,
         constants=dict(tables.constants.by_unit.get(unit_name, {})),
         generics=dict(tables.generic_funcs.by_unit.get(unit_name, {})),
         others=others,
-        reexports=_reexports_of(unit_name, tables, units, library_registry, visited),
+        reexports=(*_reexports_of(unit_name, tables, units, library_registry, visited),
+                   *generics),
         hidden={name for _, name, is_public in declared if not is_public},
     )
 
@@ -453,13 +456,17 @@ def _stdlib_provider(path: str, tables: SymbolTables, units: Dict[str, Unit],
     # The predefined enums this module is the HOME of ride along with every shape
     # (#574): `<io/fs>` brings `FileMode`, `<math>` brings `MathError`.
     homed = homed_enums(path, getattr(tables, "enums", None))
-    if is_source_stdlib_module(path):
-        return _unit_provider(path, tables, homed, units=units,
-                              library_registry=library_registry, visited=visited)
-
     generic = GENERIC_UNIT_TYPES.get(path)
-    if generic is not None:
-        return GenericNamespace(path, {generic})
+    gated = () if generic is None else (GenericNamespace(path, {generic}),)
+    if is_source_stdlib_module(path):
+        # A source module that also activates a built-in generic hands the name on as
+        # a re-export of its unit: one provider, both roles.
+        return _unit_provider(path, tables, homed, units=units,
+                              library_registry=library_registry, visited=visited,
+                              generics=gated)
+
+    if gated:
+        return gated[0]
 
     module = get_stdlib_registry().get_module(path)
     if module is not None:

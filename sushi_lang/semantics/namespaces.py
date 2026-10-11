@@ -39,8 +39,12 @@ V = TypeVar("V")
 # and the import is what gives a unit the right to write the name. The membership of one
 # `GenericNamespace`, and the whole of what `generics/active_generics.py` used to hold in
 # a process-global set five test files had to reset (section 4.3.1).
+#
+# A module may also be a Sushi-source unit: `<collections/iter>` brings the name
+# `Iterator` beside its own declarations (`passes/namespaces.py:_stdlib_provider`).
 GENERIC_UNIT_TYPES = {
     "collections/hashmap": "HashMap",
+    "collections/iter": "Iterator",
 }
 GATED_GENERIC_NAMES = frozenset(GENERIC_UNIT_TYPES.values())
 

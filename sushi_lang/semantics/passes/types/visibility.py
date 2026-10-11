@@ -29,7 +29,8 @@ from sushi_lang.semantics.visibility import (
 if TYPE_CHECKING:
     from . import TypeValidator
 
-__all__ = ["calling_unit", "extension_reaches", "name_is_ambiguous",
+__all__ = ["built_in_generic_unreachable", "calling_unit", "extension_reaches",
+           "name_is_ambiguous",
            "name_is_contested", "out_of_scope_help",
            "reject_ambiguous_extension", "reject_ambiguous_name",
            "reject_unreachable_extension",
@@ -46,6 +47,22 @@ __all__ = ["calling_unit", "extension_reaches", "name_is_ambiguous",
 _TYPE_KINDS = ("struct", "enum", "perk")
 
 
+def built_in_generic_unreachable(validator: 'TypeValidator', name: str,
+                                 namespace: Optional[str] = None) -> bool:
+    """May this unit NOT write the built-in generic `name`, bare or behind `namespace`?
+
+    The question `reject_out_of_scope_type` and the qualifier rule answer with CE2001,
+    asked with no diagnostic, so a refused name is one fault (#991).
+    """
+    if getattr(validator, "in_synthesized_body", False):
+        return False
+    if namespace is not None:
+        namespaces = validator.namespaces
+        return not (namespaces.is_namespace(namespace)
+                    and namespaces.lookup(namespace, name) is not None)
+    return not validator.scope.holds_generic(name)
+
+
 def reject_out_of_scope_type(validator: 'TypeValidator', name: str,
                              loc: Any) -> bool:
     """CE2001: a type some unit declares and THIS unit did not import (section 6.1).
@@ -60,7 +77,7 @@ def reject_out_of_scope_type(validator: 'TypeValidator', name: str,
     if getattr(validator, "in_synthesized_body", False):
         return False
     scope = validator.scope
-    if not scope.holds_generic(name):
+    if built_in_generic_unreachable(validator, name):
         module = next((path for path, generic in GENERIC_UNIT_TYPES.items()
                        if generic == name), None)
         _reject_unreachable(validator, name, loc,

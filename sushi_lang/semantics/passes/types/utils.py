@@ -10,10 +10,13 @@ from sushi_lang.internals.report import Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.tuples import TUPLE_BASE
-from sushi_lang.semantics.typesys import Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType, ReferenceType, ForeignPtrType
+from sushi_lang.semantics.typesys import (
+    Type, BuiltinType, UnknownType, ArrayType, DynamicArrayType, StructType, EnumType,
+    ReferenceType, ForeignPtrType, IteratorType, owns_resource)
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.passes.types.visibility import (
-    name_was_refused, reject_private_kept, reject_private_type)
+    built_in_generic_unreachable, name_was_refused, reject_private_kept,
+    reject_private_type)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import Param, Expr
@@ -135,6 +138,10 @@ def names_no_type(validator: 'TypeValidator', type_obj: Optional[Type]) -> bool:
             if (held.base_name != TUPLE_BASE
                     and held.base_name not in validator.generic_enum_table.by_name
                     and held.base_name not in validator.generic_struct_table.by_name):
+                return True
+        elif isinstance(held, IteratorType) and held.base_name is not None:
+            # The compiler's own type: no table holds it, and the import gates the name.
+            if built_in_generic_unreachable(validator, held.base_name, held.namespace):
                 return True
     return False
 
@@ -272,7 +279,7 @@ def _check_type_names(validator: 'TypeValidator', type_obj: Optional[Type], span
         # so the only question left is whether this unit may name it.
         reject_private_type(validator, type_obj.name, span)
     else:
-        from sushi_lang.semantics.typesys import FunctionType, IteratorType, PointerType
+        from sushi_lang.semantics.typesys import FunctionType, PointerType
         if isinstance(type_obj, FunctionType):
             for param_type in type_obj.param_types or ():
                 _check_type_names(validator, param_type, span)
@@ -457,9 +464,21 @@ def resolve_declared_type(validator: 'TypeValidator', ty: Optional[Type]) -> Opt
 
     if isinstance(ty, (UnknownType, GenericTypeRef)):
         return resolve_unknown_type(ty, structs, enums)
-    if isinstance(ty, (FunctionType, ArrayType, DynamicArrayType)):
-        return resolve_type_recursively(ty, structs, enums)
+    if isinstance(ty, (FunctionType, ArrayType, DynamicArrayType, IteratorType)):
+        return settle_item_modes(validator, resolve_type_recursively(ty, structs, enums))
     return ty
+
+
+def settle_item_modes(validator: 'TypeValidator', ty: Optional[Type]) -> Optional[Type]:
+    """`ty` with every iterator in its one form: a plain item has one type for both modes.
+
+    The pass's reader of `generics/iterators.py:settle_item_modes`, with the program's
+    `Drop` set: a type that implements `Drop` owns, also when no field owns heap.
+    """
+    from sushi_lang.semantics.generics.iterators import settle_item_modes as settle
+    drops = validator.drop_type_names
+    return settle(ty, lambda part: owns_resource(
+        part, drops, resolve=lambda held: resolve_declared_type(validator, held)))
 
 
 def intern_declared_wrapper(validator: 'TypeValidator',
@@ -535,7 +554,7 @@ def validate_and_register_parameters(validator: 'TypeValidator', params: List['P
             continue
 
         from sushi_lang.semantics.typesys import FunctionType
-        if isinstance(param.ty, (FunctionType, ArrayType, DynamicArrayType)):
+        if isinstance(param.ty, (FunctionType, ArrayType, DynamicArrayType, IteratorType)):
             # A container spelling: the WRAPPER is concrete but its members may not be.
             # A function type binds its implicit UnknownType("StdError"); an array binds
             # its element, which `P[]` leaves unresolved (#284).

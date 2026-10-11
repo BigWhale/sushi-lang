@@ -111,7 +111,7 @@ _add(ErrorMessage("CE2418", Severity.ERROR,
 
 _add(ErrorMessage("CE2419", Severity.ERROR,
     "a reference type cannot be a generic type argument ('{ty}')",
-    Category.BORROW, "A container of borrows -- `List@(peek T)`, `HashMap@(peek K, V)`, `Maybe@(peek T)` -- has no defined semantics: nothing relates the stored borrows to the values they point at, and the backend cannot lay one out (issue #318). Store owned values, or indices into a container that outlives the uses. There is NO `Maybe` / `Result` exemption on purpose: those two are exactly how a returned borrow escapes (CE2417). Foreign `ptr` carries the same restriction, as CE5012."))
+    Category.BORROW, "A container of borrows -- `List@(peek T)`, `HashMap@(peek K, V)`, `Maybe@(peek T)` -- has no defined semantics: nothing relates the stored borrows to the values they point at, and the backend cannot lay one out (issue #318). Store owned values, or indices into a container that outlives the uses. There is NO `Maybe` / `Result` exemption on purpose: those two are exactly how a returned borrow escapes (CE2417). Foreign `ptr` carries the same restriction, as CE5012. The one exception is the ITEM of an iterator (#1227, docs/design/iteration.md): `Iterator@(peek T)` lends its items, and `Iterator@((i32, peek string))` lends one element of a tuple item. Only `peek`, and only at the top of the item or of one tuple element: `Iterator@(poke T)`, `Iterator@(peek (i32, string))` and a `peek` deeper in the item (`Iterator@(List@(peek T))`) are this error."))
 
 _add(ErrorMessage("CE2420", Severity.ERROR,
     "an extension cannot target a reference type ('{ty}')",

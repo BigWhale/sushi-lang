@@ -6,7 +6,7 @@ POSITION (docs/design/tuples.md): a type takes types alone, a destructure takes 
 """
 from __future__ import annotations
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import Callable, List, Optional, TYPE_CHECKING
 
 from lark import Token, Tree
 
@@ -38,8 +38,18 @@ def _parts(elem: Tree) -> tuple[Optional[Tree], Optional[Token], Optional[Token]
     return type_node, name, underscore
 
 
-def parse_tuple_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
-    """A tuple TYPE: every element is a type, and no element names a binding."""
+# What a reader makes of one element that is written with a borrow mode: the element
+# type to keep. The tuple of an `Iterator@(...)` item keeps a `peek` element.
+LentElement = Callable[[ReferenceType, Tree], Type]
+
+
+def parse_tuple_type(node: Tree, ast_builder: 'ASTBuilder',
+                     lent_element: Optional[LentElement] = None) -> Optional[Type]:
+    """A tuple TYPE: every element is a type, and no element names a binding.
+
+    An element with a borrow mode is CE6107, as a tuple holds values. `lent_element` is
+    the one exception: the item of an `Iterator@(...)` (docs/design/iteration.md).
+    """
     tuple_list = first_tree(node.children, "tuple_list")
     if tuple_list is None:
         ice(node, "tuple_t without a tuple_list")
@@ -55,7 +65,9 @@ def parse_tuple_type(node: Tree, ast_builder: 'ASTBuilder') -> Optional[Type]:
         element = ast_builder._parse_type(type_node)
         if element is None:
             ice(elem, "tuple element type did not parse")
-        if isinstance(element, ReferenceType):
+        if isinstance(element, ReferenceType) and lent_element is not None:
+            element = lent_element(element, type_node)
+        elif isinstance(element, ReferenceType):
             element = ast_builder.recover(
                 SyntaxDiagnostic("CE6107", span=span_of(type_node),
                                  mode=element.mutability.value)
