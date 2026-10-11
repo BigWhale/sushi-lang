@@ -114,9 +114,13 @@ def can_fork_for(env: Mapping[str, str], server_env: Mapping[str, str]) -> bool:
 class ForkServer:
     """The runner's handle on one server. `run` is safe to call from many threads."""
 
-    def __init__(self, project_root: Path, work_dir: Path):
+    def __init__(self, project_root: Path, work_dir: Path,
+                 env: Optional[Mapping[str, str]] = None):
         self.project_root = Path(project_root)
         self.work_dir = Path(work_dir)
+        # The environment the server starts with: the runner's, unless the caller names
+        # another (the golden seed gate pins a second PYTHONHASHSEED).
+        self._start_env = None if env is None else dict(env)
         self._lock = threading.Lock()
         self._proc: Optional[subprocess.Popen] = None
         self._control: Optional[int] = None
@@ -133,7 +137,7 @@ class ForkServer:
         # short directory of its own.
         self._socket_dir = tempfile.mkdtemp(prefix="sushi-fs-")
         self._socket_path = os.path.join(self._socket_dir, "s")
-        self.env = dict(os.environ)
+        self.env = dict(os.environ if self._start_env is None else self._start_env)
         base = self.work_dir / "server-env.json"
         base.write_text(json.dumps(self.env), encoding="utf-8")
         control_r, control_w = os.pipe()

@@ -19,6 +19,15 @@ from test_metadata import GOLDEN_DUMPS, GoldenDump, TestMetadata
 # How many lines of a difference a failure shows; it counts the rest.
 DIFF_LINES_SHOWN = 40
 
+# The hash seeds the golden seed gate may pin; it takes the first that is not the seed of
+# the main run.
+GATE_SEEDS = ("1", "2")
+
+
+def gate_seed(main_seed: Optional[str]) -> str:
+    """The PYTHONHASHSEED of the golden seed gate: pinned, and not the main run's."""
+    return next(seed for seed in GATE_SEEDS if seed != main_seed)
+
 
 def dump_path(binary_path: Path, dump: GoldenDump) -> Path:
     """Where the compile of a fixture writes one dump."""

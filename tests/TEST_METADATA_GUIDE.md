@@ -323,6 +323,11 @@ Compares a dump of the program with a golden file beside the fixture:
 - The runner owns the two flags: `COMPILER_FLAGS` refuses `--dump-shir` and `--dump-slir`
 - A missing golden file fails the fixture. Run it with `--bless` to write the file, and
   read the new file in the diff as you read code
+- The dump must not change with `PYTHONHASHSEED`. After the main run, the runner step
+  `golden_seed_gate` starts a second fork-server with another pinned seed, compiles each
+  golden fixture of the selection again under it, and compares each dump again. The step
+  prints both seeds (`Golden seed gate (main seed 0, gate seed 1): ...`); a selection with
+  no golden fixture prints its skip
 
 ### Advanced Metadata Directives
 
