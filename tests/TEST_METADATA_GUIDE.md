@@ -823,7 +823,7 @@ python tests/run_tests.py --list tests/ir/ratchet.txt
 ```
 
 - The file holds one repository-relative path for each line
-  (`tests/arrays/fixed/test_fixed_basic.sushi`). A blank line and a line that starts with
+  (`tests/array/foreach/test_foreach_fixed_array.sushi`). A blank line and a line that starts with
   `#` are not paths
 - `--list` is a selector, like `--filter`: it goes through `select_fixtures` and checks
   each listed fixture in full. It composes with the other selectors
