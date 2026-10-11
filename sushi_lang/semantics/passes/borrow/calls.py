@@ -145,9 +145,15 @@ def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: MethodLike) -> Non
 
 
 def _viewed_array(expr: Expr) -> Expr:
-    """The array a slice views: `a[0..2]` reads the storage of `a` (docs/design/slices.md)."""
-    while isinstance(expr, IndexAccess) and expr.is_slice:
-        expr = expr.array
+    """The array a slice views: `a[0..2]` reads the storage of `a` (docs/design/slices.md).
+
+    Only slice steps are seen through; an element step names no storage a second
+    expression can share.
+    """
+    walked = walk_place(expr, Step.INDEX)
+    if walked.node is not None and all(
+            isinstance(step, IndexAccess) and step.is_slice for step in walked.path):
+        return walked.node
     return expr
 
 
