@@ -1,10 +1,10 @@
 # EXPECT_RUNTIME_EXIT: 0
 # EXPECT_DUMP_SHIR: test_shir_holes.shir
 #
-# the SHIR dump of a body with holes: lowering does not handle a `let`, an `if` and a
-# method call yet, so each is a `<hole: ...>` with the name of its AST class, and the
-# compile goes on through the old pipeline. The `return` lowers, and its local is the
-# binder of the `let`.
+# the SHIR dump of a body with holes: lowering does not handle a `let` and an `if` yet,
+# so each is a `<hole: ...>` with the name of its AST class, and the compile goes on
+# through the old pipeline. The method call and the `return` lower, and their local is
+# the binder of the `let`.
 
 fn main() i32:
     let i32 total = 40 + 2

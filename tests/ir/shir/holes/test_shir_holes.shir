@@ -6,5 +6,5 @@ ShirBody main
   block  :
     <hole: Let>
     <hole: If>
-    ExprStmt(<hole: DotCall>)
+    ExprStmt(Call(Dotted(LocalRef(_0), "hash"), []))
     Return(Binary(-, LocalRef(_0), Lit(42) = 42))

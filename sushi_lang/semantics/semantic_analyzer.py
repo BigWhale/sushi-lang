@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.generics.monomorphize import Monomorphizer
     from sushi_lang.semantics.generics.array_perk_copies import ArrayPerkCopies
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
+from sushi_lang.semantics.shir.lookup import DeclLookup
 from sushi_lang.semantics.shir.lowering import LoweredProgram, lower_unit
 from sushi_lang.semantics.passes.types import (
     TypeValidator, validate_perk_implementation_method)
@@ -833,7 +834,9 @@ class SemanticAnalyzer:
             passes = self._unit_passes(unit, unit_reporter, monomorphizer,
                                        libraries, destroy_effects, enum_names)
             passes.scope.run(unit.ast)
-            lower_unit(self.shir, unit, passes.scope.bindings, self._operand_reader(unit))
+            lower_unit(self.shir, unit, passes.scope.bindings, self._operand_reader(unit),
+                       DeclLookup(self.tables.enums.by_name, self.tables.generic_enums.by_name,
+                                  self.tables.namespaces, unit.name))
             passes.typecheck.run(unit.ast)
             passes.lifter.run()
             passes.borrow.run(unit.ast, skip=passes.typecheck.checked_template_ids)
