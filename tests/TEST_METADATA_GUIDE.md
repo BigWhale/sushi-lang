@@ -303,6 +303,26 @@ that an extension copy is not made when no call reaches it.
 - The runner adds `--write-ll --no-incremental`, as for `EXPECT_IR_HOLDS`. The directive
   may be repeated
 
+#### EXPECT_DUMP_SHIR / EXPECT_DUMP_SLIR
+
+Compares a dump of the program with a golden file beside the fixture:
+`EXPECT_DUMP_SHIR` reads the `--dump-shir` dump, and `EXPECT_DUMP_SLIR` reads the
+`--dump-slir` dump (`docs/design/ir.md`, 11.3).
+
+```sushi
+# EXPECT_DUMP_SHIR: main.shir
+# EXPECT_DUMP_SLIR: main.slir
+```
+
+- The value is the name of a file in the directory of the fixture. It ends in `.shir` or
+  `.slir`, and it has no directory part. Each directive may stand once
+- The comparison is exact, byte for byte. A difference fails the fixture and shows a diff
+- The runner adds the dump flag to the compile, with a path in the run's own directory
+  (`--dump-shir <path>`), and the compiler writes the dump to that path. The compile goes
+  on as usual, so every other directive of the fixture still holds
+- The runner owns the two flags: `COMPILER_FLAGS` refuses `--dump-shir` and `--dump-slir`
+- A missing golden file fails the fixture
+
 ### Advanced Metadata Directives
 
 #### TIMEOUT_SECONDS

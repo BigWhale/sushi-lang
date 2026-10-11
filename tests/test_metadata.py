@@ -4,7 +4,7 @@ import hashlib
 import re
 import sys
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Tuple
+from typing import NamedTuple, Optional, List, Dict, Tuple
 from pathlib import Path
 
 
@@ -109,6 +109,9 @@ class TestMetadata:
     # defined), in written order. A pattern with no `$` reads the stem, the symbol after
     # its unit.
     ir_function_expectations: Optional[List[Tuple[str, bool]]] = None
+    # The golden file of each dump the fixture compares: kind ("shir", "slir") -> the
+    # name of a file beside the fixture. The runner asks the compiler for each dump.
+    golden_dumps: Optional[Dict[str, str]] = None
     # A directive value the parser could not read; the runner fails a fixture that has one.
     directive_errors: Optional[List[str]] = None
 
@@ -150,6 +153,8 @@ class TestMetadata:
             self.ir_expectations = []
         if self.ir_function_expectations is None:
             self.ir_function_expectations = []
+        if self.golden_dumps is None:
+            self.golden_dumps = {}
         if self.directive_errors is None:
             self.directive_errors = []
 
@@ -186,10 +191,27 @@ class TestMetadata:
             self.requires_runtime = True
 
 
-# Flags the RUNNER spells: they decide the output path, the build kind and the cache, so
-# a fixture that changed one would break the run rather than test anything.
+class GoldenDump(NamedTuple):
+    """One dump a fixture may compare with a golden file beside it."""
+    kind: str
+    directive: str
+    suffix: str
+    flag: str
+
+
+# ONE row for each dump. The runner adds the flag to the compile of a fixture that has the
+# directive, and so the flag is the runner's to spell.
+GOLDEN_DUMPS = (
+    GoldenDump("shir", "EXPECT_DUMP_SHIR", ".shir", "--dump-shir"),
+    GoldenDump("slir", "EXPECT_DUMP_SLIR", ".slir", "--dump-slir"),
+)
+
+
+# Flags the RUNNER spells: they decide the output path, the build kind, the cache and the
+# dumps, so a fixture that changed one would break the run rather than test anything.
 RUNNER_OWNED_FLAGS = frozenset({
     '-o', '--lib', '--lib-info', '--clean-cache', '--build-stdlib', '--cache-dir',
+    *(dump.flag for dump in GOLDEN_DUMPS),
 })
 
 # The two flags the runner writes for each library build. `LIB_FLAGS` refuses them, because
@@ -462,6 +484,24 @@ def _ir_function(directive: str, defined: bool):
     return handle
 
 
+def _golden_dump(dump: GoldenDump):
+    """`EXPECT_DUMP_SHIR: <name>.shir` / `EXPECT_DUMP_SLIR: <name>.slir`, once each."""
+    def handle(metadata: TestMetadata, value: str, test_file: Path) -> None:
+        name = _unquote(value).strip()
+        if (Path(name).name != name or not name.endswith(dump.suffix)
+                or name == dump.suffix):
+            metadata.directive_errors.append(
+                f"{dump.directive} takes the name of a file beside the fixture that ends "
+                f"in {dump.suffix}, not {value!r}")
+        elif dump.kind in metadata.golden_dumps:
+            metadata.directive_errors.append(
+                f"{dump.directive} may stand once; the fixture names "
+                f"{metadata.golden_dumps[dump.kind]!r} and {name!r}")
+        else:
+            metadata.golden_dumps[dump.kind] = name
+    return handle
+
+
 def _release_lib_flag(metadata: TestMetadata, test_file: Path) -> None:
     """`--lib` joins the flags beside OUTPUT_PATH, and is refused without it."""
     if metadata.held_lib_flag is None:
@@ -515,6 +555,7 @@ VALUED_DIRECTIVES = {
     'EXPECT_IR_LACKS': _ir_expectation('EXPECT_IR_LACKS', False),
     'EXPECT_IR_FUNCTION': _ir_function('EXPECT_IR_FUNCTION', True),
     'EXPECT_IR_NO_FUNCTION': _ir_function('EXPECT_IR_NO_FUNCTION', False),
+    **{dump.directive: _golden_dump(dump) for dump in GOLDEN_DUMPS},
 }
 
 # Every directive that is a flag: bare `NAME` is true, `NAME: true|yes|1` sets it.

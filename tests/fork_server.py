@@ -37,6 +37,10 @@ from typing import Callable, Dict, List, Mapping, Optional
 # than the server had cannot use the server.
 IMPORT_TIME_ENV = ("SUSHI_GRAMMAR_CACHE_DIR", "XDG_CACHE_HOME", "HOME")
 
+# A Python file that a compile starts in place of `python -m sushi_lang`. Only the runner
+# tests set it: the stub of the golden dumps stands in for a compiler flag.
+COMPILER_STUB_ENV = "SUSHI_COMPILER_STUB"
+
 # The modules that `cli.main` and the pipeline import inside their functions, for a
 # compile that reaches code generation. The server imports them before it forks, so that
 # each child does not.
@@ -243,7 +247,11 @@ def _run_cli() -> int:
     import runpy
 
     try:
-        runpy.run_module("sushi_lang", run_name="__main__", alter_sys=True)
+        stub = os.environ.get(COMPILER_STUB_ENV)
+        if stub:
+            runpy.run_path(stub, run_name="__main__")
+        else:
+            runpy.run_module("sushi_lang", run_name="__main__", alter_sys=True)
         code = 0
     except SystemExit as exc:
         code = _exit_code(exc)

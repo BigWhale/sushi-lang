@@ -33,7 +33,8 @@ from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        arm_spelling_gate, spelling_gate_tripped,
                        DocGateResult, stdlib_doc_gate, stdlib_override_command,
                        fixtures_only)
-from fork_server import ForkServer
+from fork_server import COMPILER_STUB_ENV, ForkServer, wrapper_env
+from golden_dumps import check_dumps, dump_flags
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
@@ -878,7 +879,7 @@ class TestRunner:
         else:
             args = [*(["--clean-cache"] if clean else []), source, "-o", output,
                     *metadata.compiler_flags, *(IR_FLAGS if metadata.reads_the_ir else ()),
-                    *cache_flags]
+                    *dump_flags(metadata, binary_path), *cache_flags]
         if metadata.stdlib_modules and workspace is not None:
             # The bootstrap runs the compiler without the `sushic` wrapper, so it does what
             # the wrapper does: start in the checkout, and name the caller's directory.
@@ -923,6 +924,16 @@ class TestRunner:
                 self.forked_compiles.append((key, args))
                 return done
         self.fresh_compiles.append((key, args))
+        stub = env.get(COMPILER_STUB_ENV)
+        if stub:
+            # A runner test names a stub that stands in for the compiler. It starts where
+            # the wrapper starts the compiler, with the environment the wrapper gives it.
+            stub_env = wrapper_env(env, str(cwd), str(self.project_root))
+            stub_env["PYTHONPATH"] = os.pathsep.join(
+                [str(self.project_root), *filter(None, [env.get("PYTHONPATH")])])
+            return subprocess.run([sys.executable, stub, *args], capture_output=True,
+                                  text=True, cwd=self.project_root, env=stub_env,
+                                  timeout=timeout)
         return subprocess.run([str(self.project_root / "sushic"), *args],
                               capture_output=True, text=True, cwd=cwd, env=env,
                               timeout=timeout)
@@ -1063,6 +1074,9 @@ class TestRunner:
 
             if success and metadata.reads_the_ir:
                 success, message = check_ir(binary_path.with_suffix(".ll"), metadata, message)
+
+            if success and metadata.golden_dumps:
+                success, message = check_dumps(test_file, metadata, binary_path, message)
 
             return success, message
 
