@@ -1,0 +1,17 @@
+# A `poke self` receiver that is a field borrows the root owner. A second field of
+# the same owner as a plain argument is refused.
+# EXPECT_ERROR_CODE: CE2407
+
+struct H:
+    i32[] items
+    i32[] more
+
+extend i32[] add_all_from(poke self, i32[] xs) ~:
+    foreach(x in xs.iter()):
+        self.push(x)
+
+fn main() i32:
+    let H h = H(from([1]), from([2, 3]))
+    h.items.add_all_from(h.more)
+    println(h.items.len())
+    return 0

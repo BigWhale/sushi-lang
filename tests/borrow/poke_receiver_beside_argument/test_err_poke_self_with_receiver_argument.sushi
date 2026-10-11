@@ -1,0 +1,13 @@
+# A `poke self` receiver is an exclusive borrow for the length of the call. The same
+# array as a plain argument is refused.
+# EXPECT_ERROR_CODE: CE2407
+
+extend i32[] add_all(poke self, i32[] xs) ~:
+    foreach(x in xs.iter()):
+        self.push(x)
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3])
+    data.add_all(data)
+    println(data.len())
+    return 0

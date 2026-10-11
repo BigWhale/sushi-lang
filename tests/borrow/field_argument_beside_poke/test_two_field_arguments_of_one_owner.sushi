@@ -1,0 +1,16 @@
+# Two plain field reads of one owner in one call are two shared borrows. They are
+# legal together.
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_NO_LEAKS
+
+struct H:
+    i32[] items
+    i32[] more
+
+fn g(i32[] a, i32[] b) i32:
+    return a.len() + b.len()
+
+fn main() i32:
+    let H h = H(from([1]), from([2, 3]))
+    println(g(h.items, h.more))
+    return 0

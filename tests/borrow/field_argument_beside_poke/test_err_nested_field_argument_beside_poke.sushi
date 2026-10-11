@@ -1,0 +1,17 @@
+# A read two fields deep is a shared borrow of the root owner.
+# EXPECT_ERROR_CODE: CE2407
+
+struct Inner:
+    i32[] items
+
+struct Outer:
+    Inner inner
+
+fn g(poke Outer o, i32[] b) i32:
+    o.inner.items.push(1)
+    return b.len()
+
+fn main() i32:
+    let Outer o = Outer(Inner(from([1])))
+    println(g(poke o, o.inner.items))
+    return 0

@@ -1,0 +1,18 @@
+# A change of the first owner after the last use of the chain is legal.
+# EXPECT_STDOUT_EXACT: "3\n3\n3\n4\n"
+# EXPECT_NO_LEAKS
+
+struct H:
+    i32[] items
+
+fn main() i32:
+    let H h = H(from([1, 2, 3]))
+    let i32[] a = h.items
+    let i32[] b = a
+    let i32[] c = b
+    println(a.len())
+    println(b.len())
+    println(c.len())
+    h.items.push(4)
+    println(h.items.len())
+    return 0

@@ -1,0 +1,12 @@
+# A plain `self` receiver is a shared borrow. The same array as a plain argument is
+# legal.
+# EXPECT_STDOUT_EXACT: "6\n"
+# EXPECT_NO_LEAKS
+
+extend i32[] lengths_of(i32[] xs) i32:
+    return self.len() + xs.len()
+
+fn main() i32:
+    let i32[] data = from([1, 2, 3])
+    println(data.lengths_of(data))
+    return 0

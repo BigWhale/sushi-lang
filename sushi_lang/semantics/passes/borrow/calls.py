@@ -15,12 +15,12 @@ from sushi_lang.semantics.param_modes import (
     CalleeKind, ParamMode, borrow_mode, effective_modes, receiver_mode,
 )
 
-from .borrows import register_implicit_borrow
+from .borrows import acquire_borrow, register_implicit_borrow
 from .iterators import take_lent_iterator
 from .consume import consume, consume_each, read_through_receiver, source_provenance
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, expr_to_string
 from .methods import CONTAINER_INSERT_METHODS, callee_effect
-from .reads import OWNER_STEPS, called_on, read_type
+from .reads import OWNER_STEPS, borrow_owner, called_on, read_type
 from .state import BorrowState
 
 if TYPE_CHECKING:
@@ -340,10 +340,19 @@ def reject_read_through_outside_try(checker: 'BorrowChecker', expr: MethodLike) 
 
 
 def settle_method_args(checker: 'BorrowChecker', expr: MethodLike) -> None:
-    """Apply the declared modes of an extension or perk method to its arguments."""
+    """Apply the declared modes of an extension or perk method to its arguments.
+
+    A `poke self` receiver is a `poke` borrow of its owner for the call, as a `poke`
+    argument is, so an argument that reads the same owner is CE2407.
+    """
     modes = expr.callee_param_modes
     if modes is None:
         return
+    if receiver_mode(expr.callee_self_mode) is ParamMode.POKE:
+        owner = borrow_owner(expr.receiver)
+        state = checker.borrow_state.get(owner) if owner is not None else None
+        if state is not None and not state.is_moved:
+            acquire_borrow(checker, state, expr.receiver.loc, is_poke=True)
     for i, arg in enumerate(expr.args):
         apply_mode(checker, expr, arg, i, modes, CalleeKind.METHOD)
 

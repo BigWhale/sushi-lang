@@ -1,0 +1,15 @@
+# A plain item over a let-borrow only reads. It is legal.
+# EXPECT_STDOUT_EXACT: "6\n"
+# EXPECT_NO_LEAKS
+
+struct H:
+    i32[] items
+
+fn main() i32:
+    let H h = H(from([1, 2, 3]))
+    let i32[] v = h.items
+    let i32 sum = 0
+    foreach(r in v.iter()):
+        sum := sum + r
+    println(sum)
+    return 0

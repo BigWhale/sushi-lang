@@ -1,0 +1,15 @@
+# A chain of three `let` bindings reaches the first owner. A change of that owner
+# while the last binding lives is refused.
+# EXPECT_ERROR_CODE: CE2412
+
+struct H:
+    i32[] items
+
+fn main() i32:
+    let H h = H(from([1, 2, 3]))
+    let i32[] a = h.items
+    let i32[] b = a
+    let i32[] c = b
+    h.items.push(4)
+    println(c.len())
+    return 0

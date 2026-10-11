@@ -1,0 +1,12 @@
+# A `poke` item over a `peek` parameter is reported once.
+# EXPECT_ERROR_CODES_EXACT: CE2408
+
+fn zero_peeked(peek i32[] xs) ~:
+    foreach(poke r in xs.iter()):
+        r := 0
+
+fn main() i32:
+    let i32[] d = from([1, 2])
+    zero_peeked(peek d)
+    println(d[0])
+    return 0

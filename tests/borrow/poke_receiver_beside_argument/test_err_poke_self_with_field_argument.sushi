@@ -1,0 +1,14 @@
+# A field of the receiver as a plain argument of a `poke self` method is refused.
+# EXPECT_ERROR_CODE: CE2407
+
+struct H:
+    i32[] items
+
+extend H take(poke self, i32[] xs) i32:
+    self.items.push(1)
+    return xs.len()
+
+fn main() i32:
+    let H h = H(from([1, 2]))
+    println(h.take(h.items))
+    return 0

@@ -437,8 +437,7 @@ def record_borrowed_binding(checker: 'BorrowChecker', stmt: Let,
     owner = borrow_owner(stmt.value)
     if owner is None:
         return
-    owners = (slice_owners(checker, owner) if is_slice(stmt.value) else (owner,))
-    record_owners(checker.borrow_state, dest, owners, stmt.loc,
+    record_owners(checker.borrow_state, dest, view_owners(checker, owner), stmt.loc,
                   checker._scope_binding_borrows[-1])
 
 
@@ -447,11 +446,12 @@ def is_slice(expr: Optional[Expr]) -> bool:
     return isinstance(expr, IndexAccess) and expr.is_slice
 
 
-def slice_owners(checker: 'BorrowChecker', owner: str) -> tuple[str, ...]:
-    """The owners a slice of `owner` freezes: `owner`, and the owners it borrows from.
+def view_owners(checker: 'BorrowChecker', owner: str) -> tuple[str, ...]:
+    """The owners a binding that reads out of `owner` freezes: `owner`, and its owners.
 
-    A slice of a `let` of a slice views the storage of the first array, so a change of
-    that array must reach the second slice too.
+    A `let` of a let-borrow (a read, a field, a slice) views the storage of the FIRST
+    owner, so a change of that owner must reach the second binding too. Each binding
+    holds the whole set, so a chain of any length reaches the first owner.
     """
     state = checker.borrow_state.get(owner)
     if state is not None and state.is_let_borrow and not state.is_lent_iterator:

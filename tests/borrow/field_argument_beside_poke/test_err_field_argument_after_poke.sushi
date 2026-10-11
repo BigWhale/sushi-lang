@@ -1,0 +1,15 @@
+# A field read is a shared borrow of its owner. A `poke` of that owner in the same
+# call is refused.
+# EXPECT_ERROR_CODE: CE2407
+
+struct H:
+    i32[] items
+
+fn g(poke H h, i32[] b) i32:
+    h.items.push(1)
+    return b.len()
+
+fn main() i32:
+    let H h = H(from([1]))
+    println(g(poke h, h.items))
+    return 0
