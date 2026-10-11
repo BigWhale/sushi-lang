@@ -4,6 +4,16 @@ All notable changes to Sushi Lang will be documented in this file.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-11
+
+Sushi has iterators as values. An `Iterator@(T)` is a type a program can write, with lazy
+adapters, and a `peek T` return lends a borrow out of a function. A slice `data[a..b]`
+views an array with no copy. A `match` takes string arms, `|` alternatives and integer
+ranges, and a byte literal `a'x'` writes one byte. The predefined perk `Clone` joins the
+generic constraints. These are breaking changes: a method of a unit is private unless it
+is `public`, a generic body is checked where it is written, a range always goes up (use
+`.rev()` to count down), and every `.slib` built by 0.15 needs a rebuild.
+
 ### Added
 
 - **The predefined perk `Clone`.** `fn clone() Self`, structural: every type that holds no
