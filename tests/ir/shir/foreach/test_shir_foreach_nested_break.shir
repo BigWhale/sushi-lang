@@ -1,0 +1,12 @@
+unit test_shir_foreach_nested_break
+
+ShirBody main
+  params : []
+  locals : [_0 "rows": i32[], _1 "cols": i32[], _2 "total": i32, _3 "r", _4 "c"]
+  block  :
+    Assign(LocalRef(_0), <hole: DynamicArrayFrom>, is_init: true)
+    Assign(LocalRef(_1), <hole: DynamicArrayFrom>, is_init: true)
+    Assign(LocalRef(_2), Lit(0), is_init: true)
+    Loop(Items(Call(Dotted(LocalRef(_0), "iter"), []), _3, Bare), [If(Binary(==, LocalRef(_3), Lit(3)), then: [Break]), Loop(Items(Call(Dotted(LocalRef(_1), "iter"), []), _4, Bare), [If(Binary(==, LocalRef(_4), Lit(20)), then: [Continue]), If(Binary(>, LocalRef(_4), Lit(20)), then: [Break]), Assign(LocalRef(_2), Binary(+, LocalRef(_2), Binary(*, LocalRef(_3), LocalRef(_4))), is_init: false)])])
+    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_2)]))
+    Return(Lit(0))

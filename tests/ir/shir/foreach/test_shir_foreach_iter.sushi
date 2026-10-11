@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n2\n3\n6\n"
+# EXPECT_DUMP_SHIR: test_shir_foreach_iter.shir
+#
+# the SHIR dump of a `foreach` over `xs.iter()`: a `Loop` with an `Items` source. The
+# source holds the iterable, the local of the binder and the mode of the binder (`Bare`).
+# Which walk the loop gets is an answer of the typecheck pass, so the dump shows none. A
+# binder with a written type has that type in the `locals` line.
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    foreach(n in xs.iter()):
+        println(n)
+    let i32 total = 0
+    foreach(i32 m in xs.iter()):
+        total := total + m
+    println(total)
+    return 0

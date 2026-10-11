@@ -1,0 +1,18 @@
+unit test_shir_foreach_iterator_value
+
+ShirBody upto
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(<hole: RangeExpr>)
+
+ShirBody main
+  params : []
+  locals : [_0 "total": i32, _1 "v", _2 "xs": i32[], _3]
+  block  :
+    Assign(LocalRef(_0), Lit(0), is_init: true)
+    Loop(Items(Call(Named(GlobalRef(@upto)), [Lit(4)]), _1, Bare), [Assign(LocalRef(_0), Binary(+, LocalRef(_0), LocalRef(_1)), is_init: false)])
+    Assign(LocalRef(_2), <hole: DynamicArrayFrom>, is_init: true)
+    Loop(Items(Call(Dotted(Call(Dotted(LocalRef(_2), "iter"), []), "enumerate"), []), _3, Bare), [<hole: Let>, Assign(LocalRef(_0), Binary(+, LocalRef(_0), Binary(*, LocalRef(_5), LocalRef(_6))), is_init: false)])
+    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_0)]))
+    Return(Lit(0))

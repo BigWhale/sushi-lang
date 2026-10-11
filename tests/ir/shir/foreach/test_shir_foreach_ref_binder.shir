@@ -1,0 +1,11 @@
+unit test_shir_foreach_ref_binder
+
+ShirBody main
+  params : []
+  locals : [_0 "xs": i32[], _1 "r", _2 "s": i32, _3 "q"]
+  block  :
+    Assign(LocalRef(_0), <hole: DynamicArrayFrom>, is_init: true)
+    Loop(Items(Call(Dotted(LocalRef(_0), "iter"), []), _1, Ref(Poke)), [Assign(LocalRef(_1), Binary(*, LocalRef(_1), Lit(10) = 10), is_init: false)])
+    Loop(Items(Call(Dotted(LocalRef(_0), "iter"), []), _2, Ref(Poke)), [Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1) = 1), is_init: false)])
+    Loop(Items(Call(Dotted(LocalRef(_0), "iter"), []), _3, Ref(Peek)), [ExprStmt(Call(BuiltinFn("println"), [LocalRef(_3)]))])
+    Return(Lit(0))

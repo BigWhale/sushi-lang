@@ -2651,6 +2651,13 @@ tests/ir/shir/calls/test_shir_call_namespace.sushi
 tests/ir/shir/calls/test_shir_call_print.sushi
 tests/ir/shir/calls/test_shir_call_statics.sushi
 tests/ir/shir/empty_body/test_shir_empty_body.sushi
+tests/ir/shir/foreach/test_shir_foreach_discard.sushi
+tests/ir/shir/foreach/test_shir_foreach_iter.sushi
+tests/ir/shir/foreach/test_shir_foreach_iterator_value.sushi
+tests/ir/shir/foreach/test_shir_foreach_nested_break.sushi
+tests/ir/shir/foreach/test_shir_foreach_range.sushi
+tests/ir/shir/foreach/test_shir_foreach_ref_binder.sushi
+tests/ir/shir/foreach/test_shir_foreach_try_binder.sushi
 tests/ir/shir/holes/test_shir_holes.sushi
 tests/ir/shir/literals/test_shir_literals.sushi
 tests/ir/shir/names/test_shir_names.sushi
