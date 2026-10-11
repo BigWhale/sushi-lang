@@ -1,0 +1,19 @@
+unit test_shir_match_tuple
+
+ShirBody describe
+  params : [(_0 "pair": (Color, i32), Guaranteed)]
+  locals : [_1 "out": i32, _2 "n"]
+  block  :
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Tuple([Variant(@Color, "Red", []), Literal(0)]), [Assign(LocalRef(_1), Lit(1), is_init: false)]), Arm(Tuple([Variant(@Color, "Red", []), (_2, Bare)]), [Assign(LocalRef(_1), LocalRef(_2), is_init: false)]), Arm(Tuple([Variant(@Color, "Green", []), Wildcard]), [Assign(LocalRef(_1), Lit(7), is_init: false)])], consumes: false)
+    Return(LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@describe)), [<hole: TupleLiteral>])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@describe)), [<hole: TupleLiteral>])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@describe)), [<hole: TupleLiteral>])]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

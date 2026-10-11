@@ -1,0 +1,25 @@
+unit test_shir_match_arm_bodies
+
+ShirBody show
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_0)]))
+    Return(LocalRef(_0))
+
+ShirBody pick
+  params : [(_0 "m": Maybe@(i32), Guaranteed)]
+  locals : [_1 "total": i32, _2 "x"]
+  block  :
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Variant(@Maybe, "Some", [(_2, Bare)]), [Assign(LocalRef(_1), LocalRef(_2), is_init: false), ExprStmt(Call(Named(GlobalRef(@show)), [LocalRef(_2)]))]), Arm(Variant(@Maybe, "None", []), [ExprStmt(Binary(+, Call(Named(GlobalRef(@show)), [Lit(1)]), Call(Named(GlobalRef(@show)), [Lit(2)])))])], consumes: false)
+    Return(LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@pick)), [<hole: DotCall>])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@pick)), [<hole: MemberAccess>])]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

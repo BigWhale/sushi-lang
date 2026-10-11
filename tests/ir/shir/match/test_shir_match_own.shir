@@ -1,0 +1,14 @@
+unit test_shir_match_own
+
+ShirBody main
+  params : []
+  locals : [_0 "o": Own@(i32), _1 "h": Holder, _2 "inner", _3 "v", _4 "v"]
+  block  :
+    Assign(LocalRef(_0), Call(Static(Own, "alloc"), [Lit(7)]), is_init: true)
+    Assign(LocalRef(_1), <hole: DotCall>, is_init: true)
+    Match(LocalRef(_1), [Arm(Variant(@Holder, "Full", [Own((_2, Ref(Poke)))]), [Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(100) = 100), is_init: false)]), Arm(Variant(@Holder, "Nil", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("nil")]))])], consumes: false)
+    Match(LocalRef(_1), [Arm(Variant(@Holder, "Full", [Own((_3, Ref(Peek)))]), [ExprStmt(Call(BuiltinFn("println"), [LocalRef(_3)]))]), Arm(Variant(@Holder, "Nil", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("nil")]))])], consumes: false)
+    Match(LocalRef(_1), [Arm(Variant(@Holder, "Full", [Own((_4, Bare))]), [ExprStmt(Call(BuiltinFn("println"), [LocalRef(_4)]))]), Arm(Variant(@Holder, "Nil", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("nil")]))])], consumes: false)
+    Match(LocalRef(_1), [Arm(Variant(@Holder, "Full", [Own(Wildcard)]), [ExprStmt(Call(BuiltinFn("println"), [Lit("full")]))]), Arm(Variant(@Holder, "Nil", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("nil")]))])], consumes: false)
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

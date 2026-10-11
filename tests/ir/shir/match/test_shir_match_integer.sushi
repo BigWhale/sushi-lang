@@ -1,0 +1,42 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "zero\nsmall\nsmall\nhex\nminus\nother\nslash\ndigit\nother\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_match_integer.shir
+#
+# the SHIR dump of a match on an integer: literal arms in four spellings (a decimal, a
+# negative number, a hex number and a byte), `|` alternatives, an inclusive range, an
+# exclusive range and `_`. A literal arm keeps the written constant, and a range keeps its
+# written bounds and `inclusive`: the value of a bound is read at the type of the
+# position, and lowering has no types. The scrutinee is an ordinary expression, and
+# `consumes` is false.
+
+fn kind(i32 n) string:
+    let string out = "other"
+    match n:
+        0 -> out := "zero"
+        1 | 2 | 3 -> out := "small"
+        0x10..=0x1f -> out := "hex"
+        -9..-1 -> out := "minus"
+        -1 | 0x7f -> out := "other"
+        _ -> out := "other"
+    return out
+
+fn byte_kind(u8 b) string:
+    let string out = "other"
+    match b:
+        a'/' -> out := "slash"
+        a'0'..=a'9' -> out := "digit"
+        _ -> out := "other"
+    return out
+
+fn main() i32:
+    println(kind(0))
+    println(kind(2))
+    println(kind(3))
+    println(kind(0x15))
+    println(kind(-5))
+    println(kind(99))
+    println(byte_kind(a'/'))
+    println(byte_kind(a'7'))
+    println(byte_kind(a'x'))
+    println("Mostly Harmless")
+    return 0

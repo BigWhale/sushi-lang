@@ -1,0 +1,33 @@
+unit test_shir_match_integer
+
+ShirBody kind
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "out": string]
+  block  :
+    Assign(LocalRef(_1), Lit("other"), is_init: true)
+    Match(LocalRef(_0), [Arm(Literal(0), [Assign(LocalRef(_1), Lit("zero"), is_init: false)]), Arm(Or([Literal(1), Literal(2), Literal(3)]), [Assign(LocalRef(_1), Lit("small"), is_init: false)]), Arm(IntRange(0x10, 0x1f, inclusive: true), [Assign(LocalRef(_1), Lit("hex"), is_init: false)]), Arm(IntRange(-9, -1, inclusive: false), [Assign(LocalRef(_1), Lit("minus"), is_init: false)]), Arm(Or([Literal(-1), Literal(0x7f)]), [Assign(LocalRef(_1), Lit("other"), is_init: false)]), Arm(Wildcard, [Assign(LocalRef(_1), Lit("other"), is_init: false)])], consumes: false)
+    Return(LocalRef(_1))
+
+ShirBody byte_kind
+  params : [(_0 "b": u8, Guaranteed)]
+  locals : [_1 "out": string]
+  block  :
+    Assign(LocalRef(_1), Lit("other"), is_init: true)
+    Match(LocalRef(_0), [Arm(Literal(a'/'), [Assign(LocalRef(_1), Lit("slash"), is_init: false)]), Arm(IntRange(a'0', a'9', inclusive: true), [Assign(LocalRef(_1), Lit("digit"), is_init: false)]), Arm(Wildcard, [Assign(LocalRef(_1), Lit("other"), is_init: false)])], consumes: false)
+    Return(LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Lit(0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Lit(2)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Lit(3)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Lit(0x15)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Unary(neg, Lit(5) = 5)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Lit(99)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@byte_kind)), [Lit(a'/')])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@byte_kind)), [Lit(a'7')])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@byte_kind)), [Lit(a'x')])]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

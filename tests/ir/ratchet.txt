@@ -2660,6 +2660,14 @@ tests/ir/shir/foreach/test_shir_foreach_ref_binder.sushi
 tests/ir/shir/foreach/test_shir_foreach_try_binder.sushi
 tests/ir/shir/holes/test_shir_holes.sushi
 tests/ir/shir/literals/test_shir_literals.sushi
+tests/ir/shir/match/test_shir_match_arm_bodies.sushi
+tests/ir/shir/match/test_shir_match_binding_modes.sushi
+tests/ir/shir/match/test_shir_match_integer.sushi
+tests/ir/shir/match/test_shir_match_nested.sushi
+tests/ir/shir/match/test_shir_match_own.sushi
+tests/ir/shir/match/test_shir_match_result.sushi
+tests/ir/shir/match/test_shir_match_string.sushi
+tests/ir/shir/match/test_shir_match_tuple.sushi
 tests/ir/shir/names/test_shir_names.sushi
 tests/ir/shir/operators/test_shir_operators.sushi
 tests/ir/shir/statements/test_err_shir_stmt_let_untyped.sushi
