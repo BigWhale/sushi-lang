@@ -5,15 +5,20 @@ expression class and each AST statement class. A class with no row is a HOLE: lo
 records it and the compile goes on, or the stop code CE0155 stops it under
 `SUSHI_SHIR_STRICT=1`. A call argument has a second table, `ARGUMENTS`: the classes that
 are the FORM of an argument and no value of their own there, a bloom `xs...` and a
-`peek`/`poke` marker. The totality gate of a later chunk reads both tables, so this gate
-holds four rules:
+`peek`/`poke` marker. A pattern has a third table, `PATTERNS` in
+`sushi_lang/semantics/shir/lower_patterns.py`: the classes that a pattern position holds,
+a bare name (`str`) included. The `Match` row lowers each pattern through it. The totality
+gate of a later chunk reads the three tables, so this gate holds five rules:
 
-1. Each key of each table is an AST body class: a member of the `Expr` union or a
-   statement class. A pattern is lowered with its `Match`, not through this table.
+1. Each key of `LOWERING` and `ARGUMENTS` is an AST body class: a member of the `Expr`
+   union or a statement class.
 2. Each row that lowering has today is in its table. The sets only grow.
-3. No module of the lowering tests an AST body class with `isinstance`: a second
-   dispatch beside the tables is a construct that the totality gate cannot see.
-4. Each row is callable.
+3. The pattern table has a row for each class that a pattern position of the AST holds,
+   and no other row. A pattern class with no row fails here.
+4. No module of the lowering tests an AST body class or an AST pattern class with
+   `isinstance`: a second dispatch beside the tables is a construct that the totality
+   gate cannot see.
+5. Each row is callable.
 
 These tests read Python objects and source text. They do not run the compiler.
 """
@@ -25,7 +30,7 @@ import typing
 from pathlib import Path
 
 from sushi_lang.semantics import ast as a
-from sushi_lang.semantics.shir import lower_nodes, lowering
+from sushi_lang.semantics.shir import lower_nodes, lower_patterns, lowering
 
 #: The AST classes that lowering handles. A chunk that lowers a class adds it here.
 LOWERED: frozenset[str] = frozenset({
@@ -34,14 +39,14 @@ LOWERED: frozenset[str] = frozenset({
     "Call", "MethodCall", "DotCall",
     "ExprStmt", "Return", "Print", "PrintLn",
     "Let", "Rebind", "If", "While", "Break", "Continue",
-    "Foreach",
+    "Foreach", "Match",
 })
 
 #: The AST classes that are the form of a call argument (`ARGUMENTS`). The set only grows.
 ARGUMENT_FORMS: frozenset[str] = frozenset({"Spread", "Borrow"})
 
 #: The modules of body lowering.
-_MODULES = (lowering, lower_nodes)
+_MODULES = (lowering, lower_nodes, lower_patterns)
 
 
 def _statement_classes() -> set[type]:
@@ -57,6 +62,17 @@ def _statement_classes() -> set[type]:
 
 def _body_classes() -> set[type]:
     return set(typing.get_args(a.Expr)) | _statement_classes()
+
+
+def _pattern_classes() -> set[type]:
+    """The classes that a pattern position of the AST holds: an item, an arm, an alternative."""
+    found: set[type] = set()
+    for owner, name in ((a.MatchArm, "pattern"), (a.OrPattern, "alternatives"),
+                        (a.OwnPattern, "inner_pattern")):
+        hint = typing.get_type_hints(owner)[name]
+        for arg in typing.get_args(hint) or (hint,):
+            found.update(typing.get_args(arg) or (arg,))
+    return found | set(typing.get_args(a.PatternItem))
 
 
 def test_every_key_is_an_ast_body_class() -> None:
@@ -83,14 +99,22 @@ def test_the_argument_table_is_the_argument_forms() -> None:
         f"the argument table and ARGUMENT_FORMS differ: {sorted(names ^ ARGUMENT_FORMS)}")
 
 
+def test_the_pattern_table_is_every_pattern_class() -> None:
+    names = {cls.__name__ for cls in lower_patterns.PATTERNS}
+    expected = {cls.__name__ for cls in _pattern_classes()}
+    assert names == expected, (
+        f"the pattern table and the AST pattern classes differ: {sorted(names ^ expected)}")
+
+
 def test_every_row_is_callable() -> None:
-    rows = [*lower_nodes.LOWERING.items(), *lower_nodes.ARGUMENTS.items()]
+    rows = [*lower_nodes.LOWERING.items(), *lower_nodes.ARGUMENTS.items(),
+            *lower_patterns.PATTERNS.items()]
     bad = sorted(cls.__name__ for cls, row in rows if not callable(row))
     assert not bad, f"these rows do not lower: {bad}"
 
 
 def _isinstance_tests_of_body_classes(module: object) -> list[str]:
-    body_names = {cls.__name__ for cls in _body_classes()}
+    body_names = {cls.__name__ for cls in _body_classes() | _pattern_classes()} - {"str"}
     tree = ast.parse(Path(inspect.getfile(module)).read_text(encoding="utf-8"))  # type: ignore[arg-type]
     found = []
     for node in ast.walk(tree):

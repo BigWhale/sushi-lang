@@ -9,7 +9,8 @@ the `nom` marker is a hole too: it is a take (ir.md 7.4), and no row lowers a ta
 
 A call argument has a second table, `ARGUMENTS`: the classes that are the FORM of an
 argument there, and no value of their own. `nom x`, `peek x` and `poke x` are the written
-marker of the `Arg`, and `xs...` is a bloom.
+marker of the `Arg`, and `xs...` is a bloom. A pattern has a third table, `PATTERNS` in
+`lower_patterns.py`, and the `Match` row lowers each arm through it.
 
 A name lowers to the answer that the scope pass recorded for it (ir.md 7.1): a local, a
 constant, a unit `var` or a function. A name with no declaration (`Unresolved`), and a
@@ -46,6 +47,7 @@ from sushi_lang.semantics.shir.body import ShirLocal
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
 from sushi_lang.semantics.shir.lookup import DeclLookup
+from sushi_lang.semantics.shir.lower_patterns import lower_match
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, UnknownType
 
@@ -146,6 +148,10 @@ class BodyLowerer:
 
     def ident(self) -> ShirId:
         return self.ids.allocate()
+
+    def binder(self, owner: object, name: str) -> LocalId:
+        """The local that the scope pass recorded for the binder `name` of `owner`."""
+        return binder_local(self.bindings, owner, name)
 
     def made_opaque(self) -> ShirId:
         """The id of a node whose value the compiler cannot read."""
@@ -535,6 +541,7 @@ LOWERING: dict[type, Lower] = {
     a.If: _if,
     a.While: _while,
     a.Foreach: _foreach,
+    a.Match: lower_match,
     a.Break: _break,
     a.Continue: _continue,
 }

@@ -17,7 +17,10 @@ import ast
 import inspect
 from pathlib import Path
 
-from sushi_lang.semantics.shir import lower_nodes
+from sushi_lang.semantics.shir import lower_nodes, lower_patterns
+
+#: The modules of body lowering that make a node.
+_MODULES = (lower_nodes, lower_patterns)
 
 #: The SHIR nodes whose value the compiler cannot read: a local, a unit `var`, a
 #: function, a call and a hole.
@@ -42,8 +45,16 @@ def _constructed(node: ast.Call) -> str | None:
     return name if name in OPAQUE else None
 
 
-def _constructions() -> list[tuple[str, int, ast.Call, set[str]]]:
-    tree = ast.parse(Path(inspect.getfile(lower_nodes)).read_text(encoding="utf-8"))
+def _constructions() -> list[tuple[str, str, int, ast.Call, set[str]]]:
+    found = []
+    for module in _MODULES:
+        found.extend(_constructions_of(module))
+    return found
+
+
+def _constructions_of(module: object) -> list[tuple[str, str, int, ast.Call, set[str]]]:
+    path = Path(inspect.getfile(module))  # type: ignore[arg-type]
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     found = []
     for function in ast.walk(tree):
         if not isinstance(function, ast.FunctionDef):
@@ -51,7 +62,7 @@ def _constructions() -> list[tuple[str, int, ast.Call, set[str]]]:
         names = _opaque_names(function)
         for node in ast.walk(function):
             if isinstance(node, ast.Call) and (kind := _constructed(node)) is not None:
-                found.append((kind, node.lineno, node, names))
+                found.append((kind, path.name, node.lineno, node, names))
     return found
 
 
@@ -62,9 +73,9 @@ def test_every_kind_of_opaque_node_is_made() -> None:
 
 def test_each_opaque_node_takes_its_id_from_made_opaque() -> None:
     bad = []
-    for kind, line, node, names in _constructions():
+    for kind, file, line, node, names in _constructions():
         first = node.args[0] if node.args else None
         if first is None or not (_is_made_opaque(first)
                                  or (isinstance(first, ast.Name) and first.id in names)):
-            bad.append(f"lower_nodes.py:{line} {kind}")
+            bad.append(f"{file}:{line} {kind}")
     assert not bad, f"these opaque nodes do not stop the read of ruling E3: {bad}"
