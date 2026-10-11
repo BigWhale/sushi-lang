@@ -81,7 +81,11 @@ def _render_signature(func: dict, p: Palette) -> str:
     generic = _render_type_params(func.get('type_params'))
     params = _render_params(func.get('params') or [], func.get('self_mode'))
     name = f"{p.bold}{func['name']}{p.reset}"
-    line = f"{name}{generic}({params}) {_surface(func['return_type'])}"
+    # A borrowed return prints its mode as it is written (#1229).
+    from sushi_lang.semantics.param_modes import ReturnMode, return_mode
+    written = return_mode(func.get('return_mode'))
+    mode = f"{written.value} " if written is ReturnMode.PEEK else ""
+    line = f"{name}{generic}({params}) {mode}{_surface(func['return_type'])}"
     # A record with no `error_type` is bare, or spells its Result in `return_type`, so it
     # prints no arm either.
     error = func.get('error_type')

@@ -77,7 +77,8 @@ def stdlib_dependencies(manifest: dict) -> tuple[str, ...]:
 
 def parse_signature(func_info: dict, struct_table: dict, enum_table: dict,
                     owner: str | None = None,
-                    lib_path: Path | str | None = None) -> 'FuncSig':
+                    lib_path: Path | str | None = None,
+                    receiver: bool = False) -> 'FuncSig':
     """One manifest signature record as a `FuncSig`: the ONE reader of a signature.
 
     A function, a closure helper and an extension method all carry the same four keys
@@ -86,6 +87,9 @@ def parse_signature(func_info: dict, struct_table: dict, enum_table: dict,
     A record states its channel twice: `has_channel`, and the `error_type` and
     `return_type` it implies. A record whose two answers disagree is damaged, CE3512.
     That the field is there at all is `check_manifest`'s rule, not this reader's.
+
+    `return_mode` is read for a borrowed return (#1229), and `receiver` says whether a
+    borrowed receiver is a source of it: True for an instance method that borrows `self`.
     """
     from sushi_lang.internals.diagnostics import SushiError
     from sushi_lang.semantics.channel import has_channel
@@ -118,6 +122,7 @@ def parse_signature(func_info: dict, struct_table: dict, enum_table: dict,
         unit_name=owner,
         err_type=err_type,
         link_symbol=func_info.get("link_symbol"),
+        borrowed_return=_borrowed_return(func_info, params, receiver),
     )
     stated = func_info.get("has_channel")
     if stated is not None and stated != has_channel(sig):
@@ -126,6 +131,15 @@ def parse_signature(func_info: dict, struct_table: dict, enum_table: dict,
             reason=f"function '{func_name}' states has_channel {str(stated).lower()}, "
                    "and its error_type and return_type say otherwise")
     return sig
+
+
+def _borrowed_return(func_info: dict, params: list, receiver: bool):
+    """The record of a borrowed return that a manifest states, or None (#1229)."""
+    from sushi_lang.semantics.borrowed_return import record_of
+    from sushi_lang.semantics.param_modes import ReturnMode, return_mode
+    if return_mode(func_info.get("return_mode")) is not ReturnMode.PEEK:
+        return None
+    return record_of(None, params, receiver=receiver)
 
 
 @dataclass

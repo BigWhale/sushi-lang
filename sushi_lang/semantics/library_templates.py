@@ -115,7 +115,7 @@ def signature_record(func: "FuncDef | ExtendDef") -> dict:
     could print them against (`docs/design/documentation.md`, R46).
     """
     from sushi_lang.semantics.channel import has_channel
-    from sushi_lang.semantics.param_modes import param_mode
+    from sushi_lang.semantics.param_modes import ReturnMode, param_mode
 
     record: dict = {
         # The MODE is its own field, not part of the type string. A `nom` cannot be
@@ -140,6 +140,9 @@ def signature_record(func: "FuncDef | ExtendDef") -> dict:
     }
     if getattr(func, "err_type", None) is not None:
         record["error_type"] = type_string(func.err_type)
+    # Written for a borrowed return alone (#1229): an absent field is an owned return.
+    if getattr(func, "borrowed_return", None) is not None:
+        record["return_mode"] = ReturnMode.PEEK.value
     return record
 
 

@@ -320,7 +320,7 @@ The shape of a manifest, one row per field that a reader uses.
 The Python reader has the same rows in `MANIFEST_SCHEMA`
 (`sushi_lang/backend/library_format.py`), and the two tables must agree.
 :##
-const SchemaRow[146] SLIB_MANIFEST_SCHEMA = [
+const SchemaRow[149] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('manifest', 'library_name', 'str', Presence.Required()),
     SchemaRow('manifest', 'library_version', 'str', Presence.Required()),
     SchemaRow('manifest', 'platform', 'str', Presence.Required()),
@@ -359,6 +359,7 @@ const SchemaRow[146] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('function', 'type_params', '[]type_param', Presence.Optional()),
     SchemaRow('function', 'has_channel', 'bool', Presence.Required()),
     SchemaRow('function', 'error_type', 'str', Presence.Optional()),
+    SchemaRow('function', 'return_mode', 'str', Presence.Optional()),
     SchemaRow('function', 'source', 'str', Presence.Optional()),
     SchemaRow('function', 'unit', 'str', Presence.Optional()),
     SchemaRow('function', 'doc', '@doc', Presence.Optional()),
@@ -367,6 +368,7 @@ const SchemaRow[146] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('helper', 'return_type', 'str', Presence.Optional()),
     SchemaRow('helper', 'has_channel', 'bool', Presence.Required()),
     SchemaRow('helper', 'error_type', 'str', Presence.Optional()),
+    SchemaRow('helper', 'return_mode', 'str', Presence.Optional()),
     SchemaRow('helper', 'unit', 'str', Presence.Optional()),
     SchemaRow('helper', 'link_symbol', 'str', Presence.Optional()),
     SchemaRow('param', 'name', 'str', Presence.Required()),
@@ -436,6 +438,7 @@ const SchemaRow[146] SLIB_MANIFEST_SCHEMA = [
     SchemaRow('extension', 'static', 'bool', Presence.Optional()),
     SchemaRow('extension', 'has_channel', 'bool', Presence.Required()),
     SchemaRow('extension', 'error_type', 'str', Presence.Optional()),
+    SchemaRow('extension', 'return_mode', 'str', Presence.Optional()),
     SchemaRow('extension', 'unit', 'str', Presence.Optional()),
     SchemaRow('extension', 'link_symbol', 'str', Presence.Optional()),
     SchemaRow('extension', 'source', 'str', Presence.Optional()),
