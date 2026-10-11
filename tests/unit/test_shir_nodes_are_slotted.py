@@ -75,7 +75,7 @@ def test_the_package_has_its_classes() -> None:
     assert {"ShirId", "LocalId", "DeclId", "IdAllocator",
             "ShirBody", "ShirParam", "ShirLocal",
             "Instance", "TemplateCheck", "Initializer",
-            "ShirNode", "ShirBlock"} <= names
+            "ShirNode", "ShirBlock", "Variant", "PatBinding", "Arm"} <= names
 
 
 @pytest.mark.parametrize("cls", _CLASSES, ids=lambda c: c.__qualname__)

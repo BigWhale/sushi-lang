@@ -1,12 +1,13 @@
-"""Gate: the SHIR nodes are the nodes of `ir.md` 7.4 and 7.5, and each is in its union.
+"""Gate: the SHIR nodes are the nodes of `ir.md` 7.4, 7.5 and 7.8, and each is in its union.
 
 The lowering dispatch (P1.15) and every pass on SHIR read a node through its union:
-`ShirExpr` for an expression, `ShirStmt` for a statement. A node class that is in no
+`ShirExpr` for an expression, `ShirStmt` for a statement, `ShirPattern` for a pattern.
+A node class that is in no
 union is a node that no dispatch can reach, and a dispatch that is total over the union
 is then not total over the nodes. So this gate holds three rules:
 
 1. The node classes are the classes that `ir.md` names, with the fields that it gives,
-   in its order. The tables below are copied from 7.4 and 7.5; a change of the design
+   in its order. The tables below are copied from 7.4, 7.5 and 7.8; a change of the design
    changes them first.
 2. Each node class is in the union of its level, and the unions hold nothing else.
 3. Each AST body class has a row of `ir.md` 7.10, and each node of the row is in a
@@ -30,7 +31,7 @@ import pytest
 
 import sushi_lang.semantics.shir as shir_pkg
 from sushi_lang.semantics import ast as a
-from sushi_lang.semantics.shir import exprs, stmts
+from sushi_lang.semantics.shir import exprs, patterns, stmts
 from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode
 
 #: The fields that every node has (ir.md 7.3), and the recorded value of an expression
@@ -165,6 +166,45 @@ AST_STATEMENT_ROWS: dict[str, tuple[str, ...]] = {
     "Continue": ("Continue",),
 }
 
+#: ir.md 7.8, the pattern nodes and their fields in the written order. Two names change,
+#: because the expression level has them: the pattern `Range` is `IntRange`, and the
+#: binding mode `Take` is `Nom`. `IntRange` keeps the written bounds and `inclusive`:
+#: the values that the bounds give depend on the type at the position, and lowering has
+#: no types. An alternative of `Or` can be a binding, as in the AST (`Maybe.Some(x | y)`).
+PATTERN_FIELDS: dict[str, tuple[str, ...]] = {
+    "Wildcard": (),
+    "Literal": ("value",),
+    "IntRange": ("low", "high", "inclusive"),
+    "Variant": ("decl", "variant", "items"),
+    "Tuple": ("elements",),
+    "Own": ("inner",),
+    "Or": ("alternatives",),
+}
+
+#: The parts of a pattern that are not nodes (ir.md 7.8): a binding, the `nom` mode of a
+#: binding, and an arm. A binding has the modes `Bare` and `Ref` of a loop binder too.
+PATTERN_PARTS: dict[str, tuple[str, ...]] = {
+    "PatBinding": ("local", "by"),
+    "Nom": (),
+    "Arm": ("pattern", "body"),
+}
+
+#: ir.md 7.10 gives the 9 AST pattern classes and `MatchArm` one row; this table gives
+#: each class its own row. A bare name in a pattern is a `str` in the AST: it gives a
+#: `PatBinding` with the mode `Bare`, and `_` gives `Wildcard`.
+AST_PATTERN_ROWS: dict[str, tuple[str, ...]] = {
+    "Pattern": ("Variant",),
+    "WildcardPattern": ("Wildcard",),
+    "LiteralPattern": ("Literal",),
+    "RangePattern": ("IntRange",),
+    "TuplePattern": ("Tuple",),
+    "OwnPattern": ("Own",),
+    "OrPattern": ("Or",),
+    "RefBinding": ("PatBinding",),
+    "NomBinding": ("PatBinding",),
+    "MatchArm": ("Arm",),
+}
+
 _NO_NODE_OF_ITS_OWN = {"Spread"}
 
 #: The node classes that are in no union: the bases, and the block, which a node holds.
@@ -176,6 +216,7 @@ _LEVELS: dict[str, tuple[types.ModuleType, object, dict[str, tuple[str, ...]],
     "expression": (exprs, exprs.ShirExpr, EXPRESSION_FIELDS, EXPRESSION_PARTS,
                    _EXPR_BASE_FIELDS),
     "statement": (stmts, stmts.ShirStmt, STATEMENT_FIELDS, STATEMENT_PARTS, _BASE_FIELDS),
+    "pattern": (patterns, patterns.ShirPattern, PATTERN_FIELDS, PATTERN_PARTS, _BASE_FIELDS),
 }
 
 _NODES = [(level, name) for level, row in _LEVELS.items() for name in sorted(row[2])]
@@ -197,7 +238,7 @@ def _union_members(alias: object) -> set[str]:
 
 
 def _all_nodes() -> set[str]:
-    return _union_members(exprs.ShirExpr) | _union_members(stmts.ShirStmt)
+    return set().union(*(_union_members(row[1]) for row in _LEVELS.values()))
 
 
 def _field_names(cls: type) -> tuple[str, ...]:
@@ -212,6 +253,13 @@ def _ast_subclasses(root: type) -> set[str]:
                 found.add(sub.__name__)
                 pending.append(sub)
     return found
+
+
+def _ast_pattern_classes() -> set[str]:
+    """The AST classes that a pattern position holds, and the arm."""
+    arm_pattern = typing.get_type_hints(a.MatchArm)["pattern"]
+    members = set(typing.get_args(a.PatternItem)) | set(typing.get_args(arm_pattern))
+    return {cls.__name__ for cls in members if cls is not str} | {"MatchArm"}
 
 
 def _ids(pair: tuple[str, str]) -> str:
@@ -257,6 +305,11 @@ def test_a_block_holds_statements() -> None:
     assert statements.type == "list[ShirStmt]"
 
 
+def test_a_match_holds_arms() -> None:
+    arms = {item.name: item for item in dataclasses.fields(stmts.Match)}["arms"]
+    assert arms.type == "list[Arm]"
+
+
 # --- 2. each node is in its union, and the union holds nothing else -----------------
 
 
@@ -275,7 +328,11 @@ def test_every_node_of_the_package_is_in_a_union() -> None:
 
 
 def test_no_node_is_in_two_unions() -> None:
-    assert not _union_members(exprs.ShirExpr) & _union_members(stmts.ShirStmt)
+    unions = sorted(_LEVELS)
+    for index, first in enumerate(unions):
+        for second in unions[index + 1:]:
+            shared = _union_members(_LEVELS[first][1]) & _union_members(_LEVELS[second][1])
+            assert not shared, f"{first} and {second} share these nodes: {shared}"
 
 
 # --- 3. lowering has a node for every AST body class --------------------------------
@@ -284,6 +341,7 @@ def test_no_node_is_in_two_unions() -> None:
 def test_every_ast_body_class_has_a_row() -> None:
     assert set(AST_EXPRESSION_ROWS) == {cls.__name__ for cls in typing.get_args(a.Expr)}
     assert set(AST_STATEMENT_ROWS) == _ast_subclasses(a.Stmt)
+    assert set(AST_PATTERN_ROWS) == _ast_pattern_classes()
 
 
 @pytest.mark.parametrize("ast_name", sorted(AST_EXPRESSION_ROWS))
@@ -300,6 +358,12 @@ def test_an_ast_statement_lowers_to_nodes(ast_name: str) -> None:
     assert set(row) & _union_members(stmts.ShirStmt), "a statement lowers to a statement"
 
 
+@pytest.mark.parametrize("ast_name", sorted(AST_PATTERN_ROWS))
+def test_an_ast_pattern_lowers_to_pattern_nodes_or_parts(ast_name: str) -> None:
+    row = AST_PATTERN_ROWS[ast_name]
+    assert row and set(row) <= _union_members(patterns.ShirPattern) | set(PATTERN_PARTS)
+
+
 # --- a later walk reaches every node that a field holds -----------------------------
 
 #: The containers that a field may hold a node in. A walk descends a list and a tuple
@@ -308,7 +372,7 @@ _WRAPPERS_THAT_HOLD_A_NODE = {"Optional", "Union", "list", "tuple"}
 
 
 def test_no_field_wraps_a_node_in_a_container_that_a_walk_skips() -> None:
-    held = _all_nodes() | {"ShirExpr", "ShirStmt"} | _OUTSIDE_EVERY_UNION
+    held = _all_nodes() | {"ShirExpr", "ShirStmt", "ShirPattern"} | _OUTSIDE_EVERY_UNION
     offenders = []
     for cls in sorted(_package_classes(), key=lambda c: f"{c.__module__}.{c.__name__}"):
         if not dataclasses.is_dataclass(cls):

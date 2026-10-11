@@ -8,12 +8,15 @@ union `ShirStmt` is every statement node, and a dispatch reads it (gate:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, TypeAlias
+from typing import TYPE_CHECKING, Optional, TypeAlias
 
 from sushi_lang.semantics.shir.exprs import ShirExpr
 from sushi_lang.semantics.shir.ids import LocalId
 from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode
 from sushi_lang.semantics.typesys import BorrowMode
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.patterns import Arm
 
 
 @dataclass(slots=True)
@@ -65,12 +68,12 @@ class If(ShirNode):
 
 @dataclass(frozen=True, slots=True)
 class Bare:
-    """A binder with no mode: it takes the item as the walk gives it."""
+    """A binder with no mode: a loop binder or a pattern binding (ir.md 7.5, 7.8)."""
 
 
 @dataclass(frozen=True, slots=True)
 class Ref:
-    """A `peek` or `poke` binder: it points into the item."""
+    """A `peek` or `poke` binder: it points into the item or the payload."""
     mode: BorrowMode
 
 
@@ -103,9 +106,9 @@ class Loop(ShirNode):
 
 @dataclass(slots=True)
 class Match(ShirNode):
-    """`consumes` is `match nom r:`. The arm class comes with the patterns (ir.md 7.8)."""
+    """`consumes` is `match nom r:`, which lets a `nom` binding take the payload."""
     scrutinee: ShirExpr
-    arms: list[ShirNode]
+    arms: list[Arm]
     consumes: bool
 
 
