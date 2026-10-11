@@ -5,19 +5,19 @@ ShirBody make
   locals : []
   block  :
     If(Binary(==, LocalRef(_0), Lit(0)), then: [Return(EnumInit(@Slot, "Empty", []))])
-    Return(EnumInit(@Slot, "Full", [StructInit(@Note, [<hole: InterpolatedString>], written_order: [0]), LocalRef(_0)]))
+    Return(EnumInit(@Slot, "Full", [StructInit(@Note, [Interp(["note ", LocalRef(_0), ""])], written_order: [0]), LocalRef(_0)]))
 
 ShirBody show
   params : [(_0 "note": Note, InGuaranteed), (_1 "n": i32, Guaranteed)]
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [<hole: InterpolatedString>]))
+    ExprStmt(Call(BuiltinFn("println"), [Interp(["", Field(LocalRef(_0), "text"), " ", LocalRef(_1), ""])]))
 
 ShirBody eat
   params : [(_0 "note": Note, Owned)]
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [<hole: InterpolatedString>]))
+    ExprStmt(Call(BuiltinFn("println"), [Interp(["ate ", Field(LocalRef(_0), "text"), ""])]))
 
 ShirBody main
   params : []

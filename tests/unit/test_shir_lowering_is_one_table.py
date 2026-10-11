@@ -41,6 +41,7 @@ LOWERED: frozenset[str] = frozenset({
     "Let", "Rebind", "If", "While", "Break", "Continue",
     "Foreach", "Match",
     "MemberAccess", "TupleLiteral", "ArrayLiteral", "DynamicArrayFrom", "DynamicArrayNew",
+    "CastExpr", "Borrow", "TryExpr", "InterpolatedString", "RangeExpr", "IndexAccess",
 })
 
 #: The AST classes that are the form of a call argument (`ARGUMENTS`). The set only grows.

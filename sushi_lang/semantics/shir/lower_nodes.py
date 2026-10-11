@@ -5,14 +5,17 @@ keyed on the class (gate: `tests/unit/test_shir_lowering_is_one_table.py`). A cl
 no row is a HOLE: lowering makes a `Hole` that names the AST class, records it, and the
 compile goes on through the old pipeline. When the variable that `STRICT_VARIABLE` names
 is `1`, a hole stops the compile with the stop code CE0155 instead. A value that carries
-the `nom` marker is a hole too: it is a take (ir.md 7.4), and no row lowers a take yet.
+the `nom` marker outside a call argument is a `Take` of it: the AST builder puts the marker
+there only in a `let` initializer and in a `return` (ir.md 7.4).
 
 A call argument has a second table, `ARGUMENTS`: the classes that are the FORM of an
 argument there, and no value of their own. `nom x`, `peek x` and `poke x` are the written
 marker of the `Arg`, and `xs...` is a bloom. The argument of a struct or a variant
-construction is an `Arg` too. A pattern has a third table, `PATTERNS` in
-`lower_patterns.py`, and the `Match` row lowers each arm through it. The constructions and
-the member read are rows of `LOWERING`, and `lower_aggregates.py` holds their lowering.
+construction is an `Arg` too. In any other position, `peek x` and `poke x` are a `Borrow`
+(a reference `let` gives one too, from the same function). A pattern has a third table,
+`PATTERNS` in `lower_patterns.py`, and the `Match` row lowers each arm through it. The
+constructions, the member read, the index, the slice and the range are rows of
+`LOWERING`, and `lower_aggregates.py` holds their lowering.
 
 A name lowers to the answer that the scope pass recorded for it (ir.md 7.1): a local, a
 constant, a unit `var` or a function. A name with no declaration (`Unresolved`), and a
@@ -25,8 +28,10 @@ the AST constant evaluator, and the value is recorded on its node (`readable`). 
 the divisor of `/` and `%`, the count of `<<` and `>>`, and each operand of the operators
 that the overflow check folds (`+`, `-`, `*` and the negation). Lowering has no types, so
 the evaluator reads at `i64`, the widest signed type; the typecheck pass applies the type
-of the position. An operand is read only when it holds no local, no `var`, no function and
-no call and no hole: such an operand has no value that the compiler can read.
+of the position. An operand is read only when it holds no opaque node: a local, a `var`, a
+function, a call, a field read, a construction, a borrow, a take, a `??`, a slice or a
+hole has no value that the compiler can read. A cast and an interpolated string are not
+opaque: the evaluator folds them with no write on the AST.
 
 Every id comes from the counter of the body in the order of the walk, a node before its
 operands, so a body gives the same ids on every run (ir.md 11.3).
@@ -50,11 +55,12 @@ from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
 from sushi_lang.semantics.shir.lookup import CALLABLE_KINDS, TYPE_KINDS, DeclLookup
 from sushi_lang.semantics.shir.lower_aggregates import (
-    enum_init, lower_array, lower_from, lower_member, lower_new, lower_tuple, struct_init,
+    enum_init, lower_array, lower_from, lower_index, lower_member, lower_new, lower_range,
+    lower_tuple, struct_init,
 )
 from sushi_lang.semantics.shir.lower_patterns import lower_match
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
-from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, UnknownType
+from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, ReferenceType, UnknownType
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.const_eval import ConstantEvaluator
@@ -104,7 +110,16 @@ class BodyLowerer:
 
     def expr(self, node: Any) -> e.ShirExpr:
         """The expression `node` in the position of a value, where `nom` is a take."""
-        return self.hole(node) if node.nom_marked else self.value(node)
+        return self.take(node) if node.nom_marked else self.value(node)
+
+    def take(self, node: Any) -> e.Take:
+        """`nom s.out` in a `let` or a `return`: a `Take` of the place as written.
+
+        That the place is one step off a name that the body owns is a rule of the borrow
+        pass, and lowering records the written shape.
+        """
+        ident = self.made_opaque()
+        return e.Take(ident, self.span(node), self.value(node))
 
     def value(self, node: Any) -> e.ShirExpr:
         """The expression `node`; the caller reads the marker that it carries."""
@@ -260,6 +275,39 @@ def _binary(lw: BodyLowerer, node: a.BinaryOp) -> e.Binary:
     lhs = lw.operand(node.left, node.op in _READ_BOTH)
     rhs = lw.operand(node.right, node.op in _READ_BOTH or node.op in _READ_RIGHT)
     return e.Binary(ident, lw.span(node), node.op, lhs, rhs)
+
+
+def _cast(lw: BodyLowerer, node: a.CastExpr) -> e.Cast:
+    """`v as T`: the target type as written. A conversion is a `Cast` too (ir.md 4.8)."""
+    ident = lw.ident()
+    return e.Cast(ident, lw.span(node), lw.expr(node.expr), node.target_type)
+
+
+# -- ownership and text -----------------------------------------------------------
+
+
+def _borrow(lw: BodyLowerer, node: a.Borrow) -> e.Borrow:
+    """`peek x` or `poke x` outside a call argument."""
+    return _borrow_of(lw, lw.span(node), node.expr, borrow_mode(node.mutability))
+
+
+def _borrow_of(lw: BodyLowerer, loc: Span, place: Any, mode: BorrowMode) -> e.Borrow:
+    """The one `Borrow` of lowering: a marked value, and the value of a reference `let`."""
+    ident = lw.made_opaque()
+    return e.Borrow(ident, loc, lw.expr(place), mode)
+
+
+def _try(lw: BodyLowerer, node: a.TryExpr) -> e.Try:
+    """`v??`, kept whole: what it unwraps and converts is an answer of the typecheck pass."""
+    ident = lw.made_opaque()
+    return e.Try(ident, lw.span(node), lw.expr(node.expr))
+
+
+def _interp(lw: BodyLowerer, node: a.InterpolatedString) -> e.Interp:
+    """`"a{x}b"`: each text part as written, an empty one too, and each hole as an expression."""
+    ident = lw.ident()
+    return e.Interp(ident, lw.span(node), [part if isinstance(part, str) else lw.expr(part)
+                                           for part in node.parts])
 
 
 # -- calls ------------------------------------------------------------------------
@@ -430,8 +478,7 @@ def _let(lw: BodyLowerer, node: a.Let) -> s.ShirStmt:
 def _initial_value(lw: BodyLowerer, node: a.Let) -> e.ShirExpr:
     if not isinstance(node.ty, ReferenceType):
         return lw.expr(node.value)
-    ident = lw.ident()
-    return e.Borrow(ident, lw.span(node.value), lw.expr(node.value), node.ty.mutability)
+    return _borrow_of(lw, lw.span(node.value), node.value, node.ty.mutability)
 
 
 def _rebind(lw: BodyLowerer, node: a.Rebind) -> s.Assign:
@@ -551,6 +598,10 @@ LOWERING: dict[type, Lower] = {
     a.Name: _name,
     a.UnaryOp: _unary,
     a.BinaryOp: _binary,
+    a.CastExpr: _cast,
+    a.Borrow: _borrow,
+    a.TryExpr: _try,
+    a.InterpolatedString: _interp,
     a.Call: _call,
     a.DotCall: _dot_call,
     a.MethodCall: _method_call,
@@ -559,6 +610,8 @@ LOWERING: dict[type, Lower] = {
     a.ArrayLiteral: lower_array,
     a.DynamicArrayFrom: lower_from,
     a.DynamicArrayNew: lower_new,
+    a.RangeExpr: lower_range,
+    a.IndexAccess: lower_index,
     a.ExprStmt: _expr_stmt,
     a.Return: _return,
     a.Print: _print,

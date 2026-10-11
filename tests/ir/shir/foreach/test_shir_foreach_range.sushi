@@ -3,9 +3,9 @@
 # EXPECT_DUMP_SHIR: test_shir_foreach_range.shir
 #
 # the SHIR dump of a `foreach` over a range: `0..10`, `(0..10).rev()` and `1..=3`. The
-# loop is a `Loop` with an `Items` source. A range is a hole until its lowering exists
-# (P1.12), so the iterable of each loop is `<hole: RangeExpr>`. The AST builder folds
-# `.rev()` into the range, so the second loop has no call.
+# loop is a `Loop` with an `Items` source, and its iterable is a `Range` with the value of
+# each bound (ruling E3). The AST builder folds `.rev()` into the range, so the second
+# loop has `reverse: true` and no call.
 
 fn main() i32:
     let i32 total = 0

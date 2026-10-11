@@ -5,8 +5,8 @@ ShirBody main
   locals : [_0 "total": i32, _1 "i", _2 "j", _3 "k"]
   block  :
     Assign(LocalRef(_0), Lit(0), is_init: true)
-    Loop(Items(<hole: RangeExpr>, _1, Bare), [Assign(LocalRef(_0), Binary(+, LocalRef(_0), LocalRef(_1)), is_init: false)])
-    Loop(Items(<hole: RangeExpr>, _2, Bare), [Assign(LocalRef(_0), Binary(-, LocalRef(_0), LocalRef(_2)), is_init: false)])
-    Loop(Items(<hole: RangeExpr>, _3, Bare), [Assign(LocalRef(_0), Binary(+, LocalRef(_0), LocalRef(_3)), is_init: false)])
+    Loop(Items(Range(Lit(0) = 0, Lit(10) = 10, inclusive: false, reverse: false), _1, Bare), [Assign(LocalRef(_0), Binary(+, LocalRef(_0), LocalRef(_1)), is_init: false)])
+    Loop(Items(Range(Lit(0) = 0, Lit(10) = 10, inclusive: false, reverse: true), _2, Bare), [Assign(LocalRef(_0), Binary(-, LocalRef(_0), LocalRef(_2)), is_init: false)])
+    Loop(Items(Range(Lit(1) = 1, Lit(3) = 3, inclusive: true, reverse: false), _3, Bare), [Assign(LocalRef(_0), Binary(+, LocalRef(_0), LocalRef(_3)), is_init: false)])
     ExprStmt(Call(BuiltinFn("println"), [LocalRef(_0)]))
     Return(Lit(0))

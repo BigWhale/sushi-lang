@@ -3,8 +3,8 @@
 # EXPECT_DUMP_SHIR: test_shir_call_print.shir
 #
 # the SHIR dump of `print` and `println`: each is a `Call` with a built-in target, in an
-# `ExprStmt`, and the value is its one argument. An interpolated string is a hole until
-# its own lowering exists.
+# `ExprStmt`, and the value is its one argument. An interpolated string is an `Interp`
+# with its text parts and its holes.
 
 fn greet(string name) ~:
     println("Mostly Harmless, {name}")

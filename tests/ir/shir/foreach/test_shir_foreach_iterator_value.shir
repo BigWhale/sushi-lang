@@ -4,7 +4,7 @@ ShirBody upto
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    Return(<hole: RangeExpr>)
+    Return(Range(Lit(0) = 0, LocalRef(_0), inclusive: false, reverse: false))
 
 ShirBody main
   params : []
