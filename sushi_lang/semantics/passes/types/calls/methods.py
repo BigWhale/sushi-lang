@@ -686,9 +686,18 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
     refusal comes before them too (#770); only a perk implementation that answers the
     call is the sanctioned override.
     """
-    from sushi_lang.semantics.typesys import holds_declared_resource
     if call.method != "clone":
         return False
+    return reject_uncloneable(validator, call, receiver_type)
+
+
+def reject_uncloneable(validator: 'TypeValidator', call: MethodCall, value_type) -> bool:
+    """CE4018 or CE2431 when a value of `value_type` has no deep copy. True when refused.
+
+    The one rule of `.clone()`, read by `.clone()` itself and by `clone_each`, which
+    clones each lent item of an iterator (#1228).
+    """
+    from sushi_lang.semantics.typesys import holds_declared_resource
 
     def resolve(ty):
         from sushi_lang.semantics.type_resolution import resolve_unknown_type
@@ -698,16 +707,16 @@ def _reject_clone_of_resource(validator: 'TypeValidator', call: MethodCall,
     # One predicate (`holds_declared_resource`), and the type that answers it picks the
     # code: an opaque type parameter with no `Clone` (CE4018, #1070), or a handle.
     held: list = []
-    if not holds_declared_resource(receiver_type, validator.drop_type_names,
+    if not holds_declared_resource(value_type, validator.drop_type_names,
                                    resolve=resolve, found=held):
         return False
     unpromised = [ty for ty in held if isinstance(ty, TypeParameter)]
     if unpromised:
-        _reject_clone_of_opaque(validator, call, receiver_type, unpromised[0])
+        _reject_clone_of_opaque(validator, call, value_type, unpromised[0])
         return True
 
     er.emit_with(validator.reporter, er.ERR.CE2431, call.loc,
-                 type=display_type(receiver_type)) \
+                 type=display_type(value_type)) \
         .help("a second owner of a handle is '.share()'; for a value that holds "
               "handles, build a new one from a '.share()' of each handle") \
         .emit()
@@ -1057,8 +1066,10 @@ def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
         diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.loc,
                             name=f"{display_type(receiver_type)}.{call.method}")
         if isinstance(receiver_type, IteratorType):
-            diag.help("an iterator has no methods: walk it with 'foreach', or call the "
-                      "method on the collection it comes from")
+            diag.help("an iterator has the methods 'clone' and the adapters 'map', "
+                      "'filter', 'enumerate', 'zip', 'clone_each', 'fold', 'partition' "
+                      "and 'collect': walk it with 'foreach', or call the method on the "
+                      "collection it comes from")
         _explain_unpromised_method(validator, diag, receiver_type, call.method)
         diag.emit()
         return
@@ -1318,6 +1329,34 @@ def _validate_contract_method(validator: 'TypeValidator', call: MethodCall,
 
 
 @METHOD_TYPE_REGISTRY.validator("iterator")
+def _validate_iterator_family(validator: 'TypeValidator', call: MethodCall,
+                              receiver_type) -> None:
+    """`it.clone()`, or an adapter (#1228): the steps of a built-in signature, then the
+    result in the item mode that the receiver gives it."""
+    from sushi_lang.semantics.generics.iterators import ITERATOR_METHOD_SIGNATURES
+    from sushi_lang.semantics.typesys import deref_type
+    from ..iterator_adapters import adapter_result, settle_adapter_instance
+    signature = ITERATOR_METHOD_SIGNATURES.get(call.method)
+    if signature is None:
+        _validate_function_family(validator, call, receiver_type)
+        return
+    receiver_type = deref_type(receiver_type)
+    solved: list = []
+
+    def solve():
+        instance = _solve_builtin_instance(validator, call, receiver_type, signature)
+        if instance is not None:
+            instance = settle_adapter_instance(validator, call, instance)
+            solved.append(instance)
+        return instance
+
+    _run_method_steps(validator, call, receiver_type, signature, stop_on_arity=False,
+                      solve=solve)
+    if solved:
+        call.inferred_return_type = adapter_result(validator, call, receiver_type,
+                                                   solved[0], report=True)
+
+
 @METHOD_TYPE_REGISTRY.validator("function")
 def _validate_function_family(validator: 'TypeValidator', call: MethodCall,
                               receiver_type) -> None:

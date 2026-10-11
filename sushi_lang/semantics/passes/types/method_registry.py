@@ -623,21 +623,40 @@ def _answers_function(receiver_type, method_name, derived_methods):
 
 
 def _answers_iterator(receiver_type, method_name, derived_methods):
-    # `clone()` copies the cursor (#1259). No perk can name an `Iterator@(T)`: it is no
-    # extension target.
-    return isinstance(receiver_type, IteratorType) and method_name == "clone"
+    # `clone()` copies the cursor (#1259), and the adapters (#1228). No perk can name an
+    # `Iterator@(T)`: it is no extension target.
+    from sushi_lang.semantics.generics.iterators import ADAPTERS
+    return isinstance(receiver_type, IteratorType) and (
+        method_name == "clone" or method_name in ADAPTERS)
 
 
 @dataclass
 class IteratorMethodInferrer:
-    """Type inferrer for the built-in methods on an iterator value (`.clone()`)."""
+    """Type inferrer for the built-in methods on an iterator value: `.clone()` and the
+    adapters, whose result the arguments solve (`iterator_adapters.adapter_result`)."""
     receiver_type: 'Type'
-    method_name: str
+    call: 'MethodCall'
+    validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        if self.method_name == "clone":
+        from sushi_lang.semantics.generics.iterators import ITERATOR_METHOD_SIGNATURES
+        if self.call.method == "clone":
             return self.receiver_type
-        return None
+        signature = ITERATOR_METHOD_SIGNATURES.get(self.call.method)
+        if signature is None:
+            return None
+        from sushi_lang.semantics.passes.types.calls.builtin_signature import (
+            solve_builtin_call)
+        from sushi_lang.semantics.passes.types.iterator_adapters import (
+            adapter_result, settle_adapter_instance)
+        from sushi_lang.semantics.typesys import deref_type
+        receiver = deref_type(self.receiver_type)
+        instance, _unsolved = solve_builtin_call(self.validator, signature, receiver,
+                                                 self.call)
+        if instance is None:
+            return None
+        instance = settle_adapter_instance(self.validator, self.call, instance)
+        return adapter_result(self.validator, self.call, receiver, instance, report=False)
 
 
 def _answers_foreign_ptr(receiver_type, method_name, derived_methods):
@@ -683,7 +702,7 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="iterator", beats_perk=True, answers=_answers_iterator,
     arity=ITERATOR_METHOD_ARITY, modes=iterator_method_modes(),
-    infer=lambda rt, call, _v: IteratorMethodInferrer(rt, call.method)))
+    infer=lambda rt, call, v: IteratorMethodInferrer(rt, call, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="foreign_ptr", beats_perk=True, answers=_answers_foreign_ptr,
     arity=FOREIGN_PTR_METHOD_ARITY,

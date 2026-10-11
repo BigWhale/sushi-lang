@@ -32,15 +32,105 @@ LENT = "lent"       # a value that borrows the owners of its source; stack state
 OWNED = "owned"     # a value that takes its source (a temporary); heap state
 
 
-# The built-in methods of the `Iterator` family: `it.clone()` on a value, and the static
-# `Iterator.new(nom x)` on the type name. `new` takes its argument with `nom`.
-ITERATOR_METHOD_ARITY: Mapping[str, int] = MappingProxyType({"clone": 0, "new": 1})
+# The adapters of an iterator (#1228, docs/design/iteration.md): compiler code, no import.
+# A LAZY adapter answers a new iterator over its receiver; a CONSUMER walks its receiver
+# to the end at the call. Each takes its receiver with `nom self`.
+LAZY_ADAPTERS = frozenset({"map", "filter", "enumerate", "zip", "clone_each"})
+CONSUMERS = frozenset({"fold", "partition", "collect"})
+ADAPTERS = LAZY_ADAPTERS | CONSUMERS
+
+# The built-in methods of the `Iterator` family: `it.clone()` on a value, the adapters,
+# and the static `Iterator.new(nom x)` on the type name. `new` takes its argument with
+# `nom`.
+ITERATOR_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
+    "clone": 0, "new": 1, "map": 1, "filter": 1, "enumerate": 0, "zip": 1,
+    "clone_each": 0, "fold": 2, "partition": 1, "collect": 0})
+
+
+def _signatures() -> Mapping[str, Any]:
+    """The adapters, each written as a generic extension of `Iterator@(T)` would be.
+
+    `T` is the VALUE type of the item, with no `peek`: a function reads the item as a
+    borrow, whatever its mode. Every function and every iterator argument is taken with
+    `nom`. The return type is not read from the row: the item mode of the result follows
+    the item mode of the receiver (`adapter_result`).
+    """
+    from sushi_lang.semantics.generics.builtin_signatures import BuiltinParam, BuiltinSignature
+    from sushi_lang.semantics.generics.types import TypeParameter
+    from sushi_lang.semantics.param_modes import ParamMode
+    from sushi_lang.semantics.typesys import BuiltinType, FunctionType
+
+    item, out, acc = TypeParameter("T"), TypeParameter("U"), TypeParameter("A")
+
+    def fn(params: Tuple[Type, ...], ret: Type) -> FunctionType:
+        # Each item and the accumulator are borrows: the function reads them.
+        return FunctionType(param_types=params, ok_type=ret, err_type=None,
+                            param_modes=(ParamMode.BORROW,) * len(params))
+
+    def row(params: Tuple[Any, ...] = (), type_params: Tuple[str, ...] = ()) -> Any:
+        return BuiltinSignature(receiver_params=("T",), type_params=type_params,
+                                params=params, ret_type=BuiltinType.BLANK, self_mode="nom")
+
+    predicate = BuiltinParam("pred", fn((item,), BuiltinType.BOOL), is_nom=True)
+    return MappingProxyType({
+        "map": row((BuiltinParam("f", fn((item,), out), is_nom=True),), ("U",)),
+        "filter": row((predicate,)),
+        "enumerate": row(),
+        "zip": row((BuiltinParam("other", IteratorType(element_type=out), is_nom=True),),
+                   ("U",)),
+        "clone_each": row(),
+        "fold": row((BuiltinParam("init", acc, is_nom=True),
+                     BuiltinParam("f", fn((acc, item), acc), is_nom=True)), ("A",)),
+        "partition": row((predicate,)),
+        "collect": row(),
+    })
+
+
+ITERATOR_METHOD_SIGNATURES: Mapping[str, Any] = _signatures()
 
 
 def iterator_method_modes() -> Any:
-    """The parameter modes of the family (`BuiltinModes`): `new` takes `nom x`."""
+    """The parameter modes of the family (`BuiltinModes`): `new` takes `nom x`, and each
+    adapter reads its modes from its signature row."""
     from sushi_lang.semantics.param_modes import BuiltinModes, ParamMode
-    return BuiltinModes(rows=MappingProxyType({"new": (ParamMode.NOM,)}))
+    rows = dict(BuiltinModes.from_signatures(ITERATOR_METHOD_SIGNATURES).rows)
+    rows["new"] = (ParamMode.NOM,)
+    return BuiltinModes(rows=MappingProxyType(rows))
+
+
+def lent_whole(iterator: IteratorType) -> Optional[bool]:
+    """Is the item lent as a whole? None for a tuple item whose parts differ in mode."""
+    if not iterator.peeks:
+        return False
+    if all(iterator.peeks):
+        return True
+    return None
+
+
+def lends_a_part(iterator: IteratorType) -> bool:
+    """Does an item lend any part? `collect` and `partition` cannot keep such an item."""
+    return any(iterator.peeks)
+
+
+def enumerated(iterator: IteratorType) -> Optional[IteratorType]:
+    """`enumerate`: `(i32, item)`, the item in its own mode, or None when that mode would
+    stand deeper than one tuple element (a tuple item with parts of two modes)."""
+    from sushi_lang.semantics.typesys import BuiltinType
+    lent = lent_whole(iterator)
+    if lent is None:
+        return None
+    return IteratorType(element_type=tuple_ref((BuiltinType.I32, iterator.element_type)),
+                        peeks=(False, lent))
+
+
+def zipped(left: IteratorType, right: IteratorType) -> Optional[IteratorType]:
+    """`zip`: `(left item, right item)`, each side in its own mode, or None as for
+    `enumerated`."""
+    left_lent, right_lent = lent_whole(left), lent_whole(right)
+    if left_lent is None or right_lent is None:
+        return None
+    return IteratorType(element_type=tuple_ref((left.element_type, right.element_type)),
+                        peeks=(left_lent, right_lent))
 
 
 def lent_iterator(item: Type) -> IteratorType:

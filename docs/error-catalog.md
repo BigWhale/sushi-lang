@@ -1425,10 +1425,10 @@ Variable declaration with 'let' requires an explicit type annotation.
 - `` '{unit}' declares it; add `use "{unit}"` above to name it here ``
 - `` '{module}' declares it; add `use <{module}>` above to name it here ``
 - `` library '{library}' declares it; add `use <lib/{library}>` above to name it here ``
-- `an iterator has no methods: walk it with 'foreach', or call the method on the collection it comes from`
+- `an iterator has the methods 'clone' and the adapters 'map', 'filter', 'enumerate', 'zip', 'clone_each', 'fold', 'partition' and 'collect': walk it with 'foreach', or call the method on the collection it comes from`
 - `did you mean '{namespace}.{closest}'?`
 
-Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` has one method, `.clone()`, which copies its cursor: `foreach` walks it, and `next()` is the protocol of a user type, not a method of an iterator. A range has one method, `.rev()`; any other method on a range is [CE2122](#ce2122). `0..n.rev()` is the range `0..(n.rev())`, so its method is on the i32 `n`, and that is this error. In a generic body, a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
+Function call references a function that was not declared. This is for a name that no unit and no linked library declares: a name a library declares and keeps is [CE3005](#ce3005), on either library kind. It is also the answer for a method call that the receiver type does not have, for every receiver kind. An `Iterator@(T)` has the method `.clone()`, which copies its cursor, and the adapters `map`, `filter`, `enumerate`, `zip`, `clone_each`, `fold`, `partition` and `collect`; every other method on an iterator is this error. `foreach` walks an iterator, and `next()` is the protocol of a user type, not a method of an iterator. A range has one method, `.rev()`; any other method on a range is [CE2122](#ce2122). `0..n.rev()` is the range `0..(n.rev())`, so its method is on the i32 `n`, and that is this error. In a generic body, a method on a type parameter is one that a constraint of the parameter promises, and nothing more. The help names the perks that declare the method; add one of them to the constraints of the parameter: `@(T: Hashable)`. An element of a pack, which an `expand` binds, is a type parameter for this rule: it has what the constraints of the pack promise, and nothing more.
 
 ### CE2009 {#ce2009}
 
@@ -2284,6 +2284,18 @@ The alternatives of a pattern (`Shape.Circle(r) | Shape.Ring(r) -> ...`) bind th
 **Message:** `'{method}' needs a numeric element type, and '{element}' is not numeric`
 
 The array reductions `.min()`, `.max()` and `.add_up()` read each element as a number: `.min()` and `.max()` compare with the `<` of a number, and `.add_up()` adds with the `+` of a number. The element type must be an integer type or a float type. A `bool`, a `string`, a struct, an enum, an array and a function value are refused, on a fixed and on a dynamic array alike. For an order over other element types, sort the array with `.sort()` from `<collections/sort>`, or reduce it with `.fold()` from `<collections/iter>`. The reduction that adds is named `add_up` and not `sum`, so a user extension named `sum` or `total` on an array does not collide with a built-in ([CE2097](#ce2097)).
+
+### CE2129 {#ce2129}
+
+**Error** · type
+
+**Message:** `'{method}' cannot keep the borrowed items of '{type}'`
+
+**Help:**
+
+- `` there is no `List@(peek T)`, and the compiler makes no copy: clone each item first, `.clone_each().{call}` ``
+
+`collect` and `partition` keep each item in a `List@(T)`. An item of `Iterator@(peek T)` is a borrow of a value that the source keeps, and there is no `List@(peek T)`: a list of borrows has no owner for its elements ([CE2419](#ce2419)). The compiler inserts no deep copy. So `collect` and `partition` over a `peek` item of an owning type (a `string`, a `List`, a struct that holds one) are this error. An item whose tuple element is a `peek` of an owning type (`Iterator@((i32, peek string))`) is this error too. Clone each item first: `.clone_each().collect()` gives `Iterator@(T)`, with owned items and one `.clone()` for each item. Over a plain item (an `i32`, a struct of numbers) the two modes are one type, and `collect` is legal. In a generic body a type parameter can own, so `collect` over `Iterator@(peek T)` is this error where the template is written; write `.clone_each()` with `T: Clone`.
 
 ## CE24xx: Borrow and reference errors {#ce24xx}
 
