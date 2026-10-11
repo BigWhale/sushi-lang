@@ -264,7 +264,8 @@ def _container_bases() -> tuple[str, ...]:
 
 
 # Where each predicate stops. A pointer, an iterator, a fn value and a template hold what
-# they name somewhere else, so neither predicate enters them. `owns_resource` also stops
+# they name somewhere else, so neither predicate enters them. An iterator owns its own
+# value (the state its `drop_fn` frees), so `owns_resource` answers True at it. `owns_resource` also stops
 # at a borrow, because a borrow names storage that another value owns.
 _HOLDS_STOPS = frozenset({"PointerType", "IteratorType", "FunctionType", "TypePack",
                           "GenericStructType", "GenericEnumType"})
@@ -277,8 +278,8 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
     """True if a value of this type owns something RAII must release and a sink must transfer.
 
     Two ways to own. Most types own HEAP, and the answer is structural: a `string`, a
-    `T[]`, an `Own`, a `List`, a `HashMap`, a capturing closure, or a composite holding
-    one. A type may also DECLARE that it owns a resource, by implementing the `Drop`
+    `T[]`, an `Own`, a `List`, a `HashMap`, a capturing closure, an `Iterator@(T)`, or a
+    composite holding one. A type may also DECLARE that it owns a resource, by implementing the `Drop`
     perk -- a file or a socket holds one `i32` descriptor, so no field walk can find it
     (HANDLES.md ruling R2).
 
@@ -306,6 +307,8 @@ def owns_resource(t: Optional["Type"], drops: AbstractSet[str],
             return True
         if isinstance(ty, FunctionType):
             return ty.captures != ()
+        if isinstance(ty, IteratorType):
+            return True
         if isinstance(ty, GenericTypeRef):
             return ty.base_name in bases
         if isinstance(ty, (StructType, EnumType)):

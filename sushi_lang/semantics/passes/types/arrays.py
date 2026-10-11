@@ -28,7 +28,7 @@ from sushi_lang.semantics.method_effects import CONTAINER_INSERT_METHODS, effect
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import (ArrayType, BuiltinType, DynamicArrayType,
-                                          IteratorType, Type, deref_type)
+                                          Type, deref_type)
 from .utils import validate_constant_array_index
 from sushi_lang.semantics.type_predicates import is_numeric_type
 
@@ -430,8 +430,9 @@ def _the_element(array_type: ArrayReceiver,
 
 def _an_element_iterator(array_type: ArrayReceiver,
                          validator: Optional['TypeValidator']) -> Optional[Type]:
-    """`iter()`: an iterator over the element type."""
-    return IteratorType(element_type=_the_element(array_type, validator))
+    """`iter()`: an iterator that lends each element, `Iterator@(peek T)`."""
+    from .utils import producer_iterator
+    return producer_iterator(validator, _the_element(array_type, validator))
 
 
 def _the_receiver(array_type: ArrayReceiver,

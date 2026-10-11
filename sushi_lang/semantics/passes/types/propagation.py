@@ -487,6 +487,17 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
         _propagate_array_element_type(validator, value_expr, expected_type.base_type)
         return
 
+    # A range is a VALUE where the position expects `Iterator@(i32)` (#1259): an owned
+    # iterator. In every other position it stays a walk or a run, and a range that no
+    # position stamps is CE2122.
+    from sushi_lang.semantics.ast import RangeExpr as _RangeExpr
+    from sushi_lang.semantics.typesys import IteratorType as _IteratorType
+    if isinstance(value_expr, _RangeExpr):
+        if (isinstance(expected_type, _IteratorType)
+                and expected_type.element_type == BuiltinType.I32):
+            value_expr.is_value = True
+        return
+
     # Hand a lambda its expected FunctionType so bare-name params (`|x|`) infer, and a
     # bare Name its expected fn type so a generic-fn reference can solve its type args.
     from sushi_lang.semantics.typesys import FunctionType as _FunctionType

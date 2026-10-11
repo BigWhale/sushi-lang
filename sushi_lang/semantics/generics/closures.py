@@ -28,7 +28,7 @@ def validate_function_method_with_validator(
     reporter: Any,
     validator: Any,
 ) -> None:
-    """Validate a built-in function-value method call."""
+    """Validate a built-in method call on a function value or an iterator value: `clone()`."""
     if call.method == "clone":
         _validate_function_clone(call, fn_type, reporter)
     else:

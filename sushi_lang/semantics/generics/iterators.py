@@ -12,12 +12,40 @@ name and the display), and the identity rule for a plain item (`settle_item_mode
 from __future__ import annotations
 
 from dataclasses import replace
+from types import MappingProxyType
 from typing import AbstractSet, Any, Callable, Dict, Mapping, Optional, Tuple, cast
 
 from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements, tuple_ref
 from sushi_lang.semantics.typesys import BorrowMode, IteratorType, ReferenceType, Type
 
 ITERATOR_BASE = "Iterator"
+
+# The built-in producers of an iterator over a container: `.iter()` on `T[]`, `T[N]` and
+# `List@(T)`, and the four HashMap walks. Each answers `Iterator@(peek T)`.
+CONTAINER_ITERATORS = frozenset({"iter", "keys", "values", "entries", "pairs"})
+
+# How a producer call keeps the state of its iterator (`MethodCall.iterator_state`). The
+# typecheck pass stamps CURSOR on the iterable of a direct walk; the borrow pass stamps
+# LENT or OWNED on every other producer, and LENT on the clone of a lent iterator.
+CURSOR = "cursor"   # the bare cursor a direct `foreach` walk reads; no value is made
+LENT = "lent"       # a value that borrows the owners of its source; stack state
+OWNED = "owned"     # a value that takes its source (a temporary); heap state
+
+
+# The built-in methods of the `Iterator` family: `it.clone()` on a value, and the static
+# `Iterator.new(nom x)` on the type name. `new` takes its argument with `nom`.
+ITERATOR_METHOD_ARITY: Mapping[str, int] = MappingProxyType({"clone": 0, "new": 1})
+
+
+def iterator_method_modes() -> Any:
+    """The parameter modes of the family (`BuiltinModes`): `new` takes `nom x`."""
+    from sushi_lang.semantics.param_modes import BuiltinModes, ParamMode
+    return BuiltinModes(rows=MappingProxyType({"new": (ParamMode.NOM,)}))
+
+
+def lent_iterator(item: Type) -> IteratorType:
+    """`Iterator@(peek T)`: the type a built-in producer answers over items of `item`."""
+    return iterator_of(_lent(item))
 
 # A part of an item that names one of these is not concrete: its mode is decided at the
 # instance, never in a template (the template does not know whether `T` owns).

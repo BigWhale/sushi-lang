@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 CALLEE_STAMPS = ("resolved_enum_type", "callee_self_mode", "callee_builtin_family",
                  "callee_param_modes", "callee_param_names", "callee_param_types",
                  "callee_method_type_args", "callee_variadic_at",
-                 "callee_extension_unit")
+                 "callee_extension_unit", "iterator_state", "iterator_next")
 
 
 class DotCallKind(Enum):

@@ -656,8 +656,13 @@ class Foreach(Stmt):
     protocol_iter_name: Optional[str] = None
     # The typecheck pass sets it for a `next()` walk of a place reached through a `poke`
     # reference: the loop calls `next()` on the caller's storage and does not take the
-    # value (#1258). The borrow pass and the backend read this one stamp.
+    # value (#1258). The borrow pass and the backend read this one stamp. The borrow pass
+    # also sets it for an iterator value that a `let` borrows (#1259).
     walks_in_place: bool = False
+    # The typecheck pass sets it for a walk of an `Iterator@(T)` VALUE: the loop calls
+    # the value's `next_fn` (#1259). None for a range, for a built-in producer that the
+    # loop walks directly (`xs.iter()`, `m.keys()`), and for a `next()` protocol walk.
+    value_iterator: Optional[Type] = None
 
 @dataclass(slots=True)
 class Expand(Stmt):
@@ -1084,6 +1089,12 @@ class MethodCall(Node):
     # The names a call was written with. A method has no field names, so these are
     # carried only to be refused (CE6104); the builder used to drop them (#563).
     field_names: Optional[List[str]] = None
+    # How a built-in iterator producer keeps its state (`generics/iterators.py`, #1259):
+    # the bare cursor of a direct walk, a lent value, or an owned value.
+    iterator_state: Optional[str] = None
+    # `Iterator.new(nom x)`: the `next()` call on the value, built and checked by the
+    # typecheck pass. The backend reads its stamps; no pass walks it as code.
+    iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)
 
 
 @dataclass(slots=True)
@@ -1128,6 +1139,8 @@ class DotCall(Node):
     # MethodCall.
     callee_method_type_args: Optional[Tuple] = None
     callee_extension_unit: Optional[str] = None  # see MethodCall
+    iterator_state: Optional[str] = None  # see MethodCall
+    iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)  # see MethodCall
     # True when the callee is a STATIC method (#542): no receiver crosses, and the
     # backend emits the symbol with the argument list alone. Stamped by the typecheck
     # pass, exactly as the receiver mode beside it is.
@@ -1212,6 +1225,9 @@ class RangeExpr(Node):
     end: "Expr"             # End expression (must evaluate to integer)
     inclusive: bool         # True for ..=, False for ..
     reverse: bool = False   # True after an odd number of `.rev()` calls
+    # The typecheck pass sets it where the position expects `Iterator@(i32)`: the range is
+    # then a VALUE, an owned iterator (#1259).
+    is_value: bool = False
 
 Expr = Union[Name, IntLit, FloatLit, BoolLit, BlankLit, StringLit, InterpolatedString, ArrayLiteral, IndexAccess, UnaryOp, BinaryOp, Call, MethodCall, DotCall, MemberAccess, EnumConstructor, DynamicArrayNew, DynamicArrayFrom, CastExpr, Borrow, TryExpr, RangeExpr, Spread, Lambda, TupleLiteral]
 # The three call shapes; each carries the whole set of callee stamps.

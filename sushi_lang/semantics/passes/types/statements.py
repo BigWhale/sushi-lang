@@ -395,12 +395,7 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
                        validator.reporter),
             validator.reporter)
     else:
-        enclosing = validator.walked_iterable
-        validator.walked_iterable = stmt.iterable
-        try:
-            validator.validate_expression(stmt.iterable)
-        finally:
-            validator.walked_iterable = enclosing
+        validator.validate_expression(stmt.iterable)
     iterable_type = validator.infer_expression_type(stmt.iterable)
 
     if iterable_type is None:
@@ -412,6 +407,7 @@ def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> Non
 
     if isinstance(iterable_type, IteratorType):
         element_type = iterable_type.element_type
+        _choose_the_walk(validator, stmt, iterable_type)
     else:
         # Not an iterator: it may still carry `next()` (HANDLES.md ruling R21). The
         # protocol is asked SECOND, because `Iterator@(T)` is a cursor over contiguous
@@ -575,9 +571,25 @@ def resolve_protocol_iterator(validator: 'TypeValidator', stmt: Foreach, iterabl
     the return type, so the backend emits an ordinary method call and needs no second
     resolution of its own.
     """
+    if protocol_item_type(validator, iterable_type) is None:
+        return None
+    if stmt.protocol_iter_name is None:
+        stmt.protocol_iter_name = hidden_name("fe_iter", next(_protocol_iter_ids))
+    element_type, call = protocol_next_call(validator, iterable_type,
+                                            stmt.protocol_iter_name, stmt.iterable.loc)
+    stmt.protocol_next = call
+    stmt.walks_in_place = _reached_through_poke(validator, stmt.iterable)
+    return element_type
+
+
+def protocol_item_type(validator: 'TypeValidator', iterable_type) -> Optional[Type]:
+    """The T of a nullary `next()` answering `Maybe@(T)` on this type, or None.
+
+    The one rule of the protocol, for a `foreach` and for `Iterator.new(nom x)` alike.
+    It reports nothing and stamps nothing.
+    """
     from sushi_lang.semantics.passes.types.calls.methods import (
-        RESOLUTION_REPORTED, extension_call_result_type, resolve_method,
-        validate_method_call)
+        RESOLUTION_REPORTED, extension_call_result_type, resolve_method)
 
     resolved = resolve_method(validator, iterable_type, "next", report=False)
     if resolved is None or resolved is RESOLUTION_REPORTED:
@@ -589,17 +601,20 @@ def resolve_protocol_iterator(validator: 'TypeValidator', stmt: Foreach, iterabl
     # `nom self` on a `next()` makes a type unwalkable rather than walkable once.
     if receiver_mode(getattr(resolved.method, "self_mode", None)) is ParamMode.NOM:
         return None
-    element_type = _maybe_some_payload(
-        extension_call_result_type(validator, resolved.method))
-    if element_type is None:
-        return None
+    return _maybe_some_payload(extension_call_result_type(validator, resolved.method))
 
-    if stmt.protocol_iter_name is None:
-        stmt.protocol_iter_name = hidden_name("fe_iter", next(_protocol_iter_ids))
-    iter_name = stmt.protocol_iter_name
 
-    call = MethodCall(receiver=Name(id=iter_name, loc=stmt.iterable.loc),
-                      method="next", args=[], loc=stmt.iterable.loc)
+def protocol_next_call(validator: 'TypeValidator', iterable_type, iter_name: str,
+                       loc) -> tuple[Optional[Type], MethodCall]:
+    """Build and validate `<iter_name>.next()` on a walkable type, and answer its item.
+
+    The call is VALIDATED against a hidden local that holds the value, which stamps the
+    receiver mode, the symbol and the return type, so the backend needs no second
+    resolution of its own.
+    """
+    from sushi_lang.semantics.passes.types.calls.methods import validate_method_call
+
+    call = MethodCall(receiver=Name(id=iter_name, loc=loc), method="next", args=[], loc=loc)
     _MISSING = object()
     previous = validator.variable_types.get(iter_name, _MISSING)
     validator.variable_types[iter_name] = iterable_type
@@ -610,9 +625,34 @@ def resolve_protocol_iterator(validator: 'TypeValidator', stmt: Foreach, iterabl
             validator.variable_types.pop(iter_name, None)
         else:
             validator.variable_types[iter_name] = previous
-    stmt.protocol_next = call
-    stmt.walks_in_place = _reached_through_poke(validator, stmt.iterable)
-    return element_type
+    return protocol_item_type(validator, iterable_type), call
+
+
+# The built-in families whose iterator methods a loop can walk with no value at all.
+_DIRECT_WALK_FAMILIES = frozenset({"array", "list", "hashmap"})
+
+
+def _choose_the_walk(validator: 'TypeValidator', stmt: Foreach, iterable_type) -> None:
+    """A walk of an `Iterator@(T)`: a direct walk, or a walk of a value (#1259).
+
+    A range and a built-in producer written as the iterable are walked DIRECTLY: the loop
+    reads the source with no call through `next_fn` and no allocation, so the producer is
+    stamped to answer its bare cursor. Every other iterator is a VALUE, and the loop calls
+    its `next_fn`; a value reached through a `poke` reference is walked in place.
+    """
+    from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS, CURSOR
+    from .utils import settle_item_modes
+
+    iterable = stmt.iterable
+    if isinstance(iterable, RangeExpr):
+        return
+    if (isinstance(iterable, (MethodCall, DotCall)) and not iterable.args
+            and iterable.method in CONTAINER_ITERATORS
+            and iterable.callee_builtin_family in _DIRECT_WALK_FAMILIES):
+        iterable.iterator_state = CURSOR
+        return
+    stmt.value_iterator = settle_item_modes(validator, iterable_type)
+    stmt.walks_in_place = _reached_through_poke(validator, iterable)
 
 
 def _reached_through_poke(validator: 'TypeValidator', iterable) -> bool:

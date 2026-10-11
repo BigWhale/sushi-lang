@@ -357,8 +357,12 @@ class ExpressionValidator(RecursiveVisitor):
         validate_try_expression(self.type_validator, node)
 
     def visit_rangeexpr(self, node: RangeExpr) -> None:
-        """A range reached through the dispatch is in neither of its two positions."""
-        from sushi_lang.semantics.passes.types.expressions import refuse_range_value
+        """A range reached through the dispatch is a value, or in no position of its own."""
+        from sushi_lang.semantics.passes.types.expressions import (
+            refuse_range_value, validate_range_value)
+        if node.is_value:
+            validate_range_value(self.type_validator, node)
+            return
         refuse_range_value(self.type_validator, node)
 
     def visit_name(self, node: Name) -> None:

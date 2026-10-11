@@ -489,6 +489,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         """The type a method call yields, over its receiver's type, and the stamp of it."""
         from sushi_lang.semantics.typesys import ReferenceType
 
+        if receiver_type is None and _names_iterator_new(self.type_validator, node):
+            from sushi_lang.semantics.passes.types.calls.methods import iterator_new_type
+            node.inferred_return_type = iterator_new_type(self.type_validator, node)
+            return node.inferred_return_type
+
         actual_type = receiver_type
         if isinstance(receiver_type, ReferenceType):
             actual_type = receiver_type.referenced_type
@@ -647,3 +652,11 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
     def generic_visit(self, node) -> Optional[Type]:
         """Default behavior for unknown nodes."""
         return None
+
+
+def _names_iterator_new(validator, node) -> bool:
+    """Is this call the static `Iterator.new(...)` on the type name (#1259)?"""
+    from sushi_lang.semantics.generics.iterators import ITERATOR_BASE
+    receiver = node.receiver
+    return (isinstance(receiver, Name) and receiver.id == ITERATOR_BASE
+            and receiver.id not in validator.variable_types and node.method == "new")

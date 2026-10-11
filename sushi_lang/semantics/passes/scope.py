@@ -311,9 +311,13 @@ class ScopeAnalyzer:
         return self.namespaces.is_namespace(name)
 
     def is_type(self, name: str) -> bool:
-        """A type name, of every kind `statics.names_a_type` knows."""
+        """A type name, of every kind `statics.names_a_type` knows.
+
+        A compiler type that a built-in static is called on (`Iterator.new`) is a type
+        name too, though no table declares it (#1259).
+        """
         from sushi_lang.semantics import statics
-        return statics.names_a_type(
+        return name in statics.BUILTIN_STATICS or statics.names_a_type(
             name,
             structs=self.structs.by_name.keys(),
             enums=self.enums.by_name.keys(),

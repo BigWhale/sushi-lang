@@ -54,6 +54,7 @@ BUILTIN_STATICS: dict[str, frozenset[str]] = {
     "List": frozenset({"new", "with_capacity"}),
     "HashMap": frozenset({"new"}),
     "Own": frozenset({"alloc"}),
+    "Iterator": frozenset({"new"}),
     "f64": frozenset({"from_bits"}),
     "f32": frozenset({"from_bits"}),
     "string": frozenset({"from_bytes"}),

@@ -486,6 +486,15 @@ def settle_item_modes(validator: 'TypeValidator', ty: Optional[Type]) -> Optiona
                                  validator.enum_table.by_name))
 
 
+def producer_iterator(validator: Optional['TypeValidator'], item: Optional[Type]) -> Optional[Type]:
+    """What a built-in producer answers: `Iterator@(peek T)`, in its one form (#1259)."""
+    from sushi_lang.semantics.generics.iterators import lent_iterator
+    if item is None:
+        return None
+    iterator = lent_iterator(item)
+    return iterator if validator is None else settle_item_modes(validator, iterator)
+
+
 def intern_declared_wrapper(validator: 'TypeValidator',
                             ty: Optional[Type]) -> Optional[Type]:
     """The interned `Result@(T, E)`, `Maybe@(T)` or tuple a WRITTEN type names, else None.
