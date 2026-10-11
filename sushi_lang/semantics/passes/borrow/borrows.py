@@ -127,7 +127,17 @@ def _conflict(checker: 'BorrowChecker', code: ErrorMessage, state: BorrowState,
 
 
 def register_implicit_borrow(checker: 'BorrowChecker', arg: Expr) -> None:
-    """Count an unmarked argument as the shared borrow it now is."""
+    """Count an unmarked argument as the shared borrow it now is.
+
+    A slice is a shared borrow of its array's owner, so a `poke` of that owner in the
+    same call is CE2407: the callee could grow the array under the view.
+    """
+    if isinstance(arg, IndexAccess) and arg.is_slice:
+        owner = borrow_owner(arg)
+        owner_state = checker.borrow_state.get(owner) if owner is not None else None
+        if owner_state is not None and not owner_state.is_moved:
+            acquire_borrow(checker, owner_state, arg.loc, is_poke=False)
+        return
     if not isinstance(arg, Name):
         return
     state = checker.borrow_state.get(arg.id)
