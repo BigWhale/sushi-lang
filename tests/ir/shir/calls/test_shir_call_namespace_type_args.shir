@@ -1,0 +1,24 @@
+unit helpers/shir_generic_fns
+
+ShirBody nothing__i32
+  params : []
+  locals : []
+  block  :
+    Return(EnumInit(@Maybe, "None", []))
+
+ShirBody identity__string
+  params : [(_0 "x": string, Owned)]
+  locals : []
+  block  :
+    Return(LocalRef(_0))
+
+unit test_shir_call_namespace_type_args
+
+ShirBody main
+  params : []
+  locals : [_0 "m": Maybe@(i32)]
+  block  :
+    Assign(LocalRef(_0), Call(Named(GlobalRef(@gf.nothing), type_args: [i32]), []), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_0), "is_some"), [])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@gf.identity), type_args: [string]), [(Lit("Mostly Harmless"), Owned)])]))
+    Return(Lit(0))

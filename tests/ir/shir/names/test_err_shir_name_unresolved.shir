@@ -1,0 +1,8 @@
+unit test_err_shir_name_unresolved
+
+ShirBody main
+  params : []
+  locals : [_0 "total": i32]
+  block  :
+    Assign(LocalRef(_0), Binary(+, Lit(40) = 40, Lit(2) = 2), is_init: true)
+    Return(Binary(-, <hole: Name>, LocalRef(_0)))

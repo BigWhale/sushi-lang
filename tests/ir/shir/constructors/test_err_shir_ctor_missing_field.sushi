@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE2082
+# EXPECT_DUMP_SHIR: test_err_shir_ctor_missing_field.shir
+#
+# the SHIR dump of a named construction that does not write each field. `StructInit`
+# keeps the argument that the source writes, with its name in `names`. The typecheck
+# pass reports the missing field (CE2082) after lowering.
+
+struct Vec:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Vec v = Vec(y: 1)
+    return v.x

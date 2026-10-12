@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODES_EXACT: CE1001
+# EXPECT_DUMP_SHIR: test_err_shir_name_unresolved.shir
+#
+# the SHIR dump of a name with no declaration. The scope pass reports CE1001 and records
+# the name as unresolved. SHIR has no node for such a name, so lowering gives a
+# `<hole: Name>` with the name of the AST class, and the compile goes on to the typecheck
+# pass. Strict mode does not stop on this hole: it skips a unit whose scope pass reported
+# an error, so the diagnostic of the program is CE1001. This is the one golden of a hole.
+
+fn main() i32:
+    let i32 total = 40 + 2
+    return totl - total

@@ -2649,6 +2649,7 @@ tests/ir/shir/calls/test_shir_call_bloom.sushi
 tests/ir/shir/calls/test_shir_call_markers.sushi
 tests/ir/shir/calls/test_shir_call_methods.sushi
 tests/ir/shir/calls/test_shir_call_namespace.sushi
+tests/ir/shir/calls/test_shir_call_namespace_type_args.sushi
 tests/ir/shir/calls/test_shir_call_print.sushi
 tests/ir/shir/calls/test_shir_call_statics.sushi
 tests/ir/shir/calls/test_shir_call_type_args.sushi
@@ -2657,6 +2658,10 @@ tests/ir/shir/closures/test_shir_lambda_captures.sushi
 tests/ir/shir/closures/test_shir_lambda_channel.sushi
 tests/ir/shir/closures/test_shir_lambda_forms.sushi
 tests/ir/shir/closures/test_shir_lambda_nested.sushi
+tests/ir/shir/constructors/test_err_shir_ctor_missing_field.sushi
+tests/ir/shir/constructors/test_err_shir_ctor_no_struct.sushi
+tests/ir/shir/constructors/test_err_shir_ctor_repeated_field.sushi
+tests/ir/shir/constructors/test_err_shir_ctor_unknown_field.sushi
 tests/ir/shir/constructors/test_shir_ctor_alias.sushi
 tests/ir/shir/constructors/test_shir_ctor_array_dynamic.sushi
 tests/ir/shir/constructors/test_shir_ctor_array_fixed.sushi
@@ -2698,6 +2703,7 @@ tests/ir/shir/match/test_shir_match_own.sushi
 tests/ir/shir/match/test_shir_match_result.sushi
 tests/ir/shir/match/test_shir_match_string.sushi
 tests/ir/shir/match/test_shir_match_tuple.sushi
+tests/ir/shir/names/test_err_shir_name_unresolved.sushi
 tests/ir/shir/names/test_shir_names.sushi
 tests/ir/shir/operators/test_shir_operators.sushi
 tests/ir/shir/statements/test_err_shir_stmt_let_untyped.sushi
