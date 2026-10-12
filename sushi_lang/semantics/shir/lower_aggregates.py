@@ -21,8 +21,9 @@ What a written name before a dot denotes decides each node, and lowering reads i
   alias. The declaration is the written name, the alias included (`geo.Sign`), as a pattern
   names it.
 - `ns.m` on a namespace is the `ConstRef`, the `StorageRef` or the `GlobalRef` of what the
-  namespace holds under `m`, with the qualified name as written. A type, a C global and a
-  name that the namespace does not hold are holes.
+  namespace holds under `m`, with the qualified name as written. A function and a C global
+  of an `unsafe external` block (`libc.environ`) are a `GlobalRef`. A type and a name that
+  the namespace does not hold are holes.
 - Any other `x.m` is a `Field` of `x`. Which field it is, and its index, are answers of the
   typecheck pass (ruling S5).
 - `a[i]` is an `Index` with the index as written, and with the `unchecked` mark that the
@@ -54,7 +55,7 @@ from sushi_lang.semantics import ast as a
 from sushi_lang.semantics.array_runs import is_range_element
 from sushi_lang.semantics.shir import bindings as bd
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.shir.lookup import CALLABLE_KINDS, VARIABLE_KIND, DeclLookup
+from sushi_lang.semantics.shir.lookup import GLOBAL_KINDS, VARIABLE_KIND, DeclLookup
 from sushi_lang.semantics.typesys import BuiltinType, UnknownType
 
 if TYPE_CHECKING:
@@ -216,7 +217,7 @@ def _namespace_member(lw: BodyLowerer, node: a.MemberAccess, alias: str) -> e.Sh
         return e.ConstRef(lw.made_opaque(), loc, lw.decls.refer(written))
     if kind == VARIABLE_KIND:
         return e.StorageRef(lw.made_opaque(), loc, lw.decls.refer(written))
-    if kind in CALLABLE_KINDS:
+    if kind in GLOBAL_KINDS:
         return e.GlobalRef(lw.made_opaque(), loc, lw.decls.refer(written))
     return lw.hole(node)
 

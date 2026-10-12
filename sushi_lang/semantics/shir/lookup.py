@@ -7,7 +7,8 @@ type, so lowering reads the tables that the collect and namespaces passes made:
   enum `T`. Otherwise `T.m(...)` calls a static method of `T`. A name behind the dot of a
   type is one of the two, never both (#542).
 - `ns.f(...)` and `ns.f` on a namespace name what the namespace holds under `f`: a
-  function, a generic function, a C function, a constant, a unit `var` or a type.
+  function, a generic function, a C function, a C global, a constant, a unit `var` or a
+  type.
 - A named struct construction gives its fields in the declaration order, so lowering
   reads the field names of the struct declaration.
 
@@ -27,6 +28,10 @@ if TYPE_CHECKING:
 
 #: The kinds of declaration behind a namespace that a call calls (`namespaces.Binding`).
 CALLABLE_KINDS = frozenset({"function", "generic function", "extern"})
+
+#: The kinds of declaration behind a namespace that a `GlobalRef` names: a callable, and
+#: a C global of an `unsafe external` block (`libc.environ`).
+GLOBAL_KINDS = CALLABLE_KINDS | {"extern variable"}
 
 #: The kinds of declaration behind a namespace that name a type.
 TYPE_KINDS = frozenset({"struct", "enum", "type"})

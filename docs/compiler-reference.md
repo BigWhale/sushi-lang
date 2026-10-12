@@ -541,7 +541,7 @@ Write the SHIR (the Sushi High-level IR, `docs/design/ir.md`) of each body to a 
 SUSHI_SHIR_STRICT=1 ./sushic program.sushi
 ```
 
-The variable does not stop the compile of a unit in which the scope pass reported an error: a name with no declaration is a hole there, and the error of the scope pass (for example [CE1001](error-catalog.md#ce1001)) is the diagnostic.
+The variable does not stop the compile at a name with no declaration: the program always has an error then ([CE1001](error-catalog.md#ce1001), [CE1002](error-catalog.md#ce1002), or [CE0144](error-catalog.md#ce0144) for a type pack name), and that error is the diagnostic. The variable does not stop the compile of a unit in which the scope pass reported an error either: a type name written as a value is a hole there, and the error of the scope pass ([CE2105](error-catalog.md#ce2105)) is the diagnostic.
 
 The variable is for the work on the new pipeline.
 

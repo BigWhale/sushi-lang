@@ -5,7 +5,8 @@ keyed on the class (gate: `tests/unit/test_shir_lowering_is_one_table.py`). A cl
 no row is a HOLE: lowering makes a `Hole` that names the AST class, records it, and the
 compile goes on through the old pipeline. When the variable that `STRICT_VARIABLE` names
 is `1`, a hole stops the compile with the stop code CE0155 instead, except in a unit whose
-scope pass reported an error (`stops_on_hole`). A value that carries
+scope pass reported an error (`stops_on_hole`). The hole of a name with no declaration
+never stops the compile (`error_hole`). A value that carries
 the `nom` marker outside a call argument is a `Take` of it: the AST builder puts the marker
 there only in a `let` initializer and in a `return` (ir.md 7.4).
 
@@ -24,7 +25,8 @@ evaluated only when the condition is false (ir.md 7.5).
 A name lowers to the answer that the scope pass recorded for it (ir.md 7.1): a local, a
 constant, a unit `var` or a function. A name with no declaration (`Unresolved`), and a
 type or a namespace written as a value, is a hole: the program has an error, and SHIR has
-no node for such a name. The binder of a `let` gives a `ShirLocal`, with the `LocalId`
+no node for such a name. A program with an unresolved name always has an error (CE1001,
+CE1002, or CE0144 for a type pack name), so its hole never stops the compile. The binder of a `let` gives a `ShirLocal`, with the `LocalId`
 that the scope pass recorded for it. A binder with no name span is one that the AST
 builder made: its local is hidden, with no name (ir.md 7.2).
 
@@ -88,8 +90,9 @@ def stops_on_hole(scope_failed: bool) -> bool:
     """True when a hole of a unit stops the compile (docs/compiler-reference.md, Dump SHIR).
 
     The strict variable must be `1`, and the scope pass of the unit must have reported no
-    error. A name with no declaration (after CE1001 or CE1002) is a hole, so in a unit
-    with a scope error the error of the scope pass stays the diagnostic of the program.
+    error. A type name written as a value is a hole, and the scope pass reports CE2105 for
+    it, so in a unit with a scope error the error of the scope pass stays the diagnostic
+    of the program. A name with no declaration never stops the compile (`error_hole`).
     """
     return not scope_failed and os.environ.get(STRICT_VARIABLE) == "1"
 
@@ -211,10 +214,18 @@ class BodyLowerer:
 
     def hole(self, node: Any) -> Hole:
         """A construct that lowering does not handle yet; CE0155 when `stops` is true."""
-        made = Hole(self.made_opaque(), self.span(node), type(node).__name__)
         if self.stops:
-            er.raise_internal_error("CE0155", span=made.loc, stage=STAGE,
-                                    construct=made.ast_class)
+            er.raise_internal_error("CE0155", span=self.span(node), stage=STAGE,
+                                    construct=type(node).__name__)
+        return self.error_hole(node)
+
+    def error_hole(self, node: Any) -> Hole:
+        """The hole of a program that always has an error. It never stops the compile.
+
+        A name with no declaration is one: the error of the program (CE1001, CE1002 or
+        CE0144) is its diagnostic, not the stop code (ruling of 2026-10-12).
+        """
+        made = Hole(self.made_opaque(), self.span(node), type(node).__name__)
         self.holes.append(made)
         return made
 
@@ -282,6 +293,8 @@ def _name(lw: BodyLowerer, node: a.Name) -> e.ShirExpr:
             return e.StorageRef(lw.made_opaque(), loc, lw.decls.refer(name))
         case bd.Function(name):
             return e.GlobalRef(lw.made_opaque(), loc, lw.decls.refer(name))
+        case bd.Unresolved():
+            return lw.error_hole(node)
     return lw.hole(node)
 
 

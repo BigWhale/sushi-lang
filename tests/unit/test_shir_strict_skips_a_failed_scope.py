@@ -1,10 +1,16 @@
-"""Gate: strict mode stops on a hole only in a unit whose scope pass reported no error.
+"""Gate: strict mode never stops on an unresolved name, nor in a unit with a scope error.
 
-Under `SUSHI_SHIR_STRICT=1` a hole stops the compile with the stop code CE0155. A name
-with no declaration is a hole too (`Unresolved`, after CE1001 or CE1002), and SHIR has no
-node for it. So that the error of the scope pass stays the diagnostic of the program,
-strict mode skips a unit whose scope pass reported an error (ruling of 2026-10-12). The
-rule has three parts, and this gate holds each one:
+Under `SUSHI_SHIR_STRICT=1` a hole stops the compile with the stop code CE0155. Two kinds
+of hole are holes of a program that always has an error, and the error, not CE0155, must
+be the diagnostic of the program (rulings of 2026-10-12):
+
+- A name with no declaration (`Unresolved`) is a hole, and SHIR has no node for it. The
+  program has an error: CE1001 or CE1002 from the scope pass, or CE0144 from the typecheck
+  pass for a type pack name. So the hole of an unresolved name never stops the compile.
+- A type name written as a value is a hole too. The scope pass reports CE2105 for it, so
+  strict mode skips a unit whose scope pass reported an error.
+
+The rule has five parts, and this gate holds each one:
 
 1. `lower_unit` takes the result of the scope pass as the keyword `scope_failed`, with no
    default, so that no caller can forget it.
@@ -12,10 +18,14 @@ rule has three parts, and this gate holds each one:
    `scope_failed` too. `BodyLowerer.hole` raises CE0155 only behind `self.stops`.
 3. The analyzer gives `scope_failed` from the reporter of the unit, which only the scope
    pass has used when lowering starts.
+4. `BodyLowerer.error_hole` records a hole and never raises CE0155.
+5. `_name` is the one lowering that calls `error_hole`, and it calls it for an
+   `Unresolved` name. `hole` calls it too, after its stop check.
 
 The scan reads Python source and signatures; it does not start the compiler. The proof
 on a program is a compile by hand: `SUSHI_SHIR_STRICT=1 ./sushic` on a CE1001 fixture
-gives CE1001, not CE0155.
+gives CE1001, and on a fixture of `variadic/pack_name_is_not_a_value/` it gives CE0144,
+not CE0155.
 """
 from __future__ import annotations
 
@@ -89,3 +99,29 @@ def test_the_analyzer_gives_the_result_of_the_scope_pass() -> None:
     value = given.get("scope_failed")
     assert isinstance(value, ast.Attribute) and value.attr == "has_offered_errors", (
         "the analyzer must give scope_failed=<the unit reporter>.has_offered_errors")
+
+
+def test_an_error_hole_never_stops() -> None:
+    holes = [fn for fn in _functions(_tree(LOWER_NODES)) if fn.name == "error_hole"]
+    assert len(holes) == 1, "BodyLowerer.error_hole is not found"
+    assert not any(isinstance(sub, ast.Constant) and sub.value == "CE0155"
+                   for sub in ast.walk(holes[0])), "error_hole must not raise CE0155"
+
+
+def _calls_error_hole(node: ast.AST) -> bool:
+    return any(isinstance(sub, ast.Call) and isinstance(sub.func, ast.Attribute)
+               and sub.func.attr == "error_hole" for sub in ast.walk(node))
+
+
+def test_an_unresolved_name_is_the_one_error_hole() -> None:
+    shir = ROOT / "semantics" / "shir"
+    callers = [f"{path.name}:{fn.name}" for path in sorted(shir.glob("*.py"))
+               for fn in _functions(_tree(path)) if _calls_error_hole(fn)]
+    assert callers == ["lower_nodes.py:_name", "lower_nodes.py:hole"], (
+        f"the callers of error_hole: {callers}")
+    name = next(fn for fn in _functions(_tree(LOWER_NODES)) if fn.name == "_name")
+    branches = [sub for sub in ast.walk(name) if isinstance(sub, (ast.If, ast.match_case))
+                and _calls_error_hole(sub)
+                and any(isinstance(ref, ast.Attribute) and ref.attr == "Unresolved"
+                        for ref in ast.walk(sub))]
+    assert branches, "_name must call error_hole in the branch of an Unresolved name"
