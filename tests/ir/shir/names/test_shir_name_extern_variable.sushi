@@ -1,0 +1,24 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "optind: 1\noptind: one\nenviron: some\n"
+# EXPECT_DUMP_SHIR: test_shir_name_extern_variable.shir
+#
+# the SHIR dump of a C global that a program reads through the namespace of its
+# `unsafe external` block. `libc.optind` and `libc.environ` are a `GlobalRef` with the
+# written name and its alias, as a C function behind the alias is (`libc.abs`). The dump
+# shows a read as an operand, as the scrutinee of a `match` and as the receiver of a
+# method. A `GlobalRef` is opaque: the operand `libc.optind` has no value after it.
+
+unsafe external "C" as libc because "the SHIR dump of a C global":
+    var i32 optind = "optind"
+    var ptr environ = "environ"
+
+fn main() i32:
+    let i32 first = libc.optind + 0
+    println("optind: {first}")
+    match libc.optind:
+        1 -> println("optind: one")
+        _ -> println("optind: other")
+    match libc.environ.load_ptr(0):
+        Maybe.Some(_) -> println("environ: some")
+        Maybe.None -> println("environ: none")
+    return 0
