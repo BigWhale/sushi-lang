@@ -657,7 +657,7 @@ one body.
 | `LocalRef` | `local: LocalId` |
 | `ConstRef` | `const_id: DeclId`; the value is already computed (ruling Q5) |
 | `StorageRef` | `decl: DeclId`; a unit-level `var`, a PLACE with an address (`unit-storage.md`) |
-| `GlobalRef` | `decl: DeclId`; a function used as a value |
+| `GlobalRef` | `decl: DeclId`; a function used as a value, or a C global of an `unsafe external` block (`libc.environ`) |
 | `Field` | `base: Expr`, `name: str`; a struct field or a tuple element (`"0"`). The index is `typecheck`'s (S5) |
 | `Index` | `base: Expr`, `index: Expr`, `unchecked: bool` (4.9) |
 | `Slice` | `base: Expr`, `start: Expr`, `end: Expr`, `inclusive: bool`; a borrowed view (`slices.md`) |
@@ -747,6 +747,10 @@ written name of each field. `typecheck` reports the fault (CE2080, CE2081, CE208
 `T.m(...)` and the bare `T.m` on a type name are an `EnumInit` when the enum declaration of
 `T` has the variant `m`; else `T.m(...)` is a `Static` call (#542). A member `ns.m` behind
 an alias is a `ConstRef`, a `StorageRef` or a `GlobalRef`, by what the namespace holds.
+A C global of an `unsafe external` block is a `GlobalRef` with the written name and its
+alias (`libc.environ`), as a C function is (`libc.abs`). A read and a write of it are the
+same node; `typecheck` refuses the write (CE5016). A type and a name that the namespace
+does not hold stay holes. Ruled 2026-10-12.
 `from([...])` and `new()` are an `ArrayInit` of the kind `Dynamic`, never a `Call`.
 
 **A readable value inside a body.** `typecheck` needs the value of some sub-expressions
@@ -1006,7 +1010,7 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 | `ArrayLiteral`, `DynamicArrayNew`, `DynamicArrayFrom`, `ArrayElement` | `ArrayInit` with runs: `Fixed` for `[...]`, `Dynamic` for `from([...])` and `new()` |
 | `EnumConstructor` | `EnumInit` |
 | `TupleLiteral` | `TupleInit` |
-| `MemberAccess` | `Field`; `ConstRef` / `StorageRef` / `GlobalRef` through a namespace; `EnumInit` for a unit variant (`Sign.Plus`) |
+| `MemberAccess` | `Field`; `ConstRef` / `StorageRef` / `GlobalRef` through a namespace, a C global of an `unsafe external` block included (`libc.environ`); `EnumInit` for a unit variant (`Sign.Plus`) |
 | `IndexAccess` | `Index` with the `unchecked` mark of the builder (4.9), or `Slice` when the index is a range; a reversed range (`data[(0..3).rev()]`, CE2122) is a hole, because `Slice` has no field for it |
 | `CastExpr` | `Cast` |
 | `TryExpr` | `Try`, **kept** |
