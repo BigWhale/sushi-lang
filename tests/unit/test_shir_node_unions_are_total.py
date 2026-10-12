@@ -44,7 +44,8 @@ _EXPR_BASE_FIELDS = _BASE_FIELDS + ("readable",)
 
 #: ir.md 7.4, the expression nodes and their fields in the written order. `Lambda` adds
 #: `ret` and `err`, the written return type and error type, and `expr_body`, the written
-#: shape of its body; `StructInit` adds `written_order` (ruling R1).
+#: shape of its body; `StructInit` adds `written_order` (ruling R1) and `names`, the
+#: written names of a named construction whose names are not the declared fields.
 EXPRESSION_FIELDS: dict[str, tuple[str, ...]] = {
     "Lit": ("value",),
     "LocalRef": ("local",),
@@ -62,7 +63,7 @@ EXPRESSION_FIELDS: dict[str, tuple[str, ...]] = {
     "Take": ("place",),
     "Try": ("inner",),
     "Lambda": ("params", "ret", "err", "body", "expr_body"),
-    "StructInit": ("decl", "fields", "written_order"),
+    "StructInit": ("decl", "fields", "written_order", "names"),
     "EnumInit": ("decl", "variant", "payload"),
     "TupleInit": ("parts",),
     "ArrayInit": ("kind", "runs"),
@@ -72,9 +73,10 @@ EXPRESSION_FIELDS: dict[str, tuple[str, ...]] = {
 
 #: The parts of an expression that are not nodes (ir.md 7.4): a call target, an
 #: argument, an array kind and an array run, a lambda parameter, and a literal value.
-#: The range run is `RangeRun`, not `Span`: the name `Span` is the source span.
+#: The range run is `RangeRun`, not `Span`: the name `Span` is the source span. `Named`
+#: holds the written type arguments of the call (`identity@(i32)(5)`).
 EXPRESSION_PARTS: dict[str, tuple[str, ...]] = {
-    "Named": ("ref",),
+    "Named": ("ref", "type_args"),
     "Dotted": ("recv", "name"),
     "Static": ("ty", "name"),
     "BuiltinFn": ("name",),

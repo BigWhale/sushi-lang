@@ -39,7 +39,7 @@ from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, ShirId
 from sushi_lang.semantics.shir.lookup import DeclLookup
 from sushi_lang.semantics.shir.lower_binders import written_param_type
-from sushi_lang.semantics.shir.lower_nodes import BodyLowerer, binder_local
+from sushi_lang.semantics.shir.lower_nodes import BodyLowerer, binder_local, stops_on_hole
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 
 if TYPE_CHECKING:
@@ -62,13 +62,15 @@ class LoweringContext:
     `evaluator` reads the value of an operand (ruling E3, ir.md 7.4), in the scope of the
     unit of the body. `lookup` reads what a type name or a namespace before a dot holds.
     `owner` is the perk implementation that holds a perk method, because the method has
-    no field that names its receiver type.
+    no field that names its receiver type. `stops` is true when a hole raises the stop
+    code (`stops_on_hole`).
     """
     decls: DeclNames
     holes: list[Hole]
     evaluator: Optional[ConstantEvaluator] = None
     lookup: Optional[DeclLookup] = None
     owner: Optional[ExtendWithDef] = None
+    stops: bool = False
 
 
 def lower_body(bindings: Bindings, ctx: LoweringContext) -> ShirBody:
@@ -80,7 +82,7 @@ def lower_body(bindings: Bindings, ctx: LoweringContext) -> ShirBody:
     params, locals_ = _frame(decl, bindings, ctx)
     fn_id = ctx.decls.declare(_written_name(decl, ctx))
     lowerer = BodyLowerer(ids, ctx.decls, bindings, ctx.holes, _span(decl.loc), ctx.evaluator,
-                          ctx.lookup)
+                          ctx.lookup, ctx.stops)
     block = _lower_block(decl, lowerer)
     every_local = sorted([*locals_, *lowerer.locals], key=lambda local: local.id)
     return ShirBody(fn_id, _origin(decl), params, every_local, block)
@@ -97,21 +99,24 @@ class LoweredProgram:
 
 def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings],
                evaluator: Optional[ConstantEvaluator] = None,
-               lookup: Optional[DeclLookup] = None) -> None:
+               lookup: Optional[DeclLookup] = None, *, scope_failed: bool) -> None:
     """The body of each declaration of `unit` that the scope pass checked, in order.
 
     `evaluator` is a silent evaluator and `lookup` reads the declaration tables, each in
-    the scope of `unit`. The perk owners and the written templates of the unit are found
-    once, so the cost of a unit is linear in its declarations.
+    the scope of `unit`. `scope_failed` is true when the scope pass reported an error in
+    the unit: then a hole does not stop the compile (`stops_on_hole`). The perk owners
+    and the written templates of the unit are found once, so the cost of a unit is linear
+    in its declarations.
     """
     program = unit.ast
     if program is None:
         return
     owners = _perk_owners(program)
     templates = _written_template_members(program)
+    stops = stops_on_hole(scope_failed)
     lowered.units.append((unit, [
         lower_body(table, LoweringContext(lowered.decls, lowered.holes, evaluator, lookup,
-                                          owners.get(id(table.body))))
+                                          owners.get(id(table.body)), stops))
         for table in tables if not _is_written_template(table.body, templates)]))
 
 

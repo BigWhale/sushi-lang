@@ -14,7 +14,8 @@ The rules of the text, from the example of ir.md 8.11:
   spelling (`display_type`), and a name or a text as a quoted string.
 - A bool field prints with its name (`is_init: true`). An optional field that is empty
   is not printed; an optional field that is set prints with its name (`otherwise: [...]`).
-- A list and a nested block print in brackets. A statement of the body block takes one
+- A list and a nested block print in brackets. A list of types prints each type in the
+  source spelling (`type_args: [i32]`), and a list of names each name quoted. A statement of the body block takes one
   line, and a body block with no statement prints `[]`.
 - An argument with a written mode prints as `(value, Convention)`; a bloom adds `...`.
 - An expression with a recorded value (ruling E3) prints the value after it: `... = 3`.
@@ -118,6 +119,20 @@ def _lambda_param(_pr: ShirPrinter, param: e.LambdaParam) -> str:
     return f"({_local(param.local)}, {CONVENTIONS[param.convention]})"
 
 
+def _named(pr: ShirPrinter, target: e.Named) -> str:
+    type_args = (f"[{', '.join(_type(ty) for ty in target.type_args)}]"
+                 if target.type_args else None)
+    return _node("Named", pr.show(target.ref), *_optional("type_args", type_args))
+
+
+def _struct_init(pr: ShirPrinter, init: e.StructInit) -> str:
+    names = (None if init.names is None
+             else "[" + ", ".join(_quoted(name) for name in init.names) + "]")
+    return _node("StructInit", pr.decl(init.decl), pr.each(init.fields),
+                 f"written_order: [{', '.join(str(i) for i in init.written_order)}]",
+                 *_optional("names", names))
+
+
 def _interp_part(pr: ShirPrinter, part: str | e.ShirExpr) -> str:
     return _quoted(part) if isinstance(part, str) else pr.show(part)
 
@@ -177,9 +192,7 @@ PRINTERS: dict[type, Render] = {
     e.Take: lambda pr, n: _node("Take", pr.show(n.place)),
     e.Try: lambda pr, n: _node("Try", pr.show(n.inner)),
     e.Lambda: _lambda,
-    e.StructInit: lambda pr, n: _node(
-        "StructInit", pr.decl(n.decl), pr.each(n.fields),
-        f"written_order: [{', '.join(str(i) for i in n.written_order)}]"),
+    e.StructInit: _struct_init,
     e.EnumInit: lambda pr, n: _node("EnumInit", pr.decl(n.decl), _quoted(n.variant),
                                     pr.each(n.payload)),
     e.TupleInit: lambda pr, n: _node("TupleInit", pr.each(n.parts)),
@@ -189,7 +202,7 @@ PRINTERS: dict[type, Render] = {
     e.Interp: lambda pr, n: _node(
         "Interp", "[" + ", ".join(_interp_part(pr, part) for part in n.parts) + "]"),
     # the parts of an expression
-    e.Named: lambda pr, t: _node("Named", pr.show(t.ref)),
+    e.Named: _named,
     e.Dotted: lambda pr, t: _node("Dotted", pr.show(t.recv), _quoted(t.name)),
     e.Static: lambda _pr, t: _node("Static", _type(t.ty), _quoted(t.name)),
     e.BuiltinFn: lambda _pr, t: _node("BuiltinFn", _quoted(t.name)),

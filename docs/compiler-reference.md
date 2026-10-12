@@ -526,7 +526,7 @@ Write the SHIR (the Sushi High-level IR, `docs/design/ir.md`) of each body to a 
 - Each unit of the program, then each body of the unit: a function, a method, an instance of a generic function, and the initializer of a constant
 - The parameters of each body, with the convention of each (`Owned`, `Guaranteed`, `InGuaranteed`, `Inout`), and its other locals
 - The block of each body, one statement on each line
-- A hole, `<hole: AstClass>`, for each construct that lowering does not handle yet. The name is the AST class of the construct, for example `<hole: Let>`
+- A hole, `<hole: AstClass>`, for each construct that lowering does not handle yet. The name is the AST class of the construct, for example `<hole: Name>` for a name with no declaration
 
 **Rules:**
 - The text is the same on every run and under every `PYTHONHASHSEED`, so a test can compare it with a golden file (`EXPECT_DUMP_SHIR`, `tests/TEST_METADATA_GUIDE.md`)
@@ -541,7 +541,9 @@ Write the SHIR (the Sushi High-level IR, `docs/design/ir.md`) of each body to a 
 SUSHI_SHIR_STRICT=1 ./sushic program.sushi
 ```
 
-The variable is for the work on the new pipeline. With it, most programs stop at a hole today.
+The variable does not stop the compile of a unit in which the scope pass reported an error: a name with no declaration is a hole there, and the error of the scope pass (for example [CE1001](error-catalog.md#ce1001)) is the diagnostic.
+
+The variable is for the work on the new pipeline.
 
 ### Print LLVM IR
 

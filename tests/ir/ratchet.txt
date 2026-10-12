@@ -2651,6 +2651,7 @@ tests/ir/shir/calls/test_shir_call_methods.sushi
 tests/ir/shir/calls/test_shir_call_namespace.sushi
 tests/ir/shir/calls/test_shir_call_print.sushi
 tests/ir/shir/calls/test_shir_call_statics.sushi
+tests/ir/shir/calls/test_shir_call_type_args.sushi
 tests/ir/shir/closures/test_shir_lambda_argument.sushi
 tests/ir/shir/closures/test_shir_lambda_captures.sushi
 tests/ir/shir/closures/test_shir_lambda_channel.sushi
@@ -2688,7 +2689,6 @@ tests/ir/shir/foreach/test_shir_foreach_nested_break.sushi
 tests/ir/shir/foreach/test_shir_foreach_range.sushi
 tests/ir/shir/foreach/test_shir_foreach_ref_binder.sushi
 tests/ir/shir/foreach/test_shir_foreach_try_binder.sushi
-tests/ir/shir/holes/test_shir_holes.sushi
 tests/ir/shir/literals/test_shir_literals.sushi
 tests/ir/shir/match/test_shir_match_arm_bodies.sushi
 tests/ir/shir/match/test_shir_match_binding_modes.sushi

@@ -822,7 +822,9 @@ class SemanticAnalyzer:
         """scope, typecheck, lift and borrow, per unit, in one loop.
 
         Lowering runs after scope, because it reads the `Bindings` that scope writes. Its
-        result goes to `self.shir`, and the passes after it read the AST as before.
+        result goes to `self.shir`, and the passes after it read the AST as before. The
+        reporter of the unit tells lowering whether scope reported an error: in such a
+        unit a hole does not stop the compile under the strict variable.
         """
         # Every unit is analysed with the global context, because units reference each
         # other, but each gets its own reporter so a diagnostic names the right file.
@@ -838,7 +840,8 @@ class SemanticAnalyzer:
                        DeclLookup(self.tables.enums.by_name, self.tables.generic_enums.by_name,
                                   self.tables.structs.by_name,
                                   self.tables.generic_structs.by_name,
-                                  self.tables.namespaces, unit.name))
+                                  self.tables.namespaces, unit.name),
+                       scope_failed=unit_reporter.has_offered_errors)
             passes.typecheck.run(unit.ast)
             passes.lifter.run()
             passes.borrow.run(unit.ast, skip=passes.typecheck.checked_template_ids)

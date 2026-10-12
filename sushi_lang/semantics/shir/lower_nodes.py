@@ -4,7 +4,8 @@ ONE table, `LOWERING`, gives the lowering of each AST body class that lowering h
 keyed on the class (gate: `tests/unit/test_shir_lowering_is_one_table.py`). A class with
 no row is a HOLE: lowering makes a `Hole` that names the AST class, records it, and the
 compile goes on through the old pipeline. When the variable that `STRICT_VARIABLE` names
-is `1`, a hole stops the compile with the stop code CE0155 instead. A value that carries
+is `1`, a hole stops the compile with the stop code CE0155 instead, except in a unit whose
+scope pass reported an error (`stops_on_hole`). A value that carries
 the `nom` marker outside a call argument is a `Take` of it: the AST builder puts the marker
 there only in a `let` initializer and in a `return` (ir.md 7.4).
 
@@ -83,9 +84,14 @@ _READ_BOTH = frozenset({"+", "-", "*"})
 _READ_RIGHT = frozenset({"/", "%", "<<", ">>"})
 
 
-def strict() -> bool:
-    """True when a hole stops the compile (docs/compiler-reference.md, Dump SHIR)."""
-    return os.environ.get(STRICT_VARIABLE) == "1"
+def stops_on_hole(scope_failed: bool) -> bool:
+    """True when a hole of a unit stops the compile (docs/compiler-reference.md, Dump SHIR).
+
+    The strict variable must be `1`, and the scope pass of the unit must have reported no
+    error. A name with no declaration (after CE1001 or CE1002) is a hole, so in a unit
+    with a scope error the error of the scope pass stays the diagnostic of the program.
+    """
+    return not scope_failed and os.environ.get(STRICT_VARIABLE) == "1"
 
 
 @dataclass(slots=True)
@@ -96,8 +102,9 @@ class BodyLowerer:
     a node that has none of its own: the span of its declaration. `evaluator` reads the
     value of an operand (ruling E3); with no evaluator, no value is recorded. `lookup`
     reads the declaration tables; with no lookup, a call on a type name or a namespace is
-    a hole. `opaque` counts the nodes made so far whose value the compiler cannot read.
-    `locals` holds the local of each binder that the body declares, in the order of the walk.
+    a hole. `stops` is true when a hole raises the stop code (`stops_on_hole`). `opaque`
+    counts the nodes made so far whose value the compiler cannot read. `locals` holds the
+    local of each binder that the body declares, in the order of the walk.
     """
     ids: IdAllocator[ShirId]
     decls: DeclNames
@@ -106,6 +113,7 @@ class BodyLowerer:
     fallback: Span
     evaluator: Optional[ConstantEvaluator] = None
     lookup: Optional[DeclLookup] = None
+    stops: bool = False
     opaque: int = field(default=0, init=False)
     locals: list[ShirLocal] = field(default_factory=list, init=False)
 
@@ -202,9 +210,9 @@ class BodyLowerer:
         return self.ident()
 
     def hole(self, node: Any) -> Hole:
-        """A construct that lowering does not handle yet; CE0155 under the strict variable."""
+        """A construct that lowering does not handle yet; CE0155 when `stops` is true."""
         made = Hole(self.made_opaque(), self.span(node), type(node).__name__)
-        if strict():
+        if self.stops:
             er.raise_internal_error("CE0155", span=made.loc, stage=STAGE,
                                     construct=made.ast_class)
         self.holes.append(made)
@@ -331,28 +339,24 @@ def _interp(lw: BodyLowerer, node: a.InterpolatedString) -> e.Interp:
 def _call(lw: BodyLowerer, node: a.Call) -> e.ShirExpr:
     """`f(...)`: the callee is `Named`, a name or any expression that gives a function.
 
+    The written type arguments stand on the callee (`identity@(i32)(5)`), as written.
     A struct name as the callee is a construction (`StructInit`), and only a construction
-    takes a named argument. SHIR has no field for written type arguments
-    (`identity@(i32)(5)`), so such a call is a hole.
+    takes a named argument. A construction has no field for written type arguments, so
+    `Pair@(i32, i32)(1, 2)` is a hole.
     """
-    if node.type_args:
-        return lw.hole(node)
     found = lw.bindings.resolution_of(node.callee)
-    if isinstance(found, bd.TypeName):
+    if isinstance(found, bd.TypeName) and not node.type_args:
         return struct_init(lw, node, found.name, found.name, node.args, node.field_names)
-    if node.field_names is not None:
+    if node.field_names is not None or isinstance(found, bd.TypeName):
         return lw.hole(node)
     ident = lw.made_opaque()
-    return e.Call(ident, lw.span(node), e.Named(lw.expr(node.callee)),
+    return e.Call(ident, lw.span(node), e.Named(lw.expr(node.callee), _type_args(node)),
                   _arguments(lw, node.args))
 
 
-def _dot_call(lw: BodyLowerer, node: a.DotCall) -> e.ShirExpr:
-    return lw.hole(node) if node.type_args else _dotted(lw, node)
-
-
-def _method_call(lw: BodyLowerer, node: a.MethodCall) -> e.ShirExpr:
-    return _dotted(lw, node)
+def _type_args(node: a.Call | a.DotCall | a.MethodCall) -> tuple[TypeRef, ...]:
+    """The type arguments that the source writes on a call, as written; empty for none."""
+    return tuple(getattr(node, "type_args", None) or ())
 
 
 def _dotted(lw: BodyLowerer, node: a.DotCall | a.MethodCall) -> e.ShirExpr:
@@ -362,12 +366,14 @@ def _dotted(lw: BodyLowerer, node: a.DotCall | a.MethodCall) -> e.ShirExpr:
     gives a variant or a static, also behind an alias (`hm.HashMap.new()`). Any other
     receiver is a value, and the target is `Dotted`: which method it calls is an answer of
     the typecheck pass (ir.md 7.4). A named argument outside a struct construction is a
-    hole, as in `_call`.
+    hole, as in `_call`. Written type arguments stand only on the function behind a
+    namespace: on a type or a value receiver (`Vec.at@(i32)(1)`, `xs.get@(i32)(0)`) the
+    program has an error (CE6102), and `Static` and `Dotted` have no field for them.
     """
     found = lw.bindings.resolution_of(node.receiver)
     if isinstance(found, bd.Namespace):
         return _qualified_call(lw, node, found.name)
-    if node.field_names is not None:
+    if node.field_names is not None or _type_args(node):
         return lw.hole(node)
     ty = lw.type_before_dot(node.receiver)
     if ty is not None:
@@ -381,19 +387,20 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
                     alias: str) -> e.ShirExpr:
     """`ns.f(...)`: the alias folds into the written name of the function that it holds.
 
-    A struct that the namespace holds is a construction, named with the alias. Anything
-    else that the namespace holds under the name is a hole.
+    The written type arguments stand on the callee, as on a direct call
+    (`geo.nothing@(i32)()`). A struct that the namespace holds is a construction, named
+    with the alias. Anything else that the namespace holds under the name is a hole.
     """
     kind = None if lw.lookup is None else lw.lookup.member_kind(lw.bindings.body, alias,
                                                                 node.method)
-    if kind == "struct":
+    if kind == "struct" and not _type_args(node):
         return struct_init(lw, node, f"{alias}.{node.method}", node.method, node.args,
                            node.field_names)
     if node.field_names is not None or kind not in CALLABLE_KINDS:
         return lw.hole(node)
     ident = lw.made_opaque()
     ref = e.GlobalRef(lw.made_opaque(), lw.span(node), lw.decls.refer(f"{alias}.{node.method}"))
-    return e.Call(ident, lw.span(node), e.Named(ref), _arguments(lw, node.args))
+    return e.Call(ident, lw.span(node), e.Named(ref, _type_args(node)), _arguments(lw, node.args))
 
 
 def _static_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
@@ -625,8 +632,8 @@ LOWERING: dict[type, Lower] = {
     a.TryExpr: _try,
     a.InterpolatedString: _interp,
     a.Call: _call,
-    a.DotCall: _dot_call,
-    a.MethodCall: _method_call,
+    a.DotCall: _dotted,
+    a.MethodCall: _dotted,
     a.MemberAccess: lower_member,
     a.TupleLiteral: lower_tuple,
     a.ArrayLiteral: lower_array,

@@ -13,8 +13,10 @@ What a written name before a dot denotes decides each node, and lowering reads i
   the declaration order of the struct, and `written_order` keeps the order that the source
   writes, which is the order of evaluation (ruling R1). SHIR has no temporary for it:
   SHIR-to-SLIR lowering evaluates the fields in `written_order` where it lowers the
-  expression. A named construction whose names are not the fields of a struct is a hole:
-  the program has an error, and SHIR has no node that keeps the written names.
+  expression. A named construction whose names are not the fields of a struct (an
+  unknown, a repeated or a missing name), or whose name has no struct, keeps its fields
+  in the written order and its written names in `names`: the program has an error, and
+  the typecheck pass reports it (CE2080, CE2081, CE2082).
 - `T.m(...)` and `T.m` on an enum `T` with a variant `m` are an `EnumInit`, also behind an
   alias. The declaration is the written name, the alias included (`geo.Sign`), as a pattern
   names it.
@@ -76,17 +78,21 @@ def struct_init(lw: BodyLowerer, node: Any, written: str, declared: str, args: l
     """`S(...)`, `S(f: ...)` or `ns.S(...)`: the struct `written`, which the table calls `declared`.
 
     A positional construction keeps its arguments as written. A named one puts them in the
-    declaration order, and `written_order` keeps the order of evaluation (ruling R1).
+    declaration order, and `written_order` keeps the order of evaluation (ruling R1). A
+    named one whose names are not the fields of the struct keeps the written order and
+    the written names.
     """
-    positions = list(range(len(args))) if names is None else _declared_positions(
-        lw.lookup, declared, names)
-    if positions is None:
-        return lw.hole(node)
+    positions = None if names is None else _declared_positions(lw.lookup, declared, names)
     ident = lw.made_opaque()
     written_args = lw.arguments(args)
+    decl = lw.decls.refer(written)
+    if positions is None:
+        kept = None if names is None else tuple(names)
+        return e.StructInit(ident, lw.span(node), decl, written_args, tuple(range(len(args))),
+                            kept)
     fields = [arg for _position, arg in sorted(zip(positions, written_args, strict=True),
                                                key=lambda pair: pair[0])]
-    return e.StructInit(ident, lw.span(node), lw.decls.refer(written), fields, tuple(positions))
+    return e.StructInit(ident, lw.span(node), decl, fields, tuple(positions), None)
 
 
 def _declared_positions(lookup: Optional[DeclLookup], declared: str,

@@ -564,5 +564,8 @@ _add(ErrorMessage("CE0155", Severity.ERROR,
     "construct. Today the one stage is `lowering`, and the code comes only when the "
     "variable SUSHI_SHIR_STRICT is 1: with no variable, lowering records the construct "
     "as a hole and the compile goes on through the old pipeline "
-    "(docs/compiler-reference.md, Dump SHIR). The code goes when the move is complete. "
+    "(docs/compiler-reference.md, Dump SHIR). The code does not come for a unit in which "
+    "the scope pass reported an error: a name with no declaration is a hole there, and "
+    "the error of the scope pass (CE1001, CE1002) is the diagnostic. The code goes when "
+    "the move is complete. "
     "This is a limit of the compiler, not a fault in the program."))

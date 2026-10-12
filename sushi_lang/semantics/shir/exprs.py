@@ -130,8 +130,13 @@ class Slice(ExprNode):
 
 @dataclass(frozen=True, slots=True)
 class Named:
-    """A name that `scope` resolved, or any expression that can be called."""
+    """A name that `scope` resolved, or any expression that can be called.
+
+    `type_args` are the type arguments that the source writes on the call, as written
+    (`identity@(i32)(5)`, `geo.nothing@(i32)()`); empty when it writes none.
+    """
     ref: ShirExpr
+    type_args: tuple[TypeRef, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,10 +256,16 @@ class StructInit(ExprNode):
     It gives the positions of `fields` in the order that the source writes them
     (ruling R1): a named construction evaluates its fields as written. A field is an
     `Arg`, because a constructor argument keeps its written marker (`Box(nom s)`).
+
+    `names` is None, except for a named construction whose names are not the declared
+    fields (an unknown, a repeated or a missing name) or whose name has no struct. Then
+    `fields` is in the written order, `written_order` is the identity, and `names` holds
+    the written name of each field, for the typecheck pass to report.
     """
     decl: DeclId
     fields: list[Arg]
     written_order: tuple[int, ...]
+    names: Optional[tuple[str, ...]]
 
 
 @dataclass(slots=True)
