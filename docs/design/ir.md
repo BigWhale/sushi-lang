@@ -536,9 +536,12 @@ The kinds follow the bare-name ladder that `scope` already walks
 (`semantics/hidden_names.py`: a `_` binder, the `??` binder's hidden local), and two
 nodes the AST builder synthesizes can share the span of their cause. A table keyed by
 the node is valid for the tree it was built from and for no copy of it, so `scope` runs
-on EVERY copy before that copy is lowered: the copies of the fixpoint (Q2) get it today,
-and the template check copy (4.3), which today inherits the written template's
-`Lambda.captures` through its deep copy, gets a `scope` run of its own.
+on EVERY copy before that copy is lowered: the copies of the fixpoint (Q2) get it today.
+The body of a template check (4.3) is lowered from the template AS WRITTEN, which `scope`
+walks in the per-unit loop, so its `Bindings` exist and the deep copy of the check needs no
+`scope` run of its own. Each type parameter stays a type as written in that body, and its
+origin `TemplateCheck(TemplateId)` names the template whose opaque parameters `typecheck`
+reads it at.
 
 A `Capture` names WHAT is captured and nothing more. Today `Lambda.captures` has two
 writers: `scope` writes the names, and `typecheck` fills each capture's type
@@ -1441,6 +1444,10 @@ the extension copies that a first call cut, places the array-template perk copie
 late function bodies, and `_check_copies` runs `scope`, `typecheck`, `lift` and `borrow`
 over each one with the home unit's passes. Under this design each copy is lowered to SHIR
 when it is placed, with its own side tables (7.3), and the fixpoint is otherwise unchanged.
+The point is in `_check_copies`: after the `scope` run of each copy and before its
+`typecheck` run, with the passes of the home unit, as the per-unit loop lowers a unit
+after `scope`. A copy is a body of its home unit, and a unit lists its copies in the order
+of their names, which hold the type arguments, never in the order of the fixpoint.
 
 **Q3. One node set with a legality level, or two hierarchies? TWO hierarchies.**
 
