@@ -669,7 +669,7 @@ one body.
 | `Take` | `place: Expr`; a marked field take `nom s.out` in a `let` or a `return` |
 | `Try` | `inner: Expr`; `??`, kept whole for `borrow` and for G7 |
 | `Lambda` | `params: [LambdaParam]`, `ret: TypeRef \| None`, `err: TypeRef \| None`, `body: ShirBlock`, `expr_body: bool`; the captures are in `Bindings`. It stays in the tree through `borrow`; `lift` describes it in `LiftResults` (Q8) |
-| `StructInit` | `decl: DeclId`, `fields: [Arg]`, `written_order: [int]`; `fields` in the declaration order |
+| `StructInit` | `decl: DeclId`, `fields: [Arg]`, `written_order: [int]`, `names: [str] \| None`; `fields` in the declaration order |
 | `EnumInit` | `decl: DeclId`, `variant: str`, `payload: [Arg]` |
 | `TupleInit` | `parts: [Expr]` |
 | `ArrayInit` | `kind: Fixed \| Dynamic`, `runs: [ArrayRun]` |
@@ -677,7 +677,7 @@ one body.
 | `Interp` | `parts: [Str \| Expr]`; kept whole so `typecheck` reports per part |
 
 ```
-CallTarget = Named(ref: Expr)                # a scope-resolved name, or any callable expr
+CallTarget = Named(ref: Expr, type_args: [TypeRef])  # a scope-resolved name, or any callable expr
            | Dotted(recv: Expr, name: str)   # x.f(...) -- built-in, extension, perk, adapter
            | Static(ty: TypeRef, name: str)  # Vec.at, List.new, Iterator.new, f64.from_bits
            | BuiltinFn(name: str)            # print, println: no declaration, no receiver
@@ -702,6 +702,14 @@ resolves it to (S5). The split exists because lowering runs before `typecheck`: 
 cannot know whether `f` is a built-in, an extension, a perk method or an iterator adapter
 until the type of `x` is known. `Static` covers a call on a type name, user or built-in,
 `hm.HashMap.new()` behind an alias included; it has no receiver EXPRESSION at all.
+
+The type arguments that a call writes (`identity@(i32)(5)`) stand on the callee:
+`Named.type_args`, each a `TypeRef`, empty when the call writes none. A call through a
+namespace (`geo.nothing@(i32)()`) is a `Named` of a `GlobalRef` too, so the same field
+holds them. Lowering resolves no type argument; the instance that the call names is
+`typecheck`'s (S5). The grammar also parses type arguments after a type or a value and
+a dot (`Vec.at@(i32)(1)`, `xs.get@(i32)(0)`), but the language refuses both (CE6102), so
+`Static` and `Dotted` have no such field, and that form is a hole. Ruled 2026-10-12.
 
 `marker` is the WRITTEN call-site mode (`nom s`, `poke n`), or `None`. The RESOLVED
 convention is `typecheck`'s: an unmarked argument in a consuming position (constructor,
@@ -729,6 +737,12 @@ has no temp, so the rule holds in every expression position: a `while` condition
 operand of `and`, a lambda body. Today `typecheck` puts the arguments into declaration
 order and the backend evaluates them in that order. That order goes at the switch. Ruled
 2026-10-11.
+
+A named construction whose names are not the declared fields (an unknown, a repeated or a
+missing name), or whose name has no struct declaration, has an error. Lowering keeps it as
+written: `fields` in the written order, `written_order` the identity, and `names` the
+written name of each field. `typecheck` reports the fault (CE2080, CE2081, CE2082) from
+`names`. In every other construction `names` is `None`. Ruled 2026-10-12.
 
 `T.m(...)` and the bare `T.m` on a type name are an `EnumInit` when the enum declaration of
 `T` has the variant `m`; else `T.m(...)` is a `Static` call (#542). A member `ns.m` behind
@@ -981,7 +995,7 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 |---|---|
 | `Name` | `LocalRef` / `ConstRef` / `StorageRef` / `GlobalRef`, from `Bindings` |
 | `IntLit`, `FloatLit`, `BoolLit`, `BlankLit`, `StringLit` | `Lit` |
-| `Call`, `MethodCall`, `DotCall` | `Call` with a `CallTarget`; a struct name gives `StructInit`, also behind an alias; a variant of an enum gives `EnumInit` |
+| `Call`, `MethodCall`, `DotCall` | `Call` with a `CallTarget`, the written type arguments on a `Named` target; a struct name gives `StructInit`, also behind an alias; a variant of an enum gives `EnumInit` |
 | `Print`, `PrintLn` | `ExprStmt` of a `Call` with a `BuiltinFn` target |
 | `Let`, `Rebind` | `Assign` with `is_init`; a `Let` with targets gives `Destructure` |
 | `If` | `If`; each `elif` is an `If`, the one statement of the `otherwise` block of the arm before it |
