@@ -12,12 +12,13 @@ be the diagnostic of the program (rulings of 2026-10-12):
 
 The rule has five parts, and this gate holds each one:
 
-1. `lower_unit` takes the result of the scope pass as the keyword `scope_failed`, with no
-   default, so that no caller can forget it.
+1. `lower_unit` and `lower_copy` take the result of the scope pass as the keyword
+   `scope_failed`, with no default, so that no caller can forget it.
 2. The one function that reads the variable is `stops_on_hole`, and it reads
    `scope_failed` too. `BodyLowerer.hole` raises CE0155 only behind `self.stops`.
 3. The analyzer gives `scope_failed` from the reporter of the unit, which only the scope
-   pass has used when lowering starts.
+   pass has used when lowering starts. A copy that the copy fixpoint places after the
+   per-unit loop is lowered with the reporter of its home unit in the same way.
 4. `BodyLowerer.error_hole` records a hole and never raises CE0155.
 5. `_name` is the one lowering that calls `error_hole`, and it calls it for an
    `Unresolved` name. `hole` calls it too, after its stop check.
@@ -52,11 +53,19 @@ def _functions(tree: ast.Module) -> list[ast.FunctionDef]:
     return [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
 
 
-def test_lower_unit_requires_the_scope_result() -> None:
-    parameter = inspect.signature(lowering.lower_unit).parameters.get("scope_failed")
-    assert parameter is not None, "lower_unit takes no 'scope_failed'"
-    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, "'scope_failed' is not a keyword"
-    assert parameter.default is inspect.Parameter.empty, "'scope_failed' has a default"
+#: The entry points of lowering that the analyzer calls, one for each unit and one for each
+#: copy that the copy fixpoint places after the per-unit loop.
+ENTRY_POINTS = ("lower_unit", "lower_copy")
+
+
+def test_each_entry_point_requires_the_scope_result() -> None:
+    for name in ENTRY_POINTS:
+        parameter = inspect.signature(getattr(lowering, name)).parameters.get("scope_failed")
+        assert parameter is not None, f"{name} takes no 'scope_failed'"
+        assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, (
+            f"'scope_failed' of {name} is not a keyword")
+        assert parameter.default is inspect.Parameter.empty, (
+            f"'scope_failed' of {name} has a default")
 
 
 def test_the_reader_of_the_variable_reads_the_scope_result() -> None:
@@ -91,14 +100,15 @@ def test_a_hole_stops_only_behind_the_flag() -> None:
 
 
 def test_the_analyzer_gives_the_result_of_the_scope_pass() -> None:
-    calls = [node for node in ast.walk(_tree(ANALYZER))
-             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-             and node.func.id == "lower_unit"]
-    assert len(calls) == 1, f"the analyzer calls lower_unit {len(calls)} times"
-    given = {keyword.arg: keyword.value for keyword in calls[0].keywords}
-    value = given.get("scope_failed")
-    assert isinstance(value, ast.Attribute) and value.attr == "has_offered_errors", (
-        "the analyzer must give scope_failed=<the unit reporter>.has_offered_errors")
+    for name in ENTRY_POINTS:
+        calls = [node for node in ast.walk(_tree(ANALYZER))
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                 and node.func.id == name]
+        assert len(calls) == 1, f"the analyzer calls {name} {len(calls)} times"
+        given = {keyword.arg: keyword.value for keyword in calls[0].keywords}
+        value = given.get("scope_failed")
+        assert isinstance(value, ast.Attribute) and value.attr == "has_offered_errors", (
+            f"the analyzer must give {name} scope_failed=<the reporter>.has_offered_errors")
 
 
 def test_an_error_hole_never_stops() -> None:

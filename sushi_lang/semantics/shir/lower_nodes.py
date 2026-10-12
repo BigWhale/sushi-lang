@@ -19,7 +19,8 @@ construction is an `Arg` too. In any other position, `peek x` and `poke x` are a
 constructions, the member read, the index, the slice and the range are rows of
 `LOWERING`, and `lower_aggregates.py` holds their lowering. A lambda and a destructure
 declare locals; they are rows of `LOWERING` too, and `lower_binders.py` holds their
-lowering. An `assert` keeps its message as an expression, because the message is
+lowering. An `expand` declares its binder, and it is a row of `LOWERING` with its lowering in
+`lower_binders.py` too. An `assert` keeps its message as an expression, because the message is
 evaluated only when the condition is false (ir.md 7.5).
 
 A name lowers to the answer that the scope pass recorded for it (ir.md 7.1): a local, a
@@ -65,7 +66,7 @@ from sushi_lang.semantics.shir.lower_aggregates import (
     enum_init, lower_array, lower_from, lower_index, lower_member, lower_new, lower_range,
     lower_tuple, struct_init,
 )
-from sushi_lang.semantics.shir.lower_binders import lower_destructure, lower_lambda
+from sushi_lang.semantics.shir.lower_binders import lower_destructure, lower_expand, lower_lambda
 from sushi_lang.semantics.shir.lower_patterns import lower_match
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, ReferenceType, UnknownType
@@ -105,9 +106,11 @@ class BodyLowerer:
     a node that has none of its own: the span of its declaration. `evaluator` reads the
     value of an operand (ruling E3); with no evaluator, no value is recorded. `lookup`
     reads the declaration tables; with no lookup, a call on a type name or a namespace is
-    a hole. `stops` is true when a hole raises the stop code (`stops_on_hole`). `opaque`
-    counts the nodes made so far whose value the compiler cannot read. `locals` holds the
-    local of each binder that the body declares, in the order of the walk.
+    a hole. `stops` is true when a hole raises the stop code (`stops_on_hole`). `template`
+    is true in the body of a template check, the one body that may hold an `Expand`
+    (ir.md 4.5). `opaque` counts the nodes made so far whose value the compiler cannot
+    read. `locals` holds the local of each binder that the body declares, in the order of
+    the walk.
     """
     ids: IdAllocator[ShirId]
     decls: DeclNames
@@ -117,6 +120,7 @@ class BodyLowerer:
     evaluator: Optional[ConstantEvaluator] = None
     lookup: Optional[DeclLookup] = None
     stops: bool = False
+    template: bool = False
     opaque: int = field(default=0, init=False)
     locals: list[ShirLocal] = field(default_factory=list, init=False)
 
@@ -666,6 +670,7 @@ LOWERING: dict[type, Lower] = {
     a.Foreach: _foreach,
     a.Match: lower_match,
     a.Assert: _assert,
+    a.Expand: lower_expand,
     a.Break: _break,
     a.Continue: _continue,
 }

@@ -741,8 +741,8 @@ def _write_shir_dump(analyzer: SemanticAnalyzer, target: str, reporter: Reporter
     from sushi_lang.internals import errors as er
     from sushi_lang.semantics.shir.printer import print_units
 
-    units = [(unit.name, bodies) for unit, bodies in analyzer.shir.units
-             if unit.provenance is None]
+    units = [(lowered.unit.name, lowered.bodies()) for lowered in analyzer.shir.units
+             if lowered.unit.provenance is None]
     text = print_units(units, analyzer.shir.decls)
     if target == "-":
         print(text, end="")

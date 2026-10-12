@@ -523,7 +523,7 @@ Write the SHIR (the Sushi High-level IR, `docs/design/ir.md`) of each body to a 
 ```
 
 **Output includes:**
-- Each unit of the program, then each body of the unit: a function, a method, an instance of a generic function, and the initializer of a constant
+- Each unit of the program, then each body of the unit: a function, a method, the initializer of a constant, a template, and each instance of a template
 - The parameters of each body, with the convention of each (`Owned`, `Guaranteed`, `InGuaranteed`, `Inout`), and its other locals
 - The block of each body, one statement on each line
 - A hole, `<hole: AstClass>`, for each construct that lowering does not handle yet. The name is the AST class of the construct, for example `<hole: Name>` for a name with no declaration
@@ -531,7 +531,9 @@ Write the SHIR (the Sushi High-level IR, `docs/design/ir.md`) of each body to a 
 **Rules:**
 - The text is the same on every run and under every `PYTHONHASHSEED`, so a test can compare it with a golden file (`EXPECT_DUMP_SHIR`, `tests/TEST_METADATA_GUIDE.md`)
 - A unit of the bundled stdlib and a unit of a source library are not in the dump
-- A template as written is not in the dump. Its instances are
+- A template as written (a generic function, a generic extension, a method with a type parameter, a method of a perk implementation on a generic target) is the body of its template check: its header shows `(TemplateCheck("<unit>.<template>"))`, and its type parameters stay as written. An `expand` in it is one `Expand` statement, never unrolled
+- An instance is a body of the unit that declares its template, with the name of the instance (`keep__i32`, `Box@(i32).show`, `i32.pick@(string)`). An `expand` in an instance is unrolled: the instance holds one copy of the body for each element of the pack
+- The bodies that the source writes come first: the constants, the functions, the extension methods, then the perk methods, each kind in the source order. The instances come after them, in the order of their names
 - The compile goes on as usual: the exit status and the output do not change. A dump that cannot be written is the warning [CW0005](error-catalog.md#cw0005)
 - With `--lib-info` the flag has no effect ([CW0003](error-catalog.md#cw0003))
 

@@ -1,7 +1,7 @@
-"""Binder lowering: a lambda and its parameters, a destructure and its targets (docs/design/ir.md 7.4, 7.5).
+"""Binder lowering: a lambda, a destructure, an `expand` and their binders (docs/design/ir.md 7.4, 7.5).
 
-The rows of a lambda and of a destructuring `let` are in the one table `LOWERING` of
-`lower_nodes.py`; this module holds their lowering. Each construct declares locals. A
+The rows of a lambda, of a destructuring `let` and of an `expand` are in the one table
+`LOWERING` of `lower_nodes.py`; this module holds their lowering. Each construct declares locals. A
 local takes the `LocalId` that the scope pass recorded for its binder, and the body that
 holds the construct lists it: the scope pass gives the locals of a lambda and of a
 destructure from the counter of that body (ir.md 7.1).
@@ -27,8 +27,9 @@ borrows its elements is an answer of the borrow pass.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
 
+from sushi_lang.internals import errors as er
 from sushi_lang.semantics import ast as a
 from sushi_lang.semantics.param_modes import param_mode
 from sushi_lang.semantics.shir import exprs as e
@@ -82,3 +83,15 @@ def _target(lw: BodyLowerer, target: a.DestructureTarget) -> s.DestructureTarget
     local = lw.binder(target, target.name)
     lw.declare(local, target.name, target.ty, target.name_span)
     return local
+
+
+def lower_expand(lw: BodyLowerer, node: a.Expand) -> s.Expand:
+    """`expand(a in args):` in a template check body: the binder, the pack, the body."""
+    pack = getattr(node.iterable, "id", None)
+    if not lw.template or not isinstance(pack, str):
+        er.raise_internal_error("CE0015", message="an `expand` reached lowering outside the "
+                                                  "body of a template check, or with no pack")
+    ident = lw.ident()
+    local = lw.binder(node, node.var)
+    lw.declare(local, node.var, None, node.var_span)
+    return s.Expand(ident, lw.span(node), local, cast(str, pack), lw.block(node.body))

@@ -8,17 +8,35 @@ parameters. `_lower_block` fills the block, one statement at a time, through the
 come with the lowering of each binder, and `ShirBody.locals` holds every local in id order.
 The block of a constant or a `var` is its initializer, as one `Return` (ir.md 6.3).
 
-`lower_unit` calls `lower_body` for each body that the scope pass checked in one unit,
-except a template as written: SHIR is built from the specialized bodies (ir.md 7), and
-the check copy of a template (ir.md 4.3) is lowered on its own. The analyzer calls it for
-each unit, after the scope pass, on every compile; `LoweredProgram` keeps the bodies for
-`--dump-shir`, and no pass reads them yet.
+`lower_unit` calls `lower_body` for each body that the scope pass checked in one unit.
+A TEMPLATE as written (a generic function, a generic extension, a method with a type
+parameter, a method of a perk implementation on a generic target) is the body of its
+template check (ir.md 4.3): its origin is `TemplateCheck`, and each type parameter is an
+opaque type that the body keeps as written. A template body needs no type in lowering, so
+the same `BodyLowerer` lowers it, and only it may hold an `Expand` (ir.md 4.5). A written
+template that the collect pass filed no record for (a refused declaration), and a target
+with a concrete argument and no type parameter, has no template check: its copies are its
+bodies. Every other body has the origin `Instance`, a copy of a template too.
+
+`lower_copy` lowers each copy that the copy fixpoint places after the per-unit loop
+(ir.md 9 Q2): a late function copy, an extension copy of a generic or an array target and
+an array-template perk copy. The analyzer calls it after the scope pass of the copy, in
+the home unit of the copy. The analyzer calls `lower_unit` for each unit, after the scope
+pass, on every compile; `LoweredProgram` keeps the bodies for `--dump-shir`, and no pass
+reads them yet.
+
+A unit lists the bodies that the source writes in the order of the walk, then each copy
+that the compiler cut, in the order of its name (`LoweredUnit`). The name of a copy holds
+its type arguments (`keep__i32`, `Box@(i32).show`, `i32.pick@(string)`), so the order is
+the identity of the copy: the unit, the name and the type arguments, and never the order
+in which a pass placed the copy.
 
 Every id comes from a counter in the order of the walk, so a body gives the same ids on
 every run (ir.md 11.3).
 """
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional, Sequence, TypeAlias
 
@@ -27,13 +45,14 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import (
     ConstDef, ExtendDef, ExtendWithDef, FuncDef, Param, Program,
 )
+from sushi_lang.semantics.ast_walk import is_written
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import param_mode, receiver_mode
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.passes.collect.functions import Param as SignatureParam
 from sushi_lang.semantics.shir.bindings import Bindings
 from sushi_lang.semantics.shir.body import (
-    BodyOrigin, Initializer, Instance, ShirBody, ShirLocal, ShirParam,
+    BodyOrigin, Initializer, Instance, ShirBody, ShirLocal, ShirParam, TemplateCheck,
 )
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, ShirId
@@ -44,6 +63,7 @@ from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.const_eval import ConstantEvaluator
+    from sushi_lang.semantics.generics.types import TemplateId
     from sushi_lang.semantics.units import Unit
 
 #: A declaration that owns a body: a function or a perk method, an instance of a generic
@@ -63,7 +83,8 @@ class LoweringContext:
     unit of the body. `lookup` reads what a type name or a namespace before a dot holds.
     `owner` is the perk implementation that holds a perk method, because the method has
     no field that names its receiver type. `stops` is true when a hole raises the stop
-    code (`stops_on_hole`).
+    code (`stops_on_hole`). `template` names the template when the body is the body of
+    its template check (ir.md 4.3).
     """
     decls: DeclNames
     holes: list[Hole]
@@ -71,6 +92,7 @@ class LoweringContext:
     lookup: Optional[DeclLookup] = None
     owner: Optional[ExtendWithDef] = None
     stops: bool = False
+    template: Optional[TemplateId] = None
 
 
 def lower_body(bindings: Bindings, ctx: LoweringContext) -> ShirBody:
@@ -82,10 +104,22 @@ def lower_body(bindings: Bindings, ctx: LoweringContext) -> ShirBody:
     params, locals_ = _frame(decl, bindings, ctx)
     fn_id = ctx.decls.declare(_written_name(decl, ctx))
     lowerer = BodyLowerer(ids, ctx.decls, bindings, ctx.holes, _span(decl.loc), ctx.evaluator,
-                          ctx.lookup, ctx.stops)
+                          ctx.lookup, ctx.stops, template=ctx.template is not None)
     block = _lower_block(decl, lowerer)
     every_local = sorted([*locals_, *lowerer.locals], key=lambda local: local.id)
-    return ShirBody(fn_id, _origin(decl), params, every_local, block)
+    return ShirBody(fn_id, _origin(decl, ctx), params, every_local, block)
+
+
+@dataclass(slots=True)
+class LoweredUnit:
+    """The bodies of one unit: the bodies that the source writes, in the order of the walk,
+    and the copies that the compiler cut, in the order of their names."""
+    unit: Unit
+    written: list[ShirBody] = field(default_factory=list)
+    copies: list[ShirBody] = field(default_factory=list)
+
+    def bodies(self) -> list[ShirBody]:
+        return [*self.written, *self.copies]
 
 
 @dataclass(slots=True)
@@ -93,13 +127,30 @@ class LoweredProgram:
     """The bodies of each unit, in the compilation order, the names of their ids, and the
     holes of every body in the order of the walk."""
     decls: DeclNames = field(default_factory=DeclNames)
-    units: list[tuple[Unit, list[ShirBody]]] = field(default_factory=list)
+    units: list[LoweredUnit] = field(default_factory=list)
     holes: list[Hole] = field(default_factory=list)
+    _by_unit: dict[int, LoweredUnit] = field(default_factory=dict, init=False, repr=False)
+
+    def unit_of(self, unit: Unit) -> LoweredUnit:
+        """The bodies of `unit`, a new entry the first time."""
+        lowered = self._by_unit.get(id(unit))
+        if lowered is None or lowered.unit is not unit:
+            lowered = self._by_unit[id(unit)] = LoweredUnit(unit)
+            self.units.append(lowered)
+        return lowered
+
+    def add(self, unit: Unit, body: ShirBody, *, copy: bool) -> None:
+        """List `body` in `unit`: a written body at the end, a copy at the place of its name."""
+        lowered = self.unit_of(unit)
+        if not copy:
+            lowered.written.append(body)
+            return
+        bisect.insort(lowered.copies, body, key=lambda made: self.decls.name_of(made.fn_id))
 
 
 def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings],
-               evaluator: Optional[ConstantEvaluator] = None,
-               lookup: Optional[DeclLookup] = None, *, scope_failed: bool) -> None:
+               evaluator: ConstantEvaluator, lookup: DeclLookup, *,
+               scope_failed: bool) -> None:
     """The body of each declaration of `unit` that the scope pass checked, in order.
 
     `evaluator` is a silent evaluator and `lookup` reads the declaration tables, each in
@@ -111,13 +162,46 @@ def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings],
     program = unit.ast
     if program is None:
         return
-    owners = _perk_owners(program)
-    templates = _written_template_members(program)
-    stops = stops_on_hole(scope_failed)
-    lowered.units.append((unit, [
-        lower_body(table, LoweringContext(lowered.decls, lowered.holes, evaluator, lookup,
-                                          owners.get(id(table.body)), stops))
-        for table in tables if not _is_written_template(table.body, templates)]))
+    lowered.unit_of(unit)
+    _lower_tables(lowered, unit, tables, _perk_owners(program),
+                  _written_template_members(program), evaluator, lookup,
+                  stops_on_hole(scope_failed))
+
+
+def lower_copy(lowered: LoweredProgram, home: Unit, copy: Declaration | ExtendWithDef,
+               tables: Sequence[Bindings], evaluator: ConstantEvaluator,
+               lookup: DeclLookup, *, scope_failed: bool) -> None:
+    """The bodies of one copy that the copy fixpoint placed after the per-unit loop.
+
+    `tables` is what the scope pass wrote for the copy: one `Bindings` for a function or
+    an extension copy, one for each method of a perk copy. `home` is the unit that
+    declares the template, and the copy is listed there. `evaluator`, `lookup` and
+    `scope_failed` are as for `lower_unit`, in the scope of `home`.
+    """
+    owners = ({} if not isinstance(copy, ExtendWithDef)
+              else {id(method): copy for method in copy.methods})
+    _lower_tables(lowered, home, tables, owners, set(), evaluator, lookup,
+                  stops_on_hole(scope_failed))
+
+
+def _lower_tables(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings],
+                  owners: dict[int, ExtendWithDef], templates: set[int],
+                  evaluator: ConstantEvaluator, lookup: DeclLookup, stops: bool) -> None:
+    """Lower the body of each table and list it in `unit`.
+
+    A written template is the body of its template check. A written template with no
+    template check is no body: its copies are.
+    """
+    for table in tables:
+        decl = table.body
+        owner = owners.get(id(decl))
+        written = _is_written(decl, owner)
+        template = lookup.template_of(decl, owner) if written else None
+        if template is None and _is_written_template(decl, templates):
+            continue
+        body = lower_body(table, LoweringContext(lowered.decls, lowered.holes, evaluator,
+                                                 lookup, owner, stops, template))
+        lowered.add(unit, body, copy=not written)
 
 
 def _written_template_members(program: Program) -> set[int]:
@@ -128,7 +212,7 @@ def _written_template_members(program: Program) -> set[int]:
 
 
 def _is_written_template(decl: object, members: set[int]) -> bool:
-    """A template as the source writes it. Its copies are the bodies that SHIR holds."""
+    """A template as the source writes it, a declaration that the collect pass refused too."""
     if id(decl) in members:
         return True
     if isinstance(decl, ExtendDef):
@@ -136,9 +220,19 @@ def _is_written_template(decl: object, members: set[int]) -> bool:
     return bool(getattr(decl, "type_params", None)) and getattr(decl, "instance_of", None) is None
 
 
+def _is_written(decl: object, owner: Optional[ExtendWithDef]) -> bool:
+    """The source wrote the body: it is no copy, and no method of a copied implementation."""
+    if owner is not None and not is_written(owner):
+        return False
+    if isinstance(decl, ExtendDef):
+        return decl.home_unit is None
+    return is_written(decl) and getattr(decl, "instance_of", None) is None
+
+
 def _perk_owners(program: Program) -> dict[int, ExtendWithDef]:
     """The perk implementation of each perk method of the unit, keyed by the method."""
-    return {id(method): impl for impl in program.perk_impls for method in impl.methods}
+    return {id(method): impl for impl in [*program.perk_impls, *program.generic_perk_impls]
+            for method in impl.methods}
 
 
 def _lower_block(decl: Declaration, lowerer: BodyLowerer) -> ShirBlock:
@@ -148,8 +242,10 @@ def _lower_block(decl: Declaration, lowerer: BodyLowerer) -> ShirBlock:
     return lowerer.block(decl.body)
 
 
-def _origin(decl: Declaration) -> BodyOrigin:
-    return Initializer() if isinstance(decl, ConstDef) else Instance()
+def _origin(decl: Declaration, ctx: LoweringContext) -> BodyOrigin:
+    if isinstance(decl, ConstDef):
+        return Initializer()
+    return Instance() if ctx.template is None else TemplateCheck(ctx.template)
 
 
 def _owner_type(decl: Declaration, ctx: LoweringContext) -> Optional[TypeRef]:
@@ -162,9 +258,19 @@ def _owner_type(decl: Declaration, ctx: LoweringContext) -> Optional[TypeRef]:
 
 
 def _written_name(decl: Declaration, ctx: LoweringContext) -> str:
-    """The name of the declaration as the source writes it; a method has its type before it."""
+    """The name of the declaration as the source writes it; a method has its type before it.
+
+    A copy of a function has the name of its instance (`keep__i32`), and a copy of a method
+    with a type parameter has its type arguments after the name (`i32.pick@(string)`). A
+    conversion keeps its target in the same field, and it is no copy: its name stays.
+    """
     owner = _owner_type(decl, ctx)
-    return decl.name if owner is None else f"{display_type(owner)}.{decl.name}"
+    if owner is None:
+        return decl.name
+    method_args = (decl.method_type_args
+                   if isinstance(decl, ExtendDef) and decl.home_unit is not None else None)
+    args = "" if not method_args else f"@({', '.join(display_type(a) for a in method_args)})"
+    return f"{display_type(owner)}.{decl.name}{args}"
 
 
 def _frame(decl: Declaration, bindings: Bindings,

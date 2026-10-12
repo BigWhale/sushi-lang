@@ -11,6 +11,9 @@ type, so lowering reads the tables that the collect and namespaces passes made:
   type.
 - A named struct construction gives its fields in the declaration order, so lowering
   reads the field names of the struct declaration.
+- A template as written is the body of its template check (ir.md 4.3). Its origin names
+  the template with the identity that the check gives it, from the record that the
+  collect pass filed for the declaration.
 
 The declaration table of ir.md 6.3 replaces this lookup when it exists.
 """
@@ -22,8 +25,16 @@ from typing import TYPE_CHECKING, Mapping, Optional
 from sushi_lang.semantics.namespaces import body_namespaces
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
+    from sushi_lang.semantics.ast import ExtendWithDef
+    from sushi_lang.semantics.generics.types import (
+        GenericEnumType, GenericStructType, TemplateId,
+    )
     from sushi_lang.semantics.namespaces import NamespaceTable
+    from sushi_lang.semantics.passes.collect.functions import (
+        GenericExtensionTable, GenericFunctionTable,
+    )
+    from sushi_lang.semantics.passes.collect.perks import GenericPerkImplTable
+    from sushi_lang.semantics.tables import SymbolTables
     from sushi_lang.semantics.typesys import EnumType, StructType
 
 #: The kinds of declaration behind a namespace that a call calls (`namespaces.Binding`).
@@ -49,7 +60,44 @@ class DeclLookup:
     structs: Mapping[str, StructType]
     generic_structs: Mapping[str, GenericStructType]
     namespaces: Mapping[str, NamespaceTable]
+    generic_funcs: GenericFunctionTable
+    generic_extensions: GenericExtensionTable
+    generic_perk_impls: GenericPerkImplTable
     unit: str
+
+    @classmethod
+    def of(cls, tables: SymbolTables, unit: str) -> DeclLookup:
+        """The lookup of the program tables, in the scope of the unit `unit`."""
+        return cls(tables.enums.by_name, tables.generic_enums.by_name, tables.structs.by_name,
+                   tables.generic_structs.by_name, tables.namespaces, tables.generic_funcs,
+                   tables.generic_extensions, tables.generic_perk_impls, unit)
+
+    def template_of(self, decl: object, owner: Optional[ExtendWithDef]) -> Optional[TemplateId]:
+        """The template that the written body `decl` is, or None for a body of no template.
+
+        A function with a type parameter, an extension whose record has a type parameter
+        (of its target, an array target included, or of the method), and a method of a
+        perk implementation on a generic target. A declaration that the collect pass filed
+        no record for, or filed for another body, is no template.
+        """
+        from sushi_lang.semantics.ast import ExtendDef, FuncDef
+        from sushi_lang.semantics.generics.extension_targets import (
+            extension_template_id, perk_template_id,
+        )
+        from sushi_lang.semantics.generics.types import TemplateId
+        if owner is not None:
+            impl = self.generic_perk_impls.record_of(owner)
+            return None if impl is None else perk_template_id(impl)
+        if isinstance(decl, ExtendDef):
+            ext = self.generic_extensions.record_of(decl)
+            if ext is None or not (ext.type_params or ext.method_type_params):
+                return None
+            return extension_template_id(ext)
+        if isinstance(decl, FuncDef) and decl.type_params:
+            func = self.generic_funcs.lookup(decl.name, self.unit)
+            if func is not None and func.body is decl.body:
+                return TemplateId(func.unit_name, func.name)
+        return None
 
     def is_variant(self, type_name: str, member: str) -> bool:
         """True when `member` is a variant of the enum `type_name`."""
