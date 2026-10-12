@@ -1,0 +1,34 @@
+unit test_shir_generic_array_target
+
+ShirBody main
+  params : []
+  locals : [_0 "xs": i32[]]
+  block  :
+    Assign(LocalRef(_0), ArrayInit(Dynamic, [Single(Lit(1)), Single(Lit(2)), Single(Lit(3))]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_0), "twice_len"), [])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_0), "name"), [])]))
+    Return(Lit(0))
+
+ShirBody T[].twice_len (TemplateCheck("test_shir_generic_array_target.$array.twice_len"))
+  params : [(_0 "self": T[], Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(*, Call(Dotted(LocalRef(_0), "len"), []), Lit(2) = 2))
+
+ShirBody T[].name (TemplateCheck("test_shir_generic_array_target.$array.with.Named"))
+  params : [(_0 "self": T[], Guaranteed)]
+  locals : []
+  block  :
+    Return(Lit("array"))
+
+ShirBody i32[].name
+  params : [(_0 "self": i32[], Guaranteed)]
+  locals : []
+  block  :
+    Return(Lit("array"))
+
+ShirBody i32[].twice_len
+  params : [(_0 "self": i32[], Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(*, Call(Dotted(LocalRef(_0), "len"), []), Lit(2) = 2))

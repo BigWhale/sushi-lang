@@ -1,0 +1,30 @@
+unit test_shir_generic_fn
+
+ShirBody keep (TemplateCheck("test_shir_generic_fn.keep"))
+  params : [(_0 "x": T, Owned)]
+  locals : [_1 "held": T]
+  block  :
+    Assign(LocalRef(_1), LocalRef(_0), is_init: true)
+    Return(LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@keep)), [(Lit(3), Owned)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@keep)), [(Lit("Mostly Harmless"), Owned)])]))
+    Return(Lit(0))
+
+ShirBody keep__i32
+  params : [(_0 "x": i32, Owned)]
+  locals : [_1 "held": i32]
+  block  :
+    Assign(LocalRef(_1), LocalRef(_0), is_init: true)
+    Return(LocalRef(_1))
+
+ShirBody keep__string
+  params : [(_0 "x": string, Owned)]
+  locals : [_1 "held": string]
+  block  :
+    Assign(LocalRef(_1), LocalRef(_0), is_init: true)
+    Return(LocalRef(_1))

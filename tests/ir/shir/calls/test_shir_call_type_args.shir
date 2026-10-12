@@ -1,5 +1,17 @@
 unit test_shir_call_type_args
 
+ShirBody identity (TemplateCheck("test_shir_call_type_args.identity"))
+  params : [(_0 "x": T, Owned)]
+  locals : []
+  block  :
+    Return(LocalRef(_0))
+
+ShirBody empty (TemplateCheck("test_shir_call_type_args.empty"))
+  params : []
+  locals : []
+  block  :
+    Return(Call(Static(List, "new"), []))
+
 ShirBody main
   params : []
   locals : [_0 "total": i32, _1 "xs": List@(i32)]
@@ -12,17 +24,17 @@ ShirBody main
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@identity)), [(Lit("Mostly Harmless"), Owned)])]))
     Return(Lit(0))
 
-ShirBody identity__i32
-  params : [(_0 "x": i32, Owned)]
-  locals : []
-  block  :
-    Return(LocalRef(_0))
-
 ShirBody empty__i32
   params : []
   locals : []
   block  :
     Return(Call(Static(List, "new"), []))
+
+ShirBody identity__i32
+  params : [(_0 "x": i32, Owned)]
+  locals : []
+  block  :
+    Return(LocalRef(_0))
 
 ShirBody identity__string
   params : [(_0 "x": string, Owned)]

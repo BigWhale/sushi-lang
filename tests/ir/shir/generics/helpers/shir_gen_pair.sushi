@@ -1,0 +1,11 @@
+# The unit that `test_shir_generic_second_unit` imports: a generic struct with an extension
+# method, and a generic function that builds one.
+public struct Pair@(T):
+    T left
+    T right
+
+public extend Pair@(T) count() i32:
+    return 2
+
+public fn pair_of@(T)(nom T a, nom T b) Pair@(T):
+    return Pair(nom a, nom b)

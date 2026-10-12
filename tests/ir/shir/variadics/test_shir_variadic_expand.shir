@@ -1,0 +1,48 @@
+unit test_shir_variadic_expand
+
+ShirBody show_all (TemplateCheck("test_shir_variadic_expand.show_all"))
+  params : [(_0 "args": Ts, Guaranteed)]
+  locals : [_1 "n": i32, _2 "a", _3 "line": string]
+  block  :
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Expand(_2, "args", [Assign(LocalRef(_3), Interp(["[", LocalRef(_2), "]"]), is_init: true), ExprStmt(Call(BuiltinFn("println"), [LocalRef(_3)])), Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1) = 1), is_init: false)])
+    Return(LocalRef(_1))
+
+ShirBody count (TemplateCheck("test_shir_variadic_expand.count"))
+  params : [(_0 "args": Ts, Guaranteed)]
+  locals : [_1 "n": i32, _2]
+  block  :
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Expand(_2, "args", [Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1) = 1), is_init: false)])
+    Return(LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@show_all)), [Lit(1), Lit("Mostly Harmless")])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@count)), [Lit(1), Lit("a"), Lit(true)])]))
+    Return(Lit(0))
+
+ShirBody count__i32_string_bool.pack3
+  params : [(_0 "#pack_args_0": i32, Guaranteed), (_1 "#pack_args_1": string, Guaranteed), (_2 "#pack_args_2": bool, Guaranteed)]
+  locals : [_3 "n": i32]
+  block  :
+    Assign(LocalRef(_3), Lit(0), is_init: true)
+    Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(1) = 1), is_init: false)
+    Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(1) = 1), is_init: false)
+    Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(1) = 1), is_init: false)
+    Return(LocalRef(_3))
+
+ShirBody show_all__i32_string.pack2
+  params : [(_0 "#pack_args_0": i32, Guaranteed), (_1 "#pack_args_1": string, Guaranteed)]
+  locals : [_2 "n": i32, _3 "#line_x0": string, _4 "#line_x1": string]
+  block  :
+    Assign(LocalRef(_2), Lit(0), is_init: true)
+    Assign(LocalRef(_3), Interp(["[", LocalRef(_0), "]"]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_3)]))
+    Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1) = 1), is_init: false)
+    Assign(LocalRef(_4), Interp(["[", LocalRef(_1), "]"]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_4)]))
+    Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1) = 1), is_init: false)
+    Return(LocalRef(_2))

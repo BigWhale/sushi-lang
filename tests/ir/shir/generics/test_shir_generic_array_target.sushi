@@ -1,0 +1,25 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "6\narray\n"
+# EXPECT_DUMP_SHIR: test_shir_generic_array_target.shir
+#
+# the SHIR dump of two templates on an array target: an extension method and a perk
+# implementation on `T[]`. Each template is the body of its template check; the identity
+# of an array target names the array base `$array`. Both copies for `i32[]` are cut after
+# the per-unit loop: the extension copy at the call, the perk copy when the method table
+# has no entry for `i32[]`. The copy fixpoint places each one, and lowering runs on it there.
+
+extend T[] twice_len() i32:
+    return self.len() * 2
+
+perk Named:
+    fn name() string
+
+extend T[] with Named:
+    fn name() string:
+        return "array"
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    println(xs.twice_len())
+    println(xs.name())
+    return 0

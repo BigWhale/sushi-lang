@@ -1,0 +1,27 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "box of 1\nbox of 4\n"
+# EXPECT_DUMP_SHIR: test_shir_generic_perk_impl.shir
+#
+# the SHIR dump of a perk implementation on a generic target. The method as written is the
+# body of the template check of the implementation, whose identity names the base type
+# and the perk. The monomorphize pass cuts a copy of the implementation for each instance
+# of `Box`, before the per-unit loop, and each method of a copy is a body of its own. The
+# copies come in the order of their names, never in the order of a hash.
+
+perk Show:
+    fn show() string
+
+struct Box@(T):
+    T value
+    i32 size
+
+extend Box@(T) with Show:
+    fn show() string:
+        return "box of {self.size}"
+
+fn main() i32:
+    let Box@(i32) a = Box(7, 1)
+    let Box@(string) b = Box("Mostly Harmless", 4)
+    println(a.show())
+    println(b.show())
+    return 0

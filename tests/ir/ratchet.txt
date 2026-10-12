@@ -2694,6 +2694,13 @@ tests/ir/shir/foreach/test_shir_foreach_nested_break.sushi
 tests/ir/shir/foreach/test_shir_foreach_range.sushi
 tests/ir/shir/foreach/test_shir_foreach_ref_binder.sushi
 tests/ir/shir/foreach/test_shir_foreach_try_binder.sushi
+tests/ir/shir/generics/test_shir_generic_array_target.sushi
+tests/ir/shir/generics/test_shir_generic_fn.sushi
+tests/ir/shir/generics/test_shir_generic_late_instance.sushi
+tests/ir/shir/generics/test_shir_generic_method_type_param.sushi
+tests/ir/shir/generics/test_shir_generic_perk_impl.sushi
+tests/ir/shir/generics/test_shir_generic_second_unit.sushi
+tests/ir/shir/generics/test_shir_generic_struct_method.sushi
 tests/ir/shir/literals/test_shir_literals.sushi
 tests/ir/shir/match/test_shir_match_arm_bodies.sushi
 tests/ir/shir/match/test_shir_match_binding_modes.sushi
@@ -2714,6 +2721,7 @@ tests/ir/shir/statements/test_shir_stmt_let.sushi
 tests/ir/shir/statements/test_shir_stmt_let_ref.sushi
 tests/ir/shir/statements/test_shir_stmt_while.sushi
 tests/ir/shir/statements/test_warn_shir_stmt_shadow.sushi
+tests/ir/shir/variadics/test_shir_variadic_expand.sushi
 tests/iterators/adapters/test_ad_borrowed_params.sushi
 tests/iterators/adapters/test_ad_break_frees_chain.sushi
 tests/iterators/adapters/test_ad_chain.sushi
