@@ -2,12 +2,15 @@
 
 A dispatch over `Expr` is total when it names every member of the union, names nothing
 outside it, and skips only leaves. These helpers read the union, the arms a function
-names in its source, and the fields of a node that hold an expression.
+names in its source, and the fields of a node that hold an expression. A dispatch over
+every class that a BODY holds (the SHIR lowering) reads the statement classes and the
+pattern classes too.
 """
 from __future__ import annotations
 
 import ast
 import inspect
+import sys
 import textwrap
 import typing
 
@@ -21,6 +24,42 @@ def expr_union_types() -> set[type]:
 
 def expr_union_names() -> set[str]:
     return {t.__name__ for t in expr_union_types()}
+
+
+def statement_classes() -> set[type]:
+    """Every DECLARED statement class: a subclass of `Stmt` at any depth (semantics/ast.py).
+
+    A class that `@dataclass(slots=True)` dropped stays in `__subclasses__()` until the
+    cyclic collector frees it (#735), so a class counts only when its module holds it
+    under its name.
+    """
+    found: set[type] = set()
+    pending = [sushi_ast.Stmt]
+    while pending:
+        for sub in pending.pop().__subclasses__():
+            if sub not in found and getattr(sys.modules.get(sub.__module__), sub.__name__,
+                                            None) is sub:
+                found.add(sub)
+                pending.append(sub)
+    return found
+
+
+def pattern_classes() -> set[type]:
+    """The classes that a pattern position holds: an item, an arm, an alternative, the
+    inner pattern of `Own(...)`. A bare name is a `str`."""
+    found: set[type] = set()
+    for owner, name in ((sushi_ast.MatchArm, "pattern"), (sushi_ast.OrPattern, "alternatives"),
+                        (sushi_ast.OwnPattern, "inner_pattern")):
+        hint = typing.get_type_hints(owner)[name]
+        for arg in typing.get_args(hint) or (hint,):
+            found.update(typing.get_args(arg) or (arg,))
+    return found | set(typing.get_args(sushi_ast.PatternItem))
+
+
+def body_classes() -> set[type]:
+    """Every class that a body holds and a body dispatch reads: an expression of the `Expr`
+    union, a statement class, and a pattern class."""
+    return expr_union_types() | statement_classes() | pattern_classes()
 
 
 def dispatched_names(func, *, inert: tuple[type, ...] = (),

@@ -8,7 +8,7 @@ are the FORM of an argument and no value of their own there, a bloom `xs...` and
 `peek`/`poke` marker. A pattern has a third table, `PATTERNS` in
 `sushi_lang/semantics/shir/lower_patterns.py`: the classes that a pattern position holds,
 a bare name (`str`) included. The `Match` row lowers each pattern through it. The totality
-gate of a later chunk reads the three tables, so this gate holds five rules:
+gate (`test_shir_lowering_is_total.py`) reads the three tables, so this gate holds five rules:
 
 1. Each key of `LOWERING` and `ARGUMENTS` is an AST body class: a member of the `Expr`
    union or a statement class.
@@ -26,10 +26,9 @@ from __future__ import annotations
 
 import ast
 import inspect
-import typing
 from pathlib import Path
 
-from sushi_lang.semantics import ast as a
+from expr_dispatch import expr_union_types, pattern_classes, statement_classes
 from sushi_lang.semantics.shir import (
     lower_aggregates, lower_binders, lower_nodes, lower_patterns, lowering,
 )
@@ -54,30 +53,9 @@ ARGUMENT_FORMS: frozenset[str] = frozenset({"Spread", "Borrow"})
 _MODULES = (lowering, lower_nodes, lower_patterns, lower_aggregates, lower_binders)
 
 
-def _statement_classes() -> set[type]:
-    found: set[type] = set()
-    pending = [a.Stmt]
-    while pending:
-        for sub in pending.pop().__subclasses__():
-            if sub not in found:
-                found.add(sub)
-                pending.append(sub)
-    return found
-
-
 def _body_classes() -> set[type]:
-    return set(typing.get_args(a.Expr)) | _statement_classes()
-
-
-def _pattern_classes() -> set[type]:
-    """The classes that a pattern position of the AST holds: an item, an arm, an alternative."""
-    found: set[type] = set()
-    for owner, name in ((a.MatchArm, "pattern"), (a.OrPattern, "alternatives"),
-                        (a.OwnPattern, "inner_pattern")):
-        hint = typing.get_type_hints(owner)[name]
-        for arg in typing.get_args(hint) or (hint,):
-            found.update(typing.get_args(arg) or (arg,))
-    return found | set(typing.get_args(a.PatternItem))
+    """The expression and statement classes: the keys of `LOWERING` and `ARGUMENTS`."""
+    return expr_union_types() | statement_classes()
 
 
 def test_every_key_is_an_ast_body_class() -> None:
@@ -106,7 +84,7 @@ def test_the_argument_table_is_the_argument_forms() -> None:
 
 def test_the_pattern_table_is_every_pattern_class() -> None:
     names = {cls.__name__ for cls in lower_patterns.PATTERNS}
-    expected = {cls.__name__ for cls in _pattern_classes()}
+    expected = {cls.__name__ for cls in pattern_classes()}
     assert names == expected, (
         f"the pattern table and the AST pattern classes differ: {sorted(names ^ expected)}")
 
@@ -119,7 +97,7 @@ def test_every_row_is_callable() -> None:
 
 
 def _isinstance_tests_of_body_classes(module: object) -> list[str]:
-    body_names = {cls.__name__ for cls in _body_classes() | _pattern_classes()} - {"str"}
+    body_names = {cls.__name__ for cls in _body_classes() | pattern_classes()} - {"str"}
     tree = ast.parse(Path(inspect.getfile(module)).read_text(encoding="utf-8"))  # type: ignore[arg-type]
     found = []
     for node in ast.walk(tree):
