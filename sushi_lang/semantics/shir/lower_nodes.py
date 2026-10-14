@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, TypeAlias, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -58,7 +58,7 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import bindings as bd
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
-from sushi_lang.semantics.shir.body import ShirLocal
+from sushi_lang.semantics.shir.body import CopyRange, ExpandCopies, ShirLocal
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
 from sushi_lang.semantics.shir.lookup import CALLABLE_KINDS, TYPE_KINDS, DeclLookup
@@ -110,7 +110,8 @@ class BodyLowerer:
     is true in the body of a template check, the one body that may hold an `Expand`
     (ir.md 4.5). `opaque` counts the nodes made so far whose value the compiler cannot
     read. `locals` holds the local of each binder that the body declares, in the order of
-    the walk.
+    the walk. `copies` holds the copy boundaries of each block that holds copies of an
+    unrolled `expand` (ir.md 7.2).
     """
     ids: IdAllocator[ShirId]
     decls: DeclNames
@@ -123,6 +124,7 @@ class BodyLowerer:
     template: bool = False
     opaque: int = field(default=0, init=False)
     locals: list[ShirLocal] = field(default_factory=list, init=False)
+    copies: ExpandCopies = field(default_factory=ExpandCopies, init=False)
 
     def stmt(self, node: Any) -> s.ShirStmt:
         row = LOWERING.get(type(node))
@@ -165,9 +167,18 @@ class BodyLowerer:
         return _constant(value.value)
 
     def block(self, node: Optional[a.Block]) -> ShirBlock:
-        """A block, each statement in the written order. No block gives an empty one."""
+        """A block, each statement in the written order. No block gives an empty one.
+
+        Each statement gives one SHIR statement, so the copy boundaries that the unroll
+        marked on the statements of the block are statement ranges of the SHIR block too.
+        """
         ident = self.ident()
-        statements = [] if node is None else [self.stmt(stmt) for stmt in node.statements]
+        if node is None:
+            return ShirBlock(ident, self.span(node), [])
+        statements = [self.stmt(stmt) for stmt in node.statements]
+        ranges = copy_ranges([stmt.expand_copies for stmt in node.statements])
+        if ranges:
+            self.copies.record_copies(ident, ranges)
         return ShirBlock(ident, self.span(node), statements)
 
     def initializer(self, decl: a.ConstDef) -> ShirBlock:
@@ -232,6 +243,21 @@ class BodyLowerer:
         made = Hole(self.made_opaque(), self.span(node), type(node).__name__)
         self.holes.append(made)
         return made
+
+
+def copy_ranges(marks: Sequence[tuple[int, ...]]) -> tuple[CopyRange, ...]:
+    """The statement range of each copy that the marks of a block name.
+
+    A mark is `Stmt.expand_copies` of one statement: the copies that hold it, the outer
+    copy first. The ranges are in the order of their start, the outer copy first. The copy
+    numbers of the unroll come from a counter of the process, so no range keeps one.
+    """
+    found: dict[int, list[int]] = {}
+    for index, mark in enumerate(marks):
+        for depth, copy in enumerate(mark):
+            found.setdefault(copy, [index, index, depth])[1] = index + 1
+    ordered = sorted(found.values(), key=lambda run: (run[0], run[2]))
+    return tuple(CopyRange(start, stop) for start, stop, _depth in ordered)
 
 
 def binder_local(bindings: bd.Bindings, owner: object, name: str) -> LocalId:

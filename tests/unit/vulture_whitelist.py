@@ -23,7 +23,8 @@ IGNORE_DECORATORS: dict[str, str] = {
 
 _PLATFORM_ABI = "platform ABI reference table"
 _LLVMLITE = "llvmlite reads this attribute when it prints the module"
-_P2_SIDE_TABLES = "kept for P2.2 and P2.5, a side table keys each answer on it"
+_P5_EXPAND_COPIES = ("kept for the generic instances group of Phase 5: the dead-statement "
+                     "rule, the scope pass and ends_unrolled_run read the copy boundaries")
 
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
@@ -98,7 +99,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "a reserved bit of the .slib header format; the library design defines it and "
      "the writer keeps it zero"),
     # -- kept for a later chunk of the IR migration (docs/design/ir.md) --------------
-    ("sushi_lang/semantics/shir/nodes.py", "shir_id", _P2_SIDE_TABLES),
+    ("sushi_lang/semantics/shir/body.py", "holding", _P5_EXPAND_COPIES),
 )
 
 RATCHET: tuple[tuple[str, str, str], ...] = ()

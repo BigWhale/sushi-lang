@@ -1,7 +1,7 @@
 unit test_shir_variadic_expand
 
 ShirBody show_all (TemplateCheck("test_shir_variadic_expand.show_all"))
-  params : [(_0 "args": Ts, Guaranteed)]
+  params : [(_0 "args": Ts, Guaranteed, pack: true)]
   locals : [_1 "n": i32, _2 "a", _3 "line": string]
   block  :
     Assign(LocalRef(_1), Lit(0), is_init: true)
@@ -9,7 +9,7 @@ ShirBody show_all (TemplateCheck("test_shir_variadic_expand.show_all"))
     Return(LocalRef(_1))
 
 ShirBody count (TemplateCheck("test_shir_variadic_expand.count"))
-  params : [(_0 "args": Ts, Guaranteed)]
+  params : [(_0 "args": Ts, Guaranteed, pack: true)]
   locals : [_1 "n": i32, _2]
   block  :
     Assign(LocalRef(_1), Lit(0), is_init: true)
@@ -33,6 +33,7 @@ ShirBody count__i32_string_bool.pack3
     Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(1) = 1), is_init: false)
     Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(1) = 1), is_init: false)
     Return(LocalRef(_3))
+  copies : [block: [1..2, 2..3, 3..4]]
 
 ShirBody show_all__i32_string.pack2
   params : [(_0 "#pack_args_0": i32, Guaranteed), (_1 "#pack_args_1": string, Guaranteed)]
@@ -46,3 +47,4 @@ ShirBody show_all__i32_string.pack2
     ExprStmt(Call(BuiltinFn("println"), [LocalRef(_4)]))
     Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1) = 1), is_init: false)
     Return(LocalRef(_2))
+  copies : [block: [1..4, 4..7]]

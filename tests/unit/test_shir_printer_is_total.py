@@ -9,8 +9,8 @@ with a diff. So this gate holds three rules:
    `ShirStmt` and `ShirPattern`, the block, each part that a node holds (a constant, a
    call target, an argument, an array run, a loop source, a binding mode, a destructure
    target, an arm) and each origin of a body. The id that a destructure holds, `LocalId`,
-   has a row too. The bases and the three frame classes have none: `print_body` prints
-   the frame.
+   has a row too, and so does the range of one copy of an unrolled `expand`. The bases
+   and the four frame classes have none: `print_body` prints the frame.
 2. The table has no row for a class outside that set, so no row stays for a class that
    is gone.
 3. The dump does not depend on the order of a hash or on an address: the printer source
@@ -39,8 +39,9 @@ _NODE_MODULES: tuple[types.ModuleType, ...] = (nodes, exprs, stmts, patterns, bo
 #: The bases of the nodes: no value has one of these types.
 _BASES = {nodes.ShirNode, exprs.ExprNode}
 
-#: The frame of a body: `print_body` prints it, and no node holds one.
-_FRAME = {body.ShirBody, body.ShirParam, body.ShirLocal}
+#: The frame of a body: `print_body` prints it, and no node holds one. The copy boundaries
+#: of an unrolled `expand` are a side table of the body, and `print_body` prints them too.
+_FRAME = {body.ShirBody, body.ShirParam, body.ShirLocal, body.ExpandCopies}
 
 #: The ids that a node holds where a dispatch reads them: a destructure target.
 _IDS = {LocalId}

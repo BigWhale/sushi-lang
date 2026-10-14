@@ -2,7 +2,8 @@
 
 `lower_body` is the one entry point of body lowering. It builds the FRAME of a body: its
 declaration, its origin, its parameters with their conventions and the locals of the
-parameters. `_lower_block` fills the block, one statement at a time, through the table of
+parameters. The copy boundaries of an unrolled `expand` come with the lowering of each
+block, in a side table of the body (`ShirBody.copies`, ir.md 7.2). `_lower_block` fills the block, one statement at a time, through the table of
 `lower_nodes.py`. A construct that the table does not lower yet is a hole, and
 `LoweredProgram.holes` records each one. The locals that the binders of the block declare
 come with the lowering of each binder, and `ShirBody.locals` holds every local in id order.
@@ -107,7 +108,7 @@ def lower_body(bindings: Bindings, ctx: LoweringContext) -> ShirBody:
                           ctx.lookup, ctx.stops, template=ctx.template is not None)
     block = _lower_block(decl, lowerer)
     every_local = sorted([*locals_, *lowerer.locals], key=lambda local: local.id)
-    return ShirBody(fn_id, _origin(decl, ctx), params, every_local, block)
+    return ShirBody(fn_id, _origin(decl, ctx), params, every_local, block, lowerer.copies)
 
 
 @dataclass(slots=True)
@@ -277,7 +278,11 @@ def _frame(decl: Declaration, bindings: Bindings,
            ctx: LoweringContext) -> tuple[list[ShirParam], list[ShirLocal]]:
     """The parameters, the receiver first, and one local for each of them.
 
-    A static method has no receiver (#542), and a constant has no parameter.
+    A static method has no receiver (#542), and a constant has no parameter. A value pack
+    parameter (`...Ts args`) of a template keeps its written `...` as `pack`; its type is
+    the pack as written (`Ts`). In an instance the monomorphize pass gives one parameter
+    for each element of the pack (`#pack_args_0`), and the AST marks each one `is_pack`
+    for the scope pass; an element is no pack, so its `pack` is false.
     """
     if isinstance(decl, ConstDef):
         return [], []
@@ -288,13 +293,15 @@ def _frame(decl: Declaration, bindings: Bindings,
             isinstance(decl, ExtendDef) and decl.is_static):
         local = binder_local(bindings, decl, "self")
         params.append(ShirParam(local, receiver, receiver_mode(decl.self_mode).convention,
-                                _span(decl.self_mode_span, decl.name_span, decl.loc)))
+                                _span(decl.self_mode_span, decl.name_span, decl.loc),
+                                pack=False))
         locals_.append(ShirLocal(local, "self", None, None))
     for param in decl.params:
         local = binder_local(bindings, param, param.name)
         ty = _param_type(param)
         params.append(ShirParam(local, ty, param_mode(param).convention,
-                                _span(getattr(param, "loc", None), param.name_span, decl.loc)))
+                                _span(getattr(param, "loc", None), param.name_span, decl.loc),
+                                pack=param.is_pack and ctx.template is not None))
         locals_.append(ShirLocal(local, param.name, ty, param.name_span))
     return params, locals_
 

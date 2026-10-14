@@ -21,9 +21,15 @@ The rules of the text, from the example of ir.md 8.11:
 - An expression with a recorded value (ruling E3) prints the value after it: `... = 3`.
 - No `shir_id` and no span: the example of ir.md 8.11 shows neither.
 - A hole prints as `<hole: AstClass>`, with the name of the AST class that it stands for.
+- A value pack parameter (`...Ts args`) adds `pack: true` to its parameter.
+- A body with copies of an unrolled `expand` prints a `copies` line after its block: the
+  path of each block that holds a copy, from the block of the body (`block`,
+  `block[6].body`), and the range `start..stop` of each copy. A body with no copy prints
+  no such line.
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Sequence, TypeAlias
@@ -36,7 +42,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.decls import DeclNames
-from sushi_lang.semantics.shir.ids import DeclId, LocalId
+from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import BorrowMode
 
@@ -258,6 +264,8 @@ PRINTERS: dict[type, Render] = {
     b.Instance: lambda _pr, _o: "Instance",
     b.TemplateCheck: _template_check,
     b.Initializer: lambda _pr, _o: "Initializer",
+    # the side table of a body
+    b.CopyRange: lambda _pr, r: f"{r.start}..{r.stop}",
 }
 
 
@@ -281,7 +289,8 @@ def print_body(body: b.ShirBody, decls: DeclNames) -> str:
     params = [param.local for param in body.params]
     origin = "" if isinstance(body.origin, b.Instance) else f" ({pr.show(body.origin)})"
     param_texts = (f"({_named_local(by_id.get(param.local), param.local, param.ty)}, "
-                   f"{CONVENTIONS[param.convention]})" for param in body.params)
+                   f"{CONVENTIONS[param.convention]}{', pack: true' if param.pack else ''})"
+                   for param in body.params)
     local_texts = (_named_local(local, local.id, local.declared)
                    for local in sorted(body.locals, key=lambda local: local.id)
                    if local.id not in params)
@@ -293,7 +302,30 @@ def print_body(body: b.ShirBody, decls: DeclNames) -> str:
         lines.extend(f"    {pr.show(stmt)}" for stmt in body.block.statements)
     else:
         lines.append("  block  : []")
+    if body.copies.blocks():
+        lines.append(f"  copies : {_copies(pr, body)}")
     return "\n".join(lines) + "\n"
+
+
+def _copies(pr: ShirPrinter, body: b.ShirBody) -> str:
+    """Each block that holds a copy of an unrolled `expand`, by its path, with its ranges."""
+    paths: dict[ShirId, str] = {}
+    _block_paths(body.block, "block", paths)
+    return "[" + ", ".join(f"{paths[block]}: {pr.each(body.copies.ranges_of(block))}"
+                           for block in body.copies.blocks()) + "]"
+
+
+def _block_paths(value: object, path: str, paths: dict[ShirId, str]) -> None:
+    """The path of each block under `value`: a field by its name, an item by its index."""
+    if isinstance(value, ShirBlock):
+        paths[value.shir_id] = path
+        _block_paths(value.statements, path, paths)
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _block_paths(item, f"{path}[{index}]", paths)
+    elif type(value) in PRINTERS and dataclasses.is_dataclass(value):
+        for each in dataclasses.fields(value):
+            _block_paths(getattr(value, each.name), f"{path}.{each.name}", paths)
 
 
 def print_units(units: Sequence[tuple[str, Sequence[b.ShirBody]]], decls: DeclNames) -> str:

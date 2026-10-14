@@ -2721,6 +2721,7 @@ tests/ir/shir/statements/test_shir_stmt_let.sushi
 tests/ir/shir/statements/test_shir_stmt_let_ref.sushi
 tests/ir/shir/statements/test_shir_stmt_while.sushi
 tests/ir/shir/statements/test_warn_shir_stmt_shadow.sushi
+tests/ir/shir/variadics/test_shir_variadic_copy_boundaries.sushi
 tests/ir/shir/variadics/test_shir_variadic_expand.sushi
 tests/iterators/adapters/test_ad_borrowed_params.sushi
 tests/iterators/adapters/test_ad_break_frees_chain.sushi
