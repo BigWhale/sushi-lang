@@ -735,7 +735,9 @@ A struct construction takes no type arguments either (`Pair@(i32, i32)(1, 2)`, a
 an alias), and the language refuses a named argument outside a struct construction
 (CE6104). Each of these forms is an ERROR HOLE: the program always has an error from a
 later pass, so the hole never stops the compile under `SUSHI_SHIR_STRICT=1`, as the hole of
-a name with no declaration does not. Ruled 2026-10-14.
+a name with no declaration does not. Ruled 2026-10-14. Two more forms are error holes by
+the same ruling: a slice with a reversed range (`data[(0..3).rev()]`, CE2122), and a call
+of a name that the namespace does not hold (`geo.twicee(21)`, CE2008).
 
 `marker` is the WRITTEN call-site mode (`nom s`, `poke n`), or `None`. The RESOLVED
 convention is `typecheck`'s: an unmarked argument in a consuming position (constructor,
@@ -1037,7 +1039,7 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 | `EnumConstructor` | `EnumInit` |
 | `TupleLiteral` | `TupleInit` |
 | `MemberAccess` | `Field`; `ConstRef` / `StorageRef` / `GlobalRef` through a namespace, a C global of an `unsafe external` block included (`libc.environ`); `EnumInit` for a unit variant (`Sign.Plus`) |
-| `IndexAccess` | `Index` with the `unchecked` mark of the builder (4.9), or `Slice` when the index is a range; a reversed range (`data[(0..3).rev()]`, CE2122) is a hole, because `Slice` has no field for it |
+| `IndexAccess` | `Index` with the `unchecked` mark of the builder (4.9), or `Slice` when the index is a range; a reversed range (`data[(0..3).rev()]`, CE2122) is an error hole (7.4), because `Slice` has no field for it |
 | `CastExpr` | `Cast` |
 | `TryExpr` | `Try`, **kept** |
 | `InterpolatedString` | `Interp`, **kept**: each text part as written, an empty one too, and each hole as an expression |
