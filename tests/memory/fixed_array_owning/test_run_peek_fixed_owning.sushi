@@ -1,0 +1,21 @@
+# `look(peek g)` lends a `string[2]` to a `peek` parameter. The callee reads through the
+# pointer and destroys nothing; the caller destroys the two strings once. A second call,
+# and a call through a struct field, read the same value.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "look a 1 b 1\nlook a 1 b 1\nlook a 2 b 2\nkept a 1\n"
+struct Pair:
+    string[2] names
+
+fn look(peek string[2] g) i32:
+    println("look {g[0]} {g[1]}")
+    return g[0].len() + g[1].len()
+
+fn main() i32:
+    let string[2] g = ["a {1}", "b {1}"]
+    let i32 x = look(peek g)
+    let i32 y = look(peek g)
+    let Pair p = Pair(["a {2}", "b {2}"])
+    let i32 z = look(peek p.names)
+    println("kept {g[0]}")
+    return x + y + z - 18

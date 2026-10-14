@@ -179,13 +179,17 @@ def expanded_length(runs: Sequence[Run]) -> Optional[int]:
     return total
 
 
+def is_range_element(element: ArrayElement) -> bool:
+    """True when the element is a range, `a..b`: a run whose value changes with the slot."""
+    return isinstance(element.value, RangeExpr)
+
+
 def has_run(elements: Sequence[ArrayElement]) -> bool:
     """True when any element fills more than one slot -- a repeat or a range.
 
     A literal of plain elements keeps its old rendering.
     """
-    return any(element.count is not None or isinstance(element.value, RangeExpr)
-               for element in elements)
+    return any(element.count is not None or is_range_element(element) for element in elements)
 
 
 def values(elements: Sequence[ArrayElement]) -> List[Expr]:
@@ -202,13 +206,13 @@ def values(elements: Sequence[ArrayElement]) -> List[Expr]:
     the same answer `.fill()` gives for the same reason (#479). See `repeated_values`.
     """
     return [element.value for element in elements
-            if not isinstance(element.value, RangeExpr) and element.count is None]
+            if not is_range_element(element) and element.count is None]
 
 
 def repeated_values(elements: Sequence[ArrayElement]) -> List[Expr]:
     """The values of `value; count` elements, which BORROW rather than consume (Ruling 7)."""
     return [element.value for element in elements
-            if element.count is not None and not isinstance(element.value, RangeExpr)]
+            if element.count is not None and not is_range_element(element)]
 
 
 def range_bounds(elements: Sequence[ArrayElement]) -> List[Expr]:

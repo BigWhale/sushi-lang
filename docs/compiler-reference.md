@@ -61,6 +61,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--dump-parse`      | Print the raw Lark parse tree                      |
 | `--dump-ast`        | Print abstract syntax tree                         |
 | `--dump-ll`         | Print LLVM IR to terminal                          |
+| `--dump-shir PATH`  | Write the SHIR of each body to `PATH` (`-` prints it); the compile goes on as usual |
 | `--write-ll`        | Write LLVM IR to `<output>.ll` file                |
 | `--no-incremental`  | Force full rebuild, ignoring cached object files   |
 | `--clean-cache`     | Remove `__sushi_cache__/` directory and exit       |
@@ -511,6 +512,40 @@ Print the abstract syntax tree:
 - Understanding parsing
 - Debugging grammar issues
 - Compiler development
+
+### Dump SHIR
+
+Write the SHIR (the Sushi High-level IR, `docs/design/ir.md`) of each body to a file:
+
+```bash
+./sushic --dump-shir program.shir program.sushi
+./sushic --dump-shir - program.sushi    # print the dump on the terminal
+```
+
+**Output includes:**
+- Each unit of the program, then each body of the unit: a function, a method, the initializer of a constant, a template, and each instance of a template
+- The parameters of each body, with the convention of each (`Owned`, `Guaranteed`, `InGuaranteed`, `Inout`), and its other locals
+- The block of each body, one statement on each line
+- A hole, `<hole: AstClass>`, for each construct that lowering does not handle yet. The name is the AST class of the construct, for example `<hole: Name>` for a name with no declaration
+
+**Rules:**
+- The text is the same on every run and under every `PYTHONHASHSEED`, so a test can compare it with a golden file (`EXPECT_DUMP_SHIR`, `tests/TEST_METADATA_GUIDE.md`)
+- A unit of the bundled stdlib and a unit of a source library are not in the dump
+- A template as written (a generic function, a generic extension, a method with a type parameter, a method of a perk implementation on a generic target) is the body of its template check: its header shows `(TemplateCheck("<unit>.<template>"))`, and its type parameters stay as written. An `expand` in it is one `Expand` statement, never unrolled
+- An instance is a body of the unit that declares its template, with the name of the instance (`keep__i32`, `Box@(i32).show`, `i32.pick@(string)`). An `expand` in an instance is unrolled: the instance holds one copy of the body for each element of the pack
+- The bodies that the source writes come first: the constants, the functions, the extension methods, then the perk methods, each kind in the source order. The instances come after them, in the order of their names
+- The compile goes on as usual: the exit status and the output do not change. A dump that cannot be written is the warning [CW0005](error-catalog.md#cw0005)
+- With `--lib-info` the flag has no effect ([CW0003](error-catalog.md#cw0003))
+
+**Lowering on every compile:** the compiler lowers each body to SHIR on every compile, also with no `--dump-shir`. The result is not used yet, so a hole does not stop the compile: the old pipeline compiles the program, and the output does not change. Set the variable `SUSHI_SHIR_STRICT=1` to stop the compile at the first hole with the internal error [CE0155](error-catalog.md#ce0155), which names the stage and the construct:
+
+```bash
+SUSHI_SHIR_STRICT=1 ./sushic program.sushi
+```
+
+The variable does not stop the compile at a name with no declaration: the program always has an error then ([CE1001](error-catalog.md#ce1001), [CE1002](error-catalog.md#ce1002), or [CE0144](error-catalog.md#ce0144) for a type pack name), and that error is the diagnostic. The variable does not stop the compile at a form that the language always refuses either: a named argument outside a struct construction ([CE6104](error-catalog.md#ce6104)), written type arguments after a dot or on a struct construction ([CE6102](error-catalog.md#ce6102)), a slice with a reversed range ([CE2122](error-catalog.md#ce2122)), a call of a name that the namespace does not hold ([CE2008](error-catalog.md#ce2008)), and a member of a type that is no variant ([CE2045](error-catalog.md#ce2045)). The variable does not stop the compile of a unit in which the scope pass reported an error either: a type name written as a value is a hole there, and the error of the scope pass ([CE2105](error-catalog.md#ce2105)) is the diagnostic.
+
+The variable is for the work on the new pipeline. The test runner (`tests/run_tests.py`) sets it to `1` for every compile that it starts, and no flag of the runner turns it off. A compile that you start by hand does not get it.
 
 ### Print LLVM IR
 

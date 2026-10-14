@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODE: CW1002
+# EXPECT_STDOUT_EXACT: "2\n1\n"
+# EXPECT_DUMP_SHIR: test_warn_shir_stmt_shadow.shir
+#
+# the SHIR dump of a `let` that shadows a local in a nested block. The scope pass warns
+# (CW1002), and the inner binder is a second local with its own id: a name in the block
+# reads the inner local, and a name after the block reads the outer local.
+
+fn main() i32:
+    let i32 x = 1
+    if (x > 0):
+        let i32 x = 2
+        println(x)
+    println(x)
+    return 0

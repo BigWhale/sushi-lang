@@ -1,0 +1,17 @@
+unit test_shir_match_result
+
+ShirBody half
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, Binary(%, LocalRef(_0), Lit(2) = 2), Lit(1)), then: [Return(EnumInit(@Result, "Err", [EnumInit(@Bad, "Odd", [])]))])
+    Return(EnumInit(@Result, "Ok", [Binary(/, LocalRef(_0), Lit(2) = 2)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "v", _1 "v"]
+  block  :
+    Match(Call(Named(GlobalRef(@half)), [Lit(8)]), [Arm(Variant(@Result, "Ok", [(_0, Bare)]), [ExprStmt(Call(BuiltinFn("println"), [LocalRef(_0)]))]), Arm(Variant(@Result, "Err", [Wildcard]), [ExprStmt(Call(BuiltinFn("println"), [Lit("odd")]))])], consumes: false)
+    Match(Call(Named(GlobalRef(@half)), [Lit(3)]), [Arm(Variant(@Result, "Ok", [(_1, Bare)]), [ExprStmt(Call(BuiltinFn("println"), [LocalRef(_1)]))]), Arm(Variant(@Result, "Err", [Variant(@Bad, "Odd", [])]), [ExprStmt(Call(BuiltinFn("println"), [Lit("odd")]))])], consumes: false)
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

@@ -582,7 +582,6 @@ def resolve_protocol_iterator(validator: 'TypeValidator', stmt: Foreach, iterabl
     element_type, call = protocol_next_call(validator, iterable_type,
                                             stmt.protocol_iter_name, stmt.iterable.loc)
     stmt.protocol_next = call
-    stmt.walks_in_place = _reached_through_poke(validator, stmt.iterable)
     return element_type
 
 
@@ -632,45 +631,21 @@ def protocol_next_call(validator: 'TypeValidator', iterable_type, iter_name: str
     return protocol_item_type(validator, iterable_type), call
 
 
-# The built-in families whose iterator methods a loop can walk with no value at all.
-_DIRECT_WALK_FAMILIES = frozenset({"array", "list", "hashmap"})
-
-
 def _choose_the_walk(validator: 'TypeValidator', stmt: Foreach, iterable_type) -> None:
     """A walk of an `Iterator@(T)`: a direct walk, or a walk of a value (#1259).
 
     A range and a built-in producer written as the iterable are walked DIRECTLY: the loop
-    reads the source with no call through `next_fn` and no allocation, so the producer is
-    stamped to answer its bare cursor. Every other iterator is a VALUE, and the loop calls
-    its `next_fn`; a value reached through a `poke` reference is walked in place.
+    reads the source with no call through `next_fn` and no allocation. Every other
+    iterator is a VALUE, and the loop calls its `next_fn`. The borrow pass reads this
+    choice: it stamps the producer of a direct walk, and it decides whether a value is
+    walked in place (ruling S6, docs/design/ir.md).
     """
-    from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS, CURSOR
+    from sushi_lang.semantics.generics.iterators import is_producer
     from .utils import settle_item_modes
 
-    iterable = stmt.iterable
-    if isinstance(iterable, RangeExpr):
-        return
-    if (isinstance(iterable, (MethodCall, DotCall)) and not iterable.args
-            and iterable.method in CONTAINER_ITERATORS
-            and iterable.callee_builtin_family in _DIRECT_WALK_FAMILIES):
-        iterable.iterator_state = CURSOR
+    if isinstance(stmt.iterable, RangeExpr) or is_producer(stmt.iterable):
         return
     stmt.value_iterator = settle_item_modes(validator, iterable_type)
-    stmt.walks_in_place = _reached_through_poke(validator, iterable)
-
-
-def _reached_through_poke(validator: 'TypeValidator', iterable) -> bool:
-    """Is the iterable a place whose root is a `poke` reference (#1258)?
-
-    A `poke` parameter or receiver, a `let poke` binding and a `poke` pattern or item
-    binding all register their `ReferenceType`, so the root's registered type answers.
-    """
-    from sushi_lang.semantics.typesys import ReferenceType
-    root = walk_place(iterable, Step.MEMBER | Step.INDEX).name
-    if root is None:
-        return False
-    root_type = validator.variable_types.get(root.id)
-    return isinstance(root_type, ReferenceType) and root_type.is_poke()
 
 
 def _foreach_iterable_is_addressable(iterable) -> bool:

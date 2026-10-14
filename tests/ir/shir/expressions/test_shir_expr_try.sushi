@@ -1,0 +1,33 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "43\n0\n7\n0\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_expr_try.shir
+#
+# the SHIR dump of `??` in a `| E` body. A `??` is a `Try` of its operand, kept whole: the
+# error type, the conversion and the type of the value are answers of the typecheck pass.
+# On a `Maybe` the source writes `.or_err(nom e)??`, so the `Try` holds the call of
+# `or_err`, with the error value as an `Owned` argument. A `Try` is opaque (ruling E3).
+
+error ParseError:
+    Empty
+
+fn parse(string s) i32 | ParseError:
+    if (s == ""):
+        return Result.Err(ParseError.Empty)
+    return Result.Ok(42)
+
+fn bump(string s) i32 | ParseError:
+    let i32 n = parse(s)??
+    return Result.Ok(n + 1)
+
+fn first(i32[] xs) i32 | ParseError:
+    return Result.Ok(xs.get(0).or_err(nom ParseError.Empty)??)
+
+fn main() i32:
+    println(bump("x").realise(0))
+    println(bump("").realise(0))
+    let i32[] full = from([7])
+    let i32[] none = new()
+    println(first(full).realise(0))
+    println(first(none).realise(0))
+    println("Mostly Harmless")
+    return 0

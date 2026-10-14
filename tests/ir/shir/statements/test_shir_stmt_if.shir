@@ -1,0 +1,19 @@
+unit test_shir_stmt_if
+
+ShirBody classify
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "code": i32, _2 "code": i32, _3 "big": i32]
+  block  :
+    If(Binary(<, LocalRef(_0), Lit(0)), then: [Return(Lit(0))], otherwise: [If(Binary(==, LocalRef(_0), Lit(0)), then: [Assign(LocalRef(_1), Lit(1), is_init: true), Return(LocalRef(_1))], otherwise: [If(Binary(<, LocalRef(_0), Lit(10)), then: [Assign(LocalRef(_2), Lit(2), is_init: true), Return(LocalRef(_2))], otherwise: [Assign(LocalRef(_3), Binary(*, LocalRef(_0), Lit(3) = 3), is_init: true), If(Binary(>, LocalRef(_3), Lit(100)), then: [Return(Lit(4))])])])])
+    Return(Lit(3))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@classify)), [Unary(neg, Lit(5) = 5)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@classify)), [Lit(0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@classify)), [Lit(7)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@classify)), [Lit(20)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@classify)), [Lit(50)])]))
+    Return(Lit(0))

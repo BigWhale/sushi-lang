@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "41\n"
+# EXPECT_DUMP_SHIR: test_shir_stmt_let.shir
+#
+# the SHIR dump of a `let` and of a rebind: each is an `Assign`, with `is_init: true` for
+# a `let` and `is_init: false` for a rebind. The target of a `let` is the local of its
+# binder, and the `locals` line shows the binder with its type as written. A rebind of a
+# unit `var` has a `StorageRef` as its target. The body of a constant and of a `var` is
+# its initializer, as one `Return`.
+
+const i32 BASE = 6 * 7
+
+var i32 hits = 0
+
+fn main() i32:
+    let i32 a = BASE - 2
+    let i32 b = a + 2
+    b := b - 1
+    hits := b
+    println(hits)
+    return 0

@@ -1,0 +1,27 @@
+# `let fn(i32) -> i32 f = make(n)??` unwraps a capturing closure from a
+# `Result@(fn(i32) -> i32, E)`. On the Ok path the closure moves into the local and its
+# environment is destroyed once at scope exit. On the Err path the `??` returns early and
+# destroys the owning local that came before it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "got 15 for run 1\nfailed\n"
+fn make(i32 n) Result@(fn(i32) -> i32, StdError):
+    if (n == 0):
+        return Result.Err(StdError.Error)
+    let string tag = "tag {n}"
+    return Result.Ok(|i32 x| x * n + tag.len())
+
+fn run(i32 n) i32 | StdError:
+    let string label = "run {n}"
+    let fn(i32) -> i32 f = make(n)??
+    println("got {f(10)} for {label}")
+    return Result.Ok(n)
+
+fn main() i32:
+    match run(1):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("failed")
+    match run(0):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("failed")
+    return 0

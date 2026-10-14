@@ -1,0 +1,25 @@
+unit test_shir_call_bloom
+
+ShirBody sum
+  params : [(_0 "nums": i32[], Guaranteed)]
+  locals : []
+  block  :
+    Return(Call(Dotted(LocalRef(_0), "len"), []))
+
+ShirBody forward
+  params : [(_0 "xs": i32[], Owned)]
+  locals : []
+  block  :
+    Return(Call(Named(GlobalRef(@sum)), [LocalRef(_0)...]))
+
+ShirBody direct
+  params : []
+  locals : []
+  block  :
+    Return(Call(Named(GlobalRef(@sum)), [Lit(1), Lit(2), Lit(3)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))

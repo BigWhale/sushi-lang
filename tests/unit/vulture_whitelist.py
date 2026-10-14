@@ -23,6 +23,8 @@ IGNORE_DECORATORS: dict[str, str] = {
 
 _PLATFORM_ABI = "platform ABI reference table"
 _LLVMLITE = "llvmlite reads this attribute when it prints the module"
+_P5_EXPAND_COPIES = ("kept for the generic instances group of Phase 5: the dead-statement "
+                     "rule, the scope pass and ends_unrolled_run read the copy boundaries")
 
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
@@ -96,6 +98,8 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/backend/library_format.py", "FLAG_SOURCE_COMPRESSED",
      "a reserved bit of the .slib header format; the library design defines it and "
      "the writer keeps it zero"),
+    # -- kept for a later chunk of the IR migration (docs/design/ir.md) --------------
+    ("sushi_lang/semantics/shir/body.py", "holding", _P5_EXPAND_COPIES),
 )
 
 RATCHET: tuple[tuple[str, str, str], ...] = ()
@@ -144,6 +148,8 @@ TEST_WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("tests/unit/test_stdlib_build_is_one_table.py", "stdlib_dir",
      "StdlibLinker._resolve_stdlib_unit reads the field"),
     ("tests/unit/test_ast_nodes_are_slotted.py", "some_analysis_result",
+     "the test writes it to show that __slots__ refuses it"),
+    ("tests/unit/test_shir_nodes_are_slotted.py", "inferred_type",
      "the test writes it to show that __slots__ refuses it"),
     # -- read by name ----------------------------------------------------------------
     ("tests/unit/test_bare_name_ladder_is_one.py", "is_*",

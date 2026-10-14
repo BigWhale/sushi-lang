@@ -1,0 +1,21 @@
+unit test_shir_expr_interp
+
+ShirBody main
+  params : []
+  locals : [_0 "name": string, _1 "n": i32, _2 "v": Vec, _3 "xs": i32[]]
+  block  :
+    Assign(LocalRef(_0), Lit("Arthur"), is_init: true)
+    Assign(LocalRef(_1), Lit(42), is_init: true)
+    Assign(LocalRef(_2), StructInit(@Vec, [Lit(3), Lit(4)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_3), ArrayInit(Dynamic, [Single(Lit(2)), Single(Lit(9))]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Interp(["Mostly Harmless, ", LocalRef(_0), ""])]))
+    ExprStmt(Call(BuiltinFn("println"), [Interp(["", LocalRef(_1), ""])]))
+    ExprStmt(Call(BuiltinFn("println"), [Interp(["x=", Field(LocalRef(_2), "x"), " y=", Field(LocalRef(_2), "y"), " sum=", Call(Dotted(LocalRef(_2), "sum"), []), " big=", Binary(>, LocalRef(_1), Lit(40)), ""])]))
+    ExprStmt(Call(BuiltinFn("println"), [Interp(["[", Index(LocalRef(_3), Lit(0) = 0, unchecked: false), "] ", Index(LocalRef(_3), Lit(1) = 1, unchecked: false), " ", Binary(/, Cast(LocalRef(_1), f64), Lit(12.0) = 12.0), ""])]))
+    Return(Lit(0))
+
+ShirBody Vec.sum
+  params : [(_0 "self": Vec, Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(+, Field(LocalRef(_0), "x"), Field(LocalRef(_0), "y")))

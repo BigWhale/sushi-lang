@@ -36,6 +36,19 @@ def test_a_parse_outside_the_runner_set_is_caught(request):
     assert "lark.Lark.parse" in probe.stages, probe.stages
 
 
+def test_a_lowering_outside_the_runner_set_is_caught(request):
+    """The control of the lowering stage: a body lowerer that starts is a hit."""
+    from sushi_lang.internals.report import Span
+    from sushi_lang.semantics.shir.bindings import Bindings
+    from sushi_lang.semantics.shir.decls import DeclNames
+    from sushi_lang.semantics.shir.ids import IdAllocator, ShirId
+    from sushi_lang.semantics.shir.lower_nodes import BodyLowerer
+
+    with _gate().recorded_during(request.node) as probe:
+        BodyLowerer(IdAllocator(ShirId), DeclNames(), Bindings(None), [], Span(1, 1, 1, 1))
+    assert probe.stages == ["lowering"], probe.stages
+
+
 def test_a_compiler_subprocess_is_caught(request):
     """A process whose arguments name a `.sushi` file is a compiler run, whatever it is."""
     with _gate().recorded_during(request.node) as probe:
@@ -47,6 +60,7 @@ def test_a_compiler_subprocess_is_caught(request):
     ("lark:Lark", "parse"),
     ("lark:Lark", "lex"),
     ("sushi_lang.semantics.semantic_analyzer:SemanticAnalyzer", "check"),
+    ("sushi_lang.semantics.shir.lower_nodes:BodyLowerer", "__init__"),
     ("sushi_lang.backend.codegen_llvm:LLVMCodegen", "__init__"),
     ("sushi_lang.backend.driver:LLVMDriver", "__init__"),
     ("subprocess:Popen", "__init__"),

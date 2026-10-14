@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_generic_fn.shir
+#
+# the SHIR dump of a generic function. The template as written is the body of its
+# template check, with the origin `TemplateCheck` and the identity of the template: the
+# type parameter `T` is an opaque type that the body keeps as written. Each instance is a
+# body of its own, with the origin `Instance` and the name of the instance. The copies of
+# a unit come after the bodies that the source writes, in the order of their names.
+
+fn keep@(T)(nom T x) T:
+    let T held = x
+    return held
+
+fn main() i32:
+    println(keep(nom 3))
+    println(keep(nom "Mostly Harmless"))
+    return 0

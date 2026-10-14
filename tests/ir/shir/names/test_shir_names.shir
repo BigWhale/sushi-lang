@@ -1,0 +1,49 @@
+unit test_shir_names
+
+ShirBody LIMIT (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit(10))
+
+ShirBody counter (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit(7))
+
+ShirBody double
+  params : [(_0 "x": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(*, LocalRef(_0), Lit(2) = 2))
+
+ShirBody limit
+  params : []
+  locals : []
+  block  :
+    Return(Binary(+, ConstRef(@LIMIT) = 10, Lit(1) = 1))
+
+ShirBody stored
+  params : []
+  locals : []
+  block  :
+    Return(StorageRef(@counter))
+
+ShirBody pick
+  params : []
+  locals : []
+  block  :
+    Return(GlobalRef(@double))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))
+
+ShirBody i32.twice
+  params : [(_0 "self": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(*, LocalRef(_0), Lit(2) = 2))

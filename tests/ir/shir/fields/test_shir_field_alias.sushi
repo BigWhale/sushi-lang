@@ -1,0 +1,22 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "25\n7\n42\n1\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_field_alias.shir
+#
+# the SHIR dump of a member behind an alias. What the namespace holds under the name
+# decides the node, not a type: a constant is a `ConstRef`, a unit `var` a `StorageRef`
+# (also as the target of a rebind) and a function a `GlobalRef`, each with the qualified
+# name as written. Lowering reads no value through a member behind an alias, so the
+# divisor `geo.LIMIT` has no value after it (ruling E3).
+
+use "helpers/shir_geo" as geo
+
+fn main() i32:
+    let fn(i32) -> i32 f = geo.twice
+    let geo.Vec o = geo.ORIGIN
+    geo.hits := geo.hits + 1
+    println(100 / geo.LIMIT)
+    println(o.y)
+    println(f(21))
+    println(geo.hits)
+    println("Mostly Harmless")
+    return 0

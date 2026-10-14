@@ -1,0 +1,14 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n"
+# EXPECT_DUMP_SHIR: test_shir_destructure_call.shir
+#
+# the SHIR dump of a destructure of a function result, with typed targets. A type written
+# on a target is the `declared` type of its local.
+
+fn split(i32 n) (i32, i32):
+    return (n / 10, n % 10)
+
+fn main() i32:
+    let (i32 tens, i32 ones) = split(42)
+    println(tens * 10 + ones)
+    return 0

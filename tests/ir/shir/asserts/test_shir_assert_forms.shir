@@ -1,0 +1,11 @@
+unit test_shir_assert_forms
+
+ShirBody main
+  params : []
+  locals : [_0 "x": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(1), is_init: true)
+    Assert(Binary(==, LocalRef(_0), Lit(1)), label: "./tests/ir/shir/asserts/test_shir_assert_forms.sushi")
+    Assert(Binary(==, LocalRef(_0), Lit(1)), message: Lit("x is one"), label: "./tests/ir/shir/asserts/test_shir_assert_forms.sushi")
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

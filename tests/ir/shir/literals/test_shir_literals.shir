@@ -1,0 +1,67 @@
+unit test_shir_literals
+
+ShirBody decimal
+  params : []
+  locals : []
+  block  :
+    Return(Lit(42))
+
+ShirBody hexadecimal
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0xdeadbeef))
+
+ShirBody octal
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0o17))
+
+ShirBody binary
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0b1010))
+
+ShirBody byte
+  params : []
+  locals : []
+  block  :
+    Return(Lit(a'x'))
+
+ShirBody ratio
+  params : []
+  locals : []
+  block  :
+    Return(Lit(2.5))
+
+ShirBody flag
+  params : []
+  locals : []
+  block  :
+    Return(Lit(true))
+
+ShirBody text
+  params : []
+  locals : []
+  block  :
+    Return(Lit("Mostly Harmless"))
+
+ShirBody quoted
+  params : []
+  locals : []
+  block  :
+    Return(Lit("can't"))
+
+ShirBody nothing
+  params : []
+  locals : []
+  block  :
+    Return(Lit(Blank))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))

@@ -1,0 +1,55 @@
+unit test_shir_call_statics
+
+ShirBody sign
+  params : []
+  locals : []
+  block  :
+    Return(Call(Static(Sign, "plus"), []))
+
+ShirBody empty
+  params : []
+  locals : []
+  block  :
+    Return(Call(Static(List, "new"), []))
+
+ShirBody bits
+  params : [(_0 "b": u64, Guaranteed)]
+  locals : []
+  block  :
+    Return(Call(Static(f64, "from_bits"), [LocalRef(_0)]))
+
+ShirBody some
+  params : []
+  locals : []
+  block  :
+    Return(EnumInit(@Maybe, "Some", [Lit(1)]))
+
+ShirBody ratio
+  params : []
+  locals : []
+  block  :
+    Return(Binary(/, Lit(70), Call(Static(Vec, "seven"), [])))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))
+
+ShirBody Vec.at
+  params : [(_1 "x": i32, Guaranteed), (_2 "y": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(StructInit(@Vec, [LocalRef(_1), LocalRef(_2)], written_order: [0, 1]))
+
+ShirBody Vec.seven
+  params : []
+  locals : []
+  block  :
+    Return(Lit(7))
+
+ShirBody Sign.plus
+  params : []
+  locals : []
+  block  :
+    Return(EnumInit(@Sign, "Plus", []))

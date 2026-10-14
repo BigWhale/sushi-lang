@@ -1,0 +1,27 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4\n4\n1\n2\n0\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_match_arm_bodies.shir
+#
+# the SHIR dump of the two forms of an arm body. A block body is the block of the arm. A
+# body written as one expression is a block with one statement, an `ExprStmt` of the
+# expression. A statement written after the arrow (`total := x`) is a block of one
+# statement already.
+
+fn show(i32 n) i32:
+    println(n)
+    return n
+
+fn pick(Maybe@(i32) m) i32:
+    let i32 total = 0
+    match m:
+        Maybe.Some(x) ->
+            total := x
+            show(x)
+        Maybe.None -> show(1) + show(2)
+    return total
+
+fn main() i32:
+    println(pick(Maybe.Some(4)))
+    println(pick(Maybe.None))
+    println("Mostly Harmless")
+    return 0

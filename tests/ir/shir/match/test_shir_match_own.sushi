@@ -1,0 +1,29 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "107\n107\nfull\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_match_own.shir
+#
+# the SHIR dump of `Own(...)` patterns. The AST keeps the mode of `Own(poke x)` in two
+# fields of the `Own` pattern; SHIR keeps it in the one `PatBinding` that `Own` holds. A
+# bare name gives `Bare`, and `Own(_)` holds a `Wildcard`.
+
+enum Holder:
+    Full(Own@(i32))
+    Nil
+
+fn main() i32:
+    let Own@(i32) o = Own.alloc(7)
+    let Holder h = Holder.Full(o)
+    match h:
+        Holder.Full(Own(poke inner)) -> inner := inner + 100
+        Holder.Nil -> println("nil")
+    match h:
+        Holder.Full(Own(peek v)) -> println(v)
+        Holder.Nil -> println("nil")
+    match h:
+        Holder.Full(Own(v)) -> println(v)
+        Holder.Nil -> println("nil")
+    match h:
+        Holder.Full(Own(_)) -> println("full")
+        Holder.Nil -> println("nil")
+    println("Mostly Harmless")
+    return 0

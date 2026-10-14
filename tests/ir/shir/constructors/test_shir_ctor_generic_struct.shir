@@ -1,0 +1,13 @@
+unit test_shir_ctor_generic_struct
+
+ShirBody main
+  params : []
+  locals : [_0 "p": Pair@(i32, string), _1 "s": string, _2 "b": Box@(string)]
+  block  :
+    Assign(LocalRef(_0), StructInit(@Pair, [Lit(42), Lit("answer")], written_order: [1, 0]), is_init: true)
+    Assign(LocalRef(_1), Lit("Mostly Harmless"), is_init: true)
+    Assign(LocalRef(_2), StructInit(@Box, [(LocalRef(_1), Owned)], written_order: [0]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_0), "first")]))
+    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_0), "second")]))
+    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_2), "item")]))
+    Return(Lit(0))

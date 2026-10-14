@@ -1,0 +1,42 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "12\n12\nplus\nminus\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_ctor_enum.shir
+#
+# the SHIR dump of a variant construction. `T.m(...)` on an enum `T` that has a variant
+# `m` is an `EnumInit` with the payload as written, and the bare `Sign.Plus` is an
+# `EnumInit` with no payload. The variant names of the enum declaration decide it, not
+# a type. A static of the same enum stays a `Static` call.
+
+enum Sign:
+    Plus
+    Minus
+
+enum Shape:
+    Circle(i32)
+    Rect(i32, i32)
+
+extend Sign static flip(bool up) Sign:
+    if (up):
+        return Sign.Plus
+    return Sign.Minus
+
+fn area(Shape s) i32:
+    let i32 out = 0
+    match s:
+        Shape.Circle(r) -> out := 3 * r * r
+        Shape.Rect(w, h) -> out := w * h
+    return out
+
+fn show(Sign s) ~:
+    match s:
+        Sign.Plus -> println("plus")
+        Sign.Minus -> println("minus")
+
+fn main() i32:
+    let Shape c = Shape.Circle(2)
+    println(area(c))
+    println(area(Shape.Rect(3, 4)))
+    show(Sign.flip(true))
+    show(Sign.Minus)
+    println("Mostly Harmless")
+    return 0

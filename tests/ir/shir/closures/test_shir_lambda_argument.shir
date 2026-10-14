@@ -1,0 +1,15 @@
+unit test_shir_lambda_argument
+
+ShirBody apply
+  params : [(_0 "f": fn(i32) -> i32, Guaranteed), (_1 "v": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(Call(Named(LocalRef(_0)), [LocalRef(_1)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "x": i32]
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@apply)), [Lambda([(_0, Guaranteed)], [Return(Binary(+, LocalRef(_0), Lit(1) = 1))], expr_body: true), Lit(41)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

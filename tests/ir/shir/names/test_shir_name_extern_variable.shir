@@ -1,0 +1,11 @@
+unit test_shir_name_extern_variable
+
+ShirBody main
+  params : []
+  locals : [_0 "first": i32]
+  block  :
+    Assign(LocalRef(_0), Binary(+, GlobalRef(@libc.optind), Lit(0) = 0), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Interp(["optind: ", LocalRef(_0), ""])]))
+    Match(GlobalRef(@libc.optind), [Arm(Literal(1), [ExprStmt(Call(BuiltinFn("println"), [Lit("optind: one")]))]), Arm(Wildcard, [ExprStmt(Call(BuiltinFn("println"), [Lit("optind: other")]))])], consumes: false)
+    Match(Call(Dotted(GlobalRef(@libc.environ), "load_ptr"), [Lit(0)]), [Arm(Variant(@Maybe, "Some", [Wildcard]), [ExprStmt(Call(BuiltinFn("println"), [Lit("environ: some")]))]), Arm(Variant(@Maybe, "None", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("environ: none")]))])], consumes: false)
+    Return(Lit(0))

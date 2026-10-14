@@ -1,0 +1,23 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "30\n"
+# EXPECT_DUMP_SHIR: test_shir_foreach_nested_break.shir
+#
+# the SHIR dump of a `foreach` in the body of a `foreach`, with `break` and `continue`:
+# the inner loop is a `Loop` in the block of the outer loop. `break` and `continue` are
+# statements with no field, and each one stops or continues the loop that holds it.
+
+fn main() i32:
+    let i32[] rows = from([1, 2, 3])
+    let i32[] cols = from([10, 20, 30])
+    let i32 total = 0
+    foreach(r in rows.iter()):
+        if (r == 3):
+            break
+        foreach(c in cols.iter()):
+            if (c == 20):
+                continue
+            if (c > 20):
+                break
+            total := total + r * c
+    println(total)
+    return 0

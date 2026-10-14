@@ -303,6 +303,32 @@ that an extension copy is not made when no call reaches it.
 - The runner adds `--write-ll --no-incremental`, as for `EXPECT_IR_HOLDS`. The directive
   may be repeated
 
+#### EXPECT_DUMP_SHIR / EXPECT_DUMP_SLIR
+
+Compares a dump of the program with a golden file beside the fixture:
+`EXPECT_DUMP_SHIR` reads the `--dump-shir` dump, and `EXPECT_DUMP_SLIR` reads the
+`--dump-slir` dump (`docs/design/ir.md`, 11.3).
+
+```sushi
+# EXPECT_DUMP_SHIR: main.shir
+# EXPECT_DUMP_SLIR: main.slir
+```
+
+- The value is the name of a file in the directory of the fixture. It ends in `.shir` or
+  `.slir`, and it has no directory part. Each directive may stand once
+- The comparison is exact, byte for byte. A difference fails the fixture and shows a diff
+- The runner adds the dump flag to the compile, with a path in the run's own directory
+  (`--dump-shir <path>`), and the compiler writes the dump to that path. The compile goes
+  on as usual, so every other directive of the fixture still holds
+- The runner owns the two flags: `COMPILER_FLAGS` refuses `--dump-shir` and `--dump-slir`
+- A missing golden file fails the fixture. Run it with `--bless` to write the file, and
+  read the new file in the diff as you read code
+- The dump must not change with `PYTHONHASHSEED`. After the main run, the runner step
+  `golden_seed_gate` starts a second fork-server with another pinned seed, compiles each
+  golden fixture of the selection again under it, and compares each dump again. The step
+  prints both seeds (`Golden seed gate (main seed 0, gate seed 1): ...`); a selection with
+  no golden fixture prints its skip
+
 ### Advanced Metadata Directives
 
 #### TIMEOUT_SECONDS
@@ -789,6 +815,37 @@ Runs just the tests declaring `EXPECT_NO_LEAKS`, with the same enforcement `--en
 ```bash
 python tests/run_tests.py --enhanced --filter constants/
 ```
+
+### Run the fixtures of a list
+
+```bash
+python tests/run_tests.py --list tests/ir/ratchet.txt
+```
+
+- The file holds one repository-relative path for each line
+  (`tests/array/foreach/test_foreach_fixed_array.sushi`). A blank line and a line that starts with
+  `#` are not paths
+- `--list` is a selector, like `--filter`: it goes through `select_fixtures` and checks
+  each listed fixture in full. It composes with the other selectors
+- A listed path that names no fixture fails the run before the build, and no fixture runs.
+  A list that selects nothing fails the run too
+- A list names fixtures only. So the stdlib doc-block gate, the library-reader gate, the
+  library-report gate and the dead-code gate print their skip
+
+### Write the golden files
+
+```bash
+python tests/run_tests.py --bless --filter ir/
+```
+
+- `--bless` selects the fixtures that carry `EXPECT_DUMP_SHIR` or `EXPECT_DUMP_SLIR`, and
+  it composes with the other selectors. It checks each fixture in full, and writes each
+  dump to its golden file in place of the comparison
+- It prints each file it wrote (`Blessed: tests/ir/.../main.shir`) and the count of the
+  files that did not change. A run with no other fault exits 0
+- A run without `--bless` never writes a golden file
+- `--bless` selects no stdlib module, so the four runner steps of the stdlib, the library
+  reader and the toolchain programs print their skip
 
 ## Metadata Validation Workflow
 

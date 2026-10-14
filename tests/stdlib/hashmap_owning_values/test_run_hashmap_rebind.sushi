@@ -1,0 +1,29 @@
+# A rebind of a `HashMap@(K, V)` with owning keys and values drops the old map, its
+# buckets and every entry, and then stores the new map. A rebind through a struct field
+# does the same.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "2\nfirst a\n1\nnew c\n1\nheld b\n"
+use <collections/hashmap>
+
+struct Holder:
+    HashMap@(string, string) m
+
+fn fill(string key, string value) HashMap@(string, string):
+    let HashMap@(string, string) m = HashMap.new()
+    m.insert("{key}", "{value} {key}")
+    return m
+
+fn main() i32:
+    let HashMap@(string, string) m = fill("a", "first")
+    m.insert("x", "second {1}")
+    println(m.len())
+    println(m.get("a").realise("none"))
+    m := fill("c", "new")
+    println(m.len())
+    println(m.get("c").realise("none"))
+    let Holder h = Holder(fill("a", "old"))
+    h.m := fill("b", "held")
+    println(h.m.len())
+    println(h.m.get("b").realise("none"))
+    return 0

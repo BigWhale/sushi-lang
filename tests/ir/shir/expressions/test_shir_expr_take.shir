@@ -1,0 +1,27 @@
+unit test_shir_expr_take
+
+ShirBody eat
+  params : [(_0 "s": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_0)]))
+
+ShirBody unwrap
+  params : [(_0 "w": Wrap, Owned)]
+  locals : []
+  block  :
+    Return(Take(Field(LocalRef(_0), "inner")))
+
+ShirBody main
+  params : []
+  locals : [_0 "a": Wrap, _1 "got": string, _2 "b": Wrap, _3 "c": Wrap]
+  block  :
+    Assign(LocalRef(_0), StructInit(@Wrap, [Lit("alpha"), Lit(1)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_1), Take(Field(LocalRef(_0), "inner")), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_1)]))
+    Assign(LocalRef(_2), StructInit(@Wrap, [Lit("beta"), Lit(2)], written_order: [0, 1]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@unwrap)), [(LocalRef(_2), Owned)])]))
+    Assign(LocalRef(_3), StructInit(@Wrap, [Lit("gamma"), Lit(3)], written_order: [0, 1]), is_init: true)
+    ExprStmt(Call(Named(GlobalRef(@eat)), [(Field(LocalRef(_3), "inner"), Owned)]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

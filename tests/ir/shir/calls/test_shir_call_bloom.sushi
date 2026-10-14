@@ -1,0 +1,18 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SHIR: test_shir_call_bloom.shir
+#
+# the SHIR dump of a call of a variadic function: the trailing arguments stay a flat
+# list, and a bloom `xs...` forwards the array itself, as an argument with `...` after
+# it.
+
+fn sum(...i32 nums) i32:
+    return nums.len()
+
+fn forward(nom i32[] xs) i32:
+    return sum(xs...)
+
+fn direct() i32:
+    return sum(1, 2, 3)
+
+fn main() i32:
+    return 0

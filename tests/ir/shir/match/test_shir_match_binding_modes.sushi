@@ -1,0 +1,44 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "note 1 1\nnote 1 11\nate note 1\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_match_binding_modes.shir
+#
+# the SHIR dump of the binding modes of a pattern. A bare name is a `PatBinding` with the
+# mode `Bare`, `peek` and `poke` give `Ref`, and `nom` gives `Nom`. `match nom s:` hands the
+# local over, so its `Match` has `consumes: true`; every other match has `consumes: false`.
+# `_` in a payload is `Wildcard`. Each binding has its own local, and a unit variant is a
+# `Variant` with no item.
+
+struct Note:
+    string text
+
+enum Slot:
+    Full(Note, i32)
+    Empty
+
+fn make(i32 n) Slot:
+    if (n == 0):
+        return Slot.Empty
+    return Slot.Full(Note("note {n}"), n)
+
+fn show(peek Note note, i32 n) ~:
+    println("{note.text} {n}")
+
+fn eat(nom Note note) ~:
+    println("ate {note.text}")
+
+fn main() i32:
+    let Slot s = make(1)
+    match s:
+        Slot.Full(note, n) -> show(peek note, n)
+        Slot.Empty -> println("empty")
+    match s:
+        Slot.Full(_, poke n) -> n := n + 10
+        Slot.Empty -> println("empty")
+    match s:
+        Slot.Full(peek note, n) -> show(peek note, n)
+        Slot.Empty -> println("empty")
+    match nom s:
+        Slot.Full(nom note, _) -> eat(nom note)
+        Slot.Empty -> println("empty")
+    println("Mostly Harmless")
+    return 0

@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n2\n"
+# EXPECT_DUMP_SHIR: test_shir_generic_second_unit.shir
+#
+# the SHIR dump of generic instances in a second unit. The templates of the helper unit
+# are the bodies of their template checks, and each template identity names the helper
+# unit. An instance goes home to the unit that declares its template: the function copy
+# and the method copy are bodies of the helper unit, and the unit that calls them holds
+# only `main`.
+
+use "helpers/shir_gen_pair"
+
+fn main() i32:
+    let Pair@(i32) p = pair_of(nom 1, nom 2)
+    println(p.left + p.right)
+    println(p.count())
+    return 0

@@ -1,0 +1,12 @@
+unit test_shir_lambda_channel
+
+ShirBody main
+  params : []
+  locals : [_0 "half": fn(i32) -> i32 | OddError, _1 "x": i32, _2 "third": fn(i32) -> i32 | OddError, _3 "x": i32]
+  block  :
+    Assign(LocalRef(_0), Lambda([(_1, Guaranteed)], ret: i32, err: OddError, [If(Binary(==, Binary(%, LocalRef(_1), Lit(2) = 2), Lit(1)), then: [Return(EnumInit(@Result, "Err", [EnumInit(@OddError, "TooOdd", [])]))]), Return(EnumInit(@Result, "Ok", [Binary(/, LocalRef(_1), Lit(2) = 2)]))], expr_body: false), is_init: true)
+    Assign(LocalRef(_2), Lambda([(_3, Guaranteed)], [Return(Binary(/, LocalRef(_3), Lit(3) = 3))], expr_body: true), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(LocalRef(_0)), [Lit(84)]), "realise"), [Lit(0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(LocalRef(_0)), [Lit(7)]), "realise"), [Lit(0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(LocalRef(_2)), [Lit(9)]), "realise"), [Lit(0)])]))
+    Return(Lit(0))

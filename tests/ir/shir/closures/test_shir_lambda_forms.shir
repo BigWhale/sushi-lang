@@ -1,0 +1,11 @@
+unit test_shir_lambda_forms
+
+ShirBody main
+  params : []
+  locals : [_0 "zero": fn() -> i32, _1 "add": fn(i32, i32) -> i32, _2 "a": i32, _3 "b": i32, _4 "twice": fn(i32) -> i32, _5 "x": i32, _6 "y": i32]
+  block  :
+    Assign(LocalRef(_0), Lambda([], [Return(Lit(0))], expr_body: true), is_init: true)
+    Assign(LocalRef(_1), Lambda([(_2, Guaranteed), (_3, Guaranteed)], [Return(Binary(+, LocalRef(_2), LocalRef(_3)))], expr_body: true), is_init: true)
+    Assign(LocalRef(_4), Lambda([(_5, Guaranteed)], [Assign(LocalRef(_6), Binary(*, LocalRef(_5), Lit(2) = 2), is_init: true), Return(LocalRef(_6))], expr_body: false), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Binary(+, Binary(+, Call(Named(LocalRef(_0)), []), Call(Named(LocalRef(_1)), [Lit(1), Lit(2)])), Call(Named(LocalRef(_4)), [Lit(3)]))]))
+    Return(Lit(0))

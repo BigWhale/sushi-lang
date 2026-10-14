@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union, Literal, TYPE_CHECKING
 from sushi_lang.internals.report import Origin, Span
+from sushi_lang.semantics.operators import BinOp, UnOp
 from sushi_lang.semantics.typesys import FunctionType, Type
 
 from lark import Token
@@ -655,15 +656,18 @@ class Foreach(Stmt):
     # field is an ALIAS and the node walk does not descend it (#1174).
     item_try_let: "Optional[Let]" = field(default=None, metadata=ALIAS)
     item_try_span: Optional[Span] = None
+    # The binder is `_` with no `??`: the loop binds nothing that the body can read. The
+    # AST builder sets it from the source; `item_name` is then a hidden name.
+    item_discarded: bool = False
     # A `next()` protocol iterator (HANDLES.md ruling R21): the synthetic
     # `<hidden>.next()` call the typecheck pass built and stamped, and the hidden local
     # the iterator lives in. Both None for an `Iterator@(T)`, which is the buffer walk.
     protocol_next: "Optional[MethodCall]" = None
     protocol_iter_name: Optional[str] = None
-    # The typecheck pass sets it for a `next()` walk of a place reached through a `poke`
-    # reference: the loop calls `next()` on the caller's storage and does not take the
-    # value (#1258). The borrow pass and the backend read this one stamp. The borrow pass
-    # also sets it for an iterator value that a `let` borrows (#1259).
+    # The borrow pass is the one writer (ruling S6, docs/design/ir.md). It sets it for a
+    # `next()` walk or a value walk of a place reached through a `poke` reference: the
+    # loop moves the caller's state and does not take the value (#1258). It also sets it
+    # for an iterator value that a `let` borrows (#1259). The backend reads it.
     walks_in_place: bool = False
     # The typecheck pass sets it for a walk of an `Iterator@(T)` VALUE: the loop calls
     # the value's `next_fn` (#1259). None for a range, for a built-in producer that the
@@ -971,13 +975,11 @@ class IndexAccess(Node):
         """`data[a..b]`: a range in the index position is a slice (docs/design/slices.md)."""
         return isinstance(self.index, RangeExpr)
 
-UnOp =Literal["neg", "not", "~"]
 @dataclass(slots=True)
 class UnaryOp(Node):
     op: UnOp
     expr: "Expr"
 
-BinOp = Literal["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">=", "and", "or", "xor", "&", "|", "^", "<<", ">>"]
 @dataclass(slots=True)
 class BinaryOp(Node):
     op: BinOp

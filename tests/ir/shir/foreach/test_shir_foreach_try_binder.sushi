@@ -1,0 +1,42 @@
+# STDIN_INPUT: "alpha\nbeta\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "alpha\nbeta\n2\n0\n0\n"
+# EXPECT_DUMP_SHIR: test_shir_foreach_try_binder.shir
+#
+# the SHIR dump of a `foreach` with the `??` binder over `r.lines()`. The AST builder
+# gives the loop a hidden binder, with no name, and puts `let line = <hidden>??` at the
+# top of the body. Lowering keeps both: the loop binds the hidden local, and the `let` is
+# the first statement of the body. A written type (`string text??`) names the value of the
+# `let`, so it is the type of that local. With `_??` the `let` binds a hidden local too.
+# The first reader reads all of stdin, so the other two loops read no line.
+
+use <io/fs>
+use <io/buf>
+
+fn first() i32 | IoError:
+    let BufReader@(File) r = BufReader.new(nom stdin.share()??, 64)
+    let i32 seen = 0
+    foreach(line?? in r.lines()):
+        println(line)
+        seen := seen + 1
+    return Result.Ok(seen)
+
+fn typed() i32 | IoError:
+    let BufReader@(File) r = BufReader.new(nom stdin.share()??, 64)
+    let i32 total = 0
+    foreach(string text?? in r.lines()):
+        total := total + text.len()
+    return Result.Ok(total)
+
+fn skipped() i32 | IoError:
+    let BufReader@(File) r = BufReader.new(nom stdin.share()??, 64)
+    let i32 seen = 0
+    foreach(_?? in r.lines()):
+        seen := seen + 1
+    return Result.Ok(seen)
+
+fn main() i32:
+    println(first().realise(99))
+    println(typed().realise(99))
+    println(skipped().realise(99))
+    return 0

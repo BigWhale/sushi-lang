@@ -1,0 +1,39 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "300\n44\n2.5\n25\n4\n0\n7\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_expr_cast.shir
+#
+# the SHIR dump of `as`. A cast is a `Cast` of its operand, with the target type as the
+# source writes it: a wider type, a narrower type, a float. A conversion between two error
+# types (`e as AppError`) is a `Cast` too: whether a cast is numeric or a conversion is an
+# answer of the typecheck pass. A chain of casts is a `Cast` of a `Cast`. A cast is not
+# opaque (ruling E3): the divisors `(4 as i32)` and `(300 as u8)` have the value that the
+# cast gives, and the divisor `(n as i64 as i32)` has none, because `n` is a local.
+
+error ParseError:
+    Empty
+
+error AppError:
+    Parse(ParseError)
+
+extend ParseError as AppError:
+    return AppError.Parse(self)
+
+fn code(AppError e) i32:
+    match e:
+        AppError.Parse(_) -> return 7
+
+fn main() i32:
+    let i32 n = 300
+    let i64 wide = n as i64
+    let u8 low = n as u8
+    let f64 half = (n as f64) / 120.0
+    println(wide)
+    println(low)
+    println(half)
+    println(100 / (4 as i32))
+    println(200 / (300 as u8))
+    println(1 / (n as i64 as i32))
+    let AppError app = ParseError.Empty as AppError
+    println(code(app))
+    println("Mostly Harmless")
+    return 0

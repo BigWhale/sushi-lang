@@ -1,0 +1,8 @@
+unit test_err_shir_ctor_missing_field
+
+ShirBody main
+  params : []
+  locals : [_0 "v": Vec]
+  block  :
+    Assign(LocalRef(_0), StructInit(@Vec, [Lit(1)], written_order: [0], names: ["y"]), is_init: true)
+    Return(Field(LocalRef(_0), "x"))

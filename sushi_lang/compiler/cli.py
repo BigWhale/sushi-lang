@@ -169,6 +169,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                          help="Write LLVM IR to <OUT>.ll file")
     inspect.add_argument("--dump-ll", action="store_true",
                          help="Dump generated LLVM IR to terminal")
+    inspect.add_argument("--dump-shir", metavar="PATH",
+                         help="Write the SHIR of each body to PATH ('-' for the terminal); "
+                              "the compile goes on as usual")
     inspect.add_argument(
         "--traceback",
         action="store_true",
@@ -198,6 +201,8 @@ COMMAND_LINE = "<command line>"
 _NO_EFFECT: tuple[tuple[str, str, Callable[[argparse.Namespace], bool], str], ...] = (
     ("docs", "--docs", lambda a: not a.lib_info, "without --lib-info"),
     ("dont_panic", "--dont-panic", lambda a: a.lib_info,
+     "with --lib-info: a report compiles no function"),
+    ("dump_shir", "--dump-shir", lambda a: a.lib_info,
      "with --lib-info: a report compiles no function"),
     ("lib_kind", "--lib-kind", lambda a: not a.lib, "without --lib"),
     ("lib_version", "--lib-version", lambda a: not a.lib, "without --lib"),

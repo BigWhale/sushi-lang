@@ -1,0 +1,29 @@
+unit test_shir_generic_struct_method
+
+ShirBody main
+  params : []
+  locals : [_0 "a": Box@(i32), _1 "b": Box@(string)]
+  block  :
+    Assign(LocalRef(_0), StructInit(@Box, [Lit(7), Lit(1)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_1), StructInit(@Box, [Lit("Mostly Harmless"), Lit(4)], written_order: [0, 1]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_0), "weight"), [])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_1), "weight"), [])]))
+    Return(Lit(0))
+
+ShirBody Box@(T).weight (TemplateCheck("test_shir_generic_struct_method.Box.weight"))
+  params : [(_0 "self": Box@(T), Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(*, Field(LocalRef(_0), "size"), Lit(2) = 2))
+
+ShirBody Box@(i32).weight
+  params : [(_0 "self": Box@(i32), Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(*, Field(LocalRef(_0), "size"), Lit(2) = 2))
+
+ShirBody Box@(string).weight
+  params : [(_0 "self": Box@(string), Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(*, Field(LocalRef(_0), "size"), Lit(2) = 2))

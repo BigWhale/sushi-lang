@@ -1285,6 +1285,30 @@ A generic function, or an extension method that the compiler copies at the call 
 
 The `dont_panic because "<reason>"` marker removes the bounds check of each `[]` in the body that carries it, so an index out of range there is undefined behaviour and not the runtime error [RE2020](#re2020). Only three kinds of unit may write it. A bundled stdlib unit needs no flag. A unit of a build that passes `--dont-panic` may write it. A source library is parsed again in each build that uses it, so its marker meets this gate in the consumer's build, and the consumer must pass `--dont-panic` too: the consumer compiles the unchecked code, so the consumer consents. The message then names the library. A CONCRETE marked body of a binary or hybrid library is compiled into the shipped bitcode already, so its consumer needs no consent. A marked generic TEMPLATE of any library kind ships as source, so the consumer compiles it and must pass `--dont-panic`. Pass `--dont-panic`, or remove the marker. See [the dont_panic design](design/dont-panic.md).
 
+### CE0153 {#ce0153}
+
+**Error** · internal
+
+**Message:** `the scope pass recorded no binding for the {what} '{name}'`
+
+The scope pass writes the binding table of each body: what each name denotes, the local of each binder, and the captures of each lambda. When a body ends, a check walks it again and finds each name, binder and lambda that the pass did not record. This is a fault in the compiler, not in the program; please report the program.
+
+### CE0154 {#ce0154}
+
+**Error** · internal
+
+**Message:** `the SHIR printer has no text for the class '{name}'`
+
+The SHIR printer writes the text of `--dump-shir` through one table, with one row for each class that a body can hold. A value of a class with no row means that a node or a part was added and the table was not. This is a fault in the compiler, not in the program; please report the program.
+
+### CE0155 {#ce0155}
+
+**Error** · internal
+
+**Message:** `the new pipeline does not emit this program yet: {stage}, {construct}`
+
+The compiler moves to a new pipeline ([the IR design](design/ir.md)): a body is lowered to SHIR, and later stages read SHIR. While the move is in progress, a stage can meet a construct that it does not handle yet. The message names the stage and the construct. Today the one stage is `lowering`, and the code comes only when the variable `SUSHI_SHIR_STRICT` is `1`: with no variable, lowering records the construct as a hole and the compile goes on through the old pipeline (see [Dump SHIR](compiler-reference.md#dump-shir)). The code does not come for a name with no declaration: the program always has an error then ([CE1001](#ce1001), [CE1002](#ce1002), or [CE0144](#ce0144) for a type pack name), and that error is the diagnostic. The code does not come for a form that the language always refuses either: a named argument outside a struct construction ([CE6104](#ce6104)), written type arguments after a dot or on a struct construction ([CE6102](#ce6102)), a slice with a reversed range ([CE2122](#ce2122)), a call of a name that the namespace does not hold ([CE2008](#ce2008)), and a member of a type that is no variant ([CE2045](#ce2045)). The code does not come for a unit in which the scope pass reported an error either: a type name written as a value is a hole there, and the error of the scope pass ([CE2105](#ce2105)) is the diagnostic. The code goes when the move is complete. This is a limit of the compiler, not a fault in the program.
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.
@@ -3892,6 +3916,14 @@ The command line names a flag that the build it asks for does not read, so the f
 
 The `dont_panic` marker removes the bounds check of each `[]` in the body that carries it. A marked body with no `[]` removes nothing, so the author believes that a check went and none did. An index in a lambda in the body does not count, because a lambda keeps its checks. The warning is always on, and it is for the author: a user unit and a bundled stdlib unit get it, and a source library's unit in a consumer's build does not. Remove the marker. See [the dont_panic design](design/dont-panic.md).
 
+
+### CW0005 {#cw0005}
+
+**Warning** · general
+
+**Message:** `cannot write the SHIR dump to '{path}': {reason}`
+
+`--dump-shir PATH` asked for the SHIR of each body in a file, and the file could not be written, for example because the path is a directory or a directory on it does not exist. The compile goes on as usual and its output is written; only the dump is missing. Fix the path, or write `-` to print the dump on the terminal.
 ### CW1001 {#cw1001}
 
 **Warning** · scope

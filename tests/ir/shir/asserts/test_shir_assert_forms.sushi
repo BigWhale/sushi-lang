@@ -1,0 +1,15 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_assert_forms.shir
+#
+# the SHIR dump of `assert` with no message and with a message. The message is an
+# expression, because it is evaluated only when the condition is false. `label` is the
+# file name that the AST builder gives the unit, as a diagnostic shows it: the program
+# prints it with the line and the column when the condition is false (RE2026).
+
+fn main() i32:
+    let i32 x = 1
+    assert(x == 1)
+    assert(x == 1, "x is one")
+    println("Mostly Harmless")
+    return 0

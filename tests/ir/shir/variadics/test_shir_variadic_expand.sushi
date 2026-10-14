@@ -1,0 +1,31 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "[1]\n[Mostly Harmless]\n2\n3\n"
+# EXPECT_DUMP_SHIR: test_shir_variadic_expand.shir
+#
+# the SHIR dump of `expand` over a type pack. In the body of the template check, `expand`
+# is an `Expand` as written: the local of its binder, the name of the value pack and the
+# body, never unrolled. The binder `_` has a hidden local, and the value pack parameter
+# prints with `pack: true`. The monomorphize pass unrolls each `expand` of an instance
+# before lowering: the instance holds one copy of the body for each element of the pack,
+# as ordinary statements, and one parameter for each element, which is no pack. The copies
+# are not one written sequence: the `copies` line gives the statement range of each copy.
+# A `let` in a copy has the name that the unroll gives it, with the number of its copy.
+
+fn show_all@(...Ts: Display)(...Ts args) i32:
+    let i32 n = 0
+    expand(a in args):
+        let string line = "[{a}]"
+        println(line)
+        n := n + 1
+    return n
+
+fn count@(...Ts)(...Ts args) i32:
+    let i32 n = 0
+    expand(_ in args):
+        n := n + 1
+    return n
+
+fn main() i32:
+    println(show_all(1, "Mostly Harmless"))
+    println(count(1, "a", true))
+    return 0

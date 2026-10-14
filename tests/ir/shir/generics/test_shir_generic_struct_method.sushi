@@ -1,0 +1,23 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n8\n"
+# EXPECT_DUMP_SHIR: test_shir_generic_struct_method.shir
+#
+# the SHIR dump of an extension method of a generic struct. The template is the body of
+# its template check, and its receiver has the written type `Box@(T)`. The typecheck pass
+# cuts a copy for each receiver that a call names, and the copy fixpoint places each one
+# after the per-unit loop. Lowering runs on each copy at that point, and the copy is a
+# body of the unit that declares the template, named by its receiver.
+
+struct Box@(T):
+    T value
+    i32 size
+
+extend Box@(T) weight() i32:
+    return self.size * 2
+
+fn main() i32:
+    let Box@(i32) a = Box(7, 1)
+    let Box@(string) b = Box("Mostly Harmless", 4)
+    println(a.weight())
+    println(b.weight())
+    return 0

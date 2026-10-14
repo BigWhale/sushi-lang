@@ -1,0 +1,29 @@
+unit test_shir_match_nested
+
+ShirBody area
+  params : [(_0 "s": Slot, Guaranteed)]
+  locals : [_1 "out": i32, _2 "r", _3 "side"]
+  block  :
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Variant(@Slot, "Has", [Variant(@Shape, "Circle", [(_2, Bare)])]), [Assign(LocalRef(_1), Binary(*, Binary(*, Lit(3) = 3, LocalRef(_2)), LocalRef(_2)), is_init: false)]), Arm(Variant(@Slot, "Has", [Variant(@Shape, "Square", [Or([Literal(1), Literal(2)])])]), [Assign(LocalRef(_1), Lit(1), is_init: false)]), Arm(Variant(@Slot, "Has", [Variant(@Shape, "Square", [(_3, Bare)])]), [Assign(LocalRef(_1), Binary(*, LocalRef(_3), LocalRef(_3)), is_init: false)]), Arm(Variant(@Slot, "Nothing", []), [Assign(LocalRef(_1), Lit(0), is_init: false)])], consumes: false)
+    Return(LocalRef(_1))
+
+ShirBody size
+  params : [(_0 "sh": Shape, Guaranteed)]
+  locals : [_1 "out": i32, _2 "n"]
+  block  :
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Or([Variant(@Shape, "Circle", [(_2, Bare)]), Variant(@Shape, "Square", [(_2, Bare)])]), [Assign(LocalRef(_1), LocalRef(_2), is_init: false)])], consumes: false)
+    Return(LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Has", [EnumInit(@Shape, "Circle", [Lit(2)])])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Has", [EnumInit(@Shape, "Square", [Lit(2)])])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Has", [EnumInit(@Shape, "Square", [Lit(3)])])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Nothing", [])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@size)), [EnumInit(@Shape, "Square", [Lit(6)])])]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

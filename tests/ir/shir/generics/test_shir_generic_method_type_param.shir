@@ -1,0 +1,27 @@
+unit test_shir_generic_method_type_param
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Lit(7), "pick"), [(Lit(2), Owned)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Lit(7), "pick"), [(Lit("Mostly Harmless"), Owned)])]))
+    Return(Lit(0))
+
+ShirBody i32.pick (TemplateCheck("test_shir_generic_method_type_param.i32.pick"))
+  params : [(_0 "self": i32, Guaranteed), (_1 "other": U, Owned)]
+  locals : []
+  block  :
+    Return(LocalRef(_1))
+
+ShirBody i32.pick@(i32)
+  params : [(_0 "self": i32, Guaranteed), (_1 "other": i32, Owned)]
+  locals : []
+  block  :
+    Return(LocalRef(_1))
+
+ShirBody i32.pick@(string)
+  params : [(_0 "self": i32, Guaranteed), (_1 "other": string, Owned)]
+  locals : []
+  block  :
+    Return(LocalRef(_1))

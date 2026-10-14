@@ -4,7 +4,7 @@ import hashlib
 import re
 import sys
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Tuple
+from typing import NamedTuple, Optional, List, Dict, Tuple
 from pathlib import Path
 
 
@@ -109,6 +109,9 @@ class TestMetadata:
     # defined), in written order. A pattern with no `$` reads the stem, the symbol after
     # its unit.
     ir_function_expectations: Optional[List[Tuple[str, bool]]] = None
+    # The golden file of each dump the fixture compares: kind ("shir", "slir") -> the
+    # name of a file beside the fixture. The runner asks the compiler for each dump.
+    golden_dumps: Optional[Dict[str, str]] = None
     # A directive value the parser could not read; the runner fails a fixture that has one.
     directive_errors: Optional[List[str]] = None
 
@@ -150,6 +153,8 @@ class TestMetadata:
             self.ir_expectations = []
         if self.ir_function_expectations is None:
             self.ir_function_expectations = []
+        if self.golden_dumps is None:
+            self.golden_dumps = {}
         if self.directive_errors is None:
             self.directive_errors = []
 
@@ -186,10 +191,27 @@ class TestMetadata:
             self.requires_runtime = True
 
 
-# Flags the RUNNER spells: they decide the output path, the build kind and the cache, so
-# a fixture that changed one would break the run rather than test anything.
+class GoldenDump(NamedTuple):
+    """One dump a fixture may compare with a golden file beside it."""
+    kind: str
+    directive: str
+    suffix: str
+    flag: str
+
+
+# ONE row for each dump. The runner adds the flag to the compile of a fixture that has the
+# directive, and so the flag is the runner's to spell.
+GOLDEN_DUMPS = (
+    GoldenDump("shir", "EXPECT_DUMP_SHIR", ".shir", "--dump-shir"),
+    GoldenDump("slir", "EXPECT_DUMP_SLIR", ".slir", "--dump-slir"),
+)
+
+
+# Flags the RUNNER spells: they decide the output path, the build kind, the cache and the
+# dumps, so a fixture that changed one would break the run rather than test anything.
 RUNNER_OWNED_FLAGS = frozenset({
     '-o', '--lib', '--lib-info', '--clean-cache', '--build-stdlib', '--cache-dir',
+    *(dump.flag for dump in GOLDEN_DUMPS),
 })
 
 # The two flags the runner writes for each library build. `LIB_FLAGS` refuses them, because
@@ -462,6 +484,24 @@ def _ir_function(directive: str, defined: bool):
     return handle
 
 
+def _golden_dump(dump: GoldenDump):
+    """`EXPECT_DUMP_SHIR: <name>.shir` / `EXPECT_DUMP_SLIR: <name>.slir`, once each."""
+    def handle(metadata: TestMetadata, value: str, test_file: Path) -> None:
+        name = _unquote(value).strip()
+        if (Path(name).name != name or not name.endswith(dump.suffix)
+                or name == dump.suffix):
+            metadata.directive_errors.append(
+                f"{dump.directive} takes the name of a file beside the fixture that ends "
+                f"in {dump.suffix}, not {value!r}")
+        elif dump.kind in metadata.golden_dumps:
+            metadata.directive_errors.append(
+                f"{dump.directive} may stand once; the fixture names "
+                f"{metadata.golden_dumps[dump.kind]!r} and {name!r}")
+        else:
+            metadata.golden_dumps[dump.kind] = name
+    return handle
+
+
 def _release_lib_flag(metadata: TestMetadata, test_file: Path) -> None:
     """`--lib` joins the flags beside OUTPUT_PATH, and is refused without it."""
     if metadata.held_lib_flag is None:
@@ -515,6 +555,7 @@ VALUED_DIRECTIVES = {
     'EXPECT_IR_LACKS': _ir_expectation('EXPECT_IR_LACKS', False),
     'EXPECT_IR_FUNCTION': _ir_function('EXPECT_IR_FUNCTION', True),
     'EXPECT_IR_NO_FUNCTION': _ir_function('EXPECT_IR_NO_FUNCTION', False),
+    **{dump.directive: _golden_dump(dump) for dump in GOLDEN_DUMPS},
 }
 
 # Every directive that is a flag: bare `NAME` is true, `NAME: true|yes|1` sets it.
@@ -720,14 +761,39 @@ def corpus_text(path: Path) -> str:
         raise CorpusReadError(f"{path}: {e}") from None
 
 
+class FixtureListError(ValueError):
+    """A `--list` file that cannot be read, or that names a path that is not a fixture."""
+
+
+def read_fixture_list(path: Path) -> List[str]:
+    """The paths of a `--list` file: one repository-relative path for each line.
+
+    A blank line and a line that starts with `#` are not paths.
+    """
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise FixtureListError(f"the fixture list {path} cannot be read: {e}") from None
+    return [line.strip() for line in text.splitlines()
+            if line.strip() and not line.strip().startswith('#')]
+
+
 def select_fixtures(tests_dir: Path, *, filter_pattern: Optional[str] = None,
                     leaks_only: bool = False,
-                    compile_only: bool = False) -> List[Path]:
+                    compile_only: bool = False,
+                    listed: Optional[List[str]] = None,
+                    golden_only: bool = False) -> List[Path]:
     """The fixtures THIS run covers: `collect_fixtures`, narrowed by each flag.
 
     ONE selector. `collect_fixtures` answers what the corpus holds; this answers what a
     run was asked for, and every flag narrows the same list here rather than filtering a
     copy of its own somewhere in a runner.
+
+    `golden_only` (`--bless`) keeps the fixtures that compare a golden dump.
+
+    `listed` is the content of a `--list` file: paths relative to the parent of
+    `tests_dir`. A listed path that names no collected fixture raises FixtureListError,
+    because a list that names a deleted fixture would otherwise shrink in silence.
 
     The flags compose, and a combination may legitimately select nothing -- a leak
     assertion needs a run, so `--leaks-only --compile-only` is empty. An empty selection
@@ -737,12 +803,25 @@ def select_fixtures(tests_dir: Path, *, filter_pattern: Optional[str] = None,
     tests_dir = Path(tests_dir)
     selected = collect_fixtures(tests_dir)
 
+    if listed is not None:
+        root = tests_dir.resolve().parent
+        by_path = {f.resolve(): f for f in selected}
+        unknown = [p for p in listed if (root / p).resolve() not in by_path]
+        if unknown:
+            raise FixtureListError("the fixture list names no fixture at: "
+                                   + ", ".join(unknown))
+        wanted = {(root / p).resolve() for p in listed}
+        selected = [f for f in selected if f.resolve() in wanted]
+
     if filter_pattern:
         selected = [f for f in selected
                     if filter_pattern in str(f.relative_to(tests_dir))]
 
     if leaks_only:
         selected = [f for f in selected if parse_test_metadata(f).expect_no_leaks]
+
+    if golden_only:
+        selected = [f for f in selected if parse_test_metadata(f).golden_dumps]
 
     # `--compile-only` is a SELECTOR over the rule that already decides whether a binary
     # runs, never a second rule and never a weaker check: what it selects is asserted in

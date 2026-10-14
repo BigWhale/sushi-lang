@@ -1,0 +1,24 @@
+unit test_shir_expr_index
+
+ShirBody width
+  params : [(_0 "row": i32[], Guaranteed)]
+  locals : []
+  block  :
+    Return(Call(Dotted(LocalRef(_0), "len"), []))
+
+ShirBody main
+  params : []
+  locals : [_0 "xs": i32[], _1 "i": i32, _2 "grid": i32[2][3]]
+  block  :
+    Assign(LocalRef(_0), ArrayInit(Dynamic, [Single(Lit(10)), Single(Lit(20)), Single(Lit(30)), Single(Lit(40))]), is_init: true)
+    Assign(LocalRef(_1), Lit(1), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Index(LocalRef(_0), LocalRef(_1), unchecked: false)]))
+    Assign(LocalRef(_2), ArrayInit(Fixed, [Single(ArrayInit(Fixed, [Single(Lit(1)), Single(Lit(2))])), Single(ArrayInit(Fixed, [Single(Lit(3)), Single(Lit(4))])), Single(ArrayInit(Fixed, [Single(Lit(5)), Single(Lit(6))]))]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Index(Index(LocalRef(_2), Lit(2) = 2, unchecked: false), Lit(1) = 1, unchecked: false)]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@width)), [Slice(LocalRef(_0), Lit(1) = 1, Lit(3) = 3, inclusive: false)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@width)), [Slice(LocalRef(_0), Lit(1) = 1, Lit(3) = 3, inclusive: true)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Binary(/, Lit(100), Index(ArrayInit(Fixed, [Single(Lit(4)), Single(Lit(2))]), Lit(0) = 0, unchecked: false) = 4)]))
+    Assign(Index(LocalRef(_0), LocalRef(_1), unchecked: false), Lit(9), is_init: false)
+    ExprStmt(Call(BuiltinFn("println"), [Index(LocalRef(_0), Lit(1) = 1, unchecked: false)]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

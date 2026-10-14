@@ -1,0 +1,15 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_lambda_argument.shir
+#
+# the SHIR dump of a lambda passed to a function. The lambda is the value of an `Arg`
+# with no marker. Its parameter `x` is a local of `main`, and `apply` has its own body
+# with its own locals.
+
+fn apply(fn(i32) -> i32 f, i32 v) i32:
+    return f(v)
+
+fn main() i32:
+    println(apply(|i32 x| x + 1, 41))
+    println("Mostly Harmless")
+    return 0

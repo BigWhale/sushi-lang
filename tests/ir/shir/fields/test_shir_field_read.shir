@@ -1,0 +1,39 @@
+unit test_shir_field_read
+
+ShirBody ORIGIN (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(StructInit(@Vec, [Lit(0), Lit(0)], written_order: [0, 1]))
+
+ShirBody make
+  params : []
+  locals : []
+  block  :
+    Return(StructInit(@Vec, [Lit(5), Lit(6)], written_order: [0, 1]))
+
+ShirBody ratio
+  params : [(_0 "v": Vec, Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(/, Lit(100), Field(LocalRef(_0), "x")))
+
+ShirBody main
+  params : []
+  locals : [_0 "l": Line]
+  block  :
+    Assign(LocalRef(_0), StructInit(@Line, [StructInit(@Vec, [Lit(1), Lit(2)], written_order: [0, 1]), StructInit(@Vec, [Lit(3), Lit(4)], written_order: [0, 1])], written_order: [0, 1]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Field(Field(LocalRef(_0), "start"), "x")]))
+    ExprStmt(Call(BuiltinFn("println"), [Field(Field(LocalRef(_0), "stop"), "y")]))
+    ExprStmt(Call(BuiltinFn("println"), [Field(Call(Named(GlobalRef(@make)), []), "y")]))
+    ExprStmt(Call(BuiltinFn("println"), [Field(ConstRef(@ORIGIN), "x")]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@ratio)), [Field(LocalRef(_0), "stop")])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Field(LocalRef(_0), "start"), "sum"), [])]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))
+
+ShirBody Vec.sum
+  params : [(_0 "self": Vec, Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(+, Field(LocalRef(_0), "x"), Field(LocalRef(_0), "y")))

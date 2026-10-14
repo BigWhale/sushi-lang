@@ -1,0 +1,32 @@
+unit test_shir_match_binding_modes
+
+ShirBody make
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, LocalRef(_0), Lit(0)), then: [Return(EnumInit(@Slot, "Empty", []))])
+    Return(EnumInit(@Slot, "Full", [StructInit(@Note, [Interp(["note ", LocalRef(_0), ""])], written_order: [0]), LocalRef(_0)]))
+
+ShirBody show
+  params : [(_0 "note": Note, InGuaranteed), (_1 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Interp(["", Field(LocalRef(_0), "text"), " ", LocalRef(_1), ""])]))
+
+ShirBody eat
+  params : [(_0 "note": Note, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Interp(["ate ", Field(LocalRef(_0), "text"), ""])]))
+
+ShirBody main
+  params : []
+  locals : [_0 "s": Slot, _1 "note", _2 "n", _3 "n", _4 "note", _5 "n", _6 "note"]
+  block  :
+    Assign(LocalRef(_0), Call(Named(GlobalRef(@make)), [Lit(1)]), is_init: true)
+    Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [(_1, Bare), (_2, Bare)]), [ExprStmt(Call(Named(GlobalRef(@show)), [(LocalRef(_1), InGuaranteed), LocalRef(_2)]))]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("empty")]))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [Wildcard, (_3, Ref(Poke))]), [Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(10) = 10), is_init: false)]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("empty")]))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [(_4, Ref(Peek)), (_5, Bare)]), [ExprStmt(Call(Named(GlobalRef(@show)), [(LocalRef(_4), InGuaranteed), LocalRef(_5)]))]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("empty")]))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [(_6, Nom), Wildcard]), [ExprStmt(Call(Named(GlobalRef(@eat)), [(LocalRef(_6), Owned)]))]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("empty")]))])], consumes: true)
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

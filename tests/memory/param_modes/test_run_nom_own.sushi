@@ -1,0 +1,26 @@
+# `eat(nom o)` hands an `Own@(T)` to a `nom` parameter. The callee is the new owner and
+# destroys the box and its payload once; the caller destroys nothing. A callee that
+# hands the box on to a second `nom` parameter, and a temporary argument, do the same.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate box 1\npass box 2\nate box 2\nate box 3\n"
+struct Note:
+    string text
+
+fn eat(nom Own@(Note) o) ~:
+    println("ate {o.get().text}")
+
+fn pass_on(nom Own@(Note) o) ~:
+    println("pass {o.get().text}")
+    eat(nom o)
+
+fn make(i32 n) Own@(Note):
+    return Own.alloc(Note("box {n}"))
+
+fn main() i32:
+    let Own@(Note) a = make(1)
+    eat(nom a)
+    let Own@(Note) b = make(2)
+    pass_on(nom b)
+    eat(nom make(3))
+    return 0

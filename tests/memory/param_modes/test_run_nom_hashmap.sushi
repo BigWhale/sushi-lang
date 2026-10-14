@@ -1,0 +1,29 @@
+# `eat(nom m)` hands a `HashMap@(K, V)` with owning entries to a `nom` parameter. The
+# callee is the new owner and destroys the map once; the caller destroys nothing. A
+# callee that hands the map on to a second `nom` parameter, and a temporary argument, do
+# the same.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ate value 1\npass 1\nate value 2\nate value 3\n"
+use <collections/hashmap>
+
+fn eat(nom HashMap@(string, string) m) ~:
+    let string v = m.get("key").realise("none")
+    println("ate {v}")
+
+fn pass_on(nom HashMap@(string, string) m) ~:
+    println("pass {m.len()}")
+    eat(nom m)
+
+fn make(i32 n) HashMap@(string, string):
+    let HashMap@(string, string) m = HashMap.new()
+    m.insert("key", "value {n}")
+    return m
+
+fn main() i32:
+    let HashMap@(string, string) a = make(1)
+    eat(nom a)
+    let HashMap@(string, string) b = make(2)
+    pass_on(nom b)
+    eat(nom make(3))
+    return 0

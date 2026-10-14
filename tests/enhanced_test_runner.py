@@ -24,14 +24,17 @@ from tqdm import tqdm
 
 from test_metadata import (parse_test_metadata, get_test_category, should_run_runtime_test,
                           TestMetadata, fixture_binary_name, fixture_id,
-                          select_fixtures, is_rebuild_fixture, LIB_FLAG, REBUILD_DIR)
+                          select_fixtures, is_rebuild_fixture, LIB_FLAG, REBUILD_DIR,
+                          FixtureListError, read_fixture_list)
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        helpers_for_selection,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
-                       arm_spelling_gate, spelling_gate_tripped,
-                       DocGateResult, stdlib_doc_gate, stdlib_override_command)
-from fork_server import ForkServer
+                       arm_check_variables, spelling_gate_tripped,
+                       DocGateResult, stdlib_doc_gate, stdlib_override_command,
+                       fixtures_only, _spelled_path)
+from fork_server import COMPILER_STUB_ENV, ForkServer, wrapper_env
+from golden_dumps import check_dumps, dump_flags, gate_seed
 
 
 # Tests whose runtime validation is temporarily quarantined. Compilation is still
@@ -428,9 +431,18 @@ class TestRunner:
                  parallel_jobs: Optional[int] = None, json_output: bool = False,
                  leaks_only: bool = False, allow_leak_skips: bool = False,
                  compile_only: bool = False, project_root: Optional[Path] = None,
-                 fresh_processes: bool = True):
+                 fresh_processes: bool = True, list_file: Optional[str] = None,
+                 bless: bool = False, env_overrides: Optional[Dict[str, str]] = None):
         """Initialize the test runner."""
         self.tests_dir = tests_dir
+        # `--list FILE`: the fixtures the file names. The caller has read it once already,
+        # so a bad list fails before the build.
+        self.list_file = list_file
+        self.listed = read_fixture_list(Path(list_file)) if list_file else None
+        # `--bless`: the run selects the golden fixtures and writes each dump to its golden
+        # file. Each golden file it reached, and whether its content changed.
+        self.bless = bless
+        self.blessed: List[Tuple[Path, bool]] = []
         # The checkout whose `sushic` the run starts. It is the parent of `tests/` for
         # every real run; a runner test that selects from a temporary directory names it.
         self.project_root = project_root or tests_dir.parent
@@ -445,6 +457,9 @@ class TestRunner:
         # command line picks the server unless `--fresh-processes` is given; a caller
         # in this process that wants the server says so.
         self.fresh_processes = fresh_processes
+        # Names that every compile, and the fork-server, get on top of the runner's own
+        # environment. The golden seed gate pins PYTHONHASHSEED here.
+        self.env_overrides = dict(env_overrides or {})
         self._server: Optional[ForkServer] = None
         # The compiles of this run by how they started, as (fixture key, arguments).
         self.forked_compiles: List[Tuple[str, List[str]]] = []
@@ -474,7 +489,8 @@ class TestRunner:
         """Create temporary directory for test binaries."""
         self.temp_dir = tempfile.mkdtemp(prefix="sushi_tests_")
         if not self.fresh_processes:
-            self._server = ForkServer(self.project_root, Path(self.temp_dir) / "fork-server")
+            self._server = ForkServer(self.project_root, Path(self.temp_dir) / "fork-server",
+                                      env={**os.environ, **self.env_overrides})
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -484,6 +500,18 @@ class TestRunner:
             self._server = None
         if self.temp_dir and Path(self.temp_dir).exists():
             shutil.rmtree(self.temp_dir)
+
+    def blessed_files(self) -> List[Path]:
+        """The golden files this run wrote, sorted."""
+        return sorted(path for path, changed in self.blessed if changed)
+
+    def _bless_report(self) -> List[str]:
+        if not self.bless:
+            return []
+        lines = [f"Blessed: {_spelled_path(path, self.project_root)}"
+                 for path in self.blessed_files()]
+        unchanged = sum(1 for _, changed in self.blessed if not changed)
+        return lines + [f"Bless: {len(lines)} golden file(s) written, {unchanged} unchanged"]
 
     def unexcused_leak_skips(self) -> List[Tuple[str, str]]:
         """The leak assertions this run did not evaluate and was not told to excuse.
@@ -502,12 +530,16 @@ class TestRunner:
     def _describe_selection(self, filter_pattern: Optional[str]) -> str:
         """The flags that narrowed this run, for the message an empty one prints."""
         parts = []
+        if self.list_file:
+            parts.append(f"--list {self.list_file}")
         if filter_pattern:
             parts.append(f"--filter {filter_pattern!r}")
         if self.leaks_only:
             parts.append("--leaks-only")
         if self.compile_only:
             parts.append("--compile-only")
+        if self.bless:
+            parts.append("--bless")
         return ", ".join(parts) if parts else "the whole corpus"
 
     def doc_gate_failed(self) -> bool:
@@ -527,13 +559,14 @@ class TestRunner:
     def run_all_tests(self, filter_pattern: str = None) -> Dict[str, TestResult]:
         """Run every fixture this run selected.
 
-        `select_fixtures` is the one selector: `--filter`, `--leaks-only` and
+        `select_fixtures` is the one selector: `--list`, `--filter`, `--leaks-only` and
         `--compile-only` all narrow the same list there, so a flag cannot select a
         corpus a gate has never seen.
         """
         test_files = select_fixtures(self.tests_dir, filter_pattern=filter_pattern,
                                      leaks_only=self.leaks_only,
-                                     compile_only=self.compile_only)
+                                     compile_only=self.compile_only, listed=self.listed,
+                                     golden_only=self.bless)
 
         if not test_files:
             self.selected_nothing = True
@@ -624,6 +657,19 @@ class TestRunner:
 
     def run_single_test(self, test_file: Path) -> TestResult:
         """Run a single test file through compilation and optionally runtime phases."""
+        return self._in_workspace(test_file, self._compile_and_run)
+
+    def compile_single_test(self, test_file: Path) -> TestResult:
+        """The compilation phase of one fixture, every compile check included; no run."""
+        def compile_only(test_file: Path, test_name: str, category: str,
+                         metadata: TestMetadata) -> TestResult:
+            success, message = self._run_compilation_test(test_file, category, metadata)
+            return TestResult(name=test_name, category=category, compilation_success=success,
+                              compilation_message=message, skipped_runtime=True)
+        return self._in_workspace(test_file, compile_only)
+
+    def _in_workspace(self, test_file: Path, phases) -> TestResult:
+        """Run `phases` for one fixture, in the copy of its directory when it needs one."""
         test_name = test_file.name
         category = get_test_category(test_file)
         metadata = parse_test_metadata(test_file)
@@ -651,7 +697,7 @@ class TestRunner:
             self._workspaces[key] = workspace
         self._running.test_file = test_file
         try:
-            return self._compile_and_run(test_file, test_name, category, metadata)
+            return phases(test_file, test_name, category, metadata)
         finally:
             self._running.test_file = None
             shutil.rmtree(self._scratch_dir(test_file), ignore_errors=True)
@@ -797,7 +843,7 @@ class TestRunner:
                   for kind, source, slib, version, warns in metadata.library_builds]
         builds += [("BUILD_LIB_AT", "source", source, workspace.root / target, None, None)
                    for source, target in metadata.build_libs_at]
-        env = {**os.environ, "NO_COLOR": "1"}
+        env = {**os.environ, **self.env_overrides, "NO_COLOR": "1"}
         env["SUSHI_LIB_PATH"] = os.pathsep.join(
             [str(workspace.libs), *filter(None, [env.get("SUSHI_LIB_PATH")])])
         for directive, kind, source, target, written, warns in builds:
@@ -846,7 +892,7 @@ class TestRunner:
         keeping substring assertions (EXPECT_ERROR_CODE / EXPECT_STDERR_CONTAINS) robust.
         """
         workspace = self._workspace(test_file)
-        env = {**os.environ, "NO_COLOR": "1"}
+        env = {**os.environ, **self.env_overrides, "NO_COLOR": "1"}
         cwd = self.project_root
         source = str(test_file)
         # A fixture with no copy of its own shares the run's cache: the compiler's
@@ -870,7 +916,7 @@ class TestRunner:
         else:
             args = [*(["--clean-cache"] if clean else []), source, "-o", output,
                     *metadata.compiler_flags, *(IR_FLAGS if metadata.reads_the_ir else ()),
-                    *cache_flags]
+                    *dump_flags(metadata, binary_path), *cache_flags]
         if metadata.stdlib_modules and workspace is not None:
             # The bootstrap runs the compiler without the `sushic` wrapper, so it does what
             # the wrapper does: start in the checkout, and name the caller's directory.
@@ -915,6 +961,16 @@ class TestRunner:
                 self.forked_compiles.append((key, args))
                 return done
         self.fresh_compiles.append((key, args))
+        stub = env.get(COMPILER_STUB_ENV)
+        if stub:
+            # A runner test names a stub that stands in for the compiler. It starts where
+            # the wrapper starts the compiler, with the environment the wrapper gives it.
+            stub_env = wrapper_env(env, str(cwd), str(self.project_root))
+            stub_env["PYTHONPATH"] = os.pathsep.join(
+                [str(self.project_root), *filter(None, [env.get("PYTHONPATH")])])
+            return subprocess.run([sys.executable, stub, *args], capture_output=True,
+                                  text=True, cwd=self.project_root, env=stub_env,
+                                  timeout=timeout)
         return subprocess.run([str(self.project_root / "sushic"), *args],
                               capture_output=True, text=True, cwd=cwd, env=env,
                               timeout=timeout)
@@ -1055,6 +1111,10 @@ class TestRunner:
 
             if success and metadata.reads_the_ir:
                 success, message = check_ir(binary_path.with_suffix(".ll"), metadata, message)
+
+            if success and metadata.golden_dumps:
+                success, message = check_dumps(test_file, metadata, binary_path, message,
+                                               self.blessed if self.bless else None)
 
             return success, message
 
@@ -1438,8 +1498,11 @@ class TestRunner:
                 ],
                 "leak_skips_allowed": self.allow_leak_skips,
                 "stdlib_doc_gate": self._doc_gate_json(),
+                "blessed": [_spelled_path(p, self.project_root) for p in self.blessed_files()],
             }
             print(json.dumps(json_output, indent=2))
+            for line in self._bless_report():
+                print(line, file=sys.stderr)
         else:
             print(f"\n{tint(f'Test Results ({duration:.2f}s):', BOLD)}")
             print(f"  Total tests: {total_tests}")
@@ -1470,6 +1533,8 @@ class TestRunner:
                 else:
                     print("    " + tint("Excused by --allow-leak-skips.", YELLOW))
             self._print_doc_gate()
+            for line in self._bless_report():
+                print(line)
 
             if self.doc_gate_failed():
                 print("\n" + tint("The stdlib doc-block gate failed!", RED, BOLD))
@@ -1490,6 +1555,41 @@ class TestRunner:
                         reason = ("Compilation failed" if not result.compilation_success
                                   else "Runtime failed")
                         print(f"  {name}: {tint(reason, RED)}")
+
+
+SEED_ENV = "PYTHONHASHSEED"
+
+
+def golden_seed_gate(tests_dir: Path, fixtures: List[Path], jobs: int,
+                     project_root: Optional[Path] = None) -> DocGateResult:
+    """Compile each golden fixture again under a second hash seed, and compare again.
+
+    The main run keeps the seed of the runner (none pinned is `random`). The step starts
+    ONE more fork-server, with a pinned PYTHONHASHSEED that is not the main run's, and every
+    compile of the step carries that seed, so each is a child of that server. A fixture
+    whose compile checks fail under the second seed fails the step: a golden dump must not
+    depend on the hash seed (docs/design/ir.md, 11.3).
+    """
+    golden = [f for f in fixtures if parse_test_metadata(f).golden_dumps]
+    if not golden:
+        return DocGateResult(title="Golden seed gate",
+                             skip_reason="the selection holds no golden fixture")
+    main_seed = os.environ.get(SEED_ENV)
+    seed = gate_seed(main_seed)
+    start = time.time()
+    with TestRunner(tests_dir, parallel_jobs=jobs, project_root=project_root,
+                    fresh_processes=False, env_overrides={SEED_ENV: seed}) as runner:
+        result = DocGateResult(
+            title=f"Golden seed gate (main seed {main_seed or 'random'}, gate seed {seed})",
+            noun="golden fixture(s)", modules=[runner._key(f) for f in golden])
+        with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
+            for fixture, done in zip(golden, pool.map(runner.compile_single_test, golden),
+                                     strict=True):
+                if not done.compilation_success:
+                    result.failures[runner._key(fixture)] = (
+                        done.compilation_message.splitlines())
+    result.duration = time.time() - start
+    return result
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1518,6 +1618,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--filter",
         help="Run only tests matching this pattern"
+    )
+
+    parser.add_argument(
+        "--list",
+        metavar="FILE",
+        help="Run only the fixtures that FILE names: one repository-relative path for "
+             "each line; a blank line and a # line are not paths. A path that names no "
+             "fixture fails the run"
+    )
+
+    parser.add_argument(
+        "--bless",
+        action="store_true",
+        help="Run only the fixtures that compare a golden dump, check each in full, and "
+             "write each dump to its golden file. A run without it never writes one"
     )
 
     parser.add_argument(
@@ -1567,11 +1682,25 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main():
     """Main entry point for the enhanced test runner."""
-    arm_spelling_gate()
+    arm_check_variables()
     args = build_parser().parse_args()
 
     tests_dir = Path(__file__).parent
     project_root = tests_dir.parent
+
+    try:
+        selection = select_fixtures(
+            tests_dir, filter_pattern=args.filter, leaks_only=args.leaks_only,
+            compile_only=args.compile_only,
+            listed=read_fixture_list(Path(args.list)) if args.list else None,
+            golden_only=args.bless)
+    except FixtureListError as e:
+        if args.json:
+            print(json.dumps({"list_error": str(e), "total_tests": 0, "passed": 0,
+                              "failed": 0}, indent=2))
+        else:
+            print(f"The fixture list is refused: {e}")
+        return 1
 
     # Build stdlib and test helpers unless skipped
     if not args.skip_build:
@@ -1582,10 +1711,9 @@ def main():
                 print("Failed to build stdlib, aborting tests")
             return 1
         # A whole run builds every helper; a narrowed one, the helpers it can import.
-        narrowed = args.filter or args.leaks_only or args.compile_only
-        needed = (helpers_for_selection(tests_dir, select_fixtures(
-            tests_dir, filter_pattern=args.filter, leaks_only=args.leaks_only,
-            compile_only=args.compile_only)) if narrowed else None)
+        narrowed = (args.filter or args.leaks_only or args.compile_only or args.list
+                    or args.bless)
+        needed = helpers_for_selection(tests_dir, selection) if narrowed else None
         if not build_test_helpers(project_root, args.verbose, jobs=args.jobs, only=needed):
             if not args.json:
                 print("Failed to build test helpers, aborting tests")
@@ -1611,11 +1739,19 @@ def main():
 
     with TestRunner(tests_dir, args.verbose, args.jobs, args.json,
                     args.leaks_only, args.allow_leak_skips, args.compile_only,
-                    fresh_processes=args.fresh_processes) as runner:
+                    fresh_processes=args.fresh_processes, list_file=args.list,
+                    bless=args.bless) as runner:
         # Ruling 3 on #953: the doc blocks of the bundled stdlib are a runner step.
         runner.doc_gate = stdlib_doc_gate(project_root, filter_pattern=args.filter,
-                                          leaks_only=args.leaks_only)
+                                          leaks_only=args.leaks_only,
+                                          fixtures_only=fixtures_only(args))
         results = runner.run_all_tests(filter_pattern=args.filter)
+
+    # After the main run: the golden dumps again, under a second hash seed.
+    seed_gate = golden_seed_gate(tests_dir, selection, runner.parallel_jobs)
+    for line in seed_gate.report():
+        print(tint(line, YELLOW if not seed_gate.ran else GREEN if seed_gate.passed else RED),
+              file=sys.stderr if args.json else sys.stdout)
 
     # Exit with appropriate code. Two things besides a failed test count here, and both
     # say the same thing: a run that asserted nothing must not report a pass. A leak
@@ -1623,7 +1759,7 @@ def main():
     # at all is the other (#765), and an empty result dict would otherwise read as
     # "nothing failed".
     failed_count = sum(1 for r in results.values() if not r.total_success)
-    if runner.selected_nothing or runner.doc_gate_failed():
+    if runner.selected_nothing or runner.doc_gate_failed() or not seed_gate.passed:
         return 1
     return 0 if failed_count == 0 and not runner.unexcused_leak_skips() else 1
 

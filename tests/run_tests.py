@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Set, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sushi_lang.internals.report import SPELLING_GATE_ENV  # noqa: E402
+from sushi_lang.semantics.shir.lower_nodes import STRICT_VARIABLE  # noqa: E402
 from test_metadata import corpus_files  # noqa: E402
 
 
@@ -337,15 +338,32 @@ def _spelled_path(path: Path, project_root: Path) -> str:
         return path.as_posix()
 
 
+def fixtures_only(args: argparse.Namespace) -> Optional[str]:
+    """The spelling of a selector that names fixtures and nothing else, or None.
+
+    `--list` names fixtures by path, and `--bless` selects the golden fixtures, so each
+    selects no stdlib module, no library-reader check and no toolchain program: each of
+    those runner steps prints its skip.
+    """
+    if getattr(args, "list", None):
+        return f"--list {args.list}"
+    if getattr(args, "bless", False):
+        return "--bless"
+    return None
+
+
 def _doc_gate_selection(modules: Dict[str, Path], project_root: Path,
-                        filter_pattern: Optional[str], leaks_only: bool
+                        filter_pattern: Optional[str], leaks_only: bool,
+                        fixtures_only: Optional[str] = None
                         ) -> Tuple[Dict[str, Path], Optional[str]]:
     """The modules a narrowed run checks, and the skip reason when it checks none.
 
     A `--filter` selects a module when the pattern is a substring of its registry name
     or of its path under the project root. `--leaks-only` selects no module, because the
-    gate asserts no leak.
+    gate asserts no leak, and a selector that names fixtures only selects none either.
     """
+    if fixtures_only:
+        return {}, f"{fixtures_only} selects no stdlib module"
     if leaks_only:
         return {}, "--leaks-only selects no stdlib module"
     if not filter_pattern:
@@ -385,7 +403,8 @@ def _doc_findings(output: str, cwd: Path, modules: Dict[str, Path],
 
 
 def stdlib_doc_gate(project_root: Path, filter_pattern: Optional[str] = None,
-                    leaks_only: bool = False) -> DocGateResult:
+                    leaks_only: bool = False,
+                    fixtures_only: Optional[str] = None) -> DocGateResult:
     """Check the doc blocks of every bundled Sushi-source stdlib module (#953).
 
     The compiler does not lint an injected stdlib unit, and a stdlib module is never
@@ -395,7 +414,8 @@ def stdlib_doc_gate(project_root: Path, filter_pattern: Optional[str] = None,
     from sushi_lang.semantics.semantic_analyzer import STDLIB_DOC_GATE_ENV
 
     every, is_override = doc_gate_modules()
-    chosen, skip = _doc_gate_selection(every, project_root, filter_pattern, leaks_only)
+    chosen, skip = _doc_gate_selection(every, project_root, filter_pattern, leaks_only,
+                                       fixtures_only)
     if skip is not None:
         return DocGateResult(skip_reason=skip)
 
@@ -469,7 +489,8 @@ def _dead_gate_compile(command: List[str], cwd: Path, env: Dict[str, str],
 
 
 def stdlib_dead_code_gate(project_root: Path, filter_pattern: Optional[str] = None,
-                          leaks_only: bool = False) -> DocGateResult:
+                          leaks_only: bool = False,
+                          fixtures_only: Optional[str] = None) -> DocGateResult:
     """Fail on a `--warn-unused` finding in the bundled stdlib or in `toolchain/src/` (#959).
 
     The facts come from the compiler. The gate compiles the program that imports every
@@ -480,15 +501,15 @@ def stdlib_dead_code_gate(project_root: Path, filter_pattern: Optional[str] = No
 
     result = DocGateResult(title="Dead-code gate", noun="module(s) and program(s)")
     every, is_override = doc_gate_modules()
-    chosen, _ = _doc_gate_selection(every, project_root, filter_pattern, leaks_only)
-    programs = [] if leaks_only else [
+    chosen, _ = _doc_gate_selection(every, project_root, filter_pattern, leaks_only,
+                                    fixtures_only)
+    programs = [] if leaks_only or fixtures_only else [
         path for path in dead_gate_programs(project_root)
         if not filter_pattern or filter_pattern in _spelled_path(path, project_root)]
     if not chosen and not programs:
-        result.skip_reason = ("--leaks-only selects no stdlib module or toolchain program"
-                              if leaks_only else
-                              f"--filter {filter_pattern!r} selects no stdlib module or "
-                              "toolchain program")
+        selector = (fixtures_only or ("--leaks-only" if leaks_only
+                                      else f"--filter {filter_pattern!r}"))
+        result.skip_reason = f"{selector} selects no stdlib module or toolchain program"
         return result
 
     start = time.time()
@@ -771,9 +792,12 @@ def _gate_verdict(done: subprocess.CompletedProcess, code: Optional[str]) -> Opt
 
 
 def _gate_skip(result: ReaderGateResult, filter_pattern: Optional[str],
-               leaks_only: bool) -> Optional[ReaderGateResult]:
+               leaks_only: bool, fixtures_only: Optional[str] = None
+               ) -> Optional[ReaderGateResult]:
     """The result that says why a library-reader step does not run, or None."""
-    if leaks_only:
+    if fixtures_only:
+        result.skip_reason = f"{fixtures_only} selects no library-reader check"
+    elif leaks_only:
         result.skip_reason = "--leaks-only selects no library-reader check"
     elif filter_pattern and filter_pattern not in LIB_READER_GATE_PATH:
         result.skip_reason = f"--filter {filter_pattern!r} selects no library-reader check"
@@ -809,7 +833,8 @@ def _gate_tool(project_root: Path, tmp: Path, result: ReaderGateResult) -> str:
 
 
 def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
-                    leaks_only: bool = False) -> ReaderGateResult:
+                    leaks_only: bool = False,
+                    fixtures_only: Optional[str] = None) -> ReaderGateResult:
     """Run `--lib-info` in both halves, and a consumer, over damaged `.slib` files.
 
     A fixture cannot use `--lib-info`, and a damaged binary library cannot be a helper,
@@ -817,7 +842,7 @@ def lib_reader_gate(project_root: Path, filter_pattern: Optional[str] = None,
     Sushi half is the `slib-info` tool built here from `toolchain/src/`; the Python half
     is the same command with SUSHI_TOOLCHAIN=off.
     """
-    skipped = _gate_skip(ReaderGateResult(), filter_pattern, leaks_only)
+    skipped = _gate_skip(ReaderGateResult(), filter_pattern, leaks_only, fixtures_only)
     if skipped is not None:
         return skipped
 
@@ -1139,7 +1164,8 @@ REPORT_CONSENT = ("--dont-panic",)
 
 
 def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = None,
-                         leaks_only: bool = False) -> ReaderGateResult:
+                         leaks_only: bool = False,
+                         fixtures_only: Optional[str] = None) -> ReaderGateResult:
     """Read the `--lib-info` report of one library in both halves, and use the library.
 
     A fixture cannot use `--lib-info`. The step builds `_REPORT_LIBRARY` in each kind,
@@ -1148,7 +1174,7 @@ def lib_info_report_gate(project_root: Path, filter_pattern: Optional[str] = Non
     conversion of the library through `??`.
     """
     result = ReaderGateResult(title="Library-report gate")
-    if _gate_skip(result, filter_pattern, leaks_only) is not None:
+    if _gate_skip(result, filter_pattern, leaks_only, fixtures_only) is not None:
         return result
 
     start = time.time()
@@ -1275,11 +1301,25 @@ def arm_spelling_gate() -> None:
     cosmetic fault must never become a user-facing crash. A test run is exactly the
     place that wants it loud.
 
-    Both runners call this, and both also read the compiler's stderr for the gate's
-    own name: the gate raises, the process dies with a traceback, and an exit code
-    that happens to match the fixture's expectation must not read as a pass.
+    Both runners call this through `arm_check_variables`, and both also read the
+    compiler's stderr for the gate's own name: the gate raises, the process dies with a
+    traceback, and an exit code that happens to match the fixture's expectation must not
+    read as a pass.
     """
     os.environ[SPELLING_GATE_ENV] = "1"
+
+
+def arm_check_variables() -> None:
+    """Arm the variables that every compile of a run checks with, before it starts one.
+
+    The spelling gate, and SHIR strict mode: under SUSHI_SHIR_STRICT=1 a hole that
+    lowering records in a correct program stops the compile with CE0155, so a run proves
+    that lowering is total. A child of the fork-server and a fresh process both take the
+    environment of the run. No flag turns either off, and a value that the caller gives
+    is replaced. A user who starts `sushic` by hand gets neither.
+    """
+    arm_spelling_gate()
+    os.environ[STRICT_VARIABLE] = "1"
 
 
 def spelling_gate_tripped(stderr: str) -> bool:
@@ -1302,9 +1342,15 @@ def build_parser() -> argparse.ArgumentParser:
                             f"or ${JOBS_ENV_VAR})")
     parser.add_argument("--filter", type=str,
                        help="Only run tests whose path under tests/ contains this string")
+    parser.add_argument("--list", metavar="FILE",
+                       help="Only run the fixtures that FILE names, one repository-relative "
+                            "path for each line. A path that names no fixture fails the run")
     parser.add_argument("--enhanced", action="store_true",
                        help="Accepted and does nothing: every run is the enhanced run. "
                             "Kept so the CI lines and a typed habit keep working")
+    parser.add_argument("--bless", action="store_true",
+                       help="Run only the fixtures that compare a golden dump, and write "
+                            "each dump to its golden file. A run without it never writes one")
     parser.add_argument("--json", action="store_true",
                        help="Output results in JSON format")
     parser.add_argument("--skip-build", action="store_true",
@@ -1338,12 +1384,12 @@ def main():
     runs a binary, it measured 6.95s against the enhanced runner's 6.85s.
 
     What remains here is what both halves always shared -- the stdlib and helper builds,
-    the leak interposer and the spelling gate -- plus the argument
+    the leak interposer and the armed variables -- plus the argument
     parsing. `enhanced_test_runner` runs the tests.
     """
     args = build_parser().parse_args()
 
-    arm_spelling_gate()
+    arm_check_variables()
 
     import enhanced_test_runner
     sys.argv = [sys.argv[0]]
@@ -1351,9 +1397,13 @@ def main():
         sys.argv.append("--verbose")
     if args.filter:
         sys.argv.extend(["--filter", args.filter])
+    if args.list:
+        sys.argv.extend(["--list", args.list])
     sys.argv.extend(["--jobs", str(args.jobs)])
     if args.json:
         sys.argv.append("--json")
+    if args.bless:
+        sys.argv.append("--bless")
     if args.skip_build:
         sys.argv.append("--skip-build")
     if args.leaks_only:
@@ -1368,13 +1418,12 @@ def main():
 
     # After the run, which builds the stdlib the gate's libraries import. The report
     # goes to stderr under --json, so stdout stays one JSON document.
-    gate = lib_reader_gate(Path(__file__).resolve().parent.parent,
-                           filter_pattern=args.filter, leaks_only=args.leaks_only)
-    report_gate = lib_info_report_gate(Path(__file__).resolve().parent.parent,
-                                       filter_pattern=args.filter,
-                                       leaks_only=args.leaks_only)
-    dead_gate = stdlib_dead_code_gate(Path(__file__).resolve().parent.parent,
-                                      filter_pattern=args.filter, leaks_only=args.leaks_only)
+    root = Path(__file__).resolve().parent.parent
+    narrowing = dict(filter_pattern=args.filter, leaks_only=args.leaks_only,
+                     fixtures_only=fixtures_only(args))
+    gate = lib_reader_gate(root, **narrowing)
+    report_gate = lib_info_report_gate(root, **narrowing)
+    dead_gate = stdlib_dead_code_gate(root, **narrowing)
     for line in gate.report() + report_gate.report() + dead_gate.report():
         print(line, file=sys.stderr if args.json else sys.stdout)
     return rc or (0 if gate.passed and report_gate.passed and dead_gate.passed else 1)

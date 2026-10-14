@@ -534,3 +534,45 @@ _add(ErrorMessage("CE0150", Severity.ERROR,
     "#1200, a join kept the flag and dropped the location when a later path rebound the "
     "name, and the error showed no note. This is a fault in the compiler, not in the "
     "program; please report the program."))
+
+_add(ErrorMessage("CE0153", Severity.ERROR,
+    "the scope pass recorded no binding for the {what} '{name}'",
+    Category.INTERNAL,
+    "The scope pass writes the binding table of each body (docs/design/ir.md 7.1): what "
+    "each name denotes, the local of each binder, and the captures of each lambda. When "
+    "a body ends, a check walks it again and finds each name, binder and lambda that the "
+    "pass did not record. Such a gap means that an arm of the pass did not walk a part of "
+    "the body, or that it did not record what it found. "
+    "tests/unit/test_scope_binder_walk_is_total.py is the gate; this is the backstop. "
+    "This is a fault in the compiler, not in the program; please report the program."))
+
+_add(ErrorMessage("CE0154", Severity.ERROR,
+    "the SHIR printer has no text for the class '{name}'",
+    Category.INTERNAL,
+    "The SHIR printer writes the text of --dump-shir through one table, with one row for "
+    "each class that a body can hold (docs/design/ir.md 11.3). A value of a class with "
+    "no row means that a node or a part was added and the table was not. "
+    "tests/unit/test_shir_printer_is_total.py is the gate; this is the backstop. "
+    "This is a fault in the compiler, not in the program; please report the program."))
+
+_add(ErrorMessage("CE0155", Severity.ERROR,
+    "the new pipeline does not emit this program yet: {stage}, {construct}",
+    Category.INTERNAL,
+    "The compiler moves to a new pipeline (docs/design/ir.md): a body is lowered to SHIR, "
+    "and later stages read SHIR. While the move is in progress, a stage can meet a "
+    "construct that it does not handle yet. The message names the stage and the "
+    "construct. Today the one stage is `lowering`, and the code comes only when the "
+    "variable SUSHI_SHIR_STRICT is 1: with no variable, lowering records the construct "
+    "as a hole and the compile goes on through the old pipeline "
+    "(docs/compiler-reference.md, Dump SHIR). The code does not come for a name with no "
+    "declaration: the program always has an error then (CE1001, CE1002, or CE0144 for a "
+    "type pack name), and that error is the diagnostic. The code does not come for a form "
+    "that the language always refuses either: a named argument outside a struct "
+    "construction (CE6104), written type arguments after a dot or on a struct "
+    "construction (CE6102), a slice with a reversed range (CE2122), a call of a name "
+    "that the namespace does not hold (CE2008), and a member of a type that is no "
+    "variant (CE2045). The code does not come for a unit "
+    "in which the scope pass reported an error either: a type name written as a value is "
+    "a hole there, and the error of the scope pass (CE2105) is the diagnostic. The code "
+    "goes when the move is complete. "
+    "This is a limit of the compiler, not a fault in the program."))

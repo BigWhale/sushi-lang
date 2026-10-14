@@ -1,0 +1,27 @@
+# `bump(poke o)` rebinds a `poke Own@(T)` parameter. The write through the pointer frees
+# the old box and its payload in the caller's place and stores the new one; the caller
+# destroys the new box once at scope exit. A rebind of a struct field through `poke` does
+# the same.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "before box 1\nafter box 2\nafter box 3\nfield box 5\n"
+struct Note:
+    string text
+
+struct Holder:
+    Own@(Note) o
+
+fn bump(poke Own@(Note) o, i32 n) ~:
+    o := Own.alloc(Note("box {n}"))
+
+fn main() i32:
+    let Own@(Note) o = Own.alloc(Note("box {1}"))
+    println("before {o.get().text}")
+    bump(poke o, 2)
+    println("after {o.get().text}")
+    bump(poke o, 3)
+    println("after {o.get().text}")
+    let Holder h = Holder(Own.alloc(Note("box {4}")))
+    bump(poke h.o, 5)
+    println("field {h.o.get().text}")
+    return 0

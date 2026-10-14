@@ -4,8 +4,9 @@ pytest never runs the Sushi compiler: the fixture corpus under `tests/<area>/` i
 place that tests it. The one exception is a test of the test runner, and those live under
 `tests/unit/runner/`. `conftest.py` installs this gate for the whole unit layer.
 
-A stage is a Sushi parse or lex, the semantic analysis, the code generator, the driver, or
-a subprocess that starts the compiler, the runner or the toolchain build. A hit is recorded
+A stage is a Sushi parse or lex, the semantic analysis, the lowering of a body to SHIR,
+the code generator, the driver, or a subprocess that starts the compiler, the runner or the
+toolchain build. A new stage of the compiler joins the list in the change that makes it. A hit is recorded
 against the item that runs, or against the fixture that is being set up (then every item
 that uses that fixture fails), or against the module that is being collected. The hit does
 not stop the stage; the item fails when pytest writes its report.
@@ -82,10 +83,12 @@ class CompilerStageGate:
         from sushi_lang.backend.codegen_llvm import LLVMCodegen
         from sushi_lang.backend.driver import LLVMDriver
         from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
+        from sushi_lang.semantics.shir.lower_nodes import BodyLowerer
 
         self._wrap(lark.Lark, "parse", "lark.Lark.parse")
         self._wrap(lark.Lark, "lex", "lark.Lark.lex")
         self._wrap(SemanticAnalyzer, "check", "SemanticAnalyzer.check")
+        self._wrap(BodyLowerer, "__init__", "lowering")
         self._wrap(LLVMCodegen, "__init__", "LLVMCodegen")
         self._wrap(LLVMDriver, "__init__", "LLVMDriver")
         self._wrap(subprocess.Popen, "__init__", "subprocess",

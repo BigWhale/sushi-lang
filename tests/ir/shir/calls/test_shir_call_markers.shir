@@ -1,0 +1,51 @@
+unit test_shir_call_markers
+
+ShirBody count (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))
+
+ShirBody size
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    Return(Call(Dotted(LocalRef(_0), "len"), []))
+
+ShirBody look
+  params : [(_0 "s": string, InGuaranteed)]
+  locals : []
+  block  :
+    Return(Call(Dotted(LocalRef(_0), "len"), []))
+
+ShirBody take
+  params : [(_0 "s": string, Owned)]
+  locals : []
+  block  :
+    Return(Call(Dotted(LocalRef(_0), "len"), []))
+
+ShirBody bump
+  params : [(_0 "n": i32, Inout)]
+  locals : []
+  block  :
+    Return(Binary(+, LocalRef(_0), Lit(1) = 1))
+
+ShirBody add
+  params : [(_0 "a": i32, Guaranteed), (_1 "b": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(+, LocalRef(_0), LocalRef(_1)))
+
+ShirBody markers
+  params : [(_0 "s": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Named(GlobalRef(@bump)), [(StorageRef(@count), Inout)]))
+    ExprStmt(Call(Named(GlobalRef(@add)), [Call(Named(GlobalRef(@size)), [LocalRef(_0)]), Call(Named(GlobalRef(@look)), [(LocalRef(_0), InGuaranteed)])]))
+    Return(Call(Named(GlobalRef(@take)), [(LocalRef(_0), Owned)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))

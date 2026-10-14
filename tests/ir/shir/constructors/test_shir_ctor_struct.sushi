@@ -1,0 +1,32 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n4\n7\n9\n2\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_ctor_struct.shir
+#
+# the SHIR dump of a struct construction. A positional construction keeps its arguments
+# as written, and `written_order` is the identity. A named construction that writes the
+# fields in another order than the declaration gives `fields` in the DECLARATION order,
+# and `written_order` gives the positions in the order that the source writes them: the
+# arguments are evaluated in that order (ruling R1). Each argument here is a call with a
+# side effect. The count of the calls does not depend on the order, so the output is the
+# same on the old pipeline.
+
+struct Vec:
+    i32 x
+    i32 y
+
+var i32 calls = 0
+
+fn count(i32 v) i32:
+    calls := calls + 1
+    return v
+
+fn main() i32:
+    let Vec a = Vec(3, 4)
+    let Vec b = Vec(y: count(9), x: count(7))
+    println(a.x)
+    println(a.y)
+    println(b.x)
+    println(b.y)
+    println(calls)
+    println("Mostly Harmless")
+    return 0

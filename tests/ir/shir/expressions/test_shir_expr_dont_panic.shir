@@ -1,0 +1,25 @@
+unit test_shir_expr_dont_panic
+
+ShirBody third
+  params : [(_0 "xs": i32[], Guaranteed)]
+  locals : []
+  block  :
+    Return(Index(LocalRef(_0), Lit(2) = 2, unchecked: true))
+
+ShirBody pair
+  params : [(_0 "xs": i32[], Guaranteed)]
+  locals : [_1 "view": i32[]]
+  block  :
+    Assign(LocalRef(_1), Slice(LocalRef(_0), Lit(2) = 2, Lit(4) = 4, inclusive: false), is_init: true)
+    Return(Binary(*, Call(Dotted(LocalRef(_1), "len"), []), Index(LocalRef(_0), Lit(0) = 0, unchecked: true)))
+
+ShirBody main
+  params : []
+  locals : [_0 "xs": i32[]]
+  block  :
+    Assign(LocalRef(_0), ArrayInit(Dynamic, [Single(Lit(10)), Single(Lit(20)), Single(Lit(30)), Single(Lit(40))]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@third)), [LocalRef(_0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@pair)), [LocalRef(_0)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Index(LocalRef(_0), Lit(3) = 3, unchecked: false)]))
+    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    Return(Lit(0))

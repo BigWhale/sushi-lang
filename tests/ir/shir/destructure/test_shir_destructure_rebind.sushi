@@ -1,0 +1,15 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2 1\n"
+# EXPECT_DUMP_SHIR: test_shir_destructure_rebind.shir
+#
+# the SHIR dump of a tuple rebind, `(a, b) := (b, a)`, as the AST builder splits it: a
+# destructure of the whole right side into hidden binders, then one rebind of each place
+# from its binder, from left to right. The hidden binders are locals with no name and no
+# span, `_3` and `_4`; the dump never prints the names that the AST builder gave them.
+
+fn main() i32:
+    let i32 a = 1
+    let i32 b = 2
+    (a, b) := (b, a)
+    println("{a} {b}")
+    return 0

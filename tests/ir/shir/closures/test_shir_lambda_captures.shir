@@ -1,0 +1,13 @@
+unit test_shir_lambda_captures
+
+ShirBody main
+  params : []
+  locals : [_0 "base": i32, _1 "xs": i32[], _2 "add": fn(i32) -> i32, _3 "x": i32, _4 "size": fn() -> i32]
+  block  :
+    Assign(LocalRef(_0), Lit(40), is_init: true)
+    Assign(LocalRef(_1), ArrayInit(Dynamic, [Single(Lit(1)), Single(Lit(2)), Single(Lit(3))]), is_init: true)
+    Assign(LocalRef(_2), Lambda([(_3, Guaranteed)], [Return(Binary(+, LocalRef(_3), LocalRef(_0)))], expr_body: true), is_init: true)
+    Assign(LocalRef(_4), Lambda([], [Return(Call(Dotted(LocalRef(_1), "len"), []))], expr_body: true), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(LocalRef(_2)), [Lit(2)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(LocalRef(_4)), [])]))
+    Return(Lit(0))

@@ -1,0 +1,8 @@
+unit test_err_shir_expr_slice_reversed
+
+ShirBody main
+  params : []
+  locals : [_0 "xs": i32[]]
+  block  :
+    Assign(LocalRef(_0), ArrayInit(Dynamic, [Single(Lit(1)), Single(Lit(2)), Single(Lit(3))]), is_init: true)
+    Return(Call(Dotted(<hole: IndexAccess>, "len"), []))

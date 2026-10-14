@@ -1,0 +1,10 @@
+# EXPECT_ERROR_CODE: CE2007
+# EXPECT_DUMP_SHIR: test_err_shir_stmt_let_untyped.shir
+#
+# the SHIR dump of a `let` with no written type. Lowering runs before the typecheck pass,
+# which gives CE2007, so the binder is in the `locals` line with no type. Lowering never
+# reads a type: the typecheck pass gives the type of a local.
+
+fn main() i32:
+    let total = 40 + 2
+    return total

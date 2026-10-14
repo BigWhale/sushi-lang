@@ -1,0 +1,28 @@
+# `let Own@(T) o = make(n)??` unwraps an `Own@(T)` payload. On the Ok path the box moves
+# into the local and is destroyed once at scope exit. On the Err path the `??` returns
+# early and destroys the owning local that came before it.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "got box 1 for run 1\nfailed\n"
+struct Note:
+    string text
+
+fn make(i32 n) Own@(Note) | StdError:
+    if (n == 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(Own.alloc(Note("box {n}")))
+
+fn run(i32 n) i32 | StdError:
+    let string label = "run {n}"
+    let Own@(Note) o = make(n)??
+    println("got {o.get().text} for {label}")
+    return Result.Ok(n)
+
+fn main() i32:
+    match run(1):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("failed")
+    match run(0):
+        Result.Ok(_) -> ~
+        Result.Err(_) -> println("failed")
+    return 0

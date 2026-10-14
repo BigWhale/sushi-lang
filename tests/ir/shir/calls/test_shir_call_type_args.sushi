@@ -1,0 +1,27 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "5\n42\n0\nMostly Harmless\n"
+# EXPECT_DUMP_SHIR: test_shir_call_type_args.shir
+#
+# the SHIR dump of the written type arguments of a call. They stand on the callee:
+# `identity@(i32)(nom 5)` is a `Named` target with `type_args: [i32]`, and the argument
+# keeps its written marker. A type argument is a type as written, a generic type too, and
+# lowering resolves none: the instance that a call names is an answer of the typecheck
+# pass. A call with no written type argument prints with no `type_args` field. The two
+# templates are the bodies of their template checks. The copies of `identity` and of
+# `empty` are bodies of their own, after `main`, with the name of each instance, in the
+# order of their names.
+
+fn identity@(T)(nom T x) T:
+    return x
+
+fn empty@(T)() List@(T):
+    return List.new()
+
+fn main() i32:
+    let i32 total = 40 + 2
+    println(identity@(i32)(nom 5))
+    println(identity@(i32)(nom total))
+    let List@(i32) xs = empty@(i32)()
+    println(xs.len())
+    println(identity(nom "Mostly Harmless"))
+    return 0

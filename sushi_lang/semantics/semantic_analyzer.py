@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.generics.monomorphize import Monomorphizer
     from sushi_lang.semantics.generics.array_perk_copies import ArrayPerkCopies
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
+from sushi_lang.semantics.shir.lookup import DeclLookup
+from sushi_lang.semantics.shir.lowering import LoweredProgram, lower_copy, lower_unit
 from sushi_lang.semantics.passes.types import (
     TypeValidator, validate_perk_implementation_method)
 from sushi_lang.semantics.passes.borrow import BorrowChecker
@@ -210,6 +212,9 @@ class SemanticAnalyzer:
         self.array_perk_copies: Optional['ArrayPerkCopies'] = None
         self.library_extensions: list[ExtendDef] = []  # Library-shipped extension methods, declare-only too
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
+        # The SHIR of each body that the scope pass checked, per unit, in the compilation
+        # order (docs/design/ir.md 6.3). Only `--dump-shir` reads it yet.
+        self.shir = LoweredProgram()
 
     def check(self) -> None:
         """Entry point for semantic analysis. Runs every pass in sequence.
@@ -814,7 +819,13 @@ class SemanticAnalyzer:
     def _check_units(self, compilation_order: list[Unit], monomorphizer,
                      libraries: LibraryRegistration, destroy_effects,
                      enum_names: set[str]) -> None:
-        """scope, typecheck, lift and borrow, per unit, in one loop."""
+        """scope, typecheck, lift and borrow, per unit, in one loop.
+
+        Lowering runs after scope, because it reads the `Bindings` that scope writes. Its
+        result goes to `self.shir`, and the passes after it read the AST as before. The
+        reporter of the unit tells lowering whether scope reported an error: in such a
+        unit a hole does not stop the compile under the strict variable.
+        """
         # Every unit is analysed with the global context, because units reference each
         # other, but each gets its own reporter so a diagnostic names the right file.
         for unit in compilation_order:
@@ -825,11 +836,24 @@ class SemanticAnalyzer:
             passes = self._unit_passes(unit, unit_reporter, monomorphizer,
                                        libraries, destroy_effects, enum_names)
             passes.scope.run(unit.ast)
+            lower_unit(self.shir, unit, passes.scope.bindings, self._operand_reader(unit),
+                       DeclLookup.of(self.tables, unit.name),
+                       scope_failed=unit_reporter.has_offered_errors)
             passes.typecheck.run(unit.ast)
             passes.lifter.run()
             passes.borrow.run(unit.ast, skip=passes.typecheck.checked_template_ids)
 
             self._merge_unit(unit_reporter)
+
+    def _operand_reader(self, unit: Unit):
+        """A silent evaluator for lowering, in the scope of `unit` (ruling E3, ir.md 7.4).
+
+        It has its own store of reported cycles, so a cycle that it reads in silence is
+        still reported by the reader that speaks (#710). Its operator folds are its own.
+        """
+        from sushi_lang.semantics.const_eval import ConstantEvaluator
+        return ConstantEvaluator(Reporter(), self.tables.constants, unit.name,
+                                 self.tables.namespaces.get, reported_cycles=set(), folds={})
 
     def _unit_passes(self, unit: Unit, reporter: Reporter,
                      monomorphizer, libraries: LibraryRegistration, destroy_effects,
@@ -1268,6 +1292,10 @@ class SemanticAnalyzer:
         the passes run for the stamps that the backend reads. A copy of a consumed
         library's template keeps its full check, and one diagnostic that two copies give
         is merged one time.
+
+        Lowering runs after the scope pass of each copy, as in the per-unit loop: this is
+        the point where the fixpoint places a copy (ir.md 9 Q2). The copy is listed in its
+        home unit.
         """
         by_home: dict[str, tuple[Unit, list[Any]]] = {}
         for home, node in copies:
@@ -1278,9 +1306,13 @@ class SemanticAnalyzer:
             scratch = self._unit_reporter(home)
             passes = self._unit_passes(home, scratch, monomorphizer, libraries,
                                        destroy_effects, enum_names)
+            evaluator, lookup = self._operand_reader(home), DeclLookup.of(self.tables, home.name)
             for node in nodes:
                 entry = _copy_entry(node)
+                written = len(passes.scope.bindings)
                 entry.scope(passes.scope, node)
+                lower_copy(self.shir, home, node, passes.scope.bindings[written:], evaluator,
+                           lookup, scope_failed=scratch.has_offered_errors)
                 scratch.leave_body()
                 entry.typecheck(passes.typecheck, node)
                 scratch.leave_body()

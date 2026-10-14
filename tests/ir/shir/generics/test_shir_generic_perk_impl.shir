@@ -1,0 +1,29 @@
+unit test_shir_generic_perk_impl
+
+ShirBody main
+  params : []
+  locals : [_0 "a": Box@(i32), _1 "b": Box@(string)]
+  block  :
+    Assign(LocalRef(_0), StructInit(@Box, [Lit(7), Lit(1)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_1), StructInit(@Box, [Lit("Mostly Harmless"), Lit(4)], written_order: [0, 1]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_0), "show"), [])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_1), "show"), [])]))
+    Return(Lit(0))
+
+ShirBody Box@(T).show (TemplateCheck("test_shir_generic_perk_impl.Box.with.Show"))
+  params : [(_0 "self": Box@(T), Guaranteed)]
+  locals : []
+  block  :
+    Return(Interp(["box of ", Field(LocalRef(_0), "size"), ""]))
+
+ShirBody Box@(i32).show
+  params : [(_0 "self": Box@(i32), Guaranteed)]
+  locals : []
+  block  :
+    Return(Interp(["box of ", Field(LocalRef(_0), "size"), ""]))
+
+ShirBody Box@(string).show
+  params : [(_0 "self": Box@(string), Guaranteed)]
+  locals : []
+  block  :
+    Return(Interp(["box of ", Field(LocalRef(_0), "size"), ""]))

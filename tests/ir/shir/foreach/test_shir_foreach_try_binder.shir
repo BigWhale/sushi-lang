@@ -1,0 +1,37 @@
+unit test_shir_foreach_try_binder
+
+ShirBody first
+  params : []
+  locals : [_0 "r": BufReader@(File), _1 "seen": i32, _2, _3 "line"]
+  block  :
+    Assign(LocalRef(_0), Call(Static(BufReader, "new"), [(Try(Call(Dotted(StorageRef(@stdin), "share"), [])), Owned), Lit(64)]), is_init: true)
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Loop(Items(Call(Dotted(LocalRef(_0), "lines"), []), _2, Bare), [Assign(LocalRef(_3), Try(LocalRef(_2)), is_init: true), ExprStmt(Call(BuiltinFn("println"), [LocalRef(_3)])), Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1) = 1), is_init: false)])
+    Return(EnumInit(@Result, "Ok", [LocalRef(_1)]))
+
+ShirBody typed
+  params : []
+  locals : [_0 "r": BufReader@(File), _1 "total": i32, _2, _3 "text": string]
+  block  :
+    Assign(LocalRef(_0), Call(Static(BufReader, "new"), [(Try(Call(Dotted(StorageRef(@stdin), "share"), [])), Owned), Lit(64)]), is_init: true)
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Loop(Items(Call(Dotted(LocalRef(_0), "lines"), []), _2, Bare), [Assign(LocalRef(_3), Try(LocalRef(_2)), is_init: true), Assign(LocalRef(_1), Binary(+, LocalRef(_1), Call(Dotted(LocalRef(_3), "len"), [])), is_init: false)])
+    Return(EnumInit(@Result, "Ok", [LocalRef(_1)]))
+
+ShirBody skipped
+  params : []
+  locals : [_0 "r": BufReader@(File), _1 "seen": i32, _2, _3]
+  block  :
+    Assign(LocalRef(_0), Call(Static(BufReader, "new"), [(Try(Call(Dotted(StorageRef(@stdin), "share"), [])), Owned), Lit(64)]), is_init: true)
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Loop(Items(Call(Dotted(LocalRef(_0), "lines"), []), _2, Bare), [Assign(LocalRef(_3), Try(LocalRef(_2)), is_init: true), Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1) = 1), is_init: false)])
+    Return(EnumInit(@Result, "Ok", [LocalRef(_1)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@first)), []), "realise"), [Lit(99)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@typed)), []), "realise"), [Lit(99)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@skipped)), []), "realise"), [Lit(99)])]))
+    Return(Lit(0))

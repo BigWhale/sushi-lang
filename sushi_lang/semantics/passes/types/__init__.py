@@ -364,7 +364,6 @@ class ReadOnlyInferrer(TypeValidator):
 
     Only the nodes under the expression are put back. A node that inference builds for
     itself (the `MethodCall` view of a `DotCall`) is dropped when inference returns.
-    `tests/unit/test_early_inference_writes_no_stamp.py` is the gate.
 
     `namespaces` is the table of the unit that holds the expression, as the typecheck
     pass gives it: `sh.Pt(0)` names what `Pt(0)` names under a flat import only when

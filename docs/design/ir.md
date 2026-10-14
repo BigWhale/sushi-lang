@@ -7,6 +7,10 @@ a migration must keep. The phases, the risks and the progress tracking are not p
 document; a migration plan comes from it. Nothing in the language changes: every behaviour
 test passes before and after, unchanged.
 
+Amended on 2026-10-11 by the rulings on the migration plan: 6.3 (initializer bodies), 6.4
+(the gate reads the body modules), 7.4 (evaluation order, recorded values, `expect`), 10.3
+and 11.9.
+
 ## The decisions, in one place
 
 | # | Decision | Where |
@@ -82,6 +86,8 @@ completeness check. Three faults follow from that shape, and each one is in the 
   `iterator_state` is written by `typecheck` (`CURSOR`) and by `borrow` (`LENT`, `OWNED`).
   `Lambda.captures` is written by `scope` (the names) and by `typecheck` (each capture's
   `ty`, `passes/types/visit/helpers.py:72`). No pass can say that the field is final.
+  On the old pipeline, ruling S6 now makes `borrow` the one writer of `walks_in_place`
+  and of `iterator_state`.
 - **One set that is not one set.** `CallLike` says that each call class carries the whole
   set of callee fields. `Call` carries 7 `callee_*` fields, `MethodCall` 11 and `DotCall`
   13.
@@ -439,8 +445,9 @@ Only these may be asked of the AST once the migration completes:
   rewriter (ruling Q1 keeps it there). The template check works on a deep copy and leaves
   the written template as it is. Every other pass treats the AST as immutable.
 - **Be read by the backend.** The new backend reads SLIR and nothing else.
-- **Be read by a per-body pass.** Once the passes move, `typecheck`, `lift` and
-  `borrow` read SHIR only. Every WHOLE-PROGRAM pass, `collect` to `effects`, reads the
+- **Be read by a per-body pass.** Once the passes move, the BODY modules of `typecheck`,
+  `lift` and `borrow` read SHIR only. The declaration half of `typecheck` and `borrow`
+  stays on the AST (6.4). Every WHOLE-PROGRAM pass, `collect` to `effects`, reads the
   AST, bodies included: each runs before any SHIR exists, and asks question 4. `scope` is
   the one per-body pass that stays on the AST (ruling S3), and 7.1 says why.
 
@@ -456,6 +463,18 @@ declarations(program)                -> DeclTable  # declarations, whole-program
 Anything that needs a third entry point is a design smell and must be argued for in this
 document first.
 
+**The one third entry point: an initializer body.** Lowering makes a one-expression
+`ShirBody`, with an origin of its own, from each constant initializer and each `var`
+initializer. The argument: `typecheck` checks an initializer with the same helpers that
+check a body expression (the propagation of the declared type, the assignment check), and
+for a `var` it decides the element type of an empty container (`List.new()`, `from([])`).
+After the move those helpers read SHIR. The other two choices put the same rule in two
+places: type checks of its own in the constant evaluator, or AST copies of the helpers. The
+VALUE of a constant stays the evaluator's (Q5). The body only gives `typecheck` a SHIR node
+to check. Ruled 2026-10-11. The block of the body holds one statement: a `Return` of the
+initializer, because the initializer gives the value of the body as a `return` gives the
+value of a function.
+
 ### 6.4 Enforcement, not convention
 
 Three gates. All are cheap, and a rule with no gate does not survive a deadline.
@@ -463,13 +482,18 @@ Three gates. All are cheap, and a rule with no gate does not survive a deadline.
 | Gate | Mechanism | When |
 |---|---|---|
 | No node may take a stamp | `@dataclass(slots=True)` on all 77 classes. A stray write raises `AttributeError` | **In force**: `tests/unit/test_ast_nodes_are_slotted.py` |
-| A per-body pass may not read the AST | `typecheck`, `lift` and `borrow` import `shir`, not `ast` | when the passes move to SHIR |
+| A per-body pass may not read the AST | the BODY modules of `typecheck`, `lift` and `borrow` import `shir`, not `ast` | when the passes move to SHIR |
 | The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty (64 files match today) | when the old backend is deleted |
 
 Two sibling gates are in force. The ruff rule `TID251` (`pyproject.toml`) allows no
 `llvmlite` import outside `backend/` and `sushi_stdlib/`, so `semantics` names no LLVM
 type, which is the precondition for both IRs living there. `tests/unit/test_layering_gate.py`
 holds the rule that `semantics` never imports `backend`.
+
+The second gate reads the BODY modules only. The declaration half of `typecheck` and
+`borrow` stays on the AST: a module that reads declarations only, and the declaration half
+of a driver module. SHIR has no declaration, and question 4 of 6.1 allows a read of a
+declaration. Ruled 2026-10-11.
 
 ---
 
@@ -512,9 +536,12 @@ The kinds follow the bare-name ladder that `scope` already walks
 (`semantics/hidden_names.py`: a `_` binder, the `??` binder's hidden local), and two
 nodes the AST builder synthesizes can share the span of their cause. A table keyed by
 the node is valid for the tree it was built from and for no copy of it, so `scope` runs
-on EVERY copy before that copy is lowered: the copies of the fixpoint (Q2) get it today,
-and the template check copy (4.3), which today inherits the written template's
-`Lambda.captures` through its deep copy, gets a `scope` run of its own.
+on EVERY copy before that copy is lowered: the copies of the fixpoint (Q2) get it today.
+The body of a template check (4.3) is lowered from the template AS WRITTEN, which `scope`
+walks in the per-unit loop, so its `Bindings` exist and the deep copy of the check needs no
+`scope` run of its own. Each type parameter stays a type as written in that body, and its
+origin `TemplateCheck(TemplateId)` names the template whose opaque parameters `typecheck`
+reads it at.
 
 A `Capture` names WHAT is captured and nothing more. Today `Lambda.captures` has two
 writers: `scope` writes the names, and `typecheck` fills each capture's type
@@ -544,16 +571,22 @@ The pass order and every pass name are unchanged (N5).
 ```
 ShirBody
   fn_id   : DeclId                 # the declaration this body belongs to
-  origin  : Instance | TemplateCheck(TemplateId)
+  origin  : Instance | TemplateCheck(TemplateId) | Initializer
+                                   # Initializer: a constant or `var` initializer (6.3)
   params  : [ShirParam]
   locals  : [ShirLocal]            # from the `scope` pass
   block   : ShirBlock
+  copies  : ShirId -> [CopyRange]  # the copies of an unrolled `expand`, by block (4.5)
 
 ShirParam
   local      : LocalId
   ty         : TypeRef                   # the declared type (7.4)
   convention : Convention          # from the declared mode -- section 8.3
   loc        : Span
+  pack       : bool                # the written `...` of a value pack parameter
+
+CopyRange
+  start, stop : int                # the statements of one copy; `stop` is not included
 
 ShirLocal
   id       : LocalId
@@ -568,9 +601,26 @@ a written type is checked against it, and a binder with none (a `foreach` item, 
 binding, a destructuring target, a bare lambda parameter) is inferred into it. `declared`
 is syntax, like `ShirParam.ty`: the user wrote it.
 
-A hidden local is a local the AST builder made: the binder of a `foreach(x?? in ...)`, the
-whole value of a destructuring `let`, the `_` binder. It has no source name and no span,
-and no diagnostic names it.
+A hidden local is a local the AST builder made: the binder of a `foreach(x?? in ...)` or of
+a `foreach((a, b) in ...)`, a binder of a tuple rebind `(a, b) := v`, the `let` of a
+`foreach(_?? in ...)`. It has no source name and no span, and no diagnostic names it. The
+`_` binder of a `foreach` with no `??` binds nothing: its source holds `Discard` (7.5). The
+AST builder also binds the whole value of a destructuring `let` to a hidden name, but no
+SHIR node reads it, so it is not a local of the body: `Destructure` holds the value, and
+SHIR-to-SLIR lowering makes its place.
+
+`pack` is true for a value pack parameter of a template check body (`...Ts args`); its `ty`
+is the pack as written (`Ts`). In an instance, each element of the pack is a parameter of
+its own (`#pack_args_0`), and no element is a pack.
+
+`copies` is a side table, and no node holds it. The monomorphize pass puts one copy of the
+body of an `expand` in the enclosing block for each element of the pack (4.5), so the
+copies are one sequence of statements in SHIR. Three rules need the boundary of a copy: the
+dead-statement rule, the scope of each copy and the end of an element at a `break`, a
+`continue` or a `return`. Lowering is the one writer: for each block that holds copies, it
+records the statement range of each copy, in the order of the start, the outer copy first.
+A copy local keeps the name that the unroll gives it (`#line_x0`). The dump prints the
+table on a `copies` line, by the path of each block, only for a body that has a copy.
 
 ### 7.3 Everything `typecheck` decides lives in a side table
 
@@ -628,7 +678,7 @@ one body.
 | `LocalRef` | `local: LocalId` |
 | `ConstRef` | `const_id: DeclId`; the value is already computed (ruling Q5) |
 | `StorageRef` | `decl: DeclId`; a unit-level `var`, a PLACE with an address (`unit-storage.md`) |
-| `GlobalRef` | `decl: DeclId`; a function used as a value |
+| `GlobalRef` | `decl: DeclId`; a function used as a value, or a C global of an `unsafe external` block (`libc.environ`) |
 | `Field` | `base: Expr`, `name: str`; a struct field or a tuple element (`"0"`). The index is `typecheck`'s (S5) |
 | `Index` | `base: Expr`, `index: Expr`, `unchecked: bool` (4.9) |
 | `Slice` | `base: Expr`, `start: Expr`, `end: Expr`, `inclusive: bool`; a borrowed view (`slices.md`) |
@@ -639,22 +689,29 @@ one body.
 | `Borrow` | `place: Expr`, `mode: BorrowMode` |
 | `Take` | `place: Expr`; a marked field take `nom s.out` in a `let` or a `return` |
 | `Try` | `inner: Expr`; `??`, kept whole for `borrow` and for G7 |
-| `Lambda` | `params`, `body: ShirBlock`; the captures are in `Bindings`. It stays in the tree through `borrow`; `lift` describes it in `LiftResults` (Q8) |
-| `StructInit` | `decl: DeclId`, `fields: [Expr]`; positional after lowering |
-| `EnumInit` | `decl: DeclId`, `variant: str`, `payload: [Expr]` |
+| `Lambda` | `params: [LambdaParam]`, `ret: TypeRef \| None`, `err: TypeRef \| None`, `body: ShirBlock`, `expr_body: bool`; the captures are in `Bindings`. It stays in the tree through `borrow`; `lift` describes it in `LiftResults` (Q8) |
+| `StructInit` | `decl: DeclId`, `fields: [Arg]`, `written_order: [int]`, `names: [str] \| None`; `fields` in the declaration order |
+| `EnumInit` | `decl: DeclId`, `variant: str`, `payload: [Arg]` |
 | `TupleInit` | `parts: [Expr]` |
 | `ArrayInit` | `kind: Fixed \| Dynamic`, `runs: [ArrayRun]` |
 | `Range` | `start: Expr`, `end: Expr`, `inclusive: bool`, `reverse: bool` |
 | `Interp` | `parts: [Str \| Expr]`; kept whole so `typecheck` reports per part |
 
 ```
-CallTarget = Named(ref: Expr)                # a scope-resolved name, or any callable expr
+CallTarget = Named(ref: Expr, type_args: [TypeRef])  # a scope-resolved name, or any callable expr
            | Dotted(recv: Expr, name: str)   # x.f(...) -- built-in, extension, perk, adapter
            | Static(ty: TypeRef, name: str)  # Vec.at, List.new, Iterator.new, f64.from_bits
+           | BuiltinFn(name: str)            # print, println: no declaration, no receiver
 
 Arg      = (value: Expr, marker: Convention | None)
-ArrayRun = Single(Expr) | Repeat(value: Expr, count: Expr) | Span(Range)
+LambdaParam = (local: LocalId, convention: Convention)
+ArrayRun = Single(Expr) | Repeat(value: Expr, count: Expr) | RangeRun(Range)
 ```
+
+A `Repeat` run `[v; n]` evaluates its value first and then its count, in the written order.
+Today the backend evaluates the count first. The value is the first field of `Repeat` and
+the count the second, and SHIR-to-SLIR lowering evaluates each into a temp in the field
+order, so the old order goes. Ruled 2026-10-11.
 
 A `TypeRef` is a type as WRITTEN: the `typesys.Type` the AST builder made from the
 annotation, concrete in an instance and opaque in a template check copy (4.3). It is
@@ -667,19 +724,92 @@ cannot know whether `f` is a built-in, an extension, a perk method or an iterato
 until the type of `x` is known. `Static` covers a call on a type name, user or built-in,
 `hm.HashMap.new()` behind an alias included; it has no receiver EXPRESSION at all.
 
+The type arguments that a call writes (`identity@(i32)(5)`) stand on the callee:
+`Named.type_args`, each a `TypeRef`, empty when the call writes none. A call through a
+namespace (`geo.nothing@(i32)()`) is a `Named` of a `GlobalRef` too, so the same field
+holds them. Lowering resolves no type argument; the instance that the call names is
+`typecheck`'s (S5). The grammar also parses type arguments after a type or a value and
+a dot (`Vec.at@(i32)(1)`, `xs.get@(i32)(0)`), but the language refuses both (CE6102), so
+`Static` and `Dotted` have no such field, and that form is a hole. Ruled 2026-10-12.
+A struct construction takes no type arguments either (`Pair@(i32, i32)(1, 2)`, also behind
+an alias), and the language refuses a named argument outside a struct construction
+(CE6104). Each of these forms is an ERROR HOLE: the program always has an error from a
+later pass, so the hole never stops the compile under `SUSHI_SHIR_STRICT=1`, as the hole of
+a name with no declaration does not. Ruled 2026-10-14. Three more forms are error holes by
+the same ruling: a slice with a reversed range (`data[(0..3).rev()]`, CE2122), a call of a
+name that the namespace does not hold (`geo.twicee(21)`, CE2008), and a member of a type
+that is no variant (`Sign.Nope`, CE2045; a static outside a call is one too).
+
 `marker` is the WRITTEN call-site mode (`nom s`, `poke n`), or `None`. The RESOLVED
 convention is `typecheck`'s: an unmarked argument in a consuming position (constructor,
 container insert, array element) resolves to `Owned` with no marker, and
 [CE2427](../error-catalog.md#ce2427) compares `marker` against the declared parameter. A
 marked field take in a call argument (`take(nom w.inner)`) is an `Arg` with an `Owned`
-marker on a `Field`; in a `let` or a `return` it is `Take`.
+marker on a `Field`; in a `let` or a `return` it is `Take`. A struct or a variant
+construction is a consuming position, and its arguments are `Arg`s too, so the written
+marker of `Result.Ok(nom s)` stays in SHIR. Lowering records the written shape of a
+`Take`: that the place is one step off a name that the body owns is a rule of `borrow`. In
+the same way, `peek x` and `poke x` are the `marker` of an `Arg` in a call argument, and a
+`Borrow` in every other position (a tuple part, an operand). The value of a reference `let`
+(`let poke T x = place`) is a `Borrow` too, from the same lowering. A `Borrow` that is not
+legal in its position is refused by `typecheck`, not by lowering.
 
 `StructInit` and `EnumInit` name the declaration, because the binding table knows it at
-lowering. The instance of a generic struct or enum is `typecheck`'s answer (S5). Named
-struct construction is all-or-nothing, so lowering reorders named fields into declaration
-order and `StructInit` is always positional. Reordering must not reorder EVALUATION:
-lowering evaluates each field expression into a temp in the WRITTEN order, then builds the
-aggregate in declaration order.
+lowering: the written name, with its alias (`geo.Vec`), as a pattern names an enum. The
+instance of a generic struct or enum is `typecheck`'s answer (S5). Named struct
+construction is all-or-nothing, so lowering puts named fields into declaration order and
+`fields` is always positional. It reads the field names from the struct declaration, not
+from a type. Reordering must not reorder EVALUATION: `written_order` gives the positions
+of `fields` in the WRITTEN order, and SHIR-to-SLIR lowering evaluates each field
+expression into a temp in that order, then builds the aggregate in declaration order. SHIR
+has no temp, so the rule holds in every expression position: a `while` condition, an
+operand of `and`, a lambda body. Today `typecheck` puts the arguments into declaration
+order and the backend evaluates them in that order. That order goes at the switch. Ruled
+2026-10-11.
+
+A named construction whose names are not the declared fields (an unknown, a repeated or a
+missing name), or whose name has no struct declaration, has an error. Lowering keeps it as
+written: `fields` in the written order, `written_order` the identity, and `names` the
+written name of each field. `typecheck` reports the fault (CE2080, CE2081, CE2082) from
+`names`. In every other construction `names` is `None`. Ruled 2026-10-12.
+
+`T.m(...)` and the bare `T.m` on a type name are an `EnumInit` when the enum declaration of
+`T` has the variant `m`; else `T.m(...)` is a `Static` call (#542). A member `ns.m` behind
+an alias is a `ConstRef`, a `StorageRef` or a `GlobalRef`, by what the namespace holds.
+A C global of an `unsafe external` block is a `GlobalRef` with the written name and its
+alias (`libc.environ`), as a C function is (`libc.abs`). A read and a write of it are the
+same node; `typecheck` refuses the write (CE5016). A type and a name that the namespace
+does not hold stay holes. Ruled 2026-10-12.
+`from([...])` and `new()` are an `ArrayInit` of the kind `Dynamic`, never a `Call`.
+
+**A readable value inside a body.** `typecheck` needs the value of some sub-expressions
+that the compiler can read: a divisor and a shift count, the operands of an overflow fold,
+the count of an array run, a range bound, a constant index. Lowering evaluates each such
+sub-expression with the AST constant evaluator and records the value on the SHIR node. The
+value is syntax: it comes from the source alone, as `unchecked` does (4.9). `typecheck`
+reads the recorded value and does not call the evaluator, so the evaluator has no SHIR
+reader (Q5). Ruled 2026-10-11. A sub-expression that holds a call, a field read, a member
+behind an alias, a construction other than a fixed array literal, a `Borrow`, a `Take`, a
+`Try`, a `Slice` or a `Lambda` records no value: the evaluator writes on the AST for a member access,
+the value of such a construction is never a number that `typecheck` reads, and the
+evaluator has no value for an ownership node, a view or a closure. A `Cast`, an `Index`, a `Range` and
+an `Interp` are read through: the evaluator folds `4 as i32`, `[4, 2][0]` and a hole of
+constants with no write on the AST.
+
+**`expect(msg)` keeps its lazy message.** The message is evaluated only when the call
+fails, as the message of an `Assert` is. A `Builtin` call with an operand that is
+evaluated first cannot keep this. So SHIR-to-SLIR lowering lowers `expect` as it lowers
+`Assert` (8.9): `Discriminant`, `SwitchInt`, and the message on the failing edge before the
+exit. `expect` is not a row of the `Result`/`Maybe` method family (Q7). Ruled 2026-10-11.
+
+**A lambda body.** The body of a `Lambda` is a block of the enclosing `ShirBody`, lowered
+where the lambda stands: its parameters and its locals take ids from the counter of that
+body, as the scope pass gives them (7.1), and the body lists them. An expression body
+`|x| e` is a block of one `Return(e)`, and `expr_body` is true. The written shape is syntax
+that two answers need: the typecheck pass infers the return type from an expression body
+and never from a block body, and a lambda with a channel returns the value of an
+expression body in `Result.Ok`, where a block body spells both constructors
+(`closures.md`, section 2).
 
 A native variadic call is NOT collapsed here. Which parameter is `...T` is a fact about
 the callee, and `typecheck` resolves the callee. So the trailing arguments stay a flat list
@@ -692,7 +822,7 @@ forwards the array operand itself, as a `Move`.
 | Node | Fields |
 |---|---|
 | `Assign` | `target: Expr`, `value: Expr`, `is_init: bool`; `Let` and `Rebind` collapse here |
-| `Destructure` | `targets: [LocalId \| Discard]`, `value: Expr`; `let (a, b) = v` |
+| `Destructure` | `targets: [LocalId \| Discard \| Nested]`, `value: Expr`; `let (a, b) = v`, and `Nested(targets)` for `let ((a, b), c) = v` |
 | `ExprStmt` | `value: Expr` |
 | `Return` | `value: Expr` |
 | `If` | `cond: Expr`, `then: ShirBlock`, `otherwise: ShirBlock \| None` |
@@ -704,26 +834,32 @@ forwards the array operand itself, as a `Move`.
 
 ```
 LoopSource = Cond(cond: Expr)                                              # `while`
-           | Items(iterable: Expr, binder: LocalId, by: Bare | Ref(BorrowMode))  # `foreach`
+           | Items(iterable: Expr, binder: LocalId | Discard, by: Bare | Ref(BorrowMode))
+                                                                           # `foreach`
 ```
 
 `LoopSource` is what the SOURCE says: a condition, or an iterable with its binder and the
-binder's written mode. Which WALK the iterable gets is `typecheck`'s answer (7.7), and it
+binder's written mode. The binder `_` is `Discard`, and `peek _` keeps its mode. A type
+written on a plain binder is the `declared` type of its local. A type written on a `??`
+binder names the value that the `let` at the top of the body unwraps, so it is the
+`declared` type of the local of that `let`. Which WALK the iterable gets is `typecheck`'s answer (7.7), and it
 holds no operand of its own.
 
 `is_init` carries the one semantic difference between `Let` and `Rebind`: a rebind
 RE-INITIALIZES, which clears a moved flag. A reference binding (`let poke T x = place`) is
 an `Assign` with `is_init` whose value is a `Borrow`, and its local has the reference type.
-A tuple rebind `(a, b) := v` reaches lowering already split by the AST builder into a hidden
-binder and one `Rebind` per place.
+A tuple rebind `(a, b) := v` reaches lowering already split by the AST builder: a
+`Destructure` of `v` into hidden binders, then one `Assign` per place from its binder, from
+left to right.
 
 `Destructure` stays one statement, because its ownership is not that of a field read: it
 OWNS from an owned value and BORROWS from a borrow (`tuples.md`). `borrow` decides which,
 and SLIR lowering writes the field moves or the field views.
 
 `Assert` keeps its message as an expression, because the message is evaluated only when
-the condition fails (`assert.md`). `label` is the source text of the condition, set by the
-AST builder.
+the condition fails (`assert.md`). `label` is the file name that a diagnostic of the unit
+shows, set by the AST builder: the program prints it with the line and the column of the
+`assert` when the condition fails ([RE2026](../error-catalog.md#re2026)).
 
 ### 7.6 `Callee`: a closed set
 
@@ -791,6 +927,13 @@ A `while(true)` loop is a `Cond` source with a constant condition. A `foreach(x?
 lowering already desugared by the AST builder: a hidden binder, and a `let` with `??` at
 the top of the body.
 
+The iterator of a `Protocol` or an `IteratorValue` walk has no SHIR local. Today the
+typecheck pass makes a hidden local for it (`Foreach.protocol_iter_name`) and the `next()`
+call on it (`Foreach.protocol_next`), after `scope`, so lowering cannot read either. The
+`next()` callee is the `Protocol` answer, keyed by the loop's `shir_id`, and SHIR-to-SLIR
+lowering makes the SLIR local that holds the iterator. No pass before it names that local:
+`borrow` keys its facts on the loop's `shir_id`.
+
 Whether a `Protocol` or an `IteratorValue` walk takes its iterator or walks it in place,
 through a `poke` root, is NOT here: it is a borrow fact (4.4), in `OwnershipResults` (S6).
 The item mode, owned or lent, follows from the type (`IteratorType.peeks`).
@@ -799,28 +942,36 @@ The item mode, owned or lent, follows from the type (`IteratorType.peeks`).
 
 ```
 Pattern = Wildcard
-        | Literal(value: Constant)               # an integer or a string
-        | Range(low: Constant, high: Constant)   # 0x80..=0x8f -- both bounds included
+        | Literal(value: Constant)               # an integer, a byte or a string
+        | IntRange(low: Constant, high: Constant, inclusive: bool)   # 0x80..=0x8f
         | Variant(decl: DeclId, variant: str, items: [Pattern | PatBinding])
         | Tuple(elements: [Pattern | PatBinding])
         | Own(inner: Pattern | PatBinding)       # Own(poke h) -- unwraps Own@(T)
-        | Or(alternatives: [Pattern])            # 1 | 2 -- two or more, same bindings
+        | Or(alternatives: [Pattern | PatBinding])   # 1 | 2 -- two or more, same bindings
 
-PatBinding = (local: LocalId, by: Bare | Ref(BorrowMode) | Take)
+PatBinding = (local: LocalId, by: Bare | Ref(BorrowMode) | Nom)
 
 Arm = (pattern: Pattern, body: ShirBlock)
 ```
 
 A payload binding is required, and `_` discards (it lowers to `Wildcard`). A binding has
 three modes (`borrow-model.md` §10b): `Bare` is a shallow read-only view, `Ref` points into
-the payload, and `Take` (`nom`) takes it, which needs a scrutinee the match owns: a
-temporary, or `Match.consumes`.
+the payload, and `Nom` takes it, which needs a scrutinee the match owns: a
+temporary, or `Match.consumes`. `consumes` is the written `match nom r:`; whether the match
+owns a temporary scrutinee is an answer of `borrow`. A bare name in a pattern is a
+`PatBinding` with the mode `Bare`. The mode of `Own(poke h)` is in the `PatBinding` that
+`Own` holds. Two alternatives of `|` that bind one name bind one local. An arm body that
+the source writes as one expression is a block of one `ExprStmt`.
 
 An INTEGER scrutinee and a STRING scrutinee use `Literal` arms; the kinds never mix
-([CE2076](../error-catalog.md#ce2076)), and that is checked on SHIR. `Range` is an INTEGER
-pattern only: the AST's `RangePattern` (`a..b` or `a..=b`) lowers to the inclusive bounds
-as values of the type at its position, so `0..10` is `Range(0, 9)` and `0x80..=0xff` on an
-i8 is `Range(-128, -1)`. A `Literal` integer is a value of that type in the same way.
+([CE2076](../error-catalog.md#ce2076)), and that is checked on SHIR. `IntRange` is an
+INTEGER pattern only: the AST's `RangePattern` (`a..b` or `a..=b`) lowers to its written
+bounds and `inclusive`. Lowering has no types, so `typecheck` reads the bounds as values of
+the type at the position: `0..10` matches 0 to 9, and `0x80..=0xff` on an i8 matches -128
+to -1. A `Literal` integer is a value of that type in the same way. A bound is a literal and
+not an expression, so lowering does not call the constant evaluator for it, and a constant
+keeps its spelling (a radix, a byte). `Variant` names its enum by the written name, the
+alias included: a name that is not an enum is an error of `typecheck`, not of lowering.
 `Tuple` mirrors `TuplePattern`, `Own` mirrors `OwnPattern`, and `Or` mirrors `OrPattern`:
 it stands at the top of an arm and in every pattern position. Each alternative binds the
 same locals, with the same types and the same mode ([CE2126](../error-catalog.md#ce2126)),
@@ -850,8 +1001,8 @@ there: it never lowers to SLIR (4.3).
 | whether a lent iterator's state goes to the heap, because the iterator leaves through a `peek` return | the producer's or adapter's `shir_id` |
 | whether a loop walks its iterator in place | the loop's `shir_id` |
 
-**Ruling S6: one fact, one writer.** Today `typecheck` and `borrow` both write the walk in
-place and the iterator state (1.2). Each of those facts is a question about ownership, and
+**Ruling S6: one fact, one writer.** Before this ruling, `typecheck` and `borrow` both
+wrote the walk in place and the iterator state (1.2). Each of those facts is a question about ownership, and
 `borrow` sees every input that `typecheck` sees. So `borrow` writes them, and `typecheck`
 writes nothing about them. A `Cursor` walk needs no state, because its `LoopKind` says so.
 
@@ -877,27 +1028,29 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 |---|---|
 | `Name` | `LocalRef` / `ConstRef` / `StorageRef` / `GlobalRef`, from `Bindings` |
 | `IntLit`, `FloatLit`, `BoolLit`, `BlankLit`, `StringLit` | `Lit` |
-| `Call`, `MethodCall`, `DotCall` | `Call` with a `CallTarget`; a struct name gives `StructInit` |
-| `Print`, `PrintLn` | `Call` with a built-in target |
+| `Call`, `MethodCall`, `DotCall` | `Call` with a `CallTarget`, the written type arguments on a `Named` target; a struct name gives `StructInit`, also behind an alias; a variant of an enum gives `EnumInit` |
+| `Print`, `PrintLn` | `ExprStmt` of a `Call` with a `BuiltinFn` target |
 | `Let`, `Rebind` | `Assign` with `is_init`; a `Let` with targets gives `Destructure` |
+| `If` | `If`; each `elif` is an `If`, the one statement of the `otherwise` block of the arm before it |
+| `Return`, `ExprStmt`, `Break`, `Continue` | the node of the same name |
 | `Assert` | `Assert` |
 | `While` | `Loop` with a `Cond` source |
-| `Foreach` | `Loop` with an `Items` source; the walk kind is one of five `typecheck` answers |
-| `ArrayLiteral`, `DynamicArrayNew`, `DynamicArrayFrom`, `ArrayElement` | `ArrayInit` with runs |
+| `Foreach` | `Loop` with an `Items` source; the walk kind is one of five `typecheck` answers. The `let` of a `??` binder and the destructure of a tuple binder stay the first statement of the body, as the AST builder made them |
+| `ArrayLiteral`, `DynamicArrayNew`, `DynamicArrayFrom`, `ArrayElement` | `ArrayInit` with runs: `Fixed` for `[...]`, `Dynamic` for `from([...])` and `new()` |
 | `EnumConstructor` | `EnumInit` |
 | `TupleLiteral` | `TupleInit` |
-| `MemberAccess` | `Field`, or `StorageRef` / `ConstRef` through a namespace |
-| `IndexAccess` | `Index`, or `Slice` when the index is a range |
+| `MemberAccess` | `Field`; `ConstRef` / `StorageRef` / `GlobalRef` through a namespace, a C global of an `unsafe external` block included (`libc.environ`); `EnumInit` for a unit variant (`Sign.Plus`); any other member of a type (`Sign.Nope`, CE2045) is an error hole (7.4) |
+| `IndexAccess` | `Index` with the `unchecked` mark of the builder (4.9), or `Slice` when the index is a range; a reversed range (`data[(0..3).rev()]`, CE2122) is an error hole (7.4), because `Slice` has no field for it |
 | `CastExpr` | `Cast` |
 | `TryExpr` | `Try`, **kept** |
-| `InterpolatedString` | `Interp`, **kept** |
+| `InterpolatedString` | `Interp`, **kept**: each text part as written, an empty one too, and each hole as an expression |
 | `Expand` | `Expand` in a template check body; nothing in an instance (4.5) |
-| `Spread` (bloom `arr...`) | the array operand, forwarded whole; SLIR lowering makes it a `Move` |
-| `Borrow` | `Borrow` |
+| `Spread` (bloom `arr...`) | the array operand, forwarded whole: an `Arg` with `bloom`; SLIR lowering makes it a `Move` |
+| `Borrow` | `Borrow`; in a call argument, the `marker` of the `Arg` |
 | a `nom`-marked field read | `Take`, or an `Owned` marker on the `Arg` |
 | `RangeExpr` | `Range`, a run of an `ArrayInit`, or a `Slice` bound |
 | `UnaryOp`, `BinaryOp` | `Unary`, `Binary` |
-| `Lambda` | `Lambda` |
+| `Lambda` | `Lambda`; a parameter is a `LambdaParam`, with its name, written type and span on its local. A block body is the body; an expression body is a block of one `Return`, with `expr_body` |
 | `Match`, `MatchArm` and the 9 pattern classes | `Match`, `Arm`, `Pattern`, `PatBinding` |
 
 The 52 body classes of the AST become 40 SHIR nodes: 22 expressions, 11 statements and 7
@@ -1317,6 +1470,10 @@ the extension copies that a first call cut, places the array-template perk copie
 late function bodies, and `_check_copies` runs `scope`, `typecheck`, `lift` and `borrow`
 over each one with the home unit's passes. Under this design each copy is lowered to SHIR
 when it is placed, with its own side tables (7.3), and the fixpoint is otherwise unchanged.
+The point is in `_check_copies`: after the `scope` run of each copy and before its
+`typecheck` run, with the passes of the home unit, as the per-unit loop lowers a unit
+after `scope`. A copy is a body of its home unit, and a unit lists its copies in the order
+of their names, which hold the type arguments, never in the order of the fixpoint.
 
 **Q3. One node set with a legality level, or two hierarchies? TWO hierarchies.**
 
@@ -1435,11 +1592,14 @@ again when its area moves.
 
 The Python unit layer is different: the mandated seam gates
 (`test_consuming_use_coverage`, `test_borrow_dispatch_is_total`,
-`test_callee_mode_matrix`, `test_owning_binding_uses_the_router`,
-`test_scope_exit_walk_is_one`, `test_method_call_dispatch_is_a_table`, ...) assert on the
-OLD structure by name. Each guarded seam has a named replacement (8.12), so each gate is
-ported when its seam moves. The gates of the emitter families (Q7) stay. This is a real,
-planned cost.
+`test_callee_mode_matrix`, `test_scope_exit_walk_is_one`,
+`test_method_call_dispatch_is_a_table`, ...) assert on the OLD structure by name. Each
+guarded seam has a named replacement (8.12), so each gate is ported when its seam moves.
+The gates of the emitter families (Q7) stay. This is a real, planned cost.
+
+`test_owning_binding_uses_the_router` is dropped, not ported. Its replacement is the one
+drop-placement gate that `test_scope_exit_walk_is_one` ports to, and two ports of one rule
+are two gates for one rule. Ruled 2026-10-11.
 
 ---
 
@@ -1487,4 +1647,9 @@ The plan is written elsewhere; these are the design-level invariants it must hon
    emitter that evaluates an argument through a callback chooses when the argument runs:
    `List.push` evaluates its element AFTER the buffer grows. Under SLIR every operand is
    evaluated before the call. For each family with such a callback, the plan shows that
-   the order is not visible to a program, or it keeps the order.
+   the order is not visible to a program, or it keeps the order, or a ruling changes it.
+   Ruled 2026-10-11 for each visible order: where the old order is a defect (a receiver
+   that is read before an argument changes it, a receiver or an argument that is evaluated
+   two times), SHIR lowering gives the SHIR order by construction and the old order is not
+   kept. A named struct construction takes the written order, and a repeat run takes the
+   value first (7.4). `expect` keeps its lazy message (7.4).
