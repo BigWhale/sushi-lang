@@ -731,6 +731,11 @@ holds them. Lowering resolves no type argument; the instance that the call names
 `typecheck`'s (S5). The grammar also parses type arguments after a type or a value and
 a dot (`Vec.at@(i32)(1)`, `xs.get@(i32)(0)`), but the language refuses both (CE6102), so
 `Static` and `Dotted` have no such field, and that form is a hole. Ruled 2026-10-12.
+A struct construction takes no type arguments either (`Pair@(i32, i32)(1, 2)`, also behind
+an alias), and the language refuses a named argument outside a struct construction
+(CE6104). Each of these forms is an ERROR HOLE: the program always has an error from a
+later pass, so the hole never stops the compile under `SUSHI_SHIR_STRICT=1`, as the hole of
+a name with no declaration does not. Ruled 2026-10-14.
 
 `marker` is the WRITTEN call-site mode (`nom s`, `poke n`), or `None`. The RESOLVED
 convention is `typecheck`'s: an unmarked argument in a consuming position (constructor,
