@@ -12,8 +12,9 @@ be the diagnostic of the program (rulings of 2026-10-12 and 2026-10-14):
   arguments after a type or a value (`Vec.at@(i32)(1)`, `xs.get@(i32)(0)`, CE6102), and
   written type arguments on a struct construction (`Pair@(i32, i32)(1, 2)`, also behind
   an alias; the typecheck pass of group A5 refuses it with CE6102), a slice with a
-  reversed range (`xs[(0..2).rev()]`, CE2122), and a call of a name that the namespace
-  does not hold (`geo.twicee(21)`, CE2008).
+  reversed range (`xs[(0..2).rev()]`, CE2122), a call of a name that the namespace
+  does not hold (`geo.twicee(21)`, CE2008), and a member of a type that is no variant
+  (`Sign.Nope`, CE2045).
 - A type name written as a value is a hole too. The scope pass reports CE2105 for it, so
   strict mode skips a unit whose scope pass reported an error.
 
@@ -140,6 +141,8 @@ ERROR_HOLES: dict[str, str] = {
                                       "behind an alias (CE6102), a name that the namespace "
                                       "does not hold (CE2008)",
     "lower_aggregates.py:_slice": "a slice with a reversed range (CE2122)",
+    "lower_aggregates.py:_unit_variant": "a member of a type that is no variant: CE2045 on "
+                                         "an enum, CE2105, CE2007 or CE2008 on another type",
     "lower_nodes.py:hole": "the hole itself, after its stop check",
 }
 

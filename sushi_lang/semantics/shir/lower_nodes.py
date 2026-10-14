@@ -245,7 +245,8 @@ class BodyLowerer:
         the language always refuses with a diagnostic of a later pass is one too: a named
         argument outside a struct construction (CE6104), written type arguments after a
         dot or on a struct construction (CE6102), a slice with a reversed range (CE2122),
-        and a call of a name that the namespace does not hold (CE2008).
+        a call of a name that the namespace does not hold (CE2008), and a member of a type
+        that is no variant (CE2045).
         """
         made = Hole(self.made_opaque(), self.span(node), type(node).__name__)
         self.holes.append(made)

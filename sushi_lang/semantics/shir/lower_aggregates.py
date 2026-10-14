@@ -224,7 +224,15 @@ def _namespace_member(lw: BodyLowerer, node: a.MemberAccess, alias: str) -> e.Sh
 
 
 def _unit_variant(lw: BodyLowerer, node: a.MemberAccess, ty: WrittenType) -> e.ShirExpr:
-    """`T.V`: a variant with no payload. Any other member of a type is a hole."""
-    if lw.lookup is None or not lw.lookup.is_variant(str(ty), node.member):
+    """`T.V`: a variant with no payload.
+
+    Any other member of a type is an error hole: the program always has an error. A name
+    that is no variant is CE2045 on an enum (a static too, because a static is a value only
+    in a call), and a member of another type is CE2105, or CE2007 or CE2008 behind an
+    alias. With no lookup, it is a hole.
+    """
+    if lw.lookup is None:
         return lw.hole(node)
+    if not lw.lookup.is_variant(str(ty), node.member):
+        return lw.error_hole(node)
     return enum_init(lw, node, ty, node.member, [])
