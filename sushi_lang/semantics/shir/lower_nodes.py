@@ -5,8 +5,10 @@ keyed on the class (gate: `tests/unit/test_shir_lowering_is_one_table.py`). A cl
 no row is a HOLE: lowering makes a `Hole` that names the AST class, records it, and the
 compile goes on through the old pipeline. When the variable that `STRICT_VARIABLE` names
 is `1`, a hole stops the compile with the stop code CE0155 instead, except in a unit whose
-scope pass reported an error (`stops_on_hole`). The hole of a name with no declaration
-never stops the compile (`error_hole`). A value that carries
+scope pass reported an error (`stops_on_hole`). The hole of a name with no declaration,
+and of a form that the language always refuses (a named argument outside a struct
+construction, type arguments after a dot or on a struct), never stops the compile
+(`error_hole`). A value that carries
 the `nom` marker outside a call argument is a `Take` of it: the AST builder puts the marker
 there only in a `let` initializer and in a `return` (ir.md 7.4).
 
@@ -238,7 +240,10 @@ class BodyLowerer:
         """The hole of a program that always has an error. It never stops the compile.
 
         A name with no declaration is one: the error of the program (CE1001, CE1002 or
-        CE0144) is its diagnostic, not the stop code (ruling of 2026-10-12).
+        CE0144) is its diagnostic, not the stop code (ruling of 2026-10-12). A form that
+        the language always refuses with a diagnostic of a later pass is one too: a named
+        argument outside a struct construction (CE6104), and written type arguments after
+        a dot or on a struct construction (CE6102).
         """
         made = Hole(self.made_opaque(), self.span(node), type(node).__name__)
         self.holes.append(made)
@@ -384,14 +389,18 @@ def _call(lw: BodyLowerer, node: a.Call) -> e.ShirExpr:
 
     The written type arguments stand on the callee (`identity@(i32)(5)`), as written.
     A struct name as the callee is a construction (`StructInit`), and only a construction
-    takes a named argument. A construction has no field for written type arguments, so
-    `Pair@(i32, i32)(1, 2)` is a hole.
+    takes a named argument. A construction takes no written type arguments, so
+    `Pair@(i32, i32)(1, 2)` is an error hole: the language refuses it (CE6102, from the
+    typecheck pass of group A5). A named argument on another callee is an error hole too
+    (CE6104).
     """
     found = lw.bindings.resolution_of(node.callee)
-    if isinstance(found, bd.TypeName) and not node.type_args:
+    if isinstance(found, bd.TypeName):
+        if node.type_args:
+            return lw.error_hole(node)
         return struct_init(lw, node, found.name, found.name, node.args, node.field_names)
-    if node.field_names is not None or isinstance(found, bd.TypeName):
-        return lw.hole(node)
+    if node.field_names is not None:
+        return lw.error_hole(node)
     ident = lw.made_opaque()
     return e.Call(ident, lw.span(node), e.Named(lw.expr(node.callee), _type_args(node)),
                   _arguments(lw, node.args))
@@ -408,16 +417,17 @@ def _dotted(lw: BodyLowerer, node: a.DotCall | a.MethodCall) -> e.ShirExpr:
     A namespace gives what it holds: a function, or a struct to construct. A type name
     gives a variant or a static, also behind an alias (`hm.HashMap.new()`). Any other
     receiver is a value, and the target is `Dotted`: which method it calls is an answer of
-    the typecheck pass (ir.md 7.4). A named argument outside a struct construction is a
-    hole, as in `_call`. Written type arguments stand only on the function behind a
-    namespace: on a type or a value receiver (`Vec.at@(i32)(1)`, `xs.get@(i32)(0)`) the
-    program has an error (CE6102), and `Static` and `Dotted` have no field for them.
+    the typecheck pass (ir.md 7.4). A named argument outside a struct construction is an
+    error hole (CE6104), as in `_call`. Written type arguments stand only on the function
+    behind a namespace: on a type or a value receiver (`Vec.at@(i32)(1)`,
+    `xs.get@(i32)(0)`) the program has an error (CE6102), `Static` and `Dotted` have no
+    field for them, and the form is an error hole.
     """
     found = lw.bindings.resolution_of(node.receiver)
     if isinstance(found, bd.Namespace):
         return _qualified_call(lw, node, found.name)
     if node.field_names is not None or _type_args(node):
-        return lw.hole(node)
+        return lw.error_hole(node)
     ty = lw.type_before_dot(node.receiver)
     if ty is not None:
         return _static_call(lw, node, ty)
@@ -432,14 +442,18 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
 
     The written type arguments stand on the callee, as on a direct call
     (`geo.nothing@(i32)()`). A struct that the namespace holds is a construction, named
-    with the alias. Anything else that the namespace holds under the name is a hole.
+    with the alias; with written type arguments (`geo.Box@(i32)(1)`) it is an error hole,
+    as in `_call`. A named argument on anything else is an error hole (CE6104). Anything
+    else that the namespace holds under the name is a hole.
     """
     kind = None if lw.lookup is None else lw.lookup.member_kind(lw.bindings.body, alias,
                                                                 node.method)
     if kind == "struct" and not _type_args(node):
         return struct_init(lw, node, f"{alias}.{node.method}", node.method, node.args,
                            node.field_names)
-    if node.field_names is not None or kind not in CALLABLE_KINDS:
+    if node.field_names is not None or kind == "struct":
+        return lw.error_hole(node)
+    if kind not in CALLABLE_KINDS:
         return lw.hole(node)
     ident = lw.made_opaque()
     ref = e.GlobalRef(lw.made_opaque(), lw.span(node), lw.decls.refer(f"{alias}.{node.method}"))

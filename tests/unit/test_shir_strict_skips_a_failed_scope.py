@@ -1,12 +1,17 @@
 """Gate: strict mode never stops on an unresolved name, nor in a unit with a scope error.
 
-Under `SUSHI_SHIR_STRICT=1` a hole stops the compile with the stop code CE0155. Two kinds
-of hole are holes of a program that always has an error, and the error, not CE0155, must
-be the diagnostic of the program (rulings of 2026-10-12):
+Under `SUSHI_SHIR_STRICT=1` a hole stops the compile with the stop code CE0155. Some
+holes are holes of a program that always has an error, and the error, not CE0155, must
+be the diagnostic of the program (rulings of 2026-10-12 and 2026-10-14):
 
 - A name with no declaration (`Unresolved`) is a hole, and SHIR has no node for it. The
   program has an error: CE1001 or CE1002 from the scope pass, or CE0144 from the typecheck
   pass for a type pack name. So the hole of an unresolved name never stops the compile.
+- A form that the language always refuses, with a diagnostic from a later pass, is an
+  error hole too: a named argument on a callee that is no struct (CE6104), written type
+  arguments after a type or a value (`Vec.at@(i32)(1)`, `xs.get@(i32)(0)`, CE6102), and
+  written type arguments on a struct construction (`Pair@(i32, i32)(1, 2)`, also behind
+  an alias; the typecheck pass of group A5 refuses it with CE6102).
 - A type name written as a value is a hole too. The scope pass reports CE2105 for it, so
   strict mode skips a unit whose scope pass reported an error.
 
@@ -20,13 +25,14 @@ The rule has five parts, and this gate holds each one:
    pass has used when lowering starts. A copy that the copy fixpoint places after the
    per-unit loop is lowered with the reporter of its home unit in the same way.
 4. `BodyLowerer.error_hole` records a hole and never raises CE0155.
-5. `_name` is the one lowering that calls `error_hole`, and it calls it for an
-   `Unresolved` name. `hole` calls it too, after its stop check.
+5. The lowerings that call `error_hole` are the ones that `ERROR_HOLES` names, each with
+   its reason, and `_name` calls it for an `Unresolved` name. `hole` calls it too, after
+   its stop check.
 
 The scan reads Python source and signatures; it does not start the compiler. The proof
 on a program is a compile by hand: `SUSHI_SHIR_STRICT=1 ./sushic` on a CE1001 fixture
-gives CE1001, and on a fixture of `variadic/pack_name_is_not_a_value/` it gives CE0144,
-not CE0155.
+gives CE1001, on a fixture of `variadic/pack_name_is_not_a_value/` it gives CE0144, and on
+a fixture of `types/named_args/` it gives CE6104, not CE0155.
 """
 from __future__ import annotations
 
@@ -123,12 +129,23 @@ def _calls_error_hole(node: ast.AST) -> bool:
                and sub.func.attr == "error_hole" for sub in ast.walk(node))
 
 
-def test_an_unresolved_name_is_the_one_error_hole() -> None:
+#: The lowerings that call `error_hole`, each with the error that the program always has.
+ERROR_HOLES: dict[str, str] = {
+    "lower_nodes.py:_name": "a name with no declaration: CE1001, CE1002 or CE0144",
+    "lower_nodes.py:_call": "a named argument (CE6104), type arguments on a struct (CE6102)",
+    "lower_nodes.py:_dotted": "a named argument (CE6104), type arguments after a dot (CE6102)",
+    "lower_nodes.py:_qualified_call": "a named argument (CE6104), type arguments on a struct "
+                                      "behind an alias (CE6102)",
+    "lower_nodes.py:hole": "the hole itself, after its stop check",
+}
+
+
+def test_the_error_holes_are_the_ruled_forms() -> None:
     shir = ROOT / "semantics" / "shir"
-    callers = [f"{path.name}:{fn.name}" for path in sorted(shir.glob("*.py"))
-               for fn in _functions(_tree(path)) if _calls_error_hole(fn)]
-    assert callers == ["lower_nodes.py:_name", "lower_nodes.py:hole"], (
-        f"the callers of error_hole: {callers}")
+    callers = sorted(f"{path.name}:{fn.name}" for path in sorted(shir.glob("*.py"))
+                     for fn in _functions(_tree(path)) if _calls_error_hole(fn))
+    assert callers == sorted(ERROR_HOLES), (
+        f"the callers of error_hole: {callers}; the ruled callers: {sorted(ERROR_HOLES)}")
     name = next(fn for fn in _functions(_tree(LOWER_NODES)) if fn.name == "_name")
     branches = [sub for sub in ast.walk(name) if isinstance(sub, (ast.If, ast.match_case))
                 and _calls_error_hole(sub)
