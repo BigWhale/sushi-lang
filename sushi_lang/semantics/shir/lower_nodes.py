@@ -7,7 +7,8 @@ compile goes on through the old pipeline. When the variable that `STRICT_VARIABL
 is `1`, a hole stops the compile with the stop code CE0155 instead, except in a unit whose
 scope pass reported an error (`stops_on_hole`). The hole of a name with no declaration,
 and of a form that the language always refuses (a named argument outside a struct
-construction, type arguments after a dot or on a struct), never stops the compile
+construction, type arguments after a dot or on a struct, a slice with a reversed range,
+a call of a name that the namespace does not hold), never stops the compile
 (`error_hole`). A value that carries
 the `nom` marker outside a call argument is a `Take` of it: the AST builder puts the marker
 there only in a `let` initializer and in a `return` (ir.md 7.4).
@@ -242,8 +243,9 @@ class BodyLowerer:
         A name with no declaration is one: the error of the program (CE1001, CE1002 or
         CE0144) is its diagnostic, not the stop code (ruling of 2026-10-12). A form that
         the language always refuses with a diagnostic of a later pass is one too: a named
-        argument outside a struct construction (CE6104), and written type arguments after
-        a dot or on a struct construction (CE6102).
+        argument outside a struct construction (CE6104), written type arguments after a
+        dot or on a struct construction (CE6102), a slice with a reversed range (CE2122),
+        and a call of a name that the namespace does not hold (CE2008).
         """
         made = Hole(self.made_opaque(), self.span(node), type(node).__name__)
         self.holes.append(made)
@@ -443,8 +445,10 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
     The written type arguments stand on the callee, as on a direct call
     (`geo.nothing@(i32)()`). A struct that the namespace holds is a construction, named
     with the alias; with written type arguments (`geo.Box@(i32)(1)`) it is an error hole,
-    as in `_call`. A named argument on anything else is an error hole (CE6104). Anything
-    else that the namespace holds under the name is a hole.
+    as in `_call`. A named argument on anything else is an error hole (CE6104). A name
+    that the namespace does not hold is an error hole too: the typecheck pass reads the
+    same table and refuses the call (CE2008). Anything else that the namespace holds under
+    the name is a hole.
     """
     kind = None if lw.lookup is None else lw.lookup.member_kind(lw.bindings.body, alias,
                                                                 node.method)
@@ -452,6 +456,8 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
         return struct_init(lw, node, f"{alias}.{node.method}", node.method, node.args,
                            node.field_names)
     if node.field_names is not None or kind == "struct":
+        return lw.error_hole(node)
+    if kind is None and lw.lookup is not None:
         return lw.error_hole(node)
     if kind not in CALLABLE_KINDS:
         return lw.hole(node)

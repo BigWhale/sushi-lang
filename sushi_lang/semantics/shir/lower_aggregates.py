@@ -29,8 +29,9 @@ What a written name before a dot denotes decides each node, and lowering reads i
 - `a[i]` is an `Index` with the index as written, and with the `unchecked` mark that the
   AST builder puts on an index in a `dont_panic` body (ir.md 4.9). A range in the index
   position is a slice (docs/design/slices.md): a `Slice` with the bounds and `inclusive` of
-  the range. A slice with a reversed range is a hole: the program has an error (CE2122),
-  and a `Slice` has no field for `.rev()`.
+  the range. A slice with a reversed range is an error hole: the program always has an
+  error (CE2122), and a `Slice` has no field for `.rev()`, so the hole never stops strict
+  mode.
 
 `from([...])` and `new()` are an `ArrayInit` of the kind `Dynamic`, and `[...]` one of the
 kind `Fixed`, with a run for each element: `Single`, `Repeat` (the value, then the count:
@@ -183,9 +184,9 @@ def lower_index(lw: BodyLowerer, node: a.IndexAccess) -> e.ShirExpr:
 
 
 def _slice(lw: BodyLowerer, node: a.IndexAccess, bounds: a.RangeExpr) -> e.ShirExpr:
-    """`a[i..j]` and `a[i..=j]`: a borrowed view. A reversed range is a hole."""
+    """`a[i..j]` and `a[i..=j]`: a borrowed view. A reversed range is an error hole (CE2122)."""
     if bounds.reverse:
-        return lw.hole(node)
+        return lw.error_hole(node)
     ident = lw.made_opaque()
     base = lw.expr(node.array)
     start, end = _bounds(lw, bounds)

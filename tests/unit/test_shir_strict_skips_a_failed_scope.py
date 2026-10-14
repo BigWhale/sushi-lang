@@ -11,7 +11,9 @@ be the diagnostic of the program (rulings of 2026-10-12 and 2026-10-14):
   error hole too: a named argument on a callee that is no struct (CE6104), written type
   arguments after a type or a value (`Vec.at@(i32)(1)`, `xs.get@(i32)(0)`, CE6102), and
   written type arguments on a struct construction (`Pair@(i32, i32)(1, 2)`, also behind
-  an alias; the typecheck pass of group A5 refuses it with CE6102).
+  an alias; the typecheck pass of group A5 refuses it with CE6102), a slice with a
+  reversed range (`xs[(0..2).rev()]`, CE2122), and a call of a name that the namespace
+  does not hold (`geo.twicee(21)`, CE2008).
 - A type name written as a value is a hole too. The scope pass reports CE2105 for it, so
   strict mode skips a unit whose scope pass reported an error.
 
@@ -135,7 +137,9 @@ ERROR_HOLES: dict[str, str] = {
     "lower_nodes.py:_call": "a named argument (CE6104), type arguments on a struct (CE6102)",
     "lower_nodes.py:_dotted": "a named argument (CE6104), type arguments after a dot (CE6102)",
     "lower_nodes.py:_qualified_call": "a named argument (CE6104), type arguments on a struct "
-                                      "behind an alias (CE6102)",
+                                      "behind an alias (CE6102), a name that the namespace "
+                                      "does not hold (CE2008)",
+    "lower_aggregates.py:_slice": "a slice with a reversed range (CE2122)",
     "lower_nodes.py:hole": "the hole itself, after its stop check",
 }
 
