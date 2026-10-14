@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Set, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sushi_lang.internals.report import SPELLING_GATE_ENV  # noqa: E402
+from sushi_lang.semantics.shir.lower_nodes import STRICT_VARIABLE  # noqa: E402
 from test_metadata import corpus_files  # noqa: E402
 
 
@@ -1300,11 +1301,25 @@ def arm_spelling_gate() -> None:
     cosmetic fault must never become a user-facing crash. A test run is exactly the
     place that wants it loud.
 
-    Both runners call this, and both also read the compiler's stderr for the gate's
-    own name: the gate raises, the process dies with a traceback, and an exit code
-    that happens to match the fixture's expectation must not read as a pass.
+    Both runners call this through `arm_check_variables`, and both also read the
+    compiler's stderr for the gate's own name: the gate raises, the process dies with a
+    traceback, and an exit code that happens to match the fixture's expectation must not
+    read as a pass.
     """
     os.environ[SPELLING_GATE_ENV] = "1"
+
+
+def arm_check_variables() -> None:
+    """Arm the variables that every compile of a run checks with, before it starts one.
+
+    The spelling gate, and SHIR strict mode: under SUSHI_SHIR_STRICT=1 a hole that
+    lowering records in a correct program stops the compile with CE0155, so a run proves
+    that lowering is total. A child of the fork-server and a fresh process both take the
+    environment of the run. No flag turns either off, and a value that the caller gives
+    is replaced. A user who starts `sushic` by hand gets neither.
+    """
+    arm_spelling_gate()
+    os.environ[STRICT_VARIABLE] = "1"
 
 
 def spelling_gate_tripped(stderr: str) -> bool:
@@ -1369,12 +1384,12 @@ def main():
     runs a binary, it measured 6.95s against the enhanced runner's 6.85s.
 
     What remains here is what both halves always shared -- the stdlib and helper builds,
-    the leak interposer and the spelling gate -- plus the argument
+    the leak interposer and the armed variables -- plus the argument
     parsing. `enhanced_test_runner` runs the tests.
     """
     args = build_parser().parse_args()
 
-    arm_spelling_gate()
+    arm_check_variables()
 
     import enhanced_test_runner
     sys.argv = [sys.argv[0]]

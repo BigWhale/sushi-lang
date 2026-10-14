@@ -30,7 +30,7 @@ from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
                        helpers_for_selection,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
-                       arm_spelling_gate, spelling_gate_tripped,
+                       arm_check_variables, spelling_gate_tripped,
                        DocGateResult, stdlib_doc_gate, stdlib_override_command,
                        fixtures_only, _spelled_path)
 from fork_server import COMPILER_STUB_ENV, ForkServer, wrapper_env
@@ -1682,7 +1682,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main():
     """Main entry point for the enhanced test runner."""
-    arm_spelling_gate()
+    arm_check_variables()
     args = build_parser().parse_args()
 
     tests_dir = Path(__file__).parent
