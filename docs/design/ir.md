@@ -576,12 +576,17 @@ ShirBody
   params  : [ShirParam]
   locals  : [ShirLocal]            # from the `scope` pass
   block   : ShirBlock
+  copies  : ShirId -> [CopyRange]  # the copies of an unrolled `expand`, by block (4.5)
 
 ShirParam
   local      : LocalId
   ty         : TypeRef                   # the declared type (7.4)
   convention : Convention          # from the declared mode -- section 8.3
   loc        : Span
+  pack       : bool                # the written `...` of a value pack parameter
+
+CopyRange
+  start, stop : int                # the statements of one copy; `stop` is not included
 
 ShirLocal
   id       : LocalId
@@ -603,6 +608,19 @@ a `foreach((a, b) in ...)`, a binder of a tuple rebind `(a, b) := v`, the `let` 
 AST builder also binds the whole value of a destructuring `let` to a hidden name, but no
 SHIR node reads it, so it is not a local of the body: `Destructure` holds the value, and
 SHIR-to-SLIR lowering makes its place.
+
+`pack` is true for a value pack parameter of a template check body (`...Ts args`); its `ty`
+is the pack as written (`Ts`). In an instance, each element of the pack is a parameter of
+its own (`#pack_args_0`), and no element is a pack.
+
+`copies` is a side table, and no node holds it. The monomorphize pass puts one copy of the
+body of an `expand` in the enclosing block for each element of the pack (4.5), so the
+copies are one sequence of statements in SHIR. Three rules need the boundary of a copy: the
+dead-statement rule, the scope of each copy and the end of an element at a `break`, a
+`continue` or a `return`. Lowering is the one writer: for each block that holds copies, it
+records the statement range of each copy, in the order of the start, the outer copy first.
+A copy local keeps the name that the unroll gives it (`#line_x0`). The dump prints the
+table on a `copies` line, by the path of each block, only for a body that has a copy.
 
 ### 7.3 Everything `typecheck` decides lives in a side table
 
