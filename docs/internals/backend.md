@@ -170,7 +170,7 @@ builder.srem(left, right)   # signed; builder.urem for unsigned
 ```
 
 Mixed widths are refused before the backend ([CE2510](../error-catalog.md#ce2510)). The backend folds nothing: every
-compile-time integer operation is `semantics/const_eval.py`.
+compile-time integer operation is the kernel `semantics/integer_ops.py`.
 
 **Comparison:**
 ```python

@@ -157,13 +157,16 @@ let u8 a = 200 + 100      # the compiler reports this
 let u8 s = x + y          # this wraps at run time, with no check
 ```
 
-**One compile-time home.** The evaluator is the only place in the compiler that
-computes an integer operator. The backend folds nothing: it emits the instruction for two
+**One compile-time home.** The kernel `semantics/integer_ops.py` is the only place in
+the compiler that computes an integer operator. It is pure functions over an operator, its
+operand values and the integer type of the operation, and it reads no AST node. The
+evaluator calls it, and `docs/design/ir.md` 7.4 rules that the fold of a readable SHIR
+value calls it too. The backend folds nothing: it emits the instruction for two
 constants as for two locals, and LLVM is the run-time home by definition. The gate is
-`tests/unit/test_integer_operator_semantics_agree.py`: per operator and per width, the
-evaluator's value and the value a JIT-compiled copy of the emitted instruction computes
-are one bit pattern, and a constant fold in the backend's operator emitter is refused
-by its source. The smallest signed value `% -1` is [CE2077](../error-catalog.md#ce2077).
+`tests/unit/test_integer_operator_semantics_agree.py`: the kernel gives the machine's
+answer for each cell of its table, an integer operator in the source of the evaluator is
+refused, and a constant fold in the backend's operator emitter is refused by its source.
+The smallest signed value `% -1` is [CE2077](../error-catalog.md#ce2077).
 
 ### What this costs
 

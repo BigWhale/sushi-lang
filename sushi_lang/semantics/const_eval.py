@@ -23,8 +23,7 @@ from sushi_lang.semantics.ast import (
     CastExpr, IndexAccess, InterpolatedString, Lambda, MemberAccess, MethodCall, RangeExpr,
     Spread, TryExpr, TupleLiteral
 )
-from sushi_lang.semantics.integer_width import (
-    fits_integer_type, integer_bit_width, wrap_to_integer_type)
+from sushi_lang.semantics import integer_ops
 from sushi_lang.semantics.typesys import Type, BuiltinType, StructType, EnumType, UnknownType
 from sushi_lang.semantics.type_predicates import is_error_type, is_float_type, is_integer_type
 from sushi_lang.semantics import array_runs
@@ -40,16 +39,16 @@ if TYPE_CHECKING:
 # not know, which means an unrestricted scope and no alias -- the scratch reader's view.
 NamespacesOf = Callable[[Optional[str]], Optional[NamespaceTable]]
 
-# The exact arithmetic of an overflow-checked operator. Unary minus is the fourth one
-# and is applied where it is read, because it has no right operand.
-_ARITHMETIC: Mapping[str, Callable[[object, object], object]] = {
-    "+": operator.add, "-": operator.sub, "*": operator.mul,
+# The float arithmetic of the overflow-checked operators. A float has no width to leave.
+# The integer semantics are the kernel's (`integer_ops.py`).
+_FLOAT_ARITHMETIC: Mapping[str, Callable[[float, float], float]] = {
+    "+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.truediv,
+    "%": math.fmod,
 }
 
-# A width-defined operator: every bit of the result the width holds is kept, and the
-# rest are lost. None of these can leave its type, so none of them reports.
-_BITWISE: Mapping[str, Callable[[int, int], int]] = {
-    "&": operator.and_, "|": operator.or_, "^": operator.xor,
+# What CE0110 names when an operand of an overflow-checked operator is no number.
+_NOT_NUMERIC: Mapping[str, str] = {
+    "+": "arithmetic", "-": "arithmetic", "*": "arithmetic", "/": "division", "%": "modulo",
 }
 
 _LOGICAL: Mapping[str, Callable[[bool, bool], bool]] = {
@@ -57,12 +56,6 @@ _LOGICAL: Mapping[str, Callable[[bool, bool], bool]] = {
     "or": lambda left, right: left or right,
     "xor": operator.ne,
 }
-
-_COMPARISON: Mapping[str, Callable[[object, object], bool]] = {
-    "==": operator.eq, "!=": operator.ne,
-    "<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge,
-}
-_ORDERINGS = ("<", "<=", ">", ">=")
 
 # The expression kinds that are never a constant. Each answers CE0108 through the one
 # backstop in `evaluate`; naming them here is what lets the gate tell a decision from a
@@ -577,24 +570,15 @@ class ConstantEvaluator:
             emit_string_plus(self.reporter, span)
             return None
 
-        if expr.op in _ARITHMETIC:
+        if expr.op in integer_ops.OVERFLOW_CHECKED:
             return self._eval_arithmetic(expr, left_val, right_val, span)
-        elif expr.op == '/':
-            return self._eval_division(expr, left_val, right_val, span)
-        elif expr.op == '%':
-            return self._eval_modulo(expr, left_val, right_val, span)
-
-        elif expr.op in _BITWISE:
-            return self._eval_bitwise(left_val, right_val, expr.op, span)
-        elif expr.op == '<<':
-            return self._eval_shift_left(left_val, right_val, span)
-        elif expr.op == '>>':
-            return self._eval_shift_right(left_val, right_val, span)
+        elif expr.op in integer_ops.WIDTH_DEFINED:
+            return self._eval_width_defined(left_val, right_val, expr.op, span)
 
         elif expr.op in _LOGICAL:
             return self._eval_logical(left_val, right_val, expr.op, span)
 
-        elif expr.op in _COMPARISON:
+        elif expr.op in integer_ops.COMPARISONS:
             return self._eval_comparison(left_val, right_val, expr.op, span)
 
         else:
@@ -608,20 +592,21 @@ class ConstantEvaluator:
             return None
 
         if expr.op == 'neg':
-            if is_numeric_constant(operand):
-                # A negated literal is ONE leaf, and the range of a leaf is CE2073's
-                # question -- that is what makes -128 an i8 while 128 is not.
-                if isinstance(expr.expr, (IntLit, FloatLit)):
-                    return ScalarConstant(-operand.value, operand.semantic_type)
-                return self._checked(expr, '-', -operand.value,
-                                     operand.semantic_type, span)
-            else:
+            if not is_numeric_constant(operand):
                 er.emit(self.reporter, er.ERR.CE0110, span, op='negation on non-numeric type')
                 return None
+            if not is_integer_constant(operand):
+                return ScalarConstant(-operand.value, operand.semantic_type)
+            negated = integer_ops.negate(operand.value, operand.semantic_type)  # type: ignore[arg-type]
+            # A negated literal is ONE leaf, and the range of a leaf is CE2073's
+            # question -- that is what makes -128 an i8 while 128 is not.
+            if isinstance(expr.expr, IntLit):
+                return ScalarConstant(negated.value, operand.semantic_type)
+            return self._checked(expr, '-', negated, operand.semantic_type, span)
 
         elif expr.op == '~':
             if is_integer_constant(operand):
-                result = wrap_to_integer_type(~operand.value, operand.semantic_type)
+                result = integer_ops.complement(operand.value, operand.semantic_type)  # type: ignore[arg-type]
                 return ScalarConstant(result, operand.semantic_type)
             else:
                 er.emit(self.reporter, er.ERR.CE0110, span, op='bitwise NOT on non-integer type')
@@ -778,14 +763,14 @@ class ConstantEvaluator:
         # A cast asks for the bit pattern, so it truncates and never reports: it is the
         # escape from the overflow rule and cannot be subject to it.
         if is_integer_constant(value) and is_integer_type(to_type):
-            return ScalarConstant(wrap_to_integer_type(value.value, to_type), to_type)
+            return ScalarConstant(integer_ops.cast(value.value, to_type), to_type)  # type: ignore[arg-type]
 
         elif is_integer_constant(value) and is_float_type(to_type):
             return ScalarConstant(float(value.value), to_type)
 
         elif isinstance(value, ScalarConstant) and is_float_type(from_type) \
                 and is_integer_type(to_type):
-            return ScalarConstant(wrap_to_integer_type(int(value.value), to_type), to_type)
+            return ScalarConstant(integer_ops.cast(int(value.value), to_type), to_type)
 
         elif is_integer_constant(value) and to_type == BuiltinType.BOOL:
             return ScalarConstant(value.value != 0, BuiltinType.BOOL)
@@ -841,131 +826,60 @@ class ConstantEvaluator:
 
         return base.elements[index.value]
 
-    def _checked(self, node: Expr, op: str, value: Union[int, float], semantic_type: Type,
+    def _checked(self, node: Expr, op: str, folded: integer_ops.Folded, semantic_type: Type,
                  span: Optional[Span]) -> Optional[ConstantValue]:
-        """The result of an overflow-checked operation, or CE2077 when it left its type.
-
-        A float has no width to leave, and a value the operands already made a lie --
-        a mixed pair, which CE2510 owns -- is not this diagnostic's to report.
-        """
-        if (is_integer_type(semantic_type)
-                and isinstance(value, int) and not isinstance(value, bool)
-                and not fits_integer_type(value, semantic_type)):
-            record = ConstOverflow(node=node, op=op, value=value,
+        """The value of an overflow-checked operation, or CE2077 when it left its type."""
+        if folded.overflows:
+            record = ConstOverflow(node=node, op=op, value=folded.value,
                                    semantic_type=semantic_type, span=span)
             self.overflows.append(record)
             emit_overflow(self.reporter, record)
             return None
-
-        return ScalarConstant(value, semantic_type)
+        return ScalarConstant(folded.value, semantic_type)
 
     def _eval_arithmetic(self, node: BinaryOp, left: ConstantValue, right: ConstantValue,
                          span: Optional[Span]) -> Optional[ConstantValue]:
-        """Evaluate arithmetic operation."""
+        """`+ - * / %`: the kernel for an integer pair, the float arithmetic otherwise.
+
+        A pair of two kinds is CE2510's to report, and its value here is the float one.
+        """
         if not is_numeric_constant(left) or not is_numeric_constant(right):
-            er.emit(self.reporter, er.ERR.CE0110, span, op='arithmetic on non-numeric type')
+            er.emit(self.reporter, er.ERR.CE0110, span,
+                    op=f'{_NOT_NUMERIC[node.op]} on non-numeric type')
             return None
 
-        result = _ARITHMETIC[node.op](left.value, right.value)
-        return self._checked(node, node.op, result, left.semantic_type, span)  # type: ignore[arg-type]
+        if is_integer_constant(left) and is_integer_constant(right):
+            answer = integer_ops.binary(node.op, left.value, right.value,  # type: ignore[arg-type]
+                                        left.semantic_type)
+            if isinstance(answer, integer_ops.Refusal):
+                er.emit(self.reporter, er.ERR.CE0112, span)
+                return None
+            return self._checked(node, node.op, answer, left.semantic_type, span)
 
-    def _eval_division(self, node: BinaryOp, left: ConstantValue, right: ConstantValue,
-                       span: Optional[Span]) -> Optional[ConstantValue]:
-        """Evaluate division with zero check."""
-        if not is_numeric_constant(left) or not is_numeric_constant(right):
-            er.emit(self.reporter, er.ERR.CE0110, span, op='division on non-numeric type')
-            return None
-
-        if right.value == 0:
+        if node.op in ('/', '%') and right.value == 0:
             er.emit(self.reporter, er.ERR.CE0112, span)
             return None
-
-        result: Union[int, float]
-        if is_integer_constant(left):
-            result = _truncated_quotient(left.value, right.value)  # type: ignore[arg-type]
-        else:
-            result = left.value / right.value  # type: ignore[operator]
-
-        return self._checked(node, node.op, result, left.semantic_type, span)
-
-    def _eval_modulo(self, node: BinaryOp, left: ConstantValue, right: ConstantValue,
-                     span: Optional[Span]) -> Optional[ConstantValue]:
-        """Evaluate modulo with zero check."""
-        if not is_numeric_constant(left) or not is_numeric_constant(right):
-            er.emit(self.reporter, er.ERR.CE0110, span, op='modulo on non-numeric type')
-            return None
-
-        if right.value == 0:
-            er.emit(self.reporter, er.ERR.CE0112, span)
-            return None
-
-        result: Union[int, float]
-        if is_integer_constant(left):
-            # The machine divides first, so the remainder overflows exactly where the
-            # quotient does: the smallest signed value with -1. LLVM calls that srem
-            # undefined and x86 traps on it, so the quotient is what is checked here
-            # (compile-time-evaluation.md, Ruling 1).
-            quotient = _truncated_quotient(left.value, right.value)  # type: ignore[arg-type]
-            if not fits_integer_type(quotient, left.semantic_type):
-                return self._checked(node, node.op, quotient, left.semantic_type, span)
-            result = _truncated_remainder(left.value, right.value)  # type: ignore[arg-type]
-        else:
-            result = math.fmod(left.value, right.value)  # type: ignore[arg-type]
-
-        return self._checked(node, node.op, result, left.semantic_type, span)
-
-    def _eval_bitwise(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:
-        """Evaluate bitwise operation."""
-        if not is_integer_constant(left) or not is_integer_constant(right):
-            er.emit(self.reporter, er.ERR.CE0110, span, op=f'bitwise {op} on non-integer type')
-            return None
-
-        result = _BITWISE[op](left.value, right.value)  # type: ignore[arg-type]
-        return ScalarConstant(wrap_to_integer_type(result, left.semantic_type),
+        return ScalarConstant(_FLOAT_ARITHMETIC[node.op](left.value, right.value),  # type: ignore[arg-type]
                               left.semantic_type)
 
-    def _eval_shift_left(self, left: ConstantValue, right: ConstantValue, span: Optional[Span]) -> Optional[ConstantValue]:
-        """Evaluate left shift."""
-        shift = self._shift_count(left, right, span)
-        if shift is None:
-            return None
-        value, count, width = shift
-
-        result = 0 if count >= width else value << count
-        return ScalarConstant(wrap_to_integer_type(result, left.semantic_type),
-                              left.semantic_type)
-
-    def _eval_shift_right(self, left: ConstantValue, right: ConstantValue, span: Optional[Span]) -> Optional[ConstantValue]:
-        """Evaluate right shift (arithmetic for signed, logical for unsigned)."""
-        shift = self._shift_count(left, right, span)
-        if shift is None:
-            return None
-        value, count, width = shift
-
-        # A held value is in its own range, so Python's shift IS the machine's: it fills
-        # from the sign bit of a negative value, and a value of an unsigned type has none.
-        return ScalarConstant(value >> min(count, width), left.semantic_type)
-
-    def _shift_count(self, left: ConstantValue, right: ConstantValue,
-                     span: Optional[Span]) -> Optional[Tuple[int, int, int]]:
-        """The shifted value, the count and the width it moves bits in, or None with the
-        reason reported.
+    def _eval_width_defined(self, left: ConstantValue, right: ConstantValue, op: str,
+                            span: Optional[Span]) -> Optional[ConstantValue]:
+        """`& | ^ << >>`: the kernel keeps the bits of the type, and none of them reports.
 
         A count past the width is defined and not checked (Go's rule, and CE2512 covers
-        the one a body writes), so the width is handed back to clamp with: a Python shift
-        by a count of millions builds the number it names.
+        the one a body writes).
         """
         if not is_integer_constant(left) or not is_integer_constant(right):
-            er.emit(self.reporter, er.ERR.CE0110, span, op='shift on non-integer type')
+            what = 'shift' if op in ('<<', '>>') else f'bitwise {op}'
+            er.emit(self.reporter, er.ERR.CE0110, span, op=f'{what} on non-integer type')
             return None
 
-        if right.value < 0:  # type: ignore[operator]
-            er.emit(self.reporter, er.ERR.CE0110, span, op='shift by negative amount')
+        answer = integer_ops.binary(op, left.value, right.value,  # type: ignore[arg-type]
+                                    left.semantic_type)
+        if isinstance(answer, integer_ops.Refusal):
+            er.emit(self.reporter, er.ERR.CE0110, span, op=answer.value)
             return None
-
-        width = integer_bit_width(left.semantic_type)
-        assert width is not None
-        return int(left.value), int(right.value), width
+        return ScalarConstant(answer.value, left.semantic_type)
 
     def _eval_logical(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:
         """Evaluate logical operation (and, or, xor)."""
@@ -983,24 +897,22 @@ class ConstantEvaluator:
         what a body gets (#449). The typecheck pass owns that rule for a body; this
         evaluator has to agree with it, or a constant refuses what a local accepts.
         """
-        compare = _COMPARISON[op]
+        if op not in integer_ops.ORDERINGS and self._is_equatable_pair(left, right):
+            return ScalarConstant(integer_ops.compare(op, left.value, right.value), BuiltinType.BOOL)
 
-        if op not in _ORDERINGS and self._is_equatable_pair(left, right):
-            return ScalarConstant(compare(left.value, right.value), BuiltinType.BOOL)
-
-        if op in _ORDERINGS and is_string_constant(left) and is_string_constant(right):
+        if op in integer_ops.ORDERINGS and is_string_constant(left) and is_string_constant(right):
             # Compare the UTF-8 bytes, which is what emit_string_order does at run time.
             # Python's str orders by code point and UTF-8 keeps code points in numerical
             # order, so the two agree; encoding first makes them agree by construction.
             lhs = str(left.value).encode('utf-8')
             rhs = str(right.value).encode('utf-8')
-            return ScalarConstant(compare(lhs, rhs), BuiltinType.BOOL)
+            return ScalarConstant(integer_ops.compare(op, lhs, rhs), BuiltinType.BOOL)
 
         if not is_numeric_constant(left) or not is_numeric_constant(right):
             er.emit(self.reporter, er.ERR.CE0110, span, op=f'comparison {op} on non-comparable types')
             return None
 
-        return ScalarConstant(compare(left.value, right.value), BuiltinType.BOOL)
+        return ScalarConstant(integer_ops.compare(op, left.value, right.value), BuiltinType.BOOL)
 
     def _is_equatable_pair(self, left: ConstantValue,
                            right: ConstantValue) -> TypeGuard[ScalarConstant]:
@@ -1029,17 +941,3 @@ class ConstantEvaluator:
         DotCall: _evaluate_dot_call,
     }
 
-
-def _truncated_quotient(left: int, right: int) -> int:
-    """Integer division that truncates toward zero, as the backend's sdiv does.
-
-    Python floors instead, so '-7 / 2' read -4 in a constant and -3 in a body (#441).
-    """
-    magnitude = abs(left) // abs(right)
-    return -magnitude if (left < 0) != (right < 0) else magnitude
-
-
-def _truncated_remainder(left: int, right: int) -> int:
-    """Integer remainder whose sign follows the dividend, as the backend's srem does."""
-    magnitude = abs(left) % abs(right)
-    return -magnitude if left < 0 else magnitude
