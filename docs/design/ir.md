@@ -9,7 +9,9 @@ test passes before and after, unchanged.
 
 Amended on 2026-10-11 by the rulings on the migration plan: 6.3 (initializer bodies), 6.4
 (the gate reads the body modules), 7.4 (evaluation order, recorded values, `expect`), 10.3
-and 11.9.
+and 11.9. Amended on 2026-10-20 by the rulings at Gate 1: 7.4 (`typecheck` folds a readable
+value at the type of its position; an error hole carries its code), 7.5 and 8.9 (a tuple
+rebind is one `Destructure` with `Place` targets).
 
 ## The decisions, in one place
 
@@ -602,8 +604,7 @@ binding, a destructuring target, a bare lambda parameter) is inferred into it. `
 is syntax, like `ShirParam.ty`: the user wrote it.
 
 A hidden local is a local the AST builder made: the binder of a `foreach(x?? in ...)` or of
-a `foreach((a, b) in ...)`, a binder of a tuple rebind `(a, b) := v`, the `let` of a
-`foreach(_?? in ...)`. It has no source name and no span, and no diagnostic names it. The
+a `foreach((a, b) in ...)`, the `let` of a `foreach(_?? in ...)`. It has no source name and no span, and no diagnostic names it. The
 `_` binder of a `foreach` with no `??` binds nothing: its source holds `Discard` (7.5). The
 AST builder also binds the whole value of a destructuring `let` to a hidden name, but no
 SHIR node reads it, so it is not a local of the body: `Destructure` holds the value, and
@@ -740,6 +741,15 @@ the same ruling: a slice with a reversed range (`data[(0..3).rev()]`, CE2122), a
 name that the namespace does not hold (`geo.twicee(21)`, CE2008), and a member of a type
 that is no variant (`Sign.Nope`, CE2045; a static outside a call is one too).
 
+An error hole CARRIES the code of the error that it stands for (CE6102, CE6104, CE2122,
+CE2008, CE2045; for a name with no declaration, the codes CE1001, CE1002 and CE0144). At
+the end of the analysis, an error hole whose code no diagnostic reported is an internal
+error, CE0155. So an error hole can never hide a fault in a correct program: when lowering
+and `typecheck` disagree, the compile stops loudly. Lowering and `typecheck` also read ONE
+answer for a name behind a namespace: lowering resolves it (`DeclLookup.member_kind`), and
+`typecheck` reads the SHIR node and does not resolve the name a second time. Ruled
+2026-10-20.
+
 `marker` is the WRITTEN call-site mode (`nom s`, `poke n`), or `None`. The RESOLVED
 convention is `typecheck`'s: an unmarked argument in a consuming position (constructor,
 container insert, array element) resolves to `Owned` with no marker, and
@@ -784,17 +794,23 @@ does not hold stay holes. Ruled 2026-10-12.
 
 **A readable value inside a body.** `typecheck` needs the value of some sub-expressions
 that the compiler can read: a divisor and a shift count, the operands of an overflow fold,
-the count of an array run, a range bound, a constant index. Lowering evaluates each such
-sub-expression with the AST constant evaluator and records the value on the SHIR node. The
-value is syntax: it comes from the source alone, as `unchecked` does (4.9). `typecheck`
-reads the recorded value and does not call the evaluator, so the evaluator has no SHIR
-reader (Q5). Ruled 2026-10-11. A sub-expression that holds a call, a field read, a member
-behind an alias, a construction other than a fixed array literal, a `Borrow`, a `Take`, a
-`Try`, a `Slice` or a `Lambda` records no value: the evaluator writes on the AST for a member access,
-the value of such a construction is never a number that `typecheck` reads, and the
-evaluator has no value for an ownership node, a view or a closure. A `Cast`, an `Index`, a `Range` and
-an `Interp` are read through: the evaluator folds `4 as i32`, `[4, 2][0]` and a hole of
-constants with no write on the AST.
+the count of an array run, a range bound, a constant index. The value depends on the TYPE
+of the position: the overflow nest is read at the type of its left operand, a divisor at
+the type of the dividend, an index or a count at `i32`. `~255` is 0 as a `u8` and -256 as
+an `i64`; a `>>` of an unsigned value and a `u64` above the `i64` maximum also differ. Only
+`typecheck` knows that type, so `typecheck` reads the value, and lowering records none.
+
+`typecheck` FOLDS a readable SHIR sub-expression at the type of its position: a `Lit`, a
+`ConstRef` (its value from the constant table, Q5, behind an alias too), a `Unary`, a
+`Binary`, a `Cast`, an `Index` of a fixed array literal, a `Range` and an `Interp` of such
+parts. Any other node makes the sub-expression unreadable: a local, a `var`, a call, a
+field read, any other construction, a `Borrow`, a `Take`, a `Try`, a `Slice`, a `Lambda` or
+a hole. The fold is not a second evaluator: it has no arithmetic of its own. The integer
+operator semantics have ONE home, a kernel of pure functions over an operator, its values
+and a type, which the AST constant evaluator and the fold both call. The fold has its own
+totality gate over the SHIR expression nodes, and the kernel keeps the gate of the integer
+operator semantics. Ruled 2026-10-20; this replaces the ruling of 2026-10-11 that lowering
+records the value with the AST evaluator at `i64`.
 
 **`expect(msg)` keeps its lazy message.** The message is evaluated only when the call
 fails, as the message of an `Assert` is. A `Builtin` call with an operand that is
@@ -822,7 +838,7 @@ forwards the array operand itself, as a `Move`.
 | Node | Fields |
 |---|---|
 | `Assign` | `target: Expr`, `value: Expr`, `is_init: bool`; `Let` and `Rebind` collapse here |
-| `Destructure` | `targets: [LocalId \| Discard \| Nested]`, `value: Expr`; `let (a, b) = v`, and `Nested(targets)` for `let ((a, b), c) = v` |
+| `Destructure` | `targets: [LocalId \| Place \| Discard \| Nested]`, `value: Expr`; `let (a, b) = v`, `Nested(targets)` for `let ((a, b), c) = v`, and `Place(target: Expr)` for each place of a tuple rebind `(a, b) := v` |
 | `ExprStmt` | `value: Expr` |
 | `Return` | `value: Expr` |
 | `If` | `cond: Expr`, `then: ShirBlock`, `otherwise: ShirBlock \| None` |
@@ -848,9 +864,15 @@ holds no operand of its own.
 `is_init` carries the one semantic difference between `Let` and `Rebind`: a rebind
 RE-INITIALIZES, which clears a moved flag. A reference binding (`let poke T x = place`) is
 an `Assign` with `is_init` whose value is a `Borrow`, and its local has the reference type.
-A tuple rebind `(a, b) := v` reaches lowering already split by the AST builder: a
-`Destructure` of `v` into hidden binders, then one `Assign` per place from its binder, from
-left to right.
+A tuple rebind `(a, b) := v` is ONE `Destructure` whose targets are `Place`s:
+`Destructure([Place(a), Place(b)], v)`. The AST builder splits it into a destructure of `v`
+into hidden binders and one rebind per place; lowering joins the split again, so the
+hidden binders are no locals of the body. The type of a `Place` target is the type of its
+place, as the type of a `let` target is its written type, so a literal on the right side
+takes the type of its place. The order is the rule of the source: the right side first,
+then each place from left to right, and each rebind frees the old value of its place
+(4.6). SHIR-to-SLIR lowering makes the temps of that order, as it makes the temps of the
+written order of a struct construction. Ruled 2026-10-20.
 
 `Destructure` stays one statement, because its ownership is not that of a field read: it
 OWNS from an owned value and BORROWS from a borrow (`tuples.md`). `borrow` decides which,
@@ -1030,7 +1052,7 @@ pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and
 | `IntLit`, `FloatLit`, `BoolLit`, `BlankLit`, `StringLit` | `Lit` |
 | `Call`, `MethodCall`, `DotCall` | `Call` with a `CallTarget`, the written type arguments on a `Named` target; a struct name gives `StructInit`, also behind an alias; a variant of an enum gives `EnumInit` |
 | `Print`, `PrintLn` | `ExprStmt` of a `Call` with a `BuiltinFn` target |
-| `Let`, `Rebind` | `Assign` with `is_init`; a `Let` with targets gives `Destructure` |
+| `Let`, `Rebind` | `Assign` with `is_init`; a `Let` with targets gives `Destructure`; the split tuple rebind of the AST builder gives one `Destructure` with `Place` targets |
 | `If` | `If`; each `elif` is an `If`, the one statement of the `otherwise` block of the arm before it |
 | `Return`, `ExprStmt`, `Break`, `Continue` | the node of the same name |
 | `Assert` | `Assert` |
@@ -1276,7 +1298,7 @@ print values: [RE2020](../error-catalog.md#re2020) prints the index and the size
 | `Index` write (`arr[i] := v`) | the same bounds check; the target slot is a consuming position |
 | `Slice` | range compare, `SwitchInt`, `Trap("RE2028")` on the failing edge, then `Slice`; never unchecked |
 | `Assert` | `SwitchInt` on the condition; the failing edge evaluates the message, then `Trap("RE2026")` |
-| `Destructure` | one `Field` place per target: `Move` from an owned value, a view from a borrow |
+| `Destructure` | one `Field` place per target: `Move` from an owned value, a view from a borrow. For `Place` targets: the value into a temp first, then each place from left to right, a rebind of each (rule 6 of 8.10) |
 | `Take` | `Move` of the field; the other owning fields of the receiver get `Drop`, and `drop()` does not run (`borrow-model.md` §10c) |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
 | a `string` argument to an `i8*` callee | an explicit conversion into an owning temp local, dropped by the rules of 8.10. The `emit_cstr_arg` seam becomes visible IR, still one lowering site, and `run()` stays the one exception |
@@ -1498,7 +1520,9 @@ option and it is out of scope here.
 
 Fact 4.7. Constants are a **declaration-level** concern, evaluated on the AST during
 `collect`. SHIR carries `ConstRef(id)` and the value is already computed. The evaluator
-never needs a SHIR reader, and no second evaluator is built.
+never needs a SHIR reader, and no second evaluator is built. The fold of a readable value
+inside a body (7.4) reads SHIR, but it is no evaluator: it reads a constant from the table
+and calls the one integer operator kernel that the evaluator calls.
 
 **Q6. Do we need a text format? A printer, yes. A parser, no.**
 
