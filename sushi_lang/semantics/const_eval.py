@@ -40,8 +40,9 @@ if TYPE_CHECKING:
 NamespacesOf = Callable[[Optional[str]], Optional[NamespaceTable]]
 
 # The float arithmetic of the overflow-checked operators. A float has no width to leave.
-# The integer semantics are the kernel's (`integer_ops.py`).
-_FLOAT_ARITHMETIC: Mapping[str, Callable[[float, float], float]] = {
+# The integer semantics are the kernel's (`integer_ops.py`). The readable fold of the
+# typecheck pass reads this table and `LOGICAL` too (`passes/types/fold.py`).
+FLOAT_ARITHMETIC: Mapping[str, Callable[[float, float], float]] = {
     "+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.truediv,
     "%": math.fmod,
 }
@@ -51,7 +52,7 @@ _NOT_NUMERIC: Mapping[str, str] = {
     "+": "arithmetic", "-": "arithmetic", "*": "arithmetic", "/": "division", "%": "modulo",
 }
 
-_LOGICAL: Mapping[str, Callable[[bool, bool], bool]] = {
+LOGICAL: Mapping[str, Callable[[bool, bool], bool]] = {
     "and": lambda left, right: left and right,
     "or": lambda left, right: left or right,
     "xor": operator.ne,
@@ -159,6 +160,56 @@ def is_bool_constant(value: ConstantValue) -> TypeGuard[ScalarConstant]:
 
 def is_string_constant(value: ConstantValue) -> TypeGuard[ScalarConstant]:
     return isinstance(value, ScalarConstant) and value.semantic_type == BuiltinType.STRING
+
+
+def hole_text(value: ConstantValue) -> Optional[str]:
+    """One hole, as the run-time formatter prints it, or None for a value that it cannot print.
+
+    The runtime prints an integer with printf %d/%u at its width, a float with %g, and a
+    bool as true/false (#514). A constant must not drift, or it prints differently than
+    the same expression written in a body. An integer needs no truncation here: every
+    constant operation is range-checked (CE2070/CE2077), so the held value is the printed
+    value.
+    """
+    if not isinstance(value, ScalarConstant):
+        return None
+    t = value.semantic_type
+    if t == BuiltinType.STRING:
+        return str(value.value)
+    if t == BuiltinType.BOOL:
+        return "true" if value.value else "false"
+    if t == BuiltinType.F32:
+        import struct
+        return "%g" % struct.unpack("f", struct.pack("f", value.value))[0]
+    if t == BuiltinType.F64:
+        return "%g" % value.value
+    if is_integer_type(t):
+        return str(value.value)
+    return None
+
+
+def cast_constant(value: ConstantValue, to_type: Type) -> Optional[ScalarConstant]:
+    """`value as to_type`, or None for a cast that has no constant rule.
+
+    A cast asks for the bit pattern, so it truncates and never reports: it is the escape
+    from the overflow rule and cannot be subject to it.
+    """
+    if not isinstance(value, ScalarConstant):
+        return None
+    from_type = value.semantic_type
+    if is_integer_constant(value) and is_integer_type(to_type):
+        return ScalarConstant(integer_ops.cast(value.value, to_type), to_type)  # type: ignore[arg-type]
+    if is_integer_constant(value) and is_float_type(to_type):
+        return ScalarConstant(float(value.value), to_type)
+    if is_float_type(from_type) and is_integer_type(to_type):
+        return ScalarConstant(integer_ops.cast(int(value.value), to_type), to_type)
+    if is_integer_constant(value) and to_type == BuiltinType.BOOL:
+        return ScalarConstant(value.value != 0, BuiltinType.BOOL)
+    if is_bool_constant(value) and is_integer_type(to_type):
+        return ScalarConstant(1 if value.value else 0, to_type)
+    if is_float_type(from_type) and is_float_type(to_type):
+        return ScalarConstant(value.value, to_type)
+    return None
 
 
 def allocates_nothing(expr: Expr) -> bool:
@@ -376,6 +427,14 @@ class ConstantEvaluator:
         """A registry constant folds from the value its record carries (#560)."""
         return ScalarConstant(record.value, record.get_return_type())
 
+    def value_of(self, record: Union[ConstSig, 'StdlibFunction'],
+                 span: Optional[Span]) -> Optional[ConstantValue]:
+        """The value of a declared constant or of a stdlib constant: the constant table's
+        answer for a reader of a name that is already resolved (docs/design/ir.md 7.4)."""
+        if isinstance(record, ConstSig):
+            return self._fold_constant(record, span)
+        return self._stdlib_value(record)
+
     def _evaluate_struct_construction(self, expr: Call, expected_type: Type,
                                      span: Optional[Span]) -> Optional[ConstantValue]:
         """A struct built entirely from constants is itself a constant.
@@ -508,31 +567,12 @@ class ConstantEvaluator:
 
     def _format_hole(self, value: ConstantValue,
                      span: Optional[Span]) -> Optional[str]:
-        """One hole, rendered as the run-time formatter prints it.
-
-        The runtime prints an integer with printf %d/%u at its width, a float
-        with %g, and a bool as true/false (#514). The evaluator must not
-        drift, or a constant would print differently than the same
-        expression written in a body. An integer needs no truncation here:
-        every constant operation is range-checked (CE2070/CE2077), so the
-        held value is the printed value.
-        """
-        if isinstance(value, ScalarConstant):
-            t = value.semantic_type
-            if t == BuiltinType.STRING:
-                return str(value.value)
-            if t == BuiltinType.BOOL:
-                return "true" if value.value else "false"
-            if t == BuiltinType.F32:
-                import struct
-                return "%g" % struct.unpack("f", struct.pack("f", value.value))[0]
-            if t == BuiltinType.F64:
-                return "%g" % value.value
-            if is_integer_type(t):
-                return str(value.value)
-        er.emit(self.reporter, er.ERR.CE0108, span,
-                what=f"an interpolated '{display_type(value.semantic_type)}' value")
-        return None
+        """One hole, rendered as the run-time formatter prints it, or CE0108 (`hole_text`)."""
+        text = hole_text(value)
+        if text is None:
+            er.emit(self.reporter, er.ERR.CE0108, span,
+                    what=f"an interpolated '{display_type(value.semantic_type)}' value")
+        return text
 
     def _evaluate_interpolation(self, expr: InterpolatedString, expected_type: Type,
                                 span: Optional[Span]) -> Optional[ConstantValue]:
@@ -575,7 +615,7 @@ class ConstantEvaluator:
         elif expr.op in integer_ops.WIDTH_DEFINED:
             return self._eval_width_defined(left_val, right_val, expr.op, span)
 
-        elif expr.op in _LOGICAL:
+        elif expr.op in LOGICAL:
             return self._eval_logical(left_val, right_val, expr.op, span)
 
         elif expr.op in integer_ops.COMPARISONS:
@@ -757,34 +797,12 @@ class ConstantEvaluator:
         if value is None:
             return None
 
-        from_type = value.semantic_type
-        to_type = expr.target_type
-
-        # A cast asks for the bit pattern, so it truncates and never reports: it is the
-        # escape from the overflow rule and cannot be subject to it.
-        if is_integer_constant(value) and is_integer_type(to_type):
-            return ScalarConstant(integer_ops.cast(value.value, to_type), to_type)  # type: ignore[arg-type]
-
-        elif is_integer_constant(value) and is_float_type(to_type):
-            return ScalarConstant(float(value.value), to_type)
-
-        elif isinstance(value, ScalarConstant) and is_float_type(from_type) \
-                and is_integer_type(to_type):
-            return ScalarConstant(integer_ops.cast(int(value.value), to_type), to_type)
-
-        elif is_integer_constant(value) and to_type == BuiltinType.BOOL:
-            return ScalarConstant(value.value != 0, BuiltinType.BOOL)
-
-        elif is_bool_constant(value) and is_integer_type(to_type):
-            return ScalarConstant(1 if value.value else 0, to_type)
-
-        elif isinstance(value, ScalarConstant) and is_float_type(from_type) \
-                and is_float_type(to_type):
-            return ScalarConstant(value.value, to_type)
-
-        else:
-            er.emit(self.reporter, er.ERR.CE0111, span, from_type=display_type(from_type), to_type=display_type(to_type))
-            return None
+        cast = cast_constant(value, expr.target_type)
+        if cast is None:
+            er.emit(self.reporter, er.ERR.CE0111, span,
+                    from_type=display_type(value.semantic_type),
+                    to_type=display_type(expr.target_type))
+        return cast
 
     def _names_an_error_type(self, ty: Type) -> bool:
         if isinstance(ty, UnknownType):
@@ -859,7 +877,7 @@ class ConstantEvaluator:
         if node.op in ('/', '%') and right.value == 0:
             er.emit(self.reporter, er.ERR.CE0112, span)
             return None
-        return ScalarConstant(_FLOAT_ARITHMETIC[node.op](left.value, right.value),  # type: ignore[arg-type]
+        return ScalarConstant(FLOAT_ARITHMETIC[node.op](left.value, right.value),  # type: ignore[arg-type]
                               left.semantic_type)
 
     def _eval_width_defined(self, left: ConstantValue, right: ConstantValue, op: str,
@@ -887,7 +905,7 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0110, span, op=f'logical {op} on non-boolean type')
             return None
 
-        return ScalarConstant(_LOGICAL[op](bool(left.value), bool(right.value)),
+        return ScalarConstant(LOGICAL[op](bool(left.value), bool(right.value)),
                               BuiltinType.BOOL)
 
     def _eval_comparison(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:

@@ -1104,6 +1104,7 @@ All paths are under `semantics/passes/`.
 |---|---|
 | `types/__init__.py` | `TypeValidator`, the entry of the pass: the declaration half, and `check_body`, the walk of a SHIR body; `ReadOnlyInferrer` for the early passes |
 | `types/visit/` | `__init__.py`: `ARMS`, the one table of the body walk, keyed on the SHIR class, with `check` and `check_expr`; `statements.py`: the walk of a block and the statement arms (`let`, rebind, expression statement, `return`); `expressions.py`: the expression arms (literals, locals, constants); `inference.py`: the AST inference of the early passes; `helpers.py`: the lambda and function-value helpers |
+| `types/fold.py` | `Folder`: the readable fold of a SHIR sub-expression at the type of its position, over the integer operator kernel ([the IR design](../design/ir.md), 7.4) |
 | `types/arguments.py` | `check_arguments`: the one argument check (the count, then each argument) |
 | `types/method_registry.py` | `METHOD_TYPE_REGISTRY`: which built-in method family a call belongs to |
 | `types/calls/` | call validation: `dotcall.py` (`resolve_dotcall`, what `X.Y(args)` names), `statics.py`, `namespaced.py`, `methods.py`, `user_defined.py`, `generics.py`, `structs.py`, `enums.py` |

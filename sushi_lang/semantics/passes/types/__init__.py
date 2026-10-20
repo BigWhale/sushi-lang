@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.shir.body import ShirBody, ShirLocal
     from sushi_lang.semantics.shir.ids import DeclId, LocalId
     from sushi_lang.semantics.shir.lowering import LoweredProgram
+    from sushi_lang.semantics.const_eval import ConstantValue
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
@@ -34,6 +35,7 @@ from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.types.visit.inference import TypeInferenceVisitor
 from sushi_lang.semantics.passes.types.visit.statements import check_block, check_params
+from sushi_lang.semantics.passes.types.fold import Folder
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.shir.stop import Stops
 from sushi_lang.semantics.shir.typeck import TypeckResults
@@ -84,11 +86,12 @@ class TypeValidator:
         # The SHIR bodies of the program, and the record of the stops of the body half.
         self.shir = shir
         self.stops = stops
-        # The SHIR body that the body half walks, its `TypeckResults` and its locals by id,
-        # or None.
+        # The SHIR body that the body half walks, its `TypeckResults`, its locals by id and
+        # the fold of its readable values (docs/design/ir.md 7.4), or None.
         self.body: Optional['ShirBody'] = None
         self.answers: Optional[TypeckResults] = None
         self.body_locals: Dict['LocalId', 'ShirLocal'] = {}
+        self.folder: Optional[Folder] = None
         self.err = PassErrorReporter(reporter)
         self.tables = tables
         self.const_table = tables.constants
@@ -292,6 +295,7 @@ class TypeValidator:
         self.body = body
         self.answers = answers = self.shir.typeck_of(body)
         self.body_locals = {local.id: local for local in body.locals}
+        self.folder = Folder(self._constant_value)
         origin = self.reporter.origin
         filename = origin.filename if origin is not None else self.reporter.filename
         offered = sum(self.reporter.errors_offered.values())
@@ -303,7 +307,7 @@ class TypeValidator:
             self.stops.stopped(stop)
             return
         finally:
-            self.body = self.answers = None
+            self.body = self.answers = self.folder = None
             self.body_locals = {}
         if sum(self.reporter.errors_offered.values()) != offered:
             return
@@ -321,6 +325,12 @@ class TypeValidator:
         if self.shir is None:
             er.raise_internal_error("CE0000", detail="the typecheck pass has no SHIR program")
         return self.shir.decls.name_of(decl)
+
+    def _constant_value(self, decl: 'DeclId') -> Optional['ConstantValue']:
+        """The value of a constant that a `ConstRef` names, from the constant table (Q5)."""
+        from sushi_lang.semantics.passes.types.visit.expressions import constant_record
+        record = constant_record(self, self.decl_name(decl))
+        return None if record is None else self.constant_evaluator().value_of(record, None)
 
     def written_of(self, decl):
         """The declaration that lowering made the SHIR body of: `decl` itself here. The

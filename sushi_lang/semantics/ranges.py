@@ -76,17 +76,22 @@ def read_range(expr: RangeExpr, read_int: ReadInt,
     end = read_int(expr.end)
     if end is None:
         return None
+    return plan_range(start, end, expr.inclusive, expr.reverse, expr.loc)
 
-    count = max(end - start + (1 if expr.inclusive else 0), 0)
+
+def plan_range(start: int, end: int, inclusive: bool, reverse: bool,
+               loc: Optional[Span]) -> RangePlan:
+    """The plan of a range whose two bounds are read: the formula of this module."""
+    count = max(end - start + (1 if inclusive else 0), 0)
     return RangePlan(
-        first=start + count - 1 if expr.reverse else start,
-        step=-1 if expr.reverse else 1,
+        first=start + count - 1 if reverse else start,
+        step=-1 if reverse else 1,
         count=count,
-        inclusive=expr.inclusive,
-        loc=expr.loc,
+        inclusive=inclusive,
+        loc=loc,
         start=start,
         end=end,
-        reverse=expr.reverse,
+        reverse=reverse,
     )
 
 
