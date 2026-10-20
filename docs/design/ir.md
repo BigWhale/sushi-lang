@@ -595,13 +595,15 @@ ShirLocal
   name     : str | None            # the source name; None for a hidden local
   declared : TypeRef | None        # the type as WRITTEN, when the source has one
   loc      : Span | None
+  declared_loc : Span | None       # the span of the written type
 ```
 
 Every node carries `shir_id` and `loc: Span`. No node and no local carries a computed
 type. A local's type is `typecheck`'s answer, in `TypeckResults` keyed by `LocalId` (7.3):
 a written type is checked against it, and a binder with none (a `foreach` item, a pattern
 binding, a destructuring target, a bare lambda parameter) is inferred into it. `declared`
-is syntax, like `ShirParam.ty`: the user wrote it.
+is syntax, like `ShirParam.ty`: the user wrote it. `declared_loc` is where the user wrote
+it, and a type mismatch puts its note there ("declared here").
 
 A hidden local is a local the AST builder made: the binder of a `foreach(x?? in ...)` or of
 a `foreach((a, b) in ...)`, the `let` of a `foreach(_?? in ...)`. It has no source name and no span, and no diagnostic names it. The
@@ -701,8 +703,11 @@ class, with a row for each member of `ShirStmt`, `ShirExpr` and `ShirPattern`
 An arm checks its node and writes the answers of the node; the check and the answer are
 one arm, so SHIR has no second inference walk. The walk of a template check reads the body
 of the template as written (origin `TemplateCheck`), and the header of its check copy
-stays with the declaration half (6.4). The completeness check runs when a walk ends with
-no stop. While the migration is in progress, the arm of a construct that the pass does not
+stays with the declaration half (6.4). An expression arm takes the type of its position,
+when the position has one, and answers the type of its node; the one dispatch writes that
+answer as the type row of the node. A node that has an error has no answer, and a node that
+reads it has none either, so the completeness check runs only when a walk ends with no stop
+and with no error in its body. While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
 next body, so every unit is lowered and every earlier error is found.
 
@@ -857,6 +862,16 @@ and a type, which the AST constant evaluator and the fold both call. The fold ha
 totality gate over the SHIR expression nodes, and the kernel keeps the gate of the integer
 operator semantics. Ruled 2026-10-20; this replaces the ruling of 2026-10-11 that lowering
 records the value with the AST evaluator at `i64`.
+
+The fold is `Folder.read(node, type)` in `passes/types/fold.py`, with the table `FOLDS` of
+its arms and the set `UNREADABLE` (gate: `tests/unit/test_typeck_fold_is_total.py`). It
+answers the values of the constant evaluator, a `ScalarConstant` or an `AggregateConstant`,
+or a `RangePlan` for a `Range`. It answers nothing when the sub-expression is not readable
+or has no value, for example a division by zero. A literal takes the type of its position,
+else its default (`int_literal_default`). An operation that leaves its type has no value:
+the fold records it with its node (`Folder.overflows`), so the check of the position
+reports it there. The value of a `ConstRef` comes from a reader that the pass gives: the
+constant table, through the AST constant evaluator (Q5).
 
 **`expect(msg)` keeps its lazy message.** The message is evaluated only when the call
 fails, as the message of an `Assert` is. A `Builtin` call with an operand that is
