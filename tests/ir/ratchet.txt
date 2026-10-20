@@ -346,6 +346,7 @@ tests/ir/typeck/literals/test_err_typeck_literal_context.sushi
 tests/ir/typeck/literals/test_err_typeck_literal_default.sushi
 tests/ir/typeck/names/test_err_typeck_alias_private_const.sushi
 tests/ir/typeck/names/test_err_typeck_const_ref.sushi
+tests/ir/typeck/statements/test_err_typeck_answer_printed.sushi
 tests/ir/typeck/statements/test_err_typeck_let_of_a_result.sushi
 tests/ir/typeck/statements/test_err_typeck_let_untyped.sushi
 tests/ir/typeck/statements/test_err_typeck_rebind.sushi
