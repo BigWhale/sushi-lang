@@ -1320,7 +1320,9 @@ locals, and nothing else:
 1. An owning local gets `StorageLive` at its declaration and `StorageDead` after its last
    use in the enclosing block.
 2. `Drop(place)` is emitted on every exit path of the owning scope, before `StorageDead`,
-   newest declaration first (reverse declaration order).
+   newest declaration first (reverse declaration order). On the path of a `return`, the
+   value goes into `_0` FIRST and the drops come after it, because the value can read a
+   local that the scope exit frees.
 3. A local that `borrow` proved moved on **every** path gets no drop at all.
 4. A local marked CONDITIONALLY moved gets a `bool` flag local: set `true` at the
    declaration (set again on each loop iteration), set `false` at each move site, and its
@@ -1408,13 +1410,17 @@ fn greet(_1: string @owned, _2: bool @guaranteed) -> Result@(~, StdError) {
     goto -> bb4
 
   bb4:                                     // join
+    _0 = Result::Ok(const ~)
     DropIfSet(_5, _6)
     StorageDead(_6)
     StorageDead(_5)
-    _0 = Result::Ok(const ~)
     return
 }
 ```
+
+The comments are notes for this example. The printer writes one comment only: the source
+name of a local (`// msg`). In `bb4` the `return` writes `_0` first, and then the drops of
+the scope exit run (8.10, rule 2).
 
 Read `bb3` and `bb4` together. The whole of 1.4, the LLVM-keyed move set, the name-string
 drop-flag lookup, `arm_if_conditional` and `emit_free_unless_moved`, is those three lines.
