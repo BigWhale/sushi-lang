@@ -1185,6 +1185,7 @@ call splits a block. In SLIR none do.
 ```
 SlirFunction
   symbol : str                       # the mangled name; monomorphic (ruling Q1)
+  name   : str                       # the declared source name; the printer writes it
   unit   : str                       # the declaring unit; the module it goes into
   params : [(LocalId, Convention)]
   locals : [SlirLocal]
@@ -1204,6 +1205,10 @@ SlirBlock
 ```
 
 `locals[0]` is always the return slot, written `_0`.
+
+The printer writes the source name of a function and of a callee (`fn greet`,
+`call @decorate`), not the symbol (`test_spine_greet$greet`, `user_main`). The symbol is
+for the module and the link step.
 
 A statement that lowering synthesizes (a `Drop`, a flag write, a `StorageDead`, a bounds
 check) takes the `Span` of the construct that caused it: the scope exit, the move, the
@@ -1278,9 +1283,12 @@ StorageDead(LocalId)
 ```
 
 ```
-SlirCallee = Direct(symbol: str)                         # free fn, method, extern, conversion
-           | Builtin(method: BuiltinMethod, types: [Type])   # an emitter family (Q7)
+SlirCallee = Direct(symbol: str, name: str)              # free fn, method, extern, conversion
+           | Builtin(method: BuiltinName, types: [Type])     # an emitter family (Q7)
            | Indirect(Operand)                           # a closure's fn_ptr
+
+BuiltinName = BuiltinMethod                              # a row of METHOD_TYPE_REGISTRY (7.6)
+            | Intrinsic(name: str)                       # `println`, `print`, `interp`
 ```
 
 `DropIfSet` replaces the string-keyed drop-flag table of 1.4. The flag is an ordinary SLIR
@@ -1296,6 +1304,11 @@ per owner, under one region.
 
 `Builtin` is a call to a per-type emitter family (Q7). The backend expands it with the
 existing emitter, which receives LLVM values for the operands and no AST node.
+
+An `Intrinsic` callee of SHIR (7.6) has no row of `METHOD_TYPE_REGISTRY`, so it lowers to
+`Builtin(Intrinsic(name), types)`: `types` holds the type of each operand, and the
+printer writes it as `builtin println@(string)`. An interpolation lowers to the intrinsic
+`interp` (8.9).
 
 ### 8.7 Rvalues
 
@@ -1326,11 +1339,14 @@ Five, because a call is not one of them (R3):
 
 ```
 Goto(BlockId)
-SwitchInt(Operand, targets: [(int, BlockId)], otherwise: BlockId)
+SwitchInt(Operand, targets: [(int, BlockId)], otherwise: BlockId | None)
 Return
 Trap(code: str, args: [Operand])   # run-time traps. Exits. Never unwinds
 Unreachable
 ```
+
+`otherwise` is `None` when no other value can reach the switch, as for the tag of a
+`Result`. The printer writes it as `otherwise: unreachable`.
 
 `Trap` carries operands because the registry text is a printf format string and some traps
 print values: [RE2020](../error-catalog.md#re2020) prints the index and the size.
@@ -1353,7 +1369,7 @@ print values: [RE2020](../error-catalog.md#re2020) prints the index and the size
 | `Loop`, kind `IteratorValue` | the same shape, with an `Indirect` call through `next_fn` |
 | an iterator producer or a lazy adapter | an `Aggregate(Iterator, ...)` of the source's three functions and its state; the state is a local when the iterator is lent and stays in the function, and a heap block otherwise (`OwnershipResults`) |
 | `Range` as a value | an owned iterator over the range formula |
-| `Interp(parts)` | a sequence of `Builtin` string-builder calls into a fresh owning local |
+| `Interp(parts)` | ONE `Builtin(Intrinsic("interp"), types)` call into a fresh owning local, with one `Guaranteed` operand for each part in order (an empty text part gives none). The backend expands it with the string-builder emitters (Q7), so the builder state stays out of SLIR |
 | `Lambda` | one `SlirFunction` cut from the body, and an `Aggregate(Closure, [FnRef, env...])` built from `LiftResults` (Q8); each captured operand is `Copy` or `Move` by `OwnershipResults` |
 | `ArrayInit(runs)` | `memcpy` for a plain element, one `copy_out` per slot for an owning one |
 | `Index` read | bounds compare, `SwitchInt`, `Trap("RE2020")` on the failing edge; no check when `unchecked` |
@@ -1419,16 +1435,18 @@ shown inline:
 
 ```
 ShirBody greet
-  params : [(_1 "name": string, Owned), (_2 "loud": bool, Guaranteed)]
-  locals : [_5 "msg": string]
+  params : [(_0 "name": string, Owned), (_1 "loud": bool, Guaranteed)]
+  locals : [_2 "msg": string]
   block  :
-    Assign(LocalRef(_5),
-           Try(Call(Free(@decorate), [(LocalRef(_1), Owned)])),
-           is_init: true)
-    If(LocalRef(_2),
-       then: [ ExprStmt(Call(Free(@shout), [(LocalRef(_5), Owned)])) ])
-    Return(EnumInit(Result, "Ok", [Lit(Blank)]))
+    Assign(LocalRef(_2), Try(Call(Free(@decorate), [(LocalRef(_0), Owned)])), is_init: true)
+    If(LocalRef(_1), then: [ExprStmt(Call(Free(@shout), [(LocalRef(_2), Owned)]))])
+    Return(EnumInit(@Result, "Ok", [Lit(Blank)]))
 ```
+
+This is the `--dump-shir` text: one line for each statement, and a declaration keeps its
+`@`. SHIR counts its locals from `_0`. SLIR gives `_0` to the return slot and gives ids to
+its temporaries, so the ids of the two levels differ (`msg` is `_2` in SHIR and `_5` in
+SLIR).
 
 **SLIR**: this is also the `--dump-slir` text format:
 
