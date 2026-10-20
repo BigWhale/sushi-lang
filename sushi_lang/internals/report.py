@@ -204,6 +204,9 @@ def in_source_order(items: List[Diagnostic]) -> List[Diagnostic]:
 def span_of(t: Any) -> Optional[Span]:
     m = getattr(t, "meta", None)
     if m is not None:
+        # The tree of a block at the end of a file with no newline has no end.
+        if m.end_line is None or m.end_column is None:
+            return Span(m.line, m.column, m.line, m.column)
         return Span(m.line, m.column, m.end_line, m.end_column)
     if isinstance(t, Token):
         line = getattr(t, "line", None)
