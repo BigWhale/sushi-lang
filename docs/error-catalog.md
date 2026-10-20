@@ -1126,16 +1126,6 @@ A `static` extension method is called on the TYPE name (`Vec.at(3, 4)`), so noth
 
 The monomorphizer substitutes a type argument for every type parameter an instantiated body names. This error means that an expression or a statement in an instantiated body was not substituted, so an internal type parameter name (T, U) would reach the user. This is a compiler bug, not a user error. [CE0125](#ce0125) is the same check in the borrow checker, and [CE0130](#ce0130) is the same check in the scope checker.
 
-### CE0136 {#ce0136}
-
-**Error** · internal
-
-**Message:** `internal error: the AST walk has no arm for node '{node}'`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-semantics/visitors.py dispatches on a method name it builds from the class name of the node. This error means that a node kind has no arm in a visitor (StatementValidator, ExpressionValidator or TypeInferenceVisitor), so the visitor would skip that node with no diagnostic. A node kind that a parent arm reads inside itself -- an ArrayElement, a MatchArm, a Pattern -- is named in visitors.WALKED\_IN\_PARENT and never arrives here. This is a compiler bug, not a user error. [CE0125](#ce0125) is the same check in the borrow checker, and [CE0130](#ce0130) is the same check in the scope checker.
-
 ### CE0137 {#ce0137}
 
 **Error** · internal

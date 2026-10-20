@@ -139,9 +139,10 @@ _add(ErrorMessage("CE0135", Severity.ERROR,
     "internal error: type substitution has no arm for {kind} node '{node}'",
     Category.INTERNAL, "The monomorphizer substitutes a type argument for every type parameter an instantiated body names. The walk handled a cast and a '??' and COPIED every other node, so a type parameter one level deeper survived and the internal name (T, U) was printed to the user (#602): a nested cast answered CE2014, explicit call-site type arguments answered CE2061, a lambda annotation answered CE2002 and a foreach item annotation answered CE2001. ONE code for TWO positions, expression and statement, because it is one fault. tests/unit/test_substitution_dispatch_is_total.py is the CI gate; this is the runtime backstop, in the shape CE0125 gives the borrow checker and CE0130 the scope checker."))
 
-_add(ErrorMessage("CE0136", Severity.ERROR,
-    "internal error: the AST walk has no arm for node '{node}'",
-    Category.INTERNAL, "semantics/visitors.py dispatches on a method name it BUILDS from the class name, and RecursiveVisitor.generic_visit answered a miss with a bare `pass`. A node kind that ast.py added was therefore skipped in SILENCE by every consumer -- StatementValidator, ExpressionValidator and TypeInferenceVisitor -- and a class RENAME read exactly the same way (#639). Expand and Lambda were both missing an arm. A node kind a PARENT arm reads inside itself -- an ArrayElement, a MatchArm, a Pattern -- is named in visitors.WALKED_IN_PARENT and never arrives here. tests/unit/test_visitor_dispatch_is_total.py is the CI gate; this is the runtime backstop, in the shape CE0125 gives the borrow checker and CE0130 the scope checker."))
+# CE0136 ("the AST walk has no arm for node") is retired. It was the backstop of
+# RecursiveVisitor, the base of the AST statement and expression validators of the typecheck
+# pass; the pass walks SHIR through one table now, and a class with no row is an internal
+# error there (docs/design/ir.md 7.3).
 
 _add(ErrorMessage("CE0138", Severity.ERROR,
     "main() takes one parameter, `string[] args`, or no parameter",
