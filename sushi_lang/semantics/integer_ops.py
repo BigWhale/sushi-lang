@@ -113,7 +113,9 @@ def compare(op: str, left: Any, right: Any) -> bool:
 def _width(ty: Type) -> int:
     width = integer_bit_width(ty)
     if width is None:
-        er.raise_internal_error("CE0000", detail=f"an integer operator at the type {ty}")
+        from sushi_lang.semantics.generics.type_display import display_type
+        er.raise_internal_error("CE0000",
+                                detail=f"an integer operator at the type {display_type(ty)}")
     return width
 
 
