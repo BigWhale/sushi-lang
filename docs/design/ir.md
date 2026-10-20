@@ -744,7 +744,11 @@ that is no variant (`Sign.Nope`, CE2045; a static outside a call is one too).
 An error hole CARRIES the code of the error that it stands for (CE6102, CE6104, CE2122,
 CE2008, CE2045; for a name with no declaration, the codes CE1001, CE1002 and CE0144). At
 the end of the analysis, an error hole whose code no diagnostic reported is an internal
-error, CE0155. So an error hole can never hide a fault in a correct program: when lowering
+error, CE0155. An error of the construct around the hole can come first, and the hole
+accepts its code too: in a constant or a `var` initializer the constant evaluator refuses
+the first node that is not constant (CE0108), and the borrow of a slice in a `let peek` is
+refused as a borrow of a temporary (CE2404). A new case of this kind is added with its
+fixture (`tests/ir/shir/error_holes/`). So an error hole can never hide a fault in a correct program: when lowering
 and `typecheck` disagree, the compile stops loudly. Lowering and `typecheck` also read ONE
 answer for a name behind a namespace: lowering resolves it (`DeclLookup.member_kind`), and
 `typecheck` reads the SHIR node and does not resolve the name a second time. Ruled
