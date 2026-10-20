@@ -609,7 +609,7 @@ The map names files and symbols, not line numbers: a line number goes stale with
 | `Lambda` node / `FuncDef` shape | `semantics/ast.py` |
 | `Call.callee` over any `Expr` | `semantics/ast.py`; `semantics/ast_builder/expressions/chains.py` |
 | Capture analysis | `semantics/passes/scope.py` |
-| Lambda type-check, [CE2094](../error-catalog.md#ce2094), bare-param inference | `semantics/passes/types/visitor.py` |
+| Lambda type-check, [CE2094](../error-catalog.md#ce2094), bare-param inference | `semantics/passes/types/visit/helpers.py` |
 | Expected-type propagation to bare-param lambdas | `semantics/passes/types/propagation.py` |
 | The `lift` pass | `semantics/passes/lift.py` |
 | Shared fn-synthesis wiring | `semantics/generics/synthesis.py:register_synthesized_function` |

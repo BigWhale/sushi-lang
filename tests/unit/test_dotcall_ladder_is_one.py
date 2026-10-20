@@ -7,7 +7,9 @@ has a miscompile behind it: a `poke self` receiver passed by value and its write
 (#326, #327), a `nom` parameter made inert, a call bound to the copy cut for another type.
 
 This file holds the shape: one `resolve_dotcall`, one `copy_callee_stamps`, and a stamp set
-that cannot fall behind the node it copies from.
+that cannot fall behind the node it copies from. From the switch to SHIR the AST validation
+half is gone, so the inference half, the inference of the early passes, is the one reader;
+the typecheck pass on SHIR reads the name that lowering resolved.
 """
 from __future__ import annotations
 
@@ -100,7 +102,7 @@ def test_the_shared_field_reader_sees_the_stamps():
 
 
 def test_the_ladder_has_one_home():
-    """`resolve_dotcall` is written once and read by exactly the two halves."""
+    """`resolve_dotcall` is written once and read by the inference half alone."""
     defs = {}
     calls = {}
     for module in _modules():
@@ -112,13 +114,13 @@ def test_the_ladder_has_one_home():
             calls[rel] = _count_calls(tree, "resolve_dotcall")
 
     assert defs == {"calls/dotcall.py": 1}, f"the ladder is defined in {defs}"
-    assert calls == {"visitor.py": 2} or sum(calls.values()) == 2, (
+    assert calls == {"visit/inference.py": 1}, (
         f"the ladder is walked {sum(calls.values())} times, from {calls} -- "
-        "the validation half and the inference half, and nothing else")
+        "the inference half, and nothing else")
 
 
 def test_the_stamp_copy_has_one_home():
-    """`copy_callee_stamps` is written once, and BOTH halves read it."""
+    """`copy_callee_stamps` is written once, and the inference half reads it."""
     defs = 0
     calls = 0
     for module in _modules():
@@ -126,9 +128,9 @@ def test_the_stamp_copy_has_one_home():
         defs += _count_defs(tree, "copy_callee_stamps")
         calls += _count_calls(tree, "copy_callee_stamps")
     assert defs == 1, f"copy_callee_stamps is defined {defs} times"
-    assert calls == 2, (
-        f"copy_callee_stamps is called {calls} times: the validation half and the "
-        "inference half copy the same set, or one of them is back to its own list")
+    assert calls == 1, (
+        f"copy_callee_stamps is called {calls} times: the inference half copies the set, "
+        "and a second reader is back to its own list")
 
 
 def test_no_second_view_of_a_call():

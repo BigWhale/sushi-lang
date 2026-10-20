@@ -15,15 +15,3 @@ ShirBody Box@(T).weight (TemplateCheck("test_shir_generic_struct_method.Box.weig
   locals : []
   block  :
     Return(Binary(*, Field(LocalRef(_0), "size"), Lit(2)))
-
-ShirBody Box@(i32).weight
-  params : [(_0 "self": Box@(i32), Guaranteed)]
-  locals : []
-  block  :
-    Return(Binary(*, Field(LocalRef(_0), "size"), Lit(2)))
-
-ShirBody Box@(string).weight
-  params : [(_0 "self": Box@(string), Guaranteed)]
-  locals : []
-  block  :
-    Return(Binary(*, Field(LocalRef(_0), "size"), Lit(2)))

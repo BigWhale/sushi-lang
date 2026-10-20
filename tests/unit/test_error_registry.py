@@ -163,9 +163,18 @@ def test_expect_error_code_directives_are_registered():
     assert not unknown, f"EXPECT_ERROR_CODE names an unregistered code: {unknown}"
 
 
-# Registered but referenced from nowhere in sushi_lang/. EXACT-MATCH and EMPTY since
-# #989 retired the last five: a code nothing emits is not registered.
-UNREFERENCED: set[str] = set()
+# Registered but referenced from nowhere in sushi_lang/. EXACT-MATCH. It was EMPTY since
+# #989 retired the last five: a code nothing emits is not registered. The switch to SHIR
+# (P2.3) deleted the AST validators of the typecheck pass, and these codes were emitted
+# there alone. Each one comes back with the typecheck stage of its construct group, which
+# removes it here.
+UNREFERENCED: set[str] = {
+    "CE2035", "CE2037", "CE2070", "CE2115",   # P2.4: Interp holes, println, literals
+    "CW2001",                                 # P2.4: an unused Result of a call
+    "CE2111", "CE2116",                       # Tier A: new() and from([]), assert
+    "CE2094",                                 # Tier C: closures
+    "CE5010",                                 # Tier D: ptr
+}
 
 
 def test_unreferenced_codes_match_the_allowlist():

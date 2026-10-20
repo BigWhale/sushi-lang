@@ -20,15 +20,3 @@ ShirBody T[].name (TemplateCheck("test_shir_generic_array_target.$array.with.Nam
   locals : []
   block  :
     Return(Lit("array"))
-
-ShirBody i32[].name
-  params : [(_0 "self": i32[], Guaranteed)]
-  locals : []
-  block  :
-    Return(Lit("array"))
-
-ShirBody i32[].twice_len
-  params : [(_0 "self": i32[], Guaranteed)]
-  locals : []
-  block  :
-    Return(Binary(*, Call(Dotted(LocalRef(_0), "len"), []), Lit(2)))

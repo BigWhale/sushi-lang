@@ -37,6 +37,15 @@ each named for the stage it runs.
 The last four run per unit, in one loop, so the whole-program passes above them see every
 unit before any function body is walked.
 
+**The move to SHIR** ([the IR design](../design/ir.md), 7.9). The compiler lowers each body
+to SHIR after `scope`, and `typecheck` walks the SHIR body of each declaration through one
+table of arms keyed on the SHIR class (`types/visit/__init__.py`). The declaration half of
+`typecheck` (the signatures, the declared types, the constraints and the header of each
+body) still reads the AST. While the move is in progress, the arm of a construct that the
+pass does not type yet stops the walk of its body, and `effects`, `lift`, `borrow` and
+the backend do not run: a program with no error stops after the analysis with
+[CE0155](../error-catalog.md#ce0155), and `--dump-shir` is written first.
+
 `semantics/const_eval.py` is **not** a pass. Three callers reach it as a helper: the
 **AST builder**, which reads a fixed array's size while the unit is parsed (so a
 size is a literal or a constant of the same unit) and keeps a constant table of its own for it; the `typecheck` pass; and
@@ -1093,9 +1102,8 @@ All paths are under `semantics/passes/`.
 
 | Module | What it holds |
 |---|---|
-| `types/__init__.py` | `TypeValidator`, the entry of the pass; `ReadOnlyInferrer` for the early passes |
-| `types/visit/` | the three visitors, one module each: `statements.py`, `expressions.py`, `inference.py` (what an expression yields), and `helpers.py` |
-| `types/visitor.py` | a facade that re-exports the visitors for the modules outside the pass |
+| `types/__init__.py` | `TypeValidator`, the entry of the pass: the declaration half, and `check_body`, the walk of a SHIR body; `ReadOnlyInferrer` for the early passes |
+| `types/visit/` | `__init__.py`: `ARMS`, the one table of the body walk, keyed on the SHIR class; `statements.py`: the walk of a block; `inference.py`: the AST inference of the early passes; `helpers.py`: the lambda and function-value helpers |
 | `types/arguments.py` | `check_arguments`: the one argument check (the count, then each argument) |
 | `types/method_registry.py` | `METHOD_TYPE_REGISTRY`: which built-in method family a call belongs to |
 | `types/calls/` | call validation: `dotcall.py` (`resolve_dotcall`, what `X.Y(args)` names), `statics.py`, `namespaced.py`, `methods.py`, `user_defined.py`, `generics.py`, `structs.py`, `enums.py` |

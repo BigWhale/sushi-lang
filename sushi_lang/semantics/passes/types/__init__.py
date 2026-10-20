@@ -32,7 +32,8 @@ from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.types.visit.inference import TypeInferenceVisitor
 from sushi_lang.semantics.passes.types.visit.statements import check_block
-from sushi_lang.semantics.shir.stop import StageStop, Stops
+from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.semantics.shir.stop import Stops
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.typeck_check import check_answers
 

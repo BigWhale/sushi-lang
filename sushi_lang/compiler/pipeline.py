@@ -790,17 +790,11 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         _write_shir_dump(analyzer, options.dump_shir, reporter)
     if reporter.has_errors:
         return 2
-
-    out_path = _resolve_out_path(options, src_path)
-    use_incremental = (len(compilation_order) > 1 and not options.lib
-                       and not options.no_incremental and not options.dump_ll)
-    if use_incremental:
-        return _compile_incremental(
-            compilation_order, analyzer, out_path, reporter, options,
-            stdlib_units, library_imports, library_linker, unit_manager, cache,
-        )
-    return _compile_monolithic(compilation_order, analyzer, out_path, reporter,
-                               options, library_linker)
+    # From the switch to SHIR the stages after `typecheck` are not built yet, so a program
+    # with no error stops here, after the dump, with the stop code (docs/design/ir.md 11.1).
+    from sushi_lang.internals import errors as er
+    er.emit_exception(reporter, analyzer.pipeline_stop())
+    return 2
 
 
 def codegen_for(analyzer: SemanticAnalyzer,

@@ -3,7 +3,7 @@
 ONE table, `LOWERING`, gives the lowering of each AST body class that lowering handles,
 keyed on the class (gate: `tests/unit/test_shir_lowering_is_one_table.py`). A class with
 no row is a HOLE: lowering makes a `Hole` that names the AST class, records it, and the
-compile goes on through the old pipeline. When the variable that `STRICT_VARIABLE` names
+compile goes on. When the variable that `STRICT_VARIABLE` names
 is `1`, a hole stops the compile with the stop code CE0155 instead, except in a unit whose
 scope pass reported an error (`stops_on_hole`). The hole of a name with no declaration,
 and of a form that the language always refuses (a named argument outside a struct
@@ -224,9 +224,9 @@ class BodyLowerer:
         a call of a name that the namespace does not hold (CE2008), and a member of a type
         that is no variant (CE2045).
 
-        `codes` are the codes of that error. At the end of the analysis, an error hole
-        whose codes no error offered stops the compile with CE0155 under the strict
-        variable (`check_error_holes`, ir.md 7.4). In a constant or a `var` initializer,
+        `codes` are the codes of that error. At the end of the analysis, on every compile,
+        an error hole whose codes no error offered is a stop with CE0155
+        (`check_error_holes`, ir.md 7.4). In a constant or a `var` initializer,
         the constant evaluator refuses the first node that is not constant (CE0108) before
         the typecheck pass reads the form, so there the hole accepts CE0108 too.
         """

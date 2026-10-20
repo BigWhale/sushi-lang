@@ -28,11 +28,7 @@ _P24 = ("kept for P2.4: the typecheck pass on SHIR types this spine construct, a
         "helper moves to SHIR inputs")
 _TIER_A = ("kept for Tier A (Phase 3): the typecheck stage of its construct group moves "
            "the helper to SHIR inputs")
-_TIER_B = ("kept for Tier B (Phase 4): the typecheck stage of its construct group moves "
-           "the helper to SHIR inputs")
 _TIER_C = ("kept for Tier C (Phase 5): the typecheck stage of its construct group moves "
-           "the helper to SHIR inputs")
-_TIER_D = ("kept for Tier D (Phase 6): the typecheck stage of its construct group moves "
            "the helper to SHIR inputs")
 _P5_EXPAND_COPIES = ("kept for the generic instances group of Phase 5: the dead-statement "
                      "rule, the scope pass and ends_unrolled_run read the copy boundaries")
@@ -118,6 +114,23 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/typeck.py", "integer",
      "kept for the match group of Phase 3: SHIR-to-SLIR lowering reads the integer type "
      "of a literal arm and of a range arm"),
+    # -- the stages after typecheck, which the driver does not run from the switch ----
+    ("sushi_lang/semantics/semantic_analyzer.py", "_compute_effects",
+     "kept for P2.6: the destroy-effect summary is an input of the borrow pass on SHIR"),
+    ("sushi_lang/semantics/semantic_analyzer.py", "enum_base_names",
+     "kept for P2.6: the borrow pass on SHIR reads the enum base names"),
+    ("sushi_lang/semantics/passes/borrow/__init__.py", "check_template_copy",
+     "kept for P2.6: the borrow pass on SHIR checks the body of a template check"),
+    ("sushi_lang/semantics/passes/lift.py", "LambdaLifter",
+     "kept for P2.7: the driver runs lift on SHIR after typecheck"),
+    ("sushi_lang/semantics/passes/lift.py", "lift_perk_impl",
+     "kept for P2.7: the driver runs lift on SHIR after typecheck"),
+    ("sushi_lang/compiler/pipeline.py", "_resolve_out_path",
+     "kept for P2.11: the emitter of a SlirFunction writes the output of the compile"),
+    ("sushi_lang/compiler/pipeline.py", "_compile_monolithic",
+     "kept for P2.11: the emitter of a SlirFunction builds one module for each unit"),
+    ("sushi_lang/compiler/pipeline.py", "_compile_incremental",
+     "kept for P2.11: the emitter of a SlirFunction keeps the per-unit cache"),
     # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
     # Each one moves to SHIR inputs in the typecheck stage of its construct group
     # in the migration plan, and that stage deletes the entry.

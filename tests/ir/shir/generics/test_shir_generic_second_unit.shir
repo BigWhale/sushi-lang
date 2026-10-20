@@ -12,12 +12,6 @@ ShirBody Pair@(T).count (TemplateCheck("helpers/shir_gen_pair.Pair.count"))
   block  :
     Return(Lit(2))
 
-ShirBody Pair@(i32).count
-  params : [(_0 "self": Pair@(i32), Guaranteed)]
-  locals : []
-  block  :
-    Return(Lit(2))
-
 ShirBody pair_of__i32
   params : [(_0 "a": i32, Owned), (_1 "b": i32, Owned)]
   locals : []

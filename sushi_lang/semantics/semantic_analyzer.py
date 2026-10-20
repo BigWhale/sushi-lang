@@ -27,8 +27,8 @@ from sushi_lang.semantics.shir.lowering import (
 )
 from sushi_lang.semantics.passes.types import (
     TypeValidator, validate_perk_implementation_method)
-from sushi_lang.semantics.passes.borrow import BorrowChecker
-from sushi_lang.semantics.passes.lift import LambdaLifter
+from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.semantics.shir.stop import Stops
 from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.monomorphize.order import diagnostics_in_site_order
@@ -88,23 +88,17 @@ class Lints:
 
 @dataclass(frozen=True)
 class _UnitPasses:
-    """The four per-unit passes of one unit, built in that unit's scope."""
+    """The per-unit passes of one unit that run from the switch to SHIR on, built in that
+    unit's scope."""
     scope: ScopeAnalyzer
     typecheck: TypeValidator
-    lifter: LambdaLifter
-    borrow: BorrowChecker
 
 
 @dataclass(frozen=True)
 class _CopyEntry:
-    """The four per-unit pass entries for one kind of copy.
-
-    `borrow` takes the copy and the functions that the lift pass made from its lambdas.
-    """
+    """The per-unit pass entries for one kind of copy."""
     scope: Callable[[ScopeAnalyzer, Any], None]
     typecheck: Callable[[TypeValidator, Any], None]
-    lift: Callable[[LambdaLifter, Any], list]
-    borrow: Callable[[BorrowChecker, Any, list], None]
 
 
 def _written_declaration(method: Any, template_id: Any) -> tuple:
@@ -122,45 +116,18 @@ def _written_declaration(method: Any, template_id: Any) -> tuple:
     return ("copy", template_id, where)
 
 
-def _borrow_lifted(borrow: BorrowChecker, functions) -> None:
-    """Borrow-check functions, each as the body that the reporter reads."""
-    for fn in functions:
-        borrow.reporter.enter_body(fn)
-        borrow._check_function(fn)
-
-
-def _borrow_function_copy(borrow: BorrowChecker, func: Any, lifted: list) -> None:
-    _borrow_lifted(borrow, (func, *lifted))
-
-
-def _borrow_extension_copy(borrow: BorrowChecker, ext: ExtendDef, lifted: list) -> None:
-    borrow._check_extension(ext)
-    _borrow_lifted(borrow, lifted)
-
-
-def _borrow_perk_copy(borrow: BorrowChecker, impl: ExtendWithDef, lifted: list) -> None:
-    borrow._check_perk_impl(impl)
-    _borrow_lifted(borrow, lifted)
-
-
 # One row per kind of copy that is cut after the per-unit loop: a late function copy, a
 # generic-target or array-target extension copy, and an array-template perk copy.
 _COPY_ENTRIES: dict[str, _CopyEntry] = {
     "function": _CopyEntry(
         scope=ScopeAnalyzer._check_function,
-        typecheck=TypeValidator._validate_function,
-        lift=LambdaLifter.lift_body,
-        borrow=_borrow_function_copy),
+        typecheck=TypeValidator._validate_function),
     "extension": _CopyEntry(
         scope=ScopeAnalyzer._check_extension_method,
-        typecheck=TypeValidator._validate_extension_method,
-        lift=LambdaLifter.lift_body,
-        borrow=_borrow_extension_copy),
+        typecheck=TypeValidator._validate_extension_method),
     "perk": _CopyEntry(
         scope=ScopeAnalyzer._check_perk_implementation,
-        typecheck=validate_perk_implementation_method,
-        lift=LambdaLifter.lift_perk_impl,
-        borrow=_borrow_perk_copy),
+        typecheck=validate_perk_implementation_method),
 }
 
 
@@ -219,8 +186,11 @@ class SemanticAnalyzer:
         self.library_extensions: list[ExtendDef] = []  # Library-shipped extension methods, declare-only too
         self.main_expects_args: bool = False  # Whether main function has string[] args parameter
         # The SHIR of each body that the scope pass checked, per unit, in the compilation
-        # order (docs/design/ir.md 6.3). Only `--dump-shir` reads it yet.
+        # order (docs/design/ir.md 6.3). The typecheck pass walks it, and `--dump-shir`
+        # prints it.
         self.shir = LoweredProgram()
+        # The stops that the typecheck pass met (`shir/stop.py`).
+        self.stops = Stops()
         # Every error that a per-unit reporter offered, by code, for the error-hole check
         # at the end of the analysis (docs/design/ir.md 7.4).
         self._offered: Counter[str] = Counter()
@@ -259,22 +229,27 @@ class SemanticAnalyzer:
                           imported one (C3)
             effects       destroy-effect summary                 _compute_effects                  passes/borrow/destroy_effects.py
             scope         scope and variable analysis            _check_units                      passes/scope.py
+            lowering      the SHIR body of each declaration      _check_units                      shir/lowering.py
             typecheck     type validation and inference          _check_units                      passes/types/
             lift          lambda lifting                         _check_units                      passes/lift.py
             borrow        borrow checking                        _check_units                      passes/borrow/
 
-        The last four run per unit, in one loop. `_check_copies` repeats those four for
-        each copy cut after the loop started: an extension copy of a generic or an array
-        target, an array-template perk copy, and a function instance of a late request
-        of the typecheck pass (#1155). `_check_array_extensions` drives it to a
-        fixpoint. A copy of a checked template reports only the per-instance remainder.
+        From the switch to SHIR (docs/design/ir.md 7.9), `scope`, lowering and `typecheck`
+        run per unit, in one loop, and `typecheck` walks the SHIR body of each
+        declaration. `effects`, `lift` and `borrow` do not run, and the backend does not
+        run: the pipeline stops after `typecheck` with the stop code CE0155
+        (`pipeline_stop`). `_check_copies` repeats the per-unit stages for each copy cut
+        after the loop started: an extension copy of a generic or an array target, an
+        array-template perk copy, and a function instance of a late request of the
+        typecheck pass (#1155). `_check_array_extensions` drives it to a fixpoint. A copy
+        of a checked template reports only the per-instance remainder.
 
         The `typecheck` pass also checks each template of the unit one time, on a check
         copy, where it is written (#1070, `passes/types/templates.py`): each type
-        parameter is opaque, the copy lives in an overlay of the tables, and the pass runs
-        `lift` and, through a hook, `borrow` on the copy alone. After the fixpoint, `_reject_opaque_in_program_tables`
-        is the backstop (CE0148): no instance over an opaque parameter reached a program
-        table.
+        parameter is opaque, the copy lives in an overlay of the tables, and the pass
+        walks the SHIR body of the template as written. After the fixpoint,
+        `_reject_opaque_in_program_tables` is the backstop (CE0148): no instance over an
+        opaque parameter reached a program table.
 
         `ffi-clash` has a second half with no row of its own: `_check_instance_clash`
         runs CE5013 over the monomorphized function instances, directly after
@@ -376,19 +351,19 @@ class SemanticAnalyzer:
         self._reject_extensions_beside_shipped_perk_impls()
         self._warn_hidden_imported_extensions()
 
-        destroy_effects = self._compute_effects(compilation_order)
-        # Enum type names for the borrow pass's ownership-sink test, stripped to their
-        # base name: a monomorphized generic enum is interned as "Result<i32, StdError>"
-        # while its constructor is written `Result.Ok(...)`.
-        enum_names = enum_base_names(self.tables.enums, self.tables.generic_enums)
-
         self._start_late_requests(monomorphizer, compilation_order)
-        self._check_units(compilation_order, monomorphizer, libraries,
-                          destroy_effects, enum_names)
-        self._check_array_extensions(compilation_order, monomorphizer, libraries,
-                                     destroy_effects, enum_names)
+        self._check_units(compilation_order, monomorphizer, libraries)
+        self._check_array_extensions(compilation_order, monomorphizer, libraries)
         self._reject_opaque_in_program_tables()
-        check_error_holes(self.shir.holes, self._offered + self.reporter.errors_offered)
+
+    def pipeline_stop(self) -> StageStop:
+        """The one stop of the program, for an analysis that reported no error.
+
+        The first stop of the typecheck pass, else an error hole whose codes no error
+        offered (ir.md 7.4), else the stage after `typecheck` (`Stops.first`).
+        """
+        hole = check_error_holes(self.shir.holes, self._offered + self.reporter.errors_offered)
+        return self.stops.first(hole)
 
     def _reject_opaque_in_program_tables(self) -> None:
         """CE0148, the backstop of the template check (#1070): no opaque type reached here.
@@ -828,12 +803,11 @@ class SemanticAnalyzer:
         )
 
     def _check_units(self, compilation_order: list[Unit], monomorphizer,
-                     libraries: LibraryRegistration, destroy_effects,
-                     enum_names: set[str]) -> None:
-        """scope, typecheck, lift and borrow, per unit, in one loop.
+                     libraries: LibraryRegistration) -> None:
+        """scope, lowering and typecheck, per unit, in one loop.
 
         Lowering runs after scope, because it reads the `Bindings` that scope writes. Its
-        result goes to `self.shir`, and the passes after it read the AST as before. The
+        result goes to `self.shir`, and the body half of `typecheck` walks it. The
         reporter of the unit tells lowering whether scope reported an error: in such a
         unit a hole does not stop the compile under the strict variable.
         """
@@ -844,22 +818,18 @@ class SemanticAnalyzer:
                 continue
 
             unit_reporter = self._unit_reporter(unit)
-            passes = self._unit_passes(unit, unit_reporter, monomorphizer,
-                                       libraries, destroy_effects, enum_names)
+            passes = self._unit_passes(unit, unit_reporter, monomorphizer, libraries)
             passes.scope.run(unit.ast)
             lower_unit(self.shir, unit, passes.scope.bindings,
                        DeclLookup.of(self.tables, unit.name),
                        scope_failed=unit_reporter.has_offered_errors)
             passes.typecheck.run(unit.ast)
-            passes.lifter.run()
-            passes.borrow.run(unit.ast, skip=passes.typecheck.checked_template_ids)
 
             self._merge_unit(unit_reporter)
 
     def _unit_passes(self, unit: Unit, reporter: Reporter,
-                     monomorphizer, libraries: LibraryRegistration, destroy_effects,
-                     enum_names: set[str]) -> _UnitPasses:
-        """The scope, typecheck, lift and borrow passes of ONE unit, in its own scope.
+                     monomorphizer, libraries: LibraryRegistration) -> _UnitPasses:
+        """The scope and typecheck passes of ONE unit, in its own scope.
 
         Two callers: the per-unit loop, and the check of the generic-target extension
         copies, which each go home to the unit of their template (#1064). A copy is
@@ -875,22 +845,13 @@ class SemanticAnalyzer:
                               visibility=self.tables.visibility,
                               function_tables=(self.tables.funcs, self.tables.generic_funcs),
                               unit_namespaces=self.tables.namespaces)
-        # The enum names let the checker tell `Box.Full(a)` from a method call -- both
-        # are DotCall here. BASE names only: the receiver is written bare.
-        borrow = BorrowChecker(reporter, destroy_effects=destroy_effects,
-                               enum_names=enum_names, tables=self.tables,
-                               unit_name=unit.name,
-                               scope=namespaces.scope if namespaces else None)
-        # The typecheck pass calls the borrow pass on each check copy (#1070, R5).
         typecheck = TypeValidator(
             reporter, self.tables, current_unit_name=unit.name,
             monomorphized_functions=monomorphizer.monomorphized_functions,
             in_library_unit=unit.provenance is not None,
             namespaces=namespaces, checks_templates=_checks_templates(unit),
-            borrow_check_copy=borrow.check_template_copy)
-        lifter = LambdaLifter(self.tables.structs, self.tables.funcs, unit.ast,
-                              annotate=typecheck)
-        return _UnitPasses(scope, typecheck, lifter, borrow)
+            shir=self.shir, stops=self.stops)
+        return _UnitPasses(scope, typecheck)
 
     @staticmethod
     def _entry_unit(compilation_order: list[Unit]) -> Optional[Unit]:
@@ -940,8 +901,7 @@ class SemanticAnalyzer:
         self.monomorphized_extensions.append(extend_def)
 
     def _check_array_extensions(self, compilation_order: list[Unit], monomorphizer,
-                                libraries: LibraryRegistration,
-                                destroy_effects, enum_names: set[str]) -> None:
+                                libraries: LibraryRegistration) -> None:
         """Check each call-site-driven extension copy, to a fixpoint."""
         # An array-target template instantiates at the CALL SITE (the typecheck pass
         # queued it), and checking one monomorphized body can resolve a call that queues
@@ -971,8 +931,7 @@ class SemanticAnalyzer:
                 (units[ext.home_unit or ""], ext) for ext in batch]
             copies += perk_copies
             copies += functions
-            self._check_copies(copies, monomorphizer, libraries, destroy_effects,
-                               enum_names)
+            self._check_copies(copies, monomorphizer, libraries)
             if marks != table_marks(self.tables.structs, self.tables.enums):
                 growing_rounds += 1
             if growing_rounds >= self.MAX_NEW_TYPE_ROUNDS:
@@ -1278,16 +1237,14 @@ class SemanticAnalyzer:
         settle_new_instances(self.tables, self.reporter, marks)
 
     def _check_copies(self, copies: list[tuple[Unit, Any]], monomorphizer,
-                      libraries: LibraryRegistration, destroy_effects,
-                      enum_names: set[str]) -> None:
-        """scope, typecheck, lift and borrow over each copy cut after the per-unit loop.
+                      libraries: LibraryRegistration) -> None:
+        """scope, lowering and typecheck over each copy cut after the per-unit loop.
 
         A late function copy (#1155), an extension copy of a generic or an array target,
         and an array-template perk copy (#699). Each copy is checked with the passes of
         its HOME unit, the unit that declared the template (#1064): its private functions
         and its aliases are the copy's too. The passes run in the per-unit order, and
-        the lifted functions land in the home unit's AST, the one module that defines
-        the copy.
+        `typecheck` walks the SHIR body of the copy.
 
         A copy of a checked template reports only the per-instance remainder (#1070, R7):
         the passes run for the stamps that the backend reads. A copy of a consumed
@@ -1305,8 +1262,7 @@ class SemanticAnalyzer:
         seen = {diagnostic_identity(d) for d in self.reporter.items}
         for home, nodes in by_home.values():
             scratch = self._unit_reporter(home)
-            passes = self._unit_passes(home, scratch, monomorphizer, libraries,
-                                       destroy_effects, enum_names)
+            passes = self._unit_passes(home, scratch, monomorphizer, libraries)
             lookup = DeclLookup.of(self.tables, home.name)
             for node in nodes:
                 entry = _copy_entry(node)
@@ -1316,10 +1272,6 @@ class SemanticAnalyzer:
                            scope_failed=scratch.has_offered_errors)
                 scratch.leave_body()
                 entry.typecheck(passes.typecheck, node)
-                scratch.leave_body()
-                lifted = entry.lift(passes.lifter, node)
-                passes.borrow.refresh_callee_modes()
-                entry.borrow(passes.borrow, node, lifted)
                 scratch.leave_body()
             self._merge_new(scratch, seen)
 
