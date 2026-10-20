@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, TextIO, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -204,14 +204,36 @@ def _build_one_helper(sushic: Path, lib_file: Path, bin_dir: Path,
     return None
 
 
+@dataclass
+class HelperBuild:
+    """What the helper build did: the build message of each helper that did not build, by
+    its name. It is true when every helper built."""
+    failures: Dict[str, str] = field(default_factory=dict)
+
+    def __bool__(self) -> bool:
+        return not self.failures
+
+
+def failed_helpers_of(fixture: Path, failures: Dict[str, str]) -> Dict[str, str]:
+    """The failed helpers that `fixture` can import (`helpers_for_selection`'s reach)."""
+    if not failures:
+        return {}
+    names = _directory_library_imports(Path(fixture).parent)
+    return {name: message for name, message in failures.items()
+            if names is None or name in names}
+
+
 def build_test_helpers(project_root: Path, verbose: bool = False, jobs: int = 1,
-                       only: Optional[Set[str]] = None) -> bool:
-    """Build the test helper libraries, `jobs` at a time. Returns True on success.
+                       only: Optional[Set[str]] = None,
+                       out: Optional[TextIO] = None) -> HelperBuild:
+    """Build the test helper libraries, `jobs` at a time.
 
     `only` names the helpers a selection needs (`helpers_for_selection`); None builds
     every helper. A helper outside `only` has its `.slib` removed, so that a library from
     an earlier run cannot answer for this one: a need that was not read fails loudly.
-    Every failure is printed, and one failure fails the build.
+    Every failure is printed to `out` (stdout by default), and the `.slib` of a helper that
+    did not build is removed for the same reason. The run goes on: a fixture that needs
+    the helper fails on its own, with the build message (`failed_helpers_of`).
     """
     helpers_dir = project_root / "tests" / "libs" / "helpers"
     bin_dir = project_root / "tests" / "libs" / "bin"
@@ -221,7 +243,7 @@ def build_test_helpers(project_root: Path, verbose: bool = False, jobs: int = 1,
     if not helper_files:
         if verbose:
             print("No test helper libraries found, skipping...")
-        return True
+        return HelperBuild()
 
     bin_dir.mkdir(parents=True, exist_ok=True)
     if only is not None:
@@ -234,17 +256,19 @@ def build_test_helpers(project_root: Path, verbose: bool = False, jobs: int = 1,
         print(f"Building {len(helper_files)} test helper libraries...")
 
     with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
-        failures = [reason for reason in pool.map(
-            lambda f: _build_one_helper(sushic, f, bin_dir, project_root), helper_files)
-            if reason is not None]
+        reasons = list(pool.map(
+            lambda f: _build_one_helper(sushic, f, bin_dir, project_root), helper_files))
+    built = HelperBuild({f.stem: reason for f, reason in zip(helper_files, reasons, strict=True)
+                         if reason is not None})
 
-    for reason in failures:
-        print(reason)
+    for name, reason in built.failures.items():
+        (bin_dir / f"{name}.slib").unlink(missing_ok=True)
+        print(reason, file=out or sys.stdout)
 
-    if verbose and not failures:
+    if verbose and built:
         print(f"  Libraries compiled to {bin_dir}")
 
-    return not failures
+    return built
 
 
 DOC_GATE_MODULES_ENV = "SUSHI_DOC_GATE_MODULES"

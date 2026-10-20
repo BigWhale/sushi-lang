@@ -27,7 +27,7 @@ from test_metadata import (parse_test_metadata, get_test_category, should_run_ru
                           select_fixtures, is_rebuild_fixture, LIB_FLAG, REBUILD_DIR,
                           FixtureListError, read_fixture_list)
 from run_tests import (build_stdlib, build_test_helpers, build_leakcheck,
-                       helpers_for_selection,
+                       helpers_for_selection, failed_helpers_of,
                        leakcheck_lib_path, leakcheck_platform, COMPILATION_QUARANTINE,
                        DEFAULT_JOBS, JOBS_ENV_VAR, default_jobs,
                        arm_check_variables, spelling_gate_tripped,
@@ -446,6 +446,9 @@ class TestRunner:
         # The verdict of the golden dumps of each fixture that reached the comparison, by
         # its key: whether every dump held, and the message.
         self.dump_verdicts: Dict[str, Tuple[bool, str]] = {}
+        # The build message of each helper library that did not build, by its name. A
+        # fixture that can import one and fails gets the message beside its own.
+        self.failed_helpers: Dict[str, str] = {}
         # The checkout whose `sushic` the run starts. It is the parent of `tests/` for
         # every real run; a runner test that selects from a temporary directory names it.
         self.project_root = project_root or tests_dir.parent
@@ -1127,6 +1130,10 @@ class TestRunner:
                 elif not held:
                     message = f"{message}\n{dumps_message}"
 
+            if not success:
+                for name, reason in failed_helpers_of(test_file, self.failed_helpers).items():
+                    message += (f"\n✗ The helper library {name}, which this fixture can "
+                                f"import, did not build:\n  {reason.strip()}")
             return success, message
 
         except subprocess.TimeoutExpired:
@@ -1719,6 +1726,7 @@ def main():
         return 1
 
     # Build stdlib and test helpers unless skipped
+    failed_helpers: Dict[str, str] = {}
     if not args.skip_build:
         if not args.json:
             print("Building stdlib and test helpers...")
@@ -1730,10 +1738,12 @@ def main():
         narrowed = (args.filter or args.leaks_only or args.compile_only or args.list
                     or args.bless)
         needed = helpers_for_selection(tests_dir, selection) if narrowed else None
-        if not build_test_helpers(project_root, args.verbose, jobs=args.jobs, only=needed):
-            if not args.json:
-                print("Failed to build test helpers, aborting tests")
-            return 1
+        # A helper that does not build is reported, and the run goes on: a fixture that
+        # needs it fails on its own, with the build message.
+        failed_helpers = build_test_helpers(project_root, args.verbose, jobs=args.jobs,
+                                            only=needed,
+                                            out=sys.stderr if args.json else sys.stdout
+                                            ).failures
         # Unconditional: EXPECT_NO_LEAKS is enforced by every enhanced run, so the
         # interposer is as much a prerequisite as the stdlib. Gating this on a flag is
         # what turned a fresh checkout's 96 leak assertions into 96 silent skips.
@@ -1757,6 +1767,7 @@ def main():
                     args.leaks_only, args.allow_leak_skips, args.compile_only,
                     fresh_processes=args.fresh_processes, list_file=args.list,
                     bless=args.bless) as runner:
+        runner.failed_helpers = failed_helpers
         # Ruling 3 on #953: the doc blocks of the bundled stdlib are a runner step.
         runner.doc_gate = stdlib_doc_gate(project_root, filter_pattern=args.filter,
                                           leaks_only=args.leaks_only,

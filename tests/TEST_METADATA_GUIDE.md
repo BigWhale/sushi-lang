@@ -845,6 +845,9 @@ python tests/run_tests.py --bless --filter ir/
 - `--bless` selects the fixtures that carry `EXPECT_DUMP_SHIR` or `EXPECT_DUMP_SLIR`, and
   it composes with the other selectors. It checks each fixture in full, and writes each
   dump to its golden file in place of the comparison
+- `--bless` writes each dump that the compile wrote, also when another check of the fixture
+  fails (a wrong exit code, a missing diagnostic). The fixture still fails for that check,
+  so read each blessed file in the diff and check that the dump is the one you want
 - It prints each file it wrote (`Blessed: tests/ir/.../main.shir`) and the count of the
   files that did not change. A run with no other fault exits 0
 - A run without `--bless` never writes a golden file
