@@ -4,9 +4,7 @@
 #
 # the SHIR dump of a range as a value, in a position that expects `Iterator@(i32)`.
 # `0..TOP` and `0..=10` are a `Range` with `inclusive`. The AST builder folds `.rev()` into
-# the range, so `(0..n).rev()` is a `Range` with `reverse: true`, and no call. Each bound
-# records its value when the compiler can read it (ruling E3), a constant too; the local
-# bound `n` has no value.
+# the range, so `(0..n).rev()` is a `Range` with `reverse: true`, and no call.
 
 use <collections/iter>
 

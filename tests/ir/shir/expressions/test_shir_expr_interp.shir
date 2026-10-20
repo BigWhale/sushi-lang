@@ -11,7 +11,7 @@ ShirBody main
     ExprStmt(Call(BuiltinFn("println"), [Interp(["Mostly Harmless, ", LocalRef(_0), ""])]))
     ExprStmt(Call(BuiltinFn("println"), [Interp(["", LocalRef(_1), ""])]))
     ExprStmt(Call(BuiltinFn("println"), [Interp(["x=", Field(LocalRef(_2), "x"), " y=", Field(LocalRef(_2), "y"), " sum=", Call(Dotted(LocalRef(_2), "sum"), []), " big=", Binary(>, LocalRef(_1), Lit(40)), ""])]))
-    ExprStmt(Call(BuiltinFn("println"), [Interp(["[", Index(LocalRef(_3), Lit(0) = 0, unchecked: false), "] ", Index(LocalRef(_3), Lit(1) = 1, unchecked: false), " ", Binary(/, Cast(LocalRef(_1), f64), Lit(12.0) = 12.0), ""])]))
+    ExprStmt(Call(BuiltinFn("println"), [Interp(["[", Index(LocalRef(_3), Lit(0), unchecked: false), "] ", Index(LocalRef(_3), Lit(1), unchecked: false), " ", Binary(/, Cast(LocalRef(_1), f64), Lit(12.0)), ""])]))
     Return(Lit(0))
 
 ShirBody Vec.sum

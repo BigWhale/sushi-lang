@@ -4,8 +4,7 @@
 #
 # the SHIR dump of a field read: `p.x` is a `Field` of its base, a nested read `l.start.x`
 # is a `Field` of a `Field`, and the base can be a call, a constant or `self`. Which field
-# it is, and its index, are answers of the typecheck pass. A field read is not a value
-# that lowering reads: the divisor `v.x` has no value after it (ruling E3).
+# it is, and its index, are answers of the typecheck pass.
 
 struct Vec:
     i32 x

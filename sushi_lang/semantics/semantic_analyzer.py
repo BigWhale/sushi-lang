@@ -847,7 +847,7 @@ class SemanticAnalyzer:
             passes = self._unit_passes(unit, unit_reporter, monomorphizer,
                                        libraries, destroy_effects, enum_names)
             passes.scope.run(unit.ast)
-            lower_unit(self.shir, unit, passes.scope.bindings, self._operand_reader(unit),
+            lower_unit(self.shir, unit, passes.scope.bindings,
                        DeclLookup.of(self.tables, unit.name),
                        scope_failed=unit_reporter.has_offered_errors)
             passes.typecheck.run(unit.ast)
@@ -855,16 +855,6 @@ class SemanticAnalyzer:
             passes.borrow.run(unit.ast, skip=passes.typecheck.checked_template_ids)
 
             self._merge_unit(unit_reporter)
-
-    def _operand_reader(self, unit: Unit):
-        """A silent evaluator for lowering, in the scope of `unit` (ruling E3, ir.md 7.4).
-
-        It has its own store of reported cycles, so a cycle that it reads in silence is
-        still reported by the reader that speaks (#710). Its operator folds are its own.
-        """
-        from sushi_lang.semantics.const_eval import ConstantEvaluator
-        return ConstantEvaluator(Reporter(), self.tables.constants, unit.name,
-                                 self.tables.namespaces.get, reported_cycles=set(), folds={})
 
     def _unit_passes(self, unit: Unit, reporter: Reporter,
                      monomorphizer, libraries: LibraryRegistration, destroy_effects,
@@ -1317,13 +1307,13 @@ class SemanticAnalyzer:
             scratch = self._unit_reporter(home)
             passes = self._unit_passes(home, scratch, monomorphizer, libraries,
                                        destroy_effects, enum_names)
-            evaluator, lookup = self._operand_reader(home), DeclLookup.of(self.tables, home.name)
+            lookup = DeclLookup.of(self.tables, home.name)
             for node in nodes:
                 entry = _copy_entry(node)
                 written = len(passes.scope.bindings)
                 entry.scope(passes.scope, node)
-                lower_copy(self.shir, home, node, passes.scope.bindings[written:], evaluator,
-                           lookup, scope_failed=scratch.has_offered_errors)
+                lower_copy(self.shir, home, node, passes.scope.bindings[written:], lookup,
+                           scope_failed=scratch.has_offered_errors)
                 scratch.leave_body()
                 entry.typecheck(passes.typecheck, node)
                 scratch.leave_body()

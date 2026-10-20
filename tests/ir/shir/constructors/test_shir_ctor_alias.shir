@@ -7,7 +7,7 @@ ShirBody area
   locals : [_1 "out": i32, _2 "r", _3 "a"]
   block  :
     Assign(LocalRef(_1), Lit(0), is_init: true)
-    Match(LocalRef(_0), [Arm(Variant(@sh.Shape, "Circle", [(_2, Bare)]), [Assign(LocalRef(_1), Binary(*, Binary(*, Lit(3) = 3, LocalRef(_2)), LocalRef(_2)), is_init: false)]), Arm(Variant(@sh.Shape, "Square", [(_3, Bare)]), [Assign(LocalRef(_1), Binary(*, LocalRef(_3), LocalRef(_3)), is_init: false)])], consumes: false)
+    Match(LocalRef(_0), [Arm(Variant(@sh.Shape, "Circle", [(_2, Bare)]), [Assign(LocalRef(_1), Binary(*, Binary(*, Lit(3), LocalRef(_2)), LocalRef(_2)), is_init: false)]), Arm(Variant(@sh.Shape, "Square", [(_3, Bare)]), [Assign(LocalRef(_1), Binary(*, LocalRef(_3), LocalRef(_3)), is_init: false)])], consumes: false)
     Return(LocalRef(_1))
 
 ShirBody main

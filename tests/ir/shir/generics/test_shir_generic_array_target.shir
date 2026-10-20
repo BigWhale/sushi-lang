@@ -13,7 +13,7 @@ ShirBody T[].twice_len (TemplateCheck("test_shir_generic_array_target.$array.twi
   params : [(_0 "self": T[], Guaranteed)]
   locals : []
   block  :
-    Return(Binary(*, Call(Dotted(LocalRef(_0), "len"), []), Lit(2) = 2))
+    Return(Binary(*, Call(Dotted(LocalRef(_0), "len"), []), Lit(2)))
 
 ShirBody T[].name (TemplateCheck("test_shir_generic_array_target.$array.with.Named"))
   params : [(_0 "self": T[], Guaranteed)]
@@ -31,4 +31,4 @@ ShirBody i32[].twice_len
   params : [(_0 "self": i32[], Guaranteed)]
   locals : []
   block  :
-    Return(Binary(*, Call(Dotted(LocalRef(_0), "len"), []), Lit(2) = 2))
+    Return(Binary(*, Call(Dotted(LocalRef(_0), "len"), []), Lit(2)))

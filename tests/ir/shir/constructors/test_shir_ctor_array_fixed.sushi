@@ -4,9 +4,8 @@
 #
 # the SHIR dump of a fixed array literal: an `ArrayInit` of the kind `Fixed`, with one run
 # for each element as written. A plain element is `Single`. A repeat `[v; n]` is `Repeat`
-# with the value first and then the count (ruling R2), and the count that the compiler
-# can read has its value after it (ruling E3). A range element is `RangeRun` with the
-# bounds of its `Range` read in the same way, and `(0..3).rev()` sets `reverse`.
+# with the value first and then the count (ruling R2). A range element is `RangeRun` with
+# its `Range`, and `(0..3).rev()` sets `reverse`.
 
 const i32 LEN = 4
 

@@ -14,8 +14,7 @@ written type with no `peek` or `poke` and the span are on its `ShirLocal`. `ret`
 are the types written after the closing pipe. An expression body is a block of one
 `Return`, and `expr_body` keeps the written shape: the typecheck pass infers the return
 type from an expression body, and a lambda with a channel returns that value in
-`Result.Ok` (docs/design/closures.md, section 2). A lambda is opaque (ruling E3): its value
-is a closure.
+`Result.Ok` (docs/design/closures.md, section 2).
 
 A destructure `let (a, b) = v` is a `Destructure` of the value as written. A target is the
 local of its binder, `Discard` for `_`, or `Nested`. The AST builder binds the whole value
@@ -51,7 +50,7 @@ def written_param_type(ty: Optional[TypeRef]) -> Optional[TypeRef]:
 
 def lower_lambda(lw: BodyLowerer, node: a.Lambda) -> e.Lambda:
     """`|params| body`: the parameters, the written types, then the body as a block."""
-    ident = lw.made_opaque()
+    ident = lw.ident()
     params = [_param(lw, param) for param in node.params]
     if isinstance(node.body, a.Block):
         return e.Lambda(ident, lw.span(node), params, node.ret, node.err_type,

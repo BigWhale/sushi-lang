@@ -6,7 +6,7 @@ ShirBody main
   block  :
     Assign(LocalRef(_0), ArrayInit(Dynamic, [Single(Lit(1)), Single(Lit(2)), Single(Lit(3))]), is_init: true)
     Assign(LocalRef(_1), Lit(0), is_init: true)
-    Loop(Items(Call(Dotted(LocalRef(_0), "iter"), []), _, Bare), [Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1) = 1), is_init: false)])
-    Loop(Items(Call(Dotted(LocalRef(_0), "iter"), []), _, Ref(Peek)), [Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1) = 1), is_init: false)])
+    Loop(Items(Call(Dotted(LocalRef(_0), "iter"), []), _, Bare), [Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1)), is_init: false)])
+    Loop(Items(Call(Dotted(LocalRef(_0), "iter"), []), _, Ref(Peek)), [Assign(LocalRef(_1), Binary(+, LocalRef(_1), Lit(1)), is_init: false)])
     ExprStmt(Call(BuiltinFn("println"), [LocalRef(_1)]))
     Return(Lit(0))

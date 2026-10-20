@@ -2,11 +2,10 @@
 # EXPECT_STDOUT_EXACT: "optind: 1\noptind: one\nenviron: some\n"
 # EXPECT_DUMP_SHIR: test_shir_name_extern_variable.shir
 #
-# the SHIR dump of a C global that a program reads through the namespace of its
-# `unsafe external` block. `libc.optind` and `libc.environ` are a `GlobalRef` with the
-# written name and its alias, as a C function behind the alias is (`libc.abs`). The dump
-# shows a read as an operand, as the scrutinee of a `match` and as the receiver of a
-# method. A `GlobalRef` is opaque: the operand `libc.optind` has no value after it.
+# the SHIR dump of a C global that a program reads through the namespace of its `unsafe
+# external` block. `libc.optind` and `libc.environ` are a `GlobalRef` with the written
+# name and its alias, as a C function behind the alias is (`libc.abs`). The dump shows a
+# read as an operand, as the scrutinee of a `match` and as the receiver of a method.
 
 unsafe external "C" as libc because "the SHIR dump of a C global":
     var i32 optind = "optind"

@@ -18,7 +18,6 @@ The rules of the text, from the example of ir.md 8.11:
   source spelling (`type_args: [i32]`), and a list of names each name quoted. A statement of the body block takes one
   line, and a body block with no statement prints `[]`.
 - An argument with a written mode prints as `(value, Convention)`; a bloom adds `...`.
-- An expression with a recorded value (ruling E3) prints the value after it: `... = 3`.
 - No `shir_id` and no span: the example of ir.md 8.11 shows neither.
 - A hole prints as `<hole: AstClass>`, with the name of the AST class that it stands for.
 - A value pack parameter (`...Ts args`) adds `pack: true` to its parameter.
@@ -68,9 +67,7 @@ class ShirPrinter:
         row = PRINTERS.get(type(value))
         if row is None:
             er.raise_internal_error("CE0154", name=type(value).__name__)
-        text = row(self, value)
-        readable = value.readable if isinstance(value, e.ExprNode) else None
-        return text if readable is None else f"{text} = {self.show(readable)}"
+        return row(self, value)
 
     def each(self, values: Iterable[object]) -> str:
         return "[" + ", ".join(self.show(value) for value in values) + "]"

@@ -37,10 +37,8 @@ from sushi_lang.semantics import ast as a
 from sushi_lang.semantics.shir import exprs, patterns, stmts
 from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode
 
-#: The fields that every node has (ir.md 7.3), and the recorded value of an expression
-#: that the compiler can read (ruling E3, ir.md 7.4).
+#: The fields that every node has (ir.md 7.3). Lowering records no value on a node (ir.md 7.4).
 _BASE_FIELDS = ("shir_id", "loc")
-_EXPR_BASE_FIELDS = _BASE_FIELDS + ("readable",)
 
 #: ir.md 7.4, the expression nodes and their fields in the written order. `Lambda` adds
 #: `ret` and `err`, the written return type and error type, and `expr_body`, the written
@@ -229,7 +227,7 @@ _HOLE = {"Hole"}
 _LEVELS: dict[str, tuple[types.ModuleType, object, dict[str, tuple[str, ...]],
                          dict[str, tuple[str, ...]], tuple[str, ...]]] = {
     "expression": (exprs, exprs.ShirExpr, EXPRESSION_FIELDS, EXPRESSION_PARTS,
-                   _EXPR_BASE_FIELDS),
+                   _BASE_FIELDS),
     "statement": (stmts, stmts.ShirStmt, STATEMENT_FIELDS, STATEMENT_PARTS, _BASE_FIELDS),
     "pattern": (patterns, patterns.ShirPattern, PATTERN_FIELDS, PATTERN_PARTS, _BASE_FIELDS),
 }
@@ -311,12 +309,6 @@ def test_a_part_has_the_fields_of_ir_md(pair: tuple[str, str]) -> None:
 
 def test_the_call_target_union_is_the_targets_of_ir_md() -> None:
     assert _union_members(exprs.CallTarget) == CALL_TARGETS
-
-
-def test_the_recorded_value_is_on_every_expression_and_takes_no_position() -> None:
-    """Ruling E3: lowering records a readable value; a node is built with no value."""
-    readable = {item.name: item for item in dataclasses.fields(exprs.ExprNode)}["readable"]
-    assert readable.kw_only and readable.default is None
 
 
 def test_a_block_holds_statements() -> None:

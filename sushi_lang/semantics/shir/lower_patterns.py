@@ -8,8 +8,7 @@ its mode in two fields of the AST, and in the one `PatBinding` that `Own` holds.
 
 A pattern holds what the source says, and lowering has no types. A literal and the bounds
 of a range keep the written constant: `typecheck` reads them at the type of the position
-(ir.md 7.8). A bound is a literal and not an expression, so lowering does not call the
-constant evaluator for it. An enum pattern names its enum by the written name, the alias
+(ir.md 7.8). A bound is a literal and not an expression. An enum pattern names its enum by the written name, the alias
 included (`geo.Sign`). Whether that name is an enum is a question for `typecheck`.
 
 `Match.consumes` is the written `match nom r:`. Whether the match owns a temporary

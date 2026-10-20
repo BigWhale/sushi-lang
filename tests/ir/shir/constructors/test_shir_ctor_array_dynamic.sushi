@@ -4,11 +4,10 @@
 # EXPECT_DUMP_SHIR: test_shir_ctor_array_dynamic.shir
 #
 # the SHIR dump of a dynamic array: `from([...])` is an `ArrayInit` of the kind `Dynamic`
-# with the runs of its literal (ir.md 7.10), and `new()` is one with no run. A count or a
-# bound that holds a local has no value after it. In the repeat `[mark(7); mark(2)]` the
-# value is the first field and the count the second, so the value is evaluated first
-# (ruling R2). The count of the calls does not depend on the order, so the output is the
-# same on the old pipeline.
+# with the runs of its literal (ir.md 7.10), and `new()` is one with no run. In the
+# repeat `[mark(7); mark(2)]` the value is the first field and the count the second, so
+# the value is evaluated first (ruling R2). The count of the calls does not depend on the
+# order, so the output is the same on the old pipeline.
 
 var i32 calls = 0
 

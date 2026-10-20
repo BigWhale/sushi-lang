@@ -5,9 +5,7 @@
 # the SHIR dump of `as`. A cast is a `Cast` of its operand, with the target type as the
 # source writes it: a wider type, a narrower type, a float. A conversion between two error
 # types (`e as AppError`) is a `Cast` too: whether a cast is numeric or a conversion is an
-# answer of the typecheck pass. A chain of casts is a `Cast` of a `Cast`. A cast is not
-# opaque (ruling E3): the divisors `(4 as i32)` and `(300 as u8)` have the value that the
-# cast gives, and the divisor `(n as i64 as i32)` has none, because `n` is a local.
+# answer of the typecheck pass. A chain of casts is a `Cast` of a `Cast`.
 
 error ParseError:
     Empty

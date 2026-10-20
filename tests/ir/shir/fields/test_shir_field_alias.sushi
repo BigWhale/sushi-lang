@@ -5,8 +5,7 @@
 # the SHIR dump of a member behind an alias. What the namespace holds under the name
 # decides the node, not a type: a constant is a `ConstRef`, a unit `var` a `StorageRef`
 # (also as the target of a rebind) and a function a `GlobalRef`, each with the qualified
-# name as written. Lowering reads no value through a member behind an alias, so the
-# divisor `geo.LIMIT` has no value after it (ruling E3).
+# name as written.
 
 use "helpers/shir_geo" as geo
 

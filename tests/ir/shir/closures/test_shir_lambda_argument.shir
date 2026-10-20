@@ -10,6 +10,6 @@ ShirBody main
   params : []
   locals : [_0 "x": i32]
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@apply)), [Lambda([(_0, Guaranteed)], [Return(Binary(+, LocalRef(_0), Lit(1) = 1))], expr_body: true), Lit(41)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@apply)), [Lambda([(_0, Guaranteed)], [Return(Binary(+, LocalRef(_0), Lit(1)))], expr_body: true), Lit(41)])]))
     ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
     Return(Lit(0))

@@ -34,15 +34,9 @@ CE1002, or CE0144 for a type pack name), so its hole never stops the compile. Th
 that the scope pass recorded for it. A binder with no name span is one that the AST
 builder made: its local is hidden, with no name (ir.md 7.2).
 
-Ruling E3 (ir.md 7.4): an operand whose value the typecheck pass reads is read here, with
-the AST constant evaluator, and the value is recorded on its node (`readable`). These are
-the divisor of `/` and `%`, the count of `<<` and `>>`, and each operand of the operators
-that the overflow check folds (`+`, `-`, `*` and the negation). Lowering has no types, so
-the evaluator reads at `i64`, the widest signed type; the typecheck pass applies the type
-of the position. An operand is read only when it holds no opaque node: a local, a `var`, a
-function, a call, a field read, a construction, a borrow, a take, a `??`, a slice, a
-lambda or a hole has no value that the compiler can read. A cast and an interpolated string are not
-opaque: the evaluator folds them with no write on the AST.
+Lowering records no value on a node, also where the typecheck pass reads one (a divisor,
+a shift count, an operand of the overflow check): the value depends on the type of the
+position, and lowering has no types (ir.md 7.4).
 
 Every id comes from the counter of the body in the order of the walk, a node before its
 operands, so a body gives the same ids on every run (ir.md 11.3).
@@ -51,7 +45,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, TypeAlias, cast
+from typing import Any, Callable, Optional, Sequence, TypeAlias, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -79,20 +73,12 @@ from sushi_lang.semantics.shir.lower_patterns import lower_match
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, ReferenceType, UnknownType
 
-if TYPE_CHECKING:
-    from sushi_lang.semantics.const_eval import ConstantEvaluator
-
 #: The variable that makes a hole stop the compile. One place reads it (gate:
 #: `tests/unit/test_shir_strict_is_read_once.py`).
 STRICT_VARIABLE = "SUSHI_SHIR_STRICT"
 
 #: The name of this stage in the stop code.
 STAGE = "lowering"
-
-#: The operators whose operands the overflow check folds, and those whose right operand
-#: alone the typecheck pass reads (a divisor, a shift count). Ruling E3.
-_READ_BOTH = frozenset({"+", "-", "*"})
-_READ_RIGHT = frozenset({"/", "%", "<<", ">>"})
 
 
 def is_strict() -> bool:
@@ -116,14 +102,12 @@ class BodyLowerer:
     """The state of the lowering of one body.
 
     `holes` is the record of the program, shared by every body. `fallback` is the span of
-    a node that has none of its own: the span of its declaration. `evaluator` reads the
-    value of an operand (ruling E3); with no evaluator, no value is recorded. `lookup`
-    reads the declaration tables; with no lookup, a call on a type name or a namespace is
-    a hole. `stops` is true when a hole raises the stop code (`stops_on_hole`). `template`
-    is true in the body of a template check, the one body that may hold an `Expand`
-    (ir.md 4.5). `opaque` counts the nodes made so far whose value the compiler cannot
-    read. `locals` holds the local of each binder that the body declares, in the order of
-    the walk. `copies` holds the copy boundaries of each block that holds copies of an
+    a node that has none of its own: the span of its declaration. `lookup` reads the
+    declaration tables; with no lookup, a call on a type name or a namespace is a hole.
+    `stops` is true when a hole raises the stop code (`stops_on_hole`). `template` is true
+    in the body of a template check, the one body that may hold an `Expand` (ir.md 4.5).
+    `locals` holds the local of each binder that the body declares, in the order of the
+    walk. `copies` holds the copy boundaries of each block that holds copies of an
     unrolled `expand` (ir.md 7.2).
     """
     ids: IdAllocator[ShirId]
@@ -131,11 +115,9 @@ class BodyLowerer:
     bindings: bd.Bindings
     holes: list[Hole]
     fallback: Span
-    evaluator: Optional[ConstantEvaluator] = None
     lookup: Optional[DeclLookup] = None
     stops: bool = False
     template: bool = False
-    opaque: int = field(default=0, init=False)
     locals: list[ShirLocal] = field(default_factory=list, init=False)
     copies: ExpandCopies = field(default_factory=ExpandCopies, init=False)
     in_initializer: bool = field(default=False, init=False)
@@ -154,31 +136,13 @@ class BodyLowerer:
         That the place is one step off a name that the body owns is a rule of the borrow
         pass, and lowering records the written shape.
         """
-        ident = self.made_opaque()
+        ident = self.ident()
         return e.Take(ident, self.span(node), self.value(node))
 
     def value(self, node: Any) -> e.ShirExpr:
         """The expression `node`; the caller reads the marker that it carries."""
         row = LOWERING.get(type(node))
         return self.hole(node) if row is None else cast(e.ShirExpr, row(self, node))
-
-    def operand(self, node: Any, read: bool) -> e.ShirExpr:
-        """The operand `node`, with the value that the compiler reads when `read` is true."""
-        before = self.opaque
-        lowered = self.expr(node)
-        if read and self.opaque == before and isinstance(lowered, e.ExprNode):
-            lowered.readable = self.read(node)
-        return lowered
-
-    def read(self, node: Any) -> Optional[e.Constant]:
-        if self.evaluator is None:
-            return None
-        from sushi_lang.semantics.const_eval import ScalarConstant
-
-        value = self.evaluator.evaluate(node, BuiltinType.I64, None)
-        if not isinstance(value, ScalarConstant):
-            return None
-        return _constant(value.value)
 
     def block(self, node: Optional[a.Block]) -> ShirBlock:
         """A block, each statement in the written order. No block gives an empty one.
@@ -242,11 +206,6 @@ class BodyLowerer:
             return _written_type(found.name)
         return _qualified_type(self, receiver)
 
-    def made_opaque(self) -> ShirId:
-        """The id of a node whose value the compiler cannot read."""
-        self.opaque += 1
-        return self.ident()
-
     def hole(self, node: Any) -> Hole:
         """A construct that lowering does not handle yet; CE0155 when `stops` is true."""
         if self.stops:
@@ -274,7 +233,7 @@ class BodyLowerer:
         return self._record(node, (*codes, "CE0108") if self.in_initializer else codes)
 
     def _record(self, node: Any, codes: tuple[str, ...]) -> Hole:
-        made = Hole(self.made_opaque(), self.span(node), type(node).__name__, codes)
+        made = Hole(self.ident(), self.span(node), type(node).__name__, codes)
         self.holes.append(made)
         return made
 
@@ -329,19 +288,6 @@ def binder_local(bindings: bd.Bindings, owner: object, name: str) -> LocalId:
     return local
 
 
-def _constant(value: object) -> Optional[e.Constant]:
-    """The value that the evaluator gives, as a SHIR constant with no type."""
-    if isinstance(value, bool):
-        return e.BoolConst(value)
-    if isinstance(value, int):
-        return e.IntConst(value)
-    if isinstance(value, float):
-        return e.FloatConst(value)
-    if isinstance(value, str):
-        return e.StrConst(value)
-    return None
-
-
 # -- literals ---------------------------------------------------------------------
 
 
@@ -376,13 +322,13 @@ def _name(lw: BodyLowerer, node: a.Name) -> e.ShirExpr:
     loc = lw.span(node)
     match answer:
         case bd.Local(local):
-            return e.LocalRef(lw.made_opaque(), loc, local)
+            return e.LocalRef(lw.ident(), loc, local)
         case bd.Const(name):
             return e.ConstRef(lw.ident(), loc, lw.decls.refer(name))
         case bd.Storage(name):
-            return e.StorageRef(lw.made_opaque(), loc, lw.decls.refer(name))
+            return e.StorageRef(lw.ident(), loc, lw.decls.refer(name))
         case bd.Function(name):
-            return e.GlobalRef(lw.made_opaque(), loc, lw.decls.refer(name))
+            return e.GlobalRef(lw.ident(), loc, lw.decls.refer(name))
         case bd.Unresolved():
             return lw.error_hole(node, "CE1001", "CE1002", "CE0144")
     return lw.hole(node)
@@ -393,13 +339,13 @@ def _name(lw: BodyLowerer, node: a.Name) -> e.ShirExpr:
 
 def _unary(lw: BodyLowerer, node: a.UnaryOp) -> e.Unary:
     ident = lw.ident()
-    return e.Unary(ident, lw.span(node), node.op, lw.operand(node.expr, node.op == "neg"))
+    return e.Unary(ident, lw.span(node), node.op, lw.expr(node.expr))
 
 
 def _binary(lw: BodyLowerer, node: a.BinaryOp) -> e.Binary:
     ident = lw.ident()
-    lhs = lw.operand(node.left, node.op in _READ_BOTH)
-    rhs = lw.operand(node.right, node.op in _READ_BOTH or node.op in _READ_RIGHT)
+    lhs = lw.expr(node.left)
+    rhs = lw.expr(node.right)
     return e.Binary(ident, lw.span(node), node.op, lhs, rhs)
 
 
@@ -419,13 +365,13 @@ def _borrow(lw: BodyLowerer, node: a.Borrow) -> e.Borrow:
 
 def _borrow_of(lw: BodyLowerer, loc: Span, place: Any, mode: BorrowMode) -> e.Borrow:
     """The one `Borrow` of lowering: a marked value, and the value of a reference `let`."""
-    ident = lw.made_opaque()
+    ident = lw.ident()
     return e.Borrow(ident, loc, lw.expr(place), mode)
 
 
 def _try(lw: BodyLowerer, node: a.TryExpr) -> e.Try:
     """`v??`, kept whole: what it unwraps and converts is an answer of the typecheck pass."""
-    ident = lw.made_opaque()
+    ident = lw.ident()
     return e.Try(ident, lw.span(node), lw.expr(node.expr))
 
 
@@ -456,7 +402,7 @@ def _call(lw: BodyLowerer, node: a.Call) -> e.ShirExpr:
         return struct_init(lw, node, found.name, found.name, node.args, node.field_names)
     if node.field_names is not None:
         return lw.error_hole(node, "CE6104")
-    ident = lw.made_opaque()
+    ident = lw.ident()
     return e.Call(ident, lw.span(node), e.Named(lw.expr(node.callee), _type_args(node)),
                   _arguments(lw, node.args))
 
@@ -488,7 +434,7 @@ def _dotted(lw: BodyLowerer, node: a.DotCall | a.MethodCall) -> e.ShirExpr:
     ty = lw.type_before_dot(node.receiver)
     if ty is not None:
         return _static_call(lw, node, ty)
-    ident = lw.made_opaque()
+    ident = lw.ident()
     return e.Call(ident, lw.span(node), e.Dotted(lw.expr(node.receiver), node.method),
                   _arguments(lw, node.args))
 
@@ -518,8 +464,8 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
         return lw.error_hole(node, "CE2008")
     if kind not in CALLABLE_KINDS:
         return lw.hole(node)
-    ident = lw.made_opaque()
-    ref = e.GlobalRef(lw.made_opaque(), lw.span(node), lw.decls.refer(f"{alias}.{node.method}"))
+    ident = lw.ident()
+    ref = e.GlobalRef(lw.ident(), lw.span(node), lw.decls.refer(f"{alias}.{node.method}"))
     return e.Call(ident, lw.span(node), e.Named(ref, _type_args(node)), _arguments(lw, node.args))
 
 
@@ -530,7 +476,7 @@ def _static_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
         return lw.hole(node)
     if lw.lookup.is_variant(str(ty), node.method):
         return enum_init(lw, node, ty, node.method, node.args)
-    ident = lw.made_opaque()
+    ident = lw.ident()
     return e.Call(ident, lw.span(node), e.Static(ty, node.method), _arguments(lw, node.args))
 
 
@@ -615,7 +561,7 @@ def _let(lw: BodyLowerer, node: a.Let) -> s.ShirStmt:
     ident = lw.ident()
     local = binder_local(lw.bindings, node, node.name)
     lw.declare(local, node.name, node.ty, node.name_span)
-    target = e.LocalRef(lw.made_opaque(), node.name_span or lw.span(node), local)
+    target = e.LocalRef(lw.ident(), node.name_span or lw.span(node), local)
     return s.Assign(ident, lw.span(node), target, _initial_value(lw, node), is_init=True)
 
 
@@ -733,7 +679,7 @@ def _println(lw: BodyLowerer, node: a.PrintLn) -> s.ExprStmt:
 def _builtin_statement(lw: BodyLowerer, node: a.Print | a.PrintLn, name: str) -> s.ExprStmt:
     """A `print` statement is a call of a built-in function, with the value as its argument."""
     ident = lw.ident()
-    call = e.Call(lw.made_opaque(), lw.span(node), e.BuiltinFn(name),
+    call = e.Call(lw.ident(), lw.span(node), e.BuiltinFn(name),
                   [_argument(lw, node.value)])
     return s.ExprStmt(ident, lw.span(node), call)
 

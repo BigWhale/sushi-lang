@@ -16,7 +16,7 @@ ShirBody main
   params : []
   locals : [_0 "total": i32, _1 "xs": List@(i32)]
   block  :
-    Assign(LocalRef(_0), Binary(+, Lit(40) = 40, Lit(2) = 2), is_init: true)
+    Assign(LocalRef(_0), Binary(+, Lit(40), Lit(2)), is_init: true)
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@identity), type_args: [i32]), [(Lit(5), Owned)])]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@identity), type_args: [i32]), [(LocalRef(_0), Owned)])]))
     Assign(LocalRef(_1), Call(Named(GlobalRef(@empty), type_args: [i32]), []), is_init: true)

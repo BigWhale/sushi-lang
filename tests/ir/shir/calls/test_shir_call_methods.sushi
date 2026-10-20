@@ -4,8 +4,7 @@
 # the SHIR dump of a method call: the target is `Dotted`, with the receiver as written
 # and the name of the method. Which method the name calls is the typecheck pass's
 # answer. A receiver that is a call is the child of the call on it, so a chain reads
-# from the inside out. A call is never a value that the compiler reads, so the divisor
-# `(5).twice()` has no value after it, though its receiver is a literal.
+# from the inside out.
 
 extend i32 twice() i32:
     return self * 2

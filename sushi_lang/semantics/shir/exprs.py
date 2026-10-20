@@ -7,7 +7,7 @@ dispatch reads it (gate: `tests/unit/test_shir_node_unions_are_total.py`).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, TypeAlias
 
 from sushi_lang.semantics.operators import BinOp, UnOp
@@ -57,14 +57,7 @@ Constant: TypeAlias = IntConst | FloatConst | BoolConst | BlankConst | StrConst
 
 @dataclass(slots=True)
 class ExprNode(ShirNode):
-    """`readable` is the value of the expression when the compiler can read it.
-
-    Lowering records it where `typecheck` needs a value: a divisor, a shift count, the
-    operands of an overflow fold, the count of an array run, a range bound and a
-    constant index (ruling E3). It is syntax, so `typecheck` reads it and does not call
-    the constant evaluator.
-    """
-    readable: Optional[Constant] = field(default=None, kw_only=True)
+    """The base of every expression node. Lowering records no value on it (ir.md 7.4)."""
 
 
 # -- names -------------------------------------------------------------------------

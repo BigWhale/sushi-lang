@@ -24,7 +24,7 @@ ShirBody main
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Lit(2)])]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Lit(3)])]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Lit(0x15)])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Unary(neg, Lit(5) = 5)])]))
+    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Unary(neg, Lit(5))])]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@kind)), [Lit(99)])]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@byte_kind)), [Lit(a'/')])]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@byte_kind)), [Lit(a'7')])]))

@@ -10,4 +10,4 @@ ShirBody main
   params : []
   locals : []
   block  :
-    Return(Binary(+, Lit(1) = 1, Borrow(ConstRef(@K), Peek)))
+    Return(Binary(+, Lit(1), Borrow(ConstRef(@K), Peek)))

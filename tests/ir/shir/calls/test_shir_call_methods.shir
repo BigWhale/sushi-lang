@@ -34,4 +34,4 @@ ShirBody i32.twice
   params : [(_0 "self": i32, Guaranteed)]
   locals : []
   block  :
-    Return(Binary(*, LocalRef(_0), Lit(2) = 2))
+    Return(Binary(*, LocalRef(_0), Lit(2)))

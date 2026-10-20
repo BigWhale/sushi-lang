@@ -10,7 +10,7 @@ ShirBody main
   params : []
   locals : [_0 "i"]
   block  :
-    Loop(Items(Range(Lit(0) = 0, Lit(2) = 2, inclusive: false, reverse: false), _0, Bare), [ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@twice)), [LocalRef(_0)])]))])
+    Loop(Items(Range(Lit(0), Lit(2), inclusive: false, reverse: false), _0, Bare), [ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@twice)), [LocalRef(_0)])]))])
     Return(Lit(0))
 
 ShirBody twice__i32

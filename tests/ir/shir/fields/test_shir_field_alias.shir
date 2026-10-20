@@ -22,7 +22,7 @@ ShirBody twice
   params : [(_0 "x": i32, Guaranteed)]
   locals : []
   block  :
-    Return(Binary(*, LocalRef(_0), Lit(2) = 2))
+    Return(Binary(*, LocalRef(_0), Lit(2)))
 
 unit test_shir_field_alias
 
@@ -32,7 +32,7 @@ ShirBody main
   block  :
     Assign(LocalRef(_0), GlobalRef(@geo.twice), is_init: true)
     Assign(LocalRef(_1), ConstRef(@geo.ORIGIN), is_init: true)
-    Assign(StorageRef(@geo.hits), Binary(+, StorageRef(@geo.hits), Lit(1) = 1), is_init: false)
+    Assign(StorageRef(@geo.hits), Binary(+, StorageRef(@geo.hits), Lit(1)), is_init: false)
     ExprStmt(Call(BuiltinFn("println"), [Binary(/, Lit(100), ConstRef(@geo.LIMIT))]))
     ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_1), "y")]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(LocalRef(_0)), [Lit(21)])]))

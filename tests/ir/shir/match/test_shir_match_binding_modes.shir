@@ -25,7 +25,7 @@ ShirBody main
   block  :
     Assign(LocalRef(_0), Call(Named(GlobalRef(@make)), [Lit(1)]), is_init: true)
     Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [(_1, Bare), (_2, Bare)]), [ExprStmt(Call(Named(GlobalRef(@show)), [(LocalRef(_1), InGuaranteed), LocalRef(_2)]))]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("empty")]))])], consumes: false)
-    Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [Wildcard, (_3, Ref(Poke))]), [Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(10) = 10), is_init: false)]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("empty")]))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [Wildcard, (_3, Ref(Poke))]), [Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(10)), is_init: false)]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("empty")]))])], consumes: false)
     Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [(_4, Ref(Peek)), (_5, Bare)]), [ExprStmt(Call(Named(GlobalRef(@show)), [(LocalRef(_4), InGuaranteed), LocalRef(_5)]))]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("empty")]))])], consumes: false)
     Match(LocalRef(_0), [Arm(Variant(@Slot, "Full", [(_6, Nom), Wildcard]), [ExprStmt(Call(Named(GlobalRef(@eat)), [(LocalRef(_6), Owned)]))]), Arm(Variant(@Slot, "Empty", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("empty")]))])], consumes: true)
     ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))

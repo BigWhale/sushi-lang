@@ -10,7 +10,7 @@ ShirBody mark
   params : [(_0 "v": i32, Guaranteed)]
   locals : []
   block  :
-    Assign(StorageRef(@calls), Binary(+, StorageRef(@calls), Lit(1) = 1), is_init: false)
+    Assign(StorageRef(@calls), Binary(+, StorageRef(@calls), Lit(1)), is_init: false)
     Return(LocalRef(_0))
 
 ShirBody main
@@ -21,7 +21,7 @@ ShirBody main
     Assign(LocalRef(_1), ArrayInit(Dynamic, [Single(Lit(1)), Single(Lit(2)), Single(Lit(3))]), is_init: true)
     Assign(LocalRef(_2), ArrayInit(Dynamic, []), is_init: true)
     Assign(LocalRef(_3), ArrayInit(Dynamic, [Repeat(Lit(0), LocalRef(_0))]), is_init: true)
-    Assign(LocalRef(_4), ArrayInit(Dynamic, [RangeRun(Range(Lit(0) = 0, LocalRef(_0), inclusive: false, reverse: false))]), is_init: true)
+    Assign(LocalRef(_4), ArrayInit(Dynamic, [RangeRun(Range(Lit(0), LocalRef(_0), inclusive: false, reverse: false))]), is_init: true)
     Assign(LocalRef(_5), ArrayInit(Dynamic, [Repeat(Call(Named(GlobalRef(@mark)), [Lit(7)]), Call(Named(GlobalRef(@mark)), [Lit(2)]))]), is_init: true)
     ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_1), "len"), [])]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(LocalRef(_2), "len"), [])]))

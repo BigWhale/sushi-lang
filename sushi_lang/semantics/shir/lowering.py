@@ -69,7 +69,6 @@ from sushi_lang.semantics.shir.lower_nodes import (
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.const_eval import ConstantEvaluator
     from sushi_lang.semantics.generics.types import TemplateId
     from sushi_lang.semantics.units import Unit
 
@@ -86,16 +85,14 @@ class LoweringContext:
     """What a body needs beside its `Bindings`.
 
     `decls` gives each declaration its id, and `holes` records each hole of the program.
-    `evaluator` reads the value of an operand (ruling E3, ir.md 7.4), in the scope of the
-    unit of the body. `lookup` reads what a type name or a namespace before a dot holds.
-    `owner` is the perk implementation that holds a perk method, because the method has
-    no field that names its receiver type. `stops` is true when a hole raises the stop
-    code (`stops_on_hole`). `template` names the template when the body is the body of
-    its template check (ir.md 4.3).
+    `lookup` reads what a type name or a namespace before a dot holds. `owner` is the perk
+    implementation that holds a perk method, because the method has no field that names
+    its receiver type. `stops` is true when a hole raises the stop code (`stops_on_hole`).
+    `template` names the template when the body is the body of its template check (ir.md
+    4.3).
     """
     decls: DeclNames
     holes: list[Hole]
-    evaluator: Optional[ConstantEvaluator] = None
     lookup: Optional[DeclLookup] = None
     owner: Optional[ExtendWithDef] = None
     stops: bool = False
@@ -110,8 +107,8 @@ def lower_body(bindings: Bindings, ctx: LoweringContext) -> ShirBody:
     ids: IdAllocator[ShirId] = IdAllocator(ShirId)
     params, locals_ = _frame(decl, bindings, ctx)
     fn_id = ctx.decls.declare(_written_name(decl, ctx))
-    lowerer = BodyLowerer(ids, ctx.decls, bindings, ctx.holes, _span(decl.loc), ctx.evaluator,
-                          ctx.lookup, ctx.stops, template=ctx.template is not None)
+    lowerer = BodyLowerer(ids, ctx.decls, bindings, ctx.holes, _span(decl.loc), ctx.lookup,
+                          ctx.stops, template=ctx.template is not None)
     block = _lower_block(decl, lowerer)
     every_local = sorted([*locals_, *lowerer.locals], key=lambda local: local.id)
     return ShirBody(fn_id, _origin(decl, ctx), params, every_local, block, lowerer.copies)
@@ -182,44 +179,42 @@ def check_error_holes(holes: Sequence[Hole], offered: Mapping[str, int]) -> None
 
 
 def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings],
-               evaluator: ConstantEvaluator, lookup: DeclLookup, *,
-               scope_failed: bool) -> None:
+               lookup: DeclLookup, *, scope_failed: bool) -> None:
     """The body of each declaration of `unit` that the scope pass checked, in order.
 
-    `evaluator` is a silent evaluator and `lookup` reads the declaration tables, each in
-    the scope of `unit`. `scope_failed` is true when the scope pass reported an error in
-    the unit: then a hole does not stop the compile (`stops_on_hole`). The perk owners
-    and the written templates of the unit are found once, so the cost of a unit is linear
-    in its declarations.
+    `lookup` reads the declaration tables in the scope of `unit`. `scope_failed` is true
+    when the scope pass reported an error in the unit: then a hole does not stop the
+    compile (`stops_on_hole`). The perk owners and the written templates of the unit are
+    found once, so the cost of a unit is linear in its declarations.
     """
     program = unit.ast
     if program is None:
         return
     lowered.unit_of(unit)
     _lower_tables(lowered, unit, tables, _perk_owners(program),
-                  _written_template_members(program), evaluator, lookup,
+                  _written_template_members(program), lookup,
                   stops_on_hole(scope_failed))
 
 
 def lower_copy(lowered: LoweredProgram, home: Unit, copy: Declaration | ExtendWithDef,
-               tables: Sequence[Bindings], evaluator: ConstantEvaluator,
-               lookup: DeclLookup, *, scope_failed: bool) -> None:
+               tables: Sequence[Bindings], lookup: DeclLookup, *,
+               scope_failed: bool) -> None:
     """The bodies of one copy that the copy fixpoint placed after the per-unit loop.
 
     `tables` is what the scope pass wrote for the copy: one `Bindings` for a function or
     an extension copy, one for each method of a perk copy. `home` is the unit that
-    declares the template, and the copy is listed there. `evaluator`, `lookup` and
-    `scope_failed` are as for `lower_unit`, in the scope of `home`.
+    declares the template, and the copy is listed there. `lookup` and `scope_failed` are
+    as for `lower_unit`, in the scope of `home`.
     """
     owners = ({} if not isinstance(copy, ExtendWithDef)
               else {id(method): copy for method in copy.methods})
-    _lower_tables(lowered, home, tables, owners, set(), evaluator, lookup,
+    _lower_tables(lowered, home, tables, owners, set(), lookup,
                   stops_on_hole(scope_failed))
 
 
 def _lower_tables(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings],
                   owners: dict[int, ExtendWithDef], templates: set[int],
-                  evaluator: ConstantEvaluator, lookup: DeclLookup, stops: bool) -> None:
+                  lookup: DeclLookup, stops: bool) -> None:
     """Lower the body of each table and list it in `unit`.
 
     A written template is the body of its template check. A written template with no
@@ -232,8 +227,8 @@ def _lower_tables(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings
         template = lookup.template_of(decl, owner) if written else None
         if template is None and _is_written_template(decl, templates):
             continue
-        body = lower_body(table, LoweringContext(lowered.decls, lowered.holes, evaluator,
-                                                 lookup, owner, stops, template))
+        body = lower_body(table, LoweringContext(lowered.decls, lowered.holes, lookup, owner,
+                                                 stops, template))
         lowered.add(unit, body, copy=not written)
 
 

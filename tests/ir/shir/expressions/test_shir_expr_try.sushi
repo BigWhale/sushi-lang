@@ -5,7 +5,7 @@
 # the SHIR dump of `??` in a `| E` body. A `??` is a `Try` of its operand, kept whole: the
 # error type, the conversion and the type of the value are answers of the typecheck pass.
 # On a `Maybe` the source writes `.or_err(nom e)??`, so the `Try` holds the call of
-# `or_err`, with the error value as an `Owned` argument. A `Try` is opaque (ruling E3).
+# `or_err`, with the error value as an `Owned` argument.
 
 error ParseError:
     Empty

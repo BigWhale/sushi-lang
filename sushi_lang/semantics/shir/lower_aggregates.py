@@ -36,17 +36,8 @@ What a written name before a dot denotes decides each node, and lowering reads i
 `from([...])` and `new()` are an `ArrayInit` of the kind `Dynamic`, and `[...]` one of the
 kind `Fixed`, with a run for each element: `Single`, `Repeat` (the value, then the count:
 ruling R2) and `RangeRun`. A range is a `Range` in each position, a run and a value alike.
-The count of a repeat, the bounds of a range or a slice and an index record their value
-when the compiler can read it (ruling E3).
-
-Ruling E3 also decides which node is opaque. A field read, a member behind an alias, a
-struct, a variant, a tuple and a dynamic array take their id from `made_opaque`: the
-constant evaluator writes on the AST for a member access (it stamps `namespace_ref` and
-folds an alias out of the receiver), and the value of a construction is never a number
-that the typecheck pass reads. A fixed array is not opaque, because the evaluator reads a
-fixed literal of constants with no write on the AST (`[4, 2][0]` as a divisor). An index
-and a range are not opaque either, for the same reason. A slice is opaque: its value is a
-view.
+The count of a repeat, the bounds of a range or a slice and an index are as written:
+lowering records no value (ir.md 7.4).
 """
 from __future__ import annotations
 
@@ -85,7 +76,7 @@ def struct_init(lw: BodyLowerer, node: Any, written: str, declared: str, args: l
     the written names.
     """
     positions = None if names is None else _declared_positions(lw.lookup, declared, names)
-    ident = lw.made_opaque()
+    ident = lw.ident()
     written_args = lw.arguments(args)
     decl = lw.decls.refer(written)
     if positions is None:
@@ -110,13 +101,13 @@ def _declared_positions(lookup: Optional[DeclLookup], declared: str,
 def enum_init(lw: BodyLowerer, node: Any, ty: WrittenType, variant: str,
               args: list[Any]) -> e.EnumInit:
     """The variant `variant` of the enum that `ty` writes, with the payload as written."""
-    ident = lw.made_opaque()
+    ident = lw.ident()
     return e.EnumInit(ident, lw.span(node), lw.decls.refer(written_name(ty)), variant,
                       lw.arguments(args))
 
 
 def lower_tuple(lw: BodyLowerer, node: a.TupleLiteral) -> e.TupleInit:
-    ident = lw.made_opaque()
+    ident = lw.ident()
     return e.TupleInit(ident, lw.span(node), [lw.expr(part) for part in node.elements])
 
 
@@ -131,13 +122,13 @@ def lower_array(lw: BodyLowerer, node: a.ArrayLiteral) -> e.ArrayInit:
 
 def lower_from(lw: BodyLowerer, node: a.DynamicArrayFrom) -> e.ArrayInit:
     """`from([...])`: a dynamic array with the runs of its literal (ir.md 7.10)."""
-    ident = lw.made_opaque()
+    ident = lw.ident()
     return e.ArrayInit(ident, lw.span(node), e.Dynamic(), _runs(lw, node.elements.elements))
 
 
 def lower_new(lw: BodyLowerer, node: a.DynamicArrayNew) -> e.ArrayInit:
     """`new()`: a dynamic array with no run."""
-    return e.ArrayInit(lw.made_opaque(), lw.span(node), e.Dynamic(), [])
+    return e.ArrayInit(lw.ident(), lw.span(node), e.Dynamic(), [])
 
 
 def _runs(lw: BodyLowerer, elements: list[a.ArrayElement]) -> list[e.ArrayRun]:
@@ -152,23 +143,23 @@ def _run(lw: BodyLowerer, element: a.ArrayElement) -> e.ArrayRun:
     """
     if element.count is not None:
         value = lw.expr(element.value)
-        return e.Repeat(value, lw.operand(element.count, True))
+        return e.Repeat(value, lw.expr(element.count))
     if is_range_element(element):
         return e.RangeRun(lower_range(lw, cast(a.RangeExpr, element.value)))
     return e.Single(lw.expr(element.value))
 
 
 def lower_range(lw: BodyLowerer, node: a.RangeExpr) -> e.Range:
-    """`a..b`, `a..=b` and `(a..b).rev()`, with the value of each bound that the compiler reads."""
+    """`a..b`, `a..=b` and `(a..b).rev()`."""
     ident = lw.ident()
     start, end = _bounds(lw, node)
     return e.Range(ident, lw.span(node), start, end, node.inclusive, node.reverse)
 
 
 def _bounds(lw: BodyLowerer, node: a.RangeExpr) -> tuple[e.ShirExpr, e.ShirExpr]:
-    """The start and the end of a range or a slice, in this order (ruling E3)."""
-    start = lw.operand(node.start, True)
-    return start, lw.operand(node.end, True)
+    """The start and the end of a range or a slice, in this order."""
+    start = lw.expr(node.start)
+    return start, lw.expr(node.end)
 
 
 # -- an index and a slice --------------------------------------------------------------
@@ -180,7 +171,7 @@ def lower_index(lw: BodyLowerer, node: a.IndexAccess) -> e.ShirExpr:
         return _slice(lw, node, cast(a.RangeExpr, node.index))
     ident = lw.ident()
     base = lw.expr(node.array)
-    return e.Index(ident, lw.span(node), base, lw.operand(node.index, True), node.unchecked)
+    return e.Index(ident, lw.span(node), base, lw.expr(node.index), node.unchecked)
 
 
 def _slice(lw: BodyLowerer, node: a.IndexAccess, bounds: a.RangeExpr) -> e.ShirExpr:
@@ -191,7 +182,7 @@ def _slice(lw: BodyLowerer, node: a.IndexAccess, bounds: a.RangeExpr) -> e.ShirE
     """
     if bounds.reverse:
         return lw.error_hole(node, "CE2122", "CE2404")
-    ident = lw.made_opaque()
+    ident = lw.ident()
     base = lw.expr(node.array)
     start, end = _bounds(lw, bounds)
     return e.Slice(ident, lw.span(node), base, start, end, bounds.inclusive)
@@ -208,7 +199,7 @@ def lower_member(lw: BodyLowerer, node: a.MemberAccess) -> e.ShirExpr:
     ty = lw.type_before_dot(node.receiver)
     if ty is not None:
         return _unit_variant(lw, node, ty)
-    ident = lw.made_opaque()
+    ident = lw.ident()
     return e.Field(ident, lw.span(node), lw.expr(node.receiver), node.member)
 
 
@@ -219,11 +210,11 @@ def _namespace_member(lw: BodyLowerer, node: a.MemberAccess, alias: str) -> e.Sh
     loc = lw.span(node)
     written = f"{alias}.{node.member}"
     if kind == "constant":
-        return e.ConstRef(lw.made_opaque(), loc, lw.decls.refer(written))
+        return e.ConstRef(lw.ident(), loc, lw.decls.refer(written))
     if kind == VARIABLE_KIND:
-        return e.StorageRef(lw.made_opaque(), loc, lw.decls.refer(written))
+        return e.StorageRef(lw.ident(), loc, lw.decls.refer(written))
     if kind in GLOBAL_KINDS:
-        return e.GlobalRef(lw.made_opaque(), loc, lw.decls.refer(written))
+        return e.GlobalRef(lw.ident(), loc, lw.decls.refer(written))
     return lw.hole(node)
 
 

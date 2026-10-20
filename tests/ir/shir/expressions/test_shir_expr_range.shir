@@ -18,12 +18,12 @@ ShirBody main
   params : []
   locals : [_0 "up": Iterator@(i32), _1 "all": Iterator@(i32), _2 "n": i32, _3 "down": Iterator@(i32)]
   block  :
-    Assign(LocalRef(_0), Range(Lit(0) = 0, ConstRef(@TOP) = 10, inclusive: false, reverse: false), is_init: true)
+    Assign(LocalRef(_0), Range(Lit(0), ConstRef(@TOP), inclusive: false, reverse: false), is_init: true)
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@total)), [(LocalRef(_0), Owned)])]))
-    Assign(LocalRef(_1), Range(Lit(0) = 0, Lit(10) = 10, inclusive: true, reverse: false), is_init: true)
+    Assign(LocalRef(_1), Range(Lit(0), Lit(10), inclusive: true, reverse: false), is_init: true)
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@total)), [(LocalRef(_1), Owned)])]))
     Assign(LocalRef(_2), Lit(10), is_init: true)
-    Assign(LocalRef(_3), Range(Lit(0) = 0, LocalRef(_2), inclusive: false, reverse: true), is_init: true)
+    Assign(LocalRef(_3), Range(Lit(0), LocalRef(_2), inclusive: false, reverse: true), is_init: true)
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@total)), [(LocalRef(_3), Owned)])]))
     ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
     Return(Lit(0))

@@ -6,9 +6,7 @@
 # source writes it, and `unchecked: false` outside a `dont_panic` body. An index of an
 # element (`grid[2][1]`) is an `Index` of an `Index`, and an indexed rebind has an `Index`
 # as its target. A range in the index position is a slice: `xs[1..3]` and `xs[1..=3]` are
-# a `Slice` with the bounds of the range and `inclusive`. An index and each bound record
-# their value when the compiler can read it (ruling E3). An index is not opaque: the
-# divisor `[4, 2][0]` has the value 4. A slice is opaque: its value is a view.
+# a `Slice` with the bounds of the range and `inclusive`. A slice is a view.
 
 fn width(i32[] row) i32:
     return row.len()

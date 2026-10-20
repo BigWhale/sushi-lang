@@ -10,7 +10,7 @@ ShirBody count
   params : [(_0 "v": i32, Guaranteed)]
   locals : []
   block  :
-    Assign(StorageRef(@calls), Binary(+, StorageRef(@calls), Lit(1) = 1), is_init: false)
+    Assign(StorageRef(@calls), Binary(+, StorageRef(@calls), Lit(1)), is_init: false)
     Return(LocalRef(_0))
 
 ShirBody main

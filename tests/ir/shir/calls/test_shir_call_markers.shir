@@ -28,7 +28,7 @@ ShirBody bump
   params : [(_0 "n": i32, Inout)]
   locals : []
   block  :
-    Return(Binary(+, LocalRef(_0), Lit(1) = 1))
+    Return(Binary(+, LocalRef(_0), Lit(1)))
 
 ShirBody add
   params : [(_0 "a": i32, Guaranteed), (_1 "b": i32, Guaranteed)]
