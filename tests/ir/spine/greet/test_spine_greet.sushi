@@ -1,0 +1,29 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "quiet\nMostly Harmless\nloud\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SHIR: test_spine_greet.shir
+# EXPECT_DUMP_SLIR: test_spine_greet.slir
+#
+# the spine program of ir.md 8.11: `greet` as the example writes it, the two functions
+# that it calls, and a `main` that runs it on each path. On the quiet path `msg` is not
+# moved, and its drop flag drops it. On the loud path `shout` takes `msg`.
+
+fn decorate(nom string name) string | StdError:
+    return Result.Ok(name)
+
+fn shout(nom string text) ~ | StdError:
+    println(text)
+    return Result.Ok(~)
+
+fn greet(nom string name, bool loud) ~ | StdError:
+    let string msg = decorate(nom name)??
+    if (loud):
+        shout(nom msg)
+    return Result.Ok(~)
+
+fn main() i32:
+    greet(nom "So long", false)
+    println("quiet")
+    greet(nom "Mostly Harmless", true)
+    println("loud")
+    return 0
