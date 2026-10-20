@@ -6,9 +6,9 @@ value depends on the type of the position, so the pass folds the SHIR sub-expres
 that type. `Folder.read` is the one entry point.
 
 The fold has no arithmetic of its own. The integer operators are the kernel's
-(`semantics/integer_ops.py`), and the float and logical tables, the cast rules and the text
-of a hole are the constant evaluator's (`semantics/const_eval.py`), so a body and a
-constant cannot disagree. A constant is read from the constant table through the reader
+(`semantics/integer_ops.py`), and the rules of a negation, float arithmetic, a
+comparison, a cast and the text of a hole are shared functions of the constant evaluator
+(`semantics/const_eval.py`), so a body and a constant cannot disagree. A constant is read from the constant table through the reader
 that the pass gives (ruling Q5).
 
 ONE table, `FOLDS`, holds the arm of each class that can be readable, and `UNREADABLE`
@@ -25,9 +25,9 @@ from typing import Any, Callable, Optional, TypeAlias
 
 from sushi_lang.semantics import integer_ops
 from sushi_lang.semantics.const_eval import (
-    FLOAT_ARITHMETIC, LOGICAL, AggregateConstant, ConstantValue, ScalarConstant,
-    cast_constant, hole_text, is_bool_constant, is_integer_constant, is_numeric_constant,
-    is_string_constant)
+    LOGICAL, AggregateConstant, ConstantValue, ScalarConstant, cast_constant,
+    compare_constants, float_arithmetic, hole_text, is_bool_constant, is_integer_constant,
+    is_numeric_constant, negate_constant)
 from sushi_lang.semantics.passes.types.inference import int_literal_default
 from sushi_lang.semantics.ranges import RangePlan, plan_range
 from sushi_lang.semantics.shir import exprs as e
@@ -117,14 +117,11 @@ def _unary(folder: Folder, node: e.Unary, ty: Optional[Type]) -> Optional[Readab
     operand = folder.scalar(node.operand, ty)
     if operand is None:
         return None
-    if node.op == "neg" and is_integer_constant(operand):
-        negated = integer_ops.negate(int(operand.value), operand.semantic_type)
-        # A negated literal is ONE leaf: its range is the question of CE2073.
-        if isinstance(node.operand, e.Lit):
-            return ScalarConstant(negated.value, operand.semantic_type)
-        return folder.checked(node, "-", negated, operand.semantic_type)
-    if node.op == "neg" and is_numeric_constant(operand):
-        return ScalarConstant(-operand.value, operand.semantic_type)
+    if node.op == "neg":
+        negated = negate_constant(operand, leaf=isinstance(node.operand, e.Lit))
+        if isinstance(negated, integer_ops.Folded):
+            return folder.checked(node, "-", negated, operand.semantic_type)
+        return negated
     if node.op == "~" and is_integer_constant(operand):
         return ScalarConstant(integer_ops.complement(int(operand.value), operand.semantic_type),
                               operand.semantic_type)
@@ -146,29 +143,13 @@ def _binary(folder: Folder, node: e.Binary, ty: Optional[Type]) -> Optional[Read
             return folder.checked(node, op, answer, left.semantic_type)
         return None if isinstance(answer, integer_ops.Refusal) else ScalarConstant(
             answer.value, left.semantic_type)
-    if op in FLOAT_ARITHMETIC and is_numeric_constant(left) and is_numeric_constant(right):
-        if op in ("/", "%") and right.value == 0:
-            return None
-        return ScalarConstant(FLOAT_ARITHMETIC[op](float(left.value), float(right.value)),
-                              left.semantic_type)
+    if (op in integer_ops.OVERFLOW_CHECKED and is_numeric_constant(left)
+            and is_numeric_constant(right)):
+        return float_arithmetic(op, left, right)
     if op in LOGICAL and is_bool_constant(left) and is_bool_constant(right):
         return ScalarConstant(LOGICAL[op](bool(left.value), bool(right.value)), BuiltinType.BOOL)
     if op in integer_ops.COMPARISONS:
-        return _compare(op, left, right)
-    return None
-
-
-def _compare(op: str, left: ScalarConstant, right: ScalarConstant) -> Optional[Readable]:
-    """The rule of the constant evaluator: a bool is equatable and not ordered, a string
-    is ordered by its UTF-8 bytes, and a number by its value."""
-    if is_string_constant(left) and is_string_constant(right):
-        lhs, rhs = str(left.value).encode("utf-8"), str(right.value).encode("utf-8")
-        return ScalarConstant(integer_ops.compare(op, lhs, rhs), BuiltinType.BOOL)
-    if (is_bool_constant(left) and is_bool_constant(right)
-            and op not in integer_ops.ORDERINGS):
-        return ScalarConstant(integer_ops.compare(op, left.value, right.value), BuiltinType.BOOL)
-    if is_numeric_constant(left) and is_numeric_constant(right):
-        return ScalarConstant(integer_ops.compare(op, left.value, right.value), BuiltinType.BOOL)
+        return compare_constants(op, left, right)
     return None
 
 

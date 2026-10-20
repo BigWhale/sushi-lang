@@ -40,9 +40,8 @@ if TYPE_CHECKING:
 NamespacesOf = Callable[[Optional[str]], Optional[NamespaceTable]]
 
 # The float arithmetic of the overflow-checked operators. A float has no width to leave.
-# The integer semantics are the kernel's (`integer_ops.py`). The readable fold of the
-# typecheck pass reads this table and `LOGICAL` too (`passes/types/fold.py`).
-FLOAT_ARITHMETIC: Mapping[str, Callable[[float, float], float]] = {
+# The integer semantics are the kernel's (`integer_ops.py`).
+_FLOAT_ARITHMETIC: Mapping[str, Callable[[float, float], float]] = {
     "+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.truediv,
     "%": math.fmod,
 }
@@ -52,6 +51,7 @@ _NOT_NUMERIC: Mapping[str, str] = {
     "+": "arithmetic", "-": "arithmetic", "*": "arithmetic", "/": "division", "%": "modulo",
 }
 
+# The readable fold of the typecheck pass reads this table too (`passes/types/fold.py`).
 LOGICAL: Mapping[str, Callable[[bool, bool], bool]] = {
     "and": lambda left, right: left and right,
     "or": lambda left, right: left or right,
@@ -210,6 +210,58 @@ def cast_constant(value: ConstantValue, to_type: Type) -> Optional[ScalarConstan
     if is_float_type(from_type) and is_float_type(to_type):
         return ScalarConstant(value.value, to_type)
     return None
+
+
+def negate_constant(operand: ScalarConstant,
+                    leaf: bool) -> Union[ScalarConstant, integer_ops.Folded, None]:
+    """`-operand`, or None for a value that is no number.
+
+    An integer negation that leaves its type answers the kernel's `Folded`, for the caller
+    to record at its node. A negated literal (`leaf`) is ONE leaf, and its range is the
+    question of CE2073: that is what makes -128 an i8 while 128 is not.
+    """
+    if not is_numeric_constant(operand):
+        return None
+    if not is_integer_constant(operand):
+        return ScalarConstant(-operand.value, operand.semantic_type)
+    negated = integer_ops.negate(int(operand.value), operand.semantic_type)
+    if leaf or not negated.overflows:
+        return ScalarConstant(negated.value, operand.semantic_type)
+    return negated
+
+
+def float_arithmetic(op: str, left: ScalarConstant,
+                     right: ScalarConstant) -> Optional[ScalarConstant]:
+    """`left op right` for `+ - * / %` where an operand is a float, or None for a division
+    by zero. The value has the type of the left operand; a pair of two kinds is CE2510's
+    to report."""
+    if op in ('/', '%') and right.value == 0:
+        return None
+    return ScalarConstant(_FLOAT_ARITHMETIC[op](float(left.value), float(right.value)),
+                          left.semantic_type)
+
+
+def compare_constants(op: str, left: ConstantValue,
+                      right: ConstantValue) -> Optional[ScalarConstant]:
+    """`left op right` for a comparison operator, or None for a pair that does not compare.
+
+    A bool is equatable but not orderable, and a string is both, which is exactly what a
+    body gets (#449). A string orders by its UTF-8 bytes, as emit_string_order does at
+    run time: Python's str orders by code point and UTF-8 keeps code points in numerical
+    order, so the two agree, and encoding first makes them agree by construction.
+    """
+    if not isinstance(left, ScalarConstant) or not isinstance(right, ScalarConstant):
+        return None
+    if (op not in integer_ops.ORDERINGS and left.semantic_type == right.semantic_type
+            and left.semantic_type in (BuiltinType.BOOL, BuiltinType.STRING)):
+        return ScalarConstant(integer_ops.compare(op, left.value, right.value), BuiltinType.BOOL)
+    if op in integer_ops.ORDERINGS and is_string_constant(left) and is_string_constant(right):
+        lhs = str(left.value).encode('utf-8')
+        rhs = str(right.value).encode('utf-8')
+        return ScalarConstant(integer_ops.compare(op, lhs, rhs), BuiltinType.BOOL)
+    if not is_numeric_constant(left) or not is_numeric_constant(right):
+        return None
+    return ScalarConstant(integer_ops.compare(op, left.value, right.value), BuiltinType.BOOL)
 
 
 def allocates_nothing(expr: Expr) -> bool:
@@ -632,17 +684,14 @@ class ConstantEvaluator:
             return None
 
         if expr.op == 'neg':
-            if not is_numeric_constant(operand):
+            negated = (None if not isinstance(operand, ScalarConstant)
+                       else negate_constant(operand, leaf=isinstance(expr.expr, IntLit)))
+            if negated is None:
                 er.emit(self.reporter, er.ERR.CE0110, span, op='negation on non-numeric type')
                 return None
-            if not is_integer_constant(operand):
-                return ScalarConstant(-operand.value, operand.semantic_type)
-            negated = integer_ops.negate(operand.value, operand.semantic_type)  # type: ignore[arg-type]
-            # A negated literal is ONE leaf, and the range of a leaf is CE2073's
-            # question -- that is what makes -128 an i8 while 128 is not.
-            if isinstance(expr.expr, IntLit):
-                return ScalarConstant(negated.value, operand.semantic_type)
-            return self._checked(expr, '-', negated, operand.semantic_type, span)
+            if isinstance(negated, integer_ops.Folded):
+                return self._checked(expr, '-', negated, operand.semantic_type, span)
+            return negated
 
         elif expr.op == '~':
             if is_integer_constant(operand):
@@ -874,11 +923,10 @@ class ConstantEvaluator:
                 return None
             return self._checked(node, node.op, answer, left.semantic_type, span)
 
-        if node.op in ('/', '%') and right.value == 0:
+        value = float_arithmetic(node.op, left, right)
+        if value is None:
             er.emit(self.reporter, er.ERR.CE0112, span)
-            return None
-        return ScalarConstant(FLOAT_ARITHMETIC[node.op](left.value, right.value),  # type: ignore[arg-type]
-                              left.semantic_type)
+        return value
 
     def _eval_width_defined(self, left: ConstantValue, right: ConstantValue, op: str,
                             span: Optional[Span]) -> Optional[ConstantValue]:
@@ -909,35 +957,13 @@ class ConstantEvaluator:
                               BuiltinType.BOOL)
 
     def _eval_comparison(self, left: ConstantValue, right: ConstantValue, op: str, span: Optional[Span]) -> Optional[ConstantValue]:
-        """Evaluate comparison operation.
-
-        A bool is equatable but not orderable, and a string is both, which is exactly
-        what a body gets (#449). The typecheck pass owns that rule for a body; this
-        evaluator has to agree with it, or a constant refuses what a local accepts.
-        """
-        if op not in integer_ops.ORDERINGS and self._is_equatable_pair(left, right):
-            return ScalarConstant(integer_ops.compare(op, left.value, right.value), BuiltinType.BOOL)
-
-        if op in integer_ops.ORDERINGS and is_string_constant(left) and is_string_constant(right):
-            # Compare the UTF-8 bytes, which is what emit_string_order does at run time.
-            # Python's str orders by code point and UTF-8 keeps code points in numerical
-            # order, so the two agree; encoding first makes them agree by construction.
-            lhs = str(left.value).encode('utf-8')
-            rhs = str(right.value).encode('utf-8')
-            return ScalarConstant(integer_ops.compare(op, lhs, rhs), BuiltinType.BOOL)
-
-        if not is_numeric_constant(left) or not is_numeric_constant(right):
+        """Evaluate comparison operation (`compare_constants`). The typecheck pass owns the
+        rule for a body; this evaluator has to agree with it, or a constant refuses what a
+        local accepts."""
+        value = compare_constants(op, left, right)
+        if value is None:
             er.emit(self.reporter, er.ERR.CE0110, span, op=f'comparison {op} on non-comparable types')
-            return None
-
-        return ScalarConstant(integer_ops.compare(op, left.value, right.value), BuiltinType.BOOL)
-
-    def _is_equatable_pair(self, left: ConstantValue,
-                           right: ConstantValue) -> TypeGuard[ScalarConstant]:
-        """Whether two non-numeric values of the same type compare for equality."""
-        return (isinstance(left, ScalarConstant) and isinstance(right, ScalarConstant)
-                and left.semantic_type == right.semantic_type
-                and left.semantic_type in (BuiltinType.BOOL, BuiltinType.STRING))
+        return value
 
     # The one dispatch. A kind absent here is CE0108 in `evaluate`; `NOT_CONSTANT` names
     # which kinds that is meant for, and the totality gate holds the two sets against the
