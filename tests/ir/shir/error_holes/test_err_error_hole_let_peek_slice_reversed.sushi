@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODES_EXACT: CE2404
+#
+# an error hole whose code comes after the error of the construct around it: a `let peek`
+# of a slice with a reversed range. The borrow of the temporary is refused first (CE2404),
+# so the hole of the reversed slice accepts CE2404 too, and strict mode never stops on it
+# (docs/design/ir.md 7.4).
+
+fn main() i32:
+    let i32[] xs = from([1, 2, 3])
+    let peek i32[] v = xs[(0..2).rev()]
+    return v.len()

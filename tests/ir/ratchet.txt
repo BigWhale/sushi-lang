@@ -2676,6 +2676,11 @@ tests/ir/shir/destructure/test_shir_destructure_pair.sushi
 tests/ir/shir/destructure/test_shir_destructure_rebind.sushi
 tests/ir/shir/destructure/test_shir_destructure_rebind_places.sushi
 tests/ir/shir/empty_body/test_shir_empty_body.sushi
+tests/ir/shir/error_holes/test_err_error_hole_const_named_argument.sushi
+tests/ir/shir/error_holes/test_err_error_hole_const_slice_element.sushi
+tests/ir/shir/error_holes/test_err_error_hole_const_slice_reversed.sushi
+tests/ir/shir/error_holes/test_err_error_hole_const_unknown_member.sushi
+tests/ir/shir/error_holes/test_err_error_hole_let_peek_slice_reversed.sushi
 tests/ir/shir/expressions/test_err_shir_expr_borrow_operand.sushi
 tests/ir/shir/expressions/test_err_shir_expr_slice_reversed.sushi
 tests/ir/shir/expressions/test_shir_expr_cast.sushi

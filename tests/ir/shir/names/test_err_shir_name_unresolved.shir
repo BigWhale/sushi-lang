@@ -5,4 +5,4 @@ ShirBody main
   locals : [_0 "total": i32]
   block  :
     Assign(LocalRef(_0), Binary(+, Lit(40) = 40, Lit(2) = 2), is_init: true)
-    Return(Binary(-, <hole: Name>, LocalRef(_0)))
+    Return(Binary(-, <hole: Name, error: CE1001 | CE1002 | CE0144>, LocalRef(_0)))

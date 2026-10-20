@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE0108
+#
+# an error hole in a constant initializer: a named argument on a function call. The
+# constant evaluator refuses the call first (CE0108), before the typecheck pass reads the
+# argument (CE6104). So the error hole accepts CE0108 too, and strict mode never stops on
+# it (docs/design/ir.md 7.4).
+
+fn id@(T)(nom T x) T:
+    return x
+
+const i32 K = id(x: 1)
+
+fn main() i32:
+    return K

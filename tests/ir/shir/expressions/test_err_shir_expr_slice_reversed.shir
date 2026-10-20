@@ -5,4 +5,4 @@ ShirBody main
   locals : [_0 "xs": i32[]]
   block  :
     Assign(LocalRef(_0), ArrayInit(Dynamic, [Single(Lit(1)), Single(Lit(2)), Single(Lit(3))]), is_init: true)
-    Return(Call(Dotted(<hole: IndexAccess>, "len"), []))
+    Return(Call(Dotted(<hole: IndexAccess, error: CE2122 | CE2404>, "len"), []))

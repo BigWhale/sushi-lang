@@ -1,0 +1,13 @@
+# EXPECT_ERROR_CODES_EXACT: CE0108
+#
+# an error hole in a constant initializer: a call of a name that the namespace does not
+# hold. The constant evaluator refuses the call first (CE0108), before the typecheck pass
+# looks for the name (CE2008). So the error hole accepts CE0108 too, and strict mode never
+# stops on it (docs/design/ir.md 7.4).
+
+use "helpers/error_hole_geo" as geo
+
+const i32 K = geo.twicee(2)
+
+fn main() i32:
+    return K
