@@ -18,16 +18,19 @@ type from an expression body, and a lambda with a channel returns that value in
 is a closure.
 
 A destructure `let (a, b) = v` is a `Destructure` of the value as written. A target is the
-local of its binder, `Discard` for `_`, or `Nested`. A binder that the AST builder made,
-a hidden binder of a tuple rebind `(a, b) := v`, has no name span, so its local has no name
-and no span (ir.md 7.2), and a dump never prints its hidden name. The AST builder binds the
-whole value to a hidden local too, but no SHIR node reads it, so it is not a local of the
-body: SHIR-to-SLIR lowering makes the place of the value. Whether a destructure owns or
-borrows its elements is an answer of the borrow pass.
+local of its binder, `Discard` for `_`, or `Nested`. The AST builder binds the whole value
+to a hidden local too, but no SHIR node reads it, so it is not a local of the body:
+SHIR-to-SLIR lowering makes the place of the value. Whether a destructure owns or borrows
+its elements is an answer of the borrow pass.
+
+A tuple rebind `(a, b) := v` is a `Destructure` too, with a `Place` for each place (ir.md
+7.5). The AST builder splits it into a destructure into hidden binders and one rebind of
+each place from its binder; lowering joins the split again, so the hidden binders are no
+locals, and the type of each target is the type of its place.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, Iterator, Optional, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics import ast as a
@@ -83,6 +86,34 @@ def _target(lw: BodyLowerer, target: a.DestructureTarget) -> s.DestructureTarget
     local = lw.binder(target, target.name)
     lw.declare(local, target.name, target.ty, target.name_span)
     return local
+
+
+def lower_tuple_rebind(lw: BodyLowerer, node: a.Let, rebinds: list[a.Rebind]) -> s.Destructure:
+    """`(a, b) := v`: the value as written, then the place of each target.
+
+    `node` is the split destructure, and `rebinds` holds one rebind for each of its
+    binders, in the order of the binders: the place of a binder is the target of its rebind.
+    """
+    ident = lw.ident()
+    value = lw.expr(node.value)
+    return s.Destructure(ident, lw.span(node), _places(lw, node.targets or [], iter(rebinds)),
+                         value)
+
+
+def _places(lw: BodyLowerer, targets: list[a.DestructureTarget],
+            rebinds: Iterator[a.Rebind]) -> list[s.DestructureTarget]:
+    return [_place(lw, target, rebinds) for target in targets]
+
+
+def _place(lw: BodyLowerer, target: a.DestructureTarget,
+           rebinds: Iterator[a.Rebind]) -> s.DestructureTarget:
+    if target.nested is not None:
+        return s.Nested(_places(lw, target.nested, rebinds))
+    rebind = next(rebinds)
+    if getattr(rebind.value, "id", None) != target.name:
+        er.raise_internal_error("CE0015", message="a rebind of a tuple rebind does not read "
+                                                  "the binder of its place")
+    return s.Place(lw.expr(rebind.target))
 
 
 def lower_expand(lw: BodyLowerer, node: a.Expand) -> s.Expand:

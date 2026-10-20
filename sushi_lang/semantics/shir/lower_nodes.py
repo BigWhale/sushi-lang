@@ -69,7 +69,12 @@ from sushi_lang.semantics.shir.lower_aggregates import (
     enum_init, lower_array, lower_from, lower_index, lower_member, lower_new, lower_range,
     lower_tuple, struct_init,
 )
-from sushi_lang.semantics.shir.lower_binders import lower_destructure, lower_expand, lower_lambda
+from sushi_lang.semantics.shir.lower_binders import (
+    lower_destructure,
+    lower_expand,
+    lower_lambda,
+    lower_tuple_rebind,
+)
 from sushi_lang.semantics.shir.lower_patterns import lower_match
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, ReferenceType, UnknownType
@@ -172,14 +177,19 @@ class BodyLowerer:
     def block(self, node: Optional[a.Block]) -> ShirBlock:
         """A block, each statement in the written order. No block gives an empty one.
 
-        Each statement gives one SHIR statement, so the copy boundaries that the unroll
-        marked on the statements of the block are statement ranges of the SHIR block too.
+        Each statement gives one SHIR statement, except a tuple rebind: the AST builder
+        splits it into a destructure and one rebind per place, and the split gives one
+        `Destructure` (ir.md 7.5). The copy boundaries that the unroll marked on the
+        statements of the block are read from the first statement of each, so they are
+        statement ranges of the SHIR block.
         """
         ident = self.ident()
         if node is None:
             return ShirBlock(ident, self.span(node), [])
-        statements = [self.stmt(stmt) for stmt in node.statements]
-        ranges = copy_ranges([stmt.expand_copies for stmt in node.statements])
+        groups = source_statements(node.statements)
+        statements = [self.stmt(first) if not rest else lower_tuple_rebind(self, first, rest)
+                      for first, rest in groups]
+        ranges = copy_ranges([first.expand_copies for first, _rest in groups])
         if ranges:
             self.copies.record_copies(ident, ranges)
         return ShirBlock(ident, self.span(node), statements)
@@ -266,6 +276,32 @@ def copy_ranges(marks: Sequence[tuple[int, ...]]) -> tuple[CopyRange, ...]:
             found.setdefault(copy, [index, index, depth])[1] = index + 1
     ordered = sorted(found.values(), key=lambda run: (run[0], run[2]))
     return tuple(CopyRange(start, stop) for start, stop, _depth in ordered)
+
+
+def source_statements(statements: Sequence[Any]) -> list[tuple[Any, list[a.Rebind]]]:
+    """The statements of a block, each with the rebinds that its source statement split off.
+
+    The split of a tuple rebind `(a, b) := v` is a `Let` marked `rebinds` and, right after
+    it, one `Rebind` of each place from its hidden binder, in the order of the binders
+    (`ast_builder/statements/variables.py`). Every other statement has no rebinds.
+    """
+    groups: list[tuple[Any, list[a.Rebind]]] = []
+    index = 0
+    while index < len(statements):
+        first = statements[index]
+        count = len(list(a.destructure_binders(first.targets))) if _splits(first) else 0
+        rest = list(statements[index + 1:index + 1 + count])
+        if len(rest) != count:
+            er.raise_internal_error("CE0015", message="a tuple rebind reached lowering "
+                                                      "with no rebind for each place")
+        groups.append((first, rest))
+        index += 1 + count
+    return groups
+
+
+def _splits(stmt: Any) -> bool:
+    """A `Let` marked `rebinds` is the split of a tuple rebind; no other class has the field."""
+    return bool(getattr(stmt, "rebinds", False))
 
 
 def binder_local(bindings: bd.Bindings, owner: object, name: str) -> LocalId:
@@ -551,6 +587,9 @@ def _let(lw: BodyLowerer, node: a.Let) -> s.ShirStmt:
     (`let poke T x = place`) takes a `Borrow` of the place, with the written mode (ir.md 7.5).
     A destructure (`let (a, b) = v`) is a `Destructure` (`lower_binders.py`).
     """
+    if node.rebinds:
+        er.raise_internal_error("CE0015", message="a tuple rebind reached lowering outside "
+                                                  "a block")
     if node.targets is not None:
         return lower_destructure(lw, node)
     ident = lw.ident()

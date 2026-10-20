@@ -146,7 +146,8 @@ STATEMENT_FIELDS: dict[str, tuple[str, ...]] = {
 
 #: The parts of a statement that are not nodes (ir.md 7.5): a loop source and the mode
 #: of its binder, and a target of a destructure. `Nested` is a nested destructure,
-#: `let ((a, b), c) = v`, which the list of 7.5 leaves out.
+#: `let ((a, b), c) = v`, which the list of 7.5 leaves out; `Place` is a place of a
+#: tuple rebind, `(a, b) := v`.
 STATEMENT_PARTS: dict[str, tuple[str, ...]] = {
     "Cond": ("cond",),
     "Items": ("iterable", "binder", "by"),
@@ -154,6 +155,7 @@ STATEMENT_PARTS: dict[str, tuple[str, ...]] = {
     "Ref": ("mode",),
     "Discard": (),
     "Nested": ("targets",),
+    "Place": ("target",),
 }
 
 #: ir.md 7.10, one row per AST statement class. 7.10 leaves out the classes that keep

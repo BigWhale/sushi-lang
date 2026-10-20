@@ -241,6 +241,7 @@ PRINTERS: dict[type, Render] = {
     LocalId: lambda _pr, local: _local(local),
     s.Discard: lambda _pr, _t: "_",
     s.Nested: lambda pr, t: pr.each(t.targets),
+    s.Place: lambda pr, t: _node("Place", pr.show(t.target)),
     s.Cond: lambda pr, src: _node("Cond", pr.show(src.cond)),
     s.Items: lambda pr, src: _node("Items", pr.show(src.iterable), pr.show(src.binder),
                                    pr.show(src.by)),

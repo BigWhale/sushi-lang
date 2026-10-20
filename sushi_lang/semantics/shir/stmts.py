@@ -38,12 +38,21 @@ class Nested:
     targets: list[DestructureTarget]
 
 
-DestructureTarget: TypeAlias = LocalId | Discard | Nested
+@dataclass(frozen=True, slots=True)
+class Place:
+    """A place of a tuple rebind: `a` in `(a, b) := v`. Its type is the type of the place."""
+    target: ShirExpr
+
+
+DestructureTarget: TypeAlias = LocalId | Discard | Nested | Place
 
 
 @dataclass(slots=True)
 class Destructure(ShirNode):
-    """`let (a, b) = v`. It owns from an owned value and borrows from a borrow."""
+    """`let (a, b) = v`, or `(a, b) := v` with `Place` targets (ir.md 7.5).
+
+    It owns from an owned value and borrows from a borrow.
+    """
     targets: list[DestructureTarget]
     value: ShirExpr
 
