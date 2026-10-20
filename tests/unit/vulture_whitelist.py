@@ -126,7 +126,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/stop.py", "finished", _P23),
     # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
     # Each one moves to SHIR inputs in the typecheck stage of its construct group
-    # (PLAN.md appendix E.4), and that stage deletes the entry.
+    # in the migration plan, and that stage deletes the entry.
     ("sushi_lang/semantics/ast.py", "range_checked", _P24),
     ("sushi_lang/semantics/ast.py", "in_cast_context", _P24),
     (_TYPES + "expressions.py", "in_cast_context", _P24),

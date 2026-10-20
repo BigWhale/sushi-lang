@@ -1,4 +1,11 @@
-"""What an expression YIELDS: the typecheck pass's inference visitor."""
+"""What an AST expression YIELDS: the inference of the early passes.
+
+The `instantiate` and `monomorphize` passes type a generic call's arguments through
+`ReadOnlyInferrer`, which reads this visitor. The typecheck pass does not: from the switch
+to SHIR it answers each type in the expression arms of its own table (`visit.ARMS`),
+because SHIR has one table for the check and the answer. The visitor goes when the early
+passes stop inferring.
+"""
 from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 

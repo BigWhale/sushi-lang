@@ -9,7 +9,7 @@ stops the walk of the body with the stop code CE0155 (`shir/stop.py`).
 
 `statements.py` walks a block. The AST inference visitor of `inference.py` is not part of
 this walk: it is the inference of the early passes (`ReadOnlyInferrer`), until they stop
-inferring (ruling E4). `helpers.py` holds the lambda and function-value helpers that it
+inferring. `helpers.py` holds the lambda and function-value helpers that it
 reads.
 """
 from __future__ import annotations
