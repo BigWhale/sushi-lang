@@ -24,9 +24,10 @@ TYPES_PASS = (Path(__file__).resolve().parents[2]
               / "sushi_lang" / "semantics" / "passes" / "types")
 LADDER = TYPES_PASS / "calls" / "dotcall.py"
 
-#: What the DotCall hands INTO the temporary node instead of reading back off it. The
-#: propagation stamp is what makes the `HashMap.new()` key gate reachable (#272) and the
-#: namespace stamp says the receiver arrived qualified (#506).
+#: What the AST validation half handed INTO the temporary node instead of reading back
+#: off it: the propagation stamp made the `HashMap.new()` key gate reachable (#272), and
+#: the namespace stamp said the receiver arrived qualified (#506). That half is gone since
+#: the switch to SHIR; the fields stay shared, and no rung copies them back.
 _CARRIED_IN = ("resolved_struct_type", "namespace_ref")
 
 #: What the DotCall's own visit writes on the DotCall, so a copy back would only write it

@@ -52,7 +52,6 @@ _CALLERS = (
     "calls/statics.py",
     "calls/enums.py",
     "externals.py",
-    "calls/dotcall.py",
 )
 
 

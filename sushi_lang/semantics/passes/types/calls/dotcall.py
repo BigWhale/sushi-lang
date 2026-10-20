@@ -1,15 +1,15 @@
 """One ladder for `X.Y(args)`: what does a DotCall name? (#753)
 
-The question has one answer and one arm order. The validation half and the inference half
-both walk it through `resolve_dotcall`, which reports the rung that answered as a
-`DotCallTarget`; each half then does its own work with that answer. Two ladders drifted
-apart before: they copied a different number of stamps back from the temporary node they
-resolved the callee on, and every stamp in the gap has a miscompile behind it -- a lost
-`poke self` receiver (#326, #327), a `nom` parameter made inert, a call bound to the copy
-cut for another type. `copy_callee_stamps` is now the one stamp set both halves read.
+The question has one answer and one arm order. `resolve_dotcall` walks it and reports the
+rung that answered as a `DotCallTarget`. Two ladders drifted apart before: they copied a
+different number of stamps back from the temporary node they resolved the callee on, and
+every stamp in the gap has a miscompile behind it -- a lost `poke self` receiver (#326,
+#327), a `nom` parameter made inert, a call bound to the copy cut for another type.
+`copy_callee_stamps` is the one stamp set.
 
-`report` is the validation half's True and the inference half's False, the same discipline
-`resolve_method` and `resolve_static` already use: only one half may emit a diagnostic.
+From the switch to SHIR the reader is the inference of the early passes, which reports
+nothing. The validation half is gone: lowering answers what `X.Y(args)` names (a `Static`
+or a `Dotted` call target), and the typecheck pass reads the SHIR node.
 """
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Optional
 
-from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.param_modes import ParamMode
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type
@@ -60,14 +59,11 @@ class DotCallTarget:
     receiver_type: Optional[Type] = None
 
 
-def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall', *,
-                    report: bool) -> DotCallTarget:
+def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall') -> DotCallTarget:
     """Walk the ladder once and answer which rung the node belongs to."""
     from sushi_lang.semantics.passes.types.calls.namespaced import (
-        fold_namespaced_enum, fold_namespaced_static, infer_namespaced_call,
-        validate_namespaced_call)
-    from sushi_lang.semantics.passes.types.calls.statics import (
-        infer_static_call, validate_static_call)
+        fold_namespaced_enum, fold_namespaced_static, infer_namespaced_call)
+    from sushi_lang.semantics.passes.types.calls.statics import infer_static_call
 
     # `geo.Sign.Plus(1)`: the qualifier folds away and what is left is the bare
     # constructor every rule below already knows (unit-namespaces.md section 5).
@@ -79,14 +75,8 @@ def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall', *,
     # behind a `use ... as`, a registry stdlib module. Local-wins is inside
     # `namespace_of`, so a variable of the same name never reaches here.
     if validator.namespace_of(node.receiver) is not None:
-        if report:
-            validate_namespaced_call(validator, node)
-            return DotCallTarget(DotCallKind.NAMESPACE)
         return DotCallTarget(DotCallKind.NAMESPACE,
                              type=infer_namespaced_call(validator, node))
-
-    if report:
-        _reject_call_site_type_args(validator, node)
 
     # A static on a primitive type NAME: `f64.from_bits(bits)`, `f32.from_bits(bits)`,
     # `string.from_bytes(nom b)`. The receiver is a type, not a value, so it answers
@@ -98,8 +88,6 @@ def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall', *,
         # marker by the rule of every callee (#1173).
         node.callee_param_modes = (ParamMode.NOM if static.consumes else ParamMode.BORROW,)
         node.callee_param_names = [static.param_name]
-        if report:
-            _validate_primitive_static_args(validator, node, static)
         return DotCallTarget(DotCallKind.PRIMITIVE_STATIC, type=static.returns)
 
     # The receiver is deliberately NOT validated here: every path either has no receiver
@@ -109,16 +97,12 @@ def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall', *,
     # A name behind a type's dot is a MEMBER of that type (#542, ruling Q1): a static
     # method, or -- on an enum -- a variant. The static is asked first because the variant
     # path OWNS the enum's refusal (CE2045), and it steps aside for a name that is neither.
-    if report:
-        if validate_static_call(validator, node):
-            return DotCallTarget(DotCallKind.STATIC)
-    else:
-        static_type = infer_static_call(validator, node)
-        if static_type is not None:
-            return DotCallTarget(DotCallKind.STATIC, type=static_type)
+    static_type = infer_static_call(validator, node)
+    if static_type is not None:
+        return DotCallTarget(DotCallKind.STATIC, type=static_type)
 
     if isinstance(node.receiver, Name):
-        enum_target = _enum_receiver(validator, node, report=report)
+        enum_target = _enum_receiver(validator, node)
         if enum_target is not None:
             return enum_target
 
@@ -136,7 +120,7 @@ def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall', *,
         return DotCallTarget(DotCallKind.FN_FIELD, fn_type=fn_type)
 
     return DotCallTarget(DotCallKind.METHOD,
-                         method_call=_method_call_view(node, carry_stamps=report),
+                         method_call=_method_call_view(node),
                          receiver_type=receiver_type)
 
 
@@ -196,14 +180,8 @@ def _names_an_enum(validator: 'TypeValidator', name: str) -> bool:
             or name in validator.generic_enum_table.by_name)
 
 
-def _enum_receiver(validator: 'TypeValidator', node: 'DotCall', *,
-                   report: bool) -> Optional[DotCallTarget]:
+def _enum_receiver(validator: 'TypeValidator', node: 'DotCall') -> Optional[DotCallTarget]:
     """The enum rung: `Enum.Variant(args)`, or None when the receiver names no enum."""
-    if report:
-        if validate_variant_spelling(validator, node, node.method, node.args):
-            return DotCallTarget(DotCallKind.ENUM)
-        return None
-
     name = node.receiver.id
     if not _names_an_enum(validator, name):
         return None
@@ -259,44 +237,11 @@ def _primitive_static_key(node: 'DotCall') -> Optional[tuple[str, str]]:
     return (node.receiver.id, node.method)
 
 
-def _validate_primitive_static_args(validator: 'TypeValidator', node: 'DotCall',
-                                    static: PrimitiveStatic) -> None:
-    """Measure the one argument of a primitive static against its parameter."""
-    from sushi_lang.semantics.passes.types.arguments import check_arguments
-
-    check_arguments(validator, f"{node.receiver.id}.{node.method}", [static.param],
-                    node.args, node.loc,
-                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                    stop_on_arity=True)
-
-
-def _reject_call_site_type_args(validator: 'TypeValidator', node: 'DotCall') -> None:
-    """CE6102: a `@(...)` list rides a direct call to a named free function, nothing else.
-
-    The rule reads the RECEIVER, not the parse shape: every receiver that reaches this line
-    is a value. It used to live in the AST builder, which cannot know whether a receiver
-    names a bound alias (`docs/design/unit-namespaces.md` section 5.1).
-    """
-    if not node.type_args:
-        return
-    er.emit_with(validator.reporter, er.ERR.CE6102,
-                 node.type_args_loc or node.loc) \
-        .help("call the generic function directly, e.g. foo@(i32)(x)") \
-        .emit()
-
-
-def _method_call_view(node: 'DotCall', *, carry_stamps: bool) -> MethodCall:
+def _method_call_view(node: 'DotCall') -> MethodCall:
     """The temporary MethodCall the method rung resolves the callee on.
 
-    `carry_stamps` is the validation half's True. The propagation stamp travels with it
-    there: the `HashMap.new()` key gate reads the concrete HashMap type off the call node
-    (#272), and the namespace stamp is what says the receiver arrived QUALIFIED (#506,
-    A-strict). The inference half has never carried either, and handing it one here would
-    let it resolve a callee it could not resolve before -- a change of answer, not a move.
+    The inference half carries no stamp of the DotCall into it: handing it one would let
+    it resolve a callee that it could not resolve before -- a change of answer, not a move.
     """
-    view = MethodCall(receiver=node.receiver, method=node.method, args=node.args,
+    return MethodCall(receiver=node.receiver, method=node.method, args=node.args,
                       loc=node.loc)
-    if carry_stamps:
-        view.resolved_struct_type = getattr(node, 'resolved_struct_type', None)
-        view.namespace_ref = getattr(node, 'namespace_ref', None)
-    return view

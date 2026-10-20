@@ -172,6 +172,7 @@ UNREFERENCED: set[str] = {
     "CE2035", "CE2037", "CE2070", "CE2115",   # P2.4: Interp holes, println, literals
     "CW2001",                                 # P2.4: an unused Result of a call
     "CE2111", "CE2116",                       # Tier A: new() and from([]), assert
+    "CE6102",                                 # Tier A: type arguments after a dot
     "CE2094",                                 # Tier C: closures
     "CE5010",                                 # Tier D: ptr
 }

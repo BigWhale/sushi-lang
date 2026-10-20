@@ -557,7 +557,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         from sushi_lang.semantics.passes.types.calls.dotcall import (
             DotCallKind, copy_callee_stamps, resolve_dotcall)
 
-        target = resolve_dotcall(self.type_validator, node, report=False)
+        target = resolve_dotcall(self.type_validator, node)
 
         if target.kind is DotCallKind.FN_FIELD:
             node.inferred_return_type = self._fn_value_yield(target.fn_type)
