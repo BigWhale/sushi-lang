@@ -2731,6 +2731,8 @@ tests/ir/shir/variadics/test_shir_variadic_copy_boundaries.sushi
 tests/ir/shir/variadics/test_shir_variadic_expand.sushi
 tests/ir/shir/variadics/test_shir_variadic_expand_rebind.sushi
 tests/ir/spine/arg_count/test_err_spine_arg_count.sushi
+tests/ir/spine/compare/test_spine_compare.sushi
+tests/ir/spine/interp_drops/test_spine_interp_drops.sushi
 tests/ir/spine/try_string/test_spine_try_string.sushi
 tests/ir/spine/use_after_move/test_err_spine_use_after_move.sushi
 tests/iterators/adapters/test_ad_borrowed_params.sushi
