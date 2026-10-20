@@ -1,0 +1,23 @@
+unit test_err_typeck_rebind
+
+ShirBody reset
+  params : [(_0 "counter": i32, Inout)]
+  locals : []
+  block  :
+    Assign(LocalRef(_0), Lit(0), is_init: false)
+    Return(Lit(Blank))
+
+ShirBody main
+  params : []
+  locals : [_0 "count": i32, _1 "small": u8, _2 "name": string, _3 "flag": bool]
+  block  :
+    Assign(LocalRef(_0), Lit(1), is_init: true)
+    Assign(LocalRef(_0), Lit(2), is_init: false)
+    Assign(LocalRef(_1), Lit(1), is_init: true)
+    Assign(LocalRef(_1), Lit(255), is_init: false)
+    Assign(LocalRef(_2), Lit("Arthur"), is_init: true)
+    Assign(LocalRef(_2), Lit("Ford"), is_init: false)
+    Assign(LocalRef(_3), Lit(true), is_init: true)
+    Assign(LocalRef(_3), Lit(false), is_init: false)
+    Assign(LocalRef(_0), Lit("three"), is_init: false)
+    Return(LocalRef(_0))

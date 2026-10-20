@@ -8,6 +8,7 @@ from sushi_lang.semantics.integer_width import fits_integer_type, integer_bit_wi
 from sushi_lang.semantics.typesys import Type, BuiltinType, ArrayType, DynamicArrayType, IteratorType
 from sushi_lang.semantics.ast import (ArrayLiteral, IndexAccess, DynamicArrayFrom, Expr, IntLit,
                                       RangeExpr)
+from sushi_lang.semantics.shir.exprs import IntConst
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -130,9 +131,10 @@ def infer_range_expression_type(validator: 'TypeValidator', expr: 'RangeExpr') -
 _F32_MAX = 3.4028234663852886e38
 
 
-def int_literal_default(lit: IntLit) -> BuiltinType:
+def int_literal_default(lit: IntLit | IntConst) -> BuiltinType:
     """The type of an integer literal that no position has typed: u8 for a byte literal
-    (`a'x'`), i32 for a number literal. The one answer for every pass and the backend."""
+    (`a'x'`), i32 for a number literal. The one answer for every pass and the backend, for
+    an AST literal and a SHIR literal alike."""
     return BuiltinType.U8 if lit.byte_spelling is not None else BuiltinType.I32
 
 

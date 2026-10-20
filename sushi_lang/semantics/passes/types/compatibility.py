@@ -53,13 +53,21 @@ def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Op
         value_type = infer_dynamic_array_from_type(validator, value_expr, expected_type=declared_type)
     else:
         value_type = validator.infer_expression_type(value_expr)
-    if value_type is None:
-        return False  # Error already reported, or no type to compare
+    return reject_mismatch(validator, value_type, declared_type, value_span, declared_span)
 
-    if types_compatible(validator, value_type, declared_type):
+
+def reject_mismatch(validator: 'TypeValidator', got: Optional[Type], expected: Type,
+                    value_span: Optional[Span], declared_span: Optional[Span]) -> bool:
+    """CE2002 when a value of the type `got` cannot go where `expected` is declared.
+
+    A note points at the declared type, when the position writes one. No type (`got` is
+    None) is an error that is already reported, and nothing more is said. Answers whether
+    a diagnostic refused the value.
+    """
+    if got is None or types_compatible(validator, got, expected):
         return False
     b = er.emit_with(validator.reporter, er.ERR.CE2002, value_span,
-           got=display_type(value_type), expected=display_type(declared_type))
+           got=display_type(got), expected=display_type(expected))
     if declared_span:
         b.note_at("declared here", declared_span)
     b.emit()
@@ -142,17 +150,14 @@ def reject_array_size_mismatch(validator: 'TypeValidator', declared_type: ArrayT
     return True
 
 
-def validate_return_compatibility(validator: 'TypeValidator', expected_type: Type, return_expr: Expr, return_span: Optional[Span]) -> None:
-    """Validate that return expression type matches function return type (CE2003)."""
-    validator.validate_expression(return_expr)
-
-    actual_type = validator.infer_expression_type(return_expr)
-    if actual_type is None:
-        return  # Can't validate without inferred type
-
-    if not types_compatible(validator, actual_type, expected_type):
-        er.emit(validator.reporter, er.ERR.CE2003, return_span,
-               got=display_type(actual_type), expected=display_type(expected_type))
+def reject_return_mismatch(validator: 'TypeValidator', got: Optional[Type], expected: Type,
+                           span: Optional[Span]) -> bool:
+    """CE2003 when a returned value of the type `got` does not match the return type."""
+    if got is None or types_compatible(validator, got, expected):
+        return False
+    er.emit(validator.reporter, er.ERR.CE2003, span,
+            got=display_type(got), expected=display_type(expected))
+    return True
 
 
 def resolve_generic_type_ref(validator: 'TypeValidator', ty: Type) -> Type:

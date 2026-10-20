@@ -1103,12 +1103,12 @@ All paths are under `semantics/passes/`.
 | Module | What it holds |
 |---|---|
 | `types/__init__.py` | `TypeValidator`, the entry of the pass: the declaration half, and `check_body`, the walk of a SHIR body; `ReadOnlyInferrer` for the early passes |
-| `types/visit/` | `__init__.py`: `ARMS`, the one table of the body walk, keyed on the SHIR class; `statements.py`: the walk of a block; `inference.py`: the AST inference of the early passes; `helpers.py`: the lambda and function-value helpers |
+| `types/visit/` | `__init__.py`: `ARMS`, the one table of the body walk, keyed on the SHIR class, with `check` and `check_expr`; `statements.py`: the walk of a block and the statement arms (`let`, rebind, expression statement, `return`); `expressions.py`: the expression arms (literals, locals, constants); `inference.py`: the AST inference of the early passes; `helpers.py`: the lambda and function-value helpers |
 | `types/arguments.py` | `check_arguments`: the one argument check (the count, then each argument) |
 | `types/method_registry.py` | `METHOD_TYPE_REGISTRY`: which built-in method family a call belongs to |
 | `types/calls/` | call validation: `dotcall.py` (`resolve_dotcall`, what `X.Y(args)` names), `statics.py`, `namespaced.py`, `methods.py`, `user_defined.py`, `generics.py`, `structs.py`, `enums.py` |
 | `types/expressions.py` | operators, and the three closed operand rules: `reject_non_bool_condition`, `reject_non_numeric_arithmetic`, `reject_uncomparable_operands` |
-| `types/statements.py` | `let`, rebind, `if`, `while`, `foreach`, `return` |
+| `types/statements.py` | the AST statement helpers that a later construct group moves to SHIR: a destructure, a reference `let`, a rebind of a field, an element or a unit variable, `foreach`, the `return` of a body with a channel |
 | `types/control_flow.py`, `types/signatures.py` | the return paths ([CE0107](../error-catalog.md#ce0107), [CE0140](../error-catalog.md#ce0140)) and the declaration signatures |
 | `types/matching.py` | patterns: each arm checked against the scrutinee, the rows for the checker, [CE2040](../error-catalog.md#ce2040) / [CE2074](../error-catalog.md#ce2074) / [CE2118](../error-catalog.md#ce2118) |
 | `types/exhaustiveness.py` | the one exhaustiveness checker for every match: usefulness over a pattern matrix (missing patterns, dead arms) |

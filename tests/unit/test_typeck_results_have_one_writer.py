@@ -19,9 +19,8 @@ A sample test runs the two scans over a small text of each form. No scan sees th
 of a value, so the table refuses `copy.copy` and `copy.deepcopy` itself. A name that the
 code builds at run time (`getattr(t, "record_" + kind)`) is out of reach of a scan.
 
-No module writes a row yet: the typecheck pass starts to write them in P2.4, which adds
-the check that the pass calls the write API. The scan reads source; it does not start the
-compiler.
+The pass must call the write API too: a scan that finds no call in the typecheck pass has
+gone stale. The scan reads source; it does not start the compiler.
 """
 from __future__ import annotations
 
@@ -171,6 +170,10 @@ def test_the_typecheck_pass_alone_calls_the_write_api() -> None:
         f"a module outside the typecheck pass writes an answer of typecheck: {stray}. "
         "Ruling S5: every answer of typecheck is a row of TypeckResults, and the pass is "
         "its one writer.")
+    writers = [module for module in _calls_of(WRITE_API) if module.startswith(WRITER_PACKAGE)]
+    assert writers, (
+        f"no module of {WRITER_PACKAGE} calls the write API of TypeckResults: the typecheck "
+        "pass writes no answer, or the scan has gone stale")
 
 
 # -- the scan finds each form of a write and of a construction ---------------------------

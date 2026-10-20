@@ -8,71 +8,19 @@ from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
-from sushi_lang.semantics.ast import Let, Return, Rebind, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess, RangeExpr
+from sushi_lang.semantics.ast import Let, Rebind, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess, RangeExpr
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .utils import validate_type_name
-from .compatibility import (validate_assignment_compatibility,
-                            reject_incompatible_assignment, types_compatible)
+from .compatibility import validate_assignment_compatibility, types_compatible
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from . import TypeValidator
     from sushi_lang.semantics.ast import Expand
-
-
-def validate_let_statement(validator: 'TypeValidator', stmt: Let) -> None:
-    """Validate let statement type annotations."""
-    if stmt.targets is not None:
-        validate_let_destructure(validator, stmt)
-        return
-    # Check if type annotation is missing (CE2007)
-    if stmt.ty is None:
-        er.emit(validator.reporter, er.ERR.CE2007, stmt.name_span, name=stmt.name)
-        return  # Cannot continue without type info
-
-    refused = validate_type_name(validator, stmt.ty, stmt.type_span)
-
-    # Blank type cannot be used for variables
-    if stmt.ty == BuiltinType.BLANK:
-        er.emit(validator.reporter, er.ERR.CE2032, stmt.type_span)
-        return
-
-    from sushi_lang.semantics.typesys import ReferenceType
-    if isinstance(stmt.ty, ReferenceType):
-        validate_let_reference(validator, stmt)
-        return
-
-    from .resolution import resolve_variable_type
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    resolved_type = resolve_variable_type(validator, stmt.ty, stmt.type_span)
-
-    validator.variable_types[stmt.name] = resolved_type
-
-    if not (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result"):
-        if resolved_type != stmt.ty:
-            stmt.ty = resolved_type
-
-    if stmt.value:
-        from .propagation import propagate_types_to_value
-        propagate_types_to_value(validator, stmt.value, resolved_type)
-
-    if stmt.value:
-        # The value's own diagnostics first: an unhandled Result must not hide a wrong
-        # argument in the very call that produced it. Then the Result question BEFORE
-        # the general one, because CE2505 names the fix and CE2002 does not (#535).
-        validator.validate_expression(stmt.value)
-        if refused:
-            return
-        validator.refused_bindings.discard(stmt.name)
-        if (reject_unhandled_result(validator, stmt, resolved_type)
-                or reject_incompatible_assignment(validator, stmt.ty, stmt.value,
-                                                  stmt.type_span, stmt.value.loc)):
-            validator.refused_bindings.add(stmt.name)
 
 
 def _declares_a_result(stmt: Let, resolved_type) -> bool:
@@ -215,45 +163,6 @@ def validate_let_reference(validator: 'TypeValidator', stmt: Let) -> None:
     propagate_types_to_value(validator, stmt.value, referent)
     validate_assignment_compatibility(validator, referent, stmt.value, stmt.type_span,
                                       stmt.value.loc)
-
-
-def validate_return_statement(validator: 'TypeValidator', stmt: Return) -> None:
-    """Validate a return against the body it leaves: one rule for every kind of body.
-
-    A body with a channel spells `Result.Ok` / `Result.Err` (#848). A BARE body returns
-    the value: both constructors are CE2091, and the value is checked against the
-    declared type (docs/design/error-channel.md). The expression is always WALKED, or a
-    generic call in it is never rewritten to its monomorphized name and reaches the
-    backend as a CE0000 (#212).
-    """
-    value = stmt.value
-    if value is None:
-        return
-    channel = validator.channel_result
-    if channel is not None:
-        _validate_channel_return(validator, value, channel)
-        return
-    if (isinstance(value, DotCall)
-            and isinstance(value.receiver, Name)
-            and value.receiver.id == "Result"
-            and value.method in ("Ok", "Err")):
-        er.emit(validator.reporter, er.ERR.CE2091, value.loc,
-                callable=validator.body_name or "this body")
-        return
-
-    # PROPAGATE the declared return type into the value, then walk it and check the bare
-    # value against that type (CE2003 on a mismatch). A `~` return type accepts anything.
-    # Propagation is what stamps `resolved_enum_type` on a generic enum constructor:
-    # without it every generic enum in this position was a CE0113 (#387).
-    declared_type = validator.body_return_type
-    if declared_type is not None and declared_type != BuiltinType.BLANK:
-        from .propagation import propagate_declared_type_to_value
-        expected_type = propagate_declared_type_to_value(validator, value, declared_type)
-
-        from .compatibility import validate_return_compatibility
-        validate_return_compatibility(validator, expected_type, value, value.loc)
-    else:
-        validator.validate_expression(value)
 
 
 def _validate_channel_return(validator: 'TypeValidator', value, channel) -> None:

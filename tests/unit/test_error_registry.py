@@ -169,7 +169,7 @@ def test_expect_error_code_directives_are_registered():
 # there alone. Each one comes back with the typecheck stage of its construct group, which
 # removes it here.
 UNREFERENCED: set[str] = {
-    "CE2035", "CE2037", "CE2070", "CE2115",   # P2.4: Interp holes, println, literals
+    "CE2035", "CE2037", "CE2115",             # P2.4: Interp holes, print and println
     "CW2001",                                 # P2.4: an unused Result of a call
     "CE2111", "CE2116",                       # Tier A: new() and from([]), assert
     "CE6102",                                 # Tier A: type arguments after a dot

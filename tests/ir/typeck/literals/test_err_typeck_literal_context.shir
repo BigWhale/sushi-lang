@@ -1,0 +1,22 @@
+unit test_err_typeck_literal_context
+
+ShirBody main
+  params : []
+  locals : [_0 "answer": i32, _1 "byte": u8, _2 "wide": i64, _3 "letter": u8, _4 "ratio": f32, _5 "flag": bool, _6 "text": string, _7 "too_big": u8]
+  block  :
+    Assign(LocalRef(_0), Lit(42), is_init: true)
+    Assign(LocalRef(_1), Lit(200), is_init: true)
+    Assign(LocalRef(_2), Lit(0xffffffffff), is_init: true)
+    Assign(LocalRef(_3), Lit(a'x'), is_init: true)
+    Assign(LocalRef(_4), Lit(0.5), is_init: true)
+    Assign(LocalRef(_5), Lit(true), is_init: true)
+    Assign(LocalRef(_6), Lit("Mostly Harmless"), is_init: true)
+    ExprStmt(LocalRef(_1))
+    ExprStmt(LocalRef(_2))
+    ExprStmt(LocalRef(_3))
+    ExprStmt(LocalRef(_4))
+    ExprStmt(LocalRef(_5))
+    ExprStmt(LocalRef(_6))
+    Assign(LocalRef(_7), Lit(256), is_init: true)
+    ExprStmt(LocalRef(_7))
+    Return(LocalRef(_0))

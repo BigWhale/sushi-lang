@@ -95,8 +95,8 @@ def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> No
     """The state every body validates under: a function, a method and a lifted lambda.
 
     `channel_result` is the interned Result the body answers, or None for a BARE body
-    (docs/design/error-channel.md). `validate_return_statement` and the `??` check read
-    this state and nothing else, so the three kinds of body have one rule.
+    (docs/design/error-channel.md). The `Return` arm (`visit/statements.py`) and the `??`
+    check read this state and nothing else, so the three kinds of body have one rule.
     """
     from .resolution import channel_result
     self.body_name = callable_text(name, kind)

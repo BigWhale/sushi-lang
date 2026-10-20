@@ -1,27 +1,31 @@
 """The body walk of the typecheck pass over SHIR (docs/design/ir.md 7.3, 7.9).
 
 ONE table, `ARMS`, gives the arm of each SHIR node class: each member of `ShirStmt`,
-`ShirExpr` and `ShirPattern` (gate: `tests/unit/test_typecheck_table_is_total.py`). An arm
-takes the pass and one node, and it writes its answers into the `TypeckResults` of the
-body (`TypeValidator.answers`). `check` is the one dispatch, and a class with no row is an
-internal error. The arm of a construct that the pass does not type yet is `stop_at`: it
-stops the walk of the body with the stop code CE0155 (`shir/stop.py`).
+`ShirExpr` and `ShirPattern` (gate: `tests/unit/test_typecheck_table_is_total.py`). A
+statement arm takes the pass and one node (`check`). An expression arm takes the type of
+its position too, and answers the type of its node (`check_expr`), which the dispatch
+writes into the `TypeckResults` of the body. A class with no row is an internal error. The
+arm of a construct that the pass does not type yet is `stop_at`: it stops the walk of the
+body with the stop code CE0155 (`shir/stop.py`).
 
-`statements.py` walks a block. The AST inference visitor of `inference.py` is not part of
-this walk: it is the inference of the early passes (`ReadOnlyInferrer`), until they stop
-inferring. `helpers.py` holds the lambda and function-value helpers that it
-reads.
+`statements.py` walks a block and holds the statement arms, `expressions.py` the expression
+arms. The AST inference visitor of `inference.py` is not part of this walk: it is the
+inference of the early passes (`ReadOnlyInferrer`), until they stop inferring. `helpers.py`
+holds the lambda and function-value helpers that it reads.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, NoReturn, TypeAlias
+from typing import TYPE_CHECKING, Any, Callable, NoReturn, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.semantics.passes.types.visit import expressions as ex
+from sushi_lang.semantics.passes.types.visit import statements as st
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.nodes import Hole
-from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -29,30 +33,44 @@ if TYPE_CHECKING:
 #: The name of this stage in the stop code.
 STAGE = "typecheck"
 
-Arm: TypeAlias = Callable[["TypeValidator", Any], None]
 
-
-def stop_at(_validator: TypeValidator, node: Any) -> NoReturn:
+def stop_at(_validator: TypeValidator, node: Any, _expected: Optional[Type] = None) -> NoReturn:
     """The arm of a construct that the pass does not type yet: the walk of the body stops."""
     raise StageStop(STAGE, type(node).__name__, node.loc)
 
 
-def check(validator: TypeValidator, node: Any) -> None:
-    """Check one node through its arm."""
+def _arm(node: Any) -> Callable[..., Any]:
     arm = ARMS.get(type(node))
     if arm is None:
         er.raise_internal_error(
             "CE0000", detail=f"the typecheck pass has no arm for the SHIR class "
                              f"'{type(node).__name__}'")
-    arm(validator, node)
+    return arm
 
 
-ARMS: dict[type, Arm] = {
+def check(validator: TypeValidator, node: Any) -> None:
+    """Check one statement through its arm."""
+    _arm(node)(validator, node)
+
+
+def check_expr(validator: TypeValidator, node: Any,
+               expected: Optional[Type] = None) -> Optional[Type]:
+    """Check one expression at the type `expected` of its position, and write its type.
+
+    None is no answer: the node has an error, or reads a node that has one.
+    """
+    answer = _arm(node)(validator, node, expected)
+    if answer is not None:
+        validator.body_answers().record_type(node.shir_id, answer)
+    return answer
+
+
+ARMS: dict[type, Callable[..., Any]] = {
     # -- statements ------------------------------------------------------------------
-    s.Assign: stop_at,
+    s.Assign: st.check_assign,
     s.Destructure: stop_at,
-    s.ExprStmt: stop_at,
-    s.Return: stop_at,
+    s.ExprStmt: st.check_expr_stmt,
+    s.Return: st.check_return,
     s.If: stop_at,
     s.Loop: stop_at,
     s.Match: stop_at,
@@ -62,9 +80,9 @@ ARMS: dict[type, Arm] = {
     s.Expand: stop_at,
     Hole: stop_at,
     # -- expressions -----------------------------------------------------------------
-    e.Lit: stop_at,
-    e.LocalRef: stop_at,
-    e.ConstRef: stop_at,
+    e.Lit: ex.check_lit,
+    e.LocalRef: ex.check_local_ref,
+    e.ConstRef: ex.check_const_ref,
     e.StorageRef: stop_at,
     e.GlobalRef: stop_at,
     e.Field: stop_at,

@@ -17,7 +17,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, Mapping, Optional, Sequence, TypeVar, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
@@ -77,16 +77,23 @@ class TemplateValidator(TypeValidator):
     requests_late_instances = False
     in_template_check = True
 
-    def __init__(self, *args: Any, pack_elements: Optional[PackElements] = None,
-                 **kwargs: Any) -> None:
+    def __init__(self, *args: Any, scope: 'TemplateScope', opaque: Mapping[str, Any],
+                 pack_elements: Optional[PackElements] = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.pack_elements = pack_elements
         # The declaration of the check copy -> the template as written, whose SHIR body
         # is the body of the check.
         self.written: Dict[int, Any] = {}
+        # The overlay of the check, and the opaque form of each type parameter by name.
+        self._scope = scope
+        self._opaque = dict(opaque)
 
     def written_of(self, decl: Any) -> Any:
         return self.written.get(id(decl), decl)
+
+    def written_type(self, ty: Any) -> Any:
+        """A type of the template as written, at the opaque type parameters (ir.md 4.3)."""
+        return self._scope.monomorphizer.substitutor.substitute_type(ty, self._opaque)
 
 
 def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
@@ -125,7 +132,7 @@ def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
     # The cut interns what the copy names itself.
     check_copy = _cut_and_settle(scope, cut, lambda _copy: ())
     elements = PackElements(record, validator.current_unit_name)
-    checker = _checker(check, elements)
+    checker = _checker(check, record.opaque, elements)
     checker.written[id(check_copy)] = func
     checker._validate_function(check_copy)
     _close(check, TemplateId(record.unit_name, record.name))
@@ -176,7 +183,7 @@ def check_extension_template(validator: TypeValidator, ext: ExtendDef) -> bool:
         return check_copy
 
     check_copy = _cut_and_settle(scope, cut, lambda ext_copy: [ext_copy])
-    checker = _checker(check)
+    checker = _checker(check, opaque)
     checker.written[id(check_copy)] = ext
     checker._validate_extension_method(check_copy)
     _close(check, template_id)
@@ -201,7 +208,7 @@ def check_perk_template(validator: TypeValidator, impl: ExtendWithDef) -> bool:
     opened = _open_receiver(validator, template, template_id)
     if opened is None:
         return False
-    check, _opaque, args = opened
+    check, opaque, args = opened
     scope = check.scope
     target = _receiver_instance(scope, template.base_type_name, args)
 
@@ -218,7 +225,7 @@ def check_perk_template(validator: TypeValidator, impl: ExtendWithDef) -> bool:
         return check_copy
 
     check_copy = _cut_and_settle(scope, cut, lambda impl_copy: impl_copy.methods)
-    checker = _checker(check)
+    checker = _checker(check, opaque)
     checker.written.update((id(copied), written) for copied, written
                            in zip(check_copy.methods, impl.methods, strict=True))
     from .signatures import validate_perk_template_bodies
@@ -303,16 +310,18 @@ def _open(validator: TypeValidator) -> _Check:
                   sum(reporter.errors_offered.values()))
 
 
-def _checker(check: _Check,
+def _checker(check: _Check, opaque: Mapping[str, Any],
              pack_elements: Optional[PackElements] = None) -> 'TemplateValidator':
-    """The typecheck pass over the check copy: the one construction of it. A pack
-    template gives the element type of each `expand`."""
+    """The typecheck pass over the check copy: the one construction of it. `opaque` is the
+    opaque form of each type parameter. A pack template gives the element type of each
+    `expand`."""
     validator = check.validator
     return TemplateValidator(
         validator.reporter, check.scope.tables, current_unit_name=validator.current_unit_name,
         monomorphized_functions=validator.monomorphized_functions,
         in_library_unit=validator.in_library_unit, namespaces=validator.namespaces,
-        shir=validator.shir, stops=validator.stops, pack_elements=pack_elements)
+        shir=validator.shir, stops=validator.stops, scope=check.scope, opaque=opaque,
+        pack_elements=pack_elements)
 
 
 def _close(check: _Check, template_id: TemplateId) -> None:

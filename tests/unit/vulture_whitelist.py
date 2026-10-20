@@ -28,6 +28,8 @@ _P24 = ("kept for P2.4: the typecheck pass on SHIR types this spine construct, a
         "helper moves to SHIR inputs")
 _TIER_A = ("kept for Tier A (Phase 3): the typecheck stage of its construct group moves "
            "the helper to SHIR inputs")
+_TIER_B = ("kept for Tier B (Phase 4): the typecheck stage of its construct group moves "
+           "the helper to SHIR inputs")
 _TIER_C = ("kept for Tier C (Phase 5): the typecheck stage of its construct group moves "
            "the helper to SHIR inputs")
 _P5_EXPAND_COPIES = ("kept for the generic instances group of Phase 5: the dead-statement "
@@ -151,12 +153,13 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "operator_nest.py", "leave", _P24),
     (_TYPES + "calls/user_defined.py", "validate_function_call", _P24),
     (_TYPES + "expressions.py", "validate_boolean_condition", _P24),
-    (_TYPES + "statements.py", "validate_let_statement", _P24),
-    (_TYPES + "statements.py", "validate_rebind_statement", _P24),
-    (_TYPES + "statements.py", "validate_return_statement", _P24),
+    (_TYPES + "statements.py", "reject_unhandled_result", _P24),
+    (_TYPES + "statements.py", "_validate_channel_return", _P24),
     (_TYPES + "matching.py", "validate_match_statement", _TIER_A),
     (_TYPES + "constants.py", "assignment_span", _TIER_A),
     (_TYPES + "statements.py", "stamp_rebind_places", _TIER_A),
+    (_TYPES + "statements.py", "validate_rebind_statement", _TIER_A),
+    (_TYPES + "statements.py", "validate_let_destructure", _TIER_A),
     (_TYPES + "expressions.py", "refuse_range_value", _TIER_A),
     (_TYPES + "expressions.py", "reject_unknown_field", _TIER_A),
     (_TYPES + "expressions.py", "validate_array_literal", _TIER_A),
@@ -167,6 +170,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "calls/dotcall.py", "validate_variant_spelling", _TIER_A),
     (_TYPES + "calls/namespaced.py", "validate_namespaced_call", _TIER_A),
     (_TYPES + "calls/statics.py", "validate_static_call", _TIER_A),
+    (_TYPES + "statements.py", "validate_let_reference", _TIER_B),
     (_TYPES + "arguments.py", "reject_type_pack_value", _TIER_C),
     (_TYPES + "visit/helpers.py", "validate_fn_field_call_args", _TIER_C),
     (_TYPES + "signatures.py", "check_template_statements", _TIER_C),

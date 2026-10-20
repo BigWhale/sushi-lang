@@ -1,0 +1,37 @@
+unit test_err_typeck_return_mismatch
+
+ShirBody answer
+  params : []
+  locals : []
+  block  :
+    Return(Lit(42))
+
+ShirBody echo
+  params : [(_0 "value": i64, Guaranteed)]
+  locals : []
+  block  :
+    Return(LocalRef(_0))
+
+ShirBody title
+  params : []
+  locals : []
+  block  :
+    Return(Lit("Mostly Harmless"))
+
+ShirBody nothing
+  params : []
+  locals : []
+  block  :
+    Return(Lit(Blank))
+
+ShirBody wrong
+  params : []
+  locals : []
+  block  :
+    Return(Lit(42))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))

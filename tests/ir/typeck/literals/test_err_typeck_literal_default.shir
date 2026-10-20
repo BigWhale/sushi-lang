@@ -1,0 +1,17 @@
+unit test_err_typeck_literal_default
+
+ShirBody main
+  params : []
+  locals : [_0 "wide": i64]
+  block  :
+    ExprStmt(Lit(42))
+    ExprStmt(Lit(0xffffffff))
+    ExprStmt(Lit(a'x'))
+    ExprStmt(Lit(4.2))
+    ExprStmt(Lit(true))
+    ExprStmt(Lit("Mostly Harmless"))
+    ExprStmt(Lit(Blank))
+    Assign(LocalRef(_0), Lit(4294967296), is_init: true)
+    ExprStmt(LocalRef(_0))
+    ExprStmt(Lit(4294967296))
+    Return(Lit(0))

@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FuncSig
     from sushi_lang.semantics.passes.collect.constants import ConstSig
     from sushi_lang.semantics.passes.types.templates import PackElements
+    from sushi_lang.semantics.shir.body import ShirBody, ShirLocal
+    from sushi_lang.semantics.shir.ids import DeclId, LocalId
     from sushi_lang.semantics.shir.lowering import LoweredProgram
 
 from sushi_lang.internals.report import Reporter
@@ -31,7 +33,7 @@ from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.types.visit.inference import TypeInferenceVisitor
-from sushi_lang.semantics.passes.types.visit.statements import check_block
+from sushi_lang.semantics.passes.types.visit.statements import check_block, check_params
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.shir.stop import Stops
 from sushi_lang.semantics.shir.typeck import TypeckResults
@@ -82,8 +84,11 @@ class TypeValidator:
         # The SHIR bodies of the program, and the record of the stops of the body half.
         self.shir = shir
         self.stops = stops
-        # The `TypeckResults` of the body that the body half walks, or None.
+        # The SHIR body that the body half walks, its `TypeckResults` and its locals by id,
+        # or None.
+        self.body: Optional['ShirBody'] = None
         self.answers: Optional[TypeckResults] = None
+        self.body_locals: Dict['LocalId', 'ShirLocal'] = {}
         self.err = PassErrorReporter(reporter)
         self.tables = tables
         self.const_table = tables.constants
@@ -274,33 +279,58 @@ class TypeValidator:
         """The body half over the SHIR body of `decl` (docs/design/ir.md 7.3, 7.9).
 
         A stop ends the walk: the pass records it, with the file of the body, and the
-        caller goes on with the next declaration. A walk that ends with no stop is
-        checked for completeness, and its body meets the next stage, which is not built
-        yet.
+        caller goes on with the next declaration. A walk that ends with no stop and with no
+        error in its body is checked for completeness, and its body meets the next stage,
+        which is not built yet. A node that has an error has no answer, so a body with an
+        error is not checked.
         """
         body = None if self.shir is None else self.shir.body_of(self.written_of(decl))
         if body is None or self.shir is None or self.stops is None:
             er.raise_internal_error(
                 "CE0000", detail=f"the typecheck pass has no SHIR body of "
                                  f"'{getattr(decl, 'name', type(decl).__name__)}'")
+        self.body = body
         self.answers = answers = self.shir.typeck_of(body)
+        self.body_locals = {local.id: local for local in body.locals}
         origin = self.reporter.origin
         filename = origin.filename if origin is not None else self.reporter.filename
+        offered = sum(self.reporter.errors_offered.values())
         try:
+            check_params(self, body)
             check_block(self, body.block)
         except StageStop as stop:
             stop.filename = filename
             self.stops.stopped(stop)
             return
         finally:
-            self.answers = None
+            self.body = self.answers = None
+            self.body_locals = {}
+        if sum(self.reporter.errors_offered.values()) != offered:
+            return
         check_answers(body, answers, self.shir.decls)
         self.stops.finished(self.shir.decls.name_of(body.fn_id), body.block.loc, filename)
+
+    def body_answers(self) -> TypeckResults:
+        """The `TypeckResults` of the body that the body half walks."""
+        if self.answers is None:
+            er.raise_internal_error("CE0000", detail="the typecheck pass walks no SHIR body")
+        return self.answers
+
+    def decl_name(self, decl: 'DeclId') -> str:
+        """The written name of a declaration that a SHIR node names."""
+        if self.shir is None:
+            er.raise_internal_error("CE0000", detail="the typecheck pass has no SHIR program")
+        return self.shir.decls.name_of(decl)
 
     def written_of(self, decl):
         """The declaration that lowering made the SHIR body of: `decl` itself here. The
         check of a template walks the body of the template as written."""
         return decl
+
+    def written_type(self, ty: Type) -> Type:
+        """A type that a SHIR body writes, as the body half reads it: as written here. The
+        check of a template reads it at the opaque type parameters."""
+        return ty
 
     def namespace_of(self, receiver) -> Optional[str]:
         """The namespace a receiver names, or None when it names something else.

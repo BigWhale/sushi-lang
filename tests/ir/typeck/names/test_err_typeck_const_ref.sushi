@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "cannot assign i64 to string"
+# EXPECT_STDERR_CONTAINS: "= note: declared here"
+# EXPECT_DUMP_SHIR: test_err_typeck_const_ref.shir
+#
+# A name of a constant is a `ConstRef`, and its type is the declared type of the
+# constant. The `let` of `limit` takes it. The `let` of `text` gives it to a `string`
+# local, which is CE2002, with a note at the written type of the local.
+
+const i64 LIMIT = 42
+
+fn main() i32:
+    let i64 limit = LIMIT
+    let string text = LIMIT
+    limit
+    text
+    return 0
