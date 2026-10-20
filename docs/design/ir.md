@@ -695,6 +695,17 @@ class of the node, its position and the body. Each expression node needs a type,
 reference of a call target too. The captures of a lambda are in `Bindings` and not in the
 body, so the check cannot count them.
 
+The body half of `typecheck` walks a SHIR body through ONE table of arms keyed on the SHIR
+class, with a row for each member of `ShirStmt`, `ShirExpr` and `ShirPattern`
+(`passes/types/visit/__init__.py`, gate: `tests/unit/test_typecheck_table_is_total.py`).
+An arm checks its node and writes the answers of the node; the check and the answer are
+one arm, so SHIR has no second inference walk. The walk of a template check reads the body
+of the template as written (origin `TemplateCheck`), and the header of its check copy
+stays with the declaration half (6.4). The completeness check runs when a walk ends with
+no stop. While the migration is in progress, the arm of a construct that the pass does not
+type yet stops the walk of its body with the stop code; the pass then goes on with the
+next body, so every unit is lowered and every earlier error is found.
+
 `--dump-shir` prints three answers in place. The resolved callee prints in place of the
 `CallTarget` (`Call(Free(@decorate), ...)`; `println` is `Intrinsic("println")`). Each
 argument of a `Call` prints as `(value, Convention)` with its resolved convention. The type
