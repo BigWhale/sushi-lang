@@ -942,9 +942,10 @@ which records it in `TypeckResults` against the call's `shir_id` (S5). The `Call
 carries only the syntactic `CallTarget` of 7.4.
 
 `BuiltinMethod` names a row of `METHOD_TYPE_REGISTRY`, so the iterator adapters, `or_err`,
-`map_err`, the container methods and the string methods are one variant. `Method` carries
-the declaring unit of an extension, because two units' private extensions of one name
-link side by side (`extension-visibility.md`, C5).
+`map_err`, the container methods and the string methods are one variant. The row of a
+call in `TypeckResults` carries the declaring unit of an extension beside the `Method`
+callee (`ResolvedCall.unit`, 7.3), because two units' private extensions of one name link
+side by side (`extension-visibility.md`, C5).
 
 `backend/expressions/calls/dispatcher.py` is 554 lines, with 12 handlers before the
 receiver is emitted and 12 after, that decide this again at emit time. It reads the answer
