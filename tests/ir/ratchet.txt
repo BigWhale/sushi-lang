@@ -2674,6 +2674,7 @@ tests/ir/shir/destructure/test_shir_destructure_call.sushi
 tests/ir/shir/destructure/test_shir_destructure_nested.sushi
 tests/ir/shir/destructure/test_shir_destructure_pair.sushi
 tests/ir/shir/destructure/test_shir_destructure_rebind.sushi
+tests/ir/shir/destructure/test_shir_destructure_rebind_places.sushi
 tests/ir/shir/empty_body/test_shir_empty_body.sushi
 tests/ir/shir/expressions/test_err_shir_expr_borrow_operand.sushi
 tests/ir/shir/expressions/test_err_shir_expr_slice_reversed.sushi
@@ -2723,6 +2724,7 @@ tests/ir/shir/statements/test_shir_stmt_while.sushi
 tests/ir/shir/statements/test_warn_shir_stmt_shadow.sushi
 tests/ir/shir/variadics/test_shir_variadic_copy_boundaries.sushi
 tests/ir/shir/variadics/test_shir_variadic_expand.sushi
+tests/ir/shir/variadics/test_shir_variadic_expand_rebind.sushi
 tests/iterators/adapters/test_ad_borrowed_params.sushi
 tests/iterators/adapters/test_ad_break_frees_chain.sushi
 tests/iterators/adapters/test_ad_chain.sushi

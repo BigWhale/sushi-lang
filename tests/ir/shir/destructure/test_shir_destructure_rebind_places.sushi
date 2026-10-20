@@ -1,0 +1,19 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "10 20 30\n"
+# EXPECT_DUMP_SHIR: test_shir_destructure_rebind_places.shir
+#
+# the SHIR dump of a tuple rebind whose places are a field, a local and an element, with a
+# nested tuple: one `Destructure` whose targets are `Place`s, `Nested` for the inner tuple.
+# A `Place` holds the place as written, so a field is a `Field` and an element an `Index`.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    let i32[] xs = from([3, 4])
+    let i32 a = 5
+    ((p.x, a), xs[0]) := ((10, 20), 30)
+    println("{p.x} {a} {xs[0]}")
+    return 0
