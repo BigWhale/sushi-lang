@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: 17:13: error [CE2405]
+#
+# a spine program that uses a `string` after a `nom` argument moved it. The `borrow`
+# pass refuses the use. The string comes from a call, so it owns its value: a string
+# bound straight from a literal copies, and its `nom` moves nothing.
+
+fn make() string:
+    return "Mostly Harmless"
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn main() i32:
+    let string text = make()
+    eat(nom text)
+    println(text)
+    return 0
