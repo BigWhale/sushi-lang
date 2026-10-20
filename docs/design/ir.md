@@ -871,7 +871,25 @@ or has no value, for example a division by zero. A literal takes the type of its
 else its default (`int_literal_default`). An operation that leaves its type has no value:
 the fold records it with its node (`Folder.overflows`), so the check of the position
 reports it there. The value of a `ConstRef` comes from a reader that the pass gives: the
-constant table, through the AST constant evaluator (Q5).
+constant table, through the AST constant evaluator (Q5). The target of a `Cast` comes from
+a reader of written types that the pass gives too, so the check of a template reads `T` at
+its opaque type (4.3).
+
+**An operator in `typecheck`.** The arm of an operator takes the type of its position, as
+every expression arm does, and gives that type to each operand that has the type of the
+operation: both operands of `+ - * / % & | ^`, the value of a shift, and the operand of
+`-` and `~`. Only a literal and an operator take it. A number literal that gets no type
+from its position takes the type of the other operand, which is checked first. A
+comparison, `and`, `or`, `xor` and `not` answer a `bool`. Each operand of `and`, `or`,
+`xor` and `not` is a condition at the type `bool`, as the condition of an `If` and of a
+`Loop` with a `Cond` source is. A negated literal is one value: the arm of the negation
+types the literal with its sign, so `-128` is an `i8`, and the dispatch writes the type
+row of the literal and of the negation. Each operation that the overflow rule checks
+([CE2077](../error-catalog.md#ce2077)) asks the fold for its own value, at its own type and
+after its operands, and reports the overflow that the fold records at its own node. The
+fold keeps the value of each node for each type, so a nest is folded one time. A node
+whose own rule reports an error answers no type, so the node around it reports nothing
+more.
 
 **`expect(msg)` keeps its lazy message.** The message is evaluated only when the call
 fails, as the message of an `Assert` is. A `Builtin` call with an operand that is
