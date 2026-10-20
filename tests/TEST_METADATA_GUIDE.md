@@ -317,6 +317,9 @@ Compares a dump of the program with a golden file beside the fixture:
 - The value is the name of a file in the directory of the fixture. It ends in `.shir` or
   `.slir`, and it has no directory part. Each directive may stand once
 - The comparison is exact, byte for byte. A difference fails the fixture and shows a diff
+- The runner compares each dump that the compile wrote also when the exit code or another
+  check is wrong. The fixture fails for that check, and a dump that differs is reported
+  beside it
 - The runner adds the dump flag to the compile, with a path in the run's own directory
   (`--dump-shir <path>`), and the compiler writes the dump to that path. The compile goes
   on as usual, so every other directive of the fixture still holds
@@ -326,6 +329,7 @@ Compares a dump of the program with a golden file beside the fixture:
 - The dump must not change with `PYTHONHASHSEED`. After the main run, the runner step
   `golden_seed_gate` starts a second fork-server with another pinned seed, compiles each
   golden fixture of the selection again under it, and compares each dump again. The step
+  judges the dumps alone: the other checks of a fixture are the main run's. The step
   prints both seeds (`Golden seed gate (main seed 0, gate seed 1): ...`); a selection with
   no golden fixture prints its skip
 

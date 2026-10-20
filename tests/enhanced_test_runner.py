@@ -443,6 +443,9 @@ class TestRunner:
         # file. Each golden file it reached, and whether its content changed.
         self.bless = bless
         self.blessed: List[Tuple[Path, bool]] = []
+        # The verdict of the golden dumps of each fixture that reached the comparison, by
+        # its key: whether every dump held, and the message.
+        self.dump_verdicts: Dict[str, Tuple[bool, str]] = {}
         # The checkout whose `sushic` the run starts. It is the parent of `tests/` for
         # every real run; a runner test that selects from a temporary directory names it.
         self.project_root = project_root or tests_dir.parent
@@ -1112,9 +1115,17 @@ class TestRunner:
             if success and metadata.reads_the_ir:
                 success, message = check_ir(binary_path.with_suffix(".ll"), metadata, message)
 
-            if success and metadata.golden_dumps:
-                success, message = check_dumps(test_file, metadata, binary_path, message,
-                                               self.blessed if self.bless else None)
+            # Each golden dump that the compile wrote is compared also when a check above
+            # failed: the fixture keeps its fault, and a dump that differs is reported
+            # beside it. The golden seed gate reads the dump verdict alone.
+            if metadata.golden_dumps:
+                held, dumps_message = check_dumps(test_file, metadata, binary_path, message,
+                                                  self.blessed if self.bless else None)
+                self.dump_verdicts[self._key(test_file)] = (held, dumps_message)
+                if success:
+                    success, message = held, dumps_message
+                elif not held:
+                    message = f"{message}\n{dumps_message}"
 
             return success, message
 
@@ -1566,9 +1577,12 @@ def golden_seed_gate(tests_dir: Path, fixtures: List[Path], jobs: int,
 
     The main run keeps the seed of the runner (none pinned is `random`). The step starts
     ONE more fork-server, with a pinned PYTHONHASHSEED that is not the main run's, and every
-    compile of the step carries that seed, so each is a child of that server. A fixture
-    whose compile checks fail under the second seed fails the step: a golden dump must not
-    depend on the hash seed (docs/design/ir.md, 11.3).
+    compile of the step carries that seed, so each is a child of that server. The step
+    judges the dumps alone: a fixture whose dump differs from its golden file under the
+    second seed fails the step, because a golden dump must not depend on the hash seed
+    (docs/design/ir.md, 11.3). The other checks of the fixture are the main run's. A
+    fixture whose compile did not reach the comparison fails the step with the message of
+    its compile.
     """
     golden = [f for f in fixtures if parse_test_metadata(f).golden_dumps]
     if not golden:
@@ -1585,9 +1599,11 @@ def golden_seed_gate(tests_dir: Path, fixtures: List[Path], jobs: int,
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
             for fixture, done in zip(golden, pool.map(runner.compile_single_test, golden),
                                      strict=True):
-                if not done.compilation_success:
-                    result.failures[runner._key(fixture)] = (
-                        done.compilation_message.splitlines())
+                key = runner._key(fixture)
+                held, message = runner.dump_verdicts.get(
+                    key, (False, done.compilation_message))
+                if not held:
+                    result.failures[key] = message.splitlines()
     result.duration = time.time() - start
     return result
 

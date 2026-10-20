@@ -3,6 +3,8 @@
 A fixture names a golden file beside it. The runner adds the dump flag to the compile of
 the fixture, reads the dump that the compile wrote, and compares it with the golden file.
 The comparison is exact. The runner owns the dump flags, so COMPILER_FLAGS refuses them.
+The runner compares each dump that the compile wrote also when the exit code is wrong:
+the fixture fails on its exit code, and a dump that differs is reported beside it.
 
 The compiler has `--dump-shir`, and it does not have `--dump-slir` yet. These tests need a
 dump of each kind whose text they choose: a dump that matches, a dump that does not, a
@@ -25,6 +27,8 @@ from test_metadata import parse_test_metadata
 
 STUB = FIXTURES_DIR / "dump_stub.py"
 PROGRAM = 'fn main() i32:\n    println("Mostly Harmless")\n    return 0\n'
+# A parse error: the compile exits 2, and the stub writes its dump first.
+BROKEN = 'fn main() i32:\n    return )\n'
 NO_DUMP = 'fn main() i32:\n    # no dump\n    println("Mostly Harmless")\n    return 0\n'
 OUT = '# EXPECT_STDOUT_EXACT: "Mostly Harmless\\n"\n'
 SHIR = "shir\nfn main() i32:\n"
@@ -128,3 +132,22 @@ def test_a_child_of_the_fork_server_writes_the_dump(stub, tmp_path):
     assert [r.total_success for r in results.values()] == [True], {
         k: detail(r) for k, r in results.items()}
     assert runner.forked_compiles and not runner.fresh_compiles
+
+
+def test_a_wrong_exit_code_still_compares_the_dump(stub, tmp_path):
+    """The control: a dump that matches adds no fault to a wrong exit code."""
+    result = run_single(_fixture(tmp_path, "# EXPECT_DUMP_SHIR: main.shir\n", BROKEN,
+                                 {"main.shir": SHIR}))
+    assert not result.total_success, detail(result)
+    assert "Expected 0, got 2" in result.compilation_message, detail(result)
+    assert "a golden dump differs" not in result.compilation_message, detail(result)
+
+
+def test_a_wrong_exit_code_reports_a_dump_difference_beside_it(stub, tmp_path):
+    result = run_single(_fixture(tmp_path, "# EXPECT_DUMP_SHIR: main.shir\n", BROKEN,
+                                 {"main.shir": "shir\nfn other() i32:\n"}))
+    assert not result.total_success, detail(result)
+    message = result.compilation_message
+    assert "Expected 0, got 2" in message, detail(result)
+    assert "a golden dump differs" in message, detail(result)
+    assert "-fn other() i32:" in message, detail(result)

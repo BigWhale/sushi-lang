@@ -5,7 +5,9 @@ fork-server fixes its hash seed when it starts, so after the main run the step s
 SECOND fork-server with another pinned PYTHONHASHSEED, compiles each golden fixture of the
 selection again under it, and compares each dump with its golden file again. The main run
 keeps the seed of the runner, and the step prints both seeds. A selection with no golden
-fixture prints the skip.
+fixture prints the skip. The step judges the dumps alone: a fixture whose exit code is
+wrong passes the step when its dumps hold under the second seed, because the main run
+fails it for the exit code.
 
 The dumps come from the stub of `test_golden_dump_directives.py`. Its `# unstable dump`
 mode prints words in the order of a set, which follows the hash seed.
@@ -30,6 +32,9 @@ STUB = FIXTURES_DIR / "dump_stub.py"
 STABLE = ('# EXPECT_STDOUT_EXACT: "Mostly Harmless\\n"\n# EXPECT_DUMP_SHIR: main.shir\n\n'
           'fn main() i32:\n    println("Mostly Harmless")\n    return 0\n')
 UNSTABLE = STABLE.replace("    return 0", "    # unstable dump\n    return 0")
+# A parse error: the compile exits 2, and the stub writes its dump first.
+BROKEN_STABLE = STABLE.replace("return 0", "return )")
+BROKEN_UNSTABLE = UNSTABLE.replace("return 0", "return )")
 
 
 def _dump_under(seed: str, source: str) -> str:
@@ -83,6 +88,20 @@ def test_an_unstable_dump_fails_the_gate(seeded, tmp_path):
     assert list(result.failures) == ["unstable/test_golden_seed.sushi"], result.failures
     assert any("main.shir" in line for line in result.failures[
         "unstable/test_golden_seed.sushi"]), result.failures
+
+
+def test_a_wrong_exit_code_with_a_stable_dump_passes_the_gate(seeded, tmp_path):
+    fixture = _golden(tmp_path / "broken_stable", BROKEN_STABLE)
+    result = golden_seed_gate(tmp_path, [fixture], jobs=1, project_root=PROJECT_ROOT)
+    assert result.ran and result.passed, result.report()
+
+
+def test_a_wrong_exit_code_with_an_unstable_dump_fails_the_gate(seeded, tmp_path):
+    fixture = _golden(tmp_path / "broken_unstable", BROKEN_UNSTABLE)
+    result = golden_seed_gate(tmp_path, [fixture], jobs=1, project_root=PROJECT_ROOT)
+    assert result.ran and not result.passed, result.report()
+    failures = result.failures["broken_unstable/test_golden_seed.sushi"]
+    assert any("main.shir" in line for line in failures), result.failures
 
 
 def test_a_selection_with_no_golden_fixture_skips(seeded, tmp_path):
