@@ -13,24 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from sushi_lang.internals.diagnostics import InternalCompilerError
+from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
-
-STOP_CODE = "CE0155"
 
 #: The stage after `typecheck`, which is not built yet.
 NEXT_STAGE = "borrow"
-
-
-class StageStop(InternalCompilerError):
-    """CE0155: the stage `stage` does not handle `construct` yet."""
-
-    code = STOP_CODE
-
-    def __init__(self, stage: str, construct: str, span: Optional[Span] = None,
-                 filename: Optional[str] = None) -> None:
-        super().__init__(STOP_CODE, span=span, filename=filename, stage=stage,
-                         construct=construct)
 
 
 @dataclass(slots=True)

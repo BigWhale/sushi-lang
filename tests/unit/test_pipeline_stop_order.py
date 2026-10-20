@@ -15,9 +15,9 @@ These tests call the record over data. They do not run the compiler.
 """
 from __future__ import annotations
 
-from sushi_lang.internals.diagnostics import InternalCompilerError
+from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.shir.stop import STOP_CODE, StageStop, Stops
+from sushi_lang.semantics.shir.stop import Stops
 
 _A = Span(1, 1, 1, 4)
 _B = Span(2, 1, 2, 4)
@@ -30,7 +30,7 @@ def _typecheck(construct: str, span: Span = _A) -> StageStop:
 def test_a_stop_is_the_internal_error_ce0155() -> None:
     stop = StageStop("typecheck", "Return", _A, "main.sushi")
     assert isinstance(stop, InternalCompilerError)
-    assert stop.code == STOP_CODE == "CE0155"
+    assert stop.code == "CE0155"
     assert stop.params == {"stage": "typecheck", "construct": "Return"}
     assert (stop.span, stop.filename) == (_A, "main.sushi")
 

@@ -68,7 +68,7 @@ from sushi_lang.semantics.shir.lower_nodes import (
     stops_on_hole,
 )
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
-from sushi_lang.semantics.shir.stop import StageStop
+from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.shir.typeck import TypeckResults
 
 if TYPE_CHECKING:

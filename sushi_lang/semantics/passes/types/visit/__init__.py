@@ -21,7 +21,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.nodes import Hole
-from sushi_lang.semantics.shir.stop import StageStop
+from sushi_lang.internals.diagnostics import StageStop
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator

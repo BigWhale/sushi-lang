@@ -21,11 +21,10 @@ import typing
 
 import pytest
 
-from sushi_lang.internals.diagnostics import InternalCompilerError
+from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs, patterns, stmts
-from sushi_lang.semantics.shir.stop import StageStop
 
 _UNIONS = {"ShirStmt": stmts.ShirStmt, "ShirExpr": exprs.ShirExpr,
            "ShirPattern": patterns.ShirPattern}
