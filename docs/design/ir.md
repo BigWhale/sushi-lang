@@ -671,6 +671,37 @@ The side tables are PER `ShirBody`. Each copy gets its own body and its own tabl
 copy fixpoint (Q2) never collides with itself, and `shir_id` needs to be unique only within
 one body.
 
+**The table in the code.** `TypeckResults` is in `semantics/shir/typeck.py`, with one row
+kind for each row of the table above. `LoweredProgram` owns it: it makes the empty table of
+a body when lowering lists the body, and keeps it beside the body
+(`LoweredProgram.typeck_of`). `typecheck` is the one writer (gate:
+`tests/unit/test_typeck_results_have_one_writer.py`), and a second answer for one key is an
+internal error. A row for a position takes the node and the position as its key: a call
+argument and a `print` argument by the index in the arguments, a part of an `Interp` by
+the index in the parts (a text part has no row), a capture by the `LocalId` of the captured
+local, and a target of a `Destructure` by its path: the index of the target, then the index
+in each `Nested` level (`(1, 0)` is `b` in `let (a, (b, c)) = v`). The callee row holds the
+`Callee` of 7.6 with the method type arguments and the declaring unit (`ResolvedCall`). A
+`Builtin` and a `BuiltinStatic` name their row of `METHOD_TYPE_REGISTRY` by the family and
+the method (`BuiltinMethod`). The conversion row of a `Cast` and of a `Try` holds a
+`Conversion` callee, or `NoConversion` for a numeric cast and for a `??` that keeps its
+error type. The facts of a `Try` are one record (`TryFacts`), and so are the scrutinee type
+and the integer type of a `Match` (`MatchFacts`).
+
+The completeness check is `check_answers` in `semantics/shir/typeck_check.py`. It walks
+the body through the one walk of the SHIR tree (`semantics/shir/walk.py`). A missing answer
+is the internal error [CE0156](../error-catalog.md#ce0156), which names the answer, the
+class of the node, its position and the body. Each expression node needs a type, the
+reference of a call target too. The captures of a lambda are in `Bindings` and not in the
+body, so the check cannot count them.
+
+`--dump-shir` prints three answers in place. The resolved callee prints in place of the
+`CallTarget` (`Call(Free(@decorate), ...)`; `println` is `Intrinsic("println")`). Each
+argument of a `Call` prints as `(value, Convention)` with its resolved convention. The type
+of each local is its `LocalId` row. No other answer prints. Where the table holds no answer
+for a node, the dump prints the written form, so a body that `typecheck` refused or did
+not reach prints as lowering made it.
+
 ### 7.4 Expressions
 
 | Node | Fields |
