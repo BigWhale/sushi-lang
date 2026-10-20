@@ -2,9 +2,14 @@ unit test_spine_greet
 
 fn decorate(_1: string @owned) -> Result@(string, StdError) {
     let _0: Result@(string, StdError)
+    let _2: string
 
   bb0:
-    _0 = Result::Ok(move _1)
+    StorageLive(_2)
+    _2 = call builtin interp@(string, string)(copy _1 @guaranteed, const "!" @guaranteed)
+    _0 = Result::Ok(move _2)
+    StorageDead(_2)
+    Drop(_1)
     return
 }
 

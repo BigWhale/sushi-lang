@@ -4,7 +4,7 @@ ShirBody decorate
   params : [(_0 "name": string, Owned)]
   locals : []
   block  :
-    Return(EnumInit(@Result, "Ok", [LocalRef(_0)]))
+    Return(EnumInit(@Result, "Ok", [Interp(["", LocalRef(_0), "!"])]))
 
 ShirBody shout
   params : [(_0 "text": string, Owned)]
