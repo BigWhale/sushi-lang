@@ -88,8 +88,8 @@ def check_local_ref(validator: TypeValidator, node: e.LocalRef,
 
 def check_const_ref(validator: TypeValidator, node: e.ConstRef,
                     _expected: Optional[Type]) -> Optional[Type]:
-    """The declared type of the constant. A bare name of another unit's private constant
-    is CE3005, and a bare name that two imports bring is CE3012."""
+    """The declared type of the constant. Another unit's private constant is CE3005, bare
+    or behind an alias, and a bare name that two imports bring is CE3012."""
     written = validator.decl_name(node.const_id)
     record = constant_record(validator, written)
     if record is None:
@@ -99,9 +99,9 @@ def check_const_ref(validator: TypeValidator, node: e.ConstRef,
                                 detail=f"the constant '{written}' has no record")
     if not isinstance(record, ConstSig):
         return record.get_return_type()
-    if "." not in written and (
-            reject_private_name(validator, "constant", record, node.loc)
-            or reject_ambiguous_name(validator, "constant", written, node.loc)):
+    if reject_private_name(validator, "constant", record, node.loc):
+        return None
+    if "." not in written and reject_ambiguous_name(validator, "constant", written, node.loc):
         return None
     if record.const_type is None:
         return None
