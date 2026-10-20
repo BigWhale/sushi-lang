@@ -95,6 +95,11 @@ _READ_BOTH = frozenset({"+", "-", "*"})
 _READ_RIGHT = frozenset({"/", "%", "<<", ">>"})
 
 
+def is_strict() -> bool:
+    """True when the strict variable is `1`: a SHIR fault stops the compile with CE0155."""
+    return os.environ.get(STRICT_VARIABLE) == "1"
+
+
 def stops_on_hole(scope_failed: bool) -> bool:
     """True when a hole of a unit stops the compile (docs/compiler-reference.md, Dump SHIR).
 
@@ -103,7 +108,7 @@ def stops_on_hole(scope_failed: bool) -> bool:
     it, so in a unit with a scope error the error of the scope pass stays the diagnostic
     of the program. A name with no declaration never stops the compile (`error_hole`).
     """
-    return not scope_failed and os.environ.get(STRICT_VARIABLE) == "1"
+    return not scope_failed and is_strict()
 
 
 @dataclass(slots=True)
@@ -133,6 +138,7 @@ class BodyLowerer:
     opaque: int = field(default=0, init=False)
     locals: list[ShirLocal] = field(default_factory=list, init=False)
     copies: ExpandCopies = field(default_factory=ExpandCopies, init=False)
+    in_initializer: bool = field(default=False, init=False)
 
     def stmt(self, node: Any) -> s.ShirStmt:
         row = LOWERING.get(type(node))
@@ -196,6 +202,7 @@ class BodyLowerer:
 
     def initializer(self, decl: a.ConstDef) -> ShirBlock:
         """The block of a constant or a `var` initializer: one `Return` of the value (ir.md 6.3)."""
+        self.in_initializer = True
         return self.returned(decl.value, self.span(decl))
 
     def returned(self, value: Any, loc: Span) -> ShirBlock:
@@ -245,9 +252,9 @@ class BodyLowerer:
         if self.stops:
             er.raise_internal_error("CE0155", span=self.span(node), stage=STAGE,
                                     construct=type(node).__name__)
-        return self.error_hole(node)
+        return self._record(node, ())
 
-    def error_hole(self, node: Any) -> Hole:
+    def error_hole(self, node: Any, *codes: str) -> Hole:
         """The hole of a program that always has an error. It never stops the compile.
 
         A name with no declaration is one: the error of the program (CE1001, CE1002 or
@@ -257,8 +264,17 @@ class BodyLowerer:
         dot or on a struct construction (CE6102), a slice with a reversed range (CE2122),
         a call of a name that the namespace does not hold (CE2008), and a member of a type
         that is no variant (CE2045).
+
+        `codes` are the codes of that error. At the end of the analysis, an error hole
+        whose codes no error offered stops the compile with CE0155 under the strict
+        variable (`check_error_holes`, ir.md 7.4). In a constant or a `var` initializer,
+        the constant evaluator refuses the first node that is not constant (CE0108) before
+        the typecheck pass reads the form, so there the hole accepts CE0108 too.
         """
-        made = Hole(self.made_opaque(), self.span(node), type(node).__name__)
+        return self._record(node, (*codes, "CE0108") if self.in_initializer else codes)
+
+    def _record(self, node: Any, codes: tuple[str, ...]) -> Hole:
+        made = Hole(self.made_opaque(), self.span(node), type(node).__name__, codes)
         self.holes.append(made)
         return made
 
@@ -368,7 +384,7 @@ def _name(lw: BodyLowerer, node: a.Name) -> e.ShirExpr:
         case bd.Function(name):
             return e.GlobalRef(lw.made_opaque(), loc, lw.decls.refer(name))
         case bd.Unresolved():
-            return lw.error_hole(node)
+            return lw.error_hole(node, "CE1001", "CE1002", "CE0144")
     return lw.hole(node)
 
 
@@ -436,10 +452,10 @@ def _call(lw: BodyLowerer, node: a.Call) -> e.ShirExpr:
     found = lw.bindings.resolution_of(node.callee)
     if isinstance(found, bd.TypeName):
         if node.type_args:
-            return lw.error_hole(node)
+            return lw.error_hole(node, "CE6102")
         return struct_init(lw, node, found.name, found.name, node.args, node.field_names)
     if node.field_names is not None:
-        return lw.error_hole(node)
+        return lw.error_hole(node, "CE6104")
     ident = lw.made_opaque()
     return e.Call(ident, lw.span(node), e.Named(lw.expr(node.callee), _type_args(node)),
                   _arguments(lw, node.args))
@@ -465,8 +481,10 @@ def _dotted(lw: BodyLowerer, node: a.DotCall | a.MethodCall) -> e.ShirExpr:
     found = lw.bindings.resolution_of(node.receiver)
     if isinstance(found, bd.Namespace):
         return _qualified_call(lw, node, found.name)
-    if node.field_names is not None or _type_args(node):
-        return lw.error_hole(node)
+    if node.field_names is not None:
+        return lw.error_hole(node, "CE6104")
+    if _type_args(node):
+        return lw.error_hole(node, "CE6102")
     ty = lw.type_before_dot(node.receiver)
     if ty is not None:
         return _static_call(lw, node, ty)
@@ -492,10 +510,12 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
     if kind == "struct" and not _type_args(node):
         return struct_init(lw, node, f"{alias}.{node.method}", node.method, node.args,
                            node.field_names)
-    if node.field_names is not None or kind == "struct":
-        return lw.error_hole(node)
+    if kind == "struct":
+        return lw.error_hole(node, "CE6102")
+    if node.field_names is not None:
+        return lw.error_hole(node, "CE6104")
     if kind is None and lw.lookup is not None:
-        return lw.error_hole(node)
+        return lw.error_hole(node, "CE2008")
     if kind not in CALLABLE_KINDS:
         return lw.hole(node)
     ident = lw.made_opaque()

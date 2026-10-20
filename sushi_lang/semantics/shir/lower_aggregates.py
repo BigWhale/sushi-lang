@@ -184,9 +184,13 @@ def lower_index(lw: BodyLowerer, node: a.IndexAccess) -> e.ShirExpr:
 
 
 def _slice(lw: BodyLowerer, node: a.IndexAccess, bounds: a.RangeExpr) -> e.ShirExpr:
-    """`a[i..j]` and `a[i..=j]`: a borrowed view. A reversed range is an error hole (CE2122)."""
+    """`a[i..j]` and `a[i..=j]`: a borrowed view. A reversed range is an error hole (CE2122).
+
+    A borrow of the slice in a `let peek` is refused first (CE2404, the slice is a
+    temporary), so the hole accepts CE2404 too.
+    """
     if bounds.reverse:
-        return lw.error_hole(node)
+        return lw.error_hole(node, "CE2122", "CE2404")
     ident = lw.made_opaque()
     base = lw.expr(node.array)
     start, end = _bounds(lw, bounds)
@@ -234,5 +238,5 @@ def _unit_variant(lw: BodyLowerer, node: a.MemberAccess, ty: WrittenType) -> e.S
     if lw.lookup is None:
         return lw.hole(node)
     if not lw.lookup.is_variant(str(ty), node.member):
-        return lw.error_hole(node)
+        return lw.error_hole(node, "CE2045", "CE2105", "CE2007", "CE2008")
     return enum_init(lw, node, ty, node.member, [])

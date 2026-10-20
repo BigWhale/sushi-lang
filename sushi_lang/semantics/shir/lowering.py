@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import bisect
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional, Sequence, TypeAlias
+from typing import TYPE_CHECKING, Mapping, Optional, Sequence, TypeAlias
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -59,7 +59,13 @@ from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, ShirId
 from sushi_lang.semantics.shir.lookup import DeclLookup
 from sushi_lang.semantics.shir.lower_binders import written_param_type
-from sushi_lang.semantics.shir.lower_nodes import BodyLowerer, binder_local, stops_on_hole
+from sushi_lang.semantics.shir.lower_nodes import (
+    STAGE,
+    BodyLowerer,
+    binder_local,
+    is_strict,
+    stops_on_hole,
+)
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 
 if TYPE_CHECKING:
@@ -147,6 +153,32 @@ class LoweredProgram:
             lowered.written.append(body)
             return
         bisect.insort(lowered.copies, body, key=lambda made: self.decls.name_of(made.fn_id))
+
+
+def unreported_error_holes(holes: Sequence[Hole], offered: Mapping[str, int]) -> list[Hole]:
+    """Each error hole whose codes no error offered, in the order of the walk.
+
+    `offered` counts each error that the analysis offered, by code, a muted one included
+    (`Reporter.errors_offered`). A hole with no codes is no error hole.
+    """
+    return [hole for hole in holes
+            if hole.codes and not any(offered.get(code) for code in hole.codes)]
+
+
+def check_error_holes(holes: Sequence[Hole], offered: Mapping[str, int]) -> None:
+    """CE0155 for the first error hole whose codes no error offered (ir.md 7.4).
+
+    An error hole stands for an error that the program always has. When no error of its
+    codes came, lowering and the typecheck pass disagree, and the hole could hide a fault
+    in a correct program. Under the strict variable that stops the compile.
+    """
+    if not is_strict():
+        return
+    missed = unreported_error_holes(holes, offered)
+    if missed:
+        hole = missed[0]
+        er.raise_internal_error("CE0155", span=hole.loc, stage=f"{STAGE}, error hole",
+                                construct=f"{hole.ast_class} with no {' or '.join(hole.codes)}")
 
 
 def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings],

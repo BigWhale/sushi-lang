@@ -22,15 +22,15 @@ The rule has five parts, and this gate holds each one:
 
 1. `lower_unit` and `lower_copy` take the result of the scope pass as the keyword
    `scope_failed`, with no default, so that no caller can forget it.
-2. The one function that reads the variable is `stops_on_hole`, and it reads
-   `scope_failed` too. `BodyLowerer.hole` raises CE0155 only behind `self.stops`.
+2. The one function that reads the variable is `is_strict`. `stops_on_hole` asks it and
+   reads `scope_failed` too. `BodyLowerer.hole` raises CE0155 only behind `self.stops`.
 3. The analyzer gives `scope_failed` from the reporter of the unit, which only the scope
    pass has used when lowering starts. A copy that the copy fixpoint places after the
    per-unit loop is lowered with the reporter of its home unit in the same way.
 4. `BodyLowerer.error_hole` records a hole and never raises CE0155.
 5. The lowerings that call `error_hole` are the ones that `ERROR_HOLES` names, each with
-   its reason, and `_name` calls it for an `Unresolved` name. `hole` calls it too, after
-   its stop check.
+   its reason, and `_name` calls it for an `Unresolved` name. The codes that each one
+   names are held by `test_shir_error_holes_carry_codes.py`.
 
 The scan reads Python source and signatures; it does not start the compiler. The proof
 on a program is a compile by hand: `SUSHI_SHIR_STRICT=1 ./sushic` on a CE1001 fixture
@@ -78,14 +78,18 @@ def test_each_entry_point_requires_the_scope_result() -> None:
 
 
 def test_the_reader_of_the_variable_reads_the_scope_result() -> None:
-    readers = [fn for fn in _functions(_tree(LOWER_NODES)) if _loads(fn, "STRICT_VARIABLE")]
-    assert [fn.name for fn in readers] == ["stops_on_hole"], (
+    functions = _functions(_tree(LOWER_NODES))
+    readers = [fn for fn in functions if _loads(fn, "STRICT_VARIABLE")]
+    assert [fn.name for fn in readers] == ["is_strict"], (
         f"the functions that read STRICT_VARIABLE: {[fn.name for fn in readers]}")
-    reader = readers[0]
+    reader = next(fn for fn in functions if fn.name == "stops_on_hole")
     assert [arg.arg for arg in reader.args.args] == ["scope_failed"], (
         "stops_on_hole must take 'scope_failed' alone")
     assert any(_loads(stmt, "scope_failed") for stmt in reader.body), (
         "stops_on_hole does not read 'scope_failed'")
+    assert any(isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name)
+               and sub.func.id == "is_strict" for sub in ast.walk(reader)), (
+        "stops_on_hole does not ask is_strict")
 
 
 def _guards_the_stop_code(node: ast.If) -> bool:
@@ -143,7 +147,6 @@ ERROR_HOLES: dict[str, str] = {
     "lower_aggregates.py:_slice": "a slice with a reversed range (CE2122)",
     "lower_aggregates.py:_unit_variant": "a member of a type that is no variant: CE2045 on "
                                          "an enum, CE2105, CE2007 or CE2008 on another type",
-    "lower_nodes.py:hole": "the hole itself, after its stop check",
 }
 
 

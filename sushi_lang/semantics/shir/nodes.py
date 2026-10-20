@@ -39,5 +39,10 @@ class ShirBlock(ShirNode):
 
 @dataclass(slots=True)
 class Hole(ShirNode):
-    """A construct that lowering does not handle yet: `ast_class` names its AST class."""
+    """A construct that lowering does not handle yet: `ast_class` names its AST class.
+
+    An ERROR hole is the hole of a program that always has an error, and `codes` names the
+    codes of that error (ir.md 7.4); a hole with no codes is no error hole.
+    """
     ast_class: str
+    codes: tuple[str, ...] = ()

@@ -221,7 +221,8 @@ PRINTERS: dict[type, Render] = {
     e.LambdaParam: _lambda_param,
     # the block, and a construct that lowering does not handle yet
     ShirBlock: lambda pr, blk: pr.each(blk.statements),
-    Hole: lambda _pr, n: f"<hole: {n.ast_class}>",
+    Hole: lambda _pr, n: (f"<hole: {n.ast_class}, error: {' | '.join(n.codes)}>" if n.codes
+                          else f"<hole: {n.ast_class}>"),
     # statements
     s.Assign: lambda pr, n: _node("Assign", pr.show(n.target), pr.show(n.value),
                                   _flag("is_init", n.is_init)),

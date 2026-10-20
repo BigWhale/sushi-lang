@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
@@ -18,7 +19,12 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.generics.array_perk_copies import ArrayPerkCopies
 from sushi_lang.semantics.passes.scope import ScopeAnalyzer
 from sushi_lang.semantics.shir.lookup import DeclLookup
-from sushi_lang.semantics.shir.lowering import LoweredProgram, lower_copy, lower_unit
+from sushi_lang.semantics.shir.lowering import (
+    LoweredProgram,
+    check_error_holes,
+    lower_copy,
+    lower_unit,
+)
 from sushi_lang.semantics.passes.types import (
     TypeValidator, validate_perk_implementation_method)
 from sushi_lang.semantics.passes.borrow import BorrowChecker
@@ -215,6 +221,9 @@ class SemanticAnalyzer:
         # The SHIR of each body that the scope pass checked, per unit, in the compilation
         # order (docs/design/ir.md 6.3). Only `--dump-shir` reads it yet.
         self.shir = LoweredProgram()
+        # Every error that a per-unit reporter offered, by code, for the error-hole check
+        # at the end of the analysis (docs/design/ir.md 7.4).
+        self._offered: Counter[str] = Counter()
 
     def check(self) -> None:
         """Entry point for semantic analysis. Runs every pass in sequence.
@@ -307,6 +316,7 @@ class SemanticAnalyzer:
         asked for (#629).
         """
         self.reporter.items.extend(in_source_order(unit_reporter.items))
+        self._offered.update(unit_reporter.errors_offered)
 
     def _check_multi_file(self) -> None:
         """Multi-file semantic analysis with cross-unit symbol resolution.
@@ -378,6 +388,7 @@ class SemanticAnalyzer:
         self._check_array_extensions(compilation_order, monomorphizer, libraries,
                                      destroy_effects, enum_names)
         self._reject_opaque_in_program_tables()
+        check_error_holes(self.shir.holes, self._offered + self.reporter.errors_offered)
 
     def _reject_opaque_in_program_tables(self) -> None:
         """CE0148, the backstop of the template check (#1070): no opaque type reached here.
@@ -1324,6 +1335,7 @@ class SemanticAnalyzer:
 
     def _merge_new(self, scratch: Reporter, seen: set) -> None:
         """Hand a copy check's findings to the program reporter, each one time."""
+        self._offered.update(scratch.errors_offered)
         for diagnostic in in_source_order(scratch.items):
             identity = diagnostic_identity(diagnostic)
             if identity in seen:
