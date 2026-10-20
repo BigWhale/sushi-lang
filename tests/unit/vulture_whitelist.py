@@ -23,6 +23,18 @@ IGNORE_DECORATORS: dict[str, str] = {
 
 _PLATFORM_ABI = "platform ABI reference table"
 _LLVMLITE = "llvmlite reads this attribute when it prints the module"
+_TYPES = "sushi_lang/semantics/passes/types/"
+_P24 = ("kept for P2.4: the typecheck pass on SHIR types this spine construct, and the "
+        "helper moves to SHIR inputs")
+_TIER_A = ("kept for Tier A (Phase 3): the typecheck stage of its construct group moves "
+           "the helper to SHIR inputs")
+_TIER_B = ("kept for Tier B (Phase 4): the typecheck stage of its construct group moves "
+           "the helper to SHIR inputs")
+_TIER_C = ("kept for Tier C (Phase 5): the typecheck stage of its construct group moves "
+           "the helper to SHIR inputs")
+_TIER_D = ("kept for Tier D (Phase 6): the typecheck stage of its construct group moves "
+           "the helper to SHIR inputs")
+_P23 = "kept for P2.3: the driver of the switch reads it in the last commit of the series"
 _P5_EXPAND_COPIES = ("kept for the generic instances group of Phase 5: the dead-statement "
                      "rule, the scope pass and ends_unrolled_run read the copy boundaries")
 
@@ -110,6 +122,19 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "of a literal arm and of a range arm"),
     ("sushi_lang/semantics/shir/typeck_check.py", "check_answers",
      "kept for P2.3: the typecheck pass calls it at the end of each body"),
+    ("sushi_lang/semantics/shir/stop.py", "Stops", _P23),
+    ("sushi_lang/semantics/shir/stop.py", "stopped", _P23),
+    ("sushi_lang/semantics/shir/stop.py", "finished", _P23),
+    # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
+    # Each one moves to SHIR inputs in the typecheck stage of its construct group
+    # (PLAN.md appendix E.4), and that stage deletes the entry.
+    (_TYPES + "expressions.py", "validate_boolean_condition", _P24),
+    (_TYPES + "statements.py", "validate_let_statement", _P24),
+    (_TYPES + "statements.py", "validate_rebind_statement", _P24),
+    (_TYPES + "statements.py", "validate_return_statement", _P24),
+    (_TYPES + "matching.py", "validate_match_statement", _TIER_A),
+    (_TYPES + "statements.py", "validate_foreach_statement", _TIER_A),
+    (_TYPES + "statements.py", "validate_expand_statement", _TIER_C),
 )
 
 RATCHET: tuple[tuple[str, str, str], ...] = ()
