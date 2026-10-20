@@ -96,6 +96,13 @@ class TypeckResults:
     _match_facts: dict[ShirId, MatchFacts] = _table()
     _element_types: dict[tuple[ShirId, tuple[int, ...]], Type] = _table()
 
+    def __copy__(self) -> TypeckResults:
+        er.raise_internal_error("CE0000", detail="a copy of a TypeckResults is a second table "
+                                                 "of one body")
+
+    def __deepcopy__(self, memo: dict[int, object]) -> TypeckResults:
+        return self.__copy__()
+
     # -- the read API: None when the table holds no answer ------------------------------
 
     def type_of(self, node: ShirId) -> Optional[Type]:

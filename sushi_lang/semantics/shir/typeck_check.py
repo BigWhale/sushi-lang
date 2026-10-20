@@ -20,7 +20,7 @@ them: the type of a capture has no check here.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator, Optional, Sequence
+from typing import Any, Callable, Iterator, Optional, Sequence, TypeAlias
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -42,7 +42,7 @@ class MissingAnswer:
     loc: Optional[Span]
 
 
-Needs = Callable[[TypeckResults, Any], Iterator[str]]
+Needs: TypeAlias = Callable[[TypeckResults, Any], Iterator[str]]
 
 
 def _call(answers: TypeckResults, call: e.Call) -> Iterator[str]:
