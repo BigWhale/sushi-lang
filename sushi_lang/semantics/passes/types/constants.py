@@ -11,8 +11,6 @@ from sushi_lang.semantics.type_predicates import holds_dynamic_array
 from sushi_lang.semantics.typesys import BuiltinType
 
 from .utils import validate_type_name
-from .compatibility import validate_assignment_compatibility
-from .propagation import propagate_types_to_value
 
 
 def assignment_span(const: ConstDef) -> Optional[Span]:
@@ -30,7 +28,8 @@ def assignment_span(const: ConstDef) -> Optional[Span]:
 
 
 def validate_constant(self, const: ConstDef) -> None:
-    """Validate a constant definition, in the scope its initializer resolves in."""
+    """Validate the declared type of a constant, then walk its initializer, in the scope its
+    initializer resolves in."""
     from .signatures import unit_tables
     with in_body_scope(self, "namespaces", const, unit_tables(self)):
         _validate_constant(self, const)
@@ -60,27 +59,5 @@ def _validate_constant(self, const: ConstDef) -> None:
         if sig is not None:
             sig.const_type = resolved
 
-    if is_var:
-        from sushi_lang.semantics.const_eval import allocates_nothing
-        if allocates_nothing(const.value):
-            # An empty container is the descriptor `{0, 0, null}` -- no evaluation,
-            # only the type stamp its position hands over (#544).
-            propagate_types_to_value(self, const.value, const.ty)
-            validate_assignment_compatibility(self, const.ty, const.value,
-                                              const.type_span, assignment_span(const))
-            return
-
-    evaluator = self.constant_evaluator(self.reporter)
-    reported = len(self.reporter.items)
-    const_value = evaluator.evaluate(const.value, const.ty, const.loc)
-
-    if const_value is None and len(self.reporter.items) != reported:
-        return  # the evaluator named the mistake
-
-    # A value is checked against the declared type below. A SILENT None is a variant
-    # spelling whose mistake the body's validator owns (CE2045, CE2050), and it speaks
-    # here, with the body's code.
-    propagate_types_to_value(self, const.value, const.ty)
-
-    validate_assignment_compatibility(self, const.ty, const.value, const.type_span,
-                                      assignment_span(const))
+    # The initializer is the SHIR body of the constant (docs/design/ir.md 6.3).
+    self.check_body(const)

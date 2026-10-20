@@ -199,7 +199,7 @@ def _reject_unspelled_returns(self, body) -> None:
 
 
 def validate_function(self, func: FuncDef) -> None:
-    """Validate types within a function, or within a lambda the lift pass made one."""
+    """Validate the header of a function, then walk its SHIR body (`check_body`)."""
     with in_body_scope(self, "namespaces", func, unit_tables(self)):
         _validate_function_body(self, func)
 
@@ -222,8 +222,7 @@ def _validate_function_body(self, func: FuncDef) -> None:
 
     validate_type_name(self, func.ret, func.ret_span)
 
-    self._validate_block(func.body)
-    _reject_path_faults(self, func)
+    self.check_body(func)
 
     self.current_function = None
     _leave_body(self)
@@ -310,8 +309,7 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
 
     validate_type_name(self, method.ret, method.ret_span)
 
-    self._validate_block(method.body)
-    _reject_path_faults(self, method)
+    self.check_body(method)
 
     _leave_body(self)
 

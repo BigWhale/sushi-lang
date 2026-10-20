@@ -1,7 +1,17 @@
-"""The typecheck pass: type validation and inference."""
+"""The typecheck pass: type validation and inference (docs/design/ir.md 7.3, 7.9).
+
+The pass has two halves (ruling E1). The DECLARATION half reads the AST: the public
+signatures, the qualified constraints, the declared types, the constraint perks, the
+declared type of a constant and the header of each function, method and perk
+implementation. The BODY half walks the SHIR body of each declaration (`check_body`)
+through the table of `visit/`, and it writes its answers into the `TypeckResults` of the
+body. A stop of the body half ends the walk of its body, and the pass records it in
+`stops` (`shir/stop.py`); the next body is walked as usual. When a walk ends with no stop,
+the completeness check of the table runs (`check_answers`).
+"""
 from __future__ import annotations
 from contextlib import contextmanager
-from typing import Callable, Dict, Iterator, Optional, Set, TYPE_CHECKING
+from typing import Dict, Iterator, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import Binding, NamespaceTable
@@ -11,17 +21,20 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FuncSig
     from sushi_lang.semantics.passes.collect.constants import ConstSig
     from sushi_lang.semantics.passes.types.templates import PackElements
-    from sushi_lang.semantics.template_scope import CheckCopy
+    from sushi_lang.semantics.shir.lowering import LoweredProgram
 
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
-from sushi_lang.semantics.ast import (
-    Program, FuncDef, ExtendDef, Block, Stmt, Expr
-)
+from sushi_lang.internals import errors as er
+from sushi_lang.semantics.ast import Program, FuncDef, ExtendDef, Expr
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.typesys import Type, BuiltinType
 from sushi_lang.semantics.passes.types.visit.inference import TypeInferenceVisitor
+from sushi_lang.semantics.passes.types.visit.statements import check_block
+from sushi_lang.semantics.shir.stop import StageStop, Stops
+from sushi_lang.semantics.shir.typeck import TypeckResults
+from sushi_lang.semantics.shir.typeck_check import check_answers
 
 from .compatibility import types_compatible
 from .operator_nest import OperatorNests
@@ -56,18 +69,20 @@ class TypeValidator:
                  in_library_unit: bool = False,
                  namespaces: Optional['NamespaceTable'] = None,
                  checks_templates: bool = False,
-                 borrow_check_copy: Optional[Callable[['CheckCopy'], None]] = None) -> None:
+                 shir: Optional['LoweredProgram'] = None,
+                 stops: Optional[Stops] = None) -> None:
         self.reporter = reporter
         # Whether `run` checks each function template of the unit on a check copy
         # (#1070): a unit of the program, and a bundled stdlib unit. A consumed library
         # unit was checked by its own `--lib` build.
         self.checks_templates = checks_templates
-        # The borrow pass over a check copy (#1070, R5). The analyzer gives it, because
-        # this pass does not import the borrow pass.
-        self.borrow_check_copy = borrow_check_copy
-        # The written templates that `run` checked on a check copy: the borrow pass
-        # reads each of them on its check copy, and not as written.
+        # The written templates that `run` checked on a check copy.
         self.checked_template_ids: Set[int] = set()
+        # The SHIR bodies of the program, and the record of the stops of the body half.
+        self.shir = shir
+        self.stops = stops
+        # The `TypeckResults` of the body that the body half walks, or None.
+        self.answers: Optional[TypeckResults] = None
         self.err = PassErrorReporter(reporter)
         self.tables = tables
         self.const_table = tables.constants
@@ -143,10 +158,6 @@ class TypeValidator:
         # The kept types and the handed overflow checks of the expression being validated.
         self.operator_nests = OperatorNests()
 
-        self.statement_validator = StatementValidator(self)
-        self.expression_validator = ExpressionValidator(self)
-        self.type_inference_visitor = TypeInferenceVisitor(self)
-
     def run(self, program: Program) -> None:
         """Entry point for type validation."""
         # Whole-unit, and BEFORE the per-declaration walk: it is the only way a public
@@ -192,11 +203,6 @@ class TypeValidator:
             validate_template_header(self, impl)
             if self.checks_templates and check_perk_template(self, impl):
                 checked.add(id(impl))
-
-        # A template the loops above did not check: its statement rules that need no type
-        # are read once, on the body as written.
-        from .signatures import check_template_statements
-        check_template_statements(self, program, checked)
 
         for ext in program.extensions:
             self._validate_extension_method(ext)
@@ -263,28 +269,37 @@ class TypeValidator:
                                  self.namespaces_of, self.struct_table, self.enum_table,
                                  folds=self.operator_nests.folds)
 
-    def validate_expression(self, expr: Expr) -> Optional[Type]:
-        """Validate an expression and its subexpressions, and answer its type.
+    def check_body(self, decl) -> None:
+        """The body half over the SHIR body of `decl` (docs/design/ir.md 7.3, 7.9).
 
-        The type of a validated operator node is kept until the outermost expression is
-        done (`operator_nest.py`).
+        A stop ends the walk: the pass records it, with the file of the body, and the
+        caller goes on with the next declaration. A walk that ends with no stop is
+        checked for completeness, and its body meets the next stage, which is not built
+        yet.
         """
-        nests = self.operator_nests
-        nests.hold()
+        body = None if self.shir is None else self.shir.body_of(self.written_of(decl))
+        if body is None or self.shir is None or self.stops is None:
+            er.raise_internal_error(
+                "CE0000", detail=f"the typecheck pass has no SHIR body of "
+                                 f"'{getattr(decl, 'name', type(decl).__name__)}'")
+        self.answers = answers = self.shir.typeck_of(body)
+        origin = self.reporter.origin
+        filename = origin.filename if origin is not None else self.reporter.filename
         try:
-            self.expression_validator.visit(expr)
-            expr_type = self.infer_expression_type(expr)
-            nests.keep(expr, expr_type)
-            return expr_type
+            check_block(self, body.block)
+        except StageStop as stop:
+            stop.filename = filename
+            self.stops.stopped(stop)
+            return
         finally:
-            nests.leave()
+            self.answers = None
+        check_answers(body, answers, self.shir.decls)
+        self.stops.finished(self.shir.decls.name_of(body.fn_id), body.block.loc, filename)
 
-    def infer_expression_type(self, expr: Expr) -> Optional[Type]:
-        """Infer the type of an expression. A kept type of a validated operator answers first."""
-        known, kept_type = self.operator_nests.kept(expr)
-        if known:
-            return kept_type
-        return self.type_inference_visitor.visit(expr)
+    def written_of(self, decl):
+        """The declaration that lowering made the SHIR body of: `decl` itself here. The
+        check of a template walks the body of the template as written."""
+        return decl
 
     def namespace_of(self, receiver) -> Optional[str]:
         """The namespace a receiver names, or None when it names something else.
@@ -336,17 +351,6 @@ class TypeValidator:
         """The pass's surface for the analyzer, which drives the per-unit loop."""
         validate_extension_method(self, ext)
 
-    def _validate_block(self, block: Block) -> None:
-        """Validate statements in a block."""
-        from .statements import stamp_rebind_places
-        for index, stmt in enumerate(block.statements):
-            stamp_rebind_places(self, block.statements, index)
-            self._validate_statement(stmt)
-
-    def _validate_statement(self, stmt: Stmt) -> None:
-        """Validate a statement using the Visitor Pattern."""
-        self.statement_validator.visit(stmt)
-
     def _types_compatible(self, actual: Type, expected: Type) -> bool:
         """The pass's surface for the Maybe and Result intern seams."""
         return types_compatible(self, actual, expected)
@@ -382,15 +386,17 @@ class ReadOnlyInferrer(TypeValidator):
         unit = namespaces.scope.unit if namespaces is not None else None
         super().__init__(Reporter(), tables, current_unit_name=unit,
                          namespaces=namespaces)
+        self.type_inference_visitor = TypeInferenceVisitor(self)
         self._depth = 0
 
     def infer_expression_type(self, expr: Expr) -> Optional[Type]:
+        """The type of an AST expression, through the inference visitor of the early passes."""
         if self._depth:
-            return super().infer_expression_type(expr)
+            return self.type_inference_visitor.visit(expr)
         self._depth += 1
         try:
             with fields_restored_under(expr):
-                return super().infer_expression_type(expr)
+                return self.type_inference_visitor.visit(expr)
         finally:
             self._depth -= 1
 

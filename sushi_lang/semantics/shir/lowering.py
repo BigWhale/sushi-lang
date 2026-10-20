@@ -23,10 +23,10 @@ bodies. Every other body has the origin `Instance`, a copy of a template too.
 (ir.md 9 Q2): a late function copy, an extension copy of a generic or an array target and
 an array-template perk copy. The analyzer calls it after the scope pass of the copy, in
 the home unit of the copy. The analyzer calls `lower_unit` for each unit, after the scope
-pass, on every compile; `LoweredProgram` keeps the bodies for `--dump-shir`, and no pass
-reads them yet. It also keeps the `TypeckResults` of each body beside the body (ir.md 7.3):
-it makes the table when it lists the body, the typecheck pass writes the rows, and the
-dump prints them.
+pass, on every compile; `LoweredProgram` keeps the bodies for the typecheck pass and for
+`--dump-shir`, and gives the body of each declaration (`body_of`). It also keeps the
+`TypeckResults` of each body beside the body (ir.md 7.3): it makes the table when it lists
+the body, the typecheck pass writes the rows, and the dump prints them.
 
 A unit lists the bodies that the source writes in the order of the walk, then each copy
 that the compiler cut, in the order of its name (`LoweredUnit`). The name of a copy holds
@@ -65,10 +65,10 @@ from sushi_lang.semantics.shir.lower_nodes import (
     STAGE,
     BodyLowerer,
     binder_local,
-    is_strict,
     stops_on_hole,
 )
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
+from sushi_lang.semantics.shir.stop import StageStop
 from sushi_lang.semantics.shir.typeck import TypeckResults
 
 if TYPE_CHECKING:
@@ -139,6 +139,8 @@ class LoweredProgram:
     _by_unit: dict[int, LoweredUnit] = field(default_factory=dict, init=False, repr=False)
     _typeck: dict[int, tuple[ShirBody, TypeckResults]] = field(default_factory=dict,
                                                                init=False, repr=False)
+    _by_decl: dict[int, tuple[object, ShirBody]] = field(default_factory=dict, init=False,
+                                                         repr=False)
 
     def unit_of(self, unit: Unit) -> LoweredUnit:
         """The bodies of `unit`, a new entry the first time."""
@@ -156,12 +158,19 @@ class LoweredProgram:
                                                      "has no TypeckResults")
         return entry[1]
 
-    def add(self, unit: Unit, body: ShirBody, *, copy: bool) -> None:
-        """List `body` in `unit`: a written body at the end, a copy at the place of its name.
+    def body_of(self, decl: object) -> Optional[ShirBody]:
+        """The body that lowering made of the declaration `decl`, or None."""
+        entry = self._by_decl.get(id(decl))
+        return entry[1] if entry is not None and entry[0] is decl else None
+
+    def add(self, unit: Unit, decl: object, body: ShirBody, *, copy: bool) -> None:
+        """List `body`, the body of `decl`, in `unit`: a written body at the end, a copy at
+        the place of its name.
 
         The `TypeckResults` of the body is made here, empty, for the typecheck pass to fill.
         """
         self._typeck[id(body)] = (body, TypeckResults())
+        self._by_decl[id(decl)] = (decl, body)
         lowered = self.unit_of(unit)
         if not copy:
             lowered.written.append(body)
@@ -179,20 +188,20 @@ def unreported_error_holes(holes: Sequence[Hole], offered: Mapping[str, int]) ->
             if hole.codes and not any(offered.get(code) for code in hole.codes)]
 
 
-def check_error_holes(holes: Sequence[Hole], offered: Mapping[str, int]) -> None:
-    """CE0155 for the first error hole whose codes no error offered (ir.md 7.4).
+def check_error_holes(holes: Sequence[Hole], offered: Mapping[str, int]) -> Optional[StageStop]:
+    """The stop of the first error hole whose codes no error offered (ir.md 7.4), or None.
 
     An error hole stands for an error that the program always has. When no error of its
     codes came, lowering and the typecheck pass disagree, and the hole could hide a fault
-    in a correct program. Under the strict variable that stops the compile.
+    in a correct program. The check runs on every compile; the pipeline reports the stop
+    when the analysis reported no error and no stop came before it (`Stops.first`).
     """
-    if not is_strict():
-        return
     missed = unreported_error_holes(holes, offered)
-    if missed:
-        hole = missed[0]
-        er.raise_internal_error("CE0155", span=hole.loc, stage=f"{STAGE}, error hole",
-                                construct=f"{hole.ast_class} with no {' or '.join(hole.codes)}")
+    if not missed:
+        return None
+    hole = missed[0]
+    return StageStop(f"{STAGE}, error hole",
+                     f"{hole.ast_class} with no {' or '.join(hole.codes)}", hole.loc)
 
 
 def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings],
@@ -246,7 +255,7 @@ def _lower_tables(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings
             continue
         body = lower_body(table, LoweringContext(lowered.decls, lowered.holes, lookup, owner,
                                                  stops, template))
-        lowered.add(unit, body, copy=not written)
+        lowered.add(unit, decl, body, copy=not written)
 
 
 def _written_template_members(program: Program) -> set[int]:

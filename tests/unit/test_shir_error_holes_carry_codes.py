@@ -11,7 +11,10 @@ CE0155. Three rules:
    literal that the error registry holds.
 2. `unreported_error_holes` answers each error hole whose codes no error offered, and no
    hole with no codes.
-3. The analyzer calls `check_error_holes` at the end of the analysis.
+3. The analyzer calls `check_error_holes` at the end of the analysis. From the switch to
+   SHIR it runs on every compile, with no strict variable: it answers the stop of the
+   first error hole whose codes no error offered, and the pipeline reports it when no
+   error and no earlier stop came (ruling of 2026-10-20, R-F).
 
 The scan reads source, and rule 2 calls a function over data; nothing starts the compiler.
 """
@@ -24,7 +27,8 @@ from pathlib import Path
 from sushi_lang.internals.errors import REGISTRY
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir.ids import ShirId
-from sushi_lang.semantics.shir.lowering import unreported_error_holes
+from sushi_lang.semantics.shir.lower_nodes import STRICT_VARIABLE
+from sushi_lang.semantics.shir.lowering import check_error_holes, unreported_error_holes
 from sushi_lang.semantics.shir.nodes import Hole
 
 ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
@@ -78,3 +82,14 @@ def test_the_analyzer_checks_the_error_holes() -> None:
     assert any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                and node.func.id == "check_error_holes" for node in ast.walk(tree)), (
         "the analyzer does not call check_error_holes")
+
+
+def test_the_check_runs_on_every_compile(monkeypatch) -> None:
+    monkeypatch.delenv(STRICT_VARIABLE, raising=False)
+    first, second = _hole("CE2122"), _hole("CE2045")
+    stop = check_error_holes([first, second], Counter({"CE1001": 1}))
+    assert stop is not None and stop.code == "CE0155"
+    assert stop.params == {"stage": "lowering, error hole",
+                           "construct": "IndexAccess with no CE2122"}
+    assert stop.span == first.loc
+    assert check_error_holes([first], Counter({"CE2122": 1})) is None

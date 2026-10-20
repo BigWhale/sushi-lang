@@ -5,10 +5,12 @@ type parameter OPAQUE: the body knows what the constraints of the parameter prom
 and nothing more. A receiver parameter of an extension or a perk template has the
 bounds its base declares and the bounds its target adds (R1). The check cuts a CHECK COPY
 of the template in an overlay of the program tables (`semantics/template_scope.py`),
-with each type parameter replaced by its opaque form. The typecheck pass, the lift pass
-and the borrow pass check that copy (R5: an opaque parameter moves). Then the compiler discards the copy and the overlay. A fault of the template is
-reported one time, at the template's spans, and the copies of a refused template report
-nothing (the reporter mutes them).
+with each type parameter replaced by its opaque form. The typecheck pass checks the
+header of that copy, and it walks the SHIR body of the template as written, whose origin
+is `TemplateCheck` (docs/design/ir.md 4.3). From the switch to SHIR, the lift pass and
+the borrow pass do not run on it. Then the compiler discards the copy and the overlay. A
+fault of the template is reported one time, at the template's spans, and the copies of a
+refused template report nothing (the reporter mutes them).
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence, TypeV
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
-    BoundedTypeParam, Expand, ExtendDef, ExtendWithDef, FuncDef, Program)
+    BoundedTypeParam, Expand, ExtendDef, ExtendWithDef, FuncDef)
 from sushi_lang.semantics.generics.types import TemplateId, TypeParameter
 from sushi_lang.semantics.passes.collect.perks import reject_second_homes
 from sushi_lang.semantics.typesys import DynamicArrayType
@@ -79,6 +81,12 @@ class TemplateValidator(TypeValidator):
                  **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.pack_elements = pack_elements
+        # The declaration of the check copy -> the template as written, whose SHIR body
+        # is the body of the check.
+        self.written: Dict[int, Any] = {}
+
+    def written_of(self, decl: Any) -> Any:
+        return self.written.get(id(decl), decl)
 
 
 def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
@@ -118,9 +126,8 @@ def check_function_template(validator: TypeValidator, func: FuncDef) -> bool:
     check_copy = _cut_and_settle(scope, cut, lambda _copy: ())
     elements = PackElements(record, validator.current_unit_name)
     checker = _checker(check, elements)
+    checker.written[id(check_copy)] = func
     checker._validate_function(check_copy)
-    lifted = _lifter(check, checker).lift_body(check_copy)
-    _borrow(check, check_copy, lifted, elements)
     _close(check, TemplateId(record.unit_name, record.name))
     return True
 
@@ -170,9 +177,8 @@ def check_extension_template(validator: TypeValidator, ext: ExtendDef) -> bool:
 
     check_copy = _cut_and_settle(scope, cut, lambda ext_copy: [ext_copy])
     checker = _checker(check)
+    checker.written[id(check_copy)] = ext
     checker._validate_extension_method(check_copy)
-    lifted = _lifter(check, checker).lift_body(check_copy)
-    _borrow(check, check_copy, lifted)
     _close(check, template_id)
     return True
 
@@ -213,10 +219,10 @@ def check_perk_template(validator: TypeValidator, impl: ExtendWithDef) -> bool:
 
     check_copy = _cut_and_settle(scope, cut, lambda impl_copy: impl_copy.methods)
     checker = _checker(check)
+    checker.written.update((id(copied), written) for copied, written
+                           in zip(check_copy.methods, impl.methods, strict=True))
     from .signatures import validate_perk_template_bodies
     validate_perk_template_bodies(checker, target, check_copy)
-    lifted = _lifter(check, checker).lift_perk_impl(check_copy)
-    _borrow(check, check_copy, lifted)
     _close(check, template_id)
     return True
 
@@ -306,31 +312,7 @@ def _checker(check: _Check,
         validator.reporter, check.scope.tables, current_unit_name=validator.current_unit_name,
         monomorphized_functions=validator.monomorphized_functions,
         in_library_unit=validator.in_library_unit, namespaces=validator.namespaces,
-        pack_elements=pack_elements)
-
-
-def _lifter(check: _Check, checker: 'TemplateValidator'):
-    """The lift pass over the check copy: its lambdas land in a scratch program."""
-    from sushi_lang.semantics.passes.lift import LambdaLifter
-    return LambdaLifter(check.scope.tables.structs, check.scope.funcs, _scratch_program(),
-                        annotate=checker)
-
-
-def _borrow(check: _Check, check_copy: Any, lifted: Sequence[FuncDef],
-            elements: Optional[PackElements] = None) -> None:
-    """The borrow pass over the check copy and its lifted lambdas (#1070, R5).
-
-    It runs before `_close`, so a borrow fault refuses the template and mutes every copy
-    of it. The analyzer gives the hook; with no hook the template has no borrow check.
-    """
-    from sushi_lang.semantics.template_scope import CheckCopy
-    hook = check.validator.borrow_check_copy
-    if hook is None:
-        er.raise_internal_error(
-            "CE0015", message="the analyzer set no borrow check for a check copy")
-        return
-    hook(CheckCopy(check_copy, tuple(lifted), check.scope.tables,
-                   elements.element_of if elements is not None else None))
+        shir=validator.shir, stops=validator.stops, pack_elements=pack_elements)
 
 
 def _close(check: _Check, template_id: TemplateId) -> None:
@@ -357,9 +339,3 @@ def _names_no_perk(validator: TypeValidator, params: Sequence[Any]) -> bool:
     fault. The body is not checked against a promise that does not exist."""
     return any(validator.perk_table.get(name) is None
                for tp in params for name in (tp.constraints or ()))
-
-
-def _scratch_program() -> Program:
-    """A program that holds nothing: the lifted lambdas of a check copy land here."""
-    return Program(loc=None, uses=[], constants=[], structs=[], enums=[], perks=[],
-                   functions=[], extensions=[], generic_extensions=[], perk_impls=[])

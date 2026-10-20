@@ -34,7 +34,6 @@ _TIER_C = ("kept for Tier C (Phase 5): the typecheck stage of its construct grou
            "the helper to SHIR inputs")
 _TIER_D = ("kept for Tier D (Phase 6): the typecheck stage of its construct group moves "
            "the helper to SHIR inputs")
-_P23 = "kept for P2.3: the driver of the switch reads it in the last commit of the series"
 _P5_EXPAND_COPIES = ("kept for the generic instances group of Phase 5: the dead-statement "
                      "rule, the scope pass and ends_unrolled_run read the copy boundaries")
 
@@ -119,11 +118,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/typeck.py", "integer",
      "kept for the match group of Phase 3: SHIR-to-SLIR lowering reads the integer type "
      "of a literal arm and of a range arm"),
-    ("sushi_lang/semantics/shir/typeck_check.py", "check_answers",
-     "kept for P2.3: the typecheck pass calls it at the end of each body"),
-    ("sushi_lang/semantics/shir/stop.py", "Stops", _P23),
-    ("sushi_lang/semantics/shir/stop.py", "stopped", _P23),
-    ("sushi_lang/semantics/shir/stop.py", "finished", _P23),
     # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
     # Each one moves to SHIR inputs in the typecheck stage of its construct group
     # in the migration plan, and that stage deletes the entry.
@@ -141,12 +135,15 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "expressions.py", "validate_try_expression", _P24),
     (_TYPES + "operator_nest.py", "enter", _P24),
     (_TYPES + "utils.py", "reject_named_args", _P24),
+    (_TYPES + "operator_nest.py", "leave", _P24),
     (_TYPES + "calls/user_defined.py", "validate_function_call", _P24),
     (_TYPES + "expressions.py", "validate_boolean_condition", _P24),
     (_TYPES + "statements.py", "validate_let_statement", _P24),
     (_TYPES + "statements.py", "validate_rebind_statement", _P24),
     (_TYPES + "statements.py", "validate_return_statement", _P24),
     (_TYPES + "matching.py", "validate_match_statement", _TIER_A),
+    (_TYPES + "constants.py", "assignment_span", _TIER_A),
+    (_TYPES + "statements.py", "stamp_rebind_places", _TIER_A),
     (_TYPES + "expressions.py", "refuse_range_value", _TIER_A),
     (_TYPES + "expressions.py", "reject_unknown_field", _TIER_A),
     (_TYPES + "expressions.py", "validate_array_literal", _TIER_A),
@@ -156,6 +153,9 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "expressions.py", "validate_index_access", _TIER_A),
     (_TYPES + "arguments.py", "reject_type_pack_value", _TIER_C),
     (_TYPES + "visit/helpers.py", "validate_fn_field_call_args", _TIER_C),
+    (_TYPES + "signatures.py", "check_template_statements", _TIER_C),
+    ("sushi_lang/semantics/template_scope.py", "CheckCopy",
+     "kept for P2.6: the borrow pass on SHIR checks the body of a template check"),
     (_TYPES + "statements.py", "validate_foreach_statement", _TIER_A),
     (_TYPES + "statements.py", "validate_expand_statement", _TIER_C),
 )
