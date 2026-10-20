@@ -1,0 +1,14 @@
+unit test_err_typeck_foreign_pointer
+
+ShirBody same
+  params : [(_0 "a": ptr, Guaranteed), (_1 "b": ptr, Guaranteed), (_2 "n": i32, Guaranteed)]
+  locals : [_3 "small": bool]
+  block  :
+    Assign(LocalRef(_3), Binary(<, LocalRef(_2), Lit(4)), is_init: true)
+    Return(Binary(and, LocalRef(_3), Binary(==, LocalRef(_0), LocalRef(_1))))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))

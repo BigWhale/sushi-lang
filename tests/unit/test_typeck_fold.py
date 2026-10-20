@@ -17,7 +17,7 @@ from sushi_lang.semantics.passes.types.fold import Folder, Overflow
 from sushi_lang.semantics.ranges import RangePlan
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
-from sushi_lang.semantics.typesys import BuiltinType
+from sushi_lang.semantics.typesys import BuiltinType, Type, UnknownType
 
 I8 = BuiltinType.I8
 I32 = BuiltinType.I32
@@ -127,6 +127,19 @@ def test_a_cast_reads_its_operand_at_the_target_type() -> None:
     assert read(e.Cast(_id(), SPAN, lit(300), U8), None) == (44, U8)
     assert read(e.Cast(_id(), SPAN, lit(1), BOOL), None) == (True, BOOL)
     assert read(e.Cast(_id(), SPAN, lit(2.75), I32), None) == (2, I32)
+
+
+def test_a_cast_reads_its_target_as_the_body_reads_it() -> None:
+    """The check of a template writes `T` where the pass reads an opaque type: the fold
+    reads the target of a cast through the reader of written types that the pass gives."""
+    written = UnknownType("T")
+
+    def opaque(ty: Type) -> Type:
+        return I64 if ty == written else ty
+
+    cast = e.Cast(_id(), SPAN, lit(300), written)
+    assert Folder(no_constants).read(cast, None) is None
+    assert Folder(no_constants, opaque).read(cast, None) == ScalarConstant(300, I64)
 
 
 def test_an_index_of_a_fixed_array_literal_reads_its_element() -> None:

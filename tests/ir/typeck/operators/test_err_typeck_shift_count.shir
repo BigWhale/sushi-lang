@@ -1,0 +1,18 @@
+unit test_err_typeck_shift_count
+
+ShirBody main
+  params : []
+  locals : [_0 "small": u8, _1 "wide": i32, _2 "by": i32, _3 "top": u8, _4 "far": i32, _5 "any": i32, _6 "down": i32, _7 "low": u8, _8 "sum": i32, _9 "bad": u8]
+  block  :
+    Assign(LocalRef(_0), Lit(1), is_init: true)
+    Assign(LocalRef(_1), Lit(1), is_init: true)
+    Assign(LocalRef(_2), Lit(40), is_init: true)
+    Assign(LocalRef(_3), Binary(<<, LocalRef(_0), Lit(7)), is_init: true)
+    Assign(LocalRef(_4), Binary(<<, LocalRef(_1), Lit(31)), is_init: true)
+    Assign(LocalRef(_5), Binary(<<, LocalRef(_1), LocalRef(_2)), is_init: true)
+    Assign(LocalRef(_6), Binary(>>, LocalRef(_4), Binary(-, Lit(31), Lit(1))), is_init: true)
+    Assign(LocalRef(_7), Binary(>>, LocalRef(_3), Lit(7)), is_init: true)
+    Assign(LocalRef(_8), Binary(+, LocalRef(_5), LocalRef(_6)), is_init: true)
+    Assign(LocalRef(_9), Binary(<<, LocalRef(_0), Lit(8)), is_init: true)
+    Assign(LocalRef(_7), LocalRef(_9), is_init: false)
+    Return(LocalRef(_8))

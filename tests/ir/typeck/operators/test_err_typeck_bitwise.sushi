@@ -1,0 +1,24 @@
+# EXPECT_ERROR_CODES_EXACT: CE2510
+# EXPECT_STDERR_CONTAINS: "cannot use operator with mixed numeric types: u8 and i32"
+# EXPECT_DUMP_SHIR: test_err_typeck_bitwise.shir
+#
+# `&`, `|` and `^` take two integers of one type and answer that type, and `~` answers
+# the type of its operand. A shift answers the type of the value that it moves, and its
+# count can be of any integer type. A literal beside a typed operand takes its type. The
+# last statement gives a `u8` and an `i32` to `&`, which is CE2510.
+
+fn main() i32:
+    let u8 flags = 0x0F
+    let u8 mask = flags & 0x3C
+    let u8 any = flags | mask
+    let u8 diff = flags ^ 0xFF
+    let u8 inverse = ~flags
+    let i32 wide = 1 << 10
+    let i32 back = wide >> 2
+    let u8 moved = mask << 1
+    let u8 all = any & diff & inverse & moved
+    let i32 more = back | 3
+    let i32 count = 4
+    let u8 bad = flags & count
+    all := bad
+    return more

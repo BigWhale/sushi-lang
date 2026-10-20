@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING, NamedTuple, Optional, Tuple
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.typesys import (
-    BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType, deref_type)
+    BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType)
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, BinaryOp, UnaryOp, Expr, RangeExpr, MemberAccess
+from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, RangeExpr, MemberAccess
 from sushi_lang.semantics.conversions import find_conversion
 from sushi_lang.semantics.type_predicates import (
     BUILTIN_INTEGER_TYPES, is_error_type, is_instance_of, is_integer_type, is_numeric_type)
@@ -21,7 +21,9 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
+    from sushi_lang.internals.report import Span
     from sushi_lang.semantics.conversions import Conversion
+    from sushi_lang.semantics.shir.exprs import Binary, ShirExpr
     from sushi_lang.semantics.typesys import Type
 
 
@@ -427,10 +429,11 @@ def _annotate_try_expr(expr: 'TryExpr', inner_type: Optional['Type'],
     expr.inferred_conversion = conversion
 
 
-def reject_mixed_numeric_operands(validator: 'TypeValidator', expr: BinaryOp,
+def reject_mixed_numeric_operands(validator: 'TypeValidator', loc: 'Optional[Span]',
                                   left_type: 'Optional[Type]',
-                                  right_type: 'Optional[Type]') -> None:
-    """CE2510 when two numeric operands are not of the same type.
+                                  right_type: 'Optional[Type]') -> bool:
+    """CE2510 when two numeric operands are not of the same type. Answers True when it
+    reported.
 
     One rule for every operator that takes its result from operands which must
     already agree: arithmetic, comparison, and the bitwise `& | ^`. Sushi converts
@@ -439,14 +442,15 @@ def reject_mixed_numeric_operands(validator: 'TypeValidator', expr: BinaryOp,
     count says how far to move, not what the result is.
     """
     if left_type is None or right_type is None:
-        return
+        return False
     if not (is_numeric_type(left_type) and is_numeric_type(right_type)):
-        return
+        return False
     if left_type == right_type:
-        return
+        return False
 
-    er.emit(validator.reporter, er.ERR.CE2510, expr.loc,
+    er.emit(validator.reporter, er.ERR.CE2510, loc,
             left_type=display_type(left_type), right_type=display_type(right_type))
+    return True
 
 
 _EQUALITY_OPS = ("==", "!=")
@@ -471,8 +475,9 @@ def is_string_plus(op: str, left_type: 'Optional[Type]',
 
 
 def reject_non_numeric_arithmetic(validator: 'TypeValidator', op: str,
-                                  operands: 'list[Tuple[Expr, Optional[Type]]]') -> None:
-    """CE2518 for the first arithmetic operand that is not a number.
+                                  operands: 'list[Tuple[ShirExpr, Optional[Type]]]') -> bool:
+    """CE2518 for the first arithmetic operand that is not a number. Answers True when it
+    reported.
 
     One rule for the whole group: + - * / % and the unary minus, which is why the
     operands arrive as a list rather than as a pair. Arithmetic combines numbers and
@@ -482,13 +487,9 @@ def reject_non_numeric_arithmetic(validator: 'TypeValidator', op: str,
 
     The first bad operand is enough: `a - b` on two strings is one fault. A wrapper
     is told how to take its value out, because a missing '??' is the common way here.
-
-    Before #709 the pass asked nothing, so every operand reached the backend: a bool
-    or a wrapper became a CE0000 out of `emit_arithmetic`, a struct, an enum or an
-    array failed the LLVM IR parse, and `-true` compiled and printed `true`.
     """
     if len(operands) == 2 and is_string_plus(op, operands[0][1], operands[1][1]):
-        return
+        return False
 
     for operand, operand_type in operands:
         if operand_type is None or is_numeric_type(operand_type):
@@ -500,17 +501,20 @@ def reject_non_numeric_arithmetic(validator: 'TypeValidator', op: str,
             report = report.help(f"take the value with {take_the_value(wrapper[0])}")
         from sushi_lang.semantics.generics.opaque import explain_no_arithmetic
         explain_no_arithmetic(report, operand_type).emit()
-        return
+        return True
+    return False
 
 
-def reject_zero_divisor(validator: 'TypeValidator', expr: BinaryOp,
-                        left_type: 'Optional[Type]') -> None:
-    """CE0112 when the compiler can read the divisor of '/' or '%' and it is zero.
+def reject_zero_divisor(validator: 'TypeValidator', node: 'Binary',
+                        left_type: 'Optional[Type]') -> bool:
+    """CE0112 when the compiler can read the divisor of '/' or '%' and it is zero. Answers
+    True when it reported.
 
     The same code the constant evaluator emits, because it is the same rule: one
-    compile-time arithmetic, and a body cannot disagree with a constant. A divisor
-    the compiler cannot read is ordinary code and is left alone, exactly as a
-    computed shift count is (CE2512).
+    compile-time arithmetic, and a body cannot disagree with a constant. The fold reads
+    the divisor at the type of the dividend (docs/design/ir.md 7.4). A divisor the
+    compiler cannot read is ordinary code and is left alone, exactly as a computed shift
+    count is (CE2512).
 
     A left operand that is not numeric belongs to CE2518, which has already spoken;
     reporting a zero divisor as well would make one expression two faults.
@@ -518,13 +522,14 @@ def reject_zero_divisor(validator: 'TypeValidator', expr: BinaryOp,
     from sushi_lang.semantics.const_eval import is_numeric_constant
 
     if left_type is None or not is_numeric_type(left_type):
-        return
+        return False
 
-    divisor = validator.operand_evaluator().evaluate(expr.right, left_type, None)
+    divisor = validator.body_folder().scalar(node.rhs, left_type)
     if divisor is None or not is_numeric_constant(divisor) or divisor.value != 0:
-        return
+        return False
 
-    er.emit(validator.reporter, er.ERR.CE0112, expr.right.loc)
+    er.emit(validator.reporter, er.ERR.CE0112, node.rhs.loc)
+    return True
 
 
 def top_level_contract(validator: 'TypeValidator', ty: 'Optional[Type]',
@@ -568,45 +573,40 @@ def _comparison_escape(ty: 'Type') -> Optional[str]:
     return None
 
 
-def reject_uncomparable_operands(validator: 'TypeValidator', expr: BinaryOp,
+def reject_uncomparable_operands(validator: 'TypeValidator', node: 'Binary',
                                  left_type: 'Optional[Type]',
-                                 right_type: 'Optional[Type]') -> None:
-    """CE2513 for a mixed pair, CE2514 for a type that carries no such comparison.
+                                 right_type: 'Optional[Type]') -> bool:
+    """CE2513 for a mixed pair, CE2514 for a type that carries no such comparison. Answers
+    True when it reported.
 
     One rule for all six comparison operators. Equality is defined for the numeric
     types, bool and string; an order is defined for the numeric types and string,
     where it reads the bytes. A bool is deliberately left out of the order, because
-    `a < b` on two bools is almost always a typo for `!=`.
-
-    Before #449 the pass asked nothing here, so every other operand pair reached the
-    backend, which tried to compare a string, a struct or an array value as an i32
-    and answered with a CE0017 internal error.
+    `a < b` on two bools is almost always a typo for `!=`. A struct or an enum compares
+    by its derived or implemented contract.
     """
     if left_type is None or right_type is None:
-        return
+        return False
     if is_numeric_type(left_type) and is_numeric_type(right_type):
-        return
+        return False
 
     if left_type != right_type:
         from sushi_lang.semantics.generics.opaque import note_opaque
-        note_opaque(er.emit_with(validator.reporter, er.ERR.CE2513, expr.loc,
+        note_opaque(er.emit_with(validator.reporter, er.ERR.CE2513, node.loc,
                                  left_type=display_type(left_type),
-                                 right_type=display_type(right_type), op=expr.op),
+                                 right_type=display_type(right_type), op=node.op),
                     left_type, right_type).emit()
-        return
+        return True
 
     from sushi_lang.semantics.generics.contracts import EQ, ORD
-    contract = EQ if expr.op in _EQUALITY_OPS else ORD
+    contract = EQ if node.op in _EQUALITY_OPS else ORD
     refused: list = []
     permitted, reason = top_level_contract(validator, left_type, contract, refused)
     if permitted:
-        operand = deref_type(left_type)
-        if not isinstance(operand, BuiltinType):
-            expr.operand_type = operand
-        return
+        return False
 
-    builder = er.emit_with(validator.reporter, er.ERR.CE2514, expr.loc,
-                           op=expr.op, type_name=display_type(left_type))
+    builder = er.emit_with(validator.reporter, er.ERR.CE2514, node.loc,
+                           op=node.op, type_name=display_type(left_type))
     if reason is not None:
         builder = builder.note(f"no derived {contract}: {reason}")
     escape = _comparison_escape(left_type)
@@ -614,113 +614,81 @@ def reject_uncomparable_operands(validator: 'TypeValidator', expr: BinaryOp,
         builder = builder.help(escape)
     from sushi_lang.semantics.generics.opaque import explain_unpromised
     explain_unpromised(builder, contract, refused).emit()
+    return True
 
 
-def validate_bitwise_operation(validator: 'TypeValidator', expr: BinaryOp) -> None:
-    """Validate the operands of a bitwise operator: integer, and of one width.
+def reject_non_integer_operands(validator: 'TypeValidator', op: str,
+                                operands: 'list[Tuple[ShirExpr, Optional[Type]]]') -> bool:
+    """CE2004 for the first operand of a bitwise operator that is not an integer. Answers
+    True when it reported.
 
     An integer, not merely a number: a float has no bits to combine, and its bits
-    are reached through `.to_bits()`. The gate asked for a numeric type, so a float
-    passed it and the backend met an operand LLVM has no such instruction for
-    (CE0000, "instruction requires integer or integer vector operands").
+    are reached through `.to_bits()`. One rule for `& | ^`, the two shifts and `~`.
     """
-    left_type = validator.infer_expression_type(expr.left)
-    right_type = validator.infer_expression_type(expr.right)
-
-    if left_type is not None and not is_integer_type(left_type):
-        er.emit(validator.reporter, er.ERR.CE2004, expr.left.loc, op=expr.op)
-        return
-
-    if right_type is not None and not is_integer_type(right_type):
-        er.emit(validator.reporter, er.ERR.CE2004, expr.right.loc, op=expr.op)
-        return
-
-    if expr.op in ("&", "|", "^"):
-        reject_mixed_numeric_operands(validator, expr, left_type, right_type)
-
-    if expr.op in ("<<", ">>"):
-        reject_impossible_shift_count(validator, expr, left_type)
+    for operand, operand_type in operands:
+        if operand_type is not None and not is_integer_type(operand_type):
+            er.emit(validator.reporter, er.ERR.CE2004, operand.loc, op=op)
+            return True
+    return False
 
 
-def reject_overflowing_nest(validator: 'TypeValidator',
-                            top: 'BinaryOp | UnaryOp') -> None:
-    """CE2077 for each operation of a nest that the compiler can read and that leaves its type.
+def reject_overflow(validator: 'TypeValidator', node: 'ShirExpr', ty: 'Type') -> bool:
+    """CE2077 when the compiler can read the operation `node` at its type `ty` and the
+    operation leaves that type. Answers True when it reported.
 
-    The evaluator does the reading and the arithmetic, so the language has ONE
-    compile-time arithmetic and a constant cannot disagree with the same expression in a
-    body. Its reporter is silent here, because an operand that is not constant -- a
-    variable, a call -- is ordinary code and not a diagnostic.
+    The fold does the reading and the arithmetic (docs/design/ir.md 7.4), so the language
+    has ONE compile-time arithmetic and a constant cannot disagree with the same
+    expression in a body. An operand that the compiler cannot read -- a local, a call --
+    is ordinary code and not a diagnostic.
 
-    `top` is an overflow-checked node, and no node above it does its check. The nest is
-    the top and each operand below it that has the type of its operator
-    (`operator_nest.py`). One fold reads the whole nest, so the nest is folded one time.
-    The fold reads the nest at the type of the left operand of the top, or at the type
-    of the operand of a negation. An overflow is reported only when it is recorded at a
-    node of the nest. An overflow in a constant that the nest names is reported where the
-    constant is declared, and not at each use.
+    Each overflow-checked operation asks for itself, after its operands, so an overflow is
+    reported at the operation that computed it and nowhere else: the innermost operation
+    of `(200 + 100) / 2` reports, and the division around it has no type to ask with. The
+    fold reads each node one time for each type, so a nest is folded one time. An
+    overflow in a constant that the operation names is reported where the constant is
+    declared, because the reader of a constant answers no value for it.
     """
     from sushi_lang.semantics.const_eval import emit_overflow
-    from .operator_nest import nest_under
 
-    operand = top.left if isinstance(top, BinaryOp) else top.expr
-    evaluator = validator.constant_evaluator()
-    evaluator.evaluate(top, validator.infer_expression_type(operand), top.loc)
-
-    nest = nest_under(top)
-    for overflow in evaluator.overflows:
-        if id(overflow.node) in nest:
-            emit_overflow(validator.reporter, overflow)
+    folder = validator.body_folder()
+    start = len(folder.overflows)
+    folder.read(node, ty)
+    found = [overflow for overflow in folder.overflows[start:] if overflow.node is node]
+    for overflow in found:
+        emit_overflow(validator.reporter, overflow.op, overflow.value, overflow.ty, node.loc)
+    return bool(found)
 
 
-def _provable_shift_count(validator: 'TypeValidator', count: Expr) -> Optional[int]:
-    """The count as a number when the compiler can read it, else None.
-
-    A silent reporter is passed in because a count that is not a constant -- a
-    variable, a loop index, a call -- is ordinary code and not a diagnostic. Only
-    the answer is wanted here, never the evaluator's complaint about not finding
-    one.
-    """
-    from sushi_lang.semantics.const_eval import ScalarConstant
-
-    value = validator.operand_evaluator().evaluate(count, BuiltinType.I64, None)
-    if (value is None or not isinstance(value, ScalarConstant)
-            or not isinstance(value.value, int) or isinstance(value.value, bool)):
-        return None
-    return value.value
-
-
-def reject_impossible_shift_count(validator: 'TypeValidator', expr: BinaryOp,
-                                  value_type: 'Optional[Type]') -> None:
-    """CE2512 when a shift count the compiler can read cannot fit the value.
+def reject_impossible_shift_count(validator: 'TypeValidator', node: 'Binary',
+                                  value_type: 'Optional[Type]',
+                                  count_type: 'Optional[Type]') -> bool:
+    """CE2512 when a shift count the compiler can read cannot fit the value. Answers True
+    when it reported.
 
     The width of the shifted value is the limit: a count at or above it moves every
     bit out of the type, and a negative count is not a shift. LLVM answers such a
     shift with poison, so nothing reports the loss and the program prints whatever
-    the optimizer left behind. A count that cannot be read at compile time is left
-    alone -- a bit reader computes its count, and no check is emitted around it.
+    the optimizer left behind. The fold reads the count at its own type. A count that
+    cannot be read at compile time is left alone -- a bit reader computes its count, and
+    no check is emitted around it.
     """
+    from sushi_lang.semantics.const_eval import is_integer_constant
     from sushi_lang.semantics.integer_width import integer_bit_width
 
-    if value_type is None:
-        return
     width = integer_bit_width(value_type)
-    if width is None:
-        return
+    if width is None or count_type is None:
+        return False
 
-    count = _provable_shift_count(validator, expr.right)
-    if count is None or 0 <= count < width:
-        return
+    value = validator.body_folder().scalar(node.rhs, count_type)
+    if value is None or not is_integer_constant(value):
+        return False
+    count = int(value.value)
+    if 0 <= count < width:
+        return False
 
-    er.emit(validator.reporter, er.ERR.CE2512, expr.right.loc,
+    er.emit(validator.reporter, er.ERR.CE2512, node.rhs.loc,
             count=count, value_type=display_type(value_type), max_count=width - 1)
-
-
-def validate_bitwise_unary(validator: 'TypeValidator', expr: UnaryOp) -> None:
-    """Validate that bitwise NOT (~) is used with an integer, floats included out."""
-    operand_type = validator.infer_expression_type(expr.expr)
-
-    if operand_type is not None and not is_integer_type(operand_type):
-        er.emit(validator.reporter, er.ERR.CE2004, expr.expr.loc, op=expr.op)
+    return True
 
 
 # The predicate that turns each wrapper into the bool a condition wants.
@@ -752,42 +720,33 @@ def _wrapper_of(ty: Optional['Type']) -> Optional[Tuple[str, str]]:
     return None
 
 
-def reject_non_bool_condition(validator: 'TypeValidator', expr: Expr,
-                              expr_type: Optional['Type'] = None) -> bool:
-    """Refuse an expression that stands where a condition belongs and is not a bool.
+def reject_non_bool_condition(validator: 'TypeValidator', node: 'ShirExpr',
+                              ty: Optional['Type']) -> bool:
+    """Refuse a value of the type `ty` that stands where a condition belongs and is not a bool.
 
     The ONE seam for every condition position: an `if`, a `while` (#522), an `assert`,
     and the operands of `and`, `or`, `xor` and `not` (#532). A wrapper is told which predicate
     answers for it (CE2516); everything else is CE2005, which offers the `== 0` escape
     only to an integer -- a string or a struct has no such spelling. Answers True when
-    it reported.
+    it reported. No type is an error that was reported already.
     """
-    if expr_type is None:
-        expr_type = validator.infer_expression_type(expr)
-
-    if expr_type is None or expr_type == BuiltinType.BOOL:
+    if ty is None or ty == BuiltinType.BOOL:
         return False
 
-    wrapper = _wrapper_of(expr_type)
+    wrapper = _wrapper_of(ty)
     if wrapper is not None:
         name, predicate = wrapper
-        er.emit_with(validator.reporter, er.ERR.CE2516, expr.loc,
-                     ty=display_type(expr_type), wrapper=name) \
+        er.emit_with(validator.reporter, er.ERR.CE2516, node.loc,
+                     ty=display_type(ty), wrapper=name) \
             .help(f"use '.{predicate}()' to test it, or take the value with "
                   f"{take_the_value(name)}").emit()
         return True
 
-    report = er.emit_with(validator.reporter, er.ERR.CE2005, expr.loc)
-    if is_integer_type(expr_type):
+    report = er.emit_with(validator.reporter, er.ERR.CE2005, node.loc)
+    if is_integer_type(ty):
         report = report.help("use '== 0' or '!= 0' for integer conditions")
     report.emit()
     return True
-
-
-def validate_boolean_condition(validator: 'TypeValidator', expr: Expr, context: str) -> None:
-    """Validate that a control-flow condition is a bool. Nothing else is one (#522)."""
-    validator.validate_expression(expr)
-    reject_non_bool_condition(validator, expr)
 
 
 def _field_names_of(receiver_type: 'Type') -> Optional[list[str]]:

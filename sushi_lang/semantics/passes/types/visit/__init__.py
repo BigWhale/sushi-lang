@@ -9,7 +9,8 @@ arm of a construct that the pass does not type yet is `stop_at`: it stops the wa
 body with the stop code CE0155 (`shir/stop.py`).
 
 `statements.py` walks a block and holds the statement arms, `expressions.py` the expression
-arms. The AST inference visitor of `inference.py` is not part of this walk: it is the
+arms of the leaves, and `operators.py` the arms of the operators and the check of a
+condition. The AST inference visitor of `inference.py` is not part of this walk: it is the
 inference of the early passes (`ReadOnlyInferrer`), until they stop inferring. `helpers.py`
 holds the lambda and function-value helpers that it reads.
 """
@@ -20,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Callable, NoReturn, Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.passes.types.visit import expressions as ex
+from sushi_lang.semantics.passes.types.visit import operators as op
 from sushi_lang.semantics.passes.types.visit import statements as st
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
@@ -59,10 +61,16 @@ def check_expr(validator: TypeValidator, node: Any,
 
     None is no answer: the node has an error, or reads a node that has one.
     """
-    answer = _arm(node)(validator, node, expected)
-    if answer is not None:
-        validator.body_answers().record_type(node.shir_id, answer)
-    return answer
+    return answer(validator, node, _arm(node)(validator, node, expected))
+
+
+def answer(validator: TypeValidator, node: Any, ty: Optional[Type]) -> Optional[Type]:
+    """Write `ty` as the type row of the expression `node`, and answer it. The one writer
+    of a type row: `check_expr`, and the arm of a negation for its literal, which is one
+    value with its sign."""
+    if ty is not None:
+        validator.body_answers().record_type(node.shir_id, ty)
+    return ty
 
 
 ARMS: dict[type, Callable[..., Any]] = {
@@ -71,12 +79,12 @@ ARMS: dict[type, Callable[..., Any]] = {
     s.Destructure: stop_at,
     s.ExprStmt: st.check_expr_stmt,
     s.Return: st.check_return,
-    s.If: stop_at,
-    s.Loop: stop_at,
+    s.If: st.check_if,
+    s.Loop: st.check_loop,
     s.Match: stop_at,
     s.Assert: stop_at,
-    s.Break: stop_at,
-    s.Continue: stop_at,
+    s.Break: st.check_jump,
+    s.Continue: st.check_jump,
     s.Expand: stop_at,
     Hole: stop_at,
     # -- expressions -----------------------------------------------------------------
@@ -89,8 +97,8 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.Index: stop_at,
     e.Slice: stop_at,
     e.Call: stop_at,
-    e.Unary: stop_at,
-    e.Binary: stop_at,
+    e.Unary: op.check_unary,
+    e.Binary: op.check_binary,
     e.Cast: stop_at,
     e.Borrow: stop_at,
     e.Take: stop_at,

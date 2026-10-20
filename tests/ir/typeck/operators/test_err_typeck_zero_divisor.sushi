@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE0112
+# EXPECT_STDERR_CONTAINS: "division by zero"
+# EXPECT_DUMP_SHIR: test_err_typeck_zero_divisor.shir
+#
+# A divisor that the compiler can read must not be zero. The compiler reads a literal,
+# a constant and an operation on such values, at the type of the dividend. A divisor
+# that it cannot read, a local for example, is not checked. The last division reads its
+# divisor as 2 - 2, which is CE0112.
+
+const i32 TWO = 2
+
+fn main() i32:
+    let i32 a = 9
+    let i32 zero = 0
+    let i32 half = a / 2
+    let i32 odd = a % TWO
+    let i32 any = a / zero
+    let i32 calc = a / (TWO + 1)
+    let i32 sum = half + odd + any + calc
+    let i32 bad = a / (2 - TWO)
+    return sum + bad

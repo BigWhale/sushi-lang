@@ -2,9 +2,9 @@
 
 The kernel is pure functions over an operator, its operand values and the integer type of
 the operation. The AST constant evaluator (`semantics/const_eval.py`) calls it for a
-`const` initializer and for every literal pair in a body, which `reject_overflowing_nest`
-runs through the same evaluator. docs/design/ir.md 7.4 rules that the fold of a
-readable SHIR value calls it too. So no caller holds a copy of the arithmetic.
+`const` initializer, and the readable fold of the typecheck pass
+(`passes/types/fold.py`, docs/design/ir.md 7.4) calls it for each operation in a body
+that the compiler can read. So no caller holds a copy of the arithmetic.
 
 The backend used to hold a second home -- `_fold_arithmetic_constants` and
 `_fold_bitwise_constants` in `backend/expressions/operators.py` folded `+ - *` and

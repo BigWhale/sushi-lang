@@ -39,7 +39,7 @@ def check_lit(validator: TypeValidator, node: e.Lit, expected: Optional[Type]) -
         case e.IntConst() as const:
             return type_int_literal(validator, const, expected, node.loc)
         case e.FloatConst(value):
-            return _type_float_literal(validator, value, expected, node.loc)
+            return type_float_literal(validator, value, expected, node.loc)
         case e.BoolConst():
             return BuiltinType.BOOL
         case e.StrConst():
@@ -50,28 +50,41 @@ def check_lit(validator: TypeValidator, node: e.Lit, expected: Optional[Type]) -
 
 
 def type_int_literal(validator: TypeValidator, const: e.IntConst, expected: Optional[Type],
-                     loc: Span) -> Type:
+                     loc: Span, negated: Optional[Span] = None) -> Type:
     """An integer literal at the integer type of its position, else at its default.
 
     A value that the type of its position cannot hold is CE2073, and one that its default
     cannot hold is CE2070. The type stays the answer: the value is wrong, not the type.
+    A negated literal is one value: `negated` is the span of its negation, and the sign is
+    part of the range check, so -128 is an `i8` and 128 is not. A negated byte literal with
+    no type of its position is CE2073 at the negation, because no negative value fits its
+    `u8`.
     """
-    value = const.value
+    written = const.value
+    value = -written if negated is not None else written
+    radix = 10 if negated is not None else const.radix
     if isinstance(expected, BuiltinType) and is_integer_type(expected):
-        if not int_literal_fits(value, const.radix, expected):
+        if not int_literal_fits(value, radix, expected):
+            spelling = const.byte_spelling if negated is None else None
             er.emit(validator.reporter, er.ERR.CE2073, loc,
-                    literal=const.byte_spelling or str(value), type=expected.value)
+                    literal=spelling or str(value), type=expected.value)
         return expected
     default = int_literal_default(const)
-    if not int_literal_fits(value, const.radix, default):
-        er.emit(validator.reporter, er.ERR.CE2070, loc,
-                radix=_RADIX_NAMES.get(const.radix, "integer"), literal=str(value),
+    if int_literal_fits(value, radix, default):
+        return default
+    if negated is not None and const.byte_spelling is not None:
+        er.emit(validator.reporter, er.ERR.CE2073, negated, literal=str(value),
                 type=default.value)
+        return default
+    value = written
+    er.emit(validator.reporter, er.ERR.CE2070, loc,
+            radix=_RADIX_NAMES.get(const.radix, "integer"), literal=str(value),
+            type=default.value)
     return default
 
 
-def _type_float_literal(validator: TypeValidator, value: float, expected: Optional[Type],
-                        loc: Span) -> Type:
+def type_float_literal(validator: TypeValidator, value: float, expected: Optional[Type],
+                       loc: Span) -> Type:
     if isinstance(expected, BuiltinType) and is_float_type(expected):
         if not float_literal_fits(value, expected):
             er.emit(validator.reporter, er.ERR.CE2073, loc, literal=str(value),

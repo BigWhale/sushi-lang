@@ -33,7 +33,7 @@ so). Three callers reach it:
 
 | Caller | Purpose | Reporter |
 |---|---|---|
-| the `typecheck` pass, through `constant_evaluator` and `operand_evaluator` (`passes/types/__init__.py`) | validate a `const` declaration (`passes/types/constants.py`); read a shift count for [CE2512](../error-catalog.md#ce2512), a divisor for [CE0112](../error-catalog.md#ce0112) and a repeat count (`passes/types/expressions.py`) | the real one for a declaration, silent for the reads |
+| the `typecheck` pass, through `constant_evaluator` (`passes/types/__init__.py`) | validate a `const` declaration (`passes/types/constants.py`); read the value of a constant that a body names, for the readable fold (`passes/types/fold.py`); read a repeat count | the real one for a declaration, silent for the reads |
 | the backend, through `LLVMCodegen.constant_evaluator` (`backend/codegen_llvm.py`) | make the LLVM initializer | silent |
 | `ASTBuilder.integer_constant` (`ast_builder/builder.py`) | read a fixed array size | silent |
 
@@ -41,14 +41,14 @@ The `typecheck` pass and the backend share the collect pass's constant table and
 memo. The AST builder keeps a table of its own, because it runs while the compiler builds
 the AST, which is before any pass. This matters to every later decision in this document.
 
-The divisor read and the shift-count read occur at each level of a nest, and each one
-reads the whole right operand. Their evaluators (`operand_evaluator`) share one more
-table, `folds` in `passes/types/operator_nest.py`. It holds the value of each `BinaryOp`
-and `UnaryOp` that they folded, by the node and by the builtin type that the read asked
-for. Thus a level reads the value of its operand from the table, and a nest is folded
-one time. The table is not on the AST, and it lives until the outermost expression is
-validated. A propagation removes the value of each node under the value that it stamps.
-No other evaluator reads the table, because a read from it records no overflow.
+A body does not call the evaluator for its operators. The `typecheck` pass folds a
+readable SHIR sub-expression at the type of its position (`passes/types/fold.py`, the IR
+design, `ir.md` 7.4): the divisor of [CE0112](../error-catalog.md#ce0112), the shift count
+of [CE2512](../error-catalog.md#ce2512) and each operation that [CE2077](../error-catalog.md#ce2077)
+checks. The fold and the evaluator share the integer kernel (`semantics/integer_ops.py`)
+and the rules of a negation, a float operation, a comparison and a cast, so a body and a
+constant cannot disagree. The fold keeps the value of each node for each type that a read
+asked for, so a nest is folded one time.
 
 **The back end is not the blocker.** `_materialize_constant` (`backend/codegen_llvm.py`)
 builds an `ir.ArrayType` initializer of any length, and `_register_global_constant` (same
@@ -176,12 +176,11 @@ The smallest signed value `% -1` is [CE2077](../error-catalog.md#ce2077).
   `tests/constants/scalar_folding/test_constants_bitwise.sushi` hold it.
 - **The check belongs to the typecheck pass.** The back end does not report a language
   error. The typecheck pass calls the evaluator for a declaration
-  (`passes/types/constants.py`). A body is the second caller: `reject_overflowing_nest`
-  (`passes/types/expressions.py`) reads a NEST of `+ - * / %` nodes and unary minus nodes
-  with a silent reporter. The nest is the top node and each operand below it that has the
-  type of its operator (`passes/types/operator_nest.py`), so a nest is folded one time, at
-  its top, and the check is linear in the depth of the nest. It raises each overflow
-  recorded AT a node of the nest. That one rule keeps the count right -- the innermost
+  (`passes/types/constants.py`). In a body, each operation of `+ - * / %` and each unary
+  minus asks the fold for its own value at its own type, after its operands
+  (`reject_overflow`, `passes/types/expressions.py`). It reports the overflow recorded AT
+  that operation. The fold reads each node one time for each type, so the check is linear
+  in the depth of a nest. That one rule keeps the count right -- the innermost
   operation of `(200 + 100) / 2` reports, the division around it does not, and a use of a
   constant that overflows adds nothing to the report at its declaration.
 - **The code is [CE2077](../error-catalog.md#ce2077).** It is in the CE2070 to CE2079 range of

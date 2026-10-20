@@ -1,0 +1,20 @@
+unit test_err_typeck_bitwise
+
+ShirBody main
+  params : []
+  locals : [_0 "flags": u8, _1 "mask": u8, _2 "any": u8, _3 "diff": u8, _4 "inverse": u8, _5 "wide": i32, _6 "back": i32, _7 "moved": u8, _8 "all": u8, _9 "more": i32, _10 "count": i32, _11 "bad": u8]
+  block  :
+    Assign(LocalRef(_0), Lit(0xf), is_init: true)
+    Assign(LocalRef(_1), Binary(&, LocalRef(_0), Lit(0x3c)), is_init: true)
+    Assign(LocalRef(_2), Binary(|, LocalRef(_0), LocalRef(_1)), is_init: true)
+    Assign(LocalRef(_3), Binary(^, LocalRef(_0), Lit(0xff)), is_init: true)
+    Assign(LocalRef(_4), Unary(~, LocalRef(_0)), is_init: true)
+    Assign(LocalRef(_5), Binary(<<, Lit(1), Lit(10)), is_init: true)
+    Assign(LocalRef(_6), Binary(>>, LocalRef(_5), Lit(2)), is_init: true)
+    Assign(LocalRef(_7), Binary(<<, LocalRef(_1), Lit(1)), is_init: true)
+    Assign(LocalRef(_8), Binary(&, Binary(&, Binary(&, LocalRef(_2), LocalRef(_3)), LocalRef(_4)), LocalRef(_7)), is_init: true)
+    Assign(LocalRef(_9), Binary(|, LocalRef(_6), Lit(3)), is_init: true)
+    Assign(LocalRef(_10), Lit(4), is_init: true)
+    Assign(LocalRef(_11), Binary(&, LocalRef(_0), LocalRef(_10)), is_init: true)
+    Assign(LocalRef(_8), LocalRef(_11), is_init: false)
+    Return(LocalRef(_9))

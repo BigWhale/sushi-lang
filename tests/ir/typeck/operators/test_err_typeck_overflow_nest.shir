@@ -1,0 +1,17 @@
+unit test_err_typeck_overflow_nest
+
+ShirBody main
+  params : []
+  locals : [_0 "fits": u8, _1 "wide": i32, _2 "local": u8, _3 "low": i8, _4 "more": i32, _5 "next": u8, _6 "same": i8, _7 "total": u8]
+  block  :
+    Assign(LocalRef(_0), Binary(+, Binary(/, Binary(+, Lit(100), Lit(100)), Lit(2)), Lit(55)), is_init: true)
+    Assign(LocalRef(_1), Binary(+, Lit(200), Lit(100)), is_init: true)
+    Assign(LocalRef(_2), Binary(+, LocalRef(_0), Lit(250)), is_init: true)
+    Assign(LocalRef(_3), Binary(-, Unary(neg, Lit(127)), Lit(1)), is_init: true)
+    Assign(LocalRef(_4), Binary(+, LocalRef(_1), Lit(1)), is_init: true)
+    Assign(LocalRef(_5), Binary(+, LocalRef(_2), Lit(1)), is_init: true)
+    Assign(LocalRef(_6), Binary(-, LocalRef(_3), Lit(0)), is_init: true)
+    Assign(LocalRef(_7), Binary(/, Binary(+, Lit(200), Lit(100)), Lit(2)), is_init: true)
+    Assign(LocalRef(_5), LocalRef(_7), is_init: false)
+    Assign(LocalRef(_6), Binary(+, LocalRef(_6), Lit(1)), is_init: false)
+    Return(LocalRef(_4))

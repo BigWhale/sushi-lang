@@ -174,7 +174,6 @@ UNREFERENCED: set[str] = {
     "CE2111", "CE2116",                       # Tier A: new() and from([]), assert
     "CE6102",                                 # Tier A: type arguments after a dot
     "CE2094",                                 # Tier C: closures
-    "CE5010",                                 # Tier D: ptr
 }
 
 

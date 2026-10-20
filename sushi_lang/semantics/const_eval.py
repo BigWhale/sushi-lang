@@ -11,7 +11,7 @@ import math
 import operator
 from dataclasses import dataclass
 from contextlib import contextmanager
-from typing import (Callable, Dict, Iterator, List, Mapping, Optional, Tuple, TypeGuard,
+from typing import (Callable, Iterator, List, Mapping, Optional, Tuple, TypeGuard,
                     Union, TYPE_CHECKING)
 
 
@@ -80,25 +80,12 @@ NOT_CONSTANT: Mapping[type, str] = {
 }
 
 
-@dataclass
-class ConstOverflow:
-    """An operation whose result its type cannot hold.
-
-    The node is kept so a caller that reads an expression with a silent reporter can
-    tell its own overflow from one inside a constant it named: only the node that
-    computed the value reports it (CE2077).
-    """
-    node: Expr
-    op: str
-    value: int
-    semantic_type: Type
-    span: Optional[Span]
-
-
-def emit_overflow(reporter: Reporter, overflow: ConstOverflow) -> None:
-    """Raise a recorded overflow as CE2077, whoever read the expression."""
-    er.emit_with(reporter, er.ERR.CE2077, overflow.span, op=overflow.op,
-                 value=overflow.value, type=display_type(overflow.semantic_type)) \
+def emit_overflow(reporter: Reporter, op: str, value: int, semantic_type: Type,
+                  span: Optional[Span]) -> None:
+    """CE2077 for an operation whose result `value` its type cannot hold, in a constant and
+    in a body alike."""
+    er.emit_with(reporter, er.ERR.CE2077, span, op=op, value=value,
+                 type=display_type(semantic_type)) \
         .help("use a wider type, or compute in one and cast the result with 'as'").emit()
 
 
@@ -135,12 +122,6 @@ class AggregateConstant:
 
 
 ConstantValue = Union[ScalarConstant, AggregateConstant]
-
-# The folds of operator nodes that a group of silent evaluators share, by the identity of
-# the node: the node, and its value at each builtin type that a fold asked for. The
-# table is never on the AST. Its owner decides how long it lives, and removes a node
-# whose stamps change (`passes/types/operator_nest.py`).
-OperatorFolds = Dict[int, Tuple[Expr, Dict[BuiltinType, Optional[ConstantValue]]]]
 
 
 def is_integer_constant(value: ConstantValue) -> TypeGuard[ScalarConstant]:
@@ -288,8 +269,7 @@ class ConstantEvaluator:
                  namespaces_of: Optional[NamespacesOf] = None,
                  struct_table: object = None, enum_table: object = None, *,
                  reported_cycles: Optional[
-                     set[frozenset[Tuple[Optional[str], str]]]] = None,
-                 folds: Optional[OperatorFolds] = None):
+                     set[frozenset[Tuple[Optional[str], str]]]] = None):
         """Initialize the evaluator.
 
         `unit_name` is the unit whose constant expression is being evaluated. Two units
@@ -322,11 +302,6 @@ class ConstantEvaluator:
         self.evaluation_stack: List[Tuple[Optional[str], str]] = []
         self.reported_cycles = (const_table.reported_cycles if reported_cycles is None
                                 else reported_cycles)
-        # Each operation that left its type, for a caller whose reporter is silent.
-        self.overflows: List[ConstOverflow] = []
-        # The shared folds of operator nodes. A read from it records no overflow, so a
-        # caller that reads `overflows` passes none.
-        self.folds = folds
 
     @property
     def scope(self) -> UnitScope:
@@ -375,17 +350,7 @@ class ConstantEvaluator:
             er.emit(self.reporter, er.ERR.CE0108, span,
                     what=NOT_CONSTANT.get(type(expr), "this expression"))
             return None
-        if (self.folds is None or not isinstance(expr, (BinaryOp, UnaryOp))
-                or not isinstance(expected_type, BuiltinType)):
-            return handler(self, expr, expected_type, span)
-        entry = self.folds.get(id(expr))
-        if entry is None or entry[0] is not expr:
-            entry = (expr, {})
-            self.folds[id(expr)] = entry
-        values = entry[1]
-        if expected_type not in values:
-            values[expected_type] = handler(self, expr, expected_type, span)
-        return values[expected_type]
+        return handler(self, expr, expected_type, span)
 
     def _evaluate_member_access(self, expr: MemberAccess, expected_type: Type,
                                 span: Optional[Span]) -> Optional[ConstantValue]:
@@ -690,7 +655,7 @@ class ConstantEvaluator:
                 er.emit(self.reporter, er.ERR.CE0110, span, op='negation on non-numeric type')
                 return None
             if isinstance(negated, integer_ops.Folded):
-                return self._checked(expr, '-', negated, operand.semantic_type, span)
+                return self._checked('-', negated, operand.semantic_type, span)
             return negated
 
         elif expr.op == '~':
@@ -893,14 +858,11 @@ class ConstantEvaluator:
 
         return base.elements[index.value]
 
-    def _checked(self, node: Expr, op: str, folded: integer_ops.Folded, semantic_type: Type,
+    def _checked(self, op: str, folded: integer_ops.Folded, semantic_type: Type,
                  span: Optional[Span]) -> Optional[ConstantValue]:
         """The value of an overflow-checked operation, or CE2077 when it left its type."""
         if folded.overflows:
-            record = ConstOverflow(node=node, op=op, value=folded.value,
-                                   semantic_type=semantic_type, span=span)
-            self.overflows.append(record)
-            emit_overflow(self.reporter, record)
+            emit_overflow(self.reporter, op, folded.value, semantic_type, span)
             return None
         return ScalarConstant(folded.value, semantic_type)
 
@@ -921,7 +883,7 @@ class ConstantEvaluator:
             if isinstance(answer, integer_ops.Refusal):
                 er.emit(self.reporter, er.ERR.CE0112, span)
                 return None
-            return self._checked(node, node.op, answer, left.semantic_type, span)
+            return self._checked(node.op, answer, left.semantic_type, span)
 
         value = float_arithmetic(node.op, left, right)
         if value is None:

@@ -1,0 +1,34 @@
+# EXPECT_ERROR_CODES_EXACT: CE2518
+# EXPECT_STDERR_CONTAINS: "operator '+' takes a numeric operand, and 'bool' is not one"
+# EXPECT_DUMP_SHIR: test_err_typeck_arithmetic.shir
+#
+# The arithmetic operators take two numbers of one type and answer that type. A literal
+# operand takes the type of its position: the written type of a `let` reaches each
+# literal of the operation, and a literal beside a typed operand takes the type of that
+# operand. A negation answers the type of its operand, and a negated literal is one
+# value, so -128 is an `i8`. The last `let` gives a `bool` to `+`, which is CE2518.
+
+fn main() i32:
+    let i32 a = 7
+    let i32 b = 2
+    let i32 sum = a + b
+    let i32 diff = a - 3
+    let i32 prod = 4 * b
+    let i32 quot = a / b
+    let i32 rest = a % b
+    let u8 small = 200
+    let u8 more = small + 50
+    let u8 both = 1 + 2
+    let f64 half = 1.5 * 2.0
+    let i32 neg = -a
+    let i8 low = -128
+    let i32 nested = (sum + diff) * (prod - quot) + rest + neg
+    let u8 bytes = more - both
+    let f64 third = half / 3.0
+    let i8 higher = low + 1
+    let bool flag = true
+    let i32 bad = flag + 1
+    bytes := bytes + 1
+    third := third - 1.0
+    higher := higher - 1
+    return nested + bad

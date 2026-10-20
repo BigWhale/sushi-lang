@@ -42,7 +42,6 @@ from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.typeck_check import check_answers
 
 from .compatibility import types_compatible
-from .operator_nest import OperatorNests
 from .constants import validate_constant
 from .public_signatures import check_public_signatures
 from .signatures import (
@@ -164,9 +163,6 @@ class TypeValidator:
         # after the refusal, so the position that holds it adds no second error.
         self.refused_ranges: set[int] = set()
 
-        # The kept types and the handed overflow checks of the expression being validated.
-        self.operator_nests = OperatorNests()
-
     def run(self, program: Program) -> None:
         """Entry point for type validation."""
         # Whole-unit, and BEFORE the per-declaration walk: it is the only way a public
@@ -267,17 +263,6 @@ class TypeValidator:
                                  self.const_table, self.current_unit_name,
                                  self.namespaces_of, self.struct_table, self.enum_table)
 
-    def operand_evaluator(self):
-        """A silent evaluator that shares the operator folds of the expression being validated.
-
-        A check that reads an operand at each level of a nest uses it, so the nest is
-        folded one time (`operator_nest.py`).
-        """
-        from sushi_lang.semantics.const_eval import ConstantEvaluator
-        return ConstantEvaluator(Reporter(), self.const_table, self.current_unit_name,
-                                 self.namespaces_of, self.struct_table, self.enum_table,
-                                 folds=self.operator_nests.folds)
-
     def check_body(self, decl) -> None:
         """The body half over the SHIR body of `decl` (docs/design/ir.md 7.3, 7.9).
 
@@ -295,7 +280,7 @@ class TypeValidator:
         self.body = body
         self.answers = answers = self.shir.typeck_of(body)
         self.body_locals = {local.id: local for local in body.locals}
-        self.folder = Folder(self._constant_value)
+        self.folder = Folder(self._constant_value, self.written_type)
         origin = self.reporter.origin
         filename = origin.filename if origin is not None else self.reporter.filename
         offered = sum(self.reporter.errors_offered.values())
@@ -319,6 +304,12 @@ class TypeValidator:
         if self.answers is None:
             er.raise_internal_error("CE0000", detail="the typecheck pass walks no SHIR body")
         return self.answers
+
+    def body_folder(self) -> Folder:
+        """The readable fold of the body that the body half walks (docs/design/ir.md 7.4)."""
+        if self.folder is None:
+            er.raise_internal_error("CE0000", detail="the typecheck pass walks no SHIR body")
+        return self.folder
 
     def decl_name(self, decl: 'DeclId') -> str:
         """The written name of a declaration that a SHIR node names."""

@@ -904,9 +904,6 @@ class IntLit(Node):
     value: int
     radix: int = 10  # 2 (binary), 8 (octal), 10 (decimal), 16 (hexadecimal)
     resolved_type: Optional[Type] = None
-    # Set once the literal's range has been checked against its context type, so a
-    # second look does not report CE2049 twice.
-    range_checked: bool = False
     # `x as i64` gives the literal the cast's target as its context, so its range is
     # judged against that and not against the default i32.
     in_cast_context: bool = False
@@ -918,7 +915,6 @@ class IntLit(Node):
 class FloatLit(Node):
     value: float
     resolved_type: Optional[Type] = None
-    range_checked: bool = False
 
 @dataclass(slots=True)
 class BoolLit(Node):

@@ -11,6 +11,11 @@ CE2007, except for a hidden local, which takes the type of its value. An `Assign
 other place, and a reference `let`, are not typed yet. A `Return` of a bare body checks
 its value at the declared return type, and refuses a `Result` constructor (CE2091); a
 `Return` of a body with a channel, and of an initializer, are not typed yet.
+
+An `If` and a `Loop` with a `Cond` source check their condition (`check_condition`) and
+their blocks; an `elif` is an `If` in the `else` block. The kind of a `while` loop is
+`While` (ir.md 7.7). A loop over items is not typed yet. A `break` and a `continue` have
+no answer: the scope pass refuses one outside a loop.
 """
 from __future__ import annotations
 
@@ -22,9 +27,11 @@ from sushi_lang.semantics.passes.types.compatibility import (
     reject_mismatch, reject_return_mismatch, reject_unhandled_result)
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
 from sushi_lang.semantics.passes.types.utils import resolve_declared_type, validate_type_name
+from sushi_lang.semantics.passes.types.visit.operators import check_condition
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer, ShirBody
+from sushi_lang.semantics.shir.loop_kind import While
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.typesys import BuiltinType, ReferenceType
 
@@ -112,3 +119,23 @@ def check_return(validator: TypeValidator, node: s.Return) -> None:
     got = visit.check_expr(validator, node.value, expected)
     if expected is not None:
         reject_return_mismatch(validator, got, expected, node.value.loc)
+
+
+def check_if(validator: TypeValidator, node: s.If) -> None:
+    check_condition(validator, node.cond)
+    check_block(validator, node.then)
+    if node.otherwise is not None:
+        check_block(validator, node.otherwise)
+
+
+def check_loop(validator: TypeValidator, node: s.Loop) -> None:
+    """A `while` loop: its condition, its kind and its body."""
+    if not isinstance(node.source, s.Cond):
+        visit.stop_at(validator, node)
+    check_condition(validator, node.source.cond)
+    validator.body_answers().record_loop_kind(node.shir_id, While())
+    check_block(validator, node.body)
+
+
+def check_jump(_validator: TypeValidator, _node: s.Break | s.Continue) -> None:
+    """A `break` or a `continue`: no type and no answer."""

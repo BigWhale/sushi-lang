@@ -1,0 +1,19 @@
+unit test_err_typeck_logical
+
+ShirBody main
+  params : []
+  locals : [_0 "count": i32, _1 "yes": bool, _2 "no": bool, _3 "either": bool, _4 "both": bool, _5 "one": bool, _6 "none": bool, _7 "mixed": bool, _8 "odd": bool, _9 "last": bool, _10 "bad": bool]
+  block  :
+    Assign(LocalRef(_0), Lit(3), is_init: true)
+    Assign(LocalRef(_1), Lit(true), is_init: true)
+    Assign(LocalRef(_2), Lit(false), is_init: true)
+    Assign(LocalRef(_3), Binary(or, LocalRef(_1), LocalRef(_2)), is_init: true)
+    Assign(LocalRef(_4), Binary(and, LocalRef(_1), LocalRef(_2)), is_init: true)
+    Assign(LocalRef(_5), Binary(xor, LocalRef(_1), LocalRef(_2)), is_init: true)
+    Assign(LocalRef(_6), Unary(not, LocalRef(_3)), is_init: true)
+    Assign(LocalRef(_7), Binary(or, Binary(and, Binary(>, LocalRef(_0), Lit(1)), Unary(not, Binary(==, LocalRef(_0), Lit(2)))), LocalRef(_4)), is_init: true)
+    Assign(LocalRef(_8), Binary(==, LocalRef(_5), LocalRef(_6)), is_init: true)
+    Assign(LocalRef(_9), Binary(and, Binary(and, LocalRef(_7), LocalRef(_1)), LocalRef(_8)), is_init: true)
+    Assign(LocalRef(_10), Binary(and, LocalRef(_9), LocalRef(_0)), is_init: true)
+    Assign(LocalRef(_10), Lit(false), is_init: false)
+    Return(Lit(0))

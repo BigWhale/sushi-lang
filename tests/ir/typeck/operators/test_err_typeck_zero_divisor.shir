@@ -1,0 +1,21 @@
+unit test_err_typeck_zero_divisor
+
+ShirBody TWO (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit(2))
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32, _1 "zero": i32, _2 "half": i32, _3 "odd": i32, _4 "any": i32, _5 "calc": i32, _6 "sum": i32, _7 "bad": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(9), is_init: true)
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Assign(LocalRef(_2), Binary(/, LocalRef(_0), Lit(2)), is_init: true)
+    Assign(LocalRef(_3), Binary(%, LocalRef(_0), ConstRef(@TWO)), is_init: true)
+    Assign(LocalRef(_4), Binary(/, LocalRef(_0), LocalRef(_1)), is_init: true)
+    Assign(LocalRef(_5), Binary(/, LocalRef(_0), Binary(+, ConstRef(@TWO), Lit(1))), is_init: true)
+    Assign(LocalRef(_6), Binary(+, Binary(+, Binary(+, LocalRef(_2), LocalRef(_3)), LocalRef(_4)), LocalRef(_5)), is_init: true)
+    Assign(LocalRef(_7), Binary(/, LocalRef(_0), Binary(-, Lit(2), ConstRef(@TWO))), is_init: true)
+    Return(Binary(+, LocalRef(_6), LocalRef(_7)))

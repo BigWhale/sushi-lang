@@ -9,7 +9,8 @@ The fold has no arithmetic of its own. The integer operators are the kernel's
 (`semantics/integer_ops.py`), and the rules of a negation, float arithmetic, a
 comparison, a cast and the text of a hole are shared functions of the constant evaluator
 (`semantics/const_eval.py`), so a body and a constant cannot disagree. A constant is read from the constant table through the reader
-that the pass gives (ruling Q5).
+that the pass gives (ruling Q5), and the target of a cast through the reader of written
+types that the pass gives: the check of a template reads `T` at its opaque type.
 
 ONE table, `FOLDS`, holds the arm of each class that can be readable, and `UNREADABLE`
 holds the classes that make a sub-expression unreadable (gate:
@@ -42,6 +43,9 @@ Readable: TypeAlias = ScalarConstant | AggregateConstant | RangePlan
 #: The value of a constant by its declaration, or None when it has no value.
 ConstantReader: TypeAlias = Callable[[DeclId], Optional[ConstantValue]]
 
+#: A type that the body writes, as the pass reads it.
+WrittenReader: TypeAlias = Callable[[Type], Type]
+
 
 @dataclass(frozen=True, slots=True)
 class Overflow:
@@ -55,8 +59,10 @@ class Overflow:
 class Folder:
     """The fold of the sub-expressions of one body, with the reader of its constants."""
 
-    def __init__(self, constants: ConstantReader) -> None:
+    def __init__(self, constants: ConstantReader,
+                 written: WrittenReader = lambda ty: ty) -> None:
         self.constants = constants
+        self.written = written
         self.overflows: list[Overflow] = []
         self._memo: dict[tuple[Any, Optional[Type]], Optional[Readable]] = {}
 
@@ -154,10 +160,11 @@ def _binary(folder: Folder, node: e.Binary, ty: Optional[Type]) -> Optional[Read
 
 
 def _cast(folder: Folder, node: e.Cast, _ty: Optional[Type]) -> Optional[Readable]:
-    operand = folder.read(node.operand, node.target)
+    target = folder.written(node.target)
+    operand = folder.read(node.operand, target)
     if not isinstance(operand, (ScalarConstant, AggregateConstant)):
         return None
-    return cast_constant(operand, node.target)
+    return cast_constant(operand, target)
 
 
 def _index(folder: Folder, node: e.Index, _ty: Optional[Type]) -> Optional[Readable]:

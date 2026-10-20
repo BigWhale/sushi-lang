@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2077
+# EXPECT_STDERR_CONTAINS: "operator '+' gives 300, which is out of range for u8"
+# EXPECT_DUMP_SHIR: test_err_typeck_overflow_nest.shir
+#
+# The compiler reads each operation of a nest whose operands it can read, at the type of
+# the operation, and an operation that leaves its type is CE2077. A nest whose values fit
+# compiles, and so does an operation on a local. The last `let` reads 200 + 100 at `u8`,
+# which is 300, and only that operation reports: the division around it does not.
+
+fn main() i32:
+    let u8 fits = (100 + 100) / 2 + 55
+    let i32 wide = 200 + 100
+    let u8 local = fits + 250
+    let i8 low = -127 - 1
+    let i32 more = wide + 1
+    let u8 next = local + 1
+    let i8 same = low - 0
+    let u8 total = (200 + 100) / 2
+    next := total
+    same := same + 1
+    return more

@@ -152,7 +152,6 @@ def _stamp_numeric_literal(validator: 'TypeValidator', node: 'Expr',
         # Stamp even on failure: CE2073 is authoritative and compilation aborts, but
         # stamping keeps downstream type inference consistent (no secondary CE2049).
         lit.resolved_type = expected
-        lit.range_checked = True
     elif isinstance(lit, FloatLit) and expected in _NUMERIC_FLOAT:
         value = sign * float(lit.value)
         if not float_literal_fits(value, expected):
@@ -452,8 +451,6 @@ def propagate_types_to_value(validator: 'TypeValidator', value_expr: Expr,
                             expected_type: 'Type') -> None:
     """Unified entry point for all type propagation."""
     from .utils import names_no_type
-    # A stamp can change the type of a node under the value that is validated already.
-    validator.operator_nests.forget_under(value_expr)
     if names_no_type(validator, expected_type):
         _note_refused_declared_type(validator, value_expr)
         return
