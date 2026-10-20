@@ -1,7 +1,7 @@
 """The instantiate pass's lambda annotate seam must not mutate the node (issue #214)."""
 from __future__ import annotations
 
-from sushi_lang.semantics.passes.types.visitor import infer_lambda_type
+from sushi_lang.semantics.passes.types.visit.helpers import infer_lambda_type
 from sushi_lang.semantics.ast import Lambda, Param, Name
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType
 

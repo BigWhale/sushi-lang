@@ -229,7 +229,7 @@ def _enum_receiver(validator: 'TypeValidator', node: 'DotCall', *,
 def _fn_field_type(validator: 'TypeValidator', node: 'DotCall',
                    receiver_type: Optional[Type]) -> Optional[Type]:
     """The FunctionType of a fn-typed field this call goes through, or None."""
-    from sushi_lang.semantics.passes.types.visitor import resolve_fn_field_call
+    from sushi_lang.semantics.passes.types.visit.helpers import resolve_fn_field_call
     return resolve_fn_field_call(validator, node, receiver_type)
 
 

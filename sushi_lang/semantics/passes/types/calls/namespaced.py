@@ -416,7 +416,7 @@ def _reject_unknown_member(validator: 'TypeValidator', receiver, name: str,
 def _stdlib_return_type(validator: 'TypeValidator', node: 'DotCall',
                         binding: 'Binding') -> Optional[Type]:
     """A registry stdlib function's return type, by the rules its module declares."""
-    from sushi_lang.semantics.passes.types.visitor import _REGISTRY_TYPED_STDLIB_MODULES
+    from sushi_lang.semantics.passes.types.visit.inference import _REGISTRY_TYPED_STDLIB_MODULES
     module_path = binding.provider.origin
     stdlib_func = binding.record
 

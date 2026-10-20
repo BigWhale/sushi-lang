@@ -141,6 +141,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "expressions.py", "validate_try_expression", _P24),
     (_TYPES + "operator_nest.py", "enter", _P24),
     (_TYPES + "utils.py", "reject_named_args", _P24),
+    (_TYPES + "calls/user_defined.py", "validate_function_call", _P24),
     (_TYPES + "expressions.py", "validate_boolean_condition", _P24),
     (_TYPES + "statements.py", "validate_let_statement", _P24),
     (_TYPES + "statements.py", "validate_rebind_statement", _P24),
@@ -154,6 +155,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "expressions.py", "validate_cast_expression", _TIER_A),
     (_TYPES + "expressions.py", "validate_index_access", _TIER_A),
     (_TYPES + "arguments.py", "reject_type_pack_value", _TIER_C),
+    (_TYPES + "visit/helpers.py", "validate_fn_field_call_args", _TIER_C),
     (_TYPES + "statements.py", "validate_foreach_statement", _TIER_A),
     (_TYPES + "statements.py", "validate_expand_statement", _TIER_C),
 )

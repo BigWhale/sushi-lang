@@ -83,7 +83,7 @@ def test_the_ladder_stops_asking_once_a_rung_claims():
 def test_both_consumers_answer_every_rung(consumer):
     """The gate that keeps the two implementations one: a missing rung is a hole."""
     from sushi_lang.semantics.passes.scope import ScopeAnalyzer
-    from sushi_lang.semantics.passes.types.visitor import _InferenceRungs
+    from sushi_lang.semantics.passes.types.visit.inference import _InferenceRungs
 
     answerer = ScopeAnalyzer if consumer == "scope" else _InferenceRungs
     asked = typing.get_protocol_members(Rungs)

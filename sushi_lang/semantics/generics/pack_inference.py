@@ -151,7 +151,7 @@ def infer_call_arg_type(validator, arg_expr) -> "Type | None":
     if validator is None or holds_a_range_value(arg_expr):
         return None
     if isinstance(arg_expr, Lambda):
-        from sushi_lang.semantics.passes.types.visitor import infer_lambda_type
+        from sushi_lang.semantics.passes.types.visit.helpers import infer_lambda_type
         return infer_lambda_type(validator, arg_expr, stamp=False)
     arg_type = validator.infer_expression_type(arg_expr)
     if arg_type is None and getattr(arg_expr, "method", None) == "clone":

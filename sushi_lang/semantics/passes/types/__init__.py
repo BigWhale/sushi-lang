@@ -21,7 +21,7 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.typesys import Type, BuiltinType
-from sushi_lang.semantics.passes.types.visitor import StatementValidator, ExpressionValidator, TypeInferenceVisitor
+from sushi_lang.semantics.passes.types.visit.inference import TypeInferenceVisitor
 
 from .compatibility import types_compatible
 from .operator_nest import OperatorNests
