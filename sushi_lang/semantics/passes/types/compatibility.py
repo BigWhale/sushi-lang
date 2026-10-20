@@ -56,6 +56,17 @@ def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Op
     return reject_mismatch(validator, value_type, declared_type, value_span, declared_span)
 
 
+def reject_unhandled_result(validator: 'TypeValidator', got: Optional[Type], expected: Type,
+                            span: Optional[Span]) -> bool:
+    """CE2505 when a value of a `Result` type goes where a type that is no `Result` is
+    declared (#535). Asked before CE2002, which refuses the same value and names no fix."""
+    from sushi_lang.semantics.generics.results import is_result_enum
+    if not is_result_enum(got) or is_result_enum(expected):
+        return False
+    er.emit(validator.reporter, er.ERR.CE2505, span)
+    return True
+
+
 def reject_mismatch(validator: 'TypeValidator', got: Optional[Type], expected: Type,
                     value_span: Optional[Span], declared_span: Optional[Span]) -> bool:
     """CE2002 when a value of the type `got` cannot go where `expected` is declared.

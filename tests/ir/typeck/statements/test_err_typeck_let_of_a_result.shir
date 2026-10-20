@@ -1,0 +1,16 @@
+unit test_err_typeck_let_of_a_result
+
+ShirBody take
+  params : [(_0 "r": Result@(i32, StdError), Guaranteed)]
+  locals : [_1 "kept": Result@(i32, StdError), _2 "x": i32]
+  block  :
+    Assign(LocalRef(_1), LocalRef(_0), is_init: true)
+    ExprStmt(LocalRef(_1))
+    Assign(LocalRef(_2), LocalRef(_0), is_init: true)
+    Return(LocalRef(_2))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))

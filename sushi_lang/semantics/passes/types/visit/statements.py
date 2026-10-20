@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.compatibility import (
-    reject_mismatch, reject_return_mismatch)
+    reject_mismatch, reject_return_mismatch, reject_unhandled_result)
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
 from sushi_lang.semantics.passes.types.utils import resolve_declared_type, validate_type_name
 from sushi_lang.semantics.shir import exprs as e
@@ -82,8 +82,9 @@ def _check_let(validator: TypeValidator, node: s.Assign, target: e.LocalRef) -> 
     answers.record_local(local.id, ty)
     visit.check_expr(validator, target)
     got = visit.check_expr(validator, node.value, ty)
-    if not refused:
-        reject_mismatch(validator, got, ty, node.value.loc, local.declared_loc)
+    if refused or reject_unhandled_result(validator, got, ty, node.value.loc):
+        return
+    reject_mismatch(validator, got, ty, node.value.loc, local.declared_loc)
 
 
 def check_expr_stmt(validator: TypeValidator, node: s.ExprStmt) -> None:

@@ -154,7 +154,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "operator_nest.py", "leave", _P24),
     (_TYPES + "calls/user_defined.py", "validate_function_call", _P24),
     (_TYPES + "expressions.py", "validate_boolean_condition", _P24),
-    (_TYPES + "statements.py", "reject_unhandled_result", _P24),
     (_TYPES + "statements.py", "_validate_channel_return", _P24),
     (_TYPES + "matching.py", "validate_match_statement", _TIER_A),
     (_TYPES + "constants.py", "assignment_span", _TIER_A),

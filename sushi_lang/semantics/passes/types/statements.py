@@ -8,7 +8,7 @@ from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
-from sushi_lang.semantics.ast import Let, Rebind, Foreach, EnumConstructor, DotCall, MethodCall, Name, MemberAccess, IndexAccess, RangeExpr
+from sushi_lang.semantics.ast import Let, Rebind, Foreach, DotCall, MethodCall, Name, MemberAccess, IndexAccess, RangeExpr
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.places import Step, walk_place
@@ -21,51 +21,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
     from . import TypeValidator
     from sushi_lang.semantics.ast import Expand
-
-
-def _declares_a_result(stmt: Let, resolved_type) -> bool:
-    """Does the `let` declare a `Result`, in either spelling the passes keep?
-
-    A declared `Result@(T, E)` either resolves to its interned enum or stays a
-    `GenericTypeRef`, so both are read or CE2505 misfires on a legal binding.
-    """
-    from sushi_lang.semantics.generics.results import is_result_enum
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-    return (
-        is_result_enum(resolved_type)
-        or is_result_enum(stmt.ty)
-        or (isinstance(stmt.ty, GenericTypeRef) and stmt.ty.base_name == "Result")
-    )
-
-
-def reject_unhandled_result(validator: 'TypeValidator', stmt: Let, resolved_type) -> bool:
-    """CE2505 when a `let` binds an unhandled `Result` to a non-Result type (#535).
-
-    Asked BEFORE the general compatibility question. CE2002 refuses the same binding and
-    names no fix, so the two printed together at one location for a call and CE2002 alone
-    answered for a channel method -- the one shape the help text is written for.
-
-    ONE emit, two spellings of the same right-hand side: a `Result` constructor infers as
-    None and is read from its own shape (it used to reach codegen as CE0113, #48), and
-    everything else is asked what it yields. A method call is included, because
-    `.realise()` and `.clone()` answer the UNWRAPPED type and never reach the emit.
-    """
-    if _declares_a_result(stmt, resolved_type):
-        return False
-
-    is_result_ctor = (
-        (isinstance(stmt.value, EnumConstructor) and stmt.value.enum_name == "Result")
-        or (isinstance(stmt.value, DotCall)
-            and isinstance(stmt.value.receiver, Name)
-            and stmt.value.receiver.id == "Result")
-    )
-    if not is_result_ctor:
-        from sushi_lang.semantics.generics.results import is_result_enum
-        if not is_result_enum(validator.infer_expression_type(stmt.value)):
-            return False
-
-    er.emit(validator.reporter, er.ERR.CE2505, stmt.value.loc)
-    return True
 
 
 @dataclass(frozen=True)
@@ -559,7 +514,7 @@ def _choose_the_walk(validator: 'TypeValidator', stmt: Foreach, iterable_type) -
 
 def _foreach_iterable_is_addressable(iterable) -> bool:
     """True when the iterable's elements live in addressable container storage."""
-    from sushi_lang.semantics.ast import DotCall, MethodCall
+    from sushi_lang.semantics.ast import MethodCall
     if isinstance(iterable, (MethodCall, DotCall)):
         return iterable.method in ("iter", "keys", "values")
     return False
