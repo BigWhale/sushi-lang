@@ -49,6 +49,9 @@ U64_MAX = (1 << 64) - 1
     # where the quotient does, and the value it reports is the quotient.
     ("/", I8, -128, -1, Folded(128, overflows=True)),
     ("%", I8, -128, -1, Folded(128, overflows=True)),
+    # A remainder that its type cannot hold leaves the type too. A negated literal leaf is
+    # not range-checked by the evaluator (that is CE2073's question), so it reaches here.
+    ("%", U8, -7, -2, Folded(-1, overflows=True)),
     ("+", U8, 200, 100, Folded(300, overflows=True)),
     ("-", U8, 0, 1, Folded(-1, overflows=True)),
     ("*", I8, 64, 2, Folded(128, overflows=True)),

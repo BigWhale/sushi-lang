@@ -11,7 +11,11 @@ node.
 - A WIDTH-DEFINED operator (`~ & | ^ << >>`) and a cast keep the bits that the type
   holds, and never leave the type.
 
-A value that the kernel takes is in the range of its type. The gate is
+An operand can be outside the range of its type: the evaluator does not check the range
+of a negated literal leaf (CE2073 is that question), and that leaf reaches the kernel. So
+an overflow-checked operator checks its result, whatever its operands are. A width-defined
+operator and a cast keep the bits of the type for any operand, except `>>`, which takes a
+value in the range of its type. The gate is
 `tests/unit/test_integer_operator_semantics_agree.py`.
 """
 from __future__ import annotations
@@ -120,9 +124,10 @@ def _checked(value: int, ty: Type) -> Folded:
 def _divide(op: str, left: int, right: int, ty: Type) -> Answer:
     """`/` and `%` truncate toward zero, as sdiv and srem do. Python floors (#441).
 
-    The remainder overflows exactly where the quotient does: the smallest signed value
-    with -1. LLVM calls that srem undefined and x86 traps on it, so the quotient is what
-    is checked (compile-time-evaluation.md, Ruling 1).
+    For operands in the range of the type, the remainder overflows exactly where the
+    quotient does: the smallest signed value with -1. LLVM calls that srem undefined and
+    x86 traps on it, so the quotient is checked first (compile-time-evaluation.md, Ruling
+    1). The remainder is checked too, for an operand outside its range (`-7 % -2` at `u8`).
     """
     if right == 0:
         return Refusal.DIVISION_BY_ZERO
@@ -131,7 +136,7 @@ def _divide(op: str, left: int, right: int, ty: Type) -> Answer:
     if op == "/" or not fits_integer_type(quotient, ty):
         return _checked(quotient, ty)
     remainder = abs(left) % abs(right)
-    return Folded(-remainder if left < 0 else remainder)
+    return _checked(-remainder if left < 0 else remainder, ty)
 
 
 def _shift(op: str, value: int, count: int, ty: Type, width: int) -> Answer:

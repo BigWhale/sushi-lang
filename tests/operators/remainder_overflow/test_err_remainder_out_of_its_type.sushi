@@ -1,0 +1,10 @@
+# A remainder that its type cannot hold is CE2077, as a quotient is. `-7 % -2` at `u8`
+# gives -1. Each negated literal is CE2073, because a `u8` cannot hold it, and the
+# remainder is checked too: the kernel gets the values that the literals give.
+# EXPECT_ERROR_CODES_EXACT: CE2073, CE2073, CE2077
+# EXPECT_STDERR_CONTAINS: "operator '%' gives -1, which is out of range for u8"
+
+fn main() i32:
+    let u8 y = -7 % -2
+    println(y)
+    return 0
