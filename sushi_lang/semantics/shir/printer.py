@@ -20,6 +20,10 @@ The rules of the text, from the example of ir.md 8.11:
 - An argument with a written mode prints as `(value, Convention)`; a bloom adds `...`.
 - No `shir_id` and no span: the example of ir.md 8.11 shows neither.
 - A hole prints as `<hole: AstClass>`, with the name of the AST class that it stands for.
+- The answers of `typecheck` print in place, from the table of the body (ir.md 7.3): the
+  resolved callee in place of the call target (`Free(@decorate)`, `Intrinsic("println")`),
+  each argument of a call with its resolved convention, and the type of each local. No
+  other answer prints. Where the table holds no answer, the written form prints.
 - A value pack parameter (`...Ts args`) adds `pack: true` to its parameter.
 - A body with copies of an unrolled `expand` prints a `copies` line after its block: the
   path of each block that holds a copy, from the block of the body (`block`,
@@ -28,21 +32,23 @@ The rules of the text, from the example of ir.md 8.11:
 """
 from __future__ import annotations
 
-import dataclasses
 import json
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Sequence, TypeAlias
+from typing import Any, Callable, Iterable, Optional, Sequence, TypeAlias
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import body as b
+from sushi_lang.semantics.shir import callee as c
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
+from sushi_lang.semantics.shir.typeck import TypeckResults
+from sushi_lang.semantics.shir.walk import walk
 from sushi_lang.semantics.typesys import BorrowMode
 
 #: The names of ir.md 8.3.
@@ -60,8 +66,10 @@ _INT_PREFIXES: dict[int, Callable[[int], str]] = {16: hex, 8: oct, 2: bin}
 
 @dataclass(frozen=True, slots=True)
 class ShirPrinter:
-    """The text of one value of a body. `decls` names each `DeclId`."""
+    """The text of one value of a body. `decls` names each `DeclId`, and `answers` holds
+    the answers of `typecheck` for the body, if any."""
     decls: DeclNames
+    answers: Optional[TypeckResults] = None
 
     def show(self, value: object) -> str:
         row = PRINTERS.get(type(value))
@@ -113,9 +121,23 @@ def _int(_pr: ShirPrinter, const: e.IntConst) -> str:
     return str(const.value) if spell is None else spell(const.value)
 
 
-def _arg(pr: ShirPrinter, arg: e.Arg) -> str:
+def _arg(pr: ShirPrinter, arg: e.Arg, convention: Optional[Convention] = None) -> str:
+    """An argument with its resolved convention, else with its written marker, if any."""
     text = pr.show(arg.value) + ("..." if arg.bloom else "")
-    return text if arg.marker is None else f"({text}, {CONVENTIONS[arg.marker]})"
+    mode = arg.marker if convention is None else convention
+    return text if mode is None else f"({text}, {CONVENTIONS[mode]})"
+
+
+def _call(pr: ShirPrinter, call: e.Call) -> str:
+    """The resolved callee in place of the target, and each argument with its convention."""
+    answers = pr.answers
+    if answers is None:
+        return _node("Call", pr.show(call.target), pr.each(call.args))
+    resolved = answers.callee_of(call.shir_id)
+    target = pr.show(call.target if resolved is None else resolved.callee)
+    args = (_arg(pr, arg, answers.convention_of(call.shir_id, position))
+            for position, arg in enumerate(call.args))
+    return _node("Call", target, "[" + ", ".join(args) + "]")
 
 
 def _lambda_param(_pr: ShirPrinter, param: e.LambdaParam) -> str:
@@ -187,7 +209,7 @@ PRINTERS: dict[type, Render] = {
                                  _flag("unchecked", n.unchecked)),
     e.Slice: lambda pr, n: _node("Slice", pr.show(n.base), pr.show(n.start), pr.show(n.end),
                                  _flag("inclusive", n.inclusive)),
-    e.Call: lambda pr, n: _node("Call", pr.show(n.target), pr.each(n.args)),
+    e.Call: _call,
     e.Unary: lambda pr, n: _node("Unary", n.op, pr.show(n.operand)),
     e.Binary: lambda pr, n: _node("Binary", n.op, pr.show(n.lhs), pr.show(n.rhs)),
     e.Cast: lambda pr, n: _node("Cast", pr.show(n.operand), _type(n.target)),
@@ -265,6 +287,17 @@ PRINTERS: dict[type, Render] = {
     b.Initializer: lambda _pr, _o: "Initializer",
     # the side table of a body
     b.CopyRange: lambda _pr, r: f"{r.start}..{r.stop}",
+    # the callee that typecheck answers for a call (ir.md 7.6)
+    c.Free: lambda pr, n: _node("Free", pr.decl(n.decl)),
+    c.Method: lambda pr, n: _node("Method", pr.show(n.recv), pr.decl(n.decl)),
+    c.Static: lambda pr, n: _node("Static", _type(n.ty), pr.decl(n.decl)),
+    c.Builtin: lambda pr, n: _node("Builtin", pr.show(n.recv), pr.show(n.method)),
+    c.BuiltinStatic: lambda pr, n: _node("BuiltinStatic", _type(n.ty), pr.show(n.method)),
+    c.Conversion: lambda pr, n: _node("Conversion", pr.decl(n.decl)),
+    c.Extern: lambda pr, n: _node("Extern", pr.decl(n.decl)),
+    c.Intrinsic: lambda _pr, n: _node("Intrinsic", _quoted(n.name)),
+    c.Indirect: lambda pr, n: _node("Indirect", pr.show(n.value)),
+    c.BuiltinMethod: lambda _pr, m: _quoted(m.name),
 }
 
 
@@ -277,20 +310,29 @@ def _named_local(local: b.ShirLocal | None, ident: LocalId, ty: TypeRef | None) 
     return text if ty is None else f"{text}: {_type(ty)}"
 
 
-def print_body(body: b.ShirBody, decls: DeclNames) -> str:
+def print_body(body: b.ShirBody, decls: DeclNames,
+               answers: Optional[TypeckResults] = None) -> str:
     """The text of one body: its header, its parameters, its other locals, its block.
 
     `locals` holds every local of the body, the parameters too (ir.md 7.2): the line of a
-    parameter takes its name from there, and the `locals` line shows the others.
+    parameter takes its name from there, and the `locals` line shows the others. The type
+    of a local is the answer of `typecheck` in `answers`, else the type as written.
     """
-    pr = ShirPrinter(decls)
+    pr = ShirPrinter(decls, answers)
+
+    def typed(ident: LocalId, written: Optional[TypeRef]) -> Optional[TypeRef]:
+        answer = None if answers is None else answers.local_type(ident)
+        return written if answer is None else answer
+
     by_id = {local.id: local for local in body.locals}
     params = [param.local for param in body.params]
     origin = "" if isinstance(body.origin, b.Instance) else f" ({pr.show(body.origin)})"
-    param_texts = (f"({_named_local(by_id.get(param.local), param.local, param.ty)}, "
-                   f"{CONVENTIONS[param.convention]}{', pack: true' if param.pack else ''})"
-                   for param in body.params)
-    local_texts = (_named_local(local, local.id, local.declared)
+    def param_text(param: b.ShirParam) -> str:
+        head = _named_local(by_id.get(param.local), param.local, typed(param.local, param.ty))
+        return f"({head}, {CONVENTIONS[param.convention]}{', pack: true' if param.pack else ''})"
+
+    param_texts = (param_text(param) for param in body.params)
+    local_texts = (_named_local(local, local.id, typed(local.id, local.declared))
                    for local in sorted(body.locals, key=lambda local: local.id)
                    if local.id not in params)
     lines = [f"ShirBody {decls.name_of(body.fn_id)}{origin}",
@@ -308,29 +350,20 @@ def print_body(body: b.ShirBody, decls: DeclNames) -> str:
 
 def _copies(pr: ShirPrinter, body: b.ShirBody) -> str:
     """Each block that holds a copy of an unrolled `expand`, by its path, with its ranges."""
-    paths: dict[ShirId, str] = {}
-    _block_paths(body.block, "block", paths)
+    paths: dict[ShirId, str] = {value.shir_id: path for path, value in walk(body.block, "block")
+                                if isinstance(value, ShirBlock)}
     return "[" + ", ".join(f"{paths[block]}: {pr.each(body.copies.ranges_of(block))}"
                            for block in body.copies.blocks()) + "]"
 
 
-def _block_paths(value: object, path: str, paths: dict[ShirId, str]) -> None:
-    """The path of each block under `value`: a field by its name, an item by its index."""
-    if isinstance(value, ShirBlock):
-        paths[value.shir_id] = path
-        _block_paths(value.statements, path, paths)
-    elif isinstance(value, (list, tuple)):
-        for index, item in enumerate(value):
-            _block_paths(item, f"{path}[{index}]", paths)
-    elif type(value) in PRINTERS and dataclasses.is_dataclass(value):
-        for each in dataclasses.fields(value):
-            _block_paths(getattr(value, each.name), f"{path}.{each.name}", paths)
+#: A body, and the answers of `typecheck` for it, if any.
+AnsweredBody: TypeAlias = tuple[b.ShirBody, Optional[TypeckResults]]
 
 
-def print_units(units: Sequence[tuple[str, Sequence[b.ShirBody]]], decls: DeclNames) -> str:
+def print_units(units: Sequence[tuple[str, Sequence[AnsweredBody]]], decls: DeclNames) -> str:
     """The text of a program: each unit, by its name, then each of its bodies, in order."""
     parts: list[str] = []
     for name, bodies in units:
         parts.append(f"unit {name}\n")
-        parts.extend(print_body(body, decls) for body in bodies)
+        parts.extend(print_body(body, decls, answers) for body, answers in bodies)
     return "\n".join(parts)

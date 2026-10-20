@@ -100,6 +100,16 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "the writer keeps it zero"),
     # -- kept for a later chunk of the IR migration (docs/design/ir.md) --------------
     ("sushi_lang/semantics/shir/body.py", "holding", _P5_EXPAND_COPIES),
+    ("sushi_lang/semantics/shir/typeck.py", "record_*",
+     "kept for P2.4: the typecheck pass on SHIR writes each row of TypeckResults"),
+    ("sushi_lang/semantics/shir/typeck.py", "capture_type",
+     "kept for the closures group of Phase 5: lift and SLIR lowering read the type of each "
+     "capture"),
+    ("sushi_lang/semantics/shir/typeck.py", "integer",
+     "kept for the match group of Phase 3: SHIR-to-SLIR lowering reads the integer type "
+     "of a literal arm and of a range arm"),
+    ("sushi_lang/semantics/shir/typeck_check.py", "check_answers",
+     "kept for P2.3: the typecheck pass calls it at the end of each body"),
 )
 
 RATCHET: tuple[tuple[str, str, str], ...] = ()

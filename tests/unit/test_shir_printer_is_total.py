@@ -10,7 +10,9 @@ with a diff. So this gate holds three rules:
    call target, an argument, an array run, a loop source, a binding mode, a destructure
    target, an arm) and each origin of a body. The id that a destructure holds, `LocalId`,
    has a row too, and so does the range of one copy of an unrolled `expand`. The bases
-   and the four frame classes have none: `print_body` prints the frame.
+   and the four frame classes have none: `print_body` prints the frame. Each class of
+   the closed `Callee` set (ir.md 7.6) has a row too: the dump prints the callee that
+   `typecheck` answers in place of the written call target (ir.md 7.3).
 2. The table has no row for a class outside that set, so no row stays for a class that
    is gone.
 3. The dump does not depend on the order of a hash or on an address: the printer source
@@ -29,12 +31,13 @@ from pathlib import Path
 import pytest
 
 from sushi_lang.internals.diagnostics import InternalCompilerError
-from sushi_lang.semantics.shir import body, exprs, nodes, patterns, printer, stmts
+from sushi_lang.semantics.shir import body, callee, exprs, nodes, patterns, printer, stmts
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import LocalId
 
-#: The modules whose classes a body holds.
-_NODE_MODULES: tuple[types.ModuleType, ...] = (nodes, exprs, stmts, patterns, body)
+#: The modules whose classes a body holds, and the module of the callee that the dump
+#: prints in place of a call target.
+_NODE_MODULES: tuple[types.ModuleType, ...] = (nodes, exprs, stmts, patterns, body, callee)
 
 #: The bases of the nodes: no value has one of these types.
 _BASES = {nodes.ShirNode, exprs.ExprNode}

@@ -24,7 +24,9 @@ bodies. Every other body has the origin `Instance`, a copy of a template too.
 an array-template perk copy. The analyzer calls it after the scope pass of the copy, in
 the home unit of the copy. The analyzer calls `lower_unit` for each unit, after the scope
 pass, on every compile; `LoweredProgram` keeps the bodies for `--dump-shir`, and no pass
-reads them yet.
+reads them yet. It also keeps the `TypeckResults` of each body beside the body (ir.md 7.3):
+it makes the table when it lists the body, the typecheck pass writes the rows, and the
+dump prints them.
 
 A unit lists the bodies that the source writes in the order of the walk, then each copy
 that the compiler cut, in the order of its name (`LoweredUnit`). The name of a copy holds
@@ -67,6 +69,7 @@ from sushi_lang.semantics.shir.lower_nodes import (
     stops_on_hole,
 )
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
+from sushi_lang.semantics.shir.typeck import TypeckResults
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.generics.types import TemplateId
@@ -128,12 +131,14 @@ class LoweredUnit:
 
 @dataclass(slots=True)
 class LoweredProgram:
-    """The bodies of each unit, in the compilation order, the names of their ids, and the
-    holes of every body in the order of the walk."""
+    """The bodies of each unit, in the compilation order, the names of their ids, the
+    holes of every body in the order of the walk, and the `TypeckResults` of each body."""
     decls: DeclNames = field(default_factory=DeclNames)
     units: list[LoweredUnit] = field(default_factory=list)
     holes: list[Hole] = field(default_factory=list)
     _by_unit: dict[int, LoweredUnit] = field(default_factory=dict, init=False, repr=False)
+    _typeck: dict[int, tuple[ShirBody, TypeckResults]] = field(default_factory=dict,
+                                                               init=False, repr=False)
 
     def unit_of(self, unit: Unit) -> LoweredUnit:
         """The bodies of `unit`, a new entry the first time."""
@@ -143,8 +148,20 @@ class LoweredProgram:
             self.units.append(lowered)
         return lowered
 
+    def typeck_of(self, body: ShirBody) -> TypeckResults:
+        """The one `TypeckResults` of `body`, which `add` made."""
+        entry = self._typeck.get(id(body))
+        if entry is None or entry[0] is not body:
+            er.raise_internal_error("CE0000", detail="a SHIR body that lowering did not list "
+                                                     "has no TypeckResults")
+        return entry[1]
+
     def add(self, unit: Unit, body: ShirBody, *, copy: bool) -> None:
-        """List `body` in `unit`: a written body at the end, a copy at the place of its name."""
+        """List `body` in `unit`: a written body at the end, a copy at the place of its name.
+
+        The `TypeckResults` of the body is made here, empty, for the typecheck pass to fill.
+        """
+        self._typeck[id(body)] = (body, TypeckResults())
         lowered = self.unit_of(unit)
         if not copy:
             lowered.written.append(body)

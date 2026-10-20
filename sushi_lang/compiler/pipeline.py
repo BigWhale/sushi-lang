@@ -735,15 +735,17 @@ def _write_shir_dump(analyzer: SemanticAnalyzer, target: str, reporter: Reporter
 
     The analyzer lowers every unit. The dump prints the units of the program and leaves out each
     unit that has a provenance (a bundled stdlib unit, a source library unit), so a golden
-    file does not change when the stdlib changes. `-` prints the dump on stdout.
+    file does not change when the stdlib changes. `-` prints the dump on stdout. Each body
+    prints with the answers in its `TypeckResults` (docs/design/ir.md 7.3).
     """
     from sushi_lang.compiler.cli import COMMAND_LINE
     from sushi_lang.internals import errors as er
     from sushi_lang.semantics.shir.printer import print_units
 
-    units = [(lowered.unit.name, lowered.bodies()) for lowered in analyzer.shir.units
-             if lowered.unit.provenance is None]
-    text = print_units(units, analyzer.shir.decls)
+    shir = analyzer.shir
+    units = [(lowered.unit.name, [(body, shir.typeck_of(body)) for body in lowered.bodies()])
+             for lowered in shir.units if lowered.unit.provenance is None]
+    text = print_units(units, shir.decls)
     if target == "-":
         print(text, end="")
         return

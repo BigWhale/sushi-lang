@@ -582,3 +582,16 @@ _add(ErrorMessage("CE0155", Severity.ERROR,
     "accepts CE2404, because those errors come first. The code goes when the move is "
     "complete. "
     "This is a limit of the compiler, not a fault in the program."))
+
+_add(ErrorMessage("CE0156", Severity.ERROR,
+    "the typecheck pass recorded no {answer} for the {node} at {where} in the body '{body}'",
+    Category.INTERNAL,
+    "The typecheck pass writes each answer that it gives into the table of the body "
+    "(docs/design/ir.md 7.3): the type of each local and each expression, the callee and "
+    "the conventions of each call, and the other decisions that the later stages read. "
+    "No node of the body holds an answer. When the pass ends on a body with no error, a "
+    "check walks the body again and finds each answer that a node needs and that the "
+    "table does not hold. Such a gap means that an arm of the pass did not answer for a "
+    "part of the body, and a later stage would then read no answer. "
+    "tests/unit/test_typeck_results_are_complete.py tests the check. "
+    "This is a fault in the compiler, not in the program; please report the program."))
