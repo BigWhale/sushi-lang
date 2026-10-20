@@ -62,7 +62,8 @@ def lower_lambda(lw: BodyLowerer, node: a.Lambda) -> e.Lambda:
 
 def _param(lw: BodyLowerer, param: a.Param) -> e.LambdaParam:
     local = lw.binder(param, param.name)
-    lw.declare(local, param.name, written_param_type(param.ty), param.name_span)
+    lw.declare(local, param.name, written_param_type(param.ty), param.name_span,
+               param.type_span)
     return e.LambdaParam(local, param_mode(param).convention)
 
 
@@ -83,7 +84,7 @@ def _target(lw: BodyLowerer, target: a.DestructureTarget) -> s.DestructureTarget
     if target.name is None:
         return s.Discard()
     local = lw.binder(target, target.name)
-    lw.declare(local, target.name, target.ty, target.name_span)
+    lw.declare(local, target.name, target.ty, target.name_span, target.type_span)
     return local
 
 

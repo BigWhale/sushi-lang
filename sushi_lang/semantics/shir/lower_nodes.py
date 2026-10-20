@@ -187,10 +187,10 @@ class BodyLowerer:
         return binder_local(self.bindings, owner, name)
 
     def declare(self, local: LocalId, name: str, declared: Optional[TypeRef],
-                name_span: Optional[Span]) -> None:
+                name_span: Optional[Span], declared_loc: Optional[Span] = None) -> None:
         """List the local of a binder. With no name span, the AST builder made it: hidden."""
         self.locals.append(ShirLocal(local, None if name_span is None else name, declared,
-                                     name_span))
+                                     name_span, declared_loc))
 
     def arguments(self, args: list[Any]) -> list[e.Arg]:
         """Each argument in the written order, which is the order of evaluation."""
@@ -560,7 +560,7 @@ def _let(lw: BodyLowerer, node: a.Let) -> s.ShirStmt:
         return lower_destructure(lw, node)
     ident = lw.ident()
     local = binder_local(lw.bindings, node, node.name)
-    lw.declare(local, node.name, node.ty, node.name_span)
+    lw.declare(local, node.name, node.ty, node.name_span, node.type_span)
     target = e.LocalRef(lw.ident(), node.name_span or lw.span(node), local)
     return s.Assign(ident, lw.span(node), target, _initial_value(lw, node), is_init=True)
 
@@ -636,7 +636,8 @@ def _loop_binder(lw: BodyLowerer, node: a.Foreach) -> LocalId | s.Discard:
     if node.item_try_let is not None or node.item_name_span is None:
         lw.locals.append(ShirLocal(local, None, None, None))
     else:
-        lw.locals.append(ShirLocal(local, node.item_name, node.item_type, node.item_name_span))
+        lw.locals.append(ShirLocal(local, node.item_name, node.item_type, node.item_name_span,
+                                   node.item_type_span))
     return local
 
 

@@ -355,7 +355,7 @@ def _frame(decl: Declaration, bindings: Bindings,
         params.append(ShirParam(local, ty, param_mode(param).convention,
                                 _span(getattr(param, "loc", None), param.name_span, decl.loc),
                                 pack=param.is_pack and ctx.template is not None))
-        locals_.append(ShirLocal(local, param.name, ty, param.name_span))
+        locals_.append(ShirLocal(local, param.name, ty, param.name_span, param.type_span))
     return params, locals_
 
 

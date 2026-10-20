@@ -42,11 +42,13 @@ class ShirParam:
 
 @dataclass(slots=True)
 class ShirLocal:
-    """`name` is None for a hidden local. `declared` is the type as WRITTEN, if any."""
+    """`name` is None for a hidden local. `declared` is the type as WRITTEN, if any, and
+    `declared_loc` is where it is written."""
     id: LocalId
     name: Optional[str]
     declared: Optional[TypeRef]
     loc: Optional[Span]
+    declared_loc: Optional[Span] = None
 
 
 @dataclass(frozen=True, slots=True)
