@@ -1,21 +1,30 @@
-"""Call sites: which declared mode each argument lands on, and what that mode does."""
+"""Call sites: which convention each argument has, and what that convention does.
+
+`check_call` is the arm of a SHIR call of a free function and of `print`/`println`, with
+the conventions that the typecheck pass gave (docs/design/ir.md 8.3). The other helpers
+read the AST of a method call and of a call through a function field: the groups that check
+those calls port them to SHIR (Phase 3 to 5).
+"""
 
 from __future__ import annotations
 from typing import Optional, Sequence, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import (
-    Borrow, Call, CallLike, DotCall, Expr, IndexAccess, MemberAccess, MethodCall,
-    MethodLike, Name, Spread,
+    Call, CallLike, DotCall, Expr, IndexAccess, MemberAccess, MethodCall,
+    MethodLike, Name,
 )
 from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode, FunctionType
 from sushi_lang.semantics.param_modes import (
-    CalleeKind, ParamMode, borrow_mode, effective_modes, receiver_mode,
+    CalleeKind, Convention, ParamMode, effective_modes, receiver_mode,
 )
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.callee import Free, Intrinsic
 
-from .borrows import acquire_borrow, register_implicit_borrow
+from . import arms
+from .borrows import acquire_borrow, check_borrow, register_implicit_borrow
 from .iterators import take_lent_iterator
 from .consume import consume, consume_each, read_through_receiver, source_provenance
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, spelled
@@ -24,15 +33,9 @@ from .reads import OWNER_STEPS, borrow_owner, called_on, read_type
 from .state import BorrowState
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.ids import LocalId
+
     from . import BorrowChecker
-
-
-def is_enum_constructor(checker: 'BorrowChecker', expr: DotCall) -> bool:
-    """Is this `X.Y(args)` an enum constructor rather than a method call?"""
-    receiver = expr.receiver
-    if not isinstance(receiver, Name):
-        return False
-    return receiver.id in checker.enum_names and receiver.id not in checker.borrow_state
 
 
 def maybe_mark_container_insert(checker: 'BorrowChecker', expr: MethodLike) -> None:
@@ -46,65 +49,115 @@ def maybe_mark_container_insert(checker: 'BorrowChecker', expr: MethodLike) -> N
     consume_each(checker, expr.args)
 
 
-def unchanged_borrowed_roots(checker: 'BorrowChecker', expr: CallLike) -> frozenset[str]:
+def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
+    """A call of a free function or of `print`/`println`, with the convention of each
+    argument from the `TypeckResults` row of the call (docs/design/ir.md 8.3).
+
+    Each argument is read first: a `peek` or a `poke` argument borrows its place there, so
+    a borrow and a consuming use of one value in one call conflict in both orders
+    (CE2401). Then each argument takes its convention by POSITION (`apply_convention`). The
+    callee owns an `Owned` argument, and the pass decides its `Ownership`. A callee that
+    destroys its `poke` parameter destroys the caller's value (#168). The `nom` marker is
+    compared against the declared mode by the typecheck pass (CE2427). Every other callee
+    is checked by its own group, and its call stops the walk.
+    """
+    resolved = checker.answers().callee_of(node.shir_id)
+    if resolved is None or not isinstance(resolved.callee, (Free, Intrinsic)):
+        arms.stop_at(checker, node)
+    if any(arg.bloom for arg in node.args):
+        arms.stop_at(checker, node)
+    conventions = [_convention_of(checker, node, position)
+                   for position in range(len(node.args))]
+    unchanged = unchanged_borrowed_roots(checker, node, conventions)
+    for arg, convention in zip(node.args, conventions, strict=True):
+        mode = _BY_ADDRESS.get(convention)
+        if mode is None:
+            arms.check(checker, arg.value)
+        else:
+            check_borrow(checker, arg.value, mode, arg.marker_loc or arg.value.loc)
+    for arg, convention in zip(node.args, conventions, strict=True):
+        apply_convention(checker, arg.value, convention)
+    reject_borrow_read_by_the_change(checker, node, conventions, unchanged)
+    if isinstance(resolved.callee, Free):
+        apply_destroy_effects(checker, node, resolved.callee)
+
+
+#: The mode that an argument passed by address borrows its place with.
+_BY_ADDRESS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
+
+
+def _convention_of(checker: 'BorrowChecker', node: e.Call, position: int) -> Convention:
+    convention = checker.answers().convention_of(node.shir_id, position)
+    if convention is None:
+        er.raise_internal_error(
+            "CE0000", span=node.loc,
+            detail=f"the typecheck pass gave the argument {position + 1} of a call no "
+                   f"convention")
+    return convention
+
+
+def apply_convention(checker: 'BorrowChecker', value: e.ShirExpr,
+                     convention: Convention) -> None:
+    """Apply the convention of ONE argument to its value.
+
+    An `Owned` argument is a consuming use. A `Guaranteed` argument is the implicit
+    shared borrow of an unmarked argument. An `InGuaranteed` and an `Inout` argument took
+    their borrow when they were read.
+    """
+    if convention is Convention.OWNED:
+        consume(checker, value)
+    elif convention is Convention.GUARANTEED:
+        register_implicit_borrow(checker, value)
+
+
+def unchanged_borrowed_roots(checker: 'BorrowChecker', node: e.Call,
+                             conventions: Sequence[Convention]) -> frozenset:
     """The roots of a call's borrowed arguments that no change has invalidated yet.
 
-    Taken at the call's ENTRY, before its receiver and arguments are walked, so that
+    Taken at the call's ENTRY, before its arguments are read, so that
     `reject_borrow_read_by_the_change` can tell an invalidation this call made from an
     older one.
     """
-    roots = (_arg_root(checker, arg) for arg in _borrowed_args(checker, expr))
-    return frozenset(name for name, state in roots
-                     if name is not None and state is not None
+    roots = (_arg_root(checker, value) for value in _borrowed_args(node, conventions))
+    return frozenset(local for local, state in roots
+                     if local is not None and state is not None
                      and state.invalidated_at is None)
 
 
-def reject_borrow_read_by_the_change(checker: 'BorrowChecker', expr: CallLike,
-                                     unchanged: frozenset[str]) -> None:
+def reject_borrow_read_by_the_change(checker: 'BorrowChecker', node: e.Call,
+                                     conventions: Sequence[Convention],
+                                     unchanged: frozenset) -> None:
     """CE2412: a borrowed argument is read DURING the call that changes its owner.
 
     Every argument of a call is live while the callee runs (#888, #920). The call changes
-    an owner through its receiver, a `poke` argument or a `nom` argument, and each of
-    them invalidates every binding that reads out of that owner. A binding that is also
-    a borrowed argument of that call is used while the change runs, whatever the order
-    of the arguments. A consumed argument has its own refusal (CE2411).
+    an owner through a `poke` argument or a `nom` argument, and each of them invalidates
+    every binding that reads out of that owner. A binding that is also a borrowed argument
+    of that call is used while the change runs, whatever the order of the arguments. A
+    consumed argument has its own refusal (CE2411).
     """
-    for arg in _borrowed_args(checker, expr):
-        name, state = _arg_root(checker, arg)
+    for value in _borrowed_args(node, conventions):
+        local, state = _arg_root(checker, value)
         # Only the invalidation THIS call made: an older one is the ordinary later use,
         # and a read after the change in the walk was already reported and cleared.
-        if state is None or name not in unchanged or state.invalidated_at is None:
+        if state is None or local not in unchanged or state.invalidated_at is None:
             continue
-        emit_use_of_invalidated_borrow(checker, name, arg.loc, state, by_the_change=True)
+        emit_use_of_invalidated_borrow(checker, state.name, value.loc, state,
+                                       by_the_change=True)
 
 
-def _arg_root(checker: 'BorrowChecker', arg: Expr) -> tuple[Optional[str], Optional[BorrowState]]:
+def _arg_root(checker: 'BorrowChecker',
+              value: e.ShirExpr) -> tuple[Optional[LocalId], Optional[BorrowState]]:
     """The local an argument reads out of, and its borrow state."""
-    root = walk_place(arg, Step.MEMBER | Step.INDEX).name
-    if root is None:
+    local = borrow_owner(value)
+    if local is None:
         return None, None
-    return root.id, checker.borrow_state.get(root.id)
+    return local, checker.borrow_state.get(local)
 
 
-def _borrowed_args(checker: 'BorrowChecker', expr: CallLike) -> list[Expr]:
-    """The arguments a call reads without taking them, `peek` ones unwrapped."""
-    if isinstance(expr, Call):
-        args = _borrowed_call_args(checker, expr)
-    else:
-        args = _borrowed_method_args(checker, expr)
-    return [arg.expr if isinstance(arg, Borrow) else arg for arg in args
-            if not (isinstance(arg, Borrow)
-                    and borrow_mode(arg.mutability) is BorrowMode.POKE)]
-
-
-def _borrowed_call_args(checker: 'BorrowChecker', expr: Call) -> list[Expr]:
-    """A plain call's arguments that land on a parameter that does not consume."""
-    if expr.callee_unresolved:
-        return []
-    kind, modes, variadic_at = call_modes(checker, expr)
-    return [arg for i, arg in enumerate(expr.args)
-            if (variadic_at is None or i < variadic_at)
-            and not checker.callee_modes.mode_at(modes, i, kind).consumes]
+def _borrowed_args(node: e.Call, conventions: Sequence[Convention]) -> list[e.ShirExpr]:
+    """The values that a call reads without taking or writing them."""
+    return [arg.value for arg, convention in zip(node.args, conventions, strict=True)
+            if convention in (Convention.GUARANTEED, Convention.IN_GUARANTEED)]
 
 
 def _borrowed_method_args(checker: 'BorrowChecker', expr: MethodLike) -> list[Expr]:
@@ -220,23 +273,6 @@ def maybe_mark_own_alloc_move(checker: 'BorrowChecker', expr: MethodLike) -> Non
     consume_each(checker, expr.args)
 
 
-def call_modes(checker: 'BorrowChecker',
-               expr: Call) -> tuple[CalleeKind, tuple[ParamMode, ...], Optional[int]]:
-    """The callee's kind, its parameter modes, and where a `...T` slot starts."""
-    if not isinstance(expr.callee, Name):
-        fn_type = expr.callee_fn_type
-        modes = fn_type.modes if isinstance(fn_type, FunctionType) else ()
-        return CalleeKind.INDIRECT, effective_modes(modes, CalleeKind.INDIRECT), None
-
-    name = expr.callee.id
-    state = checker.borrow_state.get(name)
-    local_type = state.var_type if state is not None else None
-    kind, modes = checker.callee_modes.for_name(name, local_type)
-    variadic_at = (None if kind is CalleeKind.INDIRECT
-                   else checker.callee_modes.variadic_from(name))
-    return kind, modes, variadic_at
-
-
 def apply_mode(checker: 'BorrowChecker', call: CallLike, arg: Expr, index: int,
                modes: Sequence[ParamMode], kind: CalleeKind) -> None:
     """Apply ONE declared parameter mode to the argument that lands on it.
@@ -251,43 +287,6 @@ def apply_mode(checker: 'BorrowChecker', call: CallLike, arg: Expr, index: int,
             consume(checker, arg)
     elif not mode.by_pointer:
         register_implicit_borrow(checker, arg)
-
-
-def consume_call_args(checker: 'BorrowChecker', expr: Call) -> None:
-    """Consume the arguments the callee's declared modes say it takes ownership of."""
-    # No callee, no declared modes, nothing to say about the arguments. The resolver
-    # answers BORROW for a name it does not carry, so judging the marker against it told
-    # the user to drop a `nom` nobody declared -- and the callee may well declare one
-    # (#467). This mirrors `settle_method_args`, which has always declined the same way.
-    if expr.callee_unresolved:
-        return
-    kind, modes, variadic_at = call_modes(checker, expr)
-    collected_owner_is_callee = (
-        isinstance(expr.callee, Name)
-        and checker.callee_modes.variadic_callee_owns(expr.callee.id))
-    _settle_args(checker, expr, kind, modes, variadic_at, collected_owner_is_callee)
-
-
-def _settle_args(checker: 'BorrowChecker', call: CallLike, kind: CalleeKind,
-                 modes: Sequence[ParamMode], variadic_at: Optional[int],
-                 collected_owner_is_callee: bool) -> None:
-    """Each declared argument by its mode; each trailing one into the `...T` slot."""
-    for i, arg in enumerate(call.args):
-        if variadic_at is not None and i >= variadic_at:
-            _consume_collected(checker, arg, collected_owner_is_callee)
-        else:
-            apply_mode(checker, call, arg, i, modes, kind)
-
-
-def _consume_collected(checker: 'BorrowChecker', arg: Expr,
-                       collected_owner_is_callee: bool) -> None:
-    """A trailing argument that lands in a `...T` slot."""
-    # A bloomed `arr...` hands the WHOLE array over, so it transfers only when something
-    # else takes it. A collected element always transfers -- into the synthesized array,
-    # whoever ends up owning that.
-    if isinstance(arg, Spread) and not collected_owner_is_callee:
-        return
-    consume(checker, arg)
 
 
 def settle_receiver(checker: 'BorrowChecker', expr: MethodLike) -> None:
@@ -366,36 +365,6 @@ def settle_method_args(checker: 'BorrowChecker', expr: MethodLike) -> None:
         apply_mode(checker, expr, arg, i, modes, CalleeKind.METHOD)
 
 
-# A function behind a dot always carries its modes: the typecheck pass stamps them for
-# each of these kinds. A built-in static behind a dot (`hm.HashMap.new()`) declares none.
-_NAMESPACED_FUNCTION_KINDS = frozenset({"function", "generic function"})
-
-
-def settle_namespaced_args(checker: 'BorrowChecker', expr: DotCall) -> None:
-    """A name written through a namespace follows the modes its KIND declares.
-
-    A function's modes are stamped on the node by the typecheck pass. A STRUCT declares
-    none: a constructor consumes by position, so the answer comes from the one resolver
-    every callee kind asks, exactly as the bare `Vec(1, 2)` gets it.
-    """
-    ref = expr.namespace_ref
-    if ref is not None and ref.kind == "struct":
-        kind, struct_modes = checker.callee_modes.for_name(ref.name)
-        for i, arg in enumerate(expr.args):
-            apply_mode(checker, expr, arg, i, struct_modes, kind)
-        return
-
-    modes = expr.callee_param_modes
-    if modes is None:
-        if ref is not None and ref.kind in _NAMESPACED_FUNCTION_KINDS:
-            er.raise_internal_error("CE0143", name=ref.name, kind=ref.kind)
-        return
-    # A stdlib callee leaves the collected array with the caller, as at the flat call.
-    collected_owner_is_callee = ref is None or ref.producer != "stdlib"
-    _settle_args(checker, expr, CalleeKind.FUNCTION, modes, expr.callee_variadic_at,
-                 collected_owner_is_callee)
-
-
 def consume_indirect_args(checker: 'BorrowChecker', expr: DotCall) -> None:
     """An indirect call through a fn-typed field follows the fn type's declared modes."""
     # `apply_mode`, like every other call shape: a thinner arm here skipped the implicit
@@ -436,15 +405,14 @@ def param_name(checker: 'BorrowChecker', call: CallLike, index: int) -> Optional
     return params[index].name if index < len(params) else None
 
 
-def apply_destroy_effects(checker: 'BorrowChecker', call: Call) -> None:
-    """Mark each argument the callee destroys through a `poke` parameter (#168)."""
-    if not isinstance(call.callee, Name):
-        return
-    for index in checker.destroy_effects.get(call.callee.id, ()):
-        if index >= len(call.args):
+def apply_destroy_effects(checker: 'BorrowChecker', node: e.Call, callee: Free) -> None:
+    """Mark each argument the callee destroys through a `poke` parameter (#168).
+
+    The summary of the `effects` pass is keyed by the written name of the function.
+    """
+    for index in checker.destroy_effects.get(checker.decl_name(callee.decl), ()):
+        if index >= len(node.args):
             continue
-        arg = call.args[index]
-        if isinstance(arg, Borrow):
-            arg = arg.expr           # `poke map` -> `map`
-        if isinstance(arg, Name) and arg.id in checker.borrow_state:
-            checker.borrow_state[arg.id].is_destroyed = True
+        value = node.args[index].value
+        if isinstance(value, e.LocalRef) and value.local in checker.borrow_state:
+            checker.borrow_state[value.local].is_destroyed = True
