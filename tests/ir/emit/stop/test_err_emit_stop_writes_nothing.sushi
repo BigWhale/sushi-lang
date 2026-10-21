@@ -2,13 +2,16 @@
 # OUTPUT_PATH: prog
 # EXPECT_ERROR_CODES_EXACT: CE0155
 # EXPECT_STDERR_CONTAINS: "emit, Str"
+# EXPECT_STDERR_LACKS: "this is a bug in the Sushi compiler"
+# EXPECT_STDERR_LACKS: "--traceback"
 # EXPECT_PATH_ABSENT: prog, prog.o, prog.ll, __sushi_cache__
 #
 # A SLIR shape that the emitter does not handle yet stops the compile with the stop code
 # at the span of its statement: here the string constant of the `let`. The program has two
 # units, so it takes the per-unit module path. The module of the helper unit is built
 # first, and the stop in `main` comes before any output: no object in the cache, no binary
-# and no LLVM text.
+# and no LLVM text. The stop renders as every other stop of the stop code: it is a limit
+# of the compiler, so it carries no note that calls it a bug and no `--traceback` help.
 
 use "helpers/count"
 

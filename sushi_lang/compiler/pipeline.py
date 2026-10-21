@@ -13,7 +13,7 @@ from sushi_lang.compiler.loader import (
 )
 from sushi_lang.backend.library_format import TEMPLATES_SCHEMA_VERSION
 from sushi_lang.compiler.cache import CacheManager, publish_atomically
-from sushi_lang.internals.diagnostics import StdlibBuildError, SushiError
+from sushi_lang.internals.diagnostics import StageStop, StdlibBuildError, SushiError
 from sushi_lang.internals.report import Reporter, Span
 from sushi_lang.semantics.ast import Program
 from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
@@ -817,24 +817,28 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         _write_slir_dump(analyzer, options.dump_slir, reporter)
     if reporter.has_errors:
         return 2
-    # A stage that met a construct it does not handle yet stops the program here, after
-    # the dumps, with the stop code (docs/design/ir.md 11.1).
-    stop = analyzer.pipeline_stop()
-    if stop is not None:
+    # A stage that met a construct it does not handle yet stops the program with the stop
+    # code (docs/design/ir.md 11.1): a stop of the analysis after the dumps, or a stop of
+    # the emitter before any output. ONE place reports both, as a limit of the compiler
+    # and not as a bug of it.
+    try:
+        stop = analyzer.pipeline_stop()
+        if stop is not None:
+            raise stop
+        out_path = _resolve_out_path(options, src_path)
+        use_incremental = (len(compilation_order) > 1 and not options.lib
+                           and not options.no_incremental and not options.dump_ll)
+        if use_incremental:
+            return _compile_incremental(
+                compilation_order, analyzer, out_path, reporter, options,
+                stdlib_units, library_imports, library_linker, unit_manager, cache,
+            )
+        return _compile_monolithic(compilation_order, analyzer, out_path, reporter,
+                                   options, library_linker)
+    except StageStop as stop:
         from sushi_lang.internals import errors as er
         er.emit_exception(reporter, stop)
         return 2
-
-    out_path = _resolve_out_path(options, src_path)
-    use_incremental = (len(compilation_order) > 1 and not options.lib
-                       and not options.no_incremental and not options.dump_ll)
-    if use_incremental:
-        return _compile_incremental(
-            compilation_order, analyzer, out_path, reporter, options,
-            stdlib_units, library_imports, library_linker, unit_manager, cache,
-        )
-    return _compile_monolithic(compilation_order, analyzer, out_path, reporter,
-                               options, library_linker)
 
 
 def codegen_for(analyzer: SemanticAnalyzer,
