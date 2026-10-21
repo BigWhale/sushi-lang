@@ -41,7 +41,9 @@ rebind is one `Destructure` with `Place` targets).
 
 ## 1. The problem
 
-Every number in this section was measured in the tree on 2026-10-11, at `cc4088ca`.
+Every number in this section was measured in the tree on 2026-10-11, at `cc4088ca`. The
+section describes the pipeline before the migration: its backend modules, the AST body
+emitter, are deleted (8.12).
 
 ### 1.1 The AST does three jobs and was designed for one
 
@@ -95,7 +97,7 @@ completeness check. Three faults follow from that shape, and each one is in the 
   13.
 - **The backend writes too.** `backend/runtime/closures.py:205` writes
   `ownership_provenance` onto a node it makes, and
-  `backend/expressions/calls/dispatcher.py:322` writes `resolved_struct_type`.
+  `dispatcher.py:322` writes `resolved_struct_type`.
 
 Every dataclass in `semantics/ast.py` is `slots=True`, every analysis field is declared on
 each class that takes it, and `tests/unit/test_ast_nodes_are_slotted.py` keeps it that
@@ -112,12 +114,12 @@ the type class there, from the `Drop` set and a type resolver. The rule runs onc
 `borrow` pass to check it, and again at emission to act on it.
 
 `_provenance_of()` (`:152`) reads `source.ownership_provenance`. A missing value is
-[CE0129](../error-catalog.md#ce0129): fatal, with a deliberate no-fallback rule. Three
+CE0129: fatal, with a deliberate no-fallback rule. Three
 more backend sites read the field outside the seam (`statements/returns.py:62`,
 `expressions/memory.py:265`, `runtime/closures.py:205`), and `_mark_moved` (`:160`) finds
 the moved name by a test on the syntax (`Name` or `MemberAccess`).
 
-[CE0129](../error-catalog.md#ce0129) is not a bug. It is the correct response to a
+CE0129 was not a bug. It was the correct response to a
 missing note in a design that passes notes. An IR removes the whole category, because the
 decision becomes an instruction.
 
@@ -128,18 +130,18 @@ self._moved: Set['ir.Instruction'] = set()
 self._flags: Dict['ir.Instruction', 'ir.AllocaInstr'] = {}
 ```
 
-`MoveTracker` (`backend/memory/moves.py:13`) keys move state on `llvmlite` objects.
-`arm_if_conditional(name, slot)` arms a drop flag when the **name string** is in
+`MoveTracker` (`moves.py:13`) keyed move state on `llvmlite` objects.
+`arm_if_conditional(name, slot)` armed a drop flag when the **name string** is in
 `codegen.current_conditional_moves`, a set copied from `Block.conditional_move_names` at
-the start of each function. The scope manager keys its cleanup registries by name, and
-`_held_by_temporary` keys an owning temporary by `id(expr)`, the identity of an AST node.
+the start of each function. The scope manager keyed its cleanup registries by name, and
+`_held_by_temporary` keyed an owning temporary by `id(expr)`, the identity of an AST node.
 
-RAII is therefore tied to `llvmlite` object lifetimes, to name strings and to AST node
+RAII was therefore tied to `llvmlite` object lifetimes, to name strings and to AST node
 identity.
 
 ### 1.5 The backend makes semantic decisions by matching on syntax
 
-`emit_foreach` (`backend/statements/loops.py:58`) picks a loop protocol like this:
+`emit_foreach` (`loops.py:58`) picked a loop protocol like this:
 
 1. Test `isinstance(node.iterable, RangeExpr)`
 2. Test the `protocol_next` stamp that `typecheck` left for a type with `next()`
@@ -485,7 +487,7 @@ Three gates. All are cheap, and a rule with no gate does not survive a deadline.
 |---|---|---|
 | No node may take a stamp | `@dataclass(slots=True)` on all 77 classes. A stray write raises `AttributeError` | **In force**: `tests/unit/test_ast_nodes_are_slotted.py` |
 | A per-body pass may not read the AST | the BODY modules of `typecheck`, `lift` and `borrow` import `shir`, not `ast` | when the passes move to SHIR |
-| The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty (64 files matched before the spine, 37 after it: the declaration round and the families that still take an AST node) | when the old backend is deleted |
+| The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty (37 files match: the declaration round and the families that still take an AST node) | when the old backend is deleted |
 
 Two sibling gates are in force. The ruff rule `TID251` (`pyproject.toml`) allows no
 `llvmlite` import outside `backend/` and `sushi_stdlib/`, so `semantics` names no LLVM
@@ -664,7 +666,7 @@ stamp went wrong (1.2):
 | a field per fact, on whichever class first needed it | one table |
 | declared on one class, a different set on its siblings | one declared value type |
 | any pass may write, the backend included | one pass writes it |
-| a missing entry is [CE0129](../error-catalog.md#ce0129), at emit time | completeness is checked when `typecheck` ends |
+| a missing entry was an internal error at emit time (CE0129) | completeness is checked when `typecheck` ends |
 
 This is Rust's shape: HIR plus `TypeckResults`, read together by MIR building. Method
 resolutions and field indices live inside `TypeckResults` there too.
@@ -1052,9 +1054,8 @@ side by side (`extension-visibility.md`, C5). The row of a `Free` callee carries
 declaring unit of the function too, and SLIR lowering makes the symbol of the `Direct`
 callee from it (8.6).
 
-`backend/expressions/calls/dispatcher.py` is 554 lines, with 12 handlers before the
-receiver is emitted and 12 after, that decide this again at emit time. It reads the answer
-instead.
+The emitter reads the answer: one row of `CALL_EMITTERS` (`backend/slir/emit.py`) for
+each callee kind, and no decision at emit time.
 
 ### 7.7 `LoopKind`: 1.5, resolved
 
@@ -1598,7 +1599,7 @@ Operand  = Copy(Place)     # the value is PLAIN, or the source is a borrow
 
 **The `Copy` / `Move` distinction is the point.** `classify()` runs once, in the `borrow`
 pass, and lowering writes its answer into the operand. Nothing derives it again. 1.3
-disappears and [CE0129](../error-catalog.md#ce0129) has nothing left to guard.
+disappears, and so does CE0129, the internal error that guarded it.
 
 `Downcast` exists because a `match` arm and a `??` both read an enum payload, and reading
 one is valid only under a known variant. The worked example in 8.11 is what found it.
@@ -1733,7 +1734,7 @@ print values: [RE2020](../error-catalog.md#re2020) prints the index and the size
 | `Destructure` | one `Field` place per target: `Move` from an owned value, a view from a borrow. For `Place` targets: the value into a temp first, then each place from left to right, a rebind of each (rule 6 of 8.10) |
 | `Take` | `Move` of the field; the other owning fields of the receiver get `Drop`, and `drop()` does not run (`borrow-model.md` §10c) |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
-| a `string` argument to an `i8*` callee | an explicit conversion into an owning temp local, dropped by the rules of 8.10. The `emit_cstr_arg` seam becomes visible IR, still one lowering site, and `run()` stays the one exception |
+| a `string` argument to an `i8*` callee | an explicit conversion into an owning temp local, dropped by the rules of 8.10. The C-string marshalling becomes visible IR, still one lowering site, and `run()` stays the one exception |
 
 A condition (of an `If` or a `While`) is evaluated in a scope of its own, whose
 temporaries die before the `SwitchInt`. A condition that is no local and no constant goes
@@ -1918,7 +1919,7 @@ That is the design in one screen.
 
 ### 8.12 What SLIR removes from the backend
 
-| Backend concern today | In SLIR |
+| Backend concern before the migration | In SLIR |
 |---|---|
 | `MoveTracker` and its LLVM-keyed sets | `move` operands and `Drop` statements |
 | drop flags by name string | `DropIfSet` with a real local |
@@ -1933,6 +1934,9 @@ That is the design in one screen.
 | 34 semantic type inferences at emit time | every local is typed |
 | borrow-region derivation | `BeginBorrow` / `EndBorrow` |
 | iterator state placement read from two stamps | the state local or heap block, written at lowering |
+
+The backend has none of the concerns of the left column: each one went with the AST body
+emitter.
 
 What is NOT in this table: the 2,809 lines of monomorphization. Ruling Q1 leaves them
 where they are. Also not in the table: the per-type emitter families. Ruling Q7 keeps them.
