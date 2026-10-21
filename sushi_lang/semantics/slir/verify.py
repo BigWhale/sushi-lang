@@ -9,7 +9,8 @@ The structure comes first, statement by statement: a span on each statement and 
 one terminator for each block, blocks that exist, a type for each local and for each
 projection of a place, a `Move` out of no `Global`, a `Drop` of an owning type, a `bool`
 flag for a `DropIfSet`, no `and` or `or` in a `Binary`, the conventions of a `Direct`
-callee, and a registered `RExxxx` for a `Trap`. The type of a place also gives its root
+callee, no copy of an owning value other than a `string` into an `Owned` argument, and a
+registered `RExxxx` for a `Trap`. The type of a place also gives its root
 local, so a `Move` of a projection is a `Move` of its root.
 
 Then a dataflow over the CFG gives each local, at each point, the set of states that the
@@ -64,6 +65,7 @@ OWNING_DROP = "drop of an owning type"
 BOOL_FLAG = "bool drop flag"
 DROP_ONCE = "one drop or move on every path"
 CONVENTIONS = "declared conventions"
+OWNED_COPY = "no copy of an owning value into an owned argument"
 SHORT_CIRCUIT = "no short circuit in a binary"
 TRAP = "registered trap"
 SPANS = "spans"
@@ -265,10 +267,21 @@ class _Check:
         callee = stmt.callee
         if isinstance(callee, st.Indirect):
             self.operand(callee.operand, stmt.span)
-        for operand, _ in stmt.args:
+        for operand, convention in stmt.args:
             self.operand(operand, stmt.span)
+            if convention.consumes and isinstance(operand, p.Copy):
+                self.owned_copy(operand, stmt.span)
         if isinstance(callee, st.Direct):
             self.conventions_of(stmt, callee)
+
+    def owned_copy(self, operand: p.Copy, span: Span) -> None:
+        """An `Owned` argument takes a copy of a plain value alone. A `string` is the one
+        owning type that may come as a copy: one bound from a literal owns no heap, and
+        `borrow` adopts it (ir.md 7.9)."""
+        ty = self.place(operand.place, span).ty
+        if isinstance(ty, Type) and ty != BuiltinType.STRING and owns_resource(ty, self.drops):
+            self.fail(OWNED_COPY, f"{show(operand)} has the type {display_type(ty)}, which "
+                                  f"owns", span)
 
     def conventions_of(self, stmt: st.Call, callee: st.Direct) -> None:
         declared = self.declared(callee)

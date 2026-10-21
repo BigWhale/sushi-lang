@@ -24,7 +24,9 @@ from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.verify import DeclaredParams, declared_params, verify_function
-from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, StructType, Type, UnknownType
+from sushi_lang.semantics.typesys import (
+    BorrowMode, BuiltinType, DynamicArrayType, StructType, Type, UnknownType,
+)
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 
 from tests.unit.test_slir_printer import (
@@ -348,6 +350,31 @@ def test_a_var_arg_callee_checks_the_convention_of_its_declared_prefix():
     call = _call((p.Const(k.Int(1, I32)), OWNED), (p.Const(k.Int(2, I32)), GUARANTEED))
     _refused(_function([BLANK, BLANK], _block(0, _ret(), call)), "declared conventions",
              declared={"unit$take": DeclaredParams((GUARANTEED,), var_arg=True)})
+
+
+TAKE = {"unit$take": DeclaredParams((OWNED,))}
+
+
+def test_a_copy_of_an_owning_value_into_an_owned_argument_is_refused():
+    call = _call((_copy(2), OWNED))
+    _refused(_function(
+        [BLANK, BLANK, DynamicArrayType(I32)],
+        _block(0, _ret(), call, _drop(2), _set(0, r.Use(p.Const(k.Blank())))),
+        params=((2, OWNED),),
+    ), "no copy of an owning value into an owned argument", declared=TAKE)
+
+
+def test_a_copy_of_a_string_into_an_owned_argument_passes():
+    """A string bound from a literal owns no heap, so `borrow` adopts it: two calls take a
+    copy of it, and the local drops at its exit through its `owned` byte (ir.md 7.9)."""
+    text = _set(1, r.Use(p.Const(k.Str(b"Mostly Harmless"))))
+    first = st.Call(_local(2), st.Direct("unit$take", "take"), ((_copy(1), OWNED),), SPAN)
+    second = st.Call(_local(3), st.Direct("unit$take", "take"), ((_copy(1), OWNED),), SPAN)
+    _passes(_function(
+        [BLANK, STRING, BLANK, BLANK],
+        _block(0, _ret(), _live(1), text, first, second, _set(0, r.Use(p.Const(k.Blank()))),
+               _drop(1), _dead(1)),
+    ), TAKE)
 
 
 @pytest.mark.parametrize("op", ["and", "or"])
