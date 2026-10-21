@@ -126,8 +126,15 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/typeck.py", "integer",
      "kept for the match group of Phase 3: SHIR-to-SLIR lowering reads the integer type "
      "of a literal arm and of a range arm"),
-    ("sushi_lang/semantics/shir/ownership.py", "record_*",
-     "kept for P2.6: the borrow pass on SHIR is the one writer of OwnershipResults"),
+    ("sushi_lang/semantics/shir/ownership.py", "record_capture_ownership",
+     "kept for the closures group C2: the borrow pass on SHIR writes the ownership of each "
+     "capture"),
+    ("sushi_lang/semantics/shir/ownership.py", "record_lent*",
+     "kept for the iterators group C3 and the peek return group B8: the borrow pass on "
+     "SHIR writes the lent or owned state and the heap decision of an iterator"),
+    ("sushi_lang/semantics/shir/ownership.py", "record_in_place",
+     "kept for the iterators group C3: the borrow pass on SHIR writes the walk in place of "
+     "a loop over an iterator value or a next() type"),
     ("sushi_lang/semantics/shir/ownership.py", "is_conditionally_moved",
      "kept for P2.9: SHIR-to-SLIR lowering gives a conditionally moved local a drop flag"),
     ("sushi_lang/semantics/shir/lift.py", "record_*",
