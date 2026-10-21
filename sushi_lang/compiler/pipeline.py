@@ -735,11 +735,9 @@ def _write_shir_dump(analyzer: SemanticAnalyzer, target: str, reporter: Reporter
 
     The analyzer lowers every unit. The dump prints the units of the program and leaves out each
     unit that has a provenance (a bundled stdlib unit, a source library unit), so a golden
-    file does not change when the stdlib changes. `-` prints the dump on stdout. Each body
-    prints with the answers in its side tables (docs/design/ir.md 7.3, 7.9).
+    file does not change when the stdlib changes. Each body prints with the answers in its
+    side tables (docs/design/ir.md 7.3, 7.9).
     """
-    from sushi_lang.compiler.cli import COMMAND_LINE
-    from sushi_lang.internals import errors as er
     from sushi_lang.semantics.shir.printer import print_units
 
     shir = analyzer.shir
@@ -747,14 +745,39 @@ def _write_shir_dump(analyzer: SemanticAnalyzer, target: str, reporter: Reporter
               [(body, shir.typeck_of(body), shir.ownership_table_of(body), shir.lift_table_of(body))
                for body in lowered.bodies()])
              for lowered in shir.units if lowered.unit.provenance is None]
-    text = print_units(units, shir.decls)
+    _write_dump("SHIR", print_units(units, shir.decls), target, reporter)
+
+
+def _write_slir_dump(analyzer: SemanticAnalyzer, target: str, reporter: Reporter) -> None:
+    """`--dump-slir`: the SLIR of each body that reached the SLIR stage, as UTF-8 text.
+
+    The units and the bodies are those of `--dump-shir`, in the same order. A body that
+    reached the SLIR stage prints its function, or one line when its lowering stopped; a
+    body that did not reach it (a template check, a body that a pass stopped or refused)
+    does not print (docs/design/ir.md 8.2).
+    """
+    from sushi_lang.semantics.slir.printer import print_units
+
+    slir = analyzer.slir
+    units = [(lowered.unit.name,
+              [outcome for outcome in (slir.outcome_of(body.fn_id) for body in lowered.bodies())
+               if outcome is not None])
+             for lowered in analyzer.shir.units if lowered.unit.provenance is None]
+    _write_dump("SLIR", print_units(units), target, reporter)
+
+
+def _write_dump(kind: str, text: str, target: str, reporter: Reporter) -> None:
+    """Write the text of one dump to `target`; `-` prints it on stdout."""
+    from sushi_lang.compiler.cli import COMMAND_LINE
+    from sushi_lang.internals import errors as er
+
     if target == "-":
         print(text, end="")
         return
     try:
         Path(target).write_text(text, encoding="utf-8")
     except OSError as exc:
-        er.emit(reporter, er.ERR.CW0005, None, filename=COMMAND_LINE, path=target,
+        er.emit(reporter, er.ERR.CW0005, None, filename=COMMAND_LINE, dump=kind, path=target,
                 reason=exc.strerror or str(exc))
 
 
@@ -790,10 +813,12 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
                         src_path.stem, options)
     if options.dump_shir is not None:
         _write_shir_dump(analyzer, options.dump_shir, reporter)
+    if options.dump_slir is not None:
+        _write_slir_dump(analyzer, options.dump_slir, reporter)
     if reporter.has_errors:
         return 2
-    # The stages after `borrow` are not built yet, so a program with no error stops here,
-    # after the dump, with the stop code (docs/design/ir.md 11.1).
+    # The stages after the SLIR lowering are not built yet, so a program with no error
+    # stops here, after the dumps, with the stop code (docs/design/ir.md 11.1).
     from sushi_lang.internals import errors as er
     er.emit_exception(reporter, analyzer.pipeline_stop())
     return 2

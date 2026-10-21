@@ -22,7 +22,7 @@ class FunctionDefinitions:
         if fn.name == 'main' and not getattr(self.codegen, 'is_library_mode', False):
             return self.codegen.functions.main_wrapper.emit_main(fn)
 
-        from sushi_lang.backend.functions.declarations import declaring_unit
+        from sushi_lang.semantics.unit_symbols import declaring_unit
         llvm_fn = (self.codegen.funcs.declared(fn.name, declaring_unit(fn, unit_name))
                    or self.codegen.functions.declarations.emit_func_decl(fn, unit_name))
         self.emit_body(llvm_fn, fn)

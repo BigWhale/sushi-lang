@@ -9,9 +9,10 @@ the analysis goes on, so it can meet more than one. The pipeline reports ONE, af
 2. Else the first stop of the lift pass, at the first construct that it cannot lift.
 3. Else the first stop of the borrow pass, at the first construct that it cannot check.
 4. Else an error hole whose codes no error offered (`check_error_holes`).
-5. Else `slir, <body>`: the first body that the borrow pass finished meets the stage
-   after it, which is not built yet.
-6. Else `slir, the program`: no body was walked.
+5. Else the first stop of SLIR lowering, at the first construct that it cannot lower.
+6. Else `emit, <body>`: the first body that SLIR lowering finished meets the stage after
+   it, which is not built yet.
+7. Else `emit, the program`: no body was lowered.
 
 These tests call the record over data. They do not run the compiler.
 """
@@ -35,6 +36,10 @@ def _lift(construct: str, span: Span = _A) -> StageStop:
 
 def _borrow(construct: str, span: Span = _A) -> StageStop:
     return StageStop("borrow", construct, span, "main.sushi")
+
+
+def _slir(construct: str, span: Span = _A) -> StageStop:
+    return StageStop("slir", construct, span, "main.sushi")
 
 
 def test_a_stop_is_the_internal_error_ce0155() -> None:
@@ -101,24 +106,41 @@ def test_a_borrow_stop_comes_before_a_hole_and_a_finished_body() -> None:
     assert stops.first(hole).params == {"stage": "borrow", "construct": "Match"}
 
 
-def test_a_hole_comes_before_a_finished_body() -> None:
+def test_a_hole_comes_before_a_slir_stop_and_a_finished_body() -> None:
     stops = Stops()
     stops.finished("main", _B, "main.sushi")
+    stops.slir_stopped(_slir("Call", _B))
     hole = StageStop("lowering, error hole", "IndexAccess with no CE2122", _A)
     assert stops.first(hole) is hole
 
 
-def test_the_first_finished_body_meets_the_slir_stage() -> None:
+def test_the_first_slir_stop_is_kept() -> None:
+    stops = Stops()
+    stops.slir_stopped(_slir("ShirParam"))
+    stops.slir_stopped(_slir("Call", _B))
+    stop = stops.first(None)
+    assert stop.params == {"stage": "slir", "construct": "ShirParam"}
+    assert stop.span == _A
+
+
+def test_a_slir_stop_comes_before_a_finished_body() -> None:
+    stops = Stops()
+    stops.finished("helper", _A, "main.sushi")
+    stops.slir_stopped(_slir("ExprStmt", _B))
+    assert stops.first(None).params == {"stage": "slir", "construct": "ExprStmt"}
+
+
+def test_the_first_finished_body_meets_the_emit_stage() -> None:
     stops = Stops()
     stops.finished("helper", _A, "main.sushi")
     stops.finished("main", _B, "main.sushi")
     stop = stops.first(None)
-    assert stop.params == {"stage": "slir", "construct": "helper"}
+    assert stop.params == {"stage": "emit", "construct": "helper"}
     assert (stop.span, stop.filename) == (_A, "main.sushi")
 
 
-def test_a_program_with_no_walked_body_stops_at_slir() -> None:
+def test_a_program_with_no_lowered_body_stops_at_emit() -> None:
     stop = Stops().first(None)
     assert stop.code == "CE0155"
-    assert stop.params == {"stage": "slir", "construct": "the program"}
+    assert stop.params == {"stage": "emit", "construct": "the program"}
     assert stop.span is None

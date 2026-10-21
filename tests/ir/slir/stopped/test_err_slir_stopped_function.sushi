@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE0155
+# EXPECT_STDERR_CONTAINS: "slir, Call"
+# EXPECT_DUMP_SLIR: test_err_slir_stopped_function.slir
+#
+# The SLIR lowering finishes `answer`, and it stops in `main` at the call, which it does
+# not lower yet. The dump prints the SLIR of `answer` and one line for `main`. A stop of
+# the SLIR lowering comes before the stop of the next stage, so the program stops at
+# `slir, Call`.
+
+fn answer() i32:
+    return 42
+
+fn main() i32:
+    return answer()

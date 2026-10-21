@@ -49,9 +49,12 @@ signatures, the declared types, the constraints, the header of each body, the mo
 each parameter) still reads the AST. `scope` and `effects` stay on the AST; `effects` runs
 before the loop, because `borrow` reads its summary. While the move is in progress, the
 arm of a construct that a pass does not handle yet stops the walk of its body, the next
-pass does not get that body, and the backend does not run: a program with no error stops
-after the analysis with [CE0155](../error-catalog.md#ce0155) (`slir, <body>` for a body
-that the three passes finished), and `--dump-shir` is written first.
+pass does not get that body, and the backend does not run. `borrow` gives each body that
+it finished to the SLIR lowering (`semantics/slir/lower.py`), which is not a pass: it makes
+one `SlirFunction` for each body, and stops at the first construct that it cannot lower
+yet. A program with no error stops after the analysis with
+[CE0155](../error-catalog.md#ce0155) (`slir, <construct>`, or `emit, <body>` for a body
+that the SLIR lowering finished), and `--dump-shir` and `--dump-slir` are written first.
 
 `semantics/const_eval.py` is **not** a pass. Three callers reach it as a helper: the
 **AST builder**, which reads a fixed array's size while the unit is parsed (so a

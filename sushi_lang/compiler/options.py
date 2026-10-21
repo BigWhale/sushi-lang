@@ -25,6 +25,7 @@ class BuildOptions:
     write_ll: bool
     dump_ll: bool
     dump_shir: Optional[str]
+    dump_slir: Optional[str]
     no_incremental: bool
     cache_dir: Optional[str]
     dont_panic: bool
@@ -45,6 +46,7 @@ class BuildOptions:
             write_ll=args.write_ll,
             dump_ll=args.dump_ll,
             dump_shir=args.dump_shir,
+            dump_slir=args.dump_slir,
             no_incremental=args.no_incremental,
             cache_dir=args.cache_dir,
             dont_panic=args.dont_panic,

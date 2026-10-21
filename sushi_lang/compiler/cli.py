@@ -172,6 +172,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     inspect.add_argument("--dump-shir", metavar="PATH",
                          help="Write the SHIR of each body to PATH ('-' for the terminal); "
                               "the compile goes on as usual")
+    inspect.add_argument("--dump-slir", metavar="PATH",
+                         help="Write the SLIR of each body to PATH ('-' for the terminal); "
+                              "the compile goes on as usual")
     inspect.add_argument(
         "--traceback",
         action="store_true",
@@ -203,6 +206,8 @@ _NO_EFFECT: tuple[tuple[str, str, Callable[[argparse.Namespace], bool], str], ..
     ("dont_panic", "--dont-panic", lambda a: a.lib_info,
      "with --lib-info: a report compiles no function"),
     ("dump_shir", "--dump-shir", lambda a: a.lib_info,
+     "with --lib-info: a report compiles no function"),
+    ("dump_slir", "--dump-slir", lambda a: a.lib_info,
      "with --lib-info: a report compiles no function"),
     ("lib_kind", "--lib-kind", lambda a: not a.lib, "without --lib"),
     ("lib_version", "--lib-version", lambda a: not a.lib, "without --lib"),

@@ -1,0 +1,11 @@
+unit test_err_slir_stopped_function
+
+fn answer() -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 42_i32
+    return
+}
+
+fn main: stopped (slir, Call)

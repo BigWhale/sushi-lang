@@ -125,7 +125,8 @@ def _flag(name: str, value: bool) -> str:
     return f"{name}: {'true' if value else 'false'}"
 
 
-def _quoted(text: str) -> str:
+def quoted(text: str) -> str:
+    """A name or a text as a quoted string. The SLIR printer quotes a string the same way."""
     return json.dumps(text, ensure_ascii=False)
 
 
@@ -192,14 +193,14 @@ def _named(pr: ShirPrinter, target: e.Named) -> str:
 
 def _struct_init(pr: ShirPrinter, init: e.StructInit) -> str:
     names = (None if init.names is None
-             else "[" + ", ".join(_quoted(name) for name in init.names) + "]")
+             else "[" + ", ".join(quoted(name) for name in init.names) + "]")
     return _node("StructInit", pr.decl(init.decl), pr.each(init.fields),
                  f"written_order: [{', '.join(str(i) for i in init.written_order)}]",
                  *_optional("names", names))
 
 
 def _interp_part(pr: ShirPrinter, part: str | e.ShirExpr) -> str:
-    return _quoted(part) if isinstance(part, str) else pr.show(part)
+    return quoted(part) if isinstance(part, str) else pr.show(part)
 
 
 def _lambda(pr: ShirPrinter, lam: e.Lambda) -> str:
@@ -217,7 +218,7 @@ def _lifted(pr: ShirPrinter, lam: e.Lambda) -> tuple[str, ...]:
     symbol = pr.lift.symbol_of(lam.shir_id)
     env = pr.lift.environment_of(lam.shir_id)
     slots = None if env is None else "[" + ", ".join(_capture(pr, lam, c) for c in env) + "]"
-    return (*_optional("symbol", None if symbol is None else _quoted(symbol)),
+    return (*_optional("symbol", None if symbol is None else quoted(symbol)),
             *_optional("env", slots))
 
 
@@ -241,14 +242,14 @@ def _if(pr: ShirPrinter, stmt: s.If) -> str:
 def _assert(pr: ShirPrinter, stmt: s.Assert) -> str:
     message = None if stmt.message is None else pr.show(stmt.message)
     return _node("Assert", pr.show(stmt.cond), *_optional("message", message),
-                 f"label: {_quoted(stmt.label)}")
+                 f"label: {quoted(stmt.label)}")
 
 
 # -- the origin of a body ------------------------------------------------------------
 
 
 def _template_check(_pr: ShirPrinter, origin: b.TemplateCheck) -> str:
-    return _node("TemplateCheck", _quoted(str(origin.template)))
+    return _node("TemplateCheck", quoted(str(origin.template)))
 
 
 PRINTERS: dict[type, Render] = {
@@ -257,14 +258,14 @@ PRINTERS: dict[type, Render] = {
     e.FloatConst: lambda _pr, c: repr(c.value),
     e.BoolConst: lambda _pr, c: "true" if c.value else "false",
     e.BlankConst: lambda _pr, _c: "Blank",
-    e.StrConst: lambda _pr, c: _quoted(c.value),
+    e.StrConst: lambda _pr, c: quoted(c.value),
     # expressions
     e.Lit: lambda pr, n: _node("Lit", pr.show(n.value)),
     e.LocalRef: lambda _pr, n: _node("LocalRef", _local(n.local)),
     e.ConstRef: lambda pr, n: _node("ConstRef", pr.decl(n.const_id)),
     e.StorageRef: lambda pr, n: _node("StorageRef", pr.decl(n.decl)),
     e.GlobalRef: lambda pr, n: _node("GlobalRef", pr.decl(n.decl)),
-    e.Field: lambda pr, n: _node("Field", pr.show(n.base), _quoted(n.name)),
+    e.Field: lambda pr, n: _node("Field", pr.show(n.base), quoted(n.name)),
     e.Index: lambda pr, n: _node("Index", pr.show(n.base), pr.show(n.index),
                                  _flag("unchecked", n.unchecked)),
     e.Slice: lambda pr, n: _node("Slice", pr.show(n.base), pr.show(n.start), pr.show(n.end),
@@ -278,7 +279,7 @@ PRINTERS: dict[type, Render] = {
     e.Try: lambda pr, n: _node("Try", pr.show(n.inner)),
     e.Lambda: _lambda,
     e.StructInit: _struct_init,
-    e.EnumInit: lambda pr, n: _node("EnumInit", pr.decl(n.decl), _quoted(n.variant),
+    e.EnumInit: lambda pr, n: _node("EnumInit", pr.decl(n.decl), quoted(n.variant),
                                     pr.each(n.payload)),
     e.TupleInit: lambda pr, n: _node("TupleInit", pr.each(n.parts)),
     e.ArrayInit: lambda pr, n: _node("ArrayInit", pr.show(n.kind), pr.each(n.runs)),
@@ -288,9 +289,9 @@ PRINTERS: dict[type, Render] = {
         "Interp", "[" + ", ".join(_interp_part(pr, part) for part in n.parts) + "]"),
     # the parts of an expression
     e.Named: _named,
-    e.Dotted: lambda pr, t: _node("Dotted", pr.show(t.recv), _quoted(t.name)),
-    e.Static: lambda _pr, t: _node("Static", _type(t.ty), _quoted(t.name)),
-    e.BuiltinFn: lambda _pr, t: _node("BuiltinFn", _quoted(t.name)),
+    e.Dotted: lambda pr, t: _node("Dotted", pr.show(t.recv), quoted(t.name)),
+    e.Static: lambda _pr, t: _node("Static", _type(t.ty), quoted(t.name)),
+    e.BuiltinFn: lambda _pr, t: _node("BuiltinFn", quoted(t.name)),
     e.Arg: _arg,
     e.Fixed: lambda _pr, _k: "Fixed",
     e.Dynamic: lambda _pr, _k: "Dynamic",
@@ -315,7 +316,7 @@ PRINTERS: dict[type, Render] = {
     s.Assert: _assert,
     s.Break: lambda _pr, _n: "Break",
     s.Continue: lambda _pr, _n: "Continue",
-    s.Expand: lambda pr, n: _node("Expand", _local(n.binder), _quoted(n.pack),
+    s.Expand: lambda pr, n: _node("Expand", _local(n.binder), quoted(n.pack),
                                   pr.show(n.body)),
     # the parts of a statement
     LocalId: lambda _pr, local: _local(local),
@@ -332,7 +333,7 @@ PRINTERS: dict[type, Render] = {
     p.Literal: lambda pr, n: _node("Literal", pr.show(n.value)),
     p.IntRange: lambda pr, n: _node("IntRange", pr.show(n.low), pr.show(n.high),
                                     _flag("inclusive", n.inclusive)),
-    p.Variant: lambda pr, n: _node("Variant", pr.decl(n.decl), _quoted(n.variant),
+    p.Variant: lambda pr, n: _node("Variant", pr.decl(n.decl), quoted(n.variant),
                                    pr.each(n.items)),
     p.Tuple: lambda pr, n: _node("Tuple", pr.each(n.elements)),
     p.Own: lambda pr, n: _node("Own", pr.show(n.inner)),
@@ -355,9 +356,9 @@ PRINTERS: dict[type, Render] = {
     c.BuiltinStatic: lambda pr, n: _node("BuiltinStatic", _type(n.ty), pr.show(n.method)),
     c.Conversion: lambda pr, n: _node("Conversion", pr.decl(n.decl)),
     c.Extern: lambda pr, n: _node("Extern", pr.decl(n.decl)),
-    c.Intrinsic: lambda _pr, n: _node("Intrinsic", _quoted(n.name)),
+    c.Intrinsic: lambda _pr, n: _node("Intrinsic", quoted(n.name)),
     c.Indirect: lambda pr, n: _node("Indirect", pr.show(n.value)),
-    c.BuiltinMethod: lambda _pr, m: _quoted(m.name),
+    c.BuiltinMethod: lambda _pr, m: quoted(m.name),
 }
 
 
@@ -366,7 +367,7 @@ PRINTERS: dict[type, Render] = {
 
 def _named_local(local: b.ShirLocal | None, ident: LocalId, ty: TypeRef | None) -> str:
     name = None if local is None else local.name
-    text = _local(ident) if name is None else f"{_local(ident)} {_quoted(name)}"
+    text = _local(ident) if name is None else f"{_local(ident)} {quoted(name)}"
     return text if ty is None else f"{text}: {_type(ty)}"
 
 

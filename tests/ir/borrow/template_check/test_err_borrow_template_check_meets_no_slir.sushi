@@ -1,9 +1,10 @@
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "slir, main"
+# EXPECT_STDERR_CONTAINS: "emit, main"
 #
 # The borrow pass checks the template check of `ident`, but a template check never goes
-# to SLIR. So the first body that meets the next stage is `main`, and not `ident`. The
-# stop of the next stage is the internal error CE0155 until SLIR is built.
+# to SLIR. So SLIR lowers `main` alone, and `main` is the first body that meets the stage
+# after SLIR, and not `ident`. The stop of that stage is the internal error CE0155 until
+# the emitter of SLIR is built.
 
 fn ident@(T)(nom T x) T:
     return x

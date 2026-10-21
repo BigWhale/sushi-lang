@@ -61,6 +61,7 @@ def test_a_compiler_subprocess_is_caught(request):
     ("lark:Lark", "lex"),
     ("sushi_lang.semantics.semantic_analyzer:SemanticAnalyzer", "check"),
     ("sushi_lang.semantics.shir.lower_nodes:BodyLowerer", "__init__"),
+    ("sushi_lang.semantics.slir.lower:SlirStage", "lower_body"),
     ("sushi_lang.backend.codegen_llvm:LLVMCodegen", "__init__"),
     ("sushi_lang.backend.driver:LLVMDriver", "__init__"),
     ("subprocess:Popen", "__init__"),

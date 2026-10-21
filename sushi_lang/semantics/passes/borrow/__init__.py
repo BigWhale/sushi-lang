@@ -16,12 +16,12 @@ second round starts from the fixed point and reports.
 A construct that the pass does not check yet stops the walk of its body with the stop code
 CE0155 (`borrow, <class>`), and the pass records the stop. A body that the walk finished
 with no error writes its conditionally moved locals, has its table checked
-(`check_ownership`, CE0157), and meets the stage after the pass, which is not built yet
-(`slir`).
+(`check_ownership`, CE0157), and goes to the stage after the pass, the SLIR lowering
+(`slir/lower.py`).
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Dict, FrozenSet, Optional, Set
+from typing import TYPE_CHECKING, Callable, Dict, FrozenSet, Optional, Set
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
@@ -60,6 +60,7 @@ class BorrowChecker:
                  tables: SymbolTables,
                  shir: LoweredProgram,
                  stops: Stops,
+                 next_stage: Callable[..., None],
                  destroy_effects: Dict[str, FrozenSet[int]]):
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
@@ -69,6 +70,7 @@ class BorrowChecker:
         self.types = TypeQueries(tables)
         self.shir = shir
         self.stops = stops
+        self.next_stage = next_stage
         # fn name -> the poke param indices it destroys (#168), over EVERY unit, so a
         # cross-unit callee is not a blind spot (the `effects` pass).
         self.destroy_effects = destroy_effects
@@ -106,8 +108,9 @@ class BorrowChecker:
 
         `tables` are the tables that the typecheck pass read the body in. A stop ends the
         walk: the pass records it with the file of the body. A walk with no stop and with
-        no error checks the table of the body. It records the body as finished, but not a
-        template check: a template check never goes to SLIR (docs/design/ir.md 4.3).
+        no error checks the table of the body, and gives the body, with the tables that
+        typecheck read it in, to the next stage, the SLIR lowering. A template check never
+        goes to SLIR (docs/design/ir.md 4.3).
         """
         self._enter(decl, body, tables)
         offered = sum(self.reporter.errors_offered.values())
@@ -133,8 +136,7 @@ class BorrowChecker:
         check_ownership(body, self.shir.typeck_of(body), self.shir.lift_table_of(body),
                         ownership, self.shir.decls)
         if not isinstance(body.origin, TemplateCheck):
-            self.stops.finished(self.shir.decls.name_of(body.fn_id), body.block.loc,
-                                filename)
+            self.next_stage(decl, body, tables=tables, filename=filename)
 
     def _enter(self, decl: object, body: ShirBody, tables: SymbolTables) -> None:
         self.tables, self.types = tables, TypeQueries(tables)

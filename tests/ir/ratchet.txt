@@ -443,6 +443,8 @@ tests/ir/lift/test_err_lift_empty_table.sushi
 tests/ir/shir/expressions/test_err_shir_expr_borrow_operand.sushi
 tests/ir/shir/names/test_err_shir_name_unresolved.sushi
 tests/ir/shir/statements/test_err_shir_stmt_let_untyped.sushi
+tests/ir/slir/return_literal/test_err_slir_return_literal.sushi
+tests/ir/slir/stopped/test_err_slir_stopped_function.sushi
 tests/ir/spine/arg_count/test_err_spine_arg_count.sushi
 tests/ir/spine/use_after_move/test_err_spine_use_after_move.sushi
 tests/ir/typeck/borrows/test_err_typeck_borrow_in_let.sushi

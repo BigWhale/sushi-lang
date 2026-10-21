@@ -161,7 +161,8 @@ class LoweredProgram:
             self.units.append(lowered)
         return lowered
 
-    def _tables_of(self, body: ShirBody) -> BodyTables:
+    def tables_of(self, body: ShirBody) -> BodyTables:
+        """The body and its three side tables, which `add` made."""
         entry = self._tables.get(id(body))
         if entry is None or entry.body is not body:
             er.raise_internal_error("CE0000", detail="a SHIR body that lowering did not list "
@@ -170,15 +171,15 @@ class LoweredProgram:
 
     def typeck_of(self, body: ShirBody) -> TypeckResults:
         """The one `TypeckResults` of `body`, which `add` made."""
-        return self._tables_of(body).typeck
+        return self.tables_of(body).typeck
 
     def ownership_table_of(self, body: ShirBody) -> OwnershipResults:
         """The one `OwnershipResults` of `body`, which `add` made."""
-        return self._tables_of(body).ownership
+        return self.tables_of(body).ownership
 
     def lift_table_of(self, body: ShirBody) -> LiftResults:
         """The one `LiftResults` of `body`, which `add` made."""
-        return self._tables_of(body).lift
+        return self.tables_of(body).lift
 
     def body_of(self, decl: object) -> Optional[ShirBody]:
         """The body that lowering made of the declaration `decl`, or None."""

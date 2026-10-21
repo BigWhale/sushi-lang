@@ -31,6 +31,8 @@ from sushi_lang.semantics.passes.types import (
     TypeValidator, validate_perk_implementation_method)
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.shir.stop import Stops
+from sushi_lang.semantics.slir.function import SlirProgram
+from sushi_lang.semantics.slir.lower import SlirStage
 from sushi_lang.semantics.units import UnitManager, Unit
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.monomorphize.order import diagnostics_in_site_order
@@ -82,11 +84,12 @@ class Lints:
 class _UnitPasses:
     """The per-unit passes of one unit that run from the switch to SHIR on, built in that
     unit's scope. Each SHIR pass gives the next one each body that it finished with no
-    error: typecheck gives it to lift, and lift to borrow."""
+    error: typecheck gives it to lift, lift to borrow, and borrow to the SLIR stage."""
     scope: ScopeAnalyzer
     typecheck: TypeValidator
     lift: LiftPass
     borrow: BorrowChecker
+    slir: SlirStage
 
 
 @dataclass(frozen=True)
@@ -184,7 +187,10 @@ class SemanticAnalyzer:
         # order (docs/design/ir.md 6.3). The typecheck pass walks it, and `--dump-shir`
         # prints it.
         self.shir = LoweredProgram()
-        # The stops that the typecheck pass and the borrow pass met (`shir/stop.py`).
+        # The SLIR of each body that the borrow pass finished, or the construct at which
+        # its lowering stopped (docs/design/ir.md 8.2). `--dump-slir` prints it.
+        self.slir = SlirProgram()
+        # The stops that the SHIR passes and the SLIR stage met (`shir/stop.py`).
         self.stops = Stops()
         # Which functions destroy a `poke` parameter, transitively: the summary of the
         # `effects` pass, which the borrow pass reads.
@@ -233,16 +239,20 @@ class SemanticAnalyzer:
                           (SHIR)
             borrow        borrow checking, OwnershipResults      _check_units                      passes/borrow/
                           (SHIR)
+            slir          SHIR to SLIR, one SlirFunction for     _check_units                      slir/lower.py
+                          each body (not a pass)
 
         From the switch to SHIR (docs/design/ir.md 7.9), `scope`, lowering, `typecheck`,
-        `lift` and `borrow` run per unit, in one loop. `scope` reads the AST, and lowering
-        makes the SHIR body of each declaration. The three SHIR passes walk that body, and
-        each gives the next one each body that it finished with no error: `typecheck` gives
-        it to `lift`, and `lift` gives it to `borrow`. A stop of a pass ends the walk of
-        its body, and the next pass does not get it. `lift` stops at a `Lambda` until the
-        closures group. `effects` runs on the AST before the loop, because `borrow` reads
-        its summary. The backend does not run: the pipeline stops after `borrow` with the
-        stop code CE0155 (`pipeline_stop`), at the stage `slir`. `_check_copies` repeats
+        `lift`, `borrow` and the SLIR stage run per unit, in one loop. `scope` reads the
+        AST, and lowering makes the SHIR body of each declaration. The three SHIR passes
+        walk that body, and each gives the next stage each body that it finished with no
+        error: `typecheck` gives it to `lift`, `lift` gives it to `borrow`, and `borrow`
+        gives it to the SLIR stage. A stop of a stage ends the work on its body, and the
+        next stage does not get it. `lift` stops at a `Lambda` until the closures group.
+        `effects` runs on the AST before the loop, because `borrow` reads its summary. The
+        backend does not run: the pipeline stops after the SLIR stage with the stop code
+        CE0155 (`pipeline_stop`), at the stage `slir` or at the stage `emit` after it
+        (docs/design/ir.md 8.2). `_check_copies` repeats
         the per-unit stages for each copy cut after the loop started: an extension copy of
         a generic or an array target, an array-template perk copy, and a function instance
         of a late request of the typecheck pass (#1155). `_check_array_extensions` drives
@@ -366,8 +376,8 @@ class SemanticAnalyzer:
         """The one stop of the program, for an analysis that reported no error.
 
         The first stop of the typecheck pass, else of the lift pass, else of the borrow
-        pass, else an error hole whose codes no error offered (ir.md 7.4), else the stage
-        after `borrow` (`Stops.first`).
+        pass, else an error hole whose codes no error offered (ir.md 7.4), else of the SLIR
+        lowering, else the stage after it (`Stops.first`).
         """
         hole = check_error_holes(self.shir.holes, self._offered + self.reporter.errors_offered)
         return self.stops.first(hole)
@@ -811,12 +821,13 @@ class SemanticAnalyzer:
 
     def _check_units(self, compilation_order: list[Unit], monomorphizer,
                      libraries: LibraryRegistration) -> None:
-        """scope, lowering, typecheck, lift and borrow, per unit, in one loop.
+        """scope, lowering, typecheck, lift, borrow and the SLIR stage, per unit, in one loop.
 
         Lowering runs after scope, because it reads the `Bindings` that scope writes. Its
         result goes to `self.shir`, and the body half of `typecheck` walks it; `typecheck`
-        gives each body that it finished with no error to `lift`, and `lift` gives each
-        body that it finished to `borrow`. The reporter of the unit tells lowering whether
+        gives each body that it finished with no error to `lift`, `lift` gives each body
+        that it finished to `borrow`, and `borrow` gives each body that it finished to the
+        SLIR stage, which writes `self.slir`. The reporter of the unit tells lowering whether
         scope reported an error: in such a unit a hole does not stop the compile under the
         strict variable.
         """
@@ -838,7 +849,8 @@ class SemanticAnalyzer:
 
     def _unit_passes(self, unit: Unit, reporter: Reporter,
                      monomorphizer, libraries: LibraryRegistration) -> _UnitPasses:
-        """The scope, typecheck, lift and borrow passes of ONE unit, in its own scope.
+        """The scope, typecheck, lift and borrow passes and the SLIR stage of ONE unit, in
+        its own scope.
 
         Two callers: the per-unit loop, and the check of the generic-target extension
         copies, which each go home to the unit of their template (#1064). A copy is
@@ -854,7 +866,9 @@ class SemanticAnalyzer:
                               visibility=self.tables.visibility,
                               function_tables=(self.tables.funcs, self.tables.generic_funcs),
                               unit_namespaces=self.tables.namespaces)
+        slir = SlirStage(self.shir, self.slir, stops=self.stops, unit=unit.name)
         borrow = BorrowChecker(reporter, tables=self.tables, shir=self.shir, stops=self.stops,
+                               next_stage=slir.lower_body,
                                destroy_effects=self.destroy_effects)
         lift = LiftPass(self.shir, stops=self.stops, next_stage=borrow.check_body)
         typecheck = TypeValidator(
@@ -863,7 +877,7 @@ class SemanticAnalyzer:
             in_library_unit=unit.provenance is not None,
             namespaces=namespaces, checks_templates=_checks_templates(unit),
             shir=self.shir, stops=self.stops, next_stage=lift.check_body)
-        return _UnitPasses(scope, typecheck, lift, borrow)
+        return _UnitPasses(scope, typecheck, lift, borrow, slir)
 
     @staticmethod
     def _entry_unit(compilation_order: list[Unit]) -> Optional[Unit]:

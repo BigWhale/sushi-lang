@@ -62,6 +62,7 @@ Complete reference for the Sushi compiler: CLI options, optimization levels, and
 | `--dump-ast`        | Print abstract syntax tree                         |
 | `--dump-ll`         | Print LLVM IR to terminal                          |
 | `--dump-shir PATH`  | Write the SHIR of each body to `PATH` (`-` prints it); the compile goes on as usual |
+| `--dump-slir PATH`  | Write the SLIR of each body to `PATH` (`-` prints it); the compile goes on as usual |
 | `--write-ll`        | Write LLVM IR to `<output>.ll` file                |
 | `--no-incremental`  | Force full rebuild, ignoring cached object files   |
 | `--clean-cache`     | Remove `__sushi_cache__/` directory and exit       |
@@ -541,7 +542,7 @@ Write the SHIR (the Sushi High-level IR, `docs/design/ir.md`) of each body to a 
 - The dump is written when the semantic analysis ends, before the compile stops (see the next paragraph). A dump that cannot be written is the warning [CW0005](error-catalog.md#cw0005)
 - With `--lib-info` the flag has no effect ([CW0003](error-catalog.md#cw0003))
 
-**The new pipeline on every compile:** the compiler lowers each body to SHIR on every compile, also with no `--dump-shir`, the typecheck pass walks the SHIR body of each declaration, the lift pass walks each body that the typecheck pass finished with no error, and the borrow pass walks each body that the lift pass finished. The pipeline is not complete yet: each pass stops at the first construct that it cannot handle yet, and the stages after the borrow pass are not built. So a program that has no error stops after the analysis with the internal error [CE0155](error-catalog.md#ce0155), which names the stage and the construct (`typecheck, Match`, `typecheck, Lambda`, `borrow, If`, or `slir, main` for the first body that the three passes finished and that is not a template check), and no program is emitted. A program that has an error gives its errors and no CE0155. In both cases the dump is written first.
+**The new pipeline on every compile:** the compiler lowers each body to SHIR on every compile, also with no `--dump-shir`, the typecheck pass walks the SHIR body of each declaration, the lift pass walks each body that the typecheck pass finished with no error, the borrow pass walks each body that the lift pass finished, and the SLIR lowering lowers each body that the borrow pass finished and that is not a template check (see [Dump SLIR](#dump-slir)). The pipeline is not complete yet: each stage stops at the first construct that it cannot handle yet, and the stages after the SLIR lowering are not built. So a program that has no error stops after the analysis with the internal error [CE0155](error-catalog.md#ce0155), which names the stage and the construct (`typecheck, Match`, `typecheck, Lambda`, `borrow, If`, `slir, Call`, or `emit, main` for the first body that the SLIR lowering finished), and no program is emitted. A program that has an error gives its errors and no CE0155. In both cases the dumps are written first.
 
 A hole of lowering does not stop the compile. Set the variable `SUSHI_SHIR_STRICT=1` to stop the compile at the first hole with CE0155 (the stage is `lowering`):
 
@@ -554,6 +555,25 @@ The variable does not stop the compile at a name with no declaration: the progra
 Each of those forms is an error hole: `--dump-shir` prints it with the codes of its error (`<hole: IndexAccess, error: CE2122 | CE2404>`). On every compile, an error hole whose codes no error offered stops the compile with CE0155 (the stage is `lowering, error hole`) when no pass stopped at a construct and the program has no error: lowering and the typecheck pass then disagree, and the hole could hide a fault in a correct program. In a constant or a `var` initializer an error hole also accepts [CE0108](error-catalog.md#ce0108), and a slice with a reversed range also accepts [CE2404](error-catalog.md#ce2404), because those errors come first.
 
 The variable is for the work on the new pipeline. The test runner (`tests/run_tests.py`) sets it to `1` for every compile that it starts, and no flag of the runner turns it off. A compile that you start by hand does not get it.
+
+### Dump SLIR
+
+Write the SLIR (the Sushi Low-level IR, `docs/design/ir.md` section 8) of each body to a file:
+
+```bash
+./sushic --dump-slir program.slir program.sushi
+./sushic --dump-slir - program.sushi    # print the dump on the terminal
+```
+
+**Output includes:**
+- Each unit of the program, then each function of the unit: a header with each parameter, its type and its convention (`@owned`, `@guaranteed`, `@in_guaranteed`, `@inout`), and the return type; one `let` line for the return slot `_0` and for each other local; then each basic block with its statements and its terminator
+- One line `fn <name>: stopped (slir, <construct>)` for a function whose lowering stopped at a construct that the SLIR lowering does not handle yet
+
+**Rules:**
+- The text is the same on every run and under every `PYTHONHASHSEED`, so a test can compare it with a golden file (`EXPECT_DUMP_SLIR`, `tests/TEST_METADATA_GUIDE.md`)
+- The units and the functions are those of the SHIR dump, in the same order. A template check, and a body that a pass refused or stopped, do not reach the SLIR lowering and do not print
+- The dump is written when the semantic analysis ends, before the compile stops. A dump that cannot be written is the warning [CW0005](error-catalog.md#cw0005)
+- With `--lib-info` the flag has no effect ([CW0003](error-catalog.md#cw0003))
 
 ### Print LLVM IR
 

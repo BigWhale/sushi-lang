@@ -4,26 +4,11 @@ from typing import TYPE_CHECKING
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, ExtendDef
-from sushi_lang.semantics.unit_symbols import emitted_symbol
+from sushi_lang.semantics.unit_symbols import declaring_unit, emitted_symbol
 from sushi_lang.backend.generics.result_builder import call_value_type, declared_return_ll
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-
-
-def declaring_unit(fn: FuncDef, unit_name: str | None) -> str | None:
-    """Whose symbol this declaration takes.
-
-    A monomorphized instance goes home to the unit that declared its generic (#495):
-    `home_unit` is stamped by `generics/synthesis.py`, and two units' instances of
-    one mangled base name become two symbols. A lifted lambda carries no home and
-    keeps its bare name -- the per-unit lifter's counter already makes it unique
-    (#402) -- and so does a binary library's template instance, whose home names no
-    unit in the build.
-    """
-    if getattr(fn, "is_synthesized", False):
-        return getattr(fn, "home_unit", None)
-    return unit_name
 
 
 class FunctionDeclarations:

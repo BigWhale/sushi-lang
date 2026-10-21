@@ -50,6 +50,21 @@ def emitted_symbol(name: str, unit_name: Optional[str] = None,
     return link_symbol or mangle_unit_symbol(unit_name, name)
 
 
+def declaring_unit(fn: object, unit_name: Optional[str]) -> Optional[str]:
+    """Whose symbol a function declaration takes: the back end and SLIR lowering ask here.
+
+    A monomorphized instance goes home to the unit that declared its generic (#495):
+    `home_unit` is stamped by `generics/synthesis.py`, and two units' instances of
+    one mangled base name become two symbols. A lifted lambda carries no home and
+    keeps its bare name -- the per-unit lifter's counter already makes it unique
+    (#402) -- and so does a binary library's template instance, whose home names no
+    unit in the build.
+    """
+    if getattr(fn, "is_synthesized", False):
+        return getattr(fn, "home_unit", None)
+    return unit_name
+
+
 def lookup_in_unit(name: str, by_unit: Mapping[str, Mapping[str, V]],
                    flat: Mapping[str, V], unit: Optional[str] = None,
                    scope: object = None) -> Optional[V]:
