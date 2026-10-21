@@ -24,7 +24,7 @@ ShirBody main
   params : []
   locals : [_0 "full": i32[], _1 "none": i32[]]
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@bump)), [Lit("x")]), "realise"), [Lit(0)])]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Dotted(Call(Named(GlobalRef(@bump)), [Lit("x")]), "realise"), [Lit(0)]), Guaranteed)]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@bump)), [Lit("")]), "realise"), [Lit(0)])]))
     Assign(LocalRef(_0), ArrayInit(Dynamic, [Single(Lit(7))]), is_init: true)
     Assign(LocalRef(_1), ArrayInit(Dynamic, []), is_init: true)

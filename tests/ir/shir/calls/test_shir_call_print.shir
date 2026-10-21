@@ -4,12 +4,12 @@ ShirBody greet
   params : [(_0 "name": string, Guaranteed)]
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Interp(["Mostly Harmless, ", LocalRef(_0), ""])]))
-    ExprStmt(Call(BuiltinFn("print"), [LocalRef(_0)]))
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["Mostly Harmless, ", LocalRef(_0), ""]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("print"), [(LocalRef(_0), Guaranteed)]))
 
 ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(Named(GlobalRef(@greet)), [Lit("Arthur")]))
+    ExprStmt(Call(Free(@greet), [(Lit("Arthur"), Guaranteed)]))
     Return(Lit(0))

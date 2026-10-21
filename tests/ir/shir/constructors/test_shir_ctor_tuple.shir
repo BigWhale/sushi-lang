@@ -10,7 +10,7 @@ ShirBody main
   params : []
   locals : [_0 "t": (i32, string), _1 "n": ((i32, i32), bool)]
   block  :
-    Assign(LocalRef(_0), Call(Named(GlobalRef(@pair)), []), is_init: true)
+    Assign(LocalRef(_0), Call(Free(@pair), []), is_init: true)
     Assign(LocalRef(_1), TupleInit([TupleInit([Lit(1), Lit(2)]), Lit(true)]), is_init: true)
     ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_0), "0")]))
     ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_0), "1")]))

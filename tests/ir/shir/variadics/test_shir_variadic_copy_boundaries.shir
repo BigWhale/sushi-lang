@@ -14,7 +14,7 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@tally)), [Lit(7), Lit("Mostly Harmless")])]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Named(GlobalRef(@tally)), [Lit(7), Lit("Mostly Harmless")]), Guaranteed)]))
     Return(Lit(0))
 
 ShirBody tally__i32_string.pack2
@@ -22,9 +22,9 @@ ShirBody tally__i32_string.pack2
   locals : [_2 "n": i32, _3 "round": i32]
   block  :
     Assign(LocalRef(_2), Lit(0), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Interp(["", LocalRef(_0), ""])]))
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_0), ""]), Guaranteed)]))
     Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1)), is_init: false)
-    ExprStmt(Call(BuiltinFn("println"), [Interp(["", LocalRef(_1), ""])]))
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_1), ""]), Guaranteed)]))
     Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1)), is_init: false)
     Assign(LocalRef(_3), Lit(0), is_init: true)
     Loop(Cond(Binary(<, LocalRef(_3), Lit(2))), [Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(10)), is_init: false), Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(10)), is_init: false), Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(1)), is_init: false)])

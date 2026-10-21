@@ -40,7 +40,7 @@ ShirBody markers
   params : [(_0 "s": string, Owned)]
   locals : []
   block  :
-    ExprStmt(Call(Named(GlobalRef(@bump)), [(StorageRef(@count), Inout)]))
+    ExprStmt(Call(Free(@bump), [(StorageRef(@count), Inout)]))
     ExprStmt(Call(Named(GlobalRef(@add)), [Call(Named(GlobalRef(@size)), [LocalRef(_0)]), Call(Named(GlobalRef(@look)), [(LocalRef(_0), InGuaranteed)])]))
     Return(Call(Named(GlobalRef(@take)), [(LocalRef(_0), Owned)]))
 

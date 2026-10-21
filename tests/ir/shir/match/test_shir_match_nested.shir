@@ -20,7 +20,7 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Has", [EnumInit(@Shape, "Circle", [Lit(2)])])])]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [EnumInit(@Slot, "Has", [EnumInit(@Shape, "Circle", [Lit(2)])])]), Guaranteed)]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Has", [EnumInit(@Shape, "Square", [Lit(2)])])])]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Has", [EnumInit(@Shape, "Square", [Lit(3)])])])]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Slot, "Nothing", [])])]))

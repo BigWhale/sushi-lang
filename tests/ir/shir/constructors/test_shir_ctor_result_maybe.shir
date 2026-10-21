@@ -24,7 +24,7 @@ ShirBody main
   params : []
   locals : [_0 "s": string]
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@half)), [Lit(8)]), "realise"), [Lit(0)])]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Dotted(Call(Named(GlobalRef(@half)), [Lit(8)]), "realise"), [Lit(0)]), Guaranteed)]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@half)), [Lit(3)]), "realise"), [Lit(0)])]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@maybe)), [Lit(true)]), "realise"), [Lit(0)])]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@maybe)), [Lit(false)]), "realise"), [Lit(0)])]))

@@ -4,7 +4,7 @@ ShirBody show
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_0)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
     Return(LocalRef(_0))
 
 ShirBody pick
@@ -19,7 +19,7 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@pick)), [EnumInit(@Maybe, "Some", [Lit(4)])])]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@pick), [EnumInit(@Maybe, "Some", [Lit(4)])]), Guaranteed)]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@pick)), [EnumInit(@Maybe, "None", [])])]))
     ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
     Return(Lit(0))

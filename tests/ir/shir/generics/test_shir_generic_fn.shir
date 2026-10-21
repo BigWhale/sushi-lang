@@ -11,7 +11,7 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@keep)), [(Lit(3), Owned)])]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Named(GlobalRef(@keep)), [(Lit(3), Owned)]), Guaranteed)]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@keep)), [(Lit("Mostly Harmless"), Owned)])]))
     Return(Lit(0))
 

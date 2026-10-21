@@ -12,9 +12,9 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@verb)), [Lit("get")])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@verb)), [Lit("fetch")])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@verb)), [Lit("put")])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@verb)), [Lit("drop")])]))
-    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@verb), [(Lit("get"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@verb), [(Lit("fetch"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@verb), [(Lit("put"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@verb), [(Lit("drop"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
     Return(Lit(0))

@@ -4,7 +4,7 @@ ShirBody eat
   params : [(_0 "s": string, Owned)]
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_0)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
 
 ShirBody unwrap
   params : [(_0 "w": Wrap, Owned)]

@@ -4,7 +4,7 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Lit(7), "pick"), [(Lit(2), Owned)])]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Dotted(Lit(7), "pick"), [(Lit(2), Owned)]), Guaranteed)]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Lit(7), "pick"), [(Lit("Mostly Harmless"), Owned)])]))
     Return(Lit(0))
 

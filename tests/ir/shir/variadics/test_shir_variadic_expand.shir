@@ -20,7 +20,7 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@show_all)), [Lit(1), Lit("Mostly Harmless")])]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Named(GlobalRef(@show_all)), [Lit(1), Lit("Mostly Harmless")]), Guaranteed)]))
     ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@count)), [Lit(1), Lit("a"), Lit(true)])]))
     Return(Lit(0))
 
@@ -41,10 +41,10 @@ ShirBody show_all__i32_string.pack2
   block  :
     Assign(LocalRef(_2), Lit(0), is_init: true)
     Assign(LocalRef(_3), Interp(["[", LocalRef(_0), "]"]), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_3)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_3), Guaranteed)]))
     Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1)), is_init: false)
     Assign(LocalRef(_4), Interp(["[", LocalRef(_1), "]"]), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_4)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_4), Guaranteed)]))
     Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1)), is_init: false)
     Return(LocalRef(_2))
   copies : [block: [1..4, 4..7]]

@@ -11,9 +11,9 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@classify)), [Unary(neg, Lit(5))])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@classify)), [Lit(0)])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@classify)), [Lit(7)])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@classify)), [Lit(20)])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@classify)), [Lit(50)])]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@classify), [(Unary(neg, Lit(5)), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@classify), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@classify), [(Lit(7), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@classify), [(Lit(20), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@classify), [(Lit(50), Guaranteed)]), Guaranteed)]))
     Return(Lit(0))
