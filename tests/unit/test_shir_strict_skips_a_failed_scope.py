@@ -145,6 +145,7 @@ ERROR_HOLES: dict[str, str] = {
                                       "behind an alias (CE6102), a name that the namespace "
                                       "does not hold (CE2008)",
     "lower_aggregates.py:_slice": "a slice with a reversed range (CE2122)",
+    "lower_nodes.py:_borrowed_place": "a `poke` of a constant (CE2400)",
     "lower_aggregates.py:_unit_variant": "a member of a type that is no variant: CE2045 on "
                                          "an enum, CE2105, CE2007 or CE2008 on another type",
 }

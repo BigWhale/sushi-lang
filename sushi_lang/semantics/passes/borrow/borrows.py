@@ -34,8 +34,8 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
 
     A place is a local or a constant here; a field of a local comes with the field group. A
     constant is storage that the program keeps, so it has an address and no borrow state:
-    a `peek` of it reads it. A `poke` of it is refused before this pass (CE2400), so a
-    `poke` of a constant here is an internal error at its span. A call result, a literal and
+    a `peek` of it reads it. A `poke` of it is always refused (CE2400), and lowering keeps
+    it as an error hole, so a `poke` of a constant here is an internal error at its span. A call result, a literal and
     a construction are temporaries and have no address: CE2404.
     """
     is_poke = mode is BorrowMode.POKE

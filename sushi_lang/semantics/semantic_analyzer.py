@@ -820,7 +820,6 @@ class SemanticAnalyzer:
             unit_reporter = self._unit_reporter(unit)
             passes = self._unit_passes(unit, unit_reporter, monomorphizer, libraries)
             passes.scope.run(unit.ast)
-            passes.borrow.scope_failed = unit_reporter.has_offered_errors
             lower_unit(self.shir, unit, passes.scope.bindings,
                        DeclLookup.of(self.tables, unit.name),
                        scope_failed=unit_reporter.has_offered_errors)
@@ -1271,7 +1270,6 @@ class SemanticAnalyzer:
                 entry = _copy_entry(node)
                 written = len(passes.scope.bindings)
                 entry.scope(passes.scope, node)
-                passes.borrow.scope_failed = scratch.has_offered_errors
                 lower_copy(self.shir, home, node, passes.scope.bindings[written:], lookup,
                            scope_failed=scratch.has_offered_errors)
                 scratch.leave_body()

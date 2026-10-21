@@ -221,8 +221,8 @@ class BodyLowerer:
         the language always refuses with a diagnostic of a later pass is one too: a named
         argument outside a struct construction (CE6104), written type arguments after a
         dot or on a struct construction (CE6102), a slice with a reversed range (CE2122),
-        a call of a name that the namespace does not hold (CE2008), and a member of a type
-        that is no variant (CE2045).
+        a call of a name that the namespace does not hold (CE2008), a member of a type
+        that is no variant (CE2045), and a `poke` of a constant (CE2400).
 
         `codes` are the codes of that error. At the end of the analysis, on every compile,
         an error hole whose codes no error offered is a stop with CE0155
@@ -358,15 +358,27 @@ def _cast(lw: BodyLowerer, node: a.CastExpr) -> e.Cast:
 # -- ownership and text -----------------------------------------------------------
 
 
-def _borrow(lw: BodyLowerer, node: a.Borrow) -> e.Borrow:
+def _borrow(lw: BodyLowerer, node: a.Borrow) -> e.Borrow | Hole:
     """`peek x` or `poke x` outside a call argument."""
     return _borrow_of(lw, lw.span(node), node.expr, borrow_mode(node.mutability))
 
 
-def _borrow_of(lw: BodyLowerer, loc: Span, place: Any, mode: BorrowMode) -> e.Borrow:
-    """The one `Borrow` of lowering: a marked value, and the value of a reference `let`."""
+def _borrow_of(lw: BodyLowerer, loc: Span, place: Any,
+               mode: BorrowMode) -> e.Borrow | Hole:
+    """The one `Borrow` of lowering: a marked value, and the value of a reference `let`. A
+    `poke` of a constant is an error hole (`_borrowed_place`)."""
     ident = lw.ident()
-    return e.Borrow(ident, loc, lw.expr(place), mode)
+    value = _borrowed_place(lw, place, mode)
+    return value if isinstance(value, Hole) else e.Borrow(ident, loc, value, mode)
+
+
+def _borrowed_place(lw: BodyLowerer, place: Any, mode: BorrowMode) -> e.ShirExpr:
+    """The place of a `peek` or a `poke`. A constant lives in read-only storage, so a
+    `poke` of it is always refused (CE2400): an error hole."""
+    value = lw.expr(place)
+    if mode is BorrowMode.POKE and isinstance(value, e.ConstRef):
+        return lw.error_hole(place, "CE2400")
+    return value
 
 
 def _try(lw: BodyLowerer, node: a.TryExpr) -> e.Try:
@@ -521,7 +533,8 @@ def _argument(lw: BodyLowerer, node: Any) -> e.Arg:
 
 def _marked(lw: BodyLowerer, node: a.Borrow) -> e.Arg:
     """`peek x` or `poke x`: the marker of the argument, not a `Borrow` (ir.md 7.4)."""
-    return e.Arg(lw.expr(node.expr), _marker(node.mutability), marker_loc=lw.span(node))
+    value = _borrowed_place(lw, node.expr, borrow_mode(node.mutability))
+    return e.Arg(value, _marker(node.mutability), marker_loc=lw.span(node))
 
 
 def _bloom(lw: BodyLowerer, node: a.Spread) -> e.Arg:
