@@ -1,4 +1,10 @@
-"""Method call validation."""
+"""Method call validation.
+
+Port templates: `validate_method_call` (A1, A10), `_validate_type_name_call` (B2, B4)
+and `_validate_iterator_new` (C3) call `TypeValidator.validate_expression`, and that API
+is deleted. No pass reaches them today. The group in brackets after each name ports them
+to SHIR inputs before a SHIR pass calls them.
+"""
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional

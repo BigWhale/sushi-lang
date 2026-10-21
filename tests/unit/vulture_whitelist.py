@@ -32,6 +32,14 @@ _TIER_C = ("kept for Tier C (Phase 5): the typecheck stage of its construct grou
            "the helper to SHIR inputs")
 _TIER_D = ("kept for Tier D (Phase 6): the typecheck stage of its construct group moves "
            "the helper to SHIR inputs")
+
+
+def _port(group: str) -> str:
+    return (f"a port template: it calls TypeValidator.validate_expression, which is deleted, "
+            f"and no pass reaches it; group {group} ports it to SHIR inputs before a SHIR "
+            f"pass calls it")
+
+
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
     ("sushi_lang/semantics/*", "visit_*",
@@ -159,27 +167,27 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/ast.py", "in_cast_context", _TIER_A),
     (_TYPES + "expressions.py", "in_cast_context", _TIER_A),
     (_TYPES + "utils.py", "reject_named_args", _TIER_A),
-    (_TYPES + "calls/user_defined.py", "validate_indirect_call", _TIER_C),
+    (_TYPES + "calls/user_defined.py", "validate_indirect_call", _port("C2")),
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
     (_TYPES + "calls/user_defined.py", "check_stdlib_function", _TIER_A),
-    (_TYPES + "matching.py", "validate_match_statement", _TIER_A),
+    (_TYPES + "matching.py", "validate_match_statement", _port("A3 or A4")),
     (_TYPES + "constants.py", "assignment_span", _TIER_A),
     (_TYPES + "statements.py", "stamp_rebind_places", _TIER_A),
-    (_TYPES + "statements.py", "validate_rebind_statement", _TIER_A),
-    (_TYPES + "statements.py", "validate_let_destructure", _TIER_A),
-    (_TYPES + "expressions.py", "refuse_range_value", _TIER_A),
+    (_TYPES + "statements.py", "validate_rebind_statement", _port("A5")),
+    (_TYPES + "statements.py", "validate_let_destructure", _port("A5")),
+    (_TYPES + "expressions.py", "refuse_range_value", _port("A7")),
     (_TYPES + "expressions.py", "reject_unknown_field", _TIER_A),
-    (_TYPES + "expressions.py", "validate_array_literal", _TIER_A),
-    (_TYPES + "expressions.py", "validate_cast_expression", _TIER_A),
-    (_TYPES + "expressions.py", "validate_index_access", _TIER_A),
-    (_TYPES + "calls/dotcall.py", "validate_variant_spelling", _TIER_A),
-    (_TYPES + "calls/namespaced.py", "validate_namespaced_call", _TIER_A),
+    (_TYPES + "expressions.py", "validate_array_literal", _port("A6")),
+    (_TYPES + "expressions.py", "validate_cast_expression", _port("A1")),
+    (_TYPES + "expressions.py", "validate_index_access", _port("A6")),
+    (_TYPES + "calls/dotcall.py", "validate_variant_spelling", _port("A4")),
+    (_TYPES + "calls/namespaced.py", "validate_namespaced_call", _port("A8")),
     (_TYPES + "calls/statics.py", "validate_static_call", _TIER_A),
-    (_TYPES + "statements.py", "validate_let_reference", _TIER_B),
+    (_TYPES + "statements.py", "validate_let_reference", _port("B8")),
     (_TYPES + "arguments.py", "reject_type_pack_value", _TIER_C),
-    (_TYPES + "visit/helpers.py", "validate_fn_field_call_args", _TIER_C),
+    (_TYPES + "visit/helpers.py", "validate_fn_field_call_args", _port("C2")),
     (_TYPES + "signatures.py", "check_template_statements", _TIER_C),
-    (_TYPES + "statements.py", "validate_foreach_statement", _TIER_A),
+    (_TYPES + "statements.py", "validate_foreach_statement", _port("A7")),
     (_TYPES + "statements.py", "validate_expand_statement", _TIER_C),
 )
 
@@ -194,6 +202,11 @@ def _kept(tier: str, groups: str) -> str:
             "moves the helper to SHIR inputs")
 
 
+def _ast_probe(group: str) -> str:
+    return (f"a port template: it reads the AST, which no SHIR pass has, and no pass reaches "
+            f"it; group {group} ports it to SHIR inputs before a SHIR caller is connected")
+
+
 WHITELIST += (
     (_BORROW + "flow.py", "without", _kept("C", "C3: iterators, the item of each round")),
     (_BORROW + "flow.py", "invalidation_of", _kept("C", "C3: iterators, a view of a loop")),
@@ -204,8 +217,8 @@ WHITELIST += (
     (_BORROW + "calls.py", "settle_receiver", _kept("A", "A1, A10: method calls")),
     (_BORROW + "calls.py", "settle_method_args", _kept("A", "A1, A10: method calls")),
     (_BORROW + "writes.py", "maybe_reject_mutation", _kept("A", "A1, A10: method calls")),
-    (_BORROW + "reads.py", "_field_type", _kept("A", "A5: struct fields")),
-    (_BORROW + "reads.py", "constant_type", _kept("A", "A8: constants")),
+    (_BORROW + "reads.py", "_field_type", _ast_probe("A5")),
+    (_BORROW + "reads.py", "constant_type", _ast_probe("A8")),
     (_BORROW + "calls.py", "reject_self_aliasing_copy", _kept("B", "B1: owning arrays")),
     (_BORROW + "consume.py", "reject_slice_of_temporary", _kept("B", "B1: owning arrays")),
     (_BORROW + "calls.py", "maybe_mark_container_insert", _kept("B", "B2, B4: containers")),
@@ -227,7 +240,7 @@ WHITELIST += (
     (_BORROW + "iterators.py", "settle_walk", _kept("C", "C3: iterators")),
     (_BORROW + "iterators.py", "settle_iterator_source", _kept("C", "C3: iterators")),
     (_BORROW + "diagnostics.py", "emit_change_under_iterator", _kept("C", "C3: iterators")),
-    (_BORROW + "reads.py", "unit_variables", _kept("D", "D1: var")),
+    (_BORROW + "reads.py", "unit_variables", _ast_probe("D1")),
     (_BORROW + "state.py", "is_unit_var", _kept("D", "D1: var")),
 )
 

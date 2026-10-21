@@ -1,4 +1,10 @@
-"""User-defined and stdlib function call validation."""
+"""User-defined and stdlib function call validation.
+
+Port templates: `_validate_math_family` (A14), `validate_fn_value_call_args` (C2) and
+`validate_variadic_trailing_args` (D3) call `TypeValidator.validate_expression`, and
+that API is deleted. No pass reaches them today. The group in brackets after each name
+ports them to SHIR inputs before a SHIR pass calls them.
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 

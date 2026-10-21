@@ -1,4 +1,10 @@
-"""Type compatibility checking for type validation."""
+"""Type compatibility checking for type validation.
+
+Port templates: `validate_assignment_compatibility` call
+`TypeValidator.validate_expression`, and that API is deleted. No pass reaches them
+today. Group B8 (the reference `let`) ports them to SHIR inputs before a SHIR pass calls
+them.
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 

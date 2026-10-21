@@ -12,6 +12,12 @@ dispatcher too, because its emitters are the fourth list of the same names.
 One spelling is kept as it stood, because #750 promised no change of behaviour:
 `extend`/`extend_range` answer a type for a fixed receiver although the validator refuses
 one there.
+
+Port templates: the argument probes (`_validate_element_argument`, `_an_index`,
+`_reject_a_non_index`, `_reject_mismatched_source`, `_a_string`,
+`_a_start_and_a_comparable_source`) call `TypeValidator.validate_expression`, and that
+API is deleted. No pass reaches them today. Group A6 (arrays of plain elements) ports
+them to SHIR inputs before a SHIR pass calls them.
 """
 from __future__ import annotations
 

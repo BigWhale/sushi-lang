@@ -1,4 +1,10 @@
-"""Shared utilities for type validation."""
+"""Shared utilities for type validation.
+
+Port templates: `reject_spread_args` call `TypeValidator.validate_expression`, and that
+API is deleted. No pass reaches them today. The first group that connects one of its
+callers, A1 (method calls) or A5 (struct construction), ports them to SHIR inputs before
+a SHIR pass calls them.
+"""
 from __future__ import annotations
 
 import functools

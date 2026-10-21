@@ -1,4 +1,10 @@
-"""Pattern matching validation for type validation."""
+"""Pattern matching validation for type validation.
+
+Port templates: `validate_match_scrutinee` and `_walk_arm_body` call
+`TypeValidator.validate_expression`, and that API is deleted. No pass reaches them
+today. Group A3 or A4 (`match`), whichever comes first, ports them to SHIR inputs before
+a SHIR pass calls them.
+"""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Iterator, List, Optional, Set, Tuple

@@ -1,4 +1,10 @@
-"""Validation and table-building for the built-in Result<T, E> methods."""
+"""Validation and table-building for the built-in Result<T, E> methods.
+
+Port templates: `validate_result_realise_method_with_validator` and
+`_validate_result_expect` call `TypeValidator.validate_expression`, and that API is
+deleted. No pass reaches them today. Group A4 (the `Result` methods) ports them to SHIR
+inputs before a SHIR pass calls them.
+"""
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Optional
 

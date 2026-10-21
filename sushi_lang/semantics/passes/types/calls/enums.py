@@ -1,4 +1,9 @@
-"""Enum constructor validation."""
+"""Enum constructor validation.
+
+Port templates: `_refuse_untyped_constructor` call `TypeValidator.validate_expression`,
+and that API is deleted. No pass reaches them today. Group A4 (enums) ports them to SHIR
+inputs before a SHIR pass calls them.
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple, Optional, Sequence
 

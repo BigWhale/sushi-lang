@@ -1,4 +1,9 @@
-"""Validation and element-type parsing for the built-in List<T> methods."""
+"""Validation and element-type parsing for the built-in List<T> methods.
+
+Port templates: `validate_list_method_with_validator` and `_validate_list_element_type`
+call `TypeValidator.validate_expression`, and that API is deleted. No pass reaches them
+today. Group B2 (`List@(T)`) ports them to SHIR inputs before a SHIR pass calls them.
+"""
 from types import MappingProxyType
 from typing import Any, Mapping, Optional
 

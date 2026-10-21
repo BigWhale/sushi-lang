@@ -1,4 +1,9 @@
-"""Semantic validation for FFI `unsafe external` blocks."""
+"""Semantic validation for FFI `unsafe external` blocks.
+
+Port templates: `validate_external_call_args` call `TypeValidator.validate_expression`,
+and that API is deleted. No pass reaches them today. Group D5 (externs) ports them to
+SHIR inputs before a SHIR pass calls them.
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Optional
 

@@ -1,4 +1,10 @@
-"""Struct constructor validation."""
+"""Struct constructor validation.
+
+Port templates: the struct constructor checks (`validate_struct_constructor` and the
+helpers that it calls) call `TypeValidator.validate_expression`, and that API is
+deleted. No pass reaches them today. Group A5 (plain structs) ports them to SHIR inputs
+before a SHIR pass calls them.
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, NamedTuple, Optional, Sequence, Tuple
 

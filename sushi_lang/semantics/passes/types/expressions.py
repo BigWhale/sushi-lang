@@ -1,4 +1,9 @@
-"""Expression validation for type validation."""
+"""Expression validation for type validation.
+
+Port templates: `validate_range_expression` call `TypeValidator.validate_expression`,
+and that API is deleted. No pass reaches them today. Group A7 (counted ranges) ports
+them to SHIR inputs before a SHIR pass calls them.
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple, Optional, Tuple
 

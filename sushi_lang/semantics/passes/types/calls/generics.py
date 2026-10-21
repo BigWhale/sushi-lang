@@ -1,4 +1,9 @@
-"""Generic function call validation."""
+"""Generic function call validation.
+
+Port templates: `_walk_unchecked_arguments` call `TypeValidator.validate_expression`,
+and that API is deleted. No pass reaches them today. Group C1 (generic instances) ports
+them to SHIR inputs before a SHIR pass calls them.
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 

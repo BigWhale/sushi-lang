@@ -1,4 +1,10 @@
-"""The ir-free half of HashMap<K, V>: method validation and type-table plumbing."""
+"""The ir-free half of HashMap<K, V>: method validation and type-table plumbing.
+
+Port templates: `_validate_hashmap_insert` and `_validate_hashmap_key_method` call
+`TypeValidator.validate_expression`, and that API is deleted. No pass reaches them
+today. Group B4 (`HashMap@(K, V)`) ports them to SHIR inputs before a SHIR pass calls
+them.
+"""
 
 from types import MappingProxyType
 from typing import Any, Literal, Mapping, Optional, TYPE_CHECKING, overload

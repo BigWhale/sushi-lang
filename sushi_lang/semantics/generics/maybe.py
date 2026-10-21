@@ -1,4 +1,10 @@
-"""Validation and table-building for the built-in Maybe<T> methods."""
+"""Validation and table-building for the built-in Maybe<T> methods.
+
+Port templates: `_validate_maybe_realise` and `_validate_maybe_expect` call
+`TypeValidator.validate_expression`, and that API is deleted. No pass reaches them
+today. Group A4 (the `Maybe` methods) ports them to SHIR inputs before a SHIR pass calls
+them.
+"""
 from types import MappingProxyType
 from typing import Any, Mapping, Optional
 
