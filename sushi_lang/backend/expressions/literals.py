@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 def emit_int_constant(codegen: 'LLVMCodegen', ty: 'Type', value: int) -> ir.Constant:
-    """An integer value at the width of `ty`: the AST emitter and the SLIR emitter call it."""
+    """An integer value at the width of `ty`: the SLIR emitter calls it for an `Int` constant."""
     ll = codegen.types.ll_type(ty)
     mask = (1 << ll.width) - 1
     return ir.Constant(ll, value & mask)

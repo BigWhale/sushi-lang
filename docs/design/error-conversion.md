@@ -554,12 +554,13 @@ The new codes are in `internals/errors/result.py`, the module that owns their ra
   (docs/design/ir.md 7.3), and the cast check stamps it on the node
   (`CastExpr.inferred_conversion`). In a generic function the question is asked per
   instance.
-- **Backend.** The propagate block of `emit_try_expr` (`backend/expressions/try_expr.py`)
-  extracts the error, calls the stamped conversion with it as a consuming argument, runs
-  the scope cleanup, builds the `Err` from the converted value, and returns. The
-  conversion runs before the cleanup, and the extracted error is not registered for
-  cleanup, so it is freed once. `r??` on a named wrapper (`ownership.unwrap`, #548)
-  hands the error over in the same way.
+- **SLIR.** A `Try` lowers to `Discriminant` + `SwitchInt` + `Downcast` (docs/design/ir.md
+  8.9). On the propagate path the error is a `Move` out of the payload into a `Direct` call
+  of the conversion, the `Err` is built from the converted value, the drops of the scopes
+  that the path leaves come next, and the block returns. The conversion runs before those
+  drops, and the moved error is not dropped again, so it is freed once. `r??` on a named
+  wrapper (#548) hands the error over in the same way. The error conversions group D2
+  builds the conversion half.
 - **Libraries.** A binary or hybrid manifest gets a `conversions` row (source, target,
   link symbol). `--lib-info` and `slib-info` print it.
 - **`effects`.** The destroy summary reads the `poke` parameters of free functions. A

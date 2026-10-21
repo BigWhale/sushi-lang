@@ -63,7 +63,7 @@ def cast_float_to_float(codegen: 'LLVMCodegen', source: ir.Value, target_type: i
 
 def emit_value_cast(codegen: 'LLVMCodegen', source_value: ir.Value,
                     source_type: 'Optional[Type]', target_type: 'Type') -> ir.Value:
-    """A numeric cast of one LLVM value: the AST emitter and the SLIR emitter call it."""
+    """A numeric cast of one LLVM value: the SLIR emitter calls it for a `Cast`."""
     source_llvm_type = source_value.type
     target_llvm_type = codegen.types.ll_type(target_type)
 

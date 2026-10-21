@@ -39,8 +39,7 @@ def as_fixed_array_address(codegen: 'LLVMCodegen', expr: 'Expr', value: ir.Value
     out of `.rodata`: a constant resolves to its global for a read and to NOTHING for a
     write, so no such binary can be built even if CE2096 were bypassed. The other
     unwritable receivers have their own diagnostics -- CE2408, CE2414, CE2421, CE2422,
-    CE2426, CE2429 -- so reaching the fatal arm means one of them did not fire. Same
-    treatment `backend/ownership.py` gives a consuming use with no decision (CE0129).
+    CE2426, CE2429 -- so reaching the fatal arm means one of them did not fire.
     """
     from sushi_lang.backend.expressions.structs import try_get_struct_alloca
     from sushi_lang.semantics.ast import Name

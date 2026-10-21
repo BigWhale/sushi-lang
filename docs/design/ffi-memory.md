@@ -25,9 +25,11 @@ readers ask it, and before this work each one had its own copy: the collector
 (`intern_boundary_type`), the `externs` pass (`is_c_abi_type`, `is_c_abi_param`,
 `is_c_abi_variable`, `is_c_abi_scalar`), the backend lowering
 (`backend/runtime/externs/user_externs.py`) and the [CW5001](../error-catalog.md#cw5001) notes.
-`sushi_lang/backend/expressions/calls/foreign.py` is the backend half: `marshal_argument`
-takes one argument in, `unmarshal_return` takes a return out, and an external variable
-read goes through `unmarshal_return` too, so a C global follows the rule of a return.
+The backend half is the conversion of one value at the boundary: a `string` argument goes in
+as a `char*` (`emit_to_cstr`), a `string` return comes out as an owned fat pointer
+(`emit_cstr_to_owned_fat_pointer`, both in `backend/runtime/strings.py`), and an external
+variable read follows the rule of a return. The externs group D5 brings the call back
+through SLIR.
 
 ## Null is a state of the boundary (#1085)
 

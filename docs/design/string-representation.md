@@ -162,9 +162,9 @@ is in `.rodata`, and a string is immutable in every other position too.
 `s := s.concat(x)` therefore copied the whole string at every step, and was quadratic: 50k
 appends to a 289 KB string copied about 7 GB, which took 240 ms.
 
-The rebind frees the old value right after the copy. So the backend
-(`_emit_string_append_rebind`, `backend/statements/variables.py`) recognizes the one form
-where the receiver is the target, and calls the generated `string_append` instead:
+The rebind frees the old value right after the copy. So the compiler recognizes the one
+form where the receiver is the target, and calls the generated `string_append` instead.
+The rebind group B9 builds this peephole in SHIR-to-SLIR lowering:
 
 - When the old value's `owned` bit is 1, the buffer goes to `realloc` and `x` is copied
   to its end. This is the same rule that the destructor uses, so the buffer that the

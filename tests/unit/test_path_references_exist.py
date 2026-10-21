@@ -56,21 +56,6 @@ ALLOWED = {
     # The symbol merger, retired by #672. unit-namespaces.md is the record of a shipped
     # epic and analyses the tree as it stood; its section 1.3 says the module is gone.
     "semantics/symbol_merger.py",
-    # Modules of the AST body emitter, which the SHIR/SLIR migration deleted (ir.md 8.12).
-    # ir.md names some of them as the state before the migration. A design record names
-    # where its construct was emitted then; the group that brings the construct back
-    # through SLIR writes its new home into the record.
-    "backend/expressions/calls/dispatcher.py",
-    "backend/expressions/calls/intrinsics.py",
-    "backend/expressions/calls/utils.py",
-    "sushi_lang/backend/expressions/calls/foreign.py",
-    "backend/expressions/try_expr.py",
-    "backend/memory/moves.py",
-    "backend/statements/control_flow.py",
-    "backend/statements/loops.py",
-    "backend/statements/matching.py",
-    "backend/statements/variables.py",
-    "statements/initialization.py",
 }
 
 

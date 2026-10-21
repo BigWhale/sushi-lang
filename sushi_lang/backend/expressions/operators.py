@@ -18,7 +18,7 @@ def emit_float_negation(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
 
 
 def emit_unary_value(codegen: 'LLVMCodegen', op: str, val: ir.Value, to_i1: bool) -> ir.Value:
-    """A unary operator over one LLVM value: the AST emitter and the SLIR emitter call it."""
+    """A unary operator over one LLVM value: the SLIR emitter calls it for a `Unary`."""
     if op == "neg":
         if isinstance(val.type, (ir.FloatType, ir.DoubleType)):
             return emit_float_negation(codegen, val)

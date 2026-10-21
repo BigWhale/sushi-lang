@@ -1,6 +1,6 @@
 # Dynamic Array Value Representation
 
-Status: **Decided** (a `T[]` is its descriptor, by value, and `emit_expr` yields it).
+Status: **Decided** (a `T[]` is its descriptor, by value).
 Companion to
 `string-representation.md`, which answers the same question for `string`.
 
@@ -12,10 +12,10 @@ A dynamic array value is a **3-field descriptor**:
 { i32 len, i32 cap, T* data }
 ```
 
-`ll_type(DynamicArrayType)` says so. The rule this document adds is about `emit_expr`:
+`ll_type(DynamicArrayType)` says so. The rule this document adds is about the value:
 
-> **`emit_expr` of a `T[]` yields the DESCRIPTOR, by value** — the same contract every other
-> type has. Exactly one place turns it into an address: `as_array_address` in
+> **The value of a `T[]` is the DESCRIPTOR, by value** — the same contract every other type
+> has. Exactly one place turns it into an address: `as_array_address` in
 > `backend/types/arrays/addressing.py`.
 
 An address that reaches `as_array_address` is **kept**, never re-spilled. That is what makes
@@ -43,11 +43,10 @@ define internal { i32, [2 x i64] } @take({ i32, i32, ptr } %a)
 
 Every producer answers the descriptor: `to_bytes()` and `split()` included, and
 `File.read_bytes` is Sushi source over `fd_read` (`src_sushi/io/fs.sushi`). The regression
-test is `tests/array/value_seam/`. Three consumers keep an "if it is a pointer to a dynamic
-array, load it" branch -- `statements/variables.py`, `statements/initialization.py` and
-`types/core/inference.py`. They are a normalisation point, not a workaround: a field read
-such as `let i32[] b = w.items` is a GEP by nature, and the `let` is where it must be loaded
-and deep-copied.
+test is `tests/array/value_seam/`. In SLIR a field read such as `let i32[] b = w.items` is a
+place (`Field`), and the `let` is a `Copy` or a `Move` of it, so no emitter has to ask whether
+a value is the descriptor or its address. `types/core/inference.py` keeps an "if it is a
+pointer to a dynamic array, load it" branch for its own callers.
 
 ## Why not make `ll_type` a pointer instead
 
@@ -183,9 +182,9 @@ pointer to the freed buffer, which is then freed twice):
 
 - `emit_element_pointer` chains through an `IndexAccess` receiver: for `a[i][j]` it calls
   itself on `a[i]`, and the address of that element is the base of the second index.
-- `emit_receiver_value` (`backend/expressions/calls/utils.py`) gives an `IndexAccess`
-  receiver whose element is a dynamic array its element address, as the `Name` arm gives
-  its slot. So `a[i].push(x)` grows the inner array in place.
+- The receiver of a mutating method is a place in SLIR (`Index` of the outer array), so the
+  emitter gives the method the address of the element, as it gives a local its slot. So
+  `a[i].push(x)` grows the inner array in place, when the groups B1 and B2 bring it back.
 
 ## The one bulk copy
 
@@ -259,5 +258,5 @@ library manifest carries.
 
 One reader, not one per container: a hand-rolled reader that parses the interned name
 misses a case (an array element, `List@(T[])` or `HashMap@(K, V[])`), the element resolves to
-`None`, the typecheck pass stamps nothing on the `??`, and the backend reports **[CE0124](../error-catalog.md#ce0124)**.
-A hole in one reader is then a hole in one place.
+`None`, and the program fails with an internal error. A hole in one reader is then a hole in
+one place.

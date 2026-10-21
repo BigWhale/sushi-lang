@@ -129,8 +129,8 @@ is parked in a slot for the whole statement, so a binding into it has storage to
 `borrow-model.md` §10b is the rule.
 
 **7 — the pattern taking binding** is not a borrow: `E.V(nom p)`
-moves the payload out and the arm becomes its owner, so it is registered for its own free
-through `register_owning_value`, the complete registry router. What stops the second free
+moves the payload out and the arm becomes its owner, so drop placement drops the binding at
+the end of the arm. What stops the second free
 is the SCRUTINEE'S drop flag, cleared at the head of the taking arm, so whether the match
 still owns its value at the end is a run-time fact -- exactly the drop-flag mechanism
 that a conditional move of an ordinary local uses. Three fences: the match must OWN its scrutinee
@@ -234,9 +234,10 @@ invalidated at the change, and the error is reported at the next read of the bor
   entry point (`_check_callable`), so a relational diagnostic renders its second location in
   a method body like anywhere else.
 - **The ownership seam** needs no reference arm: the rejection happens in the borrow pass, before
-  codegen. An unstamped consuming use in the backend is [CE0129](../error-catalog.md#ce0129), which is fatal on purpose.
-- **The backend** keys every deref on the semantic type the scope manager holds for the name
-  (`codegen.memory.find_semantic_type`), one entry per scope.
+  lowering. A consuming use with no `Ownership` row is
+  [CE0157](../error-catalog.md#ce0157), which is fatal on purpose.
+- **The backend** reads no reference-ness of its own: a `peek` or `poke` parameter is an `InGuaranteed`
+  or an `Inout` convention in SLIR, and its local IS the incoming address (`docs/design/ir.md` 8.3).
 
 ## 7. What keeps this total
 

@@ -88,7 +88,7 @@ ir.LiteralStructType([
 ])
 ```
 
-A `T[]` is its descriptor BY VALUE everywhere: `emit_expr` yields the descriptor, and
+A `T[]` is its descriptor BY VALUE everywhere, and
 `as_array_address` (`backend/types/arrays/addressing.py`) is the one place that makes an
 address of it. The field addresses come from `gep_dynamic_array_len`,
 `gep_dynamic_array_cap` and `gep_dynamic_array_data` (`backend/gep_utils.py`); each takes

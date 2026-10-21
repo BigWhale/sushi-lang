@@ -502,8 +502,8 @@ evaluates to a function value works, and it reuses the fat-pointer indirect-call
   value in the callee position as in a `let`, an argument or a return. The `scope` pass walks
   every callee that is not a plain `Name`, so the lambda records its captures and each name in a
   callee expression is resolved and used. The callee is a BORROW position: a closure
-  built there has no other owner, so the backend gives it one (`own_temporary`) and its
-  environment is freed at scope exit.
+  built there has no other owner, so lowering puts it in a temporary local of its own, and
+  drop placement frees its environment at the end of the statement.
 
 Mechanically: the AST builder emits a general `Call` for a non-`Name`, non-`MemberAccess` call
 base; the type checker infers the non-`Name` callee and, when it resolves to a `FunctionType`,
@@ -614,14 +614,13 @@ The map names files and symbols, not line numbers: a line number goes stale with
 | The `lift` pass | `semantics/passes/lift.py` |
 | Shared fn-synthesis wiring | `semantics/generics/synthesis.py:register_synthesized_function` |
 | Ownership predicate (single source of truth) | `semantics/typesys.py:owns_resource` (see `docs/design/ownership-conventions.md` §6) |
-| Ownership seam (consume/bind/copy_out) | `semantics/ownership.py` (the `classify()` table), `backend/ownership.py` (the seam functions) |
+| Ownership of a capture | `semantics/ownership.py` (the `classify()` table); the borrow pass on SHIR writes the row of each capture (`OwnershipResults`, `docs/design/ir.md` 7.9) |
 | Env heap alloc / recursive env destructor / cloner | `backend/generics/own.py:emit_own_alloc`, `backend/destructors.py:emit_value_destructor`, `backend/runtime/closures.py` (env clone, `clone_ptr`) |
-| Runtime API (thunk, build value, indirect call, `emit_lambda`) | `backend/runtime/closures.py` |
-| Backend expr dispatch -> `emit_lambda` | `backend/expressions/__init__.py` (`case Lambda()`) |
-| Indirect call, non-`Name` callee routing | `backend/expressions/calls/dispatcher.py`, `backend/expressions/calls/utils.py` |
+| Runtime API (thunk, build value, indirect call, `emit_lambda`) | `backend/runtime/closures.py`; the closures group C2 gives it operands from SLIR, and until then no body reaches it |
+| Indirect call, non-`Name` callee routing | the `Indirect` callee of a SLIR `Call` (`CALL_EMITTERS`, `backend/slir/emit.py`); it stops until C2 |
 | Generic higher-order unification (`typecheck` / `instantiate`) | `semantics/generics/unify.py:unify_types`; the leading type-argument solver `semantics/generics/pack_inference.py:solve_leading_type_args` |
 | `FunctionType` substitution (monomorphization) | `semantics/generics/monomorphize/transformer.py`; `semantics/generics/types.py`; `semantics/generics/extensions.py` |
-| Gap D (`List@(T)` extensibility) | `semantics/passes/collect/` (List as generic struct); `backend/expressions/calls/dispatcher.py` (provider-first dispatch + receiver reconcile) |
+| Gap D (`List@(T)` extensibility) | `semantics/passes/collect/` (List as generic struct); the `BuiltinMethod` callee of a SLIR `Call`, which the List group B2 connects to `LIST_EMITTERS` |
 | T2.3 generic-fn-ref-under-annotation | `semantics/generics/instantiate/expressions.py`; `semantics/generics/instantiate/functions.py`; `semantics/passes/types/calls/generics.py` |
 | `collections/iter` source module | `sushi_lang/sushi_stdlib/src_sushi/collections/iter.sushi` |
 | Source-stdlib-module registry + pipeline injection | `semantics/stdlib_registry.py:SOURCE_STDLIB_MODULES`; `compiler/pipeline.py` |

@@ -182,10 +182,9 @@ resource. A `Lines@(R)` owns a `BufReader@(R)` that owns a `File`, so the loop h
 resource, three levels deep.
 
 The iterator therefore lives in a local of its own in a scope that closes after the loop's
-end block, registered through `register_owning_value` — the complete registry router, not
-`create_local`'s default, which does not know a dynamic array, a `List@(T)` or an `Own@(T)`.
-Every exit path destroys it: the end of the input, a `break`, a `return` from the
-body, and the propagation path a `??` binder takes.
+end block, and drop placement (`docs/design/ir.md` 8.10) drops it on every exit path: the end
+of the input, a `break`, a `return` from the body, and the propagation path a `??` binder
+takes.
 
 The move into that local is a consuming position, the same as `let T x = it`: it goes
 through the ownership seam (`consume`), and the borrow pass consumes the iterable the same
@@ -562,7 +561,7 @@ exists to remove. `File.readln()` stays as the one-line unbuffered read.
 | the `??` binder's desugar, and the `_` binder | `semantics/ast_builder/statements/loops.py` |
 | the protocol's resolution, and the call it builds | `resolve_protocol_iterator`, `semantics/passes/types/statements.py` |
 | the method ladder it resolves through | `resolve_method`, `semantics/passes/types/calls/methods.py` |
-| the loop arm | `_emit_protocol_foreach`, `backend/statements/loops.py` |
+| the loop arm | SHIR-to-SLIR lowering of the `Loop` (`docs/design/ir.md` 8.9), which the iterators group C3 builds |
 | `Lines@(R)` and `lines()` | `sushi_stdlib/src_sushi/io/buf.sushi` |
 | the written `Iterator@(...)` and its item mode | `semantics/ast_builder/types/iterators.py` |
 | the item mode: the written item, the manifest string, one type for a plain item | `semantics/generics/iterators.py` |
@@ -571,11 +570,11 @@ exists to remove. `File.readln()` stays as the one-line unbuffered read.
 | the reserved name | `_compiler_type_names`, `semantics/passes/collect/utils.py` |
 | the choice of the walk (direct, or a value) | `_choose_the_walk`, `semantics/passes/types/statements.py` |
 | the range value | `propagate_types_to_value`, `semantics/passes/types/propagation.py` |
-| `Iterator.new` | `_validate_iterator_new`, `semantics/passes/types/calls/methods.py`; `try_emit_iterator_new`, `backend/expressions/calls/intrinsics.py` |
+| `Iterator.new` | `_validate_iterator_new`, `semantics/passes/types/calls/methods.py`; `emit_new_iterator`, `backend/runtime/iterators.py` (C3 gives it operands) |
 | the lent and the owned iterator in the borrow pass | `semantics/passes/borrow/iterators.py` |
 | the value, the state and the three functions of each source | `backend/runtime/iterators.py` |
 | the HashMap cursor | `bucket_source`, `backend/generics/hashmap/methods/iterators.py` |
-| the walk of a value | `_emit_value_foreach`, `backend/statements/loops.py` |
+| the walk of a value | SHIR-to-SLIR lowering of the `Loop`, with the C3 group |
 | the adapter signatures and the item mode of `enumerate` and `zip` | `ITERATOR_METHOD_SIGNATURES`, `enumerated`, `zipped`, `semantics/generics/iterators.py` |
 | the result of an adapter, and CE2129 | `adapter_result`, `semantics/passes/types/iterator_adapters.py` |
 | an adapter that takes a lent iterator | `take_lent_iterator`, `semantics/passes/borrow/iterators.py` |

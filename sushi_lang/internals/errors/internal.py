@@ -302,8 +302,7 @@ _add(ErrorMessage("CE0132", Severity.ERROR,
     "CE2408, CE2414, CE2421, CE2422, CE2426 or CE2429 for the read-only receivers. Reaching "
     "this means one of them did not fire, so it is a gap in that coverage and not a user "
     "error. It is fatal ON PURPOSE: the `alloca` fallback that stood here filled a COPY of "
-    "the receiver and reported nothing, which is the silent no-op #480 records. Same "
-    "treatment CE0129 gives a consuming use with no ownership decision."))
+    "the receiver and reported nothing, which is the silent no-op #480 records."))
 
 _add(ErrorMessage("CE0137", Severity.ERROR,
     "lifted lambda name '{name}' is already registered",

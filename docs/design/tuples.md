@@ -176,10 +176,9 @@ it:
   `let (u8 a, i32 b) = (7, 1)` types the literal `7` as a `u8`.
 - The borrow pass (`_split_destructure`) gives each binder the class of the whole: an owned
   whole gives owned binders, a borrowed whole gives `let`-borrows of the whole's owner.
-- The backend (`_emit_destructure`) loads each element into its binder's slot. An owned
-  whole registers each binder for cleanup, destroys each `_` element at once, and is then
-  given up with `relinquish_temp`, so nothing is freed twice. A borrowed whole gives views
-  that free nothing.
+- SHIR-to-SLIR lowering moves each element of an owned whole into its binder, drops each
+  `_` element at once, and drops nothing of the whole after that, so nothing is freed twice.
+  A borrowed whole gives views that free nothing. The struct and tuple group A5 builds it.
 
 **Ruling 4.** A bare binder in a `let` destructure OWNS its element (from an owned value).
 A bare pattern binding in a `match` BORROWS (S10b). Both rules stay; borrow-model.md states
@@ -277,15 +276,16 @@ each element (`ConsumingUse.MATCH_SCRUTINEE`), so a later use of an owning eleme
 **[CE2405](../error-catalog.md#ce2405)**. The all-or-nothing rule of [CE2433](../error-catalog.md#ce2433) holds per root, so an arm can take `a` and
 leave `b`; the match then destroys `b` at its end.
 
-**The backend.** `emit_match` keeps the switch on the tag for an enum scrutinee. A tuple
-scrutinee has no tag, so each arm tests its whole pattern, and the first arm that matches
-runs. A `string` scrutinee has no tag either, and it takes the same path
-(`_emit_sequential_match`): a string literal test is one `emit_value_eq`. One walk serves both (`_extract_pattern_bindings`, `backend/statements/matching.py`):
-it emits every test of an arm first (a tag compare, a literal compare, through tuple
-elements, payloads and `Own(...)` cells), and a failed test goes to the next candidate arm
-(the next arm of the same tag after a switch, the next arm after a tuple match). Only
-after every test passed does the arm clear the drop flag of a root it takes from, and make
-its bindings. So a failed test takes nothing and binds nothing. A `poke` binding computes
+**Lowering.** A `match` over an enum scrutinee is a `SwitchInt` on the `Discriminant` in
+SLIR. A tuple scrutinee has no tag, so each arm tests its whole pattern, and the first arm
+that matches runs. A `string` scrutinee has no tag either, and it takes the same path: a
+string literal test is one call of the equality of the contract family (`emit_value_eq`).
+Every test of an arm comes first (a tag compare, a literal compare, through tuple elements,
+payloads and `Own(...)` cells), and a failed test goes to the next candidate arm (the next
+arm of the same tag after a switch, the next arm after a tuple match). Only after every
+test passed does the arm clear the drop flag of a root it takes from, and make its
+bindings. So a failed test takes nothing and binds nothing. The match groups (A3, A4, C4)
+build this lowering. A `poke` binding computes
 its pointer into the root's own storage: a field of a tuple, a payload offset of an enum.
 After the last candidate arm is the run-time error **[RE2023](../error-catalog.md#re2023)**, the backstop that
 exhaustiveness makes unreachable.

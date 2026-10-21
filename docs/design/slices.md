@@ -106,9 +106,8 @@ length, with the end as an exclusive end: `data[1..=3]` on an array of size 3 pr
   index and a `peek` argument reach it with no new path. The base array goes through the
   address seam of an element access (`_array_slot`), so a temporary base is parked and
   freed by its scope.
-- **No free.** The slice is BORROWED, so `ownership.bind` answers `owns=False` and
-  `initialize_dynamic_array` relinquishes the registration, as for
-  `let i32[] v = holder.items`. No scope frees a slice.
+- **No free.** The slice is BORROWED: its `let` is a borrow in `OwnershipResults`, as for
+  `let i32[] v = holder.items`, so drop placement gives it no drop. Nothing frees a slice.
 - **`dont_panic`.** `stamp_unchecked_indexes` does not stamp a slice, and the slice
   emitter does not read the stamp. A marked body whose only `[]` is a slice removes no
   check, so the marker gets CW0004.

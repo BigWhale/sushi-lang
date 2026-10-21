@@ -101,11 +101,10 @@ The trap path does not free the message or the other values in scope: the proces
   and has no NUL terminator, so the backend prints it with `%.*s` from its size and its
   data. This is `emit_runtime_error_with_message` in `RuntimeErrors`
   (`backend/runtime/errors.py`): it prints the compile-time text, then `: ` and the
-  message, then the newline. The statement is `emit_assert`
-  (`backend/statements/control_flow.py`).
-- **The message is a temporary of the fail block.** It is built in a scope of its own,
-  and that scope is popped after the trap, when the block is terminated, so no cleanup of
-  a value made there reaches the passing path.
+  message, then the newline. An `assert` lowers to a `SwitchInt` and a `Trap` in SLIR, and
+  the `Assert` group A11 connects the `Trap` to this emitter.
+- **The message is a value of the fail block.** It is built in that block, and the `Trap`
+  ends the block, so no drop of a value made there reaches the passing path.
 - **The file name is stamped on the node.** The AST builder writes
   `Assert.source_label` when it builds the node, so a monomorphized copy and an `expand`
   copy carry it with no extra step. The name is `display_filename`

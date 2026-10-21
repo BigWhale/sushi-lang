@@ -192,7 +192,7 @@ ignore the override.
 | The receiver placeholder | `ReceiverType`, `semantics/typesys.py`; built only by `register_predefined_perks` |
 | The implementation matcher | `passes/types/perks.py` |
 | The method family `contract` | `passes/types/method_registry.py` (`beats_perk=False`) |
-| The method emitter | `try_emit_contract_method`, `backend/expressions/calls/intrinsics.py` |
+| The method emitter | the `BuiltinMethod` callee of a SLIR `Call`, which the perks group C6 connects to the contract emitters below |
 | Equality and order emitters | `emit_value_eq`, `emit_value_compare`, `backend/types/contracts.py` |
 | String form emitters | `emit_value_to_str`, `emit_value_fmt`, `backend/types/display.py` |
 | The string buffer | `backend/runtime/string_builder.py` |

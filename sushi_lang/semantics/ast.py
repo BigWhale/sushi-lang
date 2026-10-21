@@ -660,7 +660,8 @@ class Foreach(Stmt):
     # The borrow pass is the one writer (ruling S6, docs/design/ir.md). It sets it for a
     # `next()` walk or a value walk of a place reached through a `poke` reference: the
     # loop moves the caller's state and does not take the value (#1258). It also sets it
-    # for an iterator value that a `let` borrows (#1259). The backend reads it.
+    # for an iterator value that a `let` borrows (#1259). No pass reads it: the borrow pass
+    # on SHIR records the walk in place in OwnershipResults.
     walks_in_place: bool = False
     # The typecheck pass sets it for a walk of an `Iterator@(T)` VALUE: the loop calls
     # the value's `next_fn` (#1259). None for a range, for a built-in producer that the
@@ -934,7 +935,8 @@ class ArrayElement(Node):
 class ArrayLiteral(Node):
     elements: List["ArrayElement"]
     # The `T[N]` this literal is, stamped by the typecheck pass: the declared type of its
-    # position, else the type inferred from its elements (#889). The backend reads it.
+    # position, else the type inferred from its elements (#889). The AST argument half of
+    # the array family reads it.
     resolved_type: Optional["Type"] = None
 
 @dataclass(slots=True)
@@ -969,7 +971,7 @@ class BinaryOp(Node):
 class TupleLiteral(Node):
     """A tuple literal: two or more expressions in parentheses, `(1, "a")`."""
     elements: List["Expr"]
-    # The interned tuple type, stamped by the typecheck pass; the backend reads it.
+    # The interned tuple type, stamped by the typecheck pass.
     resolved_type: Optional["Type"] = None
 
 @dataclass(slots=True)
@@ -1088,7 +1090,7 @@ class MethodCall(Node):
     # is on the heap. Stamped by the borrow pass on each link of the chain.
     iterator_leaves: bool = False
     # `Iterator.new(nom x)`: the `next()` call on the value, built and checked by the
-    # typecheck pass. The backend reads its stamps; no pass walks it as code.
+    # typecheck pass. No pass walks it as code.
     iterator_next: "Optional[MethodCall]" = field(default=None, metadata=ALIAS)
     # The callee has a borrowed return (#1229): where its sources stand in the call (an
     # argument index, or -1 for the receiver). None for an owned return. The answer is a
