@@ -1582,6 +1582,14 @@ the convention tells the emitter that the local is an address. So a rebind throu
 `poke` parameter writes `_1` (8.10, rule 6). An argument with one of these conventions is
 the operand `copy <place>`, and the emitter passes the address of the place.
 
+A `Guaranteed` parameter is by value, and the emitter stores the incoming value into the
+entry slot of its local unchanged (`_open`, `backend/slir/emit.py`). So a borrowed `string`
+parameter keeps the `owned` bit of the caller's value, and the callee does not clear it.
+No code reads that bit in the callee: SLIR never drops a borrowed parameter (8.10, rule 5),
+and a rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns is a stop of the
+lowering (`slir, borrowed rebind`, 8.10, rule 6). The group that lowers that rebind rules
+what the callee owns after it, and it must not drop the value of the caller.
+
 ### 8.4 Places and operands
 
 ```
