@@ -80,7 +80,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/param_modes.py", "FFI_EXTERN", "tests/unit/test_callee_mode_matrix.py"),
     ("sushi_lang/semantics/passes/types/method_registry.py", "families",
      "tests/unit/test_method_family_dispatch_is_one.py"),
-    ("sushi_lang/semantics/places.py", "NOT_A_STEP", "tests/unit/test_place_walk_is_total.py"),
+    ("sushi_lang/semantics/places.py", "*NOT_A_STEP", "tests/unit/test_place_walk_is_total.py"),
     (_TYPES + "fold.py", "UNREADABLE", "tests/unit/test_typeck_fold_is_total.py"),
     ("sushi_lang/semantics/stdlib_registry.py", "get_function", "tests/unit/test_stdlib_rows_are_one.py"),
     ("sushi_lang/semantics/type_walk.py", "TERMINAL_KINDS", "tests/unit/test_type_walk_is_total.py"),

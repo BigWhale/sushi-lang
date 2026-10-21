@@ -59,11 +59,9 @@ def borrow_owner(node: object) -> Optional[LocalId]:
     """The local that a borrow of the SHIR place `node` is counted on, and that a binding
     into `node` freezes: a local, under each `??` that reads it.
 
-    A field and an element step come with the SHIR place walk.
+    A field and an element step come with the groups that check a field and an element.
     """
-    while isinstance(node, e.Try):
-        node = node.inner
-    return node.local if isinstance(node, e.LocalRef) else None
+    return walk_place(node, Step.TRY).local
 
 
 def chain_call_boundary(expr: Optional[Expr]) -> Optional[Span]:
