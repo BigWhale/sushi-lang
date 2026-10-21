@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2400
+# EXPECT_STDERR_CONTAINS: "cannot borrow 'STEP' with `poke`"
+#
+# A constant is storage that the program keeps in read-only memory, so a `poke` of it is
+# refused before the borrow pass (CE2400, the scope pass). The borrow pass walks no body of
+# a unit in which the scope pass reported an error, so that error is the one diagnostic.
+
+const i32 STEP = 1
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+
+fn main() i32:
+    bump(poke STEP)
+    return 0

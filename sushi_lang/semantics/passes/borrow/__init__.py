@@ -62,6 +62,10 @@ class BorrowChecker:
         self.types = TypeQueries(tables)
         self.shir = shir
         self.stops = stops
+        # True when the scope pass reported an error in the unit: a body of the unit then
+        # holds an error that a pass before typecheck refused (a `poke` of a constant,
+        # CE2400), and the pass does not walk it, as lowering keeps such a hole.
+        self.scope_failed = False
         # fn name -> the poke param indices it destroys (#168), over EVERY unit, so a
         # cross-unit callee is not a blind spot (the `effects` pass).
         self.destroy_effects = destroy_effects
@@ -91,10 +95,14 @@ class BorrowChecker:
                    filename: Optional[str]) -> None:
         """Walk the SHIR body of `decl`, which the typecheck pass finished with no error.
 
-        `tables` are the tables that the typecheck pass read the body in. A stop ends the
-        walk: the pass records it with the file of the body. A walk with no stop and with
-        no error checks the table of the body and records the body as finished.
+        `tables` are the tables that the typecheck pass read the body in. A body of a unit
+        in which the scope pass reported an error is not walked: the program has an error.
+        A stop ends the walk: the pass records it with the file of the body. A walk with no
+        stop and with no error checks the table of the body and records the body as
+        finished.
         """
+        if self.scope_failed:
+            return
         self._enter(decl, body, tables)
         offered = sum(self.reporter.errors_offered.values())
         has_receiver = bool(body.params) and self.name_of(body.params[0].local) == "self"

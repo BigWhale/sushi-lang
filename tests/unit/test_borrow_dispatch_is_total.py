@@ -116,3 +116,28 @@ def test_the_one_dispatch_answers_the_row_of_a_class() -> None:
         return None
 
     assert dispatch.arm_of({int: arm}, 5, "probe") is arm
+
+
+class _Names:
+    """The one question that the backstop of a `poke` of a constant asks the pass."""
+
+    def decl_name(self, decl) -> str:
+        return f"STEP{decl.index}"
+
+
+def test_a_poke_of_a_constant_is_an_internal_error_at_its_span() -> None:
+    """A pass before borrow refuses a `poke` of a constant (CE2400); one that reaches the
+    borrow pass is a fault of the compiler, never a silent return. A `peek` reads it."""
+    from sushi_lang.semantics.passes.borrow.borrows import check_borrow
+    from sushi_lang.semantics.shir.ids import DeclId, ShirId
+    from sushi_lang.semantics.typesys import BorrowMode
+
+    span = Span(7, 15, 7, 19)
+    place = exprs.ConstRef(ShirId(0), span, DeclId(0))
+    with pytest.raises(InternalCompilerError) as caught:
+        check_borrow(_Names(), place, BorrowMode.POKE, span)
+    assert not isinstance(caught.value, StageStop)
+    assert caught.value.code == "CE0000"
+    assert caught.value.span == span
+    assert "STEP0" in str(caught.value.params.get("detail"))
+    check_borrow(_Names(), place, BorrowMode.PEEK, span)
