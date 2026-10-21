@@ -485,7 +485,7 @@ Three gates. All are cheap, and a rule with no gate does not survive a deadline.
 |---|---|---|
 | No node may take a stamp | `@dataclass(slots=True)` on all 77 classes. A stray write raises `AttributeError` | **In force**: `tests/unit/test_ast_nodes_are_slotted.py` |
 | A per-body pass may not read the AST | the BODY modules of `typecheck`, `lift` and `borrow` import `shir`, not `ast` | when the passes move to SHIR |
-| The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty (64 files match today) | when the old backend is deleted |
+| The backend may not read the AST | `grep -rn "semantics.ast" sushi_lang/backend/` is empty (64 files matched before the spine, 37 after it: the declaration round and the families that still take an AST node) | when the old backend is deleted |
 
 Two sibling gates are in force. The ruff rule `TID251` (`pyproject.toml`) allows no
 `llvmlite` import outside `backend/` and `sushi_stdlib/`, so `semantics` names no LLVM
@@ -1523,13 +1523,16 @@ slot in the entry block (`entry_alloca`), except an `InGuaranteed` or an `Inout`
 parameter, whose local IS the incoming address (8.3); a value parameter is stored into its
 slot at the entry, and `return` loads `_0`. A signature that does not agree with the
 conventions or with the type of `_0` is an internal error. `StorageLive` and `StorageDead`
-emit nothing. An operator calls the emitter of the old backend that takes LLVM values
-(Q7), and a comparison of two strings calls the string relation of that emitter.
+emit nothing. An operator calls the value half of its emitter family, which takes LLVM
+values (Q7), and a comparison of two strings calls the string relation of that family.
 `SwitchInt` with `otherwise: None` goes to a block that holds `unreachable`.
 
 Each family of the backend gets LLVM values and semantic types, never an AST node (Q7);
-where a family took an AST node, its value half is cut out, and the AST entry calls it
-until the AST emitter goes. A `Str` constant comes from the string constant seam and owns
+where a family took an AST node, its value half is cut out. The AST body emitter is
+deleted: its statement, expression, call dispatch and ownership layers went (8.12), and
+so did the AST entry of each family that has a value half. A family that has no value
+half yet keeps its AST argument half, with no caller, until the group of its construct
+gives it operands. A `Str` constant comes from the string constant seam and owns
 no heap (owned flag 0). `Copy` and `Move` both load the value: a `Move` emits no code of
 its own, because lowering placed every drop. `Drop` goes through the one destroy seam
 (`emit_value_destructor`): a string frees its buffer only when its owned flag is set, and
