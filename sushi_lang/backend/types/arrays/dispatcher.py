@@ -65,7 +65,7 @@ def _source_data_and_len(codegen: 'LLVMCodegen', expr, source_arg):
         return data, ir.Constant(codegen.types.i32, ir_type.count), source_type.base_type
 
     struct_type = value.type.pointee if isinstance(value.type, ir.PointerType) else value.type
-    address = as_array_address(codegen, value, struct_type, source_arg, source_type)
+    address = as_array_address(codegen, value, struct_type)
     data_ptr_ptr = gep_utils.gep_dynamic_array_data(codegen, address)
     len_ptr = gep_utils.gep_dynamic_array_len(codegen, address)
     return (codegen.builder.load(data_ptr_ptr, name="copy_src_data"),
@@ -311,8 +311,7 @@ def emit_dynamic_array_method(
     # place that turns a descriptor value into an address. A receiver that already IS an
     # address keeps it, which is what makes a mutating method reach the owner: a Name gives
     # its slot and a field read gives a GEP into the struct.
-    receiver_value = as_array_address(codegen, receiver_value, array_struct_type,
-                                      expr.receiver, semantic_type)
+    receiver_value = as_array_address(codegen, receiver_value, array_struct_type)
 
     # The methods on `&T` are the methods on `T`. The arms below read
     # `semantic_type.base_type`, so a reference receiver raised CE0042 and made `a.clone()`

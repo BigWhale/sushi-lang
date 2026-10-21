@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional, Tuple
 from sushi_lang.semantics.unit_symbols import mangle_unit_symbol
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.types import Type
+    from sushi_lang.semantics.typesys import Type
 
 
 # Reserved pack-marker token. A ".pack{N}" segment is appended for pack

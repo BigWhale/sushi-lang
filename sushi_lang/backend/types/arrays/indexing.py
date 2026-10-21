@@ -123,10 +123,8 @@ def _array_slot(codegen: 'LLVMCodegen', expr: IndexAccess) -> ir.Value:
         # `emit_expr` yields an array by VALUE (docs/design/array-representation.md);
         # `as_array_address` is the one seam that turns it into an address.
         from .addressing import as_array_address
-        from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
         array_value = codegen.expressions.emit_expr(expr.array)
-        return as_array_address(codegen, array_value, None, expr.array,
-                                infer_expr_semantic_type(codegen, expr.array))
+        return as_array_address(codegen, array_value)
 
     if isinstance(expr.array, Name):
         # Local alloca, or the global backing an array constant (#248) -- indexing a
