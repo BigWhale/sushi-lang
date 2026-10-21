@@ -22,17 +22,28 @@ from sushi_lang.semantics.shir.nodes import ShirBlock
 _PACKAGE = __name__.rpartition(".")[0] + "."
 
 
+def _holds_nodes(value: object) -> bool:
+    if isinstance(value, (list, tuple)):
+        return True
+    return type(value).__module__.startswith(_PACKAGE) and dataclasses.is_dataclass(value)
+
+
 def walk(value: object, path: str) -> Iterator[tuple[str, object]]:
     """Each value of the SHIR package under `value`, with its path, before its parts."""
-    if isinstance(value, (list, tuple)):
-        for index, item in enumerate(value):
-            yield from walk(item, f"{path}[{index}]")
-        return
-    if not (type(value).__module__.startswith(_PACKAGE) and dataclasses.is_dataclass(value)):
-        return
-    yield path, value
-    if isinstance(value, ShirBlock):
-        yield from walk(value.statements, path)
-        return
-    for each in dataclasses.fields(value):
-        yield from walk(getattr(value, each.name), f"{path}.{each.name}")
+    stack = [(value, path)] if _holds_nodes(value) else []
+    while stack:
+        value, path = stack.pop()
+        if isinstance(value, (list, tuple)):
+            for index in range(len(value) - 1, -1, -1):
+                item = value[index]
+                if _holds_nodes(item):
+                    stack.append((item, f"{path}[{index}]"))
+            continue
+        yield path, value
+        if isinstance(value, ShirBlock):
+            stack.append((value.statements, path))
+            continue
+        for each in reversed(dataclasses.fields(value)):  # type: ignore[arg-type]
+            part = getattr(value, each.name)
+            if _holds_nodes(part):
+                stack.append((part, f"{path}.{each.name}"))
