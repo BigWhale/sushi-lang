@@ -11,7 +11,7 @@ ShirBody bump
   params : [(_0 "s": string, Guaranteed)]
   locals : [_1 "n": i32]
   block  :
-    Assign(LocalRef(_1), Try(Call(Named(GlobalRef(@parse)), [LocalRef(_0)])), is_init: true)
+    Assign(LocalRef(_1), Try(Call(Free(@parse), [(LocalRef(_0), Guaranteed)])), is_init: true)
     Return(EnumInit(@Result, "Ok", [Binary(+, LocalRef(_1), Lit(1))]))
 
 ShirBody first

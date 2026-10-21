@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, Lambda, PerkDef, Return
-from sushi_lang.semantics.ast_walk import is_template_copy, walk_nodes
+from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, PerkDef
+from sushi_lang.semantics.ast_walk import is_template_copy
 from sushi_lang.semantics.typesys import BuiltinType, UnknownType
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.channel import callable_text, has_channel
@@ -15,7 +15,7 @@ from sushi_lang.semantics.generics.extension_targets import (
     CONCRETE_EXTENSION_TARGETS)
 
 from .borrowed_returns import reject_borrowed_return_faults
-from .control_flow import block_always_returns, reject_dead_statements
+from .control_flow import reject_dead_statements, reject_fall_off
 from .utils import validate_type_name, validate_and_register_parameters
 from .perks import (
     check_no_conflicts_with_regular_methods, reject_unnamable_implemented_perk,
@@ -125,25 +125,17 @@ def unit_tables(self):
     return getattr(getattr(self, "tables", None), "namespaces", None)
 
 
-def _reject_fall_off(self, body, ret, channel: bool, span) -> None:
-    """CE0107: a body that answers a value or a Result reaches its end with no `return`.
+def _reject_path_faults(self, node, body) -> None:
+    """CE0140, then CE0107, for the SHIR body of one function or method, and the faults
+    of a borrowed return of its declaration.
 
-    A bare `~` body answers nothing, so it may end (#824, #845).
-    """
-    if (ret != BuiltinType.BLANK or channel) and not block_always_returns(self, body):
-        self.err.emit(er.ERR.CE0107, span, callable=self.body_name)
-
-
-def _reject_path_faults(self, node) -> None:
-    """CE0140, then CE0107, for one function or method body.
-
-    Neither rule reads a type, so a template takes both once, as written, and a copy of
-    it takes neither (#1070).
+    Neither path rule reads a type, so a template takes both once, as written, and a copy
+    of it takes neither (#1070).
     """
     if self.in_template_copy:
         return
-    reject_dead_statements(self, node.body)
-    _reject_fall_off(self, node.body, node.ret, has_channel(node), node.name_span)
+    reject_dead_statements(self, body)
+    reject_fall_off(self, body.block, node.ret, has_channel(node), node.name_span)
     reject_borrowed_return_faults(self, node)
 
 
@@ -172,9 +164,10 @@ def check_template_statements(self, program, checked) -> None:
         self.reporter.leave_body()
         self.body_name = callable_text(node.name, kind)
         self.in_template_copy = False
-        _reject_path_faults(self, node)
+        body = self.shir.body_of(node)
+        _reject_path_faults(self, node, body)
         if has_channel(node):
-            _reject_unspelled_returns(self, node.body)
+            _reject_unspelled_returns(self, body)
         _leave_body(self)
 
 
@@ -184,18 +177,20 @@ def _reject_unspelled_returns(self, body) -> None:
     A lambda is a callable of its own, with the channel of its own type, so the walk does
     not enter one.
     """
+    from sushi_lang.semantics.shir import exprs as e
+    from sushi_lang.semantics.shir import stmts as s
+    from sushi_lang.semantics.shir.walk import walk
     from .result_validation import spells_a_result
     from .statements import reject_unspelled_result
 
-    def visit(node) -> bool:
-        if isinstance(node, Lambda):
-            return False
-        if isinstance(node, Return) and node.value is not None \
-                and not spells_a_result(node.value):
-            reject_unspelled_result(self, node.value)
-        return True
-
-    walk_nodes(body, visit)
+    lambdas: list[str] = []
+    for path, value in walk(body.block, "block"):
+        if any(path.startswith(inside) for inside in lambdas):
+            continue
+        if isinstance(value, e.Lambda):
+            lambdas.append(f"{path}.")
+        elif isinstance(value, s.Return) and not spells_a_result(self, value.value):
+            reject_unspelled_result(self, value.value)
 
 
 def validate_function(self, func: FuncDef) -> None:
@@ -222,7 +217,9 @@ def _validate_function_body(self, func: FuncDef) -> None:
 
     validate_type_name(self, func.ret, func.ret_span)
 
-    self.check_body(func)
+    body = self.check_body(func)
+    if body is not None:
+        _reject_path_faults(self, func, body)
 
     self.current_function = None
     _leave_body(self)
@@ -309,7 +306,9 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
 
     validate_type_name(self, method.ret, method.ret_span)
 
-    self.check_body(method)
+    body = self.check_body(method)
+    if body is not None:
+        _reject_path_faults(self, method, body)
 
     _leave_body(self)
 

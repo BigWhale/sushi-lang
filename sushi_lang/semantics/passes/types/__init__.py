@@ -91,6 +91,9 @@ class TypeValidator:
         self.answers: Optional[TypeckResults] = None
         self.body_locals: Dict['LocalId', 'ShirLocal'] = {}
         self.folder: Optional[Folder] = None
+        # True when the body holds an error that an earlier pass reported: the collect
+        # pass refuses a `??` in a bare body (CE0131), and its node has no answer.
+        self.refused_before = False
         self.err = PassErrorReporter(reporter)
         self.tables = tables
         self.const_table = tables.constants
@@ -263,14 +266,15 @@ class TypeValidator:
                                  self.const_table, self.current_unit_name,
                                  self.namespaces_of, self.struct_table, self.enum_table)
 
-    def check_body(self, decl) -> None:
+    def check_body(self, decl) -> Optional['ShirBody']:
         """The body half over the SHIR body of `decl` (docs/design/ir.md 7.3, 7.9).
 
         A stop ends the walk: the pass records it, with the file of the body, and the
         caller goes on with the next declaration. A walk that ends with no stop and with no
         error in its body is checked for completeness, and its body meets the next stage,
         which is not built yet. A node that has an error has no answer, so a body with an
-        error is not checked.
+        error is not checked. The answer is the body when the walk reached its end, and
+        None after a stop.
         """
         body = None if self.shir is None else self.shir.body_of(self.written_of(decl))
         if body is None or self.shir is None or self.stops is None:
@@ -281,23 +285,29 @@ class TypeValidator:
         self.answers = answers = self.shir.typeck_of(body)
         self.body_locals = {local.id: local for local in body.locals}
         self.folder = Folder(self._constant_value, self.written_type)
+        self.refused_before = False
         origin = self.reporter.origin
         filename = origin.filename if origin is not None else self.reporter.filename
-        offered = sum(self.reporter.errors_offered.values())
+        offered = self.errors_offered()
         try:
             check_params(self, body)
             check_block(self, body.block)
         except StageStop as stop:
             stop.filename = filename
             self.stops.stopped(stop)
-            return
+            return None
         finally:
             self.body = self.answers = self.folder = None
             self.body_locals = {}
-        if sum(self.reporter.errors_offered.values()) != offered:
-            return
+        if self.errors_offered() != offered or self.refused_before:
+            return body
         check_answers(body, answers, self.shir.decls)
         self.stops.finished(self.shir.decls.name_of(body.fn_id), body.block.loc, filename)
+        return body
+
+    def errors_offered(self) -> int:
+        """The count of the errors offered so far: a check that adds one refused its node."""
+        return sum(self.reporter.errors_offered.values())
 
     def body_answers(self) -> TypeckResults:
         """The `TypeckResults` of the body that the body half walks."""

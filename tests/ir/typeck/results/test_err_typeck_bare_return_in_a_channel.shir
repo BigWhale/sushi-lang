@@ -1,0 +1,22 @@
+unit test_err_typeck_bare_return_in_a_channel
+
+ShirBody half
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, Binary(%, LocalRef(_0), Lit(2)), Lit(1)), then: [Return(EnumInit(@Result, "Err", [EnumInit(@StdError, "Error", [])]))])
+    Return(Binary(/, LocalRef(_0), Lit(2)))
+
+ShirBody show
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Try(Call(Free(@half), [(LocalRef(_0), Guaranteed)])), Guaranteed)]))
+    Return(EnumInit(@Result, "Ok", [Lit(Blank)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@show), [(Lit(8), Guaranteed)]))
+    Return(Lit(0))

@@ -10,7 +10,9 @@ body with the stop code CE0155 (`shir/stop.py`).
 
 `statements.py` walks a block and holds the statement arms, `expressions.py` the expression
 arms of the leaves, `operators.py` the arms of the operators and the check of a condition,
-and `calls.py` the arms of a call, an interpolated string and a borrow. The AST inference
+`calls.py` the arms of a call, an interpolated string and a borrow, and `results.py` the
+arm of an enum construction. The arm of `??` is `check_try` of `passes/types/expressions.py`,
+because the one caller of the conversion lookup is in that module. The AST inference
 visitor of `inference.py` is not part of this walk: it is the inference of the early passes
 (`ReadOnlyInferrer`), until they stop inferring. `helpers.py` holds the lambda and
 function-value helpers that it reads.
@@ -24,7 +26,9 @@ from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.passes.types.visit import calls as ca
 from sushi_lang.semantics.passes.types.visit import expressions as ex
 from sushi_lang.semantics.passes.types.visit import operators as op
+from sushi_lang.semantics.passes.types.visit import results as rs
 from sushi_lang.semantics.passes.types.visit import statements as st
+from sushi_lang.semantics.passes.types.expressions import check_try
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
@@ -104,10 +108,10 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.Cast: stop_at,
     e.Borrow: ca.check_borrow,
     e.Take: stop_at,
-    e.Try: stop_at,
+    e.Try: check_try,
     e.Lambda: stop_at,
     e.StructInit: stop_at,
-    e.EnumInit: stop_at,
+    e.EnumInit: rs.check_enum_init,
     e.TupleInit: stop_at,
     e.ArrayInit: stop_at,
     e.Range: stop_at,

@@ -13,6 +13,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
     from .. import TypeValidator
+    from sushi_lang.semantics.shir import exprs as e
     from sushi_lang.semantics.ast import EnumVariant, Expr
 
 
@@ -276,22 +277,18 @@ def propagate_generic_types_to_nested_constructors(
 
 
 def validate_constructor_arguments(
-    validator: 'TypeValidator', constructor: EnumConstructor, variant: 'EnumVariant', enum_type: EnumType
+    validator: 'TypeValidator', init: 'e.EnumInit', variant: 'EnumVariant', enum_type: EnumType
 ) -> None:
-    """Validate argument count and types for enum constructor."""
-    variant_name = constructor.variant_name
+    """The payload of a variant construction against the types of the variant.
+
+    `Result.Ok()` of a `~` value is CE2036, which names the fix. Every other payload goes
+    through the one argument check, with the codes of a variant (CE2049, CE2050).
+    """
     expected_types = list(variant.associated_types)
-    actual_args = constructor.args
+    if (is_instance_of(enum_type, "Result") and init.variant == "Ok"
+            and not init.payload and expected_types == [BuiltinType.BLANK]):
+        er.emit(validator.reporter, er.ERR.CE2036, init.loc)
+        return
 
-    # Special check for Result.Ok() with zero arguments (CE2036)
-    # This provides a more helpful error message than the generic "wrong argument count"
-    if (is_instance_of(enum_type, "Result") and variant_name == "Ok" and
-        len(actual_args) == 0 and len(expected_types) == 1):
-        expected_type = expected_types[0]
-        if expected_type == BuiltinType.BLANK:
-            er.emit(validator.reporter, er.ERR.CE2036, constructor.loc)
-            return
-
-    check_arguments(validator, variant_name, expected_types, actual_args,
-                    constructor.loc,
+    check_arguments(validator, init.variant, expected_types, init.payload, init.loc,
                     mismatch_code=er.ERR.CE2049, arity_code=er.ERR.CE2050)

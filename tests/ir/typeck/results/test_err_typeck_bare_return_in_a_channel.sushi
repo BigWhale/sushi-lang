@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2030
+# EXPECT_DUMP_SHIR: test_err_typeck_bare_return_in_a_channel.shir
+#
+# A body with a channel spells its success, `return Result.Ok(v)`: a `return` of a bare
+# value is CE2030, because nothing wraps it (#848).
+
+fn half(i32 n) i32 | StdError:
+    if (n % 2 == 1):
+        return Result.Err(StdError.Error)
+    return n / 2
+
+fn show(i32 n) ~ | StdError:
+    println(half(n)??)
+    return Result.Ok(~)
+
+fn main() i32:
+    show(8)
+    return 0

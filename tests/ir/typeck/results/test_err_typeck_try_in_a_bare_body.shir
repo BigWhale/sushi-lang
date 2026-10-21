@@ -1,0 +1,21 @@
+unit test_err_typeck_try_in_a_bare_body
+
+ShirBody half
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, Binary(%, LocalRef(_0), Lit(2)), Lit(1)), then: [Return(EnumInit(@Result, "Err", [EnumInit(@StdError, "Error", [])]))])
+    Return(EnumInit(@Result, "Ok", [Binary(/, LocalRef(_0), Lit(2))]))
+
+ShirBody twice
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "h": i32]
+  block  :
+    Assign(LocalRef(_1), Try(Call(Free(@half), [(LocalRef(_0), Guaranteed)])), is_init: true)
+    Return(Binary(*, LocalRef(_1), Lit(2)))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Call(Free(@twice), [(Lit(4), Guaranteed)]))

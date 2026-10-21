@@ -1,0 +1,30 @@
+# EXPECT_ERROR_CODES_EXACT: CE2507
+# EXPECT_DUMP_SHIR: test_err_typeck_channel.shir
+#
+# A body with a channel spells both constructors: `Result.Ok(v)` takes the value type of
+# the channel, and `Result.Err(StdError.Error)` takes its error type. `??` takes a
+# `Result` of the same error type and answers its value. A `~` channel ends with
+# `return Result.Ok(~)`. A `let` that writes a `Result` type takes a constructor. `??`
+# over an `i32` is CE2507.
+
+fn half(i32 n) i32 | StdError:
+    if (n % 2 == 1):
+        return Result.Err(StdError.Error)
+    return Result.Ok(n / 2)
+
+fn quarter(i32 n) i32 | StdError:
+    let i32 h = half(n)??
+    let Result@(i32, StdError) q = Result.Ok(h)
+    return Result.Ok(half(q??)??)
+
+fn show(i32 n) ~ | StdError:
+    println(quarter(n)??)
+    return Result.Ok(~)
+
+fn wrong(i32 n) i32 | StdError:
+    let i32 v = n??
+    return Result.Ok(v)
+
+fn main() i32:
+    show(8)
+    return 0

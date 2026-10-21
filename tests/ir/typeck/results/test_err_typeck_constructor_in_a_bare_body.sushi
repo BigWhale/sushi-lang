@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2091
+# EXPECT_DUMP_SHIR: test_err_typeck_constructor_in_a_bare_body.shir
+#
+# A bare body returns the value. A `return` of a `Result` constructor in it is CE2091. The
+# body with a channel beside it spells both constructors and propagates with `??`.
+
+fn half(i32 n) i32 | StdError:
+    if (n % 2 == 1):
+        return Result.Err(StdError.Error)
+    return Result.Ok(n / 2)
+
+fn show(i32 n) ~ | StdError:
+    println(half(n)??)
+    return Result.Ok(~)
+
+fn quarter(i32 n) i32:
+    return Result.Ok(n / 4)
+
+fn main() i32:
+    show(8)
+    return 0

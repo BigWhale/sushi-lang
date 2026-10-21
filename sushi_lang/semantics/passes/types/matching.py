@@ -859,7 +859,6 @@ def check_match_exhaustiveness(validator: 'TypeValidator', stmt: Match, scrutine
     result = analyze(lambda ty: _signature(validator, ty), arms.rows, scrutinee_type)
 
     if result.missing:
-        stmt.not_exhaustive = True
         kind = _scrutinee_literal_kind(scrutinee_type)
         if kind is not None:
             er.emit(validator.reporter, er.ERR.CE2074, stmt.loc, kind=kind,

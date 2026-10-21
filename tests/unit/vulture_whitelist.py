@@ -24,8 +24,6 @@ IGNORE_DECORATORS: dict[str, str] = {
 _PLATFORM_ABI = "platform ABI reference table"
 _LLVMLITE = "llvmlite reads this attribute when it prints the module"
 _TYPES = "sushi_lang/semantics/passes/types/"
-_P24 = ("kept for P2.4: the typecheck pass on SHIR types this spine construct, and the "
-        "helper moves to SHIR inputs")
 _TIER_A = ("kept for Tier A (Phase 3): the typecheck stage of its construct group moves "
            "the helper to SHIR inputs")
 _TIER_B = ("kept for Tier B (Phase 4): the typecheck stage of its construct group moves "
@@ -34,9 +32,6 @@ _TIER_C = ("kept for Tier C (Phase 5): the typecheck stage of its construct grou
            "the helper to SHIR inputs")
 _TIER_D = ("kept for Tier D (Phase 6): the typecheck stage of its construct group moves "
            "the helper to SHIR inputs")
-_P5_EXPAND_COPIES = ("kept for the generic instances group of Phase 5: the dead-statement "
-                     "rule, the scope pass and ends_unrolled_run read the copy boundaries")
-
 WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- dispatch by a built name ----------------------------------------------------
     ("sushi_lang/semantics/*", "visit_*",
@@ -110,9 +105,21 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "a reserved bit of the .slib header format; the library design defines it and "
      "the writer keeps it zero"),
     # -- kept for a later chunk of the IR migration (docs/design/ir.md) --------------
-    ("sushi_lang/semantics/shir/body.py", "holding", _P5_EXPAND_COPIES),
-    ("sushi_lang/semantics/shir/typeck.py", "record_*",
-     "kept for P2.4: the typecheck pass on SHIR writes each row of TypeckResults"),
+    ("sushi_lang/semantics/shir/typeck.py", "record_capture",
+     "kept for the closures group of Phase 5: the typecheck pass on SHIR writes the type "
+     "of each capture"),
+    ("sushi_lang/semantics/shir/typeck.py", "record_field_index",
+     "kept for the struct and tuple group of Phase 3: the typecheck pass on SHIR writes "
+     "the index of a field"),
+    ("sushi_lang/semantics/shir/typeck.py", "record_range_value",
+     "kept for the range group of Phase 3: the typecheck pass on SHIR writes whether a "
+     "range is a value"),
+    ("sushi_lang/semantics/shir/typeck.py", "record_match",
+     "kept for the match groups of Phase 3: the typecheck pass on SHIR writes the facts "
+     "of a match"),
+    ("sushi_lang/semantics/shir/typeck.py", "record_element",
+     "kept for the struct and tuple group of Phase 3: the typecheck pass on SHIR writes "
+     "the type of each target of a destructure"),
     ("sushi_lang/semantics/shir/typeck.py", "capture_type",
      "kept for the closures group of Phase 5: lift and SLIR lowering read the type of each "
      "capture"),
@@ -139,14 +146,12 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
     # Each one moves to SHIR inputs in the typecheck stage of its construct group
     # in the migration plan, and that stage deletes the entry.
-    ("sushi_lang/semantics/ast.py", "in_cast_context", _P24),
-    (_TYPES + "expressions.py", "in_cast_context", _P24),
-    (_TYPES + "expressions.py", "validate_try_expression", _P24),
-    (_TYPES + "utils.py", "reject_named_args", _P24),
+    ("sushi_lang/semantics/ast.py", "in_cast_context", _TIER_A),
+    (_TYPES + "expressions.py", "in_cast_context", _TIER_A),
+    (_TYPES + "utils.py", "reject_named_args", _TIER_A),
     (_TYPES + "calls/user_defined.py", "validate_indirect_call", _TIER_C),
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
     (_TYPES + "calls/user_defined.py", "check_stdlib_function", _TIER_A),
-    (_TYPES + "statements.py", "_validate_channel_return", _P24),
     (_TYPES + "matching.py", "validate_match_statement", _TIER_A),
     (_TYPES + "constants.py", "assignment_span", _TIER_A),
     (_TYPES + "statements.py", "stamp_rebind_places", _TIER_A),

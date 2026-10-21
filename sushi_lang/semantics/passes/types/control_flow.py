@@ -1,118 +1,45 @@
-"""Return-reachability analysis for type validation (the typecheck pass)."""
+"""The path faults of a SHIR body (the typecheck pass, docs/design/ir.md 7.5).
+
+A statement after one that ends the path is CE0140, and a body that answers a value and
+can reach its end with no `return` is CE0107. Neither rule reads a type. The predicate is
+the one path predicate of SHIR, `semantics/shir/paths.py`, which the borrow pass reads too.
+"""
 from __future__ import annotations
 
-from enum import Enum
-from typing import Iterable, Optional
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.ast import (Block, Break, Continue, Lambda, Stmt, Return, If,
-                                      Match)
+from sushi_lang.internals.report import Span
+from sushi_lang.semantics.shir.body import ShirBody
+from sushi_lang.semantics.shir.nodes import ShirBlock
+from sushi_lang.semantics.shir.paths import first_dead_statement, terminates
+from sushi_lang.semantics.shir.walk import walk
+from sushi_lang.semantics.typesys import BuiltinType, Type
+
+if TYPE_CHECKING:
+    from . import TypeValidator
 
 
-class Reach(Enum):
-    """Where the path through a statement or a block goes."""
-    ENDS = "ends"            # it returns on every path
-    FALLS = "falls"          # some path reaches the statement after it
-    UNDECIDED = "undecided"  # a refused `match` (#886)
-
-
-def _branches(reaches: Iterable[Reach]) -> Reach:
-    """The reach of a statement whose paths are these branches."""
-    found = set(reaches)
-    if Reach.FALLS in found:
-        return Reach.FALLS
-    if Reach.UNDECIDED in found:
-        return Reach.UNDECIDED
-    return Reach.ENDS
-
-
-def block_reach(self, block: Block) -> Reach:
-    undecided = False
-    for stmt in block.statements:
-        reach = statement_reach(self, stmt)
-        if reach is Reach.ENDS:
-            return Reach.ENDS
-        undecided = undecided or reach is Reach.UNDECIDED
-    return Reach.UNDECIDED if undecided else Reach.FALLS
-
-
-def statement_reach(self, stmt: Stmt) -> Reach:
-    if isinstance(stmt, Return):
-        return Reach.ENDS
-
-    if isinstance(stmt, If):
-        if stmt.else_block is None:
-            return Reach.FALLS
-        blocks = [block for _, block in stmt.arms] + [stmt.else_block]
-        return _branches(block_reach(self, block) for block in blocks)
-
-    if isinstance(stmt, Match):
-        reach = _branches(
-            block_reach(self, arm.body) if isinstance(arm.body, Block) else Reach.FALLS
-            for arm in stmt.arms
-        )
-        # A value that no arm covers goes past the `match`, but the missing arm is
-        # already an error, and the arm that the author adds decides the path.
-        if stmt.not_exhaustive and reach is Reach.ENDS:
-            return Reach.UNDECIDED
-        return reach
-
-    # A loop may not run, or may break, and an `expand` may run zero times, as a loop
-    # may (ruling of 2026-10-08, #1070). Every other statement goes on to the next.
-    return Reach.FALLS
-
-
-def block_always_returns(self, block: Block) -> bool:
-    """The fall-off rule's question (CE0107): no path certainly reaches the block end."""
-    return block_reach(self, block) is not Reach.FALLS
-
-
-def statement_always_returns(self, stmt: Stmt) -> bool:
-    """The statement returns on every path, so no statement after it can run."""
-    return statement_reach(self, stmt) is Reach.ENDS
-
-
-def ends_the_path(self, stmt: Stmt) -> bool:
-    """Whether no statement after `stmt` in its block can run: it returns on every path,
-    or it is a `break` / `continue`."""
-    return isinstance(stmt, (Break, Continue)) or statement_always_returns(self, stmt)
-
-
-def first_dead_statement(self, block: Block) -> Optional[tuple[Stmt, Stmt]]:
-    """The statement that ends the path in `block` and the first one after it, if any."""
-    statements = block.statements
-    for ender, dead in zip(statements, statements[1:], strict=False):
-        # Two statements from different `expand` copies, or a copy and its
-        # surroundings, were not written in sequence (#854). Only a copy of a binary or
-        # hybrid library template takes this rule on an unrolled body
-        # (`is_template_copy`).
-        if ender.expand_copies != dead.expand_copies:
+def reject_dead_statements(validator: 'TypeValidator', body: ShirBody) -> None:
+    """CE0140, once per block of one body (#854)."""
+    for _path, value in walk(body.block, "block"):
+        if not isinstance(value, ShirBlock):
             continue
-        if ends_the_path(self, ender):
-            return ender, dead
-    return None
+        found = first_dead_statement(value, body)
+        if found is None:
+            continue
+        ender, dead = found
+        validator.err.emit_with(er.ERR.CE0140, dead.loc) \
+            .note_at("the path ends here", ender.loc) \
+            .help("remove the statement, or move it before the one that ends the path") \
+            .emit()
 
 
-def reject_dead_statements(self, body: Block) -> None:
-    """CE0140, once per block of one body (#854).
+def reject_fall_off(validator: 'TypeValidator', block: ShirBlock, ret: Optional[Type],
+                    channel: bool, span: Optional[Span]) -> None:
+    """CE0107: a body that answers a value or a Result reaches its end with no `return`.
 
-    A lambda's body is its own callable: the lift pass types it as a function, so the
-    walk does not enter it here.
+    A bare `~` body answers nothing, so it may end (#824, #845).
     """
-    from sushi_lang.semantics.ast_walk import walk_nodes
-
-    def visit(node) -> bool:
-        if isinstance(node, Lambda):
-            return False
-        if isinstance(node, Block):
-            found = first_dead_statement(self, node)
-            if found is not None:
-                ender, dead = found
-                self.err.emit_with(er.ERR.CE0140, dead.loc) \
-                    .note_at("the path ends here", ender.loc) \
-                    .help("remove the statement, or move it before the one that ends "
-                          "the path") \
-                    .emit()
-        return True
-
-    walk_nodes(body, visit)
+    if (ret != BuiltinType.BLANK or channel) and not terminates(block):
+        validator.err.emit(er.ERR.CE0107, span, callable=validator.body_name)

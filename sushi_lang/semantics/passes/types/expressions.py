@@ -7,11 +7,13 @@ from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.typesys import (
     BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType)
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, TryExpr, RangeExpr, MemberAccess
+from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, RangeExpr, MemberAccess
 from sushi_lang.semantics.conversions import find_conversion
 from sushi_lang.semantics.type_predicates import (
     BUILTIN_INTEGER_TYPES, is_error_type, is_instance_of, is_integer_type, is_numeric_type)
 from sushi_lang.semantics.generics.results import result_ok_err
+from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.shir.typeck import NoConversion, TryFacts
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .arrays import (
     ARRAY_INDEX, RANGE_BOUND, REPEAT_COUNT, STRING_INDEX, reject_non_i32)
@@ -23,6 +25,7 @@ if TYPE_CHECKING:
     from . import TypeValidator
     from sushi_lang.internals.report import Span
     from sushi_lang.semantics.conversions import Conversion
+    from sushi_lang.semantics.shir import exprs as e
     from sushi_lang.semantics.shir.exprs import Binary, ShirExpr
     from sushi_lang.semantics.typesys import Type
 
@@ -245,56 +248,52 @@ def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> 
 
 
 class _Arms(NamedTuple):
-    """What a `??` reads off the wrapper it is applied to."""
-    value_type: Optional['Type']       # the payload the success arm carries
-    success_tag: Optional[int]         # that arm's variant index
-    error_type: Optional['Type']       # the failure arm's payload
+    """What a `??` reads off the `Result@(T, E)` it is applied to."""
+    value_type: 'Type'       # the payload the success arm carries
+    success_tag: int         # that arm's variant index
+    error_type: 'Type'       # the failure arm's payload
 
 
-_NO_ARMS = _Arms(None, None, None)
-
-
-def validate_try_expression(validator: 'TypeValidator', expr: 'TryExpr') -> None:
-    """Validate ?? operator usage and annotate AST with inferred types.
+def check_try(validator: 'TypeValidator', node: 'e.Try',
+              _expected: Optional['Type']) -> Optional['Type']:
+    """The arm of `??` (docs/design/ir.md 7.3, 7.4): it answers the value of the success arm.
 
     Four questions, in this order, and each one reports its own fault: what channel
     encloses the `??` (CE0131, CE2508), what the operand under it is (CE2507), whether
-    the two failure arms name one type (CE2511), and what the back end reads off the
-    node. The channel comes first, so a `??` in a bare body gets CE0131 alone
-    (docs/design/error-conversion.md section 4).
+    the two failure arms name one type (CE2511), and the facts of the `??`, which are rows
+    of the table. The channel comes first, so a `??` in a bare body gets CE0131 alone
+    (docs/design/error-conversion.md section 4). Two error types that a declared
+    conversion joins are not typed yet, and the walk of the body stops there.
     """
-    validator.validate_expression(expr.expr)
-
-    inner_type = validator.infer_expression_type(expr.expr)
-    channel = _enclosing_channel(validator, expr)
-    if channel is None:
-        return
-
-    arms = _unwrapped_arms(validator, expr, inner_type)
+    inner_type = visit.check_expr(validator, node.inner)
+    channel = _enclosing_channel(validator, node)
+    if channel is None or inner_type is None:
+        return None
+    arms = _unwrapped_arms(validator, node, inner_type)
     if arms is None:
-        return
-
-    agreed, conversion = _error_arms_agree(validator, expr, arms, channel)
+        return None
+    agreed, conversion = _error_arms_agree(validator, node, arms, channel)
     if not agreed:
-        return
+        return None
+    if conversion is not None:
+        visit.stop_at(validator, node)
+    answers = validator.body_answers()
+    answers.record_conversion(node.shir_id, NoConversion())
+    answers.record_try(node.shir_id, TryFacts(arms.success_tag, arms.value_type,
+                                              arms.error_type, channel))
+    return arms.value_type
 
-    _annotate_try_expr(expr, inner_type, arms, channel, conversion)
 
-
-def _unwrapped_arms(validator: 'TypeValidator', expr: 'TryExpr',
-                    inner_type: Optional['Type']) -> Optional[_Arms]:
+def _unwrapped_arms(validator: 'TypeValidator', node: 'e.Try',
+                    inner_type: 'Type') -> Optional[_Arms]:
     """What the `Result@(T, E)` under a `??` carries, or None once CE2507 is reported.
 
     `??` takes a `Result@(T, E)` and nothing else (#1168). It reads the TYPE and not its
     variant names: a `Maybe@(T)` holds no error value, and a user enum shaped like a
-    `Result` or a `Maybe` is not one. An uninferrable operand carries nothing and reports
-    nothing: the fault that made it uninferrable has a diagnostic of its own already.
+    `Result` or a `Maybe` is not one.
     """
-    if inner_type is None:
-        return _NO_ARMS
-
     if not (isinstance(inner_type, EnumType) and is_instance_of(inner_type, "Result")):
-        diag = er.emit_with(validator.reporter, er.ERR.CE2507, expr.loc,
+        diag = er.emit_with(validator.reporter, er.ERR.CE2507, node.loc,
                             got=display_type(inner_type))
         if is_instance_of(inner_type, "Maybe"):
             diag.help("a `Maybe` holds no error value, so write one with `or_err`: "
@@ -306,34 +305,39 @@ def _unwrapped_arms(validator: 'TypeValidator', expr: 'TryExpr',
         return None
 
     ok_type, err_type = result_ok_err(inner_type)
-    return _Arms(value_type=ok_type,
-                 success_tag=inner_type.get_variant_index("Ok"),
-                 error_type=err_type)
+    success_tag = inner_type.get_variant_index("Ok")
+    if success_tag is None:
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail=f"'{display_type(inner_type)}' has no Ok variant")
+    return _Arms(value_type=ok_type, success_tag=success_tag, error_type=err_type)
 
 
-def _enclosing_channel(validator: 'TypeValidator', expr: 'TryExpr') -> Optional['Type']:
-    """The interned `Result@(T, E)` a `??` propagates into, or None once it is reported.
+def _enclosing_channel(validator: 'TypeValidator', node: 'e.Try') -> Optional['Type']:
+    """The interned `Result@(T, E)` a `??` propagates into, or None when there is none.
 
     A BARE body has no channel (docs/design/error-channel.md). The collect pass already
     refused every `??` in a written function or method body with CE0131, so a second
-    diagnostic here would only mislead. A lambda is the one body that pass cannot judge:
-    its channel comes from its TYPE, which this pass infers, so its CE0131 is emitted
-    here. A `??` outside every body keeps the CE2508 backstop.
+    diagnostic here would only mislead: the body holds that error, and the pass records
+    it (`refused_before`). A lambda is the one body that pass cannot judge: its channel
+    comes from its TYPE, which this pass infers, so its CE0131 is emitted here. A `??`
+    outside every body keeps the CE2508 backstop.
     """
     channel = validator.channel_result
     if channel is not None:
         return channel
     if validator.body_name is None:
-        er.emit(validator.reporter, er.ERR.CE2508, expr.loc)
+        er.emit(validator.reporter, er.ERR.CE2508, node.loc)
     elif validator.body_name == "lambda":
-        er.emit_with(validator.reporter, er.ERR.CE0131, expr.loc,
+        er.emit_with(validator.reporter, er.ERR.CE0131, node.loc,
                      context="a lambda without '| E'") \
             .help("write '| E' in the function type the lambda takes, or handle the "
                   "value in the body (match, .realise(default))").emit()
+    else:
+        validator.refused_before = True
     return None
 
 
-def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr', arms: _Arms,
+def _error_arms_agree(validator: 'TypeValidator', node: 'e.Try', arms: _Arms,
                       channel: 'Type') -> Tuple[bool, Optional['Conversion']]:
     """Whether the operand's failure arm reaches the channel's, and through which conversion.
 
@@ -347,9 +351,6 @@ def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr', arms: _Arms,
     outer_ok_type, outer_err_type = result_ok_err(channel)
     inner_err_type = arms.error_type
 
-    if inner_err_type is None:
-        return True, None
-
     structs = validator.struct_table.by_name
     enums = validator.enum_table.by_name
     inner = resolve_unknown_type(inner_err_type, structs, enums)
@@ -362,7 +363,7 @@ def _error_arms_agree(validator: 'TypeValidator', expr: 'TryExpr', arms: _Arms,
         return True, conversion
 
     from sushi_lang.semantics.generics.opaque import note_opaque
-    diagnostic = er.emit_with(validator.reporter, er.ERR.CE2511, expr.loc,
+    diagnostic = er.emit_with(validator.reporter, er.ERR.CE2511, node.loc,
                               ok_type=display_type(outer_ok_type),
                               inner_err=display_type(inner_err_type),
                               outer_err=display_type(outer_err_type))
@@ -415,18 +416,6 @@ def _site_form(source_text: str, target_text: str, at_try: bool) -> str:
         return (f"convert the error at this site with `.map_err(f)??`, where `f` takes "
                 f"'{source_text}' `nom` and answers '{target_text}'")
     return f"call a function that takes the error `nom` and answers '{target_text}'"
-
-
-def _annotate_try_expr(expr: 'TryExpr', inner_type: Optional['Type'],
-                       arms: _Arms, channel: 'Type',
-                       conversion: Optional['Conversion']) -> None:
-    """Annotate TryExpr AST node with inferred type information."""
-    expr.inferred_inner_type = inner_type
-    expr.inferred_unwrapped_type = arms.value_type
-    expr.inferred_success_tag = arms.success_tag
-    expr.inferred_error_type = arms.error_type
-    expr.inferred_func_return_type = channel
-    expr.inferred_conversion = conversion
 
 
 def reject_mixed_numeric_operands(validator: 'TypeValidator', loc: 'Optional[Span]',

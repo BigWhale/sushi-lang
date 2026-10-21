@@ -9,9 +9,11 @@ An `Assign` of a local is a `let` (`is_init`) or a rebind; the value is checked 
 type of the local. A `let` writes the type of its local, and a `let` that writes none is
 CE2007, except for a hidden local, which takes the type of its value. An `Assign` of any
 other place, and a reference `let`, are not typed yet. An expression statement drops its
-value, and a dropped `Result` of a value is CW2001. A `Return` of a bare body checks
-its value at the declared return type, and refuses a `Result` constructor (CE2091); a
-`Return` of a body with a channel, and of an initializer, are not typed yet.
+value, and a dropped `Result` of a value is CW2001. A `Return` of a body with a channel
+spells `Result.Ok(...)` or `Result.Err(...)` (CE2030), checked at the `Result` of the
+channel (CE2031, CE2039). A `Return` of a bare body checks its value at the declared
+return type, and refuses a `Result` constructor (CE2091). A `Return` of an initializer
+is not typed yet.
 
 An `If` and a `Loop` with a `Cond` source check their condition (`check_condition`) and
 their blocks; an `elif` is an `If` in the `else` block. The kind of a `while` loop is
@@ -28,6 +30,9 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.compatibility import (
     reject_mismatch, reject_return_mismatch, reject_unhandled_result)
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
+from sushi_lang.semantics.passes.types.result_validation import (
+    spells_a_result, validate_result_pattern)
+from sushi_lang.semantics.passes.types.statements import reject_unspelled_result
 from sushi_lang.semantics.passes.types.utils import resolve_declared_type, validate_type_name
 from sushi_lang.semantics.passes.types.visit.operators import check_condition
 from sushi_lang.semantics.shir import exprs as e
@@ -36,7 +41,7 @@ from sushi_lang.semantics.shir.body import Initializer, ShirBody
 from sushi_lang.semantics.shir.loop_kind import While
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.type_predicates import is_instance_of
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, ReferenceType
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, ReferenceType, Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -109,15 +114,18 @@ def check_expr_stmt(validator: TypeValidator, node: s.ExprStmt) -> None:
 
 
 def check_return(validator: TypeValidator, node: s.Return) -> None:
-    """A `return` of a bare body: a `Result` constructor is CE2091, and a `~` return type
-    takes any value."""
+    """A `return`. A body with a channel spells a `Result` constructor, and a bare body
+    returns the value: a `Result` constructor is CE2091 there, and a `~` return type takes
+    any value."""
     body = validator.body
-    if validator.channel_result is not None or (
-            body is not None and isinstance(body.origin, Initializer)):
+    if body is not None and isinstance(body.origin, Initializer):
         visit.stop_at(validator, node)
     value = node.value
-    if (isinstance(value, e.EnumInit) and value.variant in ("Ok", "Err")
-            and validator.decl_name(value.decl) == "Result"):
+    channel = validator.channel_result
+    if channel is not None:
+        _check_channel_return(validator, value, channel)
+        return
+    if spells_a_result(validator, value):
         er.emit(validator.reporter, er.ERR.CE2091, value.loc,
                 callable=validator.body_name or "this body")
         return
@@ -129,6 +137,20 @@ def check_return(validator: TypeValidator, node: s.Return) -> None:
     got = visit.check_expr(validator, node.value, expected)
     if expected is not None:
         reject_return_mismatch(validator, got, expected, node.value.loc)
+
+
+def _check_channel_return(validator: TypeValidator, value: e.ShirExpr, channel: Type) -> None:
+    """A `return` of a body with a channel spells `Result.Ok(...)` or `Result.Err(...)`,
+    which is checked at the `Result` of the channel. Any other value is CE2030, because
+    nothing wraps a bare value (#848); a copy of a template took that rule on the
+    template."""
+    if isinstance(value, e.EnumInit) and spells_a_result(validator, value):
+        visit.check_expr(validator, value, channel)
+        validate_result_pattern(validator, value, channel)
+        return
+    visit.check_expr(validator, value)
+    if not validator.in_template_copy:
+        reject_unspelled_result(validator, value)
 
 
 def check_if(validator: TypeValidator, node: s.If) -> None:

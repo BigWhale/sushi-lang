@@ -19,9 +19,9 @@ ShirBody main
   locals : [_0 "c": Shape]
   block  :
     Assign(LocalRef(_0), EnumInit(@Shape, "Circle", [Lit(2)]), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [LocalRef(_0)])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Named(GlobalRef(@area)), [EnumInit(@Shape, "Rect", [Lit(3), Lit(4)])])]))
-    ExprStmt(Call(Named(GlobalRef(@show)), [Call(Static(Sign, "flip"), [Lit(true)])]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(LocalRef(_0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(EnumInit(@Shape, "Rect", [Lit(3), Lit(4)]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Free(@show), [Call(Static(Sign, "flip"), [Lit(true)])]))
     ExprStmt(Call(Named(GlobalRef(@show)), [EnumInit(@Sign, "Minus", [])]))
     ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
     Return(Lit(0))

@@ -120,28 +120,11 @@ def validate_let_reference(validator: 'TypeValidator', stmt: Let) -> None:
                                       stmt.value.loc)
 
 
-def _validate_channel_return(validator: 'TypeValidator', value, channel) -> None:
-    """A body with a channel spells both constructors.
-
-    The interned channel Result is propagated into the constructor (the stamp the backend
-    builds from). A value that is not `Result.Ok(...)` / `Result.Err(...)` is CE2030,
-    because nothing wraps a bare value (#848).
-    """
-    from .propagation import propagate_types_to_value
-    from .result_validation import spells_a_result, validate_result_pattern
-    propagate_types_to_value(validator, value, channel)
-    validator.validate_expression(value)
-    if spells_a_result(value):
-        validate_result_pattern(validator, value, channel)
-    elif not validator.in_template_copy:
-        reject_unspelled_result(validator, value)
-
-
 def reject_unspelled_result(validator: 'TypeValidator', value) -> None:
     """CE2030: a `return` in a channel body spells no `Result` constructor.
 
-    Two callers, one decision (`spells_a_result`): a body as it is validated, and a
-    template body as it is written (#1070).
+    Two callers, one decision (`spells_a_result`): the `Return` arm of a body as it is
+    walked, and a template body as it is written (#1070).
     """
     er.emit_with(validator.reporter, er.ERR.CE2030, value.loc) \
         .help("wrap return value: return Result.Ok(value)").emit()

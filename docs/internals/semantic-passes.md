@@ -1103,14 +1103,15 @@ All paths are under `semantics/passes/`.
 | Module | What it holds |
 |---|---|
 | `types/__init__.py` | `TypeValidator`, the entry of the pass: the declaration half, and `check_body`, the walk of a SHIR body; `ReadOnlyInferrer` for the early passes |
-| `types/visit/` | `__init__.py`: `ARMS`, the one table of the body walk, keyed on the SHIR class, with `check` and `check_expr`; `statements.py`: the walk of a block and the statement arms (`let`, rebind, expression statement, `return`, `if`, `while`, `break`, `continue`); `expressions.py`: the expression arms of the leaves (literals, locals, constants); `operators.py`: the arms of `Unary` and `Binary` and the check of a condition; `calls.py`: the arms of a `Call` (a free function and `print`/`println`), an `Interp` and a `Borrow`; `inference.py`: the AST inference of the early passes; `helpers.py`: the lambda and function-value helpers |
+| `types/visit/` | `__init__.py`: `ARMS`, the one table of the body walk, keyed on the SHIR class, with `check` and `check_expr`; `statements.py`: the walk of a block and the statement arms (`let`, rebind, expression statement, `return`, `if`, `while`, `break`, `continue`); `expressions.py`: the expression arms of the leaves (literals, locals, constants); `operators.py`: the arms of `Unary` and `Binary` and the check of a condition; `calls.py`: the arms of a `Call` (a free function and `print`/`println`), an `Interp` and a `Borrow`; `results.py`: the arm of an `EnumInit` (a `Result` variant at the `Result` type of its position, a variant of an enum that is not generic); `inference.py`: the AST inference of the early passes; `helpers.py`: the lambda and function-value helpers |
 | `types/fold.py` | `Folder`: the readable fold of a SHIR sub-expression at the type of its position, over the integer operator kernel ([the IR design](../design/ir.md), 7.4) |
 | `types/arguments.py` | `check_arguments`: the one argument check over the SHIR arguments of a call (the count, then each argument: its type, its `nom` marker against the declared mode, and its convention) |
 | `types/method_registry.py` | `METHOD_TYPE_REGISTRY`: which built-in method family a call belongs to |
 | `types/calls/` | call validation: `dotcall.py` (`resolve_dotcall`, what `X.Y(args)` names), `statics.py`, `namespaced.py`, `methods.py`, `user_defined.py`, `generics.py`, `structs.py`, `enums.py` |
-| `types/expressions.py` | the rules of the operands of an operator, on SHIR nodes: the three closed operand rules `reject_non_bool_condition`, `reject_non_numeric_arithmetic` and `reject_uncomparable_operands`, the mixed widths, the integer operands of a bitwise operator, the divisor and the shift count that the fold reads, and the overflow of an operation (`reject_overflow`) |
-| `types/statements.py` | the AST statement helpers that a later construct group moves to SHIR: a destructure, a reference `let`, a rebind of a field, an element or a unit variable, `foreach`, the `return` of a body with a channel |
-| `types/control_flow.py`, `types/signatures.py` | the return paths ([CE0107](../error-catalog.md#ce0107), [CE0140](../error-catalog.md#ce0140)) and the declaration signatures |
+| `types/expressions.py` | `check_try`, the arm of `??` (the channel, the operand, the two error types, the facts of the `??`), and the rules of the operands of an operator, on SHIR nodes: the three closed operand rules `reject_non_bool_condition`, `reject_non_numeric_arithmetic` and `reject_uncomparable_operands`, the mixed widths, the integer operands of a bitwise operator, the divisor and the shift count that the fold reads, and the overflow of an operation (`reject_overflow`) |
+| `types/statements.py` | the AST statement helpers that a later construct group moves to SHIR: a destructure, a reference `let`, a rebind of a field, an element or a unit variable, `foreach`; and `reject_unspelled_result`, [CE2030](../error-catalog.md#ce2030) |
+| `types/result_validation.py` | the `Result` constructor that a `return` of a body with a channel spells: `spells_a_result`, and the payload against the channel ([CE2031](../error-catalog.md#ce2031), [CE2039](../error-catalog.md#ce2039)) |
+| `types/control_flow.py`, `types/signatures.py` | the path faults of a SHIR body ([CE0107](../error-catalog.md#ce0107), [CE0140](../error-catalog.md#ce0140)) over the one path predicate `semantics/shir/paths.py`, which the borrow pass reads too, and the declaration signatures |
 | `types/matching.py` | patterns: each arm checked against the scrutinee, the rows for the checker, [CE2040](../error-catalog.md#ce2040) / [CE2074](../error-catalog.md#ce2074) / [CE2118](../error-catalog.md#ce2118) |
 | `types/exhaustiveness.py` | the one exhaustiveness checker for every match: usefulness over a pattern matrix (missing patterns, dead arms) |
 | `types/arrays.py` | the built-in array methods, and `reject_non_i32` for an index, a count or a range bound |
@@ -1142,7 +1143,7 @@ parameter in an `E` position (the monomorphizer, and `resolve_method_generic_ext
 for a method-level type parameter), with a note at the template. A type with no span
 came from inference and is not judged.
 
-**What `??` takes.** `validate_try_expression` (`passes/types/expressions.py`) asks for the
+**What `??` takes.** `check_try` (`passes/types/expressions.py`) asks for the
 enclosing channel first ([`CE0131`](../error-catalog.md#ce0131) in a bare lambda, [`CE2508`](../error-catalog.md#ce2508) outside every body; a bare
 written body was refused by the `collect` pass), and then for the operand:
 `_unwrapped_arms` accepts a `Result` instance by type identity (`is_instance_of`) and
@@ -1152,9 +1153,11 @@ nothing else, so a `Maybe` and a user enum with `Ok`/`Err` variants are [`CE2507
 channel's. The same type propagates unchanged; otherwise `find_conversion`
 (`semantics/conversions.py`, the one reader of the table, gate
 `tests/unit/test_conversion_lookup_is_one.py`) answers the declared conversion, or the
-`??` is [`CE2511`](../error-catalog.md#ce2511) with a help that names the declaration. The answer is stamped on the node
-(`TryExpr.inferred_conversion`), and the backend calls the conversion before the scope
-cleanup of the propagation path. `validate_cast_expression` asks the same question for
+`??` is [`CE2511`](../error-catalog.md#ce2511) with a help that names the declaration. The answer is the conversion
+row of the `Try` in `TypeckResults`, beside its facts (the tag of `Ok`, the two payload
+types, the `Result` of the channel); a `??` across two error types that a conversion joins
+is not typed on SHIR yet, and stops the walk of its body. The backend calls the
+conversion before the scope cleanup of the propagation path. `validate_cast_expression` asks the same question for
 `e as T` (`CastExpr.inferred_conversion`, else [`CE2014`](../error-catalog.md#ce2014)). In the check of a template, an
 opaque `E` has no conversion: `??` propagates the same `E` and no other ([`CE2511`](../error-catalog.md#ce2511) with a
 note at `E`, ruling R8). Each instance asks again on its own copy of the node, where E3

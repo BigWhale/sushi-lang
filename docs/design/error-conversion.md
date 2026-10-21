@@ -549,9 +549,10 @@ The new codes are in `internals/errors/result.py`, the module that owns their ra
   the operand IS a `Result` instance (`is_instance_of`, `semantics/type_predicates.py`),
   and no longer reads variant names. The Maybe branch is removed, and so is the
   `error_type=None` path into the backend.
-- **`typecheck`.** `validate_try_expression` and `validate_cast_expression` ask the seam
-  and stamp the answer on the node (`TryExpr.inferred_conversion`,
-  `CastExpr.inferred_conversion`). In a generic function the question is asked per
+- **`typecheck`.** `check_try` and `validate_cast_expression` ask the seam. The `??` arm
+  writes the answer as the conversion row of the `Try` in `TypeckResults`
+  (docs/design/ir.md 7.3), and the cast check stamps it on the node
+  (`CastExpr.inferred_conversion`). In a generic function the question is asked per
   instance.
 - **Backend.** The propagate block of `emit_try_expr` (`backend/expressions/try_expr.py`)
   extracts the error, calls the stamped conversion with it as a consuming argument, runs
