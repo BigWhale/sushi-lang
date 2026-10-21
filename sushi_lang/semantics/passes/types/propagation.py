@@ -8,6 +8,7 @@ from sushi_lang.semantics.ast import (EnumConstructor, DotCall, Call, Name, IntL
                                       UnaryOp, BinaryOp, ArrayLiteral, DynamicArrayFrom,
                                       DynamicArrayNew)
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.operators import ARITHMETIC_OPS, BITWISE_OPS, SHIFT_OPS
 from .inference import int_literal_fits, float_literal_fits
 from sushi_lang.semantics.type_predicates import (
     BUILTIN_FLOAT_TYPES, BUILTIN_INTEGER_TYPES)
@@ -20,8 +21,7 @@ if TYPE_CHECKING:
 _NUMERIC_INT = BUILTIN_INTEGER_TYPES
 _NUMERIC_FLOAT = BUILTIN_FLOAT_TYPES
 
-_ARITH_BITWISE_OPS = {"+", "-", "*", "/", "%", "&", "|", "^"}
-_SHIFT_OPS = {"<<", ">>"}
+_ARITH_BITWISE_OPS = ARITHMETIC_OPS + BITWISE_OPS
 # A unary operator whose result is its operand's type. `not` answers a bool and is not one.
 _TYPE_PRESERVING_UNARY = {"neg", "~"}
 
@@ -98,7 +98,7 @@ def same_type_operands(expr: 'Expr') -> 'tuple[Expr, ...]':
     if isinstance(expr, BinaryOp):
         if expr.op in _ARITH_BITWISE_OPS:
             return (expr.left, expr.right)
-        if expr.op in _SHIFT_OPS:
+        if expr.op in SHIFT_OPS:
             return (expr.left,)
         return ()
     if isinstance(expr, UnaryOp) and expr.op in _TYPE_PRESERVING_UNARY:

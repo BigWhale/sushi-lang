@@ -14,6 +14,7 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, RangeExpr, MemberAccess
 from sushi_lang.semantics.conversions import find_conversion
+from sushi_lang.semantics.operators import EQUALITY_OPS
 from sushi_lang.semantics.type_predicates import (
     BUILTIN_INTEGER_TYPES, is_error_type, is_instance_of, is_integer_type, is_numeric_type)
 from sushi_lang.semantics.generics.results import result_ok_err
@@ -447,16 +448,6 @@ def reject_mixed_numeric_operands(validator: 'TypeValidator', loc: 'Optional[Spa
     return True
 
 
-_EQUALITY_OPS = ("==", "!=")
-
-
-# Arithmetic accepts no non-numeric type at all, so its set needs no name. The
-# operators it covers do: the unary minus arrives as '-' and not as 'neg'.
-ARITHMETIC_OPS = ("+", "-", "*", "/", "%")
-DIVISION_OPS = ("/", "%")
-COMPARISON_OPS = _EQUALITY_OPS + ("<", "<=", ">", ">=")
-
-
 def is_string_plus(op: str, left_type: 'Optional[Type]',
                    right_type: 'Optional[Type]') -> bool:
     """Is this the '+' that CE2509 owns -- the one with a string operand?
@@ -593,7 +584,7 @@ def reject_uncomparable_operands(validator: 'TypeValidator', node: 'Binary',
         return True
 
     from sushi_lang.semantics.generics.contracts import EQ, ORD
-    contract = EQ if node.op in _EQUALITY_OPS else ORD
+    contract = EQ if node.op in EQUALITY_OPS else ORD
     refused: list = []
     permitted, reason = top_level_contract(validator, left_type, contract, refused)
     if permitted:

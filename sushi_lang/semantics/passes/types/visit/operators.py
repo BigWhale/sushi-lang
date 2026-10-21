@@ -22,8 +22,10 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.const_eval import emit_string_plus
 from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.operators import (
+    ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, DIVISION_OPS, SHIFT_OPS)
 from sushi_lang.semantics.passes.types.expressions import (
-    ARITHMETIC_OPS, COMPARISON_OPS, DIVISION_OPS, is_string_plus, reject_impossible_shift_count,
+    is_string_plus, reject_impossible_shift_count,
     reject_mixed_numeric_operands, reject_non_bool_condition, reject_non_integer_operands,
     reject_non_numeric_arithmetic, reject_overflow, reject_uncomparable_operands,
     reject_zero_divisor)
@@ -37,9 +39,8 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
 
 _LOGICAL = ("and", "or", "xor")
-_SHIFTS = ("<<", ">>")
 #: The binary operators whose two operands have the type of the operation.
-_SAME_TYPE = ARITHMETIC_OPS + ("&", "|", "^")
+_SAME_TYPE = ARITHMETIC_OPS + BITWISE_OPS
 #: The unary operators whose operand has the type of the operation.
 _TYPE_KEEPING = ("neg", "~")
 
@@ -128,7 +129,7 @@ def _check_bitwise(validator: TypeValidator, node: e.Binary, left: Optional[Type
     fits the value."""
     if reject_non_integer_operands(validator, node.op, [(node.lhs, left), (node.rhs, right)]):
         return None
-    if node.op in _SHIFTS:
+    if node.op in SHIFT_OPS:
         refused = reject_impossible_shift_count(validator, node, left, right)
     else:
         refused = reject_mixed_numeric_operands(validator, node.loc, left, right)
@@ -143,7 +144,7 @@ def _check_operands(validator: TypeValidator, node: e.Binary,
         return (visit.check_expr(validator, lhs, BuiltinType.BOOL),
                 visit.check_expr(validator, rhs, BuiltinType.BOOL))
     position = _numeric(expected)
-    left_at = _given(lhs, position) if node.op in _SAME_TYPE + _SHIFTS else None
+    left_at = _given(lhs, position) if node.op in _SAME_TYPE + SHIFT_OPS else None
     right_at = _given(rhs, position) if node.op in _SAME_TYPE else None
     left_open = left_at is None and _literal_under(lhs) is not None
     right_open = right_at is None and _literal_under(rhs) is not None
