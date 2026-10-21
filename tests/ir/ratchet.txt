@@ -501,6 +501,7 @@ tests/ir/borrow/straight/test_err_borrow_poke_of_a_peek.sushi
 tests/ir/borrow/straight/test_err_borrow_rebind.sushi
 tests/ir/borrow/straight/test_err_borrow_try_string.sushi
 tests/ir/borrow/template_check/test_borrow_template_check_meets_no_slir.sushi
+tests/ir/emit/argv/test_emit_argv_buffer_is_freed.sushi
 tests/ir/emit/conventions/test_emit_conventions.sushi
 tests/ir/emit/rebuild/test_emit_rebuild.sushi
 tests/ir/emit/scalars/test_emit_scalars.sushi
