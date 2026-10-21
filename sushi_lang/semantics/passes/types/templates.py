@@ -7,10 +7,11 @@ bounds its base declares and the bounds its target adds (R1). The check cuts a C
 of the template in an overlay of the program tables (`semantics/template_scope.py`),
 with each type parameter replaced by its opaque form. The typecheck pass checks the
 header of that copy, and it walks the SHIR body of the template as written, whose origin
-is `TemplateCheck` (docs/design/ir.md 4.3). From the switch to SHIR, the lift pass and
-the borrow pass do not run on it. Then the compiler discards the copy and the overlay. A
-fault of the template is reported one time, at the template's spans, and the copies of a
-refused template report nothing (the reporter mutes them).
+is `TemplateCheck` (docs/design/ir.md 4.3). A body that the typecheck pass finished with
+no error goes on to the lift pass and the borrow pass, in the overlay, as every body does.
+Then the compiler discards the copy and the overlay. A fault of the template is reported
+one time, at the template's spans, and the copies of a refused template report nothing
+(the reporter mutes them).
 """
 from __future__ import annotations
 

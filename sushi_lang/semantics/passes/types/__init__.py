@@ -8,7 +8,7 @@ through the table of `visit/`, and it writes its answers into the `TypeckResults
 body. A stop of the body half ends the walk of its body, and the pass records it in
 `stops` (`shir/stop.py`); the next body is walked as usual. When a walk ends with no stop
 and with no error in its body, the completeness check of the table runs (`check_answers`),
-and the pass gives the body to the next stage, the borrow pass (`next_stage`), which the
+and the pass gives the body to the next stage, the lift pass (`next_stage`), which the
 driver gives the pass.
 """
 from __future__ import annotations
@@ -87,7 +87,7 @@ class TypeValidator:
         self.checked_template_ids: Set[int] = set()
         # The SHIR bodies of the program, the record of the stops of the body half, and the
         # stage that each body goes to when the body half finished it with no error: the
-        # borrow pass (`BorrowChecker.check_body`).
+        # lift pass (`LiftPass.check_body`).
         self.shir = shir
         self.stops = stops
         self.next_stage = next_stage
@@ -278,7 +278,7 @@ class TypeValidator:
         A stop ends the walk: the pass records it, with the file of the body, and the
         caller goes on with the next declaration. A walk that ends with no stop and with no
         error in its body is checked for completeness, and its body goes to the next
-        stage, the borrow pass, with the tables that the body was read in. A node that has
+        stage, the lift pass, with the tables that the body was read in. A node that has
         an error has no answer, so a body with an error is not checked. The answer is the
         body when the walk reached its end, and None after a stop.
         """

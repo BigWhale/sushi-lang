@@ -8,8 +8,9 @@ names of this table: only lowering makes the table, only `semantics/passes/lift.
 the write API, only `semantics/shir/lift.py` names the tables, and the class has a read API
 and a write API and nothing else.
 
-The lift pass on SHIR writes no row yet (P2.7), so the gate does not ask that the pass
-calls the write API: P2.7 adds that check.
+The lift pass on SHIR writes no row yet: it stops at each `Lambda` until the closures
+group of Phase 5. So the gate does not ask that the pass calls the write API: the closures
+group adds that check.
 """
 from __future__ import annotations
 

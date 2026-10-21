@@ -1,16 +1,70 @@
-"""Lambda-lifting pass: turn each lambda literal into a top-level function + env."""
-from __future__ import annotations
-from typing import List, Optional, Protocol, runtime_checkable
+"""The lift pass (docs/design/ir.md 7.9, ruling Q8).
 
+`LiftPass` runs on SHIR, between typecheck and borrow. It rewrites no node: the answers
+for each `Lambda` of a body are rows of the `LiftResults` of the body. A `Lambda` stops the
+walk of its body with the stop code CE0155 (`lift, Lambda`) until the closures group. A
+body that the pass ends with no stop has its table checked (`check_lift`), and goes on to
+the borrow pass.
+
+`LambdaLifter` is the lift pass of the AST pipeline, which turns each lambda literal into
+a top-level function and an environment. No stage runs it; the closures group takes what
+it needs from it.
+"""
+from __future__ import annotations
+from typing import TYPE_CHECKING, Callable, List, Optional, Protocol, runtime_checkable
+
+from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.ast import (
     Node, FuncDef, Lambda, Block, Return, Name, MemberAccess, Param, DotCall,
 )
 from sushi_lang.semantics.ast_walk import node_fields, walk_nodes
 from sushi_lang.semantics.hidden_names import hidden_name
+from sushi_lang.semantics.shir import dispatch
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.lift_check import check_lift
+from sushi_lang.semantics.shir.walk import walk
 from sushi_lang.semantics.typesys import StructType, ReferenceType, BorrowMode
 
+if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.body import ShirBody
+    from sushi_lang.semantics.shir.lowering import LoweredProgram
+    from sushi_lang.semantics.shir.stop import Stops
+    from sushi_lang.semantics.tables import SymbolTables
+
 ENV_PARAM_NAME = hidden_name("closure_env")
+
+#: The name of this stage in the stop code.
+STAGE = "lift"
+
+
+class LiftPass:
+    """The lift pass over the SHIR bodies of one unit, one body at a time."""
+
+    def __init__(self, shir: LoweredProgram, *, stops: Stops,
+                 next_stage: Callable[..., None]) -> None:
+        self.shir = shir
+        self.stops = stops
+        self.next_stage = next_stage
+
+    def check_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
+                   filename: Optional[str]) -> None:
+        """Lift the SHIR body of `decl`, which the typecheck pass finished with no error.
+
+        A stop ends the walk: the pass records it with the file of the body, and the body
+        does not go to the borrow pass. A walk with no stop checks the table of the body
+        and gives the body, with the tables that typecheck read it in, to the borrow pass.
+        """
+        try:
+            for _path, value in walk(body.block, "block"):
+                if isinstance(value, e.Lambda):
+                    dispatch.stop(STAGE, value)
+        except StageStop as stop:
+            stop.filename = filename
+            self.stops.lift_stopped(stop)
+            return
+        check_lift(body, self.shir.lift_table_of(body), self.shir.decls)
+        self.next_stage(decl, body, tables=tables, filename=filename)
 
 
 @runtime_checkable

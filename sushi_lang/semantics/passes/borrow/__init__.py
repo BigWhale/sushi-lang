@@ -1,12 +1,12 @@
 """The borrow pass over SHIR (docs/design/ir.md 7.9). The pass object holds the state of one
 body; the sibling modules hold the rules.
 
-The typecheck pass gives the pass each body that it finished with no error, with its
-`TypeckResults` (`check_body`). The DECLARATION half reads the declaration of the body: the
-mode of each parameter, the receiver, a borrowed return. The BODY half walks the SHIR body
-through one table of arms keyed on the SHIR class (`arms.py`), and writes each answer as a
-row of the `OwnershipResults` of the body. The state of the walk is keyed by `LocalId`, and
-a diagnostic names a local by the source name of its `ShirLocal`.
+The lift pass gives the pass each body that typecheck and lift finished with no error,
+with its `TypeckResults` (`check_body`). The DECLARATION half reads the declaration of the
+body: the mode of each parameter, the receiver, a borrowed return. The BODY half walks the
+SHIR body through one table of arms keyed on the SHIR class (`arms.py`), and writes each
+answer as a row of the `OwnershipResults` of the body. The state of the walk is keyed by
+`LocalId`, and a diagnostic names a local by the source name of its `ShirLocal`.
 
 A branch starts each block from the state before it, and the paths that reach the code
 after it JOIN (`flow.py`). A loop body is walked two rounds: a discovery round, which
@@ -101,7 +101,7 @@ class BorrowChecker:
 
     def check_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
                    filename: Optional[str]) -> None:
-        """Walk the SHIR body of `decl`, which the typecheck pass finished with no error.
+        """Walk the SHIR body of `decl`, which typecheck and lift finished with no error.
 
         `tables` are the tables that the typecheck pass read the body in. A stop ends the
         walk: the pass records it with the file of the body. A walk with no stop and with

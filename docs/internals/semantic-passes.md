@@ -28,27 +28,30 @@ each named for the stage it runs.
 | `finite-types` | reject a type that contains itself by value ([CE2095](../error-catalog.md#ce2095)) | `semantics/passes/finite_types.py` |
 | `derive` | auto-derive `hash()` and `clone()` (not `Eq`, `Ord` or `Display`: the contract walk answers those) | `semantics/passes/derive.py` |
 | `shadowing` | reject an extension method that collides with a built-in or with a stdlib method on a built-in type ([CE2097](../error-catalog.md#ce2097)), or with a perk method that a binary or hybrid library ships ([CE4007](../error-catalog.md#ce4007)); warn where a unit's own extension hides an imported public one ([CW3007](../error-catalog.md#cw3007)) | `semantics/semantic_analyzer.py` |
-| `effects` | which functions destroy a `poke` parameter, transitively | `semantics/passes/borrow/destroy_effects.py` |
-| `scope` | scope and variable analysis | `semantics/passes/scope.py` |
-| `typecheck` | type validation and inference; each generic template is checked one time, where it is written, with its type parameters opaque | `semantics/passes/types/` |
-| `lift` | each lambda becomes a top-level function plus an environment | `semantics/passes/lift.py` |
-| `borrow` | borrow checking | `semantics/passes/borrow/` |
+| `effects` | which functions destroy a `poke` parameter, transitively; on the AST | `semantics/passes/borrow/destroy_effects.py` |
+| `scope` | scope and variable analysis; on the AST | `semantics/passes/scope.py` |
+| `typecheck` | type validation and inference; each generic template is checked one time, where it is written, with its type parameters opaque; on SHIR, into `TypeckResults` | `semantics/passes/types/` |
+| `lift` | the symbol and the environment of each lambda; on SHIR, into `LiftResults` | `semantics/passes/lift.py` |
+| `borrow` | borrow checking; on SHIR, into `OwnershipResults` | `semantics/passes/borrow/` |
 
 The last four run per unit, in one loop, so the whole-program passes above them see every
-unit before any function body is walked.
+unit before any function body is walked. Lowering to SHIR runs in the loop too, after
+`scope`; it is not a pass.
 
 **The move to SHIR** ([the IR design](../design/ir.md), 7.9). The compiler lowers each body
-to SHIR after `scope`, and `typecheck` walks the SHIR body of each declaration through one
-table of arms keyed on the SHIR class (`types/visit/__init__.py`). It gives each body that
-it finished with no error to `borrow`, which walks the body through a table of its own
-(`borrow/arms.py`); both tables read one dispatch (`shir/dispatch.py`). The declaration
-half of `typecheck` and of `borrow` (the signatures, the declared types, the constraints,
-the header of each body, the mode of each parameter) still reads the AST. `effects` runs
+to SHIR after `scope`, and the three SHIR passes walk the SHIR body of each declaration in
+the order `typecheck`, `lift`, `borrow`. `typecheck` walks it through one table of arms
+keyed on the SHIR class (`types/visit/__init__.py`) and gives each body that it finished
+with no error to `lift`. `lift` gives each body that it finished to `borrow`, which walks
+the body through a table of its own (`borrow/arms.py`); both tables read one dispatch
+(`shir/dispatch.py`). The declaration half of `typecheck` and of `borrow` (the
+signatures, the declared types, the constraints, the header of each body, the mode of
+each parameter) still reads the AST. `scope` and `effects` stay on the AST; `effects` runs
 before the loop, because `borrow` reads its summary. While the move is in progress, the
-arm of a construct that a pass does not handle yet stops the walk of its body, and `lift`
-and the backend do not run: a program with no error stops after the analysis with
-[CE0155](../error-catalog.md#ce0155) (`slir, <body>` for a body that both passes
-finished), and `--dump-shir` is written first.
+arm of a construct that a pass does not handle yet stops the walk of its body, the next
+pass does not get that body, and the backend does not run: a program with no error stops
+after the analysis with [CE0155](../error-catalog.md#ce0155) (`slir, <body>` for a body
+that the three passes finished), and `--dump-shir` is written first.
 
 `semantics/const_eval.py` is **not** a pass. Three callers reach it as a helper: the
 **AST builder**, which reads a fixed array's size while the unit is parsed (so a
@@ -1203,11 +1206,11 @@ Each check:
 4. checks the check copy with a `TemplateValidator`, whose `in_template_check` flag stops
    every writer that cuts or queues a program copy
    (`tests/unit/test_template_check_writes_no_copy.py`);
-5. runs `lift` on the check copy, into a scratch program;
-6. runs the `borrow` pass on the check copy and its lifted functions
-   (`BorrowChecker.check_template_copy`, handed to the `TypeValidator` as
-   `borrow_check_copy`), over the overlay tables: an opaque `T` always moves (R5), so a
-   borrowed `T` that is returned, stored or passed on is [CE2411](../error-catalog.md#ce2411), at the template;
+5. gives the SHIR body of the check copy, when `typecheck` finished it with no error, to
+   `lift`;
+6. and `lift` gives it to the `borrow` pass (`next_stage`), over the overlay tables: an
+   opaque `T` always moves (R5), so a borrowed `T` that is returned, stored or passed on
+   is [CE2411](../error-catalog.md#ce2411), at the template;
 7. adds the template to `checked_templates`, and to `refused_templates` when the error
    count grew.
 
@@ -1305,6 +1308,17 @@ let i32 y = get_value().realise(0)
 
 **File:** `semantics/passes/lift.py`
 
+**On SHIR** ([the IR design](../design/ir.md), 7.9, ruling Q8), `LiftPass` runs between
+`typecheck` and `borrow`, per body. It rewrites no node: the symbol of each lambda and its
+environment layout are rows of the `LiftResults` of the body, and SLIR lowering cuts the
+function from them. A `Lambda` stops the walk of its body with
+[CE0155](../error-catalog.md#ce0155) (`lift, Lambda`) until the closures group, and
+`borrow` does not get that body. Today `typecheck` stops at a `Lambda` first. A body that
+the pass ends with no stop has its table checked (`check_lift`,
+[CE0157](../error-catalog.md#ce0157)), and goes on to `borrow`.
+
+The rest of this section is the AST pass `LambdaLifter`, which no stage runs since the
+switch to SHIR; the closures group takes the symbol and the environment layout from it.
 Each lambda literal becomes a top-level function plus a captured environment. It runs
 BETWEEN `typecheck` and `borrow`, per unit: the lifted body needs the types `typecheck`
 stamped, and the lifted function must be borrow-checked like any other.
@@ -1528,14 +1542,14 @@ whole program, once:
 
 then per unit, in one loop:
 
-  scope → typecheck → lift → borrow
+  scope (AST) → lowering → typecheck → lift → borrow (the three on SHIR)
 ```
 
 Each turn of that loop reports into a reporter of its own, and `_merge_unit` drains it
 into the program reporter through `in_source_order` (`internals/report.py`). The four
 passes each walk the unit whole, so what they emit is in PASS order and a reader wants
-the FILE: a fault the `lift` pass found in a lambda body would otherwise stand behind
-every fault the `typecheck` pass found. A file keeps the place its first
+the FILE: a fault the `borrow` pass found would otherwise stand behind every fault the
+`typecheck` pass found. A file keeps the place its first
 diagnostic gave it -- the order the passes reached the files in is information, and
 alphabetical is not -- and the sort is stable, so two findings on one caret keep pass
 order.
@@ -1563,8 +1577,9 @@ order.
 - `scope` needs `collect` (function signatures), and runs AFTER every whole-program pass,
   because the body walks need concrete, monomorphized types
 - `typecheck` needs `resolve` and `scope`
-- `lift` needs `typecheck` (the lifted body reads its stamps)
-- `borrow` needs `typecheck` (the stamps) and `effects` (the cross-unit summary)
+- `lift` needs `typecheck` (it gets each body that `typecheck` finished with no error)
+- `borrow` needs `typecheck` (`TypeckResults`), `lift` (it gets each body that `lift`
+  finished, and reads `LiftResults`) and `effects` (the cross-unit summary)
 
 ## Error Examples by Pass
 

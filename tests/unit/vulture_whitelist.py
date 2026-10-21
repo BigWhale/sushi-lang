@@ -131,14 +131,15 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/ownership.py", "is_conditionally_moved",
      "kept for P2.9: SHIR-to-SLIR lowering gives a conditionally moved local a drop flag"),
     ("sushi_lang/semantics/shir/lift.py", "record_*",
-     "kept for P2.7: the lift pass on SHIR is the one writer of LiftResults"),
-    ("sushi_lang/semantics/shir/lift_check.py", "check_lift",
-     "kept for P2.7: the lift pass on SHIR checks its table when it ends a body"),
-    # -- the stages after typecheck, which the driver does not run from the switch ----
+     "kept for the closures group of Phase 5: the lift pass on SHIR writes the symbol and "
+     "the environment of each Lambda, where it stops today"),
+    # -- the AST lift pass, which no stage runs from the switch -----------------------
     ("sushi_lang/semantics/passes/lift.py", "LambdaLifter",
-     "kept for P2.7: the driver runs lift on SHIR after typecheck"),
+     "kept for the closures group of Phase 5: the lift pass on SHIR takes the symbol and "
+     "the environment layout from it"),
     ("sushi_lang/semantics/passes/lift.py", "lift_perk_impl",
-     "kept for P2.7: the driver runs lift on SHIR after typecheck"),
+     "kept for the closures group of Phase 5: the lift pass on SHIR takes the symbol and "
+     "the environment layout from it"),
     ("sushi_lang/compiler/pipeline.py", "_resolve_out_path",
      "kept for P2.11: the emitter of a SlirFunction writes the output of the compile"),
     ("sushi_lang/compiler/pipeline.py", "_compile_monolithic",

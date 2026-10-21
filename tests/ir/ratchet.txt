@@ -436,6 +436,7 @@ tests/ir/borrow/straight/test_err_borrow_poke_of_a_constant.sushi
 tests/ir/borrow/straight/test_err_borrow_poke_of_a_peek.sushi
 tests/ir/borrow/straight/test_err_borrow_rebind.sushi
 tests/ir/borrow/straight/test_err_borrow_try_string.sushi
+tests/ir/lift/test_err_lift_empty_table.sushi
 tests/ir/shir/expressions/test_err_shir_expr_borrow_operand.sushi
 tests/ir/shir/names/test_err_shir_name_unresolved.sushi
 tests/ir/shir/statements/test_err_shir_stmt_let_untyped.sushi
