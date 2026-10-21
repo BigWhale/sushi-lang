@@ -4,9 +4,10 @@ ONE table, `ARMS`, gives the arm of each SHIR node class: each member of `ShirSt
 `ShirExpr` and `ShirPattern` (gate: `tests/unit/test_typecheck_table_is_total.py`). A
 statement arm takes the pass and one node (`check`). An expression arm takes the type of
 its position too, and answers the type of its node (`check_expr`), which the dispatch
-writes into the `TypeckResults` of the body. A class with no row is an internal error. The
-arm of a construct that the pass does not type yet is `stop_at`: it stops the walk of the
-body with the stop code CE0155 (`shir/stop.py`).
+writes into the `TypeckResults` of the body. The lookup of an arm and the stop are the one
+dispatch of the SHIR passes (`shir/dispatch.py`), which the borrow pass reads too: a class
+with no row is an internal error, and the arm of a construct that the pass does not type
+yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
 
 `statements.py` walks a block and holds the statement arms, `expressions.py` the expression
 arms of the leaves, `operators.py` the arms of the operators and the check of a condition,
@@ -21,14 +22,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, NoReturn, Optional
 
-from sushi_lang.internals import errors as er
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.passes.types.visit import calls as ca
 from sushi_lang.semantics.passes.types.visit import expressions as ex
 from sushi_lang.semantics.passes.types.visit import operators as op
 from sushi_lang.semantics.passes.types.visit import results as rs
 from sushi_lang.semantics.passes.types.visit import statements as st
 from sushi_lang.semantics.passes.types.expressions import check_try
+from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
@@ -44,16 +44,11 @@ STAGE = "typecheck"
 
 def stop_at(_validator: TypeValidator, node: Any, _expected: Optional[Type] = None) -> NoReturn:
     """The arm of a construct that the pass does not type yet: the walk of the body stops."""
-    raise StageStop(STAGE, type(node).__name__, node.loc)
+    dispatch.stop(STAGE, node)
 
 
 def _arm(node: Any) -> Callable[..., Any]:
-    arm = ARMS.get(type(node))
-    if arm is None:
-        er.raise_internal_error(
-            "CE0000", detail=f"the typecheck pass has no arm for the SHIR class "
-                             f"'{type(node).__name__}'")
-    return arm
+    return dispatch.arm_of(ARMS, node, STAGE)
 
 
 def check(validator: TypeValidator, node: Any) -> None:
