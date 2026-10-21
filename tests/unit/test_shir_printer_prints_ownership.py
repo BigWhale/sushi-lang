@@ -3,7 +3,7 @@
 The answers that the dump shows, where the table has a row:
 
 - the `Ownership` of a consuming use, as a word before the node (`move LocalRef(_0)`,
-  `adopt Lit(2)`, `reject ...`), the word of an operand of SLIR;
+  `adopt Lit(2)`, `reject ...`), the name of the answer in lower case;
 - the conditionally moved locals, on a `cond_moved` line after the `locals` line;
 - LENT or OWNED for an iterator call (`iterator: lent`) and its heap decision
   (`heap: false`), after the arguments of the `Call`;
@@ -39,7 +39,7 @@ is_init: true)
     ExprStmt(StructInit(@Box, [adopt EnumInit(@Maybe, "Some", [adopt Lit(9)])], written_order: [0]))
     Match(adopt LocalRef(_1), [Arm(Wildcard, [])], consumes: true)
     Assign(LocalRef(_8), adopt Cast(adopt Call(Free(@fail), []), AppError), is_init: true)
-    ExprStmt(Cast(LocalRef(_4), i64))
+    ExprStmt(Cast(adopt LocalRef(_4), i64))
     Loop(Items(Call(Builtin(LocalRef(_2), "iter"), []), _9, Bare), [])
     Loop(Items(adopt Call(Builtin(Call(Builtin(LocalRef(_2), "iter"), [], iterator: lent, \
 heap: false), "map"), [(adopt GlobalRef(@double), Owned)], iterator: lent, heap: true), _10, Bare), \

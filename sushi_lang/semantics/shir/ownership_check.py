@@ -12,13 +12,18 @@ answers of `typecheck`:
   `TupleInit`, and the value of each `Single` run of an `ArrayInit` (a repeated value is
   a borrow, and each slot takes its own copy);
 - the scrutinee of a `Match` that consumes (`match nom r:`);
-- the operand of a `Try`, and the operand of a `Cast` that calls a conversion;
+- the operand of a `Try`, and the operand of every `Cast`: a conversion takes it as
+  `nom self`, and an identity cast moves it (a plain operand gets ADOPT);
 - the iterable of a `Loop` over an iterator value or a `next()` type that does not walk
   in place;
 - each capture of a `Lambda`, from its environment layout in `LiftResults`.
 
 The receiver of a method call is not on the list: `TypeckResults` has no convention row for
 a receiver yet. The method group adds that row, and a `nom self` receiver joins the rule.
+
+Two writers of LENT have no check yet, because no spine body holds them: the clone of a
+lent iterator (the iterators group, C3) and a borrowed call that answers an iterator (the
+`peek` return group, B8). Each group adds its call to `_makes_an_iterator`.
 
 When the `borrow` pass ends on a body with no error, the check walks the body once and
 asks the table: each consuming use and each capture has an `Ownership`; each iterator
@@ -38,7 +43,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import ShirBody
-from sushi_lang.semantics.shir.callee import Builtin, Conversion
+from sushi_lang.semantics.shir.callee import Builtin
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.lift import LiftResults
@@ -90,10 +95,9 @@ def _try(node: e.Try, _typeck: TypeckResults,
     yield node.inner
 
 
-def _cast(node: e.Cast, typeck: TypeckResults,
+def _cast(node: e.Cast, _typeck: TypeckResults,
           _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
-    if isinstance(typeck.conversion_of(node.shir_id), Conversion):
-        yield node.operand
+    yield node.operand
 
 
 def _iterable(node: s.Loop, typeck: TypeckResults,

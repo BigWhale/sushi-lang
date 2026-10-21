@@ -27,7 +27,7 @@ The rules of the text, from the example of ir.md 8.11:
   prints.
 - The answers of `borrow` and `lift` print in place, from their tables (ir.md 7.9), where a
   row exists: the `Ownership` of a consuming use as a word before the node (`move`,
-  `adopt`, `reject`, the word of a SLIR operand), the conditionally moved locals on a
+  `adopt`, `reject`, the name of the answer in lower case), the conditionally moved locals on a
   `cond_moved` line after the `locals` line, `iterator: lent` or `iterator: owned` and
   `heap: <bool>` after the arguments of an iterator call, `in_place: <bool>` after the body
   of a loop, and `symbol: "<symbol>"` and `env: [(<ownership> _<n>, Copy | Move), ...]`
@@ -72,7 +72,7 @@ CONVENTIONS: dict[Convention, str] = {
 
 _BORROW_MODES: dict[BorrowMode, str] = {BorrowMode.PEEK: "Peek", BorrowMode.POKE: "Poke"}
 
-#: The words of a SLIR operand (ir.md 8.4), for the `Ownership` of a consuming use.
+#: The word of each `Ownership` answer of a consuming use: its name, in lower case.
 _OWNERSHIPS: dict[Ownership, str] = {
     Ownership.MOVE: "move",
     Ownership.ADOPT: "adopt",

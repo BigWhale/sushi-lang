@@ -5,8 +5,7 @@ data: no source text, no AST, no lowering and no pass. The body holds each consu
 position, a position of each kind that is not consuming, an iterator producer and a lazy
 adapter, the loops that need a walk-in-place answer and a loop that needs none, and a
 lambda. The `TypeckResults` holds only the rows that the ownership check reads: the
-conventions of the arguments, the callees of the iterator calls, the loop kinds and the
-conversions of the casts.
+conventions of the arguments, the callees of the iterator calls and the loop kinds.
 
 The body, in the source spelling that it stands for:
 
@@ -41,14 +40,14 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import ExpandCopies, Instance, ShirBody, ShirLocal, ShirParam
-from sushi_lang.semantics.shir.callee import Builtin, BuiltinMethod, Conversion, Free
+from sushi_lang.semantics.shir.callee import Builtin, BuiltinMethod, Free
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
 from sushi_lang.semantics.shir.lift import Capture, LiftResults
 from sushi_lang.semantics.shir.loop_kind import Cursor, IteratorValue, Protocol
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.ownership import OwnershipResults
-from sushi_lang.semantics.shir.typeck import NoConversion, ResolvedCall, TypeckResults
+from sushi_lang.semantics.shir.typeck import ResolvedCall, TypeckResults
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, UnknownType
 
 STRING = BuiltinType.STRING
@@ -62,7 +61,7 @@ PARAM_TYPES = (STRING, UnknownType("Box"), DynamicArrayType(I32), UnknownType("L
 CONSUMED: dict[str, int] = {
     "s_ref": 2, "keep_call": 3, "t_arg": 3, "xs_bloom": 3, "pair": 4, "t_part": 4,
     "two": 4, "array": 5, "eight": 5, "some": 6, "nine": 6, "b_ref": 7,
-    "conversion": 8, "fail_call": 8, "map_call": 12, "double_ref": 12, "lambda": 15,
+    "conversion": 8, "fail_call": 8, "k_ref": 9, "map_call": 12, "double_ref": 12, "lambda": 15,
     "sum": 15, "ok": 16, "blank": 16,
 }
 
@@ -193,8 +192,6 @@ def _typeck(decls: DeclNames, named: dict[str, e.ExprNode | s.Loop]) -> TypeckRe
     table.record_loop_kind(named["cursor_loop"].shir_id, Cursor())
     table.record_loop_kind(named["value_loop"].shir_id, IteratorValue())
     table.record_loop_kind(named["protocol_loop"].shir_id, Protocol(Free(decls.refer("next"))))
-    table.record_conversion(named["conversion"].shir_id, Conversion(decls.refer("AppError")))
-    table.record_conversion(named["widen"].shir_id, NoConversion())
     return table
 
 

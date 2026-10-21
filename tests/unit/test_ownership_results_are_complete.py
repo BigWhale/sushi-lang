@@ -40,8 +40,8 @@ def test_a_full_table_has_no_gap() -> None:
 
 def test_the_consuming_uses_are_the_positions_of_the_rule() -> None:
     """Each consuming position, and no other: not a borrowed argument, not a repeated
-    value, not a numeric cast, not a statement value, not the iterable of a direct walk or
-    of a walk in place."""
+    value, not a statement value, not the iterable of a direct walk or of a walk in place.
+    The operand of every cast is one, a numeric cast too: a plain operand gets ADOPT."""
     made = sample()
     found = [node.shir_id for node in consuming_uses(made.body, made.typeck, ownership(made))]
     assert sorted(found) == sorted(made.id_of(name) for name in CONSUMED)
