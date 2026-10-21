@@ -1318,8 +1318,9 @@ value is no exit of the local. A local that is moved on some path and that an ex
 not moved on every path is a row of the conditionally moved locals. So a local moved in
 each block of an `If` has no row; a local moved in one block, or moved before a `Return`
 and not on the path that goes on, or moved after a `Try` whose error path leaves with it,
-has a row; a local moved and then rebound has a row too, because the exit sees the new
-value; and a local moved on some paths before a rebind has a row, although each exit after
+has a row; a local moved and then rebound has a row only when an exit keeps it, because
+that exit sees the new value (moved, rebound and moved again has none; 8.10, rule 3); and
+a local moved on some paths before a rebind has a row, although each exit after
 it sees the local moved on every path, because the rebind drops the old value only on the
 paths that did not move it.
 
@@ -1476,12 +1477,13 @@ unit that holds its body.
 
 While the migration is in progress, a construct that the lowering does not handle yet
 stops the body with the stop code (`slir, <construct>`). The construct is the name of the
-SHIR class (`If`, `Try`, `ConstRef`), or one of these names: `Initializer` for the body of
-a constant, `method` for the body of an extension method, `borrowed view` for a `REJECT`
-row (7.9), `borrowed rebind` for a rebind of a `Guaranteed` or an `InGuaranteed` parameter
-that owns, `short circuit` for `and` and `or`, `library function` for a free callee whose
-row names no declaring unit (a function of a binary library, whose symbol is its
-`link_symbol`), and `bloom` for a bloom argument. The dump prints
+SHIR class (`Match`, `Cast`, `ConstRef`; `Try` for a `Try` over an owning wrapper that the
+body only reads), or one of these names: `Initializer` for the body of a constant,
+`method` for the body of an extension method, `borrowed view` for a `REJECT` row (7.9),
+`borrowed rebind` for a rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns,
+`conversion` for a `Try` that calls a declared conversion, `library function` for a free
+callee whose row names no declaring unit (a function of a binary library, whose symbol is
+its `link_symbol`), and `bloom` for a bloom argument. The dump prints
 such a function as ONE line in place of its body, `fn <name>: stopped (slir, <construct>)`,
 so that a golden file shows the progress of each function. A body that the lowering
 finished stops at the next stage, `emit` (`emit, <body>`), until the emitter of a
@@ -1635,13 +1637,14 @@ print values: [RE2020](../error-catalog.md#re2020) prints the index and the size
 
 | SHIR | SLIR |
 |---|---|
-| `If(c, t, e)` | `SwitchInt(c, [(0, else_bb)], otherwise: then_bb)` |
-| `Binary(and/or)` | **two blocks.** Short-circuit is control flow, never an rvalue |
-| `Try(e)` | evaluate `e`; `Discriminant`; `SwitchInt`; the Err arm calls the conversion if there is one, builds the Err and returns |
+| `If(c, t, e)` | `SwitchInt(c, [(0, else_bb)], otherwise: then_bb)`; with no `else`, the zero edge goes to the join. The blocks are made in the order `then`, `else`, join, and no join is made when no block reaches it |
+| `Binary(and/or)` | **two blocks.** Short-circuit is control flow, never an rvalue. The left operand goes into the place that takes the value; a `SwitchInt` on it goes to the join (`and` on a zero, `or` on any other value) or to the right block, which writes the same place and goes to the join. The temporaries of the right operand die in its block |
+| `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` that calls a declared conversion is a stop of the lowering for now (`slir, conversion`) |
 | `Match` on an enum | `Discriminant` + `SwitchInt`; one block per arm; payload through `Downcast` + `Field` |
 | `Match` on an integer | `SwitchInt` on the value; with a `Range` arm, a chain of compares in source order |
 | `Match` on a string, a tuple, or with `Or` arms | a chain of tests in source order, each a `Call` to the value equality and a `SwitchInt` on its bool |
-| `Loop`, kind `While` | header block, `SwitchInt`, body, `Goto` header |
+| `Loop`, kind `While` | header block, `SwitchInt`, body, `Goto` header. The blocks are made in the order header, body, exit |
+| `Break`, `Continue` | the drops of each scope of the loop body that it leaves (8.10, rule 2), then `Goto` the exit or the header |
 | `Loop`, kind `CountedRange` | counter local, header, compare, body, step, `Goto` header |
 | `Loop`, kind `Cursor` | `Len` into a local, then the `CountedRange` shape |
 | `Loop`, kind `HashMapCursor` | the one probe walk, over the counted `data[0..count)` range |
@@ -1660,6 +1663,11 @@ print values: [RE2020](../error-catalog.md#re2020) prints the index and the size
 | `Take` | `Move` of the field; the other owning fields of the receiver get `Drop`, and `drop()` does not run (`borrow-model.md` §10c) |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
 | a `string` argument to an `i8*` callee | an explicit conversion into an owning temp local, dropped by the rules of 8.10. The `emit_cstr_arg` seam becomes visible IR, still one lowering site, and `run()` stays the one exception |
+
+A condition (of an `If` or a `While`) is evaluated in a scope of its own, whose
+temporaries die before the `SwitchInt`. A condition that is no local and no constant goes
+into a `bool` local that the `SwitchInt` of its block reads; like the local of a
+`Discriminant`, it gets no storage marker.
 
 Four SHIR nodes vanish at this boundary: `Try`, `Interp`, `Destructure` and `Take`. They
 were kept in SHIR only so that `typecheck` and `borrow` could report against the source
@@ -1690,18 +1698,33 @@ locals, and nothing else:
    exact, whether `borrow` wrote a `cond_moved` row for the local or not (a local that is
    moved, rebound and kept at an exit has a row, 7.9; a local that is moved, rebound and
    moved again has none). A local whose state differs between the paths that meet at a
-   join must have a `cond_moved` row, and rule 4 gives it a flag. A state that disagrees
-   with the rows of `borrow` is an internal error, never a guess: a second move of a
-   moved local, a move of a parameter that the function does not own, and a join of two
-   states for a local that has no row.
+   join must have a `cond_moved` row, and rule 4 gives it a flag; after the join its
+   state is UNKNOWN. A loop header is a join too: the entry and each path back to the
+   header (the end of the body, a `Continue`) meet there. A state that disagrees with the
+   rows of `borrow` is an internal error, never a guess: a second move of a moved local, a
+   move of a local whose state is unknown, a move of a parameter that the function does
+   not own, and a join of two states for a local that has no row.
 4. A local marked CONDITIONALLY moved gets a `bool` flag local where its state differs
    between the paths that meet at a join (rule 3); on the straight line it needs none.
    The flag is set `true` at the declaration (set again on each loop iteration and at
-   each rebind), set `false` at each move site, and its drop becomes `DropIfSet`, at a
-   scope exit and at the drop of the old value of a rebind (rule 6) alike. The row is the
-   answer of `borrow` at the exits of the scope of the local and at each rebind of it
-   (7.9). A local with no row is moved on no path, or each exit and each rebind see it
-   moved on every path, and rule 3 applies to it.
+   each rebind), set `false` at each move site, and where the state of the local is
+   unknown its drop becomes `DropIfSet`, at a scope exit and at the drop of the old value
+   of a rebind (rule 6) alike. Where the state is exact, the state decides, as in rule 3:
+   a live local gets `Drop`, a moved one nothing. The flag is the local right after its
+   local; the flag of a parameter comes after the last parameter, and it is set `true` at
+   the entry. The flag is set `true` right after the statement that declares its local,
+   after the temporaries of the statement die, and right after the store of a rebind. It
+   is set `false` right after the statement that moves its local, before the temporaries
+   of the statement die, and before each jump to another block, so that each path into a
+   join carries the flag of its own state. At each exit the flag gets `StorageDead` after
+   the drop of its local and before the `StorageDead` of the local. The walk finds a local
+   that needs a flag only at the join, after its declaration and its moves, so lowering
+   records the local and lowers the body again, until a walk finds no new local; a local
+   whose state at a loop header differs from the state that a path back brings is
+   recorded with the loop, and the next walk starts the header with that state unknown.
+   The row is the answer of `borrow` at the exits of the scope of the local and at each
+   rebind of it (7.9). A local with no row is moved on no path, or each exit and each
+   rebind see it moved on every path, and rule 3 applies to it.
 5. A borrow never drops. `Guaranteed`, `InGuaranteed` and `Inout` parameters never drop;
    an `Owned` parameter drops in the callee.
 6. An `Assign` to an owning place that may hold a live value drops the OLD value, and the
