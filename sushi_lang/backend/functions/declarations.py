@@ -27,9 +27,9 @@ class FunctionDeclarations:
         one module. A synthesized body -- a monomorphized instance, a lifted lambda --
         belongs to no unit and keeps the bare name it was given.
 
-        The body of the program's `main` is `user_main`, with the declared signature.
-        `main` itself is the C entry `int main(int, char**)`, which calls it; in library
-        mode main is an ordinary function.
+        The body of a function named `main` is `user_main` (`function_symbol`), with the
+        declared signature. In a program, `main` itself is the C entry `int main(int,
+        char**)`, which calls it. A library declares no `main` (the entrypoint pass).
         """
         unit_name = declaring_unit(fn, unit_name)
         existing = self.codegen.funcs.declared(fn.name, unit_name)

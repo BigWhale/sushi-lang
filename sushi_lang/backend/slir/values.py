@@ -17,6 +17,7 @@ from sushi_lang.backend.expressions.operators import (
     emit_arithmetic, emit_bitwise, emit_number_comparison, emit_unary_value, emit_xor,
 )
 from sushi_lang.backend.slir.state import FunctionState
+from sushi_lang.semantics.operators import ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, SHIFT_OPS
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -26,9 +27,6 @@ from sushi_lang.semantics.typesys import BuiltinType, Type
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
-_ARITHMETIC = frozenset({"+", "-", "*", "/", "%"})
-_BITWISE = frozenset({"&", "|", "^", "<<", ">>"})
-_COMPARISON = frozenset({"==", "!=", "<", "<=", ">", ">="})
 
 
 def place_address(state: FunctionState, place: p.Place) -> ir.Value:
@@ -47,15 +45,19 @@ def type_of_place(state: FunctionState, place: p.Place) -> Type:
 def operand_value(codegen: LLVMCodegen, state: FunctionState, operand: p.Operand) -> ir.Value:
     """The value of an operand: a load of its place, or a constant. The drop statements of
     SLIR carry the ownership, so `Copy` and `Move` read alike."""
-    if isinstance(operand, p.Const):
-        return constant_value(codegen, state, operand.constant)
-    return state.builder.load(place_address(state, operand.place))
+    match operand:
+        case p.Const(constant):
+            return constant_value(codegen, state, constant)
+        case p.Copy(place) | p.Move(place):
+            return state.builder.load(place_address(state, place))
 
 
 def type_of_operand(state: FunctionState, operand: p.Operand) -> Type:
-    if isinstance(operand, p.Const):
-        return type_of_constant(state, operand.constant)
-    return type_of_place(state, operand.place)
+    match operand:
+        case p.Const(constant):
+            return type_of_constant(state, constant)
+        case p.Copy(place) | p.Move(place):
+            return type_of_place(state, place)
 
 
 def constant_value(codegen: LLVMCodegen, state: FunctionState, constant: k.Constant) -> ir.Value:
@@ -103,11 +105,11 @@ def _binary(codegen: LLVMCodegen, state: FunctionState, rvalue: r.Binary) -> ir.
     left = operand_value(codegen, state, rvalue.left)
     right = operand_value(codegen, state, rvalue.right)
     op = rvalue.op
-    if op in _ARITHMETIC:
+    if op in ARITHMETIC_OPS:
         return emit_arithmetic(codegen, op, left, right, ty)
-    if op in _BITWISE:
+    if op in BITWISE_OPS + SHIFT_OPS:
         return emit_bitwise(codegen, op, left, right, ty)
-    if op in _COMPARISON:
+    if op in COMPARISON_OPS:
         answer = emit_number_comparison(codegen, op, left, right, ty)
         return state.builder.zext(answer, codegen.types.ll_type(BuiltinType.BOOL))
     if op == "xor":

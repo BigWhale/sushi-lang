@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
     from sushi_lang.semantics.const_eval import ConstantValue
 
-from sushi_lang.semantics.ast import ConstDef, ExtendDef, VarDef
+from sushi_lang.semantics.ast import ConstDef, ExtendDef, FuncDef, VarDef
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.library_registry import LibraryRegistry
@@ -441,7 +441,8 @@ class LLVMCodegen:
             # Each body as the emitter named it. A snapshot cannot find these: the
             # declaration round above already put every function in the module.
             emitted: list[ir.Function] = []
-            bodies = [fn for fn in unit.ast.functions if not fn.type_params]
+            bodies: list[FuncDef | ExtendDef] = [
+                fn for fn in unit.ast.functions if not fn.type_params]
             bodies.extend(unit.ast.extensions)
             bodies.extend(method for perk_impl in unit.ast.perk_impls
                           for method in perk_impl.methods)
@@ -454,7 +455,7 @@ class LLVMCodegen:
                 weaken_all(emitted)
         self.emitting_unit = None
 
-    def _define(self, decl: object, filename: str) -> list[ir.Function]:
+    def _define(self, decl: FuncDef | ExtendDef, filename: str) -> list[ir.Function]:
         """Define the body of `decl` from its `SlirFunction`. The body of `main` is
         `user_main`, and the C `main` that calls it comes after it."""
         if self.slir_bodies is None:

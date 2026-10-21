@@ -3,6 +3,10 @@
 Each part holds `codegen`, so a collaborator's method handed in as an argument is plumbing
 that can go out of step with the one `codegen.functions` holds. Every parameter carries a
 type annotation, and the C `main` has one emitter for both argument lists.
+
+The SLIR function emitter (`backend/slir/`) is free functions, not a part of the manager:
+the backend rule makes stateless translation free functions that take `codegen` first, so
+it joins the parameter rule and not `PARTS`.
 """
 from __future__ import annotations
 
@@ -15,9 +19,14 @@ from sushi_lang.backend.functions.declarations import FunctionDeclarations
 from sushi_lang.backend.functions.definitions import FunctionDefinitions
 from sushi_lang.backend.functions.helpers import FunctionHelpers
 from sushi_lang.backend.functions.main_wrapper import MainFunctionWrapper
+from sushi_lang.backend.slir import bodies as slir_bodies
+from sushi_lang.backend.slir import emit as slir_emit
+from sushi_lang.backend.slir import state as slir_state
+from sushi_lang.backend.slir import values as slir_values
 
 PARTS = (LLVMFunctionManager, FunctionDeclarations, FunctionDefinitions,
          FunctionHelpers, MainFunctionWrapper)
+SLIR_EMITTER = (slir_bodies, slir_emit, slir_state, slir_values)
 COLLABORATOR_NAMES = {"helpers", "main_wrapper", "declarations", "definitions"}
 
 
@@ -26,6 +35,15 @@ def _methods():
         for name, member in vars(cls).items():
             if inspect.isfunction(member) and name != "__init__":
                 yield f"{cls.__name__}.{name}", member
+    for module in SLIR_EMITTER:
+        for name, member in vars(module).items():
+            if inspect.isfunction(member) and member.__module__ == module.__name__:
+                yield f"{module.__name__}.{name}", member
+        for name, member in vars(module).items():
+            if inspect.isclass(member) and member.__module__ == module.__name__:
+                for attr, method in vars(member).items():
+                    if inspect.isfunction(method) and not attr.startswith("__"):
+                        yield f"{module.__name__}.{name}.{attr}", method
 
 
 @pytest.mark.parametrize("qualname,method", list(_methods()), ids=lambda v: v if isinstance(v, str) else "")

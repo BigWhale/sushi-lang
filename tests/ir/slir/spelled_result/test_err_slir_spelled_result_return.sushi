@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE0155
+# EXPECT_STDERR_CONTAINS: "emit, Aggregate"
+# EXPECT_DUMP_SLIR: test_err_slir_spelled_result_return.slir
+#
+# A spelled `Result@(T, E)` return has the same return slot as a `| E` channel: the
+# interned `Result`, from the one derivation of SLIR lowering. The emitter checks the
+# prototype that the declaration round made against the type of `_0`, and it passes:
+# the compile stops later, at the first statement of the body, on the construction of the
+# `Result` (a shape that the emitter does not handle yet).
+
+fn found(i32 n) Result@(i32, StdError):
+    if (n > 0):
+        return Result.Ok(n)
+    return Result.Err(StdError.Error)
+
+fn main() i32:
+    return 0

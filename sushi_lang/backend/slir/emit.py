@@ -9,7 +9,7 @@ class or a terminator class that the emitter does not handle yet stops the compi
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from llvmlite import ir
 
@@ -41,7 +41,7 @@ def emit_function(codegen: LLVMCodegen, function: SlirFunction, *,
                              detail=f"the module holds no declaration of "
                                     f"'{function.symbol}' to define")
     entry = llvm_fn.append_basic_block(name="entry")
-    state = FunctionState(function, llvm_fn, ir.IRBuilder(entry), filename)
+    state = FunctionState(codegen, function, llvm_fn, ir.IRBuilder(entry), filename)
     state.blocks = {block.id: llvm_fn.append_basic_block(name=f"bb{block.id.index}")
                     for block in function.blocks}
     saved = codegen.builder, codegen.func
@@ -106,27 +106,46 @@ def _statement(codegen: LLVMCodegen, state: FunctionState, statement: st.SlirSta
         value = rvalue_value(codegen, state, statement.rvalue)
         state.builder.store(value, place_address(state, statement.place))
     elif isinstance(statement, st.Call):
-        _call(codegen, state, statement)
+        _call(state, statement)
     elif not isinstance(statement, (st.StorageLive, st.StorageDead)):
         state.stop(statement)
 
 
-def _call(codegen: LLVMCodegen, state: FunctionState, statement: st.Call) -> None:
-    """A `Direct` call: a value for an `Owned` or a `Guaranteed` argument, the address of
-    the place for an `InGuaranteed` or an `Inout` one. Another callee stops."""
-    callee = statement.callee
-    if not isinstance(callee, st.Direct):
-        state.stop(callee)
-    llvm_fn = codegen.module.globals.get(callee.symbol)
+def _call(state: FunctionState, statement: st.Call) -> None:
+    """The callee kind is SLIR lowering's answer: one row of `CALL_EMITTERS` for each."""
+    CALL_EMITTERS[type(statement.callee)](state, statement)
+
+
+def _direct(state: FunctionState, statement: st.Call) -> None:
+    """A value for an `Owned` or a `Guaranteed` argument, the address of the place for an
+    `InGuaranteed` or an `Inout` one. The argument types must agree with the callee."""
+    codegen = state.codegen
+    direct = statement.callee
+    if not isinstance(direct, st.Direct):
+        state.fault(f"the row of a direct call got a {type(direct).__name__} callee")
+    llvm_fn = codegen.module.globals.get(direct.symbol)
     if not isinstance(llvm_fn, ir.Function):
-        state.fault(f"the module declares no function '{callee.symbol}'")
+        state.fault(f"the module declares no function '{direct.symbol}'")
     args = [_argument(codegen, state, operand, convention)
             for operand, convention in statement.args]
     if [arg.type for arg in args] != [param.type for param in llvm_fn.args]:
-        state.fault(f"the call of '{callee.symbol}' does not agree with its declaration "
-                    f"{llvm_fn.function_type}")
+        state.fault(f"the call of '{direct.symbol}' does not agree with its "
+                    f"declaration {llvm_fn.function_type}")
     value = state.builder.call(llvm_fn, args)
     state.builder.store(value, place_address(state, statement.dest))
+
+
+def _not_yet(state: FunctionState, statement: st.Call) -> None:
+    """A callee kind that the emitter does not handle yet: `emit, <class>`."""
+    state.stop(statement.callee)
+
+
+#: One row for each variant of `SlirCallee` (gate: `test_slir_call_dispatch_is_a_table.py`).
+CALL_EMITTERS: dict[type, Callable[[FunctionState, st.Call], None]] = {
+    st.Direct: _direct,
+    st.Builtin: _not_yet,
+    st.Indirect: _not_yet,
+}
 
 
 def _argument(codegen: LLVMCodegen, state: FunctionState, operand: p.Operand,

@@ -17,8 +17,9 @@ This module holds three rules. The kernel gives the machine's answer for each ce
 table below, which names the cells where a reading at the wrong width or with Python's own
 operator differs. The evaluator holds no integer operator of its own: it reads the source
 of `const_eval.py` and refuses an operator that only an integer has. The backend's
-operator emitter folds nothing: a `_fold*` function, or a read of an `ir.Constant`'s Python
-value, is refused.
+operator emitters fold nothing: a `_fold*` function, or a read of an `ir.Constant`'s Python
+value, is refused in the AST operator emitter and in the module that emits the SLIR
+`Binary` and `Unary` rvalues (`backend/slir/values.py`).
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ import inspect
 import pytest
 
 from sushi_lang.backend.expressions import operators
+from sushi_lang.backend.slir import values as slir_values
 from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.semantics import const_eval
 from sushi_lang.semantics.integer_ops import (
@@ -166,14 +168,15 @@ def test_the_evaluator_holds_no_integer_operator():
     )
 
 
-def test_the_backend_folds_no_integer_operator():
+@pytest.mark.parametrize("module", [operators, slir_values], ids=lambda m: m.__name__)
+def test_the_backend_folds_no_integer_operator(module):
     """The backend emits the instruction and computes nothing.
 
     A fold starts by reading an `ir.Constant`'s Python value and ends by building a
     new `ir.Constant` from Python arithmetic. Either is a second statement of the
     language's integer semantics, one that no diagnostic guards (#681).
     """
-    tree = ast.parse(inspect.getsource(operators))
+    tree = ast.parse(inspect.getsource(module))
     folds = [node.name for node in ast.walk(tree)
              if isinstance(node, ast.FunctionDef) and node.name.startswith("_fold")]
     assert not folds, f"a constant fold is back in the backend's operator emitter: {folds}"

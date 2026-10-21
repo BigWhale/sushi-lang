@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import NoReturn, Optional
+from typing import TYPE_CHECKING, NoReturn, Optional
 
 from llvmlite import ir
 
@@ -13,16 +13,21 @@ from sushi_lang.semantics.slir.function import SlirFunction
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.typesys import Type
 
+if TYPE_CHECKING:
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
+
 #: The name of this stage in the stop code.
 STAGE = "emit"
 
 
 @dataclass(slots=True)
 class FunctionState:
-    """One function while the emitter fills it: the LLVM function and its builder, the
-    storage of each local (an entry-block slot, or the incoming address of a `peek` or a
-    `poke` parameter), the LLVM block of each SLIR block, and the span of the statement or
-    the terminator that the emitter is on."""
+    """One function while the emitter fills it: the codegen, the LLVM function and its
+    builder, the storage of each local (an entry-block slot, or the incoming address of a
+    `peek` or a `poke` parameter), the LLVM block of each SLIR block, and the span of the
+    statement or the terminator that the emitter is on. A row of a dispatch table that
+    takes one shape (the state and the shape) reads the codegen here."""
+    codegen: LLVMCodegen
     function: SlirFunction
     llvm_fn: ir.Function
     builder: ir.IRBuilder
