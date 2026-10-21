@@ -79,7 +79,7 @@ def _check_free_call(validator: TypeValidator, node: e.Call,
             or any(p.is_variadic or p.is_pack or p.ty is None for p in sig.params)):
         visit.stop_at(validator, node)
     answers = validator.body_answers()
-    answers.record_callee(node.shir_id, ResolvedCall(Free(ref.decl)))
+    answers.record_callee(node.shir_id, ResolvedCall(Free(ref.decl), unit=sig.unit_name))
     function_type = function_type_of_sig(sig)
     if function_type is not None:
         visit.answer(validator, ref, function_type)

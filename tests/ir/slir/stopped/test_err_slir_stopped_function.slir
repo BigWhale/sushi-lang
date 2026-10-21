@@ -8,4 +8,4 @@ fn answer() -> i32 {
     return
 }
 
-fn main: stopped (slir, Call)
+fn main: stopped (slir, If)

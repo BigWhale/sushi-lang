@@ -103,7 +103,8 @@ def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> No
     self.in_template_copy = is_template_copy(node)
     self.body_return_type = ret
     validate_error_channel(self, ret, err_type, err_span)
-    self.channel_result = channel_result(self, ret, err_type) if has_channel(node) else None
+    self.channel_result = (channel_result(self.struct_table, self.enum_table, ret, err_type)
+                           if has_channel(node) else None)
     self.body_conversion = getattr(node, "declared_conversion", None)
     self.body_instance_key = getattr(node, "instance_key", None)
     self.variable_types = {}

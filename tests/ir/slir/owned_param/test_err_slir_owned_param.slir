@@ -1,0 +1,26 @@
+unit test_err_slir_owned_param
+
+fn shout(_1: string @owned) -> ~ {
+    let _0: ~
+    let _2: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin println@(string)(copy _1 @guaranteed)
+    StorageDead(_2)
+    _0 = const ~
+    Drop(_1)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @shout(const "Mostly Harmless" @owned)
+    StorageDead(_1)
+    _0 = const 0_i32
+    return
+}

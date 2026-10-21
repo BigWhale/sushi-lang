@@ -1,0 +1,35 @@
+unit test_err_slir_interp
+
+fn who() -> string {
+    let _0: string
+
+  bb0:
+    _0 = const "Arthur"
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32                            // n
+    let _2: string
+    let _3: string
+    let _4: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = const 42_i32
+    StorageLive(_2)
+    _2 = call @who()
+    StorageLive(_3)
+    _3 = call builtin interp@(string, string, i32)(copy _2 @guaranteed, const " is " @guaranteed, copy _1 @guaranteed)
+    StorageLive(_4)
+    _4 = call builtin println@(string)(copy _3 @guaranteed)
+    StorageDead(_4)
+    Drop(_3)
+    StorageDead(_3)
+    Drop(_2)
+    StorageDead(_2)
+    _0 = const 0_i32
+    StorageDead(_1)
+    return
+}
