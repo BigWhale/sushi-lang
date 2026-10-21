@@ -217,9 +217,7 @@ def _validate_function_body(self, func: FuncDef) -> None:
 
     validate_type_name(self, func.ret, func.ret_span)
 
-    body = self.check_body(func)
-    if body is not None:
-        _reject_path_faults(self, func, body)
+    self.check_body(func, lambda body: _reject_path_faults(self, func, body))
 
     self.current_function = None
     _leave_body(self)
@@ -306,9 +304,7 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
 
     validate_type_name(self, method.ret, method.ret_span)
 
-    body = self.check_body(method)
-    if body is not None:
-        _reject_path_faults(self, method, body)
+    self.check_body(method, lambda body: _reject_path_faults(self, method, body))
 
     _leave_body(self)
 

@@ -272,15 +272,17 @@ class TypeValidator:
                                  self.const_table, self.current_unit_name,
                                  self.namespaces_of, self.struct_table, self.enum_table)
 
-    def check_body(self, decl) -> Optional['ShirBody']:
+    def check_body(self, decl, path_faults: Optional[Callable[['ShirBody'], None]] = None
+                   ) -> Optional['ShirBody']:
         """The body half over the SHIR body of `decl` (docs/design/ir.md 7.3, 7.9).
 
         A stop ends the walk: the pass records it, with the file of the body, and the
-        caller goes on with the next declaration. A walk that ends with no stop and with no
-        error in its body is checked for completeness, and its body goes to the next
-        stage, the lift pass, with the tables that the body was read in. A node that has
-        an error has no answer, so a body with an error is not checked. The answer is the
-        body when the walk reached its end, and None after a stop.
+        caller goes on with the next declaration. When the walk reaches its end, the path
+        faults of a function or a method (`path_faults`) are checked. A walk that ends with
+        no stop and with no error in its body is checked for completeness, and its body goes
+        to the next stage, the lift pass, with the tables that the body was read in. A node
+        that has an error has no answer, so a body with an error is not checked. The answer
+        is the body when the walk reached its end, and None after a stop.
         """
         body = None if self.shir is None else self.shir.body_of(self.written_of(decl))
         if (body is None or self.shir is None or self.stops is None
@@ -306,6 +308,8 @@ class TypeValidator:
         finally:
             self.body = self.answers = self.folder = None
             self.body_locals = {}
+        if path_faults is not None:
+            path_faults(body)
         if self.errors_offered() != offered or self.refused_before:
             return body
         check_answers(body, answers, self.shir.decls)

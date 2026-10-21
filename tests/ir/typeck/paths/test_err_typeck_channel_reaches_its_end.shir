@@ -18,7 +18,7 @@ ShirBody show
   locals : []
   block  :
     ExprStmt(Call(Free(@say), [(LocalRef(_0), Guaranteed)]))
-    ExprStmt(Call(Intrinsic("println"), [(Try(adopt Call(Free(@half), [(LocalRef(_0), Guaranteed)])), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Try(Call(Free(@half), [(LocalRef(_0), Guaranteed)])), Guaranteed)]))
 
 ShirBody main
   params : []
