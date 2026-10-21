@@ -1048,7 +1048,9 @@ carries only the syntactic `CallTarget` of 7.4.
 `map_err`, the container methods and the string methods are one variant. The row of a
 call in `TypeckResults` carries the declaring unit of an extension beside the `Method`
 callee (`ResolvedCall.unit`, 7.3), because two units' private extensions of one name link
-side by side (`extension-visibility.md`, C5).
+side by side (`extension-visibility.md`, C5). The row of a `Free` callee carries the
+declaring unit of the function too, and SLIR lowering makes the symbol of the `Direct`
+callee from it (8.6).
 
 `backend/expressions/calls/dispatcher.py` is 554 lines, with 12 handlers before the
 receiver is emitted and 12 after, that decide this again at emit time. It reads the answer
@@ -1458,19 +1460,27 @@ index. No statement has an empty span (G9).
 
 **Where SLIR lives.** The package is `semantics/slir/`, and it never imports the backend:
 the node modules (`ids.py`, `places.py`, `constants.py`, `rvalues.py`, `statements.py`,
-`terminators.py`, `function.py`), the lowering (`lower.py`) and the printer of
-`--dump-slir` (`printer.py`). Every class is a slotted dataclass, and every statement and
+`terminators.py`, `function.py`), the lowering (`lower.py`), the drop placement of 8.10
+(`drops.py`, the one module that builds a `Drop` or a `DropIfSet`; gate:
+`tests/unit/test_slir_drop_placement_is_one.py`) and the printer of `--dump-slir`
+(`printer.py`). Every class is a slotted dataclass, and every statement and
 terminator has a required `span` (gate: `tests/unit/test_slir_nodes_are_slotted.py`). The
 borrow pass gives each body that it finished, and that is not a template check (Q1), to
 the SLIR stage of its unit (`SlirStage`). The stage makes one `SlirFunction` from the body
 and its three side tables, and `SlirProgram` keeps the outcome of each body, keyed by the
 `DeclId` of the body. The symbol, the unit and the return type of the function are facts
-of its declaration (6.4).
+of its declaration (6.4). The unit is the declaring unit. A function that has none (a
+lifted lambda, the instance of a template of a binary library) goes into the module of the
+unit that holds its body.
 
 While the migration is in progress, a construct that the lowering does not handle yet
 stops the body with the stop code (`slir, <construct>`). The construct is the name of the
-SHIR class (`ShirParam` for a parameter, `ExprStmt`, `Call`), or `Initializer`, `method` or
-`channel` for a body whose declaration the lowering does not handle yet. The dump prints
+SHIR class (`If`, `Try`, `ConstRef`), or one of these names: `Initializer` for the body of
+a constant, `method` for the body of an extension method, `borrowed view` for a `REJECT`
+row (7.9), `borrowed rebind` for a rebind of a `Guaranteed` or an `InGuaranteed` parameter
+that owns, `short circuit` for `and` and `or`, `library function` for a free callee whose
+row names no declaring unit (a function of a binary library, whose symbol is its
+`link_symbol`), and `bloom` for a bloom argument. The dump prints
 such a function as ONE line in place of its body, `fn <name>: stopped (slir, <construct>)`,
 so that a golden file shows the progress of each function. A body that the lowering
 finished stops at the next stage, `emit` (`emit, <body>`), until the emitter of a
@@ -1490,6 +1500,12 @@ Convention = Owned          # `nom`     -- the callee frees
 backend each call it. Under this design `typecheck` resolves it once, per argument, into
 `TypeckResults` (7.3), and SLIR lowering writes that answer into the call. That is G1
 applied to the call boundary.
+
+An `InGuaranteed` or an `Inout` parameter is by address, and its local is the place of the
+caller: lowering reads it and writes it as an ordinary local (`copy _1`, `_1 = ...`), and
+the convention tells the emitter that the local is an address. So a rebind through a
+`poke` parameter writes `_1` (8.10, rule 6). An argument with one of these conventions is
+the operand `copy <place>`, and the emitter passes the address of the place.
 
 ### 8.4 Places and operands
 
@@ -1659,12 +1675,21 @@ locals, and nothing else:
 2. `Drop(place)` is emitted on every exit path of the owning scope, before `StorageDead`,
    newest declaration first (reverse declaration order). On the path of a `return`, the
    value goes into `_0` FIRST and the drops come after it, because the value can read a
-   local that the scope exit frees.
-3. A local that `borrow` proved moved on **every** path gets no drop at all. Such a local
-   has no `cond_moved` row, as a local moved on no path has none: SLIR lowering tells the
-   two apart by the `Ownership` rows of the body, and a local with a `move` row at a
-   `LocalRef` of it (`move LocalRef(<local>)`) or at a capture of it is moved on every
-   path, and a local with no such row is moved on no path.
+   local that the scope exit frees. A statement is the owning scope of its temporaries: a
+   temporary that nothing moves drops at the end of its statement, the newest first, and
+   on the path of a `return` its drop comes before the drops of the enclosing scopes.
+3. A local that is moved at an exit gets no drop at all. SLIR lowering tracks the state of
+   each owning local along its own walk, and the `move` rows of `borrow` are the ONLY
+   source of a move: lowering never classifies a use again. A `move` row at a `LocalRef`
+   of the local (`move LocalRef(<local>)`) or at a capture of it marks the local moved;
+   its declaration and each rebind of it mark it live. At an exit, a live local gets
+   `Drop` and a moved local gets nothing. A local whose state differs between the paths
+   that meet at a join must have a `cond_moved` row, and rule 4 applies to it. A state
+   that disagrees with the rows of `borrow` is an internal error, never a guess: a second
+   move of a moved local, and a rebind of a moved local that has no `cond_moved` row (a
+   local moved and then rebound has a row, 7.9). On the straight line the state never
+   differs between paths, so a local that is moved and then rebound is live at the exit
+   and drops with no flag.
 4. A local marked CONDITIONALLY moved gets a `bool` flag local: set `true` at the
    declaration (set again on each loop iteration and at each rebind), set `false` at each
    move site, and its drop becomes `DropIfSet`, at a scope exit and at the drop of the old
@@ -1677,7 +1702,13 @@ locals, and nothing else:
 6. An `Assign` to an owning place that may hold a live value drops the OLD value, and the
    order is normative (4.6): compute the new value FIRST, then `Drop` the old, then store.
    The source may alias the value about to be freed. A rebind through a `poke` parameter
-   follows the same rule, through the pointer.
+   follows the same rule, through the pointer. The state of rule 3 decides whether the old
+   value is live: a live one drops and a moved one drops nothing, and the store makes the
+   local live. When the old value is live, the new value goes into a temporary first,
+   unless it is a constant, and the store moves the temporary (`_2 = ...`, `Drop(_1)`,
+   `_1 = move _2`). A rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns
+   is a stop of the lowering (`slir, borrowed rebind`) until a group rules what the
+   callee owns after it.
 7. The hidden iterator local of a `Protocol` or an `IteratorValue` loop, and the item that
    the loop owns, are owning locals of the loop scope under rules 1 to 4: the end, a
    `break`, a `return` and the `??` of a binder all reach a `Drop`. A walk in place has no
