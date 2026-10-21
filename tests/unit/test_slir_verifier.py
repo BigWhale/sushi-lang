@@ -326,6 +326,56 @@ def test_the_end_of_the_storage_of_a_live_owning_local_is_refused():
              "one drop or move on every path")
 
 
+def test_the_start_of_the_storage_of_a_live_owning_local_is_refused():
+    error = _refused(_function([BLANK, STRING], _block(0, _ret(), _live(1), _text(1),
+                                                       st.StorageLive(LocalId(1), BAD))),
+                     "one drop or move on every path")
+    assert "starts the storage of _1" in error.params["detail"]
+
+
+def test_the_end_of_the_storage_names_the_end():
+    error = _refused(_function([BLANK, STRING], _block(0, _ret(), _live(1), _text(1),
+                                                       _dead(1, BAD))),
+                     "one drop or move on every path")
+    assert "ends the storage of _1" in error.params["detail"]
+
+
+def test_a_read_of_a_local_that_holds_no_value_is_refused():
+    _refused(_function([BLANK, I32, I32],
+                       _block(0, _ret(), _live(1), _set(2, r.Use(_copy(1)), BAD),
+                              _set(0, r.Use(p.Const(k.Blank()))))),
+             "no use of a local outside its storage")
+
+
+def test_a_read_of_a_local_after_the_end_of_its_storage_is_refused():
+    _refused(_function([BLANK, I32, I32],
+                       _block(0, _ret(), _live(1), _set(1, r.Use(p.Const(k.Int(1, I32)))),
+                              _dead(1), _set(2, r.Use(_copy(1)), BAD),
+                              _set(0, r.Use(p.Const(k.Blank()))))),
+             "no use of a local outside its storage")
+
+
+def test_a_move_of_a_local_that_holds_no_value_is_refused():
+    _refused(_function([BLANK, STRING, STRING],
+                       _block(0, _ret(), _set(2, r.Use(_move(1)), BAD), _drop(2),
+                              _set(0, r.Use(p.Const(k.Blank()))))),
+             "no use of a local outside its storage")
+
+
+def test_a_return_with_no_value_in_the_return_slot_is_refused():
+    _refused(_function([I32], _block(0, _ret(BAD))), "a written return slot")
+
+
+def test_a_return_with_no_value_in_the_return_slot_on_one_path_is_refused():
+    _refused(_function(
+        [I32, BOOL],
+        _block(0, _switch(1, 2, 1)),
+        _block(1, _goto(2), _set(0, r.Use(p.Const(k.Int(1, I32))))),
+        _block(2, _ret(BAD)),
+        params=((1, GUARANTEED),),
+    ), "a written return slot")
+
+
 def _call(*args: tuple[p.Operand, Convention]) -> st.Call:
     return st.Call(_local(1), st.Direct("unit$take", "take"), args, BAD)
 

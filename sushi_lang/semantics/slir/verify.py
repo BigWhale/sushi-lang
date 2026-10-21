@@ -16,7 +16,9 @@ local, so a `Move` of a projection is a `Move` of its root.
 Then a dataflow over the CFG gives each local, at each point, the set of states that the
 paths to that point can give it: uninit, live, moved or dropped, with the value of its drop
 flag for a local that a `DropIfSet` reads. A join takes the union. A read or a move of a
-local that a path moved is refused. An owning local must be moved or dropped exactly one
+local that a path moved is refused, and so is a read or a move of a local that holds no
+value on a path: before its first write, or after its `StorageLive` or its `StorageDead`.
+The `return` needs a value in `_0` on each path. An owning local must be moved or dropped exactly one
 time on each path from its write to the end of its storage, to a write over it, and to the
 `return`: a `DropIfSet` drops on the paths where its flag is true, and the paths where the
 flag is false must have moved the local. An `Owned` parameter is an owning local; a
@@ -59,6 +61,8 @@ if TYPE_CHECKING:
 TYPED_LOCALS = "typed locals"
 TYPED_PLACES = "typed places"
 USE_AFTER_MOVE = "no use after a move"
+IN_STORAGE = "no use of a local outside its storage"
+RETURN_SLOT = "a written return slot"
 GLOBAL_MOVE = "no move out of a global"
 ONE_TERMINATOR = "one terminator per block"
 KNOWN_BLOCKS = "known blocks"
@@ -481,7 +485,8 @@ class _Flow:
         elif isinstance(stmt, st.DropIfSet):
             self.drop_if_set(configs, self.check.dropped(stmt), stmt.flag, span)
         elif isinstance(stmt, (st.StorageLive, st.StorageDead)):
-            self.storage(configs, stmt.local, span)
+            self.storage(configs, stmt.local, span,
+                         "starts" if isinstance(stmt, st.StorageLive) else "ends")
         else:
             er.raise_internal_error("CE0000", span=span,
                                     detail=f"the dataflow of the SLIR verifier has no row for "
@@ -523,6 +528,8 @@ class _Flow:
     def spent(self, configs: list[frozenset[_Config]], local: LocalId, what: str,
               span: Span) -> None:
         states = {state for state, _ in configs[local.index]}
+        if _UNINIT in states:
+            self.violate(IN_STORAGE, f"{what} where _{local.index} holds no value", span)
         if _MOVED in states:
             self.violate(USE_AFTER_MOVE, f"{what} after a move of _{local.index}", span)
         if _DROPPED in states:
@@ -587,16 +594,18 @@ class _Flow:
             after.add((_DROPPED if state == _LIVE else state, value))
         configs[local.index] = frozenset(after)
 
-    def storage(self, configs: list[frozenset[_Config]], local: LocalId, span: Span) -> None:
+    def storage(self, configs: list[frozenset[_Config]], local: LocalId, span: Span,
+                verb: str) -> None:
+        """`StorageLive` and `StorageDead`: each leaves the local with no value."""
         if local in self.check.owning and any(s == _LIVE for s, _ in configs[local.index]):
-            self.violate(DROP_ONCE, f"ends the storage of _{local.index} while it holds a "
+            self.violate(DROP_ONCE, f"{verb} the storage of _{local.index} while it holds a "
                                     f"value", span)
         configs[local.index] = frozenset((_UNINIT, flag) for _, flag in configs[local.index])
         self.set_flag(configs, local, _UNSET)
 
     def leave(self, configs: list[frozenset[_Config]], span: Span) -> None:
         """The `return`: no owning local holds a value, except `_0` and an `Inout` parameter,
-        which must hold one."""
+        which must hold one. `_0` holds a value on every path."""
         for local in sorted(self.check.owning):
             if local.index == 0 or self.borrowed(local):
                 continue
@@ -607,6 +616,8 @@ class _Flow:
                                             f"_{local.index} holds no value", span)
             elif _LIVE in states:
                 self.violate(DROP_ONCE, f"returns while _{local.index} holds a value", span)
+        if any(state != _LIVE for state, _ in configs[0]):
+            self.violate(RETURN_SLOT, "returns before a write of _0", span)
 
     def borrowed(self, local: LocalId) -> bool:
         convention = self.check.conventions.get(local)
