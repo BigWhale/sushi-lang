@@ -98,13 +98,15 @@ The same shape holds for `T[]`, `List@(T)`, `HashMap@(K, V)`, `Own@(T)` and a cl
 value. Only `T[N]` and a large plain struct copy real content, which is where borrow by
 pointer earns its keep.
 
-The ABI of a borrow and of a `nom` is therefore identical. Three things differ, and all
-three are bookkeeping:
+The ABI of a borrow and of a `nom` is therefore identical, bit for bit: a borrowed
+`string` keeps the `owned` bit of the caller's value (`docs/design/ir.md` 8.3). Two things
+differ, and both are bookkeeping:
 
-1. A borrow clears the `owned` bit in the callee's copy, so the callee's destructor is a
-   runtime no-op. A `nom` keeps the bit, because the callee is the one owner.
-2. A borrow is not registered for cleanup in `begin_function`. A `nom` is.
-3. A borrow does not mark the caller's binding moved. A `nom` does.
+1. The callee never drops a borrow. SLIR gives no `Drop` to a `Guaranteed`, an
+   `InGuaranteed` or an `Inout` parameter, and an `Owned` (`nom`) parameter drops in the
+   callee, because the callee is the one owner (`ir.md` 8.10, rule 5).
+2. A borrow does not mark the caller's binding moved. A `nom` does: the borrow pass writes
+   the `move` row, and SLIR lowering writes the `Move` operand (`ir.md` 8.10, rule 3).
 
 **This is why the bug class is invisible.** Both descriptors look valid whichever side
 frees. The damage appears later, and somewhere else.
@@ -382,10 +384,12 @@ was unwrapped from.
 **The class is the wrapper's, not the payload's.** A `Result@(i32, Fail)` whose `Fail`
 carries a string owns heap in its Err arm, and that arm travels: on the propagation path
 the error is returned to the caller while the scope cleanup runs, so a local left
-registered would free what the caller is about to read. A wrapper that owns nothing in
-either arm is copied out of and stays usable, like any plain value. The move is marked
-BEFORE the propagation path's cleanup is emitted; the seam is `backend/ownership.py`'s
-`unwrap`, and the borrow pass's twin is `unwrap_place`.
+live would free what the caller is about to read. A wrapper that owns nothing in
+either arm is copied out of and stays usable, like any plain value. The borrow pass
+decides the move in `unwrap_place` and writes the `move` row of `r`. SLIR lowering moves `r`
+into the temporary of the `??` before the switch on its tag, so the drops of the propagation
+path do not see `r` live, and the error leaves only in the returned `Err` (`ir.md` 8.9,
+8.10, rule 3).
 
 **A borrowed wrapper is read through, not refused.** `let string s = r??` over a
 parameter binds a borrow -- `s` reads `r`'s payload and frees nothing -- and consuming the
@@ -471,9 +475,11 @@ another value keeps (#1259). It is two things at one time, and the two are kept 
   DESTROYS the iterator.
 
 The borrow pass stamps the producer `LENT` (`MethodCall.iterator_state`) and marks the
-`let` `BorrowState.is_lent_iterator`. In the backend, `ownership.bind` keeps the decision
-about the source (REJECT, the binding owns no source) and answers that the binding owns
-its value when the initializer is stamped `LENT`. The clone of a lent iterator is lent too:
+`let` `BorrowState.is_lent_iterator`. These are two answers, and the borrow pass keeps them
+apart: the binding owns no source (REJECT), and the binding owns its value. In SLIR the local
+of the `let` is an owning local, so drop placement drops it at each exit, and the `drop_fn`
+of a lent iterator frees only what its state owns (`ir.md` 8.10, rule 7). The iterators
+group (C3) lowers it. The clone of a lent iterator is lent too:
 it borrows the same owners, and a borrow of a lent `let` (a `foreach` item, for example)
 freezes those owners and not the `let`.
 

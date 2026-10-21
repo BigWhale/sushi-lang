@@ -907,9 +907,10 @@ a field or a payload may be), and `operand_contract` applies the TOP-LEVEL rule 
 operator, a constraint or a hole may take). The typecheck pass asks them for `==`, `<`, an
 interpolation hole, `print`, `println`, the methods `eq`, `compare` and `to_str`, the
 constraints `@(T: Eq)`, `@(T: Ord)` and `@(T: Display)`, and the HashMap key rule. It
-stamps the answer on the AST (`BinaryOp.operand_type`, `InterpolatedString.display_types`,
-`Print`/`PrintLn.display_type`), so the backend never re-derives it. `contract_walk.py` holds
-the walk mechanics that `hashing.py` shares. An `extend T with Eq` implementation is read
+records the answer in `TypeckResults` (the type of each operand node, and a display-type row
+for each interpolation part and each `print` argument), and SLIR lowering writes it into
+SLIR, so the backend never derives it again. `contract_walk.py` holds the walk mechanics
+that `hashing.py` shares. An `extend T with Eq` implementation is read
 first and wins. See [Derived contracts](../design/derived-contracts.md).
 
 ### Algorithm

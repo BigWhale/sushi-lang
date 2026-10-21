@@ -186,9 +186,10 @@ end block, and drop placement (`docs/design/ir.md` 8.10) drops it on every exit 
 of the input, a `break`, a `return` from the body, and the propagation path a `??` binder
 takes.
 
-The move into that local is a consuming position, the same as `let T x = it`: it goes
-through the ownership seam (`consume`), and the borrow pass consumes the iterable the same
-way. So the loop destroys the iterator and nothing else does (#1145):
+The move into that local is a consuming position, the same as `let T x = it`: the borrow
+pass decides it as it decides that `let`, and SLIR lowering writes the answer as a `Move`
+into the hidden local (`docs/design/ir.md` 8.10, rules 3 and 7). So the loop destroys the
+iterator and nothing else does (#1145):
 
 - a named local or a `nom` parameter is marked moved, so its scope exit skips it, and a
   later mention of it is **[CE2405](../error-catalog.md#ce2405)**;
@@ -394,8 +395,10 @@ frozen until the last use of the iterator (**[CE2412](../error-catalog.md#ce2412
 the iterator cannot be given with `nom`, returned, stored in a field or a container, or
 captured (**[CE2411](../error-catalog.md#ce2411)**). It is still DESTROYED at scope exit,
 because it owns its value: "it borrows its source" and "it owns its value" are two facts,
-and `ownership.bind` keeps them apart (`borrow-model.md` §10g). A write through a lent
-`let` is legal: `count(poke it)` moves its own cursor, and a `foreach` walks it in place.
+and the borrow pass keeps them apart (`borrow-model.md` §10g): the source is a borrow, and
+the local of the iterator is an owning local of drop placement (`ir.md` 8.10, rule 7). A
+write through a lent `let` is legal: `count(poke it)` moves its own cursor, and a `foreach`
+walks it in place.
 An owned iterator owns everything it walks, and it moves freely.
 
 **A returned iterator.** A lent iterator leaves its function in one form: a function or a

@@ -79,14 +79,16 @@ It takes one flag, and that flag is the whole of the read/write split:
 | `peek` / `poke` parameter | the pointer it arrived as | the same |
 | field or element chain | a GEP | the same |
 | constant `Name` | **none. [CE0132](../error-catalog.md#ce0132)** | its global |
-| temporary | **none. [CE0132](../error-catalog.md#ce0132)** | a `park_value` spill |
+| temporary | **none. [CE0132](../error-catalog.md#ce0132)** | a spill into an entry-block slot |
 
 **A read may spill a value that names no storage. A write may not, and there is no fallback.**
 That is what keeps a store out of `.rodata` -- a constant resolves for a read and to nothing
 for a write, so no such binary can be built even if [CE2096](../error-catalog.md#ce2096) were bypassed. The other unwritable
 receivers have their own diagnostics ([CE2408](../error-catalog.md#ce2408), [CE2414](../error-catalog.md#ce2414), [CE2421](../error-catalog.md#ce2421), [CE2422](../error-catalog.md#ce2422), [CE2426](../error-catalog.md#ce2426), [CE2429](../error-catalog.md#ce2429)), so
-reaching [CE0132](../error-catalog.md#ce0132) means one of them did not fire. Same treatment `backend/ownership.py` gives a
-consuming use with no decision.
+reaching [CE0132](../error-catalog.md#ce0132) means one of them did not fire. SLIR lowering has the same rule for a move: a
+state that disagrees with the rows of the borrow pass is an internal error, never a guess
+(`docs/design/ir.md` 8.10, rule 3). The owner of a spilled temporary is SLIR's to say, as
+for `as_array_address`. The array group (A6) brings this receiver to SLIR.
 
 ## A run-time length, and the cursor
 

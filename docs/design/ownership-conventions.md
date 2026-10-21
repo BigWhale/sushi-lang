@@ -144,9 +144,11 @@ through `drops_of(codegen)`, and every backend caller already holds `codegen`.
 every type, `string` included. The predicate is `owns_resource`
 (`sushi_lang/semantics/typesys.py`); the backend's `needs_cleanup`
 (`sushi_lang/backend/destructors.py`) is the same rule with the tables supplied, and it is the
-ONLY backend cleanup predicate: destructor recursion and cleanup registration both ask it. A
-`Drop` type shows why: a field walk finds nothing in a handle, so a second predicate would move
-the value correctly and never register it, and its `drop()` would never run.
+ONLY backend cleanup predicate: the destructor walk and the container emitters ask it. SLIR
+lowering gives a `Drop` only to a local that `owns_resource` says owns, so the decision of WHERE
+to free reads the same rule (`docs/design/ir.md` 8.10). A `Drop` type shows why: a field walk
+finds nothing in a handle, so a second predicate would move the value correctly and never drop
+it, and its `drop()` would never run.
 `tests/unit/test_cleanup_predicates_agree.py` is the gate that keeps them one.
 
 **The string exception lives on the BINDING, not the type.** A `string` bound directly from a
@@ -506,10 +508,11 @@ fn make_tag() string:
     return s.say_it()
 ```
 
-The backend clears the owned bit of a method's `string` parameter on entry, so a method body
-can never free the caller's buffer; no consuming use compiles, so the bit guards read paths
-only. `.clone()` on a `string` copies unconditionally, a view included; the destructor keeps
-its owned-bit guard. So `.clone()` is always a deep copy.
+A method body can never free the caller's buffer: a borrowed receiver or parameter is never
+dropped, because SLIR gives no `Drop` to a `Guaranteed`, an `InGuaranteed` or an `Inout`
+parameter (`docs/design/ir.md` 8.10, rule 5). A `Guaranteed` `string` keeps the `owned` bit of
+the caller's value (`ir.md` 8.3), and no consuming use of it compiles. `.clone()` on a `string` copies unconditionally, a view included;
+the destructor keeps its owned-bit guard. So `.clone()` is always a deep copy.
 
 The mutable receiver is spelled **`poke self`**, an opt-in first parameter carrying the borrow
 vocabulary the language already has —
