@@ -49,10 +49,9 @@ fn main() i32:
 - **Native ownership.** The call site synthesizes a `T[]`, which is moved into the callee; the
   callee owns and destroys it via the normal dynamic-array RAII path. The LLVM function itself stays
   non-variadic — the variadic parameter lowers to one extra `T[]` struct parameter.
-  This is the one place the collected array's owner still depends on the callee's implementation, so
-  it is stated in exactly one place (`CalleeModes.variadic_callee_owns`): a Sushi `...T` body
-  registers the array, and a STDLIB variadic (`run`) is generated IR that frees nothing, so there the
-  CALLER keeps it. A
+  This is the one place the collected array's owner still depends on the callee's implementation:
+  a Sushi `...T` body registers the array, and a STDLIB variadic (`run`) is generated IR that frees
+  nothing, so there the CALLER keeps it. A
   consuming variadic spelling (`nom ...T`) is deferred — see `docs/design/borrow-model.md` S7.
 - **Extern lowering.** The extern declaration lowers to an LLVM `var_arg=True` declaration. Trailing
   arguments undergo C default-argument promotion: `i8`/`i16`/`bool` → `i32`, `f32` → `f64`; `string`

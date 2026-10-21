@@ -1,0 +1,28 @@
+# EXPECT_ERROR_CODES_EXACT: CE2403
+# EXPECT_STDERR_CONTAINS: "'total' already has an active poke borrow"
+# EXPECT_STDERR_CONTAINS: "first borrowed here"
+# EXPECT_DUMP_SHIR: test_err_borrow_inout_args.shir
+#
+# A `poke` argument is `Inout`: the callee writes through it and the caller keeps the
+# value, so it moves nothing. A rebind through a `poke` parameter adopts the new value. A
+# constant is storage that the program keeps, and a `let` of a plain one adopts a copy.
+# One `poke` borrow of a local at a time: two `poke` arguments of one local in one call
+# are CE2403, with a note at the first borrow.
+
+const i32 START = 40
+
+fn grow(poke string text) ~:
+    text := "{text}!"
+
+fn add(poke i32 into, poke i32 extra) ~:
+    into := into + extra
+
+fn main() i32:
+    let string text = "{2} towels"
+    grow(poke text)
+    println(text)
+    let i32 total = START
+    let i32 more = 2
+    add(poke total, poke more)
+    add(poke total, poke total)
+    return total

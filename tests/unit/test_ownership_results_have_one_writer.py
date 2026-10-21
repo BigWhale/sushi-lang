@@ -11,8 +11,8 @@ makes the table, only `semantics/passes/borrow/` names the write API, only
 API and nothing else.
 
 This gate takes the place of `test_walk_fields_have_one_writer.py` for SHIR; the AST scan
-goes with the two AST fields. The borrow pass on SHIR writes no row yet (P2.6), so the
-gate does not ask that the pass calls the write API: P2.6 adds that check.
+goes with the two AST fields. The borrow pass on SHIR writes the rows, so the gate also asks
+that a module of the pass calls the write API.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from side_table_scan import (
     CONSTRUCTION_FORMS, WRITE_FORMS, SideTable, assert_a_copy_is_refused, assert_the_api,
     assert_the_data_module_alone_names_the_tables, assert_the_owner_alone_makes,
     assert_the_scan_finds_a_construction, assert_the_scan_finds_a_write,
-    assert_the_scan_lets_a_reader_and_the_writer_pass, assert_the_writer_alone_writes,
+    assert_the_scan_lets_a_reader_and_the_writer_pass, assert_the_writer_alone_writes, calls_of,
 )
 from sushi_lang.semantics.shir.ownership import OwnershipResults
 
@@ -53,6 +53,10 @@ def test_the_owner_of_the_bodies_alone_makes_the_table() -> None:
 
 def test_the_borrow_pass_alone_calls_the_write_api() -> None:
     assert_the_writer_alone_writes(TABLE)
+    writers = [module for module in calls_of(TABLE.write_api) if module.startswith(TABLE.writer)]
+    assert writers, (
+        f"no module of {TABLE.writer} calls the write API of OwnershipResults: the borrow "
+        "pass writes no answer, or the scan has gone stale")
 
 
 @pytest.mark.parametrize("form", WRITE_FORMS)

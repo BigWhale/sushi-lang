@@ -25,6 +25,7 @@ from sushi_lang.semantics.shir.lowering import (
     lower_copy,
     lower_unit,
 )
+from sushi_lang.semantics.passes.borrow import BorrowChecker
 from sushi_lang.semantics.passes.types import (
     TypeValidator, validate_perk_implementation_method)
 from sushi_lang.internals.diagnostics import StageStop
@@ -34,16 +35,6 @@ from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.semantics.generics.monomorphize.order import diagnostics_in_site_order
 from sushi_lang.semantics.library_registration import (
     LibraryRegistration, LoadedLibraries)
-
-
-def enum_base_names(*tables) -> set[str]:
-    """The base name of every enum in `tables`, for the borrow checker's sink test."""
-    names: set[str] = set()
-    for table in tables:
-        mapping = table.by_name if hasattr(table, 'by_name') else table
-        names.update(name.split('<', 1)[0] for name in mapping)
-    return names
-
 
 
 # The test runner's stdlib gates, hidden like SUSHI_SPELLING_GATE. Set, a lint also checks
@@ -89,9 +80,11 @@ class Lints:
 @dataclass(frozen=True)
 class _UnitPasses:
     """The per-unit passes of one unit that run from the switch to SHIR on, built in that
-    unit's scope."""
+    unit's scope. The borrow pass is the next stage of the typecheck pass: the typecheck
+    pass gives it each body that it finished with no error."""
     scope: ScopeAnalyzer
     typecheck: TypeValidator
+    borrow: BorrowChecker
 
 
 @dataclass(frozen=True)
@@ -189,8 +182,11 @@ class SemanticAnalyzer:
         # order (docs/design/ir.md 6.3). The typecheck pass walks it, and `--dump-shir`
         # prints it.
         self.shir = LoweredProgram()
-        # The stops that the typecheck pass met (`shir/stop.py`).
+        # The stops that the typecheck pass and the borrow pass met (`shir/stop.py`).
         self.stops = Stops()
+        # Which functions destroy a `poke` parameter, transitively: the summary of the
+        # `effects` pass, which the borrow pass reads.
+        self.destroy_effects: dict = {}
         # Every error that a per-unit reporter offered, by code, for the error-hole check
         # at the end of the analysis (docs/design/ir.md 7.4).
         self._offered: Counter[str] = Counter()
@@ -234,11 +230,12 @@ class SemanticAnalyzer:
             lift          lambda lifting                         _check_units                      passes/lift.py
             borrow        borrow checking                        _check_units                      passes/borrow/
 
-        From the switch to SHIR (docs/design/ir.md 7.9), `scope`, lowering and `typecheck`
-        run per unit, in one loop, and `typecheck` walks the SHIR body of each
-        declaration. `effects`, `lift` and `borrow` do not run, and the backend does not
-        run: the pipeline stops after `typecheck` with the stop code CE0155
-        (`pipeline_stop`). `_check_copies` repeats the per-unit stages for each copy cut
+        From the switch to SHIR (docs/design/ir.md 7.9), `scope`, lowering, `typecheck` and
+        `borrow` run per unit, in one loop: `typecheck` walks the SHIR body of each
+        declaration, and gives each body that it finished with no error to `borrow`.
+        `effects` runs before the loop, because `borrow` reads its summary. `lift` does not
+        run yet, and the backend does not run: the pipeline stops after `borrow` with the
+        stop code CE0155 (`pipeline_stop`), at the stage `slir`. `_check_copies` repeats the per-unit stages for each copy cut
         after the loop started: an extension copy of a generic or an array target, an
         array-template perk copy, and a function instance of a late request of the
         typecheck pass (#1155). `_check_array_extensions` drives it to a fixpoint. A copy
@@ -352,6 +349,7 @@ class SemanticAnalyzer:
         self._warn_hidden_imported_extensions()
 
         self._start_late_requests(monomorphizer, compilation_order)
+        self.destroy_effects = self._compute_effects(compilation_order)
         self._check_units(compilation_order, monomorphizer, libraries)
         self._check_array_extensions(compilation_order, monomorphizer, libraries)
         self._reject_opaque_in_program_tables()
@@ -359,8 +357,9 @@ class SemanticAnalyzer:
     def pipeline_stop(self) -> StageStop:
         """The one stop of the program, for an analysis that reported no error.
 
-        The first stop of the typecheck pass, else an error hole whose codes no error
-        offered (ir.md 7.4), else the stage after `typecheck` (`Stops.first`).
+        The first stop of the typecheck pass, else the first stop of the borrow pass, else
+        an error hole whose codes no error offered (ir.md 7.4), else the stage after
+        `borrow` (`Stops.first`).
         """
         hole = check_error_holes(self.shir.holes, self._offered + self.reporter.errors_offered)
         return self.stops.first(hole)
@@ -804,12 +803,13 @@ class SemanticAnalyzer:
 
     def _check_units(self, compilation_order: list[Unit], monomorphizer,
                      libraries: LibraryRegistration) -> None:
-        """scope, lowering and typecheck, per unit, in one loop.
+        """scope, lowering, typecheck and borrow, per unit, in one loop.
 
         Lowering runs after scope, because it reads the `Bindings` that scope writes. Its
-        result goes to `self.shir`, and the body half of `typecheck` walks it. The
-        reporter of the unit tells lowering whether scope reported an error: in such a
-        unit a hole does not stop the compile under the strict variable.
+        result goes to `self.shir`, and the body half of `typecheck` walks it; `typecheck`
+        gives each body that it finished with no error to `borrow`. The reporter of the
+        unit tells lowering whether scope reported an error: in such a unit a hole does not
+        stop the compile under the strict variable.
         """
         # Every unit is analysed with the global context, because units reference each
         # other, but each gets its own reporter so a diagnostic names the right file.
@@ -829,7 +829,7 @@ class SemanticAnalyzer:
 
     def _unit_passes(self, unit: Unit, reporter: Reporter,
                      monomorphizer, libraries: LibraryRegistration) -> _UnitPasses:
-        """The scope and typecheck passes of ONE unit, in its own scope.
+        """The scope, typecheck and borrow passes of ONE unit, in its own scope.
 
         Two callers: the per-unit loop, and the check of the generic-target extension
         copies, which each go home to the unit of their template (#1064). A copy is
@@ -845,13 +845,15 @@ class SemanticAnalyzer:
                               visibility=self.tables.visibility,
                               function_tables=(self.tables.funcs, self.tables.generic_funcs),
                               unit_namespaces=self.tables.namespaces)
+        borrow = BorrowChecker(reporter, tables=self.tables, shir=self.shir, stops=self.stops,
+                               destroy_effects=self.destroy_effects)
         typecheck = TypeValidator(
             reporter, self.tables, current_unit_name=unit.name,
             monomorphized_functions=monomorphizer.monomorphized_functions,
             in_library_unit=unit.provenance is not None,
             namespaces=namespaces, checks_templates=_checks_templates(unit),
-            shir=self.shir, stops=self.stops)
-        return _UnitPasses(scope, typecheck)
+            shir=self.shir, stops=self.stops, next_stage=borrow.check_body)
+        return _UnitPasses(scope, typecheck, borrow)
 
     @staticmethod
     def _entry_unit(compilation_order: list[Unit]) -> Optional[Unit]:
@@ -1238,7 +1240,7 @@ class SemanticAnalyzer:
 
     def _check_copies(self, copies: list[tuple[Unit, Any]], monomorphizer,
                       libraries: LibraryRegistration) -> None:
-        """scope, lowering and typecheck over each copy cut after the per-unit loop.
+        """scope, lowering, typecheck and borrow over each copy cut after the per-unit loop.
 
         A late function copy (#1155), an extension copy of a generic or an array target,
         and an array-template perk copy (#699). Each copy is checked with the passes of

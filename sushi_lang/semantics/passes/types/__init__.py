@@ -6,12 +6,14 @@ declared type of a constant and the header of each function, method and perk
 implementation. The BODY half walks the SHIR body of each declaration (`check_body`)
 through the table of `visit/`, and it writes its answers into the `TypeckResults` of the
 body. A stop of the body half ends the walk of its body, and the pass records it in
-`stops` (`shir/stop.py`); the next body is walked as usual. When a walk ends with no stop,
-the completeness check of the table runs (`check_answers`).
+`stops` (`shir/stop.py`); the next body is walked as usual. When a walk ends with no stop
+and with no error in its body, the completeness check of the table runs (`check_answers`),
+and the pass gives the body to the next stage, the borrow pass (`next_stage`), which the
+driver gives the pass.
 """
 from __future__ import annotations
 from contextlib import contextmanager
-from typing import Dict, Iterator, Optional, Set, TYPE_CHECKING
+from typing import Callable, Dict, Iterator, Optional, Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.namespaces import Binding, NamespaceTable
@@ -74,7 +76,8 @@ class TypeValidator:
                  namespaces: Optional['NamespaceTable'] = None,
                  checks_templates: bool = False,
                  shir: Optional['LoweredProgram'] = None,
-                 stops: Optional[Stops] = None) -> None:
+                 stops: Optional[Stops] = None,
+                 next_stage: Optional[Callable[..., None]] = None) -> None:
         self.reporter = reporter
         # Whether `run` checks each function template of the unit on a check copy
         # (#1070): a unit of the program, and a bundled stdlib unit. A consumed library
@@ -82,9 +85,12 @@ class TypeValidator:
         self.checks_templates = checks_templates
         # The written templates that `run` checked on a check copy.
         self.checked_template_ids: Set[int] = set()
-        # The SHIR bodies of the program, and the record of the stops of the body half.
+        # The SHIR bodies of the program, the record of the stops of the body half, and the
+        # stage that each body goes to when the body half finished it with no error: the
+        # borrow pass (`BorrowChecker.check_body`).
         self.shir = shir
         self.stops = stops
+        self.next_stage = next_stage
         # The SHIR body that the body half walks, its `TypeckResults`, its locals by id and
         # the fold of its readable values (docs/design/ir.md 7.4), or None.
         self.body: Optional['ShirBody'] = None
@@ -271,13 +277,14 @@ class TypeValidator:
 
         A stop ends the walk: the pass records it, with the file of the body, and the
         caller goes on with the next declaration. A walk that ends with no stop and with no
-        error in its body is checked for completeness, and its body meets the next stage,
-        which is not built yet. A node that has an error has no answer, so a body with an
-        error is not checked. The answer is the body when the walk reached its end, and
-        None after a stop.
+        error in its body is checked for completeness, and its body goes to the next
+        stage, the borrow pass, with the tables that the body was read in. A node that has
+        an error has no answer, so a body with an error is not checked. The answer is the
+        body when the walk reached its end, and None after a stop.
         """
         body = None if self.shir is None else self.shir.body_of(self.written_of(decl))
-        if body is None or self.shir is None or self.stops is None:
+        if (body is None or self.shir is None or self.stops is None
+                or self.next_stage is None):
             er.raise_internal_error(
                 "CE0000", detail=f"the typecheck pass has no SHIR body of "
                                  f"'{getattr(decl, 'name', type(decl).__name__)}'")
@@ -302,7 +309,7 @@ class TypeValidator:
         if self.errors_offered() != offered or self.refused_before:
             return body
         check_answers(body, answers, self.shir.decls)
-        self.stops.finished(self.shir.decls.name_of(body.fn_id), body.block.loc, filename)
+        self.next_stage(decl, body, tables=self.tables, filename=filename)
         return body
 
     def errors_offered(self) -> int:

@@ -1,0 +1,27 @@
+# EXPECT_ERROR_CODES_EXACT: CE2407
+# EXPECT_STDERR_CONTAINS: "cannot have peek and poke borrows of 'count' simultaneously"
+# EXPECT_STDERR_CONTAINS: "first borrowed here"
+# EXPECT_DUMP_SHIR: test_err_borrow_guaranteed_args.shir
+#
+# An unmarked argument is `Guaranteed` and a `peek` argument is `InGuaranteed`: the callee
+# borrows the value and the caller keeps it, so neither argument moves anything, and a
+# later use of the local is legal. A borrow lasts for its statement. A `peek` and a `poke`
+# of one local in one call conflict: CE2407, with a note at the first borrow.
+
+fn shout(string text) i32:
+    println(text)
+    return 1
+
+fn measure(peek string text) i32:
+    println(text)
+    return 2
+
+fn store(peek i32 source, poke i32 into) ~:
+    into := source
+
+fn main() i32:
+    let string text = "{1} towel"
+    let i32 count = shout(text) + measure(peek text)
+    println(text)
+    store(peek count, poke count)
+    return -count

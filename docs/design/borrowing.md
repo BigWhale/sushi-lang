@@ -244,7 +244,7 @@ Each gate turns the next occurrence of its bug class into a red test:
 
 | gate | what it pins |
 |---|---|
-| `test_borrow_dispatch_is_total.py` | an arm for every `Expr` node ([CE0125](../error-catalog.md#ce0125)) |
+| `test_borrow_dispatch_is_total.py` | an arm for every SHIR statement and expression class, and a located backstop |
 | `test_scope_dispatch_is_total.py` | the same for the scope pass ([CE0130](../error-catalog.md#ce0130)) |
 | `test_peek_write_gate_is_total.py` | its case table covers every method in `MUTATING_METHODS` (the table is `METHOD_EFFECTS`, `semantics/method_effects.py`; it compiles nothing) |
 | `test_readonly_receiver_matrix.py` | every kind of the read-only table has its code |

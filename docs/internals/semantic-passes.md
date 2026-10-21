@@ -39,12 +39,16 @@ unit before any function body is walked.
 
 **The move to SHIR** ([the IR design](../design/ir.md), 7.9). The compiler lowers each body
 to SHIR after `scope`, and `typecheck` walks the SHIR body of each declaration through one
-table of arms keyed on the SHIR class (`types/visit/__init__.py`). The declaration half of
-`typecheck` (the signatures, the declared types, the constraints and the header of each
-body) still reads the AST. While the move is in progress, the arm of a construct that the
-pass does not type yet stops the walk of its body, and `effects`, `lift`, `borrow` and
-the backend do not run: a program with no error stops after the analysis with
-[CE0155](../error-catalog.md#ce0155), and `--dump-shir` is written first.
+table of arms keyed on the SHIR class (`types/visit/__init__.py`). It gives each body that
+it finished with no error to `borrow`, which walks the body through a table of its own
+(`borrow/arms.py`); both tables read one dispatch (`shir/dispatch.py`). The declaration
+half of `typecheck` and of `borrow` (the signatures, the declared types, the constraints,
+the header of each body, the mode of each parameter) still reads the AST. `effects` runs
+before the loop, because `borrow` reads its summary. While the move is in progress, the
+arm of a construct that a pass does not handle yet stops the walk of its body, and `lift`
+and the backend do not run: a program with no error stops after the analysis with
+[CE0155](../error-catalog.md#ce0155) (`slir, <body>` for a body that both passes
+finished), and `--dump-shir` is written first.
 
 `semantics/const_eval.py` is **not** a pass. Three callers reach it as a helper: the
 **AST builder**, which reads a fixed array's size while the unit is parsed (so a
@@ -1321,11 +1325,26 @@ The environment parameter is a `poke` borrow, never a `peek` one. See
 
 ## The `borrow` pass: borrow checking
 
-**File:** `semantics/passes/borrow/` (`__init__.py` holds `BorrowChecker`)
+**File:** `semantics/passes/borrow/` (`__init__.py` holds `BorrowChecker`, `arms.py` the
+table of arms)
 
 ### Purpose
 
-Enforce memory safety rules for references.
+Enforce memory safety rules for references, and decide the ownership of each consuming
+use.
+
+The pass walks the SHIR body of each declaration that `typecheck` finished with no error,
+with its `TypeckResults` ([the IR design](../design/ir.md), 7.9). Each answer is a row of
+the `OwnershipResults` of the body: the `Ownership` of each consuming use, which
+`classify()` decides one time (`consume.decide`), and the conditionally moved locals. The
+convention of each call argument is the `TypeckResults` row of the call, and the pass does
+not derive it again. When the walk of a body ends with no error, `check_ownership` finds
+each consuming use with no row ([CE0157](../error-catalog.md#ce0157)). The arm of a
+construct that the pass does not check yet stops the walk of its body with
+[CE0155](../error-catalog.md#ce0155): straight-line code is checked, and a branch, a loop,
+a method call, a field, a `match` and a lambda wait for their groups. The rules below are
+the rules of the language, and each group of the move brings the rules of its constructs
+to SHIR.
 
 ### Rules
 
@@ -1464,18 +1483,18 @@ no second [CE2405](../error-catalog.md#ce2405) in round 2.
 
 ### Borrow Tracking
 
-`BorrowChecker` (`passes/borrow/__init__.py`) keeps the state of one callable:
+`BorrowChecker` (`passes/borrow/__init__.py`) keeps the state of one body:
 
-- `borrow_state: Dict[str, BorrowState]`: one record for each name
-  (`passes/borrow/state.py`). A record holds the `peek` and `poke` counts, `is_moved`,
-  `is_destroyed`, the owner a `let`-borrow reads out of (`borrows_from`), where the name
-  was moved or invalidated, and the kind of the name (a `let`-borrow, a borrow parameter,
-  a unit variable, main's `args`).
-- `active_borrows: Set[str]`: the names that a call borrows in the current statement. It
-  is cleared for each statement.
+- `borrow_state: Dict[LocalId, BorrowState]`: one record for each local, keyed by its
+  `LocalId` (`passes/borrow/state.py`), because a hidden local has no source name. A
+  record holds the source name for a diagnostic, the `peek` and `poke` counts, `is_moved`,
+  `is_destroyed`, the owners a `let`-borrow reads out of (`borrows_from`), where the local
+  was moved or invalidated, and the kind of the local (a `let`-borrow, a borrow parameter,
+  main's `args`).
+- `active_borrows: Set[LocalId]`: the locals that a call borrows in the current statement.
+  It is cleared for each statement.
 - `_scope_binding_borrows`: one frame for each open block, so a `let`-borrow ends with its
   block.
-- `callee_modes`: the parameter modes of each callee, from `semantics/param_modes.py`.
 
 The checker does not raise. Each finding goes through the reporter as a registered code
 (`self.err.emit(...)`), so one run reports every fault.

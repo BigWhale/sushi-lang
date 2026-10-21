@@ -1,0 +1,33 @@
+unit test_err_borrow_try_string
+
+ShirBody keep
+  params : [(_0 "word": string, Owned)]
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Result, "Ok", [move LocalRef(_0)]))
+
+ShirBody relay
+  params : [(_0 "word": string, Owned)]
+  locals : [_1 "got": string]
+  block  :
+    Assign(LocalRef(_1), adopt Try(adopt Call(Free(@keep), [(move LocalRef(_0), Owned)])), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
+
+ShirBody spend
+  params : [(_0 "word": string, Owned)]
+  locals : [_1 "kept": Result@(string, StdError), _2 "got": string]
+  block  :
+    Assign(LocalRef(_1), adopt Call(Free(@keep), [(move LocalRef(_0), Owned)]), is_init: true)
+    Assign(LocalRef(_2), adopt Try(move LocalRef(_1)), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Try(move LocalRef(_1)), Guaranteed)]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@relay), [(adopt Interp(["", Lit(5), " towels"]), Owned)]))
+    ExprStmt(Call(Free(@spend), [(adopt Interp(["", Lit(6), " towels"]), Owned)]))
+    Return(adopt Lit(0))

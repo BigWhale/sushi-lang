@@ -203,16 +203,10 @@ def values(elements: Sequence[ArrayElement]) -> List[Expr]:
     see `range_bounds`.
 
     A REPEATED value BORROWS. `[towel; 3]` copies three times and leaves `towel` usable,
-    the same answer `.fill()` gives for the same reason (#479). See `repeated_values`.
+    the same answer `.fill()` gives for the same reason (#479).
     """
     return [element.value for element in elements
             if not is_range_element(element) and element.count is None]
-
-
-def repeated_values(elements: Sequence[ArrayElement]) -> List[Expr]:
-    """The values of `value; count` elements, which BORROW rather than consume (Ruling 7)."""
-    return [element.value for element in elements
-            if element.count is not None and not is_range_element(element)]
 
 
 def range_bounds(elements: Sequence[ArrayElement]) -> List[Expr]:

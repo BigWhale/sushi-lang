@@ -634,7 +634,7 @@ class ScopeAnalyzer:
             handler(self, stmt)
             return
         # NOT a silent fall-through (#245): a statement with no handler got NO scope
-        # analysis, the class CE0125 closed in the borrow checker. The CI gate is
+        # analysis, the class the backstop of the borrow pass closes. The CI gate is
         # tests/unit/test_scope_dispatch_is_total.py; this is the backstop.
         er.raise_internal_error("CE0130", span=getattr(stmt, "loc", None),
                                 node=type(stmt).__name__)

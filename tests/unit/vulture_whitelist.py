@@ -128,8 +128,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "of a literal arm and of a range arm"),
     ("sushi_lang/semantics/shir/ownership.py", "record_*",
      "kept for P2.6: the borrow pass on SHIR is the one writer of OwnershipResults"),
-    ("sushi_lang/semantics/shir/ownership_check.py", "check_ownership",
-     "kept for P2.6: the borrow pass on SHIR checks its table when it ends a body"),
     ("sushi_lang/semantics/shir/ownership.py", "is_conditionally_moved",
      "kept for P2.9: SHIR-to-SLIR lowering gives a conditionally moved local a drop flag"),
     ("sushi_lang/semantics/shir/lift.py", "record_*",
@@ -137,12 +135,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/lift_check.py", "check_lift",
      "kept for P2.7: the lift pass on SHIR checks its table when it ends a body"),
     # -- the stages after typecheck, which the driver does not run from the switch ----
-    ("sushi_lang/semantics/semantic_analyzer.py", "_compute_effects",
-     "kept for P2.6: the destroy-effect summary is an input of the borrow pass on SHIR"),
-    ("sushi_lang/semantics/semantic_analyzer.py", "enum_base_names",
-     "kept for P2.6: the borrow pass on SHIR reads the enum base names"),
-    ("sushi_lang/semantics/passes/borrow/__init__.py", "check_template_copy",
-     "kept for P2.6: the borrow pass on SHIR checks the body of a template check"),
     ("sushi_lang/semantics/passes/lift.py", "LambdaLifter",
      "kept for P2.7: the driver runs lift on SHIR after typecheck"),
     ("sushi_lang/semantics/passes/lift.py", "lift_perk_impl",
@@ -179,10 +171,63 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "arguments.py", "reject_type_pack_value", _TIER_C),
     (_TYPES + "visit/helpers.py", "validate_fn_field_call_args", _TIER_C),
     (_TYPES + "signatures.py", "check_template_statements", _TIER_C),
-    ("sushi_lang/semantics/template_scope.py", "CheckCopy",
-     "kept for P2.6: the borrow pass on SHIR checks the body of a template check"),
     (_TYPES + "statements.py", "validate_foreach_statement", _TIER_A),
     (_TYPES + "statements.py", "validate_expand_statement", _TIER_C),
+)
+
+# -- the AST helpers of borrow that the switch left with no caller (P2.6a) ------------
+# Each one moves to SHIR inputs in the borrow stage of its construct group in the
+# migration plan, and that stage deletes the entry.
+_BORROW = "sushi_lang/semantics/passes/borrow/"
+
+
+def _kept(tier: str, groups: str) -> str:
+    return (f"kept for Tier {tier} ({groups}): the borrow stage of its construct group "
+            "moves the helper to SHIR inputs")
+
+
+_JOINS = "kept for P2.6b: the borrow pass on SHIR joins the state of a branch and of a loop"
+WHITELIST += (
+    (_BORROW + "flow.py", "without", _JOINS),
+    (_BORROW + "flow.py", "invalidation_of", _JOINS),
+    (_BORROW + "flow.py", "LoopFrame", _JOINS),
+    (_BORROW + "flow.py", "breaks", _JOINS),
+    (_BORROW + "flow.py", "continues", _JOINS),
+    (_BORROW + "flow.py", "LoopFlow", _JOINS),
+    (_BORROW + "flow.py", "fixed_point", _JOINS),
+    (_BORROW + "flow.py", "snapshot_flow", _JOINS),
+    (_BORROW + "flow.py", "restore_flow", _JOINS),
+    (_BORROW + "bindings.py", "register_pattern_bindings", _kept("A", "A3, A4: match")),
+    (_BORROW + "bindings.py", "reject_partial_take", _kept("A", "A3, A4: match")),
+    (_BORROW + "calls.py", "_borrowed_method_args", _kept("A", "A1, A10: method calls")),
+    (_BORROW + "calls.py", "settle_receiver", _kept("A", "A1, A10: method calls")),
+    (_BORROW + "calls.py", "settle_method_args", _kept("A", "A1, A10: method calls")),
+    (_BORROW + "writes.py", "maybe_reject_mutation", _kept("A", "A1, A10: method calls")),
+    (_BORROW + "reads.py", "_field_type", _kept("A", "A5: struct fields")),
+    (_BORROW + "reads.py", "constant_type", _kept("A", "A8: constants")),
+    (_BORROW + "calls.py", "reject_self_aliasing_copy", _kept("B", "B1: owning arrays")),
+    (_BORROW + "consume.py", "reject_slice_of_temporary", _kept("B", "B1: owning arrays")),
+    (_BORROW + "calls.py", "maybe_mark_container_insert", _kept("B", "B2, B4: containers")),
+    (_BORROW + "calls.py", "maybe_mark_own_alloc_move", _kept("B", "B5: Own")),
+    (_BORROW + "takes.py", "field_take", _kept("B", "B7: field take")),
+    (_BORROW + "takes.py", "spend", _kept("B", "B7: field take")),
+    (_BORROW + "bindings.py", "bind_let_reference", _kept("B", "B8: reference let")),
+    (_BORROW + "borrowed_returns.py", "body_return", _kept("B", "B8: peek returns")),
+    (_BORROW + "borrowed_returns.py", "settle_borrowed_call", _kept("B", "B8: peek returns")),
+    (_BORROW + "borrowed_returns.py", "reject_view_of_temporary",
+     _kept("B", "B8: peek returns")),
+    (_BORROW + "borrowed_returns.py", "check_borrowed_return",
+     _kept("B", "B8: peek returns")),
+    (_BORROW + "calls.py", "consume_indirect_args", _kept("C", "C2: closures")),
+    (_BORROW + "consume.py", "reconcile_closure_bind", _kept("C", "C2: closures")),
+    (_BORROW + "bindings.py", "bind_item", _kept("C", "C3: iterators")),
+    (_BORROW + "bindings.py", "bind_iterator", _kept("C", "C3: iterators")),
+    (_BORROW + "bindings.py", "bind_lent_walk", _kept("C", "C3: iterators")),
+    (_BORROW + "iterators.py", "settle_walk", _kept("C", "C3: iterators")),
+    (_BORROW + "iterators.py", "settle_iterator_source", _kept("C", "C3: iterators")),
+    (_BORROW + "diagnostics.py", "emit_change_under_iterator", _kept("C", "C3: iterators")),
+    (_BORROW + "reads.py", "unit_variables", _kept("D", "D1: var")),
+    (_BORROW + "state.py", "is_unit_var", _kept("D", "D1: var")),
 )
 
 RATCHET: tuple[tuple[str, str, str], ...] = ()

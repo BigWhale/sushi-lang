@@ -1042,9 +1042,6 @@ class Call(Node):
     # FunctionType: the backend uses it to emit the fat-pointer indirect call without
     # re-inferring the callee's signature.
     callee_fn_type: Optional[Type] = None
-    # Set by the type checker when it found no callee at all (CE2008, CE2092). The passes
-    # after it then know there is no signature, and say nothing about the arguments.
-    callee_unresolved: bool = False
     # What the typecheck pass resolved about the callee's parameters. The borrow pass
     # reads the modes off THIS node, so losing them makes every `nom` parameter inert.
     callee_param_modes: "Optional[Tuple[ParamMode, ...]]" = None
@@ -1094,7 +1091,6 @@ class MethodCall(Node):
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
-    callee_unresolved: bool = False  # set when no callee was found at all (CE2008, CE2092)
     external_ref: Optional[Tuple[str, str]] = None  # (namespace, name) for an FFI call
     variadic_arg_types: Optional[List] = None  # an extern variadic call's promoted arg types
     # The SOLVED method-level type arguments of a method-generic extension call
@@ -1158,7 +1154,6 @@ class DotCall(Node):
     # The rest of what the typecheck pass resolves about a call. Every call node
     # carries the whole set, so a pass never has to ask which call shape it has.
     callee_fn_type: Optional[Type] = None  # set when the callee resolves to a FunctionType
-    callee_unresolved: bool = False  # set when no callee was found at all (CE2008, CE2092)
     # The SOLVED method-level type arguments of a method-generic extension call; see
     # MethodCall.
     callee_method_type_args: Optional[Tuple] = None

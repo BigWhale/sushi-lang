@@ -379,10 +379,6 @@ class FunctionTable(UnitOwnedSymbols[FuncSig]):
             return module_path, func
         return None
 
-    def stdlib_by_name(self) -> Dict[str, Any]:
-        """Every imported stdlib function, keyed by its BARE name."""
-        return {name: func for (_module, name), func in self._stdlib_functions.items()}
-
 
 @dataclass(eq=False)
 class GenericFunctionTable(UnitOwnedSymbols[GenericFuncDef]):

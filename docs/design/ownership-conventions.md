@@ -321,8 +321,9 @@ and `_clone`); every other backend module reaches them only through `consume`/`b
 
 Enforced by a CI gate that fails when any backend module outside the seam references the primitives
 directly: `tests/unit/test_consuming_use_coverage.py`. This mirrors an existing, proven mechanism:
-`tests/unit/test_borrow_dispatch_is_total.py` pins the borrow checker's `Expr` dispatch against the
-AST union, with **[CE0125](../error-catalog.md#ce0125)** as the runtime backstop.
+`tests/unit/test_borrow_dispatch_is_total.py` pins the dispatch of the borrow pass against the
+SHIR statement and expression unions, and a class with no arm is an internal error at the span of
+the node (docs/design/ir.md 7.9).
 
 ## 6. Collapsing the predicate
 

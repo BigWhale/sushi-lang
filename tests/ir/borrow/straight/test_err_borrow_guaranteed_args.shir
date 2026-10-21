@@ -1,0 +1,31 @@
+unit test_err_borrow_guaranteed_args
+
+ShirBody shout
+  params : [(_0 "text": string, Guaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    Return(adopt Lit(1))
+
+ShirBody measure
+  params : [(_0 "text": string, InGuaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    Return(adopt Lit(2))
+
+ShirBody store
+  params : [(_0 "source": i32, InGuaranteed), (_1 "into": i32, Inout)]
+  locals : []
+  block  :
+    Assign(LocalRef(_1), adopt LocalRef(_0), is_init: false)
+
+ShirBody main
+  params : []
+  locals : [_0 "text": string, _1 "count": i32]
+  block  :
+    Assign(LocalRef(_0), adopt Interp(["", Lit(1), " towel"]), is_init: true)
+    Assign(LocalRef(_1), adopt Binary(+, Call(Free(@shout), [(LocalRef(_0), Guaranteed)]), Call(Free(@measure), [(LocalRef(_0), InGuaranteed)])), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    ExprStmt(Call(Free(@store), [(LocalRef(_1), InGuaranteed), (LocalRef(_1), Inout)]))
+    Return(adopt Unary(neg, LocalRef(_1)))

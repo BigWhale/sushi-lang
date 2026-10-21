@@ -1021,16 +1021,6 @@ The derive pass registered a hash() method whose LLVM emitter the backend never 
 
 The typecheck pass annotates every TryExpr it validates (inner type, unwrapped type, success tag, error type). Reaching the backend without one means the expression's type was never inferred. This is a gap in the typecheck pass, not a user error.
 
-### CE0125 {#ce0125}
-
-**Error** · internal
-
-**Message:** `internal error: borrow checker has no arm for expression node '{node}'`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-The Expr union grew a member the borrow checker does not dispatch on. Without the dispatch, the borrow checker does not check that node. This is a compiler bug, not a user error.
-
 ### CE0126 {#ce0126}
 
 **Error** · internal
@@ -1069,7 +1059,7 @@ Every position that takes ownership routes through backend/ownership.py::consume
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The AST grew a statement or expression node the scope checker does not dispatch on. Without the dispatch, the scope checker does not analyze that node. [CE0125](#ce0125) is the same check in the borrow checker. This is a compiler bug, not a user error.
+The AST grew a statement or expression node the scope checker does not dispatch on. Without the dispatch, the scope checker does not analyze that node. The borrow pass has the same check. This is a compiler bug, not a user error.
 
 ### CE0131 {#ce0131}
 
@@ -1124,7 +1114,7 @@ A `static` extension method is called on the TYPE name (`Vec.at(3, 4)`), so noth
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-The monomorphizer substitutes a type argument for every type parameter an instantiated body names. This error means that an expression or a statement in an instantiated body was not substituted, so an internal type parameter name (T, U) would reach the user. This is a compiler bug, not a user error. [CE0125](#ce0125) is the same check in the borrow checker, and [CE0130](#ce0130) is the same check in the scope checker.
+The monomorphizer substitutes a type argument for every type parameter an instantiated body names. This error means that an expression or a statement in an instantiated body was not substituted, so an internal type parameter name (T, U) would reach the user. This is a compiler bug, not a user error. [CE0130](#ce0130) is the same check in the scope checker.
 
 ### CE0137 {#ce0137}
 
@@ -1183,16 +1173,6 @@ The lifecycle table in backend/lifecycle.py holds one clone/destroy pair per com
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 The cache key of a unit hashes the text that the parser read, which every unit carries as its source. A unit with no source text means a loader built it without the text, which is a compiler fault and not a user error.
-
-### CE0143 {#ce0143}
-
-**Error** · internal
-
-**Message:** `internal error: the {kind} call '{name}' behind a namespace has no parameter modes`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-The typecheck pass stamps the declared parameter modes on every function call written behind a namespace (`l.gen(nom n)`), through the one mode seam, semantics/param\_modes.py. The borrow pass reads that stamp to check each `nom` marker and to record each consuming use. A call with no stamp is a compiler fault and not a user error. Without the stamp, the borrow pass cannot do the [CE2427](#ce2427) marker check for that call.
 
 ### CE0144 {#ce0144}
 
@@ -1297,7 +1277,7 @@ The SHIR printer writes the text of `--dump-shir` through one table, with one ro
 
 **Message:** `the new pipeline does not emit this program yet: {stage}, {construct}`
 
-The compiler moves to a new pipeline ([the IR design](design/ir.md)): a body is lowered to SHIR, and later stages read SHIR. While the move is in progress, a stage can meet a construct that it does not handle yet. The message names the stage and the construct. The typecheck pass walks the SHIR body of each declaration, and the first construct that it cannot type yet stops the program (the stage is `typecheck`). The stages after it are not built yet, so a program in which the typecheck pass stops at no construct stops at the next stage (the stage is `borrow`), and no program is emitted. The code comes after `--dump-shir` writes its dump, and only when the program has no error: an error of the program is the diagnostic then. Lowering gives the code too (the stage is `lowering`), only when the variable `SUSHI_SHIR_STRICT` is `1`: with no variable, lowering records the construct as a hole (see [Dump SHIR](compiler-reference.md#dump-shir)). The code does not come for a name with no declaration: the program always has an error then ([CE1001](#ce1001), [CE1002](#ce1002), or [CE0144](#ce0144) for a type pack name), and that error is the diagnostic. The code does not come for a form that the language always refuses either: a named argument outside a struct construction ([CE6104](#ce6104)), written type arguments after a dot or on a struct construction ([CE6102](#ce6102)), a slice with a reversed range ([CE2122](#ce2122)), a call of a name that the namespace does not hold ([CE2008](#ce2008)), and a member of a type that is no variant ([CE2045](#ce2045)). The code does not come for a unit in which the scope pass reported an error either: a type name written as a value is a hole there, and the error of the scope pass ([CE2105](#ce2105)) is the diagnostic. Each of those forms is an error hole that carries the codes of its error. On every compile, an error hole whose codes no error offered stops the program with this code (the stage is `lowering, error hole`) when the typecheck pass stopped at no construct: lowering and the typecheck pass then disagree, and the hole could hide a fault in a correct program. In a constant or a `var` initializer an error hole also accepts [CE0108](#ce0108), and a slice with a reversed range also accepts [CE2404](#ce2404), because those errors come first. The code goes when the move is complete. This is a limit of the compiler, not a fault in the program.
+The compiler moves to a new pipeline ([the IR design](design/ir.md)): a body is lowered to SHIR, and later stages read SHIR. While the move is in progress, a stage can meet a construct that it does not handle yet. The message names the stage and the construct. The typecheck pass walks the SHIR body of each declaration, and the first construct that it cannot type yet stops the program (the stage is `typecheck`). The typecheck pass gives each body that it finished with no error to the borrow pass, and the first construct that the borrow pass cannot check yet stops the program (the stage is `borrow`). The stages after it are not built yet, so a program in which neither pass stops at a construct stops at the next stage (the stage is `slir`), and no program is emitted. The code comes after `--dump-shir` writes its dump, and only when the program has no error: an error of the program is the diagnostic then. Lowering gives the code too (the stage is `lowering`), only when the variable `SUSHI_SHIR_STRICT` is `1`: with no variable, lowering records the construct as a hole (see [Dump SHIR](compiler-reference.md#dump-shir)). The code does not come for a name with no declaration: the program always has an error then ([CE1001](#ce1001), [CE1002](#ce1002), or [CE0144](#ce0144) for a type pack name), and that error is the diagnostic. The code does not come for a form that the language always refuses either: a named argument outside a struct construction ([CE6104](#ce6104)), written type arguments after a dot or on a struct construction ([CE6102](#ce6102)), a slice with a reversed range ([CE2122](#ce2122)), a call of a name that the namespace does not hold ([CE2008](#ce2008)), and a member of a type that is no variant ([CE2045](#ce2045)). The code does not come for a unit in which the scope pass reported an error either: a type name written as a value is a hole there, and the error of the scope pass ([CE2105](#ce2105)) is the diagnostic. Each of those forms is an error hole that carries the codes of its error. On every compile, an error hole whose codes no error offered stops the program with this code (the stage is `lowering, error hole`) when neither pass stopped at a construct: lowering and the typecheck pass then disagree, and the hole could hide a fault in a correct program. In a constant or a `var` initializer an error hole also accepts [CE0108](#ce0108), and a slice with a reversed range also accepts [CE2404](#ce2404), because those errors come first. The code goes when the move is complete. This is a limit of the compiler, not a fault in the program.
 
 ### CE0156 {#ce0156}
 

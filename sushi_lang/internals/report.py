@@ -459,6 +459,22 @@ class Reporter:
     def has_warnings(self) -> bool:
         return any(d.kind == "warning" for d in self.items)
 
+    def body_source(self) -> Optional[str]:
+        """The text of the file that the spans of the body a pass reads belong to: the file
+        of the origin that `enter_body` set (a library slice included), else this reporter's
+        own source."""
+        origin = self.origin
+        if origin is None:
+            return self.source
+        if origin.source is not None:
+            return origin.source
+        if origin.filename in self.slices:
+            return self.slices[origin.filename]
+        try:
+            return Path(origin.filename).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return None
+
     def add_slice(self, label: str, source: str) -> None:
         """Record the text of a library slice under its label, for the renderer."""
         self.slices[label] = source

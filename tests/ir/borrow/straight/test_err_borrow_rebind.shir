@@ -1,0 +1,26 @@
+unit test_err_borrow_rebind
+
+ShirBody eat
+  params : [(_0 "text": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody both
+  params : [(_0 "seen": string, Guaranteed), (_1 "taken": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "msg": string]
+  block  :
+    Assign(LocalRef(_0), adopt Interp(["", Lit(3), " towels"]), is_init: true)
+    Assign(LocalRef(_0), adopt Interp(["", LocalRef(_0), "?"]), is_init: false)
+    ExprStmt(Call(Free(@eat), [(move LocalRef(_0), Owned)]))
+    Assign(LocalRef(_0), adopt Interp(["", Lit(4), " towels"]), is_init: false)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    ExprStmt(Call(Free(@both), [(LocalRef(_0), Guaranteed), (move LocalRef(_0), Owned)]))
+    Return(adopt Lit(0))

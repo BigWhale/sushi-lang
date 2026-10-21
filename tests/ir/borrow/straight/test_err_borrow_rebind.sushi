@@ -1,0 +1,25 @@
+# EXPECT_ERROR_CODES_EXACT: CE2401
+# EXPECT_STDERR_CONTAINS: "cannot move 'msg' while it is borrowed"
+# EXPECT_STDERR_CONTAINS: "borrowed here, in the same statement"
+# EXPECT_DUMP_SHIR: test_err_borrow_rebind.shir
+#
+# A rebind of an owning local frees the old value, and the local owns the new one: the
+# rebind adopts the new value, and a hole of the new value can read the old one. A rebind
+# after a move makes the local usable again. One statement cannot borrow a value and also
+# hand it to a `nom` parameter: CE2401, with a note at the borrow.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn both(string seen, nom string taken) ~:
+    println(seen)
+    println(taken)
+
+fn main() i32:
+    let string msg = "{3} towels"
+    msg := "{msg}?"
+    eat(nom msg)
+    msg := "{4} towels"
+    println(msg)
+    both(msg, nom msg)
+    return 0

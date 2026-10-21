@@ -42,8 +42,8 @@ _WRITTEN_ON_THE_DOTCALL = ("inferred_return_type",)
 #: added to BOTH node kinds and named in none of the three tables is a stamp the ladder
 #: would drop in silence.
 _NOT_A_METHOD_STAMP = ("receiver", "method", "args", "field_names", "callee_fn_type",
-                       "callee_unresolved", "external_ref", "variadic_arg_types",
-                       "iterator_leaves", "iterator_state")
+                       "external_ref", "variadic_arg_types", "iterator_leaves",
+                       "iterator_state")
 
 #: Every `MethodCall(...)` construction under the typecheck pass, with why it is there.
 #: A third one is a second view of a call, which is what this file exists to refuse.

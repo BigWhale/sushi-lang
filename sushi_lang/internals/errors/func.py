@@ -115,13 +115,13 @@ _add(ErrorMessage("CE0124", Severity.ERROR,
     "'??' expression reached codegen without a type annotation from semantic analysis",
     Category.INTERNAL, "The typecheck pass annotates every TryExpr it validates (inner type, unwrapped type, success tag, error type). Reaching the backend without one means the expression's type was never inferred - the backend no longer re-infers types, so this is a gap in the typecheck pass, not a user error."))
 
-_add(ErrorMessage("CE0125", Severity.ERROR,
-    "internal error: borrow checker has no arm for expression node '{node}'",
-    Category.INTERNAL, "The Expr union grew a member the borrow checker does not dispatch on. This used to be a SILENT fall-through, which meant no borrow checking at all for that node - the root cause of the bloom use-after-free (#174), the unchecked range bound (#175) and the unchecked perk body (#176). tests/unit/test_borrow_dispatch_is_total.py is the CI gate; this is the runtime backstop."))
+# CE0125 ("borrow checker has no arm for expression node") is retired. It was the backstop
+# of the AST dispatch of the borrow pass; the pass walks SHIR through one table now, and a
+# class with no row is an internal error at the span of the node (docs/design/ir.md 7.9).
 
-_add(ErrorMessage("CE0143", Severity.ERROR,
-    "internal error: the {kind} call '{name}' behind a namespace has no parameter modes",
-    Category.INTERNAL, "The typecheck pass stamps the declared parameter modes on every function call written behind a namespace (`l.gen(nom n)`), through the one mode seam, semantics/param_modes.py. The borrow pass reads that stamp to check each `nom` marker and to record each consuming use. A call with no stamp is a compiler fault and not a user error. It is fatal ON PURPOSE: the borrow pass skipped such a call with no diagnostic, so a generic call behind an alias lost the CE2427 marker check and the back end then found no ownership decision for a `nom` argument (CE0129, #1125)."))
+# CE0143 ("a call behind a namespace has no parameter modes") is retired. The AST borrow
+# pass read a stamp of the modes; the borrow pass on SHIR reads the convention of each
+# argument from the TypeckResults row of the call (docs/design/ir.md 8.3).
 
 _add(ErrorMessage("CE0131", Severity.ERROR,
     "'??' operator not allowed in {context}: it returns a bare value and has no error channel",
@@ -129,7 +129,7 @@ _add(ErrorMessage("CE0131", Severity.ERROR,
 
 _add(ErrorMessage("CE0130", Severity.ERROR,
     "internal error: scope checker has no arm for node '{node}'",
-    Category.INTERNAL, "The AST grew a statement or expression node the scope checker does not dispatch on. This used to be a SILENT fall-through (issue #245) - an unhandled statement got no scope analysis at all, invisibly, the same hazard class CE0125 closed in the borrow checker. Notably the expand(...) statement was skipped this way. tests/unit/test_scope_dispatch_is_total.py is the CI gate; this is the runtime backstop."))
+    Category.INTERNAL, "The AST grew a statement or expression node the scope checker does not dispatch on. This used to be a SILENT fall-through (issue #245) - an unhandled statement got no scope analysis at all, invisibly, the same hazard class that the backstop of the borrow pass closes. Notably the expand(...) statement was skipped this way. tests/unit/test_scope_dispatch_is_total.py is the CI gate; this is the runtime backstop."))
 
 _add(ErrorMessage("CE0133", Severity.ERROR,
     "method '{name}' declares {found}, but perk '{perk}' requires {expected}",
@@ -137,7 +137,7 @@ _add(ErrorMessage("CE0133", Severity.ERROR,
 
 _add(ErrorMessage("CE0135", Severity.ERROR,
     "internal error: type substitution has no arm for {kind} node '{node}'",
-    Category.INTERNAL, "The monomorphizer substitutes a type argument for every type parameter an instantiated body names. The walk handled a cast and a '??' and COPIED every other node, so a type parameter one level deeper survived and the internal name (T, U) was printed to the user (#602): a nested cast answered CE2014, explicit call-site type arguments answered CE2061, a lambda annotation answered CE2002 and a foreach item annotation answered CE2001. ONE code for TWO positions, expression and statement, because it is one fault. tests/unit/test_substitution_dispatch_is_total.py is the CI gate; this is the runtime backstop, in the shape CE0125 gives the borrow checker and CE0130 the scope checker."))
+    Category.INTERNAL, "The monomorphizer substitutes a type argument for every type parameter an instantiated body names. The walk handled a cast and a '??' and COPIED every other node, so a type parameter one level deeper survived and the internal name (T, U) was printed to the user (#602): a nested cast answered CE2014, explicit call-site type arguments answered CE2061, a lambda annotation answered CE2002 and a foreach item annotation answered CE2001. ONE code for TWO positions, expression and statement, because it is one fault. tests/unit/test_substitution_dispatch_is_total.py is the CI gate; this is the runtime backstop, in the shape CE0130 gives the scope checker."))
 
 # CE0136 ("the AST walk has no arm for node") is retired. It was the backstop of
 # RecursiveVisitor, the base of the AST statement and expression validators of the typecheck
