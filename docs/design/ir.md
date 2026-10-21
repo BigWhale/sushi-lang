@@ -1284,10 +1284,11 @@ a call argument is the row of `typecheck`, and `borrow` does not derive it again
 `poke x` argument borrows its place for the statement with the mode that the source
 writes, so a `poke` argument for a `peek` parameter keeps the `InGuaranteed` convention of
 the parameter and is still a `poke` borrow of its place (CE2408 for a read-only place). When the walk
-of a body ends with no stop and with no error, `check_ownership` runs, and the body meets
-the stage after `borrow`, which is not built yet: the pipeline reports the first stop of
+of a body ends with no stop and with no error, `check_ownership` runs, and the body goes
+to the SLIR lowering (8.2). The pipeline reports the first stop of
 `typecheck`, then the first stop of `lift`, then the first stop of `borrow`, then an error
-hole, then the first body that `borrow` finished (`slir, <body>`).
+hole, then the first stop of the SLIR lowering, then the first body that the SLIR
+lowering finished (`emit, <body>`, 8.2).
 
 **Control flow in `borrow`.** The joins read the one path predicate of 7.5. An `If`
 checks each block from the state after its condition, and the paths that reach the code
@@ -1683,20 +1684,24 @@ locals, and nothing else:
    source of a move: lowering never classifies a use again. A `move` row at a `LocalRef`
    of the local (`move LocalRef(<local>)`) or at a capture of it marks the local moved;
    its declaration and each rebind of it mark it live. At an exit, a live local gets
-   `Drop` and a moved local gets nothing. A local whose state differs between the paths
-   that meet at a join must have a `cond_moved` row, and rule 4 applies to it. A state
-   that disagrees with the rows of `borrow` is an internal error, never a guess: a second
-   move of a moved local, and a rebind of a moved local that has no `cond_moved` row (a
-   local moved and then rebound has a row, 7.9). On the straight line the state never
-   differs between paths, so a local that is moved and then rebound is live at the exit
-   and drops with no flag.
-4. A local marked CONDITIONALLY moved gets a `bool` flag local: set `true` at the
-   declaration (set again on each loop iteration and at each rebind), set `false` at each
-   move site, and its drop becomes `DropIfSet`, at a scope exit and at the drop of the old
-   value of a rebind (rule 6) alike. The row is the answer of `borrow` at the exits of the
-   scope of the local and at each rebind of it (7.9). A local with no row is moved on no
-   path, or each exit and each rebind see it moved on every path, and rule 3 applies to
-   it.
+   `Drop` and a moved local gets nothing; at a rebind, a live old value drops and a moved
+   one drops nothing (rule 6). While every path that reaches a point gives a local one
+   state, that state decides, and no row is read: on the straight line the state is
+   exact, whether `borrow` wrote a `cond_moved` row for the local or not (a local that is
+   moved, rebound and kept at an exit has a row, 7.9; a local that is moved, rebound and
+   moved again has none). A local whose state differs between the paths that meet at a
+   join must have a `cond_moved` row, and rule 4 gives it a flag. A state that disagrees
+   with the rows of `borrow` is an internal error, never a guess: a second move of a
+   moved local, a move of a parameter that the function does not own, and a join of two
+   states for a local that has no row.
+4. A local marked CONDITIONALLY moved gets a `bool` flag local where its state differs
+   between the paths that meet at a join (rule 3); on the straight line it needs none.
+   The flag is set `true` at the declaration (set again on each loop iteration and at
+   each rebind), set `false` at each move site, and its drop becomes `DropIfSet`, at a
+   scope exit and at the drop of the old value of a rebind (rule 6) alike. The row is the
+   answer of `borrow` at the exits of the scope of the local and at each rebind of it
+   (7.9). A local with no row is moved on no path, or each exit and each rebind see it
+   moved on every path, and rule 3 applies to it.
 5. A borrow never drops. `Guaranteed`, `InGuaranteed` and `Inout` parameters never drop;
    an `Owned` parameter drops in the callee.
 6. An `Assign` to an owning place that may hold a live value drops the OLD value, and the
