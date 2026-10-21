@@ -89,7 +89,7 @@ def test_the_check_runs_on_every_compile(monkeypatch) -> None:
     first, second = _hole("CE2122"), _hole("CE2045")
     stop = check_error_holes([first, second], Counter({"CE1001": 1}))
     assert stop is not None and stop.code == "CE0155"
-    assert stop.params == {"stage": "lowering, error hole",
-                           "construct": "IndexAccess with no CE2122"}
+    assert stop.params == {"stage": "lowering",
+                           "construct": "error hole, IndexAccess with no CE2122"}
     assert stop.span == first.loc
     assert check_error_holes([first], Counter({"CE2122": 1})) is None

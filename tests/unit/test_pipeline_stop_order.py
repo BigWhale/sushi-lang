@@ -60,7 +60,7 @@ def test_a_typecheck_stop_comes_before_a_borrow_stop_and_a_hole() -> None:
     stops = Stops()
     stops.borrow_stopped(_borrow("If", _B))
     stops.stopped(_typecheck("Call"))
-    hole = StageStop("lowering, error hole", "IndexAccess with no CE2122", _B)
+    hole = StageStop("lowering", "error hole, IndexAccess with no CE2122", _B)
     assert stops.first(hole).params == {"stage": "typecheck", "construct": "Call"}
 
 
@@ -84,7 +84,7 @@ def test_a_lift_stop_comes_before_a_borrow_stop_and_a_hole() -> None:
     stops = Stops()
     stops.borrow_stopped(_borrow("If", _B))
     stops.lift_stopped(_lift("Lambda"))
-    hole = StageStop("lowering, error hole", "IndexAccess with no CE2122", _B)
+    hole = StageStop("lowering", "error hole, IndexAccess with no CE2122", _B)
     assert stops.first(hole).params == {"stage": "lift", "construct": "Lambda"}
 
 
@@ -98,14 +98,14 @@ def test_the_first_borrow_stop_is_kept() -> None:
 def test_a_borrow_stop_comes_before_a_hole() -> None:
     stops = Stops()
     stops.borrow_stopped(_borrow("Match"))
-    hole = StageStop("lowering, error hole", "IndexAccess with no CE2122", _B)
+    hole = StageStop("lowering", "error hole, IndexAccess with no CE2122", _B)
     assert stops.first(hole).params == {"stage": "borrow", "construct": "Match"}
 
 
 def test_a_hole_comes_before_a_slir_stop() -> None:
     stops = Stops()
     stops.slir_stopped(_slir("Call", _B))
-    hole = StageStop("lowering, error hole", "IndexAccess with no CE2122", _A)
+    hole = StageStop("lowering", "error hole, IndexAccess with no CE2122", _A)
     assert stops.first(hole) is hole
 
 
@@ -123,7 +123,7 @@ def test_a_program_with_no_stop_goes_on_to_the_backend() -> None:
 
 
 def test_a_hole_alone_is_the_stop() -> None:
-    hole = StageStop("lowering, error hole", "IndexAccess with no CE2122", _A)
+    hole = StageStop("lowering", "error hole, IndexAccess with no CE2122", _A)
     assert Stops().first(hole) is hole
 
 
