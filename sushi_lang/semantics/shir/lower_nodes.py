@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Sequence, TypeAlias, cast
+from typing import Any, Callable, Optional, Sequence, TypeAlias, TypeVar, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -696,8 +696,10 @@ def _continue(lw: BodyLowerer, node: a.Continue) -> s.Continue | Hole:
     return _jump(lw, node, s.Continue)
 
 
-def _jump(lw: BodyLowerer, node: a.Break | a.Continue,
-          kind: type[s.Break] | type[s.Continue]) -> s.Break | s.Continue | Hole:
+_Jump = TypeVar("_Jump", s.Break, s.Continue)
+
+
+def _jump(lw: BodyLowerer, node: a.Break | a.Continue, kind: type[_Jump]) -> _Jump | Hole:
     """A `break` or a `continue`. Outside a loop, the scope pass always refuses it (CE1003):
     an error hole."""
     if not lw.loops:
