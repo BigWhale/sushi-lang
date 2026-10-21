@@ -22,7 +22,7 @@ from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
-from sushi_lang.semantics.slir.ids import BlockId, LocalId
+from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
 from sushi_lang.semantics.slir.verify import DeclaredParams, declared_params, verify_function
 from sushi_lang.semantics.typesys import (
     BorrowMode, BuiltinType, DynamicArrayType, StructType, Type, UnknownType,
@@ -409,6 +409,48 @@ def test_a_statement_with_no_span_is_refused():
 
 def test_a_terminator_with_no_span_is_refused():
     _refused(_function([BLANK], _block(0, tm.Return(None))), "spans", None)  # type: ignore[arg-type]
+
+
+# -- shapes that no lowering makes yet, which the verifier does not check ----------------
+
+
+def _not_checked(function: SlirFunction) -> None:
+    with pytest.raises(InternalCompilerError) as caught:
+        _passes(function)
+    assert caught.value.code == "CE0000"
+    assert "not checked yet" in caught.value.params["detail"]
+    assert caught.value.span == BAD
+
+
+def test_a_begin_borrow_is_not_checked_yet():
+    begin = st.BeginBorrow(BorrowId(0), _local(1), BorrowMode.PEEK, BAD)
+    _not_checked(_function([BLANK, I32], _block(0, _ret(), _set(1, r.Use(p.Const(k.Int(1, I32)))),
+                                                begin)))
+
+
+def test_an_end_borrow_is_not_checked_yet():
+    _not_checked(_function([BLANK], _block(0, _ret(), st.EndBorrow(BorrowId(0), BAD))))
+
+
+@pytest.mark.parametrize("projection", [
+    p.Field(p.Global("unit$pair"), 0),
+    p.Index(p.Global("unit$table"), p.Const(k.Int(0, I32))),
+    p.Downcast(p.Global("unit$cache"), "Some"),
+    p.Deref(p.Global("unit$cell")),
+], ids=["field", "index", "downcast", "deref"])
+def test_a_projection_of_a_global_is_not_checked_yet(projection: p.Place):
+    _not_checked(_function([BLANK, I32], _block(0, _ret(), _set(1, r.Use(p.Copy(projection)), BAD))))
+
+
+@pytest.mark.parametrize("target", [p.Field(_local(1), 0), p.Global("unit$log")],
+                         ids=["projection", "global"])
+def test_a_drop_of_a_place_that_is_no_local_is_not_checked_yet(target: p.Place):
+    _not_checked(_function([BLANK, PAIR], _block(0, _ret(), st.Drop(target, BAD))))
+
+
+def test_a_drop_if_set_of_a_projection_is_not_checked_yet():
+    drop = st.DropIfSet(p.Field(_local(1), 0), LocalId(2), BAD)
+    _not_checked(_function([BLANK, PAIR, BOOL], _block(0, _ret(), _flag(2, True), drop)))
 
 
 # -- the readers that lowering and the verifier share ------------------------------------

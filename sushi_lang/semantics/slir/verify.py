@@ -23,8 +23,9 @@ flag is false must have moved the local. An `Owned` parameter is an owning local
 borrowed parameter never drops and never moves, and an `Inout` one holds a value again at
 the `return`. A `Trap` ends the program, so it needs no drop.
 
-No lowering makes a `BeginBorrow` yet, so the rule of the borrow regions is not checked.
-A `Global` place has no type in SLIR, so a projection of it is not checked.
+The verifier refuses a shape that no lowering makes yet, and that it does not check, with
+the internal error CE0000: a `BeginBorrow` or an `EndBorrow`, a projection of a `Global` (a
+`Global` has no type in SLIR), and a `Drop` or a `DropIfSet` of a place that is no local.
 """
 from __future__ import annotations
 
@@ -153,6 +154,12 @@ class _Check:
         er.raise_internal_error(er.ERR.CE0158.code, span=span, filename=self.filename,
                                 function=self.function.name, rule=rule, detail=detail)
 
+    def not_checked(self, what: str, span: Optional[Span]) -> NoReturn:
+        """A shape that no lowering makes yet, and that the verifier does not check."""
+        er.raise_internal_error("CE0000", span=span, filename=self.filename,
+                                detail=f"{what} is not checked yet by the SLIR verifier, "
+                                       f"because no lowering makes one")
+
     def has_local(self, local: LocalId) -> bool:
         return 0 <= local.index < len(self.function.locals)
 
@@ -198,8 +205,6 @@ class _Check:
             if isinstance(stmt, _TERMINATORS):
                 self.fail(ONE_TERMINATOR, f"{where} holds a terminator among its statements",
                           span)
-            if isinstance(stmt, st.EndBorrow):
-                continue
             arm = _STATEMENTS.get(type(stmt))
             if arm is None:
                 er.raise_internal_error("CE0000", span=span,
@@ -279,7 +284,9 @@ class _Check:
         owning type that may come as a copy: one bound from a literal owns no heap, and
         `borrow` adopts it (ir.md 7.9)."""
         ty = self.place(operand.place, span).ty
-        if isinstance(ty, Type) and ty != BuiltinType.STRING and owns_resource(ty, self.drops):
+        if ty is None or isinstance(ty, _Payload) or ty == BuiltinType.STRING:
+            return
+        if owns_resource(ty, self.drops):
             self.fail(OWNED_COPY, f"{show(operand)} has the type {display_type(ty)}, which "
                                   f"owns", span)
 
@@ -296,13 +303,17 @@ class _Check:
                 self.fail(CONVENTIONS, f"argument {index} of @{callee.name} is @{have.value}, "
                                        f"and its parameter is @{want.value}", stmt.span)
 
+    def dropped(self, stmt: st.Drop | st.DropIfSet) -> LocalId:
+        """The local that a drop targets: a drop of any other place is not checked yet."""
+        if not isinstance(stmt.place, p.Local):
+            self.not_checked(f"a drop of {show(stmt.place)}, which is no local", stmt.span)
+        self.local_place(stmt.place, stmt.span)
+        return stmt.place.id
+
     def drop(self, stmt: st.Drop | st.DropIfSet) -> None:
-        typed = self.place(stmt.place, stmt.span)
-        if isinstance(typed.ty, _Payload):
-            self.fail(OWNING_DROP, f"{show(stmt.place)} is the payload of a variant",
-                      stmt.span)
-        if typed.ty is not None and not owns_resource(typed.ty, self.drops):
-            self.fail(OWNING_DROP, f"{show(stmt.place)} has the type {display_type(typed.ty)}, "
+        ty = self.type_of(self.dropped(stmt))
+        if not owns_resource(ty, self.drops):
+            self.fail(OWNING_DROP, f"{show(stmt.place)} has the type {display_type(ty)}, "
                                    f"which owns nothing", stmt.span)
 
     def drop_if_set(self, stmt: st.DropIfSet) -> None:
@@ -310,14 +321,13 @@ class _Check:
         flag = stmt.flag
         if not self.has_local(flag) or self.type_of(flag) != BuiltinType.BOOL:
             self.fail(BOOL_FLAG, f"the flag _{flag.index} is no bool local", stmt.span)
-        if isinstance(stmt.place, p.Local):
-            kept = self.guards.setdefault(stmt.place.id, flag)
-            if kept != flag:
-                self.fail(BOOL_FLAG, f"{show(stmt.place)} has two flags, _{kept.index} and "
-                                     f"_{flag.index}", stmt.span)
+        kept = self.guards.setdefault(self.dropped(stmt), flag)
+        if kept != flag:
+            self.fail(BOOL_FLAG, f"{show(stmt.place)} has two flags, _{kept.index} and "
+                                 f"_{flag.index}", stmt.span)
 
-    def begin_borrow(self, stmt: st.BeginBorrow) -> None:
-        self.place(stmt.place, stmt.span)
+    def borrow_region(self, stmt: st.BeginBorrow | st.EndBorrow) -> None:
+        self.not_checked(f"the borrow region {stmt.id.index}", stmt.span)
 
     def storage(self, stmt: st.StorageLive | st.StorageDead) -> None:
         if not self.has_local(stmt.local):
@@ -331,40 +341,40 @@ class _Check:
             self.fail(TYPED_PLACES, f"_{place.id.index} is no local of the function", span)
         return _Typed(place, self.type_of(place.id))
 
-    def field_place(self, place: p.Field, span: Span) -> _Typed:
+    def base(self, place: p.Field | p.Index | p.Downcast | p.Deref,
+             span: Span) -> tuple[_Typed, Type | _Payload]:
+        """The base of a projection and its type. Only a `Global` has no type in SLIR, so a
+        projection of one is not checked yet."""
         base = self.place(place.base, span)
-        ty = base.ty
-        parts: Optional[tuple[Type, ...]] = None
+        if base.ty is None:
+            self.not_checked(f"the projection {show(place)} of a global", span)
+        return base, base.ty
+
+    def field_place(self, place: p.Field, span: Span) -> _Typed:
+        base, ty = self.base(place, span)
         if isinstance(ty, _Payload):
             parts = ty.types
         elif isinstance(ty, StructType):
             parts = tuple(field_ty for _, field_ty in ty.fields)
-        elif ty is not None:
+        else:
             self.fail(TYPED_PLACES, f"{show(place)} reads a field of the type "
                                     f"{display_type(ty)}, which has no fields", span)
-        if parts is None:
-            return _Typed(base.root, None, base.indexes)
         if not 0 <= place.index < len(parts):
             self.fail(TYPED_PLACES, f"{show(place)} reads field {place.index}, and the value "
                                     f"has {len(parts)}", span)
         return _Typed(base.root, parts[place.index], base.indexes)
 
     def index_place(self, place: p.Index, span: Span) -> _Typed:
-        base = self.place(place.base, span)
+        base, ty = self.base(place, span)
         self.operand(place.index, span)
-        indexes = (*base.indexes, place.index)
-        if base.ty is None:
-            return _Typed(base.root, None, indexes)
-        if not isinstance(base.ty, (ArrayType, DynamicArrayType)):
+        if not isinstance(ty, (ArrayType, DynamicArrayType)):
             self.fail(TYPED_PLACES, f"{show(place)} indexes a value that is no array", span)
-        return _Typed(base.root, base.ty.base_type, indexes)
+        return _Typed(base.root, ty.base_type, (*base.indexes, place.index))
 
     def downcast_place(self, place: p.Downcast, span: Span) -> _Typed:
-        base = self.place(place.base, span)
-        if base.ty is None:
-            return _Typed(base.root, None, base.indexes)
-        if isinstance(base.ty, EnumType):
-            for variant in base.ty.variants:
+        base, ty = self.base(place, span)
+        if isinstance(ty, EnumType):
+            for variant in ty.variants:
                 if variant.name == place.variant:
                     return _Typed(base.root, _Payload(variant.associated_types),
                                   base.indexes)
@@ -372,13 +382,11 @@ class _Check:
                   span)
 
     def deref_place(self, place: p.Deref, span: Span) -> _Typed:
-        base = self.place(place.base, span)
-        if base.ty is None:
-            return _Typed(base.root, None, base.indexes)
-        if isinstance(base.ty, ReferenceType):
-            return _Typed(base.root, base.ty.referenced_type, base.indexes)
-        if isinstance(base.ty, PointerType):
-            return _Typed(base.root, base.ty.pointee_type, base.indexes)
+        base, ty = self.base(place, span)
+        if isinstance(ty, ReferenceType):
+            return _Typed(base.root, ty.referenced_type, base.indexes)
+        if isinstance(ty, PointerType):
+            return _Typed(base.root, ty.pointee_type, base.indexes)
         self.fail(TYPED_PLACES, f"{show(place)} reads through a value that is no pointer",
                   span)
 
@@ -388,7 +396,8 @@ _STATEMENTS: dict[type, Callable[..., None]] = {
     st.Call: _Check.call,
     st.Drop: _Check.drop,
     st.DropIfSet: _Check.drop_if_set,
-    st.BeginBorrow: _Check.begin_borrow,
+    st.BeginBorrow: _Check.borrow_region,
+    st.EndBorrow: _Check.borrow_region,
     st.StorageLive: _Check.storage,
     st.StorageDead: _Check.storage,
 }
@@ -468,13 +477,15 @@ class _Flow:
                 self.operand(configs, operand, span)
             self.write(configs, stmt.dest, span, None)
         elif isinstance(stmt, st.Drop):
-            self.drop(configs, stmt.place, span)
+            self.drop(configs, self.check.dropped(stmt), span)
         elif isinstance(stmt, st.DropIfSet):
-            self.drop_if_set(configs, stmt.place, stmt.flag, span)
+            self.drop_if_set(configs, self.check.dropped(stmt), stmt.flag, span)
         elif isinstance(stmt, (st.StorageLive, st.StorageDead)):
             self.storage(configs, stmt.local, span)
-        elif isinstance(stmt, st.BeginBorrow):
-            self.read(configs, stmt.place, span)
+        else:
+            er.raise_internal_error("CE0000", span=span,
+                                    detail=f"the dataflow of the SLIR verifier has no row for "
+                                           f"the class {type(stmt).__name__}")
 
     def terminator(self, configs: list[frozenset[_Config]], term: tm.SlirTerminator) -> None:
         if isinstance(term, tm.SwitchInt):
@@ -547,11 +558,7 @@ class _Flow:
         for guarded in self.flagged.get(flag, ()):
             configs[guarded.index] = frozenset((s, value) for s, _ in configs[guarded.index])
 
-    def drop(self, configs: list[frozenset[_Config]], place: p.Place, span: Span) -> None:
-        if not isinstance(place, p.Local):
-            self.read(configs, place, span)
-            return
-        local = place.id
+    def drop(self, configs: list[frozenset[_Config]], local: LocalId, span: Span) -> None:
         if self.borrowed(local):
             self.violate(DROP_ONCE, f"drops the parameter _{local.index}, which the function "
                                     f"borrows", span)
@@ -564,13 +571,10 @@ class _Flow:
             self.violate(DROP_ONCE, f"drops _{local.index}, which holds no value", span)
         configs[local.index] = frozenset((_DROPPED, flag) for _, flag in configs[local.index])
 
-    def drop_if_set(self, configs: list[frozenset[_Config]], place: p.Place, flag: LocalId,
+    def drop_if_set(self, configs: list[frozenset[_Config]], local: LocalId, flag: LocalId,
                     span: Span) -> None:
-        if not isinstance(place, p.Local):
-            self.read(configs, place, span)
-            return
-        local, after = place.id, set()
-        for state, value in configs[place.id.index]:
+        after = set()
+        for state, value in configs[local.index]:
             if value not in (_TRUE, _FALSE):
                 self.violate(DROP_ONCE, f"reads the flag _{flag.index} of _{local.index}, "
                                         f"which holds no known value", span)
