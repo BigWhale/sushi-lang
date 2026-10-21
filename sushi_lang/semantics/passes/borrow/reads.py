@@ -1,9 +1,11 @@
-"""Expression shape probes, and the walkers over what reads out of a live owner.
+"""Expression shape probes, and the readers of what reads out of a live owner.
 
-The three walkers below answer three different questions about the SAME shapes -- is this
-a read through an owner (bool), what type does it produce (Type), which local does it
-bottom out in (str). They live together and share `unwrap_try` because a fourth, narrower
-copy that forgot the `??` is exactly how `outer.get(0)??.push(5)` went unstamped.
+`read_type` and `borrow_owner` read a SHIR node: the type of the value of a node, and the
+local that a borrow of a place is counted on and that a binding into the place freezes.
+The other probes read the AST, and the construct groups that check a field, an element, a
+container get-out and a constant port them to SHIR. They live together and share
+`unwrap_try` because a narrower copy that forgot the `??` is exactly how
+`outer.get(0)??.push(5)` went unstamped.
 """
 
 from __future__ import annotations
@@ -20,16 +22,16 @@ from sushi_lang.semantics.ast import (
     MemberAccess,
     MethodCall,
     Name,
-    TryExpr,
 )
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.borrowed_return import is_borrowed_call
 from sushi_lang.semantics.places import Step, unwrap_try, walk_place
 from sushi_lang.semantics.ownership import is_get_out_container
-from sushi_lang.semantics.passes.lift import ENV_PARAM_NAME
+from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import ReferenceType, StructType, Type
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.ids import LocalId
+
     from . import BorrowChecker
 
 # A read through an owner crosses every step: a field, an element, a call's receiver, a `??`.
@@ -53,30 +55,15 @@ def root_owner(expr: Optional[Expr]) -> Optional[str]:
     return root.id if root is not None else None
 
 
-def captured_key(variable: str) -> str:
-    """The borrow-state name of the captured `variable` in a lifted lambda body."""
-    return f"{ENV_PARAM_NAME}.{variable}"
+def borrow_owner(node: object) -> Optional[LocalId]:
+    """The local that a borrow of the SHIR place `node` is counted on, and that a binding
+    into `node` freezes: a local, under each `??` that reads it.
 
-
-def captured_variable(member: MemberAccess) -> Optional[str]:
-    """`#closure_env.xs` is the captured `xs`: the place a borrow of it stops at."""
-    receiver = member.receiver
-    if isinstance(receiver, Name) and receiver.id == ENV_PARAM_NAME:
-        return captured_key(member.member)
-    return None
-
-
-def borrow_owner(expr: Optional[Expr]) -> Optional[str]:
-    """The name a borrow of `expr` is counted on, and a binding into `expr` freezes.
-
-    It is the root local, except in a lifted lambda body, where each captured variable
-    is a place of its own (#1129): borrows of two captured variables do not conflict.
-    `root_owner` still answers the environment, which owns and frees every capture.
+    A field and an element step come with the SHIR place walk.
     """
-    walked = walk_place(expr, OWNER_STEPS, stop=captured_variable)
-    if walked.stop is not None:
-        return walked.stop
-    return walked.name.id if walked.name is not None else None
+    while isinstance(node, e.Try):
+        node = node.inner
+    return node.local if isinstance(node, e.LocalRef) else None
 
 
 def chain_call_boundary(expr: Optional[Expr]) -> Optional[Span]:
@@ -182,44 +169,19 @@ def is_bare_enum_constant(checker: 'BorrowChecker', expr: Optional[Expr]) -> boo
     return get_variant is not None and get_variant(expr.member) is not None
 
 
-def read_type(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[Type]:
-    """The type a read-through-an-owner expression produces."""
-    if isinstance(expr, TryExpr):
-        # The typecheck pass stamps what a `??` unwraps to. Answering the WRAPPER's type
-        # instead classified `r??` over a `Result@(i32, string)` as owning, and a plain
-        # payload read out of a borrowed wrapper was refused (#548).
-        unwrapped = expr.inferred_unwrapped_type
-        if unwrapped is not None:
-            return unwrapped
-    expr = unwrap_try(expr)
+def read_type(checker: 'BorrowChecker', node: object) -> Optional[Type]:
+    """The type of the value that the SHIR node `node` makes or reads.
 
-    match expr:
-        case Name():
-            state = checker.borrow_state.get(expr.id)
-            if state is not None:
-                return state.var_type
-            return constant_type(checker, expr.id)
-        case MemberAccess():
-            return _field_type(checker, expr)
-        case IndexAccess() if expr.is_slice:
-            # A slice is a `T[]` of the array it views (#1226): the typecheck pass's stamp.
-            return expr.inferred_element_type
-        case IndexAccess():
-            return checker.types.element_type(read_type(checker, expr.array))
-
-    if isinstance(expr, (MethodCall, DotCall)) and expr.iterator_state is not None:
-        # A lent iterator: the value it makes is the type the call answers (#1259).
-        return checker.types.resolve_named(expr.inferred_return_type)
-    if is_borrowed_call(expr):
-        # The answer of a borrowed return is a view of the type it answers (#1229).
-        return checker.types.resolve_named(expr.inferred_return_type)
-    receiver = called_on(expr, "get", "first", "last")
-    if receiver is None:
-        return None
-    # A container `.get()` returns `Maybe@(T)`, and every use of it reaches here through
-    # the `??` already unwrapped, so the interesting type is the element. `Own@(T).get()`
-    # hands back the bare `T`.
-    return checker.types.element_type(receiver_type(checker, receiver))
+    A local has the type of its state, which keeps the reference type of a `peek` or a
+    `poke` parameter. Every other node has the type that the typecheck pass answered: a
+    `??` answers what it unwraps.
+    """
+    if isinstance(node, e.LocalRef):
+        state = checker.borrow_state.get(node.local)
+        return state.var_type if state is not None else checker.local_type(node.local)
+    if isinstance(node, e.ExprNode):
+        return checker.answers().type_of(node.shir_id)
+    return None
 
 
 def constant_sig(checker: 'BorrowChecker', name: str):
@@ -237,20 +199,6 @@ def constant_sig(checker: 'BorrowChecker', name: str):
             checker.scope):
         return None
     return sig
-
-
-def namespaced_storage(checker: 'BorrowChecker', expr: Optional[Expr]):
-    """The record `alias.name` reaches in the constant table, a `const` or a `var` (#1016).
-
-    The typecheck pass stamps what the qualified name resolved to, so the record is read
-    from the declaring unit's own table and the name is not resolved again. A stdlib
-    constant has no record there, and it is a plain immediate.
-    """
-    ref = getattr(expr, "namespace_ref", None)
-    if (not isinstance(expr, MemberAccess) or ref is None
-            or ref.kind != "constant" or ref.producer != "unit"):
-        return None
-    return checker.tables.constants.declared(ref.name, ref.origin)
 
 
 def constant_type(checker: 'BorrowChecker', name: str) -> Optional[Type]:

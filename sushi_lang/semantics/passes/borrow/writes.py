@@ -18,6 +18,8 @@ from .reads import borrow_owner, chain_call_boundary, slice_on_path
 from .state import BorrowState
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.ids import LocalId
+
     from . import BorrowChecker
 
 
@@ -154,16 +156,19 @@ def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike,
                              moves_storage=effect.moves_storage or not effect.mutates)
 
 
-def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
+def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
                           span: Optional[Span], what: str,
                           receiver: Optional[Expr] = None,
                           *, rebind: bool = False) -> bool:
     """THE gate: a write that cannot reach the value it appears to write is rejected.
 
-    `rebind` names the POSITION: a write to the name itself rather than through it. Half
-    the table answers differently there (`refuses_a_rebind`), which is why the position is
-    an argument and not a second gate -- one of those grew beside this one and covered a
-    single kind, so a match binding was rebindable and freed the owner's payload (#590).
+    `local` is the local that the write reaches, and the diagnostic names it by its source
+    name. `rebind` names the POSITION: a write to the name itself rather than through it.
+    Half the table answers differently there (`refuses_a_rebind`), which is why the
+    position is an argument and not a second gate -- one of those grew beside this one
+    and covered a single kind, so a match binding was rebindable and freed the owner's
+    payload (#590). `receiver` is the AST receiver of a write through a place, which the
+    field and element groups port to SHIR.
     """
     # The sixth kind keys on SHAPE, not on the state of a name (#352, #407): past a call
     # boundary the receiver is a temporary copy, whatever the root's mode is -- so this
@@ -181,11 +186,12 @@ def reject_readonly_write(checker: 'BorrowChecker', name: Optional[str],
         return True
     if receiver is not None and reject_write_through_slice(checker, receiver, span, what):
         return True
-    if name is None:
+    if local is None:
         return False
-    state = checker.borrow_state.get(name)
+    state = checker.borrow_state.get(local)
     if state is None:
         return False
+    name = state.name
     if state.is_lent_iterator and not rebind:
         # The binding owns its iterator value, so a write through it moves its own cursor
         # and nothing its owners keep (#1259). A rebind would drop the value and borrow
@@ -231,7 +237,7 @@ def reject_write_through_slice(checker: 'BorrowChecker', receiver: Expr,
     return True
 
 
-def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[str],
+def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[LocalId],
                              span: Optional[Span], what: str, *,
                              place: Optional[Expr] = None,
                              moves_storage: bool = True) -> None:
@@ -248,7 +254,7 @@ def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[str],
     # INVALIDATE, do not report: the change is an error only on a read AFTER it.
     # Reporting here would reject `let g = fns.get(0)??; g(10); fns.free()`.
     # An iterator comes first, so a binding it covers is left to its one report.
-    hit: set[str] = set()
+    hit: set[LocalId] = set()
     kept: list = []
     entries = sorted(state.binding_borrows,
                      key=lambda entry: _views_storage(checker, entry[0]) is None)
@@ -275,7 +281,7 @@ def check_owner_not_borrowed(checker: 'BorrowChecker', owner: Optional[str],
                                  if entry in kept]
 
 
-def _views_storage(checker: 'BorrowChecker', name: str) -> Optional[Expr]:
+def _views_storage(checker: 'BorrowChecker', name: LocalId) -> Optional[Expr]:
     """The container a foreach iterator binding walks, or None for any other binding."""
     binding = checker.borrow_state.get(name)
     return binding.views_storage_of if binding is not None else None

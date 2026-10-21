@@ -10,10 +10,11 @@ from sushi_lang.semantics.ast import DotCall, Expr, MethodCall
 from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
 from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
+from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.source_text import source_text
 from sushi_lang.semantics.typesys import ReferenceType
 
-from .reads import read_type, root_owner
+from .reads import borrow_owner, read_type
 from .state import BorrowState
 
 if TYPE_CHECKING:
@@ -108,7 +109,8 @@ def emit_use_of_invalidated_borrow(checker: 'BorrowChecker', name: str,
     `by_the_change` is the use that IS an argument of the change: the call reads it while
     it changes the owner (#888), so the use is not later and the escape is a clone.
     """
-    owner, what = state.invalidated_by
+    owner_local, what = state.invalidated_by
+    owner = checker.name_of(owner_local)
     diag = checker.err.emit_with(er.ERR.CE2412, state.invalidated_at,
                                  owner=owner, name=name)
     if state.bound_at_span is not None:
@@ -326,19 +328,16 @@ def parameter_escape(checker: 'BorrowChecker', text: str, ty) -> str:
     return " -- otherwise " + escape_help(checker, text, ty, handover=False)
 
 
-def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr,
+def emit_consume_of_read(checker: 'BorrowChecker', expr: e.ShirExpr,
                          use_of_copy: Optional[CopyUse] = None) -> None:
-    """Report CE2411 for a read through a live owner (`h.inner`, `c.get(0)??`).
-
-    The owner can be a temporary (`give().get(0)??`), so the read is spelled with the
-    temporary in its short form.
-    """
+    """Report CE2411 for a read through a live owner (`r??` over a borrowed `r`), with the
+    read spelled as the user wrote it."""
     text = spelled(checker, expr)
     diag = checker.err.emit_with(er.ERR.CE2411, expr.loc, name=text)
-    owner = root_owner(expr)
+    owner = borrow_owner(expr)
     state = checker.borrow_state.get(owner) if owner is not None else None
     if state is not None and state.declared_at_span is not None:
-        diag.note_at(f"'{owner}' owns this value and still frees it",
+        diag.note_at(f"'{state.name}' owns this value and still frees it",
                      state.declared_at_span)
     # The OWNER's type answers the escape question: a read through it can only be
     # refused when what is read owns something, and it is the owner that holds it.
@@ -348,11 +347,6 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr,
     # hold the branch honest until it is fixed.
     value_type = read_type(checker, expr)
     _note_opaque_mover(checker, diag, value_type)
-    from .iterators import lent_iterator_help, lent_owners
-    owners = lent_owners(checker, expr)
-    if owners is not None:
-        diag.help(lent_iterator_help(owners)).emit()
-        return
     diag.help(escape_help(checker, text, owner_type, value_type,
                           use_of_copy=use_of_copy,
                           through_receiver=state is not None and state.is_method_receiver))

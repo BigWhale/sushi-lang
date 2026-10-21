@@ -1,4 +1,12 @@
-"""The ownership decision at a consuming use, and the provenance it is taken from."""
+"""The ownership decision at a consuming use, and the provenance it is taken from.
+
+A consuming use is a value in a position that takes it over (`ConsumingUse`,
+`semantics/ownership.py`; the positions of SHIR are `consuming_uses` in
+`semantics/shir/ownership_check.py`). The pass decides its `Ownership` ONE time, with
+`classify()`, and writes the answer as a row of the `OwnershipResults` of the body
+(`decide`, docs/design/ir.md 7.9). A `let` BINDS: it takes the decision too, and a borrow
+that it reads is a `let`-borrow of the owner (`bind`).
+"""
 
 from __future__ import annotations
 from dataclasses import replace
@@ -6,9 +14,10 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import (
-    Expr, IndexAccess, Lambda, Let, Name, Spread, StringLit, TryExpr)
+from sushi_lang.semantics.ast import Expr, IndexAccess, Lambda, Let, Name
 from sushi_lang.semantics.ownership import Ownership, Provenance, TypeClass, classify
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
 from .diagnostics import (
@@ -18,14 +27,8 @@ from .diagnostics import (
     no_clone_reason,
     refuses_clone,
 )
-from .reads import (
-    borrow_owner, constant_sig, names_kept_storage, namespaced_storage, read_type,
-    reads_through_owner, unwrap_try)
-from .iterators import lent_owners
-from .borrowed_returns import call_owners, reject_view_of_temporary
-from sushi_lang.semantics.borrowed_return import is_borrowed_call
+from .reads import borrow_owner, names_kept_storage, read_type
 from .state import BorrowState, record_owners
-from .takes import field_take, spend
 from .writes import check_owner_not_borrowed
 
 if TYPE_CHECKING:
@@ -33,8 +36,9 @@ if TYPE_CHECKING:
 
 
 def binds_a_bare_literal_string(declared_ty, init) -> bool:
-    """Option B: is this binding a `string` whose value is a plain literal?"""
-    return declared_ty == BuiltinType.STRING and isinstance(init, StringLit)
+    """Option B: is this binding a `string` whose value is a plain text literal?"""
+    return (declared_ty == BuiltinType.STRING and isinstance(init, e.Lit)
+            and isinstance(init.value, e.StrConst))
 
 
 def reconcile_closure_bind(checker: 'BorrowChecker', stmt: Let) -> None:
@@ -58,59 +62,42 @@ def reconcile_closure_bind(checker: 'BorrowChecker', stmt: Let) -> None:
             dest.var_type = src.var_type
 
 
-def source_provenance(checker: 'BorrowChecker', expr: Expr) -> Provenance:
-    """Where the value at a consuming use came from -- the half only semantics knows."""
-    if isinstance(expr, Name):
-        return name_provenance(checker, expr.id)
+def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
+    """Where the value at a consuming use came from -- the half only semantics knows.
 
-    # The answer of a borrowed return views its sources (#1229), a `??` over it too. A
-    # call behind an alias is one too, so this comes before the function value below.
-    if is_borrowed_call(expr):
-        return Provenance.BORROWED
-
-    # `alias.fn` is a function value, built new at each read as the bare `fn` is: it
-    # reads no storage (#1013).
-    ref = getattr(expr, "namespace_ref", None)
-    if ref is not None and ref.kind == "function":
-        return Provenance.FRESH
-
-    # `alias.name` that reaches a `const` or a `var` is the same storage as the bare name,
-    # and has the bare name's provenance (#1016).
-    if namespaced_storage(checker, expr) is not None:
+    A local has the provenance of its state. A constant is storage that the program keeps
+    (#726): it is not FRESH, so a take of an owning one is refused. `r??` yields what `r`
+    holds, and the payload has the provenance of `r` (#548): a borrowed `r` keeps its
+    owner, so the payload is a read through it; an owned `r` was SPENT by the `??` itself
+    (`unwrap_place`), so nothing owns the payload now and the position adopts it.
+    Anything else makes a new value.
+    """
+    if isinstance(node, e.LocalRef):
+        return name_provenance(checker, node.local)
+    if isinstance(node, e.ConstRef):
         return Provenance.OWNED
-
-    # A marked field take is the one read through an owner that is not a borrow: the
-    # owner is a local this function holds, and the take spends it (ruling R28).
-    if field_take(checker, expr) is not None:
-        return Provenance.OWNED
-
-    # `m.or_err(nom e)` answers what `m` holds, by the same rule as `m??` below: a
-    # borrowed `m` is read through, and an owned `m` was spent by the call (design 4).
-    receiver = read_through_receiver(checker, expr)
-    if receiver is not None:
-        if source_provenance(checker, receiver) is Provenance.BORROWED:
+    if isinstance(node, e.Try) and isinstance(node.inner, e.LocalRef):
+        if name_provenance(checker, node.inner.local) is Provenance.BORROWED:
             return Provenance.BORROWED
-        return Provenance.FRESH
-
-    # `r??` yields what `r` holds, and the payload has `r`'s provenance (#548). A
-    # borrowed `r` keeps its owner, so the payload is a read through it. An owned `r`
-    # was SPENT by the `??` itself (`unwrap_place`), so nothing owns the payload now
-    # and the position adopts it -- FRESH, never OWNED, because there is no source
-    # state left for the position to mark.
-    inner = unwrap_try(expr)
-    if inner is not expr and isinstance(inner, Name):
-        if name_provenance(checker, inner.id) is Provenance.BORROWED:
-            return Provenance.BORROWED
-        return Provenance.FRESH
-
-    if reads_through_owner(checker, expr):
-        return Provenance.BORROWED
-
-    # A lent iterator is a new value that borrows its owners (#1259): it may not leave.
-    if lent_owners(checker, expr) is not None:
-        return Provenance.BORROWED
-
     return Provenance.FRESH
+
+
+def source_class(checker: 'BorrowChecker', node: e.ShirExpr) -> TypeClass:
+    """What the value at a consuming use owns. A local applies option B (`owns_no_heap`)."""
+    if isinstance(node, e.LocalRef):
+        state = checker.borrow_state.get(node.local)
+        ty = state.var_type if state is not None else checker.local_type(node.local)
+        return checker.types.type_class_of_source(state, ty)
+    return checker.types.type_class(read_type(checker, node))
+
+
+def decide(checker: 'BorrowChecker', node: e.ShirExpr, provenance: Provenance,
+           type_class: TypeClass) -> Ownership:
+    """The `Ownership` of the consuming use `node`, from `classify()`, written ONE time as a
+    row of the `OwnershipResults` of the body. The one writer of the row."""
+    decision = classify(provenance, type_class)
+    checker.table().record_ownership(node.shir_id, decision)
+    return decision
 
 
 def read_through_receiver(checker: 'BorrowChecker', expr: Expr) -> Optional[Expr]:
@@ -132,69 +119,56 @@ def read_through_receiver(checker: 'BorrowChecker', expr: Expr) -> Optional[Expr
     return receiver
 
 
-def unwrap_place(checker: 'BorrowChecker', expr: TryExpr) -> None:
+def unwrap_place(checker: 'BorrowChecker', node: e.Try) -> None:
     """`r??` spends an owned `r`, and refuses a borrowed `r` whose error owns (#548, #1171).
 
     The unwrap moves the payload out of the wrapper, so a wrapper the writer OWNS has
     nothing left to free: the `??` is a consuming position of its own, and `r` after it
     is CE2405 exactly as after `f(nom r)`. The class is the WRAPPER's and not the
-    payload's, because the Err arm travels too -- a `Result@(i32, Fail)` whose Fail
-    holds a string is spent on the propagation path, or the scope cleanup frees the
-    error the caller is about to read. A wrapper that owns nothing is copied out of
-    and stays usable.
+    payload's, because the Err arm travels too. A wrapper that owns nothing is copied out
+    of and stays usable.
 
     A BORROWED wrapper keeps its owner. Its Ok payload is a read through it, and
     `source_provenance` says so at the position that takes it. Its error leaves the
     function in the returned Err, so an error type that owns is the consuming use of a
     borrow (CE2411, docs/design/borrow-model.md S10d); the help names `r.clone()??`.
+    Any other operand makes a new value, which the `??` adopts.
     """
-    source = expr.expr
-    if isinstance(source, Name):
-        provenance = name_provenance(checker, source.id)
-        source.ownership_provenance = provenance
-        if provenance is Provenance.OWNED:
-            consume_named(checker, source.id, provenance, expr.loc)
-            return
-    if propagates_a_borrowed_error(checker, expr):
-        consume(checker, source, PROPAGATE_THE_COPY)
+    inner = node.inner
+    provenance = source_provenance(checker, inner)
+    if isinstance(inner, e.LocalRef) and provenance is Provenance.OWNED:
+        consume_named(checker, inner, provenance, node.loc)
+        return
+    if propagates_a_borrowed_error(checker, node):
+        consume(checker, inner, PROPAGATE_THE_COPY)
+        return
+    decide(checker, inner, provenance, source_class(checker, inner))
 
 
 # What the CE2411 escape does with the copy of a borrowed wrapper under `??`.
 PROPAGATE_THE_COPY = CopyUse("propagate the copy", "??")
 
 
-def propagates_a_borrowed_error(checker: 'BorrowChecker', expr: TryExpr) -> bool:
+def propagates_a_borrowed_error(checker: 'BorrowChecker', node: e.Try) -> bool:
     """Does `r??` put an owning error that another owner keeps in the returned Err?
 
-    A read-through `m.or_err(nom e)` is not one: its error is the argument `e`, which
-    the call owns, and not a part of the borrowed `m`.
+    The error type is a fact of the `??` that the typecheck pass answers (`TryFacts`).
     """
-    source = expr.expr
-    if read_through_receiver(checker, source) is not None:
+    if source_provenance(checker, node.inner) is not Provenance.BORROWED:
         return False
-    if source_provenance(checker, source) is not Provenance.BORROWED:
-        return False
-    return checker.types.type_class(expr.inferred_error_type) is TypeClass.MOVE
+    facts = checker.answers().try_facts_of(node.shir_id)
+    return facts is not None and checker.types.type_class(facts.err) is TypeClass.MOVE
 
 
-def name_provenance(checker: 'BorrowChecker', name: str) -> Provenance:
-    """The `Provenance` of a source that is a bare name."""
-    state = checker.borrow_state.get(name)
+def name_provenance(checker: 'BorrowChecker', local) -> Provenance:
+    """The `Provenance` of a source that is a local."""
+    state = checker.borrow_state.get(local)
     if state is None:
-        # A name with no state may still reach unit-level STORAGE: a `const` gets no
-        # `BorrowState`, where a `var` gets one at function entry. It is one object the
-        # program keeps, so it is not FRESH, and calling it fresh told a plain `match`
-        # that it owned its scrutinee and could take a payload out of it (#726).
-        return (Provenance.OWNED if constant_sig(checker, name) is not None
-                else Provenance.FRESH)
+        return Provenance.FRESH
     if state.owns_no_heap:
         # Nothing to borrow: this binding's value owns no heap, so every position may
         # have it. Only a `string` bound straight from a literal answers True (#338
         # removed the method-parameter exemption -- the view it let out dangled).
-        #
-        # OWNED and not BORROWED, and that is about the SEAM: the backend re-derives
-        # the class from the TYPE alone, so it answers MOVE for any `string`, and
-        # (BORROWED, MOVE) is REJECT -- a CE0129 for a sound shape.
         return Provenance.OWNED
     if (state.is_borrowed_binding
             or state.is_borrow_param
@@ -203,45 +177,24 @@ def name_provenance(checker: 'BorrowChecker', name: str) -> Provenance:
     return Provenance.OWNED
 
 
-def consume(checker: 'BorrowChecker', expr: Expr,
-            use_of_copy: Optional[CopyUse] = None) -> None:
-    """Classify a consuming use, stamp the decision, and act on it.
+def consume(checker: 'BorrowChecker', node: e.ShirExpr,
+            use_of_copy: Optional[CopyUse] = None) -> Ownership:
+    """Decide a consuming use, write the decision, and act on it.
 
     `use_of_copy` is what the position does with the copy that the CE2411 escape takes:
     `x.clone() as T`, `r.clone().map_err(f)`.
     """
-    # A bloom `arr...` MOVES its source into the callee. CE0120 restricts the source
-    # to a bare array variable, so unwrapping here makes a use-after-bloom a CE2405
-    # instead of a use-after-free (#174).
-    if isinstance(expr, Spread):
-        expr = expr.value
-
-    provenance = source_provenance(checker, expr)
-    # Only PROVENANCE is stamped. Which consuming use this is, the backend names:
-    # semantics cannot tell `S(x)` from `f(x)` -- both are a `Call` here.
-    expr.ownership_provenance = provenance
-
-    if isinstance(expr, Name):
-        checker.err.meet(expr)
-        consume_named(checker, expr.id, provenance, expr.loc, use_of_copy)
-        return
-
-    if reject_move_of_namespaced(checker, expr, provenance):
-        return
-
-    take = field_take(checker, expr)
-    if take is not None:
-        spend(checker, take[0], expr.loc)
-        return
-
-    # A read through a live owner has no owner to mark moved, but it CAN be rejected
-    # (#242): the owner keeps the value and still frees it. Leaving this cell copying
-    # made the backend answer REJECT with no diagnostic ahead of it -- a CE0129.
-    if provenance is not Provenance.BORROWED:
-        return
-    if classify(provenance,
-                checker.types.type_class(read_type(checker, expr))) is Ownership.REJECT:
-        emit_consume_of_read(checker, expr, use_of_copy)
+    provenance = source_provenance(checker, node)
+    if isinstance(node, e.LocalRef):
+        return consume_named(checker, node, provenance, node.loc, use_of_copy)
+    decision = decide(checker, node, provenance, source_class(checker, node))
+    if isinstance(node, e.ConstRef):
+        reject_move_of_constant(checker, node, decision)
+    elif decision is Ownership.REJECT:
+        # A read through a live owner has no owner to mark moved, but it CAN be rejected
+        # (#242): the owner keeps the value and still frees it.
+        emit_consume_of_read(checker, node, use_of_copy)
+    return decision
 
 
 def consume_each(checker: 'BorrowChecker', args) -> None:
@@ -250,75 +203,45 @@ def consume_each(checker: 'BorrowChecker', args) -> None:
         consume(checker, arg)
 
 
-def reject_move_of_constant(checker: 'BorrowChecker', name: str,
-                            provenance: Provenance,
-                            use_span: Optional[Span]) -> bool:
-    """CE2436 for a take of a CONSTANT. True when it was refused (#726).
+def reject_move_of_constant(checker: 'BorrowChecker', node: e.ConstRef,
+                            decision: Ownership) -> bool:
+    """CE2436 for a take of a CONSTANT that would be a move. True when it was refused.
 
-    The `const` half of the unit-storage rule the `var` arm below states: each is one
-    object the program keeps for its whole run, and neither has an owner that can hand
-    it away. A constant gets no `BorrowState`, so the record has to be read from the
-    table, and a plain value still copies out.
+    The `const` half of the unit-storage rule (#726): a constant is one object the program
+    keeps for its whole run, and it has no owner that can hand it away. A plain value
+    still copies out. A constant behind an alias is the same declaration (#1016).
     """
-    sig = constant_sig(checker, name)
-    if sig is None or sig.is_var:
+    if decision is not Ownership.MOVE:
         return False
-    return reject_move_of_storage(checker, sig, name, provenance, use_span)
-
-
-def reject_move_of_namespaced(checker: 'BorrowChecker', expr: Expr,
-                              provenance: Provenance) -> bool:
-    """CE2436 for a take of `alias.name` that reaches a `const` or a `var` (#1016).
-
-    The bare name's rule, in both halves: a name behind an alias is the same declaration.
-    """
-    sig = namespaced_storage(checker, expr)
-    if sig is None:
-        return False
-    alias = getattr(expr.receiver, "id", None)
-    name = f"{alias}.{expr.member}" if alias is not None else expr.member
-    return reject_move_of_storage(checker, sig, name, provenance, expr.loc)
-
-
-def reject_move_of_storage(checker: 'BorrowChecker', sig, name: str,
-                           provenance: Provenance, use_span: Optional[Span]) -> bool:
-    """CE2436 when a take of the unit storage `sig` records would be a move."""
-    if classify(provenance,
-                checker.types.type_class(sig.const_type)) is not Ownership.MOVE:
-        return False
-    kind = "a unit variable" if sig.is_var else "a constant"
-    checker.err.emit(er.ERR.CE2436, use_span, name=name, kind=kind)
+    checker.err.emit(er.ERR.CE2436, node.loc, name=checker.decl_name(node.const_id),
+                     kind="a constant")
     return True
 
 
-def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
-                  use_span: Optional[Span], use_of_copy: Optional[CopyUse] = None) -> None:
-    """Apply the ownership decision to a source that is a bare name."""
-    state = checker.borrow_state.get(name)
+def consume_named(checker: 'BorrowChecker', node: e.LocalRef, provenance: Provenance,
+                  use_span: Optional[Span],
+                  use_of_copy: Optional[CopyUse] = None) -> Ownership:
+    """Decide a consuming use of a local, and apply the decision to the local."""
+    state = checker.borrow_state.get(node.local)
+    ty = state.var_type if state is not None else checker.local_type(node.local)
+    decision = decide(checker, node, provenance,
+                      checker.types.type_class_of_source(state, ty))
     if state is None:
-        reject_move_of_constant(checker, name, provenance, use_span)
-        return
+        return decision
 
     if state.is_argv_view:
         # Moving main's borrowed argv view would double-free process argv (N2). A more
         # specific diagnostic than CE2411, so it wins.
-        checker.err.emit(er.ERR.CE2410, use_span, name=name)
-        return
+        checker.err.emit(er.ERR.CE2410, use_span, name=state.name)
+        return decision
 
-    decision = classify(provenance,
-                        checker.types.type_class_of_source(state, state.var_type))
-    if state.is_unit_var:
-        # Storage the program keeps is never moved out of; a plain value copies.
-        if decision is Ownership.MOVE:
-            checker.err.emit(er.ERR.CE2436, use_span, name=name,
-                             kind="a unit variable")
-        return
     if decision is Ownership.MOVE:
         # The same value cannot be borrowed and handed away in ONE statement (CE2401).
         # Here because the counters are live: the call arm registers every argument's
         # borrow before consuming any, so both orders of `both(peek s, s)` are one
         # rule.
         if state.is_borrowed:
+            name = state.name
             diag = checker.err.emit_with(er.ERR.CE2401, use_span, name=name)
             if state.first_borrow_span is not None:
                 diag.note_at("borrowed here, in the same statement",
@@ -332,112 +255,63 @@ def consume_named(checker: 'BorrowChecker', name: str, provenance: Provenance,
                           f"points at it; borrow it twice, or clone what the owning "
                           f"position needs: `{name}.clone()`")
             diag.emit()
-            return
+            return decision
         _move_out(checker, state, use_span)
     elif decision is Ownership.REJECT:
-        emit_consume_of_borrow(checker, name, use_span, state, use_of_copy)
+        emit_consume_of_borrow(checker, state.name, use_span, state, use_of_copy)
+    return decision
 
 
 def _move_out(checker: 'BorrowChecker', state: BorrowState,
-             use_span: Optional[Span]) -> None:
-    """Hand a named owner away: a `nom` argument, a rebind and a `let` initializer alike."""
+              use_span: Optional[Span]) -> None:
+    """Hand a local away: a `nom` argument, a `??`, and a `let` initializer alike."""
     # Handing the owner away leaves every binding reading out of it pointing at
     # storage the new owner frees (#242).
-    check_owner_not_borrowed(checker, state.name, use_span, "move")
+    check_owner_not_borrowed(checker, state.local, use_span, "move")
     state.is_moved = True
     state.moved_at_span = state.moved_at_span or use_span
     state.move_reported_by = None
-    # A move deeper than the owner's declaration cannot dominate the scope exit,
-    # so the backend guards this owner's frees with a runtime drop flag (#414).
-    if checker.branch_depth > state.declared_branch_depth:
-        checker.conditional_moves.add(state.name)
+    # A move deeper than the local's declaration cannot dominate the scope exit, so the
+    # local is conditionally moved, and SLIR lowering gives it a drop flag (#414).
+    if checker.branch_depth > state.declared_branch_depth and state.local is not None:
+        checker.conditional_moves.add(state.local)
 
 
-def bind(checker: 'BorrowChecker', stmt: Let) -> None:
-    """Give a `let` binding the provenance of its initializer (#242)."""
-    expr = stmt.value
-    provenance = source_provenance(checker, expr)
-    expr.ownership_provenance = provenance
+def bind(checker: 'BorrowChecker', node: s.Assign, dest: BorrowState) -> None:
+    """Give a `let` the provenance of its value (#242).
 
-    if reject_slice_of_temporary(checker, expr) or reject_view_of_temporary(checker, expr):
-        return
-
-    dest = checker.borrow_state.get(stmt.name)
-    if dest is None:
-        return
-
-    # A take, so the binding OWNS what it was handed and the receiver is spent. Before
-    # the decision below, which reads the source's own state and has none for a take.
-    take = field_take(checker, expr)
-    if take is not None:
-        spend(checker, take[0], expr.loc)
-        return
-
-    if reject_move_of_namespaced(checker, expr, provenance):
-        return
-
-    src_state = checker.borrow_state.get(expr.id) if isinstance(expr, Name) else None
-
-    # The `let` twin of the constant arm in `consume_named`: a binding straight from an
-    # owning constant would be a move, and unit-level storage has no owner to move from.
-    if (src_state is None and isinstance(expr, Name)
-            and reject_move_of_constant(checker, expr.id, provenance, expr.loc)):
-        return
-
+    A `let` takes the decision of a consuming use: an owned local moves into the binding,
+    a new value is adopted, and a read of a borrow makes the binding a `let`-borrow of
+    the owner, so the owner is frozen while the binding lives.
+    """
+    value = node.value
+    provenance = source_provenance(checker, value)
+    src_state = (checker.borrow_state.get(value.local)
+                 if isinstance(value, e.LocalRef) else None)
     if src_state is not None and src_state.is_argv_view:
-        # Binding main's argv view by value would make the new binding free argv
-        # (N2). The same hard error as any other move of it, and more specific than
-        # anything the table says.
-        checker.err.emit(er.ERR.CE2410, expr.loc, name=expr.id)
+        # Binding main's argv view by value would make the new binding free argv (N2).
+        decide(checker, value, provenance, source_class(checker, value))
+        checker.err.emit(er.ERR.CE2410, value.loc, name=src_state.name)
         return
-
-    # The SOURCE's recorded type where there is one: the DECLARED type has lost the
-    # capture list, so it would move a plain fn reference and report a false CE2405.
-    ty = src_state.var_type if src_state is not None else stmt.ty
-
-    decision = classify(provenance, checker.types.type_class_of_source(src_state, ty))
-    if src_state is not None and src_state.is_unit_var:
-        # The `let` twin of the rule in `consume_named`: a binding straight from an
-        # owning unit variable would be a move, and there is none (CE2436).
-        if decision is Ownership.MOVE:
-            checker.err.emit(er.ERR.CE2436, expr.loc, name=expr.id,
-                             kind="a unit variable")
-        return
-    if decision is Ownership.MOVE:
-        _move_out(checker, src_state, expr.loc)
+    decision = decide(checker, value, provenance, source_class(checker, value))
+    if isinstance(value, e.ConstRef):
+        reject_move_of_constant(checker, value, decision)
+    elif decision is Ownership.MOVE and src_state is not None:
+        _move_out(checker, src_state, value.loc)
     elif decision is Ownership.REJECT:
-        record_borrowed_binding(checker, stmt, dest)
-    elif is_borrowed_call(expr):
-        # A plain answer is a copy, and it still freezes the owners of its sources: the
-        # source set of a template is the same at every type argument (#1229).
-        record_owners(checker.borrow_state, dest, call_owners(checker, expr)[0], stmt.loc,
-                      checker._scope_binding_borrows[-1])
+        record_borrowed_binding(checker, node, dest)
 
 
-def record_borrowed_binding(checker: 'BorrowChecker', stmt: Let,
+def record_borrowed_binding(checker: 'BorrowChecker', node: s.Assign,
                             dest: BorrowState) -> None:
-    """Record that a `let` borrows storage its initializer's owner keeps (#242)."""
+    """Record that a `let` borrows storage its value's owner keeps (#242)."""
     dest.is_borrowed_binding = True
     dest.is_let_borrow = True
-    dest.bound_at_span = stmt.loc
-
-    owners = lent_owners(checker, stmt.value)
-    if owners is not None:
-        dest.is_lent_iterator = True
-        dest.lent_value = stmt.value
-        record_owners(checker.borrow_state, dest, owners, stmt.loc,
-                      checker._scope_binding_borrows[-1])
-        return
-
-    if is_borrowed_call(stmt.value):
-        record_owners(checker.borrow_state, dest, call_owners(checker, stmt.value)[0],
-                      stmt.loc, checker._scope_binding_borrows[-1])
-        return
-
-    owner = borrow_owner(stmt.value)
+    dest.bound_at_span = node.loc
+    owner = borrow_owner(node.value)
     if owner is None:
         return
-    record_owners(checker.borrow_state, dest, view_owners(checker, owner), stmt.loc,
+    record_owners(checker.borrow_state, dest, view_owners(checker, owner), node.loc,
                   checker._scope_binding_borrows[-1])
 
 
@@ -446,7 +320,7 @@ def is_slice(expr: Optional[Expr]) -> bool:
     return isinstance(expr, IndexAccess) and expr.is_slice
 
 
-def view_owners(checker: 'BorrowChecker', owner: str) -> tuple[str, ...]:
+def view_owners(checker: 'BorrowChecker', owner) -> tuple:
     """The owners a binding that reads out of `owner` freezes: `owner`, and its owners.
 
     A `let` of a let-borrow (a read, a field, a slice) views the storage of the FIRST

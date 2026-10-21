@@ -1,4 +1,4 @@
-"""Path-sensitive facts and the branch / loop joins that carry them."""
+"""Path-sensitive facts and the branch / loop joins that carry them, keyed by `LocalId`."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -11,6 +11,8 @@ from sushi_lang.semantics.ast_walk import terminates as terminates
 from .state import BorrowState
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.ids import LocalId
+
     from . import BorrowChecker
 
 
@@ -25,13 +27,13 @@ class FlowFacts:
     empty identity, paths go through `join()` over the surviving list, never a fold into a
     blank `FlowFacts()`.
 
-    `moved_at` and `invalidation` hold one `(name, span, cause)` entry per name, so a join
-    keeps the location with the flag. A path that rebinds the name has no entry, and the
+    `moved_at` and `invalidation` hold one `(local, span, cause)` entry per local, so a join
+    keeps the location with the flag. A path that rebinds the local has no entry, and the
     join keeps the entry of the path that moved it.
     """
-    moved: frozenset[str] = frozenset()
-    destroyed: frozenset[str] = frozenset()
-    owns_no_heap: frozenset[str] = frozenset()
+    moved: frozenset[LocalId] = frozenset()
+    destroyed: frozenset[LocalId] = frozenset()
+    owns_no_heap: frozenset[LocalId] = frozenset()
     # Tuples, not frozensets: `Span` is an unfrozen dataclass and so unhashable. The span
     # must travel with the flag, or CE2405, CE2435 and CE2412 render with no location.
     # A `moved_at` entry is (name, where it moved, the `nom self` method that took it).
@@ -48,7 +50,7 @@ class FlowFacts:
             invalidation=_union_by_name(self.invalidation, other.invalidation),
         )
 
-    def without(self, names: frozenset[str]) -> "FlowFacts":
+    def without(self, names: frozenset[LocalId]) -> "FlowFacts":
         """Drop every fact about `names`: bindings a loop RE-CREATES on each pass.
 
         A `next()` protocol item is declared once in the checker and once per iteration
@@ -65,7 +67,7 @@ class FlowFacts:
             invalidation=tuple(e for e in self.invalidation if e[0] not in names),
         )
 
-    def invalidation_of(self, name: str) -> Optional[tuple]:
+    def invalidation_of(self, name: LocalId) -> Optional[tuple]:
         """The span and the cause of the change that invalidated `name`, or None."""
         for entry_name, span, by in self.invalidation:
             if entry_name == name:
