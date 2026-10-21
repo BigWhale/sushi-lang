@@ -50,7 +50,7 @@ from .bindings import (
 from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet, written_let
 from .borrows import clear_borrows
 from .borrowed_returns import check_borrowed_return
-from .diagnostics import emit_change_under_iterator, expr_to_string
+from .diagnostics import emit_change_under_iterator, spelled
 from .consume import (
     bind,
     binds_a_bare_literal_string,
@@ -200,7 +200,7 @@ def _split_destructure(checker: 'BorrowChecker', stmt: Let) -> None:
     whole = checker.borrow_state.get(stmt.name)
     borrowed = whole is not None and whole.is_borrowed_binding
     owners = whole.borrows_from if borrowed and whole is not None else ()
-    shown = _element_spellings(stmt) if stmt.rebinds else {}
+    shown = _element_spellings(checker, stmt) if stmt.rebinds else {}
     for binder in destructure_binders(stmt.targets):
         state = BorrowState(name=binder.name, var_type=binder.element_type,
                             declared_at_span=binder.loc,
@@ -217,14 +217,14 @@ def _split_destructure(checker: 'BorrowChecker', stmt: Let) -> None:
                       checker._scope_binding_borrows[-1])
 
 
-def _element_spellings(stmt: Let) -> dict[str, str]:
+def _element_spellings(checker: 'BorrowChecker', stmt: Let) -> dict[str, str]:
     """The hidden binders of `(a, b) := v`, each spelled as the element it takes (`v.0`).
 
     A diagnostic then names `p.0`, which the user can read, and never the hidden binder.
     The value has a spelling only when it is a place; a temporary needs none, because
     each binder owns its element.
     """
-    source = expr_to_string(stmt.value)
+    source = spelled(checker, stmt.value)
     if "<expression>" in source:
         return {}
     shown: dict[str, str] = {}
@@ -450,7 +450,7 @@ def _check_foreach(checker: 'BorrowChecker', stmt: Foreach) -> None:
         walked_view = _settle_value_walk(checker, stmt)
     elif stmt.protocol_next is not None and stmt.walks_in_place:
         maybe_reject_mutation(checker, stmt.protocol_next, receiver=stmt.iterable,
-                              what=f"walk '{expr_to_string(stmt.iterable)}'")
+                              what=f"walk '{spelled(checker, stmt.iterable)}'")
     elif stmt.protocol_next is not None:
         consume(checker, stmt.iterable)
     clear_borrows(checker)
@@ -537,7 +537,7 @@ def _settle_value_walk(checker: 'BorrowChecker', stmt: Foreach) -> Optional[str]
         stmt.walks_in_place = True
     if stmt.walks_in_place:
         reject_readonly_write(checker, borrow_owner(iterable), iterable.loc,
-                              f"walk '{expr_to_string(iterable)}'", receiver=iterable)
+                              f"walk '{spelled(checker, iterable)}'", receiver=iterable)
         return iterable.id if is_lent_name(checker, iterable) else None
     if lent_owners(checker, iterable) is None:
         consume(checker, iterable)

@@ -143,7 +143,7 @@ def _rebind_targets(target: TupleLiteral, rebinds: List[Stmt], seen: Dict[str, E
             targets.append(DestructureTarget(
                 nested=_rebind_targets(place, rebinds, seen, ast_builder), loc=place.loc))
             continue
-        spelled = _place_spelling(place)
+        spelled = _place_spelling(place, ast_builder.source)
         if spelled is not None:
             first = seen.get(spelled)
             if first is not None and first.loc is not None:
@@ -160,12 +160,11 @@ def _rebind_targets(target: TupleLiteral, rebinds: List[Stmt], seen: Dict[str, E
     return targets
 
 
-def _place_spelling(place: Expr) -> Optional[str]:
-    """The source spelling of a place, or None when a part of it is not written plainly."""
-    from sushi_lang.semantics.passes.borrow.diagnostics import expr_to_string
+def _place_spelling(place: Expr, source: Optional[str]) -> Optional[str]:
+    """The source text of a place, or None when it is no place or has no text."""
     from sushi_lang.semantics.places import Step, walk_place
+    from sushi_lang.semantics.source_text import source_text
 
     if walk_place(place, Step.MEMBER | Step.INDEX).name is None:
         return None
-    spelled = expr_to_string(place)
-    return None if "<expression>" in spelled else spelled
+    return source_text(source, place.loc)

@@ -18,7 +18,7 @@ from sushi_lang.semantics.param_modes import (
 from .borrows import acquire_borrow, register_implicit_borrow
 from .iterators import take_lent_iterator
 from .consume import consume, consume_each, read_through_receiver, source_provenance
-from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, expr_to_string
+from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, spelled
 from .methods import CONTAINER_INSERT_METHODS, callee_effect
 from .reads import OWNER_STEPS, borrow_owner, called_on, read_type
 from .state import BorrowState
@@ -140,7 +140,7 @@ def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: MethodLike) -> Non
     place = _place_of(expr.receiver)
     if place is None or place != _place_of(_viewed_array(expr.args[0])):
         return
-    checker.err.emit(er.ERR.CE2430, expr.args[0].loc, name=expr_to_string(expr.args[0]),
+    checker.err.emit(er.ERR.CE2430, expr.args[0].loc, name=spelled(checker, expr.args[0]),
                      target=place)
 
 
@@ -172,8 +172,8 @@ def _reject_refill_from_own_slot(checker: 'BorrowChecker', expr: MethodLike) -> 
     if target is None or source is None or source[:len(target)] != target:
         return
     checker.err.emit(er.ERR.CE2430, expr.args[0].loc,
-                     name=expr_to_string(expr.args[0]),
-                     target=expr_to_string(expr.receiver))
+                     name=spelled(checker, expr.args[0]),
+                     target=spelled(checker, expr.receiver))
 
 
 _ANY_SLOT = "[]"
@@ -312,14 +312,14 @@ def settle_receiver(checker: 'BorrowChecker', expr: MethodLike) -> None:
     state = checker.borrow_state.get(receiver.id) if isinstance(receiver, Name) else None
     already_moved = state is not None and state.is_moved
     consume(checker, receiver, CopyUse(f"call '{expr.method}' on the copy",
-                                       f".{expr.method}({_arguments_text(expr.args)})"))
+                                       f".{expr.method}({_arguments_text(checker, expr.args)})"))
     if state is not None and state.is_moved and not already_moved:
         state.consumed_by_method = expr.method
 
 
-def _arguments_text(args) -> str:
+def _arguments_text(checker: 'BorrowChecker', args) -> str:
     """The arguments of a call as source text, or `...` when one has no short spelling."""
-    texts = [expr_to_string(arg) for arg in args or ()]
+    texts = [spelled(checker, arg) for arg in args or ()]
     return "..." if "<expression>" in texts else ", ".join(texts)
 
 
@@ -332,7 +332,7 @@ def reject_read_through_outside_try(checker: 'BorrowChecker', expr: MethodLike) 
     if id(expr) in checker.try_operands:
         return
     from sushi_lang.semantics.generics.type_display import display_type
-    receiver = expr_to_string(expr.receiver)
+    receiver = spelled(checker, expr.receiver)
     checker.err.emit_with(er.ERR.CE2522, expr.loc,
                           maybe=display_type(expr.resolved_enum_type)) \
         .help(f"put the call under '??': `{receiver}.{expr.method}(...)??`, or take an "

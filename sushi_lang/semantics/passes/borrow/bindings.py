@@ -15,7 +15,7 @@ from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import ReferenceType, Type
 
-from .diagnostics import expr_to_string
+from .diagnostics import spelled
 from .reads import borrow_owner, names_kept_storage, root_owner
 from sushi_lang.semantics.param_modes import borrow_mode
 from .state import BorrowState, record_owners
@@ -382,7 +382,7 @@ def freeze_for_a_view(checker: 'BorrowChecker', scope: BindingScope, name: str,
 def _reject_take_from_a_borrow(checker: 'BorrowChecker', binding: NomBinding,
                                scrutinee: Optional[Expr]) -> None:
     """Report CE2432: a `nom` binding under a match that only borrows its scrutinee."""
-    text = expr_to_string(scrutinee) if scrutinee is not None else "r"
+    text = spelled(checker, scrutinee) if scrutinee is not None else "r"
     diag = checker.err.emit_with(er.ERR.CE2432, binding.loc, name=binding.name)
     owner = root_owner(scrutinee) if scrutinee is not None else None
     state = checker.borrow_state.get(owner) if owner is not None else None
@@ -515,7 +515,7 @@ def _bind_payload_ref(checker: 'BorrowChecker', scope: BindingScope, name: str,
     if kind is ScrutineeKind.BORROWED and scrutinee is not None \
             and not _is_a_place(scrutinee):
         scope.bind_ref(name, ty, marker, span, owner=None, declared_at=span)
-        checker.err.emit(er.ERR.CE2404, span, expr=expr_to_string(scrutinee))
+        checker.err.emit(er.ERR.CE2404, span, expr=spelled(checker, scrutinee))
         return
     owner = scrutinee if kind is ScrutineeKind.BORROWED or isinstance(scrutinee, Name) \
         else None

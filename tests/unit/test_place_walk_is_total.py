@@ -33,7 +33,6 @@ _KNOWN_WALKS: set[tuple[str, str]] = set()
 # it visits every node, so it recurses through a receiver like through any other child.
 _NOT_A_ROOT_WALK = {
     ("sushi_lang/semantics/ast_walk.py", "_expr_types"),              # every type a node names
-    ("sushi_lang/semantics/passes/borrow/diagnostics.py", "expr_to_string"),  # the source text
     ("sushi_lang/semantics/passes/borrow/expressions.py", "check_expr"),  # the borrow dispatch
     ("sushi_lang/semantics/passes/borrow/reads.py", "read_type"),     # the type a read yields
 }

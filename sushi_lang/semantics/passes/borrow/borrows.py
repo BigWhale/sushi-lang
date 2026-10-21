@@ -11,7 +11,7 @@ from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.param_modes import borrow_mode
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode
-from .diagnostics import emit_use_after_move, expr_to_string
+from .diagnostics import emit_use_after_move, spelled
 from .reads import borrow_owner, captured_variable, read_type
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
@@ -37,7 +37,7 @@ def check_borrow(checker: 'BorrowChecker', borrow: Borrow) -> None:
         name = walked.node.id
     else:
         # A call result, a literal, a member chain off one -- nothing with an address.
-        checker.err.emit(er.ERR.CE2404, borrow.loc, expr=expr_to_string(borrow.expr))
+        checker.err.emit(er.ERR.CE2404, borrow.loc, expr=spelled(checker, borrow.expr))
         return
 
     # An unfindable name was ALREADY reported by the scope pass, which owns names

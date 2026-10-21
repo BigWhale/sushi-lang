@@ -6,25 +6,11 @@ from typing import Callable, Optional, TYPE_CHECKING, cast
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import (
-    ArrayLiteral,
-    BinaryOp,
-    Call,
-    DotCall,
-    DynamicArrayFrom,
-    DynamicArrayNew,
-    Expr,
-    IndexAccess,
-    IntLit,
-    MemberAccess,
-    MethodCall,
-    Name,
-    RangeExpr,
-    TryExpr,
-)
+from sushi_lang.semantics.ast import DotCall, Expr, MethodCall
 from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
 from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
+from sushi_lang.semantics.source_text import source_text
 from sushi_lang.semantics.typesys import ReferenceType
 
 from .reads import read_type, root_owner
@@ -159,7 +145,7 @@ def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
     answers them.
     """
     span, (owner, what) = change
-    text = expr_to_string(iterable)
+    text = spelled(checker, iterable)
     diag = checker.err.emit_with(er.ERR.CE2412, span,
                                  owner=owner, name=text)
     if header is not None:
@@ -172,7 +158,7 @@ def emit_change_under_iterator(checker: 'BorrowChecker', change: tuple,
         diag.emit()
         return
     walked = cast(MethodCall, iterable).receiver
-    receiver = expr_to_string(walked)
+    receiver = spelled(checker, walked)
     receiver_type = read_type(checker, walked)
     if refuses_clone(checker, receiver_type):
         diag.help(f"{what} after the loop: "
@@ -347,7 +333,7 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: Expr,
     The owner can be a temporary (`give().get(0)??`), so the read is spelled with the
     temporary in its short form.
     """
-    text = expr_to_string(expr, temporaries=True)
+    text = spelled(checker, expr)
     diag = checker.err.emit_with(er.ERR.CE2411, expr.loc, name=text)
     owner = root_owner(expr)
     state = checker.borrow_state.get(owner) if owner is not None else None
@@ -402,52 +388,10 @@ def _note_opaque_mover(checker: 'BorrowChecker', diag, ty) -> None:
         note_opaque(diag, param)
 
 
-def expr_to_string(expr: Expr, *, temporaries: bool = False) -> str:
-    """Render an expression back to source text, for a message the user can paste.
-
-    With `temporaries`, a receiver that makes a new value is spelled in a short form
-    (`give()`, `[...]`, `from([...])`, `new()`). A read through a temporary then has a
-    spelling, and the placeholder does not reach the user.
-    """
-    t = temporaries
-    match expr:
-        case Name():
-            return expr.id
-        case IntLit():
-            return str(expr.value)
-        case BinaryOp():
-            return (f"({expr_to_string(expr.left, temporaries=t)} {expr.op} "
-                    f"{expr_to_string(expr.right, temporaries=t)})")
-        case MethodCall() | DotCall():
-            # Both spellings reach here, arguments included, so the text matches what the
-            # user wrote.
-            args = ", ".join(_argument_text(a) for a in (expr.args or []))
-            return f"{expr_to_string(expr.receiver, temporaries=t)}.{expr.method}({args})"
-        case MemberAccess():
-            return f"{expr_to_string(expr.receiver, temporaries=t)}.{expr.member}"
-        case IndexAccess():
-            return (f"{expr_to_string(expr.array, temporaries=t)}"
-                    f"[{expr_to_string(expr.index, temporaries=t)}]")
-        case TryExpr():
-            return f"{expr_to_string(expr.expr, temporaries=t)}??"
-        case RangeExpr():
-            operator = "..=" if expr.inclusive else ".."
-            text = (f"{expr_to_string(expr.start, temporaries=t)}{operator}"
-                    f"{expr_to_string(expr.end, temporaries=t)}")
-            return f"({text}).rev()" if expr.reverse else text
-        case Call() if temporaries and isinstance(expr.callee, Name):
-            return f"{expr.callee.id}({'...' if expr.args else ''})"
-        case ArrayLiteral() if temporaries:
-            return "[...]"
-        case DynamicArrayFrom() if temporaries:
-            return "from([...])"
-        case DynamicArrayNew() if temporaries:
-            return "new()"
-        case _:
-            return "<expression>"
+#: The stand-in of an expression whose source text the pass cannot read.
+NO_TEXT = "<expression>"
 
 
-def _argument_text(arg: Expr) -> str:
-    """An argument as written: the `nom` marker is part of the call (`f(nom x)`)."""
-    text = expr_to_string(arg)
-    return f"nom {text}" if arg.nom_marked else text
+def spelled(checker: 'BorrowChecker', node) -> str:
+    """The source text of `node`, as the user wrote it (`semantics/source_text.py`)."""
+    return source_text(checker.source, node.loc) or NO_TEXT

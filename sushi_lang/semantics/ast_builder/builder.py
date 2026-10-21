@@ -32,7 +32,7 @@ def _in_source_order(diagnostic: SushiError) -> tuple:
 
 class ASTBuilder:
     def __init__(self, reporter: Optional[Reporter] = None,
-                 source_label: Optional[str] = None):
+                 source_label: Optional[str] = None, source: Optional[str] = None):
         """Initialize ASTBuilder with lazy-loaded parsers."""
         # Where a recoverable diagnostic goes. With one, a rule that has an honest
         # substitute value reports the fault and keeps building, so one run shows
@@ -44,6 +44,8 @@ class ASTBuilder:
         # run time. A caller with no reporter names the source itself.
         self.source_label: str = display_filename(
             source_label or (reporter.filename if reporter else None) or "<input>")
+        # The text that the builder reads, for the source text of a node (`source_text`).
+        self.source = source
         self.deferred: List[SushiError] = []
         self._type_parser = None
         self._expr_parser = None

@@ -24,7 +24,7 @@ from sushi_lang.semantics.ownership import Provenance
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import IteratorType
 
-from .diagnostics import expr_to_string
+from .diagnostics import spelled
 from .reads import borrow_owner, names_kept_storage
 
 if TYPE_CHECKING:
@@ -147,16 +147,16 @@ def reject_view_of_temporary(checker: 'BorrowChecker', expr: Expr) -> bool:
     if temporary is None:
         return False
     call = _strip(expr)
-    checker.err.emit_with(er.ERR.CE2444, expr.loc, callee=_callee_text(call)) \
+    checker.err.emit_with(er.ERR.CE2444, expr.loc, callee=_callee_text(checker, call)) \
         .note_at("this argument is a temporary", temporary.loc) \
         .help("bind the argument first and give the binding, or copy the answer with "
               "`.clone()`").emit()
     return True
 
 
-def _callee_text(call: Expr) -> str:
+def _callee_text(checker: 'BorrowChecker', call: Expr) -> str:
     if isinstance(call, Call):
-        return expr_to_string(call.callee)
+        return spelled(checker, call.callee)
     return getattr(call, "method", "the callee")
 
 
@@ -269,7 +269,7 @@ def _emit_not_a_view(checker: 'BorrowChecker', returned: BodyReturn, value: Expr
                      reason: str) -> None:
     sources = ", ".join(f"'{source}'" for source in returned.sources) or "nothing"
     checker.err.emit_with(er.ERR.CE2443, value.loc,
-                          value=expr_to_string(value, temporaries=True), reason=reason) \
+                          value=spelled(checker, value), reason=reason) \
         .note_at(f"the answer is declared a borrow of {sources} here", returned.record.span) \
         .help(f"return a view of {sources}, or drop `peek` and return an owned value") \
         .emit()
