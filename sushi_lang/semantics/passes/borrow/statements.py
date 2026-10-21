@@ -19,7 +19,8 @@ after it join. A `while` loop checks its condition once, then its body in two ro
 back edge, and the paths of a `break` leave the loop. A loop over items is checked by the
 iterators group, and it stops the walk. The end of a block that the path reaches, a
 `return`, a `break` and a `continue` are exits of the blocks that they leave
-(`flow.record_exit`).
+(`flow.record_exit`), and a rebind is an exit of the old value of its local
+(`flow.record_rebind`).
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ from .flow import (
     FlowFacts,
     LoopFrame,
     record_exit,
+    record_rebind,
     reinitialize,
     restore_flow,
     snapshot_flow,
@@ -133,6 +135,9 @@ def _check_rebind(checker: 'BorrowChecker', node: s.Assign, local: LocalId) -> N
     # Replacing what the owner holds invalidates every binding reading out of it (#242).
     check_owner_not_borrowed(checker, local, node.loc, "assign", place=node.target)
     consume(checker, node.value)
+    # The rebind drops the old value, so it is an exit of that value: one moved on some
+    # paths only needs the drop flag (`flow.record_rebind`).
+    record_rebind(checker, local)
     # A rebind RE-INITIALIZES, so a previous move no longer holds. The value was checked
     # above, so `s := "{s}-x"` still reports the moved `s`.
     if state is not None:

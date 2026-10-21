@@ -1,0 +1,24 @@
+# A move on one path, then a rebind, then a move on every path. The rebind must drop the
+# old value only on the path that did not move it, so the local needs its drop flag,
+# although every exit of the function sees it moved.
+# EXPECT_STDOUT_EXACT: "1 towels\n2 towels\n2 towels\n"
+# EXPECT_NO_LEAKS: true
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn make(i32 n) string:
+    return "{n} towels"
+
+fn refill(i32 n) i32:
+    let string s = make(n)
+    if (n > 0):
+        eat(nom s)
+    s := make(2)
+    eat(nom s)
+    return 0
+
+fn main() i32:
+    refill(1)
+    refill(0)
+    return 0

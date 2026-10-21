@@ -1489,7 +1489,9 @@ iterator reports (`move_reported_by`) come back with it.
 intersection. At each EXIT of a scope -- the end of a block that the path reaches, a `return`,
 the error path of a `??`, and a `break` or a `continue` for the blocks of its loop body -- the
 pass records each local of the scope that is not moved on every path there
-(`flow.record_exit`). A local that is moved on some path and that an exit sees not moved on
+(`flow.record_exit`). A rebind drops the old value of its local, so it is an exit of that
+value: a local moved on some paths only before a rebind is recorded too
+(`flow.record_rebind`). A local that is moved on some path and that an exit sees not moved on
 every path is a row of the conditionally moved locals: SLIR lowering gives it a drop flag. A
 local moved in each arm of an `if`, or before every exit, has no row and gets no drop.
 

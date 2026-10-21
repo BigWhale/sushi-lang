@@ -4,7 +4,8 @@ The joins read the one path predicate of SHIR (`semantics/shir/paths.py`), which
 typecheck pass reads too. At each EXIT of a scope -- the end of a block that the path
 reaches, a `return`, the error path of a `??`, a `break` or a `continue` -- the pass
 records each local of the scope that is not moved on every path there
-(`record_exit`). A local that is moved on some path and that an exit sees not moved on
+(`record_exit`). A rebind drops the old value of its local, so it is an exit of that value
+(`record_rebind`). A local that is moved on some path and that an exit sees not moved on
 every path is CONDITIONALLY moved: SLIR lowering gives it a drop flag (docs/design/ir.md
 8.10, rule 4). A local that each exit sees moved on every path gets no drop (rule 3).
 """
@@ -193,3 +194,14 @@ def record_exit(checker: 'BorrowChecker', first_block: int = 0) -> None:
             state = checker.borrow_state.get(local)
             if state is not None and not state.is_moved_on_every_path:
                 checker.kept_at_an_exit.add(local)
+
+
+def record_rebind(checker: 'BorrowChecker', local: LocalId) -> None:
+    """A rebind of `local` drops its old value (docs/design/ir.md 8.10, rule 6): record the
+    local when the old value is moved on some paths and not on others, because only a drop
+    flag tells the rebind whether to drop it."""
+    if checker.discovery_rounds:
+        return
+    state = checker.borrow_state.get(local)
+    if state is not None and state.is_moved and not state.is_moved_on_every_path:
+        checker.kept_at_an_exit.add(local)

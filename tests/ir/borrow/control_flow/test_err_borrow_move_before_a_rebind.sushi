@@ -1,0 +1,36 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 's'"
+# EXPECT_DUMP_SHIR: test_err_borrow_move_before_a_rebind.shir
+#
+# A rebind drops the old value of its local, so it is an exit of that value. In `refill`,
+# `s` is moved in one arm of the `if` and not in the other, and then rebound: the rebind
+# sees `s` moved on some paths only, so `s` is in the row of the conditionally moved
+# locals, although the `return` sees it moved on every path. In `reuse`, a use of `s`
+# after its last move is CE2405.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn make(i32 n) string:
+    return "{n} towels"
+
+fn refill(i32 n) i32:
+    let string s = make(n)
+    if (n > 0):
+        eat(nom s)
+    s := make(2)
+    eat(nom s)
+    return 0
+
+fn reuse(i32 n) ~:
+    let string s = make(n)
+    if (n > 0):
+        eat(nom s)
+    s := make(3)
+    eat(nom s)
+    println(s)
+
+fn main() i32:
+    refill(1)
+    reuse(0)
+    return 0

@@ -278,8 +278,8 @@ them (§5.2).
 compile-time fact, but a move inside an if arm, a match arm, or a loop body does not dominate the
 owner's scope exit: on the paths that skip the move, a static skip would leak the value. The borrow pass
 records, at each exit of a scope (the end of a block that the path reaches, a `return`, the error
-path of a `??`, a `break`, a `continue`), each local of the scope that is not moved on every path
-there. A local that is moved on some path and that an exit sees not moved on every path is
+path of a `??`, a `break`, a `continue`, and a rebind for the old value of its local), each
+local of the scope that is not moved on every path there. A local that is moved on some path and that an exit sees not moved on every path is
 conditionally moved: a row of the `OwnershipResults` of the body (`docs/design/ir.md` 7.9), keyed
 by its `LocalId`. A local moved in each arm of an `if` is moved on every path and has no row.
 SHIR-to-SLIR lowering gives each row an `i1` drop flag (ir.md 8.10, rule 4) — set live at
