@@ -792,8 +792,8 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         _write_shir_dump(analyzer, options.dump_shir, reporter)
     if reporter.has_errors:
         return 2
-    # From the switch to SHIR the stages after `typecheck` are not built yet, so a program
-    # with no error stops here, after the dump, with the stop code (docs/design/ir.md 11.1).
+    # The stages after `borrow` are not built yet, so a program with no error stops here,
+    # after the dump, with the stop code (docs/design/ir.md 11.1).
     from sushi_lang.internals import errors as er
     er.emit_exception(reporter, analyzer.pipeline_stop())
     return 2
