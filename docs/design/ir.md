@@ -1243,10 +1243,24 @@ node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership
 The receiver of a method call is not on the list yet: `TypeckResults` has no convention row
 for a receiver. The method group adds that row, and a `nom self` receiver joins the rule.
 
-**The body half of `borrow`.** `typecheck` gives each body that it finished with no error to
-`borrow`, with the tables that it read the body in: the body of a template check is read
-in the overlay of its check, and an error of `borrow` there refuses the template as an
-error of `typecheck` does. The declaration half of `borrow` reads the declaration of the
+**The order of the three passes.** Each SHIR pass gives the next one each body that it
+finished with no error, with the tables that `typecheck` read the body in: `typecheck`
+gives it to `lift`, and `lift` gives it to `borrow`. A stop of a pass ends the walk of its
+body, and the next pass does not get the body. The body of a template check is read in the
+overlay of its check, and an error of `borrow` there refuses the template as an error of
+`typecheck` does.
+
+**`lift` on SHIR.** `LiftPass` (`passes/lift.py`) walks the body once (`walk.py`). Until the
+closures group, a `Lambda` stops the walk of its body with the stop code (`lift, Lambda`),
+and the pass writes no row: a body with a lambda never reaches `borrow`. Today
+`typecheck` stops at a `Lambda` first, so no compile meets the stop of `lift`. A body with
+no `Lambda` has an empty `LiftResults`, and the dump prints no answer of `lift`. When the
+walk ends with no stop, `check_lift` runs, and the body goes to `borrow`, which reads
+`LiftResults` for the captures. The AST pass `LambdaLifter` stays in the same module, and
+no stage runs it: the closures group takes the symbol and the environment layout from it,
+and then deletes it.
+
+**The body half of `borrow`.** The declaration half of `borrow` reads the declaration of the
 body (a borrowed return), and the mode of each parameter is its `Convention` (8.3). The
 body half walks the body through ONE table of arms keyed on the SHIR class, with a row for
 each member of `ShirStmt` and `ShirExpr` (`passes/borrow/arms.py`, gate:
@@ -1268,8 +1282,8 @@ writes, so a `poke` argument for a `peek` parameter keeps the `InGuaranteed` con
 the parameter and is still a `poke` borrow of its place (CE2408 for a read-only place). When the walk
 of a body ends with no stop and with no error, `check_ownership` runs, and the body meets
 the stage after `borrow`, which is not built yet: the pipeline reports the first stop of
-`typecheck`, then the first stop of `borrow`, then an error hole, then the first body that
-`borrow` finished (`slir, <body>`).
+`typecheck`, then the first stop of `lift`, then the first stop of `borrow`, then an error
+hole, then the first body that `borrow` finished (`slir, <body>`).
 
 **Control flow in `borrow`.** The joins read the one path predicate of 7.5. An `If`
 checks each block from the state after its condition, and the paths that reach the code
