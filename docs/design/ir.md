@@ -1456,6 +1456,27 @@ A statement that lowering synthesizes (a `Drop`, a flag write, a `StorageDead`, 
 check) takes the `Span` of the construct that caused it: the scope exit, the move, the
 index. No statement has an empty span (G9).
 
+**Where SLIR lives.** The package is `semantics/slir/`, and it never imports the backend:
+the node modules (`ids.py`, `places.py`, `constants.py`, `rvalues.py`, `statements.py`,
+`terminators.py`, `function.py`), the lowering (`lower.py`) and the printer of
+`--dump-slir` (`printer.py`). Every class is a slotted dataclass, and every statement and
+terminator has a required `span` (gate: `tests/unit/test_slir_nodes_are_slotted.py`). The
+borrow pass gives each body that it finished, and that is not a template check (Q1), to
+the SLIR stage of its unit (`SlirStage`). The stage makes one `SlirFunction` from the body
+and its three side tables, and `SlirProgram` keeps the outcome of each body, keyed by the
+`DeclId` of the body. The symbol, the unit and the return type of the function are facts
+of its declaration (6.4).
+
+While the migration is in progress, a construct that the lowering does not handle yet
+stops the body with the stop code (`slir, <construct>`). The construct is the name of the
+SHIR class (`ShirParam` for a parameter, `ExprStmt`, `Call`), or `Initializer`, `method` or
+`channel` for a body whose declaration the lowering does not handle yet. The dump prints
+such a function as ONE line in place of its body, `fn <name>: stopped (slir, <construct>)`,
+so that a golden file shows the progress of each function. A body that the lowering
+finished stops at the next stage, `emit` (`emit, <body>`), until the emitter of a
+`SlirFunction` is built. The pipeline reports one stop: a stop of `typecheck`, else of
+`lift`, else of `borrow`, else an error hole, else a stop of the lowering, else `emit`.
+
 ### 8.3 Conventions
 
 ```
