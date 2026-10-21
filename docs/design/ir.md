@@ -1191,8 +1191,13 @@ three tables use one scan (`tests/unit/side_table_scan.py`).
 The rows of `OwnershipResults`:
 
 - The `Ownership` of a consuming use is the enum of `semantics/ownership.py`: `MOVE`,
-  `ADOPT` or `REJECT`, the answer of `classify()`. The copy of a plain value is `ADOPT`.
-  The key is the `shir_id` of the consumed node. A capture has no node in the body, so its
+  `ADOPT` or `REJECT`, the answer of `classify()`. SLIR lowering makes the operand from
+  the row and the shape of the operand alone: `MOVE` gives `Move`; `ADOPT` on a place
+  gives `Copy` (by the table of `classify()`, a place that gets `ADOPT` always holds a
+  PLAIN value); `ADOPT` on a fresh value gives `Move` of its temporary; `REJECT` never
+  reaches SLIR, because it is an error of `borrow`. `ADOPT` never gives `Copy` of a fresh
+  value: a fresh owning temporary would then be dropped twice. The key is the `shir_id`
+  of the consumed node. A capture has no node in the body, so its
   row has the key of the capture type in 7.3: the `shir_id` of the `Lambda` and the
   `LocalId` of the captured local.
 - A conditionally moved local is a row by its `LocalId`. A local with no row is moved on
@@ -1216,7 +1221,8 @@ node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership
   `TupleInit`, and the value of each `Single` run of an `ArrayInit` (a repeated value is a
   borrow, and each slot takes its own copy);
 - the scrutinee of a `Match` that consumes (`match nom r:`);
-- the operand of a `Try`, and the operand of a `Cast` that calls a conversion;
+- the operand of a `Try`, and the operand of every `Cast`: a conversion takes it as
+  `nom self`, and an identity cast moves it (a plain operand gets `ADOPT`);
 - the iterable of a `Loop` over an iterator value or a `next()` type that does not walk
   in place;
 - each capture of a `Lambda`, from its environment layout in `LiftResults`.
@@ -1229,7 +1235,10 @@ error. It reads `TypeckResults` and `LiftResults` for the positions, and it need
 `Ownership` for each consuming use and each capture; LENT or OWNED for each producer over a
 container and each lazy adapter, except the iterable of a `Cursor` or a `HashMapCursor`
 walk, which makes no value; a heap decision for each lent one; and a walk-in-place answer
-for each `Loop` of kind `Protocol` or `IteratorValue`. The conditionally moved locals have
+for each `Loop` of kind `Protocol` or `IteratorValue`. Two other calls get LENT from
+`borrow`, and the check does not ask for them yet, because no spine body holds them: the
+clone of a lent iterator (the iterators group, C3) and a borrowed call that answers an
+iterator (the `peek` return group, B8). Each group adds its call to the check. The conditionally moved locals have
 no check, because no row is an answer. `check_lift` (`semantics/shir/lift_check.py`) runs
 when `lift` ends a body with no error, and it needs a symbol and an environment for each
 `Lambda`, a lambda in the body of a lambda too. A gap of either check is the internal error
@@ -1238,7 +1247,8 @@ class of the node, its position and the body.
 
 **The dump.** `--dump-shir` prints the answers of both tables in place, where a row exists:
 the `Ownership` of a consuming use as a word before the node (`move LocalRef(_0)`,
-`adopt Lit(2)`, `reject ...`), the word of a SLIR operand; the conditionally moved locals
+`adopt Lit(2)`, `reject ...`), the name of the answer in lower case (not a SLIR operand,
+which is `Copy`, `Move` or `Const`); the conditionally moved locals
 on a `cond_moved : [_5]` line after the `locals` line; `iterator: lent` or
 `iterator: owned` and `heap: true` or `heap: false` after the arguments of an iterator
 call; `in_place: true` or `in_place: false` after the body of a `Loop`; and
