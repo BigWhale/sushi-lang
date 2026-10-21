@@ -812,10 +812,13 @@ later pass, so the hole never stops the compile under `SUSHI_SHIR_STRICT=1`, as 
 a name with no declaration does not. Ruled 2026-10-14. Three more forms are error holes by
 the same ruling: a slice with a reversed range (`data[(0..3).rev()]`, CE2122), a call of a
 name that the namespace does not hold (`geo.twicee(21)`, CE2008), and a member of a type
-that is no variant (`Sign.Nope`, CE2045; a static outside a call is one too).
+that is no variant (`Sign.Nope`, CE2045; a static outside a call is one too). A `poke` of a
+constant (`bump(poke STEP)`, CE2400) is an error hole too, because a constant lives in
+read-only storage: so `borrow` never meets a `poke` of a constant, and one that reaches it
+is an internal error.
 
 An error hole CARRIES the code of the error that it stands for (CE6102, CE6104, CE2122,
-CE2008, CE2045; for a name with no declaration, the codes CE1001, CE1002 and CE0144). At
+CE2008, CE2045, CE2400; for a name with no declaration, the codes CE1001, CE1002 and CE0144). At
 the end of the analysis, an error hole whose code no diagnostic reported is an internal
 error, CE0155. An error of the construct around the hole can come first, and the hole
 accepts its code too: in a constant or a `var` initializer the constant evaluator refuses
