@@ -19,6 +19,7 @@ from . import arms
 from .borrows import check_borrow as borrow_place
 from .consume import consume, unwrap_place
 from .diagnostics import emit_use_after_move, emit_use_of_invalidated_borrow
+from .flow import record_exit
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId
@@ -85,9 +86,11 @@ def check_enum_init(checker: 'BorrowChecker', node: e.EnumInit) -> None:
 
 def check_try(checker: 'BorrowChecker', node: e.Try) -> None:
     """`r??` is a consuming position of its own: an owned wrapper is spent here (#548), and
-    a use of `r` after it is CE2405."""
+    a use of `r` after it is CE2405. Its error path returns, so it is an exit of each block
+    (`flow.record_exit`)."""
     arms.check(checker, node.inner)
     unwrap_place(checker, node)
+    record_exit(checker)
 
 
 def check_borrow(checker: 'BorrowChecker', node: e.Borrow) -> None:

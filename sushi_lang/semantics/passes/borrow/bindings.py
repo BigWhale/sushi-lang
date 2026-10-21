@@ -93,11 +93,10 @@ class BindingScope:
         """Bind a payload the arm TAKES: `Variant(nom x)` (ruling R11).
 
         Not `is_borrowed_binding`: the arm owns this value, so it may be written and it
-        may be given away. Its `declared_branch_depth` is the ARM's, so a move deeper
-        than the arm still earns a run-time drop flag exactly as a local's does.
+        may be given away. A move on some paths of the arm earns a run-time drop flag
+        exactly as a local's does.
         """
-        self.register(BorrowState(name=name, var_type=ty, declared_at_span=span,
-                                  declared_branch_depth=self.checker.branch_depth))
+        self.register(BorrowState(name=name, var_type=ty, declared_at_span=span))
 
     def bind_item(self, name: str, ty: Optional[Type], span: Optional[Span]) -> None:
         """Bind the item a `next()` protocol iterator answered: the iteration OWNS it.
@@ -105,13 +104,11 @@ class BindingScope:
         The item is the payload of a fresh `Maybe@(T)` nobody else frees, so unlike a
         container element it aliases nothing, and the body may write it or hand it
         away -- which is what the `??` binder does, `let T x = <item>??` spending the
-        item like any owned local (#548). Its `declared_branch_depth` is the BODY's,
-        one deeper than the loop statement: the item is created per iteration, so a
-        move at the top of the body dominates the item's scope exit and needs no
+        item like any owned local (#548). The item is created per iteration, so a move
+        at the top of the body reaches each exit of the item's scope and needs no
         run-time drop flag.
         """
-        self.register(BorrowState(name=name, var_type=ty, declared_at_span=span,
-                                  declared_branch_depth=self.checker.branch_depth + 1))
+        self.register(BorrowState(name=name, var_type=ty, declared_at_span=span))
 
     def bind_ref(self, name: str, ty: Optional[Type], marker: str,
                  span: Optional[Span], owner: Optional[Expr],
@@ -211,8 +208,7 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
     place = _own_payload_receiver(stmt.value) or stmt.value
     owner = borrow_owner(place)
     state = BorrowState(name=stmt.name, var_type=stmt.ty, bound_at_span=stmt.loc,
-                        declared_at_span=stmt.loc,
-                        declared_branch_depth=checker.branch_depth)
+                        declared_at_span=stmt.loc)
     checker.borrow_state[stmt.name] = state
 
     owner_state = checker.borrow_state.get(owner) if owner else None

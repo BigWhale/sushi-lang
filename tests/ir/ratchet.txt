@@ -418,6 +418,11 @@ tests/generics/type_arg_arity/test_err_type_arg_arity_list.sushi
 tests/generics/type_arg_arity/test_err_type_arg_arity_param.sushi
 tests/generics/type_arg_arity/test_err_type_arg_arity_perk_impl.sushi
 tests/generics/type_arg_arity/test_err_type_arg_arity_too_few.sushi
+tests/ir/borrow/control_flow/test_err_borrow_continue_before_move.sushi
+tests/ir/borrow/control_flow/test_err_borrow_let_borrow_across_a_branch.sushi
+tests/ir/borrow/control_flow/test_err_borrow_move_before_break.sushi
+tests/ir/borrow/control_flow/test_err_borrow_move_in_both_arms.sushi
+tests/ir/borrow/control_flow/test_err_borrow_move_in_one_arm.sushi
 tests/ir/borrow/straight/test_err_borrow_beside_a_poke_of_a_constant.sushi
 tests/ir/borrow/straight/test_err_borrow_beside_an_unknown_name.sushi
 tests/ir/borrow/straight/test_err_borrow_guaranteed_args.sushi
@@ -517,6 +522,8 @@ tests/literals/underscores/test_err_match_arm_double.sushi
 tests/literals/underscores/test_err_oct_double.sushi
 tests/memory/borrow_move_conflict/test_err_borrow_then_move_one_statement.sushi
 tests/memory/borrow_move_conflict/test_err_move_then_borrow_one_statement.sushi
+tests/memory/conditional_moves/test_err_conditional_literal_rebind.sushi
+tests/memory/conditional_moves/test_err_rebind_conditional_still_moved.sushi
 tests/memory/consume_matrix/test_err_consume_method_param_call_arg.sushi
 tests/memory/consume_matrix/test_err_consume_peek_param.sushi
 tests/memory/consume_matrix/test_err_consume_ref_binding.sushi

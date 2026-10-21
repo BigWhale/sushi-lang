@@ -1,0 +1,26 @@
+# EXPECT_ERROR_CODES_EXACT: CE2412
+# EXPECT_STDERR_CONTAINS: "cannot mutate 'text' while 'view' borrows from it"
+# EXPECT_DUMP_SHIR: test_err_borrow_let_borrow_across_a_branch.shir
+#
+# A `let`-borrow that lives across a branch keeps its owner frozen on each path. `look`
+# reads the binding in both arms of an `if` and finishes with no error. In `change`, one
+# arm rebinds the owner, and the join keeps the change: a use of the binding after the
+# `if` is CE2412, which names the owner that changed.
+
+fn look(string text, bool loud) ~:
+    let string view = text
+    if (loud):
+        println(view)
+    else:
+        println("{view}.")
+
+fn change(string text, bool reset) ~:
+    let string view = text
+    if (reset):
+        text := "{1} towels"
+    println(view)
+
+fn main() i32:
+    look("{2} towels", true)
+    change("{3} towels", false)
+    return 0

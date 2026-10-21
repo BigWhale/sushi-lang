@@ -7,9 +7,9 @@ ONE table, `ARMS`, gives the arm of each SHIR statement and expression class (ga
 internal error at the span of the node, and the arm of a construct that the pass does not
 check yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
 
-`statements.py` walks a block and holds the statement arms, `expressions.py` the
-expression arms, and `calls.py` the arm of a call. In this slice the pass checks
-straight-line code: a branch, a loop, a `break` and a `continue` stop the walk.
+`statements.py` walks a block and holds the statement arms, among them the branch, the
+`while` loop, the `break` and the `continue`; `expressions.py` holds the expression arms,
+and `calls.py` the arm of a call.
 """
 from __future__ import annotations
 
@@ -47,12 +47,12 @@ ARMS: dict[type, Callable[..., Any]] = {
     s.Destructure: stop_at,
     s.ExprStmt: st.check_expr_stmt,
     s.Return: st.check_return,
-    s.If: stop_at,
-    s.Loop: stop_at,
+    s.If: st.check_if,
+    s.Loop: st.check_loop,
     s.Match: stop_at,
     s.Assert: stop_at,
-    s.Break: stop_at,
-    s.Continue: stop_at,
+    s.Break: st.check_break,
+    s.Continue: st.check_continue,
     s.Expand: stop_at,
     Hole: stop_at,
     # -- expressions -----------------------------------------------------------------

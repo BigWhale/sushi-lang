@@ -277,14 +277,17 @@ them (§5.2).
 **A conditional move carries a runtime drop flag.** "Mark the source moved" is a
 compile-time fact, but a move inside an if arm, a match arm, or a loop body does not dominate the
 owner's scope exit: on the paths that skip the move, a static skip would leak the value. The borrow pass
-counts branch depth; a move recorded deeper than its owner's declaration lands the name in the
-callable's `conditional_move_names` stamp (on the BODY block, so the perk-method wrapper shares
-it). The backend arms those bindings with an entry-block `i1` drop flag — set live at declaration
-(re-armed on every loop iteration and on a rebind), cleared at each move site — and every free
-gate goes through `MoveTracker.emit_free_unless_moved`, which skips a statically moved slot,
-emits an `if (flag)` free for a flagged one, and frees unconditionally otherwise. An
-unconditional move keeps the zero-cost static skip; the gate
-`tests/memory/conditional_moves/` holds the leak batch.
+records, at each exit of a scope (the end of a block that the path reaches, a `return`, the error
+path of a `??`, a `break`, a `continue`), each local of the scope that is not moved on every path
+there. A local that is moved on some path and that an exit sees not moved on every path is
+conditionally moved: a row of the `OwnershipResults` of the body (`docs/design/ir.md` 7.9), keyed
+by its `LocalId`. A local moved in each arm of an `if` is moved on every path and has no row.
+SHIR-to-SLIR lowering gives each row an `i1` drop flag (ir.md 8.10, rule 4) — set live at
+declaration (again on every loop iteration and at a rebind), cleared at each move site — and
+the drop of a flagged local is `DropIfSet`. A local that each exit sees moved on every path
+gets no drop; the gate `tests/memory/conditional_moves/` holds the leak batch. (The old
+backend armed its flags from a stamp on the AST body block; that stamp is gone, and the old
+backend goes with SHIR-to-SLIR lowering.)
 
 ### 5.1 The decision is computed in semantics, not in the backend
 

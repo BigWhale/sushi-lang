@@ -1,0 +1,39 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'msg'"
+# EXPECT_DUMP_SHIR: test_err_borrow_move_in_one_arm.shir
+#
+# A move in one arm of an `if` moves the local on some paths only. `maybe` finishes with
+# no error, and its local `msg` is in the row of the conditionally moved locals, so SLIR
+# lowering gives it a drop flag. An `elif` is an `if` in the `else` block: `pick` moves
+# `msg` in its first arm and in its `else` arm, and not in its `elif` arm. A use of `msg`
+# after the `if` of `reuse` is a use after a move on one path: CE2405.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn maybe(bool give) ~:
+    let string msg = "{1} towels"
+    if (give):
+        eat(nom msg)
+    println("done")
+
+fn pick(i32 n) ~:
+    let string msg = "{2} towels"
+    if (n == 0):
+        eat(nom msg)
+    elif (n == 1):
+        println("kept")
+    else:
+        eat(nom msg)
+
+fn reuse(bool give) ~:
+    let string msg = "{3} towels"
+    if (give):
+        eat(nom msg)
+    println(msg)
+
+fn main() i32:
+    maybe(true)
+    pick(1)
+    reuse(false)
+    return 0

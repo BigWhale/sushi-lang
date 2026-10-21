@@ -186,17 +186,10 @@ def _kept(tier: str, groups: str) -> str:
             "moves the helper to SHIR inputs")
 
 
-_JOINS = "kept for P2.6b: the borrow pass on SHIR joins the state of a branch and of a loop"
 WHITELIST += (
-    (_BORROW + "flow.py", "without", _JOINS),
-    (_BORROW + "flow.py", "invalidation_of", _JOINS),
-    (_BORROW + "flow.py", "LoopFrame", _JOINS),
-    (_BORROW + "flow.py", "breaks", _JOINS),
-    (_BORROW + "flow.py", "continues", _JOINS),
-    (_BORROW + "flow.py", "LoopFlow", _JOINS),
-    (_BORROW + "flow.py", "fixed_point", _JOINS),
-    (_BORROW + "flow.py", "snapshot_flow", _JOINS),
-    (_BORROW + "flow.py", "restore_flow", _JOINS),
+    (_BORROW + "flow.py", "without", _kept("C", "C3: iterators, the item of each round")),
+    (_BORROW + "flow.py", "invalidation_of", _kept("C", "C3: iterators, a view of a loop")),
+    (_BORROW + "flow.py", "LoopFlow", _kept("C", "C3: iterators, a view of a loop")),
     (_BORROW + "bindings.py", "register_pattern_bindings", _kept("A", "A3, A4: match")),
     (_BORROW + "bindings.py", "reject_partial_take", _kept("A", "A3, A4: match")),
     (_BORROW + "calls.py", "_borrowed_method_args", _kept("A", "A1, A10: method calls")),

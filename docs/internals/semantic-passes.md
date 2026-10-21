@@ -1341,8 +1341,9 @@ convention of each call argument is the `TypeckResults` row of the call, and the
 not derive it again. When the walk of a body ends with no error, `check_ownership` finds
 each consuming use with no row ([CE0157](../error-catalog.md#ce0157)). The arm of a
 construct that the pass does not check yet stops the walk of its body with
-[CE0155](../error-catalog.md#ce0155): straight-line code is checked, and a branch, a loop,
-a method call, a field, a `match` and a lambda wait for their groups. The rules below are
+[CE0155](../error-catalog.md#ce0155): straight-line code, an `if`, a `while` loop, a `break`
+and a `continue` are checked, and a `foreach`, a method call, a field, a `match` and a lambda
+wait for their groups. The rules below are
 the rules of the language, and each group of the move brings the rules of its constructs
 to SHIR.
 
@@ -1464,22 +1465,33 @@ reference binding adds the WRITE path -- a store through it reaches the owner.
 
 6. **A loop body is checked in rounds, and `break` / `continue` end a path**
 
-`check_loop_body` (`passes/borrow/statements.py`) checks a `while` or `foreach` body in two
-rounds and returns a `LoopFlow` (`passes/borrow/flow.py`):
+`check_loop_body` (`passes/borrow/statements.py`) checks the body of a `while` loop in two
+rounds. The condition is read once, at the entry.
 
 - `entry`: the facts before the loop.
-- `fixed_point`: `entry` joined with the facts that reach the back edge after round 1. Round 2,
-  the reporting round, starts here, so a move in one round is seen by the next.
-- `back_edge`: the facts on the paths that reach the next round -- the end of the body and every
-  `continue`. A `foreach` reads its iterator's invalidation ([CE2412](../error-catalog.md#ce2412)) from these paths only.
-- `exit`: `fixed_point` joined with every `break` path. This is the state after the loop, so a
-  move before a `break` is still seen after the loop.
+- Round 1 is a discovery round: it reports no error, writes no row of `OwnershipResults` and
+  records no exit (`discovery_rounds`).
+- `fixed_point`: `entry` joined with the facts that reach the back edge after round 1 -- the end
+  of the body and every `continue`. Round 2, the reporting round, starts here, so a move in one
+  round is seen by the next.
+- The exit: `fixed_point` joined with every `break` path of round 2. This is the state after the
+  loop, so a move before a `break` is still seen after the loop.
 
-A `break` or a `continue` ends its path for the joins of an `if` or a `match` inside the body
-(`terminates(..., leaves_round=True)`). A `foreach` over an owned temporary (`a.clone().iter()`)
-freezes nothing (`walks_a_temporary`). When the iterator reports a move of its container that
-came round the back edge, the owner's state records it (`move_reported_by`), and the move gives
-no second [CE2405](../error-catalog.md#ce2405) in round 2.
+A `break` or a `continue` ends its path for the joins of an `if` inside the body
+(`terminates(..., leaves_round=True)`, the one path predicate of SHIR, `semantics/shir/paths.py`).
+The `foreach` loop comes with the iterators group: the back edge of a view of a container
+(`LoopFlow.back_edge`), the item of each round (`FlowFacts.without`) and the move that the
+iterator reports (`move_reported_by`) come back with it.
+
+7. **A local moved on some paths is conditionally moved**
+
+`FlowFacts` joins `moved` by union (moved on some path) and `moved_on_every_path` by
+intersection. At each EXIT of a scope -- the end of a block that the path reaches, a `return`,
+the error path of a `??`, and a `break` or a `continue` for the blocks of its loop body -- the
+pass records each local of the scope that is not moved on every path there
+(`flow.record_exit`). A local that is moved on some path and that an exit sees not moved on
+every path is a row of the conditionally moved locals: SLIR lowering gives it a drop flag. A
+local moved in each arm of an `if`, or before every exit, has no row and gets no drop.
 
 ### Borrow Tracking
 
@@ -1495,6 +1507,10 @@ no second [CE2405](../error-catalog.md#ce2405) in round 2.
   It is cleared for each statement.
 - `_scope_binding_borrows`: one frame for each open block, so a `let`-borrow ends with its
   block.
+- `block_locals`: the locals that each open block declared, the parameters in the first, for
+  the exits of rule 7; `loop_frames`: the `break` and `continue` paths of each loop that the walk
+  is in; `moved_locals` and `kept_at_an_exit`, whose intersection is the row of the
+  conditionally moved locals.
 
 The checker does not raise. Each finding goes through the reporter as a registered code
 (`self.err.emit(...)`), so one run reports every fault.

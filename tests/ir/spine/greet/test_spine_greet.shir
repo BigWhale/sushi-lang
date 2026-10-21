@@ -16,10 +16,11 @@ ShirBody shout
 ShirBody greet
   params : [(_0 "name": string, Owned), (_1 "loud": bool, Guaranteed)]
   locals : [_2 "msg": string]
+  cond_moved : [_2]
   block  :
     Assign(LocalRef(_2), adopt Try(adopt Call(Free(@decorate), [(move LocalRef(_0), Owned)])), is_init: true)
-    If(LocalRef(_1), then: [ExprStmt(Call(Free(@shout), [(LocalRef(_2), Owned)]))])
-    Return(EnumInit(@Result, "Ok", [Lit(Blank)]))
+    If(LocalRef(_1), then: [ExprStmt(Call(Free(@shout), [(move LocalRef(_2), Owned)]))])
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
 
 ShirBody main
   params : []

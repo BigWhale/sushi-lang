@@ -1,0 +1,33 @@
+unit test_err_borrow_move_before_break
+
+ShirBody eat
+  params : [(_0 "text": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody drain
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "msg": string, _2 "i": i32, _3 "line": string]
+  cond_moved : [_1]
+  block  :
+    Assign(LocalRef(_1), adopt Interp(["", LocalRef(_0), " towels"]), is_init: true)
+    Assign(LocalRef(_2), adopt Lit(0), is_init: true)
+    Loop(Cond(Binary(<, LocalRef(_2), LocalRef(_0))), [Assign(LocalRef(_3), adopt Interp(["", LocalRef(_2), ""]), is_init: true), ExprStmt(Call(Free(@eat), [(move LocalRef(_3), Owned)])), If(Binary(==, LocalRef(_2), Lit(2)), then: [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)])), Break]), Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(1)), is_init: false)])
+    ExprStmt(Call(Intrinsic("println"), [(Lit("done"), Guaranteed)]))
+
+ShirBody again
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "msg": string, _2 "i": i32]
+  block  :
+    Assign(LocalRef(_1), adopt Interp(["", LocalRef(_0), " towels"]), is_init: true)
+    Assign(LocalRef(_2), adopt Lit(0), is_init: true)
+    Loop(Cond(Binary(<, LocalRef(_2), LocalRef(_0))), [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)])), Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(1)), is_init: false)])
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@drain), [(Lit(4), Guaranteed)]))
+    ExprStmt(Call(Free(@again), [(Lit(1), Guaranteed)]))
+    Return(adopt Lit(0))

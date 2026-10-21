@@ -1,12 +1,19 @@
-"""Path-sensitive facts and the branch / loop joins that carry them, keyed by `LocalId`."""
+"""Path-sensitive facts and the branch / loop joins that carry them, keyed by `LocalId`.
+
+The joins read the one path predicate of SHIR (`semantics/shir/paths.py`), which the
+typecheck pass reads too. At each EXIT of a scope -- the end of a block that the path
+reaches, a `return`, the error path of a `??`, a `break` or a `continue` -- the pass
+records each local of the scope that is not moved on every path there
+(`record_exit`). A local that is moved on some path and that an exit sees not moved on
+every path is CONDITIONALLY moved: SLIR lowering gives it a drop flag (docs/design/ir.md
+8.10, rule 4). A local that each exit sees moved on every path gets no drop (rule 3).
+"""
 
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
-# The joins of this pass ask it; it lives beside `ends_unrolled_run`, which the backend
-# reads too (#1070).
-from sushi_lang.semantics.ast_walk import terminates as terminates
+from sushi_lang.semantics.shir.paths import terminates as terminates
 
 from .state import BorrowState
 
@@ -23,9 +30,10 @@ class FlowFacts:
     Which join rule a field takes is the whole design. `moved`, `destroyed` and
     `invalidation` are monotone and join by UNION, so a loop converges in two passes.
     `owns_no_heap` GRANTS permission, so it joins by INTERSECTION -- believable after the
-    join only if it held on every path; union would be unsound. Because intersection has no
-    empty identity, paths go through `join()` over the surviving list, never a fold into a
-    blank `FlowFacts()`.
+    join only if it held on every path; union would be unsound. `moved_on_every_path`
+    joins by INTERSECTION too: a local in `moved` and not in it is moved on some paths
+    only. Because intersection has no empty identity, paths go through `join()` over the
+    surviving list, never a fold into a blank `FlowFacts()`.
 
     `moved_at` and `invalidation` hold one `(local, span, cause)` entry per local, so a join
     keeps the location with the flag. A path that rebinds the local has no entry, and the
@@ -34,6 +42,7 @@ class FlowFacts:
     moved: frozenset[LocalId] = frozenset()
     destroyed: frozenset[LocalId] = frozenset()
     owns_no_heap: frozenset[LocalId] = frozenset()
+    moved_on_every_path: frozenset[LocalId] = frozenset()
     # Tuples, not frozensets: `Span` is an unfrozen dataclass and so unhashable. The span
     # must travel with the flag, or CE2405, CE2435 and CE2412 render with no location.
     # A `moved_at` entry is (name, where it moved, the `nom self` method that took it).
@@ -46,6 +55,7 @@ class FlowFacts:
             moved=self.moved | other.moved,
             destroyed=self.destroyed | other.destroyed,
             owns_no_heap=self.owns_no_heap & other.owns_no_heap,
+            moved_on_every_path=self.moved_on_every_path & other.moved_on_every_path,
             moved_at=_union_by_name(self.moved_at, other.moved_at),
             invalidation=_union_by_name(self.invalidation, other.invalidation),
         )
@@ -63,6 +73,7 @@ class FlowFacts:
             moved=self.moved - names,
             destroyed=self.destroyed - names,
             owns_no_heap=self.owns_no_heap - names,
+            moved_on_every_path=self.moved_on_every_path - names,
             moved_at=tuple(e for e in self.moved_at if e[0] not in names),
             invalidation=tuple(e for e in self.invalidation if e[0] not in names),
         )
@@ -100,6 +111,7 @@ def reinitialize(state: BorrowState) -> None:
     above passed on the line below (#590).
     """
     state.is_moved = False
+    state.is_moved_on_every_path = False
     state.moved_at_span = None
     state.consumed_by_method = None
     state.move_reported_by = None
@@ -113,8 +125,10 @@ class LoopFrame:
     """The paths that leave one round of a loop body early (#993).
 
     A `continue` path goes to the back edge; a `break` path goes to the code after the
-    loop and never to the next round.
+    loop and never to the next round. `blocks` is the count of the blocks that are open
+    outside the loop body: a `break` and a `continue` leave each block after them.
     """
+    blocks: int
     breaks: list[FlowFacts] = field(default_factory=list)
     continues: list[FlowFacts] = field(default_factory=list)
 
@@ -142,6 +156,7 @@ def snapshot_flow(checker: 'BorrowChecker') -> FlowFacts:
         moved=frozenset(n for n, s in states if s.is_moved),
         destroyed=frozenset(n for n, s in states if s.is_destroyed),
         owns_no_heap=frozenset(n for n, s in states if s.owns_no_heap),
+        moved_on_every_path=frozenset(n for n, s in states if s.is_moved_on_every_path),
         moved_at=tuple((n, s.moved_at_span, s.consumed_by_method)
                        for n, s in states if s.is_moved),
         invalidation=tuple((n, s.invalidated_at, s.invalidated_by)
@@ -155,9 +170,26 @@ def restore_flow(checker: 'BorrowChecker', facts: FlowFacts) -> None:
     invalidation = {name: (span, by) for name, span, by in facts.invalidation}
     for name, state in checker.borrow_state.items():
         state.is_moved = name in facts.moved
+        state.is_moved_on_every_path = name in facts.moved_on_every_path
         state.moved_at_span, state.consumed_by_method = moved_at.get(name, (None, None))
         state.is_destroyed = name in facts.destroyed
         state.owns_no_heap = name in facts.owns_no_heap
         span, by = invalidation.get(name, (None, ()))
         state.invalidated_at = span
         state.invalidated_by = by
+
+
+def record_exit(checker: 'BorrowChecker', first_block: int = 0) -> None:
+    """An exit of each block from `first_block` on: record each local of those blocks
+    that is not moved on every path here.
+
+    A discovery round of a loop records nothing: its facts are not the facts of the
+    fixed point.
+    """
+    if checker.discovery_rounds:
+        return
+    for block in checker.block_locals[first_block:]:
+        for local in block:
+            state = checker.borrow_state.get(local)
+            if state is not None and not state.is_moved_on_every_path:
+                checker.kept_at_an_exit.add(local)

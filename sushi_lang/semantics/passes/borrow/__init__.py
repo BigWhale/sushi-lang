@@ -8,10 +8,16 @@ through one table of arms keyed on the SHIR class (`arms.py`), and writes each a
 row of the `OwnershipResults` of the body. The state of the walk is keyed by `LocalId`, and
 a diagnostic names a local by the source name of its `ShirLocal`.
 
+A branch starts each block from the state before it, and the paths that reach the code
+after it JOIN (`flow.py`). A loop body is walked two rounds: a discovery round, which
+reports nothing and writes no row, gives the facts that come round the back edge, and the
+second round starts from the fixed point and reports.
+
 A construct that the pass does not check yet stops the walk of its body with the stop code
 CE0155 (`borrow, <class>`), and the pass records the stop. A body that the walk finished
-with no error has its table checked (`check_ownership`, CE0157), and it meets the stage after
-the pass, which is not built yet (`slir`).
+with no error writes its conditionally moved locals, has its table checked
+(`check_ownership`, CE0157), and meets the stage after the pass, which is not built yet
+(`slir`).
 """
 
 from __future__ import annotations
@@ -30,7 +36,7 @@ from . import arms  # noqa: F401
 from .borrows import BY_ADDRESS
 from .consume import binds_a_bare_literal_string
 from .destroy_effects import compute_destroy_effects
-from .flow import FlowFacts
+from .flow import FlowFacts, LoopFrame, record_exit, terminates
 from .methods import MUTATING_METHODS
 from .state import BorrowState
 from .statements import check_block
@@ -81,11 +87,17 @@ class BorrowChecker:
         # One frame per open block; `check_block` pops it, which is what gives a
         # `let`-borrow a LEXICAL lifetime. `active_borrows` clears per statement.
         self._scope_binding_borrows: list[list[tuple[LocalId, LocalId]]] = []
-        # Conditional-move tracking (#414): `branch_depth` counts the if, match and loop
-        # bodies entered; a move at a depth greater than the declaration depth of its
-        # local cannot dominate the scope exit, so the local is conditionally moved.
-        self.branch_depth = 0
-        self.conditional_moves: Set[LocalId] = set()
+        # The locals that each open block declared, the parameters in the first: an exit
+        # of a block is an exit of each of them (`flow.record_exit`).
+        self.block_locals: list[list[LocalId]] = []
+        # One frame per loop that the walk is in: the paths of its `break` and `continue`.
+        self.loop_frames: list[LoopFrame] = []
+        # The count of the discovery rounds of loops that the walk is in.
+        self.discovery_rounds = 0
+        # Conditional-move tracking (#414): the locals moved on some path, and the locals
+        # that an exit of their scope sees not moved on every path.
+        self.moved_locals: Set[LocalId] = set()
+        self.kept_at_an_exit: Set[LocalId] = set()
 
     def check_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
                    filename: Optional[str]) -> None:
@@ -101,7 +113,10 @@ class BorrowChecker:
         try:
             for param in body.params:
                 self._declare_param(param, has_receiver=has_receiver)
+            self.block_locals.append([param.local for param in body.params])
             check_block(self, body.block)
+            if not terminates(body.block):
+                record_exit(self)
         except StageStop as stop:
             stop.filename = filename
             self.stops.borrow_stopped(stop)
@@ -111,7 +126,7 @@ class BorrowChecker:
         if sum(self.reporter.errors_offered.values()) != offered:
             return
         ownership = self.shir.ownership_table_of(body)
-        for local in sorted(self.conditional_moves):
+        for local in sorted(self.moved_locals & self.kept_at_an_exit):
             ownership.record_conditional_move(local)
         check_ownership(body, self.shir.typeck_of(body), self.shir.lift_table_of(body),
                         ownership, self.shir.decls)
@@ -129,8 +144,11 @@ class BorrowChecker:
         self.borrow_state = {}
         self.active_borrows = set()
         self._scope_binding_borrows = []
-        self.branch_depth = 0
-        self.conditional_moves = set()
+        self.block_locals = []
+        self.loop_frames = []
+        self.discovery_rounds = 0
+        self.moved_locals = set()
+        self.kept_at_an_exit = set()
 
     def _leave(self) -> None:
         self.body = self.typeck = self.ownership = None
@@ -166,7 +184,6 @@ class BorrowChecker:
 
     def declare(self, state: BorrowState) -> None:
         """Give a local of the body its state, at its declaration."""
-        state.declared_branch_depth = self.branch_depth
         self.borrow_state[state.local] = state
 
     def _declare_param(self, param: ShirParam, *, has_receiver: bool) -> None:

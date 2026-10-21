@@ -547,9 +547,6 @@ class ExternalBlock(Node):
 class Block(Node):
     statements: List[Stmt]
     doc: Optional[DocBlock] = None
-    # Set on a CALLABLE's body block: the locals whose every move does not dominate the
-    # scope exit, so each needs a run-time drop flag (#414).
-    conditional_move_names: Optional[frozenset] = None
 
 
 @dataclass(slots=True)

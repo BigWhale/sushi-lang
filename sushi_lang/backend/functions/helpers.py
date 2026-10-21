@@ -90,11 +90,6 @@ class FunctionHelpers:
                        fn_def: FuncDef | ExtendDef | None = None) -> None:
         """Initialize function emission context."""
         self.codegen.func = llvm_fn
-        # The borrow pass stamps the names whose moves do not dominate their scope exit on the
-        # BODY block (#414); registration arms a runtime drop flag for exactly those.
-        body = getattr(fn_def, "body", None) if fn_def is not None else None
-        self.codegen.current_conditional_moves = frozenset(
-            getattr(body, "conditional_move_names", ()) or ())
 
         # Two blocks, and the entry one holds the branch and the stack slots alone. The
         # slots go there through `memory.entry_alloca`, which finds the block from the

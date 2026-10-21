@@ -50,9 +50,9 @@ class BorrowState:
     var_type: Optional[Type] = None
     poke_borrow_count: int = 0          # at most 1
     peek_borrow_count: int = 0          # unlimited
-    is_moved: bool = False
+    is_moved: bool = False              # moved on some path
+    is_moved_on_every_path: bool = False
     is_destroyed: bool = False          # released by an explicit `.destroy()`
-    declared_branch_depth: int = 0      # checker.branch_depth at declaration (#414)
     is_argv_view: bool = False          # main's `string[] args`; moving it frees argv
     is_unit_var: bool = False           # a `var`: borrowable, never moved out of (CE2436)
     is_borrowed_binding: bool = False

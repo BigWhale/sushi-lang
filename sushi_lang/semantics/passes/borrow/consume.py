@@ -94,9 +94,14 @@ def source_class(checker: 'BorrowChecker', node: e.ShirExpr) -> TypeClass:
 def decide(checker: 'BorrowChecker', node: e.ShirExpr, provenance: Provenance,
            type_class: TypeClass) -> Ownership:
     """The `Ownership` of the consuming use `node`, from `classify()`, written ONE time as a
-    row of the `OwnershipResults` of the body. The one writer of the row."""
+    row of the `OwnershipResults` of the body. The one writer of the row.
+
+    A discovery round of a loop decides and writes nothing: the round after it decides
+    from the facts of the fixed point.
+    """
     decision = classify(provenance, type_class)
-    checker.table().record_ownership(node.shir_id, decision)
+    if not checker.discovery_rounds:
+        checker.table().record_ownership(node.shir_id, decision)
     return decision
 
 
@@ -269,12 +274,13 @@ def _move_out(checker: 'BorrowChecker', state: BorrowState,
     # storage the new owner frees (#242).
     check_owner_not_borrowed(checker, state.local, use_span, "move")
     state.is_moved = True
+    state.is_moved_on_every_path = True
     state.moved_at_span = state.moved_at_span or use_span
     state.move_reported_by = None
-    # A move deeper than the local's declaration cannot dominate the scope exit, so the
-    # local is conditionally moved, and SLIR lowering gives it a drop flag (#414).
-    if checker.branch_depth > state.declared_branch_depth and state.local is not None:
-        checker.conditional_moves.add(state.local)
+    # A local moved here and not moved on every path at an exit of its scope is
+    # conditionally moved (`flow.record_exit`, #414).
+    if state.local is not None:
+        checker.moved_locals.add(state.local)
 
 
 def bind(checker: 'BorrowChecker', node: s.Assign, dest: BorrowState) -> None:
