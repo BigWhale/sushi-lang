@@ -198,6 +198,8 @@ class _Check:
             if isinstance(stmt, _TERMINATORS):
                 self.fail(ONE_TERMINATOR, f"{where} holds a terminator among its statements",
                           span)
+            if isinstance(stmt, st.EndBorrow):
+                continue
             arm = _STATEMENTS.get(type(stmt))
             if arm is None:
                 er.raise_internal_error("CE0000", span=span,
@@ -231,6 +233,8 @@ class _Check:
 
     def place(self, place: p.Place, span: Span) -> _Typed:
         """The root and the type of `place`; each projection must fit the type of its base."""
+        if isinstance(place, p.Global):
+            return _Typed(place, None)
         arm = _PLACES.get(type(place))
         if arm is None:
             er.raise_internal_error("CE0000", span=span,
@@ -309,18 +313,12 @@ class _Check:
             self.fail(TYPED_PLACES, f"_{stmt.local.index} is no local of the function",
                       stmt.span)
 
-    def nothing(self, stmt: st.EndBorrow) -> None:
-        return None
-
     # -- the places ----------------------------------------------------------------------
 
     def local_place(self, place: p.Local, span: Span) -> _Typed:
         if not self.has_local(place.id):
             self.fail(TYPED_PLACES, f"_{place.id.index} is no local of the function", span)
         return _Typed(place, self.type_of(place.id))
-
-    def global_place(self, place: p.Global, span: Span) -> _Typed:
-        return _Typed(place, None)
 
     def field_place(self, place: p.Field, span: Span) -> _Typed:
         base = self.place(place.base, span)
@@ -380,14 +378,12 @@ _STATEMENTS: dict[type, Callable[..., None]] = {
     st.Drop: _Check.drop,
     st.DropIfSet: _Check.drop_if_set,
     st.BeginBorrow: _Check.begin_borrow,
-    st.EndBorrow: _Check.nothing,
     st.StorageLive: _Check.storage,
     st.StorageDead: _Check.storage,
 }
 
 _PLACES: dict[type, Callable[..., _Typed]] = {
     p.Local: _Check.local_place,
-    p.Global: _Check.global_place,
     p.Field: _Check.field_place,
     p.Index: _Check.index_place,
     p.Downcast: _Check.downcast_place,
