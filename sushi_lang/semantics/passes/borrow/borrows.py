@@ -14,6 +14,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ownership import TypeClass
+from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import BorrowMode
 from .diagnostics import emit_use_after_move, spelled
@@ -23,15 +24,22 @@ from .writes import check_owner_not_borrowed, reject_readonly_write
 if TYPE_CHECKING:
     from . import BorrowChecker
 
+#: The mode of the borrow that a value passed by address takes (docs/design/ir.md 8.3).
+BY_ADDRESS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
+
 
 def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
                  span: Optional[Span]) -> None:
     """Borrow `place` for the statement: `peek x`, `poke x`.
 
-    A place is a local here; a field of a local comes with the field group. A call result,
-    a literal and a construction are temporaries and have no address: CE2404.
+    A place is a local or a constant here; a field of a local comes with the field group. A
+    constant is storage that the program keeps, so it has an address and no borrow state:
+    a `peek` of it reads it, and a `poke` of it is refused before this pass (CE2400). A call
+    result, a literal and a construction are temporaries and have no address: CE2404.
     """
     is_poke = mode is BorrowMode.POKE
+    if isinstance(place, e.ConstRef):
+        return
     if not isinstance(place, e.LocalRef):
         checker.err.emit(er.ERR.CE2404, span, expr=spelled(checker, place))
         return

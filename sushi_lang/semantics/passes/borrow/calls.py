@@ -24,7 +24,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Free, Intrinsic
 
 from . import arms
-from .borrows import acquire_borrow, check_borrow, register_implicit_borrow
+from .borrows import BY_ADDRESS, acquire_borrow, check_borrow, register_implicit_borrow
 from .iterators import take_lent_iterator
 from .consume import consume, consume_each, read_through_receiver, source_provenance
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, spelled
@@ -57,12 +57,12 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     the marker is written, so a borrow and a consuming use of one value in one call
     conflict in both orders (CE2401). A `poke` argument for a `peek` parameter has the
     `InGuaranteed` convention of the parameter, and its borrow is still the `poke` that the
-    source writes (CE2408 for a read-only place). Then each argument takes its convention
-    by POSITION (`apply_convention`). The
-    callee owns an `Owned` argument, and the pass decides its `Ownership`. A callee that
-    destroys its `poke` parameter destroys the caller's value (#168). The `nom` marker is
-    compared against the declared mode by the typecheck pass (CE2427). Every other callee
-    is checked by its own group, and its call stops the walk.
+    source writes (CE2408 for a read-only place). Then each argument with no borrow takes
+    its convention by POSITION (`apply_convention`): the callee owns an `Owned` argument,
+    and the pass decides its `Ownership`. A callee that destroys its `poke` parameter
+    destroys the caller's value (#168). The `nom` marker is compared against the declared
+    mode by the typecheck pass (CE2427). Every other callee is checked by its own group,
+    and its call stops the walk.
     """
     resolved = checker.answers().callee_of(node.shir_id)
     if resolved is None or not isinstance(resolved.callee, (Free, Intrinsic)):
@@ -72,28 +72,29 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     conventions = [_convention_of(checker, node, position)
                    for position in range(len(node.args))]
     unchanged = unchanged_borrowed_roots(checker, node, conventions)
-    for arg, convention in zip(node.args, conventions, strict=True):
-        mode = _written_borrow(arg, convention)
+    modes = [_written_borrow(arg, convention)
+             for arg, convention in zip(node.args, conventions, strict=True)]
+    for arg, mode in zip(node.args, modes, strict=True):
         if mode is None:
             arms.check(checker, arg.value)
         else:
             check_borrow(checker, arg.value, mode, arg.marker_loc or arg.value.loc)
-    for arg, convention in zip(node.args, conventions, strict=True):
-        apply_convention(checker, arg.value, convention)
+    for arg, convention, mode in zip(node.args, conventions, modes, strict=True):
+        if mode is None:
+            apply_convention(checker, arg.value, convention)
     reject_borrow_read_by_the_change(checker, node, conventions, unchanged)
     if isinstance(resolved.callee, Free):
         apply_destroy_effects(checker, node, resolved.callee)
 
 
-#: The mode that an argument passed by address borrows its place with.
-_BY_ADDRESS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
-
-
 def _written_borrow(arg: e.Arg, convention: Convention) -> Optional[BorrowMode]:
-    """The mode of the borrow that a by-address argument takes: its written marker."""
-    if convention not in _BY_ADDRESS:
-        return None
-    return _BY_ADDRESS.get(arg.marker) if arg.marker is not None else _BY_ADDRESS[convention]
+    """The mode of the borrow that an argument takes for the statement, or None when it
+    takes none: its written `peek` or `poke` marker, else a by-address convention. A marked
+    argument of `print` and `println` has the `Guaranteed` convention and borrows as it is
+    written."""
+    if arg.marker in BY_ADDRESS:
+        return BY_ADDRESS[arg.marker]
+    return BY_ADDRESS.get(convention)
 
 
 def _convention_of(checker: 'BorrowChecker', node: e.Call, position: int) -> Convention:

@@ -23,12 +23,11 @@ from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.ownership_check import check_ownership
-from sushi_lang.semantics.typesys import (
-    BorrowMode, BuiltinType, DynamicArrayType, ReferenceType, Type,
-)
+from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, ReferenceType, Type
 
 # The table of arms first: the arm modules import it, and it imports them.
 from . import arms  # noqa: F401
+from .borrows import BY_ADDRESS
 from .consume import binds_a_bare_literal_string
 from .destroy_effects import compute_destroy_effects
 from .flow import FlowFacts
@@ -46,10 +45,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.shir.stop import Stops
     from sushi_lang.semantics.shir.typeck import TypeckResults
     from sushi_lang.semantics.tables import SymbolTables
-
-#: The mode that a parameter passed by address borrows with.
-_BY_ADDRESS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
-
 
 class BorrowChecker:
     """The borrow pass over the SHIR bodies of one unit, one body at a time."""
@@ -183,7 +178,7 @@ class BorrowChecker:
         """
         name = self.name_of(param.local)
         ty = self.local_type(param.local)
-        mode = _BY_ADDRESS.get(param.convention)
+        mode = BY_ADDRESS.get(param.convention)
         var_type = ReferenceType(ty, mode) if mode is not None and ty is not None else ty
         is_borrow = param.convention is not Convention.OWNED
         receiver = name == "self" and has_receiver
