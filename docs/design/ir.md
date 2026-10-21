@@ -714,7 +714,26 @@ or a function that is private to another unit (CE3005, where the pass checks no 
 A later fault of that value (an unhandled `Result`) is a fault of its own. A call of a name
 that no function takes (CE2008) or that two imports bring (CE3012) answers nothing. The
 display type of a hole of an `Interp` and of the argument of `print` is the type of the
-value with no `peek` or `poke`. While the migration is in progress, the arm of a construct that the pass does not
+value with no `peek` or `poke`. A `??` in a body with no channel has no answer and no
+error of `typecheck`: the `collect` pass refuses it ([CE0131](../error-catalog.md#ce0131)),
+so the body holds an error, and the completeness check does not run.
+
+**The channel rule and `??`.** A `Return` of a body with a channel spells
+`Result.Ok(...)` or `Result.Err(...)`, and any other value is
+[CE2030](../error-catalog.md#ce2030); the constructor is checked at the `Result` of the
+channel, so a payload that does not fit is [CE2049](../error-catalog.md#ce2049) at the
+payload and [CE2031](../error-catalog.md#ce2031) or [CE2039](../error-catalog.md#ce2039)
+at the constructor, as before the switch. A `Return` of a bare body refuses both
+constructors ([CE2091](../error-catalog.md#ce2091)). An `EnumInit` of `Result` takes its
+instance from the `Result` type of its position (the channel of a `return`, the written
+type of a `let`, the type of a parameter); a variant of an enum that is not generic
+(`StdError.Error`) is an instance of that enum. A `Try` takes a `Result` only
+([CE2507](../error-catalog.md#ce2507)), and answers the payload of `Ok`. Its facts are
+the tag of `Ok`, the two payload types and the `Result` of the channel. Its conversion row
+is `NoConversion` when the two error types are one type; with no declared conversion
+between two error types, the `??` is [CE2511](../error-catalog.md#ce2511).
+
+While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
 next body, so every unit is lowered and every earlier error is found.
 
@@ -968,6 +987,24 @@ takes the type of its place. The order is the rule of the source: the right side
 then each place from left to right, and each rebind frees the old value of its place
 (4.6). SHIR-to-SLIR lowering makes the temps of that order, as it makes the temps of the
 written order of a struct construction. Ruled 2026-10-20.
+
+**The path predicate.** Where the path through a statement goes is ONE predicate over
+SHIR, `semantics/shir/paths.py`, with a rule for each statement class (gate:
+`tests/unit/test_shir_paths_are_total.py`). `typecheck` reads it for a statement after
+one that ends the path ([CE0140](../error-catalog.md#ce0140)) and for a body that answers
+a value or a `Result` and can reach its end with no `return`
+([CE0107](../error-catalog.md#ce0107)); `borrow` reads it at a join. A `Return` leaves the
+function. With `leaves_round`, a `Break` and a `Continue` leave the round of their loop,
+which is the question of a join in a loop body. An `If` ends the path when it has an
+`otherwise` and each of its blocks ends it. A `Loop` can run zero times or break, so it
+never ends the path, and an `Assert`, an `Expand` and every other statement go on to the
+next. A statement after a `Break` or a `Continue` of its block is dead too. Two statements
+of two copies of an unrolled `expand` were not written one after the other, so the one does
+not make the other dead (`ExpandCopies.holding`, 7.2). A `Match` has no rule yet, because
+its answer needs the exhaustiveness of its arms, an answer of `typecheck` (#886). The two
+path rules read no type: `typecheck` runs them on the SHIR body after a walk that ends
+with no stop, on a template as it is written and not on a copy of it, and it reads every
+block of the body.
 
 `Destructure` stays one statement, because its ownership is not that of a field read: it
 OWNS from an owned value and BORROWS from a borrow (`tuples.md`). `borrow` decides which,
