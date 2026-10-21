@@ -1230,6 +1230,31 @@ node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership
 The receiver of a method call is not on the list yet: `TypeckResults` has no convention row
 for a receiver. The method group adds that row, and a `nom self` receiver joins the rule.
 
+**The body half of `borrow`.** `typecheck` gives each body that it finished with no error to
+`borrow`, with the tables that it read the body in: the body of a template check is read
+in the overlay of its check, and an error of `borrow` there refuses the template as an
+error of `typecheck` does. The declaration half of `borrow` reads the declaration of the
+body (a borrowed return), and the mode of each parameter is its `Convention` (8.3). The
+body half walks the body through ONE table of arms keyed on the SHIR class, with a row for
+each member of `ShirStmt` and `ShirExpr` (`passes/borrow/arms.py`, gate:
+`tests/unit/test_borrow_dispatch_is_total.py`). The lookup of an arm and the stop are the
+one dispatch of the SHIR passes (`semantics/shir/dispatch.py`), which `typecheck` reads
+too: a class with no row is an internal error at the span of the node, and the arm of a
+construct that the pass does not check yet stops the walk of its body with the stop code
+(`borrow, <class>`). A statement of a copy of an unrolled `expand` that ends the path,
+with more statements after it in its block, stops the walk too (`borrow, Expand`): the
+group of the copies decides the statements that no path reaches. The state of the walk
+(`BorrowState`, `FlowFacts`) is keyed by `LocalId`, because a hidden local has no source
+name, and a diagnostic names a local by the name of its `ShirLocal`. The pass decides the
+`Ownership` of each consuming use ONE time, with `classify()`, and one function writes the
+row (`consume.decide`, gate: `tests/unit/test_consuming_use_coverage.py`). The convention of
+a call argument is the row of `typecheck`, and `borrow` does not derive it again: the
+`nom` marker is compared against the declared mode by `typecheck` (CE2427). When the walk
+of a body ends with no stop and with no error, `check_ownership` runs, and the body meets
+the stage after `borrow`, which is not built yet: the pipeline reports the first stop of
+`typecheck`, then the first stop of `borrow`, then an error hole, then the first body that
+`borrow` finished (`slir, <body>`).
+
 **The completeness checks.** `check_ownership` runs when `borrow` ends a body with no
 error. It reads `TypeckResults` and `LiftResults` for the positions, and it needs an
 `Ownership` for each consuming use and each capture; LENT or OWNED for each producer over a
@@ -1253,7 +1278,9 @@ on a `cond_moved : [_5]` line after the `locals` line; `iterator: lent` or
 `iterator: owned` and `heap: true` or `heap: false` after the arguments of an iterator
 call; `in_place: true` or `in_place: false` after the body of a `Loop`; and
 `symbol: "<symbol>"` and `env: [(adopt _4, Copy), ...]` after the fields of a `Lambda`,
-each capture with its `Ownership` and its mode. With no row, the text does not change.
+each capture with its `Ownership` and its mode. With no row, the text does not change: a
+body that `borrow` did not reach prints no answer of it, and a body that `borrow` stopped in
+prints the rows that the walk wrote before the stop.
 
 ### 7.10 AST to SHIR, node by node
 
