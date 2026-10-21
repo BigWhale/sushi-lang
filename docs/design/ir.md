@@ -1249,10 +1249,13 @@ values) adds that row, and a `nom self` receiver joins the rule.
 
 **The order of the three passes.** Each SHIR pass gives the next one each body that it
 finished with no error, with the tables that `typecheck` read the body in: `typecheck`
-gives it to `lift`, and `lift` gives it to `borrow`. A stop of a pass ends the walk of its
-body, and the next pass does not get the body. The body of a template check is read in the
-overlay of its check, and an error of `borrow` there refuses the template as an error of
-`typecheck` does.
+gives it to `lift`, and `lift` gives it to `borrow`. An error in the header of a function
+or a method (the type of a parameter, the return type, the channel) is an error of its
+body for `typecheck`, so such a body does not go to `lift` either: a parameter with an
+unknown type would reach SLIR as a local with no type. A stop of a pass ends the walk of
+its body, and the next pass does not get the body. The body of a template check is read
+in the overlay of its check, and an error of `borrow` there refuses the template as an
+error of `typecheck` does.
 
 **`lift` on SHIR.** `LiftPass` (`passes/lift.py`) walks the body once (`walk.py`). Until the
 closures group, a `Lambda` stops the walk of its body with the stop code (`lift, Lambda`),
@@ -1464,16 +1467,16 @@ index. No statement has an empty span (G9).
 the node modules (`ids.py`, `places.py`, `constants.py`, `rvalues.py`, `statements.py`,
 `terminators.py`, `function.py`), the lowering (`lower.py`), the drop placement of 8.10
 (`drops.py`, the one module that builds a `Drop` or a `DropIfSet`; gate:
-`tests/unit/test_slir_drop_placement_is_one.py`) and the printer of `--dump-slir`
-(`printer.py`). Every class is a slotted dataclass, and every statement and
-terminator has a required `span` (gate: `tests/unit/test_slir_nodes_are_slotted.py`). The
-borrow pass gives each body that it finished, and that is not a template check (Q1), to
-the SLIR stage of its unit (`SlirStage`). The stage makes one `SlirFunction` from the body
-and its three side tables, and `SlirProgram` keeps the outcome of each body, keyed by the
-`DeclId` of the body. The symbol, the unit and the return type of the function are facts
-of its declaration (6.4). The unit is the declaring unit. A function that has none (a
-lifted lambda, the instance of a template of a binary library) goes into the module of the
-unit that holds its body.
+`tests/unit/test_slir_drop_placement_is_one.py`), the verifier of 8.13 (`verify.py`) and
+the printer of `--dump-slir` (`printer.py`). Every class is a slotted dataclass, and every
+statement and terminator has a required `span` (gate:
+`tests/unit/test_slir_nodes_are_slotted.py`). The borrow pass gives each body that it
+finished, and that is not a template check (Q1), to the SLIR stage of its unit
+(`SlirStage`). The stage makes one `SlirFunction` from the body and its three side tables,
+and `SlirProgram` keeps the outcome of each body, keyed by the `DeclId` of the body. The
+symbol, the unit and the return type of the function are facts of its declaration (6.4).
+The unit is the declaring unit. A function that has none (a lifted lambda, the instance of
+a template of a binary library) goes into the module of the unit that holds its body.
 
 While the migration is in progress, a construct that the lowering does not handle yet
 stops the body with the stop code (`slir, <construct>`). The construct is the name of the
@@ -1638,13 +1641,13 @@ print values: [RE2020](../error-catalog.md#re2020) prints the index and the size
 
 | SHIR | SLIR |
 |---|---|
-| `If(c, t, e)` | `SwitchInt(c, [(0, else_bb)], otherwise: then_bb)`; with no `else`, the zero edge goes to the join. The blocks are made in the order `then`, `else`, join, and no join is made when no block reaches it |
+| `If(c, t, e)` | `SwitchInt(c, [(0, else_bb)], otherwise: then_bb)`; with no `else`, the zero edge goes to the join, or to a block of its own that goes to the join when the condition has a local (see below). The blocks are made in the order `then`, `else` or the zero block, join; with no `else` and no condition local, the join is the zero target. With an `else`, the join is made after the two arms, and no join is made when no block reaches it |
 | `Binary(and/or)` | **two blocks.** Short-circuit is control flow, never an rvalue. The left operand goes into the place that takes the value; a `SwitchInt` on it goes to the join (`and` on a zero, `or` on any other value) or to the right block, which writes the same place and goes to the join. The temporaries of the right operand die in its block |
 | `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` that calls a declared conversion is a stop of the lowering for now (`slir, conversion`) |
 | `Match` on an enum | `Discriminant` + `SwitchInt`; one block per arm; payload through `Downcast` + `Field` |
 | `Match` on an integer | `SwitchInt` on the value; with a `Range` arm, a chain of compares in source order |
 | `Match` on a string, a tuple, or with `Or` arms | a chain of tests in source order, each a `Call` to the value equality and a `SwitchInt` on its bool |
-| `Loop`, kind `While` | header block, `SwitchInt`, body, `Goto` header. The blocks are made in the order header, body, exit |
+| `Loop`, kind `While` | header block, `SwitchInt`, body, `Goto` header. The blocks are made in the order header, the blocks of the condition (an `and` or an `or` in it), body, the zero block (when the condition has a local, see below), exit |
 | `Break`, `Continue` | the drops of each scope of the loop body that it leaves (8.10, rule 2), then `Goto` the exit or the header |
 | `Loop`, kind `CountedRange` | counter local, header, compare, body, step, `Goto` header |
 | `Loop`, kind `Cursor` | `Len` into a local, then the `CountedRange` shape |
@@ -1745,9 +1748,9 @@ locals, and nothing else:
    local live. When the old value is live, the new value goes into a temporary first,
    unless it is a constant, and the store moves the temporary (`_2 = ...`, `Drop(_1)`,
    `_1 = move _2`). A new value that is `and` or `or` always goes into a temporary first,
-   because its left operand is written before its right operand reads the old value. A rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns
-   is a stop of the lowering (`slir, borrowed rebind`) until a group rules what the
-   callee owns after it.
+   because its left operand is written before its right operand reads the old value. A
+   rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns is a stop of the
+   lowering (`slir, borrowed rebind`) until a group rules what the callee owns after it.
 7. The hidden iterator local of a `Protocol` or an `IteratorValue` loop, and the item that
    the loop owns, are owning locals of the loop scope under rules 1 to 4: the end, a
    `break`, a `return` and the `??` of a binder all reach a `Drop`. A walk in place has no
@@ -1888,6 +1891,26 @@ Runs after lowering, before the backend. It checks:
 - no `Binary` carries `and` or `or` (8.9)
 - every `Trap` code is a registered RExxxx, with the operand count its format string needs
 - every statement and terminator carries a `Span` (G9)
+
+**As built.** The verifier is `semantics/slir/verify.py`. The SLIR stage gives it each
+function that the lowering finished, on every compile, before the function meets the next
+stage. A failed rule is the internal error CE0158, at the span of the statement, with the
+name of the function and of the rule. The structure comes first, statement by statement;
+then a dataflow over the CFG gives each local, at each point, the set of states that the
+paths to the point give it (no value, live, moved, dropped), with the value of its drop
+flag, and a join takes the union. The rule of the drops reads: on each path from the write
+of an owning local (the entry, for an `Owned` parameter) to the end of its storage, to a
+write over it, and to a `return`, the value is moved or dropped exactly one time. A
+`DropIfSet` is the drop of the paths where its flag is true, and the paths where its flag
+is false must have moved the local; so a flagged local can reach a plain `Drop` where its
+state is exact, and a `DropIfSet` where it is unknown (8.10, rule 4). A borrowed parameter
+never drops and never moves, and an `Inout` parameter holds a value again at the `return`.
+A `Trap` ends the program and needs no drop. The declared parameters of a `Direct` callee
+come from the function table, and a `var_arg` extern compares its declared prefix alone.
+While no lowering makes a `BeginBorrow`, the rule of the borrow regions is not checked. A
+`Global` place has no type in SLIR, so a projection of a `Global` is not checked. The
+negative case of each rule is a pytest test over a hand-built function
+(`tests/unit/test_slir_verifier.py`), because a correct lowering makes none.
 
 This is where most of the 250 backend internal errors go. One gate, one message, one source
 location, asked once.
