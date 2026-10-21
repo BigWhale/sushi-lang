@@ -1507,8 +1507,10 @@ hole, else a stop of the lowering. When nothing stopped, the program goes on to 
 backend.
 
 **The emitter.** The package is `backend/slir/`, and it follows the backend rule: free
-functions that take `codegen` first, and one state object for each function
-(`FunctionState`: the storage of each local and the LLVM block of each `BlockId`). The
+functions, and one state object for each function (`FunctionState`: the codegen, the
+storage of each local and the LLVM block of each `BlockId`). The stage entry
+(`emit_function`) takes `codegen` first and makes the state; every other function of the
+package takes the state first and reads the codegen from it, so one route reaches it. The
 declarations of a module still come from the AST. Each body comes from the `SlirFunction`
 of the analysis, keyed by the `DeclId` of the body: `codegen_for` hands the SLIR of the
 program to the backend (`SlirBodies`), and a body that has no `SlirFunction` there is an
@@ -1522,11 +1524,34 @@ parameter, whose local IS the incoming address (8.3); a value parameter is store
 slot at the entry, and `return` loads `_0`. A signature that does not agree with the
 conventions or with the type of `_0` is an internal error. `StorageLive` and `StorageDead`
 emit nothing. An operator calls the emitter of the old backend that takes LLVM values
-(Q7). `SwitchInt` with `otherwise: None` goes to a block that holds `unreachable`.
+(Q7), and a comparison of two strings calls the string relation of that emitter.
+`SwitchInt` with `otherwise: None` goes to a block that holds `unreachable`.
+
+Each family of the backend gets LLVM values and semantic types, never an AST node (Q7);
+where a family took an AST node, its value half is cut out, and the AST entry calls it
+until the AST emitter goes. A `Str` constant comes from the string constant seam and owns
+no heap (owned flag 0). `Copy` and `Move` both load the value: a `Move` emits no code of
+its own, because lowering placed every drop. `Drop` goes through the one destroy seam
+(`emit_value_destructor`): a string frees its buffer only when its owned flag is set, and
+an enum goes to the destroy half of its lifecycle handler. `DropIfSet` loads its flag and
+drops only while the flag is `true`. An enum is `{i32 tag, [K x i64] data}`: an
+`Aggregate` of a variant goes through the enum emitter with one value for each payload,
+`Discriminant` reads the tag as an `i32`, and the place `Field(Downcast(p, v), i)` is the
+address of payload field `i` at the offset that the one layout authority gives
+(`TypeSizing.payload_field_offsets`). The emitter reads the semantic type of the place,
+never a layout match, and an `Aggregate` whose payload types do not agree with the variant
+is an internal error. A `Builtin` call of an intrinsic goes through one row of
+`INTRINSICS` (`intrinsics.py`), which evaluates every operand before the family emits
+(11.9): `interp` appends each part to one string builder (a string part as its bytes, any
+other part as its string form, `emit_value_fmt`) and answers a fresh owned string, also for
+one string part; `print` and `println` of a string, an integer, a float or a `bool` call
+the print emitter. The print of a value that prints by its `Display` form, and a
+`BuiltinMethod` callee, still stop.
 
 While the migration is in progress, a SLIR shape that the emitter does not handle yet
 stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
-example `emit, Str` or `emit, Drop`), at the span of its statement or terminator. The stop
+example `emit, Indirect` or `emit, AggStruct`), at the span of its statement or
+terminator. The stop
 comes before any output: the incremental path builds the module of every unit before it
 writes the first object, so no object, no binary and no `.ll` text is written. This order
 serves the migration alone: when no shape stops the emitter, the path can again build and
