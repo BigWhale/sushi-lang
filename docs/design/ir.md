@@ -1194,9 +1194,15 @@ The rows of `OwnershipResults`:
   `ADOPT` or `REJECT`, the answer of `classify()`. SLIR lowering makes the operand from
   the row and the shape of the operand alone: `MOVE` gives `Move`; `ADOPT` on a place
   gives `Copy` (by the table of `classify()`, a place that gets `ADOPT` always holds a
-  PLAIN value); `ADOPT` on a fresh value gives `Move` of its temporary; `REJECT` never
-  reaches SLIR, because it is an error of `borrow`. `ADOPT` never gives `Copy` of a fresh
-  value: a fresh owning temporary would then be dropped twice. The key is the `shir_id`
+  PLAIN value); `ADOPT` on a fresh value gives `Move` of its temporary. `REJECT` is an
+  error of `borrow`, except at two positions, where it is a borrowed view with no error:
+  the value of an `Assign` with `is_init` (a let-borrow of the owner) and the operand of a
+  `Try` that reads through a borrowed owning wrapper. There SLIR lowering gives a `Copy` of
+  the place, and the binding owns nothing and gets no drop. A `REJECT` row at any other
+  position of a body that `borrow` ended with no error is the internal error CE0157 of the
+  completeness check. `ADOPT` never gives `Copy` of a fresh value: a fresh owning
+  temporary would then be dropped twice. (Ruled provisionally 2026-10-21, for a
+  confirmation before SHIR-to-SLIR lowering.) The key is the `shir_id`
   of the consumed node. A capture has no node in the body, so its
   row has the key of the capture type in 7.3: the `shir_id` of the `Lambda` and the
   `LocalId` of the captured local.
@@ -1263,7 +1269,8 @@ error. It reads `TypeckResults` and `LiftResults` for the positions, and it need
 `Ownership` for each consuming use and each capture; LENT or OWNED for each producer over a
 container and each lazy adapter, except the iterable of a `Cursor` or a `HashMapCursor`
 walk, which makes no value; a heap decision for each lent one; and a walk-in-place answer
-for each `Loop` of kind `Protocol` or `IteratorValue`. Two other calls get LENT from
+for each `Loop` of kind `Protocol` or `IteratorValue`. A `REJECT` row is legal only at
+the two positions of a borrowed view above. Two other calls get LENT from
 `borrow`, and the check does not ask for them yet, because no spine body holds them: the
 clone of a lent iterator (the iterators group, C3) and a borrowed call that answers an
 iterator (the `peek` return group, B8). Each group adds its call to the check. The conditionally moved locals have
