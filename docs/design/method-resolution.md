@@ -109,8 +109,9 @@ Inside the built-in step, both layers try the families in one canonical order:
 The receiver kinds are disjoint -- a primitive is a `BuiltinType`, the derived pair and the
 contract methods apply to `StructType`/`EnumType` (`eq` and `compare` also to a primitive),
 the function-value clone to `FunctionType` -- and the method names are disjoint, so the order
-is arbitrary. The AST body emitter had a second dispatcher that stated the order again, and a
-gate held the two equal; the dispatcher and its gate went with that emitter.
+is arbitrary. What matters is that the one table states it once.
+`tests/unit/test_method_resolution_family_order.py` pins the order of the table and of the
+ladder in `calls/methods.py`.
 
 **The families claim pairwise disjointly, and a gate proves it.** At most ONE family claims any
 (receiver kind, method name), over a space proved to reach every family
