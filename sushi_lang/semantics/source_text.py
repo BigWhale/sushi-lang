@@ -1,9 +1,9 @@
 """The source text of an expression, read from its span.
 
-A diagnostic names an expression by the text that the user wrote. A node of the AST and a
-node of SHIR each hold the span of what they stand for, so the text comes from the span
-and the source, and no pass spells a node again from its fields. The AST builder and the
-borrow pass both read it.
+A diagnostic names an expression by the text that the user wrote. A node holds the span of
+what it stands for, so the text comes from the span and the source, and no pass spells a
+node again from its fields. The borrow pass reads it for each diagnostic that names an
+expression.
 """
 from __future__ import annotations
 

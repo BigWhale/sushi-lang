@@ -6,7 +6,8 @@ from itertools import count
 
 from sushi_lang.internals.diagnostics import SyntaxDiagnostic
 from sushi_lang.semantics.ast import (
-    DestructureTarget, Expr, Let, Name, Rebind, Stmt, TupleLiteral)
+    DestructureTarget, Expr, IndexAccess, IntLit, Let, MemberAccess, Name, Rebind, Stmt,
+    TupleLiteral)
 from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.semantics.ast_builder.utils.tree_navigation import (
     first_name, first_token, first_tree, ice, is_type_node, mark_nom)
@@ -143,7 +144,7 @@ def _rebind_targets(target: TupleLiteral, rebinds: List[Stmt], seen: Dict[str, E
             targets.append(DestructureTarget(
                 nested=_rebind_targets(place, rebinds, seen, ast_builder), loc=place.loc))
             continue
-        spelled = _place_spelling(place, ast_builder.source)
+        spelled = _place_spelling(place)
         if spelled is not None:
             first = seen.get(spelled)
             if first is not None and first.loc is not None:
@@ -160,11 +161,26 @@ def _rebind_targets(target: TupleLiteral, rebinds: List[Stmt], seen: Dict[str, E
     return targets
 
 
-def _place_spelling(place: Expr, source: Optional[str]) -> Optional[str]:
-    """The source text of a place, or None when it is no place or has no text."""
-    from sushi_lang.semantics.places import Step, walk_place
-    from sushi_lang.semantics.source_text import source_text
+def _place_spelling(place: Expr) -> Optional[str]:
+    """The written place, spelled from its steps, or None when CE6109 does not compare it.
 
-    if walk_place(place, Step.MEMBER | Step.INDEX).name is None:
+    A place is a name, a field chain and an index off it. An index is compared only when it
+    is a literal or a name: two calls or two expressions can name two slots. The spelling
+    comes from the steps of the place, so the space in the source changes nothing.
+    """
+    from sushi_lang.semantics.places import Step, walk_place
+
+    walked = walk_place(place, Step.MEMBER | Step.INDEX)
+    if walked.name is None:
         return None
-    return source_text(source, place.loc)
+    spelled = walked.name.id
+    for step in reversed(walked.path):
+        if isinstance(step, MemberAccess):
+            spelled += f".{step.member}"
+        elif isinstance(step, IndexAccess) and isinstance(step.index, IntLit):
+            spelled += f"[{step.index.value}]"
+        elif isinstance(step, IndexAccess) and isinstance(step.index, Name):
+            spelled += f"[{step.index.id}]"
+        else:
+            return None
+    return spelled

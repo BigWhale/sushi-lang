@@ -1,10 +1,11 @@
-"""The source text of an expression comes from its span, for a node of either tree (H4).
+"""The source text of an expression comes from its span (H4).
 
-A diagnostic names an expression by the text that the user wrote. A node of the AST and
-a node of SHIR each hold the span of what they stand for, so ONE function reads the text
-from the span (`semantics/source_text.py`), and no pass spells a node again from its
-fields. The AST builder (the place of a tuple rebind, CE6109) and the borrow pass on SHIR
-read it. These tests call the function over a text; they do not run the compiler.
+A diagnostic names an expression by the text that the user wrote. A node holds the span of
+what it stands for, so ONE function reads the text from the span
+(`semantics/source_text.py`), and no pass spells a node again from its fields: the borrow
+pass on SHIR reads it. The place of a tuple rebind (CE6109) is no text: the AST builder
+compares the steps of the place. These tests call the function over a text; they do not
+run the compiler.
 """
 from __future__ import annotations
 

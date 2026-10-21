@@ -375,5 +375,5 @@ def parse_to_ast(src: str, dump_parse: bool = False,
     if dump_parse:
         print(tree.pretty())
 
-    ast_builder = ASTBuilder(reporter, source_label, src)
+    ast_builder = ASTBuilder(reporter, source_label)
     return ast_builder.build(tree), tree

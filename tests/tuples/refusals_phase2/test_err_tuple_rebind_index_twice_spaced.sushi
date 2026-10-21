@@ -1,0 +1,10 @@
+# The check compares the written PLACES, not their text: `xs[i]` and `xs[ i ]` are one place,
+# and the second one is refused (CE6109).
+# EXPECT_ERROR_CODES_EXACT: CE6109
+# EXPECT_STDERR_CONTAINS: "'xs[i]' is written twice in one destructuring rebind"
+
+fn main() i32:
+    let i32[] xs = from([1, 2])
+    let i32 i = 0
+    (xs[i], xs[ i ]) := (3, 4)
+    return xs[0]
