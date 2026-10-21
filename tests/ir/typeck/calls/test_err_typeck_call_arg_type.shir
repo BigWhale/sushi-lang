@@ -10,8 +10,8 @@ ShirBody fact
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    If(Binary(<=, LocalRef(_0), Lit(1)), then: [Return(Lit(1))])
-    Return(Binary(*, LocalRef(_0), Call(Free(@fact), [(Binary(-, LocalRef(_0), Lit(1)), Guaranteed)])))
+    If(Binary(<=, LocalRef(_0), Lit(1)), then: [Return(adopt Lit(1))])
+    Return(adopt Binary(*, LocalRef(_0), Call(Free(@fact), [(Binary(-, LocalRef(_0), Lit(1)), Guaranteed)])))
 
 ShirBody yes
   params : []

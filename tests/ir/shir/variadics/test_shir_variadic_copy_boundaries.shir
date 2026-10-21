@@ -27,6 +27,6 @@ ShirBody tally__i32_string.pack2
     ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_1), ""]), Guaranteed)]))
     Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(1)), is_init: false)
     Assign(LocalRef(_3), adopt Lit(0), is_init: true)
-    Loop(Cond(Binary(<, LocalRef(_3), Lit(2))), [Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(10)), is_init: false), Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(10)), is_init: false), Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(1)), is_init: false)])
-    Return(LocalRef(_2))
+    Loop(Cond(Binary(<, LocalRef(_3), Lit(2))), [Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(10)), is_init: false), Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(10)), is_init: false), Assign(LocalRef(_3), adopt Binary(+, LocalRef(_3), Lit(1)), is_init: false)])
+    Return(adopt LocalRef(_2))
   copies : [block: [1..3, 3..5], block[6].body: [0..1, 1..2]]

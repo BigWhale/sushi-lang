@@ -6,6 +6,6 @@ ShirBody main
   block  :
     Assign(LocalRef(_0), adopt Lit(0), is_init: true)
     Assign(LocalRef(_1), adopt Lit(0), is_init: true)
-    Loop(Cond(Binary(<, LocalRef(_0), Lit(10))), [Assign(LocalRef(_0), Binary(+, LocalRef(_0), Lit(1)), is_init: false), If(Binary(==, Binary(%, LocalRef(_0), Lit(2)), Lit(0)), then: [Continue]), If(Binary(>, LocalRef(_0), Lit(7)), then: [Break]), Assign(LocalRef(_2), Lit(0), is_init: true), Loop(Cond(Binary(<, LocalRef(_2), LocalRef(_0))), [Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1)), is_init: false), Assign(LocalRef(_1), Binary(+, LocalRef(_1), LocalRef(_2)), is_init: false)])])
+    Loop(Cond(Binary(<, LocalRef(_0), Lit(10))), [Assign(LocalRef(_0), adopt Binary(+, LocalRef(_0), Lit(1)), is_init: false), If(Binary(==, Binary(%, LocalRef(_0), Lit(2)), Lit(0)), then: [Continue]), If(Binary(>, LocalRef(_0), Lit(7)), then: [Break]), Assign(LocalRef(_2), adopt Lit(0), is_init: true), Loop(Cond(Binary(<, LocalRef(_2), LocalRef(_0))), [Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(1)), is_init: false), Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), LocalRef(_2)), is_init: false)])])
     ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
-    Return(Lit(0))
+    Return(adopt Lit(0))

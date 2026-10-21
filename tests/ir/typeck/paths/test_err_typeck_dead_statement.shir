@@ -4,7 +4,7 @@ ShirBody half
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    If(Binary(==, Binary(%, LocalRef(_0), Lit(2)), Lit(1)), then: [Return(EnumInit(@Result, "Err", [EnumInit(@StdError, "Error", [])]))], otherwise: [Return(EnumInit(@Result, "Ok", [Binary(/, LocalRef(_0), Lit(2))]))])
+    If(Binary(==, Binary(%, LocalRef(_0), Lit(2)), Lit(1)), then: [Return(adopt EnumInit(@Result, "Err", [adopt EnumInit(@StdError, "Error", [])]))], otherwise: [Return(adopt EnumInit(@Result, "Ok", [adopt Binary(/, LocalRef(_0), Lit(2))]))])
     ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
 
 ShirBody show

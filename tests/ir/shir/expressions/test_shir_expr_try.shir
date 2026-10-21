@@ -4,8 +4,8 @@ ShirBody parse
   params : [(_0 "s": string, Guaranteed)]
   locals : []
   block  :
-    If(Binary(==, LocalRef(_0), Lit("")), then: [Return(EnumInit(@Result, "Err", [EnumInit(@ParseError, "Empty", [])]))])
-    Return(EnumInit(@Result, "Ok", [Lit(42)]))
+    If(Binary(==, LocalRef(_0), Lit("")), then: [Return(adopt EnumInit(@Result, "Err", [adopt EnumInit(@ParseError, "Empty", [])]))])
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(42)]))
 
 ShirBody bump
   params : [(_0 "s": string, Guaranteed)]

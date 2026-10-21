@@ -30,5 +30,5 @@ ShirBody Sign.flip
   params : [(_1 "up": bool, Guaranteed)]
   locals : []
   block  :
-    If(LocalRef(_1), then: [Return(EnumInit(@Sign, "Plus", []))])
-    Return(EnumInit(@Sign, "Minus", []))
+    If(LocalRef(_1), then: [Return(adopt EnumInit(@Sign, "Plus", []))])
+    Return(adopt EnumInit(@Sign, "Minus", []))
