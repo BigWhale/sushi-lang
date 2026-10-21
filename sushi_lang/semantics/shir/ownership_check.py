@@ -33,7 +33,9 @@ each `Loop` of kind `Protocol` or `IteratorValue` has its walk in place. The con
 moved locals have no check: no row for a local is the answer "moved on no path, or on
 every path". REJECT is an error of `borrow`, except at two positions, where it is a
 borrowed view with no error: the value of a `let` (a let-borrow of the owner) and the
-operand of a `??` that reads through a borrowed owning wrapper. A REJECT row at any other
+operand of a `??` that reads through a borrowed owning wrapper. That operand is a local
+that holds a borrow: a parameter with no `nom`, a local of a reference type, or a
+let-borrow. A REJECT row at any other
 position of a body that `borrow` ended with no error is a gap too. A gap is the internal
 error CE0157, which names the pass and the table.
 """
@@ -50,13 +52,14 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import ShirBody
 from sushi_lang.semantics.shir.callee import Builtin
 from sushi_lang.semantics.shir.decls import DeclNames
-from sushi_lang.semantics.shir.ids import ShirId
+from sushi_lang.semantics.shir.ids import LocalId, ShirId
 from sushi_lang.semantics.shir.lift import LiftResults
 from sushi_lang.semantics.shir.loop_kind import Cursor, HashMapCursor, IteratorValue, Protocol
 from sushi_lang.semantics.shir.ownership import OwnershipResults
 from sushi_lang.semantics.shir.side_table import MissingAnswer, raise_first_gap
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.walk import walk
+from sushi_lang.semantics.typesys import ReferenceType
 
 Consumed: TypeAlias = Callable[[Any, TypeckResults, OwnershipResults], Iterator[e.ShirExpr]]
 
@@ -177,14 +180,34 @@ def _capture_gaps(lam: e.Lambda, lift: LiftResults,
             yield f"ownership of capture _{capture.local.index}"
 
 
-def borrowed_views(body: ShirBody) -> set[ShirId]:
+def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
+                     ownership: OwnershipResults) -> set[LocalId]:
+    """The locals that hold a borrow: a parameter with no `nom`, a local of a reference
+    type, and a let-borrow (a `let` whose value answers REJECT)."""
+    borrowed = {param.local for param in body.params
+                if param.convention is not Convention.OWNED}
+    borrowed |= {local.id for local in body.locals
+                 if isinstance(typeck.local_type(local.id), ReferenceType)}
+    for _path, value in walk(body.block, "block"):
+        if (isinstance(value, s.Assign) and value.is_init
+                and isinstance(value.target, e.LocalRef)
+                and ownership.ownership_of(value.value.shir_id) is Ownership.REJECT):
+            borrowed.add(value.target.local)
+    return borrowed
+
+
+def borrowed_views(body: ShirBody, typeck: TypeckResults,
+                   ownership: OwnershipResults) -> set[ShirId]:
     """The two positions where a REJECT row is a borrowed view and no error: the value of a
-    `let`, and the operand of a `??`."""
+    `let`, and the operand of a `??` that reads through a borrowed wrapper. A REJECT row
+    comes only for a wrapper that owns, so the operand is a local that holds a borrow."""
+    borrowed = _borrowed_locals(body, typeck, ownership)
     views: set[ShirId] = set()
     for _path, value in walk(body.block, "block"):
         if isinstance(value, s.Assign) and value.is_init:
             views.add(value.value.shir_id)
-        elif isinstance(value, e.Try):
+        elif (isinstance(value, e.Try) and isinstance(value.inner, e.LocalRef)
+                and value.inner.local in borrowed):
             views.add(value.inner.shir_id)
     return views
 
@@ -194,7 +217,7 @@ def missing_ownership(body: ShirBody, typeck: TypeckResults, lift: LiftResults,
     """Each answer that `body` needs and that `ownership` does not hold, in the order of the
     walk. `typeck` and `lift` give the positions: they are complete when `borrow` runs."""
     consumed = {node.shir_id for node in consuming_uses(body, typeck, ownership)}
-    views = borrowed_views(body)
+    views = borrowed_views(body, typeck, ownership)
     direct = _direct_iterables(body, typeck)
     gaps: list[MissingAnswer] = []
     for _path, value in walk(body.block, "block"):

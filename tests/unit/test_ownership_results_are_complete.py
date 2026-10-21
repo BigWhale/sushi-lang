@@ -147,6 +147,68 @@ def test_a_reject_at_the_return_of_a_try_is_found() -> None:
     assert caught.value.params["answer"] == _NO_REJECT
 
 
+# The operand of a `??` is a borrowed view only when it reads through a BORROWED wrapper:
+# a local that a parameter with no `nom` binds, a let-borrow, or a reference. A REJECT at
+# the operand of a `??` over an owned local or over a new value is a gap.
+
+
+def _try_over(operand: str):
+    """`let got = <operand>??` where the operand is the parameter `r`, owned (`nom r`) or
+    borrowed, the local `v` bound from `r` (a let-borrow when its `let` answers REJECT),
+    or the call `make()`. The answers: each row that the borrow pass writes."""
+    from sushi_lang.semantics.shir import exprs as e
+    from sushi_lang.semantics.shir import stmts as s
+    from sushi_lang.semantics.shir.body import (
+        ExpandCopies, Instance, ShirBody, ShirLocal, ShirParam)
+    from sushi_lang.semantics.shir.decls import DeclNames
+    from sushi_lang.semantics.shir.nodes import ShirBlock
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.shir.typeck import TypeckResults
+    from sushi_lang.semantics.typesys import BuiltinType
+
+    at = span(1)
+    decls = DeclNames()
+    table = OwnershipResults()
+    statements = []
+    convention = Convention.OWNED if operand == "owned_param" else Convention.GUARANTEED
+    if operand in ("let_borrow", "owned_local"):
+        bound = e.LocalRef(ShirId(10), at, LocalId(0))
+        statements.append(s.Assign(ShirId(11), at, e.LocalRef(ShirId(12), at, LocalId(2)),
+                                   bound, True))
+        table.record_ownership(bound.shir_id, Ownership.REJECT if operand == "let_borrow"
+                               else Ownership.MOVE)
+        inner = e.LocalRef(ShirId(0), at, LocalId(2))
+    elif operand == "call":
+        callee = e.GlobalRef(ShirId(13), at, decls.refer("make"))
+        inner = e.Call(ShirId(0), at, e.Named(callee), [])
+    else:
+        inner = e.LocalRef(ShirId(0), at, LocalId(0))
+    tried = e.Try(ShirId(1), at, inner)
+    statements.append(s.Assign(ShirId(2), at, e.LocalRef(ShirId(3), at, LocalId(1)), tried,
+                               True))
+    table.record_ownership(inner.shir_id, Ownership.REJECT)
+    table.record_ownership(tried.shir_id, Ownership.ADOPT)
+    body = ShirBody(decls.declare("read"), Instance(),
+                    [ShirParam(LocalId(0), BuiltinType.STRING, convention, at, False)],
+                    [ShirLocal(LocalId(0), "r", None, at), ShirLocal(LocalId(1), "got", None, at),
+                     ShirLocal(LocalId(2), "v", None, at)],
+                    ShirBlock(ShirId(4), at, statements), ExpandCopies())
+    return body, TypeckResults(), table, inner
+
+
+@pytest.mark.parametrize("operand", ["borrowed_param", "let_borrow"])
+def test_a_reject_at_a_try_over_a_borrowed_wrapper_is_a_borrowed_view(operand: str) -> None:
+    body, typeck, table, _inner = _try_over(operand)
+    assert missing_ownership(body, typeck, LiftResults(), table) == []
+
+
+@pytest.mark.parametrize("operand", ["owned_param", "owned_local", "call"])
+def test_a_reject_at_a_try_over_a_wrapper_that_is_not_borrowed_is_found(operand: str) -> None:
+    body, typeck, table, inner = _try_over(operand)
+    assert missing_ownership(body, typeck, LiftResults(), table) == [
+        MissingAnswer(_NO_REJECT, type(inner).__name__, span(1))]
+
+
 def test_an_owned_iterator_needs_no_heap_decision() -> None:
     made = sample()
     table = OwnershipResults()
