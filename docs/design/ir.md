@@ -818,7 +818,7 @@ read-only storage: so `borrow` never meets a `poke` of a constant, and one that 
 is an internal error. A `break` or a `continue` outside a loop (CE1003, which the `scope`
 pass reports) is an error hole too: lowering counts the loop bodies as the `scope` pass
 counts them, so `borrow` never meets a jump with no loop, and one that reaches it is an
-internal error. Ruled 2026-10-21.
+internal error.
 
 An error hole CARRIES the code of the error that it stands for (CE6102, CE6104, CE2122,
 CE2008, CE2045, CE2400, CE1003; for a name with no declaration, the codes CE1001, CE1002 and CE0144). At
@@ -1290,14 +1290,19 @@ with the same `Step` and `Walked` as the AST walk of the `scope` pass.
 path (the join is a union, and a use after it is CE2405) and moved on EVERY path (the join
 is an intersection). An EXIT of a scope is the end of a block that the path reaches, a
 `Return`, the error path of a `Try`, and a `Break` or a `Continue` for the blocks of its
-loop body. At each exit, `borrow` records each local of the scope that is not moved on
-every path there; a local of a `let` is in its scope after its value, so an exit in the
+loop body. A rebind (an `Assign` with no `is_init`) is an exit of the OLD value of its
+local: it drops that value (8.10, rule 6), so it needs to know whether the value is live.
+At each exit, `borrow` records each local of the scope that is not moved on every path
+there, and at a rebind it records the local when the old value is moved on some paths
+and not on others; a local of a `let` is in its scope after its value, so an exit in the
 value is no exit of the local. A local that is moved on some path and that an exit sees
 not moved on every path is a row of the conditionally moved locals. So a local moved in
 each block of an `If` has no row; a local moved in one block, or moved before a `Return`
 and not on the path that goes on, or moved after a `Try` whose error path leaves with it,
-has a row; and a local moved and then rebound has a row too, because the exit sees the new
-value.
+has a row; a local moved and then rebound has a row too, because the exit sees the new
+value; and a local moved on some paths before a rebind has a row, although each exit after
+it sees the local moved on every path, because the rebind drops the old value only on the
+paths that did not move it.
 
 **The completeness checks.** `check_ownership` runs when `borrow` ends a body with no
 error. It reads `TypeckResults` and `LiftResults` for the positions, and it needs an
@@ -1621,9 +1626,11 @@ locals, and nothing else:
 3. A local that `borrow` proved moved on **every** path gets no drop at all.
 4. A local marked CONDITIONALLY moved gets a `bool` flag local: set `true` at the
    declaration (set again on each loop iteration and at each rebind), set `false` at each
-   move site, and its drop becomes `DropIfSet`. The row is the answer of `borrow` at the
-   exits of the scope of the local (7.9): a local that each exit sees moved on every path
-   has no row, and rule 3 applies to it.
+   move site, and its drop becomes `DropIfSet`, at a scope exit and at the drop of the old
+   value of a rebind (rule 6) alike. The row is the answer of `borrow` at the exits of the
+   scope of the local and at each rebind of it (7.9). A local with no row is moved on no
+   path, or each exit and each rebind see it moved on every path, and rule 3 applies to
+   it.
 5. A borrow never drops. `Guaranteed`, `InGuaranteed` and `Inout` parameters never drop;
    an `Owned` parameter drops in the callee.
 6. An `Assign` to an owning place that may hold a live value drops the OLD value, and the
