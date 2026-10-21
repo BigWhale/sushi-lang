@@ -211,6 +211,7 @@ def _validate_function_body(self, func: FuncDef) -> None:
     # clears what a transplanted or copied one set.
     self.reporter.enter_body(func)
     kind = "lambda" if is_lifted_lambda(func) else "function"
+    header = self.errors_offered()
     _enter_body(self, func, func.name, kind, func.ret, func.err_type,
                 func.err_span or func.ret_span)
 
@@ -218,7 +219,7 @@ def _validate_function_body(self, func: FuncDef) -> None:
 
     validate_type_name(self, func.ret, func.ret_span)
 
-    self.check_body(func, lambda body: _reject_path_faults(self, func, body))
+    self.check_body(func, lambda body: _reject_path_faults(self, func, body), offered=header)
 
     self.current_function = None
     _leave_body(self)
@@ -296,6 +297,7 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
     if getattr(method, "is_conversion", False):
         name = f"{display_type(target_type)} as {display_type(method.ret)}"
         kind = "conversion"
+    header = self.errors_offered()
     _enter_body(self, method, name, kind, method.ret, method.err_type,
                 method.err_span or method.name_span)
 
@@ -305,7 +307,8 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
 
     validate_type_name(self, method.ret, method.ret_span)
 
-    self.check_body(method, lambda body: _reject_path_faults(self, method, body))
+    self.check_body(method, lambda body: _reject_path_faults(self, method, body),
+                    offered=header)
 
     _leave_body(self)
 

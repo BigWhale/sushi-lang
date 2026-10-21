@@ -272,8 +272,8 @@ class TypeValidator:
                                  self.const_table, self.current_unit_name,
                                  self.namespaces_of, self.struct_table, self.enum_table)
 
-    def check_body(self, decl, path_faults: Optional[Callable[['ShirBody'], None]] = None
-                   ) -> Optional['ShirBody']:
+    def check_body(self, decl, path_faults: Optional[Callable[['ShirBody'], None]] = None,
+                   *, offered: Optional[int] = None) -> Optional['ShirBody']:
         """The body half over the SHIR body of `decl` (docs/design/ir.md 7.3, 7.9).
 
         A stop ends the walk: the pass records it, with the file of the body, and the
@@ -281,8 +281,10 @@ class TypeValidator:
         faults of a function or a method (`path_faults`) are checked. A walk that ends with
         no stop and with no error in its body is checked for completeness, and its body goes
         to the next stage, the lift pass, with the tables that the body was read in. A node
-        that has an error has no answer, so a body with an error is not checked. The answer
-        is the body when the walk reached its end, and None after a stop.
+        that has an error has no answer, so a body with an error is not checked. `offered`
+        is the count of the errors before the header of a function or a method, so that a
+        body whose header has an error (an unknown parameter type) does not go on either.
+        The answer is the body when the walk reached its end, and None after a stop.
         """
         body = None if self.shir is None else self.shir.body_of(self.written_of(decl))
         if (body is None or self.shir is None or self.stops is None
@@ -297,7 +299,8 @@ class TypeValidator:
         self.refused_before = False
         origin = self.reporter.origin
         filename = origin.filename if origin is not None else self.reporter.filename
-        offered = self.errors_offered()
+        if offered is None:
+            offered = self.errors_offered()
         try:
             check_params(self, body)
             check_block(self, body.block)
