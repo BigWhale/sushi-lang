@@ -19,7 +19,8 @@ answers of `typecheck`:
 - each capture of a `Lambda`, from its environment layout in `LiftResults`.
 
 The receiver of a method call is not on the list: `TypeckResults` has no convention row for
-a receiver yet. The method group adds that row, and a `nom self` receiver joins the rule.
+a receiver yet. The first group with method calls (A1) adds that row, and a `nom self`
+receiver joins the rule.
 
 Two writers of LENT have no check yet, because no spine body holds them: the clone of a
 lent iterator (the iterators group, C3) and a borrowed call that answers an iterator (the

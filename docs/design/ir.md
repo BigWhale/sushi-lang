@@ -1241,7 +1241,8 @@ node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership
 - each capture of a `Lambda`, from its environment layout in `LiftResults`.
 
 The receiver of a method call is not on the list yet: `TypeckResults` has no convention row
-for a receiver. The method group adds that row, and a `nom self` receiver joins the rule.
+for a receiver. The first group with method calls (A1, the built-in methods on plain
+values) adds that row, and a `nom self` receiver joins the rule.
 
 **The order of the three passes.** Each SHIR pass gives the next one each body that it
 finished with no error, with the tables that `typecheck` read the body in: `typecheck`
