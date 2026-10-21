@@ -292,23 +292,37 @@ def _fact(group: str, what: str) -> str:
             "moves the fact to a SHIR table and deletes it")
 
 
+_TYPES_PASS = "passes/types/"
+
+# (field, the module of its writer, group, what it holds). The field is declared in
+# semantics/ast.py, and vulture reports the declaration and the write.
+_FACTS = (
+    ("walks_in_place", "passes/borrow/iterators.py", "C3",
+     "the walk in place of a loop; tests/unit/test_walk_fields_have_one_writer.py reads its "
+     "writer"),
+    ("resolved_scrutinee_type", _TYPES_PASS + "matching.py", "A3 and A4", "the type of a scrutinee"),
+    ("integer_match_type", _TYPES_PASS + "matching.py", "A3", "the type of an integer match"),
+    ("inferred_element_type", _TYPES_PASS + "inference.py", "A6", "the type of an index access"),
+    ("variadic_arg_types", _TYPES_PASS + "externals.py", "D5",
+     "the promoted types of a C vararg call"),
+    ("callee_method_type_args", _TYPES_PASS + "calls/methods.py", "A10",
+     "the method type arguments of an extension call"),
+    ("callee_extension_unit", _TYPES_PASS + "calls/*.py", "A10",
+     "the declaring unit of an extension callee"),
+    ("callee_is_static", _TYPES_PASS + "calls/statics.py", "A10", "a call of a static method"),
+    ("callee_static_target", _TYPES_PASS + "calls/statics.py", "A10",
+     "the type of a static callee"),
+    ("iterator_next", _TYPES_PASS + "calls/methods.py", "C3", "the next() call of a protocol loop"),
+    ("inferred_conversion", _TYPES_PASS + "expressions.py", "D2",
+     "the declared conversion of a cast between two error types"),
+)
+
+WHITELIST += tuple(
+    (_SEMANTICS + module, name, _fact(group, what))
+    for name, writer, group, what in _FACTS
+    for module in ("ast.py", writer))
+
 WHITELIST += (
-    (_SEMANTICS + "*", "walks_in_place",
-     _fact("C3", "the walk in place of a loop; tests/unit/test_walk_fields_have_one_writer.py "
-                 "reads its writer")),
-    (_SEMANTICS + "*", "resolved_scrutinee_type", _fact("A3 and A4", "the type of a scrutinee")),
-    (_SEMANTICS + "*", "integer_match_type", _fact("A3", "the type of an integer match")),
-    (_SEMANTICS + "*", "inferred_element_type", _fact("A6", "the type of an index access")),
-    (_SEMANTICS + "*", "variadic_arg_types", _fact("D5", "the promoted types of a C vararg call")),
-    (_SEMANTICS + "*", "callee_method_type_args",
-     _fact("A10", "the method type arguments of an extension call")),
-    (_SEMANTICS + "*", "callee_extension_unit",
-     _fact("A10", "the declaring unit of an extension callee")),
-    (_SEMANTICS + "*", "callee_is_static", _fact("A10", "a call of a static method")),
-    (_SEMANTICS + "*", "callee_static_target", _fact("A10", "the type of a static callee")),
-    (_SEMANTICS + "*", "iterator_next", _fact("C3", "the next() call of a protocol loop")),
-    (_SEMANTICS + "*", "inferred_conversion",
-     _fact("D2", "the declared conversion of a cast between two error types")),
     (_SEMANTICS + "passes/borrow/flow.py", "back_edge",
      "kept for the iterators group C3: a field of LoopFlow, which C3 ports"),
     (_SEMANTICS + "ast_walk.py", "ends_unrolled_run",
@@ -321,13 +335,18 @@ WHITELIST += (
 
 # The members of ConsumingUse that no code names since the backend `consume` went: the
 # closed set of consuming positions that docs/design/ir.md 7.9 and
-# ownership-conventions.md 3.1 define.
+# ownership-conventions.md 3.1 define, and tests/unit/test_ownership_table.py pins. Each
+# one is kept for the group whose owning type brings the position back with its row.
+_CONSUMING_POSITIONS = {
+    "CALL_ARG": "B1", "LET": "B1", "RETURN": "B1", "ELEMENT_ASSIGN": "B1",
+    "STRUCT_FIELD": "B3", "ENUM_PAYLOAD": "B3", "MATCH_SCRUTINEE": "B7",
+    "REBIND": "B9", "FIELD_ASSIGN": "B9",
+}
 WHITELIST += tuple(
     (_SEMANTICS + "ownership.py", member,
-     "kept for the ownership groups of Tier B: a consuming position of the closed set "
-     "ConsumingUse, which the design names")
-    for member in ("CALL_ARG", "LET", "REBIND", "FIELD_ASSIGN", "STRUCT_FIELD",
-                   "ENUM_PAYLOAD", "ELEMENT_ASSIGN", "RETURN", "MATCH_SCRUTINEE"))
+     f"kept for {group}: a consuming position of the closed set ConsumingUse "
+     "(tests/unit/test_ownership_table.py)")
+    for member, group in _CONSUMING_POSITIONS.items())
 
 RATCHET: tuple[tuple[str, str, str], ...] = ()
 
