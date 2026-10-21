@@ -1213,8 +1213,9 @@ The rows of `OwnershipResults`:
   row has the key of the capture type in 7.3: the `shir_id` of the `Lambda` and the
   `LocalId` of the captured local.
 - A conditionally moved local is a row by its `LocalId`. A local with no row is moved on
-  no path, or moved on every path at each exit of its scope. SLIR lowering gives each row a
-  drop flag (8.10, rule 4).
+  no path, or moved on every path at each exit of its scope, and a `move` row of the local
+  tells the two apart (8.10, rule 3). SLIR lowering gives each row a drop flag (8.10,
+  rule 4).
 - LENT or OWNED (a bool, true for LENT) and the heap decision of a lent iterator (a bool)
   are rows by the `shir_id` of the producer call or the lazy-adapter call.
 - The walk in place is a bool by the `shir_id` of the `Loop`.
@@ -1638,7 +1639,11 @@ locals, and nothing else:
    newest declaration first (reverse declaration order). On the path of a `return`, the
    value goes into `_0` FIRST and the drops come after it, because the value can read a
    local that the scope exit frees.
-3. A local that `borrow` proved moved on **every** path gets no drop at all.
+3. A local that `borrow` proved moved on **every** path gets no drop at all. Such a local
+   has no `cond_moved` row, as a local moved on no path has none: SLIR lowering tells the
+   two apart by the `Ownership` rows of the body, and a local with a `move` row at a
+   `LocalRef` of it (`move LocalRef(<local>)`) or at a capture of it is moved on every
+   path, and a local with no such row is moved on no path.
 4. A local marked CONDITIONALLY moved gets a `bool` flag local: set `true` at the
    declaration (set again on each loop iteration and at each rebind), set `false` at each
    move site, and its drop becomes `DropIfSet`, at a scope exit and at the drop of the old
