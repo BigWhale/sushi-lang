@@ -1,0 +1,4 @@
+# A unit of test_emit_rebuild that v2/ does not touch.
+
+public fn twice(i32 n) i32:
+    return n * 2
