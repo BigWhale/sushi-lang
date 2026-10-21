@@ -182,15 +182,12 @@ def _spell_place(validator: 'TypeValidator', value: e.ShirExpr) -> Optional[str]
     """The source spelling of a PLACE the user can borrow, or None when there is none.
 
     The help offers the argument back to the user, so it must be text the user could type.
-    A local spells its name and a field read spells its base first; anything else -- a
-    call, an index, a literal -- has no spelling here and is offered no help.
+    A local spells its name; anything else has no spelling here and is offered no help. A
+    field read is a place too, and its spelling comes with the one SHIR place walk.
     """
     if isinstance(value, e.LocalRef):
         local = validator.body_locals.get(value.local)
         return None if local is None else local.name
-    if isinstance(value, e.Field):
-        base = _spell_place(validator, value.base)
-        return None if base is None else f"{base}.{value.name}"
     return None
 
 

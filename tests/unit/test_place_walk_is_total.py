@@ -2,8 +2,9 @@
 
 Two gates. The walk is TOTAL: every node of the `Expr` union is either a step it crosses
 or a kind that ends it, never both and never neither. And the walk is ONE: a loop or a
-recursion anywhere else under `semantics/` that steps through `.receiver` / `.array` is a
-second root walk, and it is refused.
+recursion anywhere else under `semantics/` that steps through `.receiver` / `.array`, or
+through the `.base` of a SHIR `Field`, `Index` or `Slice`, is a second root walk, and it is
+refused.
 """
 from __future__ import annotations
 
@@ -20,7 +21,9 @@ from sushi_lang.semantics.places import NOT_A_STEP, Step, walk_place
 SEMANTICS = Path(places.__file__).resolve().parent
 REPO = SEMANTICS.parent.parent
 
-_STEP_FIELDS = {"receiver", "array"}
+#: The fields that a place chain steps through: the AST `receiver` and `array`, and the
+#: `base` of a SHIR place (docs/design/ir.md 7.4).
+_STEP_FIELDS = {"receiver", "array", "base"}
 
 # A root walk this gate may not remove, with the reason. The list may only shrink: an
 # entry that is no longer found fails the gate too, so it cannot outlive its walk.
