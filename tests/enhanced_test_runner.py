@@ -1202,6 +1202,14 @@ class TestRunner:
                 + ", ".join(missing)
                 + f"\nSTDERR: {stderr.strip()}"
             )
+        present = [repr(content) for content in metadata.expect_stderr_lacks
+                   if content in stderr]
+        if present:
+            return False, (
+                "✗ Compilation: stderr holds text it must not hold: "
+                + ", ".join(present)
+                + f"\nSTDERR: {stderr.strip()}"
+            )
         if metadata.expect_error_codes_exact is not None:
             expected = Counter(metadata.expect_error_codes_exact)
             printed = diagnostic_codes(stderr)
@@ -1441,6 +1449,14 @@ class TestRunner:
             else:
                 messages.append(f"✗ Stderr missing: {repr(expected_content)}\nActual stderr: {repr(result.stderr)}")
                 success = False
+
+        program_lacks = [] if category == 'warning' else metadata.expect_stderr_lacks
+        for unwanted in program_lacks:
+            if unwanted in result.stderr:
+                messages.append(f"✗ Stderr holds: {repr(unwanted)}\nActual stderr: {repr(result.stderr)}")
+                success = False
+            else:
+                messages.append(f"✓ Stderr lacks: {repr(unwanted)}")
 
         if success:
             summary = "✓ Runtime: All validations passed"

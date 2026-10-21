@@ -28,6 +28,8 @@ class TestMetadata:
     expect_stdout_contains: Optional[List[str]] = None
     expect_stdout_exact: Optional[str] = None
     expect_stderr_contains: Optional[List[str]] = None
+    # A text that the stream must NOT hold, read where EXPECT_STDERR_CONTAINS is read.
+    expect_stderr_lacks: Optional[List[str]] = None
     expect_stderr_empty: bool = False
 
     # Compilation diagnostics expectations (error/warning categories).
@@ -121,6 +123,8 @@ class TestMetadata:
             self.expect_stdout_contains = []
         if self.expect_stderr_contains is None:
             self.expect_stderr_contains = []
+        if self.expect_stderr_lacks is None:
+            self.expect_stderr_lacks = []
         if self.expect_error_code is None:
             self.expect_error_code = []
         if self.test_env is None:
@@ -187,6 +191,7 @@ class TestMetadata:
             self.expect_stdout_contains or
             self.expect_stdout_exact is not None or
             self.expect_stderr_contains or
+            self.expect_stderr_lacks or
             self.expect_stderr_empty):
             self.requires_runtime = True
 
@@ -520,6 +525,7 @@ VALUED_DIRECTIVES = {
     'EXPECT_STDOUT_CONTAINS': _extend('expect_stdout_contains', _text),
     'EXPECT_STDOUT_EXACT': _set('expect_stdout_exact', _text),
     'EXPECT_STDERR_CONTAINS': _extend('expect_stderr_contains', _text),
+    'EXPECT_STDERR_LACKS': _extend('expect_stderr_lacks', _text),
     'EXPECT_STDERR_EMPTY': _set('expect_stderr_empty',
                                 lambda v: v.lower() in ('true', 'yes', '1')),
     # A comma/space separated list, and the directive may repeat for multi-error compiles.

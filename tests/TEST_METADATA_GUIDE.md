@@ -129,6 +129,21 @@ Validates that stderr contains specific content.
   text; the runtime check does not read it, also when a `test_warn_*` binary runs.
   For every other test it asserts against the program's stderr (#1253).
 
+#### EXPECT_STDERR_LACKS
+
+Validates that stderr does NOT contain a text.
+
+```sushi
+# EXPECT_STDERR_LACKS: "this is a bug in the Sushi compiler"
+```
+
+- Supports escape sequences
+- Can be specified multiple times
+- It reads the stream that `EXPECT_STDERR_CONTAINS` reads: the COMPILER's stderr for a
+  `test_err_*` / `test_warn_*` test, the program's stderr for every other test. It pins
+  what a diagnostic must not print, which no positive check can state when the text that
+  must not come follows the text that must.
+
 #### EXPECT_STDERR_EMPTY
 
 Validates that stderr produces no output.
