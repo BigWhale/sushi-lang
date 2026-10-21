@@ -1555,7 +1555,10 @@ the print emitter. The print of a value that prints by its `Display` form, and a
 While the migration is in progress, a SLIR shape that the emitter does not handle yet
 stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
 example `emit, Indirect` or `emit, AggStruct`), at the span of its statement or
-terminator. The stop
+terminator. Where one class holds two shapes, the stop names the shape, so that the
+stop-code census counts each one: `emit, Display print` for the print of a value that
+prints by its `Display` form, and `emit, intrinsic <name>` for an intrinsic with no row
+of `INTRINSICS`. The stop
 comes before any output: the incremental path builds the module of every unit before it
 writes the first object, so no object, no binary and no `.ll` text is written. This order
 serves the migration alone: when no shape stops the emitter, the path can again build and
