@@ -1249,7 +1249,10 @@ name, and a diagnostic names a local by the name of its `ShirLocal`. The pass de
 `Ownership` of each consuming use ONE time, with `classify()`, and one function writes the
 row (`consume.decide`, gate: `tests/unit/test_consuming_use_coverage.py`). The convention of
 a call argument is the row of `typecheck`, and `borrow` does not derive it again: the
-`nom` marker is compared against the declared mode by `typecheck` (CE2427). When the walk
+`nom` marker is compared against the declared mode by `typecheck` (CE2427). A `peek x` or a
+`poke x` argument borrows its place for the statement with the mode that the source
+writes, so a `poke` argument for a `peek` parameter keeps the `InGuaranteed` convention of
+the parameter and is still a `poke` borrow of its place (CE2408 for a read-only place). When the walk
 of a body ends with no stop and with no error, `check_ownership` runs, and the body meets
 the stage after `borrow`, which is not built yet: the pipeline reports the first stop of
 `typecheck`, then the first stop of `borrow`, then an error hole, then the first body that
