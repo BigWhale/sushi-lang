@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE0155
+#
+# A nested `??` over a borrowed wrapper is a correct program. The program stops with the
+# stop code of the stages after `borrow`, and never with the completeness error CE0157.
+
+fn pick(Result@(Result@(string, StdError), StdError) r) i32 | StdError:
+    let string got = r????
+    println(got)
+    return Result.Ok(0)
+
+fn main() i32:
+    let Result@(Result@(string, StdError), StdError) r = Result.Ok(Result.Ok("Mostly Harmless"))
+    let i32 code = pick(r).realise(1)
+    return code

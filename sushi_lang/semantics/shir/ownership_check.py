@@ -197,18 +197,24 @@ def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
     return borrowed
 
 
+def _reads_a_borrow(operand: e.ShirExpr, borrowed: set[LocalId]) -> bool:
+    if isinstance(operand, e.Try):
+        return _reads_a_borrow(operand.inner, borrowed)
+    return isinstance(operand, e.LocalRef) and operand.local in borrowed
+
+
 def borrowed_views(body: ShirBody, typeck: TypeckResults,
                    ownership: OwnershipResults) -> set[ShirId]:
     """The two positions where a REJECT row is a borrowed view and no error: the value of a
     `let`, and the operand of a `??` that reads through a borrowed wrapper. A REJECT row
-    comes only for a wrapper that owns, so the operand is a local that holds a borrow."""
+    comes only for a wrapper that owns, so the operand is a local that holds a borrow, or a
+    `??` over one (a nested `??`)."""
     borrowed = _borrowed_locals(body, typeck, ownership)
     views: set[ShirId] = set()
     for _path, value in walk(body.block, "block"):
         if isinstance(value, s.Assign) and value.is_init:
             views.add(value.value.shir_id)
-        elif (isinstance(value, e.Try) and isinstance(value.inner, e.LocalRef)
-                and value.inner.local in borrowed):
+        elif isinstance(value, e.Try) and _reads_a_borrow(value.inner, borrowed):
             views.add(value.inner.shir_id)
     return views
 

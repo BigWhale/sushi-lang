@@ -418,6 +418,8 @@ tests/generics/type_arg_arity/test_err_type_arg_arity_list.sushi
 tests/generics/type_arg_arity/test_err_type_arg_arity_param.sushi
 tests/generics/type_arg_arity/test_err_type_arg_arity_perk_impl.sushi
 tests/generics/type_arg_arity/test_err_type_arg_arity_too_few.sushi
+tests/ir/borrow/borrowed_views/test_err_borrow_nested_try_over_a_borrowed_wrapper.sushi
+tests/ir/borrow/borrowed_views/test_err_borrow_triple_try_over_a_borrowed_wrapper.sushi
 tests/ir/borrow/control_flow/test_err_borrow_continue_before_move.sushi
 tests/ir/borrow/control_flow/test_err_borrow_let_borrow_across_a_branch.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_before_a_rebind.sushi
