@@ -33,7 +33,10 @@ constants and unit variables, the function declarations, and then the function b
 The declarations come from the AST. Each body comes from the `SlirFunction` of the
 analysis (`codegen_for` hands over the SLIR of the program as `SlirBodies`), through the
 SLIR emitter in `backend/slir/` (`emit_function`): every local is a slot in the entry
-block, and each SLIR block is one LLVM block. A SLIR shape that the emitter does not
+block, and each SLIR block is one LLVM block. A drop goes through the one destroy seam
+(`emit_value_destructor`), and a call of an intrinsic (`interp`, `print`, `println`)
+through its row of `INTRINSICS` (`backend/slir/intrinsics.py`), which gives LLVM values to
+the string builder or to the print emitter. A SLIR shape that the emitter does not
 handle yet stops the compile with [`CE0155`](../error-catalog.md#ce0155) (`emit, <class>`)
 before any output is written; the incremental path builds the module of every unit
 before it writes the first object for this reason. `backend/functions/` holds the function

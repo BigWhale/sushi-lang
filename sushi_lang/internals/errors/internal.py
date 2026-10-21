@@ -573,7 +573,7 @@ _add(ErrorMessage("CE0155", Severity.ERROR,
     "`slir`). A program in which no stage stops at a construct goes on to the backend: the "
     "emitter of each SLIR function stops the program at the first SLIR shape that it does "
     "not handle yet (the stage is `emit`, and the construct is the class of the shape, for "
-    "example `emit, Str`), before the compiler writes an object, a binary or an LLVM text. "
+    "example `emit, Indirect`), before the compiler writes an object, a binary or an LLVM text. "
     "The code of a pass or of the SLIR lowering comes after `--dump-shir` and `--dump-slir` "
     "write their dumps, and "
     "only when the program has no error: an error of the program is the diagnostic then. "
