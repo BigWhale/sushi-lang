@@ -161,8 +161,10 @@ _INLINE_RETURNS = {"is_empty": _BOOL, "clone": _S}
 def _validate_method_signature(call: MethodCall, spec: MethodSpec, validator: Any) -> None:
     """Measure the call against its row: the count, then every parameter's declared type."""
     from sushi_lang.semantics.passes.types.arguments import check_arguments
-    check_arguments(validator, spec.name, spec.arg_types, call.args, call.loc,
-                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+    # An AST hook with no caller since the switch: the built-in method group (A1) gives
+    # the check the SHIR arguments of the call.
+    check_arguments(validator, spec.name, spec.arg_types, call.args,  # type: ignore[arg-type]
+                    call.loc, mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
                     stop_on_arity=True, also_accepts=spec.also_accepts)
 
 

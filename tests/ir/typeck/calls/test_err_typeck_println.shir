@@ -1,0 +1,29 @@
+unit test_err_typeck_println
+
+ShirBody mk
+  params : []
+  locals : []
+  block  :
+    Return(EnumInit(@Result, "Ok", [Lit(1)]))
+
+ShirBody name
+  params : []
+  locals : []
+  block  :
+    Return(Lit("Mostly Harmless"))
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i32, _1 "s": string]
+  block  :
+    Assign(LocalRef(_0), Lit(42), is_init: true)
+    Assign(LocalRef(_1), Call(Free(@name), []), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("So long"), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit(7), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("print"), [(Lit(true), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("print"), [(Call(Free(@name), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(+, LocalRef(_0), Lit(1)), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@mk), []), Guaranteed)]))
+    Return(Lit(0))

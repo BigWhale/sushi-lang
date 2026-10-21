@@ -45,8 +45,10 @@ _INDIRECT_CEILING = {
     "calls/structs.py": 1,
 }
 
-#: The modules that must reach the seam, one per converted copy.
+#: The modules that must reach the seam, one per converted copy. `visit/calls.py` is the
+#: call arm of the SHIR walk (docs/design/ir.md 7.3).
 _CALLERS = (
+    "visit/calls.py",
     "calls/methods.py",
     "calls/user_defined.py",
     "calls/statics.py",

@@ -1,0 +1,20 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "cannot assign peek i32 to i32"
+# EXPECT_DUMP_SHIR: test_err_typeck_borrow_in_let.shir
+#
+# `peek x` and `poke x` in a call argument are the marker of the argument. Outside a call
+# argument, a borrow is a value of a reference type, and a `let` of an `i32` does not take
+# one: CE2002.
+
+fn read(peek i32 n) i32:
+    return n
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+
+fn main() i32:
+    let i32 y = 3
+    bump(poke y)
+    let i32 x = read(peek y)
+    let i32 z = peek y
+    return x + z

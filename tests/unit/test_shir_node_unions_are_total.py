@@ -72,13 +72,14 @@ EXPRESSION_FIELDS: dict[str, tuple[str, ...]] = {
 #: The parts of an expression that are not nodes (ir.md 7.4): a call target, an
 #: argument, an array kind and an array run, a lambda parameter, and a literal value.
 #: The range run is `RangeRun`, not `Span`: the name `Span` is the source span. `Named`
-#: holds the written type arguments of the call (`identity@(i32)(5)`).
+#: holds the written type arguments of the call (`identity@(i32)(5)`). An `Arg` holds
+#: the span of its written marker, for a diagnostic of the marker.
 EXPRESSION_PARTS: dict[str, tuple[str, ...]] = {
     "Named": ("ref", "type_args"),
     "Dotted": ("recv", "name"),
     "Static": ("ty", "name"),
     "BuiltinFn": ("name",),
-    "Arg": ("value", "marker", "bloom"),
+    "Arg": ("value", "marker", "bloom", "marker_loc"),
     "Fixed": (),
     "Dynamic": (),
     "Single": ("value",),

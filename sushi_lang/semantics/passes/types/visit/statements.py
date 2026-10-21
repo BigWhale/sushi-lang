@@ -8,7 +8,8 @@ type, resolved, with no `peek` or `poke` (the convention holds the mode, ir.md 4
 An `Assign` of a local is a `let` (`is_init`) or a rebind; the value is checked at the
 type of the local. A `let` writes the type of its local, and a `let` that writes none is
 CE2007, except for a hidden local, which takes the type of its value. An `Assign` of any
-other place, and a reference `let`, are not typed yet. A `Return` of a bare body checks
+other place, and a reference `let`, are not typed yet. An expression statement drops its
+value, and a dropped `Result` of a value is CW2001. A `Return` of a bare body checks
 its value at the declared return type, and refuses a `Result` constructor (CE2091); a
 `Return` of a body with a channel, and of an initializer, are not typed yet.
 
@@ -22,6 +23,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.compatibility import (
     reject_mismatch, reject_return_mismatch, reject_unhandled_result)
@@ -33,7 +35,8 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer, ShirBody
 from sushi_lang.semantics.shir.loop_kind import While
 from sushi_lang.semantics.shir.nodes import ShirBlock
-from sushi_lang.semantics.typesys import BuiltinType, ReferenceType
+from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, ReferenceType
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -69,7 +72,7 @@ def _check_let(validator: TypeValidator, node: s.Assign, target: e.LocalRef) -> 
     """`let T x = v`: the written type is the type of the local, and `v` is checked at it."""
     local = validator.body_locals[target.local]
     declared = None if local.declared is None else validator.written_type(local.declared)
-    if isinstance(declared, ReferenceType) or isinstance(node.value, e.Borrow):
+    if isinstance(declared, ReferenceType):
         visit.stop_at(validator, node)
     answers = validator.body_answers()
     if declared is None:
@@ -95,7 +98,14 @@ def _check_let(validator: TypeValidator, node: s.Assign, target: e.LocalRef) -> 
 
 
 def check_expr_stmt(validator: TypeValidator, node: s.ExprStmt) -> None:
-    visit.check_expr(validator, node.value)
+    """A value that the statement drops. A `Result` of a value loses its error: CW2001."""
+    ty = visit.check_expr(validator, node.value)
+    if not (isinstance(ty, EnumType) and is_instance_of(ty, "Result")):
+        return
+    ok = ty.get_variant("Ok")
+    if ok is not None and ok.associated_types and ok.associated_types[0] == BuiltinType.BLANK:
+        return
+    er.emit(validator.reporter, er.ERR.CW2001, node.value.loc, ty=display_type(ty))
 
 
 def check_return(validator: TypeValidator, node: s.Return) -> None:

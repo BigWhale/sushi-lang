@@ -1,0 +1,20 @@
+# EXPECT_ERROR_CODES_EXACT: CW2001, CE2505
+# EXPECT_STDERR_CONTAINS: "unused 'Result@(i32, StdError)' value"
+# EXPECT_DUMP_SHIR: test_err_typeck_unused_result.shir
+#
+# A call of a function with a channel answers a `Result`. A statement that drops a
+# `Result` of a value loses the error: CW2001. A `Result` of `~` has no value to lose, so
+# its statement is no warning. A `let` of an `i32` from the call does not handle the
+# `Result`: CE2505.
+
+fn mk() i32 | StdError:
+    return Result.Ok(1)
+
+fn act() ~ | StdError:
+    return Result.Ok(~)
+
+fn main() i32:
+    act()
+    mk()
+    let i32 x = mk()
+    return x

@@ -1,0 +1,32 @@
+unit test_err_typeck_call_arg_type
+
+ShirBody small
+  params : [(_0 "b": u8, Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(+, LocalRef(_0), Lit(1)))
+
+ShirBody fact
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(<=, LocalRef(_0), Lit(1)), then: [Return(Lit(1))])
+    Return(Binary(*, LocalRef(_0), Call(Free(@fact), [(Binary(-, LocalRef(_0), Lit(1)), Guaranteed)])))
+
+ShirBody yes
+  params : []
+  locals : []
+  block  :
+    Return(Lit(true))
+
+ShirBody main
+  params : []
+  locals : [_0 "a": u8, _1 "b": i32, _2 "c": bool, _3 "d": i32]
+  block  :
+    Assign(LocalRef(_0), Call(Free(@small), [(Lit(200), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_0), Call(Free(@small), [(LocalRef(_0), Guaranteed)]), is_init: false)
+    Assign(LocalRef(_1), Binary(+, Call(Free(@fact), [(Lit(5), Guaranteed)]), Call(Free(@fact), [(Call(Free(@fact), [(Lit(2), Guaranteed)]), Guaranteed)])), is_init: true)
+    Assign(LocalRef(_2), Binary(and, Call(Free(@yes), []), Unary(not, Call(Free(@yes), []))), is_init: true)
+    If(Binary(or, LocalRef(_2), Binary(>, LocalRef(_0), Call(Free(@small), [(Lit(3), Guaranteed)]))), then: [Assign(LocalRef(_1), Binary(-, LocalRef(_1), Lit(1)), is_init: false)])
+    Assign(LocalRef(_3), Call(Free(@fact), [LocalRef(_2)]), is_init: true)
+    Return(Binary(+, LocalRef(_1), LocalRef(_3)))

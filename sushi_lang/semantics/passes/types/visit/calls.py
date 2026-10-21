@@ -1,0 +1,229 @@
+"""The call, text and borrow arms of the typecheck pass over SHIR (docs/design/ir.md 7.3 to 7.6).
+
+A `Call` answers what its callee yields. Its written target decides the callee:
+
+- `Named` of a `GlobalRef` is a call of a free function (`Free`). The function is the
+  declaration that the written name of the `GlobalRef` names: behind an alias, what the
+  namespace holds (the one resolver of lowering); a bare name, the function of the unit's
+  scope. The arguments go through the one argument check (`arguments.check_arguments`),
+  which gives each argument its convention. The call yields the `Result` of the channel of
+  the function, or its bare return value (`call_yield`). The function decides that type,
+  so the call answers it also when an argument does not fit, or when the function is
+  private to another unit: a later fault of the value, such as an unhandled `Result`, is a
+  fault of its own.
+- `BuiltinFn` is `print` or `println` (`Intrinsic`): one argument with a string form, which
+  the intrinsic reads (`Guaranteed`). Its display type is an answer.
+
+Every other target, and a free call that another group types (a generic function, a
+stdlib function, a C function, a variadic function), stops the walk of its body.
+
+An `Interp` is a `string`, and each hole has a string form; the display type of each hole
+is an answer. A `Borrow` (`peek x`, `poke x` outside a call argument) is a value of a
+reference type, and the position that holds it decides whether it takes one.
+"""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
+
+from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
+from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION
+from sushi_lang.semantics.generics.contracts import DISPLAY
+from sushi_lang.semantics.generics.opaque import explain_unpromised
+from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.param_modes import Convention, declared_modes, param_mode
+from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.passes.types.arguments import Parameters, check_arguments
+from sushi_lang.semantics.passes.types.calls.user_defined import (
+    generic_struct_takes_the_call, own_concrete_function, struct_takes_the_call)
+from sushi_lang.semantics.passes.types.expressions import top_level_contract
+from sushi_lang.semantics.passes.types.resolution import call_yield, resolve_variable_type
+from sushi_lang.semantics.passes.types.utils import names_no_type
+from sushi_lang.semantics.passes.types.visibility import (
+    name_is_contested, name_was_refused, out_of_scope_help, reject_ambiguous_name,
+    reject_private_call, reject_private_kept_call, type_name_is_contested)
+from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.callee import Free, Intrinsic
+from sushi_lang.semantics.shir.typeck import ResolvedCall
+from sushi_lang.semantics.type_predicates import is_instance_of, is_string_convertible
+from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, Type, deref_type
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
+    from sushi_lang.semantics.passes.types import TypeValidator
+
+
+def check_call(validator: TypeValidator, node: e.Call,
+               _expected: Optional[Type]) -> Optional[Type]:
+    target = node.target
+    if isinstance(target, e.BuiltinFn):
+        return _check_print(validator, node, target.name)
+    if (isinstance(target, e.Named) and isinstance(target.ref, e.GlobalRef)
+            and not target.type_args):
+        return _check_free_call(validator, node, target.ref)
+    visit.stop_at(validator, node)
+
+
+def _check_free_call(validator: TypeValidator, node: e.Call,
+                     ref: e.GlobalRef) -> Optional[Type]:
+    written = validator.decl_name(ref.decl)
+    alias, dot, name = written.rpartition(".")
+    sig = (_function_behind_alias(validator, node, alias, name) if dot
+           else _function_of_scope(validator, node, ref, written))
+    if sig is None:
+        return None
+    if reject_private_call(validator, "function", sig, ref.loc):
+        return call_yield(validator, sig.ret_type, sig.err_type)
+    if (sig.borrowed_return is not None
+            or any(p.is_variadic or p.is_pack or p.ty is None for p in sig.params)):
+        visit.stop_at(validator, node)
+    answers = validator.body_answers()
+    answers.record_callee(node.shir_id, ResolvedCall(Free(ref.decl)))
+    function_type = function_type_of_sig(sig)
+    if function_type is not None:
+        visit.answer(validator, ref, function_type)
+    params = [_parameter_type(validator, param) for param in sig.params]
+    declared = Parameters(node.shir_id, declared_modes(sig.params),
+                          [param.name for param in sig.params])
+    check_arguments(validator, written, params, node.args, ref.loc,
+                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009, declared=declared)
+    return call_yield(validator, sig.ret_type, sig.err_type)
+
+
+def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
+                       name: str) -> Optional[FuncSig]:
+    """The concrete function that a bare name calls in this unit, or None after its error.
+
+    A generic function, a construction, a stdlib function and `errno()` are not typed
+    here, and their call stops the walk of its body.
+    """
+    own = own_concrete_function(validator.func_table, name, validator.current_unit_name)
+    if ((own is None and validator.generic_sig(name) is not None)
+            or struct_takes_the_call(validator, name)
+            or type_name_is_contested(validator, name)
+            or generic_struct_takes_the_call(validator, name)):
+        visit.stop_at(validator, node)
+    sig = validator.func_sig(name)
+    if sig is None:
+        if (validator.func_table.lookup_stdlib_by_name(name, validator.scope) is not None
+                or name == ERRNO_FUNCTION):
+            visit.stop_at(validator, node)
+        _reject_undefined(validator, name, ref.loc)
+        return None
+    if reject_ambiguous_name(validator, "function", name, ref.loc):
+        return None
+    if (name_is_contested(validator, "function", name)
+            and sig.unit_name != validator.current_unit_name):
+        visit.stop_at(validator, node)
+    return sig
+
+
+def _function_behind_alias(validator: TypeValidator, node: e.Call, alias: str,
+                           name: str) -> FuncSig:
+    """The function that `alias.name` names: what the namespace holds under the name."""
+    binding = validator.namespaces.lookup(alias, name)
+    if (binding is None or binding.kind != "function"
+            or binding.provider.namespace_kind in ("extern", "stdlib")):
+        visit.stop_at(validator, node)
+    return binding.record
+
+
+def _reject_undefined(validator: TypeValidator, name: str, loc: Span) -> None:
+    """CE2008 for a name that no function of the unit's scope takes.
+
+    A name that a library keeps is refused as kept (#469), and a name that the unit
+    declared under another kind was refused at its declaration (#1102).
+    """
+    kept = validator.library_not_exported.get(name)
+    if kept is not None and reject_private_kept_call(validator, name, loc, library=kept[0],
+                                                     kind=kept[1]):
+        return
+    if name_was_refused(validator, name):
+        return
+    diag = er.emit_with(validator.reporter, er.ERR.CE2008, loc, name=name)
+    missing = out_of_scope_help(validator, "function", name)
+    if missing is not None:
+        diag.help(missing)
+    diag.emit()
+
+
+def _parameter_type(validator: TypeValidator, param: Param) -> Type:
+    """The declared type of a parameter, resolved; a `peek` or a `poke` parameter is a
+    borrow of the resolved type."""
+    mode = param_mode(param)
+    span = param.type_span or param.name_span
+    resolved = resolve_variable_type(validator, deref_type(param.ty), span)
+    return ReferenceType(resolved, mode.borrow_mode) if mode.by_pointer else resolved
+
+
+def _check_print(validator: TypeValidator, node: e.Call, name: str) -> Optional[Type]:
+    """`print(v)` and `println(v)`: the intrinsic reads one value with a string form.
+
+    An unhandled `Result` is CE2037, and any other value with no string form is CE2115.
+    A `peek` or a `poke` marker on the argument reads the value too.
+    """
+    answers = validator.body_answers()
+    answers.record_callee(node.shir_id, ResolvedCall(Intrinsic(name)))
+    (arg,) = node.args
+    answers.record_convention(node.shir_id, 0, Convention.GUARANTEED)
+    ty = visit.check_expr(validator, arg.value)
+    if ty is None:
+        return None
+    if is_instance_of(ty, "Result"):
+        er.emit(validator.reporter, er.ERR.CE2037, arg.value.loc)
+        return None
+    if reject_no_string_form(validator, ty, arg.value.loc, printed=True):
+        return None
+    answers.record_display(node.shir_id, 0, deref_type(ty))
+    return BuiltinType.BLANK
+
+
+def check_interp(validator: TypeValidator, node: e.Interp,
+                 _expected: Optional[Type]) -> Optional[Type]:
+    """An interpolated string: each hole has a string form (CE2035)."""
+    answers = validator.body_answers()
+    refused = False
+    for index, part in enumerate(node.parts):
+        if isinstance(part, str):
+            continue
+        ty = visit.check_expr(validator, part)
+        if ty is None or reject_no_string_form(validator, ty, part.loc):
+            refused = True
+            continue
+        answers.record_display(node.shir_id, index, deref_type(ty))
+    return None if refused else BuiltinType.STRING
+
+
+def reject_no_string_form(validator: TypeValidator, ty: Type, loc: Span, *,
+                          printed: bool = False) -> bool:
+    """A value with no string form: CE2115 for `print`, CE2035 for a hole. True when it
+    was refused.
+
+    A primitive has a string form, and so does a struct, an enum, an array, a `List@(T)`
+    and an `Own@(T)` through `Display`; `print` takes `~` too. A type that a written-type
+    check refused was reported there. A type that holds something with no string form
+    says which field or element it is.
+    """
+    shown = deref_type(ty)
+    if (is_string_convertible(shown) or (printed and shown == BuiltinType.BLANK)
+            or names_no_type(validator, shown)):
+        return False
+    refused: list = []
+    printable, reason = top_level_contract(validator, ty, DISPLAY, refused)
+    if printable:
+        return False
+    spelled = display_type(ty)
+    report = (er.emit_with(validator.reporter, er.ERR.CE2115, loc, type=spelled) if printed
+              else er.emit_with(validator.reporter, er.ERR.CE2035, loc, type=spelled))
+    if reason is not None:
+        report = report.note(f"no derived Display: {reason}")
+    explain_unpromised(report, DISPLAY, refused).emit()
+    return True
+
+
+def check_borrow(validator: TypeValidator, node: e.Borrow,
+                 expected: Optional[Type]) -> Optional[Type]:
+    """`peek x` or `poke x` outside a call argument: a borrow of the type of `x`."""
+    ty = visit.check_expr(validator, node.place, deref_type(expected))
+    return None if ty is None else ReferenceType(ty, node.mode)

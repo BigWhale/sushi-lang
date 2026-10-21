@@ -1,0 +1,22 @@
+# EXPECT_ERROR_CODES_EXACT: CE2035
+# EXPECT_STDERR_CONTAINS: "cannot interpolate expression of type 'Result@(i32, StdError)' into string"
+# EXPECT_DUMP_SHIR: test_err_typeck_interp.shir
+#
+# An interpolated string is a `string`. Each hole takes a value with a string form: an
+# integer, a string, an operation and a call. The last hole takes a `Result`, which has no
+# string form until it is handled: CE2035.
+
+fn mk() i32 | StdError:
+    return Result.Ok(1)
+
+fn main() i32:
+    let i32 n = 42
+    let string who = "Arthur"
+    let string line = "{who} counts {n}"
+    println(line)
+    println("{n + 1} and {who}")
+    let string again = "{line}!"
+    println(again)
+    let string bad = "{mk()}"
+    println(bad)
+    return 0

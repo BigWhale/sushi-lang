@@ -1,0 +1,29 @@
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_STDERR_CONTAINS: "argument type mismatch at position 1: expected i32, got bool"
+# EXPECT_DUMP_SHIR: test_err_typeck_call_arg_type.shir
+#
+# A free call answers the return type of its function. A literal argument takes the type
+# of its parameter, so 200 is a `u8`. A call is an operand, an argument of a call and a
+# condition, and a function calls itself. The last call gives a `bool` to an `i32`
+# parameter, which is CE2006.
+
+fn small(u8 b) u8:
+    return b + 1
+
+fn fact(i32 n) i32:
+    if (n <= 1):
+        return 1
+    return n * fact(n - 1)
+
+fn yes() bool:
+    return true
+
+fn main() i32:
+    let u8 a = small(200)
+    a := small(a)
+    let i32 b = fact(5) + fact(fact(2))
+    let bool c = yes() and not yes()
+    if (c or a > small(3)):
+        b := b - 1
+    let i32 d = fact(c)
+    return b + d

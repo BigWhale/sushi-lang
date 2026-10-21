@@ -7,12 +7,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.ast import Call, Name, Spread
 from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION, unit_declares_external_block
 from sushi_lang.semantics.name_ladder import call_constructs_struct
-from ..visibility import (name_is_contested, name_was_refused, out_of_scope_help,
-                          type_name_is_contested,
-                          reject_ambiguous_name, reject_private_call,
-                          reject_private_kept_call)
 from ..arguments import check_arguments
-from ..borrowed_returns import stamp_call_sources
 from ..compatibility import types_compatible
 from ..propagation import propagate_types_to_value, type_literal_from_sibling
 
@@ -118,123 +113,6 @@ def _explain_missing_borrow(diag, arg, arg_ty, param_ty) -> None:
 def validate_indirect_call(validator: 'TypeValidator', call: Call, fn_ty) -> None:
     """Validate a call through a first-class function value held in a local (CE2092)."""
     validate_fn_value_call_args(validator, call.args, fn_ty, call.callee.loc)
-
-
-def validate_function_call(validator: 'TypeValidator', call: Call) -> None:
-    """Validate function call arguments and types (CE2006, CE2008)."""
-    from sushi_lang.semantics.ast import Name
-
-    # Call-through an arbitrary expression that evaluates to a function value:
-    # `env.f(x)` (a captured closure in a lifted lambda body), `obj.handler()`,
-    # `arr[0]()`, `(e)()`. If the callee is a FunctionType, validate it as an indirect
-    # call; otherwise the expression is not callable.
-    from sushi_lang.semantics.typesys import FunctionType
-    if not isinstance(call.callee, Name):
-        # validate_expression, not infer_expression_type: the callee is a full expression
-        # and needs validating in its own right, which is also what annotates it. Inferring
-        # alone left a `??` callee (`fns.get(0)??(10)`) unannotated, so the backend fell
-        # back to re-deriving its type.
-        callee_ty = validator.validate_expression(call.callee)
-        if isinstance(callee_ty, FunctionType):
-            call.callee_fn_type = callee_ty  # backend reads this for the indirect call
-            validate_indirect_call(validator, call, callee_ty)
-        else:
-            call.callee_unresolved = True
-            er.emit(validator.reporter, er.ERR.CE2092, getattr(call.callee, 'loc', call.loc),
-                    expected="a function value",
-                    actual=display_type(callee_ty) if callee_ty is not None else "a non-function expression")
-        return
-
-    function_name = call.callee.id
-
-    callee_var_ty = validator.variable_types.get(function_name)
-    if isinstance(callee_var_ty, FunctionType):
-        validate_indirect_call(validator, call, callee_var_ty)
-        return
-
-    own_concrete = own_concrete_function(
-        validator.func_table, function_name, validator.current_unit_name)
-    if own_concrete is None and validator.generic_sig(function_name) is not None:
-        from .generics import validate_generic_function_call
-        validate_generic_function_call(validator, call, function_name)
-        return
-
-    # A type name this unit lost is a construction of the unit's own type (#921), even
-    # when the name that won is an enum and the struct table has no such name.
-    if (struct_takes_the_call(validator, function_name)
-            or type_name_is_contested(validator, function_name)):
-        from .structs import validate_struct_constructor
-        validate_struct_constructor(validator, call)
-        return
-
-    # A GENERIC struct constructor that no declared type stamped: the arguments solve
-    # its type arguments, as they solve a generic call (#1150).
-    if generic_struct_takes_the_call(validator, function_name):
-        from .structs import validate_generic_struct_constructor
-        validate_generic_struct_constructor(validator, call, function_name)
-        return
-
-    func_sig = validator.func_sig(function_name)
-
-    # Section 8's ladder: a declaration wins over a name a flat `use` brought in, and a
-    # registry stdlib module is a flat import. Asking the standard library first was
-    # what made `use <math>` beside a unit's own `sin` crash the compiler (section 1.3).
-    if func_sig is None:
-        stdlib_func = check_stdlib_function(validator, call)
-        if stdlib_func is not None:
-            validate_stdlib_function(validator, call, stdlib_func)
-            return
-
-    if func_sig is None and function_name == ERRNO_FUNCTION:
-        validate_errno_call(validator, call)
-        return
-
-    if func_sig is None:
-        call.callee_unresolved = True
-        # A name a library declares and keeps. It resolves to nothing here BECAUSE the
-        # library kept it, so "undefined" was the wrong word for it (#469). The callee
-        # stays unresolved either way: no signature travels with a kept name, so the
-        # borrow pass must judge no argument against one.
-        kept = validator.library_not_exported.get(function_name)
-        if kept is not None and reject_private_kept_call(
-                validator, function_name, call.callee.loc,
-                library=kept[0], kind=kept[1]):
-            return
-        if name_was_refused(validator, function_name):
-            return
-        diag = er.emit_with(validator.reporter, er.ERR.CE2008, call.callee.loc,
-                            name=function_name)
-        missing = out_of_scope_help(validator, "function", function_name)
-        if missing is not None:
-            diag.help(missing)
-        diag.emit()
-        return
-
-    if reject_private_call(validator, "function", func_sig, call.callee.loc):
-        return
-
-    # More than one unit in scope declares this name and nothing here says which is
-    # meant (CE3012). The unit's OWN declaration wins outright, so this only fires on
-    # a name that comes from somewhere else entirely.
-    if reject_ambiguous_name(validator, "function", function_name, call.callee.loc):
-        return
-
-    # A unit that declared this name and lost it may STILL be reading somebody else's
-    # signature: only the concrete table carries a per-unit view, so a displaced GENERIC
-    # declaration has none. Measuring the unit's own call against the winner's signature
-    # is the D2 cascade -- the arity and every argument reported against a declaration
-    # this unit never wrote -- so the arguments are validated in their own right and
-    # nothing else is. Where the per-unit view did answer, the unit reads its own and
-    # every ordinary rule applies.
-    if (name_is_contested(validator, "function", function_name)
-            and getattr(func_sig, "unit_name", None) != validator.current_unit_name):
-        for arg in call.args:
-            validator.validate_expression(arg)
-        return
-
-    validate_call_arguments(validator, function_name, func_sig, call.args,
-                            call.callee.loc)
-    stamp_call_sources(validator, call, func_sig)
 
 
 def validate_errno_call(validator: 'TypeValidator', call: Call) -> None:

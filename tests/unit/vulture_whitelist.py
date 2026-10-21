@@ -32,6 +32,8 @@ _TIER_B = ("kept for Tier B (Phase 4): the typecheck stage of its construct grou
            "the helper to SHIR inputs")
 _TIER_C = ("kept for Tier C (Phase 5): the typecheck stage of its construct group moves "
            "the helper to SHIR inputs")
+_TIER_D = ("kept for Tier D (Phase 6): the typecheck stage of its construct group moves "
+           "the helper to SHIR inputs")
 _P5_EXPAND_COPIES = ("kept for the generic instances group of Phase 5: the dead-statement "
                      "rule, the scope pass and ends_unrolled_run read the copy boundaries")
 
@@ -139,10 +141,11 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     # in the migration plan, and that stage deletes the entry.
     ("sushi_lang/semantics/ast.py", "in_cast_context", _P24),
     (_TYPES + "expressions.py", "in_cast_context", _P24),
-    ("sushi_lang/semantics/type_predicates.py", "is_string_convertible", _P24),
     (_TYPES + "expressions.py", "validate_try_expression", _P24),
     (_TYPES + "utils.py", "reject_named_args", _P24),
-    (_TYPES + "calls/user_defined.py", "validate_function_call", _P24),
+    (_TYPES + "calls/user_defined.py", "validate_indirect_call", _TIER_C),
+    (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
+    (_TYPES + "calls/user_defined.py", "check_stdlib_function", _TIER_A),
     (_TYPES + "statements.py", "_validate_channel_return", _P24),
     (_TYPES + "matching.py", "validate_match_statement", _TIER_A),
     (_TYPES + "constants.py", "assignment_span", _TIER_A),

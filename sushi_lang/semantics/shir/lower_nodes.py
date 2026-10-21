@@ -514,12 +514,14 @@ def _argument(lw: BodyLowerer, node: Any) -> e.Arg:
     row = ARGUMENTS.get(type(node))
     if row is not None:
         return row(lw, node)
-    return e.Arg(lw.value(node), _marker("nom") if node.nom_marked else None)
+    if not node.nom_marked:
+        return e.Arg(lw.value(node), None)
+    return e.Arg(lw.value(node), _marker("nom"), marker_loc=node.nom_span or lw.span(node))
 
 
 def _marked(lw: BodyLowerer, node: a.Borrow) -> e.Arg:
     """`peek x` or `poke x`: the marker of the argument, not a `Borrow` (ir.md 7.4)."""
-    return e.Arg(lw.expr(node.expr), _marker(node.mutability))
+    return e.Arg(lw.expr(node.expr), _marker(node.mutability), marker_loc=lw.span(node))
 
 
 def _bloom(lw: BodyLowerer, node: a.Spread) -> e.Arg:

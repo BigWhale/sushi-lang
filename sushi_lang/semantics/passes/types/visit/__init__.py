@@ -9,10 +9,11 @@ arm of a construct that the pass does not type yet is `stop_at`: it stops the wa
 body with the stop code CE0155 (`shir/stop.py`).
 
 `statements.py` walks a block and holds the statement arms, `expressions.py` the expression
-arms of the leaves, and `operators.py` the arms of the operators and the check of a
-condition. The AST inference visitor of `inference.py` is not part of this walk: it is the
-inference of the early passes (`ReadOnlyInferrer`), until they stop inferring. `helpers.py`
-holds the lambda and function-value helpers that it reads.
+arms of the leaves, `operators.py` the arms of the operators and the check of a condition,
+and `calls.py` the arms of a call, an interpolated string and a borrow. The AST inference
+visitor of `inference.py` is not part of this walk: it is the inference of the early passes
+(`ReadOnlyInferrer`), until they stop inferring. `helpers.py` holds the lambda and
+function-value helpers that it reads.
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Callable, NoReturn, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.semantics.passes.types.visit import calls as ca
 from sushi_lang.semantics.passes.types.visit import expressions as ex
 from sushi_lang.semantics.passes.types.visit import operators as op
 from sushi_lang.semantics.passes.types.visit import statements as st
@@ -96,11 +98,11 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.Field: stop_at,
     e.Index: stop_at,
     e.Slice: stop_at,
-    e.Call: stop_at,
+    e.Call: ca.check_call,
     e.Unary: op.check_unary,
     e.Binary: op.check_binary,
     e.Cast: stop_at,
-    e.Borrow: stop_at,
+    e.Borrow: ca.check_borrow,
     e.Take: stop_at,
     e.Try: stop_at,
     e.Lambda: stop_at,
@@ -109,7 +111,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.TupleInit: stop_at,
     e.ArrayInit: stop_at,
     e.Range: stop_at,
-    e.Interp: stop_at,
+    e.Interp: ca.check_interp,
     # -- patterns --------------------------------------------------------------------
     p.Wildcard: stop_at,
     p.Literal: stop_at,

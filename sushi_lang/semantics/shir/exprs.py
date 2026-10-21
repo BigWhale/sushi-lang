@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, TypeAlias
 
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.operators import BinOp, UnOp
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.ids import DeclId, LocalId
@@ -157,10 +158,15 @@ CallTarget: TypeAlias = Named | Dotted | Static | BuiltinFn
 
 @dataclass(frozen=True, slots=True)
 class Arg:
-    """`marker` is the WRITTEN call-site mode, or None. `bloom` is `arr...`."""
+    """`marker` is the WRITTEN call-site mode, or None. `bloom` is `arr...`.
+
+    `marker_loc` is the span of the written marker: a `nom`, or a `peek x` or a `poke x`
+    from its marker. A diagnostic of the marker stands there.
+    """
     value: ShirExpr
     marker: Optional[Convention]
     bloom: bool = False
+    marker_loc: Optional[Span] = None
 
 
 @dataclass(slots=True)

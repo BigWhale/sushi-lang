@@ -1,0 +1,22 @@
+unit test_err_typeck_interp
+
+ShirBody mk
+  params : []
+  locals : []
+  block  :
+    Return(EnumInit(@Result, "Ok", [Lit(1)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i32, _1 "who": string, _2 "line": string, _3 "again": string, _4 "bad": string]
+  block  :
+    Assign(LocalRef(_0), Lit(42), is_init: true)
+    Assign(LocalRef(_1), Lit("Arthur"), is_init: true)
+    Assign(LocalRef(_2), Interp(["", LocalRef(_1), " counts ", LocalRef(_0), ""]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", Binary(+, LocalRef(_0), Lit(1)), " and ", LocalRef(_1), ""]), Guaranteed)]))
+    Assign(LocalRef(_3), Interp(["", LocalRef(_2), "!"]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_3), Guaranteed)]))
+    Assign(LocalRef(_4), Interp(["", Call(Free(@mk), []), ""]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_4), Guaranteed)]))
+    Return(Lit(0))

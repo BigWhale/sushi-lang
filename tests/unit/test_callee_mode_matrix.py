@@ -3,9 +3,13 @@ from __future__ import annotations
 
 import pytest
 
+import ast
+from pathlib import Path
+
 from sushi_lang.backend.functions.helpers import callee_owns_param
 from sushi_lang.semantics.param_modes import (
     CalleeKind,
+    Convention,
     ParamMode,
     receiver_mode,
 )
@@ -114,3 +118,47 @@ def test_a_method_with_no_row_borrows_each_argument():
     from sushi_lang.semantics.param_modes import BuiltinModes
     assert BuiltinModes().of("get", 2) == (ParamMode.BORROW, ParamMode.BORROW)
     assert BuiltinModes(slots=frozenset({"push"})).of("push", 1) is None
+
+
+# 7. The convention of an argument is the declared mode of its parameter (ir.md 7.3, 8.3)
+
+TYPES_PASS = (Path(__file__).resolve().parents[2]
+              / "sushi_lang" / "semantics" / "passes" / "types")
+
+CONVENTIONS = {
+    ParamMode.BORROW: Convention.GUARANTEED,
+    ParamMode.NOM: Convention.OWNED,
+    ParamMode.PEEK: Convention.IN_GUARANTEED,
+    ParamMode.POKE: Convention.INOUT,
+}
+
+
+@pytest.mark.parametrize("mode,convention", list(CONVENTIONS.items()))
+def test_each_declared_mode_gives_its_convention(mode, convention):
+    assert mode.convention is convention
+
+
+def _convention_rows() -> dict[str, list[ast.Call]]:
+    """Each call of `record_convention` under the typecheck pass, by module."""
+    found: dict[str, list[ast.Call]] = {}
+    for path in sorted(TYPES_PASS.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "record_convention"):
+                module = path.relative_to(TYPES_PASS).as_posix()
+                found.setdefault(module, []).append(node)
+    return found
+
+
+def test_a_declared_parameter_gives_its_convention_in_the_argument_check():
+    """The argument check is the one writer of the convention of a declared parameter, and
+    it reads the convention from the mode. The intrinsic `print` declares no parameter: its
+    one argument is read, so it is `Guaranteed`."""
+    rows = _convention_rows()
+    assert set(rows) == {"arguments.py", "visit/calls.py"}, sorted(rows)
+    for call in rows["arguments.py"]:
+        value = call.args[2]
+        assert isinstance(value, ast.Attribute) and value.attr == "convention", ast.dump(value)
+    for call in rows["visit/calls.py"]:
+        assert ast.unparse(call.args[2]) == "Convention.GUARANTEED", ast.unparse(call)

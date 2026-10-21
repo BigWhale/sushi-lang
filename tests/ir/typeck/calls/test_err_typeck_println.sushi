@@ -1,0 +1,27 @@
+# EXPECT_ERROR_CODES_EXACT: CE2037
+# EXPECT_STDERR_CONTAINS: "cannot print Result@(T, E) directly"
+# EXPECT_DUMP_SHIR: test_err_typeck_println.shir
+#
+# `print` and `println` take one value with a string form: a string, an integer and a
+# `bool`, a local, a literal, a call and an operation. The callee is the intrinsic of its
+# name, and the argument is `Guaranteed`. The last `println` takes a `Result`, which has
+# no string form until it is handled: CE2037.
+
+fn mk() i32 | StdError:
+    return Result.Ok(1)
+
+fn name() string:
+    return "Mostly Harmless"
+
+fn main() i32:
+    let i32 n = 42
+    let string s = name()
+    println(s)
+    println(n)
+    println("So long")
+    println(7)
+    print(true)
+    print(name())
+    println(n + 1)
+    println(mk())
+    return 0
