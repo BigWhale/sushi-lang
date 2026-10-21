@@ -1,0 +1,20 @@
+# EXPECT_ERROR_CODES_EXACT: CE0155
+# EXPECT_STDERR_CONTAINS: "emit, half"
+# EXPECT_DUMP_SLIR: test_err_slir_try_let.slir
+#
+# A `??` in a `let` (ir.md 8.9): the operand goes into a temporary, a switch on its
+# discriminant has no other value, the `Ok` block moves the payload into the local, and
+# the `Err` block builds the `Err` into `_0`, drops the string `first` and the parameter
+# `tag` that it leaves, and returns.
+
+fn half(i32 n) string | StdError:
+    return Result.Ok("{n}")
+
+fn twice(nom string tag, i32 n) ~ | StdError:
+    let string first = "{tag}:"
+    let string text = half(n)??
+    println("{first}{text}")
+    return Result.Ok(~)
+
+fn main() i32:
+    return 0

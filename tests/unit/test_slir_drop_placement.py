@@ -12,7 +12,9 @@ import pytest
 from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
+from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.drops import DropPlacement
 from sushi_lang.semantics.slir.ids import LocalId
@@ -136,3 +138,106 @@ def test_a_return_exits_the_temporaries_of_its_statement_first():
     placement.open_statement()
     placement.temporary(_l(3), False)
     assert placement.exit_function(SPAN) == [_dead(3), _drop(2), _dead(2), _drop(1)]
+
+
+def _drop_if_set(index: int, flag: int) -> st.DropIfSet:
+    return st.DropIfSet(p.Local(_l(index)), _l(flag), SPAN)
+
+
+def _set(flag: int, value: bool) -> st.Assign:
+    return st.Assign(p.Local(_l(flag)), r.Use(p.Const(k.Bool(value))), SPAN)
+
+
+def test_a_join_of_two_states_makes_a_flagged_local_unknown_and_its_exit_reads_the_flag():
+    placement = _placement((1, True))
+    placement.flag(_l(1), _l(2))
+    assert placement.flag_declared(_l(1), SPAN) == [st.StorageLive(_l(2), SPAN), _set(2, True)]
+    at_branch = placement.state()
+    placement.move(_l(1), SPAN)
+    assert placement.flush() == [_set(2, False)]
+    moved = placement.state()
+    assert placement.join([at_branch, moved], placement.in_scope()) == ()
+    assert placement.close_scope(SPAN) == [_drop_if_set(1, 2), _dead(2), _dead(1)]
+
+
+def test_a_join_of_two_states_for_a_local_with_no_flag_names_the_local():
+    placement = _placement((1, True), (2, True))
+    at_branch = placement.state()
+    placement.move(_l(2), SPAN)
+    assert placement.join([at_branch, placement.state()], placement.in_scope()) == (_l(2),)
+
+
+def test_a_join_of_one_state_keeps_it_exact():
+    placement = _placement((1, True))
+    placement.flag(_l(1), _l(2))
+    placement.move(_l(1), SPAN)
+    moved = placement.state()
+    assert placement.join([moved, moved], placement.in_scope()) == ()
+    assert placement.close_scope(SPAN) == [_dead(2), _dead(1)]
+
+
+def test_a_rebind_of_an_unknown_local_reads_the_flag_and_sets_it():
+    placement = _placement((1, True))
+    placement.flag(_l(1), _l(2))
+    placement.mark_unknown(_l(1))
+    assert placement.holds_live_value(_l(1))
+    assert placement.drop_old_value(_l(1), SPAN) == [_drop_if_set(1, 2)]
+    assert placement.flag_stored(_l(1), SPAN) == [_set(2, True)]
+    assert placement.close_scope(SPAN) == [_drop(1), _dead(2), _dead(1)]
+
+
+def test_a_move_of_an_unknown_local_is_an_internal_error():
+    placement = _placement((1, True))
+    placement.flag(_l(1), _l(2))
+    placement.mark_unknown(_l(1))
+    with pytest.raises(InternalCompilerError):
+        placement.move(_l(1), SPAN)
+
+
+def test_a_rebind_after_a_move_cancels_the_flag_write_of_the_move():
+    placement = _placement((1, True))
+    placement.flag(_l(1), _l(2))
+    placement.move(_l(1), SPAN)
+    placement.drop_old_value(_l(1), SPAN)
+    assert placement.flush() == []
+
+
+def test_an_unknown_owned_parameter_reads_its_flag_at_the_function_exit():
+    placement = DropPlacement()
+    placement.parameter(_l(1), Convention.OWNED, True)
+    placement.flag(_l(1), _l(2))
+    placement.open_scope()
+    placement.mark_unknown(_l(1))
+    assert placement.exit_function(SPAN) == [_drop_if_set(1, 2), _dead(2)]
+
+
+def test_a_jump_exits_the_scopes_after_a_depth_and_keeps_them_open():
+    placement = _placement((1, True))
+    depth = placement.depth()
+    placement.open_scope()
+    placement.declare(_l(2), True)
+    placement.open_statement()
+    assert placement.exit_to(depth, SPAN) == [_drop(2), _dead(2)]
+    placement.leave_scope()
+    assert placement.close_scope(SPAN) == [_drop(2), _dead(2)]
+
+
+def test_the_locals_in_scope_are_the_owning_locals_and_the_owned_parameters():
+    placement = DropPlacement()
+    placement.parameter(_l(1), Convention.OWNED, True)
+    placement.parameter(_l(2), Convention.INOUT, True)
+    placement.open_scope()
+    placement.declare(_l(3), True)
+    placement.declare(_l(4), False)
+    assert placement.in_scope() == (_l(1), _l(3))
+
+
+def test_a_back_edge_that_brings_another_state_changes_the_header():
+    placement = _placement((1, True), (2, True), (3, True))
+    placement.flag(_l(3), _l(4))
+    placement.move(_l(1), SPAN)
+    placement.mark_unknown(_l(3))
+    header = placement.state()
+    placement.drop_old_value(_l(1), SPAN)
+    placement.drop_old_value(_l(3), SPAN)
+    assert header.changed_by([placement.state()], placement.in_scope()) == (_l(1),)

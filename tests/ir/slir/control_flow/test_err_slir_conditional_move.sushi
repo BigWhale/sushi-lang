@@ -1,0 +1,37 @@
+# EXPECT_ERROR_CODES_EXACT: CE0155
+# EXPECT_STDERR_CONTAINS: "emit, eat"
+# EXPECT_DUMP_SLIR: test_err_slir_conditional_move.slir
+#
+# Drop flags (ir.md 8.10, rule 4). In `feed` the string `word` is moved on one path of an
+# `if` and not on the other, so its state differs at the join and it gets a flag right
+# after it. The rebind after the join reads the flag to drop the old value, and sets it
+# again. The parameter `food` is moved on one path, so it gets a flag after the
+# parameters, set at the entry; its drop at the exit reads the flag. In `refill` the back
+# edge of the loop brings `word` live, and the entry brings it moved, so its state at the
+# header is not known: the rebind and the exit read its flag.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn feed(nom string food, bool hungry) ~:
+    let string word = "{food}!"
+    if (hungry):
+        eat(nom word)
+    else:
+        println("kept")
+    word := "again"
+    println(word)
+    if (hungry):
+        eat(nom food)
+
+fn refill(i32 rounds) ~:
+    let string word = "{rounds}"
+    eat(nom word)
+    let i32 i = 0
+    while (i < rounds):
+        word := "{i}"
+        i := i + 1
+    println("done")
+
+fn main() i32:
+    return 0

@@ -1,16 +1,19 @@
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "slir, If"
+# EXPECT_STDERR_CONTAINS: "slir, borrowed rebind"
 # EXPECT_DUMP_SLIR: test_err_slir_stopped_function.slir
 #
-# The SLIR lowering finishes `answer`, and it stops in `main` at the `if`, which it does
-# not lower yet. The dump prints the SLIR of `answer` and one line for `main`. A stop of
-# the SLIR lowering comes before the stop of the next stage, so the program stops at
-# `slir, If`.
+# The SLIR lowering finishes `answer`, and it stops in `rename` at the rebind of a
+# borrowed parameter that owns, which it does not lower yet. The dump prints the SLIR of
+# `answer` and one line for `rename` and for `main`. A stop of the SLIR lowering comes
+# before the stop of the next stage, so the program stops at `slir, borrowed rebind`.
 
 fn answer() i32:
     return 42
 
-fn main() i32:
+fn rename(string name) ~:
     if (answer() == 42):
-        return 0
-    return 1
+        name := "Mostly Harmless"
+    println(name)
+
+fn main() i32:
+    return 0

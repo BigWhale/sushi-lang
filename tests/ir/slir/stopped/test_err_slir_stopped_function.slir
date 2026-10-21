@@ -8,4 +8,12 @@ fn answer() -> i32 {
     return
 }
 
-fn main: stopped (slir, If)
+fn rename: stopped (slir, borrowed rebind)
+
+fn main() -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 0_i32
+    return
+}
