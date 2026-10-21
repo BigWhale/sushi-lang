@@ -707,7 +707,11 @@ stays with the declaration half (6.4). An expression arm takes the type of its p
 when the position has one, and answers the type of its node; the one dispatch writes that
 answer as the type row of the node. A node that has an error has no answer, and a node that
 reads it has none either, so the completeness check runs only when a walk ends with no stop
-and with no error in its body. While the migration is in progress, the arm of a construct that the pass does not
+and with no error in its body. A call is the one exception: its callee decides its type, so
+a call of a known function answers what the function yields also when an argument does not
+fit, and a later fault of that value (an unhandled `Result`) is a fault of its own. The
+display type of a hole of an `Interp` and of the argument of `print` is the type of the
+value with no `peek` or `poke`. While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
 next body, so every unit is lowered and every earlier error is found.
 
@@ -751,7 +755,7 @@ CallTarget = Named(ref: Expr, type_args: [TypeRef])  # a scope-resolved name, or
            | Static(ty: TypeRef, name: str)  # Vec.at, List.new, Iterator.new, f64.from_bits
            | BuiltinFn(name: str)            # print, println: no declaration, no receiver
 
-Arg      = (value: Expr, marker: Convention | None)
+Arg      = (value: Expr, marker: Convention | None, bloom: bool, marker_loc: Span | None)
 LambdaParam = (local: LocalId, convention: Convention)
 ArrayRun = Single(Expr) | Repeat(value: Expr, count: Expr) | RangeRun(Range)
 ```
@@ -801,10 +805,17 @@ answer for a name behind a namespace: lowering resolves it (`DeclLookup.member_k
 `typecheck` reads the SHIR node and does not resolve the name a second time. Ruled
 2026-10-20.
 
-`marker` is the WRITTEN call-site mode (`nom s`, `poke n`), or `None`. The RESOLVED
-convention is `typecheck`'s: an unmarked argument in a consuming position (constructor,
-container insert, array element) resolves to `Owned` with no marker, and
-[CE2427](../error-catalog.md#ce2427) compares `marker` against the declared parameter. A
+`marker` is the WRITTEN call-site mode (`nom s`, `poke n`), or `None`, and `marker_loc` is
+the span of the written marker (a `peek x` and a `poke x` from the marker), where a
+diagnostic of the marker stands. The RESOLVED convention is `typecheck`'s: an unmarked
+argument in a consuming position (constructor, container insert, array element) resolves
+to `Owned` with no marker. At a call of a declared parameter, the one argument check
+(`passes/types/arguments.py`) resolves the convention of each argument from the declared
+mode. A `peek x` or a `poke x` argument is a borrow of the type of `x`, so a wrong or a
+missing `peek`/`poke` marker is an argument type mismatch, and a `poke` argument for a
+`peek` parameter is a safe downgrade that resolves to `InGuaranteed`. A `nom` changes no
+type, and [CE2427](../error-catalog.md#ce2427) compares it against the declared parameter
+in `typecheck`. The one argument of `print` and `println` is read, so it is `Guaranteed`. A
 marked field take in a call argument (`take(nom w.inner)`) is an `Arg` with an `Owned`
 marker on a `Field`; in a `let` or a `return` it is `Take`. A struct or a variant
 construction is a consuming position, and its arguments are `Arg`s too, so the written
@@ -813,7 +824,9 @@ marker of `Result.Ok(nom s)` stays in SHIR. Lowering records the written shape o
 the same way, `peek x` and `poke x` are the `marker` of an `Arg` in a call argument, and a
 `Borrow` in every other position (a tuple part, an operand). The value of a reference `let`
 (`let poke T x = place`) is a `Borrow` too, from the same lowering. A `Borrow` that is not
-legal in its position is refused by `typecheck`, not by lowering.
+legal in its position is refused by `typecheck`, not by lowering: its arm answers the
+reference type `peek T` or `poke T`, and the position refuses it as any other type that it
+does not take (a `let` of a `T`, an operand). An `Interp` hole takes it and prints the `T`.
 
 `StructInit` and `EnumInit` name the declaration, because the binding table knows it at
 lowering: the written name, with its alias (`geo.Vec`), as a pattern names an enum. The
