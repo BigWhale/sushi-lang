@@ -69,6 +69,7 @@ from sushi_lang.semantics.shir.lower_nodes import (
     stops_on_hole,
 )
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
+from sushi_lang.semantics.shir.stop import ERROR_HOLE
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.shir.lift import LiftResults
 from sushi_lang.semantics.shir.ownership import OwnershipResults
@@ -224,8 +225,8 @@ def check_error_holes(holes: Sequence[Hole], offered: Mapping[str, int]) -> Opti
     if not missed:
         return None
     hole = missed[0]
-    return StageStop(f"{STAGE}, error hole",
-                     f"{hole.ast_class} with no {' or '.join(hole.codes)}", hole.loc)
+    return StageStop(STAGE,
+                     f"{ERROR_HOLE}, {hole.ast_class} with no {' or '.join(hole.codes)}", hole.loc)
 
 
 def lower_unit(lowered: LoweredProgram, unit: Unit, tables: Sequence[Bindings],

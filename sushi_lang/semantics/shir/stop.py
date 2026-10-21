@@ -56,13 +56,24 @@ class Stops:
         return None
 
 
+ERROR_HOLE = "error hole"
+
+
 def parse_stop(output: str) -> Optional[Tuple[str, str]]:
     """The (stage, construct) of the first CE0155 line in compiler output, or None.
 
-    The pattern comes from the registry text of CE0155, so the message has one home.
+    The pattern comes from the registry text of CE0155, so the message has one home. The
+    stage ends at the first comma. The construct runs to the end of the line, without the
+    final period. The stop of an error hole names the hole after its construct
+    (`ERROR_HOLE, <class> with no <codes>`), and its row is `ERROR_HOLE`.
     """
     text = re.escape(REGISTRY[StageStop.code].text)
-    for name in ("stage", "construct"):
-        text = text.replace(re.escape("{" + name + "}"), rf"(?P<{name}>\w+)")
-    found = re.search(text, output)
-    return (found["stage"], found["construct"]) if found else None
+    text = text.replace(re.escape("{stage}"), r"(?P<stage>[^,\n]+)")
+    text = text.replace(re.escape("{construct}"), r"(?P<construct>[^\n]+?)\.?$")
+    found = re.search(text, output, re.MULTILINE)
+    if found is None:
+        return None
+    construct = found["construct"]
+    if construct.startswith(ERROR_HOLE + ", "):
+        construct = ERROR_HOLE
+    return found["stage"], construct
