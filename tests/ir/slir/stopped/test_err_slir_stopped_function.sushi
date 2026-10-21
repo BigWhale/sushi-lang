@@ -4,8 +4,8 @@
 #
 # The SLIR lowering finishes `answer`, and it stops in `rename` at the rebind of a
 # borrowed parameter that owns, which it does not lower yet. The dump prints the SLIR of
-# `answer` and one line for `rename` and for `main`. A stop of the SLIR lowering comes
-# before the stop of the next stage, so the program stops at `slir, borrowed rebind`.
+# `answer` and of `main` in full, and one line for `rename`. A stop of the SLIR lowering
+# comes before the stop of the next stage, so the program stops at `slir, borrowed rebind`.
 
 fn answer() i32:
     return 42
