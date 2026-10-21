@@ -10,20 +10,20 @@ one terminator for each block, blocks that exist, a type for each local and for 
 projection of a place, a `Move` out of no `Global`, a `Drop` of an owning type, a `bool`
 flag for a `DropIfSet`, no `and` or `or` in a `Binary`, the conventions of a `Direct`
 callee, no copy of an owning value other than a `string` into an `Owned` argument, and a
-registered `RExxxx` for a `Trap`. The type of a place also gives its root
-local, so a `Move` of a projection is a `Move` of its root.
+registered `RExxxx` for a `Trap`. The type of a place also gives its root local, so a
+`Move` of a projection is a `Move` of its root.
 
 Then a dataflow over the CFG gives each local, at each point, the set of states that the
 paths to that point can give it: uninit, live, moved or dropped, with the value of its drop
 flag for a local that a `DropIfSet` reads. A join takes the union. A read or a move of a
 local that a path moved is refused, and so is a read or a move of a local that holds no
 value on a path: before its first write, or after its `StorageLive` or its `StorageDead`.
-The `return` needs a value in `_0` on each path. An owning local must be moved or dropped exactly one
-time on each path from its write to the end of its storage, to a write over it, and to the
-`return`: a `DropIfSet` drops on the paths where its flag is true, and the paths where the
-flag is false must have moved the local. An `Owned` parameter is an owning local; a
-borrowed parameter never drops and never moves, and an `Inout` one holds a value again at
-the `return`. A `Trap` ends the program, so it needs no drop.
+The `return` needs a value in `_0` on each path. An owning local must be moved or dropped
+exactly one time on each path from its write to the end of its storage, to a write over
+it, and to the `return`: a `DropIfSet` drops on the paths where its flag is true, and the
+paths where the flag is false must have moved the local. An `Owned` parameter is an owning
+local; a borrowed parameter never drops and never moves, and an `Inout` one holds a value
+again at the `return`. A `Trap` ends the program, so it needs no drop.
 
 The verifier refuses a shape that no lowering makes yet, and that it does not check, with
 the internal error CE0000: a `BeginBorrow` or an `EndBorrow`, a projection of a `Global` (a
