@@ -53,9 +53,12 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     """A call of a free function or of `print`/`println`, with the convention of each
     argument from the `TypeckResults` row of the call (docs/design/ir.md 8.3).
 
-    Each argument is read first: a `peek` or a `poke` argument borrows its place there, so
-    a borrow and a consuming use of one value in one call conflict in both orders
-    (CE2401). Then each argument takes its convention by POSITION (`apply_convention`). The
+    Each argument is read first: a `peek` or a `poke` argument borrows its place there, as
+    the marker is written, so a borrow and a consuming use of one value in one call
+    conflict in both orders (CE2401). A `poke` argument for a `peek` parameter has the
+    `InGuaranteed` convention of the parameter, and its borrow is still the `poke` that the
+    source writes (CE2408 for a read-only place). Then each argument takes its convention
+    by POSITION (`apply_convention`). The
     callee owns an `Owned` argument, and the pass decides its `Ownership`. A callee that
     destroys its `poke` parameter destroys the caller's value (#168). The `nom` marker is
     compared against the declared mode by the typecheck pass (CE2427). Every other callee
@@ -70,7 +73,7 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
                    for position in range(len(node.args))]
     unchanged = unchanged_borrowed_roots(checker, node, conventions)
     for arg, convention in zip(node.args, conventions, strict=True):
-        mode = _BY_ADDRESS.get(convention)
+        mode = _written_borrow(arg, convention)
         if mode is None:
             arms.check(checker, arg.value)
         else:
@@ -84,6 +87,13 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
 
 #: The mode that an argument passed by address borrows its place with.
 _BY_ADDRESS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
+
+
+def _written_borrow(arg: e.Arg, convention: Convention) -> Optional[BorrowMode]:
+    """The mode of the borrow that a by-address argument takes: its written marker."""
+    if convention not in _BY_ADDRESS:
+        return None
+    return _BY_ADDRESS.get(arg.marker) if arg.marker is not None else _BY_ADDRESS[convention]
 
 
 def _convention_of(checker: 'BorrowChecker', node: e.Call, position: int) -> Convention:
@@ -155,9 +165,10 @@ def _arg_root(checker: 'BorrowChecker',
 
 
 def _borrowed_args(node: e.Call, conventions: Sequence[Convention]) -> list[e.ShirExpr]:
-    """The values that a call reads without taking or writing them."""
+    """The values that a call reads without taking them and without a written `poke`."""
     return [arg.value for arg, convention in zip(node.args, conventions, strict=True)
-            if convention in (Convention.GUARANTEED, Convention.IN_GUARANTEED)]
+            if convention in (Convention.GUARANTEED, Convention.IN_GUARANTEED)
+            and arg.marker is not Convention.INOUT]
 
 
 def _borrowed_method_args(checker: 'BorrowChecker', expr: MethodLike) -> list[Expr]:
