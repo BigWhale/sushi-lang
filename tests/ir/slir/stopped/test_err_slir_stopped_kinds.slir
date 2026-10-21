@@ -1,0 +1,9 @@
+unit test_err_slir_stopped_kinds
+
+fn Dog.paws: stopped (slir, method)
+
+fn Small.as: stopped (slir, conversion)
+
+fn Dog.label: stopped (slir, perk method)
+
+fn keep__i32: stopped (slir, generic instance)

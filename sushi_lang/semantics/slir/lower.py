@@ -29,11 +29,13 @@ that must make the flag. So a walk records what it finds (`_Learned`) and goes o
 body is lowered again with what the walks found, until a walk finds nothing new.
 
 The construct of a stop is the SHIR class of the node, or one of these names: `Initializer`
-for the body of a constant, `method` for the body of an extension method, `borrowed view`
-for a `reject` row, `borrowed rebind` for a rebind of a borrowed parameter that owns,
-`borrowed try` for a `??` over an owning wrapper that the body only reads, `conversion`
-for a `??` that calls a declared conversion, `library function` for a callee whose
-declaring unit the typecheck row does not name, and `bloom` for a bloom argument. The
+for the body of a constant; `generic instance`, `conversion`, `perk method` and `method`
+for the body of a monomorphized generic instance, of a conversion, of a perk method and of
+an extension method; `borrowed view` for a `reject` row, `borrowed rebind` for a rebind of
+a borrowed parameter that owns, `borrowed try` for a `??` over an owning wrapper that the
+body only reads, `conversion` also for a `??` that calls a declared conversion, `library
+function` for a callee whose declaring unit the typecheck row does not name, and `bloom`
+for a bloom argument. The
 symbol, the unit and the return type of the function are facts of its declaration (ir.md
 6.4). The unit is the declaring unit; a function that has none (a lifted lambda, the
 instance of a template of a binary library) goes into the module of the unit that holds
@@ -47,11 +49,12 @@ from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import FuncDef
+from sushi_lang.semantics.ast import ExtendDef, FuncDef
 from sushi_lang.semantics.channel import channel_result, has_channel
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
 from sushi_lang.semantics.ownership import Ownership
+from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
@@ -776,12 +779,26 @@ def _constant(lit: e.Lit, typeck: TypeckResults) -> k.Constant:
 
 
 def _symbol(decl: object, home: Optional[str], body: ShirBody) -> str:
-    """The symbol of the function in its module: `user_main` for the body of `main`."""
-    if not isinstance(decl, FuncDef):
-        raise StageStop(STAGE, "method", body.block.loc)
+    """The symbol of the function in its module: `user_main` for the body of `main`. A
+    body that is not a free function stops with the name of its kind."""
+    if not isinstance(decl, FuncDef) or len(body.params) > len(decl.params):
+        raise StageStop(STAGE, _kind(decl, body), body.block.loc)
     if decl.name == "main":
         return USER_MAIN_SYMBOL
     return emitted_symbol(decl.name, home)
+
+
+def _kind(decl: object, body: ShirBody) -> str:
+    """The kind of a body that is not a free function. A perk method is a `FuncDef` whose
+    body has a receiver before its declared parameters."""
+    if isinstance(decl, FuncDef):
+        return "perk method"
+    if isinstance(decl, GenericFuncDef):
+        return "generic instance"
+    if isinstance(decl, ExtendDef):
+        return "conversion" if decl.is_conversion else "method"
+    er.raise_internal_error("CE0000", span=body.block.loc,
+                            detail=f"a body of {type(decl).__name__} reached SLIR")
 
 
 def _return_type(decl: object, tables: SymbolTables, body: ShirBody) -> Type:

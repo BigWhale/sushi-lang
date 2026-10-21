@@ -1,0 +1,34 @@
+# EXPECT_ERROR_CODES_EXACT: CE0155
+# EXPECT_STDERR_CONTAINS: "typecheck, Call"
+# EXPECT_DUMP_SLIR: test_err_slir_stopped_kinds.slir
+#
+# The SLIR lowering does not lower a generic instance, a conversion, a perk method or an
+# extension method yet. It stops each one with the name of its kind. The typecheck pass
+# stops `main` at the call of the generic function first, so the program stops there.
+
+fn keep@(T)(nom T x) T:
+    return x
+
+struct Dog:
+    i32 n
+
+extend Dog paws() i32:
+    return 4
+
+perk Named:
+    fn label() i32
+
+extend Dog with Named:
+    fn label() i32:
+        return 3
+
+error Small:
+    Tiny
+error Large:
+    Huge(Small)
+
+extend Small as Large:
+    return Large.Huge(self)
+
+fn main() i32:
+    return keep(nom 0)

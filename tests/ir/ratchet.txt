@@ -462,6 +462,7 @@ tests/ir/slir/owned_param/test_err_slir_owned_param.sushi
 tests/ir/slir/result_return/test_err_slir_result_return.sushi
 tests/ir/slir/return_literal/test_err_slir_return_literal.sushi
 tests/ir/slir/stopped/test_err_slir_stopped_function.sushi
+tests/ir/slir/stopped/test_err_slir_stopped_kinds.sushi
 tests/ir/spine/arg_count/test_err_spine_arg_count.sushi
 tests/ir/spine/use_after_move/test_err_spine_use_after_move.sushi
 tests/ir/typeck/borrows/test_err_typeck_borrow_in_let.sushi
