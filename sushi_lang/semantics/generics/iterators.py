@@ -34,9 +34,20 @@ def is_producer(expr: Any) -> bool:
     A `foreach` walks such a producer DIRECTLY when it is the iterable.
     """
     from sushi_lang.semantics.ast import DotCall, MethodCall
-    return (isinstance(expr, (MethodCall, DotCall)) and not expr.args
-            and expr.method in CONTAINER_ITERATORS
-            and expr.callee_builtin_family in _PRODUCER_FAMILIES)
+    return (isinstance(expr, (MethodCall, DotCall))
+            and produces_from_a_container(expr.callee_builtin_family, expr.method,
+                                          len(expr.args)))
+
+
+def produces_from_a_container(family: Optional[str], method: str, arity: int) -> bool:
+    """Is a call of the built-in method `method` of `family`, with `arity` arguments, a
+    producer over a container? The AST and SHIR both ask this one rule."""
+    return arity == 0 and method in CONTAINER_ITERATORS and family in _PRODUCER_FAMILIES
+
+
+def is_lazy_adapter(family: Optional[str], method: str) -> bool:
+    """Is a call of the built-in method `method` of `family` a lazy adapter (`it.map(f)`)?"""
+    return family == "iterator" and method in LAZY_ADAPTERS
 
 
 # How a producer call keeps the state of its iterator (`MethodCall.iterator_state`). The

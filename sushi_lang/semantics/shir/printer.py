@@ -23,7 +23,15 @@ The rules of the text, from the example of ir.md 8.11:
 - The answers of `typecheck` print in place, from the table of the body (ir.md 7.3): the
   resolved callee in place of the call target (`Free(@decorate)`, `Intrinsic("println")`),
   each argument of a call with its resolved convention, and the type of each local. No
-  other answer prints. Where the table holds no answer, the written form prints.
+  other answer of `typecheck` prints. Where the table holds no answer, the written form
+  prints.
+- The answers of `borrow` and `lift` print in place, from their tables (ir.md 7.9), where a
+  row exists: the `Ownership` of a consuming use as a word before the node (`move`,
+  `adopt`, `reject`, the word of a SLIR operand), the conditionally moved locals on a
+  `cond_moved` line after the `locals` line, `iterator: lent` or `iterator: owned` and
+  `heap: <bool>` after the arguments of an iterator call, `in_place: <bool>` after the body
+  of a loop, and `symbol: "<symbol>"` and `env: [(<ownership> _<n>, Copy | Move), ...]`
+  after the fields of a lambda. With no row, the text is the text of the written form.
 - A value pack parameter (`...Ts args`) adds `pack: true` to its parameter.
 - A body with copies of an unrolled `expand` prints a `copies` line after its block: the
   path of each block that holds a copy, from the block of the body (`block`,
@@ -38,6 +46,7 @@ from typing import Any, Callable, Iterable, Optional, Sequence, TypeAlias
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import body as b
 from sushi_lang.semantics.shir import callee as c
@@ -46,7 +55,9 @@ from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
+from sushi_lang.semantics.shir.lift import Capture, LiftResults
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
+from sushi_lang.semantics.shir.ownership import OwnershipResults
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.walk import walk
 from sushi_lang.semantics.typesys import BorrowMode
@@ -61,21 +72,36 @@ CONVENTIONS: dict[Convention, str] = {
 
 _BORROW_MODES: dict[BorrowMode, str] = {BorrowMode.PEEK: "Peek", BorrowMode.POKE: "Poke"}
 
+#: The words of a SLIR operand (ir.md 8.4), for the `Ownership` of a consuming use.
+_OWNERSHIPS: dict[Ownership, str] = {
+    Ownership.MOVE: "move",
+    Ownership.ADOPT: "adopt",
+    Ownership.REJECT: "reject",
+}
+
 _INT_PREFIXES: dict[int, Callable[[int], str]] = {16: hex, 8: oct, 2: bin}
 
 
 @dataclass(frozen=True, slots=True)
 class ShirPrinter:
-    """The text of one value of a body. `decls` names each `DeclId`, and `answers` holds
-    the answers of `typecheck` for the body, if any."""
+    """The text of one value of a body. `decls` names each `DeclId`; `answers`,
+    `ownership` and `lift` hold the answers of `typecheck`, `borrow` and `lift` for the
+    body, if any."""
     decls: DeclNames
     answers: Optional[TypeckResults] = None
+    ownership: Optional[OwnershipResults] = None
+    lift: Optional[LiftResults] = None
 
     def show(self, value: object) -> str:
+        """The text of `value`; a consuming use has the word of its `Ownership` before it."""
         row = PRINTERS.get(type(value))
         if row is None:
             er.raise_internal_error("CE0154", name=type(value).__name__)
-        return row(self, value)
+        text = row(self, value)
+        if self.ownership is None or not isinstance(value, e.ExprNode):
+            return text
+        decided = self.ownership.ownership_of(value.shir_id)
+        return text if decided is None else f"{_OWNERSHIPS[decided]} {text}"
 
     def each(self, values: Iterable[object]) -> str:
         return "[" + ", ".join(self.show(value) for value in values) + "]"
@@ -129,15 +155,29 @@ def _arg(pr: ShirPrinter, arg: e.Arg, convention: Optional[Convention] = None) -
 
 
 def _call(pr: ShirPrinter, call: e.Call) -> str:
-    """The resolved callee in place of the target, and each argument with its convention."""
+    """The resolved callee in place of the target, each argument with its convention, and
+    the state of the iterator that the call makes."""
     answers = pr.answers
-    if answers is None:
-        return _node("Call", pr.show(call.target), pr.each(call.args))
-    resolved = answers.callee_of(call.shir_id)
+    resolved = None if answers is None else answers.callee_of(call.shir_id)
     target = pr.show(call.target if resolved is None else resolved.callee)
-    args = (_arg(pr, arg, answers.convention_of(call.shir_id, position))
-            for position, arg in enumerate(call.args))
-    return _node("Call", target, "[" + ", ".join(args) + "]")
+    args = (_arg(pr, arg, None if answers is None else answers.convention_of(call.shir_id, i))
+            for i, arg in enumerate(call.args))
+    return _node("Call", target, "[" + ", ".join(args) + "]", *_iterator_state(pr, call))
+
+
+def _iterator_state(pr: ShirPrinter, call: e.Call) -> tuple[str, ...]:
+    """LENT or OWNED for an iterator call, and the heap decision of a lent one."""
+    if pr.ownership is None:
+        return ()
+    lent = pr.ownership.lent_of(call.shir_id)
+    heap = pr.ownership.lent_on_heap(call.shir_id)
+    return (*_optional("iterator", None if lent is None else "lent" if lent else "owned"),
+            *_optional("heap", None if heap is None else "true" if heap else "false"))
+
+
+def _in_place(pr: ShirPrinter, loop: s.Loop) -> tuple[str, ...]:
+    walks = None if pr.ownership is None else pr.ownership.in_place_of(loop.shir_id)
+    return () if walks is None else (_flag("in_place", walks),)
 
 
 def _lambda_param(_pr: ShirPrinter, param: e.LambdaParam) -> str:
@@ -166,7 +206,27 @@ def _lambda(pr: ShirPrinter, lam: e.Lambda) -> str:
     ret = None if lam.ret is None else _type(lam.ret)
     err = None if lam.err is None else _type(lam.err)
     return _node("Lambda", pr.each(lam.params), *_optional("ret", ret),
-                 *_optional("err", err), pr.show(lam.body), _flag("expr_body", lam.expr_body))
+                 *_optional("err", err), pr.show(lam.body), _flag("expr_body", lam.expr_body),
+                 *_lifted(pr, lam))
+
+
+def _lifted(pr: ShirPrinter, lam: e.Lambda) -> tuple[str, ...]:
+    """The symbol of the lifted function and its environment, each capture with its mode."""
+    if pr.lift is None:
+        return ()
+    symbol = pr.lift.symbol_of(lam.shir_id)
+    env = pr.lift.environment_of(lam.shir_id)
+    slots = None if env is None else "[" + ", ".join(_capture(pr, lam, c) for c in env) + "]"
+    return (*_optional("symbol", None if symbol is None else _quoted(symbol)),
+            *_optional("env", slots))
+
+
+def _capture(pr: ShirPrinter, lam: e.Lambda, capture: Capture) -> str:
+    decided = (None if pr.ownership is None
+               else pr.ownership.capture_ownership_of(lam.shir_id, capture.local))
+    local = _local(capture.local)
+    text = local if decided is None else f"{_OWNERSHIPS[decided]} {local}"
+    return f"({text}, {'Move' if capture.moves else 'Copy'})"
 
 
 # -- the parts of a statement --------------------------------------------------------
@@ -249,7 +309,7 @@ PRINTERS: dict[type, Render] = {
     s.ExprStmt: lambda pr, n: _node("ExprStmt", pr.show(n.value)),
     s.Return: lambda pr, n: _node("Return", pr.show(n.value)),
     s.If: _if,
-    s.Loop: lambda pr, n: _node("Loop", pr.show(n.source), pr.show(n.body)),
+    s.Loop: lambda pr, n: _node("Loop", pr.show(n.source), pr.show(n.body), *_in_place(pr, n)),
     s.Match: lambda pr, n: _node("Match", pr.show(n.scrutinee), pr.each(n.arms),
                                  _flag("consumes", n.consumes)),
     s.Assert: _assert,
@@ -310,15 +370,17 @@ def _named_local(local: b.ShirLocal | None, ident: LocalId, ty: TypeRef | None) 
     return text if ty is None else f"{text}: {_type(ty)}"
 
 
-def print_body(body: b.ShirBody, decls: DeclNames,
-               answers: Optional[TypeckResults] = None) -> str:
+def print_body(body: b.ShirBody, decls: DeclNames, answers: Optional[TypeckResults] = None,
+               *, ownership: Optional[OwnershipResults] = None,
+               lift: Optional[LiftResults] = None) -> str:
     """The text of one body: its header, its parameters, its other locals, its block.
 
     `locals` holds every local of the body, the parameters too (ir.md 7.2): the line of a
     parameter takes its name from there, and the `locals` line shows the others. The type
-    of a local is the answer of `typecheck` in `answers`, else the type as written.
+    of a local is the answer of `typecheck` in `answers`, else the type as written. The
+    conditionally moved locals of `ownership`, if any, follow on their own line.
     """
-    pr = ShirPrinter(decls, answers)
+    pr = ShirPrinter(decls, answers, ownership, lift)
 
     def typed(ident: LocalId, written: Optional[TypeRef]) -> Optional[TypeRef]:
         answer = None if answers is None else answers.local_type(ident)
@@ -338,6 +400,9 @@ def print_body(body: b.ShirBody, decls: DeclNames,
     lines = [f"ShirBody {decls.name_of(body.fn_id)}{origin}",
              f"  params : [{', '.join(param_texts)}]",
              f"  locals : [{', '.join(local_texts)}]"]
+    moved = () if ownership is None else ownership.conditionally_moved()
+    if moved:
+        lines.append(f"  cond_moved : [{', '.join(_local(local) for local in moved)}]")
     if body.block.statements:
         lines.append("  block  :")
         lines.extend(f"    {pr.show(stmt)}" for stmt in body.block.statements)
@@ -356,8 +421,9 @@ def _copies(pr: ShirPrinter, body: b.ShirBody) -> str:
                            for block in body.copies.blocks()) + "]"
 
 
-#: A body, and the answers of `typecheck` for it, if any.
-AnsweredBody: TypeAlias = tuple[b.ShirBody, Optional[TypeckResults]]
+#: A body, and the answers of `typecheck`, `borrow` and `lift` for it, if any.
+AnsweredBody: TypeAlias = tuple[b.ShirBody, Optional[TypeckResults], Optional[OwnershipResults],
+                                Optional[LiftResults]]
 
 
 def print_units(units: Sequence[tuple[str, Sequence[AnsweredBody]]], decls: DeclNames) -> str:
@@ -365,5 +431,6 @@ def print_units(units: Sequence[tuple[str, Sequence[AnsweredBody]]], decls: Decl
     parts: list[str] = []
     for name, bodies in units:
         parts.append(f"unit {name}\n")
-        parts.extend(print_body(body, decls, answers) for body, answers in bodies)
+        parts.extend(print_body(body, decls, answers, ownership=ownership, lift=lift)
+                     for body, answers, ownership, lift in bodies)
     return "\n".join(parts)

@@ -19,27 +19,19 @@ them: the type of a capture has no check here.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Callable, Iterator, Optional, Sequence, TypeAlias
 
-from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
+from sushi_lang.internals import errors as er
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import ShirBody
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import LocalId
 from sushi_lang.semantics.shir.nodes import ShirNode
+from sushi_lang.semantics.shir.side_table import MissingAnswer, raise_first_gap
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.walk import walk
-
-
-@dataclass(frozen=True, slots=True)
-class MissingAnswer:
-    """An answer that a node needs and that the table does not hold."""
-    answer: str
-    node: str
-    loc: Optional[Span]
 
 
 Needs: TypeAlias = Callable[[TypeckResults, Any], Iterator[str]]
@@ -166,10 +158,4 @@ def _locals(body: ShirBody) -> Iterator[tuple[LocalId, str, Optional[Span]]]:
 
 def check_answers(body: ShirBody, answers: TypeckResults, decls: DeclNames) -> None:
     """CE0156 at the first answer that `body` needs and that `answers` does not hold."""
-    gaps = missing_answers(body, answers)
-    if not gaps:
-        return
-    gap = gaps[0]
-    where = "no location" if gap.loc is None else f"line {gap.loc.line}, column {gap.loc.col}"
-    er.raise_internal_error("CE0156", span=gap.loc, answer=gap.answer, node=gap.node,
-                            where=where, body=decls.name_of(body.fn_id))
+    raise_first_gap(er.ERR.CE0156, missing_answers(body, answers), decls.name_of(body.fn_id))

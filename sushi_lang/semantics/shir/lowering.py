@@ -24,9 +24,10 @@ bodies. Every other body has the origin `Instance`, a copy of a template too.
 an array-template perk copy. The analyzer calls it after the scope pass of the copy, in
 the home unit of the copy. The analyzer calls `lower_unit` for each unit, after the scope
 pass, on every compile; `LoweredProgram` keeps the bodies for the typecheck pass and for
-`--dump-shir`, and gives the body of each declaration (`body_of`). It also keeps the
-`TypeckResults` of each body beside the body (ir.md 7.3): it makes the table when it lists
-the body, the typecheck pass writes the rows, and the dump prints them.
+`--dump-shir`, and gives the body of each declaration (`body_of`). It also keeps the side
+tables of each body beside the body (`BodyTables`): the `TypeckResults` (ir.md 7.3), the
+`OwnershipResults` and the `LiftResults` (ir.md 7.9). It makes each table when it lists the
+body, the one writer pass writes the rows, and the dump prints them.
 
 A unit lists the bodies that the source writes in the order of the walk, then each copy
 that the compiler cut, in the order of its name (`LoweredUnit`). The name of a copy holds
@@ -69,6 +70,8 @@ from sushi_lang.semantics.shir.lower_nodes import (
 )
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
 from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.semantics.shir.lift import LiftResults
+from sushi_lang.semantics.shir.ownership import OwnershipResults
 from sushi_lang.semantics.shir.typeck import TypeckResults
 
 if TYPE_CHECKING:
@@ -129,16 +132,24 @@ class LoweredUnit:
         return [*self.written, *self.copies]
 
 
+@dataclass(frozen=True, slots=True)
+class BodyTables:
+    """A body and its side tables: one of each, made empty when lowering lists the body."""
+    body: ShirBody
+    typeck: TypeckResults
+    ownership: OwnershipResults
+    lift: LiftResults
+
+
 @dataclass(slots=True)
 class LoweredProgram:
     """The bodies of each unit, in the compilation order, the names of their ids, the
-    holes of every body in the order of the walk, and the `TypeckResults` of each body."""
+    holes of every body in the order of the walk, and the side tables of each body."""
     decls: DeclNames = field(default_factory=DeclNames)
     units: list[LoweredUnit] = field(default_factory=list)
     holes: list[Hole] = field(default_factory=list)
     _by_unit: dict[int, LoweredUnit] = field(default_factory=dict, init=False, repr=False)
-    _typeck: dict[int, tuple[ShirBody, TypeckResults]] = field(default_factory=dict,
-                                                               init=False, repr=False)
+    _tables: dict[int, BodyTables] = field(default_factory=dict, init=False, repr=False)
     _by_decl: dict[int, tuple[object, ShirBody]] = field(default_factory=dict, init=False,
                                                          repr=False)
 
@@ -150,13 +161,24 @@ class LoweredProgram:
             self.units.append(lowered)
         return lowered
 
+    def _tables_of(self, body: ShirBody) -> BodyTables:
+        entry = self._tables.get(id(body))
+        if entry is None or entry.body is not body:
+            er.raise_internal_error("CE0000", detail="a SHIR body that lowering did not list "
+                                                     "has no side tables")
+        return entry
+
     def typeck_of(self, body: ShirBody) -> TypeckResults:
         """The one `TypeckResults` of `body`, which `add` made."""
-        entry = self._typeck.get(id(body))
-        if entry is None or entry[0] is not body:
-            er.raise_internal_error("CE0000", detail="a SHIR body that lowering did not list "
-                                                     "has no TypeckResults")
-        return entry[1]
+        return self._tables_of(body).typeck
+
+    def ownership_table_of(self, body: ShirBody) -> OwnershipResults:
+        """The one `OwnershipResults` of `body`, which `add` made."""
+        return self._tables_of(body).ownership
+
+    def lift_table_of(self, body: ShirBody) -> LiftResults:
+        """The one `LiftResults` of `body`, which `add` made."""
+        return self._tables_of(body).lift
 
     def body_of(self, decl: object) -> Optional[ShirBody]:
         """The body that lowering made of the declaration `decl`, or None."""
@@ -167,9 +189,10 @@ class LoweredProgram:
         """List `body`, the body of `decl`, in `unit`: a written body at the end, a copy at
         the place of its name.
 
-        The `TypeckResults` of the body is made here, empty, for the typecheck pass to fill.
+        The side tables of the body are made here, empty, for their passes to fill.
         """
-        self._typeck[id(body)] = (body, TypeckResults())
+        self._tables[id(body)] = BodyTables(body, TypeckResults(), OwnershipResults(),
+                                            LiftResults())
         self._by_decl[id(decl)] = (decl, body)
         lowered = self.unit_of(unit)
         if not copy:

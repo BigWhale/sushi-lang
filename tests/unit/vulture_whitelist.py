@@ -126,6 +126,16 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/typeck.py", "integer",
      "kept for the match group of Phase 3: SHIR-to-SLIR lowering reads the integer type "
      "of a literal arm and of a range arm"),
+    ("sushi_lang/semantics/shir/ownership.py", "record_*",
+     "kept for P2.6: the borrow pass on SHIR is the one writer of OwnershipResults"),
+    ("sushi_lang/semantics/shir/ownership_check.py", "check_ownership",
+     "kept for P2.6: the borrow pass on SHIR checks its table when it ends a body"),
+    ("sushi_lang/semantics/shir/ownership.py", "is_conditionally_moved",
+     "kept for P2.9: SHIR-to-SLIR lowering gives a conditionally moved local a drop flag"),
+    ("sushi_lang/semantics/shir/lift.py", "record_*",
+     "kept for P2.7: the lift pass on SHIR is the one writer of LiftResults"),
+    ("sushi_lang/semantics/shir/lift_check.py", "check_lift",
+     "kept for P2.7: the lift pass on SHIR checks its table when it ends a body"),
     # -- the stages after typecheck, which the driver does not run from the switch ----
     ("sushi_lang/semantics/semantic_analyzer.py", "_compute_effects",
      "kept for P2.6: the destroy-effect summary is an input of the borrow pass on SHIR"),

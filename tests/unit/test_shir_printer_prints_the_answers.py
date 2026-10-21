@@ -86,7 +86,8 @@ def test_an_argument_with_no_convention_prints_as_written() -> None:
 
 def test_a_program_prints_each_body_with_its_table() -> None:
     made = sample()
-    text = print_units([("main", [(made.body, answers(made)), (made.body, None)])], made.decls)
+    text = print_units([("main", [(made.body, answers(made), None, None),
+                                  (made.body, None, None, None)])], made.decls)
     assert text == f"unit main\n\n{ANSWERED}\n{WRITTEN}"
 
 

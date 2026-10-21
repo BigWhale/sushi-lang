@@ -15,14 +15,14 @@ its path, the index of the target and then its index in each `Nested` level.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Optional, TypeAlias, TypeVar
+from dataclasses import dataclass
+from typing import Optional, TypeAlias
 
-from sushi_lang.internals import errors as er
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.callee import Callee, Conversion
 from sushi_lang.semantics.shir.ids import LocalId, ShirId
 from sushi_lang.semantics.shir.loop_kind import LoopKind
+from sushi_lang.semantics.shir.side_table import SideTable, row_table, write_once
 from sushi_lang.semantics.typesys import Type
 
 
@@ -62,46 +62,23 @@ class MatchFacts:
     integer: Optional[Type]
 
 
-KeyT = TypeVar("KeyT")
-ValueT = TypeVar("ValueT")
-
-
-def _write(table: dict[KeyT, ValueT], key: KeyT, value: ValueT, row: str) -> None:
-    if key in table:
-        er.raise_internal_error("CE0000", detail=f"the typecheck pass answered the {row} of "
-                                                 f"{key} twice")
-    table[key] = value
-
-
-def _table() -> Any:
-    """A table of one row kind: closed to the constructor, as a pass writes it."""
-    return field(default_factory=dict, init=False, repr=False)
-
-
 @dataclass(slots=True)
-class TypeckResults:
+class TypeckResults(SideTable):
     """The answers of `typecheck` for one body, one row kind for each decision of ir.md 7.3."""
-    _node_types: dict[ShirId, Type] = _table()
-    _local_types: dict[LocalId, Type] = _table()
-    _capture_types: dict[tuple[ShirId, LocalId], Type] = _table()
-    _callees: dict[ShirId, ResolvedCall] = _table()
-    _arg_conventions: dict[tuple[ShirId, int], Convention] = _table()
-    _instance_types: dict[ShirId, Type] = _table()
-    _field_indices: dict[ShirId, int] = _table()
-    _loop_kinds: dict[ShirId, LoopKind] = _table()
-    _range_values: dict[ShirId, bool] = _table()
-    _conversions: dict[ShirId, ConversionChoice] = _table()
-    _try_facts: dict[ShirId, TryFacts] = _table()
-    _display_types: dict[tuple[ShirId, int], Type] = _table()
-    _match_facts: dict[ShirId, MatchFacts] = _table()
-    _element_types: dict[tuple[ShirId, tuple[int, ...]], Type] = _table()
-
-    def __copy__(self) -> TypeckResults:
-        er.raise_internal_error("CE0000", detail="a copy of a TypeckResults is a second table "
-                                                 "of one body")
-
-    def __deepcopy__(self, memo: dict[int, object]) -> TypeckResults:
-        return self.__copy__()
+    _node_types: dict[ShirId, Type] = row_table()
+    _local_types: dict[LocalId, Type] = row_table()
+    _capture_types: dict[tuple[ShirId, LocalId], Type] = row_table()
+    _callees: dict[ShirId, ResolvedCall] = row_table()
+    _arg_conventions: dict[tuple[ShirId, int], Convention] = row_table()
+    _instance_types: dict[ShirId, Type] = row_table()
+    _field_indices: dict[ShirId, int] = row_table()
+    _loop_kinds: dict[ShirId, LoopKind] = row_table()
+    _range_values: dict[ShirId, bool] = row_table()
+    _conversions: dict[ShirId, ConversionChoice] = row_table()
+    _try_facts: dict[ShirId, TryFacts] = row_table()
+    _display_types: dict[tuple[ShirId, int], Type] = row_table()
+    _match_facts: dict[ShirId, MatchFacts] = row_table()
+    _element_types: dict[tuple[ShirId, tuple[int, ...]], Type] = row_table()
 
     # -- the read API: None when the table holds no answer ------------------------------
 
@@ -159,43 +136,43 @@ class TypeckResults:
     # -- the write API: the typecheck pass alone calls it --------------------------------
 
     def record_type(self, node: ShirId, ty: Type) -> None:
-        _write(self._node_types, node, ty, "type")
+        write_once(self._node_types, node, ty, "typecheck", "type")
 
     def record_local(self, local: LocalId, ty: Type) -> None:
-        _write(self._local_types, local, ty, "local type")
+        write_once(self._local_types, local, ty, "typecheck", "local type")
 
     def record_capture(self, lam: ShirId, local: LocalId, ty: Type) -> None:
-        _write(self._capture_types, (lam, local), ty, "capture type")
+        write_once(self._capture_types, (lam, local), ty, "typecheck", "capture type")
 
     def record_callee(self, call: ShirId, answer: ResolvedCall) -> None:
-        _write(self._callees, call, answer, "callee")
+        write_once(self._callees, call, answer, "typecheck", "callee")
 
     def record_convention(self, call: ShirId, position: int, convention: Convention) -> None:
-        _write(self._arg_conventions, (call, position), convention, "convention")
+        write_once(self._arg_conventions, (call, position), convention, "typecheck", "convention")
 
     def record_instance(self, init: ShirId, ty: Type) -> None:
-        _write(self._instance_types, init, ty, "instance type")
+        write_once(self._instance_types, init, ty, "typecheck", "instance type")
 
     def record_field_index(self, node: ShirId, index: int) -> None:
-        _write(self._field_indices, node, index, "field index")
+        write_once(self._field_indices, node, index, "typecheck", "field index")
 
     def record_loop_kind(self, loop: ShirId, kind: LoopKind) -> None:
-        _write(self._loop_kinds, loop, kind, "loop kind")
+        write_once(self._loop_kinds, loop, kind, "typecheck", "loop kind")
 
     def record_range_value(self, node: ShirId, is_value: bool) -> None:
-        _write(self._range_values, node, is_value, "range value")
+        write_once(self._range_values, node, is_value, "typecheck", "range value")
 
     def record_conversion(self, node: ShirId, conversion: ConversionChoice) -> None:
-        _write(self._conversions, node, conversion, "conversion")
+        write_once(self._conversions, node, conversion, "typecheck", "conversion")
 
     def record_try(self, node: ShirId, facts: TryFacts) -> None:
-        _write(self._try_facts, node, facts, "try facts")
+        write_once(self._try_facts, node, facts, "typecheck", "try facts")
 
     def record_display(self, node: ShirId, part: int, ty: Type) -> None:
-        _write(self._display_types, (node, part), ty, "display type")
+        write_once(self._display_types, (node, part), ty, "typecheck", "display type")
 
     def record_match(self, match: ShirId, facts: MatchFacts) -> None:
-        _write(self._match_facts, match, facts, "match facts")
+        write_once(self._match_facts, match, facts, "typecheck", "match facts")
 
     def record_element(self, node: ShirId, target: tuple[int, ...], ty: Type) -> None:
-        _write(self._element_types, (node, target), ty, "element type")
+        write_once(self._element_types, (node, target), ty, "typecheck", "element type")

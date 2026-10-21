@@ -601,3 +601,18 @@ _add(ErrorMessage("CE0156", Severity.ERROR,
     "part of the body, and a later stage would then read no answer. "
     "tests/unit/test_typeck_results_are_complete.py tests the check. "
     "This is a fault in the compiler, not in the program; please report the program."))
+
+_add(ErrorMessage("CE0157", Severity.ERROR,
+    "the {writer} pass recorded no {answer} in its {table} for the {node} at {where} in the "
+    "body '{body}'",
+    Category.INTERNAL,
+    "The borrow pass and the lift pass each write their answers into a table of the body "
+    "(docs/design/ir.md 7.9): borrow the ownership of each consuming use, the state of each "
+    "iterator and the walk of each loop, lift the symbol and the environment of each "
+    "lambda. No node of the body holds an answer. When a pass ends on a body with no "
+    "error, a check walks the body again and finds each answer that a node needs and that "
+    "the table does not hold. Such a gap means that the pass did not answer for a part of "
+    "the body, and a later stage would then read no answer. "
+    "tests/unit/test_ownership_results_are_complete.py and "
+    "tests/unit/test_lift_results_are_complete.py test the checks. "
+    "This is a fault in the compiler, not in the program; please report the program."))

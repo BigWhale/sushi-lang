@@ -1307,6 +1307,14 @@ The compiler moves to a new pipeline ([the IR design](design/ir.md)): a body is 
 
 The typecheck pass writes each answer that it gives into the table of the body ([the IR design](design/ir.md)): the type of each local and each expression, the callee and the conventions of each call, and the other decisions that the later stages read. No node of the body holds an answer. When the pass ends on a body with no error, a check walks the body again and finds each answer that a node needs and that the table does not hold. Such a gap means that an arm of the pass did not answer for a part of the body, and a later stage would then read no answer. This is a fault in the compiler, not in the program; please report the program.
 
+### CE0157 {#ce0157}
+
+**Error** · internal
+
+**Message:** `the {writer} pass recorded no {answer} in its {table} for the {node} at {where} in the body '{body}'`
+
+The borrow pass and the lift pass each write their answers into a table of the body ([the IR design](design/ir.md)): borrow the ownership of each consuming use, the state of each iterator and the walk of each loop, lift the symbol and the environment of each lambda. No node of the body holds an answer. When a pass ends on a body with no error, a check walks the body again and finds each answer that a node needs and that the table does not hold. Such a gap means that the pass did not answer for a part of the body, and a later stage would then read no answer. This is a fault in the compiler, not in the program; please report the program.
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.
