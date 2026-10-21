@@ -162,7 +162,8 @@ def _direct(state: FunctionState, statement: st.Call) -> None:
 
 def _builtin(state: FunctionState, statement: st.Call) -> None:
     """An intrinsic, through its row of `INTRINSICS`. A method family of
-    `METHOD_TYPE_REGISTRY`, and an intrinsic with no row, stop for now."""
+    `METHOD_TYPE_REGISTRY` stops for now (`emit, <class>`), and so does an intrinsic with no
+    row (`emit, intrinsic <name>`)."""
     builtin = statement.callee
     if not isinstance(builtin, st.Builtin):
         state.fault(f"the row of a builtin call got a {type(builtin).__name__} callee")

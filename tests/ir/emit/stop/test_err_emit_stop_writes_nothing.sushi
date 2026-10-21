@@ -1,7 +1,7 @@
 # RUN_IN_FIXTURE_DIR
 # OUTPUT_PATH: prog
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "emit, Builtin"
+# EXPECT_STDERR_CONTAINS: "emit, Display print"
 # EXPECT_STDERR_LACKS: "this is a bug in the Sushi compiler"
 # EXPECT_STDERR_LACKS: "--traceback"
 # EXPECT_PATH_ABSENT: prog, prog.o, prog.ll, __sushi_cache__

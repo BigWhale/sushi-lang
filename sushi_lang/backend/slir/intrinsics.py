@@ -51,7 +51,7 @@ def _write(state: FunctionState, statement: st.Call, *, is_line: bool) -> ir.Val
         state.fault(f"a print of {len(parts)} values")
     (value, ty), = parts
     if ty != BuiltinType.STRING and ty != BuiltinType.BOOL and not is_numeric_type(ty):
-        state.stop(statement.callee)
+        state.stop("Display print")
     state.codegen.runtime.formatting.emit_print_value(value, is_line=is_line,
                                                       semantic_type=ty)
     return constant_value(state, k.Blank())

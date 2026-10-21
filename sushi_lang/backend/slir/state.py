@@ -37,8 +37,10 @@ class FunctionState:
     blocks: dict[BlockId, ir.Block] = field(default_factory=dict)
 
     def stop(self, shape: object) -> NoReturn:
-        """CE0155 `emit, <class>` for a SLIR shape that the emitter does not handle yet."""
-        raise StageStop(STAGE, type(shape).__name__, self.span, self.filename)
+        """CE0155 `emit, <class>` for a SLIR shape that the emitter does not handle yet. A
+        string is the name of a construct that the class does not tell apart."""
+        construct = shape if isinstance(shape, str) else type(shape).__name__
+        raise StageStop(STAGE, construct, self.span, self.filename)
 
     def type_of(self, local: LocalId) -> Type:
         """The type of a local. The verifier makes sure that the id of a local is its
