@@ -12,10 +12,12 @@ the stop of the stage `emit` (`backend/slir/`).
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.errors import REGISTRY
 
 
 @dataclass(slots=True)
@@ -52,3 +54,15 @@ class Stops:
             if stop is not None:
                 return stop
         return None
+
+
+def parse_stop(output: str) -> Optional[Tuple[str, str]]:
+    """The (stage, construct) of the first CE0155 line in compiler output, or None.
+
+    The pattern comes from the registry text of CE0155, so the message has one home.
+    """
+    text = re.escape(REGISTRY[StageStop.code].text)
+    for name in ("stage", "construct"):
+        text = text.replace(re.escape("{" + name + "}"), rf"(?P<{name}>\w+)")
+    found = re.search(text, output)
+    return (found["stage"], found["construct"]) if found else None

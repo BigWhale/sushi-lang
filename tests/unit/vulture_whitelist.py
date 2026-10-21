@@ -73,6 +73,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- gate data: a gate test reads it ---------------------------------------------
     ("sushi_lang/backend/lifecycle.py", "registered_halves", "tests/unit/test_lifecycle_handlers.py"),
     ("sushi_lang/semantics/ast.py", "attrs", "tests/docs_sweep.py reads the fence info string"),
+    ("sushi_lang/semantics/shir/stop.py", "parse_stop", "tests/stop_census.py"),
     ("sushi_lang/semantics/ast_walk.py", "TERMINAL_NODES", "tests/unit/test_body_walk_is_total.py"),
     ("sushi_lang/semantics/ast_walk.py", "FIELD_KINDS", "tests/unit/test_node_walk_is_total.py"),
     ("sushi_lang/semantics/generics/contracts.py", "WALKED_KINDS",
