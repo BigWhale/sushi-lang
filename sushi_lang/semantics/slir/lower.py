@@ -43,7 +43,7 @@ its body.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 
 from sushi_lang.internals import errors as er
@@ -731,12 +731,8 @@ _VALUES: dict[type, Callable[..., _Value]] = {
 
 def _moves(value: r.Rvalue | _CallValue) -> list[p.Place]:
     """The place of each `move` operand of a value."""
-    if isinstance(value, _CallValue):
-        parts: list[object] = [operand for operand, _ in value.args]
-    else:
-        parts = []
-        for part in (getattr(value, item.name) for item in fields(value)):
-            parts.extend(part if isinstance(part, tuple) else [part])
+    parts = (tuple(operand for operand, _ in value.args) if isinstance(value, _CallValue)
+             else r.operands_of(value))
     return [part.place for part in parts if isinstance(part, p.Move)]
 
 

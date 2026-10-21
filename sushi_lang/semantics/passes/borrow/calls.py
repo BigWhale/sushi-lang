@@ -168,7 +168,7 @@ def _arg_root(checker: 'BorrowChecker',
 def _borrowed_args(node: e.Call, conventions: Sequence[Convention]) -> list[e.ShirExpr]:
     """The values that a call reads without taking them and without a written `poke`."""
     return [arg.value for arg, convention in zip(node.args, conventions, strict=True)
-            if convention in (Convention.GUARANTEED, Convention.IN_GUARANTEED)
+            if convention.read_only
             and arg.marker is not Convention.INOUT]
 
 

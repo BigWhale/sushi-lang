@@ -53,6 +53,16 @@ class Convention(Enum):
     IN_GUARANTEED = "in_guaranteed"  # `peek`  -- by address, read only, many at once
     INOUT = "inout"                  # `poke`  -- by address, read and write, exclusive
 
+    @property
+    def consumes(self) -> bool:
+        """True when the callee takes the value over: it drops it or moves it."""
+        return self is Convention.OWNED
+
+    @property
+    def read_only(self) -> bool:
+        """True when the callee borrows the value and never writes it: the default and `peek`."""
+        return self in (Convention.GUARANTEED, Convention.IN_GUARANTEED)
+
 
 _CONVENTIONS: Mapping[ParamMode, Convention] = MappingProxyType({
     ParamMode.BORROW: Convention.GUARANTEED,

@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TypeAlias
 
+from sushi_lang.internals import errors as er
 from sushi_lang.semantics.operators import BinOp, UnOp
 from sushi_lang.semantics.slir.places import Operand, Place
 from sushi_lang.semantics.typesys import BorrowMode, Type
@@ -112,3 +113,20 @@ class Ref:
 Rvalue: TypeAlias = (
     Use | Binary | Unary | Cast | Aggregate | Discriminant | Clone | Len | Slice | Ref
 )
+
+
+def operands_of(value: Rvalue) -> tuple[Operand | Place, ...]:
+    """The operands and the places that `value` reads, in order. An rvalue class that this
+    function does not know is an internal error."""
+    if isinstance(value, (Use, Unary, Cast, Clone)):
+        return (value.operand,)
+    if isinstance(value, Binary):
+        return (value.left, value.right)
+    if isinstance(value, Aggregate):
+        return value.parts
+    if isinstance(value, (Discriminant, Len, Ref)):
+        return (value.place,)
+    if isinstance(value, Slice):
+        return (value.place, value.start, value.end)
+    er.raise_internal_error("CE0000", detail=f"no operands for the SLIR rvalue "
+                                             f"{type(value).__name__}")

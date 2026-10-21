@@ -70,7 +70,6 @@ TRAP = "registered trap"
 SPANS = "spans"
 
 _TERMINATORS = get_args(tm.SlirTerminator)
-_BORROWED = frozenset({Convention.GUARANTEED, Convention.IN_GUARANTEED})
 _PRINTF = re.compile(r"%[-+ #0-9.]*[a-zA-Z%]")
 
 # The state of a local on one path, and the value of its drop flag there.
@@ -252,7 +251,7 @@ class _Check:
     def rvalue(self, value: r.Rvalue, span: Span) -> None:
         if isinstance(value, r.Binary) and value.op in ("and", "or"):
             self.fail(SHORT_CIRCUIT, f"a binary carries '{value.op}'", span)
-        for part in _parts(value):
+        for part in r.operands_of(value):
             if isinstance(part, (p.Copy, p.Move, p.Const)):
                 self.operand(part, span)
             else:
@@ -400,19 +399,6 @@ def _successors(term: tm.SlirTerminator) -> list[BlockId]:
     return []
 
 
-def _parts(value: r.Rvalue) -> list[p.Operand | p.Place]:
-    """The operands and the places that an rvalue reads, in order."""
-    if isinstance(value, (r.Use, r.Unary, r.Cast, r.Clone)):
-        return [value.operand]
-    if isinstance(value, r.Binary):
-        return [value.left, value.right]
-    if isinstance(value, r.Aggregate):
-        return list(value.parts)
-    if isinstance(value, (r.Discriminant, r.Len, r.Ref)):
-        return [value.place]
-    return [value.place, value.start, value.end]
-
-
 @dataclass(slots=True)
 class _Flow:
     """The dataflow of the moves and the drops of one function (see the module docstring)."""
@@ -460,7 +446,7 @@ class _Flow:
     def statement(self, configs: list[frozenset[_Config]], stmt: st.SlirStatement) -> None:
         span = stmt.span
         if isinstance(stmt, st.Assign):
-            for part in _parts(stmt.rvalue):
+            for part in r.operands_of(stmt.rvalue):
                 self.operand(configs, part, span)
             self.write(configs, stmt.place, span, stmt.rvalue)
         elif isinstance(stmt, st.Call):
@@ -607,4 +593,5 @@ class _Flow:
                 self.violate(DROP_ONCE, f"returns while _{local.index} holds a value", span)
 
     def borrowed(self, local: LocalId) -> bool:
-        return self.check.conventions.get(local) in _BORROWED
+        convention = self.check.conventions.get(local)
+        return convention is not None and convention.read_only

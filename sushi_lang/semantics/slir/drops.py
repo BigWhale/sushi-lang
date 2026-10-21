@@ -34,11 +34,6 @@ from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.ids import LocalId
 
-#: The conventions whose parameter is the caller's value: it never drops and never moves.
-_NEVER_MOVES = frozenset({Convention.GUARANTEED, Convention.IN_GUARANTEED, Convention.INOUT})
-#: The conventions whose parameter is a read-only borrow: a rebind of it is not lowered.
-_BORROWS = frozenset({Convention.GUARANTEED, Convention.IN_GUARANTEED})
-
 _LIVE, _MOVED, _UNKNOWN = "live", "moved", "unknown"
 
 
@@ -85,11 +80,11 @@ class DropPlacement:
         """A parameter: an `Owned` one is an owning local of the function (L15)."""
         if owning:
             self._owning.add(local)
-        if convention in _NEVER_MOVES:
+        if not convention.consumes:
             self._never_moved.add(local)
-        if convention in _BORROWS:
+        if convention.read_only:
             self._borrowed.add(local)
-        elif convention is Convention.OWNED and owning:
+        elif convention.consumes and owning:
             self._owned_params.append(local)
 
     def flag(self, local: LocalId, flag: LocalId) -> None:

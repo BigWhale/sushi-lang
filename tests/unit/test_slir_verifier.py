@@ -7,7 +7,7 @@ They call a Python function over data; they do not run the compiler.
 """
 from __future__ import annotations
 
-from typing import Mapping, Optional
+from typing import Mapping, Optional, get_args
 
 import pytest
 
@@ -23,7 +23,7 @@ from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.verify import DeclaredParams, verify_function
-from sushi_lang.semantics.typesys import BuiltinType, StructType, Type, UnknownType
+from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, StructType, Type, UnknownType
 
 from tests.unit.test_slir_printer import (
     RESULT_STRING, _decorate, _greet, _main, _shout,
@@ -378,3 +378,27 @@ def test_a_statement_with_no_span_is_refused():
 
 def test_a_terminator_with_no_span_is_refused():
     _refused(_function([BLANK], _block(0, tm.Return(None))), "spans", None)  # type: ignore[arg-type]
+
+
+# -- the readers that lowering and the verifier share ------------------------------------
+
+
+def test_every_rvalue_class_has_its_operands():
+    place, operand = _local(1), _copy(2)
+    values = {
+        r.Use: r.Use(operand), r.Unary: r.Unary("-", operand),  # type: ignore[arg-type]
+        r.Cast: r.Cast(operand, I32), r.Clone: r.Clone(operand),
+        r.Binary: r.Binary("+", operand, operand),  # type: ignore[arg-type]
+        r.Aggregate: r.Aggregate(r.AggStruct(PAIR), (operand, operand)),
+        r.Discriminant: r.Discriminant(place), r.Len: r.Len(place),
+        r.Ref: r.Ref(place, BorrowMode.PEEK), r.Slice: r.Slice(place, operand, operand),
+    }
+    assert set(values) == set(get_args(r.Rvalue))
+    assert r.operands_of(values[r.Slice]) == (place, operand, operand)
+    assert r.operands_of(values[r.Aggregate]) == (operand, operand)
+
+
+def test_the_operands_of_an_unknown_rvalue_class_are_an_internal_error():
+    with pytest.raises(InternalCompilerError) as caught:
+        r.operands_of(object())  # type: ignore[arg-type]
+    assert caught.value.code == "CE0000"
