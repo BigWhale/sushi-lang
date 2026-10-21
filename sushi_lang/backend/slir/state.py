@@ -25,8 +25,8 @@ class FunctionState:
     """One function while the emitter fills it: the codegen, the LLVM function and its
     builder, the storage of each local (an entry-block slot, or the incoming address of a
     `peek` or a `poke` parameter), the LLVM block of each SLIR block, and the span of the
-    statement or the terminator that the emitter is on. A row of a dispatch table that
-    takes one shape (the state and the shape) reads the codegen here."""
+    statement or the terminator that the emitter is on. Every function of the emitter
+    after the stage entry takes the state, and reads the codegen here."""
     codegen: LLVMCodegen
     function: SlirFunction
     llvm_fn: ir.Function

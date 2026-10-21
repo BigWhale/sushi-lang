@@ -18,7 +18,7 @@ its buffer with the print frame of the CALL SITE, which is another function.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 import llvmlite.ir as ir
 
@@ -57,6 +57,22 @@ def emit_value_to_str(codegen: 'LLVMCodegen', value: ir.Value, ty: Type) -> ir.V
         return call_override(codegen, override, [value])
     buffer = sb.emit_new(codegen)
     emit_value_fmt(codegen, value, ty, buffer)
+    return sb.emit_finish(codegen, buffer)
+
+
+def emit_interpolation(codegen: 'LLVMCodegen',
+                       parts: Sequence[tuple[ir.Value, Type]]) -> ir.Value:
+    """An interpolation of parts that are evaluated already, as a fresh owned string.
+
+    A string part goes in as its bytes, and every other part as its string form. The
+    parts are only read, so the caller keeps each one.
+    """
+    buffer = sb.emit_new(codegen)
+    for value, ty in parts:
+        if ty == BuiltinType.STRING:
+            sb.emit_push_string(codegen, buffer, value)
+        else:
+            emit_value_fmt(codegen, value, ty, buffer)
     return sb.emit_finish(codegen, buffer)
 
 

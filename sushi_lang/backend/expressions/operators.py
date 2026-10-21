@@ -7,6 +7,7 @@ from sushi_lang.backend.constants import INT8_BIT_WIDTH
 from sushi_lang.semantics.ast import Expr, UnaryOp, BinaryOp
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_both_initialized
+from sushi_lang.semantics.operators import EQUALITY_OPS
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -97,10 +98,7 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
 
     if (codegen.types.is_string_type(lhs.type) and
         codegen.types.is_string_type(rhs.type)):
-        if op in ("==", "!="):
-            i1v = codegen.runtime.strings.emit_string_comparison(op, lhs, rhs)
-        else:
-            i1v = codegen.runtime.strings.emit_string_order(op, lhs, rhs)
+        i1v = emit_string_relation(codegen, op, lhs, rhs)
         return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
 
     sem = None
@@ -111,6 +109,15 @@ def emit_comparison(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.V
             sem = infer_expr_semantic_type(codegen, expr.right)
     i1v = emit_number_comparison(codegen, op, lhs, rhs, sem)
     return i1v if to_i1 else codegen.builder.zext(i1v, ir.IntType(INT8_BIT_WIDTH))
+
+
+def emit_string_relation(codegen: 'LLVMCodegen', op: str, lhs: ir.Value,
+                         rhs: ir.Value) -> ir.Value:
+    """The i1 answer of a comparison of two strings: `==` and `!=` read the bytes, and the
+    order operators read the bytes, then the length."""
+    if op in EQUALITY_OPS:
+        return codegen.runtime.strings.emit_string_comparison(op, lhs, rhs)
+    return codegen.runtime.strings.emit_string_order(op, lhs, rhs)
 
 
 def emit_number_comparison(codegen: 'LLVMCodegen', op: str, lhs: ir.Value, rhs: ir.Value,

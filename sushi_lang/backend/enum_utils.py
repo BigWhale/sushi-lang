@@ -89,14 +89,15 @@ def set_enum_data(
     return codegen.builder.insert_value(enum_value, data, 1, name=name)
 
 
-def unpack_variant_field(
+def variant_field_address(
     codegen: 'LLVMCodegen',
     data_ptr: ir.Value,
     field_type: 'Type',
     offset: int,
     name: str = "field"
 ) -> ir.Value:
-    """Load one field from enum variant data at `offset`, a payload_field_offsets entry."""
+    """The address of one field in enum variant data at `offset`, a payload_field_offsets
+    entry."""
     field_llvm_type = codegen.types.ll_type(field_type)
 
     if offset > 0:
@@ -109,11 +110,22 @@ def unpack_variant_field(
     else:
         field_ptr = data_ptr
 
-    typed_ptr = codegen.builder.bitcast(
+    return codegen.builder.bitcast(
         field_ptr,
         ir.PointerType(field_llvm_type),
         name=f"{name}_typed_ptr"
     )
+
+
+def unpack_variant_field(
+    codegen: 'LLVMCodegen',
+    data_ptr: ir.Value,
+    field_type: 'Type',
+    offset: int,
+    name: str = "field"
+) -> ir.Value:
+    """Load one field from enum variant data at `offset`, a payload_field_offsets entry."""
+    typed_ptr = variant_field_address(codegen, data_ptr, field_type, offset, name)
     return codegen.builder.load(typed_ptr, name=name)
 
 

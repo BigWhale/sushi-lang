@@ -5,7 +5,8 @@ or a `poke` parameter: its local IS the incoming address (docs/design/ir.md 8.3)
 parameter is stored into its slot at the entry. `_0` is the return slot, and `return`
 loads it. Each SLIR block is one LLVM block, in the order of the function. A statement
 class or a terminator class that the emitter does not handle yet stops the compile
-(`emit, <class>`). `StorageLive` and `StorageDead` emit nothing.
+(`emit, <class>`). `StorageLive` and `StorageDead` emit nothing. A drop goes through the
+one destroy seam of the backend.
 """
 from __future__ import annotations
 
@@ -13,17 +14,22 @@ from typing import TYPE_CHECKING, Callable, Optional
 
 from llvmlite import ir
 
+from sushi_lang.backend.destructors import emit_value_destructor
+from sushi_lang.backend.slir.intrinsics import INTRINSICS
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.slir.values import (
     type_of_constant, constant_value, operand_value, place_address, rvalue_value,
+    type_of_place,
 )
 from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.shir.callee import Intrinsic
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import SlirFunction, SlirLocal
 from sushi_lang.semantics.slir.lower import RETURN_SLOT
+from sushi_lang.semantics.typesys import BuiltinType
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -47,32 +53,32 @@ def emit_function(codegen: LLVMCodegen, function: SlirFunction, *,
     saved = codegen.builder, codegen.func
     codegen.builder, codegen.func = state.builder, llvm_fn
     try:
-        _open(codegen, state)
+        _open(state)
         state.builder.branch(state.block(function.entry))
         for block in function.blocks:
             state.builder.position_at_end(state.block(block.id))
             for statement in block.statements:
                 state.span = statement.span
-                _statement(codegen, state, statement)
+                _statement(state, statement)
             state.span = block.terminator.span
-            _terminator(codegen, state, block.terminator)
+            _terminator(state, block.terminator)
     finally:
         codegen.builder, codegen.func = saved
     return llvm_fn
 
 
-def _open(codegen: LLVMCodegen, state: FunctionState) -> None:
+def _open(state: FunctionState) -> None:
     """The storage of each local, and the value parameters stored into their slots. The
     signature that the declaration made must agree with the locals and the conventions."""
-    function, llvm_fn = state.function, state.llvm_fn
+    codegen, function, llvm_fn = state.codegen, state.function, state.llvm_fn
     if (len(llvm_fn.args) != len(function.params)
-            or llvm_fn.function_type.return_type != _ll(codegen, function.locals[0])):
+            or llvm_fn.function_type.return_type != _ll(state, function.locals[0])):
         state.fault(f"the declaration {llvm_fn.function_type} does not agree with the "
                     f"SLIR header")
     params = {local: (index, convention)
               for index, (local, convention) in enumerate(function.params)}
     for local in function.locals:
-        ll = _ll(codegen, local)
+        ll = _ll(state, local)
         param = params.get(local.id)
         if param is None:
             state.storage[local.id] = codegen.memory.entry_alloca(ll, _name(local))
@@ -89,8 +95,8 @@ def _open(codegen: LLVMCodegen, state: FunctionState) -> None:
         state.storage[local.id] = slot
 
 
-def _ll(codegen: LLVMCodegen, local: SlirLocal) -> ir.Type:
-    return codegen.types.ll_type(local.ty)
+def _ll(state: FunctionState, local: SlirLocal) -> ir.Type:
+    return state.codegen.types.ll_type(local.ty)
 
 
 def _name(local: SlirLocal) -> str:
@@ -99,16 +105,35 @@ def _name(local: SlirLocal) -> str:
 
 # -- statements ------------------------------------------------------------------------
 
-def _statement(codegen: LLVMCodegen, state: FunctionState, statement: st.SlirStatement) -> None:
+def _statement(state: FunctionState, statement: st.SlirStatement) -> None:
     """`StorageLive` and `StorageDead` emit nothing: the emitter keeps every local in one
     slot for the whole function."""
     if isinstance(statement, st.Assign):
-        value = rvalue_value(codegen, state, statement.rvalue)
+        value = rvalue_value(state, statement.rvalue)
         state.builder.store(value, place_address(state, statement.place))
     elif isinstance(statement, st.Call):
         _call(state, statement)
+    elif isinstance(statement, st.Drop):
+        _drop(state, statement.place)
+    elif isinstance(statement, st.DropIfSet):
+        _drop_if_set(state, statement)
     elif not isinstance(statement, (st.StorageLive, st.StorageDead)):
         state.stop(statement)
+
+
+def _drop(state: FunctionState, place: p.Place) -> None:
+    """The destroy seam frees what the value owns: a string only when its owned flag is
+    set, an enum through the destroy half of its lifecycle handler."""
+    emit_value_destructor(state.codegen, place_address(state, place), type_of_place(state, place))
+
+
+def _drop_if_set(state: FunctionState, statement: st.DropIfSet) -> None:
+    """The drop runs only while the flag local holds `true`."""
+    if state.type_of(statement.flag) != BuiltinType.BOOL:
+        state.fault(f"the drop flag _{statement.flag.index} is no bool")
+    flag = state.builder.load(state.storage_of(statement.flag))
+    with state.builder.if_then(state.codegen.utils.as_i1(flag)):
+        _drop(state, statement.place)
 
 
 def _call(state: FunctionState, statement: st.Call) -> None:
@@ -119,20 +144,33 @@ def _call(state: FunctionState, statement: st.Call) -> None:
 def _direct(state: FunctionState, statement: st.Call) -> None:
     """A value for an `Owned` or a `Guaranteed` argument, the address of the place for an
     `InGuaranteed` or an `Inout` one. The argument types must agree with the callee."""
-    codegen = state.codegen
     direct = statement.callee
     if not isinstance(direct, st.Direct):
         state.fault(f"the row of a direct call got a {type(direct).__name__} callee")
-    llvm_fn = codegen.module.globals.get(direct.symbol)
+    llvm_fn = state.codegen.module.globals.get(direct.symbol)
     if not isinstance(llvm_fn, ir.Function):
         state.fault(f"the module declares no function '{direct.symbol}'")
-    args = [_argument(codegen, state, operand, convention)
+    args = [_argument(state, operand, convention)
             for operand, convention in statement.args]
     if [arg.type for arg in args] != [param.type for param in llvm_fn.args]:
         state.fault(f"the call of '{direct.symbol}' does not agree with its "
                     f"declaration {llvm_fn.function_type}")
     value = state.builder.call(llvm_fn, args)
     state.builder.store(value, place_address(state, statement.dest))
+
+
+def _builtin(state: FunctionState, statement: st.Call) -> None:
+    """An intrinsic, through its row of `INTRINSICS`. A method family of
+    `METHOD_TYPE_REGISTRY`, and an intrinsic with no row, stop for now."""
+    builtin = statement.callee
+    if not isinstance(builtin, st.Builtin):
+        state.fault(f"the row of a builtin call got a {type(builtin).__name__} callee")
+    if not isinstance(builtin.method, Intrinsic):
+        state.stop(builtin.method)
+    emit = INTRINSICS.get(builtin.method.name)
+    if emit is None:
+        state.stop(builtin)
+    state.builder.store(emit(state, statement), place_address(state, statement.dest))
 
 
 def _not_yet(state: FunctionState, statement: st.Call) -> None:
@@ -143,19 +181,19 @@ def _not_yet(state: FunctionState, statement: st.Call) -> None:
 #: One row for each variant of `SlirCallee` (gate: `test_slir_call_dispatch_is_a_table.py`).
 CALL_EMITTERS: dict[type, Callable[[FunctionState, st.Call], None]] = {
     st.Direct: _direct,
-    st.Builtin: _not_yet,
+    st.Builtin: _builtin,
     st.Indirect: _not_yet,
 }
 
 
-def _argument(codegen: LLVMCodegen, state: FunctionState, operand: p.Operand,
-              convention: Convention) -> ir.Value:
+def _argument(state: FunctionState, operand: p.Operand, convention: Convention) -> ir.Value:
     if not convention.by_address:
-        return operand_value(codegen, state, operand)
+        return operand_value(state, operand)
     if isinstance(operand, p.Copy):
         return place_address(state, operand.place)
     if isinstance(operand, p.Const):
-        value = constant_value(codegen, state, operand.constant)
+        codegen = state.codegen
+        value = constant_value(state, operand.constant)
         slot = codegen.memory.entry_alloca(
             codegen.types.ll_type(type_of_constant(state, operand.constant)), "arg")
         state.builder.store(value, slot)
@@ -165,13 +203,12 @@ def _argument(codegen: LLVMCodegen, state: FunctionState, operand: p.Operand,
 
 # -- terminators -----------------------------------------------------------------------
 
-def _terminator(codegen: LLVMCodegen, state: FunctionState,
-                terminator: tm.SlirTerminator) -> None:
+def _terminator(state: FunctionState, terminator: tm.SlirTerminator) -> None:
     builder = state.builder
     if isinstance(terminator, tm.Goto):
         builder.branch(state.block(terminator.target))
     elif isinstance(terminator, tm.SwitchInt):
-        _switch(codegen, state, terminator)
+        _switch(state, terminator)
     elif isinstance(terminator, tm.Return):
         builder.ret(builder.load(state.storage_of(RETURN_SLOT)))
     elif isinstance(terminator, tm.Unreachable):
@@ -180,9 +217,9 @@ def _terminator(codegen: LLVMCodegen, state: FunctionState,
         state.stop(terminator)
 
 
-def _switch(codegen: LLVMCodegen, state: FunctionState, terminator: tm.SwitchInt) -> None:
+def _switch(state: FunctionState, terminator: tm.SwitchInt) -> None:
     """`otherwise: None` goes to a block of its own that holds `unreachable`."""
-    value = operand_value(codegen, state, terminator.operand)
+    value = operand_value(state, terminator.operand)
     if terminator.otherwise is None:
         default = state.llvm_fn.append_basic_block(name="unreachable")
         ir.IRBuilder(default).unreachable()
