@@ -109,15 +109,16 @@ class SlirStage:
         the function meets the next stage.
         """
         name = self.shir.decls.name_of(body.fn_id)
+        drops = drop_type_names(tables.perk_impls)
         try:
             function = lower_function(decl, self.shir.tables_of(body), decls=self.shir.decls,
-                                      name=name, unit=self.unit, tables=tables)
+                                      name=name, unit=self.unit, tables=tables, drops=drops)
         except StageStop as stop:
             stop.filename = filename
             self.stops.slir_stopped(stop)
             self.slir.record(body.fn_id, SlirStopped(name, str(stop.params["construct"])))
             return
-        self.verifier.verify(function, tables=tables, filename=filename)
+        self.verifier.verify(function, funcs=tables.funcs, drops=drops, filename=filename)
         self.slir.record(body.fn_id, function)
         self.stops.finished(name, body.block.loc, filename)
 
@@ -179,7 +180,7 @@ class _LoopFrame:
 
 
 def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name: str,
-                   unit: str, tables: SymbolTables) -> SlirFunction:
+                   unit: str, tables: SymbolTables, drops: frozenset[str]) -> SlirFunction:
     """The `SlirFunction` of one body that `borrow` finished, from the body and its tables.
 
     Raises `StageStop` at the first construct that the lowering does not handle yet.
@@ -192,7 +193,6 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     home = declaring_unit(decl, unit)
     symbol = _symbol(decl, home, body)
     ret = _return_type(decl, tables, body)
-    drops = drop_type_names(tables.perk_impls)
     shir_locals = {local.id: local for local in body.locals}
     learned = _Learned()
     while True:

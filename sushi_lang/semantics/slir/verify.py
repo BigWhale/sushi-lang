@@ -29,12 +29,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Mapping, NoReturn, Optional, TypeAlias, get_args
+from functools import partial
+from typing import TYPE_CHECKING, Callable, NoReturn, Optional, TypeAlias, get_args
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import REGISTRY, Category
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import Convention, declared_modes
 from sushi_lang.semantics.slir import constants as k
@@ -53,7 +53,6 @@ from sushi_lang.semantics.unit_symbols import emitted_symbol
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FunctionTable
-    from sushi_lang.semantics.tables import SymbolTables
 
 TYPED_LOCALS = "typed locals"
 TYPED_PLACES = "typed places"
@@ -87,34 +86,34 @@ class DeclaredParams:
     var_arg: bool = False
 
 
+#: The declared parameters of a `Direct` callee, or None when the build declares none.
+DeclaredLookup: TypeAlias = Callable[[st.Direct], Optional[DeclaredParams]]
+
+
 @dataclass(slots=True)
 class SlirVerifier:
     """The pipeline entry of the verifier: the SLIR stage of a unit gives it each function
-    that the lowering finished. The declared parameters come from the function table."""
-    _declared: Optional[dict[str, DeclaredParams]] = None
+    that the lowering finished. The declared parameters come from the function table, at
+    each call, so a generic instance that a later body declares is found too."""
 
-    def verify(self, function: SlirFunction, *, tables: SymbolTables,
+    def verify(self, function: SlirFunction, *, funcs: FunctionTable, drops: frozenset[str],
                filename: Optional[str]) -> None:
-        if self._declared is None:
-            self._declared = declared_params(tables.funcs)
-        verify_function(function, drops=drop_type_names(tables.perk_impls),
-                        declared=self._declared, filename=filename)
+        verify_function(function, drops=drops, declared=partial(declared_params, funcs),
+                        filename=filename)
 
 
-def declared_params(funcs: FunctionTable) -> dict[str, DeclaredParams]:
-    """The declared parameters of each function of the build, by the symbol that a `Direct`
-    callee names (the symbol of its declaring unit)."""
-    found: dict[str, DeclaredParams] = {}
+def declared_params(funcs: FunctionTable, callee: st.Direct) -> Optional[DeclaredParams]:
+    """The declared parameters of the function that `callee` names: the function of its
+    name in the unit whose symbol is the symbol of the callee."""
     for unit, own in funcs.by_unit.items():
-        for name, sig in own.items():
-            found[emitted_symbol(name, unit)] = DeclaredParams(
-                tuple(mode.convention for mode in declared_modes(sig.params)))
-    return found
+        sig = own.get(callee.name)
+        if sig is not None and emitted_symbol(callee.name, unit) == callee.symbol:
+            return DeclaredParams(tuple(mode.convention for mode in declared_modes(sig.params)))
+    return None
 
 
 def verify_function(function: SlirFunction, *, drops: frozenset[str],
-                    declared: Mapping[str, DeclaredParams],
-                    filename: Optional[str] = None) -> None:
+                    declared: DeclaredLookup, filename: Optional[str] = None) -> None:
     """CE0158 at the first rule of ir.md 8.13 that `function` breaks."""
     check = _Check(function, drops, declared, filename)
     check.structure()
@@ -141,7 +140,7 @@ class _Check:
     """The structure of one function, and the facts that the dataflow reads."""
     function: SlirFunction
     drops: frozenset[str]
-    declared: Mapping[str, DeclaredParams]
+    declared: DeclaredLookup
     filename: Optional[str]
     blocks: dict[BlockId, SlirBlock] = field(default_factory=dict)
     conventions: dict[LocalId, Convention] = field(default_factory=dict)
@@ -272,7 +271,7 @@ class _Check:
             self.conventions_of(stmt, callee)
 
     def conventions_of(self, stmt: st.Call, callee: st.Direct) -> None:
-        declared = self.declared.get(callee.symbol)
+        declared = self.declared(callee)
         if declared is None:
             self.fail(CONVENTIONS, f"the callee @{callee.name} has no declaration", stmt.span)
         wanted, given = declared.conventions, tuple(c for _, c in stmt.args)

@@ -14,6 +14,7 @@ import pytest
 from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.passes.collect.functions import FuncSig, FunctionTable, Param
 from sushi_lang.semantics.shir.callee import Intrinsic
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
@@ -22,8 +23,9 @@ from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
-from sushi_lang.semantics.slir.verify import DeclaredParams, verify_function
+from sushi_lang.semantics.slir.verify import DeclaredParams, declared_params, verify_function
 from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, StructType, Type, UnknownType
+from sushi_lang.semantics.unit_symbols import emitted_symbol
 
 from tests.unit.test_slir_printer import (
     RESULT_STRING, _decorate, _greet, _main, _shout,
@@ -108,7 +110,9 @@ def _function(types: list[Optional[Type]], *blocks: SlirBlock,
 
 def _passes(function: SlirFunction,
             declared: Optional[Mapping[str, DeclaredParams]] = None) -> None:
-    verify_function(function, drops=frozenset(), declared=declared or {})
+    table = declared or {}
+    verify_function(function, drops=frozenset(),
+                    declared=lambda callee: table.get(callee.symbol))
 
 
 def _refused(function: SlirFunction, rule: str, span: Optional[Span] = BAD,
@@ -402,3 +406,13 @@ def test_the_operands_of_an_unknown_rvalue_class_are_an_internal_error():
     with pytest.raises(InternalCompilerError) as caught:
         r.operands_of(object())  # type: ignore[arg-type]
     assert caught.value.code == "CE0000"
+
+
+def test_the_declared_parameters_of_a_callee_are_read_from_the_function_table_at_each_call():
+    funcs = FunctionTable()
+    callee = st.Direct(emitted_symbol("late", "unit"), "late")
+    assert declared_params(funcs, callee) is None
+    funcs.declare("late", FuncSig("late", params=[Param("x", STRING, None, None, 0, is_nom=True)],
+                                  unit_name="unit"))
+    assert declared_params(funcs, callee) == DeclaredParams((OWNED,))
+    assert declared_params(funcs, st.Direct(emitted_symbol("late", "other"), "late")) is None
