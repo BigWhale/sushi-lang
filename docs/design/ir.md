@@ -1301,8 +1301,8 @@ the parameter and is still a `poke` borrow of its place (CE2408 for a read-only 
 of a body ends with no stop and with no error, `check_ownership` runs, and the body goes
 to the SLIR lowering (8.2). The pipeline reports the first stop of
 `typecheck`, then the first stop of `lift`, then the first stop of `borrow`, then an error
-hole, then the first stop of the SLIR lowering, then the first body that the SLIR
-lowering finished (`emit, <body>`, 8.2).
+hole, then the first stop of the SLIR lowering; with no stop, the backend emits each body from
+its SLIR (8.2).
 
 **Control flow in `borrow`.** The joins read the one path predicate of 7.5. An `If`
 checks each block from the state after its condition, and the paths that reach the code
@@ -1501,10 +1501,34 @@ the body only reads (a copy of it would drop its payload twice), `conversion` al
 function` for a free callee whose row names no declaring unit (a function of a binary
 library, whose symbol is its `link_symbol`), and `bloom` for a bloom argument. The dump
 prints such a function as ONE line in place of its body, `fn <name>: stopped (slir, <construct>)`,
-so that a golden file shows the progress of each function. A body that the lowering
-finished stops at the next stage, `emit` (`emit, <body>`), until the emitter of a
-`SlirFunction` is built. The pipeline reports one stop: a stop of `typecheck`, else of
-`lift`, else of `borrow`, else an error hole, else a stop of the lowering, else `emit`.
+so that a golden file shows the progress of each function. The pipeline reports one stop
+after the analysis: a stop of `typecheck`, else of `lift`, else of `borrow`, else an error
+hole, else a stop of the lowering. When nothing stopped, the program goes on to the
+backend.
+
+**The emitter.** The package is `backend/slir/`, and it follows the backend rule: free
+functions that take `codegen` first, and one state object for each function
+(`FunctionState`: the storage of each local and the LLVM block of each `BlockId`). The
+declarations of a module still come from the AST. Each body comes from the `SlirFunction`
+of the analysis, keyed by the `DeclId` of the body: `codegen_for` hands the SLIR of the
+program to the backend (`SlirBodies`), and a body that has no `SlirFunction` there is an
+internal error. There is no fallback to the AST body emitter. The emitter defines the LLVM
+function that the declaration round made for the symbol. One function derives the symbol
+of a body (`function_symbol`, `semantics/unit_symbols.py`): the definition, the callee of
+a `Direct` call, the declaration round and the verifier all read it. The body of `main` is
+`user_main`, and the C `main` that calls it stays a helper of the backend. Every local is a
+slot in the entry block (`entry_alloca`), except an `InGuaranteed` or an `Inout`
+parameter, whose local IS the incoming address (8.3); a value parameter is stored into its
+slot at the entry, and `return` loads `_0`. A signature that does not agree with the
+conventions or with the type of `_0` is an internal error. `StorageLive` and `StorageDead`
+emit nothing. An operator calls the emitter of the old backend that takes LLVM values
+(Q7). `SwitchInt` with `otherwise: None` goes to a block that holds `unreachable`.
+
+While the migration is in progress, a SLIR shape that the emitter does not handle yet
+stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
+example `emit, Str` or `emit, Drop`), at the span of its statement or terminator. The stop
+comes before any output: the incremental path builds the module of every unit before it
+writes the first object, so no object, no binary and no `.ll` text is written.
 
 ### 8.3 Conventions
 
