@@ -202,14 +202,17 @@ OWNERSHIP_ROWS = (
 )
 
 
-def ownership(made: Sample, *, skip: str | None = None) -> OwnershipResults:
+def ownership(made: Sample, *, skip: str | None = None,
+              reject: str | None = None) -> OwnershipResults:
     """The full table of the sample, less the row `skip`: the name of a consuming use or a
-    label of `OWNERSHIP_ROWS`. The local `t` is conditionally moved."""
+    label of `OWNERSHIP_ROWS`. The consuming use `reject` answers REJECT. The local `t` is
+    conditionally moved."""
     table = OwnershipResults()
     lam = made.id_of("lambda")
     for name in CONSUMED:
         if name != skip:
-            table.record_ownership(made.id_of(name), Ownership.MOVE if name == "s_ref"
+            table.record_ownership(made.id_of(name), Ownership.REJECT if name == reject
+                                   else Ownership.MOVE if name == "s_ref"
                                    else Ownership.ADOPT)
     rows: dict[str, Callable[[], None]] = {
         "capture": lambda: table.record_capture_ownership(lam, CAPTURED, Ownership.ADOPT),

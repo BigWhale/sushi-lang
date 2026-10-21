@@ -1,0 +1,30 @@
+# EXPECT_ERROR_CODES_EXACT: CE2412
+# EXPECT_STDERR_CONTAINS: "cannot mutate 'text' while 'view' borrows from it"
+# EXPECT_DUMP_SHIR: test_err_borrow_let_borrow.shir
+#
+# A `let` of a borrow of an owning value is a let-borrow: the binding views the storage of
+# the owner and owns nothing, so its value answers REJECT with no error, and the owner is
+# frozen while the binding lives. A `??` over a borrowed `Result` that owns its payload
+# reads the payload through: the operand answers REJECT, and the `let` is a let-borrow
+# too. `look` finishes with no error and its table is complete. A rebind of the owner
+# while the binding lives, and a use of the binding after it, is CE2412.
+
+fn keep(nom string word) string | StdError:
+    return Result.Ok(word)
+
+fn look(string text, Result@(string, StdError) kept) ~ | StdError:
+    let string view = text
+    let string got = kept??
+    println(view)
+    println(got)
+    return Result.Ok(~)
+
+fn change(string text) ~:
+    let string view = text
+    text := "{1} towels"
+    println(view)
+
+fn main() i32:
+    look("{2} towels", keep(nom "{3} towels"))
+    change("{4} towels")
+    return 0

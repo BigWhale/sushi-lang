@@ -420,6 +420,7 @@ tests/generics/type_arg_arity/test_err_type_arg_arity_perk_impl.sushi
 tests/generics/type_arg_arity/test_err_type_arg_arity_too_few.sushi
 tests/ir/borrow/straight/test_err_borrow_guaranteed_args.sushi
 tests/ir/borrow/straight/test_err_borrow_inout_args.sushi
+tests/ir/borrow/straight/test_err_borrow_let_borrow.sushi
 tests/ir/borrow/straight/test_err_borrow_let_move.sushi
 tests/ir/borrow/straight/test_err_borrow_nom_of_a_borrow.sushi
 tests/ir/borrow/straight/test_err_borrow_peek_of_a_constant.sushi

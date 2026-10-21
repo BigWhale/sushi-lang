@@ -31,13 +31,18 @@ producer and each lazy adapter has LENT or OWNED, except the iterable of a direc
 (`Cursor`, `HashMapCursor`), which makes no value; each lent one has its heap decision;
 each `Loop` of kind `Protocol` or `IteratorValue` has its walk in place. The conditionally
 moved locals have no check: no row for a local is the answer "moved on no path, or on
-every path". A gap is the internal error CE0157, which names the pass and the table.
+every path". REJECT is an error of `borrow`, except at two positions, where it is a
+borrowed view with no error: the value of a `let` (a let-borrow of the owner) and the
+operand of a `??` that reads through a borrowed owning wrapper. A REJECT row at any other
+position of a body that `borrow` ended with no error is a gap too. A gap is the internal
+error CE0157, which names the pass and the table.
 """
 from __future__ import annotations
 
 from typing import Any, Callable, Iterator, TypeAlias
 
 from sushi_lang.semantics.generics.iterators import is_lazy_adapter, produces_from_a_container
+from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.shir import exprs as e
@@ -172,11 +177,24 @@ def _capture_gaps(lam: e.Lambda, lift: LiftResults,
             yield f"ownership of capture _{capture.local.index}"
 
 
+def borrowed_views(body: ShirBody) -> set[ShirId]:
+    """The two positions where a REJECT row is a borrowed view and no error: the value of a
+    `let`, and the operand of a `??`."""
+    views: set[ShirId] = set()
+    for _path, value in walk(body.block, "block"):
+        if isinstance(value, s.Assign) and value.is_init:
+            views.add(value.value.shir_id)
+        elif isinstance(value, e.Try):
+            views.add(value.inner.shir_id)
+    return views
+
+
 def missing_ownership(body: ShirBody, typeck: TypeckResults, lift: LiftResults,
                       ownership: OwnershipResults) -> list[MissingAnswer]:
     """Each answer that `body` needs and that `ownership` does not hold, in the order of the
     walk. `typeck` and `lift` give the positions: they are complete when `borrow` runs."""
     consumed = {node.shir_id for node in consuming_uses(body, typeck, ownership)}
+    views = borrowed_views(body)
     direct = _direct_iterables(body, typeck)
     gaps: list[MissingAnswer] = []
     for _path, value in walk(body.block, "block"):
@@ -184,8 +202,12 @@ def missing_ownership(body: ShirBody, typeck: TypeckResults, lift: LiftResults,
             continue
         node = type(value).__name__
         answers: list[str] = []
-        if value.shir_id in consumed and ownership.ownership_of(value.shir_id) is None:
+        decided = ownership.ownership_of(value.shir_id)
+        if value.shir_id in consumed and decided is None:
             answers.append("ownership")
+        elif (value.shir_id in consumed and decided is Ownership.REJECT
+                and value.shir_id not in views):
+            answers.append("ownership other than reject")
         if (isinstance(value, e.Call) and value.shir_id not in direct
                 and _makes_an_iterator(value, typeck)):
             answers.extend(_iterator_gaps(value, ownership))

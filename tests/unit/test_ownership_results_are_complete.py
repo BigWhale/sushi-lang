@@ -77,6 +77,76 @@ def test_a_consuming_use_with_no_ownership_is_found(name: str) -> None:
         MissingAnswer("ownership", type(node).__name__, span(CONSUMED[name]))]
 
 
+# -- a REJECT row with no error (docs/design/ir.md 7.9) ---------------------------------
+# REJECT is an error of `borrow`, except at two positions, where it is a borrowed view:
+# the value of a `let` (a let-borrow) and the operand of a `??` that reads through a
+# borrowed owning wrapper. Anywhere else in a body that `borrow` finished, it is CE0157.
+
+_NO_REJECT = "ownership other than reject"
+
+
+def test_a_reject_at_the_value_of_a_let_is_a_borrowed_view() -> None:
+    made = sample()
+    assert _missing(made, ownership(made, reject="s_ref")) == []
+
+
+@pytest.mark.parametrize("name", ["keep_call", "t_arg", "fail_call", "ok"],
+                         ids=["rebind", "owned_argument", "cast_operand", "return"])
+def test_a_reject_anywhere_else_is_found(name: str) -> None:
+    made = sample()
+    node = made.nodes[name]
+    assert _missing(made, ownership(made, reject=name)) == [
+        MissingAnswer(_NO_REJECT, type(node).__name__, span(CONSUMED[name]))]
+
+
+def _try_body(*, returns: bool):
+    """`let string got = r??` with `r` a borrowed owning `Result`; or `return r??`."""
+    from sushi_lang.semantics.shir import exprs as e
+    from sushi_lang.semantics.shir import stmts as s
+    from sushi_lang.semantics.shir.body import (
+        ExpandCopies, Instance, ShirBody, ShirLocal, ShirParam)
+    from sushi_lang.semantics.shir.decls import DeclNames
+    from sushi_lang.semantics.shir.nodes import ShirBlock
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.shir.typeck import TypeckResults
+    from sushi_lang.semantics.typesys import BuiltinType
+
+    at = span(1)
+    inner = e.LocalRef(ShirId(0), at, LocalId(0))
+    tried = e.Try(ShirId(1), at, inner)
+    statement = (s.Return(ShirId(2), at, tried) if returns
+                 else s.Assign(ShirId(2), at, e.LocalRef(ShirId(3), at, LocalId(1)), tried,
+                               True))
+    decls = DeclNames()
+    body = ShirBody(decls.declare("read"), Instance(),
+                    [ShirParam(LocalId(0), BuiltinType.STRING, Convention.GUARANTEED, at,
+                               False)],
+                    [ShirLocal(LocalId(0), "r", None, at), ShirLocal(LocalId(1), "got", None, at)],
+                    ShirBlock(ShirId(4), at, [statement]), ExpandCopies())
+    return body, TypeckResults(), inner, tried, decls
+
+
+def test_a_reject_at_the_operand_of_a_try_is_a_borrowed_view() -> None:
+    body, typeck, inner, tried, _decls = _try_body(returns=False)
+    table = OwnershipResults()
+    table.record_ownership(inner.shir_id, Ownership.REJECT)
+    table.record_ownership(tried.shir_id, Ownership.REJECT)
+    assert missing_ownership(body, typeck, LiftResults(), table) == []
+
+
+def test_a_reject_at_the_return_of_a_try_is_found() -> None:
+    body, typeck, inner, tried, decls = _try_body(returns=True)
+    table = OwnershipResults()
+    table.record_ownership(inner.shir_id, Ownership.REJECT)
+    table.record_ownership(tried.shir_id, Ownership.REJECT)
+    assert missing_ownership(body, typeck, LiftResults(), table) == [
+        MissingAnswer(_NO_REJECT, "Try", span(1))]
+    with pytest.raises(InternalCompilerError) as caught:
+        check_ownership(body, typeck, LiftResults(), table, decls)
+    assert caught.value.code == "CE0157"
+    assert caught.value.params["answer"] == _NO_REJECT
+
+
 def test_an_owned_iterator_needs_no_heap_decision() -> None:
     made = sample()
     table = OwnershipResults()
