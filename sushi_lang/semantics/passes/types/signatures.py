@@ -98,7 +98,7 @@ def _enter_body(self, node, name: str, kind: str, ret, err_type, err_span) -> No
     (docs/design/error-channel.md). The `Return` arm (`visit/statements.py`) and the `??`
     check read this state and nothing else, so the three kinds of body have one rule.
     """
-    from .resolution import channel_result
+    from sushi_lang.semantics.channel import channel_result
     self.body_name = callable_text(name, kind)
     self.in_template_copy = is_template_copy(node)
     self.body_return_type = ret

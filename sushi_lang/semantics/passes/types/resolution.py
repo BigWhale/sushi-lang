@@ -2,39 +2,12 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
-from sushi_lang.semantics.type_resolution import resolve_unknown_type
+from sushi_lang.semantics.channel import channel_result
 
 if TYPE_CHECKING:
     from . import TypeValidator
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.internals.report import Span
-    from sushi_lang.semantics.passes.collect.enums import EnumTable
-    from sushi_lang.semantics.passes.collect.structs import StructTable
-
-
-def channel_result(struct_table: 'StructTable', enum_table: 'EnumTable',
-                   declared_type: Optional['Type'],
-                   err_type_node: Optional['Type']) -> Optional['Type']:
-    """The interned `Result@(T, E)` a body answers, or None when the body is BARE.
-
-    ONE derivation for a function, a method and a lifted lambda: the channel is the
-    spelled `| E`, or the explicit `Result@(T, E)` return; with neither there is no
-    channel and no default error type (docs/design/error-channel.md). The typecheck pass
-    and SLIR lowering (the type of the return slot) both read it.
-    """
-    from sushi_lang.semantics.generics.results import (
-        ensure_result_type_in_table, is_result_enum, signature_result_arms)
-
-    if is_result_enum(declared_type):
-        return declared_type
-    arms = signature_result_arms(declared_type, err_type_node)
-    if arms is None:
-        return None
-    structs = struct_table.by_name
-    enums = enum_table.by_name
-    ok = resolve_unknown_type(arms[0], structs, enums)
-    err = resolve_unknown_type(arms[1], structs, enums)
-    return ensure_result_type_in_table(enum_table, ok, err, struct_table=structs)
 
 
 def call_yield(validator: 'TypeValidator', ret: Optional['Type'],

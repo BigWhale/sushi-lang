@@ -37,12 +37,11 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import FuncDef
-from sushi_lang.semantics.channel import has_channel
+from sushi_lang.semantics.channel import channel_result, has_channel
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
-from sushi_lang.semantics.passes.types.resolution import channel_result
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
