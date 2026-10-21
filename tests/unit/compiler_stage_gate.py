@@ -7,7 +7,9 @@ place that tests it. The one exception is a test of the test runner, and those l
 A stage is a Sushi parse or lex, the semantic analysis, the lowering of a body to SHIR,
 the lowering of a body to SLIR (the entry of the SLIR stage that the analysis calls for
 each body), the SLIR verifier (its pipeline entry; a test calls the per-function check),
-the code generator, the driver, or a subprocess that starts the compiler, the runner or the
+the code generator, the SLIR emitter (`emit_function`, a module function: the gate replaces
+the module attribute, and the back end reads the attribute at each call), the driver, or a
+subprocess that starts the compiler, the runner or the
 toolchain build. A new stage of the compiler joins the list in the change that makes it. A hit is recorded
 against the item that runs, or against the fixture that is being set up (then every item
 that uses that fixture fails), or against the module that is being collected. The hit does
@@ -84,6 +86,7 @@ class CompilerStageGate:
 
         from sushi_lang.backend.codegen_llvm import LLVMCodegen
         from sushi_lang.backend.driver import LLVMDriver
+        from sushi_lang.backend.slir import emit as slir_emit
         from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
         from sushi_lang.semantics.shir.lower_nodes import BodyLowerer
         from sushi_lang.semantics.slir.lower import SlirStage
@@ -96,6 +99,7 @@ class CompilerStageGate:
         self._wrap(SlirStage, "lower_body", "slir lowering")
         self._wrap(SlirVerifier, "verify", "slir verifier")
         self._wrap(LLVMCodegen, "__init__", "LLVMCodegen")
+        self._wrap(slir_emit, "emit_function", "SLIR emitter")
         self._wrap(LLVMDriver, "__init__", "LLVMDriver")
         self._wrap(subprocess.Popen, "__init__", "subprocess",
                    when=lambda args, kwargs: compiler_argument(
@@ -105,7 +109,7 @@ class CompilerStageGate:
         while self._restore:
             self._restore.pop()()
 
-    def _wrap(self, owner: type, name: str, stage: str,
+    def _wrap(self, owner: object, name: str, stage: str,
               when: Optional[Callable[[tuple, dict], Optional[str]]] = None) -> None:
         original = owner.__dict__[name]
         gate = self

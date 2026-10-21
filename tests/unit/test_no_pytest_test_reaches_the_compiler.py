@@ -63,6 +63,7 @@ def test_a_compiler_subprocess_is_caught(request):
     ("sushi_lang.semantics.shir.lower_nodes:BodyLowerer", "__init__"),
     ("sushi_lang.semantics.slir.lower:SlirStage", "lower_body"),
     ("sushi_lang.semantics.slir.verify:SlirVerifier", "verify"),
+    ("sushi_lang.backend.slir.emit", "emit_function"),
     ("sushi_lang.backend.codegen_llvm:LLVMCodegen", "__init__"),
     ("sushi_lang.backend.driver:LLVMDriver", "__init__"),
     ("subprocess:Popen", "__init__"),
@@ -70,8 +71,9 @@ def test_a_compiler_subprocess_is_caught(request):
 def test_every_stage_is_wrapped(owner, name):
     import importlib
 
-    module, cls = owner.split(":")
-    method = getattr(getattr(importlib.import_module(module), cls), name)
+    module, _, cls = owner.partition(":")
+    holder = importlib.import_module(module)
+    method = getattr(getattr(holder, cls) if cls else holder, name)
     assert getattr(method, "__wrapped__", None) is not None, f"{owner}.{name} is not watched"
 
 

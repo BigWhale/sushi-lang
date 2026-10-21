@@ -1,0 +1,52 @@
+# EXPECT_RUNTIME_EXIT: 0
+#
+# The operators over plain scalars, through the emitters of the old backend that take LLVM
+# values: an unsigned and a signed division, an arithmetic and a logical right shift, a
+# float division and an ordered float comparison, a negation, `not` and `xor`. The exit
+# code is the count of the checks that fail.
+
+fn udiv(u32 a, u32 b) u32:
+    return a / b
+
+fn sdiv(i32 a, i32 b) i32:
+    return a / b
+
+fn shr(i32 a) i32:
+    return a >> 1
+
+fn ushr(u32 a) u32:
+    return a >> 1
+
+fn half(f64 x) f64:
+    return x / 2.0
+
+fn neg(i32 a) i32:
+    return -a
+
+fn flip(bool p) bool:
+    return not p
+
+fn either(bool p, bool q) bool:
+    return p xor q
+
+fn main() i32:
+    let i32 failed = 0
+    if (udiv(4294967294, 2) != 2147483647):
+        failed := failed + 1
+    if (sdiv(-7, 2) != -3):
+        failed := failed + 1
+    if (shr(-8) != -4):
+        failed := failed + 1
+    if (ushr(4294967288) != 2147483644):
+        failed := failed + 1
+    if (half(5.0) != 2.5):
+        failed := failed + 1
+    if (neg(5) != -5):
+        failed := failed + 1
+    if (flip(true)):
+        failed := failed + 1
+    if (not either(true, false)):
+        failed := failed + 1
+    if (5.5 < 2.0):
+        failed := failed + 1
+    return failed

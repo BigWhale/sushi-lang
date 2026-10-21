@@ -1,4 +1,4 @@
-unit test_err_slir_return_literal
+unit test_slir_return_literal
 
 fn main() -> i32 {
     let _0: i32

@@ -1,6 +1,5 @@
-# EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "emit, step"
-# EXPECT_DUMP_SLIR: test_err_slir_and_or_rebind.slir
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SLIR: test_slir_and_or_rebind.slir
 #
 # A rebind whose new value is `and` or `or` that reads the old value. The new value is
 # computed first, into a temporary of its own, and the store comes after it (ir.md 8.10,

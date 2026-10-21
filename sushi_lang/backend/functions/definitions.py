@@ -19,10 +19,12 @@ class FunctionDefinitions:
 
     def emit_func_def(self, fn: FuncDef, unit_name: str | None = None) -> ir.Function:
         """Define the body of a regular function."""
+        from sushi_lang.semantics.unit_symbols import declaring_unit, function_symbol
         if fn.name == 'main' and not getattr(self.codegen, 'is_library_mode', False):
-            return self.codegen.functions.main_wrapper.emit_main(fn)
+            self.codegen.functions.declarations.emit_func_decl(fn, unit_name)
+            self.emit_body(self.codegen.module.globals[function_symbol(fn.name, unit_name)], fn)
+            return self.codegen.functions.main_wrapper.emit_main()
 
-        from sushi_lang.semantics.unit_symbols import declaring_unit
         llvm_fn = (self.codegen.funcs.declared(fn.name, declaring_unit(fn, unit_name))
                    or self.codegen.functions.declarations.emit_func_decl(fn, unit_name))
         self.emit_body(llvm_fn, fn)

@@ -31,25 +31,28 @@ def emit_float_negation(codegen: 'LLVMCodegen', val: ir.Value) -> ir.Value:
 
 def emit_unary_op(codegen: 'LLVMCodegen', expr: UnaryOp, to_i1: bool) -> ir.Value:
     """Emit unary operation (negation, logical not)."""
-    val = codegen.expressions.emit_expr(expr.expr)
+    return emit_unary_value(codegen, expr.op, codegen.expressions.emit_expr(expr.expr), to_i1)
 
-    if expr.op == "neg":
+
+def emit_unary_value(codegen: 'LLVMCodegen', op: str, val: ir.Value, to_i1: bool) -> ir.Value:
+    """A unary operator over one LLVM value: the AST emitter and the SLIR emitter call it."""
+    if op == "neg":
         if isinstance(val.type, (ir.FloatType, ir.DoubleType)):
             return emit_float_negation(codegen, val)
         else:
             return codegen.builder.sub(ir.Constant(val.type, 0), val)
 
-    if expr.op == "not":
+    if op == "not":
         if to_i1:
             i1v = codegen.utils.as_i1(val)
             return codegen.builder.xor(i1v, ir.Constant(codegen.i1, 1))
         i1v = codegen.utils.as_i1(val)
         return codegen.builder.zext(codegen.builder.xor(i1v, ir.Constant(codegen.i1, 1)), codegen.i8)
 
-    if expr.op == "~":
+    if op == "~":
         return codegen.builder.not_(val)
 
-    raise NotImplementedError(f"unknown UnaryOp: {expr.op!r}")
+    raise NotImplementedError(f"unknown UnaryOp: {op!r}")
 
 
 def emit_binary_op(codegen: 'LLVMCodegen', expr: BinaryOp, to_i1: bool) -> ir.Value:
@@ -269,15 +272,20 @@ def _emit_shift(codegen: 'LLVMCodegen', op: str, value: ir.Value, count: ir.Valu
     return builder.select(leaves_the_type, emptied, shifted)
 
 
+def emit_xor(codegen: 'LLVMCodegen', lhs: ir.Value, rhs: ir.Value, to_i1: bool) -> ir.Value:
+    """`xor` over two bool values: it reads both operands, so it is no control flow."""
+    result = codegen.builder.xor(codegen.utils.as_i1(lhs), codegen.utils.as_i1(rhs),
+                                 name="xor_result")
+    return result if to_i1 else codegen.builder.zext(result, codegen.i8)
+
+
 def emit_logic(codegen: 'LLVMCodegen', op: str, left_expr: Expr, right_expr: Expr, to_i1: bool = False) -> ir.Value:
     """Emit short-circuit boolean logic for 'and', 'or', and 'xor' operations."""
     builder, func = require_both_initialized(codegen)
 
     if op == "xor":
-        lhs_i1 = codegen.utils.as_i1(codegen.expressions.emit_expr(left_expr, to_i1=True))
-        rhs_i1 = codegen.utils.as_i1(codegen.expressions.emit_expr(right_expr, to_i1=True))
-        result = codegen.builder.xor(lhs_i1, rhs_i1, name="xor_result")
-        return result if to_i1 else codegen.builder.zext(result, codegen.i8)
+        return emit_xor(codegen, codegen.expressions.emit_expr(left_expr, to_i1=True),
+                        codegen.expressions.emit_expr(right_expr, to_i1=True), to_i1)
 
     lhs_i1 = codegen.utils.as_i1(codegen.expressions.emit_expr(left_expr, to_i1=True))
     lhs_branch_bb = codegen.builder.block

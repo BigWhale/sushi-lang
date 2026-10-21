@@ -1,0 +1,9 @@
+unit test_borrow_template_check_meets_no_slir
+
+fn main() -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 0_i32
+    return
+}

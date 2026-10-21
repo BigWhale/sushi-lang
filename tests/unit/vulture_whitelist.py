@@ -152,12 +152,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/passes/lift.py", "lift_perk_impl",
      "kept for the closures group of Phase 5: the lift pass on SHIR takes the symbol and "
      "the environment layout from it"),
-    ("sushi_lang/compiler/pipeline.py", "_resolve_out_path",
-     "kept for P2.11: the emitter of a SlirFunction writes the output of the compile"),
-    ("sushi_lang/compiler/pipeline.py", "_compile_monolithic",
-     "kept for P2.11: the emitter of a SlirFunction builds one module for each unit"),
-    ("sushi_lang/compiler/pipeline.py", "_compile_incremental",
-     "kept for P2.11: the emitter of a SlirFunction keeps the per-unit cache"),
     # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
     # Each one moves to SHIR inputs in the typecheck stage of its construct group
     # in the migration plan, and that stage deletes the entry.

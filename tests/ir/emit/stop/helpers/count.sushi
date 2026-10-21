@@ -1,0 +1,4 @@
+# The second unit of test_err_emit_stop_writes_nothing: a body that the emitter handles.
+
+public fn one() i32:
+    return 1

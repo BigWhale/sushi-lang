@@ -1,5 +1,5 @@
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "emit, count"
+# EXPECT_STDERR_CONTAINS: "emit, Builtin"
 # EXPECT_DUMP_SLIR: test_err_slir_while_short_circuit.slir
 #
 # The condition of a `while` is an `and`, so the condition has blocks of its own (ir.md

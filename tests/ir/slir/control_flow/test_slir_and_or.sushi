@@ -1,6 +1,5 @@
-# EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "emit, both"
-# EXPECT_DUMP_SLIR: test_err_slir_and_or.slir
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_DUMP_SLIR: test_slir_and_or.slir
 #
 # `and` and `or` are control flow, never an rvalue (ir.md 8.9). The left operand goes into
 # the place that takes the value, a switch on it skips the right operand, and the right

@@ -1,5 +1,5 @@
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "emit, eat"
+# EXPECT_STDERR_CONTAINS: "emit, Builtin"
 # EXPECT_DUMP_SLIR: test_err_slir_break_flag.slir
 #
 # A drop flag with a `break`. The `break` path moves `w` and the path of the condition does

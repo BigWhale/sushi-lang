@@ -1,5 +1,5 @@
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "emit, half"
+# EXPECT_STDERR_CONTAINS: "emit, Aggregate"
 # EXPECT_DUMP_SLIR: test_err_slir_try_argument.slir
 #
 # A `??` in a later argument of a call that takes an earlier argument with `nom`. The move

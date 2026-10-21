@@ -1,5 +1,5 @@
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "emit, half"
+# EXPECT_STDERR_CONTAINS: "emit, Builtin"
 # EXPECT_DUMP_SLIR: test_err_slir_try_let.slir
 #
 # A `??` in a `let` (ir.md 8.9): the operand goes into a temporary, a switch on its

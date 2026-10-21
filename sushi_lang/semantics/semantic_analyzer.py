@@ -249,9 +249,9 @@ class SemanticAnalyzer:
         error: `typecheck` gives it to `lift`, `lift` gives it to `borrow`, and `borrow`
         gives it to the SLIR stage. A stop of a stage ends the work on its body, and the
         next stage does not get it. `lift` stops at a `Lambda` until the closures group.
-        `effects` runs on the AST before the loop, because `borrow` reads its summary. The
-        backend does not run: the pipeline stops after the SLIR stage with the stop code
-        CE0155 (`pipeline_stop`), at the stage `slir` or at the stage `emit` after it
+        `effects` runs on the AST before the loop, because `borrow` reads its summary. A
+        stop of a stage stops the pipeline after the analysis with the stop code CE0155
+        (`pipeline_stop`); with no stop, the backend emits the `SlirFunction` of each body
         (docs/design/ir.md 8.2). `_check_copies` repeats
         the per-unit stages for each copy cut after the loop started: an extension copy of
         a generic or an array target, an array-template perk copy, and a function instance
@@ -372,12 +372,12 @@ class SemanticAnalyzer:
         self._check_array_extensions(compilation_order, monomorphizer, libraries)
         self._reject_opaque_in_program_tables()
 
-    def pipeline_stop(self) -> StageStop:
+    def pipeline_stop(self) -> Optional[StageStop]:
         """The one stop of the program, for an analysis that reported no error.
 
         The first stop of the typecheck pass, else of the lift pass, else of the borrow
         pass, else an error hole whose codes no error offered (ir.md 7.4), else of the SLIR
-        lowering, else the stage after it (`Stops.first`).
+        lowering (`Stops.first`). None when nothing stopped: the backend runs.
         """
         hole = check_error_holes(self.shir.holes, self._offered + self.reporter.errors_offered)
         return self.stops.first(hole)

@@ -6,6 +6,7 @@ from llvmlite import ir
 
 if TYPE_CHECKING:
     from sushi_lang.backend.library_paths import LibraryResolver
+    from sushi_lang.backend.slir.bodies import SlirBodies
     from sushi_lang.semantics.ast import ExtendWithDef
     from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
@@ -30,6 +31,8 @@ from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, emitted_symbol, 
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
+from sushi_lang.backend.slir import emit as slir_emit
+from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
 # Registers the hash() emitter factories that semantics/generics/hashing.py
 # resolves when it emits an auto-derived hash(). The derive pass registers the method
 # itself without knowing anything about LLVM.
@@ -154,6 +157,10 @@ class LLVMCodegen:
         self.library_registry: Optional[LibraryRegistry] = None
 
         self.monomorphized_extensions: list['ExtendDef'] = []
+
+        # The SLIR of the program (`codegen_for`): every body that the module walk defines
+        # comes from it. None in a codegen that defines no body.
+        self.slir_bodies: Optional['SlirBodies'] = None
 
         # Library-shipped concrete perk impls (C4a): declared only, never
         # defined - the bodies link in from the library bitcode.
@@ -390,11 +397,13 @@ class LLVMCodegen:
 
         ONE walk for both build paths: every function, extension and perk-impl method
         is declared before any body is emitted, so a body may call a function that a
-        later unit defines. A monomorphized extension is declared in every module and
-        defined in the module of its HOME unit alone, the unit that declared its
-        template, like a perk-impl copy (#1064): its body names that unit's private
-        functions and aliases, and one definition is one symbol (#404). A unit named in
-        `weak_units` has each of its bodies weakened (`backend/library_linkage.py`).
+        later unit defines. The declarations come from the AST; each body comes from the
+        `SlirFunction` of the analysis (`slir_bodies`), through the SLIR emitter. A
+        monomorphized extension is declared in every module and defined in the module of
+        its HOME unit alone, the unit that declared its template, like a perk-impl copy
+        (#1064): its body names that unit's private functions and aliases, and one
+        definition is one symbol (#404). A unit named in `weak_units` has each of its
+        bodies weakened (`backend/library_linkage.py`).
         """
         from sushi_lang.backend.library_linkage import weaken_all
 
@@ -431,28 +440,32 @@ class LLVMCodegen:
             self.emitting_unit = unit.name
             # Each body as the emitter named it. A snapshot cannot find these: the
             # declaration round above already put every function in the module.
-            emitted = []
-            for fn in unit.ast.functions:
-                if fn.type_params:
-                    continue
-                emitted.append(self.functions.emit_func_def(fn, unit.name))
-
-            for ext in unit.ast.extensions:
-                emitted.append(self.functions.emit_extension_method_def(ext, unit.name))
-
-            for perk_impl in unit.ast.perk_impls:
-                for method in perk_impl.methods:
-                    synthetic_ext = _perk_method_to_extend_def(perk_impl, method)
-                    emitted.append(
-                        self.functions.emit_extension_method_def(synthetic_ext))
-
-            for ext in self.monomorphized_extensions:
-                if ext.home_unit == unit.name:
-                    emitted.append(self.functions.emit_extension_method_def(ext))
+            emitted: list[ir.Function] = []
+            bodies = [fn for fn in unit.ast.functions if not fn.type_params]
+            bodies.extend(unit.ast.extensions)
+            bodies.extend(method for perk_impl in unit.ast.perk_impls
+                          for method in perk_impl.methods)
+            bodies.extend(ext for ext in self.monomorphized_extensions
+                          if ext.home_unit == unit.name)
+            for decl in bodies:
+                emitted.extend(self._define(decl, str(unit.file_path)))
 
             if unit.name in weak_units:
                 weaken_all(emitted)
         self.emitting_unit = None
+
+    def _define(self, decl: object, filename: str) -> list[ir.Function]:
+        """Define the body of `decl` from its `SlirFunction`. The body of `main` is
+        `user_main`, and the C `main` that calls it comes after it."""
+        if self.slir_bodies is None:
+            from sushi_lang.internals.errors import raise_internal_error
+            raise_internal_error("CE0000", detail="the backend defines a body with no SLIR "
+                                                  "of the program")
+        function = self.slir_bodies.function_of(decl)
+        defined = [slir_emit.emit_function(self, function, filename=filename)]
+        if function.symbol == USER_MAIN_SYMBOL:
+            defined.append(self.functions.main_wrapper.emit_main())
+        return defined
 
     def _declare_library_perk_impl_methods(self) -> None:
         """Declare (never define) library-shipped perk-impl methods (C4a).

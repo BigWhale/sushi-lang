@@ -1,5 +1,5 @@
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "emit, main"
+# EXPECT_STDERR_CONTAINS: "emit, Builtin"
 # EXPECT_DUMP_SLIR: test_err_slir_while_break_continue.slir
 #
 # A `while` is a header block that evaluates the condition and switches, a body block that

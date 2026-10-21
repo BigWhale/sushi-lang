@@ -817,11 +817,24 @@ def compile_multi_file(main_ast: Program, src_path: Path, reporter: Reporter,
         _write_slir_dump(analyzer, options.dump_slir, reporter)
     if reporter.has_errors:
         return 2
-    # The stages after the SLIR lowering are not built yet, so a program with no error
-    # stops here, after the dumps, with the stop code (docs/design/ir.md 11.1).
-    from sushi_lang.internals import errors as er
-    er.emit_exception(reporter, analyzer.pipeline_stop())
-    return 2
+    # A stage that met a construct it does not handle yet stops the program here, after
+    # the dumps, with the stop code (docs/design/ir.md 11.1).
+    stop = analyzer.pipeline_stop()
+    if stop is not None:
+        from sushi_lang.internals import errors as er
+        er.emit_exception(reporter, stop)
+        return 2
+
+    out_path = _resolve_out_path(options, src_path)
+    use_incremental = (len(compilation_order) > 1 and not options.lib
+                       and not options.no_incremental and not options.dump_ll)
+    if use_incremental:
+        return _compile_incremental(
+            compilation_order, analyzer, out_path, reporter, options,
+            stdlib_units, library_imports, library_linker, unit_manager, cache,
+        )
+    return _compile_monolithic(compilation_order, analyzer, out_path, reporter,
+                               options, library_linker)
 
 
 def codegen_for(analyzer: SemanticAnalyzer,
@@ -841,8 +854,12 @@ def codegen_for(analyzer: SemanticAnalyzer,
     through a Protocol that names its manifests alone -- the back end also resolves a
     path with it -- and the registry and the implementations come off the analyzer,
     which is where the `libraries` step files them.
+
+    The SLIR of the program travels the same way: every body that the backend defines
+    comes from the `SlirFunction` of the analysis (docs/design/ir.md 8.2).
     """
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+    from sushi_lang.backend.slir.bodies import SlirBodies
 
     tables = analyzer.tables
     cg = LLVMCodegen(struct_table=tables.structs, enum_table=tables.enums,
@@ -857,6 +874,7 @@ def codegen_for(analyzer: SemanticAnalyzer,
     # through the same per-unit scope the typecheck pass accepted it under, and a
     # constant's initializer through the aliases of the unit that wrote it (#561).
     cg.unit_namespaces = dict(tables.namespaces)
+    cg.slir_bodies = SlirBodies(analyzer.shir, analyzer.slir)
     return cg
 
 
@@ -954,14 +972,16 @@ def _compile_monolithic(compilation_order, analyzer, out_path: Path,
 def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: Reporter,
                          options: BuildOptions, stdlib_units, library_imports,
                          library_linker, unit_manager, cache: CacheManager) -> int:
-    """Incremental compilation path: per-unit .o caching."""
+    """Incremental compilation path: per-unit .o caching.
+
+    The module of every unit that the cache does not hold is built before the first
+    object is written, so a stop of the emitter (CE0155) leaves no output behind.
+    """
     from sushi_lang.compiler.fingerprint import (
         compute_unit_fingerprint,
         compute_stdlib_fingerprint,
         compute_lib_fingerprint,
     )
-
-    cache.prepare()
 
     monomorphized_extensions = analyzer.monomorphized_extensions
 
@@ -977,8 +997,6 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
 
     t0 = time.monotonic()
 
-    print("Code generation:")
-
     # Digest every imported `.slib` once. These feed both the consumer unit
     # fingerprints (so a library template change invalidates consumers that
     # monomorphize it -- cross-library generics) and the library `.o`
@@ -993,22 +1011,31 @@ def _compile_incremental(compilation_order, analyzer, out_path: Path, reporter: 
     from sushi_lang.backend.ownership import drops_of
     drop_types = drops_of(cg)
 
-    for unit in compilation_order:
-        fp = compute_unit_fingerprint(
+    fingerprints = {
+        unit.name: compute_unit_fingerprint(
             unit, unit_manager, monomorphized_extensions,
             library_fingerprints=library_fingerprints,
             drop_types=drop_types,
         )
+        for unit in compilation_order
+    }
+    modules = {unit.name: cg.build_module_single_unit(unit, compilation_order)
+               for unit in compilation_order
+               if not cache.has_cached_unit(unit.name, fingerprints[unit.name])}
 
-        if cache.has_cached_unit(unit.name, fp):
+    cache.prepare()
+    print("Code generation:")
+    for unit in compilation_order:
+        fp = fingerprints[unit.name]
+        module = modules.get(unit.name)
+        if module is None:
             obj_path = cache.unit_object_path(unit.name, fp)
             obj_paths.append(obj_path)
             cached.append(unit.name)
             print(f"  {unit.name:<30s} [cached]")
         else:
             obj_bytes = driver.compile_single_unit_to_object(
-                unit, compilation_order,
-                opt=options.opt, verify=not options.no_verify,
+                module, unit.name, opt=options.opt, verify=not options.no_verify,
             )
             obj_path = cache.store_unit_object(unit.name, obj_bytes, fp)
             obj_paths.append(obj_path)

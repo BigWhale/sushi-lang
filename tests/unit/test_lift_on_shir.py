@@ -81,7 +81,7 @@ def test_a_body_that_lift_stopped_does_not_reach_borrow() -> None:
     made = sample()
     stops, next_stage, program = _run(made.body, made.decls)
     assert next_stage.calls == []
-    assert stops.next_stage is None
+    assert stops.first(None) is not None
     lam = made.id_of("lambda")
     table = program.lift_table_of(made.body)
     assert (table.symbol_of(lam), table.environment_of(lam)) == (None, None)

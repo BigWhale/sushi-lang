@@ -280,14 +280,14 @@ class LLVMDriver:
                 obj_path.unlink(missing_ok=True)
         return out
 
-    def compile_single_unit_to_object(self, target_unit: Unit, all_units: list[Unit],
+    def compile_single_unit_to_object(self, mod_ir: ir.Module, unit_name: str,
                                       opt: str = "mem2reg", verify: bool = True) -> bytes:
-        """Compile a single unit to an object file (bytes)."""
-        mod_ir = self.codegen.build_module_single_unit(target_unit, all_units)
+        """Compile the module of one unit (`build_module_single_unit`) to an object file
+        (bytes)."""
         llmod = llvm.parse_assembly(str(mod_ir))
 
         tm = self.codegen.optimizer.ensure_target(llmod)
-        self._verify_and_optimize(llmod, opt, verify, f" ({target_unit.name})")
+        self._verify_and_optimize(llmod, opt, verify, f" ({unit_name})")
         return tm.emit_object(llmod)
 
     def compile_stdlib_to_object(self, stdlib_unit: str, opt: str = "mem2reg") -> bytes:

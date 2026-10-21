@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import FuncDef
 from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
 from sushi_lang.semantics.typesys import Type as Ty
 from sushi_lang.backend import enum_utils
@@ -72,13 +71,16 @@ class MainFunctionWrapper:
             ir.Constant(self.codegen.types.i64, 0),
         ])
 
-    def emit_main(self, fn: FuncDef) -> ir.Function:
-        """Emit the C `main` that calls the user's main and returns its exit code."""
-        c_main = self.codegen.funcs.get('main')
-        if c_main is None:
-            raise_internal_error("CE0064")
+    def emit_main(self) -> ir.Function:
+        """Emit the C `main` that calls the user's main and returns its exit code.
 
-        user_main = self.create_user_main_function(fn)
+        The declaration round made both functions, and the body of the user's main is
+        already defined (`user_main`).
+        """
+        c_main = self.codegen.funcs.get('main')
+        user_main = self.codegen.module.globals.get(USER_MAIN_SYMBOL)
+        if c_main is None or not isinstance(user_main, ir.Function):
+            raise_internal_error("CE0064")
 
         self.codegen.functions.helpers.begin_function(c_main)
         self._unbuffer_libc_stdio()
@@ -123,20 +125,3 @@ class MainFunctionWrapper:
             cmd_args_desc.destroyed = True
 
         self.codegen.builder.ret(converted_value)
-
-    def create_user_main_function(self, fn: FuncDef) -> ir.Function:
-        """Create a separate function for the user's main function body."""
-        params = self.codegen.functions.helpers.params_of(fn)
-        ll_param_tys = [self.codegen.types.ll_type(ty) for _, ty in params]
-        from sushi_lang.backend.generics.result_builder import declared_return_ll
-        ll_ret = declared_return_ll(self.codegen, fn)
-
-        fnty = ir.FunctionType(ll_ret, ll_param_tys)
-        user_main = ir.Function(self.codegen.module, fnty, name=USER_MAIN_SYMBOL)
-        user_main.linkage = 'internal'
-
-        for i, (pname, _) in enumerate(params):
-            user_main.args[i].name = pname
-
-        self.codegen.functions.definitions.emit_body(user_main, fn)
-        return user_main

@@ -1,5 +1,5 @@
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "emit, eat"
+# EXPECT_STDERR_CONTAINS: "emit, Builtin"
 # EXPECT_DUMP_SLIR: test_err_slir_conditional_move.slir
 #
 # Drop flags (ir.md 8.10, rule 4). In `feed` the string `word` is moved on one path of an

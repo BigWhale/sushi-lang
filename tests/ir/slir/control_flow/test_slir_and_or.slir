@@ -1,4 +1,4 @@
-unit test_err_slir_and_or
+unit test_slir_and_or
 
 fn both(_1: bool @guaranteed, _2: bool @guaranteed) -> bool {
     let _0: bool

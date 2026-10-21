@@ -7,8 +7,7 @@ body from the body and its side tables. A construct that the lowering does not h
 stops the body with the stop code CE0155 (`slir, <construct>`): the stage records the stop
 (`Stops.slir_stopped`) and the construct (`SlirStopped`, for the dump), and the analysis
 goes on with the next body. The verifier (`verify.py`, ir.md 8.13) checks a body that the
-lowering finished, and the body meets the next stage, which is not built yet
-(`Stops.finished`).
+lowering finished, and `SlirProgram` keeps it for the emitter (`backend/slir/`).
 
 The lowering handles the parameters, a `let`, a rebind, a call statement, a `return`, an
 `if`, a `while` with its `break` and `continue`, over literals, locals, the operators,
@@ -105,7 +104,7 @@ class SlirStage:
 
         A stop ends the lowering of the body: the stage records it with the file of the
         body. The verifier checks a function that the lowering finished (ir.md 8.13), and
-        the function meets the next stage.
+        the program keeps it for the emitter.
         """
         name = self.shir.decls.name_of(body.fn_id)
         drops = drop_type_names(tables.perk_impls)
@@ -119,7 +118,6 @@ class SlirStage:
             return
         self.verifier.verify(function, funcs=tables.funcs, drops=drops, filename=filename)
         self.slir.record(body.fn_id, function)
-        self.stops.finished(name, body.block.loc, filename)
 
 
 @dataclass(slots=True)

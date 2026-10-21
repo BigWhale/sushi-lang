@@ -22,7 +22,7 @@ and links:
 | Method | What it does |
 |---|---|
 | `compile_multi_unit` | the monolithic path: one module for the whole program, then the link |
-| `compile_single_unit_to_object` | the incremental path: one unit to one object |
+| `compile_single_unit_to_object` | the incremental path: the module of one unit (`build_module_single_unit`) to one object |
 | `compile_stdlib_to_object`, `compile_library_to_object` | a bitcode stdlib module or a binary library to an object, for the cache |
 | `compile_to_bitcode` | the bitcode of a `.slib` library |
 | `link_object_files` | the link of the objects with `cc` |
@@ -30,8 +30,15 @@ and links:
 The emit order in a module is: the declarations of the runtime and the libc externs, the
 user externs (`declare_user_externs`, `backend/runtime/externs/user_externs.py`), the
 constants and unit variables, the function declarations, and then the function bodies.
-`backend/functions/` holds the function manager: `declarations.py`, `definitions.py`, and
-`main_wrapper.py`, whose `emit_main` emits the C `main`. The C `main` calls the Sushi
+The declarations come from the AST. Each body comes from the `SlirFunction` of the
+analysis (`codegen_for` hands over the SLIR of the program as `SlirBodies`), through the
+SLIR emitter in `backend/slir/` (`emit_function`): every local is a slot in the entry
+block, and each SLIR block is one LLVM block. A SLIR shape that the emitter does not
+handle yet stops the compile with [`CE0155`](../error-catalog.md#ce0155) (`emit, <class>`)
+before any output is written; the incremental path builds the module of every unit
+before it writes the first object for this reason. `backend/functions/` holds the function
+manager: `declarations.py`, `definitions.py`, and `main_wrapper.py`, whose `emit_main`
+emits the C `main`. The C `main` calls the Sushi
 `main` (emitted as the internal function `user_main`), converts `argc`/`argv` to a
 `string[]` when `main` takes `args`, and returns the value of the Sushi `main` as the exit
 code. The Sushi `main` is bare ([`CE0106`](../error-catalog.md#ce0106) refuses a channel), so its value IS the exit code.

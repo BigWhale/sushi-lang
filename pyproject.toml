@@ -114,7 +114,7 @@ max-complexity = 32
 
 [tool.mypy]
 # Tier 5.2 ratchet. The CLEAN packages (internals, compiler, packager, sushi_stdlib,
-# semantics/shir, semantics/slir) are enforced by a blocking CI step that checks exactly those paths; the remaining
+# semantics/shir, semantics/slir, backend/slir) are enforced by a blocking CI step that checks exactly those paths; the remaining
 # backlog (~2950 across backend and semantics, mostly union-attr on stamped Optional
 # annotations) is burned down in later waves, with a non-blocking CI step printing
 # the full count so drift stays visible. No strictness flags yet.

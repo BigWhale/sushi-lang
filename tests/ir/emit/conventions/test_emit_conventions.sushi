@@ -1,0 +1,36 @@
+# EXPECT_RUNTIME_EXIT: 0
+#
+# Each parameter convention over plain scalars: a value parameter (`Guaranteed`), a `nom`
+# parameter (`Owned`), a `peek` parameter (`InGuaranteed`, by address) and a `poke`
+# parameter (`Inout`, by address, written through). The exit code is the count of the
+# checks that fail.
+
+fn twice(i32 n) i32:
+    return n * 2
+
+fn take(nom i32 n) i32:
+    return n - 1
+
+fn look(peek i32 n) i32:
+    return n + 100
+
+fn swap(poke i32 a, poke i32 b) ~:
+    let i32 t = a
+    a := b
+    b := t
+
+fn main() i32:
+    let i32 failed = 0
+    if (twice(21) != 42):
+        failed := failed + 1
+    let i32 k = 8
+    if (take(nom k) != 7):
+        failed := failed + 1
+    if (look(peek k) != 108):
+        failed := failed + 1
+    let i32 x = 1
+    let i32 y = 2
+    swap(poke x, poke y)
+    if (x != 2 or y != 1):
+        failed := failed + 1
+    return failed

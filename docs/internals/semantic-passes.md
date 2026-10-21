@@ -54,9 +54,11 @@ it finished to the SLIR lowering (`semantics/slir/lower.py`), which is not a pas
 one `SlirFunction` for each body, and stops at the first construct that it cannot lower
 yet. The SLIR verifier (`semantics/slir/verify.py`) checks each function that the
 lowering finished; a broken rule is the internal error
-[CE0158](../error-catalog.md#ce0158). A program with no error stops after the analysis with
-[CE0155](../error-catalog.md#ce0155) (`slir, <construct>`, or `emit, <body>` for a body
-that the SLIR lowering finished), and `--dump-shir` and `--dump-slir` are written first.
+[CE0158](../error-catalog.md#ce0158). A stop stops a program with no error after the
+analysis with [CE0155](../error-catalog.md#ce0155) (`slir, <construct>`), and `--dump-shir`
+and `--dump-slir` are written first. With no stop, the backend emits each function from its
+SLIR (`backend/slir/`), and the emitter stops at a SLIR shape that it does not handle yet
+(`emit, <class>`).
 
 `semantics/const_eval.py` is **not** a pass. Three callers reach it as a helper: the
 **AST builder**, which reads a fixed array's size while the unit is parsed (so a

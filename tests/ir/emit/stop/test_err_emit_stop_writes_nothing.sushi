@@ -1,0 +1,18 @@
+# RUN_IN_FIXTURE_DIR
+# OUTPUT_PATH: prog
+# EXPECT_ERROR_CODES_EXACT: CE0155
+# EXPECT_STDERR_CONTAINS: "emit, Str"
+# EXPECT_PATH_ABSENT: prog, prog.o, prog.ll, __sushi_cache__
+#
+# A SLIR shape that the emitter does not handle yet stops the compile with the stop code
+# at the span of its statement: here the string constant of the `let`. The program has two
+# units, so it takes the per-unit module path. The module of the helper unit is built
+# first, and the stop in `main` comes before any output: no object in the cache, no binary
+# and no LLVM text.
+
+use "helpers/count"
+
+fn main() i32:
+    let string word = "Mostly Harmless"
+    println(word)
+    return one() - 1

@@ -1,5 +1,5 @@
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "emit, main"
+# EXPECT_STDERR_CONTAINS: "emit, Str"
 # EXPECT_DUMP_SLIR: test_err_slir_let_rebind.slir
 #
 # A `let` of a string literal, and a rebind that reads the old value. The rebind computes

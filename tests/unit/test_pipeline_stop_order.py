@@ -10,9 +10,8 @@ the analysis goes on, so it can meet more than one. The pipeline reports ONE, af
 3. Else the first stop of the borrow pass, at the first construct that it cannot check.
 4. Else an error hole whose codes no error offered (`check_error_holes`).
 5. Else the first stop of SLIR lowering, at the first construct that it cannot lower.
-6. Else `emit, <body>`: the first body that SLIR lowering finished meets the stage after
-   it, which is not built yet.
-7. Else `emit, the program`: no body was lowered.
+6. Else no stop: every body that reached the SLIR lowering finished, and the program goes
+   on to the backend. A stop at `emit` comes from the emitter, not from this record.
 
 These tests call the record over data. They do not run the compiler.
 """
@@ -57,9 +56,8 @@ def test_the_first_typecheck_stop_is_kept() -> None:
     assert stops.first(None).params["construct"] == "Return"
 
 
-def test_a_typecheck_stop_comes_before_a_borrow_stop_a_hole_and_a_finished_body() -> None:
+def test_a_typecheck_stop_comes_before_a_borrow_stop_and_a_hole() -> None:
     stops = Stops()
-    stops.finished("main", _B, "main.sushi")
     stops.borrow_stopped(_borrow("If", _B))
     stops.stopped(_typecheck("Call"))
     hole = StageStop("lowering, error hole", "IndexAccess with no CE2122", _B)
@@ -82,9 +80,8 @@ def test_the_first_lift_stop_is_kept() -> None:
     assert stop.span == _A
 
 
-def test_a_lift_stop_comes_before_a_borrow_stop_a_hole_and_a_finished_body() -> None:
+def test_a_lift_stop_comes_before_a_borrow_stop_and_a_hole() -> None:
     stops = Stops()
-    stops.finished("main", _B, "main.sushi")
     stops.borrow_stopped(_borrow("If", _B))
     stops.lift_stopped(_lift("Lambda"))
     hole = StageStop("lowering, error hole", "IndexAccess with no CE2122", _B)
@@ -98,17 +95,15 @@ def test_the_first_borrow_stop_is_kept() -> None:
     assert stops.first(None).params == {"stage": "borrow", "construct": "If"}
 
 
-def test_a_borrow_stop_comes_before_a_hole_and_a_finished_body() -> None:
+def test_a_borrow_stop_comes_before_a_hole() -> None:
     stops = Stops()
-    stops.finished("main", _B, "main.sushi")
     stops.borrow_stopped(_borrow("Match"))
     hole = StageStop("lowering, error hole", "IndexAccess with no CE2122", _B)
     assert stops.first(hole).params == {"stage": "borrow", "construct": "Match"}
 
 
-def test_a_hole_comes_before_a_slir_stop_and_a_finished_body() -> None:
+def test_a_hole_comes_before_a_slir_stop() -> None:
     stops = Stops()
-    stops.finished("main", _B, "main.sushi")
     stops.slir_stopped(_slir("Call", _B))
     hole = StageStop("lowering, error hole", "IndexAccess with no CE2122", _A)
     assert stops.first(hole) is hole
@@ -123,24 +118,15 @@ def test_the_first_slir_stop_is_kept() -> None:
     assert stop.span == _A
 
 
-def test_a_slir_stop_comes_before_a_finished_body() -> None:
-    stops = Stops()
-    stops.finished("helper", _A, "main.sushi")
-    stops.slir_stopped(_slir("ExprStmt", _B))
-    assert stops.first(None).params == {"stage": "slir", "construct": "ExprStmt"}
+def test_a_program_with_no_stop_goes_on_to_the_backend() -> None:
+    assert Stops().first(None) is None
 
 
-def test_the_first_finished_body_meets_the_emit_stage() -> None:
-    stops = Stops()
-    stops.finished("helper", _A, "main.sushi")
-    stops.finished("main", _B, "main.sushi")
-    stop = stops.first(None)
-    assert stop.params == {"stage": "emit", "construct": "helper"}
-    assert (stop.span, stop.filename) == (_A, "main.sushi")
+def test_a_hole_alone_is_the_stop() -> None:
+    hole = StageStop("lowering, error hole", "IndexAccess with no CE2122", _A)
+    assert Stops().first(hole) is hole
 
 
-def test_a_program_with_no_lowered_body_stops_at_emit() -> None:
-    stop = Stops().first(None)
-    assert stop.code == "CE0155"
-    assert stop.params == {"stage": "emit", "construct": "the program"}
-    assert stop.span is None
+def test_the_record_has_no_emit_stage() -> None:
+    assert not hasattr(Stops(), "finished")
+    assert not hasattr(Stops(), "next_stage")

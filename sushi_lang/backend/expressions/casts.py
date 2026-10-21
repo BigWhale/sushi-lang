@@ -1,6 +1,6 @@
 """Type casting operations for the Sushi language compiler."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.internals.errors import raise_internal_error
@@ -10,6 +10,7 @@ from sushi_lang.backend.utils import require_builder
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.conversions import Conversion
+    from sushi_lang.semantics.typesys import Type
 
 
 def emit_conversion_call(codegen: 'LLVMCodegen', conversion: 'Conversion',
@@ -117,8 +118,14 @@ def emit_cast_expression(codegen: 'LLVMCodegen', expr: CastExpr) -> ir.Value:
                                          expr.source_type,
                                          ownership.ConsumingUse.RECEIVER)
 
+    return emit_value_cast(codegen, source_value, expr.source_type, expr.target_type)
+
+
+def emit_value_cast(codegen: 'LLVMCodegen', source_value: ir.Value,
+                    source_type: 'Optional[Type]', target_type: 'Type') -> ir.Value:
+    """A numeric cast of one LLVM value: the AST emitter and the SLIR emitter call it."""
     source_llvm_type = source_value.type
-    target_llvm_type = codegen.types.ll_type(expr.target_type)
+    target_llvm_type = codegen.types.ll_type(target_type)
 
     if source_llvm_type == target_llvm_type:
         return source_value
@@ -127,8 +134,8 @@ def emit_cast_expression(codegen: 'LLVMCodegen', expr: CastExpr) -> ir.Value:
     dst_category = classify_type_for_cast(target_llvm_type)
 
     from sushi_lang.semantics.type_predicates import is_unsigned_int
-    source_unsigned = is_unsigned_int(expr.source_type)
-    target_unsigned = is_unsigned_int(expr.target_type)
+    source_unsigned = is_unsigned_int(source_type)
+    target_unsigned = is_unsigned_int(target_type)
 
     cast_ops = {
         ('int', 'int'): lambda src, dst: cast_int_to_int(codegen, src, dst, source_unsigned),

@@ -63,6 +63,11 @@ class Convention(Enum):
         """True when the callee borrows the value and never writes it: the default and `peek`."""
         return self in (Convention.GUARANTEED, Convention.IN_GUARANTEED)
 
+    @property
+    def by_address(self) -> bool:
+        """True when the value crosses as the address of the caller's place: `peek` and `poke`."""
+        return self in (Convention.IN_GUARANTEED, Convention.INOUT)
+
 
 _CONVENTIONS: Mapping[ParamMode, Convention] = MappingProxyType({
     ParamMode.BORROW: Convention.GUARANTEED,

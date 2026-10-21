@@ -31,6 +31,7 @@ tests/array/nested/hashmap/test_err_nested_dynamic_inside_fixed_key.sushi
 tests/array/refused_conversions/test_err_cast_array.sushi
 tests/basic/continuation/test_err_multiline_without_parens.sushi
 tests/basic/expressions/test_err_non_bool_conditions.sushi
+tests/basic/expressions/test_run_arithmetic_validation.sushi
 tests/basic/function_calls/test_err_duplicate_params.sushi
 tests/basic/function_calls/test_err_function_call_arg_count.sushi
 tests/basic/function_calls/test_err_function_call_type_mismatch.sushi
@@ -44,6 +45,7 @@ tests/basic/multifile/test_err_multifile_private.sushi
 tests/basic/print_output/test_err_print_result.sushi
 tests/basic/print_output/test_err_println_result_value.sushi
 tests/basic/print_top_level_arrays/test_err_toplevel_array_display_bound_unchanged.sushi
+tests/basic/smoke/test_minimal.sushi
 tests/basic/struct_basics/test_err_direct_recursion.sushi
 tests/basic/syntax_errors/test_err_syntax_bad_dedent.sushi
 tests/basic/syntax_errors/test_err_syntax_basic.sushi
@@ -78,6 +80,7 @@ tests/constants/take/test_err_const_move_let.sushi
 tests/constants/take/test_err_const_move_nom_arg.sushi
 tests/control_flow/assert/test_err_assert_fn_is_reserved.sushi
 tests/control_flow/assert/test_err_assert_is_reserved.sushi
+tests/control_flow/block_scopes/test_nested_scopes.sushi
 tests/control_flow/conditions/test_err_result_and_operand.sushi
 tests/control_flow/conditions/test_err_result_blank_if.sushi
 tests/control_flow/conditions/test_err_result_bool_if.sushi
@@ -87,6 +90,7 @@ tests/control_flow/dead_code/test_err_dead_after_break.sushi
 tests/control_flow/dead_code/test_err_dead_after_if_else.sushi
 tests/control_flow/dead_code/test_err_dead_after_return.sushi
 tests/control_flow/foreach_discard/test_err_foreach_discard_is_not_a_name.sushi
+tests/control_flow/loop_break_continue/test_break_continue.sushi
 tests/control_flow/loop_break_continue/test_err_break_continue_outside_loop.sushi
 tests/control_flow/match_alternatives/test_err_alt_double_bar.sushi
 tests/control_flow/match_alternatives/test_err_alt_or_keyword.sushi
@@ -438,13 +442,17 @@ tests/ir/borrow/straight/test_err_borrow_poke_of_a_constant.sushi
 tests/ir/borrow/straight/test_err_borrow_poke_of_a_peek.sushi
 tests/ir/borrow/straight/test_err_borrow_rebind.sushi
 tests/ir/borrow/straight/test_err_borrow_try_string.sushi
-tests/ir/borrow/template_check/test_err_borrow_template_check_meets_no_slir.sushi
+tests/ir/borrow/template_check/test_borrow_template_check_meets_no_slir.sushi
+tests/ir/emit/conventions/test_emit_conventions.sushi
+tests/ir/emit/scalars/test_emit_scalars.sushi
+tests/ir/emit/stop/test_err_emit_stop_writes_nothing.sushi
+tests/ir/emit/two_units/test_emit_two_units.sushi
 tests/ir/lift/test_err_lift_empty_table.sushi
+tests/ir/shir/empty_body/test_shir_empty_body.sushi
 tests/ir/shir/expressions/test_err_shir_expr_borrow_operand.sushi
 tests/ir/shir/names/test_err_shir_name_unresolved.sushi
+tests/ir/shir/operators/test_shir_operators.sushi
 tests/ir/shir/statements/test_err_shir_stmt_let_untyped.sushi
-tests/ir/slir/control_flow/test_err_slir_and_or.sushi
-tests/ir/slir/control_flow/test_err_slir_and_or_rebind.sushi
 tests/ir/slir/control_flow/test_err_slir_break_flag.sushi
 tests/ir/slir/control_flow/test_err_slir_conditional_move.sushi
 tests/ir/slir/control_flow/test_err_slir_if.sushi
@@ -452,6 +460,8 @@ tests/ir/slir/control_flow/test_err_slir_try_argument.sushi
 tests/ir/slir/control_flow/test_err_slir_try_let.sushi
 tests/ir/slir/control_flow/test_err_slir_while_break_continue.sushi
 tests/ir/slir/control_flow/test_err_slir_while_short_circuit.sushi
+tests/ir/slir/control_flow/test_slir_and_or.sushi
+tests/ir/slir/control_flow/test_slir_and_or_rebind.sushi
 tests/ir/slir/conventions/test_err_slir_conventions.sushi
 tests/ir/slir/interp/test_err_slir_interp.sushi
 tests/ir/slir/let_rebind/test_err_slir_let_rebind.sushi
@@ -460,7 +470,7 @@ tests/ir/slir/move_rebind/test_err_slir_move_rebind_return.sushi
 tests/ir/slir/move_rebind/test_err_slir_move_rebind_use.sushi
 tests/ir/slir/owned_param/test_err_slir_owned_param.sushi
 tests/ir/slir/result_return/test_err_slir_result_return.sushi
-tests/ir/slir/return_literal/test_err_slir_return_literal.sushi
+tests/ir/slir/return_literal/test_slir_return_literal.sushi
 tests/ir/slir/stopped/test_err_slir_stopped_function.sushi
 tests/ir/slir/stopped/test_err_slir_stopped_kinds.sushi
 tests/ir/spine/arg_count/test_err_spine_arg_count.sushi
@@ -666,6 +676,7 @@ tests/operators/deep_literal_operand_nests/test_err_deep_left_literal_nest_overf
 tests/operators/deep_literal_operand_nests/test_err_deep_right_literal_byte_nest.sushi
 tests/operators/deep_operator_nests/test_err_deep_nest_inner_overflow.sushi
 tests/operators/deep_operator_nests/test_err_deep_nest_two_overflows.sushi
+tests/operators/logical_evaluation/test_logical.sushi
 tests/operators/logical_operands/test_err_and_integer_operand.sushi
 tests/operators/logical_operands/test_err_not_integer_operand.sushi
 tests/operators/logical_operands/test_err_not_string_operand.sushi
