@@ -267,11 +267,6 @@ class _Lowering:
         if owning and self.placement.is_borrowed(ident):
             raise StageStop(STAGE, "borrowed rebind", stmt.loc)
         if not self.placement.holds_live_value(ident):
-            if owning and not self.answers.ownership.is_conditionally_moved(target.local):
-                er.raise_internal_error(
-                    "CE0000", span=stmt.loc,
-                    detail="SLIR lowering rebinds a moved local that borrow does not mark "
-                           "conditionally moved")
             value = self.value(stmt.value)
             self.emit(self.placement.drop_old_value(ident, stmt.loc))
             self.write(p.Local(ident), value, stmt.loc)

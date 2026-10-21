@@ -1,0 +1,16 @@
+# EXPECT_ERROR_CODES_EXACT: CE0155
+# EXPECT_STDERR_CONTAINS: "emit, eat"
+# EXPECT_DUMP_SLIR: test_err_slir_move_rebind_use.slir
+#
+# A local that is moved, rebound and read. The rebind of the moved local drops nothing,
+# and the exit drops the new value.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn main() i32:
+    let string word = "{1}"
+    eat(nom word)
+    word := "{2}"
+    println(word)
+    return 0

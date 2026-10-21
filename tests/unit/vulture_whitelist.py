@@ -143,6 +143,9 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/ownership.py", "record_in_place",
      "kept for the iterators group C3: the borrow pass on SHIR writes the walk in place of "
      "a loop over an iterator value or a next() type"),
+    ("sushi_lang/semantics/shir/ownership.py", "is_conditionally_moved",
+     "kept for P2.9b: SHIR-to-SLIR lowering gives a drop flag to a local whose state "
+     "differs between the paths that meet at a join"),
     ("sushi_lang/semantics/shir/lift.py", "record_*",
      "kept for the closures group of Phase 5: the lift pass on SHIR writes the symbol and "
      "the environment of each Lambda, where it stops today"),

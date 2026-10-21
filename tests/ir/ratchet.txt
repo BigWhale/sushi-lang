@@ -446,6 +446,9 @@ tests/ir/shir/statements/test_err_shir_stmt_let_untyped.sushi
 tests/ir/slir/conventions/test_err_slir_conventions.sushi
 tests/ir/slir/interp/test_err_slir_interp.sushi
 tests/ir/slir/let_rebind/test_err_slir_let_rebind.sushi
+tests/ir/slir/move_rebind/test_err_slir_move_rebind_move.sushi
+tests/ir/slir/move_rebind/test_err_slir_move_rebind_return.sushi
+tests/ir/slir/move_rebind/test_err_slir_move_rebind_use.sushi
 tests/ir/slir/owned_param/test_err_slir_owned_param.sushi
 tests/ir/slir/result_return/test_err_slir_result_return.sushi
 tests/ir/slir/return_literal/test_err_slir_return_literal.sushi
