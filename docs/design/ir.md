@@ -1150,6 +1150,7 @@ so one binding list serves the arm whatever alternative matched.
 | `typecheck` | SHIR | `ShirBody` | `TypeckResults` (S5) |
 | `lift` | SHIR | `ShirBody`, `TypeckResults`, `Bindings` | `LiftResults` (Q8) |
 | `borrow` | SHIR | `ShirBody`, `TypeckResults`, `LiftResults`, the destroy-effect summary | `OwnershipResults` |
+| *SLIR lowering* | SHIR | `ShirBody`, `TypeckResults`, `OwnershipResults`, the declaration (for the symbol and the return type); the verifier reads the function table (8.13) | `SlirFunction` (8.2) |
 
 A template check body runs the same three SHIR passes, at opaque type arguments, and stops
 there: it never lowers to SLIR (4.3).
@@ -1201,22 +1202,30 @@ The rows of `OwnershipResults`:
 - The `Ownership` of a consuming use is the enum of `semantics/ownership.py`: `MOVE`,
   `ADOPT` or `REJECT`, the answer of `classify()`. SLIR lowering makes the operand from
   the row and the shape of the operand alone: `MOVE` gives `Move`; `ADOPT` on a place
-  gives `Copy` (by the table of `classify()`, a place that gets `ADOPT` always holds a
-  PLAIN value); `ADOPT` on a fresh value gives `Move` of its temporary. `REJECT` is an
-  error of `borrow`, except at two positions, where it is a borrowed view with no error:
-  the value of an `Assign` with `is_init` (a let-borrow of the owner) and the operand of a
-  `Try` that reads through a borrowed owning wrapper. There SLIR lowering gives a `Copy` of
-  the place, and the binding owns nothing and gets no drop. A `REJECT` row at any other
-  position of a body that `borrow` ended with no error is the internal error CE0157 of the
-  completeness check. `ADOPT` never gives `Copy` of a fresh value: a fresh owning
+  gives `Copy`; `ADOPT` on a fresh value gives `Move` of its temporary. By the table of
+  `classify()`, a place that gets `ADOPT` holds a PLAIN value, or a `string` that is bound
+  directly from a literal: such a string owns no heap and copies freely. Its local keeps
+  its drop at each exit, and the emitter guards the drop of a string with the `owned`
+  byte of the string, so that drop frees nothing. So the verifier refuses a `Copy` of an
+  owning value into an `Owned` argument for every type except `string` (8.13). `REJECT` is
+  an error of `borrow`, except at two positions, where it is a borrowed view with no
+  error: the value of an `Assign` with `is_init` (a let-borrow of the owner) and the
+  operand of a `Try` that reads through a borrowed owning wrapper. SLIR lowering does not
+  lower a borrowed view yet: a `REJECT` row stops the body with `slir, borrowed view`
+  (8.2), and the operand that a borrowed view gets waits for a ruling. A `REJECT` row at
+  any other position of a body that `borrow` ended with no error is the internal error
+  CE0157 of the completeness check. `ADOPT` never gives `Copy` of a fresh value: a fresh owning
   temporary would then be dropped twice. (Ruled provisionally 2026-10-21, for a
   confirmation before SHIR-to-SLIR lowering.) The key is the `shir_id`
   of the consumed node. A capture has no node in the body, so its
   row has the key of the capture type in 7.3: the `shir_id` of the `Lambda` and the
   `LocalId` of the captured local.
 - A conditionally moved local is a row by its `LocalId`. A local with no row is moved on
-  no path, or moved on every path at each exit of its scope, and a `move` row of the local
-  tells the two apart (8.10, rule 3). SLIR lowering gives each row a drop flag (8.10,
+  no path, or moved on every path, at each exit of its scope and at each rebind of it.
+  SLIR lowering reads no row to tell the two apart: it tracks the state of each owning
+  local along its walk, from the `move` rows of the consuming uses, and on the straight
+  line that state is exact (8.10, rule 3). A local gets a drop flag only where its state
+  differs between the paths that meet at a join, and such a local must have a row (8.10,
   rule 4).
 - LENT or OWNED (a bool, true for LENT) and the heap decision of a lent iterator (a bool)
   are rows by the `shir_id` of the producer call or the lazy-adapter call.
@@ -1252,7 +1261,9 @@ finished with no error, with the tables that `typecheck` read the body in: `type
 gives it to `lift`, and `lift` gives it to `borrow`. An error in the header of a function
 or a method (the type of a parameter, the return type, the channel) is an error of its
 body for `typecheck`, so such a body does not go to `lift` either: a parameter with an
-unknown type would reach SLIR as a local with no type. A stop of a pass ends the walk of
+unknown type would reach SLIR as a local with no type. In the same way, `typecheck` checks
+the path faults of a function or a method (CE0140 and CE0107) before it gives the body to
+`lift`, so a body with one of them meets no later stage. A stop of a pass ends the walk of
 its body, and the next pass does not get the body. The body of a template check is read
 in the overlay of its check, and an error of `borrow` there refuses the template as an
 error of `typecheck` does.
@@ -1480,15 +1491,16 @@ a template of a binary library) goes into the module of the unit that holds its 
 
 While the migration is in progress, a construct that the lowering does not handle yet
 stops the body with the stop code (`slir, <construct>`). The construct is the name of the
-SHIR class, or one of these names: `Initializer` for the body of a constant, `method` for
-the body of an extension method, `borrowed view` for a `REJECT` row (7.9), `borrowed
-rebind` for a rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns,
-`borrowed try` for a `Try` over an owning wrapper that the body only reads (a copy of it
-would drop its payload twice), `conversion` for a `Try` that calls a declared conversion
-(today `typecheck` stops there first), `library function` for a free
-callee whose row names no declaring unit (a function of a binary library, whose symbol is
-its `link_symbol`), and `bloom` for a bloom argument. The dump prints
-such a function as ONE line in place of its body, `fn <name>: stopped (slir, <construct>)`,
+SHIR class, or one of these names: `Initializer` for the body of a constant; `generic
+instance`, `conversion`, `perk method` and `method` for the body of a monomorphized generic
+instance, of a conversion, of a perk method and of an extension method; `borrowed view`
+for a `REJECT` row (7.9), `borrowed rebind` for a rebind of a `Guaranteed` or an
+`InGuaranteed` parameter that owns, `borrowed try` for a `Try` over an owning wrapper that
+the body only reads (a copy of it would drop its payload twice), `conversion` also for a
+`Try` that calls a declared conversion (today `typecheck` stops there first), `library
+function` for a free callee whose row names no declaring unit (a function of a binary
+library, whose symbol is its `link_symbol`), and `bloom` for a bloom argument. The dump
+prints such a function as ONE line in place of its body, `fn <name>: stopped (slir, <construct>)`,
 so that a golden file shows the progress of each function. A body that the lowering
 finished stops at the next stage, `emit` (`emit, <body>`), until the emitter of a
 `SlirFunction` is built. The pipeline reports one stop: a stop of `typecheck`, else of
@@ -1688,8 +1700,11 @@ Seven rules. They encode the two drop regimes (a local moved on every path has n
 local moved on some paths has a drop flag), the rebind order of 4.6, and the loop's own
 locals, and nothing else:
 
-1. An owning local gets `StorageLive` at its declaration and `StorageDead` after its last
-   use in the enclosing block.
+1. Each local that is not `_0` or a parameter gets `StorageLive` right before its first
+   write, and `StorageDead` at each exit of its scope: a temporary at each exit of its
+   statement, and a named local and its flag at each exit of its block, after the drop of
+   the local (rule 2). The local of a condition and the local of a `Discriminant` follow
+   the rule of 8.9.
 2. `Drop(place)` is emitted on every exit path of the owning scope, before `StorageDead`,
    newest declaration first (reverse declaration order). On the path of a `return`, the
    value goes into `_0` FIRST and the drops come after it, because the value can read a
@@ -1874,6 +1889,8 @@ Runs after lowering, before the backend. It checks:
 - every local is typed, and every `Place` type-checks against it
 - every `Downcast` names a real variant of the place's enum
 - no use of a place after a `Move` of it, on any path
+- no read and no `Move` of a local that holds no value on a path: before its first write,
+  or after its `StorageLive` or its `StorageDead`
 - a `Move` of a sub-place (a `Field`, a `Downcast`) is a `Move` of its root local, and
   no local is ever PARTIALLY moved: lowering drops the sibling owning fields first (8.9,
   `Take`), or the sibling payloads of a pattern take, because an arm takes the variant
@@ -1884,10 +1901,12 @@ Runs after lowering, before the backend. It checks:
 - every `Drop` targets an owning type
 - every owning local reaches exactly one of: a `Drop`, a `DropIfSet`, or a `Move` on
   every path
+- `_0` holds a value on every path to a `return`
 - every `BeginBorrow` has exactly one matching `EndBorrow` on every path
 - every argument `Convention` matches the callee's declared parameter, with one
   carve-out: the tail of a `var_arg` extern has no declared parameters, so the rule
   applies to the declared prefix only
+- no `Copy` of an owning value into an `Owned` argument, except a `string` (7.9)
 - no `Binary` carries `and` or `or` (8.9)
 - every `Trap` code is a registered RExxxx, with the operand count its format string needs
 - every statement and terminator carries a `Span` (G9)
@@ -1905,12 +1924,20 @@ write over it, and to a `return`, the value is moved or dropped exactly one time
 is false must have moved the local; so a flagged local can reach a plain `Drop` where its
 state is exact, and a `DropIfSet` where it is unknown (8.10, rule 4). A borrowed parameter
 never drops and never moves, and an `Inout` parameter holds a value again at the `return`.
-A `Trap` ends the program and needs no drop. The declared parameters of a `Direct` callee
-come from the function table, and a `var_arg` extern compares its declared prefix alone.
-While no lowering makes a `BeginBorrow`, the rule of the borrow regions is not checked. A
-`Global` place has no type in SLIR, so a projection of a `Global` is not checked. The
-negative case of each rule is a pytest test over a hand-built function
-(`tests/unit/test_slir_verifier.py`), because a correct lowering makes none.
+A `Trap` ends the program and needs no drop. A read or a `Move` of a local in the state
+"no value" is refused, and so is a `return` on a path where `_0` holds no value. The
+declared parameters of a `Direct` callee come from the function table (`funcs.by_unit`),
+which the verifier reads at each call, so a generic instance that a later body declares is
+found too. A `Direct` callee with no row there is CE0158. Today only a free function of the
+build has a row: the group that first emits another `Direct` callee (an extern, a method, a
+conversion, a function of a library) adds its row, with `var_arg` for a variadic extern.
+The comparison of the declared prefix alone is in the code already, for that day. The
+verifier does not check a shape that no lowering makes yet, and it refuses such a shape
+with the internal error CE0000 (the growth rule): a `BeginBorrow` or an `EndBorrow`, a
+projection of a `Global` (a `Global` has no type in SLIR), and a `Drop` or a `DropIfSet`
+of a place that is no local. The negative case of each rule is a pytest test over a
+hand-built function (`tests/unit/test_slir_verifier.py`), because a correct lowering makes
+none.
 
 This is where most of the 250 backend internal errors go. One gate, one message, one source
 location, asked once.
