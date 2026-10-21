@@ -451,6 +451,7 @@ tests/ir/slir/control_flow/test_err_slir_if.sushi
 tests/ir/slir/control_flow/test_err_slir_try_argument.sushi
 tests/ir/slir/control_flow/test_err_slir_try_let.sushi
 tests/ir/slir/control_flow/test_err_slir_while_break_continue.sushi
+tests/ir/slir/control_flow/test_err_slir_while_short_circuit.sushi
 tests/ir/slir/conventions/test_err_slir_conventions.sushi
 tests/ir/slir/interp/test_err_slir_interp.sushi
 tests/ir/slir/let_rebind/test_err_slir_let_rebind.sushi
