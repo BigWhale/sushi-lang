@@ -1528,7 +1528,10 @@ While the migration is in progress, a SLIR shape that the emitter does not handl
 stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
 example `emit, Str` or `emit, Drop`), at the span of its statement or terminator. The stop
 comes before any output: the incremental path builds the module of every unit before it
-writes the first object, so no object, no binary and no `.ll` text is written.
+writes the first object, so no object, no binary and no `.ll` text is written. This order
+serves the migration alone: when no shape stops the emitter, the path can again build and
+write one unit at a time. A stop of the emitter renders as a stop of the analysis does
+(one `except StageStop` in `compile_multi_file`): it is a limit of the compiler, not a bug.
 
 ### 8.3 Conventions
 
