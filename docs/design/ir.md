@@ -1477,11 +1477,12 @@ unit that holds its body.
 
 While the migration is in progress, a construct that the lowering does not handle yet
 stops the body with the stop code (`slir, <construct>`). The construct is the name of the
-SHIR class (`Match`, `Cast`, `ConstRef`; `Try` for a `Try` over an owning wrapper that the
-body only reads), or one of these names: `Initializer` for the body of a constant,
-`method` for the body of an extension method, `borrowed view` for a `REJECT` row (7.9),
-`borrowed rebind` for a rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns,
-`conversion` for a `Try` that calls a declared conversion, `library function` for a free
+SHIR class, or one of these names: `Initializer` for the body of a constant, `method` for
+the body of an extension method, `borrowed view` for a `REJECT` row (7.9), `borrowed
+rebind` for a rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns,
+`borrowed try` for a `Try` over an owning wrapper that the body only reads (a copy of it
+would drop its payload twice), `conversion` for a `Try` that calls a declared conversion
+(today `typecheck` stops there first), `library function` for a free
 callee whose row names no declaring unit (a function of a binary library, whose symbol is
 its `link_symbol`), and `bloom` for a bloom argument. The dump prints
 such a function as ONE line in place of its body, `fn <name>: stopped (slir, <construct>)`,
@@ -1666,8 +1667,13 @@ print values: [RE2020](../error-catalog.md#re2020) prints the index and the size
 
 A condition (of an `If` or a `While`) is evaluated in a scope of its own, whose
 temporaries die before the `SwitchInt`. A condition that is no local and no constant goes
-into a `bool` local that the `SwitchInt` of its block reads; like the local of a
-`Discriminant`, it gets no storage marker.
+into a `bool` local: it gets `StorageLive` before its first write, and `StorageDead` at the
+top of each block that its `SwitchInt` goes to (the rule of rustc); an exit inside the
+condition (the error path of a `Try`) ends it too. So each target of that `SwitchInt` is a
+block that only the switch reaches: an `If` with no `else` sends its zero edge to a block
+of its own that goes to the join, and a `While` sends its zero edge to a block of its own
+that goes to the exit, which a `Break` reaches too. Only the local of a `Discriminant`,
+which the terminator of its own block reads, gets no storage marker.
 
 Four SHIR nodes vanish at this boundary: `Try`, `Interp`, `Destructure` and `Take`. They
 were kept in SHIR only so that `typecheck` and `borrow` could report against the source
@@ -1690,7 +1696,11 @@ locals, and nothing else:
 3. A local that is moved at an exit gets no drop at all. SLIR lowering tracks the state of
    each owning local along its own walk, and the `move` rows of `borrow` are the ONLY
    source of a move: lowering never classifies a use again. A `move` row at a `LocalRef`
-   of the local (`move LocalRef(<local>)`) or at a capture of it marks the local moved;
+   of the local (`move LocalRef(<local>)`) or at a capture of it marks the local moved at
+   the statement that consumes the operand (the call or the store), never where the
+   operand is built: an exit between the two (the error path of a `Try` in a later
+   argument) still drops the local. The same holds for a temporary that is read with
+   `Move`, and a move of a projection (`move ((_3 as Ok).0)`) moves its local;
    its declaration and each rebind of it mark it live. At an exit, a live local gets
    `Drop` and a moved local gets nothing; at a rebind, a live old value drops and a moved
    one drops nothing (rule 6). While every path that reaches a point gives a local one
@@ -1734,7 +1744,8 @@ locals, and nothing else:
    value is live: a live one drops and a moved one drops nothing, and the store makes the
    local live. When the old value is live, the new value goes into a temporary first,
    unless it is a constant, and the store moves the temporary (`_2 = ...`, `Drop(_1)`,
-   `_1 = move _2`). A rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns
+   `_1 = move _2`). A new value that is `and` or `or` always goes into a temporary first,
+   because its left operand is written before its right operand reads the old value. A rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns
    is a stop of the lowering (`slir, borrowed rebind`) until a group rules what the
    callee owns after it.
 7. The hidden iterator local of a `Protocol` or an `IteratorValue` loop, and the item that
