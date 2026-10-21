@@ -47,6 +47,7 @@ from typing import Any, Callable, Iterator, TypeAlias
 from sushi_lang.semantics.generics.iterators import is_lazy_adapter, produces_from_a_container
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
@@ -197,12 +198,6 @@ def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
     return borrowed
 
 
-def _reads_a_borrow(operand: e.ShirExpr, borrowed: set[LocalId]) -> bool:
-    if isinstance(operand, e.Try):
-        return _reads_a_borrow(operand.inner, borrowed)
-    return isinstance(operand, e.LocalRef) and operand.local in borrowed
-
-
 def borrowed_views(body: ShirBody, typeck: TypeckResults,
                    ownership: OwnershipResults) -> set[ShirId]:
     """The two positions where a REJECT row is a borrowed view and no error: the value of a
@@ -214,7 +209,7 @@ def borrowed_views(body: ShirBody, typeck: TypeckResults,
     for _path, value in walk(body.block, "block"):
         if isinstance(value, s.Assign) and value.is_init:
             views.add(value.value.shir_id)
-        elif isinstance(value, e.Try) and _reads_a_borrow(value.inner, borrowed):
+        elif isinstance(value, e.Try) and walk_place(value.inner, Step.TRY).local in borrowed:
             views.add(value.inner.shir_id)
     return views
 
