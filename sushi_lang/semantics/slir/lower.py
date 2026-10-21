@@ -52,7 +52,6 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import ExtendDef, FuncDef
 from sushi_lang.semantics.channel import channel_result, has_channel
 from sushi_lang.semantics.drop_set import drop_type_names
-from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.param_modes import Convention
@@ -79,7 +78,7 @@ from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.verify import SlirVerifier
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type, owns_resource
-from sushi_lang.semantics.unit_symbols import declaring_unit, emitted_symbol
+from sushi_lang.semantics.unit_symbols import declaring_unit, function_symbol
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.decls import DeclNames
@@ -633,7 +632,7 @@ class _Lowering:
             if resolved.unit is None:
                 raise StageStop(STAGE, "library function", node.loc)
             name = self.decls.name_of(callee.decl).rpartition(".")[2]
-            return st.Direct(emitted_symbol(name, resolved.unit), name)
+            return st.Direct(function_symbol(name, resolved.unit), name)
         if isinstance(callee, Intrinsic):
             return st.Builtin(callee, tuple(self.display_type(node.shir_id, index, node.loc)
                                             for index in range(len(node.args))))
@@ -775,13 +774,11 @@ def _constant(lit: e.Lit, typeck: TypeckResults) -> k.Constant:
 
 
 def _symbol(decl: object, home: Optional[str], body: ShirBody) -> str:
-    """The symbol of the function in its module: `user_main` for the body of `main`. A
-    body that is not a free function stops with the name of its kind."""
+    """The symbol of the function in its module (`function_symbol`). A body that is not a
+    free function stops with the name of its kind."""
     if not isinstance(decl, FuncDef) or len(body.params) > len(decl.params):
         raise StageStop(STAGE, _kind(decl, body), body.block.loc)
-    if decl.name == "main":
-        return USER_MAIN_SYMBOL
-    return emitted_symbol(decl.name, home)
+    return function_symbol(decl.name, home)
 
 
 def _kind(decl: object, body: ShirBody) -> str:

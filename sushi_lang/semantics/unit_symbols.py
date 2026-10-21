@@ -50,6 +50,21 @@ def emitted_symbol(name: str, unit_name: Optional[str] = None,
     return link_symbol or mangle_unit_symbol(unit_name, name)
 
 
+def function_symbol(name: str, unit_name: Optional[str]) -> str:
+    """The symbol of the body of a free function: the ONE derivation (docs/design/ir.md 8.2).
+
+    SLIR lowering names the definition (`SlirFunction.symbol`) and the callee of a call
+    (`Direct`) with it, the declaration round of the back end names the LLVM function with
+    it, and the SLIR verifier finds the declared parameters of a callee with it. The body of
+    `main` is `user_main`: the C `main` that calls it is the back end's own.
+    """
+    from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
+
+    if name == "main":
+        return USER_MAIN_SYMBOL
+    return emitted_symbol(name, unit_name)
+
+
 def declaring_unit(fn: object, unit_name: Optional[str]) -> Optional[str]:
     """Whose symbol a function declaration takes: the back end and SLIR lowering ask here.
 

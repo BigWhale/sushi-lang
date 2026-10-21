@@ -53,7 +53,7 @@ from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, PointerType, ReferenceType,
     StructType, Type, UnknownType, owns_resource,
 )
-from sushi_lang.semantics.unit_symbols import emitted_symbol
+from sushi_lang.semantics.unit_symbols import function_symbol
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FunctionTable
@@ -114,7 +114,7 @@ def declared_params(funcs: FunctionTable, callee: st.Direct) -> Optional[Declare
     name in the unit whose symbol is the symbol of the callee."""
     for unit, own in funcs.by_unit.items():
         sig = own.get(callee.name)
-        if sig is not None and emitted_symbol(callee.name, unit) == callee.symbol:
+        if sig is not None and function_symbol(callee.name, unit) == callee.symbol:
             return DeclaredParams(tuple(mode.convention for mode in declared_modes(sig.params)))
     return None
 
