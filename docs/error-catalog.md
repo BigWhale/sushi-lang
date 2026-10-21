@@ -1295,6 +1295,14 @@ The typecheck pass writes each answer that it gives into the table of the body (
 
 The borrow pass and the lift pass each write their answers into a table of the body ([the IR design](design/ir.md)): borrow the ownership of each consuming use, the state of each iterator and the walk of each loop, lift the symbol and the environment of each lambda. No node of the body holds an answer. When a pass ends on a body with no error, a check walks the body again and finds each answer that a node needs and that the table does not hold. Such a gap means that the pass did not answer for a part of the body, and a later stage would then read no answer. This is a fault in the compiler, not in the program; please report the program.
 
+### CE0158 {#ce0158}
+
+**Error** · internal
+
+**Message:** `the SLIR of the function '{function}' breaks the verifier rule '{rule}': {detail}`
+
+The SLIR lowering makes one SLIR function from each body ([the IR design](design/ir.md)). Before the function goes to the next stage, the SLIR verifier checks it on every compile: each local and each place has a type, no place is read after a move, no value moves out of a unit variable, each block has one terminator and goes to blocks that exist, each drop is of an owning type and its flag is a bool local, each owning value is moved or dropped one time on each path, each argument of a direct call has the convention of its parameter, no binary carries `and` or `or`, and each trap names a runtime code with the values that its text prints. Each statement and each terminator has a location. The message names the function and the rule that the lowering broke. This is a fault in the compiler, not in the program; please report the program.
+
 ## CE1xxx: Scope and variable errors {#ce1xxx}
 
 These errors are about names, scopes and variables.

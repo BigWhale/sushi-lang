@@ -6,8 +6,9 @@ template check never comes (ir.md 4.3). `lower_function` makes the `SlirFunction
 body from the body and its side tables. A construct that the lowering does not handle yet
 stops the body with the stop code CE0155 (`slir, <construct>`): the stage records the stop
 (`Stops.slir_stopped`) and the construct (`SlirStopped`, for the dump), and the analysis
-goes on with the next body. A body that the lowering finished meets the next stage, which
-is not built yet (`Stops.finished`).
+goes on with the next body. The verifier (`verify.py`, ir.md 8.13) checks a body that the
+lowering finished, and the body meets the next stage, which is not built yet
+(`Stops.finished`).
 
 The lowering handles the parameters, a `let`, a rebind, a call statement, a `return`, an
 `if`, a `while` with its `break` and `continue`, over literals, locals, the operators,
@@ -72,6 +73,7 @@ from sushi_lang.semantics.slir.function import (
     STAGE, SlirBlock, SlirFunction, SlirLocal, SlirProgram, SlirStopped,
 )
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
+from sushi_lang.semantics.slir.verify import SlirVerifier
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type, owns_resource
 from sushi_lang.semantics.unit_symbols import declaring_unit, emitted_symbol
@@ -93,13 +95,15 @@ class SlirStage:
     slir: SlirProgram
     stops: Stops
     unit: str
+    verifier: SlirVerifier = field(default_factory=SlirVerifier)
 
     def lower_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
                    filename: Optional[str]) -> None:
         """Lower the SHIR body of `decl` and record the outcome.
 
         A stop ends the lowering of the body: the stage records it with the file of the
-        body. A body that the lowering finished meets the next stage.
+        body. The verifier checks a function that the lowering finished (ir.md 8.13), and
+        the function meets the next stage.
         """
         name = self.shir.decls.name_of(body.fn_id)
         try:
@@ -110,6 +114,7 @@ class SlirStage:
             self.stops.slir_stopped(stop)
             self.slir.record(body.fn_id, SlirStopped(name, str(stop.params["construct"])))
             return
+        self.verifier.verify(function, tables=tables, filename=filename)
         self.slir.record(body.fn_id, function)
         self.stops.finished(name, body.block.loc, filename)
 

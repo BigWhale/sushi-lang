@@ -6,7 +6,8 @@ place that tests it. The one exception is a test of the test runner, and those l
 
 A stage is a Sushi parse or lex, the semantic analysis, the lowering of a body to SHIR,
 the lowering of a body to SLIR (the entry of the SLIR stage that the analysis calls for
-each body), the code generator, the driver, or a subprocess that starts the compiler, the runner or the
+each body), the SLIR verifier (its pipeline entry; a test calls the per-function check),
+the code generator, the driver, or a subprocess that starts the compiler, the runner or the
 toolchain build. A new stage of the compiler joins the list in the change that makes it. A hit is recorded
 against the item that runs, or against the fixture that is being set up (then every item
 that uses that fixture fails), or against the module that is being collected. The hit does
@@ -86,12 +87,14 @@ class CompilerStageGate:
         from sushi_lang.semantics.semantic_analyzer import SemanticAnalyzer
         from sushi_lang.semantics.shir.lower_nodes import BodyLowerer
         from sushi_lang.semantics.slir.lower import SlirStage
+        from sushi_lang.semantics.slir.verify import SlirVerifier
 
         self._wrap(lark.Lark, "parse", "lark.Lark.parse")
         self._wrap(lark.Lark, "lex", "lark.Lark.lex")
         self._wrap(SemanticAnalyzer, "check", "SemanticAnalyzer.check")
         self._wrap(BodyLowerer, "__init__", "lowering")
         self._wrap(SlirStage, "lower_body", "slir lowering")
+        self._wrap(SlirVerifier, "verify", "slir verifier")
         self._wrap(LLVMCodegen, "__init__", "LLVMCodegen")
         self._wrap(LLVMDriver, "__init__", "LLVMDriver")
         self._wrap(subprocess.Popen, "__init__", "subprocess",

@@ -52,7 +52,9 @@ arm of a construct that a pass does not handle yet stops the walk of its body, t
 pass does not get that body, and the backend does not run. `borrow` gives each body that
 it finished to the SLIR lowering (`semantics/slir/lower.py`), which is not a pass: it makes
 one `SlirFunction` for each body, and stops at the first construct that it cannot lower
-yet. A program with no error stops after the analysis with
+yet. The SLIR verifier (`semantics/slir/verify.py`) checks each function that the
+lowering finished; a broken rule is the internal error
+[CE0158](../error-catalog.md#ce0158). A program with no error stops after the analysis with
 [CE0155](../error-catalog.md#ce0155) (`slir, <construct>`, or `emit, <body>` for a body
 that the SLIR lowering finished), and `--dump-shir` and `--dump-slir` are written first.
 

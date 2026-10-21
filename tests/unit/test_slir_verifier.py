@@ -1,0 +1,380 @@
+"""The SLIR verifier over hand-built functions (docs/design/ir.md 8.13).
+
+A correct lowering never makes a function that breaks a rule, so no fixture can show a rule
+refuse. These tests give the per-function check of the verifier a function that breaks one
+rule each, and the functions of the worked example of ir.md 8.11, which keep every rule.
+They call a Python function over data; they do not run the compiler.
+"""
+from __future__ import annotations
+
+from typing import Mapping, Optional
+
+import pytest
+
+from sushi_lang.internals.diagnostics import InternalCompilerError
+from sushi_lang.internals.report import Span
+from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.shir.callee import Intrinsic
+from sushi_lang.semantics.slir import constants as k
+from sushi_lang.semantics.slir import places as p
+from sushi_lang.semantics.slir import rvalues as r
+from sushi_lang.semantics.slir import statements as st
+from sushi_lang.semantics.slir import terminators as tm
+from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
+from sushi_lang.semantics.slir.ids import BlockId, LocalId
+from sushi_lang.semantics.slir.verify import DeclaredParams, verify_function
+from sushi_lang.semantics.typesys import BuiltinType, StructType, Type, UnknownType
+
+from tests.unit.test_slir_printer import (
+    RESULT_STRING, _decorate, _greet, _main, _shout,
+)
+
+SPAN = Span(1, 1, 1, 9)
+BAD = Span(7, 5, 7, 20)
+OWNED, GUARANTEED = Convention.OWNED, Convention.GUARANTEED
+I32, STRING, BOOL, BLANK = BuiltinType.I32, BuiltinType.STRING, BuiltinType.BOOL, BuiltinType.BLANK
+PAIR = StructType(name="Pair", fields=(("first", I32), ("second", I32)))
+
+GREET_DECLARED = {
+    "test_spine_greet$decorate": DeclaredParams((OWNED,)),
+    "test_spine_greet$shout": DeclaredParams((OWNED,)),
+    "test_spine_greet$greet": DeclaredParams((OWNED, GUARANTEED)),
+}
+
+
+def _local(index: int) -> p.Local:
+    return p.Local(LocalId(index))
+
+
+def _copy(index: int) -> p.Copy:
+    return p.Copy(_local(index))
+
+
+def _move(index: int) -> p.Move:
+    return p.Move(_local(index))
+
+
+def _set(index: int, value: r.Rvalue, span: Span = SPAN) -> st.Assign:
+    return st.Assign(_local(index), value, span)
+
+
+def _text(index: int, span: Span = SPAN) -> st.Call:
+    """`_index = interp("x")`: a new owning string."""
+    return st.Call(_local(index), st.Builtin(Intrinsic("interp"), (STRING,)),
+                   ((p.Const(k.Str(b"x")), GUARANTEED),), span)
+
+
+def _flag(index: int, value: bool, span: Span = SPAN) -> st.Assign:
+    return _set(index, r.Use(p.Const(k.Bool(value))), span)
+
+
+def _live(index: int) -> st.StorageLive:
+    return st.StorageLive(LocalId(index), SPAN)
+
+
+def _dead(index: int, span: Span = SPAN) -> st.StorageDead:
+    return st.StorageDead(LocalId(index), span)
+
+
+def _drop(index: int, span: Span = SPAN) -> st.Drop:
+    return st.Drop(_local(index), span)
+
+
+def _block(index: int, terminator: object, *statements: object) -> SlirBlock:
+    return SlirBlock(BlockId(index), tuple(statements), terminator)  # type: ignore[arg-type]
+
+
+def _ret(span: Span = SPAN) -> tm.Return:
+    return tm.Return(span)
+
+
+def _goto(index: int, span: Span = SPAN) -> tm.Goto:
+    return tm.Goto(BlockId(index), span)
+
+
+def _switch(local: int, zero: int, other: int) -> tm.SwitchInt:
+    return tm.SwitchInt(_copy(local), ((0, BlockId(zero)),), BlockId(other), SPAN)
+
+
+def _function(types: list[Optional[Type]], *blocks: SlirBlock,
+              params: tuple[tuple[int, Convention], ...] = (),
+              entry: int = 0) -> SlirFunction:
+    locals_ = tuple(SlirLocal(LocalId(index), ty, None, None)  # type: ignore[arg-type]
+                    for index, ty in enumerate(types))
+    return SlirFunction("unit$probe", "probe", "unit",
+                        tuple((LocalId(index), convention) for index, convention in params),
+                        locals_, blocks, BlockId(entry))
+
+
+def _passes(function: SlirFunction,
+            declared: Optional[Mapping[str, DeclaredParams]] = None) -> None:
+    verify_function(function, drops=frozenset(), declared=declared or {})
+
+
+def _refused(function: SlirFunction, rule: str, span: Optional[Span] = BAD,
+             declared: Optional[Mapping[str, DeclaredParams]] = None) -> InternalCompilerError:
+    with pytest.raises(InternalCompilerError) as caught:
+        _passes(function, declared)
+    error = caught.value
+    assert error.code == "CE0158"
+    assert error.params["rule"] == rule
+    assert error.params["function"] == function.name
+    assert error.span == span
+    return error
+
+
+# -- functions that keep every rule ----------------------------------------------------
+
+
+def test_the_functions_of_the_worked_example_pass():
+    for function in (_decorate(), _shout(), _greet(), _main()):
+        _passes(function, GREET_DECLARED)
+
+
+def test_a_loop_whose_body_declares_and_drops_an_owning_local_passes():
+    _passes(_function(
+        [I32, BOOL, STRING],
+        _block(0, _goto(1), _set(1, r.Use(p.Const(k.Bool(True))))),
+        _block(1, _switch(1, 3, 2)),
+        _block(2, _goto(1), _live(2), _text(2), _drop(2), _dead(2)),
+        _block(3, _ret(), _set(0, r.Use(p.Const(k.Int(0, I32))))),
+    ))
+
+
+def test_a_flagged_local_drops_with_drop_where_its_state_is_exact_and_with_its_flag_after_a_join():
+    _passes(_function(
+        [BLANK, BOOL, STRING, BOOL, STRING],
+        _block(0, _switch(1, 2, 1), _live(2), _text(2), _live(3), _flag(3, True)),
+        _block(1, _goto(2), _set(4, r.Use(_move(2))), _flag(3, False), _drop(4)),
+        _block(2, _goto(3), st.DropIfSet(_local(2), LocalId(3), SPAN), _text(2), _flag(3, True)),
+        _block(3, _ret(), _set(0, r.Use(p.Const(k.Blank()))), _drop(2), _dead(3), _dead(2)),
+        params=((1, GUARANTEED),),
+    ))
+
+
+def test_a_var_arg_callee_checks_its_declared_prefix_alone():
+    call = st.Call(_local(1), st.Direct("printf", "printf"),
+                   ((p.Const(k.Int(1, I32)), GUARANTEED), (p.Const(k.Int(2, I32)), OWNED)), SPAN)
+    _passes(_function([BLANK, I32], _block(0, _ret(), call, _set(0, r.Use(p.Const(k.Blank()))))),
+            {"printf": DeclaredParams((GUARANTEED,), var_arg=True)})
+
+
+# -- one function for each rule --------------------------------------------------------
+
+
+def test_a_local_with_no_type_is_refused():
+    error = _refused(_function([BLANK, None], _block(0, _ret())), "typed locals", None)
+    assert "_1" in error.params["detail"]
+
+
+def test_a_local_with_an_unresolved_type_is_refused():
+    _refused(_function([BLANK, UnknownType("Foo")], _block(0, _ret())), "typed locals", None)
+
+
+def test_a_field_past_the_fields_of_a_struct_is_refused():
+    read = _set(1, r.Use(p.Copy(p.Field(_local(2), 2))), BAD)
+    _refused(_function([BLANK, I32, PAIR], _block(0, _ret(), read)), "typed places")
+
+
+def test_a_field_of_a_value_that_has_no_fields_is_refused():
+    read = _set(1, r.Use(p.Copy(p.Field(_local(1), 0))), BAD)
+    _refused(_function([BLANK, I32], _block(0, _ret(), read)), "typed places")
+
+
+def test_a_downcast_to_a_variant_that_the_enum_does_not_have_is_refused():
+    read = _set(1, r.Use(p.Copy(p.Field(p.Downcast(_local(2), "Gone"), 0))), BAD)
+    _refused(_function([BLANK, STRING, RESULT_STRING], _block(0, _ret(), read)), "typed places")
+
+
+def test_a_place_that_names_no_local_of_the_function_is_refused():
+    _refused(_function([BLANK], _block(0, _ret(), _set(9, r.Use(p.Const(k.Blank())), BAD))),
+             "typed places")
+
+
+def test_a_use_after_a_move_is_refused():
+    _refused(_function(
+        [BLANK, STRING, STRING, I32],
+        _block(0, _ret(), _set(2, r.Use(_move(1))), _set(3, r.Len(_local(1)), BAD), _drop(2)),
+        params=((1, OWNED),),
+    ), "no use after a move")
+
+
+def test_a_use_after_a_move_on_one_path_is_refused():
+    _refused(_function(
+        [BLANK, BOOL, STRING, STRING, I32],
+        _block(0, _switch(1, 2, 1), _live(2), _text(2)),
+        _block(1, _goto(2), _set(3, r.Use(_move(2)))),
+        _block(2, _ret(), _set(4, r.Len(_local(2)), BAD)),
+        params=((1, GUARANTEED),),
+    ), "no use after a move")
+
+
+def test_a_move_of_a_payload_moves_its_whole_local():
+    payload = p.Move(p.Field(p.Downcast(_local(1), "Ok"), 0))
+    _refused(_function(
+        [BLANK, RESULT_STRING, STRING, I32],
+        _block(0, _ret(), _set(2, r.Use(payload)), _set(3, r.Discriminant(_local(1)), BAD),
+               _drop(2)),
+        params=((1, OWNED),),
+    ), "no use after a move")
+
+
+def test_a_move_out_of_a_global_is_refused():
+    _refused(_function([BLANK, STRING],
+                       _block(0, _ret(), _set(1, r.Use(p.Move(p.Global("unit$log"))), BAD),
+                              _drop(1))),
+             "no move out of a global")
+
+
+def test_a_block_with_no_terminator_is_refused():
+    _refused(_function([BLANK], _block(0, None)), "one terminator per block", None)
+
+
+def test_a_terminator_among_the_statements_is_refused():
+    _refused(_function([BLANK], _block(0, _ret(), tm.Return(BAD))), "one terminator per block")
+
+
+def test_a_jump_to_a_block_that_the_function_does_not_have_is_refused():
+    _refused(_function([BLANK], _block(0, _goto(4, BAD))), "known blocks")
+
+
+def test_an_entry_that_the_function_does_not_have_is_refused():
+    _refused(_function([BLANK], _block(0, _ret()), entry=2), "known blocks", None)
+
+
+def test_a_drop_of_a_plain_value_is_refused():
+    _refused(_function([BLANK, I32], _block(0, _ret(), _set(1, r.Use(p.Const(k.Int(1, I32)))),
+                                            _drop(1, BAD))),
+             "drop of an owning type")
+
+
+def test_a_drop_flag_that_is_no_bool_is_refused():
+    _refused(_function(
+        [BLANK, STRING, I32],
+        _block(0, _ret(), _text(1), st.DropIfSet(_local(1), LocalId(2), BAD)),
+    ), "bool drop flag")
+
+
+def test_an_owning_local_that_the_function_returns_with_is_refused():
+    _refused(_function([BLANK, STRING], _block(0, _ret(BAD), _live(1), _text(1))),
+             "one drop or move on every path")
+
+
+def test_an_owning_local_dropped_two_times_is_refused():
+    _refused(_function([BLANK, STRING],
+                       _block(0, _ret(), _live(1), _text(1), _drop(1), _drop(1, BAD))),
+             "one drop or move on every path")
+
+
+def test_an_owning_local_dropped_on_one_path_alone_is_refused():
+    _refused(_function(
+        [BLANK, BOOL, STRING],
+        _block(0, _switch(1, 2, 1), _live(2), _text(2)),
+        _block(1, _goto(2), _drop(2)),
+        _block(2, _ret(), _dead(2, BAD)),
+        params=((1, GUARANTEED),),
+    ), "one drop or move on every path")
+
+
+def test_a_drop_if_set_whose_flag_is_false_on_a_live_path_is_refused():
+    _refused(_function(
+        [BLANK, STRING, BOOL],
+        _block(0, _ret(), _live(1), _text(1), _flag(2, False),
+               st.DropIfSet(_local(1), LocalId(2), BAD)),
+    ), "one drop or move on every path")
+
+
+def test_a_drop_if_set_whose_flag_is_true_after_a_move_is_refused():
+    _refused(_function(
+        [BLANK, STRING, BOOL, STRING],
+        _block(0, _ret(), _live(1), _text(1), _flag(2, True), _set(3, r.Use(_move(1))),
+               st.DropIfSet(_local(1), LocalId(2), BAD), _drop(3)),
+    ), "one drop or move on every path")
+
+
+def test_a_drop_of_a_borrowed_parameter_is_refused():
+    _refused(_function([BLANK, STRING], _block(0, _ret(), _drop(1, BAD)),
+                       params=((1, GUARANTEED),)),
+             "one drop or move on every path")
+
+
+def test_an_owned_parameter_that_the_function_never_drops_is_refused():
+    _refused(_function([BLANK, STRING], _block(0, _ret(BAD)), params=((1, OWNED),)),
+             "one drop or move on every path")
+
+
+def test_an_inout_parameter_that_holds_no_value_at_the_return_is_refused():
+    _refused(_function([BLANK, STRING], _block(0, _ret(BAD), _drop(1)),
+                       params=((1, Convention.INOUT),)),
+             "one drop or move on every path")
+
+
+def test_an_overwrite_of_a_live_owning_local_is_refused():
+    _refused(_function([BLANK, STRING],
+                       _block(0, _ret(), _live(1), _text(1), _text(1, BAD), _drop(1))),
+             "one drop or move on every path")
+
+
+def test_the_end_of_the_storage_of_a_live_owning_local_is_refused():
+    _refused(_function([BLANK, STRING], _block(0, _ret(), _live(1), _text(1), _dead(1, BAD))),
+             "one drop or move on every path")
+
+
+def _call(*args: tuple[p.Operand, Convention]) -> st.Call:
+    return st.Call(_local(1), st.Direct("unit$take", "take"), args, BAD)
+
+
+def test_an_argument_whose_convention_is_not_the_declared_one_is_refused():
+    call = _call((p.Const(k.Int(1, I32)), OWNED))
+    _refused(_function([BLANK, BLANK], _block(0, _ret(), call)), "declared conventions",
+             declared={"unit$take": DeclaredParams((GUARANTEED,))})
+
+
+def test_a_call_with_more_arguments_than_the_declared_parameters_is_refused():
+    one = (p.Const(k.Int(1, I32)), GUARANTEED)
+    _refused(_function([BLANK, BLANK], _block(0, _ret(), _call(one, one))),
+             "declared conventions", declared={"unit$take": DeclaredParams((GUARANTEED,))})
+
+
+def test_a_direct_callee_with_no_declaration_is_refused():
+    _refused(_function([BLANK, BLANK], _block(0, _ret(), _call())), "declared conventions")
+
+
+def test_a_var_arg_callee_checks_the_convention_of_its_declared_prefix():
+    call = _call((p.Const(k.Int(1, I32)), OWNED), (p.Const(k.Int(2, I32)), GUARANTEED))
+    _refused(_function([BLANK, BLANK], _block(0, _ret(), call)), "declared conventions",
+             declared={"unit$take": DeclaredParams((GUARANTEED,), var_arg=True)})
+
+
+@pytest.mark.parametrize("op", ["and", "or"])
+def test_a_binary_that_carries_a_short_circuit_is_refused(op: str):
+    value = r.Binary(op, p.Const(k.Bool(True)), p.Const(k.Bool(False)))  # type: ignore[arg-type]
+    _refused(_function([BLANK, BOOL], _block(0, _ret(), _set(1, value, BAD))),
+             "no short circuit in a binary")
+
+
+@pytest.mark.parametrize("code, count", [
+    ("RE9999", 0),      # no registered code
+    ("CE0155", 0),      # a registered code that is no runtime code
+    ("RE2020", 1),      # its text prints two values
+    ("RE2021", 1),      # its text prints none
+])
+def test_a_trap_that_names_no_runtime_code_with_its_operand_count_is_refused(code: str, count: int):
+    trap = tm.Trap(code, tuple(p.Const(k.Int(index, I32)) for index in range(count)), BAD)
+    _refused(_function([BLANK], _block(0, trap)), "registered trap")
+
+
+def test_a_trap_with_the_operands_of_its_text_passes():
+    trap = tm.Trap("RE2020", (p.Const(k.Int(5, I32)), p.Const(k.Int(3, I32))), SPAN)
+    _passes(_function([BLANK], _block(0, trap)))
+
+
+def test_a_statement_with_no_span_is_refused():
+    error = _refused(_function([BLANK], _block(0, _ret(), _set(0, r.Use(p.Const(k.Blank())),
+                                                               None))),  # type: ignore[arg-type]
+                     "spans", None)
+    assert "bb0" in error.params["detail"]
+
+
+def test_a_terminator_with_no_span_is_refused():
+    _refused(_function([BLANK], _block(0, tm.Return(None))), "spans", None)  # type: ignore[arg-type]

@@ -625,3 +625,18 @@ _add(ErrorMessage("CE0157", Severity.ERROR,
     "tests/unit/test_ownership_results_are_complete.py and "
     "tests/unit/test_lift_results_are_complete.py test the checks. "
     "This is a fault in the compiler, not in the program; please report the program."))
+
+_add(ErrorMessage("CE0158", Severity.ERROR,
+    "the SLIR of the function '{function}' breaks the verifier rule '{rule}': {detail}",
+    Category.INTERNAL,
+    "The SLIR lowering makes one SLIR function from each body (docs/design/ir.md 8.2). "
+    "Before the function goes to the next stage, the SLIR verifier checks it on every "
+    "compile (ir.md 8.13): each local and each place has a type, no place is read after a "
+    "move, no value moves out of a unit variable, each block has one terminator and goes to "
+    "blocks that exist, each drop is of an owning type and its flag is a bool local, each "
+    "owning value is moved or dropped one time on each path, each argument of a direct "
+    "call has the convention of its parameter, no binary carries `and` or `or`, and each "
+    "trap names a runtime code with the values that its text prints. Each statement and "
+    "each terminator has a location. The message names the function and the rule that "
+    "the lowering broke. tests/unit/test_slir_verifier.py tests each rule. "
+    "This is a fault in the compiler, not in the program; please report the program."))
