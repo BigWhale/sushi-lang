@@ -79,9 +79,11 @@ def test_an_owned_parameter_that_is_moved_gets_no_drop():
     assert placement.exit_function(SPAN) == []
 
 
-def test_a_move_of_a_borrowed_parameter_is_an_internal_error():
+@pytest.mark.parametrize("convention", [Convention.GUARANTEED, Convention.IN_GUARANTEED,
+                                        Convention.INOUT])
+def test_a_move_of_a_parameter_that_is_no_owner_is_an_internal_error(convention):
     placement = DropPlacement()
-    placement.parameter(_l(1), Convention.IN_GUARANTEED, True)
+    placement.parameter(_l(1), convention, True)
     with pytest.raises(InternalCompilerError):
         placement.move(_l(1), SPAN)
 

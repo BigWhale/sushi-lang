@@ -27,7 +27,9 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.ids import LocalId
 
-#: The conventions whose parameter is a borrow of the caller's value: it never drops.
+#: The conventions whose parameter is the caller's value: it never drops and never moves.
+_NEVER_MOVES = frozenset({Convention.GUARANTEED, Convention.IN_GUARANTEED, Convention.INOUT})
+#: The conventions whose parameter is a read-only borrow: a rebind of it is not lowered.
 _BORROWS = frozenset({Convention.GUARANTEED, Convention.IN_GUARANTEED})
 
 
@@ -46,11 +48,14 @@ class DropPlacement:
     _moved: set[LocalId] = field(default_factory=set)
     _owned_params: list[LocalId] = field(default_factory=list)
     _borrowed: set[LocalId] = field(default_factory=set)
+    _never_moved: set[LocalId] = field(default_factory=set)
 
     def parameter(self, local: LocalId, convention: Convention, owning: bool) -> None:
         """A parameter: an `Owned` one is an owning local of the function (L15)."""
         if owning:
             self._owning.add(local)
+        if convention in _NEVER_MOVES:
+            self._never_moved.add(local)
         if convention in _BORROWS:
             self._borrowed.add(local)
         elif convention is Convention.OWNED and owning:
@@ -87,9 +92,9 @@ class DropPlacement:
         return local in self._borrowed
 
     def move(self, local: LocalId, span: Span) -> None:
-        """A move out of `local`. A second move, or a move of a borrow, is an internal error:
-        `borrow` refuses both."""
-        if local in self._borrowed or local in self._moved:
+        """A move out of `local`. A second move, or a move of a parameter that the function
+        does not own, is an internal error: `borrow` refuses both."""
+        if local in self._never_moved or local in self._moved:
             er.raise_internal_error(
                 "CE0000", span=span,
                 detail=f"SLIR lowering moves _{local.index}, which holds no value to move")
