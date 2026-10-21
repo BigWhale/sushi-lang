@@ -815,10 +815,13 @@ name that the namespace does not hold (`geo.twicee(21)`, CE2008), and a member o
 that is no variant (`Sign.Nope`, CE2045; a static outside a call is one too). A `poke` of a
 constant (`bump(poke STEP)`, CE2400) is an error hole too, because a constant lives in
 read-only storage: so `borrow` never meets a `poke` of a constant, and one that reaches it
-is an internal error.
+is an internal error. A `break` or a `continue` outside a loop (CE1003, which the `scope`
+pass reports) is an error hole too: lowering counts the loop bodies as the `scope` pass
+counts them, so `borrow` never meets a jump with no loop, and one that reaches it is an
+internal error. Ruled 2026-10-21.
 
 An error hole CARRIES the code of the error that it stands for (CE6102, CE6104, CE2122,
-CE2008, CE2045, CE2400; for a name with no declaration, the codes CE1001, CE1002 and CE0144). At
+CE2008, CE2045, CE2400, CE1003; for a name with no declaration, the codes CE1001, CE1002 and CE0144). At
 the end of the analysis, an error hole whose code no diagnostic reported is an internal
 error, CE0155. An error of the construct around the hole can come first, and the hole
 accepts its code too: in a constant or a `var` initializer the constant evaluator refuses
@@ -1210,7 +1213,8 @@ The rows of `OwnershipResults`:
   row has the key of the capture type in 7.3: the `shir_id` of the `Lambda` and the
   `LocalId` of the captured local.
 - A conditionally moved local is a row by its `LocalId`. A local with no row is moved on
-  no path, or on every path. SLIR lowering gives each row a drop flag (8.10, rule 4).
+  no path, or moved on every path at each exit of its scope. SLIR lowering gives each row a
+  drop flag (8.10, rule 4).
 - LENT or OWNED (a bool, true for LENT) and the heap decision of a lent iterator (a bool)
   are rows by the `shir_id` of the producer call or the lazy-adapter call.
 - The walk in place is a bool by the `shir_id` of the `Loop`.
@@ -1266,6 +1270,34 @@ of a body ends with no stop and with no error, `check_ownership` runs, and the b
 the stage after `borrow`, which is not built yet: the pipeline reports the first stop of
 `typecheck`, then the first stop of `borrow`, then an error hole, then the first body that
 `borrow` finished (`slir, <body>`).
+
+**Control flow in `borrow`.** The joins read the one path predicate of 7.5. An `If`
+checks each block from the state after its condition, and the paths that reach the code
+after it JOIN: a block that ends in a `Return`, a `Break` or a `Continue` leaves by its own
+exit, and an `If` with no `otherwise` has the path that skips `then`. A `Loop` with a
+`Cond` source reads its condition once, at the entry, and checks its body in two rounds.
+The first round is a DISCOVERY round: it reports no error, writes no row and records no
+exit, and it gives the facts that come round the back edge (the end of the body and each
+`Continue`). The second round starts from the entry joined with that back edge, and it
+reports and writes each row once. The code after the loop sees that fixed point joined
+with each `Break` path of the second round. A `Loop` with an `Items` source is the
+iterators group's (C3) and stops the walk. A `While` loop has no iterator, so it has no
+walk-in-place row: that row is a fact of a `Protocol` or an `IteratorValue` walk alone.
+`walk_place` (`semantics/places.py`) reads a SHIR place through the adapter of its tree,
+with the same `Step` and `Walked` as the AST walk of the `scope` pass.
+
+**The conditionally moved locals.** The state of a local holds two facts: moved on SOME
+path (the join is a union, and a use after it is CE2405) and moved on EVERY path (the join
+is an intersection). An EXIT of a scope is the end of a block that the path reaches, a
+`Return`, the error path of a `Try`, and a `Break` or a `Continue` for the blocks of its
+loop body. At each exit, `borrow` records each local of the scope that is not moved on
+every path there; a local of a `let` is in its scope after its value, so an exit in the
+value is no exit of the local. A local that is moved on some path and that an exit sees
+not moved on every path is a row of the conditionally moved locals. So a local moved in
+each block of an `If` has no row; a local moved in one block, or moved before a `Return`
+and not on the path that goes on, or moved after a `Try` whose error path leaves with it,
+has a row; and a local moved and then rebound has a row too, because the exit sees the new
+value.
 
 **The completeness checks.** `check_ownership` runs when `borrow` ends a body with no
 error. It reads `TypeckResults` and `LiftResults` for the positions, and it needs an
@@ -1588,8 +1620,10 @@ locals, and nothing else:
    local that the scope exit frees.
 3. A local that `borrow` proved moved on **every** path gets no drop at all.
 4. A local marked CONDITIONALLY moved gets a `bool` flag local: set `true` at the
-   declaration (set again on each loop iteration), set `false` at each move site, and its
-   drop becomes `DropIfSet`.
+   declaration (set again on each loop iteration and at each rebind), set `false` at each
+   move site, and its drop becomes `DropIfSet`. The row is the answer of `borrow` at the
+   exits of the scope of the local (7.9): a local that each exit sees moved on every path
+   has no row, and rule 3 applies to it.
 5. A borrow never drops. `Guaranteed`, `InGuaranteed` and `Inout` parameters never drop;
    an `Owned` parameter drops in the callee.
 6. An `Assign` to an owning place that may hold a live value drops the OLD value, and the
