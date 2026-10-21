@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n2\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_move_rebind_use.slir
+#
+# A local that is moved, rebound and read. The rebind of the moved local drops nothing,
+# and the exit drops the new value.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn main() i32:
+    let string word = "{1}"
+    eat(nom word)
+    word := "{2}"
+    println(word)
+    return 0

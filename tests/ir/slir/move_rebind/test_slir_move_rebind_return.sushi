@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n2\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_move_rebind_return.slir
+#
+# A local that is moved, rebound and returned. The rebind of the moved local drops
+# nothing, and the return moves the new value into _0, so the exit drops nothing. borrow
+# writes no cond_moved row for it, because no exit keeps it.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn remake() string:
+    let string word = "{1}"
+    eat(nom word)
+    word := "{2}"
+    return word
+
+fn main() i32:
+    println(remake())
+    return 0

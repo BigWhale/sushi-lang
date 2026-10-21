@@ -1,0 +1,33 @@
+unit test_slir_result_return
+
+fn found() -> Result@(string, StdError) {
+    let _0: Result@(string, StdError)
+
+  bb0:
+    _0 = Result::Ok(const "Mostly Harmless")
+    return
+}
+
+fn lost() -> Result@(~, StdError) {
+    let _0: Result@(~, StdError)
+    let _1: StdError
+
+  bb0:
+    StorageLive(_1)
+    _1 = StdError::Error
+    _0 = Result::Err(move _1)
+    StorageDead(_1)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: Result@(~, StdError)
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @lost()
+    StorageDead(_1)
+    _0 = const 0_i32
+    return
+}

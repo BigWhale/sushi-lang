@@ -1,0 +1,36 @@
+unit test_slir_spelled_result_return
+
+fn found(_1: i32 @guaranteed) -> Result@(i32, StdError) {
+    let _0: Result@(i32, StdError)
+    let _2: bool
+    let _3: StdError
+
+  bb0:
+    StorageLive(_2)
+    _2 = copy _1 > const 0_i32
+    switchInt(copy _2) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    StorageDead(_2)
+    _0 = Result::Ok(copy _1)
+    return
+
+  bb2:
+    StorageDead(_2)
+    goto -> bb3
+
+  bb3:
+    StorageLive(_3)
+    _3 = StdError::Error
+    _0 = Result::Err(move _3)
+    StorageDead(_3)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 0_i32
+    return
+}

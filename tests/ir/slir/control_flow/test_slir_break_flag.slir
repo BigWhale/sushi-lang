@@ -1,0 +1,102 @@
+unit test_slir_break_flag
+
+fn eat(_1: string @owned) -> ~ {
+    let _0: ~
+    let _2: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin println@(string)(copy _1 @guaranteed)
+    StorageDead(_2)
+    _0 = const ~
+    Drop(_1)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32                            // i
+    let _2: string                         // w
+    let _3: bool
+    let _4: bool
+    let _5: string                         // v
+    let _6: bool
+    let _7: ~
+    let _8: bool
+    let _9: ~
+    let _10: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = const 0_i32
+    StorageLive(_2)
+    _2 = call builtin interp@(i32)(copy _1 @guaranteed)
+    StorageLive(_3)
+    _3 = const true
+    goto -> bb1
+
+  bb1:
+    StorageLive(_4)
+    _4 = copy _1 < const 4_i32
+    switchInt(copy _4) -> [0: bb3, otherwise: bb2]
+
+  bb2:
+    StorageDead(_4)
+    _1 = copy _1 + const 1_i32
+    StorageLive(_5)
+    _5 = call builtin interp@(i32)(copy _1 @guaranteed)
+    StorageLive(_6)
+    _6 = copy _1 == const 2_i32
+    switchInt(copy _6) -> [0: bb6, otherwise: bb5]
+
+  bb3:
+    StorageDead(_4)
+    goto -> bb4
+
+  bb4:
+    _0 = copy _1
+    DropIfSet(_2, _3)
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageDead(_1)
+    return
+
+  bb5:
+    StorageDead(_6)
+    StorageLive(_7)
+    _7 = call @eat(move _5 @owned)
+    StorageDead(_7)
+    StorageDead(_5)
+    goto -> bb1
+
+  bb6:
+    StorageDead(_6)
+    goto -> bb7
+
+  bb7:
+    StorageLive(_8)
+    _8 = copy _1 == const 3_i32
+    switchInt(copy _8) -> [0: bb9, otherwise: bb8]
+
+  bb8:
+    StorageDead(_8)
+    StorageLive(_9)
+    _9 = call @eat(move _2 @owned)
+    _3 = const false
+    StorageDead(_9)
+    Drop(_5)
+    StorageDead(_5)
+    goto -> bb4
+
+  bb9:
+    StorageDead(_8)
+    goto -> bb10
+
+  bb10:
+    StorageLive(_10)
+    _10 = call builtin println@(string)(copy _5 @guaranteed)
+    StorageDead(_10)
+    Drop(_5)
+    StorageDead(_5)
+    goto -> bb1
+}

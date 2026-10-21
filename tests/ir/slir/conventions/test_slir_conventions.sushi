@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 42
+# EXPECT_STDOUT_EXACT: "41\nMostly Harmless\nMostly Harmless\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_conventions.slir
+#
+# A call with each of the four conventions. The `nom` argument moves the local `a`, so
+# the exit of `main` does not drop `a`. A plain argument and a `peek` argument of an
+# owning type read their place with `copy`. Only the `nom` parameter drops in the callee.
+
+fn four(nom string a, string b, peek string c, poke i32 d) ~:
+    println(a)
+    println(b)
+    println(c)
+    d := d + 1
+
+fn main() i32:
+    let i32 n = 41
+    let string a = "{n}"
+    let string b = "Mostly Harmless"
+    four(nom a, b, peek b, poke n)
+    return n

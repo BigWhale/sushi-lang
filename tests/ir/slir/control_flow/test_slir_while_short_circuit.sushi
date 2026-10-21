@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_while_short_circuit.slir
+#
+# The condition of a `while` is an `and`, so the condition has blocks of its own (ir.md
+# 8.9). The header writes the left operand into the condition local and switches; the
+# right block writes the same local and goes to the block after it, which switches to the
+# body or to the zero block. So the blocks come in the order header, the blocks of the
+# condition, body, zero block, exit. Each target of the last switch ends the condition
+# local at its top.
+
+fn count(bool a, i32 n) i32:
+    let i32 i = 0
+    while (a and i < n):
+        i := i + 1
+    return i
+
+fn main() i32:
+    println(count(true, 3))
+    return 0

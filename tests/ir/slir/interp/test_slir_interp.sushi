@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Arthur is 42\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_interp.slir
+#
+# An interpolation is one call of the intrinsic `interp`, with one operand for each part
+# and the display type of each operand. The hole `who()` and the interpolation are
+# temporaries that nothing moves, so each one drops at the end of its statement, the
+# newest first.
+
+fn who() string:
+    return "Arthur"
+
+fn main() i32:
+    let i32 n = 42
+    println("{who()} is {n}")
+    return 0
