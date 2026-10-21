@@ -127,15 +127,3 @@ def is_borrowed_call(expr: Any) -> bool:
     return getattr(expr, "callee_borrows", None) is not None
 
 
-def lends_a_view(expr: Any) -> bool:
-    """Is `expr` the answer of a borrowed return that owns nothing of its own?
-
-    The answer views storage that a source keeps, so nothing may free it. A returned
-    iterator is the one exception: it owns its state, which its holder destroys.
-    """
-    from sushi_lang.semantics.ast import TryExpr
-    from sushi_lang.semantics.generics.iterators import LENT
-    while isinstance(expr, TryExpr):
-        expr = expr.expr
-    return (getattr(expr, "callee_borrows", None) is not None
-            and getattr(expr, "iterator_state", None) != LENT)

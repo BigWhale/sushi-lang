@@ -49,11 +49,6 @@ PRIMITIVE_METHOD_TYPES: dict[str, frozenset] = {
 }
 
 
-def is_builtin_primitive_method(method_name: str) -> bool:
-    """Check if a method name is a builtin primitive method."""
-    return method_name in PRIMITIVE_METHOD_TYPES
-
-
 def has_primitive_method(target_type: Type, method_name: str) -> bool:
     """Check if a primitive type carries the named builtin method."""
     carriers = PRIMITIVE_METHOD_TYPES.get(method_name)

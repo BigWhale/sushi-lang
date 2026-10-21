@@ -110,8 +110,6 @@ def _propagate_numeric_type(validator: 'TypeValidator', expr: 'Expr',
                             expected: BuiltinType) -> None:
     """Push an expected numeric type into a value's literal leaves."""
     if isinstance(expr, BinaryOp):
-        # A literal under the node can change its type. The next inference stamps it again.
-        expr.inferred_type = None
         for operand in same_type_operands(expr):
             _propagate_numeric_type(validator, operand, expected)
         return

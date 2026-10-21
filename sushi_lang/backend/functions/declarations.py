@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, ExtendDef
 from sushi_lang.semantics.unit_symbols import declaring_unit, emitted_symbol, function_symbol
-from sushi_lang.backend.generics.result_builder import call_value_type, declared_return_ll
+from sushi_lang.backend.generics.result_builder import declared_return_ll
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -54,11 +54,6 @@ class FunctionDeclarations:
             llvm_fn = self._declare_c_main(emitted_symbol(fn.name, unit_name))
 
         self.codegen.funcs.declare(fn.name, llvm_fn, unit=unit_name)
-
-        if not is_entry and fn.ret is not None:
-            self.codegen.function_return_types.declare(
-                fn.name, call_value_type(self.codegen, fn), unit=unit_name)
-
         return llvm_fn
 
     def _declare_c_main(self, symbol: str) -> ir.Function:

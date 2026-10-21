@@ -1,10 +1,9 @@
 """No module under `backend/expressions/` catches `InternalCompilerError`.
 
 #823: four callers caught the internal error of `infer_struct_type` to mean "not a
-struct". The catch also hid a real compiler fault, and it dropped the fact that the
-receiver was some other kind of value: a bare enum variant receiver then had no
-semantic type and stopped with CE0019. `try_infer_struct_type` answers None for "not a
-struct", so no caller has a reason to catch.
+struct". The catch also hid a real compiler fault. The AST expression layer is gone
+(P2.13); the rule holds for what stays there: the value halves, the memory helpers of
+the families and the stdlib call table.
 """
 from __future__ import annotations
 
@@ -35,8 +34,8 @@ def test_no_module_catches_an_internal_error():
                 offenders.append(f"{path.relative_to(ROOT)}:{node.lineno}")
     assert not offenders, (
         "an `except InternalCompilerError` under backend/expressions/ reads a compiler "
-        "fault as an answer; use try_infer_struct_type: " + ", ".join(offenders))
+        "fault as an answer; answer None for \"not of this kind\": " + ", ".join(offenders))
 
 
 def test_the_scan_sees_the_tree():
-    assert len(list(ROOT.rglob("*.py"))) > 20
+    assert len(list(ROOT.rglob("*.py"))) > 10

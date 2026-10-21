@@ -606,14 +606,10 @@ class Return(Stmt):
 @dataclass(slots=True)
 class Print(Stmt):
     value: "Expr"
-    # The struct, enum, array or container the value prints through `Display`, stamped
-    # by the typecheck pass; the backend reads it.
-    display_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class PrintLn(Stmt):
     value: "Expr"
-    display_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class Assert(Stmt):
@@ -928,9 +924,6 @@ class StringLit(Node):
 class InterpolatedString(Node):
     """Represents a string with interpolated expressions like "Hello, {name}!" """
     parts: List[Union[str, "Expr"]]  # Alternating string literals and expressions
-    # For each hole that prints through `Display` (a struct, an enum, an array or a
-    # container), its type; None elsewhere. Stamped by the typecheck pass; the backend reads it.
-    display_types: Optional[List[Optional["Type"]]] = None
 
 @dataclass(slots=True)
 class ArrayElement(Node):
@@ -952,11 +945,6 @@ class IndexAccess(Node):
     # `T[]` of a slice.
     inferred_element_type: Optional["Type"] = None
     reads_a_string_byte: bool = False  # `s[i]` on a string (#1091), stamped by the typecheck pass
-                                            # The backend reads the typecheck pass's stamp rather than
-                                            # re-deriving; with none, `rows[0].hash()` died
-                                            # as CE0019 (#286). Siblings:
-                                            # `inferred_return_type`,
-                                            # `inferred_unwrapped_type`.
     # In the body of a `dont_panic` function, and not in a lambda there: the backend
     # emits no bounds check (docs/design/dont-panic.md). Stamped by the AST builder.
     unchecked: bool = False
@@ -976,12 +964,6 @@ class BinaryOp(Node):
     op: BinOp
     left: "Expr"
     right: "Expr"
-    # The struct or enum a comparison compares, stamped by the typecheck pass when the
-    # operator reads a contract (`Eq` for `==`, `Ord` for `<`). The backend reads it.
-    operand_type: Optional["Type"] = None
-    # The builtin type of an arithmetic or bitwise operator, stamped by the typecheck
-    # pass when it infers the node. The backend reads it through `stamped_semantic_type`.
-    inferred_type: Optional["Type"] = None
 
 @dataclass(slots=True)
 class TupleLiteral(Node):
@@ -1222,15 +1204,6 @@ class Borrow(Node):
 class TryExpr(Node):
     """Try expression: expr??"""
     expr: "Expr"  # The expression being unwrapped (must be Result<T>)
-
-    inferred_inner_type: "Optional[Type]" = None
-    inferred_unwrapped_type: "Optional[Type]" = None
-    inferred_success_tag: "Optional[int]" = None
-    inferred_error_type: "Optional[Type]" = None
-    inferred_func_return_type: "Optional[Type]" = None
-    # The declared conversion the propagate path calls when the two error types differ
-    # (`semantics/conversions.py`). None when the error propagates unchanged.
-    inferred_conversion: Optional["Conversion"] = None
 
 @dataclass(slots=True)
 class RangeExpr(Node):

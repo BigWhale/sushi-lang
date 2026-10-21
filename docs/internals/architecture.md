@@ -49,11 +49,12 @@ compiled again. A single-file program, a library build (`--lib`), `--no-incremen
 | `semantics/passes/` | The passes: `collect/`, `docs.py`, `namespaces.py`, `resolve.py`, `finite_types.py`, `derive.py`, `scope.py`, `types/` (the `typecheck` pass), `lift.py`, `borrow/` |
 | `semantics/generics/` | Instantiation (`instantiate/`), monomorphization (`monomorphize/`), the Result and Maybe interning, derived `hash` and `clone`, name mangling, type display |
 | `backend/` | LLVM IR generation. `codegen_llvm.py` GENERATES a module; `driver.py` compiles, links and builds library bitcode |
-| `backend/expressions/`, `backend/statements/` | Tree-to-IR translation, one module per node family |
+| `backend/slir/` | The emitter of a `SlirFunction`: one LLVM function for each body |
+| `backend/expressions/` | The value halves of the operators, the casts, the integer constants and the enum variants; the memory helpers of the families; the stdlib call table |
 | `backend/types/` | The LLVM types (`core/`), and the code for arrays, primitives, structs and enums |
 | `backend/generics/` | `List@(T)`, `HashMap@(K, V)`, `Maybe@(T)`, `Result@(T, E)`, `Own@(T)`, the container walk and the derived hashes |
-| `backend/memory/` | Scopes and scope exit, stack slots, move tracking, heap calls, print frames |
-| `backend/functions/` | Function declarations, bodies and the C `main` wrapper |
+| `backend/memory/` | Stack slots and heap calls |
+| `backend/functions/` | Function declarations and the C `main` wrapper |
 | `backend/runtime/` | Runtime support: strings, formatting, runtime errors, closures, libc and user externs |
 | `sushi_stdlib/src/` | Python generators that emit the IR of the bitcode stdlib modules |
 | `sushi_stdlib/src_sushi/` | Stdlib modules written in Sushi, compiled as ordinary units |
@@ -142,19 +143,15 @@ A backend subsystem that keeps STATE is a manager class. `LLVMCodegen`
 |---|---|---|
 | `codegen.types` | `LLVMTypeSystem` | `backend/types/core/__init__.py` |
 | `codegen.runtime` | `LLVMRuntime` | `backend/runtime/core.py` |
-| `codegen.memory` | `ScopeManager` | `backend/memory/scopes.py` |
-| `codegen.moves` | `MoveTracker` | `backend/memory/moves.py` |
-| `codegen.expressions` | `ExpressionEmitter` | `backend/expressions/__init__.py` |
-| `codegen.statements` | `StatementEmitter` | `backend/statements/__init__.py` |
 | `codegen.functions` | `LLVMFunctionManager` | `backend/functions/__init__.py` |
 | `codegen.optimizer` | `LLVMOptimizer` | `backend/llvm_optimization.py` |
 | `codegen.stdlib` | `StdlibLinker` | `backend/stdlib_linker.py` |
-| `codegen.print_frames` | `PrintFrames` | `backend/memory/print_frames.py` |
 
-A translation from the tree to IR that keeps NO state is a free function, and it takes
-`codegen` as its first parameter. Most of `backend/expressions/`, `backend/statements/`,
-`backend/destructors.py`, `backend/gep_utils.py` and `backend/enum_utils.py` have this
-shape. `LLVMDriver` (`backend/driver.py`) wraps a codegen and does the compile and the
+A translation to IR that keeps NO state is a free function, and it takes `codegen` as its
+first parameter. `backend/destructors.py`, `backend/gep_utils.py`, `backend/enum_utils.py`
+and the value halves under `backend/expressions/` have this shape. The emitter of a
+`SlirFunction` (`backend/slir/`) is free functions too: the stage entry `emit_function`
+takes `codegen` first, and every other function takes the `FunctionState` of the body. `LLVMDriver` (`backend/driver.py`) wraps a codegen and does the compile and the
 link.
 
 No backend invariant is an `assert`, because `python -O` removes it. The backend calls
@@ -209,24 +206,20 @@ tables below are a map; each module's docstring holds the full rule.
 
 | Question | Where |
 |---|---|
-| Every ownership transfer (`consume`, `bind`, `relinquish`); the one deep clone (`copy_out`); the `Drop` set (`drops_of`) | `backend/ownership.py` |
+| The body of a function, from its `SlirFunction` (`emit_function`); the dispatch of a SLIR `Call` by callee kind (`CALL_EMITTERS`) | `backend/slir/emit.py` |
+| The one deep clone (`copy_out`); the `Drop` set (`drops_of`) | `backend/ownership.py` |
 | The clone and destroy pair for each type kind | `backend/lifecycle.py` |
 | Destroy a value; the one cleanup predicate (`needs_cleanup`); a declared `drop()` | `backend/destructors.py` |
-| An owning temporary (`own_temporary`); `llvm.mem*` and buffer growth | `backend/expressions/memory.py` |
+| `llvm.mem*` and buffer growth | `backend/expressions/memory.py` |
 | Every stack slot, in the entry block (`entry_alloca`) | `backend/memory/allocas.py` |
-| Scope exit, newest first, for a block end, `return`, `??`, `break` and `continue` | `backend/memory/scopes.py` |
 | The address of a dynamic array (`as_array_address`) | `backend/types/arrays/addressing.py` |
 | A dynamic-array descriptor field (`{len, cap, data}`) | `backend/gep_utils.py` |
 | A bounds check, and the Some/None merge | `backend/types/arrays/bounds.py` |
-| C-string marshalling for a stdlib or FFI callee (`emit_cstr_arg`) | `backend/expressions/calls/utils.py` |
-| The semantic type of a Result or Maybe receiver (`infer_generic_enum_type`) | `backend/expressions/calls/utils.py` |
-| The method-call dispatch, and the checked-call tail | `backend/expressions/calls/dispatcher.py` |
 | The emitter of a stdlib call (`STDLIB_EMITTERS`) | `backend/expressions/calls/stdlib/__init__.py` |
 | A container method's emitter (`emit_from_table`) | `backend/generics/container_table.py` |
 | The counted walk over a container; the HashMap probe loop | `backend/generics/container_walk.py`, `backend/generics/hashmap/probe.py` |
 | A `Maybe` value (`emit_maybe_some`, `emit_maybe_none`) | `backend/generics/maybe.py` |
 | The hash of one held value (`emit_value_hash`) | `backend/types/value_hash.py` |
-| A loop frame; a merge block; a `match` scrutinee type | `backend/statements/loops.py`, `backend/statements/control_flow.py`, `backend/statements/matching.py` |
 | The enum payload layout (`payload_field_offsets`) | `backend/types/core/sizing.py` |
 | An extension or perk method symbol (`extension_symbol`) | `semantics/generics/name_mangling.py` |
 

@@ -63,10 +63,6 @@ _add(ErrorMessage("CE0112", Severity.ERROR,
     "division by zero",
     Category.FUNC, "The compiler can read this divisor, and it is zero. One compile-time arithmetic answers a constant and a body alike, so '10 / 0' is refused in both positions. Only a divisor the compiler can read is an error: a computed one -- a variable, a loop index, a call -- is ordinary code and no check is emitted around it. The message named the constant position until #709, where the body half was added: a body divided by a literal zero, emitted 'sdiv i32 1, 0' and printed whatever the optimizer left behind -- 2 at --opt none and a different number at O2, because LLVM makes the result poison."))
 
-_add(ErrorMessage("CE0113", Severity.ERROR,
-    "{message}",
-    Category.INTERNAL, "Generic enum constructor requires type annotation from semantic analysis."))
-
 _add(ErrorMessage("CE0114", Severity.ERROR,
     "{message}",
     Category.FUNC, "A variadic '...T' parameter must be the last parameter, a function may declare at most one, and its element type must not be a reference (a dynamic-array element '...T[]' is allowed and moved per element)."))
@@ -110,10 +106,6 @@ _add(ErrorMessage("CE0123", Severity.ERROR,
 _add(ErrorMessage("CE0127", Severity.ERROR,
     "no clone emitter registered for kind '{kind}'",
     Category.INTERNAL, "The derive pass registered a clone() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load."))
-
-_add(ErrorMessage("CE0124", Severity.ERROR,
-    "'??' expression reached codegen without a type annotation from semantic analysis",
-    Category.INTERNAL, "The typecheck pass annotates every TryExpr it validates (inner type, unwrapped type, success tag, error type). Reaching the backend without one means the expression's type was never inferred - the backend no longer re-infers types, so this is a gap in the typecheck pass, not a user error."))
 
 # CE0125 ("borrow checker has no arm for expression node") is retired. It was the backstop
 # of the AST dispatch of the borrow pass; the pass walks SHIR through one table now, and a

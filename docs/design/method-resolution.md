@@ -36,21 +36,20 @@ extensions of the units that the calling unit imports. One predicate answers it,
 [`CE3022`](../error-catalog.md#ce3022), and two imported public ones are
 [`CE3023`](../error-catalog.md#ce3023) at the call.
 
-## The three layers
+## The layers
 
-The same precedence is implemented three times, and all three must agree. Any disagreement is
-a bug:
+Two layers read the same precedence:
 
 | layer | file | what it decides |
 |---|---|---|
 | **validation** | `semantics/passes/types/method_registry.py` (the family's `validate` hook) | which family checks arity and argument types |
 | **inference** | `semantics/passes/types/method_registry.py` (the family's `infer` hook) | what the call expression's type is |
-| **codegen** | `backend/expressions/calls/dispatcher.py:emit_method_call` | which body actually runs |
 
 Validation and inference are ONE table. Each of its eleven family rows carries both hooks,
 and `calls/methods.py:validate_method_call` asks the table and holds no arm chain of its
-own. Codegen is its own dispatcher, so two layers must agree: the table and the
-dispatcher.
+own. The backend keeps no dispatcher of its own: the `Callee` of each SLIR `Call`
+(`docs/design/ir.md` 7.6) names the body that runs. The method-call dispatcher went with the
+AST body emitter.
 
 Inference is the layer that goes wrong quietly. `validate_assignment_compatibility` opens with
 `if value_type is None: return`, so a family that fails to infer does not report anything --
@@ -110,10 +109,8 @@ Inside the built-in step, both layers try the families in one canonical order:
 The receiver kinds are disjoint -- a primitive is a `BuiltinType`, the derived pair and the
 contract methods apply to `StructType`/`EnumType` (`eq` and `compare` also to a primitive),
 the function-value clone to `FunctionType` -- and the method names are disjoint, so the order
-is arbitrary. What matters is that validation and codegen state the SAME one: if the two layers stated
-it differently, a type that satisfied two families would dispatch differently per layer
-with no diagnostic.
-`tests/unit/test_method_resolution_family_order.py` pins the order in both files.
+is arbitrary. The AST body emitter had a second dispatcher that stated the order again, and a
+gate held the two equal; the dispatcher and its gate went with that emitter.
 
 **The families claim pairwise disjointly, and a gate proves it.** At most ONE family claims any
 (receiver kind, method name), over a space proved to reach every family

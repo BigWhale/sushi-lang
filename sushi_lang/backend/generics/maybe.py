@@ -8,6 +8,7 @@ from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import EnumType, Type
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
 
 
@@ -70,7 +71,6 @@ def _emit_maybe_or_err(
     from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check
     from sushi_lang.backend.generics.result_builder import (
         build_err_from_return_type, build_ok_variant, stamped_result_return)
-    from sushi_lang.backend.memory.allocas import entry_alloca
     from sushi_lang.semantics.generics.results import result_ok_err
     from sushi_lang.semantics.typesys import BuiltinType
 
@@ -153,7 +153,7 @@ def emit_maybe_some(codegen: 'LLVMCodegen', value_type: Type, value: ir.Value) -
 
     data_array_type = llvm_enum_type.elements[1]  # [N x i8] array
     # ENTRY block: a Maybe built inside a loop must not grow the frame (BUGS.md B1).
-    temp_alloca = codegen.memory.entry_alloca(data_array_type, "enum_data_temp")
+    temp_alloca = entry_alloca(codegen.builder, data_array_type, "enum_data_temp")
 
     data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 

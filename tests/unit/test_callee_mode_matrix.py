@@ -6,7 +6,6 @@ import pytest
 import ast
 from pathlib import Path
 
-from sushi_lang.backend.functions.helpers import callee_owns_param
 from sushi_lang.semantics.param_modes import (
     CalleeKind,
     Convention,
@@ -35,16 +34,6 @@ POSITIONAL_KINDS = [
 def test_every_callee_kind_is_in_exactly_one_group():
     assert set(DECLARING_KINDS) | set(POSITIONAL_KINDS) == set(CalleeKind)
     assert not set(DECLARING_KINDS) & set(POSITIONAL_KINDS)
-
-
-# 3. The callee registers cleanup iff the mode is nom
-
-
-def test_ownership_does_not_depend_on_the_kind_of_callee():
-    """The whole point: the same declaration means the same thing everywhere."""
-    import inspect
-    signature = inspect.signature(callee_owns_param)
-    assert list(signature.parameters) == ["param"]
 
 
 # 5. The RECEIVER's mode is read through the same seam

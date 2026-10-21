@@ -506,9 +506,8 @@ class ForeignPtrMethodInferrer:
 
 # The family table. Written in the order the VALIDATION half reads: the families that
 # answer before a perk implementation, then the ones that answer after it. The claims are
-# disjoint, so the order changes no answer; stating ONE order in both layers is the point
-# (#273), and `tests/unit/test_method_resolution_family_order.py` pins it against the
-# codegen dispatcher.
+# disjoint, so the order changes no answer (#273). The disjointness is the gate
+# (`tests/unit/test_method_family_dispatch_is_one.py`).
 #
 # A claim reads the receiver type as the caller hands it in. Both callers deref a borrow
 # before they ask -- the inference half in `visitor.py:visit_methodcall`, the validation

@@ -1,11 +1,13 @@
 """Main function wrapper handling for C compatibility."""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
-from sushi_lang.semantics.typesys import Type as Ty
+from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type as Ty
 from sushi_lang.backend import enum_utils
+from sushi_lang.backend.destructors import emit_value_destructor
+from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.runtime.constants import IONBF
 
@@ -38,7 +40,7 @@ class MainFunctionWrapper:
         # The slot is scratch: the payload is loaded straight back out, so one slot per
         # site is enough. Where it goes is `backend/memory/allocas.py`'s to say (#589).
         data_array = enum_utils.extract_enum_data(self.codegen, result_enum, name="result_data")
-        data_alloca = self.codegen.memory.entry_alloca(data_array.type, "result_data_slot")
+        data_alloca = entry_alloca(self.codegen.builder, data_array.type, "result_data_slot")
         self.codegen.builder.store(data_array, data_alloca)
 
         value_ptr = self.codegen.builder.bitcast(data_alloca, value_type.as_pointer())
@@ -75,35 +77,41 @@ class MainFunctionWrapper:
         """Emit the C `main` that calls the user's main and returns its exit code.
 
         The declaration round made both functions, and the body of the user's main is
-        already defined (`user_main`).
+        already defined (`user_main`). The entry block holds the stack slots alone.
         """
         c_main = self.codegen.funcs.get('main')
         user_main = self.codegen.module.globals.get(USER_MAIN_SYMBOL)
         if c_main is None or not isinstance(user_main, ir.Function):
             raise_internal_error("CE0064")
 
-        self.codegen.functions.helpers.begin_function(c_main)
+        entry = c_main.append_basic_block(name="entry")
+        start = c_main.append_basic_block(name="start")
+        ir.IRBuilder(entry).branch(start)
+        saved = self.codegen.builder, self.codegen.func
+        self.codegen.builder, self.codegen.func = ir.IRBuilder(start), c_main
         self._unbuffer_libc_stdio()
 
         # The entrypoint pass admits `string[] args` or nothing (CE0138), so argv is the
         # one possible argument.
+        args_slot = None
         user_main_args: list[ir.Value] = []
         if self.codegen.main_expects_args:
             argc, argv = c_main.args[0], c_main.args[1]
-            args_array = self.codegen._generate_argc_argv_conversion(argc, argv)
-            user_main_args.append(self.codegen.builder.load(args_array, name="args_struct"))
+            args_slot = self.codegen._generate_argc_argv_conversion(argc, argv)
+            user_main_args.append(self.codegen.builder.load(args_slot, name="args_struct"))
 
-        self._return_exit_code(user_main, user_main_args)
+        self._return_exit_code(user_main, user_main_args, args_slot)
 
-        self.codegen.functions.helpers.end_function()
+        self.codegen.builder, self.codegen.func = saved
         return c_main
 
-    def _return_exit_code(self, user_main: ir.Function,
-                          user_main_args: list[ir.Value]) -> None:
+    def _return_exit_code(self, user_main: ir.Function, user_main_args: list[ir.Value],
+                          args_slot: Optional[ir.Value]) -> None:
         """Call the user's main and return its value as an i32.
 
         The user's main is bare (CE0106 refuses a channel), so its value IS the exit
-        code, widened or cut to the C `int`.
+        code, widened or cut to the C `int`. The `string[]` of argv is freed after the
+        call: each element is a borrowed view of argv, so only the buffer goes.
         """
         value = self.codegen.builder.call(user_main, user_main_args, name="user_main_result")
 
@@ -119,9 +127,8 @@ class MainFunctionWrapper:
         else:
             converted_value = ir.Constant(i32, 0)
 
-        cmd_args_desc = self.codegen.dynamic_arrays._array("cmd_args")
-        if cmd_args_desc is not None:
-            self.codegen.dynamic_arrays.emit_array_destructor("cmd_args")
-            cmd_args_desc.destroyed = True
+        if args_slot is not None:
+            emit_value_destructor(self.codegen, args_slot,
+                                  DynamicArrayType(BuiltinType.STRING))
 
         self.codegen.builder.ret(converted_value)

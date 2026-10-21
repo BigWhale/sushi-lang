@@ -3,7 +3,7 @@
 The port of `test_scope_exit_walk_is_one.py` to SLIR: the drops of a scope exit, of a
 moved local and of the old value of a rebind are placed by `semantics/slir/drops.py`, the
 newest declaration first. So no other module of the compiler builds a SLIR `Drop` or a
-`DropIfSet`. The old gate stays until Gate 4, with the scope-exit walk of the backend.
+`DropIfSet`. The scope-exit walk of the old backend and its gate are deleted.
 """
 from __future__ import annotations
 

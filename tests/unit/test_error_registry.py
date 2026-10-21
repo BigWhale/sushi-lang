@@ -40,7 +40,7 @@ PACKAGER_REFERENCE = re.compile(r"""["'](NE\d{4})["']""")
 # Why a code exists belongs in its module's `doc` field; what changed belongs in the
 # CHANGELOG and the git log. Neither belongs in this comment, which had grown to a
 # 5,000-character single line of per-code history.
-REGISTRY_SIZE = 481
+REGISTRY_SIZE = 457
 
 # Codes whose numeric range does not match their category. SHRINK-ONLY: never add.
 # Renumbering would break EXPECT_ERROR_CODE headers and the docs, so these stay
@@ -167,11 +167,15 @@ def test_expect_error_code_directives_are_registered():
 # #989 retired the last five: a code nothing emits is not registered. The switch to SHIR
 # (P2.3) deleted the AST validators of the typecheck pass, and these codes were emitted
 # there alone. Each one comes back with the typecheck stage of its construct group, which
-# removes it here.
+# removes it here. P2.13 deleted the AST body emitter, which alone emitted the three
+# runtime traps; each one comes back with the SLIR Trap of its construct group.
 UNREFERENCED: set[str] = {
     "CE2111", "CE2116",                       # Tier A: new() and from([]), assert
     "CE6102",                                 # Tier A: type arguments after a dot
     "CE2094",                                 # Tier C: closures
+    "RE2023",                                 # Tier A (A3, A4): a match with no arm
+    "RE2026",                                 # Tier A (A11): a failed assert
+    "RE2025",                                 # Tier D (D5): a null foreign return
 }
 
 

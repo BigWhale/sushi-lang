@@ -8,9 +8,6 @@ layers; the compiler code may not.
 """
 from __future__ import annotations
 
-import ast
-from pathlib import Path
-
 import pytest
 
 from sushi_lang.backend.generics.hashmap import HASHMAP_EMITTERS
@@ -23,10 +20,6 @@ _TABLES = [
     pytest.param(LIST_EMITTERS, LIST_METHOD_ARITY, "List", id="List"),
     pytest.param(HASHMAP_EMITTERS, HASHMAP_METHOD_ARITY, "HashMap", id="HashMap"),
 ]
-
-_DISPATCH = (Path(__file__).resolve().parents[2]
-             / "sushi_lang" / "backend" / "expressions" / "calls" / "generics.py")
-
 
 @pytest.mark.parametrize("emitters, arity, base", _TABLES)
 def test_every_arity_name_has_an_emitter(emitters, arity, base):
@@ -49,10 +42,3 @@ def test_every_row_is_an_emitter_and_a_bool_flag(emitters, arity, base):
 def test_the_statics_are_container_methods(emitters, arity, base):
     assert BUILTIN_STATICS[base] <= set(emitters)
 
-
-def test_the_dispatcher_does_not_write_the_static_names_again():
-    tree = ast.parse(_DISPATCH.read_text())
-    statics = set().union(BUILTIN_STATICS["List"], BUILTIN_STATICS["HashMap"])
-    written = [node.value for node in ast.walk(tree)
-               if isinstance(node, ast.Constant) and node.value in statics]
-    assert written == []

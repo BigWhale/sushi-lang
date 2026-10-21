@@ -64,17 +64,9 @@ _add(ErrorMessage("CE0013", Severity.ERROR,
     "runtime function '{name}' not declared",
     Category.INTERNAL, "C library function not declared - runtime initialization required."))
 
-_add(ErrorMessage("CE0014", Severity.ERROR,
-    "dynamic array manager not initialized",
-    Category.INTERNAL, "Dynamic array manager is None - initialization required."))
-
 _add(ErrorMessage("CE0015", Severity.ERROR,
     "AST invariant violated: {message}",
     Category.INTERNAL, "An AST invariant is violated: a semantic pass or the code generator found a structure that the compiler does not make. This is a fault in the compiler, not in the program."))
-
-_add(ErrorMessage("CE0016", Severity.ERROR,
-    "scope stack underflow: attempted to pop from empty scope stack",
-    Category.INTERNAL, "Push/pop mismatch - each push_scope() must be paired with exactly one pop_scope()."))
 
 # Type Conversion/Casting (CE0017-CE0022)
 _add(ErrorMessage("CE0017", Severity.ERROR,
@@ -110,44 +102,16 @@ _add(ErrorMessage("CE0024", Severity.ERROR,
     "unknown method '{method}' for type '{type}'",
     Category.INTERNAL, "Method not found for this type - semantic analysis should prevent this."))
 
-_add(ErrorMessage("CE0025", Severity.ERROR,
-    "extension method '{name}' not declared",
-    Category.INTERNAL, "Extension method reference not found in symbol table."))
-
-_add(ErrorMessage("CE0026", Severity.ERROR,
-    "function expects {expected} arguments, got {got}",
-    Category.INTERNAL, "Function parameter count mismatch during codegen."))
-
-_add(ErrorMessage("CE0027", Severity.ERROR,
-    "callee must be a Name, got {type}",
-    Category.INTERNAL, "Function call expression has invalid callee type - AST invariant violation."))
-
 _add(ErrorMessage("CE0028", Severity.ERROR,
     "stdlib method not implemented: {method}",
     Category.INTERNAL, "Standard library method missing backend implementation."))
 
 # Struct Operations (CE0029-CE0032)
-_add(ErrorMessage("CE0029", Severity.ERROR,
-    "struct '{struct}' has no field '{field}'",
-    Category.INTERNAL, "Struct field lookup failed - semantic analysis should prevent this."))
-
-_add(ErrorMessage("CE0030", Severity.ERROR,
-    "cannot get address of struct for member access",
-    Category.INTERNAL, "Failed to retrieve struct pointer for field access."))
-
-_add(ErrorMessage("CE0031", Severity.ERROR,
-    "member access on non-struct type: {type}",
-    Category.INTERNAL, "Attempted field access on non-struct type - semantic analysis failure."))
-
 _add(ErrorMessage("CE0032", Severity.ERROR,
     "expected StructType, got {type}",
     Category.INTERNAL, "Type mismatch: expected struct type but got different type."))
 
 # Enum Operations (CE0033-CE0040)
-_add(ErrorMessage("CE0033", Severity.ERROR,
-    "unknown enum type: {name}",
-    Category.INTERNAL, "Enum type not found in symbol table during codegen."))
-
 _add(ErrorMessage("CE0034", Severity.ERROR,
     "variant '{variant}' not found in enum '{enum}'",
     Category.INTERNAL, "Enum variant lookup failed - semantic analysis should prevent this."))
@@ -173,14 +137,6 @@ _add(ErrorMessage("CE0041", Severity.ERROR,
 _add(ErrorMessage("CE0042", Severity.ERROR,
     "expected DynamicArrayType, got {type}",
     Category.INTERNAL, "Type mismatch: expected dynamic array but got different type."))
-
-_add(ErrorMessage("CE0043", Severity.ERROR,
-    "array.get() returned non-struct type: {type}",
-    Category.INTERNAL, "Array element type is not a struct as expected."))
-
-_add(ErrorMessage("CE0044", Severity.ERROR,
-    "nested member access on non-struct field type: {type}",
-    Category.INTERNAL, "Attempted nested field access on non-struct type."))
 
 # Generic Type Resolution (CE0045-CE0050)
 _add(ErrorMessage("CE0045", Severity.ERROR,
@@ -221,31 +177,7 @@ _add(ErrorMessage("CE0055", Severity.ERROR,
     "unknown variable or constant: {name}",
     Category.INTERNAL, "Variable/constant not found in symbol table during codegen."))
 
-_add(ErrorMessage("CE0056", Severity.ERROR,
-    "cannot determine type for variable: {name}",
-    Category.INTERNAL, "Variable type information missing during codegen."))
-
-_add(ErrorMessage("CE0057", Severity.ERROR,
-    "dynamic array '{name}' not declared",
-    Category.INTERNAL, "Dynamic array not found in tracking state."))
-
-_add(ErrorMessage("CE0058", Severity.ERROR,
-    "dynamic array '{name}' already destroyed",
-    Category.INTERNAL, "Attempted to use dynamic array after explicit destruction."))
-
 # Builder/Context State (CE0059-CE0063)
-_add(ErrorMessage("CE0059", Severity.ERROR,
-    "attempt to emit into a terminated block",
-    Category.INTERNAL, "Cannot add instructions to basic block that already has a terminator."))
-
-_add(ErrorMessage("CE0060", Severity.ERROR,
-    "attempt to emit statement after a terminator",
-    Category.INTERNAL, "Cannot emit code after return/branch - control flow analysis failure."))
-
-_add(ErrorMessage("CE0061", Severity.ERROR,
-    "block has no 'statements' list",
-    Category.INTERNAL, "AST block node missing expected statements field."))
-
 # CE0062 ("invalid cleanup_type") is retired. `emit_scope_cleanup` took a cleanup kind
 # that every caller gave as 'all', so the guard could not fire; #835 removed the
 # parameter. The number is not reused.
@@ -262,18 +194,6 @@ _add(ErrorMessage("CE0064", Severity.ERROR,
 
 
 # Type Inference (CE0067-CE0070)
-_add(ErrorMessage("CE0067", Severity.ERROR,
-    "cannot infer struct type from expression: {expr}",
-    Category.INTERNAL, "Struct type inference failed for expression."))
-
-_add(ErrorMessage("CE0068", Severity.ERROR,
-    "cannot infer struct type from method call: {method}",
-    Category.INTERNAL, "Struct type inference failed for method call."))
-
-_add(ErrorMessage("CE0069", Severity.ERROR,
-    "cannot infer struct type from DotCall: {method}",
-    Category.INTERNAL, "Struct type inference failed for dot-call expression."))
-
 
 # Iterator Operations (CE0071)
 _add(ErrorMessage("CE0071", Severity.ERROR,
@@ -372,16 +292,6 @@ _add(ErrorMessage("CE0091", Severity.ERROR,
 # CE2095 from the finite-types pass, which stops the analysis before the derive pass runs. The
 # number is not reused.
 
-_add(ErrorMessage("CE0129", Severity.ERROR,
-    "no ownership decision for the {use} consuming use of a {node}",
-    Category.INTERNAL,
-    "Every position that takes ownership routes through backend/ownership.py::consume, which "
-    "reads the Provenance semantics stamped on the source expression. A missing stamp means "
-    "The borrow pass did not classify this position -- a gap in the borrow checker's coverage of the "
-    "ConsumingUse set, not a user error. It is fatal ON PURPOSE: a fallback that guessed the "
-    "decision would be a twelfth derivation of the rule, which is the thing the seam exists to "
-    "make impossible. Same treatment CE0124 gives a missing try-expression annotation."))
-
 _add(ErrorMessage("CE0132", Severity.ERROR,
     "no write address for a fixed-array receiver of kind {node}",
     Category.INTERNAL,
@@ -465,10 +375,6 @@ _add(ErrorMessage("CE0096", Severity.ERROR,
 
 
 # Expression Type Validation (CE0099-CE0100)
-_add(ErrorMessage("CE0099", Severity.ERROR,
-    "not an operator type: {type}",
-    Category.INTERNAL, "Expression node is not a valid operator - AST invariant violation."))
-
 # Struct errors
 _add(ErrorMessage("CE0004", Severity.ERROR,
     "duplicate struct '{name}'",

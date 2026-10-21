@@ -1,7 +1,8 @@
-"""The seam: the only way a value may be given to a new owner.
+"""The deep copy of a value read out of a container, and the `Drop` set of the backend.
 
-`tests/unit/test_consuming_use_coverage.py` fails the build if any other backend module
-touches a move-mark primitive. See docs/design/ownership-conventions.md.
+`copy_out` is the one deep-clone entry outside the clone engine
+(`tests/unit/test_clone_entry_is_copy_out.py`). `drops_of` is the backend reader of the
+`Drop` set. See docs/design/ownership-conventions.md.
 """
 from __future__ import annotations
 
@@ -9,115 +10,16 @@ from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 
-from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.ast import MemberAccess, Name
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.ownership import (
-    ConsumingUse,
-    Ownership,
-    Provenance,
     Type,
-    classify,
-    type_class_of,
 )
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
-__all__ = ["ConsumingUse", "bind", "consume", "copy_out", "drops_of", "relinquish",
-           "relinquish_temp", "resolver_for", "unwrap"]
-
-
-def relinquish_temp(codegen: 'LLVMCodegen', name: str) -> None:
-    """Transfer a compiler-SYNTHESIZED temporary to a new owner, by name."""
-    da = getattr(codegen, "dynamic_arrays", None)
-    if da is not None:
-        da.mark_as_moved(name)
-    codegen.memory.mark_struct_as_moved(name)
-
-
-def relinquish(codegen: 'LLVMCodegen', name: str) -> None:
-    """State that a local NAMES storage it does not own, so no exit path frees it."""
-    da = getattr(codegen, "dynamic_arrays", None)
-    if da is not None:
-        da.mark_as_moved(name)
-    codegen.memory.mark_struct_as_moved(name)
-
-
-def bind(codegen: 'LLVMCodegen', source, value: ir.Value,
-         target_type: Optional[Type]) -> tuple[ir.Value, bool]:
-    """Bind a `let`; returns (value to store, whether the caller must register cleanup).
-
-    `consume()` with one answer mapped differently: REJECT means the source is a borrow, so
-    the binding owns nothing rather than being CE0129 (#242).
-
-    A lent iterator is the one REJECT that owns its value (#1259): it BORROWS its source,
-    so it may not leave, and it OWNS its state, so the binding destroys it. The two facts
-    are kept apart here: the borrow pass stamped the producer LENT, and the decision about
-    the source stays REJECT.
-    """
-    provenance = _provenance_of(source, ConsumingUse.LET)
-    decision = classify(provenance, type_class_of(target_type, drops_of(codegen), resolver_for(codegen)))
-
-    if decision is Ownership.MOVE:
-        _mark_moved(codegen, source)
-        return value, True
-    if decision is Ownership.ADOPT:
-        return value, True
-    return value, _makes_a_lent_iterator(source)
-
-
-def _makes_a_lent_iterator(source) -> bool:
-    """Is `source` a call that makes a NEW iterator value over a borrowed source?"""
-    from sushi_lang.semantics.ast import TryExpr
-    from sushi_lang.semantics.generics.iterators import LENT
-    while isinstance(source, TryExpr):
-        source = source.expr
-    return getattr(source, "iterator_state", None) == LENT
-
-
-def consume(codegen: 'LLVMCodegen', source, value: ir.Value,
-            target_type: Optional[Type], use: ConsumingUse) -> ir.Value:
-    """Give `value` to a new owner, and return what the caller should store.
-
-    An unstamped source is CE0129: deliberately fatal with no fallback, because a fallback
-    that guessed would be a second derivation of the rule this seam exists to centralize.
-    """
-    provenance = _provenance_of(source, use)
-    decision = classify(provenance, type_class_of(target_type, drops_of(codegen), resolver_for(codegen)))
-
-    if decision is Ownership.MOVE:
-        _mark_moved(codegen, source)
-        _release_temporary(codegen, source)
-        return value
-    if decision is Ownership.ADOPT:
-        _release_temporary(codegen, source)
-        return value
-
-    # REJECT is CE2411, which the borrow pass reports before codegen ever runs. Reaching it here
-    # means the borrow checker classified the same source differently from this call --
-    # impossible while both go through `classify`, so it is a real internal error.
-    raise_internal_error("CE0129", use=use.value, node=type(source).__name__)
-
-
-def unwrap(codegen: 'LLVMCodegen', source, value: ir.Value,
-           wrapper_type: Optional[Type]) -> ir.Value:
-    """`source??` over a place: spend the wrapper if the writer owns it (#548).
-
-    The payload leaves the wrapper here, so an OWNED wrapper that owns heap has nothing
-    left to free and is marked moved -- BEFORE the propagation path's scope cleanup is
-    emitted, so the Err arm is not freed under the caller who is about to read it. The
-    class is the WRAPPER's, as in the borrow pass's `unwrap_place`. REJECT is not an
-    error here: a borrowed wrapper keeps its owner, the payload is a read through it,
-    and the position that takes the payload decides (CE2411 there, from the borrow
-    pass). A wrapper that owns nothing is copied out of.
-    """
-    provenance = _provenance_of(source, ConsumingUse.TRY)
-    decision = classify(provenance, type_class_of(wrapper_type, drops_of(codegen), resolver_for(codegen)))
-    if decision is Ownership.MOVE:
-        _mark_moved(codegen, source)
-    return value
+__all__ = ["copy_out", "drops_of", "resolver_for"]
 
 
 def copy_out(codegen: 'LLVMCodegen', value: ir.Value,
@@ -147,60 +49,6 @@ def resolver_for(codegen: 'LLVMCodegen'):
                 or codegen.enum_table.by_name.get(name)
                 or ty)
     return resolve
-
-
-def _provenance_of(source, use: ConsumingUse) -> Provenance:
-    """The `Provenance` the borrow pass stamped on `source`, or CE0129 if there is none."""
-    provenance = getattr(source, "ownership_provenance", None)
-    if provenance is None:
-        raise_internal_error("CE0129", use=use.value, node=type(source).__name__)
-    return provenance
-
-
-def _mark_moved(codegen: 'LLVMCodegen', source) -> None:
-    """Record that the source no longer owns the value, so scope exit skips it."""
-    if isinstance(source, MemberAccess):
-        _spend_taken_from(codegen, source)
-        return
-    if not isinstance(source, Name):
-        return
-    codegen.memory.mark_struct_as_moved(source.id)
-    da = getattr(codegen, "dynamic_arrays", None)
-    if da is not None:
-        da.mark_as_moved(source.id)
-
-
-def _release_temporary(codegen: 'LLVMCodegen', source) -> None:
-    """The value goes to its new owner, so a scope temporary that holds it frees nothing.
-
-    A method call holds its receiver in a scope temporary before the method is known, and
-    a `nom self` method then takes that receiver (#1169). An operand is held the same way
-    from its emission until its position takes it, so a `??` in a later sibling operand
-    frees it once (`hold_operand`).
-    """
-    name = codegen.memory.temporary_holding(source)
-    if name is not None:
-        relinquish_temp(codegen, name)
-
-
-def _spend_taken_from(codegen: 'LLVMCodegen', source: MemberAccess) -> None:
-    """A marked field take spends its receiver: destroy the rest, then mark it moved.
-
-    Reaching here at all is the stamp: a MemberAccess carries Provenance.OWNED only
-    where the borrow pass read it as a take (ruling R28), and every other field read is
-    BORROWED, which never decides MOVE. What suppresses the receiver's own free is the
-    whole value and not one field, so the fields left behind are destroyed here -- the
-    scope exit is about to skip them.
-    """
-    receiver = source.receiver
-    if not isinstance(receiver, Name):
-        return
-    from sushi_lang.backend.destructors import emit_struct_fields_except
-    slot = codegen.memory.try_find_local_slot(receiver.id)
-    receiver_type = codegen.memory.find_semantic_type(receiver.id)
-    if slot is not None and receiver_type is not None:
-        emit_struct_fields_except(codegen, slot, receiver_type, source.member)
-    _mark_moved(codegen, receiver)
 
 
 def _clone(codegen: 'LLVMCodegen', value: ir.Value,

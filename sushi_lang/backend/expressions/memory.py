@@ -1,9 +1,7 @@
 """Memory management operations for the Sushi language compiler."""
 from __future__ import annotations
 import enum
-import itertools
-from collections import defaultdict
-from typing import TYPE_CHECKING, Iterator, Optional
+from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
 from sushi_lang.semantics.type_predicates import is_instance_of
@@ -112,8 +110,6 @@ def _llvm_type_alignment(llvm_type: 'ir.Type') -> int:
     return 8
 
 
-
-
 def emit_realloc_call(codegen: 'LLVMCodegen', old_ptr: ir.Value, new_size: ir.Value) -> ir.Value:
     """Emit realloc() call with error checking."""
     realloc_func = codegen.get_realloc_func()
@@ -212,193 +208,10 @@ def clone_dynamic_array_value(codegen: 'LLVMCodegen', array_struct: ir.Value, el
     return result_phi
 
 
-def is_container_get_call(codegen: 'LLVMCodegen', expr) -> bool:
-    """Is `expr` a `.get()`/`.first()`/`.last()` reading out of storage its receiver owns?"""
-    from sushi_lang.semantics.places import unwrap_try
-    expr = unwrap_try(expr)
-
-    if getattr(expr, "method", None) not in ("get", "first", "last"):
-        return False
-    receiver = getattr(expr, "receiver", None)
-    if receiver is None:
-        return False
-    from sushi_lang.semantics.ownership import is_get_out_container
-    from sushi_lang.backend.expressions.type_utils import infer_expr_semantic_type
-    from sushi_lang.backend.expressions.calls.utils import infer_generic_struct_type
-
-    receiver_type = infer_expr_semantic_type(codegen, receiver)
-    if receiver_type is None:
-        # The generic containers resolve through the same helper their emitters use
-        # (`calls/utils.py`), so this predicate and `try_emit_own_method` cannot disagree
-        # about what an `Own` / `List` / `HashMap` receiver is. It is AST-only and emits no
-        # IR, which is what makes it safe to call from a predicate.
-        from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
-        for base in CONTAINER_BASES:
-            receiver_type = infer_generic_struct_type(codegen, receiver, base)
-            if receiver_type is not None:
-                break
-    return is_get_out_container(receiver_type)
-
-
-def reads_a_borrow_through(codegen: 'LLVMCodegen', expr) -> bool:
-    """Is `expr` (a `??` around it included) a call that reads a borrowed receiver through?
-
-    `m.or_err(nom e)` over a borrowed `Maybe` answers a view of what the owner keeps
-    (docs/design/error-conversion.md section 4): the receiver is a get-out, or the borrow
-    pass stamped it BORROWED (a parameter, a pattern binding, a field), and its payload
-    owns a resource. The owner frees the payload, so the answer has no owner of its own.
-    """
-    from sushi_lang.semantics.ast import TryExpr
-    from sushi_lang.semantics.generics.builtin_signatures import read_through_receiver_of
-    from sushi_lang.semantics.ownership import Provenance
-    # The `??` is stripped by hand and not by `unwrap_try`, because `unwrap_try` reads
-    # through the very call that this predicate asks about.
-    while isinstance(expr, TryExpr):
-        expr = expr.expr
-    receiver = read_through_receiver_of(expr)
-    receiver_type = getattr(expr, "resolved_enum_type", None)
-    if receiver is None or receiver_type is None:
-        return False
-    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
-    if not needs_cleanup(codegen, resolve_named_type(codegen, receiver_type)):
-        return False
-    return (getattr(receiver, "ownership_provenance", None) is Provenance.BORROWED
-            or is_container_get_call(codegen, receiver))
-
-
-def expression_is_temporary(codegen: 'LLVMCodegen', expr) -> bool:
-    """Does `expr` produce a value that NO other owner will free?"""
-    from sushi_lang.semantics.ast import Name, MemberAccess, IndexAccess
-    if isinstance(expr, (Name, MemberAccess, IndexAccess)):
-        return False
-    from sushi_lang.semantics.borrowed_return import lends_a_view
-    if lends_a_view(expr):
-        # The answer of a borrowed return views storage that a source keeps (#1229).
-        return False
-    if reads_a_borrow_through(codegen, expr):
-        return False
-    return not is_container_get_call(codegen, expr)
-
-
-# One name counter per prefix, so the call-argument temporaries keep names of their own.
-_PARK_SEQ: defaultdict[str, Iterator[int]] = defaultdict(itertools.count)
-
-
-def own_temporary(codegen: 'LLVMCodegen', expr, value: ir.Value,
-                  semantic_type: Optional[Type],
-                  slot_type: Optional[ir.Type] = None,
-                  prefix: str = "__temp") -> Optional[ir.Value]:
-    """Give a value NOBODY else will free an owner, and return its slot; None if it has one.
-
-    THE ownership decision for a value no binding names, and `expression_is_temporary` is
-    the predicate that makes it: a value nobody else will free is registered like any
-    owning local, so scope exit frees it exactly once; a value read out of storage someone
-    else owns gets no owner here, because a second one would be a double free.
-
-    Registration goes through `register_owning_value`, the COMPLETE registry router.
-    `create_local` reaches only `register_local_cleanup`, which knows structs with owning
-    fields, fixed arrays, closures and strings -- so a dynamic array, a `List@(T)` and an
-    `Own@(T)` given an owner here were registered NOWHERE and leaked (#382).
-    """
-    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
-
-    if value is None or semantic_type is None:
-        return None
-    # A value that a scope temporary already holds keeps that one owner. The method
-    # receiver is owned first, and the fixed-array dispatcher then asks for its address.
-    held = codegen.memory.slot_holding(expr, value)
-    if held is not None:
-        return held
-    resolved = resolve_named_type(codegen, semantic_type)
-    if resolved is None or not needs_cleanup(codegen, resolved):
-        return None
-    if not expression_is_temporary(codegen, expr):
-        return None
-
-    name = f"{prefix}_{next(_PARK_SEQ[prefix])}"
-    slot = codegen.memory.create_local(name, slot_type or value.type, value, resolved,
-                                       register_cleanup=False)
-    codegen.memory.register_owning_value(name, resolved, slot)
-    codegen.memory.hold_in_temporary(expr, name, value)
-    return slot
-
-
-def hold_operand(codegen: 'LLVMCodegen', expr, value: ir.Value,
-                 semantic_type: Optional[Type]) -> None:
-    """Give an owning temporary OPERAND its owner at once, before its siblings are emitted.
-
-    A `??` in a later sibling leaves before the position takes the operand, and that exit
-    frees only what has an owner. A position that only reads the operand keeps this owner;
-    a position that takes it goes through `consume()`, which releases the hold.
-    """
-    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
-
-    if value is None or semantic_type is None:
-        return
-    resolved = resolve_named_type(codegen, semantic_type)
-    if resolved is None or not needs_cleanup(codegen, resolved):
-        return
-    if not expression_is_temporary(codegen, expr):
-        return
-    ll_type = codegen.types.ll_type(resolved)
-    if isinstance(value.type, ir.PointerType) and value.type.pointee == ll_type:
-        value = codegen.builder.load(value, name="operand_val")
-    elif value.type != ll_type:
-        return
-    own_temporary(codegen, expr, value, resolved, prefix="__operand")
-
-
-def emit_held_operand(codegen: 'LLVMCodegen', expr,
-                      semantic_type: Optional[Type]) -> ir.Value:
-    """Emit one operand of a call, a construction or a comparison, and hold it at once."""
-    value = codegen.expressions.emit_expr(expr)
-    hold_operand(codegen, expr, value, semantic_type)
-    return value
-
-
-def park_value(codegen: 'LLVMCodegen', expr, value: ir.Value,
-               semantic_type: Optional[Type],
-               slot_type: Optional[ir.Type] = None) -> ir.Value:
-    """Park a value that names no storage in a slot, giving it an OWNER when it needs one."""
-    slot = own_temporary(codegen, expr, value, semantic_type, slot_type)
-    if slot is not None:
-        return slot
-
-    # An ENTRY-block slot, not one per block: a receiver inside a `while` body would
-    # otherwise allocate on every iteration and grow the stack without bound.
-    slot = codegen.memory.entry_alloca(slot_type or value.type, "temp_slot")
-    codegen.builder.store(value, slot)
-    return slot
-
-
-def destroy_enum_temp(codegen: 'LLVMCodegen', expr_ast, enum_value: ir.Value,
-                      enum_type: Type) -> None:
-    """Free an unbound Result/Maybe temporary whose payload is never extracted (#159)."""
-    from sushi_lang.backend.destructors import (
-        emit_value_destructor, needs_cleanup, resolve_named_type
-    )
-
-    if not expression_is_temporary(codegen, expr_ast):
-        return
-
-    # `needs_cleanup` is table-free: an unresolved UnknownType answers False, which is exactly
-    # how a Result's owning payload escaped every RAII predicate in #179. Resolve first.
-    resolved = resolve_named_type(codegen, enum_type)
-    if not isinstance(resolved, EnumType) or not needs_cleanup(codegen, resolved):
-        return
-
-    # emit_value_destructor takes a POINTER, and the temporary is an SSA aggregate. Park it in an
-    # ENTRY-block alloca: a `while` condition is re-entered every iteration, and an alloca emitted
-    # there would allocate per iteration and grow the stack without bound.
-    slot = codegen.memory.entry_alloca(enum_value.type, "enum_temp_slot")
-    codegen.builder.store(enum_value, slot)
-    emit_value_destructor(codegen, slot, resolved)
-
-
 def emit_value_clone(codegen: 'LLVMCodegen', value: ir.Value, value_type: Type) -> ir.Value:
     """Return a deep copy of `value` that owns independent heap buffers."""
     from sushi_lang.semantics.typesys import (
-        UnknownType, BuiltinType, ForeignPtrType, EnumType, FunctionType, IteratorType
+        UnknownType, BuiltinType, ForeignPtrType, FunctionType, IteratorType
     )
 
     if isinstance(value_type, UnknownType):

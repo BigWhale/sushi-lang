@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, List
 
 from llvmlite import ir
 
-from sushi_lang.semantics.typesys import FunctionType
+from sushi_lang.semantics.type_predicates import is_instance_of
+from sushi_lang.semantics.typesys import FunctionType, StructType
 from sushi_lang.backend.memory.heap import emit_malloc
 
 if TYPE_CHECKING:
@@ -111,8 +112,7 @@ def get_or_create_env_drop(codegen: "LLVMCodegen", env_struct) -> ir.Function:
             zero = ir.Constant(i32, 0)
             for idx, fty in owned:
                 field_ptr = b.gep(env_ptr, [zero, ir.Constant(i32, idx)], inbounds=True, name="cap_field")
-                da = codegen.dynamic_arrays
-                if da is not None and da.is_list_type(fty):
+                if isinstance(fty, StructType) and is_instance_of(fty, "List"):
                     from sushi_lang.backend.generics.list.methods_destroy import emit_list_destroy
                     emit_list_destroy(codegen, field_ptr, fty)
                 else:

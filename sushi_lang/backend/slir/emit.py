@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 from llvmlite import ir
 
 from sushi_lang.backend.destructors import emit_value_destructor
+from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.slir.intrinsics import INTRINSICS
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.internals.errors import raise_internal_error
@@ -70,7 +71,7 @@ def emit_function(codegen: LLVMCodegen, function: SlirFunction, *,
 def _open(state: FunctionState) -> None:
     """The storage of each local, and the value parameters stored into their slots. The
     signature that the declaration made must agree with the locals and the conventions."""
-    codegen, function, llvm_fn = state.codegen, state.function, state.llvm_fn
+    function, llvm_fn = state.function, state.llvm_fn
     if (len(llvm_fn.args) != len(function.params)
             or llvm_fn.function_type.return_type != _ll(state, function.locals[0])):
         state.fault(f"the declaration {llvm_fn.function_type} does not agree with the "
@@ -81,7 +82,7 @@ def _open(state: FunctionState) -> None:
         ll = _ll(state, local)
         param = params.get(local.id)
         if param is None:
-            state.storage[local.id] = codegen.memory.entry_alloca(ll, _name(local))
+            state.storage[local.id] = entry_alloca(state.builder, ll, _name(local))
             continue
         arg = llvm_fn.args[param[0]]
         by_address = param[1].by_address
@@ -90,7 +91,7 @@ def _open(state: FunctionState) -> None:
         if by_address:
             state.storage[local.id] = arg
             continue
-        slot = codegen.memory.entry_alloca(ll, _name(local))
+        slot = entry_alloca(state.builder, ll, _name(local))
         state.builder.store(arg, slot)
         state.storage[local.id] = slot
 
@@ -194,8 +195,9 @@ def _argument(state: FunctionState, operand: p.Operand, convention: Convention) 
     if isinstance(operand, p.Const):
         codegen = state.codegen
         value = constant_value(state, operand.constant)
-        slot = codegen.memory.entry_alloca(
-            codegen.types.ll_type(type_of_constant(state, operand.constant)), "arg")
+        slot = entry_alloca(
+            state.builder, codegen.types.ll_type(type_of_constant(state, operand.constant)),
+            "arg")
         state.builder.store(value, slot)
         return slot
     state.fault(f"a {convention.value} argument is a move")

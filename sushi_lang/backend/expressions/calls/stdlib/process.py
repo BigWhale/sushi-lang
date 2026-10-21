@@ -13,7 +13,6 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.backend.expressions.calls.stdlib.signatures import emit_registry_call
-from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
 from sushi_lang.sushi_stdlib.src.sys.process import PROCESS_SIGNATURES
 
 if TYPE_CHECKING:
@@ -41,6 +40,7 @@ def _emit_run(codegen: 'LLVMCodegen', expr, to_i1: bool) -> ir.Value:
     The trailing string arguments are collected (or a single `arr...` bloomed) into the
     argv string[], through the same machinery as user variadics.
     """
+    from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
     from sushi_lang.backend.expressions.calls.variadic import build_variadic_array
     from sushi_lang.backend.functions import declare_stdlib_function
     from sushi_lang.semantics.typesys import DynamicArrayType

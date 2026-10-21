@@ -656,9 +656,9 @@ def ends_unrolled_run(stmt) -> bool:
     A copy of a pack template holds each element in place in its block (#1070, R6), so
     a `break`, a `continue` or a `return` of an element can stand before more statements
     of that block. No path reaches them, as no path leaves the element in the template
-    check: the backend does not emit them. The backend asks here until it reads SLIR
-    (P2.11). The borrow pass reads SHIR and asks `semantics/shir/paths.py`, which holds
-    the same rule.
+    check. The AST body emitter asked here, and it is deleted; SHIR lowering of an
+    instance asks here in the generic instances group. The borrow pass reads SHIR and
+    asks `semantics/shir/paths.py`, which holds the same rule.
 
     Only an element statement ends the run. A WRITTEN block can hold statements after
     one that `terminates` accepts: the dead-statement rule (CE0140, #854) reads an `if`

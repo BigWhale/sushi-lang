@@ -46,8 +46,7 @@ def test_only_the_seam_calls_the_builder_alloca():
     assert not offenders, (
         "a stack slot is made outside backend/memory/allocas.py:\n  "
         + "\n  ".join(offenders)
-        + "\nRoute it through `codegen.memory.entry_alloca(...)`, or through "
-        "`allocas.entry_alloca(builder, ...)` when the builder is not `codegen.builder`. "
+        + "\nRoute it through `allocas.entry_alloca(builder, ...)`. "
         "A slot placed at the current position grows the frame on every pass of a loop "
         "that reaches it (#589)."
     )

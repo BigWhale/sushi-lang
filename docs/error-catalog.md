@@ -134,16 +134,6 @@ Function context is None - cannot emit code outside function context.
 
 C library function not declared - runtime initialization required.
 
-### CE0014 {#ce0014}
-
-**Error** · internal
-
-**Message:** `dynamic array manager not initialized`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Dynamic array manager is None - initialization required.
-
 ### CE0015 {#ce0015}
 
 **Error** · internal
@@ -153,16 +143,6 @@ Dynamic array manager is None - initialization required.
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 An AST invariant is violated: a semantic pass or the code generator found a structure that the compiler does not make. This is a fault in the compiler, not in the program.
-
-### CE0016 {#ce0016}
-
-**Error** · internal
-
-**Message:** `scope stack underflow: attempted to pop from empty scope stack`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Push/pop mismatch - each push\_scope() must be paired with exactly one pop\_scope().
 
 ### CE0017 {#ce0017}
 
@@ -244,36 +224,6 @@ Method called with wrong number of arguments during codegen.
 
 Method not found for this type - semantic analysis should prevent this.
 
-### CE0025 {#ce0025}
-
-**Error** · internal
-
-**Message:** `extension method '{name}' not declared`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Extension method reference not found in symbol table.
-
-### CE0026 {#ce0026}
-
-**Error** · internal
-
-**Message:** `function expects {expected} arguments, got {got}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Function parameter count mismatch during codegen.
-
-### CE0027 {#ce0027}
-
-**Error** · internal
-
-**Message:** `callee must be a Name, got {type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Function call expression has invalid callee type - AST invariant violation.
-
 ### CE0028 {#ce0028}
 
 **Error** · internal
@@ -284,36 +234,6 @@ Function call expression has invalid callee type - AST invariant violation.
 
 Standard library method missing backend implementation.
 
-### CE0029 {#ce0029}
-
-**Error** · internal
-
-**Message:** `struct '{struct}' has no field '{field}'`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Struct field lookup failed - semantic analysis should prevent this.
-
-### CE0030 {#ce0030}
-
-**Error** · internal
-
-**Message:** `cannot get address of struct for member access`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Failed to retrieve struct pointer for field access.
-
-### CE0031 {#ce0031}
-
-**Error** · internal
-
-**Message:** `member access on non-struct type: {type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Attempted field access on non-struct type - semantic analysis failure.
-
 ### CE0032 {#ce0032}
 
 **Error** · internal
@@ -323,16 +243,6 @@ Attempted field access on non-struct type - semantic analysis failure.
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 Type mismatch: expected struct type but got different type.
-
-### CE0033 {#ce0033}
-
-**Error** · internal
-
-**Message:** `unknown enum type: {name}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Enum type not found in symbol table during codegen.
 
 ### CE0034 {#ce0034}
 
@@ -393,26 +303,6 @@ Type mismatch: expected fixed-size array but got different type.
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 Type mismatch: expected dynamic array but got different type.
-
-### CE0043 {#ce0043}
-
-**Error** · internal
-
-**Message:** `array.get() returned non-struct type: {type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Array element type is not a struct as expected.
-
-### CE0044 {#ce0044}
-
-**Error** · internal
-
-**Message:** `nested member access on non-struct field type: {type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Attempted nested field access on non-struct type.
 
 ### CE0045 {#ce0045}
 
@@ -494,66 +384,6 @@ Hash method called with incorrect number of arguments.
 
 Variable/constant not found in symbol table during codegen.
 
-### CE0056 {#ce0056}
-
-**Error** · internal
-
-**Message:** `cannot determine type for variable: {name}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Variable type information missing during codegen.
-
-### CE0057 {#ce0057}
-
-**Error** · internal
-
-**Message:** `dynamic array '{name}' not declared`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Dynamic array not found in tracking state.
-
-### CE0058 {#ce0058}
-
-**Error** · internal
-
-**Message:** `dynamic array '{name}' already destroyed`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Attempted to use dynamic array after explicit destruction.
-
-### CE0059 {#ce0059}
-
-**Error** · internal
-
-**Message:** `attempt to emit into a terminated block`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Cannot add instructions to basic block that already has a terminator.
-
-### CE0060 {#ce0060}
-
-**Error** · internal
-
-**Message:** `attempt to emit statement after a terminator`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Cannot emit code after return/branch - control flow analysis failure.
-
-### CE0061 {#ce0061}
-
-**Error** · internal
-
-**Message:** `block has no 'statements' list`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-AST block node missing expected statements field.
-
 ### CE0064 {#ce0064}
 
 **Error** · internal
@@ -563,36 +393,6 @@ AST block node missing expected statements field.
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 Generated C main wrapper not found in module.
-
-### CE0067 {#ce0067}
-
-**Error** · internal
-
-**Message:** `cannot infer struct type from expression: {expr}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Struct type inference failed for expression.
-
-### CE0068 {#ce0068}
-
-**Error** · internal
-
-**Message:** `cannot infer struct type from method call: {method}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Struct type inference failed for method call.
-
-### CE0069 {#ce0069}
-
-**Error** · internal
-
-**Message:** `cannot infer struct type from DotCall: {method}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Struct type inference failed for dot-call expression.
 
 ### CE0071 {#ce0071}
 
@@ -794,16 +594,6 @@ Maybe.expect() method called with incorrect arguments.
 
 Intrinsic operation not recognized.
 
-### CE0099 {#ce0099}
-
-**Error** · internal
-
-**Message:** `not an operator type: {type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Expression node is not a valid operator - AST invariant violation.
-
 ### CE0100 {#ce0100}
 
 **Error** · internal
@@ -917,16 +707,6 @@ Type cast is not allowed in constant expressions.
 
 The compiler can read this divisor, and it is zero. The same compile-time arithmetic applies to a constant and to a body, so '10 / 0' is refused in both positions. Only a divisor the compiler can read is an error: a computed one -- a variable, a loop index, a call -- is ordinary code and no check is emitted around it.
 
-### CE0113 {#ce0113}
-
-**Error** · internal
-
-**Message:** `{message}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Generic enum constructor requires type annotation from semantic analysis.
-
 ### CE0114 {#ce0114}
 
 **Error** · function
@@ -1011,16 +791,6 @@ A generic type instantiation nests without bound (e.g. a type parameter that gro
 
 The derive pass registered a hash() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load.
 
-### CE0124 {#ce0124}
-
-**Error** · internal
-
-**Message:** `'??' expression reached codegen without a type annotation from semantic analysis`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-The typecheck pass annotates every TryExpr it validates (inner type, unwrapped type, success tag, error type). Reaching the backend without one means the expression's type was never inferred. This is a gap in the typecheck pass, not a user error.
-
 ### CE0126 {#ce0126}
 
 **Error** · internal
@@ -1040,16 +810,6 @@ Two spellings of one generic enum (Result@(T, E), Maybe@(T)) mangled to the same
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 The derive pass registered a clone() method whose LLVM emitter the backend never supplied. The backend types modules register their emitter factories at import; one of them failed to load.
-
-### CE0129 {#ce0129}
-
-**Error** · internal
-
-**Message:** `no ownership decision for the {use} consuming use of a {node}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Every position that takes ownership routes through backend/ownership.py::consume, which reads the Provenance semantics stamped on the source expression. A missing stamp means the borrow pass did not classify this position -- a gap in the borrow checker's coverage of the ConsumingUse set, not a user error. [CE0124](#ce0124) is the same check for a missing try-expression annotation.
 
 ### CE0130 {#ce0130}
 

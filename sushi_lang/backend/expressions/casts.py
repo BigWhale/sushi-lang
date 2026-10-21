@@ -3,29 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
-from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.ast import CastExpr, IntLit, UnaryOp
-from sushi_lang.backend.utils import require_builder
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.conversions import Conversion
     from sushi_lang.semantics.typesys import Type
-
-
-def emit_conversion_call(codegen: 'LLVMCodegen', conversion: 'Conversion',
-                         error_value: ir.Value) -> ir.Value:
-    """Call the body of a declared conversion on one error value, and answer the target.
-
-    The ONE call site of a conversion, for `as` and for the propagate path of `??`
-    (docs/design/error-conversion.md section 8.2). The body takes `nom self`, so the
-    value crosses BY VALUE and the body frees what it does not put in the target. The
-    caller has already given the value to it: the body is its one owner.
-    """
-    llvm_fn = codegen.funcs.get(conversion.symbol)
-    if llvm_fn is None:
-        raise_internal_error("CE0025", name=conversion.symbol)
-    return codegen.builder.call(llvm_fn, [error_value], name="converted")
 
 
 def classify_type_for_cast(llvm_type: ir.Type) -> str:
@@ -78,47 +59,6 @@ def cast_float_to_float(codegen: 'LLVMCodegen', source: ir.Value, target_type: i
         return codegen.builder.fptrunc(source, target_type)
     else:
         return source
-
-
-def emit_cast_expression(codegen: 'LLVMCodegen', expr: CastExpr) -> ir.Value:
-    """Emit LLVM IR for type casting expressions."""
-    require_builder(codegen)
-
-    # An integer literal cast directly to an integer type materializes at the
-    # TARGET width, so values above i32 range (e.g. 40000000000 as i64) are
-    # exact instead of pre-wrapped by the default 32-bit literal emission.
-    target_ll = codegen.types.ll_type(expr.target_type)
-    if isinstance(target_ll, ir.IntType):
-        literal = None
-        if isinstance(expr.expr, IntLit):
-            literal = int(expr.expr.value)
-        elif (isinstance(expr.expr, UnaryOp) and expr.expr.op == "neg"
-              and isinstance(expr.expr.expr, IntLit)):
-            literal = -int(expr.expr.expr.value)
-        if literal is not None:
-            mask = (1 << target_ll.width) - 1
-            return ir.Constant(target_ll, literal & mask)
-
-    source_value = codegen.expressions.emit_expr(expr.expr)
-
-    # `as` consumes its operand by position (design 3.2). Between two error types it
-    # calls the declared conversion, and the operand is its `nom self`. An identity cast
-    # moves an owning operand to the new owner. A plain operand, every numeric one
-    # included, is a copy and does not go through the seam.
-    from sushi_lang.backend import ownership
-    conversion = expr.inferred_conversion
-    if conversion is not None:
-        source_value = ownership.consume(codegen, expr.expr, source_value,
-                                         conversion.source,
-                                         ownership.ConsumingUse.RECEIVER)
-        return emit_conversion_call(codegen, conversion, source_value)
-    from sushi_lang.backend.destructors import needs_cleanup
-    if expr.source_type is not None and needs_cleanup(codegen, expr.source_type):
-        source_value = ownership.consume(codegen, expr.expr, source_value,
-                                         expr.source_type,
-                                         ownership.ConsumingUse.RECEIVER)
-
-    return emit_value_cast(codegen, source_value, expr.source_type, expr.target_type)
 
 
 def emit_value_cast(codegen: 'LLVMCodegen', source_value: ir.Value,

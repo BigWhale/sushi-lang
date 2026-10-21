@@ -97,14 +97,6 @@ def call_override(codegen: 'LLVMCodegen', fn: ir.Function, values: list) -> ir.V
     return builder.call(fn, args)
 
 
-def load_operand(codegen: 'LLVMCodegen', value: ir.Value, ty: Type) -> ir.Value:
-    """A borrowed operand arrives as the address of its value; the seams read values."""
-    llvm_type = codegen.types.ll_type(ty)
-    if isinstance(value.type, ir.PointerType) and value.type.pointee == llvm_type:
-        return codegen.builder.load(value, name="contract_operand")
-    return value
-
-
 # --- primitives --------------------------------------------------------------------
 
 def _is_nan(builder: ir.IRBuilder, x: ir.Value) -> ir.Value:

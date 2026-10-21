@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from sushi_lang.backend.library_paths import LibraryResolver
     from sushi_lang.backend.slir.bodies import SlirBodies
     from sushi_lang.semantics.ast import ExtendWithDef
-    from sushi_lang.semantics.typesys import Type
     from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
     from sushi_lang.semantics.const_eval import ConstantValue
 
@@ -20,12 +19,6 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import declare_libc
 from sushi_lang.backend.llvm_types import LLVMTypeSystem
 from sushi_lang.backend.llvm_utils import LLVMUtils
 from sushi_lang.backend.runtime import LLVMRuntime
-from sushi_lang.backend.memory.scopes import ScopeManager
-from sushi_lang.backend.memory.dynamic_arrays import DynamicArrayManager
-from sushi_lang.backend.memory.moves import MoveTracker
-from sushi_lang.backend.memory.print_frames import PrintFrames
-from sushi_lang.backend.expressions import ExpressionEmitter
-from sushi_lang.backend.statements import StatementEmitter
 from sushi_lang.backend.functions import LLVMFunctionManager
 from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, emitted_symbol, mangle_unit_symbol
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
@@ -86,17 +79,10 @@ class LLVMCodegen:
         from sushi_lang.semantics.passes.collect import FunctionTable, ConstantTable
         self.func_table = func_table or FunctionTable()
         # The unit whose bodies are being emitted, or None outside a multi-unit walk.
-        # A named callee is resolved through it, so a library's own body reads the
-        # library's signature where a consumer shadows the name (#487).
         self.emitting_unit: Optional[str] = None
-        # The library unit whose scope the body being emitted resolves in, while it is a
-        # copy of a compiled library's template (#1120). None for every other body.
-        self.body_scope_unit: Optional[str] = None
         # What each unit may write, bare and behind a dot, handed over by the semantic
-        # analyser. The back end resolves a bare callee through the SAME ladder the
-        # typecheck pass walked, or two units declaring one name would bind the call to
-        # whichever the flat view happened to hold (`unit-namespaces.md` section 6); and
-        # a constant's initializer is folded as the unit that wrote it reads (#561).
+        # analyser: a constant's initializer is folded as the unit that wrote it reads
+        # (#561).
         self.unit_namespaces: Dict[str, Any] = {}
         # REQUIRED (#780): an empty default answers "nothing implements Drop", and
         # every handle is then copied and closed twice.
@@ -112,11 +98,6 @@ class LLVMCodegen:
                                     context=self.llvm_context)
         self.utils = LLVMUtils(self)
         self.runtime = LLVMRuntime(self)
-        self.memory = ScopeManager(self)
-        self.moves = MoveTracker(self)  # Unified move tracking (arrays, lists, structs, Own<T>)
-        self.dynamic_arrays: Optional[DynamicArrayManager] = None  # Will be initialized when builder is available
-        self.expressions = ExpressionEmitter(self)
-        self.statements = StatementEmitter(self)
         self.functions = LLVMFunctionManager(self)
         self.optimizer = LLVMOptimizer(self)
 
@@ -131,13 +112,8 @@ class LLVMCodegen:
 
         self.builder: Optional[ir.IRBuilder] = None
         self.func: Optional[ir.Function] = None
-        # Loop context tracking for break/continue statements. Each entry is
-        # (continue-target block, break-target block, loop-body scope index); the scope
-        # index bounds break/continue RAII cleanup to the loop's own scopes.
-        self.loop_stack: list[tuple[ir.Block, ir.Block, int]] = []
 
-        # Two views: the unit that declared a name, and the flat one. `emitting_unit`
-        # is what turns a bare Sushi name into the right declaration.
+        # Two views: the unit that declared a name, and the flat one.
         self.funcs: UnitKeyedSymbols[ir.Function] = UnitKeyedSymbols()
 
         self.constants: UnitKeyedSymbols[ir.GlobalVariable] = UnitKeyedSymbols()
@@ -145,8 +121,6 @@ class LLVMCodegen:
         self._malloc_func: Optional[ir.Function] = None
         self._free_func: Optional[ir.Function] = None
         self._realloc_func: Optional[ir.Function] = None
-
-        self.print_frames = PrintFrames(self)
 
         self.main_expects_args: bool = False
 
@@ -169,14 +143,6 @@ class LLVMCodegen:
 
         self.stdlib_units: set[str] = set()
 
-        # Function return type tracking (Sushi language types, not LLVM types)
-        # Maps function name to its return type (pre-Result wrapping)
-        # Used for inferring Result<T> types from function call expressions
-        self.function_return_types: UnitKeyedSymbols['Type'] = UnitKeyedSymbols()
-
-        # The names the borrow pass stamped as conditionally moved in the body being
-        # emitted (#414); `begin_function` sets it.
-        self.current_conditional_moves: frozenset[str] = frozenset()
 
         # Recursive-lifecycle state, declared here rather than conjured on at first use:
         # each `_inprogress` is the stack of type keys being inlined, so a re-entry means
@@ -193,17 +159,6 @@ class LLVMCodegen:
         """The namespace table of `unit_name`, or None for a unit the analyser never saw."""
         return self.unit_namespaces.get(unit_name)
 
-    def scope_of(self, unit_name: Optional[str]):
-        """What `unit_name` may write with no qualifier, or an unrestricted scope.
-
-        A constant's initializer is folded outside the per-unit walk, with the unit
-        handed in, so the scope has to follow the unit whose expression is read and
-        not whichever unit's bodies are being emitted.
-        """
-        from sushi_lang.semantics.namespaces import UnitScope
-        found = self.namespaces_of(unit_name)
-        return found.scope if found is not None else UnitScope.unrestricted()
-
     def constant_evaluator(self, unit_name: Optional[str] = None):
         """A silent evaluator reading as `unit_name` -- the emitting unit by default.
 
@@ -215,15 +170,6 @@ class LLVMCodegen:
         return ConstantEvaluator(Reporter(), self.const_table,
                                  unit_name or self.emitting_unit, self.namespaces_of,
                                  self.struct_table, self.enum_table)
-
-    @property
-    def scope(self):
-        """The scope of the body being emitted, or an unrestricted one outside a unit.
-
-        A body's scope is its unit's, except for a copy of a compiled library's
-        template, which resolves in the library unit's (`body_scope_unit`, #1120).
-        """
-        return self.scope_of(self.body_scope_unit or self.emitting_unit)
 
     # Centralized memory management function declarations.
     # Private: allocate through backend.memory.heap.emit_malloc, which null-checks
@@ -301,7 +247,6 @@ class LLVMCodegen:
         self._malloc_func = None
         self._free_func = None
         self._realloc_func = None
-        self.print_frames.reset()
         self._dtor_funcs = {}
         self._clone_funcs = {}
         self._dtor_inprogress = []
@@ -351,7 +296,6 @@ class LLVMCodegen:
         self._malloc_func = None
         self._free_func = None
         self._realloc_func = None
-        self.print_frames.reset()
         self._dtor_funcs = saved_dtor_funcs
         self._clone_funcs = saved_clone_funcs
         self._dtor_inprogress = saved_dtor_inprogress
@@ -517,14 +461,12 @@ class LLVMCodegen:
             return
 
         def _declare_one(func_sig, name: str, unit: str | None):
-            from sushi_lang.backend.generics.result_builder import (
-                call_value_type, declared_return_ll)
+            from sushi_lang.backend.generics.result_builder import declared_return_ll
 
             param_types = [self.types.ll_type(p.ty) for p in func_sig.params]
             # The typecheck pass's derivation, so the call and the prototype agree on the
             # channel: `| E` is the Err arm, an explicit Result is not wrapped twice
             # (#541), and a bare signature is its return.
-            result_type = call_value_type(self, func_sig)
             ll_ret = declared_return_ll(self, func_sig)
 
             symbol = emitted_symbol(name, None, getattr(func_sig, "link_symbol", None))
@@ -538,10 +480,8 @@ class LLVMCodegen:
                         llvm_fn.args[i].name = p.name
 
             self.funcs.declare(name, llvm_fn, unit=unit)
-            self.function_return_types.declare(name, result_type, unit=unit)
             if symbol != name:
                 self.funcs.declare(symbol, llvm_fn)
-                self.function_return_types.declare(symbol, result_type)
 
         for func_name, func_sig in self.library_registry.get_all_functions().items():
             if func_name in self.funcs:

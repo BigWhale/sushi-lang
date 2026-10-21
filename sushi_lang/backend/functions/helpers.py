@@ -4,9 +4,8 @@ from typing import TYPE_CHECKING, List, Tuple
 
 from llvmlite import ir
 from sushi_lang.semantics.ast import FuncDef, Param, ExtendDef
-from sushi_lang.semantics.typesys import Type as Ty, DynamicArrayType
-from sushi_lang.backend.ownership import relinquish
-from sushi_lang.internals.errors import raise_internal_error, InternalCompilerError
+from sushi_lang.semantics.typesys import Type as Ty
+from sushi_lang.internals.errors import raise_internal_error
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -22,12 +21,6 @@ def extension_owner(ext: ExtendDef, unit_name: str | None) -> str | None:
     if ext.is_conversion:
         return None
     return ext.declaring_unit if ext.declaring_unit is not None else unit_name
-
-
-def callee_owns_param(param) -> bool:
-    """Does the CALLEE own this parameter, and therefore free it at scope exit?"""
-    from sushi_lang.semantics.param_modes import param_mode
-    return param_mode(param).consumes
 
 
 class FunctionHelpers:
@@ -65,123 +58,6 @@ class FunctionHelpers:
         return extension_symbol(extension_receiver_name(ext.target_type), ext.name,
                                 getattr(ext, "method_type_args", None) or (),
                                 unit=extension_owner(ext, unit_name))
-
-    def emit_fall_off(self, fn: FuncDef | ExtendDef) -> None:
-        """Close a body that left its last block open: one rule for every callable.
-
-        CE0107 refuses every body that answers a value or a Result and can reach its end,
-        and the `if` and `match` emitters leave no merge block that no arm branches to
-        (#849). So only a BARE `~` body arrives here, and it returns the blank value.
-        There is no implicit `Result.Ok(~)` or `Result.Err` to emit.
-        """
-        from sushi_lang.backend.generics.result_builder import channel_result_of
-        if channel_result_of(self.codegen, fn) is not None or fn.ret is None:
-            raise InternalCompilerError(
-                "CE0015", message=f"{fn.name}: the body left its last block open with no return")
-
-        from sushi_lang.backend.statements import utils
-        utils.emit_scope_cleanup(self.codegen)
-
-        value_llvm_type = self.codegen.types.ll_type(fn.ret)
-        zero_value = self.codegen.utils.get_zero_value(value_llvm_type)
-        self.codegen.builder.ret(zero_value)
-
-    def begin_function(self, llvm_fn: ir.Function,
-                       fn_def: FuncDef | ExtendDef | None = None) -> None:
-        """Initialize function emission context."""
-        self.codegen.func = llvm_fn
-
-        # Two blocks, and the entry one holds the branch and the stack slots alone. The
-        # slots go there through `memory.entry_alloca`, which finds the block from the
-        # builder rather than from a field the caller has to keep in step.
-        entry = llvm_fn.append_basic_block(name="entry")
-        start = llvm_fn.append_basic_block(name="start")
-
-        self.codegen.builder = ir.IRBuilder(start)
-
-        self.codegen.memory.reset_scope_stack()
-        self.codegen.memory.push_scope()
-
-        from sushi_lang.backend.memory.dynamic_arrays import DynamicArrayManager
-        self.codegen.dynamic_arrays = DynamicArrayManager(self.codegen.builder, self.codegen)
-
-        ir.IRBuilder(entry).branch(start)
-
-        # A parameter type arrives as written. Resolve it here at every depth, as for a `let`.
-        # Each reader of the slot then sees the table entry of a named element.
-        from sushi_lang.semantics.type_resolution import resolve_type_recursively
-        param_semantic_types = {}
-        if fn_def is not None:
-            for param in fn_def.params:
-                if param.ty is not None:
-                    param_semantic_types[param.name] = resolve_type_recursively(
-                        param.ty, self.codegen.struct_table.by_name,
-                        self.codegen.enum_table.by_name)
-
-        param_slots = []
-        for i, arg in enumerate(llvm_fn.args):
-            pname = arg.name or f"arg{i}"
-
-            semantic_type = param_semantic_types.get(pname)
-
-            # For reference parameters, the arg is already a pointer, so we store the pointer itself
-            # rather than loading through it. This allows us to use the reference transparently.
-            # When the parameter is used (in _emit_name), we'll load through this pointer.
-            slot = self.codegen.memory.entry_alloca(arg.type, pname)
-            self.codegen.memory.track_local(pname, slot, semantic_type)
-
-            param_slots.append((arg, slot))
-
-        # A `nom` parameter TAKES OWNERSHIP, so its owned bit must survive. Every other
-        # mode is a BORROW: clearing the copy's owned bit means the body can never free the
-        # caller's buffer (#145). Consuming a borrow is CE2411, so this guards reads only.
-        owning_params: set[str] = set()
-        if fn_def is not None:
-            for param in fn_def.params:
-                if callee_owns_param(param):
-                    owning_params.add(param.name)
-
-        for arg, slot in param_slots:
-            val = arg
-            if (self.codegen.types.is_string_type(arg.type)
-                    and (arg.name or "") not in owning_params):
-                val = self.codegen.builder.insert_value(arg, ir.Constant(self.codegen.i8, 0), 2)
-            self.codegen.builder.store(val, slot)
-
-        # One question, asked of the DECLARATION: `callee_owns_param`. Asking the
-        # implementation instead is how one feature came to free its parameters in a `.slib`
-        # build and not in a generated stdlib one.
-        #
-        # A native variadic `...T` array is the one parameter the CALLER synthesizes, so the
-        # callee adopts it whatever the mode says.
-        if fn_def is not None:
-            slot_by_name = {arg.name or f"arg{i}": slot
-                            for i, (arg, slot) in enumerate(param_slots)}
-            for param in fn_def.params:
-                slot = slot_by_name.get(param.name)
-                if slot is None:
-                    continue
-
-                is_variadic = (getattr(param, "is_variadic", False)
-                               and isinstance(param.ty, DynamicArrayType))
-                resolved = param_semantic_types.get(param.name, param.ty)
-                if is_variadic or callee_owns_param(param):
-                    self.codegen.memory.register_owning_value(param.name, resolved, slot)
-                    continue
-
-                # Registered and immediately RELINQUISHED. The registration is what a
-                # REBIND needs -- the value it puts there has no other owner and would leak.
-                # The relinquish is what the CALLER needs -- the value that arrives is
-                # theirs, so no exit path may free it. Two facts, one slot, in that order.
-                self.codegen.memory.register_owning_value(param.name, resolved, slot)
-                relinquish(self.codegen, param.name)
-
-    def end_function(self) -> None:
-        """Clean up function emission context."""
-        self.codegen.current_conditional_moves = frozenset()
-        self.codegen.func = None
-        self.codegen.builder = None
-        self.codegen.memory.reset_scope_stack()
 
 
 def declare_stdlib_function(

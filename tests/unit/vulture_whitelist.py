@@ -236,6 +236,99 @@ WHITELIST += (
     (_BORROW + "state.py", "is_unit_var", _kept("D", "D1: var")),
 )
 
+# -- the emitter families whose AST callers P2.13 deleted ----------------------------
+# The old body emitter called each entry below. The families stay (ir.md Q7), and the
+# group of each one gives it operands from SLIR. Its AST argument half calls the deleted
+# expression layer until then.
+_BACKEND = "sushi_lang/backend/"
+
+
+def _family(group: str, what: str) -> str:
+    return (f"kept for {group}: {what}; the SLIR emitter calls the family with operands "
+            "there, and its AST argument half goes then")
+
+
+WHITELIST += (
+    (_BACKEND + "generics/list/__init__.py", "emit_list_method",
+     _family("B2", "the List method family")),
+    (_BACKEND + "generics/maybe.py", "emit_*maybe*_method",
+     _family("A4 and B10", "the Maybe method family")),
+    (_BACKEND + "generics/results.py", "emit_*result*_method",
+     _family("A4 and B10", "the Result method family")),
+    (_BACKEND + "generics/own.py", "emit_builtin_own_method",
+     _family("B5", "the Own method family")),
+    (_BACKEND + "runtime/closures.py", "materialize_function_ref",
+     _family("C2", "a named function as a function value")),
+    (_BACKEND + "runtime/closures.py", "emit_lambda",
+     _family("C2", "the closure value and its environment")),
+    (_BACKEND + "runtime/errors.py", "emit_runtime_error_with_message",
+     _family("A11", "the trap of a failed assert, from the SLIR Trap terminator")),
+    (_BACKEND + "runtime/iterator_adapters.py", "emit_adapter_call",
+     _family("C3", "the iterator adapters")),
+    (_BACKEND + "runtime/iterator_adapters.py", "owned_parts",
+     _family("C3", "the parts of an owned iterator that a loop destroys")),
+    (_BACKEND + "runtime/iterators.py", "emit_range_iterator",
+     _family("A7", "a range as an Iterator@(i32) value")),
+    (_BACKEND + "runtime/iterators.py", "emit_new_iterator",
+     _family("C3", "Iterator.new over a next() type")),
+    (_BACKEND + "runtime/strings.py", "emit_to_cstr",
+     _family("D4", "the i8* string argument")),
+    (_BACKEND + "runtime/strings.py", "emit_cstr_to_owned_fat_pointer",
+     _family("D5", "the string that an extern returns")),
+    (_BACKEND + "types/arrays/runs.py", "single_runs",
+     _family("D3", "the T[] of a variadic tail, built by the array builders")),
+    (_BACKEND + "types/display.py", "emit_value_to_str",
+     _family("A12", "the string form of a value through Display")),
+)
+
+# -- AST facts whose last reader P2.13 deleted ----------------------------------------
+# The old body emitter read each one. A port template writes it, and the group moves the
+# fact to the tables of SHIR (TypeckResults, OwnershipResults) and deletes the field.
+_SEMANTICS = "sushi_lang/semantics/"
+
+
+def _fact(group: str, what: str) -> str:
+    return (f"kept for {group}: {what}; an AST port template writes it, and the group "
+            "moves the fact to a SHIR table and deletes it")
+
+
+WHITELIST += (
+    (_SEMANTICS + "*", "walks_in_place",
+     _fact("C3", "the walk in place of a loop; tests/unit/test_walk_fields_have_one_writer.py "
+                 "reads its writer")),
+    (_SEMANTICS + "*", "resolved_scrutinee_type", _fact("A3 and A4", "the type of a scrutinee")),
+    (_SEMANTICS + "*", "integer_match_type", _fact("A3", "the type of an integer match")),
+    (_SEMANTICS + "*", "inferred_element_type", _fact("A6", "the type of an index access")),
+    (_SEMANTICS + "*", "variadic_arg_types", _fact("D5", "the promoted types of a C vararg call")),
+    (_SEMANTICS + "*", "callee_method_type_args",
+     _fact("A10", "the method type arguments of an extension call")),
+    (_SEMANTICS + "*", "callee_extension_unit",
+     _fact("A10", "the declaring unit of an extension callee")),
+    (_SEMANTICS + "*", "callee_is_static", _fact("A10", "a call of a static method")),
+    (_SEMANTICS + "*", "callee_static_target", _fact("A10", "the type of a static callee")),
+    (_SEMANTICS + "*", "iterator_next", _fact("C3", "the next() call of a protocol loop")),
+    (_SEMANTICS + "*", "inferred_conversion",
+     _fact("D2", "the declared conversion of a cast between two error types")),
+    (_SEMANTICS + "passes/borrow/flow.py", "back_edge",
+     "kept for the iterators group C3: a field of LoopFlow, which C3 ports"),
+    (_SEMANTICS + "ast_walk.py", "ends_unrolled_run",
+     "kept for the generic instances group C1: SHIR lowering of an instance asks it "
+     "(tests/unit/test_unrolled_run_end_is_one.py)"),
+    (_SEMANTICS + "typesys.py", "get_field_index",
+     "kept for the struct and tuple group A5: the typecheck pass on SHIR reads the index "
+     "of a field"),
+)
+
+# The members of ConsumingUse that no code names since the backend `consume` went: the
+# closed set of consuming positions that docs/design/ir.md 7.9 and
+# ownership-conventions.md 3.1 define.
+WHITELIST += tuple(
+    (_SEMANTICS + "ownership.py", member,
+     "kept for the ownership groups of Tier B: a consuming position of the closed set "
+     "ConsumingUse, which the design names")
+    for member in ("CALL_ARG", "LET", "REBIND", "FIELD_ASSIGN", "STRUCT_FIELD",
+                   "ENUM_PAYLOAD", "ELEMENT_ASSIGN", "RETURN", "MATCH_SCRUTINEE"))
+
 RATCHET: tuple[tuple[str, str, str], ...] = ()
 
 # -- the scan of `tests/unit/` ---------------------------------------------------------

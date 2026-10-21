@@ -408,37 +408,12 @@ def emit_declared_drop(codegen: LLVMCodegen, value_ptr: ir.Value,
     codegen.builder.call(fn, [value_ptr])
 
 
-def emit_struct_fields_except(codegen: LLVMCodegen, value_ptr: ir.Value,
-                              value_type: Type, keep_field: str) -> None:
-    """Destroy every owning field of a struct but one -- the marked field take (R28).
-
-    `drop()` is deliberately NOT called, and that is the ruling rather than an omission:
-    a destructor is written for a value that goes away WHOLE, and here one field
-    survives it, so a `drop()` that flushed into the taken handle or closed it would be
-    told it still owns what the caller is taking. The method performing the take does
-    the finishing work itself, which is what `into_inner()` spells.
-
-    Field order matches `_emit_struct_destructor`'s, because it is the same walk with
-    one slot held back.
-    """
-    resolved = resolve_named_type(codegen, value_type)
-    if not isinstance(resolved, StructType):
-        return
-    builder = codegen.builder
-    for i, (field_name, field_type) in enumerate(resolved.fields):
-        if field_name == keep_field or not needs_cleanup(codegen, field_type):
-            continue
-        field_ptr = builder.gep(value_ptr, [ZERO_I32, make_i32_const(i)],
-                                name=f"take_rest_{field_name}_ptr")
-        emit_value_destructor(codegen, field_ptr, field_type)
-
-
 def needs_cleanup(codegen: LLVMCodegen, value_type: Type) -> bool:
     """Does a value of this type own something RAII must release?
 
     ONE backend cleanup predicate (ruling R2a). It used to be two -- a table-free
-    `needs_cleanup` and a resolving `field_needs_cleanup` -- and a third walk in
-    `memory/dynamic_arrays.py` answered the same question a third way. One gated
+    `needs_cleanup` and a resolving `field_needs_cleanup` -- and a third walk in the
+    array manager of the old backend answered the same question a third way. One gated
     RECURSION and another gated REGISTRATION, and the two disagreeing is exactly what
     #162 and #183 were.
 

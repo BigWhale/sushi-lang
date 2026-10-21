@@ -29,7 +29,6 @@ SPECIAL_CASES = {"exit", "run"}
 
 READERS = {
     ROOT / "semantics" / "generics" / "instantiate" / "expressions.py": set(),
-    ROOT / "backend" / "expressions" / "calls" / "utils.py": set(),
     STDLIB_EMITTERS / "time.py": set(),
     STDLIB_EMITTERS / "env.py": set(),
     STDLIB_EMITTERS / "process.py": SPECIAL_CASES,
@@ -208,17 +207,3 @@ def test_a_user_generic_takes_the_name_before_the_row():
     assert _scanner()._stdlib_row("now") is not None
     assert _scanner(generic_funcs={"now": object()})._stdlib_row("now") is None
     assert _scanner(func_table={"copy": object()})._stdlib_row("copy") is None
-
-
-def test_named_ok_reads_the_interned_spelling():
-    """A nested generic payload is looked up by `Maybe<List<i32>>`, never `List@(i32)`."""
-    from sushi_lang.backend.expressions.calls.utils import _named_ok
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-    from sushi_lang.semantics.typesys import BuiltinType
-
-    interned = object()
-    codegen = SimpleNamespace(
-        enum_table=SimpleNamespace(by_name={"Maybe<List<i32>>": interned}),
-        struct_table=SimpleNamespace(by_name={}))
-    payload = GenericTypeRef("Maybe", (GenericTypeRef("List", (BuiltinType.I32,)),))
-    assert _named_ok(codegen, payload) is interned

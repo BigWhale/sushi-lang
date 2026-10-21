@@ -9,7 +9,6 @@ from sushi_lang.semantics.typesys import Type
 from .types import ENTRY_EMPTY, ENTRY_OCCUPIED, emit_key_hash_i32
 from sushi_lang.backend.types.contracts import emit_value_eq
 from sushi_lang.backend.memory.allocas import entry_alloca
-from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
 from sushi_lang.backend.generics.maybe import emit_maybe_none, emit_maybe_some
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -167,6 +166,7 @@ def emit_find_key(
 
 def emit_lookup_key(codegen: Any, expr: Any, key_type: Type, method: str) -> ir.Value:
     """The one key argument of a lookup, borrowed: a lookup reads the key and keeps nothing."""
+    from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
     if len(expr.args) != 1:
         raise_internal_error("CE0023", method=method, expected=1, got=len(expr.args))
     return emit_borrowed_arg(codegen, expr.args[0], key_type)

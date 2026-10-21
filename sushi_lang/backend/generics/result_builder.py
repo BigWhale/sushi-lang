@@ -6,6 +6,7 @@ import llvmlite.ir as ir
 
 from sushi_lang.semantics.typesys import EnumType, Type
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -169,7 +170,7 @@ def _build_payload_variant(
     if payload_value is not None:
         data_array_type = enum_llvm_type.elements[1]
         # ENTRY block: a variant built inside a loop must not grow the frame (BUGS.md B1).
-        temp_alloca = codegen.memory.entry_alloca(data_array_type, f"{variant.lower()}_data_temp")
+        temp_alloca = entry_alloca(codegen.builder, data_array_type, f"{variant.lower()}_data_temp")
         data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr,
                                            name=f"{variant.lower()}_data_ptr")
 

@@ -1,79 +1,15 @@
 """Enum constructor operations for the Sushi language compiler."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Sequence, Union
+from typing import TYPE_CHECKING, Sequence
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import EnumConstructor, DotCall, Name
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.typesys import EnumType, EnumVariantInfo
-
-
-def emit_enum_constructor(codegen: 'LLVMCodegen', expr: Union[EnumConstructor, DotCall], is_dotcall: bool = False) -> ir.Value:
-    """Emit enum variant constructor (e.g., Result.Ok(42) or Color.Red())."""
-    if is_dotcall:
-        if not isinstance(expr.receiver, Name):
-            raise_internal_error("CE0027", type=type(expr.receiver).__name__)
-        enum_name = expr.receiver.id
-        variant_name = expr.method
-        args = expr.args
-        resolved_enum_type = getattr(expr, 'resolved_enum_type', None)
-    else:
-        enum_name = expr.enum_name
-        variant_name = expr.variant_name
-        args = expr.args
-        resolved_enum_type = expr.resolved_enum_type
-
-    if resolved_enum_type is not None:
-        return emit_enum_constructor_from_method_call(
-            codegen, resolved_enum_type, variant_name, args
-        )
-
-    if enum_name not in codegen.enum_table.by_name:
-        raise_internal_error("CE0033", name=enum_name)
-
-    enum_type = codegen.enum_table.by_name[enum_name]
-
-    return emit_enum_constructor_from_method_call(codegen, enum_type, variant_name, args)
-
-
-def emit_enum_constructor_from_method_call(
-    codegen: 'LLVMCodegen',
-    enum_type: 'EnumType',
-    variant_name: str,
-    args: list
-) -> ir.Value:
-    """Emit enum constructor for method call syntax (e.g., Color.Red())."""
-    variant = _variant(enum_type, variant_name, len(args))
-
-    # Every payload value is emitted and held first, and taken only after the last
-    # one: a `??` in a later argument leaves before the variant exists, and the hold
-    # frees an earlier value on that exit.
-    from sushi_lang.backend.expressions.memory import emit_held_operand
-    from sushi_lang.backend.ownership import ConsumingUse, consume
-    payload_types = list(variant.associated_types)
-    emitted = [emit_held_operand(codegen, arg_expr, arg_type)
-               for arg_expr, arg_type in zip(args, payload_types, strict=True)]
-    values = []
-    for arg_expr, arg_type, arg_value in zip(args, payload_types, emitted, strict=True):
-        # Some expressions hand back a POINTER rather than the value -- an array
-        # `.clone()`, for one. The payload goes into the variant's byte blob
-        # verbatim, so an unnormalized pointer read back a garbage length.
-        if (isinstance(arg_value.type, ir.PointerType)
-                and arg_value.type.pointee == codegen.types.ll_type(arg_type)):
-            arg_value = codegen.builder.load(arg_value, name="enum_payload_by_value")
-
-        # An enum payload is stored SHALLOWLY into the variant's byte blob, so the
-        # enum becomes an owner of whatever the value points at. Which is why the
-        # decision matters here more than almost anywhere: a returned Result is
-        # emitted BEFORE scope cleanup, so `return Result.Ok(w.items)` handed the
-        # caller an already-freed buffer when this position got it wrong (#256).
-        values.append(consume(codegen, arg_expr, arg_value, arg_type,
-                              ConsumingUse.ENUM_PAYLOAD))
-    return emit_enum_variant_value(codegen, enum_type, variant_name, values)
 
 
 def emit_enum_variant_value(
@@ -105,7 +41,7 @@ def emit_enum_variant_value(
     # would otherwise allocate again every iteration and never release it until
     # the function returned (BUGS.md B1). One slot per site is enough, because the
     # packed payload is loaded back out before the expression finishes.
-    temp_alloca = codegen.memory.entry_alloca(data_array_type, "enum_data_temp")
+    temp_alloca = entry_alloca(codegen.builder, data_array_type, "enum_data_temp")
     data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
     # Pack each value at its offset from the ONE layout authority -- extraction,

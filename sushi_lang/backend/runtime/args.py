@@ -2,6 +2,7 @@
 from typing import TYPE_CHECKING
 import llvmlite.ir as ir
 from sushi_lang.semantics.typesys import DynamicArrayType, BuiltinType
+from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.generics.container_walk import emit_container_walk
 from sushi_lang.backend import gep_utils
@@ -63,7 +64,8 @@ def generate_argc_argv_conversion(codegen: 'LLVMCodegen', argc: ir.Value, argv: 
     builder = codegen.builder
     string_array_type = DynamicArrayType(BuiltinType.STRING)
 
-    args_array_alloca = codegen.dynamic_arrays.declare_dynamic_array("cmd_args", string_array_type)
+    args_array_alloca = entry_alloca(builder, codegen.types.ll_type(string_array_type),
+                                     "cmd_args_struct")
 
     typed_data_ptr = allocate_string_array_data(codegen, argc)
 

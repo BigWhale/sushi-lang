@@ -16,7 +16,6 @@ import pytest
 
 from sushi_lang.backend.functions import LLVMFunctionManager
 from sushi_lang.backend.functions.declarations import FunctionDeclarations
-from sushi_lang.backend.functions.definitions import FunctionDefinitions
 from sushi_lang.backend.functions.helpers import FunctionHelpers
 from sushi_lang.backend.functions.main_wrapper import MainFunctionWrapper
 from sushi_lang.backend.slir import bodies as slir_bodies
@@ -25,10 +24,9 @@ from sushi_lang.backend.slir import intrinsics as slir_intrinsics
 from sushi_lang.backend.slir import state as slir_state
 from sushi_lang.backend.slir import values as slir_values
 
-PARTS = (LLVMFunctionManager, FunctionDeclarations, FunctionDefinitions,
-         FunctionHelpers, MainFunctionWrapper)
+PARTS = (LLVMFunctionManager, FunctionDeclarations, FunctionHelpers, MainFunctionWrapper)
 SLIR_EMITTER = (slir_bodies, slir_emit, slir_intrinsics, slir_state, slir_values)
-COLLABORATOR_NAMES = {"helpers", "main_wrapper", "declarations", "definitions"}
+COLLABORATOR_NAMES = {"helpers", "main_wrapper", "declarations"}
 
 
 def _methods():

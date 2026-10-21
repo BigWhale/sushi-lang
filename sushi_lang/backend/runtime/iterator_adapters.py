@@ -30,6 +30,7 @@ from sushi_lang.backend.runtime.iterators import (
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.iterators import LENT, OWNED, item_parts, state_on_heap
 from sushi_lang.semantics.typesys import FunctionType, IteratorType, StructType
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -141,7 +142,7 @@ def _destroy_value(codegen: 'LLVMCodegen', value: ir.Value, value_type: 'Type') 
     from sushi_lang.backend.destructors import emit_value_destructor, needs_cleanup
     if not needs_cleanup(codegen, value_type):
         return
-    slot = codegen.memory.entry_alloca(value.type, "iter_item_drop")
+    slot = entry_alloca(codegen.builder, value.type, "iter_item_drop")
     codegen.builder.store(value, slot)
     emit_value_destructor(codegen, slot, value_type)
 
@@ -217,7 +218,7 @@ def _emit_lazy(codegen: 'LLVMCodegen', kind: LazyKind, expr, fields: Sequence[ir
     if on_heap:
         raw, state = _heap_state(codegen, state_type)
     else:
-        state = codegen.memory.entry_alloca(state_type, f"iter_{kind.name}_state")
+        state = entry_alloca(codegen.builder, state_type, f"iter_{kind.name}_state")
         raw = state
     for index, value in enumerate(fields):
         codegen.builder.store(value, gep_utils.gep_struct_field(
@@ -470,7 +471,7 @@ def _walk(codegen: 'LLVMCodegen', value: ir.Value, receiver: IteratorType,
     """
     from sushi_lang.backend.destructors import emit_function_value_destructor
     b = codegen.builder
-    slot = codegen.memory.entry_alloca(value.type, "iter_walked")
+    slot = entry_alloca(codegen.builder, value.type, "iter_walked")
     b.store(value, slot)
     loop, found, done = _blocks(codegen.func, "consume.next", "consume.item", "consume.end")
     b.branch(loop)
@@ -488,7 +489,7 @@ def _new_list(codegen: 'LLVMCodegen', list_type: 'Type') -> ir.Value:
     if not isinstance(list_type, StructType):
         raise_internal_error("CE0015", message="a consumer reached the backend with no "
                                                "List type")
-    slot = codegen.memory.entry_alloca(codegen.types.ll_type(list_type), "collected")
+    slot = entry_alloca(codegen.builder, codegen.types.ll_type(list_type), "collected")
     codegen.builder.store(emit_list_new(codegen, list_type), slot)
     return slot
 
@@ -541,7 +542,7 @@ def _emit_fold(codegen: 'LLVMCodegen', call: AdapterCall) -> ir.Value:
     fn_type = call.function_type(1)
     init, step_fn = call.args
     b = codegen.builder
-    acc = codegen.memory.entry_alloca(init.type, "fold_acc")
+    acc = entry_alloca(codegen.builder, init.type, "fold_acc")
     b.store(init, acc)
 
     def step(item: ir.Value) -> None:

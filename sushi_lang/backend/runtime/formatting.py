@@ -9,6 +9,7 @@ from sushi_lang.backend.constants.llvm_values import make_i64_const
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.backend.runtime.constants import FORMAT_STRINGS, STDOUT_FD
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if typing.TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -58,7 +59,7 @@ class FormattingOperations:
         """
         builder = self.codegen.builder
         i8 = self.codegen.i8
-        slot = self.codegen.memory.entry_alloca(ir.ArrayType(i8, size + 1), "print_buf")
+        slot = entry_alloca(self.codegen.builder, ir.ArrayType(i8, size + 1), "print_buf")
         buf = builder.bitcast(slot, i8.as_pointer(), name="print_buf_ptr")
         written = builder.call(self.codegen.runtime.libc_strings.sprintf,
                                [buf, fmt_ptr, value], name="print_len")
@@ -109,13 +110,13 @@ class FormattingOperations:
                             is_line: bool = False) -> None:
         """Print an integer at its own width with signedness-aware formatting."""
         from sushi_lang.semantics.typesys import BuiltinType
-        from sushi_lang.backend.expressions.type_utils import is_unsigned_type
+        from sushi_lang.semantics.type_predicates import is_unsigned_int
 
         builder = self.codegen.builder
 
         width = v.type.width if isinstance(v.type, ir.IntType) else 32
         is_bool = (width == 1 or semantic_type == BuiltinType.BOOL)
-        is_signed = not is_unsigned_type(semantic_type)
+        is_signed = not is_unsigned_int(semantic_type)
 
         if is_bool:
             self._emit_print_bool(v, is_line)

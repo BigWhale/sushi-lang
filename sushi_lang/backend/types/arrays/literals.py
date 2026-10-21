@@ -8,6 +8,7 @@ from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.ast import ArrayLiteral
 from sushi_lang.semantics.typesys import ArrayType
 from sushi_lang.backend.types.arrays import runs
+from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -41,6 +42,6 @@ def emit_array_literal(codegen: 'LLVMCodegen', expr: ArrayLiteral) -> ir.Value:
     if expanded is not None:
         return ir.Constant(array_type, expanded)
 
-    array_alloca = codegen.memory.entry_alloca(array_type, "array_literal")
+    array_alloca = entry_alloca(codegen.builder, array_type, "array_literal")
     runs.fill_fixed_slot(codegen, array_alloca, emitted, element_type)
     return codegen.builder.load(array_alloca)
