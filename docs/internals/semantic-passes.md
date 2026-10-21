@@ -1319,9 +1319,9 @@ the pass ends with no stop has its table checked (`check_lift`,
 
 The rest of this section is the AST pass `LambdaLifter`, which no stage runs since the
 switch to SHIR; the closures group takes the symbol and the environment layout from it.
-Each lambda literal becomes a top-level function plus a captured environment. It runs
-BETWEEN `typecheck` and `borrow`, per unit: the lifted body needs the types `typecheck`
-stamped, and the lifted function must be borrow-checked like any other.
+Each lambda literal becomes a top-level function plus a captured environment. Before the
+switch, it ran BETWEEN `typecheck` and `borrow`, per unit: the lifted body needed the types
+that `typecheck` stamped, and the lifted function was borrow-checked like any other.
 
 **This pass owns the lambda BODY.** A lifted lambda is a function, so its body goes
 through `_validate_function` -- the `annotate` hook -- like every other function's, and
