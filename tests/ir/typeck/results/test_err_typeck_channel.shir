@@ -11,16 +11,16 @@ ShirBody quarter
   params : [(_0 "n": i32, Guaranteed)]
   locals : [_1 "h": i32, _2 "q": Result@(i32, StdError)]
   block  :
-    Assign(LocalRef(_1), Try(Call(Free(@half), [(LocalRef(_0), Guaranteed)])), is_init: true)
-    Assign(LocalRef(_2), EnumInit(@Result, "Ok", [LocalRef(_1)]), is_init: true)
-    Return(EnumInit(@Result, "Ok", [Try(Call(Free(@half), [(Try(LocalRef(_2)), Guaranteed)]))]))
+    Assign(LocalRef(_1), adopt Try(adopt Call(Free(@half), [(LocalRef(_0), Guaranteed)])), is_init: true)
+    Assign(LocalRef(_2), adopt EnumInit(@Result, "Ok", [adopt LocalRef(_1)]), is_init: true)
+    Return(adopt EnumInit(@Result, "Ok", [adopt Try(adopt Call(Free(@half), [(Try(adopt LocalRef(_2)), Guaranteed)]))]))
 
 ShirBody show
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    ExprStmt(Call(Intrinsic("println"), [(Try(Call(Free(@quarter), [(LocalRef(_0), Guaranteed)])), Guaranteed)]))
-    Return(EnumInit(@Result, "Ok", [Lit(Blank)]))
+    ExprStmt(Call(Intrinsic("println"), [(Try(adopt Call(Free(@quarter), [(LocalRef(_0), Guaranteed)])), Guaranteed)]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
 
 ShirBody wrong
   params : [(_0 "n": i32, Guaranteed)]
@@ -34,4 +34,4 @@ ShirBody main
   locals : []
   block  :
     ExprStmt(Call(Free(@show), [(Lit(8), Guaranteed)]))
-    Return(Lit(0))
+    Return(adopt Lit(0))

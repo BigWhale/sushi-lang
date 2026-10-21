@@ -16,4 +16,4 @@ ShirBody main
     ExprStmt(Call(Intrinsic("println"), [(Call(Free(@classify), [(Lit(7), Guaranteed)]), Guaranteed)]))
     ExprStmt(Call(Intrinsic("println"), [(Call(Free(@classify), [(Lit(20), Guaranteed)]), Guaranteed)]))
     ExprStmt(Call(Intrinsic("println"), [(Call(Free(@classify), [(Lit(50), Guaranteed)]), Guaranteed)]))
-    Return(Lit(0))
+    Return(adopt Lit(0))

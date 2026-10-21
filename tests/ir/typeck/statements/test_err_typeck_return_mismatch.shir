@@ -4,25 +4,25 @@ ShirBody answer
   params : []
   locals : []
   block  :
-    Return(Lit(42))
+    Return(adopt Lit(42))
 
 ShirBody echo
   params : [(_0 "value": i64, Guaranteed)]
   locals : []
   block  :
-    Return(LocalRef(_0))
+    Return(adopt LocalRef(_0))
 
 ShirBody title
   params : []
   locals : []
   block  :
-    Return(Lit("Mostly Harmless"))
+    Return(adopt Lit("Mostly Harmless"))
 
 ShirBody nothing
   params : []
   locals : []
   block  :
-    Return(Lit(Blank))
+    Return(adopt Lit(Blank))
 
 ShirBody wrong
   params : []
@@ -34,4 +34,4 @@ ShirBody main
   params : []
   locals : []
   block  :
-    Return(Lit(0))
+    Return(adopt Lit(0))

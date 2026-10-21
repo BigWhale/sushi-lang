@@ -30,4 +30,4 @@ ShirBody main
     ExprStmt(Call(Intrinsic("println"), [(Call(Free(@byte_kind), [(Lit(a'7'), Guaranteed)]), Guaranteed)]))
     ExprStmt(Call(Intrinsic("println"), [(Call(Free(@byte_kind), [(Lit(a'x'), Guaranteed)]), Guaranteed)]))
     ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
-    Return(Lit(0))
+    Return(adopt Lit(0))

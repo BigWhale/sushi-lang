@@ -19,4 +19,4 @@ ShirBody T[].name (TemplateCheck("test_shir_generic_array_target.$array.with.Nam
   params : [(_0 "self": T[], Guaranteed)]
   locals : []
   block  :
-    Return(Lit("array"))
+    Return(adopt Lit("array"))

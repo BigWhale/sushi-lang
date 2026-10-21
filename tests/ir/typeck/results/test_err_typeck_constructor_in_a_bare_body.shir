@@ -11,8 +11,8 @@ ShirBody show
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    ExprStmt(Call(Intrinsic("println"), [(Try(Call(Free(@half), [(LocalRef(_0), Guaranteed)])), Guaranteed)]))
-    Return(EnumInit(@Result, "Ok", [Lit(Blank)]))
+    ExprStmt(Call(Intrinsic("println"), [(Try(adopt Call(Free(@half), [(LocalRef(_0), Guaranteed)])), Guaranteed)]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
 
 ShirBody quarter
   params : [(_0 "n": i32, Guaranteed)]
@@ -25,4 +25,4 @@ ShirBody main
   locals : []
   block  :
     ExprStmt(Call(Free(@show), [(Lit(8), Guaranteed)]))
-    Return(Lit(0))
+    Return(adopt Lit(0))

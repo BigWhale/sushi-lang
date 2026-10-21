@@ -4,64 +4,64 @@ ShirBody decimal
   params : []
   locals : []
   block  :
-    Return(Lit(42))
+    Return(adopt Lit(42))
 
 ShirBody hexadecimal
   params : []
   locals : []
   block  :
-    Return(Lit(0xdeadbeef))
+    Return(adopt Lit(0xdeadbeef))
 
 ShirBody octal
   params : []
   locals : []
   block  :
-    Return(Lit(0o17))
+    Return(adopt Lit(0o17))
 
 ShirBody binary
   params : []
   locals : []
   block  :
-    Return(Lit(0b1010))
+    Return(adopt Lit(0b1010))
 
 ShirBody byte
   params : []
   locals : []
   block  :
-    Return(Lit(a'x'))
+    Return(adopt Lit(a'x'))
 
 ShirBody ratio
   params : []
   locals : []
   block  :
-    Return(Lit(2.5))
+    Return(adopt Lit(2.5))
 
 ShirBody flag
   params : []
   locals : []
   block  :
-    Return(Lit(true))
+    Return(adopt Lit(true))
 
 ShirBody text
   params : []
   locals : []
   block  :
-    Return(Lit("Mostly Harmless"))
+    Return(adopt Lit("Mostly Harmless"))
 
 ShirBody quoted
   params : []
   locals : []
   block  :
-    Return(Lit("can't"))
+    Return(adopt Lit("can't"))
 
 ShirBody nothing
   params : []
   locals : []
   block  :
-    Return(Lit(Blank))
+    Return(adopt Lit(Blank))
 
 ShirBody main
   params : []
   locals : []
   block  :
-    Return(Lit(0))
+    Return(adopt Lit(0))

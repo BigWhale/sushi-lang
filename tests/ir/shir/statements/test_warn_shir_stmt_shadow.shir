@@ -4,7 +4,7 @@ ShirBody main
   params : []
   locals : [_0 "x": i32, _1 "x": i32]
   block  :
-    Assign(LocalRef(_0), Lit(1), is_init: true)
+    Assign(LocalRef(_0), adopt Lit(1), is_init: true)
     If(Binary(>, LocalRef(_0), Lit(0)), then: [Assign(LocalRef(_1), Lit(2), is_init: true), ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))])
     ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
     Return(Lit(0))

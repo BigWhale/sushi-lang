@@ -20,10 +20,10 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(EnumInit(@Slot, "Has", [EnumInit(@Shape, "Circle", [Lit(2)])]), Guaranteed)]), Guaranteed)]))
-    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(EnumInit(@Slot, "Has", [EnumInit(@Shape, "Square", [Lit(2)])]), Guaranteed)]), Guaranteed)]))
-    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(EnumInit(@Slot, "Has", [EnumInit(@Shape, "Square", [Lit(3)])]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(EnumInit(@Slot, "Has", [adopt EnumInit(@Shape, "Circle", [adopt Lit(2)])]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(EnumInit(@Slot, "Has", [adopt EnumInit(@Shape, "Square", [adopt Lit(2)])]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(EnumInit(@Slot, "Has", [adopt EnumInit(@Shape, "Square", [adopt Lit(3)])]), Guaranteed)]), Guaranteed)]))
     ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(EnumInit(@Slot, "Nothing", []), Guaranteed)]), Guaranteed)]))
-    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@size), [(EnumInit(@Shape, "Square", [Lit(6)]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@size), [(EnumInit(@Shape, "Square", [adopt Lit(6)]), Guaranteed)]), Guaranteed)]))
     ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
-    Return(Lit(0))
+    Return(adopt Lit(0))

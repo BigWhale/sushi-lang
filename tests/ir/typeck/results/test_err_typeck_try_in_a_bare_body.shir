@@ -18,4 +18,4 @@ ShirBody main
   params : []
   locals : []
   block  :
-    Return(Call(Free(@twice), [(Lit(4), Guaranteed)]))
+    Return(adopt Call(Free(@twice), [(Lit(4), Guaranteed)]))

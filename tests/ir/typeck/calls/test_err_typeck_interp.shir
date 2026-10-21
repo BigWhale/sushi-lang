@@ -4,7 +4,7 @@ ShirBody mk
   params : []
   locals : []
   block  :
-    Return(EnumInit(@Result, "Ok", [Lit(1)]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(1)]))
 
 ShirBody main
   params : []

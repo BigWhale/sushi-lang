@@ -5,7 +5,7 @@ ShirBody show
   locals : []
   block  :
     ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
-    Return(LocalRef(_0))
+    Return(adopt LocalRef(_0))
 
 ShirBody pick
   params : [(_0 "m": Maybe@(i32), Guaranteed)]

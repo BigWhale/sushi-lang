@@ -21,12 +21,12 @@ ShirBody tally__i32_string.pack2
   params : [(_0 "#pack_args_0": i32, Guaranteed), (_1 "#pack_args_1": string, Guaranteed)]
   locals : [_2 "n": i32, _3 "round": i32]
   block  :
-    Assign(LocalRef(_2), Lit(0), is_init: true)
+    Assign(LocalRef(_2), adopt Lit(0), is_init: true)
     ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_0), ""]), Guaranteed)]))
-    Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1)), is_init: false)
+    Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(1)), is_init: false)
     ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_1), ""]), Guaranteed)]))
-    Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(1)), is_init: false)
-    Assign(LocalRef(_3), Lit(0), is_init: true)
+    Assign(LocalRef(_2), adopt Binary(+, LocalRef(_2), Lit(1)), is_init: false)
+    Assign(LocalRef(_3), adopt Lit(0), is_init: true)
     Loop(Cond(Binary(<, LocalRef(_3), Lit(2))), [Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(10)), is_init: false), Assign(LocalRef(_2), Binary(+, LocalRef(_2), Lit(10)), is_init: false), Assign(LocalRef(_3), Binary(+, LocalRef(_3), Lit(1)), is_init: false)])
     Return(LocalRef(_2))
   copies : [block: [1..3, 3..5], block[6].body: [0..1, 1..2]]

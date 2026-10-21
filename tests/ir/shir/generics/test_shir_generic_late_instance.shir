@@ -4,7 +4,7 @@ ShirBody twice (TemplateCheck("test_shir_generic_late_instance.twice"))
   params : [(_0 "x": T, Guaranteed)]
   locals : []
   block  :
-    Return(Interp(["", LocalRef(_0), "", LocalRef(_0), ""]))
+    Return(adopt Interp(["", LocalRef(_0), "", LocalRef(_0), ""]))
 
 ShirBody main
   params : []
@@ -17,4 +17,4 @@ ShirBody twice__i32
   params : [(_0 "x": i32, Guaranteed)]
   locals : []
   block  :
-    Return(Interp(["", LocalRef(_0), "", LocalRef(_0), ""]))
+    Return(adopt Interp(["", LocalRef(_0), "", LocalRef(_0), ""]))

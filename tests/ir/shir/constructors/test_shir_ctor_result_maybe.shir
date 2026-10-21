@@ -18,7 +18,7 @@ ShirBody keep
   params : [(_0 "s": string, Owned)]
   locals : []
   block  :
-    Return(EnumInit(@Result, "Ok", [(LocalRef(_0), Owned)]))
+    Return(adopt EnumInit(@Result, "Ok", [(move LocalRef(_0), Owned)]))
 
 ShirBody main
   params : []

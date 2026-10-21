@@ -28,10 +28,10 @@ ShirBody main
   params : []
   locals : []
   block  :
-    Return(Lit(0))
+    Return(adopt Lit(0))
 
 ShirBody i32.twice
   params : [(_0 "self": i32, Guaranteed)]
   locals : []
   block  :
-    Return(Binary(*, LocalRef(_0), Lit(2)))
+    Return(adopt Binary(*, LocalRef(_0), Lit(2)))

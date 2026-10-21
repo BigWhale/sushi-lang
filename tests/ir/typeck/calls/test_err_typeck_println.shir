@@ -4,13 +4,13 @@ ShirBody mk
   params : []
   locals : []
   block  :
-    Return(EnumInit(@Result, "Ok", [Lit(1)]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(1)]))
 
 ShirBody name
   params : []
   locals : []
   block  :
-    Return(Lit("Mostly Harmless"))
+    Return(adopt Lit("Mostly Harmless"))
 
 ShirBody main
   params : []

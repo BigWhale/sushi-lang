@@ -12,4 +12,4 @@ ShirBody main
   params : []
   locals : []
   block  :
-    Return(Lit(0))
+    Return(adopt Lit(0))

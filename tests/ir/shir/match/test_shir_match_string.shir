@@ -17,4 +17,4 @@ ShirBody main
     ExprStmt(Call(Intrinsic("println"), [(Call(Free(@verb), [(Lit("put"), Guaranteed)]), Guaranteed)]))
     ExprStmt(Call(Intrinsic("println"), [(Call(Free(@verb), [(Lit("drop"), Guaranteed)]), Guaranteed)]))
     ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
-    Return(Lit(0))
+    Return(adopt Lit(0))

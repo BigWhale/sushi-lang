@@ -12,4 +12,4 @@ ShirBody main
   locals : []
   block  :
     ExprStmt(Call(Free(@greet), [(Lit("Arthur"), Guaranteed)]))
-    Return(Lit(0))
+    Return(adopt Lit(0))

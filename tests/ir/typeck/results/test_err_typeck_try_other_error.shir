@@ -19,4 +19,4 @@ ShirBody main
   locals : []
   block  :
     ExprStmt(Call(Free(@show), [(Lit(8), Guaranteed)]))
-    Return(Lit(0))
+    Return(adopt Lit(0))

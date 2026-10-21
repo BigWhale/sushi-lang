@@ -4,7 +4,7 @@ ShirBody small
   params : [(_0 "b": u8, Guaranteed)]
   locals : []
   block  :
-    Return(Binary(+, LocalRef(_0), Lit(1)))
+    Return(adopt Binary(+, LocalRef(_0), Lit(1)))
 
 ShirBody fact
   params : [(_0 "n": i32, Guaranteed)]
@@ -17,7 +17,7 @@ ShirBody yes
   params : []
   locals : []
   block  :
-    Return(Lit(true))
+    Return(adopt Lit(true))
 
 ShirBody main
   params : []

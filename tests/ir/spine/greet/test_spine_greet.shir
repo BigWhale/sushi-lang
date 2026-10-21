@@ -4,20 +4,20 @@ ShirBody decorate
   params : [(_0 "name": string, Owned)]
   locals : []
   block  :
-    Return(EnumInit(@Result, "Ok", [Interp(["", LocalRef(_0), "!"])]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Interp(["", LocalRef(_0), "!"])]))
 
 ShirBody shout
   params : [(_0 "text": string, Owned)]
   locals : []
   block  :
     ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
-    Return(EnumInit(@Result, "Ok", [Lit(Blank)]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
 
 ShirBody greet
   params : [(_0 "name": string, Owned), (_1 "loud": bool, Guaranteed)]
   locals : [_2 "msg": string]
   block  :
-    Assign(LocalRef(_2), Try(Call(Free(@decorate), [(LocalRef(_0), Owned)])), is_init: true)
+    Assign(LocalRef(_2), adopt Try(adopt Call(Free(@decorate), [(move LocalRef(_0), Owned)])), is_init: true)
     If(LocalRef(_1), then: [ExprStmt(Call(Free(@shout), [(LocalRef(_2), Owned)]))])
     Return(EnumInit(@Result, "Ok", [Lit(Blank)]))
 
@@ -25,8 +25,8 @@ ShirBody main
   params : []
   locals : []
   block  :
-    ExprStmt(Call(Free(@greet), [(Lit("So long"), Owned), (Lit(false), Guaranteed)]))
+    ExprStmt(Call(Free(@greet), [(adopt Lit("So long"), Owned), (Lit(false), Guaranteed)]))
     ExprStmt(Call(Intrinsic("println"), [(Lit("quiet"), Guaranteed)]))
-    ExprStmt(Call(Free(@greet), [(Lit("Mostly Harmless"), Owned), (Lit(true), Guaranteed)]))
+    ExprStmt(Call(Free(@greet), [(adopt Lit("Mostly Harmless"), Owned), (Lit(true), Guaranteed)]))
     ExprStmt(Call(Intrinsic("println"), [(Lit("loud"), Guaranteed)]))
-    Return(Lit(0))
+    Return(adopt Lit(0))

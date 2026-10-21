@@ -29,4 +29,4 @@ ShirBody ParseError.as
   params : [(_0 "self": ParseError, Owned)]
   locals : []
   block  :
-    Return(EnumInit(@AppError, "Parse", [LocalRef(_0)]))
+    Return(adopt EnumInit(@AppError, "Parse", [adopt LocalRef(_0)]))

@@ -4,26 +4,26 @@ ShirBody twice
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    Return(Binary(*, LocalRef(_0), Lit(2)))
+    Return(adopt Binary(*, LocalRef(_0), Lit(2)))
 
 ShirBody length
   params : [(_0 "text": string, Owned)]
   locals : []
   block  :
     ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
-    Return(Lit(1))
+    Return(adopt Lit(1))
 
 ShirBody read
   params : [(_0 "n": i32, InGuaranteed)]
   locals : []
   block  :
-    Return(Binary(+, LocalRef(_0), Lit(1)))
+    Return(adopt Binary(+, LocalRef(_0), Lit(1)))
 
 ShirBody bump
   params : [(_0 "n": i32, Inout)]
   locals : []
   block  :
-    Assign(LocalRef(_0), Binary(+, LocalRef(_0), Lit(1)), is_init: false)
+    Assign(LocalRef(_0), adopt Binary(+, LocalRef(_0), Lit(1)), is_init: false)
 
 ShirBody main
   params : []

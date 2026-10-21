@@ -34,7 +34,7 @@ ShirBody main
   params : []
   locals : []
   block  :
-    Return(Lit(0))
+    Return(adopt Lit(0))
 
 ShirBody Vec.at
   params : [(_1 "x": i32, Guaranteed), (_2 "y": i32, Guaranteed)]
@@ -46,10 +46,10 @@ ShirBody Vec.seven
   params : []
   locals : []
   block  :
-    Return(Lit(7))
+    Return(adopt Lit(7))
 
 ShirBody Sign.plus
   params : []
   locals : []
   block  :
-    Return(EnumInit(@Sign, "Plus", []))
+    Return(adopt EnumInit(@Sign, "Plus", []))

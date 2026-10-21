@@ -4,8 +4,8 @@ ShirBody reset
   params : [(_0 "counter": i32, Inout)]
   locals : []
   block  :
-    Assign(LocalRef(_0), Lit(0), is_init: false)
-    Return(Lit(Blank))
+    Assign(LocalRef(_0), adopt Lit(0), is_init: false)
+    Return(adopt Lit(Blank))
 
 ShirBody main
   params : []

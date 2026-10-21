@@ -4,7 +4,7 @@ ShirBody bump
   params : [(_0 "n": i32, Inout)]
   locals : []
   block  :
-    Assign(LocalRef(_0), Binary(+, LocalRef(_0), Lit(1)), is_init: false)
+    Assign(LocalRef(_0), adopt Binary(+, LocalRef(_0), Lit(1)), is_init: false)
 
 ShirBody main
   params : []
