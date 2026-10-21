@@ -108,7 +108,8 @@ class BodyLowerer:
     in the body of a template check, the one body that may hold an `Expand` (ir.md 4.5).
     `locals` holds the local of each binder that the body declares, in the order of the
     walk. `copies` holds the copy boundaries of each block that holds copies of an
-    unrolled `expand` (ir.md 7.2).
+    unrolled `expand` (ir.md 7.2). `loops` counts the loop bodies that the walk is in, as
+    the scope pass counts them for CE1003.
     """
     ids: IdAllocator[ShirId]
     decls: DeclNames
@@ -121,6 +122,7 @@ class BodyLowerer:
     locals: list[ShirLocal] = field(default_factory=list, init=False)
     copies: ExpandCopies = field(default_factory=ExpandCopies, init=False)
     in_initializer: bool = field(default=False, init=False)
+    loops: int = field(default=0, init=False)
 
     def stmt(self, node: Any) -> s.ShirStmt:
         row = LOWERING.get(type(node))
@@ -222,7 +224,8 @@ class BodyLowerer:
         argument outside a struct construction (CE6104), written type arguments after a
         dot or on a struct construction (CE6102), a slice with a reversed range (CE2122),
         a call of a name that the namespace does not hold (CE2008), a member of a type
-        that is no variant (CE2045), and a `poke` of a constant (CE2400).
+        that is no variant (CE2045), a `poke` of a constant (CE2400), and a `break` or a
+        `continue` outside a loop (CE1003).
 
         `codes` are the codes of that error. At the end of the analysis, on every compile,
         an error hole whose codes no error offered is a stop with CE0155
@@ -618,7 +621,16 @@ def _while(lw: BodyLowerer, node: a.While) -> s.Loop:
     """`while (cond)`: a `Loop` with a `Cond` source (ir.md 7.5)."""
     ident = lw.ident()
     source = s.Cond(lw.expr(node.cond))
-    return s.Loop(ident, lw.span(node), source, lw.block(node.body))
+    return s.Loop(ident, lw.span(node), source, _loop_body(lw, node.body))
+
+
+def _loop_body(lw: BodyLowerer, body: a.Block) -> ShirBlock:
+    """The body of a loop: a `break` and a `continue` in it leave the loop."""
+    lw.loops += 1
+    try:
+        return lw.block(body)
+    finally:
+        lw.loops -= 1
 
 
 def _foreach(lw: BodyLowerer, node: a.Foreach) -> s.Loop:
@@ -632,7 +644,7 @@ def _foreach(lw: BodyLowerer, node: a.Foreach) -> s.Loop:
     ident = lw.ident()
     iterable = lw.expr(node.iterable)
     source = s.Items(iterable, _loop_binder(lw, node), _item_mode(node.item_borrow))
-    body = lw.block(node.body)
+    body = _loop_body(lw, node.body)
     if node.item_try_let is not None and node.item_type is not None:
         _write_type(lw, node.item_try_let, node.item_type)
     return s.Loop(ident, lw.span(node), source, body)
@@ -676,12 +688,21 @@ def _assert(lw: BodyLowerer, node: a.Assert) -> s.Assert:
     return s.Assert(ident, lw.span(node), cond, message, node.source_label)
 
 
-def _break(lw: BodyLowerer, node: a.Break) -> s.Break:
-    return s.Break(lw.ident(), lw.span(node))
+def _break(lw: BodyLowerer, node: a.Break) -> s.Break | Hole:
+    return _jump(lw, node, s.Break)
 
 
-def _continue(lw: BodyLowerer, node: a.Continue) -> s.Continue:
-    return s.Continue(lw.ident(), lw.span(node))
+def _continue(lw: BodyLowerer, node: a.Continue) -> s.Continue | Hole:
+    return _jump(lw, node, s.Continue)
+
+
+def _jump(lw: BodyLowerer, node: a.Break | a.Continue,
+          kind: type[s.Break] | type[s.Continue]) -> s.Break | s.Continue | Hole:
+    """A `break` or a `continue`. Outside a loop, the scope pass always refuses it (CE1003):
+    an error hole."""
+    if not lw.loops:
+        return lw.error_hole(node, "CE1003")
+    return kind(lw.ident(), lw.span(node))
 
 
 def _print(lw: BodyLowerer, node: a.Print) -> s.ExprStmt:
