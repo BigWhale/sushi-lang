@@ -708,8 +708,11 @@ when the position has one, and answers the type of its node; the one dispatch wr
 answer as the type row of the node. A node that has an error has no answer, and a node that
 reads it has none either, so the completeness check runs only when a walk ends with no stop
 and with no error in its body. A call is the one exception: its callee decides its type, so
-a call of a known function answers what the function yields also when an argument does not
-fit, and a later fault of that value (an unhandled `Result`) is a fault of its own. The
+a call of a function that the pass finds answers what the function yields also when the
+call has an error of its own: a wrong count, an argument that does not fit, a wrong marker,
+or a function that is private to another unit (CE3005, where the pass checks no argument).
+A later fault of that value (an unhandled `Result`) is a fault of its own. A call of a name
+that no function takes (CE2008) or that two imports bring (CE3012) answers nothing. The
 display type of a hole of an `Interp` and of the argument of `print` is the type of the
 value with no `peek` or `poke`. While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
