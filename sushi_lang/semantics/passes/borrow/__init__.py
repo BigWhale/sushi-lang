@@ -28,6 +28,7 @@ from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.shir.body import TemplateCheck
 from sushi_lang.semantics.shir.ownership_check import check_ownership
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, ReferenceType, Type
 
@@ -105,7 +106,8 @@ class BorrowChecker:
 
         `tables` are the tables that the typecheck pass read the body in. A stop ends the
         walk: the pass records it with the file of the body. A walk with no stop and with
-        no error checks the table of the body and records the body as finished.
+        no error checks the table of the body. It records the body as finished, but not a
+        template check: a template check never goes to SLIR (docs/design/ir.md 4.3).
         """
         self._enter(decl, body, tables)
         offered = sum(self.reporter.errors_offered.values())
@@ -130,7 +132,9 @@ class BorrowChecker:
             ownership.record_conditional_move(local)
         check_ownership(body, self.shir.typeck_of(body), self.shir.lift_table_of(body),
                         ownership, self.shir.decls)
-        self.stops.finished(self.shir.decls.name_of(body.fn_id), body.block.loc, filename)
+        if not isinstance(body.origin, TemplateCheck):
+            self.stops.finished(self.shir.decls.name_of(body.fn_id), body.block.loc,
+                                filename)
 
     def _enter(self, decl: object, body: ShirBody, tables: SymbolTables) -> None:
         self.tables, self.types = tables, TypeQueries(tables)
