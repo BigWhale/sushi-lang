@@ -96,8 +96,8 @@ completeness check. Three faults follow from that shape, and each one is in the 
   set of callee fields. `Call` carries 7 `callee_*` fields, `MethodCall` 11 and `DotCall`
   13.
 - **The backend writes too.** `backend/runtime/closures.py:205` writes
-  `ownership_provenance` onto a node it makes, and the deleted
-  `backend/expressions/calls/dispatcher.py:322` writes `resolved_struct_type`.
+  `ownership_provenance` onto a node it makes, and `dispatcher.py:322` of
+  `backend/expressions/calls/` (deleted, 8.12) writes `resolved_struct_type`.
 
 Every dataclass in `semantics/ast.py` is `slots=True`, every analysis field is declared on
 each class that takes it, and `tests/unit/test_ast_nodes_are_slotted.py` keeps it that
