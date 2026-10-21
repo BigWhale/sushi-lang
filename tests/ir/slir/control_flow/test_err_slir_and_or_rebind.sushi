@@ -1,0 +1,20 @@
+# EXPECT_ERROR_CODES_EXACT: CE0155
+# EXPECT_STDERR_CONTAINS: "emit, step"
+# EXPECT_DUMP_SLIR: test_err_slir_and_or_rebind.slir
+#
+# A rebind whose new value is `and` or `or` that reads the old value. The new value is
+# computed first, into a temporary of its own, and the store comes after it (ir.md 8.10,
+# rule 6), so the right operand reads the old value and not the left operand.
+
+fn step(bool y, bool x0) bool:
+    let bool x = x0
+    x := y and x
+    return x
+
+fn ready(bool a, bool b) bool:
+    let bool done = a
+    done := b or (a and done)
+    return done
+
+fn main() i32:
+    return 0

@@ -1,0 +1,29 @@
+# EXPECT_ERROR_CODES_EXACT: CE0155
+# EXPECT_STDERR_CONTAINS: "emit, half"
+# EXPECT_DUMP_SLIR: test_err_slir_try_argument.slir
+#
+# A `??` in a later argument of a call that takes an earlier argument with `nom`. The move
+# happens at the call, in the `Ok` block, so the `Err` block of the `??` still drops the
+# string: the local `w` in `run`, and the temporary of `make(n)` in `run_made`.
+
+fn half(i32 n) i32 | StdError:
+    return Result.Ok(n)
+
+fn make(i32 n) string:
+    return "{n}"
+
+fn take(nom string s, i32 n) i32:
+    println(s)
+    return n
+
+fn run(i32 n) i32 | StdError:
+    let string w = "{n}"
+    let i32 got = take(nom w, half(n)??)
+    return Result.Ok(got)
+
+fn run_made(i32 n) i32 | StdError:
+    let i32 got = take(nom make(n), half(n)??)
+    return Result.Ok(got)
+
+fn main() i32:
+    return 0

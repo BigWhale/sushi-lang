@@ -95,10 +95,12 @@ fn refill(_1: i32 @guaranteed) -> ~ {
     goto -> bb1
 
   bb1:
+    StorageLive(_6)
     _6 = copy _5 < copy _1
     switchInt(copy _6) -> [0: bb3, otherwise: bb2]
 
   bb2:
+    StorageDead(_6)
     StorageLive(_7)
     _7 = call builtin interp@(i32)(copy _5 @guaranteed)
     DropIfSet(_2, _3)
@@ -109,6 +111,10 @@ fn refill(_1: i32 @guaranteed) -> ~ {
     goto -> bb1
 
   bb3:
+    StorageDead(_6)
+    goto -> bb4
+
+  bb4:
     StorageLive(_8)
     _8 = call builtin println@(string)(const "done" @guaranteed)
     StorageDead(_8)

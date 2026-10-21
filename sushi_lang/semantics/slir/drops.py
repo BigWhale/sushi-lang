@@ -117,6 +117,11 @@ class DropPlacement:
             er.raise_internal_error("CE0000", detail="a SLIR temporary outside every statement")
         self._add(self._scopes[-1], local, owning)
 
+    def detach(self, local: LocalId) -> None:
+        """`local` leaves the newest scope: from here on lowering ends its storage itself
+        (a condition local, at the top of each block that its switch goes to)."""
+        self._scopes[-1].locals.remove(local)
+
     def _add(self, scope: _Scope, local: LocalId, owning: bool) -> None:
         scope.locals.append(local)
         if owning:

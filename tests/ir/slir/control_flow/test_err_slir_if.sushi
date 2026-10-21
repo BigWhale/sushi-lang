@@ -5,9 +5,9 @@
 # An `if` switches on its condition: a zero goes to the `else` block, or to the join block
 # when there is no `else`; any other value goes to the `then` block (ir.md 8.9). Blocks get
 # their ids in the order that lowering makes them: `then`, `else`, then the join. A
-# condition that is not a local goes into a local of its own, which the terminator of its
-# block reads, so it gets no storage marker. The `else` block of `pick` drops its string
-# at its end. Each block of `grade` returns, so no join block is made.
+# condition that is not a local goes into a local of its own: it is live before its write,
+# and dead at the top of each block that the switch goes to. The `else` block of `pick`
+# drops its string at its end. Each block of `grade` returns, so no join block is made.
 
 fn pick(bool a, i32 n) i32:
     let i32 x = 1

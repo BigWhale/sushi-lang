@@ -17,8 +17,9 @@ answer of `borrow` and the shape of the value alone (ir.md 7.9): a `move` row gi
 `Move`; an `adopt` row gives `Copy` of a place, a constant for a literal, and `Move` of the
 temporary of a new value. A value with no row is read with `Copy`. A new value goes into
 the place that takes it (the local of a `let`, `_0`), else into a temporary of its
-statement. Drop placement (`drops.py`) places every drop, every flag write and every
-`StorageDead`, and it joins the state of the locals where paths meet.
+statement. The store that consumes a `move` operand marks its local moved, not the place
+where the operand is built. Drop placement (`drops.py`) places every drop, every flag
+write and every `StorageDead`, and it joins the state of the locals where paths meet.
 
 A local whose state differs between the paths of a join gets a drop flag right after it
 (ir.md 8.10, rule 4), and so does a local whose state at a loop header is not the state
@@ -29,16 +30,17 @@ body is lowered again with what the walks found, until a walk finds nothing new.
 The construct of a stop is the SHIR class of the node, or one of these names: `Initializer`
 for the body of a constant, `method` for the body of an extension method, `borrowed view`
 for a `reject` row, `borrowed rebind` for a rebind of a borrowed parameter that owns,
-`conversion` for a `??` that calls a declared conversion, `library function` for a callee
-whose declaring unit the typecheck row does not name, and `bloom` for a bloom argument. A
-`??` over an owning wrapper that the body only reads stops with its class name. The symbol,
-the unit and the return type of the function are facts of its declaration (ir.md 6.4). The
-unit is the declaring unit; a function that has none (a lifted lambda, the instance of a
-template of a binary library) goes into the module of the unit that holds its body.
+`borrowed try` for a `??` over an owning wrapper that the body only reads, `conversion`
+for a `??` that calls a declared conversion, `library function` for a callee whose
+declaring unit the typecheck row does not name, and `bloom` for a bloom argument. The
+symbol, the unit and the return type of the function are facts of its declaration (ir.md
+6.4). The unit is the declaring unit; a function that has none (a lifted lambda, the
+instance of a template of a binary library) goes into the module of the unit that holds
+its body.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 
 from sushi_lang.internals import errors as er
@@ -347,8 +349,8 @@ class _Lowering:
         if not self.alive:
             self.placement.leave_scope()
             return []
-        self.emit(self.placement.close_scope(body.loc))
         self.emit(self.placement.flush())
+        self.emit(self.placement.close_scope(body.loc))
         return [(self.block, self.placement.state())]
 
     def meet(self, join: _Block, arrivals: list[_Arrival], among: tuple[LocalId, ...],
@@ -368,7 +370,11 @@ class _Lowering:
         and the body is lowered again with what it found."""
         for local in locals_:
             shir = self.shir_of.get(local)
-            if shir is None or not self.answers.ownership.is_conditionally_moved(shir):
+            if shir is None:
+                er.raise_internal_error(
+                    "CE0000", span=span,
+                    detail=f"two paths give the temporary _{local.index} two states")
+            if not self.answers.ownership.is_conditionally_moved(shir):
                 er.raise_internal_error(
                     "CE0000", span=span,
                     detail=f"two paths give _{local.index} two states, and borrow does not "
@@ -377,31 +383,44 @@ class _Lowering:
             if loop is not None:
                 self.found_unknown.add((loop, shir))
 
-    def condition(self, expr: e.ShirExpr) -> p.Operand:
-        """The operand that a switch reads. The temporaries of the condition die before the
-        switch; a condition that is no local or constant goes into a local of its own, which
-        the terminator reads and which gets no storage marker, as a discriminant (L12)."""
+    def condition(self, expr: e.ShirExpr) -> tuple[p.Operand, Optional[LocalId]]:
+        """The operand that a switch reads, and the local that holds it, if any. The
+        temporaries of the condition die before the switch. A condition that is no local or
+        constant goes into a local of its own: it is live before its first write, an exit
+        inside the condition ends it, and the caller ends it at the top of each block that
+        the switch goes to (L12)."""
         self.placement.open_statement()
         value = self.value(expr)
+        local: Optional[LocalId] = None
         if isinstance(value, r.Use) and isinstance(value.operand, (p.Const, p.Copy)):
             operand = value.operand
         else:
-            local = self.new_local(BuiltinType.BOOL, None, None)
-            self.write(p.Local(local), value, expr.loc)
+            local = self.temporary(value, BuiltinType.BOOL, expr.loc)
+            self.placement.detach(local)
             operand = p.Copy(p.Local(local))
         self.emit(self.placement.close_scope(expr.loc))
-        return operand
+        return operand, local
+
+    def targets(self, local: Optional[LocalId], blocks: tuple[_Block, ...], span: Span) -> None:
+        """The storage of the condition local `local` ends at the top of each target block."""
+        if local is not None:
+            for block in blocks:
+                block.statements.append(st.StorageDead(local, span))
 
     def if_(self, stmt: s.If) -> None:
         """`switchInt(c, [(0, else)], otherwise: then)`; with no `else`, the zero edge goes to
-        the join (ir.md 8.9). The blocks: `then`, `else`, then the join (L5)."""
-        cond = self.condition(stmt.cond)
+        the join, or to a block of its own when a condition local must end there (ir.md
+        8.9). The blocks: `then`, `else`, then the join (L5)."""
+        cond, local = self.condition(stmt.cond)
         then, other = self.new_block(), self.new_block()
+        join = self.new_block() if stmt.otherwise is None and local is not None else None
         self.jump(tm.SwitchInt(cond, ((0, other.id),), then.id, stmt.loc))
+        self.targets(local, (then, other), stmt.cond.loc)
         among, at_branch = self.placement.in_scope(), self.placement.state()
         arrivals = self.arm(then, stmt.then)
         if stmt.otherwise is None:
-            self.meet(other, [*arrivals, (None, at_branch)], among, stmt.loc)
+            zero: _Arrival = (None, at_branch) if join is None else (other, at_branch)
+            self.meet(other if join is None else join, [*arrivals, zero], among, stmt.loc)
             return
         self.placement.restore(at_branch)
         arrivals += self.arm(other, stmt.otherwise)
@@ -410,21 +429,27 @@ class _Lowering:
 
     def loop(self, stmt: s.Loop) -> None:
         """A `while`: a header block that evaluates the condition and switches, the body,
-        which goes back to the header, and the exit block (ir.md 8.9)."""
+        which goes back to the header, and the exit block (ir.md 8.9). When a condition
+        local must end on the zero edge, that edge goes to a block of its own, which goes
+        to the exit, because a `break` goes to the exit too."""
         source = stmt.source
         if not (isinstance(source, s.Cond)
                 and isinstance(self.typeck.loop_kind_of(stmt.shir_id), While)):
             dispatch.stop(STAGE, stmt)
-        header, body, exit_ = self.new_block(), self.new_block(), self.new_block()
+        header = self.new_block()
         self.jump(tm.Goto(header.id, stmt.loc))
         self.block = header
         among = self.placement.in_scope()
-        for local in among:
-            if (stmt.shir_id, self.shir_of.get(local)) in self.learned.unknown_at:
-                self.placement.mark_unknown(local)
+        for kept in among:
+            if (stmt.shir_id, self.shir_of.get(kept)) in self.learned.unknown_at:
+                self.placement.mark_unknown(kept)
         at_header = self.placement.state()
-        cond = self.condition(source.cond)
-        self.jump(tm.SwitchInt(cond, ((0, exit_.id),), body.id, stmt.loc))
+        cond, local = self.condition(source.cond)
+        body = self.new_block()
+        done = None if local is None else self.new_block()
+        exit_ = self.new_block()
+        self.jump(tm.SwitchInt(cond, ((0, (done or exit_).id),), body.id, stmt.loc))
+        self.targets(local, (body,) if done is None else (body, done), source.cond.loc)
         after_cond = self.placement.state()
         frame = _LoopFrame(header.id, exit_.id, self.placement.depth())
         self.loops.append(frame)
@@ -434,7 +459,7 @@ class _Lowering:
             frame.continues.append(state)
         self.loops.pop()
         self.learn(at_header.changed_by(frame.continues, among), stmt.loc, stmt.shir_id)
-        self.meet(exit_, [(None, after_cond), *((None, state) for state in frame.breaks)],
+        self.meet(exit_, [(done, after_cond), *((None, state) for state in frame.breaks)],
                   among, stmt.loc)
 
     def break_(self, stmt: s.Break) -> None:
@@ -471,17 +496,19 @@ class _Lowering:
 
     def rebind(self, stmt: s.Assign, target: e.LocalRef) -> None:
         """A rebind: the new value first, then the drop of the old one, then the store, then
-        the flag (rules 4 and 6). An old value that a move took drops nothing."""
+        the flag (rules 4 and 6). An old value that a move took drops nothing. A new value
+        that may still read the old one (a live owning value, `and`, `or`) goes into a
+        temporary first."""
         ident = self.local_of(target.local, target.loc)
         owning = self.owns(self.locals[ident.index].ty)
         if owning and self.placement.is_borrowed(ident):
             raise StageStop(STAGE, "borrowed rebind", stmt.loc)
         value = self.value(stmt.value)
-        if self.placement.holds_live_value(ident) and not (
-                isinstance(value, r.Use) and isinstance(value.operand, p.Const)):
-            temp = self.temporary(value, self.type_of(stmt.value), stmt.value.loc)
-            self.placement.move(temp, stmt.value.loc)
-            value = r.Use(p.Move(p.Local(temp)))
+        if isinstance(value, _ShortCircuit) or (self.placement.holds_live_value(ident) and not (
+                isinstance(value, r.Use) and isinstance(value.operand, p.Const))):
+            ty = self.type_of(stmt.value)
+            temp = p.Local(self.temporary(value, ty, stmt.value.loc))
+            value = r.Use(p.Move(temp) if self.owns(ty) else p.Copy(temp))
         self.emit(self.placement.drop_old_value(ident, stmt.loc))
         self.write(p.Local(ident), value, stmt.loc)
         self.emit(self.placement.flag_stored(ident, stmt.loc))
@@ -500,19 +527,24 @@ class _Lowering:
         self.block.terminator = tm.Return(span)
 
     def write(self, place: p.Place, value: _Value, span: Span) -> None:
+        """Store `value` into `place`. The store is the statement that consumes each `move`
+        operand of the value, so it marks the local of each one moved (ir.md 8.10, rule 3)."""
         if isinstance(value, _ShortCircuit):
             self.short_circuit(place, value)
-        elif isinstance(value, _CallValue):
+            return
+        if isinstance(value, _CallValue):
             self.emit([st.Call(place, value.callee, value.args, span)])
         else:
             self.emit([st.Assign(place, value, span)])
+        for moved in _moves(value):
+            self.placement.move(_root(moved), span)
 
     def short_circuit(self, place: p.Place, value: _ShortCircuit) -> None:
         """`and` and `or` as two blocks (ir.md 8.9): the left operand goes into `place`, a
         switch on it skips the right block, and the right block writes `place` again. The
         temporaries of the right operand die in its block."""
         span = value.span
-        self.emit([st.Assign(place, r.Use(value.lhs), span)])
+        self.write(place, r.Use(value.lhs), span)
         right, join = self.new_block(), self.new_block()
         skip, other = (join, right) if value.op == "and" else (right, join)
         self.jump(tm.SwitchInt(p.Copy(place), ((0, skip.id),), other.id, span))
@@ -549,18 +581,12 @@ class _Lowering:
             return p.Const(_constant(expr, self.typeck))
         if isinstance(expr, e.LocalRef):
             place = p.Local(self.local_of(expr.local, expr.loc))
-            if row is Ownership.MOVE:
-                self.placement.move(place.id, expr.loc)
-                return p.Move(place)
-            return p.Copy(place)
+            return p.Move(place) if row is Ownership.MOVE else p.Copy(place)
         if row is Ownership.MOVE:
             er.raise_internal_error("CE0000", span=expr.loc,
                                     detail=f"a move row on a {type(expr).__name__}, which is no place")
         temp = self.temporary(self.value(expr), self.type_of(expr), expr.loc)
-        if row is Ownership.ADOPT:
-            self.placement.move(temp, expr.loc)
-            return p.Move(p.Local(temp))
-        return p.Copy(p.Local(temp))
+        return p.Move(p.Local(temp)) if row is Ownership.ADOPT else p.Copy(p.Local(temp))
 
     def leaf(self, expr: e.Lit | e.LocalRef) -> _Value:
         return r.Use(self.operand(expr))
@@ -636,7 +662,9 @@ class _Lowering:
         """`??` (ir.md 8.9): the operand into a temporary, a switch on its discriminant with
         no other value, an `Err` block that builds the `Err` into `_0`, leaves every scope
         and returns, and the `Ok` block, where the payload moves into the place that takes
-        the value. A `??` that calls a declared conversion stops (`slir, conversion`)."""
+        the value; each store moves the temporary. A `??` that calls a declared conversion
+        stops (`slir, conversion`), and a `??` over an owning wrapper that the body only reads
+        stops (`slir, borrowed try`)."""
         facts = self.typeck.try_facts_of(node.shir_id)
         choice = self.typeck.conversion_of(node.shir_id)
         if isinstance(choice, Conversion):
@@ -647,7 +675,7 @@ class _Lowering:
         ty = self.type_of(node.inner)
         value = self.value(node.inner)
         if self.owns(ty) and isinstance(value, r.Use) and isinstance(value.operand, p.Copy):
-            raise StageStop(STAGE, "Try", node.loc)
+            raise StageStop(STAGE, "borrowed try", node.loc)
         (ok_tag, ok), (err_tag, err) = _arms(ty, facts.success_tag, node.loc)
         temp = self.temporary(value, ty, node.inner.loc)
         tag = self.new_local(BuiltinType.I32, None, None)
@@ -655,7 +683,6 @@ class _Lowering:
         ok_block, err_block = self.new_block(), self.new_block()
         targets = tuple(sorted([(ok_tag, ok_block.id), (err_tag, err_block.id)]))
         self.jump(tm.SwitchInt(p.Copy(p.Local(tag)), targets, None, node.loc))
-        self.placement.move(temp, node.loc)
         at_switch = self.placement.state()
         self.block = err_block
         payload = p.Move(p.Field(p.Downcast(p.Local(temp), err), 0))
@@ -692,6 +719,27 @@ _VALUES: dict[type, Callable[..., _Value]] = {
     e.Interp: _Lowering.interp,
     e.Try: _Lowering.try_,
 }
+
+
+def _moves(value: r.Rvalue | _CallValue) -> list[p.Place]:
+    """The place of each `move` operand of a value."""
+    if isinstance(value, _CallValue):
+        parts: list[object] = [operand for operand, _ in value.args]
+    else:
+        parts = []
+        for part in (getattr(value, item.name) for item in fields(value)):
+            parts.extend(part if isinstance(part, tuple) else [part])
+    return [part.place for part in parts if isinstance(part, p.Move)]
+
+
+def _root(place: p.Place) -> LocalId:
+    """The local that a move takes: a local, or the payload of a variant of a local
+    (`move ((_3 as Ok).0)`), which moves the whole local."""
+    if isinstance(place, p.Field) and isinstance(place.base, p.Downcast):
+        place = place.base.base
+    if not isinstance(place, p.Local):
+        er.raise_internal_error("CE0000", detail=f"SLIR lowering moves out of {place}")
+    return place.id
 
 
 def _arms(ty: Type, success: int, span: Span) -> tuple[tuple[int, str], tuple[int, str]]:

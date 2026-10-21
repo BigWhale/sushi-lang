@@ -444,8 +444,11 @@ tests/ir/shir/expressions/test_err_shir_expr_borrow_operand.sushi
 tests/ir/shir/names/test_err_shir_name_unresolved.sushi
 tests/ir/shir/statements/test_err_shir_stmt_let_untyped.sushi
 tests/ir/slir/control_flow/test_err_slir_and_or.sushi
+tests/ir/slir/control_flow/test_err_slir_and_or_rebind.sushi
+tests/ir/slir/control_flow/test_err_slir_break_flag.sushi
 tests/ir/slir/control_flow/test_err_slir_conditional_move.sushi
 tests/ir/slir/control_flow/test_err_slir_if.sushi
+tests/ir/slir/control_flow/test_err_slir_try_argument.sushi
 tests/ir/slir/control_flow/test_err_slir_try_let.sushi
 tests/ir/slir/control_flow/test_err_slir_while_break_continue.sushi
 tests/ir/slir/conventions/test_err_slir_conventions.sushi

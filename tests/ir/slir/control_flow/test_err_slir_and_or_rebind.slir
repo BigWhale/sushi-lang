@@ -1,0 +1,64 @@
+unit test_err_slir_and_or_rebind
+
+fn step(_1: bool @guaranteed, _2: bool @guaranteed) -> bool {
+    let _0: bool
+    let _3: bool                           // x
+    let _4: bool
+
+  bb0:
+    StorageLive(_3)
+    _3 = copy _2
+    StorageLive(_4)
+    _4 = copy _1
+    switchInt(copy _4) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    _4 = copy _3
+    goto -> bb2
+
+  bb2:
+    _3 = copy _4
+    StorageDead(_4)
+    _0 = copy _3
+    StorageDead(_3)
+    return
+}
+
+fn ready(_1: bool @guaranteed, _2: bool @guaranteed) -> bool {
+    let _0: bool
+    let _3: bool                           // done
+    let _4: bool
+
+  bb0:
+    StorageLive(_3)
+    _3 = copy _1
+    StorageLive(_4)
+    _4 = copy _2
+    switchInt(copy _4) -> [0: bb1, otherwise: bb2]
+
+  bb1:
+    _4 = copy _1
+    switchInt(copy _4) -> [0: bb4, otherwise: bb3]
+
+  bb2:
+    _3 = copy _4
+    StorageDead(_4)
+    _0 = copy _3
+    StorageDead(_3)
+    return
+
+  bb3:
+    _4 = copy _3
+    goto -> bb4
+
+  bb4:
+    goto -> bb2
+}
+
+fn main() -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 0_i32
+    return
+}
