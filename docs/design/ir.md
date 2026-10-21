@@ -1150,8 +1150,8 @@ there: it never lowers to SLIR (4.3).
 
 | Decision | Keyed by |
 |---|---|
-| the `Ownership` of each consuming use (move, copy, reject) | `shir_id` |
-| the locals that are CONDITIONALLY moved | the body |
+| the `Ownership` of each consuming use (move, adopt, reject) | `shir_id` |
+| the locals that are CONDITIONALLY moved | `LocalId`, one set for the body |
 | whether a producer makes a LENT or an OWNED iterator | the producer's `shir_id` |
 | whether a lent iterator's state goes to the heap, because the iterator leaves through a `peek` return | the producer's or adapter's `shir_id` |
 | whether a loop walks its iterator in place | the loop's `shir_id` |
@@ -1176,6 +1176,74 @@ read from `LiftResults`). SLIR lowering cuts one `SlirFunction` per `Lambda` fro
 enclosing body's tables and builds the closure `Aggregate` from `LiftResults` (8.9). So no
 pass rewrites SHIR after it is built, `TypeckResults` keeps one writer (S5), and a
 `shir_id` stays unique within one body.
+
+**The tables in the code.** `OwnershipResults` is in `semantics/shir/ownership.py`, and
+`LiftResults` is in `semantics/shir/lift.py`. `LoweredProgram` owns both, as it owns
+`TypeckResults`: when lowering lists a body, it makes the three empty tables of the body
+(`BodyTables`) and keeps them beside the body (`ownership_table_of`, `lift_table_of`). The
+three tables share their shapes (`semantics/shir/side_table.py`): a second answer for one
+key is an internal error, a copy of a table is refused, and a completeness check stops at
+its first gap. `borrow` is the one writer of `OwnershipResults` (gate:
+`tests/unit/test_ownership_results_have_one_writer.py`), and `lift` is the one writer of
+`LiftResults` (gate: `tests/unit/test_lift_results_have_one_writer.py`). The gates of the
+three tables use one scan (`tests/unit/side_table_scan.py`).
+
+The rows of `OwnershipResults`:
+
+- The `Ownership` of a consuming use is the enum of `semantics/ownership.py`: `MOVE`,
+  `ADOPT` or `REJECT`, the answer of `classify()`. The copy of a plain value is `ADOPT`.
+  The key is the `shir_id` of the consumed node. A capture has no node in the body, so its
+  row has the key of the capture type in 7.3: the `shir_id` of the `Lambda` and the
+  `LocalId` of the captured local.
+- A conditionally moved local is a row by its `LocalId`. A local with no row is moved on
+  no path, or on every path. SLIR lowering gives each row a drop flag (8.10, rule 4).
+- LENT or OWNED (a bool, true for LENT) and the heap decision of a lent iterator (a bool)
+  are rows by the `shir_id` of the producer call or the lazy-adapter call.
+- The walk in place is a bool by the `shir_id` of the `Loop`.
+
+`LiftResults` holds the symbol (a string) and the environment layout (`Capture(local,
+moves)` for each slot, in slot order), each by the `shir_id` of the `Lambda`.
+
+**What a consuming use is.** A consuming use is a value in a position that takes it over
+(`ConsumingUse`, `semantics/ownership.py`). SHIR shows the position, and the rule reads the
+node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership_check.py`):
+
+- the value of an `Assign` (a `let`, a rebind, a write of a field or an element) and the
+  value of a `Destructure`;
+- the value of a `Return`;
+- an argument of a `Call` whose convention is `Owned`, and a bloom argument;
+- each field of a `StructInit`, each payload of an `EnumInit`, each part of a
+  `TupleInit`, and the value of each `Single` run of an `ArrayInit` (a repeated value is a
+  borrow, and each slot takes its own copy);
+- the scrutinee of a `Match` that consumes (`match nom r:`);
+- the operand of a `Try`, and the operand of a `Cast` that calls a conversion;
+- the iterable of a `Loop` over an iterator value or a `next()` type that does not walk
+  in place;
+- each capture of a `Lambda`, from its environment layout in `LiftResults`.
+
+The receiver of a method call is not on the list yet: `TypeckResults` has no convention row
+for a receiver. The method group adds that row, and a `nom self` receiver joins the rule.
+
+**The completeness checks.** `check_ownership` runs when `borrow` ends a body with no
+error. It reads `TypeckResults` and `LiftResults` for the positions, and it needs an
+`Ownership` for each consuming use and each capture; LENT or OWNED for each producer over a
+container and each lazy adapter, except the iterable of a `Cursor` or a `HashMapCursor`
+walk, which makes no value; a heap decision for each lent one; and a walk-in-place answer
+for each `Loop` of kind `Protocol` or `IteratorValue`. The conditionally moved locals have
+no check, because no row is an answer. `check_lift` (`semantics/shir/lift_check.py`) runs
+when `lift` ends a body with no error, and it needs a symbol and an environment for each
+`Lambda`, a lambda in the body of a lambda too. A gap of either check is the internal error
+[CE0157](../error-catalog.md#ce0157), which names the pass, the table, the answer, the
+class of the node, its position and the body.
+
+**The dump.** `--dump-shir` prints the answers of both tables in place, where a row exists:
+the `Ownership` of a consuming use as a word before the node (`move LocalRef(_0)`,
+`adopt Lit(2)`, `reject ...`), the word of a SLIR operand; the conditionally moved locals
+on a `cond_moved : [_5]` line after the `locals` line; `iterator: lent` or
+`iterator: owned` and `heap: true` or `heap: false` after the arguments of an iterator
+call; `in_place: true` or `in_place: false` after the body of a `Loop`; and
+`symbol: "<symbol>"` and `env: [(adopt _4, Copy), ...]` after the fields of a `Lambda`,
+each capture with its `Ownership` and its mode. With no row, the text does not change.
 
 ### 7.10 AST to SHIR, node by node
 
