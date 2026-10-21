@@ -96,8 +96,8 @@ completeness check. Three faults follow from that shape, and each one is in the 
   set of callee fields. `Call` carries 7 `callee_*` fields, `MethodCall` 11 and `DotCall`
   13.
 - **The backend writes too.** `backend/runtime/closures.py:205` writes
-  `ownership_provenance` onto a node it makes, and
-  `dispatcher.py:322` writes `resolved_struct_type`.
+  `ownership_provenance` onto a node it makes, and the deleted
+  `backend/expressions/calls/dispatcher.py:322` writes `resolved_struct_type`.
 
 Every dataclass in `semantics/ast.py` is `slots=True`, every analysis field is declared on
 each class that takes it, and `tests/unit/test_ast_nodes_are_slotted.py` keeps it that
@@ -106,24 +106,24 @@ not give a fact an owner, one writer, or a completeness check. Sections 7.3 and 
 The declared analysis fields are transitional (6.2): each one goes when the pass that
 writes it moves to SHIR and its side table.
 
-### 1.3 The ownership rule runs twice
+### 1.3 The ownership rule ran twice
 
-`backend/ownership.py` calls `classify(provenance, type_class)` **while it emits LLVM IR**,
-at three sites: `bind` (`:61`), `consume` (`:88`) and `unwrap` (`:117`). Each site builds
-the type class there, from the `Drop` set and a type resolver. The rule runs once in the
-`borrow` pass to check it, and again at emission to act on it.
+`backend/ownership.py` called `classify(provenance, type_class)` **while it emitted LLVM
+IR**, at three sites: `bind` (`:61`), `consume` (`:88`) and `unwrap` (`:117`). Each site
+built the type class there, from the `Drop` set and a type resolver. The rule ran once in
+the `borrow` pass to check it, and again at emission to act on it.
 
-`_provenance_of()` (`:152`) reads `source.ownership_provenance`. A missing value is
+`_provenance_of()` (`:152`) read `source.ownership_provenance`. A missing value was
 CE0129: fatal, with a deliberate no-fallback rule. Three
 more backend sites read the field outside the seam (`statements/returns.py:62`,
-`expressions/memory.py:265`, `runtime/closures.py:205`), and `_mark_moved` (`:160`) finds
+`expressions/memory.py:265`, `runtime/closures.py:205`), and `_mark_moved` (`:160`) found
 the moved name by a test on the syntax (`Name` or `MemberAccess`).
 
 CE0129 was not a bug. It was the correct response to a
-missing note in a design that passes notes. An IR removes the whole category, because the
+missing note in a design that passed notes. An IR removes the whole category, because the
 decision becomes an instruction.
 
-### 1.4 Ownership state is keyed on LLVM objects and on names
+### 1.4 Ownership state was keyed on LLVM objects and on names
 
 ```
 self._moved: Set['ir.Instruction'] = set()
@@ -131,7 +131,7 @@ self._flags: Dict['ir.Instruction', 'ir.AllocaInstr'] = {}
 ```
 
 `MoveTracker` (`moves.py:13`) keyed move state on `llvmlite` objects.
-`arm_if_conditional(name, slot)` armed a drop flag when the **name string** is in
+`arm_if_conditional(name, slot)` armed a drop flag when the **name string** was in
 `codegen.current_conditional_moves`, a set copied from `Block.conditional_move_names` at
 the start of each function. The scope manager keyed its cleanup registries by name, and
 `_held_by_temporary` keyed an owning temporary by `id(expr)`, the identity of an AST node.
