@@ -1,10 +1,8 @@
-# EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "slir, Builtin"
-# EXPECT_DUMP_SLIR: test_err_borrow_string_method_reaches_slir.slir
+# EXPECT_DUMP_SLIR: test_borrow_string_method_reaches_slir.slir
 #
 # A string method and a primitive method read their receiver and their arguments, and the
-# borrow pass finishes the body with no error. The SLIR lowering does not lower a
-# built-in method call yet, so the program stops there: `slir, Builtin`.
+# borrow pass finishes the body with no error. The SLIR lowering makes each call a `Call`
+# of a `Builtin` callee. The receiver is the first operand, with the convention of a borrow.
 
 fn main() i32:
     let string s = "Mostly Harmless"

@@ -1,3 +1,0 @@
-unit test_err_borrow_string_method_reaches_slir
-
-fn main: stopped (slir, Builtin)

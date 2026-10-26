@@ -15,7 +15,7 @@ from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.passes.collect.functions import FuncSig, FunctionTable, Param
-from sushi_lang.semantics.shir.callee import Intrinsic
+from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -400,6 +400,24 @@ def test_a_var_arg_callee_checks_the_convention_of_its_declared_prefix():
     call = _call((p.Const(k.Int(1, I32)), OWNED), (p.Const(k.Int(2, I32)), GUARANTEED))
     _refused(_function([BLANK, BLANK], _block(0, _ret(), call)), "declared conventions",
              declared={"unit$take": DeclaredParams((GUARANTEED,), var_arg=True)})
+
+
+def _method(*args: tuple[p.Operand, Convention]) -> st.Call:
+    return st.Call(_local(1), st.Builtin(BuiltinMethod("string", "len"), ()), args, BAD)
+
+
+def test_a_built_in_method_call_with_no_receiver_operand_is_refused():
+    _refused(_function([BLANK, I32], _block(0, _ret(), _method(), _set(0, r.Use(p.Const(k.Blank()))))),
+             "a receiver operand")
+
+
+def test_a_built_in_method_call_with_its_receiver_first_passes():
+    text = _set(2, r.Use(p.Const(k.Str(b"Mostly Harmless"))))
+    _passes(_function(
+        [BLANK, I32, STRING],
+        _block(0, _ret(), _live(2), text, _method((_copy(2), GUARANTEED)),
+               _set(0, r.Use(p.Const(k.Blank()))), _drop(2), _dead(2)),
+    ))
 
 
 TAKE = {"unit$take": DeclaredParams((OWNED,))}

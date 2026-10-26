@@ -60,7 +60,7 @@ from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer, ShirBody, ShirLocal, TemplateCheck
-from sushi_lang.semantics.shir.callee import Conversion, Free, Intrinsic
+from sushi_lang.semantics.shir.callee import Builtin, Conversion, Free, Intrinsic
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.loop_kind import While
@@ -630,12 +630,16 @@ class _Lowering:
             er.raise_internal_error("CE0000", span=node.loc,
                                     detail="a call with no callee reached SLIR")
         callee = self.callee(node, resolved)
-        return _CallValue(callee, tuple(self.argument(node, index, arg)
-                                        for index, arg in enumerate(node.args)))
+        receiver = ((self.operand(resolved.callee.recv), Convention.GUARANTEED),) \
+            if isinstance(resolved.callee, Builtin) else ()
+        return _CallValue(callee, receiver + tuple(self.argument(node, index, arg)
+                                                   for index, arg in enumerate(node.args)))
 
     def callee(self, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee:
         """A free function by its symbol and its source name; an intrinsic with the display
-        type of each argument (L7)."""
+        type of each argument (L7); a built-in method by its family and its name, with no
+        types: the receiver is the first operand of the call and has the convention of a
+        borrow, because no method of the primitive or string family changes or consumes it."""
         callee = resolved.callee
         if isinstance(callee, Free):
             if resolved.unit is None:
@@ -645,6 +649,8 @@ class _Lowering:
         if isinstance(callee, Intrinsic):
             return st.Builtin(callee, tuple(self.display_type(node.shir_id, index, node.loc)
                                             for index in range(len(node.args))))
+        if isinstance(callee, Builtin):
+            return st.Builtin(callee.method, ())
         raise StageStop(STAGE, type(callee).__name__, node.loc)
 
     def argument(self, node: e.Call, index: int,

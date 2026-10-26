@@ -1,0 +1,16 @@
+# EXPECT_DUMP_SLIR: test_slir_method_temporary_receiver.slir
+#
+# The receiver of a method call can be a literal, the answer of another method call or the
+# answer of a function call. Each one is a temporary that the call borrows, and the drop
+# placement drops it at the end of the statement.
+
+fn word() string:
+    return "Mostly Harmless"
+
+fn main() i32:
+    let i32 a = "Mostly Harmless".len()
+    let i32 b = word().upper().len()
+    let bool c = word().contains("H")
+    if (c):
+        return a + b
+    return 0

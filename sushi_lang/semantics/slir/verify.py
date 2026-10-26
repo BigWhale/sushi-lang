@@ -42,6 +42,7 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.integer_width import fits_integer_type, integer_range
 from sushi_lang.semantics.param_modes import Convention, declared_modes
+from sushi_lang.semantics.shir.callee import BuiltinMethod
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -72,6 +73,7 @@ OWNING_DROP = "drop of an owning type"
 BOOL_FLAG = "bool drop flag"
 DROP_ONCE = "one drop or move on every path"
 CONVENTIONS = "declared conventions"
+RECEIVER_OPERAND = "a receiver operand"
 OWNED_COPY = "no copy of an owning value into an owned argument"
 SHORT_CIRCUIT = "no short circuit in a binary"
 NUMERIC_CAST = "a numeric cast"
@@ -315,6 +317,10 @@ class _Check:
                 self.owned_copy(operand, stmt.span)
         if isinstance(callee, st.Direct):
             self.conventions_of(stmt, callee)
+        elif isinstance(callee, st.Builtin) and isinstance(callee.method, BuiltinMethod) \
+                and not stmt.args:
+            self.fail(RECEIVER_OPERAND, f"the call of {callee.method.family}."
+                                        f"{callee.method.name} has no receiver", stmt.span)
 
     def owned_copy(self, operand: p.Copy, span: Span) -> None:
         """An `Owned` argument takes a copy of a plain value alone. A `string` is the one
