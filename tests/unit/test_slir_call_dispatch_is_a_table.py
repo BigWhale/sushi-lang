@@ -44,3 +44,24 @@ def test_the_call_instruction_is_emitted_once():
             for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
             if "builder.call(" in line]
     assert len(hits) == 1, hits
+
+
+def test_an_intrinsic_with_no_row_stops_with_its_name():
+    from types import SimpleNamespace
+
+    from sushi_lang.backend.slir.state import FunctionState
+    from sushi_lang.internals.diagnostics import StageStop
+    from sushi_lang.semantics.shir.callee import Intrinsic
+    from sushi_lang.semantics.slir import statements as st
+
+    name = "no_such_intrinsic"
+    assert name not in emit.INTRINSICS
+    state = FunctionState(None, None, None, None, None)
+    statement = SimpleNamespace(callee=st.Builtin(Intrinsic(name), ()))
+    try:
+        emit._builtin(state, statement)
+    except StageStop as stop:
+        assert stop.params["stage"] == "emit"
+        assert stop.params["construct"] == f"intrinsic {name}"
+    else:
+        raise AssertionError("an intrinsic with no row did not stop")

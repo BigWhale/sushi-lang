@@ -171,7 +171,7 @@ def _builtin(state: FunctionState, statement: st.Call) -> None:
         state.stop(builtin.method)
     emit = INTRINSICS.get(builtin.method.name)
     if emit is None:
-        state.stop(builtin)
+        state.stop(f"intrinsic {builtin.method.name}")
     state.builder.store(emit(state, statement), place_address(state, statement.dest))
 
 
