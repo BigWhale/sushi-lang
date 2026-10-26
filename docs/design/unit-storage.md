@@ -117,10 +117,11 @@ a value. A `var` is ONE storage, so:
 - a consumer of a BINARY library declares it under the manifest's `link_symbol`, and the
   library's bitcode carries the definition.
 
-The reads and writes reach it through the seams a constant uses:
-`resolve_name_slot` answers the global where it answered a local's slot, and
-`namespaced_storage` (backend/expressions/names.py) is the ONE reader of an alias that
-reaches storage -- a rebind, a `poke`, a field write and a mutating method all ask it.
+The reads and writes reach it as a `Global` place of SLIR (`semantics/slir/places.py`). The
+AST body emitter and its two seams, `resolve_name_slot` and `namespaced_storage`, are
+deleted. Until group A9 of the migration (`docs/design/ir.md`), SLIR lowering has no row for a
+`var`: a program that names one stops with CE0155. The rule is the same in the new pipeline: a
+rebind, a `poke`, a field write and a mutating method all go through one place.
 
 ## Library manifest
 

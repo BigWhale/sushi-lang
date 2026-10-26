@@ -68,8 +68,10 @@ is legal.
 
 `as_fixed_array_address` (`backend/types/arrays/fixed_addressing.py`) is the one rule. It
 resolves the address from the AST rather than from the value, through
-`try_get_struct_alloca`, which already walks a `Name`, a nested field chain, an `IndexAccess`
-and a reference parameter.
+`try_get_struct_alloca`, which walked a `Name`, a nested field chain, an `IndexAccess` and a
+reference parameter. That helper is deleted with the AST body emitter, and the SLIR emitter
+does not call the function yet. Until group A6 of the migration (`docs/design/ir.md`), the
+text below states the rule, and SLIR gives the address of a fixed-array receiver as a place.
 
 It takes one flag, and that flag is the whole of the read/write split:
 

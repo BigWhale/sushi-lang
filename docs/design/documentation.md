@@ -399,8 +399,9 @@ and hands them to the attachment step instead.
 
 This is not a detail. If a doc block reached the statement dispatcher as an AST statement
 class, every exhaustive statement dispatcher would need an arm for it or would raise an
-ICE — the backend `emit_stmt` match, the `scope`, `borrow` and `typecheck` passes, the
-monomorphize transformer, and `semantics/visitors.py`. Peeling it in `parse_block` is the
+ICE — the lowering to SHIR and to SLIR, the `scope`, `borrow` and `typecheck` passes, the
+monomorphize transformer, and `semantics/visitors.py`. (The backend `emit_stmt` match that
+stood here is deleted: the SLIR emitter reads SLIR and never an AST statement.) Peeling it in `parse_block` is the
 difference between a contained change and one that touches the whole compiler.
 
 ### Keep `loc` on the declaration keyword

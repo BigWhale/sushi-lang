@@ -843,7 +843,7 @@ A callable has an error channel only when its signature writes '| E' or returns 
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-A mutating built-in on a fixed array -- fill, reverse -- routes its receiver through backend/types/arrays/fixed\_addressing.py::as\_fixed\_array\_address with writable=True, which resolves an address from the AST. A receiver that names no storage has no write address, and every such receiver already has a diagnostic: [CE2096](#ce2096) for a constant, and [CE2408](#ce2408), [CE2414](#ce2414), [CE2421](#ce2421), [CE2422](#ce2422), [CE2426](#ce2426) or [CE2429](#ce2429) for the read-only receivers. Reaching this means one of them did not fire, so it is a gap in that coverage and not a user error.
+A mutating built-in on a fixed array -- fill, reverse -- routes its receiver through backend/types/arrays/fixed\_addressing.py::as\_fixed\_array\_address with writable=True, which resolves an address from the AST. The function still stands in the tree, but the SLIR emitter does not call it, and its helper `try_get_struct_alloca` is deleted; group A6 of the migration replaces it with an address from a SLIR place. A receiver that names no storage has no write address, and every such receiver already has a diagnostic: [CE2096](#ce2096) for a constant, and [CE2408](#ce2408), [CE2414](#ce2414), [CE2421](#ce2421), [CE2422](#ce2422), [CE2426](#ce2426) or [CE2429](#ce2429) for the read-only receivers. Reaching this means one of them did not fire, so it is a gap in that coverage and not a user error.
 
 ### CE0133 {#ce0133}
 
