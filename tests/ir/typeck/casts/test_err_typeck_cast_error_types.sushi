@@ -1,0 +1,23 @@
+# EXPECT_ERROR_CODES_EXACT: CE2014
+# EXPECT_STDERR_CONTAINS: "declare `extend LowError as AppError:` in the unit that declares 'AppError'"
+# EXPECT_DUMP_SHIR: test_err_typeck_cast_error_types.shir
+#
+# Between two error types, `as` calls the conversion that the program declares for the
+# pair. A cast to the same error type needs none. Here no unit declares a conversion from
+# `LowError` to `AppError`, so the cast is CE2014, and the help names the declaration to
+# write.
+
+error LowError:
+    Bad
+
+error AppError:
+    Low
+
+fn keep(LowError e) LowError:
+    return e as LowError
+
+fn lift(LowError e) AppError:
+    return e as AppError
+
+fn main() i32:
+    return 0

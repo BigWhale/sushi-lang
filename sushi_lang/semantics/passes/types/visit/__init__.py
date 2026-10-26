@@ -12,11 +12,11 @@ yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
 `statements.py` walks a block and holds the statement arms, `expressions.py` the expression
 arms of the leaves, `operators.py` the arms of the operators and the check of a condition,
 `calls.py` the arms of a call, an interpolated string and a borrow, and `results.py` the
-arm of an enum construction. The arm of `??` is `check_try` of `passes/types/expressions.py`,
-because the one caller of the conversion lookup is in that module. The AST inference
-visitor of `inference.py` is not part of this walk: it is the inference of the early passes
-(`ReadOnlyInferrer`), until they stop inferring. `helpers.py` holds the lambda and
-function-value helpers that it reads.
+arm of an enum construction. The arms of `??` and of `as` are `check_try` and `check_cast`
+of `passes/types/expressions.py`, because the callers of the conversion lookup are in that
+module. The AST inference visitor of `inference.py` is not part of this walk: it is the
+inference of the early passes (`ReadOnlyInferrer`), until they stop inferring.
+`helpers.py` holds the lambda and function-value helpers that it reads.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from sushi_lang.semantics.passes.types.visit import operators as op
 from sushi_lang.semantics.passes.types.visit import results as rs
 from sushi_lang.semantics.passes.types.visit import statements as st
 from sushi_lang.semantics.passes.types.call_facts import TypecheckCallFacts
-from sushi_lang.semantics.passes.types.expressions import check_try
+from sushi_lang.semantics.passes.types.expressions import check_cast, check_try
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
@@ -69,8 +69,8 @@ def check_expr(validator: TypeValidator, node: Any,
 
 def answer(validator: TypeValidator, node: Any, ty: Optional[Type]) -> Optional[Type]:
     """Write `ty` as the type row of the expression `node`, and answer it. The one writer
-    of a type row: `check_expr`, and the arm of a negation for its literal, which is one
-    value with its sign."""
+    of a type row: `check_expr`, the arm of a negation for its literal, which is one value
+    with its sign, and the arm of a cast for an integer literal directly under it."""
     if ty is not None:
         validator.body_answers().record_type(node.shir_id, ty)
     return ty
@@ -102,7 +102,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.Call: ca.check_call,
     e.Unary: op.check_unary,
     e.Binary: op.check_binary,
-    e.Cast: stop_at,
+    e.Cast: check_cast,
     e.Borrow: ca.check_borrow,
     e.Take: stop_at,
     e.Try: check_try,

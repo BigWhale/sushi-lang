@@ -1,0 +1,27 @@
+# EXPECT_ERROR_CODES_EXACT: CE2077
+# EXPECT_STDERR_CONTAINS: "operator '+' gives 4294967296, which is out of range for u32"
+# EXPECT_DUMP_SHIR: test_err_typeck_width_u32.shir
+#
+# A value of the type `u32`: a literal at the type, a cast into the type and out of it, a
+# comparison, an operation and a print. A literal under a cast keeps the low bits of the
+# type. The compiler reads an operation on two literals at `u32`, and the last one leaves
+# the type: CE2077.
+
+fn main() i32:
+    let u32 high = 4294967295
+    let u32 low = 0
+    let u32 cut = 5000000000 as u32
+    let i64 wide = high as i64
+    let u32 back = wide as u32
+    let bool less = low < high
+    let u32 mid = high / 2 + low / 2
+    let u32 shifted = high >> 4
+    println(high)
+    println(cut)
+    println(back == high)
+    println(less)
+    println(mid)
+    println(shifted)
+    let u32 over = 4294967295 + 1
+    println(over)
+    return 0

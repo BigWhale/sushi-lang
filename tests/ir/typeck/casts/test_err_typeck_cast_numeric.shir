@@ -1,0 +1,37 @@
+unit test_err_typeck_cast_numeric
+
+ShirBody digit
+  params : [(_0 "c": u8, Guaranteed)]
+  locals : []
+  block  :
+    Return(Cast(Binary(-, LocalRef(_0), Lit(a'0')), u64))
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i32, _1 "wide": i64, _2 "low": u8, _3 "half": f64, _4 "small": f32, _5 "back": i32, _6 "same": i32, _7 "round": i32, _8 "byte": u8, _9 "max": u64, _10 "big": u64, _11 "zero": u64, _12 "whole": f64, _13 "wider": bool, _14 "bad": u8]
+  block  :
+    Assign(LocalRef(_0), Lit(300), is_init: true)
+    Assign(LocalRef(_1), Cast(LocalRef(_0), i64), is_init: true)
+    Assign(LocalRef(_2), Cast(LocalRef(_0), u8), is_init: true)
+    Assign(LocalRef(_3), Binary(/, Cast(LocalRef(_0), f64), Lit(120.0)), is_init: true)
+    Assign(LocalRef(_4), Cast(LocalRef(_3), f32), is_init: true)
+    Assign(LocalRef(_5), Cast(LocalRef(_3), i32), is_init: true)
+    Assign(LocalRef(_6), Cast(LocalRef(_0), i32), is_init: true)
+    Assign(LocalRef(_7), Cast(Cast(LocalRef(_0), i64), i32), is_init: true)
+    Assign(LocalRef(_8), Cast(Lit(300), u8), is_init: true)
+    Assign(LocalRef(_9), Cast(Unary(neg, Lit(1)), u64), is_init: true)
+    Assign(LocalRef(_10), Cast(Lit(18446744073709551615), u64), is_init: true)
+    Assign(LocalRef(_11), Cast(Lit(a'0'), u64), is_init: true)
+    Assign(LocalRef(_12), Cast(Lit(5), f64), is_init: true)
+    Assign(LocalRef(_13), Binary(>, LocalRef(_1), Cast(LocalRef(_0), i64)), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_4), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_8), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(==, LocalRef(_9), LocalRef(_10)), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(+, LocalRef(_11), Call(Free(@digit), [(Lit(a'7'), Guaranteed)])), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_12), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_13), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(/, Lit(200), Cast(Lit(300), u8)), Guaranteed)]))
+    Assign(LocalRef(_14), Binary(/, Lit(7), Cast(Lit(256), u8)), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_14), Guaranteed)]))
+    Return(Binary(+, Binary(+, LocalRef(_5), LocalRef(_6)), LocalRef(_7)))

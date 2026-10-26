@@ -20,7 +20,6 @@ from .inference import infer_array_element_type, infer_dynamic_array_from_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
-    from sushi_lang.semantics.conversions import Conversion
 
 
 def validate_assignment_compatibility(validator: 'TypeValidator', declared_type: Optional[Type], value_expr: Expr, declared_span: Optional[Span], value_span: Optional[Span]) -> None:
@@ -303,18 +302,14 @@ def _iterators_compatible(validator: 'TypeValidator', actual: IteratorType,
                                  settled_expected.element_type))
 
 
-def is_valid_cast(source_type: Type, target_type: Type,
-                  conversion: Optional['Conversion'] = None) -> bool:
+def is_valid_cast(source_type: Type, target_type: Type) -> bool:
     """Check if a cast from source_type to target_type is valid.
 
-    `conversion` is the declared conversion of the pair, when both are error types; the
-    caller asks `conversions.find_conversion` for it (docs/design/error-conversion.md
-    section 3.2). An identity cast is a no-op and stays legal.
+    An identity cast is a no-op and stays legal. A cast between two error types calls the
+    declared conversion of the pair, which the caller asks `conversions.find_conversion`
+    for (docs/design/error-conversion.md section 3.2).
     """
     if source_type == target_type:
-        return True
-
-    if conversion is not None:
         return True
 
     # Only allow casts between numeric types for now

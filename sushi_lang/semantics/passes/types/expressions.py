@@ -10,20 +10,22 @@ from typing import TYPE_CHECKING, NamedTuple, Optional, Tuple
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.typesys import (
-    BuiltinType, ArrayType, DynamicArrayType, EnumType, StructType)
+    BuiltinType, ArrayType, DynamicArrayType, EnumType, ForeignPtrType, StructType)
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, CastExpr, RangeExpr, MemberAccess
+from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, RangeExpr, MemberAccess
 from sushi_lang.semantics.conversions import find_conversion
 from sushi_lang.semantics.operators import EQUALITY_OPS
 from sushi_lang.semantics.type_predicates import (
-    BUILTIN_INTEGER_TYPES, is_error_type, is_instance_of, is_integer_type, is_numeric_type)
+    is_error_type, is_instance_of, is_integer_type, is_numeric_type)
 from sushi_lang.semantics.generics.results import result_ok_err
 from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.shir.exprs import IntConst, Lit, Unary
 from sushi_lang.semantics.shir.typeck import NoConversion, TryFacts
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .arrays import (
     ARRAY_INDEX, RANGE_BOUND, REPEAT_COUNT, STRING_INDEX, reject_non_i32)
 from .compatibility import is_valid_cast
+from .resolution import resolve_variable_type
 from .utils import validate_constant_array_index
 from sushi_lang.semantics.generics.type_display import display_type
 
@@ -141,16 +143,70 @@ def _refuse_range_in_index(validator: 'TypeValidator', expr: RangeExpr, help_tex
     validate_range_expression(validator, expr)
 
 
-def _reject_self_conversion(validator: 'TypeValidator', expr: CastExpr,
-                            conversion: 'Conversion') -> None:
-    """CE2523: a cast of a conversion's own pair inside that conversion's body.
+def check_cast(validator: 'TypeValidator', node: 'e.Cast',
+               _expected: Optional['Type']) -> Optional['Type']:
+    """The arm of `as` (docs/design/ir.md 4.8, 7.3): it answers the target type.
+
+    A cast between two numeric types, and a cast to the type of its operand, call nothing:
+    the conversion row is `NoConversion`. Any other pair is CE2014. In the body of a
+    conversion, a cast of the pair of that conversion is CE2523. Three casts are not typed
+    yet, and the walk of the body stops there: a cast to an opaque type parameter of a
+    template check (C1), a cast to or from `ptr` (D5), and a cast between two error types
+    that a declared conversion joins (D2).
+    """
+    target = validator.written_type(node.target)
+    resolved = resolve_variable_type(validator, target, node.loc)
+    source = _check_cast_operand(validator, node.operand, resolved)
+    if source is None:
+        return None
+    from sushi_lang.semantics.generics.opaque import holds_opaque, note_opaque
+    if holds_opaque(target) or any(isinstance(ty, ForeignPtrType) for ty in (source, resolved)):
+        visit.stop_at(validator, node)
+    conversion = find_conversion(validator.tables, source, resolved)
+    if conversion is not None:
+        if _reject_self_conversion(validator, node, conversion):
+            return None
+        visit.stop_at(validator, node)
+    if not is_valid_cast(source, resolved):
+        diag = er.emit_with(validator.reporter, er.ERR.CE2014, node.loc,
+                            source=display_type(source), target=display_type(target))
+        if is_error_type(source) and is_error_type(resolved):
+            diag.help(conversion_help(source, resolved, at_try=False))
+        note_opaque(diag, source, resolved).emit()
+        return None
+    validator.body_answers().record_conversion(node.shir_id, NoConversion())
+    return resolved
+
+
+def _check_cast_operand(validator: 'TypeValidator', operand: 'ShirExpr',
+                        target: 'Type') -> Optional['Type']:
+    """The type of the operand of a cast to `target`.
+
+    An integer literal directly under a cast to an integer type, with or without its
+    negation, has the target type, and its range is not checked: the cast keeps the bits
+    that the type holds (`300 as u8` is 44). The fold reads the operand at the target too
+    (`fold._cast`). Any other operand gets no type from its position.
+    """
+    literal = operand.operand if isinstance(operand, Unary) and operand.op == "neg" else operand
+    if not (is_integer_type(target) and isinstance(literal, Lit)
+            and isinstance(literal.value, IntConst)):
+        return visit.check_expr(validator, operand)
+    if literal is not operand:
+        visit.answer(validator, literal, target)
+    return visit.answer(validator, operand, target)
+
+
+def _reject_self_conversion(validator: 'TypeValidator', node: 'e.Cast',
+                            conversion: 'Conversion') -> bool:
+    """CE2523: a cast of a conversion's own pair inside that conversion's body. Answers True
+    when it reported.
 
     `self` is always a value of the source, so the call never ends. A cast of another
     pair in the body is legal.
     """
     if conversion != validator.body_conversion:
-        return
-    diag = er.emit_with(validator.reporter, er.ERR.CE2523, expr.loc,
+        return False
+    diag = er.emit_with(validator.reporter, er.ERR.CE2523, node.loc,
                         source=display_type(conversion.source),
                         target=display_type(conversion.target))
     if conversion.name_span is not None:
@@ -158,54 +214,7 @@ def _reject_self_conversion(validator: 'TypeValidator', expr: CastExpr,
                      conversion.filename)
     diag.help("build the target value directly, for example with one of its "
               "variants").emit()
-
-
-def validate_cast_expression(validator: 'TypeValidator', expr: CastExpr) -> None:
-    """Validate a cast expression and check if the cast is valid."""
-    # An integer literal (or negated literal) cast directly to an integer type
-    # materializes at the TARGET width, so it is exempt
-    # from the bare-literal i32 range check (CE2070). Mark it before recursing.
-    from sushi_lang.semantics.ast import IntLit, UnaryOp
-    if expr.target_type in BUILTIN_INTEGER_TYPES:
-        if isinstance(expr.expr, IntLit):
-            expr.expr.in_cast_context = True
-        elif (isinstance(expr.expr, UnaryOp) and expr.expr.op == "neg"
-              and isinstance(expr.expr.expr, IntLit)):
-            expr.expr.expr.in_cast_context = True
-
-    validator.validate_expression(expr.expr)
-
-    source_type = validator.infer_expression_type(expr.expr)
-    target_type = expr.target_type
-
-    # Stamp the operand's semantic type for the backend (signedness of the cast
-    # opcode is unrecoverable from the signless LLVM type). Follows the
-    # resolved_* annotation pattern.
-    expr.source_type = source_type
-
-    if source_type is None:
-        return
-
-    # Between two error types, `as` calls the declared conversion of the pair (design
-    # 3.2), the one lookup of `semantics/conversions.py`. The target is stamped resolved,
-    # so the backend and every later reader see the type and not the written name.
-    structs = validator.struct_table.by_name
-    enums = validator.enum_table.by_name
-    resolved_target = resolve_unknown_type(target_type, structs, enums)
-    conversion = find_conversion(validator.tables, source_type, resolved_target)
-    expr.inferred_conversion = conversion
-    if conversion is not None:
-        expr.target_type = conversion.target
-        _reject_self_conversion(validator, expr, conversion)
-
-    if not is_valid_cast(source_type, resolved_target, conversion):
-        diag = er.emit_with(validator.reporter, er.ERR.CE2014, expr.loc,
-                            source=display_type(source_type),
-                            target=display_type(target_type))
-        if is_error_type(source_type) and is_error_type(resolved_target):
-            diag.help(conversion_help(source_type, resolved_target, at_try=False))
-        from sushi_lang.semantics.generics.opaque import note_opaque
-        note_opaque(diag, source_type, resolved_target).emit()
+    return True
 
 
 def validate_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:

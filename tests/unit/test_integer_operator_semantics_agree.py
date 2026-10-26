@@ -39,7 +39,9 @@ from sushi_lang.semantics.typesys import BuiltinType
 
 I8, U8, I32, I64, U64 = (BuiltinType.I8, BuiltinType.U8, BuiltinType.I32, BuiltinType.I64,
                          BuiltinType.U64)
+I16, U16, U32 = BuiltinType.I16, BuiltinType.U16, BuiltinType.U32
 U64_MAX = (1 << 64) - 1
+U32_MAX = (1 << 32) - 1
 
 
 @pytest.mark.parametrize("op,ty,left,right,answer", [
@@ -74,6 +76,23 @@ U64_MAX = (1 << 64) - 1
     ("/", U64, U64_MAX, 2, Folded(U64_MAX // 2)),
     ("+", U64, U64_MAX, 1, Folded(1 << 64, overflows=True)),
     # A zero divisor and a negative shift count have no value.
+    # The 16-bit widths and `u32`: each limit is the limit of its own width, and a `u32`
+    # above the `i32` maximum stays positive.
+    ("+", I16, 32767, 1, Folded(32768, overflows=True)),
+    ("*", I16, -256, 128, Folded(-32768)),
+    ("/", I16, -32768, -1, Folded(32768, overflows=True)),
+    ("<<", I16, 1, 15, Folded(-32768)),
+    (">>", I16, -32768, 16, Folded(-1)),
+    ("^", I16, -1, 32767, Folded(-32768)),
+    ("-", U16, 0, 1, Folded(-1, overflows=True)),
+    ("+", U16, 65535, 1, Folded(65536, overflows=True)),
+    ("<<", U16, 65535, 8, Folded(65280)),
+    ("<<", U16, 1, 16, Folded(0)),
+    ("+", U32, U32_MAX, 1, Folded(1 << 32, overflows=True)),
+    ("<<", U32, 1, 31, Folded(1 << 31)),
+    (">>", U32, U32_MAX, 4, Folded(U32_MAX >> 4)),
+    ("/", U32, U32_MAX, 2, Folded(U32_MAX // 2)),
+    ("%", U32, U32_MAX, 10, Folded(5)),
     ("/", I32, 1, 0, Refusal.DIVISION_BY_ZERO),
     ("%", U8, 1, 0, Refusal.DIVISION_BY_ZERO),
     ("<<", I32, 1, -1, Refusal.NEGATIVE_SHIFT),
@@ -88,6 +107,9 @@ def test_the_kernel_gives_the_machine_answer(op, ty, left, right, answer):
     (I64, 255, -256),
     (U64, 0, U64_MAX),
     (I8, 0, -1),
+    (I16, 0, -1),
+    (U16, 0, 65535),
+    (U32, 255, U32_MAX - 255),
 ])
 def test_the_complement_keeps_the_width(ty, value, answer):
     """`~255` is 0 as a `u8` and -256 as an `i64`: the type decides the value."""
@@ -99,6 +121,9 @@ def test_the_complement_keeps_the_width(ty, value, answer):
     (I8, 127, Folded(-127)),
     (U8, 5, Folded(-5, overflows=True)),
     (U8, 0, Folded(0)),
+    (I16, -32768, Folded(32768, overflows=True)),
+    (U16, 0, Folded(0)),
+    (U32, 1, Folded(-1, overflows=True)),
 ])
 def test_the_negation_is_overflow_checked(ty, value, answer):
     assert negate(value, ty) == answer
@@ -110,6 +135,10 @@ def test_the_negation_is_overflow_checked(ty, value, answer):
     (U64, -1, U64_MAX),
     (I64, U64_MAX, -1),
     (I32, 7, 7),
+    (I16, 40000, -25536),
+    (U16, 70000, 4464),
+    (U32, 5000000000, 705032704),
+    (U32, -1, U32_MAX),
 ])
 def test_a_cast_keeps_the_bits_of_the_type(ty, value, answer):
     """A cast is the escape from the overflow rule: it truncates and never overflows."""

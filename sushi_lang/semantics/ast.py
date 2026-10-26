@@ -896,9 +896,6 @@ class IntLit(Node):
     value: int
     radix: int = 10  # 2 (binary), 8 (octal), 10 (decimal), 16 (hexadecimal)
     resolved_type: Optional[Type] = None
-    # `x as i64` gives the literal the cast's target as its context, so its range is
-    # judged against that and not against the default i32.
-    in_cast_context: bool = False
     # The source spelling of a byte literal (`a'/'`), or None for a number literal. A
     # byte literal defaults to u8, and a diagnostic names it by this spelling.
     byte_spelling: Optional[str] = None
@@ -1191,10 +1188,6 @@ class DynamicArrayFrom(Node):
 class CastExpr(Node):
     expr: "Expr"
     target_type: Type
-    source_type: Optional[Type] = None  # Operand's semantic type, stamped by the typecheck pass (signedness for codegen)
-    # The declared conversion `as` calls between two error types (`semantics/conversions.py`),
-    # stamped by the typecheck pass. None for a numeric cast and an identity cast.
-    inferred_conversion: Optional["Conversion"] = None
 
 @dataclass(slots=True)
 class Borrow(Node):

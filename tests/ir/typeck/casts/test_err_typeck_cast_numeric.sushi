@@ -1,0 +1,41 @@
+# EXPECT_ERROR_CODES_EXACT: CE0112
+# EXPECT_STDERR_CONTAINS: "division by zero"
+# EXPECT_DUMP_SHIR: test_err_typeck_cast_numeric.shir
+#
+# A cast between two numeric types changes the width or the kind of a value: an integer
+# becomes wider or narrower, an integer becomes a float, and a float becomes an integer or
+# a float of the other width. A cast to the type of its operand is legal too. An integer
+# literal directly under a cast to an integer type has the target type, and the compiler
+# does not check its range: `300 as u8` keeps the low eight bits. `as` binds after `-`, so
+# `(c - a'0') as u64` casts the difference. The compiler reads a cast whose operand it can
+# read, so the last divisor, `256 as u8`, is zero: CE0112.
+
+fn digit(u8 c) u64:
+    return (c - a'0') as u64
+
+fn main() i32:
+    let i32 n = 300
+    let i64 wide = n as i64
+    let u8 low = n as u8
+    let f64 half = (n as f64) / 120.0
+    let f32 small = half as f32
+    let i32 back = half as i32
+    let i32 same = n as i32
+    let i32 round = n as i64 as i32
+    let u8 byte = 300 as u8
+    let u64 max = -1 as u64
+    let u64 big = 18446744073709551615 as u64
+    let u64 zero = a'0' as u64
+    let f64 whole = 5 as f64
+    let bool wider = wide > (n as i64)
+    println(low)
+    println(small)
+    println(byte)
+    println(max == big)
+    println(zero + digit(a'7'))
+    println(whole)
+    println(wider)
+    println(200 / (300 as u8))
+    let u8 bad = 7 / (256 as u8)
+    println(bad)
+    return back + same + round

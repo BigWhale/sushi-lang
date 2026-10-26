@@ -1,0 +1,14 @@
+unit test_err_typeck_cast_not_numeric
+
+ShirBody main
+  params : []
+  locals : [_0 "flag": bool, _1 "text": string, _2 "same": bool, _3 "copy": string, _4 "bit": u8]
+  block  :
+    Assign(LocalRef(_0), Lit(true), is_init: true)
+    Assign(LocalRef(_1), Lit("Mostly Harmless"), is_init: true)
+    Assign(LocalRef(_2), Cast(LocalRef(_0), bool), is_init: true)
+    Assign(LocalRef(_3), Cast(LocalRef(_1), string), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_3), Guaranteed)]))
+    Assign(LocalRef(_4), Cast(LocalRef(_0), u8), is_init: true)
+    Return(Cast(LocalRef(_4), i32))

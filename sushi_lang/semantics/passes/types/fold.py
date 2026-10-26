@@ -160,6 +160,9 @@ def _binary(folder: Folder, node: e.Binary, ty: Optional[Type]) -> Optional[Read
 
 
 def _cast(folder: Folder, node: e.Cast, _ty: Optional[Type]) -> Optional[Readable]:
+    """`v as T`: the fold reads `v` at `T`, as the constant evaluator does, and keeps the
+    bits of `T`. The arm of the cast (`check_cast`) types an integer literal under it at
+    `T` too, and stops at an opaque `T` before the fold reads it."""
     target = folder.written(node.target)
     operand = folder.read(node.operand, target)
     if not isinstance(operand, (ScalarConstant, AggregateConstant)):

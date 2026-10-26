@@ -156,8 +156,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
     # Each one moves to SHIR inputs in the typecheck stage of its construct group
     # in the migration plan, and that stage deletes the entry.
-    ("sushi_lang/semantics/ast.py", "in_cast_context", _TIER_A),
-    (_TYPES + "expressions.py", "in_cast_context", _TIER_A),
     (_TYPES + "utils.py", "reject_named_args", _TIER_A),
     (_TYPES + "calls/user_defined.py", "validate_indirect_call", _port("C2")),
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
@@ -170,7 +168,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "expressions.py", "refuse_range_value", _port("A7")),
     (_TYPES + "expressions.py", "reject_unknown_field", _TIER_A),
     (_TYPES + "expressions.py", "validate_array_literal", _port("A6")),
-    (_TYPES + "expressions.py", "validate_cast_expression", _port("A1")),
     (_TYPES + "expressions.py", "validate_index_access", _port("A6")),
     (_TYPES + "calls/dotcall.py", "validate_variant_spelling", _port("A4")),
     (_TYPES + "calls/namespaced.py", "validate_namespaced_call", _port("A8")),
@@ -313,8 +310,6 @@ _FACTS = (
     ("callee_static_target", _TYPES_PASS + "calls/statics.py", "A10",
      "the type of a static callee"),
     ("iterator_next", _TYPES_PASS + "calls/methods.py", "C3", "the next() call of a protocol loop"),
-    ("inferred_conversion", _TYPES_PASS + "expressions.py", "D2",
-     "the declared conversion of a cast between two error types"),
 )
 
 WHITELIST += tuple(

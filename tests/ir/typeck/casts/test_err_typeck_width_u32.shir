@@ -1,0 +1,23 @@
+unit test_err_typeck_width_u32
+
+ShirBody main
+  params : []
+  locals : [_0 "high": u32, _1 "low": u32, _2 "cut": u32, _3 "wide": i64, _4 "back": u32, _5 "less": bool, _6 "mid": u32, _7 "shifted": u32, _8 "over": u32]
+  block  :
+    Assign(LocalRef(_0), Lit(4294967295), is_init: true)
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Assign(LocalRef(_2), Cast(Lit(5000000000), u32), is_init: true)
+    Assign(LocalRef(_3), Cast(LocalRef(_0), i64), is_init: true)
+    Assign(LocalRef(_4), Cast(LocalRef(_3), u32), is_init: true)
+    Assign(LocalRef(_5), Binary(<, LocalRef(_1), LocalRef(_0)), is_init: true)
+    Assign(LocalRef(_6), Binary(+, Binary(/, LocalRef(_0), Lit(2)), Binary(/, LocalRef(_1), Lit(2))), is_init: true)
+    Assign(LocalRef(_7), Binary(>>, LocalRef(_0), Lit(4)), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(==, LocalRef(_4), LocalRef(_0)), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_5), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_6), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_7), Guaranteed)]))
+    Assign(LocalRef(_8), Binary(+, Lit(4294967295), Lit(1)), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_8), Guaranteed)]))
+    Return(Lit(0))
