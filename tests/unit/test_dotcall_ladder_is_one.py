@@ -42,7 +42,7 @@ SHIR_HOMES = {
 
 #: The facts whose SHIR home comes with a later chunk, and the chunk.
 LATER = {
-    "callee_self_mode": "P3.A1b.bc1, the convention of the receiver (ir.md 8.3)",
+    "callee_self_mode": "A4, the convention of a `nom self` receiver (ir.md 8.3)",
     "callee_param_names": "A10, read from the declaration that the callee row names",
     "callee_param_types": "A10, read from the declaration that the callee row names",
     "callee_variadic_at": "A10, read from the declaration that the callee row names",

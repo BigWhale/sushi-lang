@@ -1,9 +1,10 @@
 """Shared utilities for type validation.
 
-Port templates: `reject_spread_args` call `TypeValidator.validate_expression`, and that
-API is deleted. No pass reaches them today. The first group that connects one of its
-callers, A1 (method calls) or A5 (struct construction), ports them to SHIR inputs before
-a SHIR pass calls them.
+Port template: `reject_spread_args` calls `TypeValidator.validate_expression`, and that
+API is deleted. No pass reaches it today. Its callers are the AST struct construction
+(`calls/structs.py`, group A5) and the AST method-call ladder (`calls/methods.py`, group
+A10). A SHIR method call refuses a spread with `arguments.reject_misplaced_spread`. When
+A5 ports the struct template, it merges the two refusals into one.
 """
 from __future__ import annotations
 
