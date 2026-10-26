@@ -13,6 +13,7 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.shir import exprs as e
 
 from . import arms
@@ -20,6 +21,7 @@ from .borrows import check_borrow as borrow_place
 from .consume import consume, unwrap_place
 from .diagnostics import emit_use_after_move, emit_use_of_invalidated_borrow
 from .flow import record_exit
+from .reads import read_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId
@@ -68,6 +70,15 @@ def check_unary(checker: 'BorrowChecker', node: e.Unary) -> None:
 def check_binary(checker: 'BorrowChecker', node: e.Binary) -> None:
     arms.check(checker, node.lhs)
     arms.check(checker, node.rhs)
+
+
+def check_cast(checker: 'BorrowChecker', node: e.Cast) -> None:
+    """A cast reads its operand and takes a plain one by value (ADOPT). A cast of an owning
+    operand is a move that no group checks yet: it stops."""
+    arms.check(checker, node.operand)
+    if checker.types.type_class(read_type(checker, node.operand)) is TypeClass.MOVE:
+        arms.stop_at(checker, node)
+    consume(checker, node.operand)
 
 
 def check_interp(checker: 'BorrowChecker', node: e.Interp) -> None:

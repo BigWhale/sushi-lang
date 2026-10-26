@@ -67,7 +67,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.Call: ca.check_call,
     e.Unary: ex.check_unary,
     e.Binary: ex.check_binary,
-    e.Cast: stop_at,
+    e.Cast: ex.check_cast,
     e.Borrow: ex.check_borrow,
     e.Take: stop_at,
     e.Try: ex.check_try,

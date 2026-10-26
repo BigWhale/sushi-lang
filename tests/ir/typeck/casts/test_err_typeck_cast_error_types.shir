@@ -4,7 +4,7 @@ ShirBody keep
   params : [(_0 "e": LowError, Guaranteed)]
   locals : []
   block  :
-    Return(Cast(LocalRef(_0), LowError))
+    Return(adopt Cast(adopt LocalRef(_0), LowError))
 
 ShirBody lift
   params : [(_0 "e": LowError, Guaranteed)]

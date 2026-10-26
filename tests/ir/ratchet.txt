@@ -514,6 +514,7 @@ tests/generics/user_generic_enum/test_user_generic_minimal.sushi
 tests/generics/user_generic_struct/test_user_generic_struct_collect.sushi
 tests/ir/borrow/borrowed_views/test_err_borrow_nested_try_over_a_borrowed_wrapper.sushi
 tests/ir/borrow/borrowed_views/test_err_borrow_triple_try_over_a_borrowed_wrapper.sushi
+tests/ir/borrow/casts/test_err_borrow_cast_reads_its_operand.sushi
 tests/ir/borrow/control_flow/test_err_borrow_continue_before_move.sushi
 tests/ir/borrow/control_flow/test_err_borrow_let_borrow_across_a_branch.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_before_a_rebind.sushi

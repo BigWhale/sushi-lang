@@ -4,7 +4,7 @@ ShirBody digit
   params : [(_0 "c": u8, Guaranteed)]
   locals : []
   block  :
-    Return(Cast(Binary(-, LocalRef(_0), Lit(a'0')), u64))
+    Return(adopt Cast(adopt Binary(-, LocalRef(_0), Lit(a'0')), u64))
 
 ShirBody main
   params : []

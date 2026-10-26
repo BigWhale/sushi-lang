@@ -1,0 +1,30 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'text'"
+# EXPECT_DUMP_SHIR: test_err_borrow_cast_reads_its_operand.shir
+#
+# A cast reads its operand, so a use of a moved local inside the operand is CE2405. A cast
+# of a plain value adopts it: a number, a cast of a cast and an identity cast of a plain
+# value all pass. The last cast reads `text` after the move.
+
+fn size(string text) i32:
+    println(text)
+    return 3
+
+fn make(i32 n) string:
+    return "{n} towels"
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn main() i32:
+    let i32 a = 300
+    let u8 b = a as u8
+    let i64 c = (a + 1) as i64
+    let f64 d = (b as i32) as f64
+    let i32 e = a as i32
+    let string text = make(42)
+    let i64 n = size(text) as i64
+    eat(nom text)
+    let i64 m = size(text) as i64
+    println("{b} {c} {d} {e} {n} {m}")
+    return 0
