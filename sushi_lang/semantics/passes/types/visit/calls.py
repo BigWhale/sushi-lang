@@ -56,13 +56,12 @@ from sushi_lang.semantics.passes.types.visibility import (
     name_is_contested, name_was_refused, out_of_scope_help, reject_ambiguous_name,
     reject_private_call, reject_private_kept_call, type_name_is_contested)
 from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
-from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir import dispatch, exprs as e
 from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.type_predicates import is_instance_of, is_string_convertible
 from sushi_lang.semantics.typesys import (
     BuiltinType, DynamicArrayType, ReferenceType, Type, deref_type)
-from sushi_lang.sushi_stdlib.src.collections.strings import METHOD_SPECS
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
@@ -144,7 +143,7 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
         return _check_primitive_method(validator, node, receiver, target.name, answer.family)
     if answer.family.name == STRING_FAMILY:
         return _check_string_method(validator, node, receiver, target.name, answer.family)
-    visit.stop_at_family(node, answer.family.name)
+    dispatch.stop_at_family(visit.STAGE, node, answer.family.name)
 
 
 def _check_primitive_method(validator: TypeValidator, node: e.Call, receiver: Type,
@@ -164,6 +163,7 @@ def _check_string_method(validator: 'TypeValidator', node: e.Call, receiver: Typ
     CE2006 at the argument. The call yields its type after either fault. A method that
     answers a dynamic array stops the walk, as the array values are not typed yet.
     """
+    from sushi_lang.sushi_stdlib.src.collections.strings import METHOD_SPECS
     spec = METHOD_SPECS.get(name)
     miscount = reject_builtin_miscount(validator.reporter, node.loc, name, len(node.args),
                                        f"{display_type(receiver)}.{name}", family.arity)
@@ -175,7 +175,7 @@ def _check_string_method(validator: 'TypeValidator', node: e.Call, receiver: Typ
                         declared=declared, also_accepts=spec.also_accepts)
     yielded = string_method_return_type(validator, name)
     if isinstance(yielded, DynamicArrayType):
-        visit.stop_at_family(node, STRING_ARRAY_STOP)
+        dispatch.stop_at_family(visit.STAGE, node, STRING_ARRAY_STOP)
     return yielded
 
 

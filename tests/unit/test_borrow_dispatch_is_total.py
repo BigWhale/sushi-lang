@@ -22,15 +22,18 @@ from __future__ import annotations
 import ast
 import dataclasses
 import inspect
+import types
 import typing
 
 import pytest
 
 from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.passes.borrow import arms
+from sushi_lang.semantics.passes.borrow import arms, calls
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import dispatch, exprs, stmts
+from sushi_lang.semantics.shir.callee import Builtin, BuiltinMethod
+from sushi_lang.semantics.shir.typeck import ResolvedCall
 
 _UNIONS = {"ShirStmt": stmts.ShirStmt, "ShirExpr": exprs.ShirExpr}
 
@@ -101,6 +104,22 @@ def test_the_borrow_pass_never_stops_at_a_call() -> None:
     assert not isinstance(caught.value, StageStop)
     assert caught.value.code == "CE0000"
     assert arms.ARMS[exprs.Call] is not arms.stop_at
+
+
+def test_the_borrow_pass_stops_at_a_builtin_call_with_its_family() -> None:
+    """A call of a built-in method has no checking arm in the borrow pass yet. Its stop names
+    the stage and the family that the typecheck pass wrote in the callee row."""
+    span = Span(6, 4, 6, 12)
+    call = _node(exprs.Call, span)
+    call.target = exprs.Dotted(None, "len")  # type: ignore[attr-defined, arg-type]
+    row = ResolvedCall(Builtin(None, BuiltinMethod("string", "len")))  # type: ignore[arg-type]
+    checker = types.SimpleNamespace(answers=lambda: types.SimpleNamespace(
+        callee_of=lambda _id: row))
+    with pytest.raises(StageStop) as caught:
+        calls.check_call(checker, call)  # type: ignore[arg-type]
+    assert caught.value.code == "CE0155"
+    assert caught.value.params == {"stage": "borrow", "construct": "Call(method string)"}
+    assert caught.value.span == span
 
 
 @pytest.mark.parametrize("module", [arms, visit], ids=["borrow", "typecheck"])

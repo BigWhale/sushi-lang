@@ -36,11 +36,6 @@ def stop_at(_checker: BorrowChecker, node: Any) -> NoReturn:
     dispatch.stop(STAGE, node)
 
 
-def stop_at_family(node: Any, family: str) -> NoReturn:
-    """The stop at a method call of a built-in family that the pass does not check yet."""
-    dispatch.stop(STAGE, node, family=family)
-
-
 def check(checker: BorrowChecker, node: Any) -> None:
     """Check one statement or one expression through its arm."""
     dispatch.arm_of(ARMS, node, STAGE)(checker, node)

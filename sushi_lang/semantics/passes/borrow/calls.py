@@ -20,7 +20,7 @@ from sushi_lang.semantics.typesys import BorrowMode, FunctionType
 from sushi_lang.semantics.param_modes import (
     CalleeKind, Convention, ParamMode, effective_modes, receiver_mode,
 )
-from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir import dispatch, exprs as e
 from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic
 
 from . import arms
@@ -66,7 +66,7 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     """
     resolved = checker.answers().callee_of(node.shir_id)
     if resolved is not None and isinstance(resolved.callee, Builtin):
-        arms.stop_at_family(node, resolved.callee.method.family)
+        dispatch.stop_at_family(arms.STAGE, node, resolved.callee.method.family)
     if resolved is None or not isinstance(resolved.callee, (Free, Intrinsic)):
         arms.stop_at(checker, node)
     if any(arg.bloom for arg in node.args):

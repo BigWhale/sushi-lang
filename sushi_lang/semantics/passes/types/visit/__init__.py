@@ -49,12 +49,6 @@ def stop_at(validator: TypeValidator, node: Any, _expected: Optional[Type] = Non
     dispatch.stop(STAGE, node, facts)
 
 
-def stop_at_family(node: e.Call, family: str) -> NoReturn:
-    """The stop at a method call whose family the ladder found, where the pass does not
-    have the arm of the family yet (`typecheck, Call(method <family>)`)."""
-    dispatch.stop(STAGE, node, family=family)
-
-
 def _arm(node: Any) -> Callable[..., Any]:
     return dispatch.arm_of(ARMS, node, STAGE)
 

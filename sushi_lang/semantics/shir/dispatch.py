@@ -88,3 +88,10 @@ def stop(stage: str, node: Any, facts: Optional[CallFacts] = None, *,
          family: Optional[str] = None) -> NoReturn:
     """The stop of the pass `stage` at a construct that it does not handle yet."""
     raise StageStop(stage, construct_of(node, facts, family=family), node.loc)
+
+
+def stop_at_family(stage: str, node: Any, family: str) -> NoReturn:
+    """The stop of the pass `stage` at a method call whose built-in family the ladder
+    found, where the pass does not have the arm of the family yet
+    (`<stage>, Call(method <family>)`)."""
+    stop(stage, node, family=family)

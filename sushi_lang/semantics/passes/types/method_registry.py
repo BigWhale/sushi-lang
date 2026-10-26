@@ -53,7 +53,6 @@ from sushi_lang.semantics.passes.types.arrays import ARRAY_METHOD_MODES
 from sushi_lang.semantics.foreign_memory import (
     FOREIGN_PTR_METHODS, FOREIGN_PTR_METHOD_ARITY, foreign_ptr_return_type)
 from sushi_lang.semantics.shir.callee import BuiltinMethod
-from sushi_lang.sushi_stdlib.src.collections.strings import STRING_METHOD_ARITY
 
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
@@ -216,6 +215,24 @@ def stamp_builtin_modes(call: 'MethodCall', modes: BuiltinModes) -> None:
 
 
 METHOD_TYPE_REGISTRY = MethodTypeRegistry()
+
+
+class LazyStringArity(Mapping[str, int]):
+    """The arity row of the string family, read from the generator package on first use,
+    so that importing the registry does not import the generators."""
+
+    def _row(self) -> Mapping[str, int]:
+        from sushi_lang.sushi_stdlib.src.collections.strings import STRING_METHOD_ARITY
+        return STRING_METHOD_ARITY
+
+    def __getitem__(self, name: str) -> int:
+        return self._row()[name]
+
+    def __iter__(self):
+        return iter(self._row())
+
+    def __len__(self) -> int:
+        return len(self._row())
 
 
 def producer_iterator(validator: 'TypeValidator', item: Optional['Type']) -> Optional['Type']:
@@ -692,7 +709,7 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="array", beats_perk=True, answers=_answers_array, modes=ARRAY_METHOD_MODES,
     infer=lambda rt, call, v: ArrayMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="string", beats_perk=True, answers=_answers_string, arity=STRING_METHOD_ARITY,
+    name="string", beats_perk=True, answers=_answers_string, arity=LazyStringArity(),
     infer=lambda _receiver, call, v: StringMethodInferrer(call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="result", beats_perk=True, answers=_answers_result, arity=RESULT_METHOD_ARITY,

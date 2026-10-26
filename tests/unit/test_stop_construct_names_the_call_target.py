@@ -112,6 +112,14 @@ def test_a_stop_at_a_family_names_the_family(family):
     assert raised.value.params == {"stage": "typecheck", "construct": f"Call(method {family})"}
 
 
+@pytest.mark.parametrize("stage", ["typecheck", "borrow"])
+def test_one_helper_stops_at_a_family_for_every_stage(stage):
+    call = _call(e.Dotted(LOCAL, "len"))
+    with pytest.raises(StageStop) as raised:
+        dispatch.stop_at_family(stage, call, "string")
+    assert raised.value.params == {"stage": stage, "construct": "Call(method string)"}
+
+
 def test_only_a_method_call_has_a_family():
     with pytest.raises(InternalCompilerError) as raised:
         dispatch.construct_of(_call(e.BuiltinFn("println")), facts(), family="primitive")
