@@ -1588,8 +1588,8 @@ the print emitter. The print of a value that prints by its `Display` form still 
 A `Builtin` call of a `BuiltinMethod` goes to one row of `METHOD_FAMILIES`
 (`backend/slir/methods.py`), by the family of the method. The receiver is the first
 operand, and every operand is evaluated before the family emits. The family keeps its
-emitters and gives them the operand values (Q7). The primitive family has a row. A
-family with no row stops.
+emitters and gives them the operand values (Q7). The primitive family and the `string`
+family have a row. A family with no row stops.
 
 While the migration is in progress, a SLIR shape that the emitter does not handle yet
 stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
