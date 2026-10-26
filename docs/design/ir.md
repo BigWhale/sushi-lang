@@ -1584,16 +1584,21 @@ is an internal error. A `Builtin` call of an intrinsic goes through one row of
 (11.9): `interp` appends each part to one string builder (a string part as its bytes, any
 other part as its string form, `emit_value_fmt`) and answers a fresh owned string, also for
 one string part; `print` and `println` of a string, an integer, a float or a `bool` call
-the print emitter. The print of a value that prints by its `Display` form, and a
-`BuiltinMethod` callee, still stop.
+the print emitter. The print of a value that prints by its `Display` form still stops.
+A `Builtin` call of a `BuiltinMethod` goes to one row of `METHOD_FAMILIES`
+(`backend/slir/methods.py`), by the family of the method. The receiver is the first
+operand, and every operand is evaluated before the family emits. The family keeps its
+emitters and gives them the operand values (Q7). The primitive family has a row. A
+family with no row stops.
 
 While the migration is in progress, a SLIR shape that the emitter does not handle yet
 stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
 example `emit, Indirect` or `emit, AggStruct`), at the span of its statement or
 terminator. Where one class holds two shapes, the stop names the shape, so that the
 stop-code census counts each one: `emit, Display print` for the print of a value that
-prints by its `Display` form, and `emit, intrinsic <name>` for an intrinsic with no row
-of `INTRINSICS`. The stop
+prints by its `Display` form, `emit, intrinsic <name>` for an intrinsic with no row
+of `INTRINSICS`, and `emit, <family> method` for a `BuiltinMethod` whose family has no row
+of `METHOD_FAMILIES`. The stop
 comes before any output: the incremental path builds the module of every unit before it
 writes the first object, so no object, no binary and no `.ll` text is written. This order
 serves the migration alone: when no shape stops the emitter, the path can again build and
