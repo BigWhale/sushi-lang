@@ -766,12 +766,17 @@ makes the `BuiltinMethod`, so its family is always a row of the table (gate:
 stamps on the call node. The SHIR ladder puts each fact in a row: the callee, the method
 type arguments and the declaring unit in `ResolvedCall`, the mode of each parameter in a
 convention row, the family in `BuiltinMethod`, and the type of the receiver in the type
-row of the receiver. The convention of the receiver has no row yet (8.3). While the
-migration is in progress, the ladder types a receiver of a built-in type (a primitive or
-`string`). A receiver of another type stops the walk with `typecheck, Call(method)`, a
-perk implementation and an extension method stop it with the label of the call target
-(`Call(extension)`, `Call(stdlib method)`), and a family whose arm the pass does not have
-yet stops it with `typecheck, Call(method <family>)`. The primitive family has its arm:
+row of the receiver. The convention of the receiver has no row yet (8.3). The ladder runs
+for a receiver of every type. A family answer goes to the arm of its family in ONE table,
+`FAMILY_ARMS` (`passes/types/visit/calls.py`), keyed by the name of the family in
+`METHOD_TYPE_REGISTRY`, and no arm compares a family name of its own (gate:
+`tests/unit/test_typecheck_family_arms_are_registry_rows.py`). While the migration is in
+progress, a family with no arm in the table stops the walk with
+`typecheck, Call(method <family>)`, on a receiver of any type (`Call(method maybe)`,
+`Call(method array)`), so each group counts its own stops. A receiver that is not of a
+built-in type and that no family claims stops the walk with the label of the call target
+(`Call(method)`, `Call(extension)`, `Call(stdlib method)`), and so do a perk implementation
+and an extension method. The primitive family has its arm:
 a primitive method takes no argument (a wrong count is [CE2009](../error-catalog.md#ce2009)
 from the arity row of the family), and the call yields the type of its row in
 `PRIMITIVE_METHOD_RETURNS`. A wrong count does not stop the call from yielding that type.
@@ -791,8 +796,8 @@ target. One function makes the label, `construct_of` (`semantics/shir/dispatch.p
 the SHIR node and from the call facts that the stop site gives it
 (`passes/types/call_facts.py`). A stage that stops on a `Call` with no facts is an internal
 error, so no stage prints a label that another stage would print in another way. The labels
-are `Call(<kind>)`: `method` (a method that no extension and no perk method of any unit
-names), `extension` (a user extension or perk method), `stdlib method` (a `public extend`
+are `Call(<kind>)`: `method` (a method that no built-in family claims and that no
+extension and no perk method of any unit names, for example a method of a type parameter), `extension` (a user extension or perk method), `stdlib method` (a `public extend`
 or perk method of a bundled Sushi-source stdlib unit), `static` (a user static),
 `builtin static` (a row of `BUILTIN_STATICS`), `stdlib` (a stdlib function, also behind an
 alias), `extern` (a C function, also behind an alias, and `errno`), `alias` (a function of a
@@ -801,7 +806,8 @@ function, or written type arguments), `fn value` (a call through a function valu
 `builtin` (`print`, `println`). There is no
 `Call(construction)`: a construction lowers to `StructInit` or `EnumInit`. A method call
 whose family the ladder found names the family instead and needs no facts:
-`Call(method <family>)`, made by the one helper `dispatch.stop_at_family` for every stage.
+`Call(method <family>)`, made by the one helper `dispatch.stop_at_family` for the typecheck
+pass and for the borrow pass.
 The stop-code census of the runner (`tests/stop_census.py`) counts a stop inside a bundled
 stdlib unit in a row of its own, `<stage>, <construct> [<module>]`, from the note that names
 the module. The census reads the labels and decides nothing.
@@ -1321,9 +1327,13 @@ node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership
 - each capture of a `Lambda`, from its environment layout in `LiftResults`.
 
 The receiver of a method call is not on the list yet: `TypeckResults` has no convention row
-for a receiver. A method of the primitive family or the `string` family never consumes its
-receiver, so these two families need no row. The first family with a `nom self` method
-adds the row, and a `nom self` receiver joins the rule.
+for a receiver. ONE set names the families whose methods only read their receiver,
+`RECEIVER_READ_FAMILIES` (`semantics/method_effects.py`): today the primitive family and the
+`string` family. These families need no row. The set and `EFFECT_FAMILIES`, the families
+that the rows of `METHOD_EFFECTS` describe, are disjoint, and each name of the two is a
+family of `METHOD_TYPE_REGISTRY` (gate: `tests/unit/test_method_mutation_is_one_fact.py`).
+The `borrow` pass and SLIR lowering both read the set. The first family with a `nom self`
+method adds the row, and a `nom self` receiver joins the rule.
 
 **The order of the three passes.** Each SHIR pass gives the next one each body that it
 finished with no error, with the tables that `typecheck` read the body in: `typecheck`
@@ -1357,7 +1367,7 @@ too: a class with no row is an internal error at the span of the node, and the a
 construct that the pass does not check yet stops the walk of its body with the stop code
 (`borrow, <class>`). A statement of a copy of an unrolled `expand` that ends the path,
 with more statements after it in its block, stops the walk too (`borrow, Expand`): the
-group of the copies decides the statements that no path reaches. A call of a built-in method of the primitive family or the `string` family has its arm: it reads its receiver (a use after a move is CE2405) and then each argument by its convention row, as a call of a free function does. No method of these two families changes its receiver or consumes it (`callee_effect` has no row for them), so the receiver stays with its owner and needs no convention row. A call of a method of another family has no arm in the pass yet: it stops the walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages make this stop with the one helper `dispatch.stop_at_family`. The typecheck pass records only the callees `Free`, `Intrinsic` and `Builtin`, so a call with another callee in this pass is an internal error. The state of the walk
+group of the copies decides the statements that no path reaches. A call of a built-in method of the primitive family or the `string` family has its arm: it reads its receiver (a use after a move is CE2405) and then each argument by its convention row, as a call of a free function does. These two families are the set `RECEIVER_READ_FAMILIES`: no method of a family of the set changes its receiver or consumes it, so the receiver stays with its owner and needs no convention row. A call of a method of another family has no arm in the pass yet: it stops the walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages make this stop with the one helper `dispatch.stop_at_family`. The typecheck pass records only the callees `Free`, `Intrinsic` and `Builtin`, so a call with another callee in this pass is an internal error. The state of the walk
 (`BorrowState`, `FlowFacts`) is keyed by `LocalId`, because a hidden local has no source
 name, and a diagnostic names a local by the name of its `ShirLocal`. The pass decides the
 `Ownership` of each consuming use ONE time, with `classify()`, and one function writes the
@@ -1767,9 +1777,12 @@ printer writes it as `builtin println@(string)`. An interpolation lowers to the 
 A `Builtin(recv, BuiltinMethod)` callee of SHIR lowers to `Builtin(BuiltinMethod, [])`: a
 method has no operand types in the callee, because each operand is a place or a constant
 that has its own type. The receiver is the FIRST operand of the call, and it comes before
-the arguments in the order of evaluation. Its convention is `Guaranteed`, because no method
-of the primitive family or of the `string` family changes its receiver or consumes it (the
-convention of the receiver has no row, 8.3). The printer writes the call as
+the arguments in the order of evaluation. Its convention is `Guaranteed` for a family of
+`RECEIVER_READ_FAMILIES` (`receiver_convention`, `slir/lower.py`), because no method of such
+a family changes its receiver or consumes it (the convention of the receiver has no row,
+8.3). A method of any other family can change or consume its receiver, and it stops in
+`typecheck` or in `borrow` first; its call in lowering is the internal error CE0000, never a
+`Guaranteed` receiver by default. The printer writes the call as
 `builtin string.len(copy _1 @guaranteed)`. A method that answers a `string` writes it into a
 fresh owning local like any other call, and the drop placement drops it (8.10).
 
