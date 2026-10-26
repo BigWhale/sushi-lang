@@ -601,6 +601,7 @@ tests/ir/typeck/control_flow/test_err_typeck_if_elif_else.sushi
 tests/ir/typeck/control_flow/test_err_typeck_while.sushi
 tests/ir/typeck/literals/test_err_typeck_literal_context.sushi
 tests/ir/typeck/literals/test_err_typeck_literal_default.sushi
+tests/ir/typeck/methods/test_err_typeck_method_on_refused_let.sushi
 tests/ir/typeck/methods/test_err_typeck_method_receiver_error.sushi
 tests/ir/typeck/methods/test_err_typeck_method_spread.sushi
 tests/ir/typeck/methods/test_err_typeck_method_unknown_on_call.sushi

@@ -96,6 +96,9 @@ class TypeValidator:
         self.body: Optional['ShirBody'] = None
         self.answers: Optional[TypeckResults] = None
         self.body_locals: Dict['LocalId', 'ShirLocal'] = {}
+        # The locals of the body whose `let` the pass refused (CE2002, an unhandled
+        # `Result`): a method call on one reports no CE2008 (#1128). `_check_let` writes it.
+        self.refused_locals: set['LocalId'] = set()
         self.folder: Optional[Folder] = None
         # True when the body holds an error that an earlier pass reported: the collect
         # pass refuses a `??` in a bare body (CE0131), and its node has no answer.
@@ -166,7 +169,9 @@ class TypeValidator:
         self.in_synthesized_body = False
         self.variable_types: Dict[str, Type] = {}
         # The `let` names whose initializer was refused; a method call on one is not
-        # refused again (#1128).
+        # refused again (#1128). Only the AST port templates read and write it
+        # (`validate_let_destructure`, A5; `validate_method_call`, A10): the SHIR walk
+        # keeps `refused_locals`.
         self.refused_bindings: set[str] = set()
         # The ranges refused outside their two positions (#1165): each answers no type
         # after the refusal, so the position that holds it adds no second error.
@@ -295,6 +300,7 @@ class TypeValidator:
         self.body = body
         self.answers = answers = self.shir.typeck_of(body)
         self.body_locals = {local.id: local for local in body.locals}
+        self.refused_locals = set()
         self.folder = Folder(self._constant_value, self.written_type)
         self.refused_before = False
         origin = self.reporter.origin
@@ -311,6 +317,7 @@ class TypeValidator:
         finally:
             self.body = self.answers = self.folder = None
             self.body_locals = {}
+            self.refused_locals = set()
         if path_faults is not None:
             path_faults(body)
         if self.errors_offered() != offered or self.refused_before:

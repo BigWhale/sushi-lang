@@ -1,0 +1,9 @@
+unit test_err_typeck_method_on_refused_let
+
+ShirBody main
+  params : []
+  locals : [_0 "x": i32, _1 "m": i32]
+  block  :
+    Assign(LocalRef(_0), Lit("text"), is_init: true)
+    Assign(LocalRef(_1), Call(Dotted(LocalRef(_0), "nowhere"), []), is_init: true)
+    Return(LocalRef(_1))

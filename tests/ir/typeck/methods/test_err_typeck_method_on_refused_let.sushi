@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_DUMP_SHIR: test_err_typeck_method_on_refused_let.shir
+#
+# A `let` whose value does not fit its written type is CE2002. The local keeps its written
+# type, but the pass records it as refused, and a method call on it reports nothing more:
+# the one error is the error of the `let`, not a CE2008 for the method.
+
+fn main() i32:
+    let i32 x = "text"
+    let i32 m = x.nowhere()
+    return m

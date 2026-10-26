@@ -7,7 +7,9 @@ type, resolved, with no `peek` or `poke` (the convention holds the mode, ir.md 4
 
 An `Assign` of a local is a `let` (`is_init`) or a rebind; the value is checked at the
 type of the local. A `let` writes the type of its local, and a `let` that writes none is
-CE2007, except for a hidden local, which takes the type of its value. An `Assign` of any
+CE2007, except for a hidden local, which takes the type of its value. A `let` whose value
+does not fit keeps its written type, and the pass records the local as refused: a method
+call on it reports nothing more. An `Assign` of any
 other place, and a reference `let`, are not typed yet. An expression statement drops its
 value, and a dropped `Result` of a value is CW2001. A `Return` of a body with a channel
 spells `Result.Ok(...)` or `Result.Err(...)` (CE2030), checked at the `Result` of the
@@ -97,9 +99,11 @@ def _check_let(validator: TypeValidator, node: s.Assign, target: e.LocalRef) -> 
     answers.record_local(local.id, ty)
     visit.check_expr(validator, target)
     got = visit.check_expr(validator, node.value, ty)
-    if refused or reject_unhandled_result(validator, got, ty, node.value.loc):
+    if refused:
         return
-    reject_mismatch(validator, got, ty, node.value.loc, local.declared_loc)
+    if (reject_unhandled_result(validator, got, ty, node.value.loc)
+            or reject_mismatch(validator, got, ty, node.value.loc, local.declared_loc)):
+        validator.refused_locals.add(local.id)
 
 
 def check_expr_stmt(validator: TypeValidator, node: s.ExprStmt) -> None:

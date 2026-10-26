@@ -107,7 +107,8 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     """`x.f(args)`: the receiver, then the callee that the ladder finds (ir.md 7.3).
 
     A perk implementation and an extension method stop the walk (C6, A10), and so does a
-    family until the pass has its arm.
+    family until the pass has its arm. A method that nothing answers on a local whose `let`
+    the pass refused reports nothing more.
     """
     refused = [reject_misplaced_spread(validator, arg) for arg in node.args]
     if any(refused):
@@ -120,7 +121,9 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
         visit.stop_at(validator, node)
     answer = resolve_dotted(validator, receiver, target.name)
     if answer.rung is MethodRung.UNANSWERED:
-        reject_unknown_method(validator, receiver, target.name, node.loc)
+        if not (isinstance(target.recv, e.LocalRef)
+                and target.recv.local in validator.refused_locals):
+            reject_unknown_method(validator, receiver, target.name, node.loc)
         return None
     if answer.family is None:
         visit.stop_at(validator, node)

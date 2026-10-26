@@ -63,11 +63,15 @@ LADDER_MARKERS = {
 VALIDATION_SCOPE = "def validate_method_call("
 
 
-def _family_order(path: Path, markers: dict[str, str], scope: str | None = None) -> list[str]:
+def _family_order(path: Path, markers: dict[str, str], scope: str | None = None, *,
+                  one_function: bool = False) -> list[str]:
     text = path.read_text(encoding="utf-8")
     if scope is not None:
         start = text.index(scope)
         text = text[start:]
+        if one_function:
+            end = text.find("\ndef ", len(scope))
+            text = text if end == -1 else text[:end]
     positions = {}
     for family, marker in markers.items():
         match = re.search(marker, text)
@@ -103,5 +107,5 @@ SHIR_MARKERS = {
 
 def test_the_shir_ladder_asks_the_rungs_in_that_order():
     """The SHIR ladder reads the same order: the table, the perk, the extension."""
-    assert _family_order(SHIR_LADDER, SHIR_MARKERS, scope="def resolve_dotted(") == [
-        "FAMILIES", "PERK", "EXTENSION"]
+    assert _family_order(SHIR_LADDER, SHIR_MARKERS, scope="def resolve_dotted(",
+                         one_function=True) == ["FAMILIES", "PERK", "EXTENSION"]

@@ -48,10 +48,10 @@ from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY, OWN_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY, RESULT_METHOD_MODES
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import BuiltinModes
-from sushi_lang.semantics.shir.callee import BuiltinMethod
 from sushi_lang.semantics.passes.types.arrays import ARRAY_METHOD_MODES
 from sushi_lang.semantics.foreign_memory import (
     FOREIGN_PTR_METHODS, FOREIGN_PTR_METHOD_ARITY, foreign_ptr_return_type)
+from sushi_lang.semantics.shir.callee import BuiltinMethod
 
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,

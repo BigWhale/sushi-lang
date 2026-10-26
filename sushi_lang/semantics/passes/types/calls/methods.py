@@ -4,7 +4,10 @@ Port templates: `validate_method_call` (A10, C3), `_validate_type_name_call` (B2
 and `_validate_iterator_new` (C3) call `TypeValidator.validate_expression`, and that API
 is deleted. No pass reaches them today. The group in brackets after each name ports them
 to SHIR inputs before a SHIR pass calls them. The order of the rungs is on SHIR already:
-`calls/dotcall.py:resolve_dotted`.
+`calls/dotcall.py:resolve_dotted`. No `WHITELIST` row can name `validate_method_call`:
+`statements.py:protocol_next_call` calls it, and the A7 port template
+`validate_foreach_statement` reaches that, so vulture never reports it. A10 deletes it, or
+C3 when it ports the protocol `next()` call.
 """
 from __future__ import annotations
 from dataclasses import dataclass
