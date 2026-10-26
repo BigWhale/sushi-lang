@@ -762,6 +762,12 @@ yet stops it with `typecheck, Call(method <family>)`. The primitive family has i
 a primitive method takes no argument (a wrong count is [CE2009](../error-catalog.md#ce2009)
 from the arity row of the family), and the call yields the type of its row in
 `PRIMITIVE_METHOD_RETURNS`. A wrong count does not stop the call from yielding that type.
+The `string` family has its arm too. A string method has the arguments of its row in
+`METHOD_SPECS` (a wrong count is [CE2009](../error-catalog.md#ce2009) from the arity row of
+the family, and a wrong argument type is [CE2006](../error-catalog.md#ce2006) from the one
+argument check), and the call yields the return type of its row. A wrong count skips the
+argument types. A method whose row answers a dynamic array (`split`, `to_bytes`) stops the
+walk with `typecheck, Call(method string array)`.
 
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
