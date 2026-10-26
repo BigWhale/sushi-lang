@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.method_effects import PRIMITIVE_FAMILY, STRING_FAMILY
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
     IteratorType, StructType)
@@ -1193,7 +1194,7 @@ def _validate_array_family(validator: 'TypeValidator', call: MethodCall,
     validate_builtin_array_method(call, receiver_type, validator.reporter, validator)
 
 
-@METHOD_TYPE_REGISTRY.validator("string")
+@METHOD_TYPE_REGISTRY.validator(STRING_FAMILY)
 def _validate_string_family(validator: 'TypeValidator', call: MethodCall,
                             receiver_type) -> None:
     """The count is the arity row of the family, read before this hook runs."""
@@ -1382,7 +1383,7 @@ def _validate_function_family(validator: 'TypeValidator', call: MethodCall,
         call, receiver_type, validator.reporter, validator)
 
 
-@METHOD_TYPE_REGISTRY.validator("primitive")
+@METHOD_TYPE_REGISTRY.validator(PRIMITIVE_FAMILY)
 def _validate_primitive_family(validator: 'TypeValidator', call: MethodCall,
                                receiver_type) -> None:
     """The count is the arity row of the family, read before this hook runs."""

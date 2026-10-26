@@ -16,11 +16,13 @@ A `Call` answers what its callee yields. Its written target decides the callee:
 - `Dotted` is a method call. The receiver is typed first, and the ladder of the call
   (`calls/dotcall.py:resolve_dotted`) finds the callee: a built-in family, a perk
   implementation, an extension method, or nothing (CE2008). A family answer is the callee
-  row `Builtin`; the primitive family yields the type of its row. A method is never variadic, so a bloom argument is CE0120.
+  row `Builtin`, and the arm of the family in `FAMILY_ARMS` types the call. A family with
+  no arm stops with the label `Call(method <family>)`, for a receiver of any type. A
+  method is never variadic, so a bloom argument is CE0120.
 
 Every other target, and a call that another group types (a generic function, a stdlib
 function, a C function, a variadic function, a method of a receiver that is not of a
-built-in type, a perk method, an extension method, a family with no arm yet), stops the
+built-in type and that no family answers, a perk method, an extension method), stops the
 walk of its body.
 
 An `Interp` is a `string`, and each hole has a string form; the display type of each hole
@@ -29,7 +31,8 @@ reference type, and the position that holds it decides whether it takes one.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Callable, Mapping, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -39,6 +42,7 @@ from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscoun
 from sushi_lang.semantics.generics.opaque import explain_unpromised
 from sushi_lang.semantics.generics.primitives import primitive_method_return_type
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.method_effects import PRIMITIVE_FAMILY, STRING_FAMILY
 from sushi_lang.semantics.param_modes import Convention, declared_modes, param_mode
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
@@ -68,8 +72,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
 
 
-PRIMITIVE_FAMILY = "primitive"
-STRING_FAMILY = "string"
 STRING_ARRAY_STOP = "string array"
 
 
@@ -116,9 +118,11 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
                        target: e.Dotted) -> Optional[Type]:
     """`x.f(args)`: the receiver, then the callee that the ladder finds (ir.md 7.3).
 
-    A perk implementation and an extension method stop the walk (C6, A10), and so does a
-    family until the pass has its arm. A method that nothing answers on a local whose `let`
-    the pass refused reports nothing more.
+    A family answer goes to the arm of the family in `FAMILY_ARMS`, and a family with no
+    arm stops the walk with the label of the family, on a receiver of any type. A perk
+    implementation and an extension method stop the walk (C6, A10), and so does a method
+    of a receiver that is not of a built-in type. A method that nothing answers on a local
+    whose `let` the pass refused reports nothing more.
     """
     refused = [reject_misplaced_spread(validator, arg) for arg in node.args]
     if any(refused):
@@ -127,23 +131,22 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     if received is None:
         return None
     receiver = deref_type(received)
+    answer = resolve_dotted(validator, receiver, target.name)
+    if answer.family is not None:
+        arm = FAMILY_ARMS.get(answer.family.name)
+        if arm is None:
+            dispatch.stop_at_family(visit.STAGE, node, answer.family.name)
+        callee = Builtin(target.recv, answer.family.callee(target.name))
+        validator.body_answers().record_callee(node.shir_id, ResolvedCall(callee))
+        return arm(validator, node, receiver, target.name, answer.family)
     if not isinstance(receiver, BuiltinType):
         visit.stop_at(validator, node)
-    answer = resolve_dotted(validator, receiver, target.name)
     if answer.rung is MethodRung.UNANSWERED:
         if not (isinstance(target.recv, e.LocalRef)
                 and target.recv.local in validator.refused_locals):
             reject_unknown_method(validator, receiver, target.name, node.loc)
         return None
-    if answer.family is None:
-        visit.stop_at(validator, node)
-    callee = Builtin(target.recv, answer.family.callee(target.name))
-    validator.body_answers().record_callee(node.shir_id, ResolvedCall(callee))
-    if answer.family.name == PRIMITIVE_FAMILY:
-        return _check_primitive_method(validator, node, receiver, target.name, answer.family)
-    if answer.family.name == STRING_FAMILY:
-        return _check_string_method(validator, node, receiver, target.name, answer.family)
-    dispatch.stop_at_family(visit.STAGE, node, answer.family.name)
+    visit.stop_at(validator, node)
 
 
 def _check_primitive_method(validator: TypeValidator, node: e.Call, receiver: Type,
@@ -177,6 +180,16 @@ def _check_string_method(validator: 'TypeValidator', node: e.Call, receiver: Typ
     if isinstance(yielded, DynamicArrayType):
         dispatch.stop_at_family(visit.STAGE, node, STRING_ARRAY_STOP)
     return yielded
+
+
+FamilyArm = Callable[['TypeValidator', e.Call, Type, str, MethodFamily], Optional[Type]]
+
+#: The arm of each built-in family that the pass types, keyed by the registry name of the
+#: family. A family that is not here stops the walk (`Call(method <family>)`).
+FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
+    PRIMITIVE_FAMILY: _check_primitive_method,
+    STRING_FAMILY: _check_string_method,
+})
 
 
 def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,

@@ -13,6 +13,7 @@ from llvmlite import ir
 from sushi_lang.backend.expressions.calls.stdlib.strings import emit_stdlib_string_call
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import operand_value, type_of_operand
+from sushi_lang.semantics.method_effects import PRIMITIVE_FAMILY, STRING_FAMILY
 from sushi_lang.semantics.shir.callee import BuiltinMethod
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.typesys import ReferenceType
@@ -45,8 +46,8 @@ def _string(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> 
 
 #: One row for each family that the emitter handles, by the name of the family.
 METHOD_FAMILIES: dict[str, Callable[[FunctionState, BuiltinMethod, st.Call], ir.Value]] = {
-    "primitive": _primitive,
-    "string": _string,
+    PRIMITIVE_FAMILY: _primitive,
+    STRING_FAMILY: _string,
 }
 
 

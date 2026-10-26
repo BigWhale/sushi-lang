@@ -48,6 +48,7 @@ from sushi_lang.semantics.generics.primitives import PRIMITIVE_METHOD_ARITY
 from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY, OWN_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY, RESULT_METHOD_MODES
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.method_effects import PRIMITIVE_FAMILY, STRING_FAMILY
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.passes.types.arrays import ARRAY_METHOD_MODES
 from sushi_lang.semantics.foreign_memory import (
@@ -709,7 +710,7 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="array", beats_perk=True, answers=_answers_array, modes=ARRAY_METHOD_MODES,
     infer=lambda rt, call, v: ArrayMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="string", beats_perk=True, answers=_answers_string, arity=LazyStringArity(),
+    name=STRING_FAMILY, beats_perk=True, answers=_answers_string, arity=LazyStringArity(),
     infer=lambda _receiver, call, v: StringMethodInferrer(call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="result", beats_perk=True, answers=_answers_result, arity=RESULT_METHOD_ARITY,
@@ -756,6 +757,6 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="function", beats_perk=False, answers=_answers_function,
     infer=lambda rt, call, v: FunctionMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="primitive", beats_perk=False, answers=_answers_primitive,
+    name=PRIMITIVE_FAMILY, beats_perk=False, answers=_answers_primitive,
     arity=PRIMITIVE_METHOD_ARITY,
     infer=lambda rt, call, v: PrimitiveMethodInferrer(rt, call.method, v)))
