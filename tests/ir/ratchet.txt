@@ -1146,6 +1146,7 @@ tests/strings/print_to_str_temporary/test_print_number_to_str.sushi
 tests/strings/print_to_str_temporary/test_println_number_to_str.sushi
 tests/strings/print_to_str_temporary/test_println_to_str_as_argument.sushi
 tests/strings/slir_methods/test_string_method_answer_as_argument.sushi
+tests/strings/slir_methods/test_string_method_clone_of_a_heap_string.sushi
 tests/strings/slir_methods/test_string_method_peek_receiver.sushi
 tests/strings/slir_methods/test_string_method_poke_receiver.sushi
 tests/strings/slir_methods/test_string_method_search_family.sushi

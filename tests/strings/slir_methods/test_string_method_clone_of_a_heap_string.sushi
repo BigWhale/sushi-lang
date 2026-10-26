@@ -1,0 +1,15 @@
+# EXPECT_STDOUT_EXACT: "MOSTLY HARMLESS\nMOSTLY HARMLESS\nmostly harmless\n"
+# EXPECT_NO_LEAKS
+#
+# A clone of a string that a method gave owns a buffer of its own. The clone of a
+# temporary and the clone of a bound string are each freed once, and so is each source.
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let string loud = s.upper().clone()
+    println(loud)
+    let string quiet = s.lower()
+    let string copy = quiet.clone()
+    println(s.upper())
+    println(copy)
+    return 0
