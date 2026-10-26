@@ -77,6 +77,51 @@ PORT_TEMPLATES: dict[tuple[str, str], str] = {
     ("semantics/passes/borrow/borrowed_returns.py", "check_borrowed_return"): "B8",
 }
 
+#: The rows of `PORT_TEMPLATES` at the day of the pin. A row may leave both; none may join.
+PINNED_PORT_TEMPLATES: frozenset[tuple[str, str]] = frozenset({
+    (_B + "expressions/calls/stdlib/math.py", "emit_math_function"),
+    (_B + "expressions/calls/stdlib/process.py", "_emit_run"),
+    (_B + "expressions/calls/stdlib/process.py", "_emit_exit"),
+    (_B + "expressions/calls/stdlib/signatures.py", "emit_registry_call"),
+    (_B + "expressions/calls/stdlib/strings.py", "emit_stdlib_string_call"),
+    (_B + "generics/enum_methods_base.py", "emit_enum_realise"),
+    (_B + "generics/enum_methods_base.py", "emit_enum_expect"),
+    (_B + "generics/enum_methods_base.py", "_destroy_the_untaken_arm"),
+    (_B + "generics/enum_methods_base.py", "_expression_is_borrow"),
+    (_B + "generics/hashmap/methods/iterators.py", "_emit_bucket_iterator.owned"),
+    (_B + "generics/hashmap/methods/mutations.py", "emit_hashmap_insert"),
+    (_B + "generics/hashmap/probe.py", "emit_lookup_key"),
+    (_B + "generics/list/methods_capacity.py", "emit_list_reserve"),
+    (_B + "generics/list/methods_iter.py", "emit_list_iter.owned"),
+    (_B + "generics/list/methods_modify.py", "emit_list_push.element"),
+    (_B + "generics/list/methods_modify.py", "emit_list_get"),
+    (_B + "generics/list/methods_modify.py", "emit_list_insert"),
+    (_B + "generics/list/methods_modify.py", "emit_list_remove"),
+    (_B + "generics/list/methods_search.py", "_data_len_and_needle"),
+    (_B + "generics/list/methods_search.py", "emit_list_index_of_from"),
+    (_B + "generics/list/methods_simple.py", "emit_list_with_capacity"),
+    (_B + "generics/own.py", "emit_builtin_own_method"),
+    (_B + "ranges.py", "emit_range"),
+    (_B + "runtime/closures.py", "emit_lambda"),
+    (_B + "runtime/iterator_adapters.py", "emit_adapter_call"),
+    (_B + "types/arrays/dispatcher.py", "_source_data_and_len"),
+    (_B + "types/arrays/dispatcher.py", "_index_arg"),
+    (_B + "types/arrays/dispatcher.py", "_length_args"),
+    (_B + "types/arrays/dispatcher.py", "emit_fixed_array_method"),
+    (_B + "types/arrays/dispatcher.py", "emit_dynamic_array_method"),
+    (_B + "types/arrays/fixed_addressing.py", "as_fixed_array_address"),
+    (_B + "types/arrays/indexing.py", "_emit_string_byte"),
+    (_B + "types/arrays/indexing.py", "emit_element_pointer"),
+    (_B + "types/arrays/indexing.py", "emit_slice_address"),
+    (_B + "types/arrays/indexing.py", "_array_slot"),
+    (_B + "types/arrays/indexing.py", "_array_slot.address_of_value"),
+    (_B + "types/arrays/methods/iterators.py", "emit_dynamic_array_iter.owned"),
+    (_B + "types/arrays/methods/iterators.py", "emit_fixed_array_iter.owned"),
+    (_B + "types/arrays/runs.py", "emit_runs"),
+    ("semantics/passes/borrow/bindings.py", "bind_let_reference"),
+    ("semantics/passes/borrow/borrowed_returns.py", "check_borrowed_return"),
+})
+
 
 def _sources():
     for path in sorted(PACKAGE.rglob("*.py")):
@@ -132,7 +177,7 @@ def _absolute(path: Path, node: ast.ImportFrom) -> str:
 
 
 def _owners(tree: ast.Module) -> dict[int, str]:
-    """The qualified name of the innermost function around each node, by `id`."""
+    """The qualified name of the innermost function or class around each node, by `id`."""
     owner: dict[int, str] = {}
 
     def walk(node: ast.AST, name: str) -> None:
@@ -141,7 +186,7 @@ def _owners(tree: ast.Module) -> dict[int, str]:
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 inner = f"{name}.{child.name}" if name else child.name
             elif isinstance(child, ast.ClassDef):
-                inner = ""
+                inner = f"{name}.{child.name}" if name else child.name
             owner[id(child)] = inner
             walk(child, inner)
 
@@ -202,13 +247,59 @@ def test_the_port_templates_only_shrink():
     assert not clean, f"these port templates name nothing deleted; delete their rows: {clean}"
 
 
+def test_no_port_template_row_is_new():
+    grown = sorted(set(PORT_TEMPLATES) - PINNED_PORT_TEMPLATES)
+    assert not grown, f"a port template row may be deleted and never added: {grown}"
+
+
+def _reaches(tree: ast.AST, names: set[str]) -> list[tuple[int, str]]:
+    """Each line of `tree` that names one of `names`, as (line, name).
+
+    A name is a bare read, an attribute, an imported name or a string, so a call through a
+    table of functions, a module attribute or a lookup by name is seen as well.
+    """
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            name = node.id
+        elif isinstance(node, ast.Attribute):
+            name = node.attr
+        elif isinstance(node, ast.alias):
+            name = node.name.split(".")[-1]
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            name = node.value
+        else:
+            continue
+        if name in names:
+            found.append((getattr(node, "lineno", 0), name))
+    return found
+
+
 def test_the_slir_emitter_names_no_port_template():
     names = {where.split(".")[0] for _path, where in PORT_TEMPLATES}
-    hits = [f"{path.relative_to(PACKAGE)}:{node.lineno} {node.id}"
+    hits = [f"{path.relative_to(PACKAGE)}:{line} {name}"
             for path in sorted(SLIR_EMITTER.rglob("*.py"))
-            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
-            if isinstance(node, ast.Name) and node.id in names]
+            for line, name in _reaches(ast.parse(path.read_text(encoding="utf-8")), names)]
     assert not hits, hits
+
+
+def test_the_reach_scan_sees_a_table_and_a_module_attribute():
+    source = ("from m import emit_a as alias\n"
+              "TABLE = {'x': emit_b, 'y': mod.emit_c}\n"
+              "ROWS = (emit_d,)\n"
+              "NAMED = {'emit_e': 1}\n")
+    found = _reaches(ast.parse(source), {"emit_a", "emit_b", "emit_c", "emit_d", "emit_e"})
+    assert sorted(name for _line, name in found) == [
+        "emit_a", "emit_b", "emit_c", "emit_d", "emit_e"]
+
+
+def test_an_owner_of_a_method_names_its_class(tmp_path):
+    source = tmp_path / "probe.py"
+    source.write_text("class Box:\n    def run(self):\n"
+                      "        from sushi_lang.backend.statements import loops\n"
+                      "def run():\n    from sushi_lang.backend.statements import loops\n")
+    found = _faults(source, ast.parse(source.read_text()))
+    assert sorted(w for w, _what in found) == ["Box.run", "run"]
 
 
 def test_the_scan_sees_a_missing_import(tmp_path):
