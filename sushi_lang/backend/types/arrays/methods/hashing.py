@@ -17,7 +17,7 @@ from sushi_lang.backend.memory.allocas import entry_alloca
 def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
     """Create a hash() emitter function for fixed array types."""
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-               receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+               receiver_type: ir.Type) -> ir.Value:
         """Emit LLVM IR for fixed_array.hash() method."""
         reject_hash_arguments(args)
 
@@ -59,7 +59,7 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
 def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
     """Create a hash() emitter function for dynamic array types."""
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-               receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+               receiver_type: ir.Type) -> ir.Value:
         """Emit LLVM IR for dynamic_array.hash() method."""
         reject_hash_arguments(args)
 
@@ -127,8 +127,7 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
 
 
 def emit_fixed_array_hash_direct(codegen: Any, array_ptr: ir.Value,
-                                 receiver_type: ir.Type, array_type: Type,
-                                 to_i1: bool) -> ir.Value:
+                                 receiver_type: ir.Type, array_type: Type) -> ir.Value:
     """Direct emitter for fixed array hash.
 
     The receiver arrives as an address and its type arrives with it. Looking the type up by
@@ -138,12 +137,11 @@ def emit_fixed_array_hash_direct(codegen: Any, array_ptr: ir.Value,
     guess.
     """
     emitter = _emit_fixed_array_hash(array_type)
-    return emitter(codegen, (), array_ptr, receiver_type, to_i1)
+    return emitter(codegen, (), array_ptr, receiver_type)
 
 
 def emit_dynamic_array_hash_direct(codegen: Any, receiver_value: ir.Value,
-                                   receiver_type: ir.Type, array_type: DynamicArrayType,
-                                   to_i1: bool) -> ir.Value:
+                                   receiver_type: ir.Type, array_type: DynamicArrayType) -> ir.Value:
     """Direct emitter for dynamic array hash.
 
     The receiver's type arrives with it, the way the fixed twin above takes one. Reading it
@@ -151,7 +149,7 @@ def emit_dynamic_array_hash_direct(codegen: Any, receiver_value: ir.Value,
     field was CE0056 (#482).
     """
     emitter = _emit_dynamic_array_hash(array_type)
-    return emitter(codegen, (), receiver_value, receiver_type, to_i1)
+    return emitter(codegen, (), receiver_value, receiver_type)
 
 
 def _make_array_hash_emitter(array_type: Type) -> Any:

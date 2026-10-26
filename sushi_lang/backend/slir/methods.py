@@ -14,7 +14,7 @@ from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import operand_value, type_of_operand
 from sushi_lang.semantics.shir.callee import BuiltinMethod
 from sushi_lang.semantics.slir import statements as st
-from sushi_lang.semantics.typesys import deref_type
+from sushi_lang.semantics.typesys import ReferenceType
 
 
 def _primitive(state: FunctionState, method: BuiltinMethod,
@@ -24,13 +24,14 @@ def _primitive(state: FunctionState, method: BuiltinMethod,
     if not statement.args:
         state.fault(f"the call of '{method.name}' has no receiver")
     receiver, _ = statement.args[0]
-    receiver_type = deref_type(type_of_operand(state, receiver))
-    entry = (state.codegen.derived_methods.get_method(receiver_type, method.name)
-             if receiver_type is not None else None)
+    receiver_type = type_of_operand(state, receiver)
+    if isinstance(receiver_type, ReferenceType):
+        state.fault(f"the receiver of '{method.name}' has the reference type {receiver_type}")
+    entry = state.codegen.derived_methods.get_method(receiver_type, method.name)
     if entry is None:
         state.fault(f"no primitive method '{method.name}' on {receiver_type}")
     values = [operand_value(state, operand) for operand, _ in statement.args]
-    return entry.llvm_emitter(state.codegen, values[1:], values[0], values[0].type, False)
+    return entry.llvm_emitter(state.codegen, values[1:], values[0], values[0].type)
 
 
 #: One row for each family that the emitter handles, by the name of the family.

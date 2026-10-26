@@ -19,7 +19,7 @@ def _emit_enum_hash(enum_type: Type) -> Any:
         raise_internal_error("CE0032", type=type(enum_type).__name__)
 
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-               receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+               receiver_type: ir.Type) -> ir.Value:
         """Emit LLVM IR for enum.hash() method."""
         reject_hash_arguments(args)
 
@@ -123,7 +123,7 @@ register_hash_emitter_factory("enum", _emit_enum_hash)
 def _emit_enum_clone(target_type: Type) -> Any:
     """Create a clone() emitter for an enum type (#134)."""
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+                receiver_type: ir.Type) -> ir.Value:
         from sushi_lang.backend.ownership import copy_out
         return copy_out(codegen, receiver_value, target_type)
 

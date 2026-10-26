@@ -13,7 +13,7 @@ class BuiltinMethod:
     name: str
     return_type: Optional[Type]
     description: str
-    llvm_emitter: Callable[[Any, Sequence[ir.Value], ir.Value, ir.Type, bool], ir.Value]
+    llvm_emitter: Callable[[Any, Sequence[ir.Value], ir.Value, ir.Type], ir.Value]
 
 
 def register_builtin_method(target_type: Type, method: BuiltinMethod) -> None:

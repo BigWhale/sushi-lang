@@ -306,10 +306,6 @@ class LLVMCodegen:
 
         return result_module
 
-    def has_stdlib_unit(self, unit_path: str) -> bool:
-        """Check if a stdlib unit has been imported."""
-        return self.stdlib.has_stdlib_unit(unit_path)
-
     def _emit_multi_unit_program(self, units: list[Unit],
                                  weak_units: frozenset[str] = frozenset()) -> None:
         """Emit LLVM IR for multiple compilation units.

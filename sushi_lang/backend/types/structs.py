@@ -19,7 +19,7 @@ def _emit_struct_hash(prim_type: Type) -> Any:
     struct_type = prim_type
 
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-               receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+               receiver_type: ir.Type) -> ir.Value:
         """Emit LLVM IR for struct.hash() method."""
         reject_hash_arguments(args)
 
@@ -77,7 +77,7 @@ register_hash_emitter_factory("struct", _emit_struct_hash)
 def _emit_struct_clone(target_type: Type) -> Any:
     """Create a clone() emitter for a struct type (#134)."""
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+                receiver_type: ir.Type) -> ir.Value:
         from sushi_lang.backend.ownership import copy_out
         return copy_out(codegen, receiver_value, target_type)
 

@@ -93,7 +93,7 @@ _add(ErrorMessage("CE0022", Severity.ERROR,
     "unsupported type for operation: {type}",
     Category.INTERNAL, "Type cannot be used in this context."))
 
-# Method/Function Validation (CE0023-CE0028)
+# Method/Function Validation (CE0023-CE0027)
 _add(ErrorMessage("CE0023", Severity.ERROR,
     "method '{method}' expects {expected} argument(s), got {got}",
     Category.INTERNAL, "Method called with wrong number of arguments during codegen."))
@@ -101,10 +101,6 @@ _add(ErrorMessage("CE0023", Severity.ERROR,
 _add(ErrorMessage("CE0024", Severity.ERROR,
     "unknown method '{method}' for type '{type}'",
     Category.INTERNAL, "Method not found for this type - semantic analysis should prevent this."))
-
-_add(ErrorMessage("CE0028", Severity.ERROR,
-    "stdlib method not implemented: {method}",
-    Category.INTERNAL, "Standard library method missing backend implementation."))
 
 # Struct Operations (CE0029-CE0032)
 _add(ErrorMessage("CE0032", Severity.ERROR,

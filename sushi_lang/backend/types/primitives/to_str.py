@@ -39,7 +39,7 @@ def _emit_generic_to_str(prim_type: BuiltinType) -> Any:
     kind, param1, param2 = spec
 
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-               receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+               receiver_type: ir.Type) -> ir.Value:
         """Generic to_str() emitter created by factory."""
         if args:
             raise_internal_error("CE0078", got=len(args))

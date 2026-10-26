@@ -52,11 +52,11 @@ def derived_method(target_type: Type, *, name: str, kind: str, return_type: Type
     A missing factory is the internal error `ice`. The count is the derived family's row
     (`MethodFamily.arity`), so the method carries no validator.
     """
-    def emit(codegen, args, receiver_value, receiver_type, to_i1):
+    def emit(codegen, args, receiver_value, receiver_type):
         factory = factory_getter(kind)
         if factory is None:
             raise_internal_error(ice.code, kind=kind)
-        return factory(target_type)(codegen, args, receiver_value, receiver_type, to_i1)
+        return factory(target_type)(codegen, args, receiver_value, receiver_type)
 
     from sushi_lang.sushi_stdlib.src.common import BuiltinMethod
     return BuiltinMethod(

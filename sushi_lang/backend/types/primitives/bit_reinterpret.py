@@ -14,7 +14,7 @@ def _emit_to_bits(prim_type: BuiltinType) -> Any:
     int_width = INT32_BIT_WIDTH if prim_type == BuiltinType.F32 else INT64_BIT_WIDTH
 
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+                receiver_type: ir.Type) -> ir.Value:
         """to_bits() emitter created by factory."""
         if args:
             raise_internal_error("CE0078", got=len(args))

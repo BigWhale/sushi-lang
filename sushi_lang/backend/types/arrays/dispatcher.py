@@ -253,8 +253,7 @@ def emit_fixed_array_method(
 
         case "hash":
             return hashing.emit_fixed_array_hash_direct(codegen, address(writable=False),
-                                                        fixed_ir_type, fixed_semantic_type,
-                                                        to_i1)
+                                                        fixed_ir_type, fixed_semantic_type)
 
         case "clone":
             # A fixed array is a value, so the clone is value-in / value-out. It routes
@@ -440,8 +439,7 @@ def emit_dynamic_array_method(
 
         case "hash":
             return hashing.emit_dynamic_array_hash_direct(codegen, receiver_value,
-                                                          array_struct_type, semantic_type,
-                                                          to_i1)
+                                                          array_struct_type, semantic_type)
 
         case "fill":
             # The element type drives the per-slot deep copy of an owning element (#476).

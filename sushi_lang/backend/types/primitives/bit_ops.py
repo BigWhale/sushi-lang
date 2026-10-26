@@ -54,7 +54,7 @@ _EMITTERS: dict[str, Callable[[ir.IRBuilder, ir.Value], ir.Value]] = {
 
 def _bit_method_emitter(method: str) -> Callable[..., ir.Value]:
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+                receiver_type: ir.Type) -> ir.Value:
         if args:
             raise_internal_error("CE0023", method=method, expected=0, got=len(args))
         return _EMITTERS[method](require_builder(codegen), receiver_value)

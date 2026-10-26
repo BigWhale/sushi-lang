@@ -61,26 +61,10 @@ class StdlibLinker:
 
         # The path AS WRITTEN, and nothing else. Recording an import's parent directory
         # too made every SIBLING module look imported, so `use <io/files>` walked
-        # straight through the `io/stdio` gate (#501). A directory import is served by
-        # `has_stdlib_unit`, which walks the parents of the name it is ASKED about.
+        # straight through the `io/stdio` gate (#501).
         for use_stmt in program.uses:
             if use_stmt.is_stdlib:
                 stdlib_units.add(use_stmt.path)
-
-    def has_stdlib_unit(self, unit_path: str) -> bool:
-        """Check if a stdlib unit has been imported."""
-        stdlib_units = self.codegen.stdlib_units
-
-        if unit_path in stdlib_units:
-            return True
-
-        parts = unit_path.split('/')
-        for i in range(1, len(parts)):
-            parent = '/'.join(parts[:i])
-            if parent in stdlib_units:
-                return True
-
-        return False
 
     def link_stdlib_modules(self, llmod: llvm.ModuleRef,
                             programs: Iterable[Program]) -> set[str]:

@@ -224,16 +224,6 @@ Method called with wrong number of arguments during codegen.
 
 Method not found for this type - semantic analysis should prevent this.
 
-### CE0028 {#ce0028}
-
-**Error** · internal
-
-**Message:** `stdlib method not implemented: {method}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Standard library method missing backend implementation.
-
 ### CE0032 {#ce0032}
 
 **Error** · internal

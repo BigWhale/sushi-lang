@@ -54,7 +54,7 @@ def emit_value_hash(codegen: Any, value: ir.Value, semantic_type: Type) -> ir.Va
         return builder.call(override, [codegen.utils.cast_for_param(value, param_type)])
 
     hash_method = _derived_hash(codegen, semantic_type)
-    return hash_method.llvm_emitter(codegen, (), value, value.type, False)
+    return hash_method.llvm_emitter(codegen, (), value, value.type)
 
 
 def _derived_hash(codegen: Any, semantic_type: Type) -> Any:

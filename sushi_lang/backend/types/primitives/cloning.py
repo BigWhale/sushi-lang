@@ -10,7 +10,7 @@ from sushi_lang.sushi_stdlib.src.common import BuiltinMethod, register_builtin_m
 
 
 def _emit_clone(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+                receiver_type: ir.Type) -> ir.Value:
     """clone() on a primitive: the value is its own deep copy."""
     if args:
         raise_internal_error("CE0078", got=len(args))

@@ -55,7 +55,7 @@ def _as_address(codegen: Any, value: ir.Value, llvm_type: ir.Type, name: str) ->
 def _make_list_hash_emitter(list_type: Type) -> Any:
     """Build the hash() emitter for one `List@(T)`: its elements, then its length."""
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+                receiver_type: ir.Type) -> ir.Value:
         reject_hash_arguments(args)
 
         builder = require_builder(codegen)
@@ -95,7 +95,7 @@ def _make_own_hash_emitter(own_type: Type) -> Any:
     who only sees values.
     """
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+                receiver_type: ir.Type) -> ir.Value:
         reject_hash_arguments(args)
 
         builder = require_builder(codegen)

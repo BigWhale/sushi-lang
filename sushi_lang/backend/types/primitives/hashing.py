@@ -18,7 +18,7 @@ FXHASH_MULTIPLIER = 0x517cc1b727220a95  # FxHash prime for 64-bit mixing
 def _emit_generic_hash(prim_type: BuiltinType) -> Any:
     """Create a hash() emitter function for the given primitive type."""
     def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
-               receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+               receiver_type: ir.Type) -> ir.Value:
         """Generic hash() emitter created by factory."""
         reject_hash_arguments(args)
 
