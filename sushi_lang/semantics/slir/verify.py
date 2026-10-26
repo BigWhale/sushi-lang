@@ -8,9 +8,10 @@ the statement, that names the function and the rule.
 The structure comes first, statement by statement: a span on each statement and terminator,
 one terminator for each block, blocks that exist, a type for each local and for each
 projection of a place, a `Move` out of no `Global`, a `Drop` of an owning type, a `bool`
-flag for a `DropIfSet`, no `and` or `or` in a `Binary`, a `Cast` between two numeric types or of one type, the conventions of a `Direct`
-callee, no copy of an owning value other than a `string` into an `Owned` argument, and a
-registered `RExxxx` for a `Trap`. The type of a place also gives its root local, so a
+flag for a `DropIfSet`, no `and` or `or` in a `Binary`, a `Cast` between two numeric types
+or of one type, an `Int` constant in the range of its type, the conventions of a `Direct`
+callee, a receiver operand for a call of a built-in method, no copy of an owning value
+other than a `string` into an `Owned` argument, and a registered `RExxxx` for a `Trap`. The type of a place also gives its root local, so a
 `Move` of a projection is a `Move` of its root.
 
 Then a dataflow over the CFG gives each local, at each point, the set of states that the
