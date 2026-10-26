@@ -8,7 +8,7 @@ the statement, that names the function and the rule.
 The structure comes first, statement by statement: a span on each statement and terminator,
 one terminator for each block, blocks that exist, a type for each local and for each
 projection of a place, a `Move` out of no `Global`, a `Drop` of an owning type, a `bool`
-flag for a `DropIfSet`, no `and` or `or` in a `Binary`, the conventions of a `Direct`
+flag for a `DropIfSet`, no `and` or `or` in a `Binary`, a `Cast` between two numeric types or of one type, the conventions of a `Direct`
 callee, no copy of an owning value other than a `string` into an `Owned` argument, and a
 registered `RExxxx` for a `Trap`. The type of a place also gives its root local, so a
 `Move` of a projection is a `Move` of its root.
@@ -53,6 +53,7 @@ from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, PointerType, ReferenceType,
     StructType, Type, UnknownType, owns_resource,
 )
+from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.unit_symbols import function_symbol
 
 if TYPE_CHECKING:
@@ -72,6 +73,7 @@ DROP_ONCE = "one drop or move on every path"
 CONVENTIONS = "declared conventions"
 OWNED_COPY = "no copy of an owning value into an owned argument"
 SHORT_CIRCUIT = "no short circuit in a binary"
+NUMERIC_CAST = "a numeric cast"
 TRAP = "registered trap"
 SPANS = "spans"
 
@@ -266,6 +268,27 @@ class _Check:
                 self.operand(part, span)
             else:
                 self.place(part, span)
+        if isinstance(value, r.Cast):
+            self.cast(value, span)
+
+    def cast(self, value: r.Cast, span: Span) -> None:
+        """A cast joins two numeric types, or keeps one type. Its operand has a known type
+        in SLIR except behind a `Global` or a `Downcast`."""
+        source = self.operand_type(value.operand, span)
+        if source is None or source == value.target:
+            return
+        if source not in BUILTIN_NUMERIC_TYPES or value.target not in BUILTIN_NUMERIC_TYPES:
+            self.fail(NUMERIC_CAST, f"{show(value)} casts {display_type(source)} to "
+                                    f"{display_type(value.target)}", span)
+
+    def operand_type(self, operand: p.Operand, span: Span) -> Optional[Type]:
+        if isinstance(operand, p.Const):
+            constant = operand.constant
+            if isinstance(constant, (k.Int, k.Float)):
+                return constant.ty
+            return BuiltinType.BOOL if isinstance(constant, k.Bool) else None
+        ty = self.place(operand.place, span).ty
+        return None if isinstance(ty, _Payload) else ty
 
     def assign(self, stmt: st.Assign) -> None:
         self.place(stmt.place, stmt.span)

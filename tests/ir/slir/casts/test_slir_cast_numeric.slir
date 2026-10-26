@@ -1,0 +1,65 @@
+unit test_slir_cast_numeric
+
+fn widen(_1: i32 @guaranteed) -> i64 {
+    let _0: i64
+
+  bb0:
+    _0 = copy _1 as i64
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32                            // n
+    let _2: u8                             // low
+    let _3: u8                             // byte
+    let _4: i64
+    let _5: i32                            // round
+    let _6: f64
+    let _7: f64                            // half
+    let _8: ~
+    let _9: ~
+    let _10: ~
+    let _11: bool
+    let _12: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = const 300_i32
+    StorageLive(_2)
+    _2 = copy _1 as u8
+    StorageLive(_3)
+    _3 = const 300_u8 as u8
+    StorageLive(_4)
+    _4 = call @widen(copy _1 @guaranteed)
+    StorageLive(_5)
+    _5 = move _4 as i32
+    StorageDead(_4)
+    StorageLive(_6)
+    _6 = copy _1 as f64
+    StorageLive(_7)
+    _7 = copy _6 / const 2.0_f64
+    StorageDead(_6)
+    StorageLive(_8)
+    _8 = call builtin println@(u8)(copy _3 @guaranteed)
+    StorageDead(_8)
+    StorageLive(_9)
+    _9 = call builtin println@(u8)(copy _2 @guaranteed)
+    StorageDead(_9)
+    StorageLive(_10)
+    _10 = call builtin println@(i32)(copy _5 @guaranteed)
+    StorageDead(_10)
+    StorageLive(_11)
+    _11 = copy _7 > const 100.0_f64
+    StorageLive(_12)
+    _12 = call builtin println@(bool)(copy _11 @guaranteed)
+    StorageDead(_12)
+    StorageDead(_11)
+    _0 = const 0_i32
+    StorageDead(_7)
+    StorageDead(_5)
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageDead(_1)
+    return
+}

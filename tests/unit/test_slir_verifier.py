@@ -535,3 +535,41 @@ def test_the_declared_parameters_of_a_callee_are_read_from_the_function_table_at
                                   unit_name="unit"))
     assert declared_params(funcs, callee) == DeclaredParams((OWNED,))
     assert declared_params(funcs, st.Direct(emitted_symbol("late", "other"), "late")) is None
+
+
+# -- the rule of a cast (ir.md 8.7) ---------------------------------------------------------
+
+
+I64, U8, F64 = BuiltinType.I64, BuiltinType.U8, BuiltinType.F64
+
+
+def _cast_of(operand: p.Operand, source: Type, target: Type, span: Span = SPAN) -> SlirFunction:
+    """`_2 = operand as target`, where `_1` is a parameter of type `source`."""
+    done = _set(0, r.Use(p.Const(k.Blank())))
+    return _function([BLANK, source, target],
+                     _block(0, _ret(), _live(2), _set(2, r.Cast(operand, target), span), done,
+                            _dead(2)),
+                     params=((1, GUARANTEED),))
+
+
+@pytest.mark.parametrize("source, target", [
+    (I32, I64), (I64, I32), (I32, U8), (I32, F64), (F64, I32), (BuiltinType.F32, F64),
+    (BOOL, BOOL),
+], ids=str)
+def test_a_cast_between_numeric_types_or_of_one_type_passes(source: Type, target: Type):
+    _passes(_cast_of(_copy(1), source, target))
+
+
+def test_a_cast_of_a_numeric_constant_passes():
+    _passes(_cast_of(p.Const(k.Int(300, U8)), I32, I32))
+
+
+@pytest.mark.parametrize("source, target", [
+    (BOOL, I32), (I32, BOOL), (STRING, I32), (I32, STRING), (PAIR, I32),
+], ids=str)
+def test_a_cast_that_is_not_numeric_is_refused(source: Type, target: Type):
+    _refused(_cast_of(_copy(1), source, target, BAD), "a numeric cast")
+
+
+def test_a_cast_of_a_boolean_constant_is_refused():
+    _refused(_cast_of(p.Const(k.Bool(True)), I32, I32, BAD), "a numeric cast")

@@ -604,6 +604,11 @@ class _Lowering:
     def unary(self, node: e.Unary) -> _Value:
         return r.Unary(node.op, self.operand(node.operand))
 
+    def cast(self, node: e.Cast) -> _Value:
+        """A numeric cast, or a cast to the type of its operand. A cast that calls a
+        conversion stops in `typecheck`, so no row here calls one."""
+        return r.Cast(self.operand(node.operand), self.type_of(node))
+
     def enum_init(self, node: e.EnumInit) -> _Value:
         """An enum variant as an aggregate of its instance type (L10)."""
         ty = self.typeck.instance_of(node.shir_id)
@@ -719,6 +724,7 @@ _VALUES: dict[type, Callable[..., _Value]] = {
     e.LocalRef: _Lowering.leaf,
     e.Binary: _Lowering.binary,
     e.Unary: _Lowering.unary,
+    e.Cast: _Lowering.cast,
     e.EnumInit: _Lowering.enum_init,
     e.Call: _Lowering.call,
     e.Interp: _Lowering.interp,

@@ -1,0 +1,23 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "44\n44\n300\ntrue\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_cast_numeric.slir
+#
+# A cast is one `Cast` rvalue with the type of the target. The operand is a copy of a
+# local, a constant, or a temporary that holds an inner cast. An integer literal directly
+# under a cast has the target type, so `300 as u8` is a constant of type u8.
+
+fn widen(i32 n) i64:
+    return n as i64
+
+fn main() i32:
+    let i32 n = 300
+    let u8 low = n as u8
+    let u8 byte = 300 as u8
+    let i32 round = widen(n) as i32
+    let f64 half = (n as f64) / 2.0
+    println(byte)
+    println(low)
+    println(round)
+    println(half > 100.0)
+    return 0
