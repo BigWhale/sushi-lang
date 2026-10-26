@@ -27,6 +27,7 @@ from sushi_lang.semantics.passes.types.visit import expressions as ex
 from sushi_lang.semantics.passes.types.visit import operators as op
 from sushi_lang.semantics.passes.types.visit import results as rs
 from sushi_lang.semantics.passes.types.visit import statements as st
+from sushi_lang.semantics.passes.types.call_facts import TypecheckCallFacts
 from sushi_lang.semantics.passes.types.expressions import check_try
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
@@ -42,9 +43,10 @@ if TYPE_CHECKING:
 STAGE = "typecheck"
 
 
-def stop_at(_validator: TypeValidator, node: Any, _expected: Optional[Type] = None) -> NoReturn:
+def stop_at(validator: TypeValidator, node: Any, _expected: Optional[Type] = None) -> NoReturn:
     """The arm of a construct that the pass does not type yet: the walk of the body stops."""
-    dispatch.stop(STAGE, node)
+    facts = TypecheckCallFacts(validator) if isinstance(node, e.Call) else None
+    dispatch.stop(STAGE, node, facts)
 
 
 def _arm(node: Any) -> Callable[..., Any]:

@@ -10,11 +10,13 @@ the node. For a `Call`, it names the kind of the target too (`construct_of`).
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, NoReturn
+from typing import Any, Callable, Mapping, NoReturn, Optional, Protocol
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.ids import DeclId
+from sushi_lang.semantics.statics import is_builtin_static
 
 
 def arm_of(arms: Mapping[type, Callable[..., Any]], node: object,
@@ -28,31 +30,70 @@ def arm_of(arms: Mapping[type, Callable[..., Any]], node: object,
     return arm
 
 
-def construct_of(node: Any) -> str:
+class CallFacts(Protocol):
+    """What the stop site of a `Call` knows, so that the label separates the groups.
+
+    The typecheck pass answers it from its declaration names and its tables. It decides
+    nothing: `construct_of` is the one place that turns the facts into a label.
+    """
+
+    def written_name(self, decl: DeclId) -> str:
+        """The written name of the declaration that a `GlobalRef` names."""
+
+    def names_extension(self, name: str) -> bool:
+        """Whether a user extension method or a perk method has this name."""
+
+    def namespace_kind(self, alias: str, name: str) -> Optional[str]:
+        """The kind of the namespace behind `alias` that holds `name`, or None."""
+
+    def is_generic_function(self, name: str) -> bool:
+        """Whether a bare `name` calls a generic function."""
+
+    def is_stdlib_function(self, name: str) -> bool:
+        """Whether a bare `name` calls a stdlib function."""
+
+    def is_extern_function(self, name: str) -> bool:
+        """Whether a bare `name` calls a C function with no namespace."""
+
+
+def construct_of(node: Any, facts: Optional[CallFacts] = None) -> str:
     """The construct that a stop names: the class of `node`, and the target kind of a `Call`.
 
-    The kind comes from the SHIR node alone, before `typecheck` resolves the callee. A
-    call by a written name is `function`: the node does not tell a user function, a stdlib
-    function, an extern and a qualified name apart.
+    A `Call` needs `facts`, and a stage that stops on one with no facts is an internal
+    error: no stage prints a label that another stage would print in another way.
     """
     if not isinstance(node, e.Call):
         return type(node).__name__
-    target = node.target
+    if facts is None:
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail="a stop at a call needs the call facts of its stage")
+    return f"Call({_target_kind(node.target, facts)})"
+
+
+def _target_kind(target: e.CallTarget, facts: CallFacts) -> str:
     if isinstance(target, e.Dotted):
-        kind = "method"
-    elif isinstance(target, e.Static):
-        kind = "static"
-    elif isinstance(target, e.BuiltinFn):
-        kind = "builtin"
-    elif not isinstance(target.ref, e.GlobalRef):
-        kind = "fn value"
-    elif target.type_args:
-        kind = "generic"
-    else:
-        kind = "function"
-    return f"Call({kind})"
+        return "extension" if facts.names_extension(target.name) else "method"
+    if isinstance(target, e.Static):
+        if is_builtin_static(str(target.ty).rpartition(".")[2], target.name):
+            return "builtin static"
+        return "static"
+    if isinstance(target, e.BuiltinFn):
+        return "builtin"
+    if not isinstance(target.ref, e.GlobalRef):
+        return "fn value"
+    if target.type_args:
+        return "generic"
+    alias, dot, name = facts.written_name(target.ref.decl).rpartition(".")
+    if dot:
+        kind = facts.namespace_kind(alias, name)
+        return kind if kind in ("extern", "stdlib") else "alias"
+    if facts.is_generic_function(name):
+        return "generic"
+    if facts.is_extern_function(name):
+        return "extern"
+    return "stdlib" if facts.is_stdlib_function(name) else "function"
 
 
-def stop(stage: str, node: Any) -> NoReturn:
+def stop(stage: str, node: Any, facts: Optional[CallFacts] = None) -> NoReturn:
     """The stop of the pass `stage` at a construct that it does not handle yet."""
-    raise StageStop(stage, construct_of(node), node.loc)
+    raise StageStop(stage, construct_of(node, facts), node.loc)

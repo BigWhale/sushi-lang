@@ -2,8 +2,9 @@
 
 The runner names this file in SUSHI_COMPILER_STUB. The last line of the source
 file names the line to print: `# STUB: <stage>, <construct>` prints the stop code CE0155
-with that stage and construct, and `# STUB: CE1001` prints that code alone. A line `<stage>, <construct> @ <module>` adds the
-note that the compiler prints for a stop inside a bundled stdlib unit.
+with that stage and construct, and `# STUB: CE1001` prints that code alone.
+A line `<stage>, <construct> @ <module>` adds the note that the compiler prints for a
+stop inside a bundled stdlib unit.
 """
 from __future__ import annotations
 
