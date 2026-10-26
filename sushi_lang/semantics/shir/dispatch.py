@@ -17,6 +17,7 @@ from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.statics import is_builtin_static
+from sushi_lang.semantics.stdlib_registry import is_source_stdlib_module
 
 
 def arm_of(arms: Mapping[type, Callable[..., Any]], node: object,
@@ -40,8 +41,8 @@ class CallFacts(Protocol):
     def written_name(self, decl: DeclId) -> str:
         """The written name of the declaration that a `GlobalRef` names."""
 
-    def names_extension(self, name: str) -> bool:
-        """Whether a user extension method or a perk method has this name."""
+    def declaring_units(self, name: str) -> frozenset[Optional[str]]:
+        """The units that declare an extension method or a perk method with this name."""
 
     def namespace_kind(self, alias: str, name: str) -> Optional[str]:
         """The kind of the namespace behind `alias` that holds `name`, or None."""
@@ -70,9 +71,16 @@ def construct_of(node: Any, facts: Optional[CallFacts] = None) -> str:
     return f"Call({_target_kind(node.target, facts)})"
 
 
+def _is_stdlib_unit(unit: Optional[str]) -> bool:
+    return unit is not None and is_source_stdlib_module(unit)
+
+
 def _target_kind(target: e.CallTarget, facts: CallFacts) -> str:
     if isinstance(target, e.Dotted):
-        return "extension" if facts.names_extension(target.name) else "method"
+        units = facts.declaring_units(target.name)
+        if not units:
+            return "method"
+        return "extension" if any(not _is_stdlib_unit(unit) for unit in units) else "stdlib method"
     if isinstance(target, e.Static):
         if is_builtin_static(str(target.ty).rpartition(".")[2], target.name):
             return "builtin static"

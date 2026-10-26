@@ -24,11 +24,16 @@ NAMES = {0: "f", 1: "alias.f", 2: "sqrt", 3: "libc.puts", 4: "std.sqrt", 5: "kee
 NAMESPACES = {("alias", "f"): "function", ("libc", "puts"): "extern", ("std", "sqrt"): "stdlib"}
 
 
+UNITS = {"doubled": frozenset({"app"}), "lines": frozenset({"collections/strings"}),
+         "both": frozenset({"collections/strings", "app"}), "read": frozenset({"io/contracts"}),
+         "tick": frozenset({"app"}), "lib": frozenset({None})}
+
+
 def facts() -> SimpleNamespace:
     """A table of facts: the written names of the declarations and the names by kind."""
     return SimpleNamespace(
         written_name=lambda decl: NAMES[decl.index],
-        names_extension=lambda name: name == "doubled",
+        declaring_units=lambda name: UNITS.get(name, frozenset()),
         namespace_kind=lambda alias, name: NAMESPACES.get((alias, name)),
         is_generic_function=lambda name: name == "keep",
         is_stdlib_function=lambda name: name == "sqrt",
@@ -52,6 +57,11 @@ LOCAL = _node(e.LocalRef, LocalId(0))
 CASES = [
     (e.Dotted(LOCAL, "len"), "Call(method)"),
     (e.Dotted(LOCAL, "doubled"), "Call(extension)"),
+    (e.Dotted(LOCAL, "lines"), "Call(stdlib method)"),
+    (e.Dotted(LOCAL, "read"), "Call(stdlib method)"),
+    (e.Dotted(LOCAL, "both"), "Call(extension)"),
+    (e.Dotted(LOCAL, "tick"), "Call(extension)"),
+    (e.Dotted(LOCAL, "lib"), "Call(extension)"),
     (e.Static(UnknownType("Vec"), "at"), "Call(static)"),
     (e.Static(UnknownType("List"), "new"), "Call(builtin static)"),
     (e.Static(UnknownType("hm.HashMap"), "new"), "Call(builtin static)"),

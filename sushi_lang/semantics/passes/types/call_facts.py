@@ -24,15 +24,23 @@ class TypecheckCallFacts:
     def written_name(self, decl: DeclId) -> str:
         return self.validator.decl_name(decl)
 
-    def names_extension(self, name: str) -> bool:
+    def declaring_units(self, name: str) -> frozenset[Optional[str]]:
+        """The units that declare an extension or a perk method of this name.
+
+        The answer reads the name alone, because the receiver type is not known at the
+        stop: a user extension of a user type that reuses a built-in method name gives a
+        built-in call of that name the label `extension`. This is a known limit.
+        """
         validator = self.validator
-        if any(name in methods for methods in validator.extension_table.by_type.values()):
-            return True
-        if any(key[0] == name for methods in validator.generic_extension_table.by_type.values()
-               for key in methods):
-            return True
-        return any(m.name == name for impl in validator.perk_impl_table.implementations.values()
-                   for m in impl.methods)
+        units: set[Optional[str]] = set()
+        for methods in validator.extension_table.by_type.values():
+            units.update(record.unit_name for record in methods.get(name, ()))
+        for table in validator.generic_extension_table.by_type.values():
+            units.update(unit for (method, _key, unit) in table if method == name)
+        perks = validator.perk_impl_table
+        units.update(perks.units.get(key) for key, impl in perks.implementations.items()
+                     if any(m.name == name for m in impl.methods))
+        return frozenset(units)
 
     def namespace_kind(self, alias: str, name: str) -> Optional[str]:
         binding = self.validator.namespaces.lookup(alias, name)
