@@ -15,6 +15,7 @@ from sushi_lang.semantics.ast import (
     Call, CallLike, DotCall, Expr, IndexAccess, MemberAccess, MethodCall,
     MethodLike, Name,
 )
+from sushi_lang.semantics.method_effects import RECEIVER_READ_FAMILIES
 from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode, FunctionType
@@ -48,10 +49,6 @@ def maybe_mark_container_insert(checker: 'BorrowChecker', expr: MethodLike) -> N
     if receiver is None or not checker.types.is_container(read_type(checker, receiver)):
         return
     consume_each(checker, expr.args)
-
-
-#: The built-in method families whose methods only read their receiver.
-RECEIVER_READ_FAMILIES = frozenset({"primitive", "string"})
 
 
 def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
@@ -102,9 +99,9 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
 def _check_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Builtin) -> None:
     """The receiver of a built-in method call: a read of its place.
 
-    A primitive method and a string method change nothing in their receiver and consume
-    nothing (`callee_effect` has no row for them), so the receiver is read and stays the
-    owner of its value. A family with no arm here stops the walk.
+    A method of a family of `RECEIVER_READ_FAMILIES` changes nothing in its receiver and
+    consumes nothing, so the receiver is read and stays the owner of its value. A family
+    with no arm here stops the walk.
     """
     if callee.method.family not in RECEIVER_READ_FAMILIES:
         dispatch.stop_at_family(arms.STAGE, node, callee.method.family)

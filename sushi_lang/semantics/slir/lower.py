@@ -53,6 +53,7 @@ from sushi_lang.semantics.channel import channel_result, has_channel
 from sushi_lang.semantics import integer_ops
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.integer_width import integer_bit_width
+from sushi_lang.semantics.method_effects import RECEIVER_READ_FAMILIES
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.param_modes import Convention
@@ -630,7 +631,8 @@ class _Lowering:
             er.raise_internal_error("CE0000", span=node.loc,
                                     detail="a call with no callee reached SLIR")
         callee = self.callee(node, resolved)
-        receiver = ((self.operand(resolved.callee.recv), Convention.GUARANTEED),) \
+        receiver = ((self.operand(resolved.callee.recv),
+                     receiver_convention(resolved.callee.method.family, node.loc)),) \
             if isinstance(resolved.callee, Builtin) else ()
         return _CallValue(callee, receiver + tuple(self.argument(node, index, arg)
                                                    for index, arg in enumerate(node.args)))
@@ -638,8 +640,7 @@ class _Lowering:
     def callee(self, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee:
         """A free function by its symbol and its source name; an intrinsic with the display
         type of each argument (L7); a built-in method by its family and its name, with no
-        types: the receiver is the first operand of the call and has the convention of a
-        borrow, because no method of the primitive or string family changes or consumes it."""
+        types: the receiver is the first operand of the call (`receiver_convention`)."""
         callee = resolved.callee
         if isinstance(callee, Free):
             if resolved.unit is None:
@@ -742,6 +743,19 @@ _VALUES: dict[type, Callable[..., _Value]] = {
     e.Interp: _Lowering.interp,
     e.Try: _Lowering.try_,
 }
+
+
+def receiver_convention(family: str, span: Span) -> Convention:
+    """The convention of the receiver of a built-in method of `family`: a borrow
+    (`Guaranteed`) for a family of `RECEIVER_READ_FAMILIES`. Any other family can change or
+    consume its receiver, and it stops in `typecheck` or `borrow` until its group gives it
+    a row, so its call here is an internal error."""
+    if family not in RECEIVER_READ_FAMILIES:
+        er.raise_internal_error(
+            "CE0000", span=span,
+            detail=f"a call of a method of the family '{family}' reached SLIR, and no "
+                   f"receiver convention is written for that family")
+    return Convention.GUARANTEED
 
 
 def _moves(value: r.Rvalue | _CallValue) -> list[p.Place]:

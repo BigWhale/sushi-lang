@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
+import pytest
 
 from sushi_lang.semantics.method_effects import METHOD_EFFECTS, effect_of
 from sushi_lang.semantics.passes.types import arrays
@@ -40,14 +41,42 @@ def test_every_array_method_the_table_marks_is_measured():
             "extend_back"} <= marked
 
 
-def test_no_primitive_or_string_method_changes_or_consumes_its_receiver():
-    """The borrow arm of a SHIR method call of these two families only reads its receiver.
-    A method of the table that one of them shares a name with (`string.reverse`) is a
-    method that answers a new string."""
-    from sushi_lang.semantics.method_effects import MethodEffect, callee_effect
+def test_a_family_reads_its_receiver_or_has_effect_rows_never_both():
+    """A family whose methods only read their receiver has no row of `METHOD_EFFECTS`, and
+    a family that the effect rows describe does not only read its receiver. Each name of
+    the two sets is a family of `METHOD_TYPE_REGISTRY`."""
+    from sushi_lang.semantics.method_effects import EFFECT_FAMILIES, RECEIVER_READ_FAMILIES
     from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 
-    for family in (METHOD_TYPE_REGISTRY.family(name) for name in ("primitive", "string")):
-        assert family.arity
-        for method in family.arity:
-            assert callee_effect(method, family.name) == MethodEffect(), (family.name, method)
+    registry = {family.name for family in METHOD_TYPE_REGISTRY.families}
+    assert RECEIVER_READ_FAMILIES, "no family reads its receiver"
+    assert RECEIVER_READ_FAMILIES.isdisjoint(EFFECT_FAMILIES)
+    unknown = (RECEIVER_READ_FAMILIES | EFFECT_FAMILIES) - registry
+    assert not unknown, f"no family of METHOD_TYPE_REGISTRY is named {sorted(unknown)}"
+
+
+def test_the_borrow_pass_and_slir_lowering_read_the_one_set_of_read_receivers():
+    from sushi_lang.semantics import method_effects
+    from sushi_lang.semantics.passes.borrow import calls
+    from sushi_lang.semantics.slir import lower
+
+    assert calls.RECEIVER_READ_FAMILIES is method_effects.RECEIVER_READ_FAMILIES
+    assert lower.RECEIVER_READ_FAMILIES is method_effects.RECEIVER_READ_FAMILIES
+
+
+def test_slir_lowering_gives_a_read_receiver_a_borrow_and_refuses_any_other_family():
+    """A receiver of another family can be consumed (`or_err`, `map_err`), so a borrow
+    there would be a silent fallback. Lowering gets no such call while the family has no
+    arm, and one that comes is an internal error."""
+    from sushi_lang.internals.diagnostics import InternalCompilerError
+    from sushi_lang.internals.report import Span
+    from sushi_lang.semantics.method_effects import RECEIVER_READ_FAMILIES
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.slir import lower
+
+    span = Span(1, 1, 1, 2)
+    for family in RECEIVER_READ_FAMILIES:
+        assert lower.receiver_convention(family, span) is Convention.GUARANTEED
+    with pytest.raises(InternalCompilerError) as caught:
+        lower.receiver_convention("maybe", span)
+    assert caught.value.code == "CE0000"

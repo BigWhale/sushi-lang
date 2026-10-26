@@ -62,6 +62,14 @@ def effect_of(method: str) -> MethodEffect:
 # and a user extension named `push` are other methods with the same name.
 EFFECT_FAMILIES = frozenset({"array", "list", "hashmap", "own"})
 
+PRIMITIVE_FAMILY = "primitive"
+STRING_FAMILY = "string"
+
+# The families whose methods only read their receiver: no method changes or consumes it.
+# The borrow pass reads the receiver of such a call, and SLIR lowering gives it the
+# `Guaranteed` convention. A family that is not here has no such rule yet.
+RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
+
 
 def callee_effect(method: str, family: Optional[str]) -> MethodEffect:
     """The effect of a call whose callee the typecheck pass stamped as `family`."""
