@@ -1,8 +1,11 @@
 # The Sushi IR: SHIR and SLIR
 
-**Status: ACCEPTED.** Measured against the tree on 2026-10-11, at `cc4088ca`, and ruled
-on the same day. Every design question has a ruling. No SHIR or SLIR code exists in the
-tree. This document is the DESIGN: what the two IRs are, why they have this shape, and what
+**Status: ACCEPTED, and BUILT in part.** Measured against the tree on 2026-10-11, at
+`cc4088ca`, and ruled on the same day. Every design question has a ruling. SHIR and SLIR
+exist on the branch `feat/ir-shir-slir`: Phases 0, 1 and 2 of the migration are done (the
+spine), and Phase 3 (Tier A, plain values) is open. A construct that a stage does not handle
+yet stops the compile with CE0155. The numbers in sections 1 to 5 describe the tree at
+`cc4088ca`. This document is the DESIGN: what the two IRs are, why they have this shape, and what
 a migration must keep. The phases, the risks and the progress tracking are not part of this
 document; a migration plan comes from it. Nothing in the language changes: every behaviour
 test passes before and after, unchanged.
@@ -11,7 +14,9 @@ Amended on 2026-10-11 by the rulings on the migration plan: 6.3 (initializer bod
 (the gate reads the body modules), 7.4 (evaluation order, recorded values, `expect`), 10.3
 and 11.9. Amended on 2026-10-20 by the rulings at Gate 1: 7.4 (`typecheck` folds a readable
 value at the type of its position; an error hole carries its code), 7.5 and 8.9 (a tuple
-rebind is one `Destructure` with `Place` targets).
+rebind is one `Destructure` with `Place` targets). Amended on 2026-10-26 at the start of Phase 3:
+the status above, 8.12 (the concerns that are not built yet), and 10.2 and 10.3 (the counts and
+the gate names).
 
 ## The decisions, in one place
 
@@ -1949,6 +1954,13 @@ That is the design in one screen.
 The backend has none of the concerns of the left column: each one went with the AST body
 emitter.
 
+Two rows of the right column are not built yet. The borrow-region row is not built: SLIR
+lowering writes no `BeginBorrow` and no `EndBorrow`, and it stops at a let-borrow with
+`slir, borrowed view` (Tier B, group B8). The iterator-state row is not built: SLIR lowering
+places no state local and no heap block for an iterator (Tier C, group C3). The verifier
+rule and the printer form of `BeginBorrow` and `EndBorrow` exist, and pytest tests them over
+SLIR built by hand.
+
 What is NOT in this table: the 2,809 lines of monomorphization. Ruling Q1 leaves them
 where they are. Also not in the table: the per-type emitter families. Ruling Q7 keeps them.
 
@@ -2149,12 +2161,13 @@ This is not a rewrite from nothing:
 
 ### 10.2 The behaviour suite
 
-The `.sushi` suite (5,801 fixtures) asserts on behaviour: stdout, exit codes, error codes
-and leaks (1,483 fixtures carry `EXPECT_NO_LEAKS`). It does not assert on compiler
+The `.sushi` suite (6,055 fixtures, measured on 2026-10-26 at `0a0d6689`) asserts on
+behaviour: stdout, exit codes, error codes and leaks (1,554 fixtures carry
+`EXPECT_NO_LEAKS`). It does not assert on compiler
 internals. A refactor of this size usually fails because the tests encode the old
 structure. Here they do not. This is the single largest reason the work is feasible.
 
-One small group is the exception: 16 fixtures assert on the emitted LLVM IR
+One small group is the exception: 18 fixtures assert on the emitted LLVM IR
 (`EXPECT_IR_HOLDS`, `EXPECT_IR_LACKS`, `EXPECT_IR_FUNCTION`, `EXPECT_IR_NO_FUNCTION`). Most
 assert that a copy is absent or present, which the new backend keeps; each one is read
 again when its area moves.
@@ -2168,9 +2181,12 @@ The Python unit layer is different: the mandated seam gates
 guarded seam has a named replacement (8.12), so each gate is ported when its seam moves.
 The gates of the emitter families (Q7) stay. This is a real, planned cost.
 
-`test_owning_binding_uses_the_router` is dropped, not ported. Its replacement is the one
-drop-placement gate that `test_scope_exit_walk_is_one` ports to, and two ports of one rule
-are two gates for one rule. Ruled 2026-10-11.
+Three of these gates are deleted on the branch (P2.13). `test_scope_exit_walk_is_one` is
+ported to `tests/unit/test_slir_drop_placement_is_one.py`, the one drop-placement gate.
+`test_method_call_dispatch_is_a_table` is ported to
+`tests/unit/test_slir_call_dispatch_is_a_table.py`. `test_owning_binding_uses_the_router` is
+dropped, not ported: its replacement is the one drop-placement gate, and two ports of one
+rule are two gates for one rule. Ruled 2026-10-11.
 
 ---
 
