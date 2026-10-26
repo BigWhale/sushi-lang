@@ -250,6 +250,9 @@ def test_the_port_templates_only_shrink():
 def test_no_port_template_row_is_new():
     grown = sorted(set(PORT_TEMPLATES) - PINNED_PORT_TEMPLATES)
     assert not grown, f"a port template row may be deleted and never added: {grown}"
+    stale = sorted(PINNED_PORT_TEMPLATES - set(PORT_TEMPLATES))
+    assert not stale, (
+        f"delete the pin row together with the port template row, or the row can return: {stale}")
 
 
 def _reaches(tree: ast.AST, names: set[str]) -> list[tuple[int, str]]:
@@ -275,8 +278,14 @@ def _reaches(tree: ast.AST, names: set[str]) -> list[tuple[int, str]]:
     return found
 
 
+def _scanned_name(where: str) -> str:
+    """The function or method that a row names: a class prefix and a nested function drop."""
+    parts = where.split(".")
+    return parts[1] if parts[0][:1].isupper() and len(parts) > 1 else parts[0]
+
+
 def test_the_slir_emitter_names_no_port_template():
-    names = {where.split(".")[0] for _path, where in PORT_TEMPLATES}
+    names = {_scanned_name(where) for _path, where in PORT_TEMPLATES}
     hits = [f"{path.relative_to(PACKAGE)}:{line} {name}"
             for path in sorted(SLIR_EMITTER.rglob("*.py"))
             for line, name in _reaches(ast.parse(path.read_text(encoding="utf-8")), names)]
@@ -291,6 +300,12 @@ def test_the_reach_scan_sees_a_table_and_a_module_attribute():
     found = _reaches(ast.parse(source), {"emit_a", "emit_b", "emit_c", "emit_d", "emit_e"})
     assert sorted(name for _line, name in found) == [
         "emit_a", "emit_b", "emit_c", "emit_d", "emit_e"]
+
+
+def test_a_method_row_is_scanned_by_its_own_name():
+    assert _scanned_name("Box.run") == "run"
+    assert _scanned_name("Box.run.inner") == "run"
+    assert _scanned_name("emit_list_push.element") == "emit_list_push"
 
 
 def test_an_owner_of_a_method_names_its_class(tmp_path):
