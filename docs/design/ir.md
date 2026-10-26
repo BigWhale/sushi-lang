@@ -1288,8 +1288,9 @@ node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership
 - each capture of a `Lambda`, from its environment layout in `LiftResults`.
 
 The receiver of a method call is not on the list yet: `TypeckResults` has no convention row
-for a receiver. The first group with method calls (A1, the built-in methods on plain
-values) adds that row, and a `nom self` receiver joins the rule.
+for a receiver. A method of the primitive family or the `string` family never consumes its
+receiver, so these two families need no row. The first family with a `nom self` method
+adds the row, and a `nom self` receiver joins the rule.
 
 **The order of the three passes.** Each SHIR pass gives the next one each body that it
 finished with no error, with the tables that `typecheck` read the body in: `typecheck`
@@ -1323,7 +1324,7 @@ too: a class with no row is an internal error at the span of the node, and the a
 construct that the pass does not check yet stops the walk of its body with the stop code
 (`borrow, <class>`). A statement of a copy of an unrolled `expand` that ends the path,
 with more statements after it in its block, stops the walk too (`borrow, Expand`): the
-group of the copies decides the statements that no path reaches. A call of a built-in method has no arm in the pass yet: it stops the walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages make this stop with the one helper `dispatch.stop_at_family`. The state of the walk
+group of the copies decides the statements that no path reaches. A call of a built-in method of the primitive family or the `string` family has its arm: it reads its receiver (a use after a move is CE2405) and then each argument by its convention row, as a call of a free function does. No method of these two families changes its receiver or consumes it (`callee_effect` has no row for them), so the receiver stays with its owner and needs no convention row. A call of a method of another family has no arm in the pass yet: it stops the walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages make this stop with the one helper `dispatch.stop_at_family`. The typecheck pass records only the callees `Free`, `Intrinsic` and `Builtin`, so a call with another callee in this pass is an internal error. The state of the walk
 (`BorrowState`, `FlowFacts`) is keyed by `LocalId`, because a hidden local has no source
 name, and a diagnostic names a local by the name of its `ShirLocal`. The pass decides the
 `Ownership` of each consuming use ONE time, with `classify()`, and one function writes the
