@@ -740,6 +740,26 @@ the tag of `Ok`, the two payload types and the `Result` of the channel. Its conv
 is `NoConversion` when the two error types are one type; with no declared conversion
 between two error types, the `??` is [CE2511](../error-catalog.md#ce2511).
 
+**A method call.** A `Call` with a `Dotted` target types its receiver first, at no
+expected type. Then the ladder of the call (`resolve_dotted`, `passes/types/calls/dotcall.py`)
+finds the callee in one order: the family of `METHOD_TYPE_REGISTRY` that claims the
+receiver and the name (the claim puts a perk implementation before a family that yields
+to it), then a perk implementation, then an extension method of the name in any unit,
+and else nothing. A call that nothing answers is [CE2008](../error-catalog.md#ce2008),
+except when the collect pass refused an extension of that name on that type. A family
+answer is the callee row `Builtin(recv, BuiltinMethod)`, and only `MethodFamily.callee`
+makes the `BuiltinMethod`, so its family is always a row of the table (gate:
+`tests/unit/test_dotcall_ladder_is_one.py`). The AST ladder put its answer in a set of
+stamps on the call node. The SHIR ladder puts each fact in a row: the callee, the method
+type arguments and the declaring unit in `ResolvedCall`, the mode of each parameter in a
+convention row, the family in `BuiltinMethod`, and the type of the receiver in the type
+row of the receiver. The convention of the receiver has no row yet (8.3). While the
+migration is in progress, the ladder types a receiver of a built-in type (a primitive or
+`string`). A receiver of another type stops the walk with `typecheck, Call(method)`, a
+perk implementation and an extension method stop it with the label of the call target
+(`Call(extension)`, `Call(stdlib method)`), and a family whose arm the pass does not have
+yet stops it with `typecheck, Call(method <family>)`.
+
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
 next body, so every unit is lowered and every earlier error is found.
