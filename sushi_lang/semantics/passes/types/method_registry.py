@@ -53,6 +53,7 @@ from sushi_lang.semantics.passes.types.arrays import ARRAY_METHOD_MODES
 from sushi_lang.semantics.foreign_memory import (
     FOREIGN_PTR_METHODS, FOREIGN_PTR_METHOD_ARITY, foreign_ptr_return_type)
 from sushi_lang.semantics.shir.callee import BuiltinMethod
+from sushi_lang.sushi_stdlib.src.collections.strings import STRING_METHOD_ARITY
 
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
@@ -263,6 +264,22 @@ class ArrayMethodInferrer:
         return None
 
 
+def string_method_return_type(validator: 'TypeValidator', method_name: str) -> Optional['Type']:
+    """The type that a built-in string method yields, from its row.
+
+    The row spells a `Maybe` and a tuple as a written type (it has no enum table), so
+    this layer interns it.
+    """
+    from sushi_lang.sushi_stdlib.src.collections.strings import (
+        is_builtin_string_method, get_builtin_string_method_return_type)
+    from sushi_lang.semantics.passes.types.utils import intern_declared_wrapper
+    if not is_builtin_string_method(method_name):
+        return None
+    ret = get_builtin_string_method_return_type(method_name, BuiltinType.STRING)
+    interned = intern_declared_wrapper(validator, ret)
+    return interned if interned is not None else ret
+
+
 @dataclass
 class StringMethodInferrer:
     """Type inferrer for string methods."""
@@ -270,15 +287,7 @@ class StringMethodInferrer:
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.sushi_stdlib.src.collections.strings import is_builtin_string_method, get_builtin_string_method_return_type
-        from sushi_lang.semantics.passes.types.utils import intern_declared_wrapper
-        if is_builtin_string_method(self.method_name):
-            ret = get_builtin_string_method_return_type(self.method_name, BuiltinType.STRING)
-            # The family table answers a Maybe as a SPELLING (it has no enum table);
-            # interning it is this layer's job.
-            interned = intern_declared_wrapper(self.validator, ret)
-            return interned if interned is not None else ret
-        return None
+        return string_method_return_type(self.validator, self.method_name)
 
 
 @dataclass
@@ -683,7 +692,7 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="array", beats_perk=True, answers=_answers_array, modes=ARRAY_METHOD_MODES,
     infer=lambda rt, call, v: ArrayMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="string", beats_perk=True, answers=_answers_string,
+    name="string", beats_perk=True, answers=_answers_string, arity=STRING_METHOD_ARITY,
     infer=lambda _receiver, call, v: StringMethodInferrer(call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="result", beats_perk=True, answers=_answers_result, arity=RESULT_METHOD_ARITY,

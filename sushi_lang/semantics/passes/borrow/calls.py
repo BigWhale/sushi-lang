@@ -21,7 +21,7 @@ from sushi_lang.semantics.param_modes import (
     CalleeKind, Convention, ParamMode, effective_modes, receiver_mode,
 )
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.shir.callee import Free, Intrinsic
+from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic
 
 from . import arms
 from .borrows import BY_ADDRESS, acquire_borrow, check_borrow, register_implicit_borrow
@@ -65,6 +65,8 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     and its call stops the walk.
     """
     resolved = checker.answers().callee_of(node.shir_id)
+    if resolved is not None and isinstance(resolved.callee, Builtin):
+        arms.stop_at_family(node, resolved.callee.method.family)
     if resolved is None or not isinstance(resolved.callee, (Free, Intrinsic)):
         arms.stop_at(checker, node)
     if any(arg.bloom for arg in node.args):

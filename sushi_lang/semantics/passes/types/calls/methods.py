@@ -1196,10 +1196,7 @@ def _validate_array_family(validator: 'TypeValidator', call: MethodCall,
 @METHOD_TYPE_REGISTRY.validator("string")
 def _validate_string_family(validator: 'TypeValidator', call: MethodCall,
                             receiver_type) -> None:
-    from sushi_lang.sushi_stdlib.src.collections.strings import (
-        validate_builtin_string_method_with_validator)
-    validate_builtin_string_method_with_validator(
-        call, receiver_type, validator.reporter, validator)
+    """The count is the arity row of the family, read before this hook runs."""
 
 
 @METHOD_TYPE_REGISTRY.validator("result")

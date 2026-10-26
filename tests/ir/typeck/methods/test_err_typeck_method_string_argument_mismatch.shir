@@ -1,0 +1,12 @@
+unit test_err_typeck_method_string_argument_mismatch
+
+ShirBody main
+  params : []
+  locals : [_0 "s": string, _1 "a": bool, _2 "p": string, _3 "t": string]
+  block  :
+    Assign(LocalRef(_0), Lit("Mostly Harmless"), is_init: true)
+    Assign(LocalRef(_1), Call(Builtin(LocalRef(_0), "starts_with"), [Lit(5)]), is_init: true)
+    Assign(LocalRef(_2), Call(Builtin(LocalRef(_0), "pad_left"), [(Lit(3), Guaranteed), Lit(4)]), is_init: true)
+    Assign(LocalRef(_3), Call(Builtin(LocalRef(_0), "sleft"), [(Lit(2), Guaranteed)]), is_init: true)
+    If(LocalRef(_1), then: [Return(Call(Builtin(LocalRef(_2), "len"), []))])
+    Return(Call(Builtin(LocalRef(_3), "len"), []))

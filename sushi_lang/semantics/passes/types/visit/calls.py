@@ -47,7 +47,8 @@ from sushi_lang.semantics.passes.types.calls.dotcall import (
     MethodRung, reject_unknown_method, resolve_dotted)
 from sushi_lang.semantics.passes.types.calls.user_defined import (
     generic_struct_takes_the_call, own_concrete_function, struct_takes_the_call)
-from sushi_lang.semantics.passes.types.method_registry import MethodFamily
+from sushi_lang.semantics.passes.types.method_registry import (
+    MethodFamily, string_method_return_type)
 from sushi_lang.semantics.passes.types.expressions import top_level_contract
 from sushi_lang.semantics.passes.types.resolution import call_yield, resolve_variable_type
 from sushi_lang.semantics.passes.types.utils import names_no_type
@@ -59,7 +60,9 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.type_predicates import is_instance_of, is_string_convertible
-from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, Type, deref_type
+from sushi_lang.semantics.typesys import (
+    BuiltinType, DynamicArrayType, ReferenceType, Type, deref_type)
+from sushi_lang.sushi_stdlib.src.collections.strings import METHOD_SPECS
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
@@ -67,6 +70,8 @@ if TYPE_CHECKING:
 
 
 PRIMITIVE_FAMILY = "primitive"
+STRING_FAMILY = "string"
+STRING_ARRAY_STOP = "string array"
 
 
 def check_call(validator: TypeValidator, node: e.Call,
@@ -137,6 +142,8 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
     validator.body_answers().record_callee(node.shir_id, ResolvedCall(callee))
     if answer.family.name == PRIMITIVE_FAMILY:
         return _check_primitive_method(validator, node, receiver, target.name, answer.family)
+    if answer.family.name == STRING_FAMILY:
+        return _check_string_method(validator, node, receiver, target.name, answer.family)
     visit.stop_at_family(node, answer.family.name)
 
 
@@ -147,6 +154,29 @@ def _check_primitive_method(validator: TypeValidator, node: e.Call, receiver: Ty
     reject_builtin_miscount(validator.reporter, node.loc, name, len(node.args),
                             f"{display_type(receiver)}.{name}", family.arity)
     return primitive_method_return_type(receiver, name)
+
+
+def _check_string_method(validator: 'TypeValidator', node: e.Call, receiver: Type,
+                         name: str, family: MethodFamily) -> Optional[Type]:
+    """A string method takes the arguments of its row and yields the type of its row.
+
+    A wrong count is CE2009 and skips the argument types; a wrong argument type is
+    CE2006 at the argument. The call yields its type after either fault. A method that
+    answers a dynamic array stops the walk, as the array values are not typed yet.
+    """
+    spec = METHOD_SPECS.get(name)
+    miscount = reject_builtin_miscount(validator.reporter, node.loc, name, len(node.args),
+                                       f"{display_type(receiver)}.{name}", family.arity)
+    if not miscount and spec is not None:
+        modes = family.modes.of(name, len(node.args)) or ()
+        declared = Parameters(node.shir_id, modes, [f"#{i}" for i in range(1, len(modes) + 1)])
+        check_arguments(validator, spec.name, spec.arg_types, node.args, node.loc,
+                        mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+                        declared=declared, also_accepts=spec.also_accepts)
+    yielded = string_method_return_type(validator, name)
+    if isinstance(yielded, DynamicArrayType):
+        visit.stop_at_family(node, STRING_ARRAY_STOP)
+    return yielded
 
 
 def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,

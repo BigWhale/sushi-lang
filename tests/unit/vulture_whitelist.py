@@ -96,8 +96,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/visibility.py", "NO_VISIBILITY", "tests/unit/test_visibility_seam_is_total.py"),
     ("sushi_lang/sushi_stdlib/src/_platform/*/net.py", "AI_CANONNAME_OFFSET",
      "tests/unit/test_net_platform_constants.py"),
-    ("sushi_lang/sushi_stdlib/src/collections/strings/__init__.py", "arg_count",
-     "tests/unit/test_string_method_rows_are_one.py"),
     ("sushi_lang/sushi_stdlib/src/io/files_funcs.py", "FILE_UTILITY_FUNCTIONS",
      "tests/unit/test_stdlib_signature_tables.py"),
     ("sushi_lang/sushi_stdlib/src/io/files_funcs.py", "get_builtin_files_function_return_type",

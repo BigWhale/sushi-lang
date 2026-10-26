@@ -5,11 +5,9 @@ from dataclasses import dataclass
 import llvmlite.ir as ir
 from llvmlite import binding as llvm
 
-from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.generics.tuples import tuple_ref
 from sushi_lang.semantics.generics.types import GenericTypeRef
 from sushi_lang.semantics.typesys import Type, BuiltinType, DynamicArrayType
-from sushi_lang.internals import errors as er
 
 from .intrinsics.utf8_count import emit_utf8_count_intrinsic
 from .intrinsics.utf8_byte_offset import emit_utf8_byte_offset_intrinsic
@@ -157,37 +155,17 @@ METHOD_SPECS = {row[0]: _spec(*row) for row in (
 # The inline intrinsics answer here, beside the rows.
 _INLINE_RETURNS = {"is_empty": _BOOL, "clone": _S}
 
+#: The argument count of each string method, from its row. An inline intrinsic takes none.
+STRING_METHOD_ARITY: dict[str, int] = {
+    **{name: spec.arg_count for name, spec in METHOD_SPECS.items()},
+    **dict.fromkeys(_INLINE_RETURNS, 0),
+}
 
-def _validate_method_signature(call: MethodCall, spec: MethodSpec, validator: Any) -> None:
-    """Measure the call against its row: the count, then every parameter's declared type."""
-    from sushi_lang.semantics.passes.types.arguments import check_arguments
-    # An AST hook with no caller since the switch: the built-in method group (A1) gives
-    # the check the SHIR arguments of the call.
-    check_arguments(validator, spec.name, spec.arg_types, call.args,  # type: ignore[arg-type]
-                    call.loc, mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                    stop_on_arity=True, also_accepts=spec.also_accepts)
 
 
 def is_builtin_string_method(method_name: str) -> bool:
     """Check if a method name is a built-in string method."""
     return method_name in METHOD_SPECS or method_name in ("is_empty", "clone")
-
-
-def validate_builtin_string_method_with_validator(call: MethodCall, string_type: BuiltinType, reporter: Any, validator: Any) -> None:
-    """Validate built-in string method calls with access to the validator for type checking."""
-    method_name = call.method
-
-    # Inline intrinsics, not in METHOD_SPECS. `clone` is the explicit deep copy and the
-    # escape from CE2411; it must not need `use <collections/strings>` (#242).
-    if method_name in ("is_empty", "clone"):
-        if len(call.args) != 0:
-            er.emit(reporter, er.ERR.CE2009, call.loc,
-                   name=f"string.{method_name}", expected=0, got=len(call.args))
-        return
-
-    spec = METHOD_SPECS.get(method_name)
-    if spec:
-        _validate_method_signature(call, spec, validator)
 
 
 def get_builtin_string_method_return_type(method_name: str, string_type: BuiltinType) -> Type | None:
