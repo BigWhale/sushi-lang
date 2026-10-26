@@ -740,6 +740,19 @@ the tag of `Ok`, the two payload types and the `Result` of the channel. Its conv
 is `NoConversion` when the two error types are one type; with no declared conversion
 between two error types, the `??` is [CE2511](../error-catalog.md#ce2511).
 
+**A cast.** The arm of `as` (`check_cast`, `passes/types/expressions.py`) answers the
+target type. A cast between two numeric types, and a cast to the type of its operand, call
+nothing: the conversion row is `NoConversion`. Any other pair is
+[CE2014](../error-catalog.md#ce2014). In the body of a conversion, a cast of the pair of
+that conversion is [CE2523](../error-catalog.md#ce2523), with a note at the conversion. Three
+casts are not typed yet, and each one stops the walk of the body with `typecheck, Cast`: a
+cast to an opaque type parameter of a template check (group C1), a cast to or from `ptr`
+(group D5), and a cast between two error types that a declared conversion joins (group D2).
+An integer literal directly under a cast to an integer type, also under a negation there,
+has the target type, and the pass does not check its range: the cast keeps the bits that
+the type holds (`300 as u8` is 44). The fold reads that operand at the target type too
+(`fold._cast`). Any other operand of a cast gets no type from its position.
+
 **A method call.** A `Call` with a `Dotted` target types its receiver first, at no
 expected type. Then the ladder of the call (`resolve_dotted`, `passes/types/calls/dotcall.py`)
 finds the callee in one order: the family of `METHOD_TYPE_REGISTRY` that claims the
@@ -772,6 +785,26 @@ walk with `typecheck, Call(method string array)`.
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
 next body, so every unit is lowered and every earlier error is found.
+
+**The label of a stop at a call.** Only `typecheck` stops on a `Call` with the kind of its
+target. One function makes the label, `construct_of` (`semantics/shir/dispatch.py`), from
+the SHIR node and from the call facts that the stop site gives it
+(`passes/types/call_facts.py`). A stage that stops on a `Call` with no facts is an internal
+error, so no stage prints a label that another stage would print in another way. The labels
+are `Call(<kind>)`: `method` (a method that no extension and no perk method of any unit
+names), `extension` (a user extension or perk method), `stdlib method` (a `public extend`
+or perk method of a bundled Sushi-source stdlib unit), `static` (a user static),
+`builtin static` (a row of `BUILTIN_STATICS`), `stdlib` (a stdlib function, also behind an
+alias), `extern` (a C function, also behind an alias, and `errno`), `alias` (a function of a
+user unit behind a `use ... as` alias), `function` (a user function), `generic` (a generic
+function, or written type arguments), `fn value` (a call through a function value) and
+`builtin` (`print`, `println`). There is no
+`Call(construction)`: a construction lowers to `StructInit` or `EnumInit`. A method call
+whose family the ladder found names the family instead and needs no facts:
+`Call(method <family>)`, made by the one helper `dispatch.stop_at_family` for every stage.
+The stop-code census of the runner (`tests/stop_census.py`) counts a stop inside a bundled
+stdlib unit in a row of its own, `<stage>, <construct> [<module>]`, from the note that names
+the module. The census reads the labels and decides nothing.
 
 `--dump-shir` prints three answers in place. The resolved callee prints in place of the
 `CallTarget` (`Call(Free(@decorate), ...)`; `println` is `Intrinsic("println")`). Each
@@ -1560,7 +1593,12 @@ parameter, whose local IS the incoming address (8.3); a value parameter is store
 slot at the entry, and `return` loads `_0`. A signature that does not agree with the
 conventions or with the type of `_0` is an internal error. `StorageLive` and `StorageDead`
 emit nothing. An operator calls the value half of its emitter family, which takes LLVM
-values (Q7), and a comparison of two strings calls the string relation of that family.
+values (Q7), and a comparison of two strings calls the string relation of that family. A
+comparison of two enums of one type calls the contract seam (`emit_contract_relation`,
+`backend/expressions/operators.py`): `==` and `!=` read the `Eq` contract, the order
+operators read the `Ord` contract, an implementation of the perk first and else the derived
+one (`emit_value_eq`, `emit_value_compare`). The operand of any other operator is an
+integer, a float or a `bool`, and any other operand type stops the emitter.
 `SwitchInt` with `otherwise: None` goes to a block that holds `unreachable`.
 
 Each family of the backend gets LLVM values and semantic types, never an AST node (Q7);
@@ -1673,6 +1711,17 @@ Constant = Int(value: int, ty: Type)
 
 Produced by the constant evaluator on the AST (ruling Q5) and carried through unchanged.
 Only the backend turns one into an `ir.Constant`.
+
+**The value that an integer literal holds.** Lowering makes the `Int` of a `Lit` at the
+type that `typecheck` gave the literal (`_constant`, `slir/lower.py`). At three positions
+the constant holds the value that its type holds, through the one integer kernel
+(`integer_ops.cast`, which the fold calls too): the operand of a `Cast` (`300 as u8` holds
+44), the operand of a negation (`-128` as an `i8`: the operand `128` holds -128), and a
+literal with a radix other than 10, which spells bits (`0xFF` as an `i8` holds -1). At those
+positions `typecheck` checks the range by its own rule: none under a cast, the negated value
+under a negation, the unsigned range of the width for a bit pattern. At every other position
+`typecheck` checked that the value is in the range of the type, so the value is carried
+unchanged. The verifier rule "a constant in range" (8.13) holds the result.
 
 ### 8.6 Statements
 
@@ -2035,6 +2084,10 @@ Runs after lowering, before the backend. It checks:
 - no `Copy` of an owning value into an `Owned` argument, except a `string` (7.9)
 - a call of a `BuiltinMethod` has a receiver operand, the first operand
 - no `Binary` carries `and` or `or` (8.9)
+- a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
+  type (a conversion is a call, never a `Cast`)
+- a constant in range: every `Int` constant holds a value in the range of its integer type
+  (8.5)
 - every `Trap` code is a registered RExxxx, with the operand count its format string needs
 - every statement and terminator carries a `Span` (G9)
 
