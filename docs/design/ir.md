@@ -758,7 +758,10 @@ migration is in progress, the ladder types a receiver of a built-in type (a prim
 `string`). A receiver of another type stops the walk with `typecheck, Call(method)`, a
 perk implementation and an extension method stop it with the label of the call target
 (`Call(extension)`, `Call(stdlib method)`), and a family whose arm the pass does not have
-yet stops it with `typecheck, Call(method <family>)`.
+yet stops it with `typecheck, Call(method <family>)`. The primitive family has its arm:
+a primitive method takes no argument (a wrong count is [CE2009](../error-catalog.md#ce2009)
+from the arity row of the family), and the call yields the type of its row in
+`PRIMITIVE_METHOD_RETURNS`. A wrong count does not stop the call from yielding that type.
 
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
