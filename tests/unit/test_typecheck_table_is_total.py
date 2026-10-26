@@ -9,7 +9,9 @@ this gate holds four rules:
 2. The table has no row for another class.
 3. A class with no row is an internal error, never a silent skip.
 4. The stop arm, the arm of a construct that the pass does not type yet, stops the body
-   with the stop code CE0155 (`typecheck, <class>`) at the span of the node.
+   with the stop code CE0155 (`typecheck, <class>`) at the span of the node. A `Call`
+   names the kind of its target too (`typecheck, Call(<kind>)`), from the call facts of
+   the pass, so the gate builds a well-formed `Call` and a validator with empty tables.
 
 These tests read Python objects and call the dispatch over a node that the test builds.
 They do not run the compiler.
@@ -18,6 +20,7 @@ from __future__ import annotations
 
 import dataclasses
 import typing
+from types import SimpleNamespace
 
 import pytest
 
@@ -25,6 +28,7 @@ from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs, patterns, stmts
+from sushi_lang.semantics.shir.ids import LocalId, ShirId
 
 _UNIONS = {"ShirStmt": stmts.ShirStmt, "ShirExpr": exprs.ShirExpr,
            "ShirPattern": patterns.ShirPattern}
@@ -43,6 +47,20 @@ def _node(cls: type, span: Span) -> object:
     fields = {each.name: None for each in dataclasses.fields(cls)}
     fields["loc"] = span
     return cls(**fields)
+
+
+def _call(span: Span) -> exprs.Call:
+    """A well-formed `Call`: a method call, with an empty argument list."""
+    local = exprs.LocalRef(ShirId(0), span, LocalId(0))
+    return exprs.Call(ShirId(1), span, exprs.Dotted(local, "len"), [])
+
+
+def _validator_with_empty_tables() -> SimpleNamespace:
+    """What the call facts of a stop read: the tables that name extension methods."""
+    return SimpleNamespace(
+        extension_table=SimpleNamespace(by_type={}),
+        generic_extension_table=SimpleNamespace(by_type={}),
+        perk_impl_table=SimpleNamespace(implementations={}, units={}))
 
 
 @pytest.mark.parametrize("union", list(_UNIONS), ids=list(_UNIONS))
@@ -76,9 +94,11 @@ def test_a_class_with_no_row_is_an_internal_error() -> None:
                          ids=lambda cls: cls.__name__)
 def test_the_stop_arm_names_the_stage_the_class_and_the_span(cls: type) -> None:
     span = Span(3, 5, 3, 9)
+    node = _call(span) if cls is exprs.Call else _node(cls, span)
+    construct = "Call(method)" if cls is exprs.Call else cls.__name__
     with pytest.raises(StageStop) as caught:
-        visit.stop_at(object(), _node(cls, span))
+        visit.stop_at(_validator_with_empty_tables(), node)
     stop = caught.value
     assert stop.code == "CE0155"
-    assert stop.params == {"stage": "typecheck", "construct": cls.__name__}
+    assert stop.params == {"stage": "typecheck", "construct": construct}
     assert stop.span == span

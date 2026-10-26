@@ -80,7 +80,7 @@ def test_a_class_with_no_row_is_an_internal_error_at_its_span() -> None:
     assert caught.value.span == span
 
 
-@pytest.mark.parametrize("cls", sorted(_classes(), key=lambda cls: cls.__name__),
+@pytest.mark.parametrize("cls", sorted(_classes() - {exprs.Call}, key=lambda cls: cls.__name__),
                          ids=lambda cls: cls.__name__)
 def test_the_stop_arm_names_the_stage_the_class_and_the_span(cls: type) -> None:
     span = Span(3, 5, 3, 9)
@@ -90,6 +90,17 @@ def test_the_stop_arm_names_the_stage_the_class_and_the_span(cls: type) -> None:
     assert stop.code == "CE0155"
     assert stop.params == {"stage": "borrow", "construct": cls.__name__}
     assert stop.span == span
+
+
+def test_the_borrow_pass_never_stops_at_a_call() -> None:
+    """A `Call` stop names the kind of its target, and only the typecheck pass has the call
+    facts for that. The borrow table has a checking arm for `Call`, and a stop at one with
+    no facts is an internal error, never a label that the typecheck pass would not print."""
+    with pytest.raises(InternalCompilerError) as caught:
+        arms.stop_at(object(), _node(exprs.Call, Span(3, 5, 3, 9)))
+    assert not isinstance(caught.value, StageStop)
+    assert caught.value.code == "CE0000"
+    assert arms.ARMS[exprs.Call] is not arms.stop_at
 
 
 @pytest.mark.parametrize("module", [arms, visit], ids=["borrow", "typecheck"])

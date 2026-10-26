@@ -10,12 +10,12 @@ the node. For a `Call`, it names the kind of the target too (`construct_of`).
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, NoReturn, Optional, Protocol
+from typing import Any, Callable, Mapping, NoReturn, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.shir.ids import DeclId
+from sushi_lang.semantics.call_facts import CallFacts
 from sushi_lang.semantics.statics import is_builtin_static
 from sushi_lang.semantics.stdlib_registry import is_source_stdlib_module
 
@@ -29,32 +29,6 @@ def arm_of(arms: Mapping[type, Callable[..., Any]], node: object,
             "CE0000", span=getattr(node, "loc", None),
             detail=f"the {stage} pass has no arm for the SHIR class '{type(node).__name__}'")
     return arm
-
-
-class CallFacts(Protocol):
-    """What the stop site of a `Call` knows, so that the label separates the groups.
-
-    The typecheck pass answers it from its declaration names and its tables. It decides
-    nothing: `construct_of` is the one place that turns the facts into a label.
-    """
-
-    def written_name(self, decl: DeclId) -> str:
-        """The written name of the declaration that a `GlobalRef` names."""
-
-    def declaring_units(self, name: str) -> frozenset[Optional[str]]:
-        """The units that declare an extension method or a perk method with this name."""
-
-    def namespace_kind(self, alias: str, name: str) -> Optional[str]:
-        """The kind of the namespace behind `alias` that holds `name`, or None."""
-
-    def is_generic_function(self, name: str) -> bool:
-        """Whether a bare `name` calls a generic function."""
-
-    def is_stdlib_function(self, name: str) -> bool:
-        """Whether a bare `name` calls a stdlib function."""
-
-    def is_extern_function(self, name: str) -> bool:
-        """Whether a bare `name` calls a C function with no namespace."""
 
 
 def construct_of(node: Any, facts: Optional[CallFacts] = None) -> str:
