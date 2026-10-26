@@ -1323,7 +1323,7 @@ too: a class with no row is an internal error at the span of the node, and the a
 construct that the pass does not check yet stops the walk of its body with the stop code
 (`borrow, <class>`). A statement of a copy of an unrolled `expand` that ends the path,
 with more statements after it in its block, stops the walk too (`borrow, Expand`): the
-group of the copies decides the statements that no path reaches. The state of the walk
+group of the copies decides the statements that no path reaches. A call of a built-in method has no arm in the pass yet: it stops the walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages make this stop with the one helper `dispatch.stop_at_family`. The state of the walk
 (`BorrowState`, `FlowFacts`) is keyed by `LocalId`, because a hidden local has no source
 name, and a diagnostic names a local by the name of its `ShirLocal`. The pass decides the
 `Ownership` of each consuming use ONE time, with `classify()`, and one function writes the
