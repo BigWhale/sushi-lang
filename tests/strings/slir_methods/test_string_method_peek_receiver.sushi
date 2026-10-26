@@ -1,0 +1,13 @@
+# EXPECT_STDOUT_EXACT: "MOSTLY HARMLESS 15\n"
+# EXPECT_NO_LEAKS
+#
+# A `peek string` parameter is the receiver of a string method.
+
+fn shout(peek string s) string:
+    return s.upper()
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let string loud = shout(peek s)
+    println("{loud} {s.len()}")
+    return 0

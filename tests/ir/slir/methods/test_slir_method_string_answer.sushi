@@ -1,4 +1,5 @@
 # EXPECT_DUMP_SLIR: test_slir_method_string_answer.slir
+# EXPECT_RUNTIME_EXIT: 15
 #
 # A string method that answers a string writes it into a fresh local that owns it. The drop
 # of that local comes from the drop placement. The receiver is the first operand, and an

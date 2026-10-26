@@ -1,0 +1,13 @@
+# EXPECT_STDOUT_EXACT: "Mostly Harmless 15 false\n"
+# EXPECT_NO_LEAKS
+#
+# A `poke string` parameter is the receiver of a string method.
+
+fn measure(poke string s) i32:
+    return s.trim().len()
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let i32 n = measure(poke s)
+    println("{s} {n} {s.is_empty()}")
+    return 0

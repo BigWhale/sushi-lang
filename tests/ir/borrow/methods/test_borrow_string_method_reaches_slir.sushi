@@ -1,4 +1,5 @@
 # EXPECT_DUMP_SLIR: test_borrow_string_method_reaches_slir.slir
+# EXPECT_RUNTIME_EXIT: 20
 #
 # A string method and a primitive method read their receiver and their arguments, and the
 # borrow pass finishes the body with no error. The SLIR lowering makes each call a `Call`

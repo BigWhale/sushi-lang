@@ -523,6 +523,7 @@ tests/ir/borrow/control_flow/test_err_borrow_move_before_a_rebind.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_before_break.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_in_both_arms.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_in_one_arm.sushi
+tests/ir/borrow/methods/test_borrow_string_method_reaches_slir.sushi
 tests/ir/borrow/methods/test_err_borrow_method_argument_after_move.sushi
 tests/ir/borrow/methods/test_err_borrow_method_receiver_after_move.sushi
 tests/ir/borrow/straight/test_err_borrow_beside_a_poke_of_a_constant.sushi
@@ -569,6 +570,8 @@ tests/ir/slir/control_flow/test_slir_while_short_circuit.sushi
 tests/ir/slir/conventions/test_slir_conventions.sushi
 tests/ir/slir/interp/test_slir_interp.sushi
 tests/ir/slir/let_rebind/test_slir_let_rebind.sushi
+tests/ir/slir/methods/test_slir_method_string_answer.sushi
+tests/ir/slir/methods/test_slir_method_temporary_receiver.sushi
 tests/ir/slir/move_rebind/test_slir_move_rebind_move.sushi
 tests/ir/slir/move_rebind/test_slir_move_rebind_return.sushi
 tests/ir/slir/move_rebind/test_slir_move_rebind_use.sushi
@@ -1115,6 +1118,7 @@ tests/stdlib/net/verbs/test_err_ip_prefixed_names_are_gone.sushi
 tests/stdlib/slib/read_failure/test_err_slib_library_is_a_directory.sushi
 tests/strings/basics/test_string_assignment.sushi
 tests/strings/basics/test_string_comparison.sushi
+tests/strings/basics/test_string_is_empty.sushi
 tests/strings/basics/test_string_literal.sushi
 tests/strings/basics/test_string_println.sushi
 tests/strings/interpolation/test_interpolation_arithmetic.sushi
@@ -1132,11 +1136,19 @@ tests/strings/interpolation_refusal/test_err_empty_interpolation.sushi
 tests/strings/interpolation_refusal/test_err_interp_bad_expr.sushi
 tests/strings/interpolation_refusal/test_err_interpolation_blank.sushi
 tests/strings/interpolation_refusal/test_err_unterminated_interpolation.sushi
+tests/strings/join_arg_type/test_err_join_string_argument.sushi
 tests/strings/method_arguments/test_err_string_methods.sushi
+tests/strings/method_arguments/test_err_string_methods_arg_count.sushi
 tests/strings/method_arguments/test_err_string_methods_arg_types.sushi
+tests/strings/method_arguments/test_err_string_methods_args.sushi
 tests/strings/method_arguments/test_err_string_methods_types.sushi
 tests/strings/print_to_str_temporary/test_print_number_to_str.sushi
 tests/strings/print_to_str_temporary/test_println_number_to_str.sushi
+tests/strings/print_to_str_temporary/test_println_to_str_as_argument.sushi
+tests/strings/slir_methods/test_string_method_answer_as_argument.sushi
+tests/strings/slir_methods/test_string_method_peek_receiver.sushi
+tests/strings/slir_methods/test_string_method_poke_receiver.sushi
+tests/strings/slir_methods/test_string_method_search_family.sushi
 tests/strings/to_str_on_string/test_to_str_of_literal_local.sushi
 tests/tuples/match_patterns/test_err_tuple_pattern_poke_in_payload.sushi
 tests/tuples/refusals/test_err_tuple_cast.sushi

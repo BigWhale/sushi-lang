@@ -1,4 +1,5 @@
 # EXPECT_DUMP_SLIR: test_slir_method_temporary_receiver.slir
+# EXPECT_RUNTIME_EXIT: 30
 #
 # The receiver of a method call can be a literal, the answer of another method call or the
 # answer of a function call. Each one is a temporary that the call borrows, and the drop

@@ -10,6 +10,7 @@ from typing import Callable
 
 from llvmlite import ir
 
+from sushi_lang.backend.expressions.calls.stdlib.strings import emit_stdlib_string_call
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import operand_value, type_of_operand
 from sushi_lang.semantics.shir.callee import BuiltinMethod
@@ -34,9 +35,18 @@ def _primitive(state: FunctionState, method: BuiltinMethod,
     return entry.llvm_emitter(state.codegen, values[1:], values[0], values[0].type)
 
 
+def _string(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
+    """A method of `string`, through the one emitter of the string family."""
+    if not statement.args:
+        state.fault(f"the call of '{method.name}' has no receiver")
+    values = [operand_value(state, operand) for operand, _ in statement.args]
+    return emit_stdlib_string_call(state.codegen, method.name, values[0], values[1:])
+
+
 #: One row for each family that the emitter handles, by the name of the family.
 METHOD_FAMILIES: dict[str, Callable[[FunctionState, BuiltinMethod, st.Call], ir.Value]] = {
     "primitive": _primitive,
+    "string": _string,
 }
 
 
