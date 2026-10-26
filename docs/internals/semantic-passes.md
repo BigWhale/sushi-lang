@@ -1172,8 +1172,10 @@ channel's. The same type propagates unchanged; otherwise `find_conversion`
 row of the `Try` in `TypeckResults`, beside its facts (the tag of `Ok`, the two payload
 types, the `Result` of the channel); a `??` across two error types that a conversion joins
 is not typed on SHIR yet, and stops the walk of its body. The backend calls the
-conversion before the scope cleanup of the propagation path. `validate_cast_expression` asks the same question for
-`e as T` (`CastExpr.inferred_conversion`, else [`CE2014`](../error-catalog.md#ce2014)). In the check of a template, an
+conversion before the scope cleanup of the propagation path. `check_cast` asks the same question for
+`e as T`: a numeric cast and an identity cast have the conversion row `NoConversion`, a cast
+that a conversion joins stops the walk of its body, and any other pair is
+[`CE2014`](../error-catalog.md#ce2014). In the check of a template, an
 opaque `E` has no conversion: `??` propagates the same `E` and no other ([`CE2511`](../error-catalog.md#ce2511) with a
 note at `E`, ruling R8). Each instance asks again on its own copy of the node, where E3
 also stays.
