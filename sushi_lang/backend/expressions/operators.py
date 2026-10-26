@@ -47,6 +47,19 @@ def emit_string_relation(codegen: 'LLVMCodegen', op: str, lhs: ir.Value,
     return codegen.runtime.strings.emit_string_order(op, lhs, rhs)
 
 
+def emit_contract_relation(codegen: 'LLVMCodegen', op: str, lhs: ir.Value, rhs: ir.Value,
+                           ty: 'Type') -> ir.Value:
+    """The i1 answer of a comparison of two values of one struct, enum or container type:
+    `==` and `!=` read the `Eq` contract, the order operators read the `Ord` contract."""
+    from sushi_lang.backend.types.contracts import emit_value_compare, emit_value_eq
+    if op == "==":
+        return emit_value_eq(codegen, lhs, rhs, ty)
+    if op == "!=":
+        return codegen.builder.not_(emit_value_eq(codegen, lhs, rhs, ty))
+    order = emit_value_compare(codegen, lhs, rhs, ty)
+    return codegen.builder.icmp_signed(op, order, ir.Constant(order.type, 0))
+
+
 def emit_number_comparison(codegen: 'LLVMCodegen', op: str, lhs: ir.Value, rhs: ir.Value,
                            operand_type: 'Optional[Type]') -> ir.Value:
     """The i1 answer of a comparison of two numbers of one type.

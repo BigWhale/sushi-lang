@@ -561,7 +561,24 @@ def test_a_cast_between_numeric_types_or_of_one_type_passes(source: Type, target
 
 
 def test_a_cast_of_a_numeric_constant_passes():
-    _passes(_cast_of(p.Const(k.Int(300, U8)), I32, I32))
+    _passes(_cast_of(p.Const(k.Int(255, U8)), I32, I32))
+
+
+@pytest.mark.parametrize("value, ty", [
+    (255, U8), (0, U8), (-128, BuiltinType.I8), (127, BuiltinType.I8),
+    (65535, BuiltinType.U16), (-32768, BuiltinType.I16), (4294967295, BuiltinType.U32),
+    (-(1 << 63), I64), ((1 << 64) - 1, BuiltinType.U64),
+], ids=str)
+def test_an_integer_constant_in_the_range_of_its_type_passes(value: int, ty: Type):
+    _passes(_cast_of(p.Const(k.Int(value, ty)), ty, ty))
+
+
+@pytest.mark.parametrize("value, ty", [
+    (300, U8), (-1, U8), (128, BuiltinType.I8), (65536, BuiltinType.U16),
+    (-32769, BuiltinType.I16), (4294967296, BuiltinType.U32), (1 << 63, I64),
+], ids=str)
+def test_an_integer_constant_out_of_the_range_of_its_type_is_refused(value: int, ty: Type):
+    _refused(_cast_of(p.Const(k.Int(value, ty)), ty, ty, BAD), "a constant in range")
 
 
 @pytest.mark.parametrize("source, target", [

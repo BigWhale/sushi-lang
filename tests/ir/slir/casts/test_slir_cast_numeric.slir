@@ -29,7 +29,7 @@ fn main() -> i32 {
     StorageLive(_2)
     _2 = copy _1 as u8
     StorageLive(_3)
-    _3 = const 300_u8 as u8
+    _3 = const 44_u8 as u8
     StorageLive(_4)
     _4 = call @widen(copy _1 @guaranteed)
     StorageLive(_5)

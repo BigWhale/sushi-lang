@@ -40,6 +40,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import REGISTRY, Category
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
+from sushi_lang.semantics.integer_width import fits_integer_type, integer_range
 from sushi_lang.semantics.param_modes import Convention, declared_modes
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
@@ -74,6 +75,7 @@ CONVENTIONS = "declared conventions"
 OWNED_COPY = "no copy of an owning value into an owned argument"
 SHORT_CIRCUIT = "no short circuit in a binary"
 NUMERIC_CAST = "a numeric cast"
+CONSTANT_RANGE = "a constant in range"
 TRAP = "registered trap"
 SPANS = "spans"
 
@@ -255,10 +257,18 @@ class _Check:
 
     def operand(self, operand: p.Operand, span: Span) -> None:
         if isinstance(operand, p.Const):
+            self.constant(operand.constant, span)
             return
         typed = self.place(operand.place, span)
         if isinstance(operand, p.Move) and isinstance(typed.root, p.Global):
             self.fail(GLOBAL_MOVE, f"{show(operand)} takes the value of a global", span)
+
+    def constant(self, constant: k.Constant, span: Span) -> None:
+        """An integer constant holds a value that its type can hold."""
+        if isinstance(constant, k.Int) and integer_range(constant.ty) is not None \
+                and not fits_integer_type(constant.value, constant.ty):
+            self.fail(CONSTANT_RANGE, f"{constant.value} is out of the range of "
+                                      f"{display_type(constant.ty)}", span)
 
     def rvalue(self, value: r.Rvalue, span: Span) -> None:
         if isinstance(value, r.Binary) and value.op in ("and", "or"):

@@ -3,7 +3,7 @@
 An operator calls the emitter of the old backend that takes LLVM values (ruling Q7), so the
 integer and the float rules stay in one place, and the backend folds nothing
 (`semantics/integer_ops.py` is the one compile-time home). An rvalue over a type that is
-not an integer, a float or a `bool` stops with the class of the rvalue.
+not an integer, a float, a `bool` or an enum comparison stops with the class of the rvalue.
 
 An enum is `{i32 tag, [K x i64] data}`. The tag, a variant and the address of a payload
 field come from the one layout authority (`TypeSizing.payload_field_offsets`, read through
@@ -21,7 +21,7 @@ from sushi_lang.backend.expressions.casts import emit_value_cast
 from sushi_lang.backend.expressions.enums import emit_enum_variant_value
 from sushi_lang.backend.expressions.literals import emit_int_constant
 from sushi_lang.backend.expressions.operators import (
-    emit_arithmetic, emit_bitwise, emit_number_comparison, emit_string_relation,
+    emit_arithmetic, emit_bitwise, emit_contract_relation, emit_number_comparison, emit_string_relation,
     emit_unary_value, emit_xor,
 )
 from sushi_lang.backend.slir.state import FunctionState
@@ -145,6 +145,11 @@ def _binary(state: FunctionState, rvalue: r.Binary) -> ir.Value:
         answer = emit_string_relation(codegen, rvalue.op, operand_value(state, rvalue.left),
                                       operand_value(state, rvalue.right))
         return state.builder.zext(answer, codegen.types.ll_type(BuiltinType.BOOL))
+    if _is_contract_relation(state, rvalue):
+        answer = emit_contract_relation(codegen, rvalue.op, operand_value(state, rvalue.left),
+                                        operand_value(state, rvalue.right),
+                                        type_of_operand(state, rvalue.left))
+        return state.builder.zext(answer, codegen.types.ll_type(BuiltinType.BOOL))
     ty = _scalar_type(state, rvalue, type_of_operand(state, rvalue.left))
     _scalar_type(state, rvalue, type_of_operand(state, rvalue.right))
     left = operand_value(state, rvalue.left)
@@ -167,6 +172,13 @@ def _is_string_relation(state: FunctionState, rvalue: r.Binary) -> bool:
     return (rvalue.op in COMPARISON_OPS
             and type_of_operand(state, rvalue.left) == BuiltinType.STRING
             and type_of_operand(state, rvalue.right) == BuiltinType.STRING)
+
+
+def _is_contract_relation(state: FunctionState, rvalue: r.Binary) -> bool:
+    """A comparison of two enums of one type, which reads the derived or implemented contract."""
+    left = type_of_operand(state, rvalue.left)
+    return (rvalue.op in COMPARISON_OPS and isinstance(left, EnumType)
+            and left == type_of_operand(state, rvalue.right))
 
 
 def _unary(state: FunctionState, rvalue: r.Unary) -> ir.Value:

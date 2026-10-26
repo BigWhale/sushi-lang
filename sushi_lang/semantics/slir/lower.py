@@ -50,7 +50,9 @@ from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import ExtendDef, FuncDef
 from sushi_lang.semantics.channel import channel_result, has_channel
+from sushi_lang.semantics import integer_ops
 from sushi_lang.semantics.drop_set import drop_type_names
+from sushi_lang.semantics.integer_width import fits_integer_type, integer_range
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.param_modes import Convention
@@ -773,8 +775,15 @@ def _constant(lit: e.Lit, typeck: TypeckResults) -> k.Constant:
     if ty is None:
         er.raise_internal_error("CE0000", span=lit.loc, detail="a literal with no type reached SLIR")
     if isinstance(value, e.IntConst):
-        return k.Int(value.value, ty)
+        return k.Int(_held(value.value, ty), ty)
     return k.Float(value.value, ty)
+
+
+def _held(value: int, ty: Type) -> int:
+    """The value that a literal holds at its type. A literal that a cast gave the target type
+    holds what the cast gives (`300 as u8` holds 44); one that fits is unchanged."""
+    return value if fits_integer_type(value, ty) or integer_range(ty) is None \
+        else integer_ops.cast(value, ty)
 
 
 def _symbol(decl: object, home: Optional[str], body: ShirBody) -> str:

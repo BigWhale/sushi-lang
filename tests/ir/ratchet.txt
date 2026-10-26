@@ -894,6 +894,7 @@ tests/operators/deep_operator_nests/test_deep_negation_nest.sushi
 tests/operators/deep_operator_nests/test_deep_sum_nest.sushi
 tests/operators/deep_operator_nests/test_err_deep_nest_inner_overflow.sushi
 tests/operators/deep_operator_nests/test_err_deep_nest_two_overflows.sushi
+tests/operators/eq_derived/test_enum_eq.sushi
 tests/operators/logical_evaluation/test_logical.sushi
 tests/operators/logical_evaluation/test_logical_aliases.sushi
 tests/operators/logical_evaluation/test_logical_xor.sushi
@@ -1210,6 +1211,7 @@ tests/types/numeric_widths/test_same_type_int_operations.sushi
 tests/types/numeric_widths/test_same_type_small_integers.sushi
 tests/types/numeric_widths/test_same_type_unsigned_operations.sushi
 tests/types/numeric_widths/test_u64_println.sushi
+tests/types/numeric_widths/test_widths_i16_u16_u32.sushi
 tests/types/primitive_types/test_types_bool.sushi
 tests/types/primitive_types/test_types_f32.sushi
 tests/types/primitive_types/test_types_f64.sushi
