@@ -314,6 +314,7 @@ tests/extensions/visibility/leak/test_err_ev_leak_private_target.sushi
 tests/extensions/visibility/r2_import_brings_names/test_err_ev_r2_alias_brings_no_flat_type.sushi
 tests/extensions/visibility/r2_import_brings_names/test_err_ev_r2_string_builder_needs_import.sushi
 tests/extensions/visibility/r3_stdlib_types/test_err_ev_r3_hashmap_needs_import.sushi
+tests/extensions/visibility/r4_private_extension/test_err_ev_r4_undeclared_method.sushi
 tests/extensions/visibility/r8_perk_impl/test_err_ev_r8_public_on_perk_method.sushi
 tests/extensions/visibility/r9_syntax/test_err_ev_r9_public_on_conversion.sushi
 tests/extensions/visibility/r9_syntax/test_err_ev_r9_public_on_perk_impl.sushi
@@ -390,6 +391,7 @@ tests/functions/bare_functions/test_bare_recursive_function.sushi
 tests/functions/bare_functions/test_err_bare_function_value_reaches_its_end.sushi
 tests/functions/bare_functions/test_err_main_with_result_return.sushi
 tests/functions/bare_functions/test_err_main_with_std_error_channel.sushi
+tests/functions/bare_functions/test_err_realise_on_bare_call.sushi
 tests/functions/bare_functions/test_err_result_err_in_bare_function.sushi
 tests/functions/bare_functions/test_err_result_ok_in_bare_function.sushi
 tests/functions/bare_functions/test_err_try_in_bare_function.sushi
@@ -599,6 +601,11 @@ tests/ir/typeck/control_flow/test_err_typeck_if_elif_else.sushi
 tests/ir/typeck/control_flow/test_err_typeck_while.sushi
 tests/ir/typeck/literals/test_err_typeck_literal_context.sushi
 tests/ir/typeck/literals/test_err_typeck_literal_default.sushi
+tests/ir/typeck/methods/test_err_typeck_method_receiver_error.sushi
+tests/ir/typeck/methods/test_err_typeck_method_spread.sushi
+tests/ir/typeck/methods/test_err_typeck_method_unknown_on_call.sushi
+tests/ir/typeck/methods/test_err_typeck_method_unknown_on_literal.sushi
+tests/ir/typeck/methods/test_err_typeck_method_unknown_on_string.sushi
 tests/ir/typeck/names/test_err_typeck_alias_private_const.sushi
 tests/ir/typeck/names/test_err_typeck_const_ref.sushi
 tests/ir/typeck/operators/test_err_typeck_arithmetic.sushi
@@ -644,6 +651,8 @@ tests/libs/bare_functions/test_err_lib_binary_bare_call_is_no_result.sushi
 tests/libs/bare_functions/test_err_lib_source_bare_call_is_no_result.sushi
 tests/libs/bento_package/test_lib_bento_package.sushi
 tests/libs/consumer_generics/test_err_lib_generic_struct_constraint.sushi
+tests/libs/kept_private/test_err_lib_kept_concrete.sushi
+tests/libs/kept_private/test_err_lib_kept_generic.sushi
 tests/libs/library_dependencies/test_err_lib_dep_binary_over_source_plain_use_gives_no_name.sushi
 tests/libs/library_dependencies/test_err_lib_dep_binary_two_versions_of_one_library.sushi
 tests/libs/library_dependencies/test_err_lib_dep_hybrid_over_source_plain_use_gives_no_name.sushi
@@ -1040,6 +1049,9 @@ tests/perks/unreached_concrete_impl_header/test_err_perk_concrete_conflict_unrea
 tests/perks/unreached_concrete_impl_header/test_err_perk_concrete_contract_unreached.sushi
 tests/perks/variadic_in_impl/test_err_perk_impl_generic_target_variadic.sushi
 tests/perks/variadic_in_impl/test_err_perk_impl_native_variadic.sushi
+tests/primitives/bit_ops/test_err_bit_ops_on_bare_literal.sushi
+tests/primitives/bit_ops/test_err_bit_ops_on_f64.sushi
+tests/primitives/bit_ops/test_err_bit_ops_on_i32.sushi
 tests/references/bare_mode_param/test_err_bare_nom_name_is_not_a_receiver.sushi
 tests/references/bare_mode_param/test_err_bare_poke_name_is_not_a_receiver.sushi
 tests/references/borrow_of_constant/test_err_borrow_constant.sushi
@@ -1162,6 +1174,7 @@ tests/types/finite_types/test_err_infinite_struct_self.sushi
 tests/types/finite_types/test_err_mixed_cycle_starts_at_the_struct.sushi
 tests/types/finite_types/test_err_struct_field_enum_payload_cycle.sushi
 tests/types/finite_types/test_run_recursive_struct_own.sushi
+tests/types/float_bits/test_err_to_bits_int.sushi
 tests/types/float_rebind/test_f32_local.sushi
 tests/types/float_rebind/test_f64_local.sushi
 tests/types/float_rebind/test_f64_param_copy.sushi

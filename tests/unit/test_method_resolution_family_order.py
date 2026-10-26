@@ -22,6 +22,7 @@ from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGIST
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 VALIDATION = SOURCE_ROOT / "semantics" / "passes" / "types" / "calls" / "methods.py"
+SHIR_LADDER = SOURCE_ROOT / "semantics" / "passes" / "types" / "calls" / "dotcall.py"
 
 # The canonical family order, highest priority first.
 CANONICAL_ORDER = [
@@ -88,3 +89,19 @@ def test_the_dispatcher_asks_the_rungs_in_that_order():
     """And the dispatcher reads them so: perk, the table's second half, extension."""
     assert _family_order(VALIDATION, LADDER_MARKERS, scope=VALIDATION_SCOPE) == [
         "PERK", "FAMILIES_AFTER_PERK", "EXTENSION"]
+
+
+# The ladder over SHIR (docs/design/ir.md 7.3): the claim of the table, which puts a perk
+# implementation between the two halves of the table, then the perk rung, then the
+# extension rung.
+SHIR_MARKERS = {
+    "FAMILIES": r"METHOD_TYPE_REGISTRY\.claim\(",
+    "PERK": r"perk_impl_table\.get_method\(",
+    "EXTENSION": r"declaring_units\(",
+}
+
+
+def test_the_shir_ladder_asks_the_rungs_in_that_order():
+    """The SHIR ladder reads the same order: the table, the perk, the extension."""
+    assert _family_order(SHIR_LADDER, SHIR_MARKERS, scope="def resolve_dotted(") == [
+        "FAMILIES", "PERK", "EXTENSION"]

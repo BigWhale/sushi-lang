@@ -15,7 +15,10 @@ from sushi_lang.semantics.typesys import Type
 
 @dataclass(frozen=True, slots=True)
 class BuiltinMethod:
-    """A method of a row of `METHOD_TYPE_REGISTRY`: the family, and the method name."""
+    """A method of a row of `METHOD_TYPE_REGISTRY`: the family, and the method name.
+
+    `MethodFamily.callee` makes it, so the family is a row of the table (gate:
+    `tests/unit/test_dotcall_ladder_is_one.py`)."""
     family: str
     name: str
 

@@ -48,6 +48,7 @@ from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY, OWN_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY, RESULT_METHOD_MODES
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import BuiltinModes
+from sushi_lang.semantics.shir.callee import BuiltinMethod
 from sushi_lang.semantics.passes.types.arrays import ARRAY_METHOD_MODES
 from sushi_lang.semantics.foreign_memory import (
     FOREIGN_PTR_METHODS, FOREIGN_PTR_METHOD_ARITY, foreign_ptr_return_type)
@@ -109,6 +110,11 @@ class MethodFamily:
     validate: Optional[ValidateHook] = None
     arity: Mapping[str, int] = field(default_factory=lambda: MappingProxyType({}))
     modes: BuiltinModes = field(default_factory=BuiltinModes)
+
+    def callee(self, method_name: str) -> BuiltinMethod:
+        """The method of this family as a callee of SHIR (docs/design/ir.md 7.6). The one
+        maker of a `BuiltinMethod`, so its family is always a row of the table."""
+        return BuiltinMethod(self.name, method_name)
 
     def claims(self, receiver_type: 'Type', method_name: str,
                validator: 'TypeValidator') -> bool:

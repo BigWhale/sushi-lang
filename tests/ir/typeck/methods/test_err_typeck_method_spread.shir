@@ -1,0 +1,15 @@
+unit test_err_typeck_method_spread
+
+ShirBody count
+  params : [(_0 "parts": i32[], Guaranteed)]
+  locals : [_1 "n": i32, _2 "m": i32]
+  block  :
+    Assign(LocalRef(_1), Lit(7), is_init: true)
+    Assign(LocalRef(_2), Call(Dotted(LocalRef(_1), "nowhere"), [LocalRef(_0)...]), is_init: true)
+    Return(LocalRef(_2))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))

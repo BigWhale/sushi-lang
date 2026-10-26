@@ -13,9 +13,15 @@ A `Call` answers what its callee yields. Its written target decides the callee:
   fault of its own.
 - `BuiltinFn` is `print` or `println` (`Intrinsic`): one argument with a string form, which
   the intrinsic reads (`Guaranteed`). Its display type is an answer.
+- `Dotted` is a method call. The receiver is typed first, and the ladder of the call
+  (`calls/dotcall.py:resolve_dotted`) finds the callee: a built-in family, a perk
+  implementation, an extension method, or nothing (CE2008). A family answer is the callee
+  row `Builtin`. A method is never variadic, so a bloom argument is CE0120.
 
-Every other target, and a free call that another group types (a generic function, a
-stdlib function, a C function, a variadic function), stops the walk of its body.
+Every other target, and a call that another group types (a generic function, a stdlib
+function, a C function, a variadic function, a method of a receiver that is not of a
+built-in type, a perk method, an extension method, a family with no arm yet), stops the
+walk of its body.
 
 An `Interp` is a `string`, and each hole has a string form; the display type of each hole
 is an answer. A `Borrow` (`peek x`, `poke x` outside a call argument) is a value of a
@@ -33,7 +39,10 @@ from sushi_lang.semantics.generics.opaque import explain_unpromised
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import Convention, declared_modes, param_mode
 from sushi_lang.semantics.passes.types import visit
-from sushi_lang.semantics.passes.types.arguments import Parameters, check_arguments
+from sushi_lang.semantics.passes.types.arguments import (
+    Parameters, check_arguments, reject_misplaced_spread)
+from sushi_lang.semantics.passes.types.calls.dotcall import (
+    MethodRung, reject_unknown_method, resolve_dotted)
 from sushi_lang.semantics.passes.types.calls.user_defined import (
     generic_struct_takes_the_call, own_concrete_function, struct_takes_the_call)
 from sushi_lang.semantics.passes.types.expressions import top_level_contract
@@ -44,7 +53,7 @@ from sushi_lang.semantics.passes.types.visibility import (
     reject_private_call, reject_private_kept_call, type_name_is_contested)
 from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.shir.callee import Free, Intrinsic
+from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.type_predicates import is_instance_of, is_string_convertible
 from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, Type, deref_type
@@ -59,6 +68,8 @@ def check_call(validator: TypeValidator, node: e.Call,
     target = node.target
     if isinstance(target, e.BuiltinFn):
         return _check_print(validator, node, target.name)
+    if isinstance(target, e.Dotted):
+        return _check_method_call(validator, node, target)
     if (isinstance(target, e.Named) and isinstance(target.ref, e.GlobalRef)
             and not target.type_args):
         return _check_free_call(validator, node, target.ref)
@@ -89,6 +100,33 @@ def _check_free_call(validator: TypeValidator, node: e.Call,
     check_arguments(validator, written, params, node.args, ref.loc,
                     mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009, declared=declared)
     return call_yield(validator, sig.ret_type, sig.err_type)
+
+
+def _check_method_call(validator: TypeValidator, node: e.Call,
+                       target: e.Dotted) -> Optional[Type]:
+    """`x.f(args)`: the receiver, then the callee that the ladder finds (ir.md 7.3).
+
+    A perk implementation and an extension method stop the walk (C6, A10), and so does a
+    family until the pass has its arm.
+    """
+    refused = [reject_misplaced_spread(validator, arg) for arg in node.args]
+    if any(refused):
+        return None
+    received = visit.check_expr(validator, target.recv)
+    if received is None:
+        return None
+    receiver = deref_type(received)
+    if not isinstance(receiver, BuiltinType):
+        visit.stop_at(validator, node)
+    answer = resolve_dotted(validator, receiver, target.name)
+    if answer.rung is MethodRung.UNANSWERED:
+        reject_unknown_method(validator, receiver, target.name, node.loc)
+        return None
+    if answer.family is None:
+        visit.stop_at(validator, node)
+    callee = Builtin(target.recv, answer.family.callee(target.name))
+    validator.body_answers().record_callee(node.shir_id, ResolvedCall(callee))
+    visit.stop_at_family(node, answer.family.name)
 
 
 def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,

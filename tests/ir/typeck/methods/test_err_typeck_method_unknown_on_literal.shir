@@ -1,0 +1,8 @@
+unit test_err_typeck_method_unknown_on_literal
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Dotted(Lit(0x80), "trailing_zeros"), []), Guaranteed)]))
+    Return(Lit(0))

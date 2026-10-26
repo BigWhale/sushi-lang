@@ -544,7 +544,7 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
     def visit_dotcall(self, node: DotCall) -> Optional[Type]:
         """Infer dot-call type and annotate node with inferred return type."""
         from sushi_lang.semantics.passes.types.calls.dotcall import (
-            DotCallKind, copy_callee_stamps, resolve_dotcall)
+            DotCallKind, resolve_dotcall)
 
         target = resolve_dotcall(self.type_validator, node)
 
@@ -558,7 +558,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         inferred_type = self._method_call_type(target.method_call, target.receiver_type)
         if inferred_type is not None:
             node.inferred_return_type = inferred_type
-        copy_callee_stamps(node, target.method_call)
         return inferred_type
 
     def visit_dynamicarraynew(self, node: DynamicArrayNew) -> Optional[Type]:

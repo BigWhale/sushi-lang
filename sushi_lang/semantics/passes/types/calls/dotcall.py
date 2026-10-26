@@ -1,15 +1,17 @@
-"""One ladder for `X.Y(args)`: what does a DotCall name? (#753)
+"""The ladders of a method call: what does `X.Y(args)` name? (#753)
 
-The question has one answer and one arm order. `resolve_dotcall` walks it and reports the
-rung that answered as a `DotCallTarget`. Two ladders drifted apart before: they copied a
-different number of stamps back from the temporary node they resolved the callee on, and
-every stamp in the gap has a miscompile behind it -- a lost `poke self` receiver (#326,
-#327), a `nom` parameter made inert, a call bound to the copy cut for another type.
-`copy_callee_stamps` is the one stamp set.
+The question has one answer and one arm order. Two ladders drifted apart before: they
+copied a different number of stamps back from the temporary node they resolved the callee
+on, and every stamp in the gap has a miscompile behind it -- a lost `poke self` receiver
+(#326, #327), a `nom` parameter made inert, a call bound to the copy cut for another type.
 
-From the switch to SHIR the reader is the inference of the early passes, which reports
-nothing. The validation half is gone: lowering answers what `X.Y(args)` names (a `Static`
-or a `Dotted` call target), and the typecheck pass reads the SHIR node.
+The typecheck pass reads SHIR, where lowering already answered a namespace call, a static
+and an enum constructor. `resolve_dotted` is its ladder of a method call: a built-in
+family, a perk implementation, an extension method (docs/design/ir.md 7.3). It writes no
+stamp: the pass writes the answer as rows of `TypeckResults`.
+
+`resolve_dotcall` is the AST ladder of the inference of the early passes, which reports
+nothing, until those passes stop inferring.
 """
 from __future__ import annotations
 
@@ -17,10 +19,16 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Optional
 
+from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import MethodCall, Name
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import ParamMode
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type
 from .enums import validate_enum_constructor
+from .methods import declaration_was_refused
+from ..call_facts import TypecheckCallFacts
+from ..method_registry import METHOD_TYPE_REGISTRY, MethodFamily
 from ..propagation import holds_declared_type
 
 if TYPE_CHECKING:
@@ -28,13 +36,49 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
 
 
-#: The stamps a resolved callee leaves on the temporary node, in one place. The borrow
-#: pass and the backend read every one of them off the DotCall itself. The inference half
-#: writes `inferred_return_type` on the DotCall itself, so it is not copied (#769).
-CALLEE_STAMPS = ("resolved_enum_type", "callee_self_mode", "callee_builtin_family",
-                 "callee_param_modes", "callee_param_names", "callee_param_types",
-                 "callee_method_type_args", "callee_variadic_at",
-                 "callee_extension_unit", "iterator_next", "callee_borrows")
+class MethodRung(Enum):
+    """Which rung of the SHIR ladder answered a method call."""
+
+    FAMILY = auto()
+    PERK = auto()
+    EXTENSION = auto()
+    UNANSWERED = auto()
+
+
+@dataclass(frozen=True)
+class MethodAnswer:
+    """The rung that answered a method call, and the family when a family answered."""
+
+    rung: MethodRung
+    family: Optional[MethodFamily] = None
+
+
+def resolve_dotted(validator: 'TypeValidator', receiver_type: Type,
+                   name: str) -> MethodAnswer:
+    """The rung that answers the method `name` on a receiver of `receiver_type`.
+
+    The family of the table first: its claim puts a perk implementation before a family
+    that yields to it (`MethodFamily.claims`). Then a perk implementation, then an
+    extension method of the name in any unit, and else nothing.
+    """
+    family = METHOD_TYPE_REGISTRY.claim(receiver_type, name, validator)
+    if family is not None:
+        return MethodAnswer(MethodRung.FAMILY, family)
+    if validator.perk_impl_table.get_method(receiver_type, name) is not None:
+        return MethodAnswer(MethodRung.PERK)
+    if TypecheckCallFacts(validator).declaring_units(name):
+        return MethodAnswer(MethodRung.EXTENSION)
+    return MethodAnswer(MethodRung.UNANSWERED)
+
+
+def reject_unknown_method(validator: 'TypeValidator', receiver_type: Type, name: str,
+                          loc: Span) -> None:
+    """CE2008 for a method that no rung answers. When the collect pass refused an extension
+    of this name on this type, it reported that fault, and the call reports nothing."""
+    if declaration_was_refused(validator, receiver_type, name):
+        return
+    er.emit(validator.reporter, er.ERR.CE2008, loc,
+            name=f"{display_type(receiver_type)}.{name}")
 
 
 class DotCallKind(Enum):
@@ -122,20 +166,6 @@ def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall') -> DotCallTarge
     return DotCallTarget(DotCallKind.METHOD,
                          method_call=_method_call_view(node),
                          receiver_type=receiver_type)
-
-
-def copy_callee_stamps(node: 'DotCall', resolved: MethodCall) -> None:
-    """Copy what the resolved callee stamped on the temporary node back onto the DotCall.
-
-    ONE stamp set. The borrow pass and the backend read every one of these off the DotCall,
-    so a stamp dropped here is a silent miscompile: a `poke self` receiver passed by value
-    and its write lost (#326, #327), a `nom` parameter made inert, or a call bound to
-    `List__i32_mapv` where `List__i32_mapv__bool` is defined.
-    """
-    for stamp in CALLEE_STAMPS:
-        value = getattr(resolved, stamp, None)
-        if value is not None:
-            setattr(node, stamp, value)
 
 
 def validate_variant_spelling(validator: 'TypeValidator', node, variant_name: str,

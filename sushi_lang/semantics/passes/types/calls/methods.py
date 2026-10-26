@@ -1,9 +1,10 @@
 """Method call validation.
 
-Port templates: `validate_method_call` (A1, A10), `_validate_type_name_call` (B2, B4)
+Port templates: `validate_method_call` (A10, C3), `_validate_type_name_call` (B2, B4)
 and `_validate_iterator_new` (C3) call `TypeValidator.validate_expression`, and that API
 is deleted. No pass reaches them today. The group in brackets after each name ports them
-to SHIR inputs before a SHIR pass calls them.
+to SHIR inputs before a SHIR pass calls them. The order of the rungs is on SHIR already:
+`calls/dotcall.py:resolve_dotted`.
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -1067,7 +1068,7 @@ def _validate_extension_call(validator: 'TypeValidator', call: MethodCall,
     if method is None:
         if _reject_unhandled_channel_chain(validator, call, receiver_type):
             return
-        if _was_refused(validator, receiver_type, call.method):
+        if declaration_was_refused(validator, receiver_type, call.method):
             return
         if isinstance(call.receiver, Name) and call.receiver.id in validator.refused_bindings:
             return
@@ -1107,7 +1108,8 @@ def _explain_unpromised_method(validator: 'TypeValidator', diag, receiver_type,
                   f"of its constraints and nothing more")
 
 
-def _was_refused(validator: 'TypeValidator', receiver_type, method_name: str) -> bool:
+def declaration_was_refused(validator: 'TypeValidator', receiver_type,
+                            method_name: str) -> bool:
     """The collect pass refused this method's declaration, and said so there.
 
     An extension (#808) and a perk implementation (#860, #864) keep one record each,

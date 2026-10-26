@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODES_EXACT: CE2008
+# EXPECT_STDERR_CONTAINS: "i32.trailing_zeros"
+# EXPECT_DUMP_SHIR: test_err_typeck_method_unknown_on_literal.shir
+#
+# A literal receiver has no expected type, so a bare integer literal is `i32`. The bit
+# methods are on the unsigned integers alone, so `trailing_zeros` on the literal is
+# CE2008. A cast gives the literal its unsigned type: `(0x80 as u8).trailing_zeros()`.
+
+fn main() i32:
+    println(0x80.trailing_zeros())
+    return 0

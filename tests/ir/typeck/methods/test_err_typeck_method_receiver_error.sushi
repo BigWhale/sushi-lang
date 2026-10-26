@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODES_EXACT: CE2518
+# EXPECT_DUMP_SHIR: test_err_typeck_method_receiver_error.shir
+#
+# A receiver with an error has no type. The method call then answers nothing and reports
+# nothing more: the one error is the error of the receiver, CE2518 for a `bool` operand
+# of `+`.
+
+fn main() i32:
+    let bool flag = true
+    let i32 n = (flag + 1).nowhere()
+    return n

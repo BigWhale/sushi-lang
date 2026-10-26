@@ -128,7 +128,7 @@ class RefusalRecord:
 
     A call of one is not an undefined name: the declaration carries the one diagnostic
     (#808, #860). The extension table and the generic perk-implementation table both
-    carry one, and one predicate reads both (`calls/methods.py:_was_refused`).
+    carry one, and one predicate reads both (`calls/methods.py:declaration_was_refused`).
     """
 
     refused: Set[Tuple[str, str]] = field(default_factory=set)

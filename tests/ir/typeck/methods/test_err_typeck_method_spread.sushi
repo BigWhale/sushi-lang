@@ -1,0 +1,13 @@
+# EXPECT_ERROR_CODES_EXACT: CE0120
+# EXPECT_DUMP_SHIR: test_err_typeck_method_spread.shir
+#
+# A method is never variadic, so a bloom argument `arr...` of a method call is CE0120 at
+# the argument. The ladder does not look for the callee of such a call.
+
+fn count(i32[] parts) i32:
+    let i32 n = 7
+    let i32 m = n.nowhere(parts...)
+    return m
+
+fn main() i32:
+    return 0

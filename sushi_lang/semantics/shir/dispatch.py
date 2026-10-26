@@ -6,7 +6,8 @@ row for each SHIR class that the pass reads. The two passes read the same dispat
 of the node: a pass never skips a node in silence. `stop` is the arm of a construct that a
 pass does not handle yet: it ends the walk of the body with the stop code CE0155, which
 names the stage and the construct, at the span of the node. The construct is the class of
-the node. For a `Call`, it names the kind of the target too (`construct_of`).
+the node. For a `Call`, it names the kind of the target too (`construct_of`), or the
+family of a method call that the ladder resolved and whose arm the pass does not have yet.
 """
 from __future__ import annotations
 
@@ -31,14 +32,21 @@ def arm_of(arms: Mapping[type, Callable[..., Any]], node: object,
     return arm
 
 
-def construct_of(node: Any, facts: Optional[CallFacts] = None) -> str:
+def construct_of(node: Any, facts: Optional[CallFacts] = None, *,
+                 family: Optional[str] = None) -> str:
     """The construct that a stop names: the class of `node`, and the target kind of a `Call`.
 
     A `Call` needs `facts`, and a stage that stops on one with no facts is an internal
-    error: no stage prints a label that another stage would print in another way.
+    error: no stage prints a label that another stage would print in another way. A method
+    call whose family the ladder found names the family instead, and needs no facts.
     """
     if not isinstance(node, e.Call):
         return type(node).__name__
+    if family is not None:
+        if not isinstance(node.target, e.Dotted):
+            er.raise_internal_error("CE0000", span=node.loc,
+                                    detail="only a method call stops at a method family")
+        return f"Call(method {family})"
     if facts is None:
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail="a stop at a call needs the call facts of its stage")
@@ -76,6 +84,7 @@ def _target_kind(target: e.CallTarget, facts: CallFacts) -> str:
     return "stdlib" if facts.is_stdlib_function(name) else "function"
 
 
-def stop(stage: str, node: Any, facts: Optional[CallFacts] = None) -> NoReturn:
+def stop(stage: str, node: Any, facts: Optional[CallFacts] = None, *,
+         family: Optional[str] = None) -> NoReturn:
     """The stop of the pass `stage` at a construct that it does not handle yet."""
-    raise StageStop(stage, construct_of(node, facts), node.loc)
+    raise StageStop(stage, construct_of(node, facts, family=family), node.loc)

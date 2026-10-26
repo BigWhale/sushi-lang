@@ -1,0 +1,10 @@
+unit test_err_typeck_method_unknown_on_string
+
+ShirBody main
+  params : []
+  locals : [_0 "text": string, _1 "loud": string]
+  block  :
+    Assign(LocalRef(_0), Lit("Mostly Harmless"), is_init: true)
+    Assign(LocalRef(_1), Call(Dotted(LocalRef(_0), "shout"), []), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+    Return(Lit(0))

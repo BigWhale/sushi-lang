@@ -1,0 +1,9 @@
+unit test_err_typeck_method_receiver_error
+
+ShirBody main
+  params : []
+  locals : [_0 "flag": bool, _1 "n": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(true), is_init: true)
+    Assign(LocalRef(_1), Call(Dotted(Binary(+, LocalRef(_0), Lit(1)), "nowhere"), []), is_init: true)
+    Return(LocalRef(_1))
