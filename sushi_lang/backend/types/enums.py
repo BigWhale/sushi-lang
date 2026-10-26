@@ -1,7 +1,6 @@
 """LLVM emission for the auto-derived enum hash() method."""
 
-from typing import Any, Optional
-from sushi_lang.semantics.ast import MethodCall
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import EnumType, Type
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
@@ -19,10 +18,10 @@ def _emit_enum_hash(enum_type: Type) -> Any:
     if not isinstance(enum_type, EnumType):
         raise_internal_error("CE0032", type=type(enum_type).__name__)
 
-    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for enum.hash() method."""
-        reject_hash_arguments(call)
+        reject_hash_arguments(args)
 
         builder = require_builder(codegen)
         u64 = ir.IntType(INT64_BIT_WIDTH)
@@ -123,7 +122,7 @@ register_hash_emitter_factory("enum", _emit_enum_hash)
 
 def _emit_enum_clone(target_type: Type) -> Any:
     """Create a clone() emitter for an enum type (#134)."""
-    def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
                 receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         from sushi_lang.backend.ownership import copy_out
         return copy_out(codegen, receiver_value, target_type)

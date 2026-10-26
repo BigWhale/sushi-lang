@@ -1,7 +1,6 @@
 """LLVM emission for the auto-derived array hash() method."""
 
-from typing import Any, Optional
-from sushi_lang.semantics.ast import MethodCall
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType, Type
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
@@ -17,10 +16,10 @@ from sushi_lang.backend.memory.allocas import entry_alloca
 
 def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
     """Create a hash() emitter function for fixed array types."""
-    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for fixed_array.hash() method."""
-        reject_hash_arguments(call)
+        reject_hash_arguments(args)
 
         builder = require_builder(codegen)
         u64 = ir.IntType(INT64_BIT_WIDTH)
@@ -59,10 +58,10 @@ def _emit_fixed_array_hash(array_type: ArrayType) -> Any:
 
 def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
     """Create a hash() emitter function for dynamic array types."""
-    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for dynamic_array.hash() method."""
-        reject_hash_arguments(call)
+        reject_hash_arguments(args)
 
         builder = require_builder(codegen)
         i32 = ir.IntType(INT32_BIT_WIDTH)
@@ -127,7 +126,7 @@ def _emit_dynamic_array_hash(array_type: DynamicArrayType) -> Any:
     return emitter
 
 
-def emit_fixed_array_hash_direct(codegen: Any, expr: Any, array_ptr: ir.Value,
+def emit_fixed_array_hash_direct(codegen: Any, array_ptr: ir.Value,
                                  receiver_type: ir.Type, array_type: Type,
                                  to_i1: bool) -> ir.Value:
     """Direct emitter for fixed array hash.
@@ -139,10 +138,10 @@ def emit_fixed_array_hash_direct(codegen: Any, expr: Any, array_ptr: ir.Value,
     guess.
     """
     emitter = _emit_fixed_array_hash(array_type)
-    return emitter(codegen, expr, array_ptr, receiver_type, to_i1)
+    return emitter(codegen, (), array_ptr, receiver_type, to_i1)
 
 
-def emit_dynamic_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.Value,
+def emit_dynamic_array_hash_direct(codegen: Any, receiver_value: ir.Value,
                                    receiver_type: ir.Type, array_type: DynamicArrayType,
                                    to_i1: bool) -> ir.Value:
     """Direct emitter for dynamic array hash.
@@ -152,7 +151,7 @@ def emit_dynamic_array_hash_direct(codegen: Any, expr: Any, receiver_value: ir.V
     field was CE0056 (#482).
     """
     emitter = _emit_dynamic_array_hash(array_type)
-    return emitter(codegen, expr, receiver_value, receiver_type, to_i1)
+    return emitter(codegen, (), receiver_value, receiver_type, to_i1)
 
 
 def _make_array_hash_emitter(array_type: Type) -> Any:

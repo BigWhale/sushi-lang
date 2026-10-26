@@ -17,6 +17,7 @@ from llvmlite import ir
 from sushi_lang.backend.destructors import emit_value_destructor
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.slir.intrinsics import INTRINSICS
+from sushi_lang.backend.slir.methods import emit_method
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.slir.values import (
@@ -24,7 +25,7 @@ from sushi_lang.backend.slir.values import (
     type_of_place,
 )
 from sushi_lang.semantics.param_modes import Convention
-from sushi_lang.semantics.shir.callee import Intrinsic
+from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
@@ -161,12 +162,15 @@ def _direct(state: FunctionState, statement: st.Call) -> None:
 
 
 def _builtin(state: FunctionState, statement: st.Call) -> None:
-    """An intrinsic, through its row of `INTRINSICS`. A method family of
-    `METHOD_TYPE_REGISTRY` stops for now (`emit, <class>`), and so does an intrinsic with no
-    row (`emit, intrinsic <name>`)."""
+    """An intrinsic, through its row of `INTRINSICS`, and a method, through its family
+    (`emit_method`). An intrinsic with no row stops (`emit, intrinsic <name>`)."""
     builtin = statement.callee
     if not isinstance(builtin, st.Builtin):
         state.fault(f"the row of a builtin call got a {type(builtin).__name__} callee")
+    if isinstance(builtin.method, BuiltinMethod):
+        value = emit_method(state, builtin.method, statement)
+        state.builder.store(value, place_address(state, statement.dest))
+        return
     if not isinstance(builtin.method, Intrinsic):
         state.stop(builtin.method)
     emit = INTRINSICS.get(builtin.method.name)

@@ -1,13 +1,13 @@
 """Built-in hash extension methods for primitive types."""
 
-from typing import Any
-from sushi_lang.semantics.ast import MethodCall
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import BuiltinType
 import llvmlite.ir as ir
 from sushi_lang.backend.constants import INT32_BIT_WIDTH, INT64_BIT_WIDTH
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.sushi_stdlib.src.common import register_builtin_method, BuiltinMethod
+from sushi_lang.backend.types.value_hash import reject_hash_arguments
 from sushi_lang.backend.types.hash_utils import FNV1A_OFFSET_BASIS, emit_fnv1a_combine
 from sushi_lang.backend.memory.allocas import entry_alloca
 
@@ -17,11 +17,10 @@ FXHASH_MULTIPLIER = 0x517cc1b727220a95  # FxHash prime for 64-bit mixing
 
 def _emit_generic_hash(prim_type: BuiltinType) -> Any:
     """Create a hash() emitter function for the given primitive type."""
-    def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Generic hash() emitter created by factory."""
-        if call is not None and call.args:
-            raise_internal_error("CE0054", got=len(call.args))
+        reject_hash_arguments(args)
 
         builder = require_builder(codegen)
         builder = codegen.builder

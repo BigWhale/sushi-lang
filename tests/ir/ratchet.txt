@@ -781,6 +781,7 @@ tests/memory/param_modes/test_err_nom_marker_missing.sushi
 tests/memory/peek_poke/test_err_peek_forward_without_borrow.sushi
 tests/memory/peek_poke/test_err_peek_poke_conflict.sushi
 tests/memory/peek_poke/test_err_peek_to_poke.sushi
+tests/memory/peek_poke/test_peek_primitive_receiver.sushi
 tests/memory/peek_write_gate/test_err_peek_modify.sushi
 tests/memory/peek_write_gate/test_err_peek_poke_reborrow.sushi
 tests/memory/poke_forwarding/test_poke_pass_through_clean.sushi
@@ -1059,11 +1060,17 @@ tests/perks/unreached_concrete_impl_header/test_err_perk_concrete_conflict_unrea
 tests/perks/unreached_concrete_impl_header/test_err_perk_concrete_contract_unreached.sushi
 tests/perks/variadic_in_impl/test_err_perk_impl_generic_target_variadic.sushi
 tests/perks/variadic_in_impl/test_err_perk_impl_native_variadic.sushi
+tests/primitives/bit_ops/test_bit_ops_reverse_low_bits.sushi
+tests/primitives/bit_ops/test_bit_ops_u16.sushi
+tests/primitives/bit_ops/test_bit_ops_u32.sushi
+tests/primitives/bit_ops/test_bit_ops_u64.sushi
+tests/primitives/bit_ops/test_bit_ops_u8.sushi
 tests/primitives/bit_ops/test_err_bit_ops_on_bare_literal.sushi
 tests/primitives/bit_ops/test_err_bit_ops_on_f64.sushi
 tests/primitives/bit_ops/test_err_bit_ops_on_i32.sushi
 tests/primitives/bit_ops/test_err_bit_ops_shift_past_width.sushi
 tests/primitives/bit_ops/test_err_bit_ops_with_argument.sushi
+tests/primitives/methods/test_primitive_methods_emit.sushi
 tests/references/bare_mode_param/test_err_bare_nom_name_is_not_a_receiver.sushi
 tests/references/bare_mode_param/test_err_bare_poke_name_is_not_a_receiver.sushi
 tests/references/borrow_of_constant/test_err_borrow_constant.sushi
@@ -1092,6 +1099,8 @@ tests/references/ref_type_positions/test_err_ref_generic_arg_maybe.sushi
 tests/references/ref_type_positions/test_err_ref_nested.sushi
 tests/references/ref_type_positions/test_err_ref_return_type.sushi
 tests/references/ref_type_positions/test_err_ref_struct_field.sushi
+tests/stdlib/core/primitives/test_stdlib_primitives.sushi
+tests/stdlib/core/primitives/test_to_str_direct.sushi
 tests/stdlib/generics/hashmap/test_err_hashmap_key_no_equality.sushi
 tests/stdlib/generics/hashmap/test_err_hashmap_key_no_hash.sushi
 tests/stdlib/generics/hashmap/test_err_hashmap_no_use_var.sushi
@@ -1126,6 +1135,9 @@ tests/strings/interpolation_refusal/test_err_unterminated_interpolation.sushi
 tests/strings/method_arguments/test_err_string_methods.sushi
 tests/strings/method_arguments/test_err_string_methods_arg_types.sushi
 tests/strings/method_arguments/test_err_string_methods_types.sushi
+tests/strings/print_to_str_temporary/test_print_number_to_str.sushi
+tests/strings/print_to_str_temporary/test_println_number_to_str.sushi
+tests/strings/to_str_on_string/test_to_str_of_literal_local.sushi
 tests/tuples/match_patterns/test_err_tuple_pattern_poke_in_payload.sushi
 tests/tuples/refusals/test_err_tuple_cast.sushi
 tests/tuples/refusals/test_err_tuple_destructure_mode.sushi

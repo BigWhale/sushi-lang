@@ -1,0 +1,32 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4614253070214989087 1069547520\n42 true 1.5\n2 5\n255 7\n"
+# EXPECT_NO_LEAKS
+#
+# The primitive method family through the emitter: float bits, to_str of an integer, a
+# bool and a float, clone, hash equality and the bit methods. Each receiver is a
+# variable, a literal cast or the answer of another method call.
+
+fn main() i32:
+    let f64 pi = 3.14
+    let f32 half = 1.5 as f32
+    let u64 a = pi.to_bits()
+    let u32 b = half.to_bits()
+    println("{a} {b}")
+
+    let i32 n = 42
+    let string s = n.to_str()
+    let string t = true.to_str()
+    let string u = (1.5 as f64).to_str()
+    println("{s} {t} {u}")
+
+    let i32 c = n.clone()
+    let u64 h1 = c.hash()
+    let u64 h2 = n.hash()
+    if (h1 != h2):
+        return 1
+
+    let u8 x = 0x04
+    let u8 y = 0x80
+    println("{x.trailing_zeros()} {x.reverse_bits().leading_zeros() + 3}")
+    println("{(y | 0x7f).reverse_bits()} {y.leading_zeros() + 7}")
+    return 0

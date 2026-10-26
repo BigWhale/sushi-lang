@@ -252,7 +252,7 @@ def emit_fixed_array_method(
                                                    fixed_ir_type, element_semantic_type)
 
         case "hash":
-            return hashing.emit_fixed_array_hash_direct(codegen, expr, address(writable=False),
+            return hashing.emit_fixed_array_hash_direct(codegen, address(writable=False),
                                                         fixed_ir_type, fixed_semantic_type,
                                                         to_i1)
 
@@ -439,7 +439,7 @@ def emit_dynamic_array_method(
             return emit_byte_array_to_string_checked(codegen, expr, receiver_value, array_struct_type, to_i1)
 
         case "hash":
-            return hashing.emit_dynamic_array_hash_direct(codegen, expr, receiver_value,
+            return hashing.emit_dynamic_array_hash_direct(codegen, receiver_value,
                                                           array_struct_type, semantic_type,
                                                           to_i1)
 

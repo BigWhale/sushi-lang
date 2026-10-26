@@ -1,8 +1,7 @@
 """Common utilities and infrastructure for built-in extension methods."""
 
-from typing import Dict, Optional, Callable, Any
+from typing import Dict, Optional, Callable, Any, Sequence
 from dataclasses import dataclass
-from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import Type
 from sushi_lang.semantics.derived_methods import builtin_registry
 import llvmlite.ir as ir
@@ -14,7 +13,7 @@ class BuiltinMethod:
     name: str
     return_type: Optional[Type]
     description: str
-    llvm_emitter: Callable[[Any, MethodCall, ir.Value, ir.Type, bool], ir.Value]
+    llvm_emitter: Callable[[Any, Sequence[ir.Value], ir.Value, ir.Type, bool], ir.Value]
 
 
 def register_builtin_method(target_type: Type, method: BuiltinMethod) -> None:

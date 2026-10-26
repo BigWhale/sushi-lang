@@ -12,7 +12,7 @@ nothing reaches this module for a map: its buckets carry a state for each slot a
 slot order is not the entry order, so it needs a fold that this walk cannot give.
 """
 
-from typing import Any
+from typing import Any, Sequence
 
 import llvmlite.ir as ir
 
@@ -54,9 +54,9 @@ def _as_address(codegen: Any, value: ir.Value, llvm_type: ir.Type, name: str) ->
 
 def _make_list_hash_emitter(list_type: Type) -> Any:
     """Build the hash() emitter for one `List@(T)`: its elements, then its length."""
-    def emitter(codegen: Any, call: Any, receiver_value: ir.Value,
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
                 receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-        reject_hash_arguments(call)
+        reject_hash_arguments(args)
 
         builder = require_builder(codegen)
         u64 = ir.IntType(INT64_BIT_WIDTH)
@@ -94,9 +94,9 @@ def _make_own_hash_emitter(own_type: Type) -> Any:
     Two allocations of one value must hash alike, or the hash means nothing to a reader
     who only sees values.
     """
-    def emitter(codegen: Any, call: Any, receiver_value: ir.Value,
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
                 receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-        reject_hash_arguments(call)
+        reject_hash_arguments(args)
 
         builder = require_builder(codegen)
         payload_type = _held_type(own_type, 0)

@@ -4,14 +4,13 @@ The rule is in docs/language-reference.md, section "Bit Methods". A count of an 
 value is the width, so the intrinsics are called with is_zero_poison = false.
 """
 
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 import llvmlite.ir as ir
 
 from sushi_lang.backend.constants import INT32_BIT_WIDTH
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import BuiltinType
 from sushi_lang.sushi_stdlib.src.common import BuiltinMethod, register_builtin_method
 
@@ -53,11 +52,14 @@ _EMITTERS: dict[str, Callable[[ir.IRBuilder, ir.Value], ir.Value]] = {
 }
 
 
-def _emit_bit_method(codegen: Any, call: MethodCall, receiver_value: ir.Value,
-                     receiver_type: ir.Type, to_i1: bool) -> ir.Value:
-    if len(call.args) != 0:
-        raise_internal_error("CE0023", method=call.method, expected=0, got=len(call.args))
-    return _EMITTERS[call.method](require_builder(codegen), receiver_value)
+def _bit_method_emitter(method: str) -> Callable[..., ir.Value]:
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
+                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
+        if args:
+            raise_internal_error("CE0023", method=method, expected=0, got=len(args))
+        return _EMITTERS[method](require_builder(codegen), receiver_value)
+
+    return emitter
 
 
 for _prim_type in _UNSIGNED:
@@ -72,6 +74,6 @@ for _prim_type in _UNSIGNED:
                 name=_name,
                 return_type=_returns,
                 description=f"{_prim_type}: {_what}",
-                llvm_emitter=_emit_bit_method,
+                llvm_emitter=_bit_method_emitter(_name),
             ),
         )

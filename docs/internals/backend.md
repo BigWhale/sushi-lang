@@ -227,8 +227,9 @@ A container method has its row in `LIST_EMITTERS` or `HASHMAP_EMITTERS` (`emit_f
 `backend/types/arrays/`. An extension method symbol comes from `extension_symbol`
 (`semantics/generics/name_mangling.py`), for example `Pair__i32_string_swapped`. These
 families still take AST nodes: each one gets operands from SLIR in the group that brings
-its construct back (`docs/design/ir.md` Q7), and the emitter stops on a `BuiltinMethod`
-callee until then.
+its construct back (`docs/design/ir.md` Q7). The primitive family already takes operands
+(`backend/slir/methods.py`, `METHOD_FAMILIES`). The emitter stops on a `BuiltinMethod`
+callee of any other family until then.
 
 ## Memory management
 

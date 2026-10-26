@@ -7,12 +7,11 @@ implementation is the sanctioned override and wins, then the derived method, the
 the primitive built-ins (a miss in the per-compilation table falls through to them).
 An overridden type is terminal: its fields are not read.
 
-A hash emitter takes the call node of a written `.hash()` call, and reads it for
-nothing but the argument count. A held value has no call, so it gets None, and no
-emitter reads a node that was never written (#855).
+A hash emitter takes the argument values of the call, and reads them for nothing but
+their count. A held value has no call, so it gets none.
 """
 
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import llvmlite.ir as ir
 
@@ -23,10 +22,10 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import BuiltinType, Type
 
 
-def reject_hash_arguments(call: Optional[Any]) -> None:
+def reject_hash_arguments(args: Sequence[Any]) -> None:
     """The backstop for the argument count of a hash emitter (CE0054)."""
-    if call is not None and call.args:
-        raise_internal_error("CE0054", got=len(call.args))
+    if args:
+        raise_internal_error("CE0054", got=len(args))
 
 
 def hash_override(codegen: Any, semantic_type: Type) -> Optional[ir.Function]:
@@ -55,7 +54,7 @@ def emit_value_hash(codegen: Any, value: ir.Value, semantic_type: Type) -> ir.Va
         return builder.call(override, [codegen.utils.cast_for_param(value, param_type)])
 
     hash_method = _derived_hash(codegen, semantic_type)
-    return hash_method.llvm_emitter(codegen, None, value, value.type, False)
+    return hash_method.llvm_emitter(codegen, (), value, value.type, False)
 
 
 def _derived_hash(codegen: Any, semantic_type: Type) -> Any:

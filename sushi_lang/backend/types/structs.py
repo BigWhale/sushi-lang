@@ -1,7 +1,6 @@
 """LLVM emission for the auto-derived struct hash() method."""
 
-from typing import Any, Optional
-from sushi_lang.semantics.ast import MethodCall
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import StructType, Type
 from sushi_lang.semantics.generics.hashing import container_hash_kind
 import llvmlite.ir as ir
@@ -19,10 +18,10 @@ def _emit_struct_hash(prim_type: Type) -> Any:
 
     struct_type = prim_type
 
-    def emitter(codegen: Any, call: Optional[MethodCall], receiver_value: ir.Value,
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
                receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         """Emit LLVM IR for struct.hash() method."""
-        reject_hash_arguments(call)
+        reject_hash_arguments(args)
 
         builder = require_builder(codegen)
 
@@ -77,7 +76,7 @@ register_hash_emitter_factory("struct", _emit_struct_hash)
 
 def _emit_struct_clone(target_type: Type) -> Any:
     """Create a clone() emitter for a struct type (#134)."""
-    def emitter(codegen: Any, call: MethodCall, receiver_value: ir.Value,
+    def emitter(codegen: Any, args: Sequence[ir.Value], receiver_value: ir.Value,
                 receiver_type: ir.Type, to_i1: bool) -> ir.Value:
         from sushi_lang.backend.ownership import copy_out
         return copy_out(codegen, receiver_value, target_type)
