@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE0155
+# EXPECT_STDERR_CONTAINS: "slir, Builtin"
+# EXPECT_DUMP_SLIR: test_err_borrow_string_method_reaches_slir.slir
+#
+# A string method and a primitive method read their receiver and their arguments, and the
+# borrow pass finishes the body with no error. The SLIR lowering does not lower a
+# built-in method call yet, so the program stops there: `slir, Builtin`.
+
+fn main() i32:
+    let string s = "Mostly Harmless"
+    let string needle = "H"
+    let bool found = s.contains(needle)
+    let u8 byte = 5 as u8
+    let i32 zeros = byte.leading_zeros()
+    if (found):
+        return s.len() + zeros
+    return 0

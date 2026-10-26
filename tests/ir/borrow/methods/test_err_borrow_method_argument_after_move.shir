@@ -1,0 +1,19 @@
+unit test_err_borrow_method_argument_after_move
+
+ShirBody make
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Interp(["", LocalRef(_0), " towels"]))
+
+ShirBody main
+  params : []
+  locals : [_0 "text": string, _1 "needle": string, _2 "other": string, _3 "found": bool]
+  block  :
+    Assign(LocalRef(_0), adopt Call(Free(@make), [(Lit(42), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_1), adopt Call(Free(@make), [(Lit(1), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_2), move LocalRef(_1), is_init: true)
+    Assign(LocalRef(_3), adopt Call(Builtin(LocalRef(_0), "contains"), [(LocalRef(_1), Guaranteed)]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))
+    If(LocalRef(_3), then: [Return(adopt Lit(1))])
+    Return(adopt Lit(0))

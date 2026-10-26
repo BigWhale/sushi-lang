@@ -1,7 +1,8 @@
 """Call sites: which convention each argument has, and what that convention does.
 
-`check_call` is the arm of a SHIR call of a free function and of `print`/`println`, with
-the conventions that the typecheck pass gave (docs/design/ir.md 8.3). The other helpers
+`check_call` is the arm of a SHIR call of a free function, of `print`/`println` and of a
+built-in method of the primitive or string family, with the conventions that the
+typecheck pass gave (docs/design/ir.md 8.3). The other helpers
 read the AST of a method call and of a call through a function field: the groups that check
 those calls port them to SHIR (Phase 3 to 5).
 """
@@ -49,6 +50,10 @@ def maybe_mark_container_insert(checker: 'BorrowChecker', expr: MethodLike) -> N
     consume_each(checker, expr.args)
 
 
+#: The built-in method families whose methods only read their receiver.
+RECEIVER_READ_FAMILIES = frozenset({"primitive", "string"})
+
+
 def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     """A call of a free function or of `print`/`println`, with the convention of each
     argument from the `TypeckResults` row of the call (docs/design/ir.md 8.3).
@@ -61,14 +66,19 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     its convention by POSITION (`apply_convention`): the callee owns an `Owned` argument,
     and the pass decides its `Ownership`. A callee that destroys its `poke` parameter
     destroys the caller's value (#168). The `nom` marker is compared against the declared
-    mode by the typecheck pass (CE2427). Every other callee is checked by its own group,
-    and its call stops the walk.
+    mode by the typecheck pass (CE2427). A built-in method reads its receiver first. A
+    family that has no arm yet stops the walk. The typecheck pass stops at every other
+    callee, so one in this pass is an internal error.
     """
     resolved = checker.answers().callee_of(node.shir_id)
-    if resolved is not None and isinstance(resolved.callee, Builtin):
-        dispatch.stop_at_family(arms.STAGE, node, resolved.callee.method.family)
-    if resolved is None or not isinstance(resolved.callee, (Free, Intrinsic)):
-        arms.stop_at(checker, node)
+    callee = resolved.callee if resolved is not None else None
+    if isinstance(callee, Builtin):
+        _check_builtin_receiver(checker, node, callee)
+    elif not isinstance(callee, (Free, Intrinsic)):
+        er.raise_internal_error(
+            "CE0000", span=node.loc,
+            detail=f"the typecheck pass gave the borrow pass a call with the callee "
+                   f"{type(callee).__name__}, and it stops at that call first")
     if any(arg.bloom for arg in node.args):
         arms.stop_at(checker, node)
     conventions = [_convention_of(checker, node, position)
@@ -85,8 +95,20 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
         if mode is None:
             apply_convention(checker, arg.value, convention)
     reject_borrow_read_by_the_change(checker, node, conventions, unchanged)
-    if isinstance(resolved.callee, Free):
-        apply_destroy_effects(checker, node, resolved.callee)
+    if isinstance(callee, Free):
+        apply_destroy_effects(checker, node, callee)
+
+
+def _check_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Builtin) -> None:
+    """The receiver of a built-in method call: a read of its place.
+
+    A primitive method and a string method change nothing in their receiver and consume
+    nothing (`callee_effect` has no row for them), so the receiver is read and stays the
+    owner of its value. A family with no arm here stops the walk.
+    """
+    if callee.method.family not in RECEIVER_READ_FAMILIES:
+        dispatch.stop_at_family(arms.STAGE, node, callee.method.family)
+    arms.check(checker, callee.recv)
 
 
 def _written_borrow(arg: e.Arg, convention: Convention) -> Optional[BorrowMode]:

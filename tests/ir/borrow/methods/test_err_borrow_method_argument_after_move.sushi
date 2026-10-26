@@ -1,0 +1,20 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'needle'"
+# EXPECT_STDERR_CONTAINS: "'needle' was moved here"
+# EXPECT_DUMP_SHIR: test_err_borrow_method_argument_after_move.shir
+#
+# An argument of a string method borrows its value. A read of a local that an earlier
+# statement moved is CE2405, in an argument as in a receiver.
+
+fn make(i32 n) string:
+    return "{n} towels"
+
+fn main() i32:
+    let string text = make(42)
+    let string needle = make(1)
+    let string other = needle
+    let bool found = text.contains(needle)
+    println(other)
+    if (found):
+        return 1
+    return 0

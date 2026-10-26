@@ -38,3 +38,16 @@ def test_every_array_method_the_table_marks_is_measured():
     marked = {name for name in arrays._ARRAY_METHODS if effect_of(name).mutates}
     assert {"clear", "push", "pop", "fill", "reverse", "extend",
             "extend_back"} <= marked
+
+
+def test_no_primitive_or_string_method_changes_or_consumes_its_receiver():
+    """The borrow arm of a SHIR method call of these two families only reads its receiver.
+    A method of the table that one of them shares a name with (`string.reverse`) is a
+    method that answers a new string."""
+    from sushi_lang.semantics.method_effects import MethodEffect, callee_effect
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    for family in (METHOD_TYPE_REGISTRY.family(name) for name in ("primitive", "string")):
+        assert family.arity
+        for method in family.arity:
+            assert callee_effect(method, family.name) == MethodEffect(), (family.name, method)

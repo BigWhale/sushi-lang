@@ -523,6 +523,8 @@ tests/ir/borrow/control_flow/test_err_borrow_move_before_a_rebind.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_before_break.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_in_both_arms.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_in_one_arm.sushi
+tests/ir/borrow/methods/test_err_borrow_method_argument_after_move.sushi
+tests/ir/borrow/methods/test_err_borrow_method_receiver_after_move.sushi
 tests/ir/borrow/straight/test_err_borrow_beside_a_poke_of_a_constant.sushi
 tests/ir/borrow/straight/test_err_borrow_beside_an_unknown_name.sushi
 tests/ir/borrow/straight/test_err_borrow_guaranteed_args.sushi
