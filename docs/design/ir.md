@@ -1710,6 +1710,15 @@ An `Intrinsic` callee of SHIR (7.6) has no row of `METHOD_TYPE_REGISTRY`, so it 
 printer writes it as `builtin println@(string)`. An interpolation lowers to the intrinsic
 `interp` (8.9).
 
+A `Builtin(recv, BuiltinMethod)` callee of SHIR lowers to `Builtin(BuiltinMethod, [])`: a
+method has no operand types in the callee, because each operand is a place or a constant
+that has its own type. The receiver is the FIRST operand of the call, and it comes before
+the arguments in the order of evaluation. Its convention is `Guaranteed`, because no method
+of the primitive family or of the `string` family changes its receiver or consumes it (the
+convention of the receiver has no row, 8.3). The printer writes the call as
+`builtin string.len(copy _1 @guaranteed)`. A method that answers a `string` writes it into a
+fresh owning local like any other call, and the drop placement drops it (8.10).
+
 ### 8.7 Rvalues
 
 ```
@@ -2019,6 +2028,7 @@ Runs after lowering, before the backend. It checks:
   carve-out: the tail of a `var_arg` extern has no declared parameters, so the rule
   applies to the declared prefix only
 - no `Copy` of an owning value into an `Owned` argument, except a `string` (7.9)
+- a call of a `BuiltinMethod` has a receiver operand, the first operand
 - no `Binary` carries `and` or `or` (8.9)
 - every `Trap` code is a registered RExxxx, with the operand count its format string needs
 - every statement and terminator carries a `Span` (G9)
