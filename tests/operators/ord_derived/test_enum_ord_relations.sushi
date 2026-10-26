@@ -1,0 +1,36 @@
+# `!=`, `<`, `<=`, `>` and `>=` on a derived enum: the variant order first, then the payload.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true\nfalse\ntrue\ntrue\nfalse\nfalse\ntrue\ntrue\ntrue\nfalse\nfalse\ntrue\ntrue\ntrue\ntrue\nfalse\n"
+
+enum Colour:
+    Red
+    Green
+    Blue
+
+enum Shape:
+    Circle(i32)
+    Rect(i32)
+
+fn main() i32:
+    let Colour a = Colour.Red
+    let Colour b = Colour.Blue
+    println(a != b)
+    println(a != Colour.Red)
+    println(a < b)
+    println(a <= b)
+    println(a > b)
+    println(a >= b)
+    let Shape c = Shape.Circle(5)
+    let Shape d = Shape.Circle(7)
+    let Shape r = Shape.Rect(1)
+    println(c != d)
+    println(c < d)
+    println(c <= d)
+    println(c > d)
+    println(c >= d)
+    println(c < r)
+    println(r > c)
+    println(c <= Shape.Circle(5))
+    println(c >= Shape.Circle(5))
+    println(r <= c)
+    return 0

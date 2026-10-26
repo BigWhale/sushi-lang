@@ -52,7 +52,7 @@ from sushi_lang.semantics.ast import ExtendDef, FuncDef
 from sushi_lang.semantics.channel import channel_result, has_channel
 from sushi_lang.semantics import integer_ops
 from sushi_lang.semantics.drop_set import drop_type_names
-from sushi_lang.semantics.integer_width import fits_integer_type, integer_range
+from sushi_lang.semantics.integer_width import integer_bit_width
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.param_modes import Convention
@@ -579,13 +579,16 @@ class _Lowering:
             dispatch.stop(STAGE, expr)
         return arm(self, expr)
 
-    def operand(self, expr: e.ShirExpr) -> p.Operand:
-        """The operand of `expr`, from its `Ownership` row and its shape (ir.md 7.9)."""
+    def operand(self, expr: e.ShirExpr, wraps: bool = False) -> p.Operand:
+        """The operand of `expr`, from its `Ownership` row and its shape (ir.md 7.9). An
+        integer literal holds the value that its type holds: a bit pattern (a radix other
+        than 10) always wraps, and a decimal one wraps when `wraps` is set (the operand of a
+        cast or of a negation, where typecheck reads the magnitude)."""
         row = self.answers.ownership.ownership_of(expr.shir_id)
         if row is Ownership.REJECT:
             raise StageStop(STAGE, "borrowed view", expr.loc)
         if isinstance(expr, e.Lit):
-            return p.Const(_constant(expr, self.typeck))
+            return p.Const(_constant(expr, self.typeck, wraps))
         if isinstance(expr, e.LocalRef):
             place = p.Local(self.local_of(expr.local, expr.loc))
             return p.Move(place) if row is Ownership.MOVE else p.Copy(place)
@@ -604,12 +607,13 @@ class _Lowering:
         return r.Binary(node.op, self.operand(node.lhs), self.operand(node.rhs))
 
     def unary(self, node: e.Unary) -> _Value:
-        return r.Unary(node.op, self.operand(node.operand))
+        return r.Unary(node.op, self.operand(node.operand, wraps=node.op == "neg"))
 
     def cast(self, node: e.Cast) -> _Value:
         """A numeric cast, or a cast to the type of its operand. A cast that calls a
-        conversion stops in `typecheck`, so no row here calls one."""
-        return r.Cast(self.operand(node.operand), self.type_of(node))
+        conversion stops in `typecheck`, so no row here calls one. An integer literal under a
+        cast holds the value that the cast gives at its type (`300 as u8` holds 44)."""
+        return r.Cast(self.operand(node.operand, wraps=True), self.type_of(node))
 
     def enum_init(self, node: e.EnumInit) -> _Value:
         """An enum variant as an aggregate of its instance type (L10)."""
@@ -762,7 +766,7 @@ def _text(value: str) -> k.Str:
     return k.Str(value.encode("utf-8", "surrogatepass"))
 
 
-def _constant(lit: e.Lit, typeck: TypeckResults) -> k.Constant:
+def _constant(lit: e.Lit, typeck: TypeckResults, wraps: bool) -> k.Constant:
     """The SLIR constant of a literal, at the type that typecheck gave it."""
     value = lit.value
     if isinstance(value, e.BoolConst):
@@ -775,15 +779,11 @@ def _constant(lit: e.Lit, typeck: TypeckResults) -> k.Constant:
     if ty is None:
         er.raise_internal_error("CE0000", span=lit.loc, detail="a literal with no type reached SLIR")
     if isinstance(value, e.IntConst):
-        return k.Int(_held(value.value, ty), ty)
+        held = (integer_ops.cast(value.value, ty)
+                if (wraps or value.radix != 10) and integer_bit_width(ty) is not None
+                else value.value)
+        return k.Int(held, ty)
     return k.Float(value.value, ty)
-
-
-def _held(value: int, ty: Type) -> int:
-    """The value that a literal holds at its type. A literal that a cast gave the target type
-    holds what the cast gives (`300 as u8` holds 44); one that fits is unchanged."""
-    return value if fits_integer_type(value, ty) or integer_range(ty) is None \
-        else integer_ops.cast(value, ty)
 
 
 def _symbol(decl: object, home: Optional[str], body: ShirBody) -> str:

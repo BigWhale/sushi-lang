@@ -905,6 +905,7 @@ tests/operators/logical_operands/test_err_not_string_operand.sushi
 tests/operators/logical_operands/test_err_or_float_operand.sushi
 tests/operators/operator_precedence/test_combined_operators.sushi
 tests/operators/operator_precedence/test_operator_precedence.sushi
+tests/operators/ord_derived/test_enum_ord_relations.sushi
 tests/operators/ord_derived/test_err_bare_bool_order_stays.sushi
 tests/operators/ord_derived/test_err_ord_constraint_fn_struct.sushi
 tests/operators/overflow_in_nested_positions/test_err_overflow_in_interpolation_hole.sushi
