@@ -608,7 +608,6 @@ tests/ir/typeck/methods/test_err_typeck_method_primitive_return_mismatch.sushi
 tests/ir/typeck/methods/test_err_typeck_method_receiver_error.sushi
 tests/ir/typeck/methods/test_err_typeck_method_spread.sushi
 tests/ir/typeck/methods/test_err_typeck_method_string_argument_mismatch.sushi
-tests/ir/typeck/methods/test_err_typeck_method_string_array_result_stop.sushi
 tests/ir/typeck/methods/test_err_typeck_method_string_miscount.sushi
 tests/ir/typeck/methods/test_err_typeck_method_string_nom_marker.sushi
 tests/ir/typeck/methods/test_err_typeck_method_string_return_mismatch.sushi

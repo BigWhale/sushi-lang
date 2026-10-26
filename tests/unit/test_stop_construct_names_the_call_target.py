@@ -120,6 +120,21 @@ def test_one_helper_stops_at_a_family_for_every_stage(stage):
     assert raised.value.params == {"stage": stage, "construct": "Call(method string)"}
 
 
+def test_the_string_array_stop_has_its_label_and_stops_the_array_rows_only():
+    """The typecheck arm of the string family stops at a row that answers a dynamic array,
+    with the label below. The stop is temporary: this test reads the rows and the label
+    as data, so the arrays group changes it in one place."""
+    from sushi_lang.semantics.passes.types.visit.calls import STRING_ARRAY_STOP
+    from sushi_lang.semantics.typesys import DynamicArrayType
+    from sushi_lang.sushi_stdlib.src.collections.strings import METHOD_SPECS
+
+    call = _call(e.Dotted(LOCAL, "split"))
+    assert dispatch.construct_of(call, family=STRING_ARRAY_STOP) == "Call(method string array)"
+    arrays = {name for name, spec in METHOD_SPECS.items()
+              if isinstance(spec.returns, DynamicArrayType)}
+    assert arrays == {"split", "to_bytes"}
+
+
 def test_only_a_method_call_has_a_family():
     with pytest.raises(InternalCompilerError) as raised:
         dispatch.construct_of(_call(e.BuiltinFn("println")), facts(), family="primitive")
