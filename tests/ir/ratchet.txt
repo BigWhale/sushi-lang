@@ -601,7 +601,10 @@ tests/ir/typeck/control_flow/test_err_typeck_if_elif_else.sushi
 tests/ir/typeck/control_flow/test_err_typeck_while.sushi
 tests/ir/typeck/literals/test_err_typeck_literal_context.sushi
 tests/ir/typeck/literals/test_err_typeck_literal_default.sushi
+tests/ir/typeck/methods/test_err_typeck_known_method_on_refused_let.sushi
 tests/ir/typeck/methods/test_err_typeck_method_on_refused_let.sushi
+tests/ir/typeck/methods/test_err_typeck_method_primitive_miscount.sushi
+tests/ir/typeck/methods/test_err_typeck_method_primitive_return_mismatch.sushi
 tests/ir/typeck/methods/test_err_typeck_method_receiver_error.sushi
 tests/ir/typeck/methods/test_err_typeck_method_spread.sushi
 tests/ir/typeck/methods/test_err_typeck_method_unknown_on_call.sushi
@@ -1053,6 +1056,8 @@ tests/perks/variadic_in_impl/test_err_perk_impl_native_variadic.sushi
 tests/primitives/bit_ops/test_err_bit_ops_on_bare_literal.sushi
 tests/primitives/bit_ops/test_err_bit_ops_on_f64.sushi
 tests/primitives/bit_ops/test_err_bit_ops_on_i32.sushi
+tests/primitives/bit_ops/test_err_bit_ops_shift_past_width.sushi
+tests/primitives/bit_ops/test_err_bit_ops_with_argument.sushi
 tests/references/bare_mode_param/test_err_bare_nom_name_is_not_a_receiver.sushi
 tests/references/bare_mode_param/test_err_bare_poke_name_is_not_a_receiver.sushi
 tests/references/borrow_of_constant/test_err_borrow_constant.sushi
@@ -1136,6 +1141,9 @@ tests/types/blank_type/test_err_blank_constant.sushi
 tests/types/blank_type/test_err_blank_parameter.sushi
 tests/types/blank_type/test_err_blank_return_empty_ok.sushi
 tests/types/blank_type/test_err_blank_variable.sushi
+tests/types/builtin_method_return_type/test_err_issue239_primitive_return_type.sushi
+tests/types/builtin_method_return_type/test_err_issue239_string_builtin_return_type.sushi
+tests/types/builtin_method_return_type/test_err_issue239_to_bits_width.sushi
 tests/types/casts/test_cast_basic.sushi
 tests/types/casts/test_cast_truncation.sushi
 tests/types/casts/test_err_cast_invalid.sushi

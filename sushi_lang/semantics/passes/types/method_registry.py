@@ -44,6 +44,7 @@ from sushi_lang.semantics.generics.hashmap import HASHMAP_METHOD_ARITY, HASHMAP_
 from sushi_lang.semantics.generics.iterators import ITERATOR_METHOD_ARITY, iterator_method_modes
 from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY, LIST_METHOD_MODES
 from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_ARITY, MAYBE_METHOD_MODES
+from sushi_lang.semantics.generics.primitives import PRIMITIVE_METHOD_ARITY
 from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY, OWN_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY, RESULT_METHOD_MODES
 from sushi_lang.semantics.generics.type_display import display_type
@@ -194,7 +195,7 @@ class MethodTypeRegistry:
         if family is None or family.beats_perk != beats_perk or family.validate is None:
             return False
         call.callee_builtin_family = family.name
-        if reject_builtin_miscount(validator.reporter, call,
+        if reject_builtin_miscount(validator.reporter, call.loc, call.method, len(call.args),
                                    f"{display_type(receiver_type)}.{call.method}",
                                    family.arity):
             return True
@@ -730,4 +731,5 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     infer=lambda rt, call, v: FunctionMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name="primitive", beats_perk=False, answers=_answers_primitive,
+    arity=PRIMITIVE_METHOD_ARITY,
     infer=lambda rt, call, v: PrimitiveMethodInferrer(rt, call.method, v)))

@@ -1,0 +1,11 @@
+# EXPECT_ERROR_CODES_EXACT: CE2009
+# EXPECT_DUMP_SHIR: test_err_typeck_method_primitive_miscount.shir
+#
+# A bit method takes no argument. One argument is a wrong count, and the call still
+# yields the return type of its row.
+
+fn main() i32:
+    let u32 c = 11
+    let u32 r = c.reverse_bits(4)
+    let i32 z = c.leading_zeros()
+    return z + (r as i32)

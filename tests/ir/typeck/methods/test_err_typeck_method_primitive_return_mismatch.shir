@@ -1,0 +1,10 @@
+unit test_err_typeck_method_primitive_return_mismatch
+
+ShirBody main
+  params : []
+  locals : [_0 "pi": f64, _1 "whole": u64, _2 "half": u32]
+  block  :
+    Assign(LocalRef(_0), Lit(3.14), is_init: true)
+    Assign(LocalRef(_1), Call(Builtin(LocalRef(_0), "to_bits"), []), is_init: true)
+    Assign(LocalRef(_2), Call(Builtin(LocalRef(_0), "to_bits"), []), is_init: true)
+    Return(Binary(+, Cast(LocalRef(_1), i32), Cast(LocalRef(_2), i32)))

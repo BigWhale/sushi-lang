@@ -929,8 +929,8 @@ def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
     from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
     family, statics = _CONTAINER_STATICS.get(type_name, ("", ()))
     if call.method in statics:
-        if reject_builtin_miscount(validator.reporter, call, f"{type_name}.{call.method}",
-                                   arity_of_family(family)):
+        if reject_builtin_miscount(validator.reporter, call.loc, call.method, len(call.args),
+                                   f"{type_name}.{call.method}", arity_of_family(family)):
             return
         if call.method in _CONTAINER_STATIC_COUNTS:
             from sushi_lang.semantics.passes.types.arrays import reject_non_i32
@@ -1388,8 +1388,7 @@ def _validate_function_family(validator: 'TypeValidator', call: MethodCall,
 @METHOD_TYPE_REGISTRY.validator("primitive")
 def _validate_primitive_family(validator: 'TypeValidator', call: MethodCall,
                                receiver_type) -> None:
-    from sushi_lang.semantics.generics.primitives import validate_primitive_method
-    validate_primitive_method(call, receiver_type, validator.reporter)
+    """The count is the arity row of the family, read before this hook runs."""
 
 
 def _stamp_param_modes(call, method) -> None:

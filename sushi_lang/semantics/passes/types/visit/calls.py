@@ -16,7 +16,7 @@ A `Call` answers what its callee yields. Its written target decides the callee:
 - `Dotted` is a method call. The receiver is typed first, and the ladder of the call
   (`calls/dotcall.py:resolve_dotted`) finds the callee: a built-in family, a perk
   implementation, an extension method, or nothing (CE2008). A family answer is the callee
-  row `Builtin`. A method is never variadic, so a bloom argument is CE0120.
+  row `Builtin`; the primitive family yields the type of its row. A method is never variadic, so a bloom argument is CE0120.
 
 Every other target, and a call that another group types (a generic function, a stdlib
 function, a C function, a variadic function, a method of a receiver that is not of a
@@ -35,7 +35,9 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION
 from sushi_lang.semantics.generics.contracts import DISPLAY
+from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
 from sushi_lang.semantics.generics.opaque import explain_unpromised
+from sushi_lang.semantics.generics.primitives import primitive_method_return_type
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import Convention, declared_modes, param_mode
 from sushi_lang.semantics.passes.types import visit
@@ -45,6 +47,7 @@ from sushi_lang.semantics.passes.types.calls.dotcall import (
     MethodRung, reject_unknown_method, resolve_dotted)
 from sushi_lang.semantics.passes.types.calls.user_defined import (
     generic_struct_takes_the_call, own_concrete_function, struct_takes_the_call)
+from sushi_lang.semantics.passes.types.method_registry import MethodFamily
 from sushi_lang.semantics.passes.types.expressions import top_level_contract
 from sushi_lang.semantics.passes.types.resolution import call_yield, resolve_variable_type
 from sushi_lang.semantics.passes.types.utils import names_no_type
@@ -61,6 +64,9 @@ from sushi_lang.semantics.typesys import BuiltinType, ReferenceType, Type, deref
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import FuncSig, Param
     from sushi_lang.semantics.passes.types import TypeValidator
+
+
+PRIMITIVE_FAMILY = "primitive"
 
 
 def check_call(validator: TypeValidator, node: e.Call,
@@ -129,7 +135,18 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
         visit.stop_at(validator, node)
     callee = Builtin(target.recv, answer.family.callee(target.name))
     validator.body_answers().record_callee(node.shir_id, ResolvedCall(callee))
+    if answer.family.name == PRIMITIVE_FAMILY:
+        return _check_primitive_method(validator, node, receiver, target.name, answer.family)
     visit.stop_at_family(node, answer.family.name)
+
+
+def _check_primitive_method(validator: TypeValidator, node: e.Call, receiver: Type,
+                            name: str, family: MethodFamily) -> Optional[Type]:
+    """A primitive method takes no argument and yields the type of its row. A wrong count
+    is CE2009, and the call still yields that type."""
+    reject_builtin_miscount(validator.reporter, node.loc, name, len(node.args),
+                            f"{display_type(receiver)}.{name}", family.arity)
+    return primitive_method_return_type(receiver, name)
 
 
 def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
