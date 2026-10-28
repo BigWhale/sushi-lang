@@ -28,7 +28,7 @@ Amended on 2026-10-28 by ruling R-U (group A11): 8.8, 8.9 and 8.13 (a `Trap` giv
 operand of a fixed type to each printf conversion of its registry text; the trap of an
 `assert` carries its position and its message as two `string` operands).
 Amended on 2026-10-28 by group A3: 7.8 (an `IntRange` keeps the span of each bound, where a
-diagnostic of that bound points).
+diagnostic of that bound points), and 7.5 (the path rule of a `Match`).
 
 ## The decisions, in one place
 
@@ -1116,11 +1116,16 @@ which is the question of a join in a loop body. An `If` ends the path when it ha
 never ends the path, and an `Assert`, an `Expand` and every other statement go on to the
 next. A statement after a `Break` or a `Continue` of its block is dead too. Two statements
 of two copies of an unrolled `expand` were not written one after the other, so the one does
-not make the other dead (`ExpandCopies.holding`, 7.2). A `Match` has no rule yet, because
-its answer needs the exhaustiveness of its arms, an answer of `typecheck` (#886). The two
-path rules read no type: `typecheck` runs them on the SHIR body after a walk that ends
-with no stop, on a template as it is written and not on a copy of it, and it reads every
-block of the body.
+not make the other dead (`ExpandCopies.holding`, 7.2). A `Match` ends the path when it has
+an arm and each arm ends it. A match whose arms miss a value
+([CE2040](../error-catalog.md#ce2040), [CE2074](../error-catalog.md#ce2074)) has no answer,
+because the arm that the author adds decides its path (#886): the statement after it is not
+dead, and it gives the body no CE0107. So the dead-statement rule gives the predicate the set
+of these matches of the body (`uncovered`), and a match of the set does not end the path. The
+fall-off rule and `borrow` give no set: the fall-off rule takes the match as one that ends the
+path, and a body with an error does not get to `borrow`. The two path rules read no type:
+`typecheck` runs them on the SHIR body after a walk that ends with no stop, on a template as
+it is written and not on a copy of it, and it reads every block of the body.
 
 `Destructure` stays one statement, because its ownership is not that of a field read: it
 OWNS from an owned value and BORROWS from a borrow (`tuples.md`). `borrow` decides which,
