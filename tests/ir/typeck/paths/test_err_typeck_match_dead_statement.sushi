@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE0140
+# EXPECT_DUMP_SHIR: test_err_typeck_match_dead_statement.shir
+#
+# A match whose every arm returns ends the path, so the statement after it cannot run:
+# CE0140, with a note at the match. The body does not reach its end, so it has no CE0107.
+
+fn sign(i32 n) i32:
+    match n:
+        0 -> return 0
+        _ -> return 1
+    println(n)
+
+fn main() i32:
+    return sign(4)

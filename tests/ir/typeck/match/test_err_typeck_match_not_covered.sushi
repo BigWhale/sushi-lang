@@ -1,0 +1,29 @@
+# EXPECT_ERROR_CODES_EXACT: CE2074, CE2074
+# EXPECT_STDERR_CONTAINS: "no arm matches the value 128 (0x80)"
+# EXPECT_STDERR_CONTAINS: "no arm matches every other string"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_not_covered.shir
+#
+# The arms of an integer match cover the type when they hold each of its values: two
+# ranges cover a u8, and a match with no `_` arm is legal there. A gap is CE2074, which
+# names the first value that no arm matches, in the base of the first arm. The values of
+# a string cannot be listed, so a string match needs a `_` arm: CE2074.
+
+fn full(u8 b) string:
+    match b:
+        0..=0x7f -> return "ascii"
+        0x80..=0xff -> return "high"
+
+fn gap(u8 b) string:
+    match b:
+        0x00..=0x7f -> return "ascii"
+        0x81..=0xff -> return "high"
+
+fn word(string s) i32:
+    match s:
+        "get" -> return 1
+        "put" -> return 2
+
+fn main() i32:
+    println(full(1))
+    println(gap(1))
+    return word("get")

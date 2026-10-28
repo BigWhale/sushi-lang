@@ -1,0 +1,40 @@
+# EXPECT_ERROR_CODES_EXACT: CE2118, CE2118, CE2118, CE2118
+# EXPECT_STDERR_CONTAINS: "unreachable match arm '3..=7'"
+# EXPECT_STDERR_CONTAINS: "the arm '0..=4' matches these values first"
+# EXPECT_STDERR_CONTAINS: "'5..5' matches no value: '5..=5' matches the one value 5"
+# EXPECT_STDERR_CONTAINS: "the alternative '_' matches these values first"
+# EXPECT_STDERR_CONTAINS: "unreachable match arm '_'"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_dead_arm.shir
+#
+# An arm that the arms above match all of can never run: CE2118, with a note at each arm
+# above that shares a value with it. A range like `5..5` matches no value. An alternative
+# after a `_` alternative of its arm can never match. A `_` arm after arms that cover the
+# type can never run.
+
+fn covered(i32 n) string:
+    match n:
+        0..=4 -> return "low"
+        5..=9 -> return "high"
+        3..=7 -> return "never"
+        _ -> return "other"
+
+fn empty(i32 n) string:
+    match n:
+        5..5 -> return "never"
+        _ -> return "other"
+
+fn alternative(i32 n) i32:
+    match n:
+        1 | _ | 2 -> return 1
+
+fn full(i8 b) string:
+    match b:
+        -128..=-1 -> return "negative"
+        0..=127 -> return "positive"
+        _ -> return "never"
+
+fn main() i32:
+    println(covered(1))
+    println(empty(1))
+    println(full(1))
+    return alternative(1)

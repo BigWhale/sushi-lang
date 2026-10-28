@@ -2,9 +2,8 @@
 
 A match on an integer or a string records its `MatchFacts`: the type of the scrutinee, and
 the integer type that a literal arm and a range arm are read at (None on a string). Then it
-checks each arm and walks its body. The coverage of the arms is not checked yet: the walk
-stops with `typecheck, Match exhaustiveness`. A match on an enum or a tuple stops with
-`typecheck, Match`. The value of an integer pattern is read at the type of its position
+checks each arm, walks its body, and runs the one checker over the rows of the arms; the
+walk goes on after the match. A match on an enum or a tuple stops with `typecheck, Match`. The value of an integer pattern is read at the type of its position
 (`semantics/integer_patterns.py`). The tests run the arm over SHIR built by hand, with a
 stand-in for the pass; they do not run the compiler.
 """
@@ -35,7 +34,8 @@ COLOR = EnumType("Color", (EnumVariantInfo("Red", ()), EnumVariantInfo("Green", 
 def _validator(answers: TypeckResults) -> SimpleNamespace:
     empty = SimpleNamespace(by_name={})
     return SimpleNamespace(body_answers=lambda: answers, struct_table=empty,
-                           enum_table=empty, visibility=None, reporter=None)
+                           enum_table=empty, visibility=None, reporter=None,
+                           uncovered_matches=set())
 
 
 def _arm(index: int, pattern: p.ShirPattern) -> p.Arm:
@@ -64,7 +64,7 @@ def _stop(validator: SimpleNamespace, node: s.Match) -> dict:
     return caught.value.params
 
 
-def test_an_integer_match_records_its_facts_and_stops_at_its_coverage() -> None:
+def test_an_integer_match_records_its_facts_and_is_covered() -> None:
     node, answers, validator = _match(I32, [
         _arm(0, p.Literal(ShirId(10), SPAN, _int(1))),
         _arm(1, p.Or(ShirId(11), SPAN, [p.Literal(ShirId(12), SPAN, _int(2)),
@@ -72,8 +72,8 @@ def test_an_integer_match_records_its_facts_and_stops_at_its_coverage() -> None:
         _arm(2, _range(_int(0x10, 16), _int(0x1f, 16), True)),
         _arm(3, p.Wildcard(ShirId(14), SPAN)),
     ])
-    assert _stop(validator, node) == {"stage": "typecheck",
-                                      "construct": "Match exhaustiveness"}
+    visit.check(validator, node)
+    assert validator.uncovered_matches == set()
     assert answers.match_facts_of(node.shir_id) == MatchFacts(I32, I32)
     assert answers.type_of(node.scrutinee.shir_id) == I32
 
@@ -83,8 +83,8 @@ def test_a_string_match_has_no_integer_type() -> None:
         _arm(0, p.Literal(ShirId(10), SPAN, e.StrConst("get"))),
         _arm(1, p.Wildcard(ShirId(11), SPAN)),
     ])
-    assert _stop(validator, node) == {"stage": "typecheck",
-                                      "construct": "Match exhaustiveness"}
+    visit.check(validator, node)
+    assert validator.uncovered_matches == set()
     assert answers.match_facts_of(node.shir_id) == MatchFacts(STRING, None)
 
 

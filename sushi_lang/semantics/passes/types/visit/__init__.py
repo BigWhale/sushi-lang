@@ -60,12 +60,6 @@ def stop_with_no_value(node: Any) -> NoReturn:
     dispatch.stop(STAGE, node, state="with no value")
 
 
-def stop_at_coverage(node: s.Match) -> NoReturn:
-    """The stop after the arms of a match on an integer or a string (`Match exhaustiveness`):
-    the pass does not check the coverage of the arms yet."""
-    dispatch.stop(STAGE, node, state="exhaustiveness")
-
-
 def _arm(node: Any) -> Callable[..., Any]:
     return dispatch.arm_of(ARMS, node, STAGE)
 

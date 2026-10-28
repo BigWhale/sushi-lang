@@ -6,7 +6,8 @@ typecheck pass reads it for the missing `return` (CE0107) and for a dead stateme
 
 1. `RULES` has a row for each member of `ShirStmt`, and no row for another class.
 2. Each row gives the answer of ir.md 7.5 over a block that the test builds.
-3. A `match` has no rule yet, and asking for one is an internal error.
+3. A `match` ends the path when it has an arm and each arm ends it. A match whose arms
+   miss a value (the caller names it in `uncovered`) does not end it.
 
 These tests read Python objects and call the predicate over nodes that they build. They
 do not run the compiler.
@@ -15,12 +16,10 @@ from __future__ import annotations
 
 import typing
 
-import pytest
-
-from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import paths
+from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import CopyRange, ExpandCopies, Instance, ShirBody
 from sushi_lang.semantics.shir.ids import DeclId, IdAllocator, ShirId
@@ -100,11 +99,38 @@ def test_a_loop_never_ends_the_path_and_its_body_is_not_read() -> None:
     assert not paths.terminates(loop_with_break, leaves_round=True)
 
 
-def test_a_match_has_no_rule_yet() -> None:
-    match = s.Match(_IDS.allocate(), _SPAN, _value(), [], False)
-    with pytest.raises(InternalCompilerError) as caught:
-        paths.terminates(match)
-    assert caught.value.code == "CE0000"
+def _match(*bodies: ShirBlock) -> s.Match:
+    arms = [p.Arm(p.Wildcard(_IDS.allocate(), _SPAN), body) for body in bodies]
+    return s.Match(_IDS.allocate(), _SPAN, _value(), arms, False)
+
+
+def test_a_match_ends_the_path_only_when_each_arm_ends_it() -> None:
+    assert paths.terminates(_match(_block(_return()), _block(_say(), _return())))
+    assert not paths.terminates(_match(_block(_return()), _block(_say())))
+    assert not paths.terminates(_match())
+    assert paths.terminates(_block(_say(), _match(_block(_return()), _block(_return()))))
+    assert paths.ends_the_path(_match(_block(_return()), _block(_return())))
+
+
+def test_a_break_in_an_arm_leaves_the_round_only() -> None:
+    match = _match(_block(_break()), _block(_return()))
+    assert not paths.terminates(match)
+    assert paths.terminates(match, leaves_round=True)
+
+
+def test_a_match_whose_arms_miss_a_value_does_not_end_the_path() -> None:
+    match = _match(_block(_return()), _block(_return()))
+    uncovered = {match.shir_id}
+    assert not paths.terminates(match, uncovered=uncovered)
+    assert not paths.ends_the_path(match, uncovered=uncovered)
+    nested = _if(_block(match), _block(_return()))
+    assert not paths.terminates(nested, uncovered=uncovered)
+    assert paths.terminates(nested)
+    block = _block(match, _say())
+    assert paths.first_dead_statement(block, _body(block, ExpandCopies()),
+                                      uncovered=uncovered) is None
+    dead = block.statements[1]
+    assert paths.first_dead_statement(block, _body(block, ExpandCopies())) == (match, dead)
 
 
 def _body(block: ShirBlock, copies: ExpandCopies) -> ShirBody:

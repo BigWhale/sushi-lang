@@ -2,18 +2,20 @@
 
 The SHIR half checks a `match` on an integer (#415) or a string. `matchable_type` is the
 rule of the scrutinee (CE2048), `check_literal_arm` checks the pattern of one arm and gives
-it its row, and `reject_arm_kinds` refuses a literal arm on an enum or a tuple scrutinee
-(CE2076). The pattern arms of the table of the pass (`visit.ARMS`) are
-`check_wildcard_pattern`, `check_literal_pattern` and `check_range_pattern`. Each one reads
-its pattern at the type of its position and answers the place of the pattern in the matrix
-of the one checker (`exhaustiveness.py`), or None after an error. A literal and the bounds
-of a range are values of that type (`semantics/integer_patterns.py`).
+it its row (a repeated value is CE2075), and `reject_arm_kinds` refuses a literal arm on an
+enum or a tuple scrutinee (CE2076). The pattern arms of the table of the pass (`visit.ARMS`)
+are `check_wildcard_pattern`, `check_literal_pattern` and `check_range_pattern`. Each one
+reads its pattern at the type of its position and answers the place of the pattern in the
+matrix of the one checker (`exhaustiveness.py`), or None after an error. A literal and the
+bounds of a range are values of that type (`semantics/integer_patterns.py`).
+`check_match_exhaustiveness` runs the one checker over the rows of the arms (CE2040, CE2074,
+CE2118).
 
 Port templates: the rest of the module reads AST patterns. `collect_and_validate_patterns`
-checks the arms of a match on an enum or a tuple (group A4), `reject_poke_binding_into_a_constant`
-refuses a `poke` binding into a constant (group A4), and `check_match_exhaustiveness` runs
-the one checker over the rows (P3.A3.tc2). No pass reaches them. Where a template calls a
-SHIR helper of this module, the group that ports the template gives it SHIR patterns.
+checks the arms of a match on an enum or a tuple (group A4), and
+`reject_poke_binding_into_a_constant` refuses a `poke` binding into a constant (group A4).
+No pass reaches them. Where a template calls a SHIR helper of this module, the group that
+ports the template gives it SHIR patterns.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -107,18 +109,31 @@ _MODE_WORDS = {"bare": "a bare binding", "peek": "a `peek` binding",
 
 
 @dataclass
+class _Seen:
+    """The values that the arms and alternatives above already match, for CE2075.
+
+    A string is one value. An integer literal and a range are an interval of the
+    scrutinee type, each with the spelling of the pattern that matches it first.
+    """
+    strings: dict[str, str] = field(default_factory=dict)
+    integers: List[Tuple[IntRange, str]] = field(default_factory=list)
+
+
+@dataclass
 class ArmRows:
     """What the arms of one match give the checker.
 
     `rows[i]` is arm i's pattern for the matrix, or None for an arm left out (a duplicate
     that CE2041 or CE2075 reported). `reported` holds the arms whose own rule spoke, so the
     dead-arm error does not speak again. `invalid` says that an arm has an error in its
-    pattern: the checker then gives no answer, because the coverage is not known.
+    pattern: the checker then gives no answer, because the coverage is not known. `values`
+    holds the values that the literal arms above match, for CE2075.
     """
     rows: List[Optional[Pat]] = field(default_factory=list)
     reported: Set[int] = field(default_factory=set)
     invalid: bool = False
     after_wildcard: Optional[int] = None
+    values: _Seen = field(default_factory=_Seen)
 
 
 # -- the SHIR half -----------------------------------------------------------------------
@@ -189,27 +204,39 @@ def check_literal_arm(validator: 'TypeValidator', rows: 'ArmRows', match: 's.Mat
 
     Each alternative is an arm of the kind of the scrutinee (CE2076). An integer literal
     takes the type of the scrutinee under the fit rule of a context-typed literal (CE2073),
-    so a non-decimal literal is a bit pattern. A `_` arm is the last arm (CE2041).
+    so a non-decimal literal is a bit pattern. Duplicates are duplicates by VALUE: `0x2a` and
+    `42` are one value, `0xff` and `-1` are one value on an i8, and `"a"` and `'a'` are one
+    value (CE2075). A `_` arm is the last arm (CE2041).
     """
     pattern = match.arms[index].pattern
     if isinstance(pattern, p.Wildcard):
         _wildcard_row(validator, rows, index, len(match.arms), pattern)
         return
     kind = literal_kind(ty)
-    _add_row(rows, index, pattern, [(alt, _literal_alternative(validator, alt, ty, kind))
-                                    for alt in _alternatives(pattern)])
+    _add_row(rows, index, pattern,
+             [(alt, _literal_alternative(validator, alt, ty, kind, rows.values))
+              for alt in _alternatives(pattern)])
 
 
 def _literal_alternative(validator: 'TypeValidator', alt: p.ShirPattern | p.PatBinding,
-                         ty: Type, kind: Optional[str]) -> Optional[Pat]:
+                         ty: Type, kind: Optional[str],
+                         seen: _Seen) -> Optional[Pat | _Dropped]:
     """One top-level alternative of a literal arm: its place in the row, or None after an
-    error."""
+    error. A value that an arm or an alternative above already matches is CE2075."""
     if isinstance(alt, p.Wildcard):
         return check_wildcard_pattern(validator, alt, ty)
     if isinstance(alt, p.IntRange) and (kind == "integer" or _has_string_bound(alt)):
-        return check_range_pattern(validator, alt, ty)
+        return _first_values(validator, alt, check_range_pattern(validator, alt, ty), seen)
     if isinstance(alt, p.Literal) and _constant_kind(alt.value) == kind:
-        return check_literal_pattern(validator, alt, ty)
+        row = check_literal_pattern(validator, alt, ty)
+        if row is None or not isinstance(alt.value, StrConst):
+            return _first_values(validator, alt, row, seen)
+        first = seen.strings.get(alt.value.value)
+        if first is not None:
+            er.emit(validator.reporter, er.ERR.CE2075, alt.loc, value=first, first=first)
+            return _DROPPED
+        seen.strings[alt.value.value] = alt.value.spelling()
+        return row
     if isinstance(alt, p.Tuple):
         er.emit(validator.reporter, er.ERR.CE2117, alt.loc, type=display_type(ty))
     elif isinstance(alt, (p.Variant, p.Literal, p.IntRange)):
@@ -406,18 +433,7 @@ def _poke_bindings(item: object) -> Iterator[RefBinding]:
 
 
 
-@dataclass
-class _Seen:
-    """The values that the arms and alternatives above already match, for CE2075.
-
-    A string is one value. An integer literal and a range are an interval of the
-    scrutinee type, each with the spelling of the pattern that matches it first.
-    """
-    strings: dict[str, str] = field(default_factory=dict)
-    integers: List[Tuple[IntRange, str]] = field(default_factory=list)
-
-
-def _first_values(validator: 'TypeValidator', alt: LiteralPattern | RangePattern,
+def _first_values(validator: 'TypeValidator', alt: p.Literal | p.IntRange,
                   row: Optional[Pat], seen: _Seen) -> Optional[Pat | _Dropped]:
     """An integer alternative against the values above it (CE2075), then recorded.
 
@@ -432,22 +448,37 @@ def _first_values(validator: 'TypeValidator', alt: LiteralPattern | RangePattern
     key = row.key
     shared = [(max(key.low, other.low), first) for other, first in seen.integers
               if other.overlaps(key)]
-    if shared and (isinstance(alt, LiteralPattern)
+    if shared and (isinstance(alt, p.Literal)
                    or not covers([other for other, _first in seen.integers], key)):
         value, first = min(shared, key=lambda pair: pair[0])
         er.emit(validator.reporter, er.ERR.CE2075, alt.loc,
                 value=_spell_value(value, _radix_of(alt)), first=first)
-        if isinstance(alt, LiteralPattern):
+        if isinstance(alt, p.Literal):
             return _DROPPED
-    seen.integers.append((key, pattern_source(alt)))
+    seen.integers.append((key, _spell_pattern(alt)))
     return row
 
 
-def _radix_of(alt: object) -> int:
+def _radix_of(alt: p.Literal | p.IntRange) -> int:
     """The base an integer pattern is written in: the base of its first bound."""
-    if isinstance(alt, RangePattern):
-        return alt.low.radix
-    return alt.radix if isinstance(alt, LiteralPattern) else 10
+    const = alt.low if isinstance(alt, p.IntRange) else alt.value
+    return const.radix if isinstance(const, IntConst) else 10
+
+
+def _spell_pattern(pattern: p.ShirPattern | p.PatBinding) -> str:
+    """A pattern as a diagnostic shows it: an integer in its base, a byte as written, and a
+    string in double quotes."""
+    if isinstance(pattern, p.Wildcard):
+        return "_"
+    if isinstance(pattern, p.Literal) and isinstance(pattern.value, (IntConst, StrConst)):
+        return pattern.value.spelling()
+    if isinstance(pattern, p.IntRange):
+        return _range_source(pattern)
+    if isinstance(pattern, p.Or):
+        return " | ".join(_spell_pattern(alt) for alt in pattern.alternatives)
+    raise_internal_error("CE0000", span=getattr(pattern, "loc", None),
+                         detail=f"no spelling of a {type(pattern).__name__} pattern yet")
+    return ""
 
 
 def _spell_value(value: int, radix: int) -> str:
@@ -862,20 +893,23 @@ def _binding_difference(first: dict[str, _Bound], here: dict[str, _Bound]) -> Op
     return None
 
 
-def check_match_exhaustiveness(validator: 'TypeValidator', stmt: Match, scrutinee_type: Type,
-                               arms: ArmRows) -> None:
-    """Run the one checker over the arms: the missing patterns, and the dead arms."""
+def check_match_exhaustiveness(validator: 'TypeValidator', match: 's.Match',
+                               scrutinee_type: Type, arms: ArmRows) -> None:
+    """Run the one checker over the rows of the arms: the missing values (CE2040, CE2074),
+    and the dead arms and alternatives (CE2118). A match whose arms miss a value goes into
+    `validator.uncovered_matches`, for the dead-statement rule."""
     if arms.invalid:
         return
     result = analyze(lambda ty: _signature(validator, ty), arms.rows, scrutinee_type)
 
     if result.missing:
+        validator.uncovered_matches.add(match.shir_id)
         kind = literal_kind(scrutinee_type)
         if kind is not None:
-            er.emit(validator.reporter, er.ERR.CE2074, stmt.loc, kind=kind,
-                    missing=_first_missing(stmt, scrutinee_type, result.missing[0]))
+            er.emit(validator.reporter, er.ERR.CE2074, match.loc, kind=kind,
+                    missing=_first_missing(match, scrutinee_type, result.missing[0]))
         else:
-            er.emit(validator.reporter, er.ERR.CE2040, stmt.loc,
+            er.emit(validator.reporter, er.ERR.CE2040, match.loc,
                     variants=_render_missing(validator, result.missing, scrutinee_type,
                                              arms.rows))
 
@@ -883,10 +917,10 @@ def check_match_exhaustiveness(validator: 'TypeValidator', stmt: Match, scrutine
         if index in arms.reported or (arms.after_wildcard is not None
                                       and index >= arms.after_wildcard):
             continue
-        dead = stmt.arms[index].pattern
+        dead = match.arms[index].pattern
         diagnostic = er.emit_with(validator.reporter, er.ERR.CE2118, dead.loc,
-                                  pattern=pattern_source(dead))
-        _note_covering_arms(diagnostic, stmt, covering)
+                                  pattern=_spell_pattern(dead))
+        _note_covering_arms(diagnostic, match, covering)
         _help_for_an_empty_range(diagnostic, dead, scrutinee_type)
         diagnostic.emit()
 
@@ -897,17 +931,17 @@ def check_match_exhaustiveness(validator: 'TypeValidator', stmt: Match, scrutine
             continue
         alt, span = dead_alternative.label
         diagnostic = er.emit_with(validator.reporter, er.ERR.CE2118, span,
-                                  pattern=pattern_source(alt))
-        _note_covering_arms(diagnostic, stmt, dead_alternative.arms)
+                                  pattern=_spell_pattern(alt))
+        _note_covering_arms(diagnostic, match, dead_alternative.arms)
         _help_for_an_empty_range(diagnostic, alt, scrutinee_type)
         for earlier, earlier_span in dead_alternative.alternatives:
             if earlier_span is not None:
-                diagnostic.note_at(f"the alternative '{pattern_source(earlier)}' matches "
+                diagnostic.note_at(f"the alternative '{_spell_pattern(earlier)}' matches "
                                    f"these values first", earlier_span)
         diagnostic.emit()
 
 
-def _first_missing(stmt: Match, ty: Type, witness: Pat) -> str:
+def _first_missing(match: 's.Match', ty: Type, witness: Pat) -> str:
     """The `{missing}` slot of CE2074: the first integer value that no arm matches, in the
     base of the first integer arm, or the other strings."""
     if ty == BuiltinType.STRING:
@@ -917,31 +951,29 @@ def _first_missing(stmt: Match, ty: Type, witness: Pat) -> str:
     else:
         bounds = integer_range(ty)
         value = bounds[0] if bounds is not None else 0
-    radix = next((_radix_of(alt) for arm in stmt.arms for alt in alternatives_of(arm.pattern)
-                  if isinstance(alt, (LiteralPattern, RangePattern))), 10)
+    radix = next((_radix_of(alt) for arm in match.arms for alt in _alternatives(arm.pattern)
+                  if isinstance(alt, (p.Literal, p.IntRange))), 10)
     return f"the value {_spell_value(value, radix)}"
 
 
 def _help_for_an_empty_range(diagnostic, pattern: object, ty: Type) -> None:
     """A range like `5..5` at the top of an arm matches no value: say so."""
-    if not isinstance(pattern, RangePattern) or _has_string_bound(pattern) \
-            or integer_range(ty) is None:
+    if not isinstance(pattern, p.IntRange) or not isinstance(pattern.low, IntConst) \
+            or _has_string_bound(pattern) or integer_range(ty) is None:
         return
     low, high = pattern_interval(pattern, ty)
     if low > high:
-        diagnostic.help(f"'{pattern_source(pattern)}' matches no value: '{pattern.low.display}"
-                        f"..={pattern.low.display}' matches the one value "
-                        f"{pattern.low.display}")
+        written = pattern.low.spelling()
+        diagnostic.help(f"'{_range_source(pattern)}' matches no value: '{written}..={written}' "
+                        f"matches the one value {written}")
 
 
-def _note_covering_arms(diagnostic, stmt: Match, covering: List[int]) -> None:
+def _note_covering_arms(diagnostic, match: 's.Match', covering: List[int]) -> None:
     """A note at each arm above that matches the values of a dead pattern first."""
     for above in covering:
-        cover = stmt.arms[above].pattern
-        if cover.loc is not None:
-            diagnostic.note_at(
-                f"the arm '{pattern_source(cover)}' matches these values first",
-                cover.loc)
+        cover = match.arms[above].pattern
+        diagnostic.note_at(f"the arm '{_spell_pattern(cover)}' matches these values first",
+                           cover.loc)
 
 
 def _signature(validator: 'TypeValidator', ty: Type) -> Signature:

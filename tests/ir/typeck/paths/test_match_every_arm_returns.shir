@@ -1,0 +1,23 @@
+unit test_match_every_arm_returns
+
+ShirBody size
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal(0), [Return(Lit("zero"))]), Arm(IntRange(1, 9, inclusive: true), [Return(Lit("small"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody code
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Or([Literal("get"), Literal("put")]), [Return(Lit(1))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@size), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@size), [(Lit(5), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@size), [(Lit(50), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@code), [(Lit("put"), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

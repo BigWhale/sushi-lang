@@ -126,16 +126,17 @@ def unit_tables(self):
     return getattr(getattr(self, "tables", None), "namespaces", None)
 
 
-def _reject_path_faults(self, node, body) -> None:
+def _reject_path_faults(self, node, body, uncovered=frozenset()) -> None:
     """CE0140, then CE0107, for the SHIR body of one function or method, and the faults
-    of a borrowed return of its declaration.
+    of a borrowed return of its declaration. `uncovered` holds the matches of the body
+    whose arms miss a value.
 
     Neither path rule reads a type, so a template takes both once, as written, and a copy
     of it takes neither (#1070).
     """
     if self.in_template_copy:
         return
-    reject_dead_statements(self, body)
+    reject_dead_statements(self, body, uncovered)
     reject_fall_off(self, body.block, node.ret, has_channel(node), node.name_span)
     reject_borrowed_return_faults(self, node)
 
@@ -219,7 +220,8 @@ def _validate_function_body(self, func: FuncDef) -> None:
 
     validate_type_name(self, func.ret, func.ret_span)
 
-    self.check_body(func, lambda body: _reject_path_faults(self, func, body), offered=header)
+    self.check_body(func, lambda body, uncovered: _reject_path_faults(
+        self, func, body, uncovered), offered=header)
 
     self.current_function = None
     _leave_body(self)
@@ -307,8 +309,8 @@ def _validate_method_statements(self, target_type, method, synthesized: bool) ->
 
     validate_type_name(self, method.ret, method.ret_span)
 
-    self.check_body(method, lambda body: _reject_path_faults(self, method, body),
-                    offered=header)
+    self.check_body(method, lambda body, uncovered: _reject_path_faults(
+        self, method, body, uncovered), offered=header)
 
     _leave_body(self)
 

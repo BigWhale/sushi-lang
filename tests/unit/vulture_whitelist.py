@@ -159,9 +159,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "matching.py", "reject_poke_binding_into_a_constant",
      "kept for A4: a port template that reads AST patterns; group A4 ports it to SHIR "
      "inputs with the Variant pattern, which holds a poke binding"),
-    (_TYPES + "matching.py", "check_match_exhaustiveness",
-     "kept for P3.A3.tc2: a port template that reads AST arms; the chunk ports the one "
-     "checker to the rows of the SHIR match arm, in place of its coverage stop"),
     (_TYPES + "statements.py", "stamp_rebind_places", _TIER_A),
     (_TYPES + "statements.py", "validate_rebind_statement", _port("A5")),
     (_TYPES + "statements.py", "validate_let_destructure", _port("A5")),

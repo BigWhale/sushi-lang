@@ -1,0 +1,34 @@
+unit test_err_typeck_match_dead_arm
+
+ShirBody covered
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(IntRange(0, 4, inclusive: true), [Return(Lit("low"))]), Arm(IntRange(5, 9, inclusive: true), [Return(Lit("high"))]), Arm(IntRange(3, 7, inclusive: true), [Return(Lit("never"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody empty
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(IntRange(5, 5, inclusive: false), [Return(Lit("never"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody alternative
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Or([Literal(1), Wildcard, Literal(2)]), [Return(Lit(1))])], consumes: false)
+
+ShirBody full
+  params : [(_0 "b": i8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(IntRange(-128, -1, inclusive: true), [Return(Lit("negative"))]), Arm(IntRange(0, 127, inclusive: true), [Return(Lit("positive"))]), Arm(Wildcard, [Return(Lit("never"))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@covered), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@empty), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@full), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    Return(adopt Call(Free(@alternative), [(Lit(1), Guaranteed)]))

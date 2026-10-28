@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types.constants import InitializerFacts
     from sushi_lang.semantics.passes.types.templates import PackElements
     from sushi_lang.semantics.shir.body import ShirBody, ShirLocal
-    from sushi_lang.semantics.shir.ids import DeclId, LocalId
+    from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
     from sushi_lang.semantics.shir.lowering import LoweredProgram
     from sushi_lang.semantics.const_eval import ConstantValue
 
@@ -100,6 +100,9 @@ class TypeValidator:
         # The locals of the body whose `let` the pass refused (CE2002, an unhandled
         # `Result`): a method call on one reports no CE2008 (#1128). `_check_let` writes it.
         self.refused_locals: set['LocalId'] = set()
+        # The matches of the body whose arms miss a value (CE2040, CE2074): the
+        # dead-statement rule does not take one as the end of a path (#886).
+        self.uncovered_matches: set['ShirId'] = set()
         self.folder: Optional[Folder] = None
         # True when the body holds an error that an earlier pass reported: the collect
         # pass refuses a `??` in a bare body (CE0131), and its node has no answer.
@@ -281,18 +284,20 @@ class TypeValidator:
                                  self.const_table, self.current_unit_name,
                                  self.namespaces_of, self.struct_table, self.enum_table)
 
-    def check_body(self, decl, path_faults: Optional[Callable[['ShirBody'], None]] = None,
+    def check_body(self, decl,
+                   path_faults: Optional[Callable[['ShirBody', Set['ShirId']], None]] = None,
                    *, offered: Optional[int] = None) -> Optional['ShirBody']:
         """The body half over the SHIR body of `decl` (docs/design/ir.md 7.3, 7.9).
 
         A stop ends the walk: the pass records it, with the file of the body, and the
         caller goes on with the next declaration. When the walk reaches its end, the path
-        faults of a function or a method (`path_faults`) are checked. A walk that ends with
-        no stop and with no error in its body is checked for completeness, and its body goes
-        to the next stage, the lift pass, with the tables that the body was read in. A node
-        that has an error has no answer, so a body with an error is not checked. `offered`
-        is the count of the errors before the header of a function or a method, so that a
-        body whose header has an error (an unknown parameter type) does not go on either.
+        faults of a function or a method (`path_faults`) are checked, with the matches of
+        the body whose arms miss a value. A walk that ends with no stop and with no error
+        in its body is checked for completeness, and its body goes to the next stage, the
+        lift pass, with the tables that the body was read in. A node that has an error has
+        no answer, so a body with an error is not checked. `offered` is the count of the
+        errors before the header of a function or a method, so that a body whose header has
+        an error (an unknown parameter type) does not go on either.
         The answer is the body when the walk reached its end, and None after a stop.
         """
         body = None if self.shir is None else self.shir.body_of(self.written_of(decl))
@@ -305,6 +310,7 @@ class TypeValidator:
         self.answers = answers = self.shir.typeck_of(body)
         self.body_locals = {local.id: local for local in body.locals}
         self.refused_locals = set()
+        self.uncovered_matches = set()
         self.folder = Folder(self._constant_value, self.written_type)
         self.refused_before = False
         origin = self.reporter.origin
@@ -319,11 +325,13 @@ class TypeValidator:
             self.stops.stopped(stop)
             return None
         finally:
+            uncovered = self.uncovered_matches
             self.body = self.answers = self.folder = None
             self.body_locals = {}
             self.refused_locals = set()
+            self.uncovered_matches = set()
         if path_faults is not None:
-            path_faults(body)
+            path_faults(body, uncovered)
         if self.errors_offered() != offered or self.refused_before:
             return body
         check_answers(body, answers, self.shir.decls)

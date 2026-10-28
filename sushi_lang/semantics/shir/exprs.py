@@ -7,6 +7,7 @@ dispatch reads it (gate: `tests/unit/test_shir_node_unions_are_total.py`).
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Callable, Optional, TypeAlias
 
@@ -60,6 +61,10 @@ class BlankConst:
 @dataclass(frozen=True, slots=True)
 class StrConst:
     value: str
+
+    def spelling(self) -> str:
+        """The text in double quotes, as a diagnostic and the dump show it."""
+        return json.dumps(self.value, ensure_ascii=False)
 
 
 Constant: TypeAlias = IntConst | FloatConst | BoolConst | BlankConst | StrConst

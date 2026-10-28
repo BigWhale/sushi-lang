@@ -1,0 +1,27 @@
+unit test_err_typeck_match_not_covered
+
+ShirBody full
+  params : [(_0 "b": u8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(IntRange(0, 0x7f, inclusive: true), [Return(Lit("ascii"))]), Arm(IntRange(0x80, 0xff, inclusive: true), [Return(Lit("high"))])], consumes: false)
+
+ShirBody gap
+  params : [(_0 "b": u8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(IntRange(0x0, 0x7f, inclusive: true), [Return(Lit("ascii"))]), Arm(IntRange(0x81, 0xff, inclusive: true), [Return(Lit("high"))])], consumes: false)
+
+ShirBody word
+  params : [(_0 "s": string, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal("get"), [Return(Lit(1))]), Arm(Literal("put"), [Return(Lit(2))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@full), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@gap), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    Return(adopt Call(Free(@word), [(Lit("get"), Guaranteed)]))

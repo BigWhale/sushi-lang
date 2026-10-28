@@ -1,0 +1,23 @@
+# EXPECT_STDOUT_EXACT: "zero\nsmall\nother\n1\n"
+# EXPECT_DUMP_SHIR: test_match_every_arm_returns.shir
+#
+# A match is the last statement of a body that answers a value, and each of its arms
+# returns. No path reaches the end of the body, so it has no CE0107.
+
+fn size(i32 n) string:
+    match n:
+        0 -> return "zero"
+        1..=9 -> return "small"
+        _ -> return "other"
+
+fn code(string s) i32:
+    match s:
+        "get" | "put" -> return 1
+        _ -> return 0
+
+fn main() i32:
+    println(size(0))
+    println(size(5))
+    println(size(50))
+    println(code("put"))
+    return 0

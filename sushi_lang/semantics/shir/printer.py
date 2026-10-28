@@ -252,7 +252,7 @@ PRINTERS: dict[type, Render] = {
     e.FloatConst: lambda _pr, c: repr(c.value),
     e.BoolConst: lambda _pr, c: "true" if c.value else "false",
     e.BlankConst: lambda _pr, _c: "Blank",
-    e.StrConst: lambda _pr, c: quoted(c.value),
+    e.StrConst: lambda _pr, c: c.spelling(),
     # expressions
     e.Lit: lambda pr, n: _node("Lit", pr.show(n.value)),
     e.LocalRef: lambda _pr, n: _node("LocalRef", _local(n.local)),

@@ -3,14 +3,16 @@
 A statement after one that ends the path is CE0140, and a body that answers a value and
 can reach its end with no `return` is CE0107. Neither rule reads a type. The predicate is
 the one path predicate of SHIR, `semantics/shir/paths.py`, which the borrow pass reads too.
+A match whose arms miss a value (`uncovered`) does not make the statement after it dead.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Collection, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir.body import ShirBody
+from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.paths import first_dead_statement, terminates
 from sushi_lang.semantics.shir.walk import walk
@@ -20,12 +22,13 @@ if TYPE_CHECKING:
     from . import TypeValidator
 
 
-def reject_dead_statements(validator: 'TypeValidator', body: ShirBody) -> None:
+def reject_dead_statements(validator: 'TypeValidator', body: ShirBody,
+                           uncovered: Collection[ShirId]) -> None:
     """CE0140, once per block of one body (#854)."""
     for _path, value in walk(body.block, "block"):
         if not isinstance(value, ShirBlock):
             continue
-        found = first_dead_statement(value, body)
+        found = first_dead_statement(value, body, uncovered=uncovered)
         if found is None:
             continue
         ender, dead = found

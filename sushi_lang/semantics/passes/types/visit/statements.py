@@ -26,8 +26,8 @@ no answer: the scope pass refuses one outside a loop.
 
 A `Match` checks its scrutinee (CE2048, `matching.matchable_type`). A match on an integer
 or a string writes its `MatchFacts`, checks the pattern of each arm, gives the arm its row
-for the one checker, and then walks the body of the arm. The checker does not read the rows
-yet, so the walk stops after the last arm (`Match exhaustiveness`). A match on an enum or a
+for the one checker, and then walks the body of the arm. After the last arm, the one
+checker reads the rows (`matching.check_match_exhaustiveness`). A match on an enum or a
 tuple refuses a literal arm (CE2076) and stops (`Match`).
 """
 from __future__ import annotations
@@ -41,7 +41,8 @@ from sushi_lang.semantics.passes.types.compatibility import (
     reject_mismatch, reject_return_mismatch, reject_unhandled_result)
 from sushi_lang.semantics.passes.types.constants import assignment_span
 from sushi_lang.semantics.passes.types.matching import (
-    ArmRows, check_literal_arm, literal_kind, matchable_type, reject_arm_kinds)
+    ArmRows, check_literal_arm, check_match_exhaustiveness, literal_kind, matchable_type,
+    reject_arm_kinds)
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
 from sushi_lang.semantics.passes.types.result_validation import (
     spells_a_result, validate_result_pattern)
@@ -221,7 +222,7 @@ def check_assert(validator: TypeValidator, node: s.Assert) -> None:
 
 def check_match(validator: TypeValidator, node: s.Match) -> None:
     """A `match` on an integer (#415) or a string: its facts, then the pattern and the body
-    of each arm in the written order."""
+    of each arm in the written order, then the coverage of the arms."""
     ty = matchable_type(validator, node, visit.check_expr(validator, node.scrutinee))
     kind = None if ty is None else literal_kind(ty)
     if ty is None or kind is None:
@@ -234,7 +235,7 @@ def check_match(validator: TypeValidator, node: s.Match) -> None:
     for index, arm in enumerate(node.arms):
         check_literal_arm(validator, rows, node, index, ty)
         check_block(validator, arm.body)
-    visit.stop_at_coverage(node)
+    check_match_exhaustiveness(validator, node, ty, rows)
 
 
 def check_jump(_validator: TypeValidator, _node: s.Break | s.Continue) -> None:
