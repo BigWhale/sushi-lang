@@ -16,7 +16,8 @@ and 11.9. Amended on 2026-10-20 by the rulings at Gate 1: 7.4 (`typecheck` folds
 value at the type of its position; an error hole carries its code), 7.5 and 8.9 (a tuple
 rebind is one `Destructure` with `Place` targets). Amended on 2026-10-26 at the start of Phase 3:
 the status above, 8.12 (the concerns that are not built yet), and 10.2 and 10.3 (the counts and
-the gate names).
+the gate names). Amended on 2026-10-28 by ruling R-W: 7.3 and 8.5 (`typecheck` writes the value
+that an integer literal holds, and the value of a constant, as a row of `TypeckResults`).
 
 ## The decisions, in one place
 
@@ -662,6 +663,7 @@ than types:
 | the display type of each hole of an `Interp`, and of a `print` argument | the node's `shir_id`, per part |
 | the scrutinee type of a `Match`, and its integer type for literal and range arms | the `Match`'s `shir_id` |
 | the element type of each target of a `Destructure` | the statement's `shir_id`, per target |
+| the value that an integer literal holds (8.5), the value of the constant that a `ConstRef` names, and the value of a constant or `var` initializer | the `Lit`'s or the `ConstRef`'s `shir_id`; the `shir_id` of the `Return` of the initializer body |
 
 **This is not the stamp channel returning.** Four differences, and each one is a reason a
 stamp went wrong (1.2):
@@ -695,13 +697,20 @@ in each `Nested` level (`(1, 0)` is `b` in `let (a, (b, c)) = v`). The callee ro
 the method (`BuiltinMethod`). The conversion row of a `Cast` and of a `Try` holds a
 `Conversion` callee, or `NoConversion` for a numeric cast and for a `??` that keeps its
 error type. The facts of a `Try` are one record (`TryFacts`), and so are the scrutinee type
-and the integer type of a `Match` (`MatchFacts`).
+and the integer type of a `Match` (`MatchFacts`). The value row holds a value of the constant
+evaluator (`ConstantValue`, `semantics/const_eval.py`), one shape for the three keys: the value
+that an integer literal holds at its type, the value of the constant that a `ConstRef` names
+(from the constant table, Q5), and the value of an initializer.
 
 The completeness check is `check_answers` in `semantics/shir/typeck_check.py`. It walks
 the body through the one walk of the SHIR tree (`semantics/shir/walk.py`). A missing answer
 is the internal error [CE0156](../error-catalog.md#ce0156), which names the answer, the
 class of the node, its position and the body. Each expression node needs a type, the
-reference of a call target too. The captures of a lambda are in `Bindings` and not in the
+reference of a call target too. An integer literal and a `ConstRef` need a value too. A
+`ConstRef` of a constant that has no value (its initializer has an error, which the check of
+that initializer reports) has no value row, and the body does not go on to the next stage, as a
+body with an error does not. The check asks for no value row of an initializer: a `var` whose
+initializer is an empty container has no value (its global is zero). The captures of a lambda are in `Bindings` and not in the
 body, so the check cannot count them.
 
 The body half of `typecheck` walks a SHIR body through ONE table of arms keyed on the SHIR
@@ -739,6 +748,16 @@ type of a `let`, the type of a parameter); a variant of an enum that is not gene
 the tag of `Ok`, the two payload types and the `Result` of the channel. Its conversion row
 is `NoConversion` when the two error types are one type; with no declared conversion
 between two error types, the `??` is [CE2511](../error-catalog.md#ce2511).
+
+**An initializer body.** Before the walk of the initializer body of a constant or a `var`
+(6.3), the constant evaluator reads the initializer at the declared type, with the reporter of
+the pass (Q5). It reports what is not constant ([CE0108](../error-catalog.md#ce0108)), an
+overflow ([CE2077](../error-catalog.md#ce2077)), a division by zero and a cycle
+([CE0109](../error-catalog.md#ce0109)), and the walk does not run after an error of the
+evaluator. An empty container (`List.new()`, `from([])`) allocates nothing: the evaluator does
+not read it. The `Return` of the body checks its value at the declared type, as a `let` does: a
+value that does not fit is [CE2002](../error-catalog.md#ce2002) at `name = value`, with a note
+at the declared type. The value that the evaluator gave is the value row of the `Return`.
 
 **A cast.** The arm of `as` (`check_cast`, `passes/types/expressions.py`) answers the
 target type. A cast between two numeric types, and a cast to the type of its operand, call
@@ -1722,16 +1741,19 @@ Constant = Int(value: int, ty: Type)
 Produced by the constant evaluator on the AST (ruling Q5) and carried through unchanged.
 Only the backend turns one into an `ir.Constant`.
 
-**The value that an integer literal holds.** Lowering makes the `Int` of a `Lit` at the
-type that `typecheck` gave the literal (`_constant`, `slir/lower.py`). At three positions
-the constant holds the value that its type holds, through the one integer kernel
-(`integer_ops.cast`, which the fold calls too): the operand of a `Cast` (`300 as u8` holds
-44), the operand of a negation (`-128` as an `i8`: the operand `128` holds -128), and a
-literal with a radix other than 10, which spells bits (`0xFF` as an `i8` holds -1). At those
-positions `typecheck` checks the range by its own rule: none under a cast, the negated value
-under a negation, the unsigned range of the width for a bit pattern. At every other position
-`typecheck` checked that the value is in the range of the type, so the value is carried
-unchanged. The verifier rule "a constant in range" (8.13) holds the result.
+**The value that an integer literal holds.** `typecheck` decides it one time, and writes it
+as the value row of the literal (7.3, ruling R-W), beside the type of the literal: the one
+writer of a type row (`visit.answer`) writes both, through one function (`held_value`,
+`passes/types/visit/expressions.py`). At three positions the literal holds the value that its
+type holds, through the one integer kernel (`integer_ops.cast`, which the fold calls too): the
+operand of a `Cast` (`300 as u8` holds 44), the operand of a negation (`-128` as an `i8`: the
+operand `128` holds -128), and a literal with a radix other than 10, which spells bits (`0xFF`
+as an `i8` holds -1). At those positions `typecheck` checks the range by its own rule: none
+under a cast, the negated value under a negation, the unsigned range of the width for a bit
+pattern. At every other position `typecheck` checked that the value is in the range of the
+type, so the value is carried unchanged. SLIR lowering makes the `Int` of a `Lit` from the
+value row and decides nothing. The verifier rule "a constant in range" (8.13) holds the
+result.
 
 ### 8.6 Statements
 
