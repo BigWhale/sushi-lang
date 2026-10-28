@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODE: CE2405
+#
+# The message of an assert takes `s` with `nom`. A later use of `s` is an error.
+
+fn take(nom string s) string:
+    return s
+
+fn main() i32:
+    let string s = "Mostly {1 + 1}"
+    assert(true, take(nom s))
+    println(s)
+    return 0

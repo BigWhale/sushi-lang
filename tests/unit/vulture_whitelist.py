@@ -255,8 +255,6 @@ WHITELIST += (
      _family("C2", "a named function as a function value")),
     (_BACKEND + "runtime/closures.py", "emit_lambda",
      _family("C2", "the closure value and its environment")),
-    (_BACKEND + "runtime/errors.py", "emit_runtime_error_with_message",
-     _family("A11", "the trap of a failed assert, from the SLIR Trap terminator")),
     (_BACKEND + "runtime/iterator_adapters.py", "emit_adapter_call",
      _family("C3", "the iterator adapters")),
     (_BACKEND + "runtime/iterator_adapters.py", "owned_parts",

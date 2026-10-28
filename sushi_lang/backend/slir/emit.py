@@ -19,7 +19,8 @@ from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.slir.intrinsics import INTRINSICS
 from sushi_lang.backend.slir.methods import emit_method
 from sushi_lang.backend.slir.state import FunctionState
-from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.internals.errors import message_for, raise_internal_error
+from sushi_lang.internals.errors.runtime import printf_conversions
 from sushi_lang.backend.slir.values import (
     type_of_constant, constant_value, operand_value, place_address, rvalue_value,
     type_of_place,
@@ -220,8 +221,26 @@ def _terminator(state: FunctionState, terminator: tm.SlirTerminator) -> None:
         builder.ret(builder.load(state.storage_of(RETURN_SLOT)))
     elif isinstance(terminator, tm.Unreachable):
         builder.unreachable()
+    elif isinstance(terminator, tm.Trap):
+        _trap(state, terminator)
     else:
         state.stop(terminator)
+
+
+def _trap(state: FunctionState, terminator: tm.Trap) -> None:
+    """The registry text is the printf format. A string operand fills `%.*s`: its size as
+    an `int`, then its data. The error emitter exits, so the block ends in `unreachable`."""
+    builder = state.builder
+    values: list[ir.Value] = []
+    for conversion, operand in zip(printf_conversions(message_for(terminator.code)),
+                                   terminator.args, strict=True):
+        value = operand_value(state, operand)
+        if conversion == "%.*s":
+            values += [builder.extract_value(value, 1), builder.extract_value(value, 0)]
+        else:
+            values.append(value)
+    state.codegen.runtime.errors.emit_runtime_error_with_values(terminator.code, *values)
+    builder.unreachable()
 
 
 def _switch(state: FunctionState, terminator: tm.SwitchInt) -> None:

@@ -1,0 +1,13 @@
+# The message of a passing assert takes an owning string with `nom`. The string is still
+# dropped once, at the end of the scope.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_NO_LEAKS
+
+fn take(nom string s) string:
+    return s
+
+fn main() i32:
+    let string s = "Mostly {1 + 1}"
+    assert(true, take(nom s))
+    println("Mostly Harmless")
+    return 0

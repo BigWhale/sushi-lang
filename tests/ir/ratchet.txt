@@ -170,7 +170,13 @@ tests/constants/struct_constants/test_err_const_struct_nested_function_call.sush
 tests/constants/take/test_const_plain_copies_out.sushi
 tests/constants/take/test_err_const_move_let.sushi
 tests/constants/take/test_err_const_move_nom_arg.sushi
+tests/control_flow/assert/library/test_assert_fails_in_source_library.sushi
+tests/control_flow/assert/test_assert_consuming_message_passes.sushi
+tests/control_flow/assert/test_assert_fails_bare.sushi
+tests/control_flow/assert/test_assert_false_falls_through.sushi
+tests/control_flow/assert/test_assert_heap_message_passes.sushi
 tests/control_flow/assert/test_err_assert_condition_not_bool.sushi
+tests/control_flow/assert/test_err_assert_consuming_message_use_after.sushi
 tests/control_flow/assert/test_err_assert_false_needs_a_return.sushi
 tests/control_flow/assert/test_err_assert_fn_is_reserved.sushi
 tests/control_flow/assert/test_err_assert_is_reserved.sushi
@@ -623,6 +629,8 @@ tests/ir/shir/statements/test_err_shir_stmt_let_untyped.sushi
 tests/ir/shir/statements/test_shir_stmt_if.sushi
 tests/ir/shir/statements/test_shir_stmt_while.sushi
 tests/ir/shir/statements/test_warn_shir_stmt_shadow.sushi
+tests/ir/slir/assert/test_slir_assert_fails.sushi
+tests/ir/slir/assert/test_slir_assert_holds.sushi
 tests/ir/slir/casts/test_slir_cast_numeric.sushi
 tests/ir/slir/constants/test_slir_const_behind_alias.sushi
 tests/ir/slir/constants/test_slir_const_scalar.sushi
