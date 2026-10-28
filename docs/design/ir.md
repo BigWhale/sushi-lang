@@ -707,11 +707,14 @@ the body through the one walk of the SHIR tree (`semantics/shir/walk.py`). A mis
 is the internal error [CE0156](../error-catalog.md#ce0156), which names the answer, the
 class of the node, its position and the body. Each expression node needs a type, the
 reference of a call target too. An integer literal and a `ConstRef` need a value too. A
-`ConstRef` of a constant that has no value (its initializer has an error, which the check of
-that initializer reports) has no value row, and the body does not go on to the next stage, as a
-body with an error does not. The check asks for no value row of an initializer: a `var` whose
-initializer is an empty container has no value (its global is zero). The captures of a lambda are in `Bindings` and not in the
-body, so the check cannot count them.
+`ConstRef` of a constant that has no value stops the walk of its body with
+`typecheck, ConstRef with no value`, and an initializer with no value that is no empty
+container stops with `typecheck, Return with no value`: a function-typed constant
+(`const fn() -> i32 F = area`) has no value and no error yet. When the initializer has an
+error, that error is the diagnostic, and the stop does not show. The check asks for no value
+row of an initializer: a `var` whose initializer is an empty container has no value (its
+global is zero). The captures of a lambda are in `Bindings` and not in the body, so the check
+cannot count them.
 
 The body half of `typecheck` walks a SHIR body through ONE table of arms keyed on the SHIR
 class, with a row for each member of `ShirStmt`, `ShirExpr` and `ShirPattern`
