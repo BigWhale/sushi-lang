@@ -37,7 +37,10 @@ consuming use with `consumes`). Amended on 2026-10-28 by group A3 (SLIR): 8.6 (t
 intrinsic `eq`, the value equality of a test of a match), 8.8 (the trap RE2023 after the last
 arm of a match carries the source text of that arm as a `string` operand), 8.9 (the lowering
 of a `Match` on an integer or a string; the `bool` local of a test gets no storage marker)
-and 8.13 (the rule of a switch on an integer).
+and 8.13 (the rule of a switch on an integer). Amended on 2026-10-28 by group A4: 7.3 (a
+`Maybe` or a `Result` variant in a comparison takes the type of the other operand) and 7.8 (a
+`Variant` keeps the spans of its enum name and of its variant name; the typecheck rule of a
+match on an enum or a tuple, and the type row of a binder).
 
 ## The decisions, in one place
 
@@ -769,7 +772,8 @@ payload and [CE2031](../error-catalog.md#ce2031) or [CE2039](../error-catalog.md
 at the constructor, as before the switch. A `Return` of a bare body refuses both
 constructors ([CE2091](../error-catalog.md#ce2091)). An `EnumInit` of `Result` or of
 `Maybe` takes its instance from the `Result` or the `Maybe` type of its position (the
-channel of a `return`, the written type of a `let`, the type of a parameter); a variant of
+channel of a `return`, the written type of a `let`, the type of a parameter, and the type of
+the other operand of a comparison, `m == Maybe.None`); a variant of
 an enum that is not generic (`StdError.Error`) is an instance of that enum, also behind an
 alias (`geo.Sign.Plus`): the enum is the one that the namespace holds
 (`NamespaceTable.lookup`). A variant of a private enum of another unit is
@@ -1254,7 +1258,8 @@ The item mode, owned or lent, follows from the type (`IteratorType.peeks`).
 Pattern = Wildcard
         | Literal(value: Constant, written: str)            # an integer, a byte or a string
         | IntRange(low: RangeBound, high: RangeBound, inclusive: bool)   # 0x80..=0x8f
-        | Variant(decl: DeclId, variant: str, items: [Pattern | PatBinding])
+        | Variant(decl: DeclId, variant: str, items: [Pattern | PatBinding],
+                  enum_loc: Span, variant_loc: Span)
         | Tuple(elements: [Pattern | PatBinding])
         | Own(inner: Pattern | PatBinding)       # Own(poke h) -- unwraps Own@(T)
         | Or(alternatives: [Pattern | PatBinding])   # 1 | 2 -- two or more, same bindings
@@ -1294,7 +1299,22 @@ alias included: a name that is not an enum is an error of `typecheck`, not of lo
 `Tuple` mirrors `TuplePattern`, `Own` mirrors `OwnPattern`, and `Or` mirrors `OrPattern`:
 it stands at the top of an arm and in every pattern position. Each alternative binds the
 same locals, with the same types and the same mode ([CE2126](../error-catalog.md#ce2126)),
-so one binding list serves the arm whatever alternative matched.
+so one binding list serves the arm whatever alternative matched. `Variant` keeps the span
+of the written enum name (`enum_loc`) and of the written variant name (`variant_loc`), where
+a diagnostic of that name points: [CE2107](../error-catalog.md#ce2107),
+[CE2001](../error-catalog.md#ce2001) and [CE3005](../error-catalog.md#ce3005) at the enum,
+[CE2045](../error-catalog.md#ce2045) at the variant. Lowering fills them, and no pass fills
+them later (S5).
+
+In `typecheck`, a match on an enum or a tuple writes `MatchFacts` with no integer type, and
+checks each arm in the written order. Each alternative of the arm is a pattern at the type
+of the scrutinee, and each item of a `Variant`, a `Tuple` and an `Own` is a pattern at the
+type of its payload position. A `PatBinding` matches every value of its position. The
+type row of the local of a binder is the type of its position with no `peek` or `poke`:
+the mode is in the `PatBinding`, as the convention of a parameter holds its mode (4.1). The
+alternatives of `|` that bind one name share one local, so the local gets one row, from the
+first alternative, after CE2126 finds no difference. An arm whose pattern has an error
+does not walk its body. After the last arm, the one checker reads the rows of the arms.
 
 ### 7.9 What each pass reads and writes
 
