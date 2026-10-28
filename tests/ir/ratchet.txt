@@ -728,6 +728,11 @@ tests/ir/typeck/match/test_err_typeck_match_range_string_bound.sushi
 tests/ir/typeck/match/test_err_typeck_match_scrutinee.sushi
 tests/ir/typeck/match/test_err_typeck_match_tuple_arm_on_int.sushi
 tests/ir/typeck/match/test_err_typeck_match_wildcard_not_last.sushi
+tests/ir/typeck/match/test_err_typeck_match_written_bound.sushi
+tests/ir/typeck/match/test_err_typeck_match_written_hex.sushi
+tests/ir/typeck/match/test_err_typeck_match_written_note.sushi
+tests/ir/typeck/match/test_err_typeck_match_written_quotes.sushi
+tests/ir/typeck/match/test_err_typeck_match_written_range.sushi
 tests/ir/typeck/methods/test_err_typeck_known_method_on_refused_let.sushi
 tests/ir/typeck/methods/test_err_typeck_method_on_refused_let.sushi
 tests/ir/typeck/methods/test_err_typeck_method_primitive_miscount.sushi

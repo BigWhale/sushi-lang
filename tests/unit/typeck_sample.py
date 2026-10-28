@@ -113,7 +113,7 @@ def sample() -> Sample:
                 s.Items(expr("range", e.Range, 6, lit(e.IntConst(0), 6, "start"),
                              lit(e.IntConst(3), 6, "end"), False, False), LocalId(5), s.Bare()),
                 block(7, stmt("print", s.ExprStmt, 7, println)))
-    arms = [p.Arm(p.Literal(ids.allocate(), span(9), e.IntConst(0)), block(9)),
+    arms = [p.Arm(p.Literal(ids.allocate(), span(9), e.IntConst(0), "0"), block(9)),
             p.Arm(p.Wildcard(ids.allocate(), span(10)), block(10))]
     match = stmt("match", s.Match, 8, expr("cast", e.Cast, 8, local(3), I64), arms, False)
     pair = expr("struct", e.StructInit, 11, decls.refer("Pair"),

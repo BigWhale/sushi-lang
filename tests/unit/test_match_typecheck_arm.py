@@ -3,20 +3,26 @@
 A match on an integer or a string records its `MatchFacts`: the type of the scrutinee, and
 the integer type that a literal arm and a range arm are read at (None on a string). Then it
 checks each arm, walks its body, and runs the one checker over the rows of the arms; the
-walk goes on after the match. A match on an enum or a tuple stops with `typecheck, Match`. The value of an integer pattern is read at the type of its position
-(`semantics/integer_patterns.py`). The tests run the arm over SHIR built by hand, with a
+walk goes on after the match. A match on an enum or a tuple stops with `typecheck, Match`.
+The value of an integer pattern is read at the type of its position
+(`semantics/integer_patterns.py`). A pattern has its own table of arms (ruling R17): its
+dispatch answers the place of the pattern in the matrix and writes no type row, and the
+expression table has no pattern row. The tests run the arm over SHIR built by hand, with a
 stand-in for the pass; they do not run the compiler.
 """
 from __future__ import annotations
 
 from types import SimpleNamespace
 
+import typing
+
 import pytest
 
-from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.integer_patterns import goes_down, literal_value, pattern_interval
 from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.passes.types.exhaustiveness import Ctor, IntRange
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
@@ -46,8 +52,20 @@ def _int(value: int, radix: int = 10) -> e.IntConst:
     return e.IntConst(value, radix)
 
 
+def _written(const: e.Constant) -> str:
+    """The source text of a constant of these tests: a decimal, or a lower-case hex."""
+    if isinstance(const, e.StrConst):
+        return f'"{const.value}"'
+    return hex(const.value) if const.radix == 16 else str(const.value)
+
+
+def _lit(ident: int, const: e.Constant) -> p.Literal:
+    return p.Literal(ShirId(ident), SPAN, const, _written(const))
+
+
 def _range(low: e.IntConst, high: e.IntConst, inclusive: bool) -> p.IntRange:
-    return p.IntRange(ShirId(50), SPAN, low, high, inclusive, SPAN, SPAN)
+    return p.IntRange(ShirId(50), SPAN, p.RangeBound(low, _written(low), SPAN),
+                      p.RangeBound(high, _written(high), SPAN), inclusive)
 
 
 def _match(ty, arms: list[p.Arm]) -> tuple[s.Match, TypeckResults, SimpleNamespace]:
@@ -66,9 +84,9 @@ def _stop(validator: SimpleNamespace, node: s.Match) -> dict:
 
 def test_an_integer_match_records_its_facts_and_is_covered() -> None:
     node, answers, validator = _match(I32, [
-        _arm(0, p.Literal(ShirId(10), SPAN, _int(1))),
-        _arm(1, p.Or(ShirId(11), SPAN, [p.Literal(ShirId(12), SPAN, _int(2)),
-                                        p.Literal(ShirId(13), SPAN, _int(0x7f, 16))])),
+        _arm(0, _lit(10, _int(1))),
+        _arm(1, p.Or(ShirId(11), SPAN, [_lit(12, _int(2)),
+                                        _lit(13, _int(0x7f, 16))])),
         _arm(2, _range(_int(0x10, 16), _int(0x1f, 16), True)),
         _arm(3, p.Wildcard(ShirId(14), SPAN)),
     ])
@@ -80,7 +98,7 @@ def test_an_integer_match_records_its_facts_and_is_covered() -> None:
 
 def test_a_string_match_has_no_integer_type() -> None:
     node, answers, validator = _match(STRING, [
-        _arm(0, p.Literal(ShirId(10), SPAN, e.StrConst("get"))),
+        _arm(0, _lit(10, e.StrConst("get"))),
         _arm(1, p.Wildcard(ShirId(11), SPAN)),
     ])
     visit.check(validator, node)
@@ -102,7 +120,7 @@ def test_an_enum_match_stops_with_no_facts() -> None:
 ])
 def test_a_literal_is_read_at_the_type_of_its_position(const, ty, value) -> None:
     assert literal_value(const, ty) == value
-    assert pattern_interval(p.Literal(ShirId(1), SPAN, const), ty) == (value, value)
+    assert pattern_interval(_lit(1, const), ty) == (value, value)
 
 
 @pytest.mark.parametrize("low, high, inclusive, ty, interval", [
@@ -119,3 +137,25 @@ def test_a_range_is_read_at_the_type_of_its_position(low, high, inclusive, ty,
 
 def test_a_range_whose_start_is_above_its_end_goes_down() -> None:
     assert goes_down(_range(_int(0x8f, 16), _int(0x80, 16), True), U8)
+
+
+def test_the_expression_table_has_no_pattern_row() -> None:
+    assert not set(typing.get_args(p.ShirPattern)) & set(visit.ARMS)
+    answers = TypeckResults()
+    literal = _lit(10, _int(1))
+    with pytest.raises(InternalCompilerError) as caught:
+        visit.check_expr(_validator(answers), literal, I32)
+    assert not isinstance(caught.value, StageStop)
+    assert caught.value.code == "CE0000"
+    assert answers.type_of(literal.shir_id) is None
+
+
+def test_the_pattern_dispatch_answers_a_row_and_writes_no_type() -> None:
+    answers = TypeckResults()
+    validator = _validator(answers)
+    literal = _lit(10, _int(0xff, 16))
+    assert visit.check_pattern(validator, literal, I8) == Ctor(IntRange(-1, -1))
+    bounds = _range(_int(0x10, 16), _int(0x1f, 16), True)
+    assert visit.check_pattern(validator, bounds, U8) == Ctor(IntRange(0x10, 0x1f))
+    assert answers.type_of(literal.shir_id) is None
+    assert answers.type_of(bounds.shir_id) is None

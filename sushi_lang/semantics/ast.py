@@ -717,9 +717,9 @@ class RangePattern(Node):
 
     The two bounds are literal patterns, in every form an integer arm takes. `inclusive`
     is the `..=` form. The values the range matches depend on the type at its position,
-    because a non-decimal bound is a bit pattern of that type: the typecheck pass and the
-    backend both read them from `semantics/integer_patterns.py`. A string bound parses,
-    and the typecheck pass refuses it (CE2072).
+    because a non-decimal bound is a bit pattern of that type: the readers of the SHIR
+    pattern that lowering makes of it read them from `semantics/integer_patterns.py`. A
+    string bound parses, and the typecheck pass refuses it (CE2072).
     """
     low: LiteralPattern
     high: LiteralPattern

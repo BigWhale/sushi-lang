@@ -7,9 +7,8 @@ dispatch reads it (gate: `tests/unit/test_shir_node_unions_are_total.py`).
 """
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from typing import Callable, Optional, TypeAlias
+from typing import Optional, TypeAlias
 
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.operators import BinOp, UnOp
@@ -23,24 +22,12 @@ from sushi_lang.semantics.typesys import BorrowMode
 # its position, and that is an answer of `typecheck`.
 
 
-#: The spelling of an integer written in a base other than 10.
-_INT_PREFIXES: dict[int, Callable[[int], str]] = {16: hex, 8: oct, 2: bin}
-
-
 @dataclass(frozen=True, slots=True)
 class IntConst:
     """`radix` and `byte_spelling` are the written form; a diagnostic shows them."""
     value: int
     radix: int = 10
     byte_spelling: Optional[str] = None
-
-    def spelling(self) -> str:
-        """The written form, as a diagnostic and the dump show it: a byte as written, and
-        an integer in its base."""
-        if self.byte_spelling is not None:
-            return self.byte_spelling
-        spell = _INT_PREFIXES.get(self.radix)
-        return str(self.value) if spell is None else spell(self.value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,10 +48,6 @@ class BlankConst:
 @dataclass(frozen=True, slots=True)
 class StrConst:
     value: str
-
-    def spelling(self) -> str:
-        """The text in double quotes, as a diagnostic and the dump show it."""
-        return json.dumps(self.value, ensure_ascii=False)
 
 
 Constant: TypeAlias = IntConst | FloatConst | BoolConst | BlankConst | StrConst

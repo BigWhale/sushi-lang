@@ -122,6 +122,10 @@ def _flag(name: str, value: bool) -> str:
     return f"{name}: {'true' if value else 'false'}"
 
 
+#: The dump of an integer written in a base other than 10: its value in that base.
+_INT_PREFIXES: dict[int, Callable[[int], str]] = {16: hex, 8: oct, 2: bin}
+
+
 def quoted(text: str) -> str:
     """A name or a text as a quoted string. The SLIR printer quotes a string the same way."""
     return json.dumps(text, ensure_ascii=False)
@@ -139,7 +143,10 @@ def _optional(name: str, text: str | None) -> tuple[str, ...]:
 
 
 def _int(_pr: ShirPrinter, const: e.IntConst) -> str:
-    return const.spelling()
+    if const.byte_spelling is not None:
+        return const.byte_spelling
+    spell = _INT_PREFIXES.get(const.radix)
+    return str(const.value) if spell is None else spell(const.value)
 
 
 def _arg(pr: ShirPrinter, arg: e.Arg, convention: Optional[Convention] = None) -> str:
@@ -252,7 +259,7 @@ PRINTERS: dict[type, Render] = {
     e.FloatConst: lambda _pr, c: repr(c.value),
     e.BoolConst: lambda _pr, c: "true" if c.value else "false",
     e.BlankConst: lambda _pr, _c: "Blank",
-    e.StrConst: lambda _pr, c: c.spelling(),
+    e.StrConst: lambda _pr, c: quoted(c.value),
     # expressions
     e.Lit: lambda pr, n: _node("Lit", pr.show(n.value)),
     e.LocalRef: lambda _pr, n: _node("LocalRef", _local(n.local)),
@@ -324,6 +331,7 @@ PRINTERS: dict[type, Render] = {
     s.Ref: lambda _pr, m: _node("Ref", _BORROW_MODES[m.mode]),
     # patterns
     p.Wildcard: lambda _pr, _n: "Wildcard",
+    p.RangeBound: lambda pr, b: pr.show(b.value),
     p.Literal: lambda pr, n: _node("Literal", pr.show(n.value)),
     p.IntRange: lambda pr, n: _node("IntRange", pr.show(n.low), pr.show(n.high),
                                     _flag("inclusive", n.inclusive)),

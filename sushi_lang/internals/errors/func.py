@@ -93,7 +93,7 @@ _add(ErrorMessage("CE0120", Severity.ERROR,
 
 _add(ErrorMessage("CE0121", Severity.ERROR,
     "could not resolve the concrete enum type for match pattern '{pattern}' - pattern bindings cannot be extracted",
-    Category.INTERNAL, "The backend could not determine the scrutinee's concrete enum type for a match arm with bindings. The type checker should have annotated Match.resolved_scrutinee_type; a miss here would otherwise silently drop the arm's binding locals."))
+    Category.INTERNAL, "A pattern position holds an item that no pattern rule of the typecheck pass handles, so its bindings cannot be read. Before the switch to SHIR, the backend gave this error when the type checker did not write the AST field `Match.resolved_scrutinee_type`. That field is deleted: the typecheck pass writes the type of a scrutinee as the `MatchFacts` row of `TypeckResults` (docs/design/ir.md 7.3)."))
 
 _add(ErrorMessage("CE0122", Severity.ERROR,
     "generic type '{name}' is infinitely recursive - monomorphization exceeded the maximum depth",

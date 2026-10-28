@@ -178,23 +178,25 @@ AST_STATEMENT_ROWS: dict[str, tuple[str, ...]] = {
 
 #: ir.md 7.8, the pattern nodes and their fields in the written order. Two names change,
 #: because the expression level has them: the pattern `Range` is `IntRange`, and the
-#: binding mode `Take` is `Nom`. `IntRange` keeps the written bounds, `inclusive` and the
-#: span of each bound: the values that the bounds give depend on the type at the position,
-#: and lowering has no types. An alternative of `Or` can be a binding, as in the AST (`Maybe.Some(x | y)`).
+#: binding mode `Take` is `Nom`. `IntRange` keeps the written bounds and `inclusive`: the
+#: values that the bounds give depend on the type at the position, and lowering has no
+#: types. A `Literal` and each bound keep the source text too (ruling R18). An alternative of `Or` can be a binding, as in the AST (`Maybe.Some(x | y)`).
 PATTERN_FIELDS: dict[str, tuple[str, ...]] = {
     "Wildcard": (),
-    "Literal": ("value",),
-    "IntRange": ("low", "high", "inclusive", "low_loc", "high_loc"),
+    "Literal": ("value", "written"),
+    "IntRange": ("low", "high", "inclusive"),
     "Variant": ("decl", "variant", "items"),
     "Tuple": ("elements",),
     "Own": ("inner",),
     "Or": ("alternatives",),
 }
 
-#: The parts of a pattern that are not nodes (ir.md 7.8): a binding, the `nom` mode of a
-#: binding, and an arm. A binding has the modes `Bare` and `Ref` of a loop binder too.
+#: The parts of a pattern that are not nodes (ir.md 7.8): a binding, a bound of a range, the
+#: `nom` mode of a binding, and an arm. A binding has the modes `Bare` and `Ref` of a loop
+#: binder too.
 PATTERN_PARTS: dict[str, tuple[str, ...]] = {
     "PatBinding": ("local", "by"),
+    "RangeBound": ("value", "written", "loc"),
     "Nom": (),
     "Arm": ("pattern", "body"),
 }

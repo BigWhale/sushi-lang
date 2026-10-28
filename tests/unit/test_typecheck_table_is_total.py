@@ -1,12 +1,14 @@
 """Gate: the typecheck pass has one arm for each SHIR node class (docs/design/ir.md 7.3, 7.9).
 
 The typecheck pass walks a SHIR body through ONE dispatch table, `ARMS` in
-`sushi_lang/semantics/passes/types/visit/__init__.py`, keyed on the SHIR class. The
-models are `LOWERING` in `shir/lower_nodes.py` and `PRINTERS` in `shir/printer.py`. So
-this gate holds four rules:
+`sushi_lang/semantics/passes/types/visit/__init__.py`, keyed on the SHIR class. A pattern
+has its own table there, `PATTERN_ARMS` (ruling R17): a pattern arm answers a place in the
+matrix of the one checker, and its dispatch writes no type row. The models are `LOWERING`
+in `shir/lower_nodes.py` and `PRINTERS` in `shir/printer.py`. So this gate holds four rules:
 
-1. The table has a row for each member of `ShirStmt`, `ShirExpr` and `ShirPattern`.
-2. The table has no row for another class.
+1. `ARMS` has a row for each member of `ShirStmt` and `ShirExpr`, and `PATTERN_ARMS` a row
+   for each member of `ShirPattern`.
+2. Neither table has a row for another class.
 3. A class with no row is an internal error, never a silent skip.
 4. The stop arm, the arm of a construct that the pass does not type yet, stops the body
    with the stop code CE0155 (`typecheck, <class>`) at the span of the node. A `Call`
@@ -32,6 +34,8 @@ from sushi_lang.semantics.shir.ids import LocalId, ShirId
 
 _UNIONS = {"ShirStmt": stmts.ShirStmt, "ShirExpr": exprs.ShirExpr,
            "ShirPattern": patterns.ShirPattern}
+#: The table of each union: a pattern has its own (ruling R17).
+_TABLES = {"ShirStmt": visit.ARMS, "ShirExpr": visit.ARMS, "ShirPattern": visit.PATTERN_ARMS}
 
 
 def _classes() -> set[type]:
@@ -65,17 +69,21 @@ def _validator_with_empty_tables() -> SimpleNamespace:
 
 @pytest.mark.parametrize("union", list(_UNIONS), ids=list(_UNIONS))
 def test_each_member_of_a_node_union_has_a_row(union: str) -> None:
-    missing = set(typing.get_args(_UNIONS[union])) - set(visit.ARMS)
+    missing = set(typing.get_args(_UNIONS[union])) - set(_TABLES[union])
     assert not missing, f"the typecheck pass has no arm for: {_names(missing)}"
 
 
 def test_the_table_has_no_row_for_another_class() -> None:
-    extra = set(visit.ARMS) - _classes()
+    patterns_ = set(typing.get_args(patterns.ShirPattern))
+    extra = set(visit.ARMS) - (_classes() - patterns_)
     assert not extra, f"the typecheck pass has an arm for a class of no union: {_names(extra)}"
+    extra = set(visit.PATTERN_ARMS) - patterns_
+    assert not extra, f"the pattern table has a row for a class that is no pattern: {_names(extra)}"
 
 
 def test_every_row_is_callable() -> None:
-    bad = [cls.__name__ for cls, arm in visit.ARMS.items() if not callable(arm)]
+    bad = [cls.__name__ for table in (visit.ARMS, visit.PATTERN_ARMS)
+           for cls, arm in table.items() if not callable(arm)]
     assert not bad, f"these rows are no arm: {bad}"
 
 

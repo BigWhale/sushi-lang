@@ -35,7 +35,7 @@ def literal_value(const: Constant, ty: Optional[Type]) -> int:
 
 def range_bounds(pattern: IntRange, ty: Optional[Type]) -> Interval:
     """The two written bounds of a range, as values of `ty`: (start, end)."""
-    return literal_value(pattern.low, ty), literal_value(pattern.high, ty)
+    return literal_value(pattern.low.value, ty), literal_value(pattern.high.value, ty)
 
 
 def goes_down(pattern: IntRange, ty: Optional[Type]) -> bool:

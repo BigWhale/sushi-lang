@@ -1,10 +1,13 @@
 """The body walk of the typecheck pass over SHIR (docs/design/ir.md 7.3, 7.9).
 
-ONE table, `ARMS`, gives the arm of each SHIR node class: each member of `ShirStmt`,
-`ShirExpr` and `ShirPattern` (gate: `tests/unit/test_typecheck_table_is_total.py`). A
-statement arm takes the pass and one node (`check`). An expression arm takes the type of
+ONE table, `ARMS`, gives the arm of each statement and expression class: each member of
+`ShirStmt` and `ShirExpr`. A pattern has its own table, `PATTERN_ARMS`, with a row for each
+member of `ShirPattern` (ruling R17; gate for both: `tests/unit/test_typecheck_table_is_total.py`).
+A statement arm takes the pass and one node (`check`). An expression arm takes the type of
 its position too, and answers the type of its node (`check_expr`), which the dispatch
-writes into the `TypeckResults` of the body. The lookup of an arm and the stop are the one
+writes into the `TypeckResults` of the body. A pattern arm takes the type of its position,
+and answers the place of the pattern in the matrix of the one checker (`check_pattern`): a
+pattern has no type, so its dispatch writes no row. The lookup of an arm and the stop are the one
 dispatch of the SHIR passes (`shir/dispatch.py`), which the borrow pass reads too: a class
 with no row is an internal error, and the arm of a construct that the pass does not type
 yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
@@ -12,10 +15,8 @@ yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
 `statements.py` walks a block and holds the statement arms, `expressions.py` the expression
 arms of the leaves, `operators.py` the arms of the operators and the check of a condition,
 `calls.py` the arms of a call, an interpolated string and a borrow, and `results.py` the
-arm of an enum construction. The pattern arms are in `passes/types/matching.py`: a pattern
-arm takes the type of its position, and answers the place of the pattern in the matrix of
-the one checker, which no type row holds. The arms of `??` and of `as` are `check_try` and
-`check_cast` of `passes/types/expressions.py`, because the callers of the conversion lookup
+arm of an enum construction. The pattern arms are in `passes/types/matching.py`. The arms
+of `??` and of `as` are `check_try` and `check_cast` of `passes/types/expressions.py`, because the callers of the conversion lookup
 are in that module. The AST inference visitor of `inference.py` is not part of this walk: it
 is the inference of the early passes (`ReadOnlyInferrer`), until they stop inferring.
 `helpers.py` holds the lambda and function-value helpers that it reads.
@@ -32,6 +33,7 @@ from sushi_lang.semantics.passes.types.visit import statements as st
 from sushi_lang.semantics.passes.types import matching as mt
 from sushi_lang.semantics.const_eval import ScalarConstant
 from sushi_lang.semantics.passes.types.call_facts import TypecheckCallFacts
+from sushi_lang.semantics.passes.types.exhaustiveness import Pat
 from sushi_lang.semantics.passes.types.expressions import check_cast, check_try
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
@@ -76,6 +78,12 @@ def check_expr(validator: TypeValidator, node: Any,
     None is no answer: the node has an error, or reads a node that has one.
     """
     return answer(validator, node, _arm(node)(validator, node, expected))
+
+
+def check_pattern(validator: TypeValidator, node: Any, ty: Type) -> Optional[Pat]:
+    """Check one pattern at the type `ty` of its position. The answer is its place in the
+    matrix of the one checker, or None after an error. No row is written."""
+    return dispatch.arm_of(PATTERN_ARMS, node, STAGE)(validator, node, ty)
 
 
 def answer(validator: TypeValidator, node: Any, ty: Optional[Type],
@@ -131,7 +139,9 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.ArrayInit: stop_at,
     e.Range: stop_at,
     e.Interp: ca.check_interp,
-    # -- patterns --------------------------------------------------------------------
+}
+
+PATTERN_ARMS: dict[type, Callable[..., Any]] = {
     p.Wildcard: mt.check_wildcard_pattern,
     p.Literal: mt.check_literal_pattern,
     p.IntRange: mt.check_range_pattern,

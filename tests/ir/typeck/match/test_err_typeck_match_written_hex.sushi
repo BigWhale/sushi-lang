@@ -1,0 +1,16 @@
+# EXPECT_ERROR_CODES_EXACT: CE2073
+# EXPECT_STDERR_CONTAINS: "literal 0x1FF out of range for i8"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_written_hex.shir
+#
+# A diagnostic quotes a literal arm as it is written: the upper-case hex digits stay. On an
+# i8, `0x7F` fits and `0x1FF` does not: CE2073.
+
+fn f(i8 b) string:
+    match b:
+        0x7F -> return "high"
+        0x1FF -> return "too wide"
+        _ -> return "other"
+
+fn main() i32:
+    println(f(1))
+    return 0

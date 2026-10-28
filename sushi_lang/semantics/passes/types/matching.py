@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Iterator, List, Optional, Set, Tuple
 from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.inference import int_literal_fits
 from sushi_lang.semantics.passes.types.visibility import name_is_contested
 from sushi_lang.semantics.typesys import (
@@ -138,11 +139,6 @@ class ArmRows:
 
 # -- the SHIR half -----------------------------------------------------------------------
 
-#: The characters that a byte literal writes as an escape.
-_BYTE_ESCAPES = {"\n": "\\n", "\t": "\\t", "\r": "\\r", "\0": "\\0", "\\": "\\\\",
-                 "'": "\\'"}
-
-
 def literal_kind(ty: Type) -> Optional[str]:
     """The literal kind that a scrutinee type takes, or None when it takes no literal arm."""
     if ty == BuiltinType.STRING:
@@ -224,18 +220,18 @@ def _literal_alternative(validator: 'TypeValidator', alt: p.ShirPattern | p.PatB
     """One top-level alternative of a literal arm: its place in the row, or None after an
     error. A value that an arm or an alternative above already matches is CE2075."""
     if isinstance(alt, p.Wildcard):
-        return check_wildcard_pattern(validator, alt, ty)
+        return visit.check_pattern(validator, alt, ty)
     if isinstance(alt, p.IntRange) and (kind == "integer" or _has_string_bound(alt)):
-        return _first_values(validator, alt, check_range_pattern(validator, alt, ty), seen)
+        return _first_values(validator, alt, visit.check_pattern(validator, alt, ty), seen)
     if isinstance(alt, p.Literal) and _constant_kind(alt.value) == kind:
-        row = check_literal_pattern(validator, alt, ty)
+        row = visit.check_pattern(validator, alt, ty)
         if row is None or not isinstance(alt.value, StrConst):
             return _first_values(validator, alt, row, seen)
         first = seen.strings.get(alt.value.value)
         if first is not None:
             er.emit(validator.reporter, er.ERR.CE2075, alt.loc, value=first, first=first)
             return _DROPPED
-        seen.strings[alt.value.value] = alt.value.spelling()
+        seen.strings[alt.value.value] = alt.written
         return row
     if isinstance(alt, p.Tuple):
         er.emit(validator.reporter, er.ERR.CE2117, alt.loc, type=display_type(ty))
@@ -258,37 +254,28 @@ def _reject_arm_kind(validator: 'TypeValidator', pattern: p.Literal | p.IntRange
         arm_kind = "enum-pattern"
     report = er.emit_with(validator.reporter, er.ERR.CE2076, pattern.loc,
                           arm_kind=arm_kind, scrutinee_type=display_type(scrutinee_type))
-    other_quote = _other_quote_form(pattern.value) if isinstance(pattern, p.Literal) else None
+    other_quote = _other_quote_form(pattern) if isinstance(pattern, p.Literal) else None
     if other_quote is not None:
         report = report.help(other_quote)
     report.emit()
 
 
-def _other_quote_form(const: Constant) -> Optional[str]:
+def _other_quote_form(pattern: p.Literal) -> Optional[str]:
     """The help for an arm written in the wrong quote form, the byte `a'/'` against the
-    string `'/'`, when the other form holds the same one character from 0 to 127."""
+    string `'/'`, when the other form holds the same one character from 0 to 127. The help
+    gives the source text of the arm in the other quotes."""
+    const = pattern.value
     if isinstance(const, IntConst) and const.byte_spelling is not None and const.value <= 127:
-        return f"write `{const.byte_spelling[1:]}` for a string arm"
+        return f"write `{pattern.written[1:]}` for a string arm"
     if isinstance(const, StrConst) and len(const.value) == 1 and ord(const.value) <= 127:
-        return f"write `a'{_byte_text(const.value)}'` for the byte"
+        return f"write `a'{pattern.written[1:-1]}'` for the byte"
     return None
 
 
-def _byte_text(char: str) -> str:
-    """One character from 0 to 127 as a byte literal writes it between its quotes."""
-    if char in _BYTE_ESCAPES:
-        return _BYTE_ESCAPES[char]
-    return char if " " <= char <= "~" else f"\\x{ord(char):02x}"
-
-
 def _range_source(pattern: p.IntRange) -> str:
-    """A range of integer bounds as it is written: `0x80..=0x8f`."""
-    if not isinstance(pattern.low, IntConst) or not isinstance(pattern.high, IntConst):
-        raise_internal_error("CE0000", span=pattern.loc,
-                             detail="the range has a bound that is no integer")
-        return ""
+    """A range as it is written: `0x80..=0x8F`."""
     operator = "..=" if pattern.inclusive else ".."
-    return f"{pattern.low.spelling()}{operator}{pattern.high.spelling()}"
+    return f"{pattern.low.written}{operator}{pattern.high.written}"
 
 
 def check_wildcard_pattern(_validator: 'TypeValidator', _node: p.Wildcard,
@@ -312,7 +299,7 @@ def check_literal_pattern(validator: 'TypeValidator', node: p.Literal,
             return None
         return Ctor(string_key(node.value.value))
     if not _reads_an_integer(validator, node.loc, ty) \
-            or not _bound_fits(validator, node.value, node.loc, ty):
+            or not _bound_fits(validator, node.value, node.written, node.loc, ty):
         return None
     value = literal_value(node.value, ty)
     return Ctor(IntRange(value, value))
@@ -327,14 +314,14 @@ def check_range_pattern(validator: 'TypeValidator', node: p.IntRange,
     `5..5` is legal and matches no value: the checker reports it as a dead arm (CE2118).
     """
     if _has_string_bound(node):
-        loc = node.low_loc if isinstance(node.low, StrConst) else node.high_loc
+        loc = node.low.loc if isinstance(node.low.value, StrConst) else node.high.loc
         er.emit(validator.reporter, er.ERR.CE2072, loc,
                 got=display_type(BuiltinType.STRING), expected="an integer literal")
         return None
     if not _reads_an_integer(validator, node.loc, ty):
         return None
-    fits = [_bound_fits(validator, bound, loc, ty)
-            for bound, loc in ((node.low, node.low_loc), (node.high, node.high_loc))]
+    fits = [_bound_fits(validator, bound.value, bound.written, bound.loc, ty)
+            for bound in (node.low, node.high)]
     if not all(fits):
         return None
     if goes_down(node, ty):
@@ -342,7 +329,7 @@ def check_range_pattern(validator: 'TypeValidator', node: p.IntRange,
         er.emit_with(validator.reporter, er.ERR.CE2125, node.loc,
                      range=_range_source(node)) \
             .help(f"a range pattern goes up: write "
-                  f"'{node.high.spelling()}{operator}{node.low.spelling()}'") \
+                  f"'{node.high.written}{operator}{node.low.written}'") \
             .emit()
         return None
     low, high = pattern_interval(node, ty)
@@ -351,7 +338,7 @@ def check_range_pattern(validator: 'TypeValidator', node: p.IntRange,
 
 def _has_string_bound(pattern: p.IntRange) -> bool:
     """Does a range pattern have a string bound (CE2072)?"""
-    return any(isinstance(bound, StrConst) for bound in (pattern.low, pattern.high))
+    return any(isinstance(bound.value, StrConst) for bound in (pattern.low, pattern.high))
 
 
 def _reads_an_integer(validator: 'TypeValidator', loc: 'Span', ty: Type) -> bool:
@@ -362,15 +349,17 @@ def _reads_an_integer(validator: 'TypeValidator', loc: 'Span', ty: Type) -> bool
     return False
 
 
-def _bound_fits(validator: 'TypeValidator', const: Constant, loc: 'Span', ty: Type) -> bool:
-    """An integer literal fits the type it reads (CE2073), by the context-typed rule."""
+def _bound_fits(validator: 'TypeValidator', const: Constant, written: str, loc: 'Span',
+                ty: Type) -> bool:
+    """An integer literal fits the type it reads (CE2073), by the context-typed rule. The
+    diagnostic quotes the source text of the literal."""
     if not isinstance(const, IntConst):
         raise_internal_error("CE0000", span=loc,
                              detail="an integer pattern holds no integer")
         return False
     if isinstance(ty, BuiltinType) and int_literal_fits(const.value, const.radix, ty):
         return True
-    er.emit(validator.reporter, er.ERR.CE2073, loc, literal=const.spelling(),
+    er.emit(validator.reporter, er.ERR.CE2073, loc, literal=written,
             type=display_type(ty))
     return False
 
@@ -461,17 +450,16 @@ def _first_values(validator: 'TypeValidator', alt: p.Literal | p.IntRange,
 
 def _radix_of(alt: p.Literal | p.IntRange) -> int:
     """The base an integer pattern is written in: the base of its first bound."""
-    const = alt.low if isinstance(alt, p.IntRange) else alt.value
+    const = alt.low.value if isinstance(alt, p.IntRange) else alt.value
     return const.radix if isinstance(const, IntConst) else 10
 
 
 def _spell_pattern(pattern: p.ShirPattern | p.PatBinding) -> str:
-    """A pattern as a diagnostic shows it: an integer in its base, a byte as written, and a
-    string in double quotes."""
+    """A pattern as a diagnostic shows it: as it is written."""
     if isinstance(pattern, p.Wildcard):
         return "_"
-    if isinstance(pattern, p.Literal) and isinstance(pattern.value, (IntConst, StrConst)):
-        return pattern.value.spelling()
+    if isinstance(pattern, p.Literal):
+        return pattern.written
     if isinstance(pattern, p.IntRange):
         return _range_source(pattern)
     if isinstance(pattern, p.Or):
@@ -540,7 +528,7 @@ def _alternatives_row(pattern: object, kept: List[Tuple[object, Pat]]) -> Pat:
 
 
 def _wildcard_row(validator: 'TypeValidator', arms: ArmRows, idx: int, count: int,
-                  pattern: WildcardPattern) -> None:
+                  pattern: p.Wildcard) -> None:
     """A `_` arm: it must be the last arm (CE2041), and it matches every value."""
     if idx != count - 1:
         er.emit(validator.reporter, er.ERR.CE2041, pattern.loc, variant="_")
@@ -958,12 +946,12 @@ def _first_missing(match: 's.Match', ty: Type, witness: Pat) -> str:
 
 def _help_for_an_empty_range(diagnostic, pattern: object, ty: Type) -> None:
     """A range like `5..5` at the top of an arm matches no value: say so."""
-    if not isinstance(pattern, p.IntRange) or not isinstance(pattern.low, IntConst) \
-            or _has_string_bound(pattern) or integer_range(ty) is None:
+    if not isinstance(pattern, p.IntRange) or _has_string_bound(pattern) \
+            or integer_range(ty) is None:
         return
     low, high = pattern_interval(pattern, ty)
     if low > high:
-        written = pattern.low.spelling()
+        written = pattern.low.written
         diagnostic.help(f"'{_range_source(pattern)}' matches no value: '{written}..={written}' "
                         f"matches the one value {written}")
 

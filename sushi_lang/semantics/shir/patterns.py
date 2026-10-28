@@ -2,7 +2,8 @@
 
 Data only. A pattern holds what the source says: a literal and a range bound keep their
 written values, because the value that a bound gives depends on the type at its position,
-and that is an answer of `typecheck` (ruling S5). The union `ShirPattern` is every pattern
+and that is an answer of `typecheck` (ruling S5). They keep their source text too, which a
+diagnostic quotes (ruling R18). The union `ShirPattern` is every pattern
 node, and a dispatch reads it (gate: `tests/unit/test_shir_node_unions_are_total.py`).
 """
 from __future__ import annotations
@@ -39,19 +40,25 @@ class Wildcard(ShirNode):
 
 @dataclass(slots=True)
 class Literal(ShirNode):
-    """An integer or a string arm."""
+    """An integer or a string arm. `written` is its source text: `0x1FF`, `'a'`, `a'/'`."""
     value: Constant
+    written: str
+
+
+@dataclass(frozen=True, slots=True)
+class RangeBound:
+    """One bound of a range: its value, its source text and its span."""
+    value: Constant
+    written: str
+    loc: Span
 
 
 @dataclass(slots=True)
 class IntRange(ShirNode):
-    """`0x80..=0x8f`: an integer range. `inclusive` is the `..=` form. `low_loc` and
-    `high_loc` are the spans of the written bounds."""
-    low: Constant
-    high: Constant
+    """`0x80..=0x8f`: an integer range. `inclusive` is the `..=` form."""
+    low: RangeBound
+    high: RangeBound
     inclusive: bool
-    low_loc: Span
-    high_loc: Span
 
 
 @dataclass(slots=True)

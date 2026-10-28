@@ -7,8 +7,8 @@ mode `Bare`. `peek x` and `poke x` give `Ref`, and `nom x` gives `Nom`. `Own(pok
 its mode in two fields of the AST, and in the one `PatBinding` that `Own` holds.
 
 A pattern holds what the source says, and lowering has no types. A literal and the bounds
-of a range keep the written constant, and a range the span of each bound: `typecheck` reads
-them at the type of the position (ir.md 7.8). A bound is a literal and not an expression.
+of a range keep the written constant, the source text and the span: `typecheck` reads them
+at the type of the position, and a diagnostic quotes the text (ir.md 7.8). A bound is a literal and not an expression.
 An enum pattern names its enum by the written name, the alias included (`geo.Sign`).
 Whether that name is an enum is a question for `typecheck`.
 
@@ -99,12 +99,16 @@ def _wildcard(lw: BodyLowerer, node: a.WildcardPattern, _owner: Optional[a.Node]
 
 
 def _literal(lw: BodyLowerer, node: a.LiteralPattern, _owner: Optional[a.Node]) -> Item:
-    return p.Literal(lw.ident(), lw.span(node), _constant(node))
+    return p.Literal(lw.ident(), lw.span(node), _constant(node), node.display)
 
 
 def _range(lw: BodyLowerer, node: a.RangePattern, _owner: Optional[a.Node]) -> Item:
-    return p.IntRange(lw.ident(), lw.span(node), _constant(node.low), _constant(node.high),
-                      node.inclusive, lw.span(node.low), lw.span(node.high))
+    return p.IntRange(lw.ident(), lw.span(node), _bound(lw, node.low), _bound(lw, node.high),
+                      node.inclusive)
+
+
+def _bound(lw: BodyLowerer, node: a.LiteralPattern) -> p.RangeBound:
+    return p.RangeBound(_constant(node), node.display, lw.span(node))
 
 
 def _constant(node: a.LiteralPattern) -> e.Constant:
