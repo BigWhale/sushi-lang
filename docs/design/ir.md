@@ -40,7 +40,8 @@ of a `Match` on an integer or a string; the `bool` local of a test gets no stora
 and 8.13 (the rule of a switch on an integer). Amended on 2026-10-28 by group A4: 7.3 (a
 `Maybe` or a `Result` variant in a comparison takes the type of the other operand) and 7.8 (a
 `Variant` keeps the spans of its enum name and of its variant name; the typecheck rule of a
-match on an enum or a tuple, and the type row of a binder).
+match on an enum or a tuple, and the type row of a binder), and 7.3 again (the arms of the
+`result` and `maybe` method families).
 
 ## The decisions, in one place
 
@@ -831,7 +832,7 @@ for a receiver of every type. A family answer goes to the arm of its family in O
 `METHOD_TYPE_REGISTRY`, and no arm compares a family name of its own (gate:
 `tests/unit/test_typecheck_family_arms_are_registry_rows.py`). While the migration is in
 progress, a family with no arm in the table stops the walk with
-`typecheck, Call(method <family>)`, on a receiver of any type (`Call(method maybe)`,
+`typecheck, Call(method <family>)`, on a receiver of any type (`Call(method list)`,
 `Call(method array)`), so each group counts its own stops. A receiver that is not of a
 built-in type and that no family claims stops the walk with the label of the call target
 (`Call(method)`, `Call(extension)`, `Call(stdlib method)`), and so do a perk implementation
@@ -845,6 +846,16 @@ the family, and a wrong argument type is [CE2006](../error-catalog.md#ce2006) fr
 argument check), and the call yields the return type of its row. A wrong count skips the
 argument types. A method whose row answers a dynamic array (`split`, `to_bytes`) stops the
 walk with `typecheck, Call(method string array)`.
+The `result` and `maybe` families have their arms too. `is_ok`, `is_err`, `is_some` and
+`is_none` yield a `bool`, `realise` and `expect` yield the payload `T`, and `err` yields a
+`Maybe@(E)`. A wrong count is [CE2009](../error-catalog.md#ce2009) from the arity row of
+the family, and it skips the argument types. The one argument check reads the default of
+`realise` at the type `T` and the message of `expect` at `string`. A value of another type
+is [CE2503](../error-catalog.md#ce2503) at the argument, and each argument borrows. The
+call yields its type after either fault. `realise` on a `~` payload is
+[CE2506](../error-catalog.md#ce2506) at the call, and the pass does not check its default.
+A method with a signature row (`map_err`, `or_err`, group B10) stops the walk with the
+label of its family, `typecheck, Call(method result)` or `Call(method maybe)`.
 
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
