@@ -1,17 +1,17 @@
 """Enum constructor validation.
 
-Port templates: `_refuse_untyped_constructor` call `TypeValidator.validate_expression`,
-and that API is deleted. No pass reaches them today. Group A4 (enums) ports them to SHIR
-inputs before a SHIR pass calls them.
+Port template: `_refuse_untyped_constructor` calls `TypeValidator.validate_expression`,
+and that API is deleted. No pass reaches it today. The generic instances group (C1) ports
+it to SHIR inputs with the construction of a generic enum.
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple, Optional, Sequence
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
-from ..visibility import name_is_contested
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
-from sushi_lang.semantics.ast import EnumConstructor, DotCall, Name
+from sushi_lang.semantics.ast import EnumConstructor
 from ..arguments import check_arguments
 from ..propagation import holds_declared_type
 from sushi_lang.semantics.generics.type_display import display_type
@@ -20,57 +20,6 @@ if TYPE_CHECKING:
     from .. import TypeValidator
     from sushi_lang.semantics.shir import exprs as e
     from sushi_lang.semantics.ast import EnumVariant, Expr
-
-
-def validate_enum_constructor(validator: 'TypeValidator', constructor: EnumConstructor, *,
-                              declared: Optional[bool] = None) -> None:
-    """Validate enum variant constructor - variant exists, argument count and types.
-
-    `declared` says whether a concrete declared type was propagated to the constructor;
-    a caller that validates a temporary node passes the answer for the written one.
-    """
-    if declared is None:
-        declared = holds_declared_type(validator, constructor)
-    enum_type = resolve_enum_type(validator, constructor, declared=declared)
-    if enum_type is None:
-        return
-    from ..utils import reject_unpromised_arguments
-    reject_unpromised_arguments(validator, enum_type, constructor.loc)
-
-    variant = validate_variant_exists(validator, enum_type, constructor)
-    if variant is None:
-        return
-
-    propagate_generic_types_to_nested_constructors(validator, constructor, variant)
-
-    validate_constructor_arguments(validator, constructor, variant, enum_type)
-
-
-def resolve_enum_type(validator: 'TypeValidator', constructor: EnumConstructor, *,
-                      declared: bool = False) -> Optional[EnumType]:
-    """Resolve constructor to concrete or generic enum type."""
-    if hasattr(constructor, 'resolved_enum_type') and constructor.resolved_enum_type is not None:
-        return constructor.resolved_enum_type
-
-    enum_name = constructor.enum_name
-
-    if enum_name in validator.enum_table.by_name:
-        return validator.enum_table.by_name[enum_name]
-
-    if enum_name in validator.generic_enum_table.by_name:
-        # No position stamped the constructor: the payload gives the instance, or the
-        # constructor is refused (#1005). There is no default type argument.
-        instance = untyped_constructor_instance(
-            validator, enum_name, constructor.variant_name, constructor.args)
-        if instance is not None:
-            constructor.resolved_enum_type = instance
-            return instance
-        _refuse_untyped_constructor(validator, constructor, declared=declared)
-        return None
-
-    er.emit(validator.reporter, er.ERR.CE2001, constructor.enum_name_span or constructor.loc,
-           name=enum_name)
-    return None
 
 
 class PayloadSolution(NamedTuple):
@@ -190,12 +139,8 @@ def _refuse_untyped_constructor(validator: 'TypeValidator', constructor: EnumCon
     template = validator.generic_enum_table.by_name[constructor.enum_name]
     variant = next((v for v in template.variants if v.name == constructor.variant_name), None)
     if variant is None:
-        er.emit_with(validator.reporter, er.ERR.CE2045,
-                     constructor.variant_name_span or constructor.loc,
-                     variant=constructor.variant_name, enum=template.name) \
-            .help("a name behind an enum's dot is a variant or a static method: "
-                  f"add the variant, or declare 'extend {template.name} "
-                  f"static {constructor.variant_name}(...)'").emit()
+        reject_missing_variant(validator, constructor.variant_name_span or constructor.loc,
+                               constructor.variant_name, template.name)
         for arg in constructor.args:
             validator.validate_expression(arg)
         return
@@ -226,59 +171,16 @@ def _refuse_untyped_constructor(validator: 'TypeValidator', constructor: EnumCon
               "then use 'v'").emit()
 
 
-def validate_variant_exists(
-    validator: 'TypeValidator', enum_type: EnumType, constructor: EnumConstructor
-) -> Optional['EnumVariant']:
-    """Check variant exists in enum and return it."""
-    variant_name = constructor.variant_name
-    variant = enum_type.get_variant(variant_name)
+def reject_missing_variant(validator: 'TypeValidator', loc: Optional[Span], variant: str,
+                           enum: str) -> None:
+    """CE2045: the dot of the enum `enum` holds no member `variant`.
 
-    if variant is None:
-        # A contested name is the winner's enum, not this unit's (D2). CE2045 would name
-        # a variant the user did write, against an enum they did not.
-        if not name_is_contested(validator, "enum", enum_type.name):
-            # One namespace behind a type's dot (#542, ruling Q1): the name could have
-            # been either member, so the help names both.
-            er.emit_with(validator.reporter, er.ERR.CE2045,
-                         constructor.variant_name_span or constructor.loc,
-                         variant=variant_name, enum=display_type(enum_type)) \
-                .help("a name behind an enum's dot is a variant or a static method: "
-                      f"add the variant, or declare 'extend {display_type(enum_type)} "
-                      f"static {variant_name}(...)'").emit()
-        return None
-
-    return variant
-
-
-def propagate_generic_types_to_nested_constructors(
-    validator: 'TypeValidator', constructor: EnumConstructor, variant: 'EnumVariant'
-) -> None:
-    """Set resolved_enum_type for nested generic enum constructors."""
-    from sushi_lang.semantics.generics.types import GenericTypeRef
-
-    expected_types = list(variant.associated_types)
-    actual_args = constructor.args
-
-    for _i, (arg, expected_type) in enumerate(zip(actual_args, expected_types, strict=False)):
-        resolved_type = expected_type
-        if isinstance(expected_type, GenericTypeRef):
-            concrete_name = str(expected_type)
-            if concrete_name in validator.enum_table.by_name:
-                resolved_type = validator.enum_table.by_name[concrete_name]
-            else:
-                continue
-
-        if not isinstance(resolved_type, EnumType):
-            continue
-
-        if isinstance(arg, EnumConstructor):
-            if arg.enum_name in validator.generic_enum_table.by_name:
-                arg.resolved_enum_type = resolved_type
-        elif isinstance(arg, DotCall):
-            if isinstance(arg.receiver, Name):
-                receiver_name = arg.receiver.id
-                if receiver_name in validator.generic_enum_table.by_name:
-                    arg.resolved_enum_type = resolved_type
+    One namespace stands behind a type's dot (#542, ruling Q1): the name could have been a
+    variant or a static method, so the help names both.
+    """
+    er.emit_with(validator.reporter, er.ERR.CE2045, loc, variant=variant, enum=enum) \
+        .help("a name behind an enum's dot is a variant or a static method: "
+              f"add the variant, or declare 'extend {enum} static {variant}(...)'").emit()
 
 
 def validate_constructor_arguments(

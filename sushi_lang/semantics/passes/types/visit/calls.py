@@ -20,6 +20,9 @@ A `Call` answers what its callee yields. Its written target decides the callee:
   no arm stops with the label `Call(method <family>)`, for a receiver of any type. A
   method is never variadic, so a bloom argument is CE0120.
 
+A `Static` call on an enum whose dot holds no such member is CE2045
+(`visit/results.py:reject_unknown_variant`).
+
 Every other target, and a call that another group types (a generic function, a stdlib
 function, a C function, a variadic function, a method of a receiver that is not of a
 built-in type and that no family answers, a perk method, an extension method), stops the
@@ -60,6 +63,7 @@ from sushi_lang.semantics.passes.types.visibility import (
     name_is_contested, name_was_refused, out_of_scope_help, reject_ambiguous_name,
     reject_private_call, reject_private_kept_call, type_name_is_contested)
 from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
+from sushi_lang.semantics.passes.types.visit.results import reject_unknown_variant
 from sushi_lang.semantics.shir import dispatch, exprs as e
 from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic
 from sushi_lang.semantics.shir.typeck import ResolvedCall
@@ -76,7 +80,7 @@ STRING_ARRAY_STOP = "string array"
 
 
 def check_call(validator: TypeValidator, node: e.Call,
-               _expected: Optional[Type]) -> Optional[Type]:
+               expected: Optional[Type]) -> Optional[Type]:
     target = node.target
     if isinstance(target, e.BuiltinFn):
         return _check_print(validator, node, target.name)
@@ -85,6 +89,9 @@ def check_call(validator: TypeValidator, node: e.Call,
     if (isinstance(target, e.Named) and isinstance(target.ref, e.GlobalRef)
             and not target.type_args):
         return _check_free_call(validator, node, target.ref)
+    if isinstance(target, e.Static) and reject_unknown_variant(validator, node, target,
+                                                               expected):
+        return None
     visit.stop_at(validator, node)
 
 

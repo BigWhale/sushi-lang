@@ -25,11 +25,9 @@ from sushi_lang.semantics.ast import MethodCall, Name
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import ParamMode
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type
-from .enums import validate_enum_constructor
 from .methods import declaration_was_refused
 from ..call_facts import TypecheckCallFacts
 from ..method_registry import METHOD_TYPE_REGISTRY, MethodFamily
-from ..propagation import holds_declared_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.ast import DotCall
@@ -166,40 +164,6 @@ def resolve_dotcall(validator: 'TypeValidator', node: 'DotCall') -> DotCallTarge
     return DotCallTarget(DotCallKind.METHOD,
                          method_call=_method_call_view(node),
                          receiver_type=receiver_type)
-
-
-def validate_variant_spelling(validator: 'TypeValidator', node, variant_name: str,
-                              args: list) -> bool:
-    """Validate `Enum.Variant(...)` or the bare `Enum.Variant` as the constructor it is.
-
-    Both parse as an operation on a type NAME -- a call, or a field read -- and both
-    construct the same value, so one path checks them. The bare spelling used to take
-    neither path: an undeclared variant compiled, and a GENERIC enum's variant carried no
-    stamp for the borrow pass and the backend to read (#545).
-
-    Local-wins (#296): a local named after the enum shadows it, so the node is a method
-    call or a field read on the local, never a variant construction.
-    """
-    from sushi_lang.semantics.ast import EnumConstructor
-
-    receiver_name = node.receiver.id
-    if not _names_an_enum(validator, receiver_name):
-        return False
-
-    constructor = EnumConstructor(
-        enum_name=receiver_name,
-        variant_name=variant_name,
-        args=args,
-        enum_name_span=node.receiver.loc,
-        variant_name_span=getattr(node, 'member_span', None),
-        loc=node.loc,
-    )
-    constructor.resolved_enum_type = getattr(node, 'resolved_enum_type', None)
-    validate_enum_constructor(validator, constructor,
-                              declared=holds_declared_type(validator, node))
-    if constructor.resolved_enum_type is not None:
-        node.resolved_enum_type = constructor.resolved_enum_type
-    return True
 
 
 def _names_an_enum(validator: 'TypeValidator', name: str) -> bool:

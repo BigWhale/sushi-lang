@@ -54,6 +54,7 @@ tests/basic/let_statements/test_let_statements.sushi
 tests/basic/let_statements/test_rebind_no_move.sushi
 tests/basic/multifile/test_err_multifile_private.sushi
 tests/basic/print_output/test_err_print_result.sushi
+tests/basic/print_output/test_err_println_maybe.sushi
 tests/basic/print_output/test_err_println_result_value.sushi
 tests/basic/print_output/test_print_statements.sushi
 tests/basic/print_output/test_println_basic.sushi
@@ -313,7 +314,9 @@ tests/docs/examples/test_err_doc_example_no_fence.sushi
 tests/docs/examples/test_err_doc_example_unterminated.sushi
 tests/enums/declaration_and_match/test_err_enum_wrong_args.sushi
 tests/enums/pattern_codes/test_err_match_scrutinee_not_matchable.sushi
+tests/enums/untyped_constructor/test_err_untyped_unknown_variant.sushi
 tests/enums/variant_names/test_err_duplicate_variant.sushi
+tests/enums/variant_names/test_err_unknown_variant.sushi
 tests/error_handling/result_values/test_err_let_result_unhandled.sushi
 tests/error_handling/result_values/test_err_result_type_mismatch.sushi
 tests/error_handling/result_values/test_result_basic.sushi
@@ -370,6 +373,7 @@ tests/extensions/shadowed_builtin_is_refused/test_err_issue239_extension_shadows
 tests/extensions/shadowed_builtin_is_refused/test_err_issue239_extension_shadows_generic.sushi
 tests/extensions/shadowed_builtin_is_refused/test_err_issue239_extension_shadows_primitive.sushi
 tests/extensions/shadowed_builtin_is_refused/test_err_issue239_extension_shadows_string.sushi
+tests/extensions/statics/test_err_enum_has_no_static.sushi
 tests/extensions/statics/test_err_static_beside_a_same_named_method.sushi
 tests/extensions/statics/test_err_static_collides_with_a_variant.sushi
 tests/extensions/statics/test_err_static_declares_a_receiver.sushi
@@ -575,6 +579,7 @@ tests/generics/constraints/test_err_generic_func_constraint_multi.sushi
 tests/generics/constraints/test_err_generic_struct_constraint_violation.sushi
 tests/generics/diagnostic_order/test_err_monomorphize_refusals_in_source_order.sushi
 tests/generics/errors/test_err_generic_arity_nested.sushi
+tests/generics/errors/test_err_generic_type_mismatch_nested.sushi
 tests/generics/function_monomorphization/test_generic_func_parse.sushi
 tests/generics/identity/test_err_generic_and_concrete_in_one_unit.sushi
 tests/generics/identity/test_err_generic_twice_in_one_unit.sushi
@@ -735,6 +740,13 @@ tests/ir/typeck/constants/test_err_typeck_constant_overflow.sushi
 tests/ir/typeck/constants/test_err_typeck_var_initializer.sushi
 tests/ir/typeck/control_flow/test_err_typeck_if_elif_else.sushi
 tests/ir/typeck/control_flow/test_err_typeck_while.sushi
+tests/ir/typeck/enums/test_err_typeck_enum_alias_arity.sushi
+tests/ir/typeck/enums/test_err_typeck_enum_alias_payload.sushi
+tests/ir/typeck/enums/test_err_typeck_enum_alias_private.sushi
+tests/ir/typeck/enums/test_err_typeck_enum_alias_unknown_variant.sushi
+tests/ir/typeck/enums/test_err_typeck_enum_maybe_payload.sushi
+tests/ir/typeck/enums/test_err_typeck_enum_maybe_unknown_variant.sushi
+tests/ir/typeck/enums/test_err_typeck_enum_unknown_variant.sushi
 tests/ir/typeck/literals/test_err_typeck_literal_context.sushi
 tests/ir/typeck/literals/test_err_typeck_literal_default.sushi
 tests/ir/typeck/match/test_err_typeck_match_arm_body.sushi

@@ -1,0 +1,16 @@
+unit units/compass
+
+unit test_err_typeck_enum_alias_unknown_variant
+
+ShirBody pick
+  params : [(_0 "h": Heading, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@pick), [Call(Static(Heading, "South"), [])]))
+    Return(Lit(0))

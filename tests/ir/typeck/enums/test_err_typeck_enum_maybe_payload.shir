@@ -1,0 +1,21 @@
+unit test_err_typeck_enum_maybe_payload
+
+ShirBody half
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, Binary(%, LocalRef(_0), Lit(2)), Lit(1)), then: [Return(adopt EnumInit(@Maybe, "None", []))])
+    Return(adopt EnumInit(@Maybe, "Some", [adopt Binary(/, LocalRef(_0), Lit(2))]))
+
+ShirBody count
+  params : [(_0 "m": Maybe@(i32), Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@count), [EnumInit(@Maybe, "Some", [Lit("Mostly Harmless")])]))
+    Return(Lit(0))

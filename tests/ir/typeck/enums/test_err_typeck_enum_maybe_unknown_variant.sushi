@@ -1,0 +1,13 @@
+# EXPECT_ERROR_CODES_EXACT: CE2045
+# EXPECT_STDERR_CONTAINS: "enum variant 'Nope' not found in enum 'Maybe@(i32)'"
+# EXPECT_DUMP_SHIR: test_err_typeck_enum_maybe_unknown_variant.shir
+#
+# A name behind the dot of a generic enum that is no variant is CE2045. Where the position
+# gives the instance (here the parameter), the diagnostic names the instance.
+
+fn count(Maybe@(i32) m) Maybe@(i32):
+    return m
+
+fn main() i32:
+    count(Maybe.Nope())
+    return 0

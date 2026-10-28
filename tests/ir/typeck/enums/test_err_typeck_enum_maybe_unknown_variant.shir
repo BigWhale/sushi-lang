@@ -1,0 +1,14 @@
+unit test_err_typeck_enum_maybe_unknown_variant
+
+ShirBody count
+  params : [(_0 "m": Maybe@(i32), Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@count), [Call(Static(Maybe, "Nope"), [])]))
+    Return(Lit(0))
