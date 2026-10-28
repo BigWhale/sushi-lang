@@ -31,7 +31,9 @@ Amended on 2026-10-28 by group A3: 7.8 (an `IntRange` keeps the span of each bou
 diagnostic of that bound points), and 7.5 (the path rule of a `Match`). Amended on 2026-10-28
 by rulings R17 and R18 (group A3): 7.3 (a pattern has its own table of arms, and its dispatch
 writes no type row) and 7.8 (a `Literal` and each bound of an `IntRange` keep the source
-text, which a diagnostic quotes).
+text, which a diagnostic quotes). Amended on 2026-10-28 by group A3 (borrow): 7.9 (the
+arms of a `Match` join as the blocks of an `If` do, and its scrutinee is a read, or a
+consuming use with `consumes`).
 
 ## The decisions, in one place
 
@@ -1461,7 +1463,14 @@ its SLIR (8.2).
 **Control flow in `borrow`.** The joins read the one path predicate of 7.5. An `If`
 checks each block from the state after its condition, and the paths that reach the code
 after it JOIN: a block that ends in a `Return`, a `Break` or a `Continue` leaves by its own
-exit, and an `If` with no `otherwise` has the path that skips `then`. A `Loop` with a
+exit, and an `If` with no `otherwise` has the path that skips `then`. A `Match` reads its
+scrutinee, and a `Match` with `consumes` takes it over, a consuming use. Its arms are
+exclusive paths: each arm starts from the state after the scrutinee, and the paths that
+reach the code after the match join as the blocks of an `If` do. The arms cover each value
+(`typecheck` refuses a match that misses one), so no path skips the arms. A literal arm
+(`Wildcard`, `Literal`, `IntRange`, and an `Or` of them) binds no name. A `Match` with an
+arm that binds a name stops the walk (`borrow, Match`): the group of the enum match checks
+its binders. A `Loop` with a
 `Cond` source reads its condition once, at the entry, and checks its body in two rounds.
 The first round is a DISCOVERY round: it reports no error, writes no row and records no
 exit, and it gives the facts that come round the back edge (the end of the body and each
