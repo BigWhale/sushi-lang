@@ -27,6 +27,7 @@ from sushi_lang.semantics.passes.types.visit import expressions as ex
 from sushi_lang.semantics.passes.types.visit import operators as op
 from sushi_lang.semantics.passes.types.visit import results as rs
 from sushi_lang.semantics.passes.types.visit import statements as st
+from sushi_lang.semantics.const_eval import ScalarConstant
 from sushi_lang.semantics.passes.types.call_facts import TypecheckCallFacts
 from sushi_lang.semantics.passes.types.expressions import check_cast, check_try
 from sushi_lang.semantics.shir import dispatch
@@ -67,12 +68,19 @@ def check_expr(validator: TypeValidator, node: Any,
     return answer(validator, node, _arm(node)(validator, node, expected))
 
 
-def answer(validator: TypeValidator, node: Any, ty: Optional[Type]) -> Optional[Type]:
+def answer(validator: TypeValidator, node: Any, ty: Optional[Type],
+           wraps: bool = False) -> Optional[Type]:
     """Write `ty` as the type row of the expression `node`, and answer it. The one writer
     of a type row: `check_expr`, the arm of a negation for its literal, which is one value
-    with its sign, and the arm of a cast for an integer literal directly under it."""
+    with its sign, and the arm of a cast for an integer literal directly under it. Those two
+    arms set `wraps`. The value row of an integer literal is written here too, at its type
+    (`ex.held_value`, ir.md 8.5)."""
     if ty is not None:
-        validator.body_answers().record_type(node.shir_id, ty)
+        answers = validator.body_answers()
+        answers.record_type(node.shir_id, ty)
+        if isinstance(node, e.Lit) and isinstance(node.value, e.IntConst):
+            answers.record_value(node.shir_id,
+                                 ScalarConstant(ex.held_value(node.value, ty, wraps), ty))
     return ty
 
 

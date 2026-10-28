@@ -159,7 +159,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
     (_TYPES + "calls/user_defined.py", "check_stdlib_function", _TIER_A),
     (_TYPES + "matching.py", "validate_match_statement", _port("A3 or A4")),
-    (_TYPES + "constants.py", "assignment_span", _TIER_A),
     (_TYPES + "statements.py", "stamp_rebind_places", _TIER_A),
     (_TYPES + "statements.py", "validate_rebind_statement", _port("A5")),
     (_TYPES + "statements.py", "validate_let_destructure", _port("A5")),

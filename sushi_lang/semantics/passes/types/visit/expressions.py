@@ -6,8 +6,10 @@ reads a node that has one. The dispatch (`visit.check_expr`) writes the answer a
 row of the node.
 
 A literal takes the type of its position when the position gives one of its kind, else
-its default (`int_literal_default`). A local answers the type that the table holds for it.
-A constant answers its declared type, from the constant table.
+its default (`int_literal_default`). An integer literal holds a value at that type
+(`held_value`, ir.md 8.5). A local answers the type that the table holds for it. A constant
+answers its declared type, and its value, from the constant table (Q5). A constant with no
+value has an error of its own initializer, so the body that reads it does not go on.
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ from typing import TYPE_CHECKING, Optional, Union
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics import integer_ops
 from sushi_lang.semantics.passes.collect.constants import ConstSig
 from sushi_lang.semantics.passes.types.inference import (
     float_literal_fits, int_literal_default, int_literal_fits)
@@ -83,6 +86,18 @@ def type_int_literal(validator: TypeValidator, const: e.IntConst, expected: Opti
     return default
 
 
+def held_value(const: e.IntConst, ty: Type, wraps: bool) -> int:
+    """The value that an integer literal holds at its integer type `ty` (ir.md 8.5).
+
+    A literal that spells bits (a radix other than 10) holds the value that its type holds,
+    and so does the operand of a cast or of a negation (`wraps`), where the range check of
+    the literal is not the range of its type. Any other literal is in the range of its type.
+    """
+    if wraps or const.radix != 10:
+        return integer_ops.cast(const.value, ty)
+    return const.value
+
+
 def type_float_literal(validator: TypeValidator, value: float, expected: Optional[Type],
                        loc: Span) -> Type:
     if isinstance(expected, BuiltinType) and is_float_type(expected):
@@ -111,6 +126,7 @@ def check_const_ref(validator: TypeValidator, node: e.ConstRef,
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail=f"the constant '{written}' has no record")
     if not isinstance(record, ConstSig):
+        _record_constant_value(validator, node, record)
         return record.get_return_type()
     if reject_private_name(validator, "constant", record, node.loc):
         return None
@@ -118,7 +134,19 @@ def check_const_ref(validator: TypeValidator, node: e.ConstRef,
         return None
     if record.const_type is None:
         return None
+    _record_constant_value(validator, node, record)
     return resolve_variable_type(validator, record.const_type, record.type_span)
+
+
+def _record_constant_value(validator: TypeValidator, node: e.ConstRef,
+                           record: Union[ConstSig, StdlibFunction]) -> None:
+    """The value row of `node`. A constant with no value has an error of its own
+    initializer, and the body that reads it does not go on (`refused_before`)."""
+    value = validator.constant_value(record)
+    if value is None:
+        validator.refused_before = True
+        return
+    validator.body_answers().record_value(node.shir_id, value)
 
 
 def constant_record(validator: TypeValidator,

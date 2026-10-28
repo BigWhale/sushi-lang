@@ -12,8 +12,14 @@ from __future__ import annotations
 import pytest
 
 from sushi_lang.internals.diagnostics import InternalCompilerError
+from sushi_lang.semantics.const_eval import ScalarConstant
 from sushi_lang.semantics.param_modes import Convention
-from sushi_lang.semantics.shir.ids import LocalId, ShirId
+from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir import stmts as s
+from sushi_lang.semantics.shir.body import ExpandCopies, Initializer, ShirBody
+from sushi_lang.semantics.shir.decls import DeclNames
+from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
+from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.typeck_check import MissingAnswer, check_answers, missing_answers
 from sushi_lang.semantics.typesys import BuiltinType
@@ -56,6 +62,11 @@ GAPS: dict[str, MissingAnswer] = {
     "element 1": _gap("element type of target 1", "Destructure", 5),
     "element 1.0": _gap("element type of target 1.0", "Destructure", 5),
     "element 1.1": _gap("element type of target 1.1", "Destructure", 5),
+    "value one": _gap("value", "Lit", 5),
+    "value two": _gap("value", "Lit", 5),
+    "value three": _gap("value", "Lit", 5),
+    "value start": _gap("value", "Lit", 6),
+    "value end": _gap("value", "Lit", 6),
 }
 
 
@@ -139,3 +150,58 @@ def test_a_read_of_a_key_with_no_answer_is_none() -> None:
     assert table.type_of(ShirId(3)) is None
     assert table.local_type(LocalId(3)) is None
     assert table.callee_of(ShirId(3)) is None
+
+
+# -- the value row of an initializer body ------------------------------------------------
+
+
+def _initializer() -> tuple[ShirBody, DeclNames, e.ConstRef, e.Lit, s.Return]:
+    """`const i32 NEXT = ANSWER + 1`, made by hand: the initializer body of `NEXT`."""
+    ids: IdAllocator[ShirId] = IdAllocator(ShirId)
+    decls = DeclNames()
+    fn_id = decls.declare("NEXT")
+    ref = e.ConstRef(ids.allocate(), span(1), decls.refer("ANSWER"))
+    one = e.Lit(ids.allocate(), span(1), e.IntConst(1))
+    ret = s.Return(ids.allocate(), span(1), e.Binary(ids.allocate(), span(1), "+", ref, one))
+    body = ShirBody(fn_id, Initializer(), [], [], ShirBlock(ids.allocate(), span(1), [ret]),
+                    ExpandCopies())
+    return body, decls, ref, one, ret
+
+
+def _initializer_answers(body: ShirBody, ref: e.ConstRef, one: e.Lit, ret: s.Return, *,
+                         skip: str | None = None) -> TypeckResults:
+    table = TypeckResults()
+    value = ret.value
+    assert isinstance(value, e.Binary)
+    for node in (ref, one, value):
+        table.record_type(node.shir_id, BuiltinType.I32)
+    if skip != "constant":
+        table.record_value(ref.shir_id, ScalarConstant(42, BuiltinType.I32))
+    if skip != "literal":
+        table.record_value(one.shir_id, ScalarConstant(1, BuiltinType.I32))
+    if skip != "initializer":
+        table.record_value(ret.shir_id, ScalarConstant(43, BuiltinType.I32))
+    return table
+
+
+def test_a_full_initializer_table_has_no_gap() -> None:
+    body, decls, ref, one, ret = _initializer()
+    table = _initializer_answers(body, ref, one, ret)
+    assert missing_answers(body, table) == []
+    check_answers(body, table, decls)
+    assert table.value_of(ret.shir_id) == ScalarConstant(43, BuiltinType.I32)
+
+
+@pytest.mark.parametrize("skip", ["constant", "literal"])
+def test_a_constant_and_an_integer_literal_need_a_value(skip: str) -> None:
+    body, _decls, ref, one, ret = _initializer()
+    node = ref if skip == "constant" else one
+    gaps = missing_answers(body, _initializer_answers(body, ref, one, ret, skip=skip))
+    assert gaps == [MissingAnswer("value", type(node).__name__, node.loc)]
+
+
+def test_an_initializer_needs_no_value_row() -> None:
+    """A `var` of an empty container has no value: its global is zero (ir.md 7.3)."""
+    body, _decls, ref, one, ret = _initializer()
+    assert missing_answers(body, _initializer_answers(body, ref, one, ret,
+                                                      skip="initializer")) == []

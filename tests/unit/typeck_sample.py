@@ -36,6 +36,7 @@ from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import IdAllocator, LocalId, ShirId
 from sushi_lang.semantics.shir.loop_kind import CountedRange
 from sushi_lang.semantics.shir.nodes import ShirBlock
+from sushi_lang.semantics.const_eval import ScalarConstant
 from sushi_lang.semantics.shir.typeck import (
     MatchFacts, NoConversion, ResolvedCall, TryFacts, TypeckResults,
 )
@@ -90,8 +91,8 @@ def sample() -> Sample:
     def local(index: int) -> e.ExprNode:
         return expr(None, e.LocalRef, 1, LocalId(index))
 
-    def lit(value: e.Constant, line: int) -> e.ExprNode:
-        return expr(None, e.Lit, line, value)
+    def lit(value: e.Constant, line: int, name: str | None = None) -> e.ExprNode:
+        return expr(name, e.Lit, line, value)
 
     decorate = expr("decorate_call", e.Call, 2,
                     e.Named(expr(None, e.GlobalRef, 2, decls.refer("decorate"))),
@@ -101,15 +102,16 @@ def sample() -> Sample:
                  e.Named(expr(None, e.GlobalRef, 4, decls.refer("shout"))),
                  [e.Arg(local(2), Convention.OWNED)])
     branch = stmt("if", s.If, 3, local(1), block(4, stmt("shout", s.ExprStmt, 4, shout)), None)
-    inner = expr("inner_tuple", e.TupleInit, 5, [lit(e.IntConst(2), 5), lit(e.IntConst(3), 5)])
-    outer = expr("outer_tuple", e.TupleInit, 5, [lit(e.IntConst(1), 5), inner])
+    inner = expr("inner_tuple", e.TupleInit, 5,
+                 [lit(e.IntConst(2), 5, "two"), lit(e.IntConst(3), 5, "three")])
+    outer = expr("outer_tuple", e.TupleInit, 5, [lit(e.IntConst(1), 5, "one"), inner])
     destructure = stmt("destructure", s.Destructure, 5,
                        [LocalId(3), s.Nested([LocalId(4), s.Discard()])], outer)
     interp = expr("interp", e.Interp, 7, ["", local(5), "!"])
     println = expr("println_call", e.Call, 7, e.BuiltinFn("println"), [e.Arg(interp, None)])
     loop = stmt("loop", s.Loop, 6,
-                s.Items(expr("range", e.Range, 6, lit(e.IntConst(0), 6), lit(e.IntConst(3), 6),
-                             False, False), LocalId(5), s.Bare()),
+                s.Items(expr("range", e.Range, 6, lit(e.IntConst(0), 6, "start"),
+                             lit(e.IntConst(3), 6, "end"), False, False), LocalId(5), s.Bare()),
                 block(7, stmt("print", s.ExprStmt, 7, println)))
     arms = [p.Arm(p.Literal(ids.allocate(), span(9), e.IntConst(0)), block(9)),
             p.Arm(p.Wildcard(ids.allocate(), span(10)), block(10))]
@@ -152,6 +154,7 @@ ROWS = (
     "display interp 1", "display println 0",
     "match facts",
     "element 0", "element 1", "element 1.0", "element 1.1",
+    "value one", "value two", "value three", "value start", "value end",
 )
 
 
@@ -199,4 +202,6 @@ def answers(sample: Sample, *, skip: str | None = None,
     for path, ty in (((0,), I32), ((1,), BLANK), ((1, 0), I32), ((1, 1), I32)):
         row(f"element {'.'.join(str(step) for step in path)}", table.record_element,
             _id(sample, "destructure"), path, ty)
+    for name, held in (("one", 1), ("two", 2), ("three", 3), ("start", 0), ("end", 3)):
+        row(f"value {name}", table.record_value, _id(sample, name), ScalarConstant(held, I32))
     return table

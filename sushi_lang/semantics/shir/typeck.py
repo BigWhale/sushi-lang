@@ -12,11 +12,15 @@ A row for a position is keyed by the node and the position: a call argument and 
 `print` argument by their index in the arguments, a part of an `Interp` by its index in
 the parts, a capture of a lambda by the captured local, and a target of a `Destructure` by
 its path, the index of the target and then its index in each `Nested` level.
+
+The value row holds a value of the constant evaluator, one shape for three keys: the value
+that an integer literal holds at its type (ir.md 8.5, ruling R-W), the value of the constant
+that a `ConstRef` names, and the value of an initializer, keyed by the `Return` of its body.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, TypeAlias
+from typing import TYPE_CHECKING, Optional, TypeAlias
 
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.callee import Callee, Conversion
@@ -24,6 +28,9 @@ from sushi_lang.semantics.shir.ids import LocalId, ShirId
 from sushi_lang.semantics.shir.loop_kind import LoopKind
 from sushi_lang.semantics.shir.side_table import SideTable, row_table, write_once
 from sushi_lang.semantics.typesys import Type
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.const_eval import ConstantValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +87,7 @@ class TypeckResults(SideTable):
     _display_types: dict[tuple[ShirId, int], Type] = row_table()
     _match_facts: dict[ShirId, MatchFacts] = row_table()
     _element_types: dict[tuple[ShirId, tuple[int, ...]], Type] = row_table()
+    _values: dict[ShirId, ConstantValue] = row_table()
 
     # -- the read API: None when the table holds no answer ------------------------------
 
@@ -134,6 +142,11 @@ class TypeckResults(SideTable):
         """The element type of the target of a `Destructure` at the path `target`."""
         return self._element_types.get((node, target))
 
+    def value_of(self, node: ShirId) -> Optional[ConstantValue]:
+        """The value of an integer literal, of a `ConstRef`, or of the `Return` of an
+        initializer body."""
+        return self._values.get(node)
+
     # -- the write API: the typecheck pass alone calls it --------------------------------
 
     def record_type(self, node: ShirId, ty: Type) -> None:
@@ -177,3 +190,6 @@ class TypeckResults(SideTable):
 
     def record_element(self, node: ShirId, target: tuple[int, ...], ty: Type) -> None:
         write_once(self._element_types, (node, target), ty, "typecheck", "element type")
+
+    def record_value(self, node: ShirId, value: ConstantValue) -> None:
+        write_once(self._values, node, value, "typecheck", "value")

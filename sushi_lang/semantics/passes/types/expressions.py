@@ -184,16 +184,16 @@ def _check_cast_operand(validator: 'TypeValidator', operand: 'ShirExpr',
 
     An integer literal directly under a cast to an integer type, with or without its
     negation, has the target type, and its range is not checked: the cast keeps the bits
-    that the type holds (`300 as u8` is 44). The fold reads the operand at the target too
-    (`fold._cast`). Any other operand gets no type from its position.
+    that the type holds (`300 as u8` holds 44, `visit.answer`). The fold reads the operand
+    at the target too (`fold._cast`). Any other operand gets no type from its position.
     """
     literal = operand.operand if isinstance(operand, Unary) and operand.op == "neg" else operand
     if not (is_integer_type(target) and isinstance(literal, Lit)
             and isinstance(literal.value, IntConst)):
         return visit.check_expr(validator, operand)
     if literal is not operand:
-        visit.answer(validator, literal, target)
-    return visit.answer(validator, operand, target)
+        visit.answer(validator, literal, target, wraps=True)
+    return visit.answer(validator, operand, target, wraps=True)
 
 
 def _reject_self_conversion(validator: 'TypeValidator', node: 'e.Cast',

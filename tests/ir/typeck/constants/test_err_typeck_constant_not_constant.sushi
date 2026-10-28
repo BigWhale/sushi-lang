@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE0108
+# EXPECT_STDERR_CONTAINS: "a function call is not a compile-time constant"
+# EXPECT_DUMP_SHIR: test_err_typeck_constant_not_constant.shir
+#
+# The constant evaluator refuses the first node of an initializer that is not constant: a
+# call of a function is CE0108. The typecheck pass reports nothing more about the call.
+
+fn twice(i32 n) i32:
+    return n * 2
+
+const i32 FOUR = twice(2)
+
+fn main() i32:
+    println(FOUR)
+    return 0

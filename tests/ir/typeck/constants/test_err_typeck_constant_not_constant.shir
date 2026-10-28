@@ -1,0 +1,20 @@
+unit test_err_typeck_constant_not_constant
+
+ShirBody FOUR (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Call(Named(GlobalRef(@twice)), [Lit(2)]))
+
+ShirBody twice
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(*, LocalRef(_0), Lit(2)))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(ConstRef(@FOUR), Guaranteed)]))
+    Return(Lit(0))

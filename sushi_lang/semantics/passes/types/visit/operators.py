@@ -67,7 +67,7 @@ def check_unary(validator: TypeValidator, node: e.Unary,
     if node.op == "neg" and isinstance(operand, e.Lit):
         negated = _type_negated_literal(validator, node, operand, position)
         if negated is not None:
-            return visit.answer(validator, operand, negated)
+            return visit.answer(validator, operand, negated, wraps=True)
     ty = visit.check_expr(validator, operand, _given(operand, position))
     if ty is None or _rejects_a_pointer(validator, node, ty):
         return None

@@ -1,16 +1,36 @@
-"""Constant definition validation for type validation (the typecheck pass)."""
+"""Constant definition validation for type validation (the typecheck pass).
+
+The constant evaluator reads the initializer at the declared type first, with the reporter
+of the pass (docs/design/ir.md 7.3, Q5). After an error of the evaluator, the initializer
+body is not walked. Else the walk checks the body (`visit/statements.py`), and the value
+that the evaluator gave is the value row of its `Return`. An empty container allocates
+nothing, so the evaluator does not read it.
+"""
 from __future__ import annotations
 
-from typing import Optional
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import ConstDef, VarDef
+from sushi_lang.semantics.const_eval import allocates_nothing
 from sushi_lang.semantics.namespaces import in_body_scope
 from sushi_lang.semantics.type_predicates import holds_dynamic_array
 from sushi_lang.semantics.typesys import BuiltinType
 
 from .utils import validate_type_name
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.const_eval import ConstantValue
+
+
+@dataclass(frozen=True)
+class InitializerFacts:
+    """What the `Return` of an initializer body reads: the declaration, and the value that
+    the constant evaluator gave it (None for an empty container)."""
+    decl: ConstDef
+    value: Optional[ConstantValue]
 
 
 def assignment_span(const: ConstDef) -> Optional[Span]:
@@ -59,5 +79,16 @@ def _validate_constant(self, const: ConstDef) -> None:
         if sig is not None:
             sig.const_type = resolved
 
+    value = None
+    if not (is_var and allocates_nothing(const.value)):
+        offered = self.errors_offered()
+        value = self.constant_evaluator(self.reporter).evaluate(const.value, const.ty, const.loc)
+        if self.errors_offered() != offered:
+            return
+
     # The initializer is the SHIR body of the constant (docs/design/ir.md 6.3).
-    self.check_body(const)
+    self.initializer = InitializerFacts(const, value)
+    try:
+        self.check_body(const)
+    finally:
+        self.initializer = None

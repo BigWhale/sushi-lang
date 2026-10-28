@@ -14,10 +14,11 @@ reports nothing and writes no row, gives the facts that come round the back edge
 second round starts from the fixed point and reports.
 
 A construct that the pass does not check yet stops the walk of its body with the stop code
-CE0155 (`borrow, <class>`), and the pass records the stop. A body that the walk finished
-with no error writes its conditionally moved locals, has its table checked
-(`check_ownership`, CE0157), and goes to the stage after the pass, the SLIR lowering
-(`slir/lower.py`).
+CE0155 (`borrow, <class>`), and the pass records the stop. The body of a constant or `var`
+initializer stops too (`borrow, Initializer`): a constant that it names is no move. A body
+that the walk finished with no error writes its conditionally moved locals, has its table
+checked (`check_ownership`, CE0157), and goes to the stage after the pass, the SLIR
+lowering (`slir/lower.py`).
 """
 
 from __future__ import annotations
@@ -28,12 +29,13 @@ from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.param_modes import Convention
-from sushi_lang.semantics.shir.body import TemplateCheck
+from sushi_lang.semantics.shir.body import Initializer, TemplateCheck
 from sushi_lang.semantics.shir.ownership_check import check_ownership
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, ReferenceType, Type
 
 # The table of arms first: the arm modules import it, and it imports them.
 from . import arms  # noqa: F401
+from .arms import STAGE
 from .borrows import BY_ADDRESS
 from .consume import binds_a_bare_literal_string
 from .destroy_effects import compute_destroy_effects
@@ -116,6 +118,8 @@ class BorrowChecker:
         offered = sum(self.reporter.errors_offered.values())
         has_receiver = bool(body.params) and self.name_of(body.params[0].local) == "self"
         try:
+            if isinstance(body.origin, Initializer):
+                raise StageStop(STAGE, "Initializer", body.block.loc)
             for param in body.params:
                 self._declare_param(param, has_receiver=has_receiver)
             self.block_locals.append([param.local for param in body.params])

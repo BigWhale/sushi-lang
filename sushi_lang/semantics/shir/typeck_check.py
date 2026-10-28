@@ -12,7 +12,12 @@ once (`walk.py`) and asks the table:
 - a `Cast` has its conversion, and a `Try` its conversion and its facts;
 - each hole of an `Interp` has a display type;
 - a `Match` has the type of its scrutinee;
-- each target of a `Destructure`, at each level, has an element type.
+- each target of a `Destructure`, at each level, has an element type;
+- an integer literal and a `ConstRef` have a value.
+
+A `ConstRef` of a constant with no value reads an error of that constant, and the body
+that holds it does not reach this check. An initializer needs no value row: a `var` of an empty container has
+no value.
 
 The captures of a lambda are in `Bindings` and not in the body, so the check cannot count
 them: the type of a capture has no check here.
@@ -82,6 +87,16 @@ def _interp(answers: TypeckResults, node: e.Interp) -> Iterator[str]:
             yield f"display type of part {position}"
 
 
+def _lit(answers: TypeckResults, node: e.Lit) -> Iterator[str]:
+    if isinstance(node.value, e.IntConst) and answers.value_of(node.shir_id) is None:
+        yield "value"
+
+
+def _const_ref(answers: TypeckResults, node: e.ConstRef) -> Iterator[str]:
+    if answers.value_of(node.shir_id) is None:
+        yield "value"
+
+
 def _loop(answers: TypeckResults, node: s.Loop) -> Iterator[str]:
     if answers.loop_kind_of(node.shir_id) is None:
         yield "loop kind"
@@ -119,6 +134,8 @@ NEEDS: dict[type, Needs] = {
     e.Cast: _cast,
     e.Try: _try,
     e.Interp: _interp,
+    e.Lit: _lit,
+    e.ConstRef: _const_ref,
     s.Loop: _loop,
     s.Match: _match,
     s.Destructure: _destructure,

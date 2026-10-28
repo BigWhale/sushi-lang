@@ -1,0 +1,25 @@
+unit test_err_typeck_var_initializer
+
+ShirBody counter (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit(0))
+
+ShirBody name (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit("Ford"))
+
+ShirBody ready (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit(1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))

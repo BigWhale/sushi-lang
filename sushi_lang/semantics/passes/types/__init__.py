@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.externals import ExternalSig
     from sushi_lang.semantics.passes.collect.functions import FuncSig
     from sushi_lang.semantics.passes.collect.constants import ConstSig
+    from sushi_lang.semantics.passes.types.constants import InitializerFacts
     from sushi_lang.semantics.passes.types.templates import PackElements
     from sushi_lang.semantics.shir.body import ShirBody, ShirLocal
     from sushi_lang.semantics.shir.ids import DeclId, LocalId
@@ -101,8 +102,13 @@ class TypeValidator:
         self.refused_locals: set['LocalId'] = set()
         self.folder: Optional[Folder] = None
         # True when the body holds an error that an earlier pass reported: the collect
-        # pass refuses a `??` in a bare body (CE0131), and its node has no answer.
+        # pass refuses a `??` in a bare body (CE0131), and its node has no answer. True
+        # too when the body reads a constant with no value: the check of its initializer
+        # reports the error.
         self.refused_before = False
+        # The initializer that the body half walks: its declaration and the value that the
+        # constant evaluator gave it (docs/design/ir.md 7.3), or None.
+        self.initializer: Optional['InitializerFacts'] = None
         self.err = PassErrorReporter(reporter)
         self.tables = tables
         self.const_table = tables.constants
@@ -352,7 +358,12 @@ class TypeValidator:
         """The value of a constant that a `ConstRef` names, from the constant table (Q5)."""
         from sushi_lang.semantics.passes.types.visit.expressions import constant_record
         record = constant_record(self, self.decl_name(decl))
-        return None if record is None else self.constant_evaluator().value_of(record, None)
+        return None if record is None else self.constant_value(record)
+
+    def constant_value(self, record) -> Optional['ConstantValue']:
+        """The value of a declared constant or of a stdlib constant, or None when its
+        initializer has an error."""
+        return self.constant_evaluator().value_of(record, None)
 
     def written_of(self, decl):
         """The declaration that lowering made the SHIR body of: `decl` itself here. The
