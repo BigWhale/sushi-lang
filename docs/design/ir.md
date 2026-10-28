@@ -767,10 +767,16 @@ so the body holds an error, and the completeness check does not run.
 channel, so a payload that does not fit is [CE2049](../error-catalog.md#ce2049) at the
 payload and [CE2031](../error-catalog.md#ce2031) or [CE2039](../error-catalog.md#ce2039)
 at the constructor, as before the switch. A `Return` of a bare body refuses both
-constructors ([CE2091](../error-catalog.md#ce2091)). An `EnumInit` of `Result` takes its
-instance from the `Result` type of its position (the channel of a `return`, the written
-type of a `let`, the type of a parameter); a variant of an enum that is not generic
-(`StdError.Error`) is an instance of that enum. A `Try` takes a `Result` only
+constructors ([CE2091](../error-catalog.md#ce2091)). An `EnumInit` of `Result` or of
+`Maybe` takes its instance from the `Result` or the `Maybe` type of its position (the
+channel of a `return`, the written type of a `let`, the type of a parameter); a variant of
+an enum that is not generic (`StdError.Error`) is an instance of that enum, also behind an
+alias (`geo.Sign.Plus`): the enum is the one that the namespace holds
+(`NamespaceTable.lookup`). A variant of a private enum of another unit is
+[CE3005](../error-catalog.md#ce3005). A `Static` call on an enum whose dot holds no
+variant of the name, where no unit declares a method of the name, is
+[CE2045](../error-catalog.md#ce2045); the diagnostic names the instance that the position
+gives to a generic enum. A `Try` takes a `Result` only
 ([CE2507](../error-catalog.md#ce2507)), and answers the payload of `Ok`. Its facts are
 the tag of `Ok`, the two payload types and the `Result` of the channel. Its conversion row
 is `NoConversion` when the two error types are one type; with no declared conversion
