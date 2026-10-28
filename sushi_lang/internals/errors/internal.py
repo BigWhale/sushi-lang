@@ -56,10 +56,6 @@ _add(ErrorMessage("CE0009", Severity.ERROR,
     "builder not initialized",
     Category.INTERNAL, "IR builder is None - function compilation context required."))
 
-_add(ErrorMessage("CE0010", Severity.ERROR,
-    "function context not initialized",
-    Category.INTERNAL, "Function context is None - cannot emit code outside function context."))
-
 _add(ErrorMessage("CE0013", Severity.ERROR,
     "runtime function '{name}' not declared",
     Category.INTERNAL, "C library function not declared - runtime initialization required."))
@@ -76,10 +72,6 @@ _add(ErrorMessage("CE0017", Severity.ERROR,
 _add(ErrorMessage("CE0018", Severity.ERROR,
     "unknown builtin type: '{type}'",
     Category.INTERNAL, "Encountered unrecognized builtin type during codegen."))
-
-_add(ErrorMessage("CE0019", Severity.ERROR,
-    "cannot determine language type for LLVM type: {llvm_type}",
-    Category.INTERNAL, "Failed to map LLVM type back to semantic type."))
 
 _add(ErrorMessage("CE0020", Severity.ERROR,
     "unresolved type '{type}' - semantic analysis should have caught this",

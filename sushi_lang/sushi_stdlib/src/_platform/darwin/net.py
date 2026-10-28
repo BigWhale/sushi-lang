@@ -16,7 +16,7 @@ from sushi_lang.sushi_stdlib.src._platform.posix.net import (  # noqa: F401
     declare_socket, declare_connect, declare_bind, declare_listen,
     declare_accept, declare_send, declare_recv, declare_sendto,
     declare_recvfrom, declare_setsockopt, declare_getsockname,
-    declare_getpeername, declare_shutdown, declare_getaddrinfo,
+    declare_getpeername, declare_getaddrinfo,
     declare_freeaddrinfo, declare_getnameinfo, declare_close, declare_dup,
 )
 

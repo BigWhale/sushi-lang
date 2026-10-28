@@ -500,12 +500,6 @@ class ExtendWithDef(Node):
     target_params: Tuple[Optional[BoundedTypeParam], ...] = ()
 
 @dataclass(slots=True)
-class TypeConstraint:
-    """Perk constraint on a type parameter (T: Hashable)."""
-    perk_name: str
-    loc: Optional[Span] = None
-
-@dataclass(slots=True)
 class ExternalDecl(Node):
     """A single foreign function declaration inside an unsafe external block."""
     name: str                    # Sushi-visible name (e.g., "strlen")
@@ -1261,7 +1255,7 @@ __all__ = [
     "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "DontPanicMarker", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "ExternalVar", "Block", "Param",
     "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "RangePattern", "WildcardPattern", "TuplePattern", "OrPattern", "alternatives_of", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda", "TupleLiteral", "DestructureTarget", "destructure_binders",
-    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "TypeConstraint", "OwnPattern", "RefBinding", "NomBinding",
+    "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "OwnPattern", "RefBinding", "NomBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",
 ]
 

@@ -114,16 +114,6 @@ grammar.lark failed to load. This is a compiler bug.
 
 IR builder is None - function compilation context required.
 
-### CE0010 {#ce0010}
-
-**Error** · internal
-
-**Message:** `function context not initialized`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Function context is None - cannot emit code outside function context.
-
 ### CE0013 {#ce0013}
 
 **Error** · internal
@@ -163,16 +153,6 @@ Type conversion failed during code generation - semantic analysis should prevent
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 Encountered unrecognized builtin type during codegen.
-
-### CE0019 {#ce0019}
-
-**Error** · internal
-
-**Message:** `cannot determine language type for LLVM type: {llvm_type}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Failed to map LLVM type back to semantic type.
 
 ### CE0020 {#ce0020}
 
