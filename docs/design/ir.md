@@ -19,7 +19,8 @@ the status above, 8.12 (the concerns that are not built yet), and 10.2 and 10.3 
 the gate names). Amended on 2026-10-28 by ruling R-W: 7.3 and 8.5 (`typecheck` writes the value
 that an integer literal holds, and the value of a constant, as a row of `TypeckResults`).
 Amended on 2026-10-28 by group A8: 7.3, 7.4 and 7.9 (`borrow` walks an initializer body, and
-refuses a `poke` of a constant with CE2400; a `poke` of a constant is no error hole).
+refuses a `poke` of a constant with CE2400; a `poke` of a constant is no error hole), and 8.2
+and 8.5 (SLIR lowers an initializer body and a `ConstRef` from the value rows of `typecheck`).
 
 ## The decisions, in one place
 
@@ -1612,22 +1613,31 @@ symbol, the unit and the return type of the function are facts of its declaratio
 The unit is the declaring unit. A function that has none (a lifted lambda, the instance of
 a template of a binary library) goes into the module of the unit that holds its body.
 
-While the migration is in progress, a construct that the lowering does not handle yet
-stops the body with the stop code (`slir, <construct>`). The construct is the name of the
-SHIR class, or one of these names: `Initializer` for the body of a constant; `generic
-instance`, `conversion`, `perk method` and `method` for the body of a monomorphized generic
-instance, of a conversion, of a perk method and of an extension method; `borrowed view`
-for a `REJECT` row (7.9), `borrowed rebind` for a rebind of a `Guaranteed` or an
-`InGuaranteed` parameter that owns, `borrowed try` for a `Try` over an owning wrapper that
-the body only reads (a copy of it would drop its payload twice), `conversion` also for a
-`Try` that calls a declared conversion (today `typecheck` stops there first), `library
-function` for a free callee whose row names no declaring unit (a function of a binary
-library, whose symbol is its `link_symbol`), and `bloom` for a bloom argument. The dump
-prints such a function as ONE line in place of its body, `fn <name>: stopped (slir, <construct>)`,
+While the migration is in progress, a construct that the lowering does not handle yet stops
+the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
+class, or one of these names: `generic instance`, `conversion`, `perk method` and `method`
+for the body of a monomorphized generic instance, of a conversion, of a perk method and of
+an extension method; `borrowed view` for a `REJECT` row (7.9), `borrowed rebind` for a
+rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns, `borrowed try` for a
+`Try` over an owning wrapper that the body only reads (a copy of it would drop its payload
+twice), `conversion` also for a `Try` that calls a declared conversion (today `typecheck`
+stops there first), `library function` for a free callee whose row names no declaring unit
+(a function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
+argument, `aggregate constant` for a `ConstRef` whose value is a struct, an enum or an array
+(the groups of those kinds give its `Constant`), and `ConstRef out of range` for a
+`ConstRef` whose value its type cannot hold (8.5). The dump prints such a function as ONE
+line in place of its body, `fn <name>: stopped (slir, <construct>)`,
 so that a golden file shows the progress of each function. The pipeline reports one stop
 after the analysis: a stop of `typecheck`, else of `lift`, else of `borrow`, else an error
 hole, else a stop of the lowering. When nothing stopped, the program goes on to the
 backend.
+
+**An initializer body.** The lowering makes a function from the initializer body of a
+constant or a `var` (6.3), as from any other body: its `Return` writes `_0`. The function
+takes the symbol of its global (`emitted_symbol`, `unit_symbols.py`) and the declared type as
+the type of `_0`. The emitter does not emit it: the global takes the value of the constant
+evaluator (Q5) in the declaration round. The dump shows the function, and the verifier
+checks it.
 
 **The emitter.** The package is `backend/slir/`, and it follows the backend rule: free
 functions, and one state object for each function (`FunctionState`: the codegen, the
@@ -1779,6 +1789,17 @@ pattern. At every other position `typecheck` checked that the value is in the ra
 type, so the value is carried unchanged. SLIR lowering makes the `Int` of a `Lit` from the
 value row and decides nothing. The verifier rule "a constant in range" (8.13) holds the
 result.
+
+**The value of a `ConstRef`.** A `ConstRef` is a `Const` operand with any row. Lowering
+reads the value row of the `ConstRef` (7.3), which holds the value of the constant (Q5), and
+makes the `Constant` of that value. A string constant is a `Str`: a literal, which owns no
+heap. So an `adopt` of a string constant (the `Return` of `const string ALIAS = GREETING`)
+gives the literal to `_0`, as an `adopt` of a literal-bound string does. A `move` row on a
+`ConstRef` does not reach SLIR: `borrow` refuses it with CE2436. A struct, an enum or an
+array value stops the lowering (`aggregate constant`). The constant evaluator does not wrap
+a literal that spells bits (`const i8 B = 0xFF` holds 255), and it gives a value to an
+initializer with a range error. A value that its type cannot hold stops the lowering
+(`ConstRef out of range`), so lowering decides no value and the verifier rule holds.
 
 ### 8.6 Statements
 
