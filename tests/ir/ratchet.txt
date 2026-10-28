@@ -31,7 +31,6 @@ tests/array/nested/constants/test_err_const_dynamic_inside_fixed.sushi
 tests/array/nested/constants/test_err_const_dynamic_three_levels.sushi
 tests/array/nested/constants/test_err_const_fixed_inside_dynamic.sushi
 tests/array/nested/hashmap/test_err_nested_dynamic_inside_fixed_key.sushi
-tests/array/refused_conversions/test_err_cast_array.sushi
 tests/basic/cmdline_args/test_cmdline_no_args_param.sushi
 tests/basic/continuation/test_err_multiline_without_parens.sushi
 tests/basic/expressions/test_err_non_bool_conditions.sushi
