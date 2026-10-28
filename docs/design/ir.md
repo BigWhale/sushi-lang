@@ -24,6 +24,9 @@ and 8.5 (SLIR lowers an initializer body and a `ConstRef` from the value rows of
 Amended on 2026-10-28 by group A8 (emit): 7.9, 8.2 and 8.5 (an initializer body does not go
 to SLIR; the global of a constant or a `var` takes the value of the constant evaluator, in
 the declaration round of the backend, and that is the one path).
+Amended on 2026-10-28 by ruling R-U (group A11): 8.8, 8.9 and 8.13 (a `Trap` gives one
+operand of a fixed type to each printf conversion of its registry text; the trap of an
+`assert` carries its position and its message as two `string` operands).
 
 ## The decisions, in one place
 
@@ -1902,7 +1905,23 @@ Unreachable
 `Result`. The printer writes it as `otherwise: unreachable`.
 
 `Trap` carries operands because the registry text is a printf format string and some traps
-print values: [RE2020](../error-catalog.md#re2020) prints the index and the size.
+print values: [RE2020](../error-catalog.md#re2020) prints the index and the size. Each printf
+conversion of the text takes one operand, in order, and the conversion gives the type of
+that operand: `%d` takes an `i32`, and `%.*s` takes a `string`. The trap reads each operand
+as a `Guaranteed` argument, and it drops nothing, because the program ends there. The trap
+emitter prints a `string` operand with `%.*s` from its fields, the size and the data,
+because a Sushi string has no NUL at its end. A text holds no conversion of another kind.
+
+The trap of an `assert` is [RE2026](../error-catalog.md#re2026) (ruling R-U), and its text
+is `assertion failed at %.*s%.*s`. The first operand is the position of the `assert`, a
+`Str` constant: the `label` of the SHIR node (7.5), the line and the column
+(`file:line:col`). The second operand is the message. With a message, the position ends in
+`: `, and the operand of the message is the value of the message expression. With no
+message, the second operand is the empty string, and the position has no `: `. So the two
+forms print the text of the AST backend: `assertion failed at f.sushi:3:5: the message`,
+and `assertion failed at f.sushi:3:5` for a bare `assert`. A value that the compiler knows,
+such as the position, is a constant operand: the text of RE2026 holds no `{name}` slot,
+because the backend would put the file name in a printf format string.
 
 ### 8.9 SHIR to SLIR, construct by construct
 
@@ -1929,7 +1948,7 @@ print values: [RE2020](../error-catalog.md#re2020) prints the index and the size
 | `Index` read | bounds compare, `SwitchInt`, `Trap("RE2020")` on the failing edge; no check when `unchecked` |
 | `Index` write (`arr[i] := v`) | the same bounds check; the target slot is a consuming position |
 | `Slice` | range compare, `SwitchInt`, `Trap("RE2028")` on the failing edge, then `Slice`; never unchecked |
-| `Assert` | `SwitchInt` on the condition; the failing edge evaluates the message, then `Trap("RE2026")` |
+| `Assert` | `SwitchInt(c, [(0, fail_bb)], otherwise: next_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2026", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state of the locals before the failing block. The blocks are made in the order fail, next. A condition local ends at the top of the two blocks, as for an `If` |
 | `Destructure` | one `Field` place per target: `Move` from an owned value, a view from a borrow. For `Place` targets: the value into a temp first, then each place from left to right, a rebind of each (rule 6 of 8.10) |
 | `Take` | `Move` of the field; the other owning fields of the receiver get `Drop`, and `drop()` does not run (`borrow-model.md` §10c) |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
@@ -2178,7 +2197,10 @@ Runs after lowering, before the backend. It checks:
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
   (8.5)
-- every `Trap` code is a registered RExxxx, with the operand count its format string needs
+- every `Trap` code is a registered RExxxx, with one operand for each printf conversion of
+  its registry text, of the type that the conversion takes (8.8): `%d` an `i32`, `%.*s` a
+  `string`. A conversion of another kind, and an operand whose type SLIR does not hold (a
+  `Global`), are refused
 - every statement and terminator carries a `Span` (G9)
 
 **As built.** The verifier is `semantics/slir/verify.py`. The SLIR stage gives it each
