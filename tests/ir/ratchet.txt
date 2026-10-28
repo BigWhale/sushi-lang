@@ -312,6 +312,8 @@ tests/docs/blocks/test_err_doc_unknown_parameter.sushi
 tests/docs/examples/test_doc_example_fences.sushi
 tests/docs/examples/test_err_doc_example_no_fence.sushi
 tests/docs/examples/test_err_doc_example_unterminated.sushi
+tests/enums/bare_variant/test_err_bare_unknown_variant.sushi
+tests/enums/bare_variant/test_err_bare_unknown_variant_on_a_generic_enum.sushi
 tests/enums/declaration_and_match/test_err_enum_wrong_args.sushi
 tests/enums/pattern_codes/test_err_match_scrutinee_not_matchable.sushi
 tests/enums/untyped_constructor/test_err_untyped_unknown_variant.sushi
@@ -744,6 +746,8 @@ tests/ir/typeck/enums/test_err_typeck_enum_alias_arity.sushi
 tests/ir/typeck/enums/test_err_typeck_enum_alias_payload.sushi
 tests/ir/typeck/enums/test_err_typeck_enum_alias_private.sushi
 tests/ir/typeck/enums/test_err_typeck_enum_alias_unknown_variant.sushi
+tests/ir/typeck/enums/test_err_typeck_enum_bare_unknown_member.sushi
+tests/ir/typeck/enums/test_err_typeck_enum_channel_unknown_variant.sushi
 tests/ir/typeck/enums/test_err_typeck_enum_maybe_payload.sushi
 tests/ir/typeck/enums/test_err_typeck_enum_maybe_unknown_variant.sushi
 tests/ir/typeck/enums/test_err_typeck_enum_unknown_variant.sushi

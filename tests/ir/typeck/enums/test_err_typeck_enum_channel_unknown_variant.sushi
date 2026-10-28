@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE2045, CE2030
+# EXPECT_STDERR_CONTAINS: "enum variant 'Nope' not found in enum 'Result@(i32, StdError)'"
+# EXPECT_STDERR_CONTAINS: "declare 'extend Result@(i32, StdError) static Nope(...)'"
+# EXPECT_DUMP_SHIR: test_err_typeck_enum_channel_unknown_variant.shir
+#
+# A name behind the dot of `Result` that is no variant is CE2045. In the `return` of a
+# body with a channel, the channel is the instance of the position, so the diagnostic names
+# `Result@(i32, StdError)`. The value is no `Result.Ok(...)`, so the `return` is CE2030 too.
+
+fn half(i32 n) i32 | StdError:
+    return Result.Nope(n)
+
+fn main() i32:
+    return half(4).realise(0)

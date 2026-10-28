@@ -56,7 +56,7 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
 from sushi_lang.semantics.shir.lift import Capture, LiftResults
-from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
+from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef, UnknownMember
 from sushi_lang.semantics.shir.ownership import OwnershipResults
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.walk import walk
@@ -246,6 +246,14 @@ def _assert(pr: ShirPrinter, stmt: s.Assert) -> str:
                  f"label: {quoted(stmt.label)}")
 
 
+def _hole(pr: ShirPrinter, n: Hole) -> str:
+    """`<hole: C>`, or an error hole with its codes, and the member that it keeps."""
+    if not n.codes:
+        return f"<hole: {n.ast_class}>"
+    member = "" if n.member is None else f", member: {pr.show(n.member)}"
+    return f"<hole: {n.ast_class}, error: {' | '.join(n.codes)}{member}>"
+
+
 # -- the origin of a body ------------------------------------------------------------
 
 
@@ -302,8 +310,8 @@ PRINTERS: dict[type, Render] = {
     e.LambdaParam: _lambda_param,
     # the block, and a construct that lowering does not handle yet
     ShirBlock: lambda pr, blk: pr.each(blk.statements),
-    Hole: lambda _pr, n: (f"<hole: {n.ast_class}, error: {' | '.join(n.codes)}>" if n.codes
-                          else f"<hole: {n.ast_class}>"),
+    Hole: _hole,
+    UnknownMember: lambda _pr, m: f"{m.written}.{m.name}",
     # statements
     s.Assign: lambda pr, n: _node("Assign", pr.show(n.target), pr.show(n.value),
                                   _flag("is_init", n.is_init)),

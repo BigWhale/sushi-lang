@@ -1,0 +1,13 @@
+unit test_err_typeck_enum_channel_unknown_variant
+
+ShirBody half
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(Call(Static(Result, "Nope"), [LocalRef(_0)]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(Call(Dotted(Call(Free(@half), [(Lit(4), Guaranteed)]), "realise"), [Lit(0)]))

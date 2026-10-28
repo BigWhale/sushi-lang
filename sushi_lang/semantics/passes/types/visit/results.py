@@ -9,7 +9,8 @@ the payload is checked against the types of the variant. A variant of a private 
 another unit is CE3005. A node that has an error has no answer.
 
 Lowering makes `T.m(...)` a `Static` call when the enum `T` has no variant `m`. When no
-unit declares a method `m`, the dot of the enum holds no such member: CE2045.
+unit declares a method `m`, the dot of the enum holds no such member: CE2045. The bare
+`T.m` is an error hole that keeps the member, and it is CE2045 too.
 
 A wrapper variant whose position gives no instance, a variant of a generic enum of the
 program, and a variant of an enum whose name the unit lost (D2) are not typed yet, and stop
@@ -20,6 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.call_facts import TypecheckCallFacts
@@ -29,6 +31,7 @@ from sushi_lang.semantics.passes.types.utils import reject_unpromised_arguments
 from sushi_lang.semantics.passes.types.visibility import name_is_contested, reject_private_type
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.lower_aggregates import written_name
+from sushi_lang.semantics.shir.nodes import Hole
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import EnumType, Type
 
@@ -59,18 +62,36 @@ def check_enum_init(validator: TypeValidator, node: e.EnumInit,
 def reject_unknown_variant(validator: TypeValidator, node: e.Call, target: e.Static,
                            expected: Optional[Type]) -> bool:
     """CE2045 for `T.m(...)` on an enum `T` whose dot holds no variant `m` and no method
-    `m`. True when it was reported. The diagnostic names the instance that the position
-    gives to a generic enum, else the enum."""
-    name = _enum_name(validator, written_name(target.ty))
+    `m`. True when it was reported."""
+    if TypecheckCallFacts(validator).declaring_units(target.name):
+        return False
+    return _reject_member(validator, written_name(target.ty), target.name, node.loc,
+                          expected)
+
+
+def check_hole(validator: TypeValidator, node: Hole,
+               expected: Optional[Type] = None) -> None:
+    """The error hole of a member of an enum that is no variant (`Sign.Nope`) is CE2045 at
+    the member (ir.md 7.4). Every other hole stops the walk of its body."""
+    member = node.member
+    if member is None or not _reject_member(validator, member.written, member.name,
+                                            member.name_loc, expected):
+        visit.stop_at(validator, node)
+
+
+def _reject_member(validator: TypeValidator, written: str, member: str, loc: Span,
+                   expected: Optional[Type]) -> bool:
+    """CE2045 for the member `member` of the written type `written` when it names an enum
+    whose name the unit did not lose. True when it was reported. The diagnostic names the
+    instance that the position gives to a generic enum, else the enum."""
+    name = _enum_name(validator, written)
     if name is None or name_is_contested(validator, "enum", name):
         return False
     generic = name in validator.generic_enum_table.by_name
     if not generic and name not in validator.enum_table.by_name:
         return False
-    if TypecheckCallFacts(validator).declaring_units(target.name):
-        return False
     shown = display_type(expected) if generic and is_instance_of(expected, name) else name
-    reject_missing_variant(validator, node.loc, target.name, shown)
+    reject_missing_variant(validator, loc, member, shown)
     return True
 
 
@@ -91,7 +112,7 @@ def _instance(validator: TypeValidator, node: e.EnumInit,
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail=f"the enum '{written}' of a construction has no record")
     if name != written:
-        reject_private_type(validator, name, node.loc)
+        reject_private_type(validator, name, node.decl_loc)
     return instance
 
 

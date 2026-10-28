@@ -115,7 +115,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     s.Break: st.check_jump,
     s.Continue: st.check_jump,
     s.Expand: stop_at,
-    Hole: stop_at,
+    Hole: rs.check_hole,
     # -- expressions -----------------------------------------------------------------
     e.Lit: ex.check_lit,
     e.LocalRef: ex.check_local_ref,

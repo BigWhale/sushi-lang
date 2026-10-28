@@ -269,10 +269,12 @@ class StructInit(ExprNode):
 
 @dataclass(slots=True)
 class EnumInit(ExprNode):
-    """A payload value is an `Arg` with its written marker (`Result.Ok(nom s)`)."""
+    """A payload value is an `Arg` with its written marker (`Result.Ok(nom s)`).
+    `decl_loc` is the span of the written type path (`geo.Sign`)."""
     decl: DeclId
     variant: str
     payload: list[Arg]
+    decl_loc: Span
 
 
 @dataclass(slots=True)

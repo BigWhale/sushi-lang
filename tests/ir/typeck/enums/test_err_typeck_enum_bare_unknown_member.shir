@@ -1,0 +1,37 @@
+unit units/compass
+
+unit test_err_typeck_enum_bare_unknown_member
+
+ShirBody keep
+  params : [(_0 "s": Shape, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody hold
+  params : [(_0 "m": Maybe@(i32), Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody point
+  params : [(_0 "h": Heading, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@keep), [<hole: MemberAccess, error: CE2045 | CE2105 | CE2007 | CE2008, member: Shape.Nope>]))
+    ExprStmt(Call(Free(@hold), [<hole: MemberAccess, error: CE2045 | CE2105 | CE2007 | CE2008, member: Maybe.Nope>]))
+    ExprStmt(Call(Free(@point), [<hole: MemberAccess, error: CE2045 | CE2105 | CE2007 | CE2008, member: cp.Heading.South>]))
+    ExprStmt(Call(Free(@keep), [<hole: MemberAccess, error: CE2045 | CE2105 | CE2007 | CE2008, member: Shape.build>]))
+    Return(Lit(0))
+
+ShirBody Shape.build
+  params : []
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Shape, "Empty", []))

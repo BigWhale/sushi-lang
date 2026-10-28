@@ -70,7 +70,7 @@ from sushi_lang.semantics.shir.lower_binders import (
     lower_tuple_rebind,
 )
 from sushi_lang.semantics.shir.lower_patterns import lower_match
-from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef
+from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef, UnknownMember
 from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, ReferenceType, UnknownType
 
 #: The variable that makes a hole stop the compile. One place reads it (gate:
@@ -215,7 +215,8 @@ class BodyLowerer:
                                     construct=type(node).__name__)
         return self._record(node, ())
 
-    def error_hole(self, node: Any, *codes: str) -> Hole:
+    def error_hole(self, node: Any, *codes: str,
+                   member: Optional[UnknownMember] = None) -> Hole:
         """The hole of a program that always has an error. It never stops the compile.
 
         A name with no declaration is one: the error of the program (CE1001, CE1002 or
@@ -230,12 +231,15 @@ class BodyLowerer:
         an error hole whose codes no error offered is a stop with CE0155
         (`check_error_holes`, ir.md 7.4). In a constant or a `var` initializer,
         the constant evaluator refuses the first node that is not constant (CE0108) before
-        the typecheck pass reads the form, so there the hole accepts CE0108 too.
+        the typecheck pass reads the form, so there the hole accepts CE0108 too. The hole
+        of a member of a type that is no variant keeps the `member` that its CE2045 reads.
         """
-        return self._record(node, (*codes, "CE0108") if self.in_initializer else codes)
+        return self._record(node, (*codes, "CE0108") if self.in_initializer else codes,
+                            member)
 
-    def _record(self, node: Any, codes: tuple[str, ...]) -> Hole:
-        made = Hole(self.ident(), self.span(node), type(node).__name__, codes)
+    def _record(self, node: Any, codes: tuple[str, ...],
+                member: Optional[UnknownMember] = None) -> Hole:
+        made = Hole(self.ident(), self.span(node), type(node).__name__, codes, member)
         self.holes.append(made)
         return made
 

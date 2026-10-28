@@ -148,7 +148,8 @@ def sample() -> Sample:
         stmt(s.ExprStmt, 6,
              expr("box", e.StructInit, 6, decls.refer("Box"),
                   [e.Arg(expr("some", e.EnumInit, 6, decls.refer("Maybe"), "Some",
-                              [e.Arg(lit("nine", e.IntConst(9), 6), None)]), None)],
+                              [e.Arg(lit("nine", e.IntConst(9), 6), None)], span(6)),
+                         None)],
                   (0,), None)),
         stmt(s.Match, 7, local("b_ref", 1, 7),
              [p.Arm(p.Wildcard(ids.allocate(), span(8)), block(8))], True),
@@ -160,7 +161,7 @@ def sample() -> Sample:
         loop("protocol_loop", 14, local("it_ref", 3, 14), 11),
         stmt(s.Assign, 15, local(None, 12, 15), lam, True),
         stmt(s.Return, 16, expr("ok", e.EnumInit, 16, decls.refer("Result"), "Ok",
-                                [e.Arg(lit("blank", e.BlankConst(), 16), None)])),
+                                [e.Arg(lit("blank", e.BlankConst(), 16), None)], span(16))),
     ]
     conventions = [Convention.OWNED, Convention.GUARANTEED, Convention.GUARANTEED,
                    Convention.INOUT, Convention.GUARANTEED]

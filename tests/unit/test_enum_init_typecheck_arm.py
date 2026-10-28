@@ -57,7 +57,7 @@ def _validator(written: str, *, lost: Optional[str] = None,
 
 
 def _init(variant: str) -> e.EnumInit:
-    return e.EnumInit(ShirId(1), SPAN, DeclId(0), variant, [])
+    return e.EnumInit(ShirId(1), SPAN, DeclId(0), variant, [], SPAN)
 
 
 def _stop(validator: SimpleNamespace, node: e.ShirExpr,

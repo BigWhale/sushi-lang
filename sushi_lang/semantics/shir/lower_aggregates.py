@@ -48,6 +48,7 @@ from sushi_lang.semantics.array_runs import is_range_element
 from sushi_lang.semantics.shir import bindings as bd
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.lookup import GLOBAL_KINDS, VARIABLE_KIND, DeclLookup
+from sushi_lang.semantics.shir.nodes import UnknownMember
 from sushi_lang.semantics.typesys import BuiltinType, UnknownType
 
 if TYPE_CHECKING:
@@ -103,7 +104,7 @@ def enum_init(lw: BodyLowerer, node: Any, ty: WrittenType, variant: str,
     """The variant `variant` of the enum that `ty` writes, with the payload as written."""
     ident = lw.ident()
     return e.EnumInit(ident, lw.span(node), lw.decls.refer(written_name(ty)), variant,
-                      lw.arguments(args))
+                      lw.arguments(args), lw.span(node.receiver))
 
 
 def lower_tuple(lw: BodyLowerer, node: a.TupleLiteral) -> e.TupleInit:
@@ -224,10 +225,13 @@ def _unit_variant(lw: BodyLowerer, node: a.MemberAccess, ty: WrittenType) -> e.S
     Any other member of a type is an error hole: the program always has an error. A name
     that is no variant is CE2045 on an enum (a static too, because a static is a value only
     in a call), and a member of another type is CE2105, or CE2007 or CE2008 behind an
-    alias. With no lookup, it is a hole.
+    alias. The hole keeps the written type, the member and its span, which CE2045 reads
+    (ir.md 7.4). With no lookup, it is a hole.
     """
     if lw.lookup is None:
         return lw.hole(node)
     if not lw.lookup.is_variant(str(ty), node.member):
-        return lw.error_hole(node, "CE2045", "CE2105", "CE2007", "CE2008")
+        member = UnknownMember(written_name(ty), node.member,
+                               node.member_span or lw.span(node))
+        return lw.error_hole(node, "CE2045", "CE2105", "CE2007", "CE2008", member=member)
     return enum_init(lw, node, ty, node.member, [])

@@ -181,12 +181,15 @@ def _check_channel_return(validator: TypeValidator, value: e.ShirExpr, channel: 
     """A `return` of a body with a channel spells `Result.Ok(...)` or `Result.Err(...)`,
     which is checked at the `Result` of the channel. Any other value is CE2030, because
     nothing wraps a bare value (#848); a copy of a template took that rule on the
-    template."""
+    template. A `Static` call on `Result` is checked at the channel too, so that its
+    CE2045 names the instance."""
     if isinstance(value, e.EnumInit) and spells_a_result(validator, value):
         visit.check_expr(validator, value, channel)
         validate_result_pattern(validator, value, channel)
         return
-    visit.check_expr(validator, value)
+    on_result = (isinstance(value, e.Call) and isinstance(value.target, e.Static)
+                 and str(value.target.ty) == "Result")
+    visit.check_expr(validator, value, channel if on_result else None)
     if not validator.in_template_copy:
         reject_unspelled_result(validator, value)
 

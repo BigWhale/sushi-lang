@@ -11,7 +11,7 @@ always refuses), for which SHIR has no node.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, Optional, TypeAlias
 
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir.ids import ShirId
@@ -37,12 +37,23 @@ class ShirBlock(ShirNode):
     statements: list[ShirStmt]
 
 
+@dataclass(frozen=True, slots=True)
+class UnknownMember:
+    """The member `name` of the written type `written` (`Sign.Nope`, `geo.Sign.Nope`) that
+    is no variant: the data of the CE2045 of its error hole (ir.md 7.4)."""
+    written: str
+    name: str
+    name_loc: Span
+
+
 @dataclass(slots=True)
 class Hole(ShirNode):
     """A construct that lowering does not handle yet: `ast_class` names its AST class.
 
     An ERROR hole is the hole of a program that always has an error, and `codes` names the
-    codes of that error (ir.md 7.4); a hole with no codes is no error hole.
+    codes of that error (ir.md 7.4); a hole with no codes is no error hole. The error hole of
+    a member of a type that is no variant keeps that `member`.
     """
     ast_class: str
     codes: tuple[str, ...] = ()
+    member: Optional[UnknownMember] = None
