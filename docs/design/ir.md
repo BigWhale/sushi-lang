@@ -758,6 +758,9 @@ evaluator. An empty container (`List.new()`, `from([])`) allocates nothing: the 
 not read it. The `Return` of the body checks its value at the declared type, as a `let` does: a
 value that does not fit is [CE2002](../error-catalog.md#ce2002) at `name = value`, with a note
 at the declared type. The value that the evaluator gave is the value row of the `Return`.
+The `borrow` pass does not check an initializer body yet, and stops there
+(`borrow, Initializer`): a constant that an initializer names is not moved, and the borrow
+rule of an initializer is not built.
 
 **A cast.** The arm of `as` (`check_cast`, `passes/types/expressions.py`) answers the
 target type. A cast between two numeric types, and a cast to the type of its operand, call
