@@ -207,39 +207,6 @@ def iterator_of(item: Type, *, base_name: Optional[str] = None,
     return IteratorType(element_type=item, base_name=base_name, namespace=namespace)
 
 
-def read_iterator_string(text: str, read: Callable[[str], Type]) -> Optional[IteratorType]:
-    """The iterator an interned name spells (`Iterator<peek string>`), else None.
-
-    `read` reads one type with no mode. The mode is read here, at the top of the item
-    or of one tuple element, which is where `written_item` writes it.
-    """
-    from sushi_lang.semantics.generics.tuples import TUPLE_BASE
-    from sushi_lang.semantics.generics.type_strings import split_type_arguments
-
-    item = _arguments_of(text, ITERATOR_BASE)
-    if item is None:
-        return None
-    word = f"{BorrowMode.PEEK} "
-
-    def part(spelled: str) -> Type:
-        return _lent(read(spelled[len(word):])) if spelled.startswith(word) else read(spelled)
-
-    elements = _arguments_of(item, TUPLE_BASE)
-    if elements is not None:
-        written = split_type_arguments(elements)
-        if any(element.startswith(word) for element in written):
-            return iterator_of(tuple_ref(part(element) for element in written))
-    return iterator_of(part(item))
-
-
-def _arguments_of(text: str, base: str) -> Optional[str]:
-    """The argument text of an interned name of `base`, or None for another name."""
-    head, angle, rest = text.strip().partition("<")
-    if head.strip() != base or not angle or not rest.endswith(">"):
-        return None
-    return rest[:-1].strip()
-
-
 def written_item(iterator: IteratorType) -> Type:
     """The item as a program writes it: `peek string`, or `(i32, peek string)`."""
     if not iterator.peeks:

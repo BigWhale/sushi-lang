@@ -161,8 +161,8 @@ right operand before place.
 
 An array element can be an array (ruling R1). The suffixes read from LEFT TO RIGHT: a
 suffix applies to the type on its left. The grammar says so with one left-recursive rule
-(`array_type` in `grammar.lark`), and `ArrayType.__str__`, `display_type`,
-`parse_type_string` and `resolve_type_from_string` all peel the LAST suffix.
+(`array_type` in `grammar.lark`), and `ArrayType.__str__`, `display_type` and
+`parse_type_string` all peel the LAST suffix.
 
 | Written | Is | Layout |
 |---|---|---|

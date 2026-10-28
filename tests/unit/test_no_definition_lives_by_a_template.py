@@ -51,8 +51,6 @@ KEPT: dict[str, str] = {
     "sushi_lang/backend/generics/hashmap/__init__.py:emit_hashmap_method":
         "kept for B4: the HashMap method family; the SLIR emitter calls it with operands "
         "there, and its AST argument half goes then",
-    "sushi_lang/semantics/generics/type_strings.py:resolve_type_from_string":
-        "tests/unit/test_missing_instance_names_the_source_spelling.py calls it",
 }
 
 #: The rows of `KEPT` at the day of the pin. A row may leave both; none may join.
@@ -63,7 +61,6 @@ PINNED_KEPT: frozenset[str] = frozenset({
     "sushi_lang/backend/types/arrays/methods/core.py:emit_dynamic_array_new",
     "sushi_lang/backend/types/arrays/methods/core.py:emit_dynamic_array_from",
     "sushi_lang/backend/generics/hashmap/__init__.py:emit_hashmap_method",
-    "sushi_lang/semantics/generics/type_strings.py:resolve_type_from_string",
 })
 
 
