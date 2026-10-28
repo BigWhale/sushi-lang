@@ -895,7 +895,7 @@ not reach prints as lowering made it.
 | `Try` | `inner: Expr`; `??`, kept whole for `borrow` and for G7 |
 | `Lambda` | `params: [LambdaParam]`, `ret: TypeRef \| None`, `err: TypeRef \| None`, `body: ShirBlock`, `expr_body: bool`; the captures are in `Bindings`. It stays in the tree through `borrow`; `lift` describes it in `LiftResults` (Q8) |
 | `StructInit` | `decl: DeclId`, `fields: [Arg]`, `written_order: [int]`, `names: [str] \| None`; `fields` in the declaration order |
-| `EnumInit` | `decl: DeclId`, `variant: str`, `payload: [Arg]` |
+| `EnumInit` | `decl: DeclId`, `variant: str`, `payload: [Arg]`, `decl_loc: Span`; `decl_loc` is the span of the written type path (`geo.Sign`) |
 | `TupleInit` | `parts: [Expr]` |
 | `ArrayInit` | `kind: Fixed \| Dynamic`, `runs: [ArrayRun]` |
 | `Range` | `start: Expr`, `end: Expr`, `inclusive: bool`, `reverse: bool` |
@@ -1016,7 +1016,10 @@ written name of each field. `typecheck` reports the fault (CE2080, CE2081, CE208
 `names`. In every other construction `names` is `None`. Ruled 2026-10-12.
 
 `T.m(...)` and the bare `T.m` on a type name are an `EnumInit` when the enum declaration of
-`T` has the variant `m`; else `T.m(...)` is a `Static` call (#542). A member `ns.m` behind
+`T` has the variant `m`; else `T.m(...)` is a `Static` call (#542). `decl_loc` is the span
+of the written type path before the dot (`Sign`, `geo.Hidden`), where a diagnostic of the
+type points (the CE3005 of a private enum behind an alias). Lowering sets it from the
+source; no pass fills it (S5). Ruled 2026-10-28 (R19). A member `ns.m` behind
 an alias is a `ConstRef`, a `StorageRef` or a `GlobalRef`, by what the namespace holds.
 A C global of an `unsafe external` block is a `GlobalRef` with the written name and its
 alias (`libc.environ`), as a C function is (`libc.abs`). A read and a write of it are the
