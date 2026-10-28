@@ -41,7 +41,11 @@ and 8.13 (the rule of a switch on an integer). Amended on 2026-10-28 by group A4
 `Maybe` or a `Result` variant in a comparison takes the type of the other operand) and 7.8 (a
 `Variant` keeps the spans of its enum name and of its variant name; the typecheck rule of a
 match on an enum or a tuple, and the type row of a binder), and 7.3 again (the arms of the
-`result` and `maybe` method families).
+`result` and `maybe` method families). Amended on 2026-10-29 by ruling R-V (group A4,
+borrow): 8.3 (the receiver of a built-in method: each family is in one set of a total
+partition, and the `result` and `maybe` families give a per-method answer), 7.9 and 8.6
+(the `borrow` pass and SLIR lowering read that answer), and 7.9 again (the bare binders of
+an enum match in `borrow`).
 
 ## The decisions, in one place
 
@@ -1442,14 +1446,10 @@ node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership
   in place;
 - each capture of a `Lambda`, from its environment layout in `LiftResults`.
 
-The receiver of a method call is not on the list yet: `TypeckResults` has no convention row
-for a receiver. ONE set names the families whose methods only read their receiver,
-`RECEIVER_READ_FAMILIES` (`semantics/method_effects.py`): today the primitive family and the
-`string` family. These families need no row. The set and `EFFECT_FAMILIES`, the families
-that the rows of `METHOD_EFFECTS` describe, are disjoint, and each name of the two is a
-family of `METHOD_TYPE_REGISTRY` (gate: `tests/unit/test_method_mutation_is_one_fact.py`).
-The `borrow` pass and SLIR lowering both read the set. The first family with a `nom self`
-method adds the row, and a `nom self` receiver joins the rule.
+The receiver of a built-in method that declares `nom self` is a consuming use too (its arm
+is group B10's). Its convention is the answer of the receiver partition (8.3), and not a
+row of `TypeckResults`: the answer is a fact of the callee row (`BuiltinMethod.nom_self`).
+The `borrow` pass and SLIR lowering both read it through `receiver_convention`.
 
 **The order of the three passes.** Each SHIR pass gives the next one each body that it
 finished with no error, with the tables that `typecheck` read the body in: `typecheck`
@@ -1483,7 +1483,7 @@ too: a class with no row is an internal error at the span of the node, and the a
 construct that the pass does not check yet stops the walk of its body with the stop code
 (`borrow, <class>`). A statement of a copy of an unrolled `expand` that ends the path,
 with more statements after it in its block, stops the walk too (`borrow, Expand`): the
-group of the copies decides the statements that no path reaches. A call of a built-in method of the primitive family or the `string` family has its arm: it reads its receiver (a use after a move is CE2405) and then each argument by its convention row, as a call of a free function does. These two families are the set `RECEIVER_READ_FAMILIES`: no method of a family of the set changes its receiver or consumes it, so the receiver stays with its owner and needs no convention row. A call of a method of another family has no arm in the pass yet: it stops the walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages make this stop with the one helper `dispatch.stop_at_family`. The typecheck pass records only the callees `Free`, `Intrinsic` and `Builtin`, so a call with another callee in this pass is an internal error. The state of the walk
+group of the copies decides the statements that no path reaches. A call of a built-in method has its arm when `receiver_convention` (8.3) gives its receiver the convention `Guaranteed`: each method of the primitive family and of the `string` family, and each method of the `result` and `maybe` families that does not declare `nom self`. The arm reads the receiver (a use after a move is CE2405), and the receiver stays with its owner. Then it reads each argument by its convention row, as a call of a free function does. A call of a method of another family, and a call with an `Owned` receiver, have no arm in the pass yet: each stops the walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages make this stop with the one helper `dispatch.stop_at_family`. The typecheck pass records only the callees `Free`, `Intrinsic` and `Builtin`, so a call with another callee in this pass is an internal error. The state of the walk
 (`BorrowState`, `FlowFacts`) is keyed by `LocalId`, because a hidden local has no source
 name, and a diagnostic names a local by the name of its `ShirLocal`. The pass decides the
 `Ownership` of each consuming use ONE time, with `classify()`, and one function writes the
@@ -1526,9 +1526,14 @@ scrutinee, and a `Match` with `consumes` takes it over, a consuming use. Its arm
 exclusive paths: each arm starts from the state after the scrutinee, and the paths that
 reach the code after the match join as the blocks of an `If` do. The arms cover each value
 (`typecheck` refuses a match that misses one), so no path skips the arms. A literal arm
-(`Wildcard`, `Literal`, `IntRange`, and an `Or` of them) binds no name. A `Match` with an
-arm that binds a name stops the walk (`borrow, Match`): the group of the enum match checks
-its binders. A `Loop` with a
+(`Wildcard`, `Literal`, `IntRange`, and an `Or` of them) binds no name. A `Variant` binds
+the local of each `PatBinding` in it, at any depth. Each arm declares its binders before
+its body: a bare binder of a plain payload is a read-only view of the payload (CE2414 for
+a write or a rebind, with a note at the name of the variant that binds it), and a position
+that takes it takes a copy (`ADOPT`). The alternatives of `|` share one local, and the
+first alternative gives the span of the note. A `Match` with an arm that binds a name in
+another way stops the walk (`borrow, Match`): a `poke`, `peek` or `nom` binder (B7, B8), a
+bare binder of a payload that owns (B3), a `Tuple` (A5) and an `Own` (B5). A `Loop` with a
 `Cond` source reads its condition once, at the entry, and checks its body in two rounds.
 The first round is a DISCOVERY round: it reports no error, writes no row and records no
 exit, and it gives the facts that come round the back edge (the end of the body and each
@@ -1836,6 +1841,39 @@ and a rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns is a sto
 lowering (`slir, borrowed rebind`, 8.10, rule 6). The group that lowers that rebind rules
 what the callee owns after it, and it must not drop the value of the caller.
 
+**The receiver of a built-in method** (ruling R-V). The receiver is the first operand of the
+call (8.6). Its convention comes from ONE partition of the families of
+`METHOD_TYPE_REGISTRY`, in `semantics/method_effects.py`. Each family is in exactly one of
+four sets (gate: `tests/unit/test_method_mutation_is_one_fact.py`):
+
+- **Only reads** (`RECEIVER_READ_FAMILIES`: `primitive`, `string`). No method of the family
+  changes or consumes its receiver. The receiver is `Guaranteed`.
+- **Effect** (`EFFECT_FAMILIES`: `array`, `list`, `hashmap`, `own`). The rows of
+  `METHOD_EFFECTS` tell what a method does to its receiver. The group of each family writes
+  its convention. Until then, a call stops in `typecheck` or in `borrow`.
+- **Consumes** (`CONSUMING_RECEIVER_FAMILIES`: `result`, `maybe`). The family has a
+  `nom self` method, so the answer is per method. The receiver of a method that declares
+  `nom self` (`map_err`, `or_err`) is `Owned`: a consuming use (7.9). The receiver of each
+  other method of the family (`is_ok`, `is_err`, `err`, `is_some`, `is_none`, `realise`,
+  `expect`) is `Guaranteed`: a read. The source of the answer is the `self_mode` of the
+  signature row of the method. `BuiltinModes` reads it, and `MethodFamily.callee` writes it
+  into the callee (`BuiltinMethod.nom_self`). So `realise` and `expect` read a named
+  wrapper, as on `main`: the wrapper stays usable after the call, and the emitter copies an
+  owning payload out of it.
+- **No rule yet** (`NO_RECEIVER_RULE_FAMILIES`): each other family. The set can only
+  shrink: the gate holds a pinned copy. A call of a method of such a family stops in
+  `typecheck` or in `borrow`.
+
+One function gives the convention of a receiver: `receiver_convention`
+(`semantics/method_effects.py`). It answers None for a family of the effect set and of
+the no-rule set, and a family in no set is an internal error. There is no default
+convention: the `borrow` pass stops at such a call
+(`borrow, Call(method <family>)`), and in SLIR lowering such a call is an internal error.
+The `borrow` pass reads a `Guaranteed` receiver. An `Owned` receiver is a consuming use
+(7.9), and group B10 builds its arm with the read-through of `or_err`: until then the
+`borrow` pass stops at it, and `typecheck` stops at `map_err` and `or_err` first. SLIR
+lowering writes the answer as the convention of the first operand.
+
 ### 8.4 Places and operands
 
 ```
@@ -1952,12 +1990,10 @@ destination is a `bool` local. The backend expands it with the contract seam `em
 A `Builtin(recv, BuiltinMethod)` callee of SHIR lowers to `Builtin(BuiltinMethod, [])`: a
 method has no operand types in the callee, because each operand is a place or a constant
 that has its own type. The receiver is the FIRST operand of the call, and it comes before
-the arguments in the order of evaluation. Its convention is `Guaranteed` for a family of
-`RECEIVER_READ_FAMILIES` (`receiver_convention`, `slir/lower.py`), because no method of such
-a family changes its receiver or consumes it (the convention of the receiver has no row,
-8.3). A method of any other family can change or consume its receiver, and it stops in
-`typecheck` or in `borrow` first; its call in lowering is the internal error CE0000, never a
-`Guaranteed` receiver by default. The printer writes the call as
+the arguments in the order of evaluation. Its convention is the answer of the receiver
+partition (`receiver_convention`, 8.3). A family with no answer stops in `typecheck` or in
+`borrow` first, so its call in lowering is the internal error CE0000, never a `Guaranteed`
+receiver by default. The printer writes the call as
 `builtin string.len(copy _1 @guaranteed)`. A method that answers a `string` writes it into a
 fresh owning local like any other call, and the drop placement drops it (8.10).
 
