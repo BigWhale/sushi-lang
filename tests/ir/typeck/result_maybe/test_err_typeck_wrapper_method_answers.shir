@@ -1,0 +1,41 @@
+unit test_err_typeck_wrapper_method_answers
+
+ShirBody parse
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(<, LocalRef(_0), Lit(0)), then: [Return(adopt EnumInit(@Result, "Err", [adopt EnumInit(@StdError, "Error", [])]))])
+    Return(adopt EnumInit(@Result, "Ok", [adopt LocalRef(_0)]))
+
+ShirBody half
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, Binary(%, LocalRef(_0), Lit(2)), Lit(1)), then: [Return(adopt EnumInit(@Maybe, "None", []))])
+    Return(adopt EnumInit(@Maybe, "Some", [adopt Binary(/, LocalRef(_0), Lit(2))]))
+
+ShirBody tests
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "r": Result@(i32, StdError), _2 "m": Maybe@(i32), _3 "ok": bool, _4 "bad": bool, _5 "some": bool, _6 "none": bool, _7 "a": i32, _8 "b": i32, _9 "c": i32, _10 "d": i32, _11 "e": Maybe@(StdError), _12 "f": i32]
+  block  :
+    Assign(LocalRef(_1), adopt Call(Free(@parse), [(LocalRef(_0), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_2), adopt Call(Free(@half), [(LocalRef(_0), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_3), Call(Builtin(LocalRef(_1), "is_ok"), []), is_init: true)
+    Assign(LocalRef(_4), Call(Builtin(LocalRef(_1), "is_err"), []), is_init: true)
+    Assign(LocalRef(_5), Call(Builtin(LocalRef(_2), "is_some"), []), is_init: true)
+    Assign(LocalRef(_6), Call(Builtin(LocalRef(_2), "is_none"), []), is_init: true)
+    Assign(LocalRef(_7), Call(Builtin(LocalRef(_1), "realise"), [(Lit(0), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_8), Call(Builtin(LocalRef(_2), "realise"), [(Lit(1), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_9), Call(Builtin(LocalRef(_1), "expect"), [(Lit("Mostly Harmless"), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_10), Call(Builtin(LocalRef(_2), "expect"), [(Lit("Mostly Harmless"), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_11), Call(Builtin(LocalRef(_1), "err"), []), is_init: true)
+    Assign(LocalRef(_12), Call(Builtin(Call(Free(@parse), [(LocalRef(_0), Guaranteed)]), "realise"), [(Lit(2), Guaranteed)]), is_init: true)
+    If(Binary(and, Binary(and, Binary(and, Binary(and, LocalRef(_3), Unary(not, LocalRef(_4))), LocalRef(_5)), Unary(not, LocalRef(_6))), Call(Builtin(LocalRef(_11), "is_none"), [])), then: [Return(Binary(+, Binary(+, Binary(+, Binary(+, LocalRef(_7), LocalRef(_8)), LocalRef(_9)), LocalRef(_10)), LocalRef(_12)))])
+    Return(Lit(0))
+
+ShirBody main
+  params : []
+  locals : [_0 "s": string]
+  block  :
+    Assign(LocalRef(_0), Call(Builtin(Call(Free(@parse), [(Lit(1), Guaranteed)]), "is_ok"), []), is_init: true)
+    Return(Binary(+, Call(Free(@tests), [(Lit(4), Guaranteed)]), Call(Builtin(LocalRef(_0), "len"), [])))

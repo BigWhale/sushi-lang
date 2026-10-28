@@ -81,6 +81,7 @@ tests/borrow/borrowed_return/test_err_br_lambda.sushi
 tests/borrow/borrowed_return/test_err_br_nom_self.sushi
 tests/borrow/borrowed_return/test_err_br_perk_contract.sushi
 tests/borrow/borrowed_return/test_err_br_perk_implementation.sushi
+tests/borrow/builtin_argument_modes/test_err_realise_nom_on_a_result.sushi
 tests/borrow/move_note_at_join/test_err_move_in_match_arm_rebind_in_other.sushi
 tests/borrow/nested_own_take/test_err_nested_own_nom_match_nom.sushi
 tests/borrow/nested_own_take/test_err_nested_own_nom_plain_match.sushi
@@ -261,6 +262,7 @@ tests/diagnostics/arity_count/test_err_function_arity_of_one.sushi
 tests/diagnostics/batching/test_err_many_bad_literals.sushi
 tests/diagnostics/call_span/test_err_bare_call_span_starts_at_callee.sushi
 tests/diagnostics/call_span/test_err_propagation_in_main_span.sushi
+tests/diagnostics/channel_texts/test_err_realise_on_blank_channel.sushi
 tests/diagnostics/channel_texts/test_err_result_ok_in_bare_blank_function.sushi
 tests/diagnostics/channel_texts/test_err_try_binder_in_bare_main.sushi
 tests/diagnostics/channel_texts/test_err_try_binder_in_bare_method.sushi
@@ -349,6 +351,8 @@ tests/enums/pattern_codes/test_err_match_scrutinee_not_matchable.sushi
 tests/enums/untyped_constructor/test_err_untyped_unknown_variant.sushi
 tests/enums/variant_names/test_err_duplicate_variant.sushi
 tests/enums/variant_names/test_err_unknown_variant.sushi
+tests/error_handling/realise/test_err_realise_type_mismatch.sushi
+tests/error_handling/realise/test_err_realise_wrong_arg_count.sushi
 tests/error_handling/result_values/test_err_let_result_unhandled.sushi
 tests/error_handling/result_values/test_err_result_type_mismatch.sushi
 tests/error_handling/result_values/test_result_basic.sushi
@@ -550,6 +554,7 @@ tests/functions/main_exit_width/test_main_returns_i16.sushi
 tests/functions/main_exit_width/test_main_returns_i64.sushi
 tests/functions/main_exit_width/test_main_returns_u8.sushi
 tests/functions/nested_declarations/test_err_nested_fn.sushi
+tests/generics/builtin_methods/test_err_result_is_ok_arity.sushi
 tests/generics/checked_templates/borrow/test_err_checked_one_fault_two_instances.sushi
 tests/generics/checked_templates/borrow/test_err_checked_return_borrowed_t.sushi
 tests/generics/checked_templates/check_copy/test_err_checked_called_twice_one_fault.sushi
@@ -851,6 +856,12 @@ tests/ir/typeck/paths/test_err_typeck_match_arm_falls_off.sushi
 tests/ir/typeck/paths/test_err_typeck_match_dead_statement.sushi
 tests/ir/typeck/paths/test_err_typeck_match_not_covered_ends_no_path.sushi
 tests/ir/typeck/paths/test_match_every_arm_returns.sushi
+tests/ir/typeck/result_maybe/test_err_typeck_expect_message.sushi
+tests/ir/typeck/result_maybe/test_err_typeck_realise_default_mismatch.sushi
+tests/ir/typeck/result_maybe/test_err_typeck_realise_nom_marker.sushi
+tests/ir/typeck/result_maybe/test_err_typeck_realise_on_blank.sushi
+tests/ir/typeck/result_maybe/test_err_typeck_wrapper_method_answers.sushi
+tests/ir/typeck/result_maybe/test_err_typeck_wrapper_method_miscount.sushi
 tests/ir/typeck/results/test_err_typeck_bare_return_in_a_channel.sushi
 tests/ir/typeck/results/test_err_typeck_channel.sushi
 tests/ir/typeck/results/test_err_typeck_constructor_in_a_bare_body.sushi
@@ -1013,6 +1024,7 @@ tests/memory/conditional_moves/test_move_path_sensitive.sushi
 tests/memory/consume_matrix/test_err_consume_method_param_call_arg.sushi
 tests/memory/consume_matrix/test_err_consume_peek_param.sushi
 tests/memory/consume_matrix/test_err_consume_ref_binding.sushi
+tests/memory/consume_matrix/test_err_consume_ref_enum_payload.sushi
 tests/memory/consume_matrix/test_err_consume_ref_param.sushi
 tests/memory/consume_matrix/test_err_consume_ref_return.sushi
 tests/memory/consume_matrix/test_err_consume_self_call_arg.sushi
@@ -1068,6 +1080,7 @@ tests/namespaces/alias/test_err_use_below_a_declaration.sushi
 tests/namespaces/aliased_constant_ownership/test_aliased_plain_constant_copies.sushi
 tests/namespaces/aliased_constant_ownership/test_err_aliased_constant_let.sushi
 tests/namespaces/aliased_constant_ownership/test_err_aliased_constant_nom_arg.sushi
+tests/namespaces/aliased_constant_ownership/test_err_aliased_constant_payload.sushi
 tests/namespaces/aliased_constant_ownership/test_err_aliased_constant_return.sushi
 tests/namespaces/ambiguous_name_has_no_type/test_err_ambiguous_call_as_argument.sushi
 tests/namespaces/ambiguous_name_has_no_type/test_err_ambiguous_call_as_statement.sushi
@@ -1463,6 +1476,7 @@ tests/tuples/refusals_phase2/test_err_tuple_rebind_name_twice.sushi
 tests/tuples/refusals_phase2/test_err_tuple_rebind_name_twice_nested.sushi
 tests/types/blank_type/test_err_blank_constant.sushi
 tests/types/blank_type/test_err_blank_parameter.sushi
+tests/types/blank_type/test_err_blank_realise.sushi
 tests/types/blank_type/test_err_blank_return_empty_ok.sushi
 tests/types/blank_type/test_err_blank_variable.sushi
 tests/types/builtin_method_return_type/test_err_issue239_primitive_return_type.sushi
@@ -1608,6 +1622,7 @@ tests/types/result/error_conversion/declaration_rules/outside_target_unit/test_e
 tests/types/result/error_conversion/declaration_rules/test_err_as_between_error_types_without_conversion.sushi
 tests/types/result/error_conversion/declaration_rules/test_err_as_into_std_error_help.sushi
 tests/types/result/error_conversion/declaration_rules/test_err_as_with_a_generic_error_help.sushi
+tests/types/result/error_conversion/declaration_rules/test_err_conversion_as_in_a_const.sushi
 tests/types/result/error_conversion/declaration_rules/test_err_conversion_calls_itself.sushi
 tests/types/result/error_conversion/declaration_rules/test_err_conversion_declared_twice.sushi
 tests/types/result/error_conversion/declaration_rules/test_err_conversion_from_a_generic_error.sushi

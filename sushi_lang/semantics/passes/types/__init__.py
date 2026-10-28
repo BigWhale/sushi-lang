@@ -44,7 +44,6 @@ from sushi_lang.semantics.shir.stop import Stops
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.typeck_check import check_answers
 
-from .compatibility import types_compatible
 from .constants import validate_constant
 from .public_signatures import check_public_signatures
 from .signatures import (
@@ -430,10 +429,6 @@ class TypeValidator:
     def _validate_extension_method(self, ext: ExtendDef) -> None:
         """The pass's surface for the analyzer, which drives the per-unit loop."""
         validate_extension_method(self, ext)
-
-    def _types_compatible(self, actual: Type, expected: Type) -> bool:
-        """The pass's surface for the Maybe and Result intern seams."""
-        return types_compatible(self, actual, expected)
 
 
 class ReadOnlyInferrer(TypeValidator):

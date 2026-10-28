@@ -1,0 +1,16 @@
+unit test_err_typeck_realise_on_blank
+
+ShirBody step
+  params : []
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Result, "Ok", [adopt Lit(Blank)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "m": Maybe@(~)]
+  block  :
+    Assign(LocalRef(_0), EnumInit(@Maybe, "Some", [Lit(Blank)]), is_init: true)
+    ExprStmt(Call(Builtin(Call(Free(@step), []), "realise"), [Lit(Blank)]))
+    ExprStmt(Call(Builtin(LocalRef(_0), "realise"), [Lit(Blank)]))
+    Return(Lit(0))

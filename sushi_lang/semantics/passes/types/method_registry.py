@@ -48,7 +48,8 @@ from sushi_lang.semantics.generics.primitives import PRIMITIVE_METHOD_ARITY
 from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY, OWN_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY, RESULT_METHOD_MODES
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.method_effects import PRIMITIVE_FAMILY, STRING_FAMILY
+from sushi_lang.semantics.method_effects import (
+    MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.passes.types.arrays import ARRAY_METHOD_MODES
 from sushi_lang.semantics.foreign_memory import (
@@ -354,31 +355,16 @@ class ResultMethodInferrer:
 
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.semantics.generics.results import (
-            RESULT_METHOD_SIGNATURES, is_builtin_result_method)
-        from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
+            RESULT_METHOD_SIGNATURES, result_method_return_type)
         signature = RESULT_METHOD_SIGNATURES.get(self.call.method)
         if signature is not None:
             from sushi_lang.semantics.passes.types.calls.builtin_signature import (
                 builtin_call_return_type)
             return builtin_call_return_type(self.validator, signature,
                                             self.receiver_type, self.call)
-        if is_builtin_result_method(self.call.method):
-            ok_variant = self.receiver_type.get_variant("Ok")
-            err_variant = self.receiver_type.get_variant("Err")
-
-            if self.call.method in ("is_ok", "is_err"):
-                return BuiltinType.BOOL
-            elif self.call.method == "realise":
-                if ok_variant and ok_variant.associated_types:
-                    return ok_variant.associated_types[0]
-            elif self.call.method == "expect":
-                if ok_variant and ok_variant.associated_types:
-                    return ok_variant.associated_types[0]
-            elif self.call.method == "err":
-                if err_variant and err_variant.associated_types:
-                    err_type = err_variant.associated_types[0]
-                    return ensure_maybe_type_in_table(self.validator.enum_table, err_type, struct_table=self.validator.struct_table.by_name)
-        return None
+        return result_method_return_type(self.receiver_type, self.call.method,
+                                         self.validator.enum_table,
+                                         self.validator.struct_table.by_name)
 
 
 @dataclass
@@ -390,19 +376,14 @@ class MaybeMethodInferrer:
 
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.semantics.generics.maybe import (
-            MAYBE_METHOD_SIGNATURES, is_builtin_maybe_method, maybe_method_return_type)
+            MAYBE_METHOD_SIGNATURES, maybe_method_return_type, maybe_payload)
         signature = MAYBE_METHOD_SIGNATURES.get(self.call.method)
         if signature is not None:
             from sushi_lang.semantics.passes.types.calls.builtin_signature import (
                 builtin_call_return_type)
             return builtin_call_return_type(self.validator, signature,
                                             self.receiver_type, self.call)
-        if is_builtin_maybe_method(self.call.method):
-            some_variant = self.receiver_type.get_variant("Some")
-            if some_variant and some_variant.associated_types:
-                return maybe_method_return_type(
-                    some_variant.associated_types[0], self.call.method)
-        return None
+        return maybe_method_return_type(maybe_payload(self.receiver_type), self.call.method)
 
 
 @dataclass
@@ -713,11 +694,11 @@ METHOD_TYPE_REGISTRY.register(MethodFamily(
     name=STRING_FAMILY, beats_perk=True, answers=_answers_string, arity=LazyStringArity(),
     infer=lambda _receiver, call, v: StringMethodInferrer(call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="result", beats_perk=True, answers=_answers_result, arity=RESULT_METHOD_ARITY,
+    name=RESULT_FAMILY, beats_perk=True, answers=_answers_result, arity=RESULT_METHOD_ARITY,
     modes=RESULT_METHOD_MODES,
     infer=lambda rt, call, v: ResultMethodInferrer(rt, call, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="maybe", beats_perk=True, answers=_answers_maybe, arity=MAYBE_METHOD_ARITY,
+    name=MAYBE_FAMILY, beats_perk=True, answers=_answers_maybe, arity=MAYBE_METHOD_ARITY,
     modes=MAYBE_METHOD_MODES,
     infer=lambda rt, call, v: MaybeMethodInferrer(rt, call, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(

@@ -1,0 +1,16 @@
+# EXPECT_ERROR_CODES_EXACT: CE2506, CE2506
+# EXPECT_STDERR_CONTAINS: "cannot call .realise() on 'Result@(~, StdError)'"
+# EXPECT_STDERR_CONTAINS: "cannot call .realise() on 'Maybe@(~)'"
+# EXPECT_DUMP_SHIR: test_err_typeck_realise_on_blank.shir
+#
+# A `~` payload has no value to extract, so `realise` on a `Result@(~, E)` or on a
+# `Maybe@(~)` is CE2506 at the call. The default is not checked.
+
+fn step() ~ | StdError:
+    return Result.Ok(~)
+
+fn main() i32:
+    let Maybe@(~) m = Maybe.Some(~)
+    step().realise(~)
+    m.realise(~)
+    return 0

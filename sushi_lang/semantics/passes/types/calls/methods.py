@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.method_effects import PRIMITIVE_FAMILY, STRING_FAMILY
+from sushi_lang.semantics.method_effects import (
+    MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
     IteratorType, StructType)
@@ -1200,30 +1201,24 @@ def _validate_string_family(validator: 'TypeValidator', call: MethodCall,
     """The count is the arity row of the family, read before this hook runs."""
 
 
-@METHOD_TYPE_REGISTRY.validator("result")
+@METHOD_TYPE_REGISTRY.validator(RESULT_FAMILY)
 def _validate_result_family(validator: 'TypeValidator', call: MethodCall,
                             receiver_type) -> None:
-    from sushi_lang.semantics.generics.results import (
-        RESULT_METHOD_SIGNATURES, validate_result_method_with_validator)
+    """A method with no signature row checks only its count, read before this hook runs."""
+    from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES
     signature = RESULT_METHOD_SIGNATURES.get(call.method)
     if signature is not None:
         _validate_builtin_signature(validator, call, receiver_type, signature)
-        return
-    validate_result_method_with_validator(
-        call, receiver_type, validator.reporter, validator)
 
 
-@METHOD_TYPE_REGISTRY.validator("maybe")
+@METHOD_TYPE_REGISTRY.validator(MAYBE_FAMILY)
 def _validate_maybe_family(validator: 'TypeValidator', call: MethodCall,
                            receiver_type) -> None:
-    from sushi_lang.semantics.generics.maybe import (
-        MAYBE_METHOD_SIGNATURES, validate_maybe_method_with_validator)
+    """A method with no signature row checks only its count, read before this hook runs."""
+    from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_SIGNATURES
     signature = MAYBE_METHOD_SIGNATURES.get(call.method)
     if signature is not None:
         _validate_builtin_signature(validator, call, receiver_type, signature)
-        return
-    validate_maybe_method_with_validator(
-        call, receiver_type, validator.reporter, validator)
 
 
 def _validate_builtin_signature(validator: 'TypeValidator', call: MethodCall,

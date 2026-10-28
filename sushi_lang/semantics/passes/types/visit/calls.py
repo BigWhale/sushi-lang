@@ -45,7 +45,12 @@ from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscoun
 from sushi_lang.semantics.generics.opaque import explain_unpromised
 from sushi_lang.semantics.generics.primitives import primitive_method_return_type
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.method_effects import PRIMITIVE_FAMILY, STRING_FAMILY
+from sushi_lang.semantics.generics.maybe import (
+    MAYBE_METHOD_SIGNATURES, maybe_method_return_type, maybe_payload)
+from sushi_lang.semantics.generics.results import (
+    RESULT_METHOD_SIGNATURES, result_method_return_type)
+from sushi_lang.semantics.method_effects import (
+    MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.param_modes import Convention, declared_modes, param_mode
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
@@ -189,6 +194,54 @@ def _check_string_method(validator: 'TypeValidator', node: e.Call, receiver: Typ
     return yielded
 
 
+def _check_result_method(validator: TypeValidator, node: e.Call, receiver: Type,
+                         name: str, family: MethodFamily) -> Optional[Type]:
+    """A method of `Result@(T, E)`. A method with a signature row (`map_err`) stops the
+    walk with the label of the family, as it is not typed yet."""
+    if name in RESULT_METHOD_SIGNATURES:
+        dispatch.stop_at_family(visit.STAGE, node, family.name)
+    yielded = result_method_return_type(receiver, name, validator.enum_table,
+                                        validator.struct_table.by_name)
+    return _check_wrapper_method(validator, node, receiver, name, family, yielded)
+
+
+def _check_maybe_method(validator: TypeValidator, node: e.Call, receiver: Type,
+                        name: str, family: MethodFamily) -> Optional[Type]:
+    """A method of `Maybe@(T)`. A method with a signature row (`or_err`) stops the walk
+    with the label of the family, as it is not typed yet."""
+    if name in MAYBE_METHOD_SIGNATURES:
+        dispatch.stop_at_family(visit.STAGE, node, family.name)
+    yielded = maybe_method_return_type(maybe_payload(receiver), name)
+    return _check_wrapper_method(validator, node, receiver, name, family, yielded)
+
+
+def _check_wrapper_method(validator: TypeValidator, node: e.Call, receiver: Type,
+                          name: str, family: MethodFamily,
+                          yielded: Optional[Type]) -> Optional[Type]:
+    """A method of a `Result` or a `Maybe` takes the arguments of its row and yields
+    `yielded`, the type of its row.
+
+    A wrong count is CE2009 and skips the argument types. `realise` on a `~` payload is
+    CE2506, and its default is not checked. The default of `realise` has the payload type,
+    and the message of `expect` is a string: a value of another type is CE2503 at the
+    argument. The call yields its type after CE2009 and CE2503.
+    """
+    if reject_builtin_miscount(validator.reporter, node.loc, name, len(node.args),
+                               f"{display_type(receiver)}.{name}", family.arity):
+        return yielded
+    if name == "realise" and yielded == BuiltinType.BLANK:
+        er.emit(validator.reporter, er.ERR.CE2506, node.loc, ty=display_type(receiver))
+        return None
+    params = {"realise": [yielded], "expect": [BuiltinType.STRING]}.get(name)
+    if params is not None:
+        modes = family.modes.of(name, len(node.args)) or ()
+        declared = Parameters(node.shir_id, modes, [f"#{i}" for i in range(1, len(modes) + 1)])
+        check_arguments(validator, name, params, node.args, node.loc,
+                        mismatch_code=er.ERR.CE2503, arity_code=er.ERR.CE2009,
+                        declared=declared)
+    return yielded
+
+
 FamilyArm = Callable[['TypeValidator', e.Call, Type, str, MethodFamily], Optional[Type]]
 
 #: The arm of each built-in family that the pass types, keyed by the registry name of the
@@ -196,6 +249,8 @@ FamilyArm = Callable[['TypeValidator', e.Call, Type, str, MethodFamily], Optiona
 FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
     PRIMITIVE_FAMILY: _check_primitive_method,
     STRING_FAMILY: _check_string_method,
+    RESULT_FAMILY: _check_result_method,
+    MAYBE_FAMILY: _check_maybe_method,
 })
 
 

@@ -64,6 +64,8 @@ EFFECT_FAMILIES = frozenset({"array", "list", "hashmap", "own"})
 
 PRIMITIVE_FAMILY = "primitive"
 STRING_FAMILY = "string"
+RESULT_FAMILY = "result"
+MAYBE_FAMILY = "maybe"
 
 # The families whose methods only read their receiver: no method changes or consumes it.
 # The borrow pass reads the receiver of such a call, and SLIR lowering gives it the

@@ -10,4 +10,4 @@ ShirBody main
   params : []
   locals : []
   block  :
-    Return(Call(Dotted(Call(Free(@half), [(Lit(4), Guaranteed)]), "realise"), [Lit(0)]))
+    Return(Call(Builtin(Call(Free(@half), [(Lit(4), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]))

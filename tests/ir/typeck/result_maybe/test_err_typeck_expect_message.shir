@@ -1,0 +1,22 @@
+unit test_err_typeck_expect_message
+
+ShirBody parse
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Result, "Ok", [adopt LocalRef(_0)]))
+
+ShirBody half
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Maybe, "Some", [adopt Binary(/, LocalRef(_0), Lit(2))]))
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32, _1 "b": i32, _2 "c": i32]
+  block  :
+    Assign(LocalRef(_0), Call(Builtin(Call(Free(@parse), [(Lit(3), Guaranteed)]), "expect"), [Lit(42)]), is_init: true)
+    Assign(LocalRef(_1), Call(Builtin(Call(Free(@half), [(Lit(4), Guaranteed)]), "expect"), [Lit(false)]), is_init: true)
+    Assign(LocalRef(_2), Call(Builtin(Call(Free(@half), [(Lit(6), Guaranteed)]), "expect"), [(Lit("Mostly Harmless"), Guaranteed)]), is_init: true)
+    Return(Binary(+, Binary(+, LocalRef(_0), LocalRef(_1)), LocalRef(_2)))

@@ -1,0 +1,22 @@
+unit test_err_typeck_realise_default_mismatch
+
+ShirBody parse
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Result, "Ok", [adopt LocalRef(_0)]))
+
+ShirBody name
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, LocalRef(_0), Lit(0)), then: [Return(adopt EnumInit(@Maybe, "None", []))])
+    Return(adopt EnumInit(@Maybe, "Some", [adopt Lit("Mostly Harmless")]))
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32, _1 "s": string]
+  block  :
+    Assign(LocalRef(_0), Call(Builtin(Call(Free(@parse), [(Lit(3), Guaranteed)]), "realise"), [Lit("zero")]), is_init: true)
+    Assign(LocalRef(_1), Call(Builtin(Call(Free(@name), [(Lit(1), Guaranteed)]), "realise"), [Lit(true)]), is_init: true)
+    Return(Binary(+, LocalRef(_0), Call(Builtin(LocalRef(_1), "len"), [])))

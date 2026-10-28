@@ -12,5 +12,5 @@ ShirBody main
     Assign(LocalRef(_5), Call(Builtin(LocalRef(_0), "clone"), []), is_init: true)
     Assign(LocalRef(_6), Call(Builtin(LocalRef(_0), "upper"), []), is_init: true)
     If(LocalRef(_3), then: [Return(Binary(+, Call(Builtin(LocalRef(_1), "len"), []), Call(Builtin(LocalRef(_5), "len"), [])))])
-    If(Call(Dotted(LocalRef(_4), "is_some"), []), then: [Return(Lit(2))])
+    If(Call(Builtin(LocalRef(_4), "is_some"), []), then: [Return(Lit(2))])
     Return(Binary(+, LocalRef(_2), LocalRef(_6)))
