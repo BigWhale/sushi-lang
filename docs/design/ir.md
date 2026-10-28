@@ -18,6 +18,8 @@ rebind is one `Destructure` with `Place` targets). Amended on 2026-10-26 at the 
 the status above, 8.12 (the concerns that are not built yet), and 10.2 and 10.3 (the counts and
 the gate names). Amended on 2026-10-28 by ruling R-W: 7.3 and 8.5 (`typecheck` writes the value
 that an integer literal holds, and the value of a constant, as a row of `TypeckResults`).
+Amended on 2026-10-28 by group A8: 7.3, 7.4 and 7.9 (`borrow` walks an initializer body, and
+refuses a `poke` of a constant with CE2400; a `poke` of a constant is no error hole).
 
 ## The decisions, in one place
 
@@ -761,9 +763,9 @@ evaluator. An empty container (`List.new()`, `from([])`) allocates nothing: the 
 not read it. The `Return` of the body checks its value at the declared type, as a `let` does: a
 value that does not fit is [CE2002](../error-catalog.md#ce2002) at `name = value`, with a note
 at the declared type. The value that the evaluator gave is the value row of the `Return`.
-The `borrow` pass does not check an initializer body yet, and stops there
-(`borrow, Initializer`): a constant that an initializer names is not moved, and the borrow
-rule of an initializer is not built.
+The `borrow` pass walks an initializer body as any other body. The constant evaluator makes
+each value of an initializer, so each value there is a new value: the `Return` adopts its
+value, and a constant that the initializer names is read, not moved (7.9).
 
 **A cast.** The arm of `as` (`check_cast`, `passes/types/expressions.py`) answers the
 target type. A cast between two numeric types, and a cast to the type of its operand, call
@@ -913,15 +915,14 @@ a name with no declaration does not. Ruled 2026-10-14. Three more forms are erro
 the same ruling: a slice with a reversed range (`data[(0..3).rev()]`, CE2122), a call of a
 name that the namespace does not hold (`geo.twicee(21)`, CE2008), and a member of a type
 that is no variant (`Sign.Nope`, CE2045; a static outside a call is one too). A `poke` of a
-constant (`bump(poke STEP)`, CE2400) is an error hole too, because a constant lives in
-read-only storage: so `borrow` never meets a `poke` of a constant, and one that reaches it
-is an internal error. A `break` or a `continue` outside a loop (CE1003, which the `scope`
-pass reports) is an error hole too: lowering counts the loop bodies as the `scope` pass
-counts them, so `borrow` never meets a jump with no loop, and one that reaches it is an
+constant (`bump(poke STEP)`) is NOT an error hole: it is a `Borrow` of a `ConstRef`, and
+`borrow` refuses it (CE2400, 7.9). A `break` or a `continue` outside a loop (CE1003, which
+the `scope` pass reports) is an error hole: lowering counts the loop bodies as the `scope`
+pass counts them, so `borrow` never meets a jump with no loop, and one that reaches it is an
 internal error.
 
 An error hole CARRIES the code of the error that it stands for (CE6102, CE6104, CE2122,
-CE2008, CE2045, CE2400, CE1003; for a name with no declaration, the codes CE1001, CE1002 and CE0144). At
+CE2008, CE2045, CE1003; for a name with no declaration, the codes CE1001, CE1002 and CE0144). At
 the end of the analysis, an error hole whose code no diagnostic reported is an internal
 error, CE0155. An error of the construct around the hole can come first, and the hole
 accepts its code too: in a constant or a `var` initializer the constant evaluator refuses
@@ -1401,9 +1402,27 @@ a call argument is the row of `typecheck`, and `borrow` does not derive it again
 `nom` marker is compared against the declared mode by `typecheck` (CE2427). A `peek x` or a
 `poke x` argument borrows its place for the statement with the mode that the source
 writes, so a `poke` argument for a `peek` parameter keeps the `InGuaranteed` convention of
-the parameter and is still a `poke` borrow of its place (CE2408 for a read-only place). When the walk
-of a body ends with no stop and with no error, `check_ownership` runs, and the body goes
-to the SLIR lowering (8.2). The pipeline reports the first stop of
+the parameter and is still a `poke` borrow of its place (CE2408 for a read-only place).
+
+**A constant in `borrow`.** A constant is read-only storage that the program keeps: a
+`ConstRef` has an address and no state of the walk. A `peek` of it, a `poke` of it and the
+value of a reference `let` (`let poke T x = STEP`) reach the one arm of a borrowed place
+(`borrows.check_borrow`). The arm reads the record of the constant in the scope of the
+body, bare or behind an alias (`NamespaceTable.constant_record`), and asks the one gate
+`reject_borrow_of_constant` (`semantics/constant_borrow.py`): a `peek` reads the constant,
+and a `poke` is [CE2400](../error-catalog.md#ce2400) at the place. A stdlib constant
+(`PI`) has no record and no storage, so both modes are CE2400 there. The `scope` pass asks
+the gate only for a name that SHIR keeps as no `ConstRef`: a top-level function and a
+namespace. A take of a constant is a consuming use (CE2436, `consume.reject_move_of_constant`).
+In an initializer body, the constant evaluator makes each value, so the provenance of each
+consuming use there is FRESH: the `Return` adopts its value, and `const string ALIAS =
+GREETING` is no take of `GREETING`. `typecheck` does not type a reference `let` yet, and
+stops there first; the group of the let-borrows (B8) makes the binding reach this arm. A
+body with an error of `typecheck` does not reach the arm either: `let i32 y = poke STEP` is
+CE2002 alone.
+
+When the walk of a body ends with no stop and with no error, `check_ownership` runs, and
+the body goes to the SLIR lowering (8.2). The pipeline reports the first stop of
 `typecheck`, then the first stop of `lift`, then the first stop of `borrow`, then an error
 hole, then the first stop of the SLIR lowering; with no stop, the backend emits each body from
 its SLIR (8.2).
