@@ -152,10 +152,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "calls/user_defined.py", "validate_indirect_call", _port("C2")),
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
     (_TYPES + "calls/user_defined.py", "check_stdlib_function", _TIER_A),
-    (_TYPES + "matching.py", "collect_and_validate_patterns", _port("A4")),
-    (_TYPES + "matching.py", "reject_poke_binding_into_a_constant",
-     "kept for A4: a port template that reads AST patterns; group A4 ports it to SHIR "
-     "inputs with the Variant pattern, which holds a poke binding"),
     (_TYPES + "statements.py", "stamp_rebind_places", _TIER_A),
     (_TYPES + "statements.py", "validate_rebind_statement", _port("A5")),
     (_TYPES + "statements.py", "validate_let_destructure", _port("A5")),

@@ -1,0 +1,25 @@
+unit test_err_typeck_match_enum_poke_constant
+
+ShirBody TONE (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Shade, "Dim", [adopt Lit(2)]))
+
+ShirBody read
+  params : []
+  locals : [_0 "r": i32]
+  block  :
+    Match(ConstRef(@TONE), [Arm(Variant(@Shade, "Dim", [(_0, Ref(Peek))]), [Return(LocalRef(_0))]), Arm(Variant(@Shade, "Bright", [Wildcard]), [Return(Lit(0))])], consumes: false)
+
+ShirBody write
+  params : []
+  locals : [_0 "r": i32]
+  block  :
+    Match(ConstRef(@TONE), [Arm(Variant(@Shade, "Dim", [(_0, Ref(Poke))]), [Return(LocalRef(_0))]), Arm(Variant(@Shade, "Bright", [Wildcard]), [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, Call(Free(@read), []), Call(Free(@write), [])))

@@ -8,7 +8,9 @@ other operand. A numeric literal operand that gets no type from its position tak
 type of the other operand, which is checked first; of two such literals, a number beside
 a byte literal takes its `u8`.
 
-A comparison, `and`, `or`, `xor` and `not` answer a `bool`. Each operand of `and`, `or`,
+A comparison, `and`, `or`, `xor` and `not` answer a `bool`. A `Maybe` or a `Result`
+variant that is an operand of a comparison takes the type of the other operand, which is
+checked first (`m == Maybe.None`). Each operand of `and`, `or`,
 `xor` and `not` is a condition, as the condition of an `if` and of a `while` is
 (`check_condition`). A negated literal is one value: the negation types the literal with
 its sign. An overflow-checked operation reads itself through the fold when its operands
@@ -31,6 +33,7 @@ from sushi_lang.semantics.passes.types.expressions import (
     reject_zero_divisor)
 from sushi_lang.semantics.passes.types.visit.expressions import (
     type_float_literal, type_int_literal)
+from sushi_lang.semantics.passes.types.visit.results import WRAPPERS
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.type_predicates import is_numeric_type
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, Type
@@ -143,6 +146,14 @@ def _check_operands(validator: TypeValidator, node: e.Binary,
     if node.op in _LOGICAL:
         return (visit.check_expr(validator, lhs, BuiltinType.BOOL),
                 visit.check_expr(validator, rhs, BuiltinType.BOOL))
+    if node.op in COMPARISON_OPS:
+        wrapped = _takes_the_other(validator, lhs), _takes_the_other(validator, rhs)
+        if wrapped == (False, True):
+            left = visit.check_expr(validator, lhs)
+            return left, visit.check_expr(validator, rhs, left)
+        if wrapped == (True, False):
+            right = visit.check_expr(validator, rhs)
+            return visit.check_expr(validator, lhs, right), right
     position = _numeric(expected)
     left_at = _given(lhs, position) if node.op in _SAME_TYPE + SHIFT_OPS else None
     right_at = _given(rhs, position) if node.op in _SAME_TYPE else None
@@ -159,6 +170,12 @@ def _check_operands(validator: TypeValidator, node: e.Binary,
         right = visit.check_expr(validator, rhs, right_at)
         return visit.check_expr(validator, lhs, _builtin(right)), right
     return visit.check_expr(validator, lhs, left_at), visit.check_expr(validator, rhs, right_at)
+
+
+def _takes_the_other(validator: TypeValidator, operand: e.ShirExpr) -> bool:
+    """Is the operand a `Maybe` or a `Result` variant, which takes the instance of its
+    position: in a comparison, the type of the other operand (`m == Maybe.None`)?"""
+    return isinstance(operand, e.EnumInit) and validator.decl_name(operand.decl) in WRAPPERS
 
 
 def _rejects_a_pointer(validator: TypeValidator, node: e.Unary | e.Binary,

@@ -9,8 +9,8 @@ its mode in two fields of the AST, and in the one `PatBinding` that `Own` holds.
 A pattern holds what the source says, and lowering has no types. A literal and the bounds
 of a range keep the written constant, the source text and the span: `typecheck` reads them
 at the type of the position, and a diagnostic quotes the text (ir.md 7.8). A bound is a literal and not an expression.
-An enum pattern names its enum by the written name, the alias included (`geo.Sign`).
-Whether that name is an enum is a question for `typecheck`.
+An enum pattern names its enum by the written name, the alias included (`geo.Sign`), and keeps the spans of the written enum name and variant
+name. Whether that name is an enum is a question for `typecheck`.
 
 `Match.consumes` is the written `match nom r:`. Whether the match owns a temporary
 scrutinee is an answer of `borrow`. An arm body that the source writes as one expression
@@ -122,8 +122,10 @@ def _variant(lw: BodyLowerer, node: a.Pattern, _owner: Optional[a.Node]) -> Item
     """`E.V(items)`: the enum by its written name, behind its alias when it has one."""
     ident = lw.ident()
     written = node.enum_name if node.namespace is None else f"{node.namespace}.{node.enum_name}"
-    return p.Variant(ident, lw.span(node), lw.decls.refer(written), node.variant_name,
-                     _items(lw, node.bindings, node))
+    loc = lw.span(node)
+    return p.Variant(ident, loc, lw.decls.refer(written), node.variant_name,
+                     _items(lw, node.bindings, node), node.enum_name_span or loc,
+                     node.variant_name_span or loc)
 
 
 def _tuple(lw: BodyLowerer, node: a.TuplePattern, _owner: Optional[a.Node]) -> Item:
@@ -143,9 +145,12 @@ def _own(lw: BodyLowerer, node: a.OwnPattern, _owner: Optional[a.Node]) -> Item:
 
 
 def _or(lw: BodyLowerer, node: a.OrPattern, owner: Optional[a.Node]) -> Item:
-    """`x | y`: each alternative in the position of the `|`, so its owner is the same."""
+    """`x | y`: each alternative in the position of the `|`, so its owner is the same. A bare
+    `_` has no span of its own in the AST: it takes the span of the `|` list."""
     ident = lw.ident()
-    return p.Or(ident, lw.span(node), _items(lw, node.alternatives, owner))
+    loc = lw.span(node)
+    return p.Or(ident, loc, [p.Wildcard(lw.ident(), loc) if alt == "_" else item(lw, alt, owner)
+                             for alt in node.alternatives])
 
 
 LowerPattern: TypeAlias = Callable[["BodyLowerer", Any, Optional[a.Node]], Item]

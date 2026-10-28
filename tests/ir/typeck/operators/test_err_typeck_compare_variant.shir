@@ -1,0 +1,25 @@
+unit test_err_typeck_compare_variant
+
+ShirBody same
+  params : [(_0 "m": Maybe@(i32), Guaranteed), (_1 "r": Result@(i32, StdError), Guaranteed), (_2 "c": Color, Guaranteed)]
+  locals : [_3 "a": bool, _4 "b": bool, _5 "d": bool, _6 "f": bool]
+  block  :
+    Assign(LocalRef(_3), adopt Binary(==, LocalRef(_0), EnumInit(@Maybe, "None", [])), is_init: true)
+    Assign(LocalRef(_4), adopt Binary(!=, EnumInit(@Maybe, "Some", [adopt Lit(3)]), LocalRef(_0)), is_init: true)
+    Assign(LocalRef(_5), adopt Binary(==, LocalRef(_1), EnumInit(@Result, "Err", [adopt EnumInit(@StdError, "Error", [])])), is_init: true)
+    Assign(LocalRef(_6), adopt Binary(==, LocalRef(_2), EnumInit(@Color, "Green", [])), is_init: true)
+    Return(adopt Binary(and, Binary(and, Binary(and, LocalRef(_3), LocalRef(_4)), LocalRef(_5)), LocalRef(_6)))
+
+ShirBody mixed
+  params : [(_0 "m": Maybe@(i32), Guaranteed)]
+  locals : []
+  block  :
+    Return(Binary(==, LocalRef(_0), Lit(3)))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@same), [(EnumInit(@Maybe, "Some", [adopt Lit(1)]), Guaranteed), (EnumInit(@Result, "Ok", [adopt Lit(1)]), Guaranteed), (EnumInit(@Color, "Red", []), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@mixed), [(EnumInit(@Maybe, "None", []), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

@@ -5,9 +5,10 @@ ONE table, `ARMS`, gives the arm of each statement and expression class: each me
 member of `ShirPattern` (ruling R17; gate for both: `tests/unit/test_typecheck_table_is_total.py`).
 A statement arm takes the pass and one node (`check`). An expression arm takes the type of
 its position too, and answers the type of its node (`check_expr`), which the dispatch
-writes into the `TypeckResults` of the body. A pattern arm takes the type of its position,
-and answers the place of the pattern in the matrix of the one checker (`check_pattern`): a
-pattern has no type, so its dispatch writes no row. The lookup of an arm and the stop are the one
+writes into the `TypeckResults` of the body. A pattern arm takes the type of its position
+and a note that says where that type comes from, and answers the place of the pattern in
+the matrix of the one checker (`check_pattern`): a pattern has no type, so its dispatch
+writes no row. The lookup of an arm and the stop are the one
 dispatch of the SHIR passes (`shir/dispatch.py`), which the borrow pass reads too: a class
 with no row is an internal error, and the arm of a construct that the pass does not type
 yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
@@ -31,6 +32,7 @@ from sushi_lang.semantics.passes.types.visit import operators as op
 from sushi_lang.semantics.passes.types.visit import results as rs
 from sushi_lang.semantics.passes.types.visit import statements as st
 from sushi_lang.semantics.passes.types import matching as mt
+from sushi_lang.semantics.passes.types.matching import PositionNote
 from sushi_lang.semantics.const_eval import ScalarConstant
 from sushi_lang.semantics.passes.types.call_facts import TypecheckCallFacts
 from sushi_lang.semantics.passes.types.exhaustiveness import Pat
@@ -80,10 +82,12 @@ def check_expr(validator: TypeValidator, node: Any,
     return answer(validator, node, _arm(node)(validator, node, expected))
 
 
-def check_pattern(validator: TypeValidator, node: Any, ty: Type) -> Optional[Pat]:
-    """Check one pattern at the type `ty` of its position. The answer is its place in the
-    matrix of the one checker, or None after an error. No row is written."""
-    return dispatch.arm_of(PATTERN_ARMS, node, STAGE)(validator, node, ty)
+def check_pattern(validator: TypeValidator, node: Any, ty: Type,
+                  note: Optional[PositionNote] = None) -> Optional[Pat]:
+    """Check one pattern at the type `ty` of its position; `note` says where that type comes
+    from. The answer is its place in the matrix of the one checker, or None after an error.
+    No type row is written."""
+    return dispatch.arm_of(PATTERN_ARMS, node, STAGE)(validator, node, ty, note)
 
 
 def answer(validator: TypeValidator, node: Any, ty: Optional[Type],
@@ -145,8 +149,8 @@ PATTERN_ARMS: dict[type, Callable[..., Any]] = {
     p.Wildcard: mt.check_wildcard_pattern,
     p.Literal: mt.check_literal_pattern,
     p.IntRange: mt.check_range_pattern,
-    p.Variant: stop_at,
-    p.Tuple: stop_at,
-    p.Own: stop_at,
-    p.Or: stop_at,
+    p.Variant: mt.check_variant_pattern,
+    p.Tuple: mt.check_tuple_pattern,
+    p.Own: mt.check_own_pattern,
+    p.Or: mt.check_or_pattern,
 }

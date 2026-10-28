@@ -269,11 +269,16 @@ def _chain(low: _Lowering, stmt: s.Match, scrutinee: p.Operand, facts: MatchFact
             _test(low, steps[start:start + count], alt, scrutinee, facts, body.id, after.id)
         if index == len(stmt.arms) - 1:
             missed.terminator = tm.Trap(
-                "RE2023", (p.Const(k.text(spell_pattern(case.pattern))),), stmt.loc)
+                "RE2023", (p.Const(k.text(_spell(low, case.pattern))),), stmt.loc)
         low.placement.restore(at_switch)
         arrivals += arm(low, body, case.body)
         entry = missed
     return arrivals
+
+
+def _spell(low: _Lowering, pattern: pt.ShirPattern) -> str:
+    """The arm as it is written, for the trap after the last arm."""
+    return spell_pattern(pattern, low.decls.name_of, lambda local: low.shir_locals[local].name)
 
 
 def _test(low: _Lowering, steps: list[_Block], alt: _Alternative,

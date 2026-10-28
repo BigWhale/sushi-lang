@@ -91,10 +91,6 @@ _add(ErrorMessage("CE0120", Severity.ERROR,
     "{message}",
     Category.FUNC, "A bloom argument 'arr...' requires a variadic '...T' parameter and must be the sole, last trailing argument at the call site."))
 
-_add(ErrorMessage("CE0121", Severity.ERROR,
-    "could not resolve the concrete enum type for match pattern '{pattern}' - pattern bindings cannot be extracted",
-    Category.INTERNAL, "A pattern position holds an item that no pattern rule of the typecheck pass handles, so its bindings cannot be read. Before the switch to SHIR, the backend gave this error when the type checker did not write the AST field `Match.resolved_scrutinee_type`. That field is deleted: the typecheck pass writes the type of a scrutinee as the `MatchFacts` row of `TypeckResults` (docs/design/ir.md 7.3)."))
-
 _add(ErrorMessage("CE0122", Severity.ERROR,
     "generic type '{name}' is infinitely recursive - monomorphization exceeded the maximum depth",
     Category.TYPE, "A generic type instantiation nests without bound (e.g. a type parameter that grows on each self-reference), so monomorphization cannot terminate. A finite self-reference through an opaque pointer (Own@(T)) is fine; an ever-growing type argument is not."))

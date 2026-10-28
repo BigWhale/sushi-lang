@@ -1,0 +1,13 @@
+unit test_err_typeck_match_enum_unknown_variant
+
+ShirBody shade
+  params : [(_0 "l": Light, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Light, "Red", []), [Return(Lit(1))]), Arm(Variant(@Light, "Blue", []), [Return(Lit(2))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Free(@shade), [(EnumInit(@Light, "Green", []), Guaranteed)]))

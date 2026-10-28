@@ -783,13 +783,6 @@ PatternItem = Union[str, Pattern, OwnPattern, RefBinding, NomBinding, LiteralPat
                     RangePattern, TuplePattern, OrPattern]
 
 
-def alternatives_of(item: object) -> list:
-    """The alternatives of a pattern item: its own list for `|` alternatives, else itself."""
-    if isinstance(item, OrPattern):
-        return list(item.alternatives)
-    return [item]
-
-
 def pattern_bindings(item: object, parent: "Optional[Node]" = None,
                      every_alternative: bool = False):
     """(name, owner, span) for each name that a pattern item binds, in source order.
@@ -819,36 +812,6 @@ def pattern_bindings(item: object, parent: "Optional[Node]" = None,
     elif isinstance(item, (RefBinding, NomBinding)):
         yield item.name, parent, item.loc or (parent.loc if parent else None)
 
-
-def pattern_source(item: object) -> str:
-    """A pattern as it is written, for a diagnostic: `(Color.Red, nom s)`."""
-    if isinstance(item, Pattern):
-        head = f"{item.enum_name}.{item.variant_name}"
-        if item.namespace is not None:
-            head = f"{item.namespace}.{head}"
-        if not item.bindings:
-            return head
-        return f"{head}({', '.join(pattern_source(b) for b in item.bindings)})"
-    if isinstance(item, TuplePattern):
-        return f"({', '.join(pattern_source(e) for e in item.elements)})"
-    if isinstance(item, OwnPattern):
-        inner = pattern_source(item.inner_pattern)
-        if item.inner_borrow is not None:
-            inner = f"{item.inner_borrow} {inner}"
-        return f"Own({inner})"
-    if isinstance(item, RefBinding):
-        return f"{item.mode} {item.name}"
-    if isinstance(item, NomBinding):
-        return f"nom {item.name}"
-    if isinstance(item, LiteralPattern):
-        return item.display
-    if isinstance(item, RangePattern):
-        return f"{item.low.display}{'..=' if item.inclusive else '..'}{item.high.display}"
-    if isinstance(item, OrPattern):
-        return " | ".join(pattern_source(alt) for alt in item.alternatives)
-    if isinstance(item, str):
-        return item
-    return "_"
 
 @dataclass(slots=True)
 class MatchArm(Node):
@@ -1244,7 +1207,7 @@ def normalize_bin_op(op_tok_or_str: Token | str) -> BinOp:
 
 __all__ = [
     "Node", "Program", "UseStatement", "DocBlock", "DocTag", "DocExample", "DontPanicMarker", "FuncDef", "ConstDef", "VarDef", "StructDef", "StructField", "EnumDef", "EnumVariant", "ExtendDef", "ExternalBlock", "ExternalDecl", "ExternalVar", "Block", "Param",
-    "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "RangePattern", "WildcardPattern", "TuplePattern", "OrPattern", "alternatives_of", "Break", "Continue",
+    "Let", "ExprStmt", "Return", "Print", "PrintLn", "Assert", "If", "While", "Foreach", "Expand", "Match", "MatchArm", "Pattern", "LiteralPattern", "RangePattern", "WildcardPattern", "TuplePattern", "OrPattern", "Break", "Continue",
     "Name", "IntLit", "FloatLit", "BoolLit", "BlankLit", "StringLit", "InterpolatedString", "ArrayElement", "ArrayLiteral", "DynamicArrayNew", "DynamicArrayFrom", "IndexAccess", "UnaryOp", "UnOp", "BinaryOp", "BinOp", "Call", "MethodCall", "DotCall", "MemberAccess", "EnumConstructor", "CastExpr", "Borrow", "TryExpr", "RangeExpr", "Spread", "Lambda", "TupleLiteral", "DestructureTarget", "destructure_binders",
     "PerkDef", "PerkMethodSignature", "ExtendWithDef", "BoundedTypeParam", "OwnPattern", "RefBinding", "NomBinding",
     "Stmt", "Expr", "Rebind", "normalize_bin_op",

@@ -35,7 +35,8 @@ def _range() -> p.IntRange:
 
 def _variant() -> p.Variant:
     binding = p.PatBinding(LocalId(1), s.Bare())
-    return p.Variant(ShirId(40), SPAN, DeclNames().refer("Maybe"), "Some", [binding])
+    return p.Variant(ShirId(40), SPAN, DeclNames().refer("Maybe"), "Some", [binding], SPAN,
+                     SPAN)
 
 
 def _arm(pattern: p.ShirPattern) -> p.Arm:

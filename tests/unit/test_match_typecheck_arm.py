@@ -3,7 +3,7 @@
 A match on an integer or a string records its `MatchFacts`: the type of the scrutinee, and
 the integer type that a literal arm and a range arm are read at (None on a string). Then it
 checks each arm, walks its body, and runs the one checker over the rows of the arms; the
-walk goes on after the match. A match on an enum or a tuple stops with `typecheck, Match`.
+walk goes on after the match. A match on an enum is in `test_match_enum_typecheck_arm.py`.
 The value of an integer pattern is read at the type of its position
 (`semantics/integer_patterns.py`). A pattern has its own table of arms (ruling R17): its
 dispatch answers the place of the pattern in the matrix and writes no type row, and the
@@ -29,12 +29,11 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.ids import LocalId, ShirId
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.typeck import MatchFacts, TypeckResults
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, EnumVariantInfo
+from sushi_lang.semantics.typesys import BuiltinType
 
 SPAN = Span(4, 5, 4, 20)
 I8, U8, I32 = BuiltinType.I8, BuiltinType.U8, BuiltinType.I32
 STRING = BuiltinType.STRING
-COLOR = EnumType("Color", (EnumVariantInfo("Red", ()), EnumVariantInfo("Green", ())))
 
 
 def _validator(answers: TypeckResults) -> SimpleNamespace:
@@ -75,13 +74,6 @@ def _match(ty, arms: list[p.Arm]) -> tuple[s.Match, TypeckResults, SimpleNamespa
     return node, answers, _validator(answers)
 
 
-def _stop(validator: SimpleNamespace, node: s.Match) -> dict:
-    with pytest.raises(StageStop) as caught:
-        visit.check(validator, node)
-    assert caught.value.span == SPAN
-    return caught.value.params
-
-
 def test_an_integer_match_records_its_facts_and_is_covered() -> None:
     node, answers, validator = _match(I32, [
         _arm(0, _lit(10, _int(1))),
@@ -104,12 +96,6 @@ def test_a_string_match_has_no_integer_type() -> None:
     visit.check(validator, node)
     assert validator.uncovered_matches == set()
     assert answers.match_facts_of(node.shir_id) == MatchFacts(STRING, None)
-
-
-def test_an_enum_match_stops_with_no_facts() -> None:
-    node, answers, validator = _match(COLOR, [_arm(0, p.Wildcard(ShirId(10), SPAN))])
-    assert _stop(validator, node) == {"stage": "typecheck", "construct": "Match"}
-    assert answers.match_facts_of(node.shir_id) is None
 
 
 @pytest.mark.parametrize("const, ty, value", [

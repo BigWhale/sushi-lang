@@ -63,10 +63,13 @@ class IntRange(ShirNode):
 
 @dataclass(slots=True)
 class Variant(ShirNode):
-    """`Shape.Circle(r)`: one item for each value of the payload."""
+    """`Shape.Circle(r)`: one item for each value of the payload. `enum_loc` and
+    `variant_loc` are the spans of the written enum name and variant name."""
     decl: DeclId
     variant: str
     items: list[ShirPattern | PatBinding]
+    enum_loc: Span
+    variant_loc: Span
 
 
 @dataclass(slots=True)

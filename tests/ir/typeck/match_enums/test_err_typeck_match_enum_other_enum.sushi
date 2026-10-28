@@ -1,0 +1,35 @@
+# EXPECT_ERROR_CODES_EXACT: CE2107, CE2107
+# EXPECT_STDERR_CONTAINS: "pattern matches enum 'Other', but the value has type 'Shape'"
+# EXPECT_STDERR_CONTAINS: "the value matched here is 'Shape'"
+# EXPECT_STDERR_CONTAINS: "variant 'Wrap' of 'Outer' carries 'Shape'"
+# EXPECT_STDERR_CONTAINS: "  |         Other.Alpha -> return 0\n  `         --+--\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_enum_other_enum.shir
+#
+# An arm that names another enum than the value it reads is CE2107, with a note at the
+# value: the scrutinee for an arm, the variant that carries the payload for a nested
+# pattern. The binders of the arms that fit get the type of their position.
+
+enum Shape:
+    Circle(i32)
+    Square(i32)
+
+enum Other:
+    Alpha
+
+enum Outer:
+    Wrap(Shape)
+
+fn top(Shape s) i32:
+    match s:
+        Shape.Circle(r) -> return r
+        Other.Alpha -> return 0
+        _ -> return 1
+
+fn nested(Outer o) i32:
+    match o:
+        Outer.Wrap(Other.Alpha) -> return 0
+        Outer.Wrap(Shape.Square(side)) -> return side
+        _ -> return 1
+
+fn main() i32:
+    return top(Shape.Circle(2)) + nested(Outer.Wrap(Shape.Square(3)))

@@ -1,0 +1,19 @@
+unit test_err_typeck_match_enum_dead_arm
+
+ShirBody covered
+  params : [(_0 "s": Shape, Guaranteed)]
+  locals : [_1 "r": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Shape, "Circle", [(_1, Bare)]), [Return(LocalRef(_1))]), Arm(Variant(@Shape, "Square", [Wildcard]), [Return(Lit(0))]), Arm(Variant(@Shape, "Circle", [Literal(0)]), [Return(Lit(1))])], consumes: false)
+
+ShirBody alternative
+  params : [(_0 "m": Maybe@(Shape), Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Or([Variant(@Maybe, "Some", [Wildcard]), Variant(@Maybe, "Some", [Variant(@Shape, "Square", [Wildcard])])]), [Return(Lit(1))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, Call(Free(@covered), [(EnumInit(@Shape, "Circle", [adopt Lit(2)]), Guaranteed)]), Call(Free(@alternative), [(EnumInit(@Maybe, "None", []), Guaranteed)])))

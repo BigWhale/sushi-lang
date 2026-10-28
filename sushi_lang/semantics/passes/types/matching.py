@@ -1,21 +1,20 @@
 """Pattern matching in the typecheck pass (docs/design/ir.md 7.8).
 
-The SHIR half checks a `match` on an integer (#415) or a string. `matchable_type` is the
-rule of the scrutinee (CE2048), `check_literal_arm` checks the pattern of one arm and gives
-it its row (a repeated value is CE2075), and `reject_arm_kinds` refuses a literal arm on an
-enum or a tuple scrutinee (CE2076). The pattern arms of the table of the pass (`visit.ARMS`)
-are `check_wildcard_pattern`, `check_literal_pattern` and `check_range_pattern`. Each one
-reads its pattern at the type of its position and answers the place of the pattern in the
-matrix of the one checker (`exhaustiveness.py`), or None after an error. A literal and the
-bounds of a range are values of that type (`semantics/integer_patterns.py`).
-`check_match_exhaustiveness` runs the one checker over the rows of the arms (CE2040, CE2074,
-CE2118).
+`matchable_type` is the rule of the scrutinee (CE2048). A match on an integer (#415) or a
+string checks each arm with `check_literal_arm`: each alternative is a literal or a range of
+the kind of the scrutinee (CE2076), and a repeated value is CE2075. A match on an enum or a
+tuple checks each arm with `check_pattern_arm`: each alternative is a pattern at the type of
+the scrutinee, a variant that an arm above names again is CE2041, the alternatives of `|`
+bind the same names (CE2126), and each binder gets the type of its position, with no `peek`
+or `poke`. `reject_poke_binding_into_a_constant` refuses a `poke` binding into a constant
+(CE2400).
 
-Port templates: the rest of the module reads AST patterns. `collect_and_validate_patterns`
-checks the arms of a match on an enum or a tuple (group A4), and
-`reject_poke_binding_into_a_constant` refuses a `poke` binding into a constant (group A4).
-No pass reaches them. Where a template calls a SHIR helper of this module, the group that
-ports the template gives it SHIR patterns.
+The pattern arms of the table of the pass (`visit.PATTERN_ARMS`) take the type of their
+position and a note that says where that type comes from (for the relational CE2107). Each
+one answers the place of the pattern in the matrix of the one checker (`exhaustiveness.py`),
+or None after an error. A literal and the bounds of a range are values of that type
+(`semantics/integer_patterns.py`). `check_match_exhaustiveness` runs the one checker over the
+rows of the arms (CE2040, CE2074, CE2118).
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -24,29 +23,29 @@ from typing import TYPE_CHECKING, Iterator, List, Optional, Set, Tuple
 from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.passes.collect.constants import ConstSig
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.inference import int_literal_fits
+from sushi_lang.semantics.passes.types.qualified import reject_qualified_name
 from sushi_lang.semantics.passes.types.visibility import name_is_contested
+from sushi_lang.semantics.passes.types.visit.expressions import constant_record
 from sushi_lang.semantics.typesys import (
-    BuiltinType, EnumType, ReferenceType, StructType, Type,
-)
-from sushi_lang.semantics.ast import (
-    Match, MatchArm, Pattern, LiteralPattern, WildcardPattern, OwnPattern, Block, Expr,
-    NomBinding, OrPattern, RangePattern, RefBinding, TupleLiteral, TuplePattern,
-    alternatives_of, pattern_source,
+    BorrowMode, BuiltinType, EnumType, ReferenceType, StructType, Type,
 )
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.ownership import is_own_type
-from sushi_lang.semantics.param_modes import ParamMode, borrow_mode, receiver_mode
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.generics.own import own_payload_type
 from sushi_lang.semantics.generics.tuples import display_tuple, is_tuple_type, tuple_elements
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.integer_patterns import goes_down, literal_value, pattern_interval
 from sushi_lang.semantics.integer_width import integer_range
+from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir.exprs import Constant, IntConst, StrConst
+from sushi_lang.semantics.shir.ids import LocalId
 from sushi_lang.semantics.shir.spelling import spell_pattern, spell_range
+from sushi_lang.semantics.shir.stmts import Ref
 from .exhaustiveness import (
     OWN_KEY, TUPLE_KEY, WILD, Ctor, IntegerColumn, IntRange, Or, Pat, Signature, Wild,
     analyze, covers, string_key,
@@ -63,9 +62,9 @@ if TYPE_CHECKING:
     from sushi_lang.internals.report import Span
     from sushi_lang.semantics.shir import stmts as s
 
-# Where the type of a pattern position comes from, for the relational note of CE2107: a
-# label and the span it points at.
-_Note = Tuple[str, Optional["Span"]]
+#: Where the type of a pattern position comes from, for the relational note of CE2107: a
+#: label and the span it points at.
+PositionNote = Tuple[str, Optional["Span"]]
 
 
 def _resolve(validator: 'TypeValidator', ty: Type) -> Type:
@@ -80,14 +79,6 @@ def _resolve(validator: 'TypeValidator', ty: Type) -> Type:
     return resolved if resolved is not None else ty
 
 
-def _walk_arm_body(validator: 'TypeValidator', arm: MatchArm) -> None:
-    """Validate one arm's body, in either shape a `->` takes."""
-    if isinstance(arm.body, Block):
-        validator._validate_block(arm.body)
-    elif isinstance(arm.body, Expr):
-        validator.validate_expression(arm.body)
-
-
 class _Dropped:
     """An alternative that an older rule reported as a repeat (CE2041, CE2075).
 
@@ -100,7 +91,8 @@ _DROPPED = _Dropped()
 
 @dataclass(frozen=True)
 class _Bound:
-    """One name a pattern binds: its value type and its mode."""
+    """One name a pattern binds: its local, the type of its position and its mode."""
+    local: LocalId
     name: str
     ty: Type
     mode: str                 # "bare" | "peek" | "poke" | "nom"
@@ -129,16 +121,18 @@ class ArmRows:
     that CE2041 or CE2075 reported). `reported` holds the arms whose own rule spoke, so the
     dead-arm error does not speak again. `invalid` says that an arm has an error in its
     pattern: the checker then gives no answer, because the coverage is not known. `values`
-    holds the values that the literal arms above match, for CE2075.
+    holds the values that the literal arms above match, for CE2075, and `variants` the
+    variant patterns that the arms above name, for CE2041.
     """
     rows: List[Optional[Pat]] = field(default_factory=list)
     reported: Set[int] = field(default_factory=set)
     invalid: bool = False
     after_wildcard: Optional[int] = None
     values: _Seen = field(default_factory=_Seen)
+    variants: Set[str] = field(default_factory=set)
 
 
-# -- the SHIR half -----------------------------------------------------------------------
+# -- the scrutinee, and the arms of a match on an integer or a string --------------
 
 def literal_kind(ty: Type) -> Optional[str]:
     """The literal kind that a scrutinee type takes, or None when it takes no literal arm."""
@@ -164,13 +158,18 @@ def _alternatives(pattern: p.ShirPattern) -> List[p.ShirPattern | p.PatBinding]:
 def matchable_type(validator: 'TypeValidator', match: 's.Match',
                    ty: Optional[Type]) -> Optional[Type]:
     """The type of the scrutinee `ty` of a match: an enum, an integer (#415), a string or a
-    tuple. None after an error: the scrutinee has one, or its type has no match (CE2048)."""
+    tuple. None after an error: the scrutinee has one, its type has no match (CE2048), or
+    its type name is one that the unit lost."""
     if ty is None:
         return None
     ty = _resolve(validator, ty)
     if isinstance(ty, ReferenceType) and is_tuple_type(ty):
         ty = _resolve(validator, ty.referenced_type)
-    if isinstance(ty, EnumType) or literal_kind(ty) is not None:
+    if isinstance(ty, EnumType):
+        # An enum name this unit lost (D2): the CE0004, CE2046 or CE3011 of its declaration
+        # is the one fault, and its arms are not read against the winner's variants.
+        return None if name_is_contested(validator, "enum", ty.name) else ty
+    if literal_kind(ty) is not None:
         return ty
     if isinstance(ty, StructType) and is_tuple_type(ty):
         return ty
@@ -180,19 +179,6 @@ def matchable_type(validator: 'TypeValidator', match: 's.Match',
         return None
     er.emit(validator.reporter, er.ERR.CE2048, match.scrutinee.loc, got=display_type(ty))
     return None
-
-
-def reject_arm_kinds(validator: 'TypeValidator', match: 's.Match', ty: Type) -> None:
-    """A literal arm and a range arm do not fit an enum or a tuple scrutinee, and an enum
-    pattern arm does not fit a tuple scrutinee (CE2076). A contested enum name has no
-    declaration that this unit can trust (D2), so its arms are not read."""
-    if isinstance(ty, EnumType) and name_is_contested(validator, "enum", ty.name):
-        return
-    for arm in match.arms:
-        for alt in _alternatives(arm.pattern):
-            if isinstance(alt, (p.Literal, p.IntRange)) or (
-                    isinstance(alt, p.Variant) and not isinstance(ty, EnumType)):
-                _reject_arm_kind(validator, alt, ty)
 
 
 def check_literal_arm(validator: 'TypeValidator', rows: 'ArmRows', match: 's.Match',
@@ -274,13 +260,13 @@ def _other_quote_form(pattern: p.Literal) -> Optional[str]:
 
 
 def check_wildcard_pattern(_validator: 'TypeValidator', _node: p.Wildcard,
-                           _ty: Optional[Type]) -> Pat:
+                           _ty: Optional[Type], _note: Optional[PositionNote] = None) -> Pat:
     """`_` matches every value of its position."""
     return WILD
 
 
-def check_literal_pattern(validator: 'TypeValidator', node: p.Literal,
-                          ty: Type) -> Optional[Pat]:
+def check_literal_pattern(validator: 'TypeValidator', node: p.Literal, ty: Type,
+                          _note: Optional[PositionNote] = None) -> Optional[Pat]:
     """A literal pattern: a value of the kind of the literal, and an integer literal that
     fits.
 
@@ -300,8 +286,8 @@ def check_literal_pattern(validator: 'TypeValidator', node: p.Literal,
     return Ctor(IntRange(value, value))
 
 
-def check_range_pattern(validator: 'TypeValidator', node: p.IntRange,
-                        ty: Type) -> Optional[Pat]:
+def check_range_pattern(validator: 'TypeValidator', node: p.IntRange, ty: Type,
+                        _note: Optional[PositionNote] = None) -> Optional[Pat]:
     """A range pattern: two integer bounds that fit the type at its position, going up.
 
     A string bound is CE2072, once for the range. A range reads an integer value (CE2119),
@@ -359,62 +345,377 @@ def _bound_fits(validator: 'TypeValidator', const: Constant, written: str, loc: 
     return False
 
 
-# -- the port templates (AST) --------------------------------------------------------------
+# -- the patterns of a match on an enum or a tuple ------------------------------------
+
+def check_pattern_arm(validator: 'TypeValidator', rows: ArmRows, match: 's.Match',
+                      index: int, ty: Type) -> bool:
+    """The pattern of arm `index` of a match on an enum or a tuple, its row, and the type of
+    each binder. True when the arm walks its body: an arm whose pattern has an error does
+    not.
+
+    Each alternative is a pattern of the scrutinee type. A variant that an arm or an
+    alternative above names again is CE2041. The alternatives of `|` bind the same names
+    with the same types and modes (CE2126), so the body reads one binding list.
+    """
+    pattern = match.arms[index].pattern
+    if isinstance(pattern, p.Wildcard):
+        _wildcard_row(validator, rows, index, len(match.arms), pattern)
+        return True
+    note: PositionNote = ("the value matched here is", match.scrutinee.loc)
+    pieces = [(alt, _pattern_alternative(validator, alt, ty, note, rows.variants))
+              for alt in _alternatives(pattern)]
+    if (isinstance(pattern, p.Or) and all(piece is not None for _alt, piece in pieces)
+            and _reject_binding_mismatch(validator, pattern, ty)):
+        pieces.append((pattern, None))
+    if _add_row(rows, index, pattern, pieces) is None:
+        return False
+    _record_binders(validator, pattern, ty)
+    return True
 
 
-def reject_poke_binding_into_a_constant(validator: 'TypeValidator',
-                                        stmt: Match) -> None:
+def _pattern_alternative(validator: 'TypeValidator', alt: p.ShirPattern | p.PatBinding,
+                         ty: Type, note: PositionNote,
+                         variants: Set[str]) -> Optional[Pat | _Dropped]:
+    """One top-level alternative of an enum or a tuple arm: its place in the row, or None
+    after an error. A literal or a range arm needs an integer or a string scrutinee, and an
+    enum pattern arm an enum scrutinee (CE2076)."""
+    if isinstance(alt, p.Wildcard):
+        return WILD
+    if isinstance(alt, (p.Literal, p.IntRange)) or (
+            isinstance(alt, p.Variant) and not isinstance(ty, EnumType)):
+        _reject_arm_kind(validator, alt, ty)
+        return None
+    if isinstance(alt, p.Variant):
+        signature = _item_signature(alt)
+        if signature in variants and isinstance(ty, EnumType) \
+                and _names_the_scrutinee(validator, alt, ty):
+            er.emit(validator.reporter, er.ERR.CE2041, alt.loc, variant=alt.variant)
+            return _DROPPED
+        variants.add(signature)
+    return _check_item(validator, alt, ty, note)
+
+
+def _names_the_scrutinee(validator: 'TypeValidator', pattern: p.Variant,
+                         scrutinee_type: EnumType) -> bool:
+    """Does an arm's enum pattern name a variant of the scrutinee's own enum?"""
+    return (_names_enum(validator, _enum_name(validator, pattern), scrutinee_type)
+            and scrutinee_type.get_variant(pattern.variant) is not None)
+
+
+def _enum_name(validator: 'TypeValidator', pattern: p.Variant) -> str:
+    """The written enum name of a pattern, without its alias."""
+    return validator.decl_name(pattern.decl).rpartition(".")[2]
+
+
+def _names_enum(validator: 'TypeValidator', written: str, enum_type: EnumType) -> bool:
+    """Does a pattern's written enum name name `enum_type`?
+
+    For a generic enum the pattern uses the base name (`Maybe`), and the type carries its
+    type arguments (`Maybe<i32>`).
+    """
+    if written == enum_type.name:
+        return True
+    return (written in validator.generic_enum_table.by_name
+            and generic_base_of(enum_type) == written)
+
+
+def _check_item(validator: 'TypeValidator', item: p.ShirPattern | p.PatBinding, ty: Type,
+                note: Optional[PositionNote]) -> Optional[Pat]:
+    """One pattern position at the type of the value it reads: its place in the matrix of
+    the one checker, or None after an error. A binding matches every value."""
+    ty = _resolve(validator, ty)
+    if isinstance(item, p.PatBinding):
+        return WILD
+    return visit.check_pattern(validator, item, ty, note)
+
+
+def check_variant_pattern(validator: 'TypeValidator', node: p.Variant, ty: Type,
+                          note: Optional[PositionNote] = None) -> Optional[Pat]:
+    """An enum pattern: the enum of the value (CE2108, CE2107), one of its variants
+    (CE2045), and one item for each value of its payload (CE2044). Behind an alias, the
+    namespace holds the enum (CE2001, CE3005)."""
+    alias, dot, name = validator.decl_name(node.decl).rpartition(".")
+    if dot and reject_qualified_name(validator, alias, name, node.enum_loc, kind="type"):
+        return None
+    if not isinstance(ty, EnumType):
+        er.emit(validator.reporter, er.ERR.CE2108, node.loc, got=display_type(ty))
+        return None
+    if not _names_enum(validator, name, ty):
+        label, span = note if note is not None else ("", None)
+        reject_other_enum(validator, name, node.enum_loc, ty, label, span)
+        return None
+    variant = ty.get_variant(node.variant)
+    if variant is None:
+        er.emit(validator.reporter, er.ERR.CE2045, node.variant_loc,
+                variant=node.variant, enum=display_type(ty))
+        return None
+    if len(variant.associated_types) != len(node.items):
+        er.emit(validator.reporter, er.ERR.CE2044, node.loc, variant=node.variant,
+                expected=len(variant.associated_types), got=len(node.items))
+        return None
+    payload: PositionNote = (f"variant '{node.variant}' of '{display_type(ty)}' carries",
+                             node.variant_loc)
+    args = []
+    for item, item_type in zip(node.items, variant.associated_types, strict=True):
+        sub = _check_item(validator, item, item_type, payload)
+        if sub is None:
+            return None
+        args.append(sub)
+    return Ctor(node.variant, tuple(args))
+
+
+def check_tuple_pattern(validator: 'TypeValidator', node: p.Tuple, ty: Type,
+                        note: Optional[PositionNote] = None) -> Optional[Pat]:
+    """A tuple pattern: a tuple value (CE2117), one item for each element (CE2120)."""
+    if not is_tuple_type(ty):
+        er.emit(validator.reporter, er.ERR.CE2117, node.loc, type=display_type(ty))
+        return None
+    elements = tuple_elements(ty)
+    if len(node.elements) != len(elements):
+        er.emit(validator.reporter, er.ERR.CE2120, node.loc,
+                count=len(node.elements), type=display_type(ty), arity=len(elements))
+        return None
+    spelling = display_type(ty)
+    span = note[1] if note is not None else None
+    args = []
+    for index, (item, element_type) in enumerate(zip(node.elements, elements, strict=True)):
+        sub = _check_item(validator, item, element_type,
+                          (f"element {index} of '{spelling}' is", span))
+        if sub is None:
+            return None
+        args.append(sub)
+    return Ctor(TUPLE_KEY, tuple(args))
+
+
+def check_own_pattern(validator: 'TypeValidator', node: p.Own, ty: Type,
+                      note: Optional[PositionNote] = None) -> Optional[Pat]:
+    """An `Own(...)` pattern: an `Own@(T)` value (CE2109), and a pattern of its pointee."""
+    pointee = own_payload_type(ty) if is_own_type(ty) else None
+    if pointee is None:
+        er.emit(validator.reporter, er.ERR.CE2109, node.loc, got=display_type(ty))
+        return None
+    if isinstance(node.inner, (p.PatBinding, p.Wildcard)):
+        return WILD
+    sub = _check_item(validator, node.inner, pointee, note)
+    return None if sub is None else Ctor(OWN_KEY, (sub,))
+
+
+def check_or_pattern(validator: 'TypeValidator', node: p.Or, ty: Type,
+                     note: Optional[PositionNote] = None) -> Optional[Pat]:
+    """`|` alternatives in a pattern position: each one is a pattern of the position.
+
+    An alternative that repeats a value or a variant of an earlier one is the repeat error
+    of its kind (CE2075, CE2041), and each alternative binds what the first one binds
+    (CE2126). An integer literal or range that shares a value with an earlier one is
+    CE2075 by the rule of the top of an arm (`_first_values`).
+    """
+    pieces: List[Tuple[object, Optional[Pat | _Dropped]]] = []
+    firsts: dict[str, p.ShirPattern | p.PatBinding] = {}
+    seen = _Seen()
+    for alt in node.alternatives:
+        piece: Optional[Pat | _Dropped] = _check_item(validator, alt, ty, note)
+        if isinstance(alt, (p.Literal, p.IntRange)) and isinstance(piece, Ctor) \
+                and isinstance(piece.key, IntRange):
+            pieces.append((alt, _first_values(validator, alt, piece, seen)))
+            continue
+        signature = _item_signature(alt)
+        if piece is not None and isinstance(alt, (p.Variant, p.Literal)) \
+                and signature in firsts:
+            _report_repeat(validator, alt, firsts[signature])
+            piece = _DROPPED
+        firsts.setdefault(signature, alt)
+        pieces.append((alt, piece))
+    if any(piece is None for _alt, piece in pieces):
+        return None
+    if _reject_binding_mismatch(validator, node, ty):
+        return None
+    return _alternatives_row(node, [(alt, piece) for alt, piece in pieces
+                                    if isinstance(piece, (Wild, Ctor, Or))])
+
+
+def _report_repeat(validator: 'TypeValidator', alt: p.Variant | p.Literal,
+                   first: p.ShirPattern | p.PatBinding) -> None:
+    """An alternative that repeats one above it: CE2075 for a value, CE2041 for a variant.
+
+    A string value prints as the first alternative spells it, quotes included.
+    """
+    if isinstance(alt, p.Literal):
+        written = first.written if isinstance(first, p.Literal) else ""
+        er.emit(validator.reporter, er.ERR.CE2075, alt.loc, value=written, first=written)
+    else:
+        er.emit(validator.reporter, er.ERR.CE2041, alt.loc, variant=alt.variant)
+
+
+def _item_signature(item: p.ShirPattern | p.PatBinding) -> str:
+    """The signature of one pattern position; every binding reads as `_`.
+
+    A `poke`, `peek` or `nom` binding binds like a bare name: the mode changes how the
+    binding is made, not which values the arm matches, so `Poly(p)`, `Poly(poke p)` and
+    `Poly(nom p)` are duplicates of each other.
+    """
+    if isinstance(item, p.Variant):
+        if not item.items:
+            return item.variant
+        return f"{item.variant}({','.join(_item_signature(i) for i in item.items)})"
+    if isinstance(item, p.Tuple):
+        return "(" + ",".join(_item_signature(e) for e in item.elements) + ")"
+    if isinstance(item, p.Literal):
+        return _constant_signature(item.value)
+    if isinstance(item, p.IntRange):
+        operator = "..=" if item.inclusive else ".."
+        return (f"{_constant_signature(item.low.value)}{operator}"
+                f"{_constant_signature(item.high.value)}")
+    if isinstance(item, p.Own):
+        if isinstance(item.inner, (p.PatBinding, p.Wildcard)):
+            return "Own"
+        return f"Own({_item_signature(item.inner)})"
+    if isinstance(item, p.Or):
+        return "|".join(_item_signature(alt) for alt in item.alternatives)
+    return "_"
+
+
+def _constant_signature(const: Constant) -> str:
+    """A string keeps its quotes, so `"1"` is not the integer 1 and `"_"` is not `_`."""
+    return repr(const.value) if isinstance(const, StrConst) else str(const.value)
+
+
+def _bindings_of(validator: 'TypeValidator', item: p.ShirPattern | p.PatBinding,
+                 ty: Type) -> List[_Bound]:
+    """The names a pattern item binds, in source order, each with the type of its position
+    and its mode.
+
+    `|` alternatives bind what their first alternative binds: `_reject_binding_mismatch`
+    holds the others to it.
+    """
+    ty = _resolve(validator, ty)
+    if isinstance(item, p.PatBinding):
+        local = validator.body_locals[item.local]
+        return [_Bound(item.local, local.name or "_", ty, _mode_word(item.by))]
+    if isinstance(item, p.Or):
+        return _bindings_of(validator, item.alternatives[0], ty)
+    if isinstance(item, p.Variant):
+        variant = ty.get_variant(item.variant) if isinstance(ty, EnumType) else None
+        if variant is None:
+            return []
+        return [bound for sub, sub_type in zip(item.items, variant.associated_types,
+                                               strict=False)
+                for bound in _bindings_of(validator, sub, sub_type)]
+    if isinstance(item, p.Tuple):
+        return [bound for sub, sub_type in zip(item.elements, tuple_elements(ty), strict=False)
+                for bound in _bindings_of(validator, sub, sub_type)]
+    if isinstance(item, p.Own):
+        pointee = own_payload_type(ty)
+        return [] if pointee is None else _bindings_of(validator, item.inner, pointee)
+    return []
+
+
+def _mode_word(mode: p.BindMode) -> str:
+    """The written mode of a binding: `bare`, `peek`, `poke` or `nom`."""
+    if isinstance(mode, Ref):
+        return mode.mode.value
+    return "nom" if isinstance(mode, p.Nom) else "bare"
+
+
+def _record_binders(validator: 'TypeValidator', pattern: p.ShirPattern, ty: Type) -> None:
+    """The type row of the local of each binder: the type of its position, with no `peek`
+    or `poke` (ir.md 7.8). A local that the pattern names twice gets one row."""
+    answers = validator.body_answers()
+    recorded: Set[LocalId] = set()
+    for bound in _bindings_of(validator, pattern, ty):
+        if bound.local not in recorded:
+            recorded.add(bound.local)
+            answers.record_local(bound.local, bound.ty)
+
+
+def _reject_binding_mismatch(validator: 'TypeValidator', pattern: p.Or, ty: Type) -> bool:
+    """CE2126: an alternative that binds other names, types or modes than the first one.
+
+    The arm body reads one binding, whatever alternative matched, so every alternative
+    gives it the same names with the same types and the same modes. One error for each
+    alternative that differs, with a note at the first alternative. True when reported.
+    """
+    head = pattern.alternatives[0]
+    first = {bound.name: bound for bound in _bindings_of(validator, head, ty)}
+    reported = False
+    for alt in pattern.alternatives[1:]:
+        here = {bound.name: bound for bound in _bindings_of(validator, alt, ty)}
+        detail = _binding_difference(first, here)
+        if detail is None:
+            continue
+        diagnostic = er.emit_with(validator.reporter, er.ERR.CE2126,
+                                  getattr(alt, "loc", None) or pattern.loc,
+                                  alternative=_spell(validator, alt), detail=detail)
+        names = ", ".join(f"'{name}'" for name in first) or "no name"
+        diagnostic.note_at(f"the first alternative '{_spell(validator, head)}' binds {names}",
+                           getattr(head, "loc", None) or pattern.loc)
+        diagnostic.emit()
+        reported = True
+    return reported
+
+
+def _binding_difference(first: dict[str, _Bound], here: dict[str, _Bound]) -> Optional[str]:
+    """How the bindings of an alternative differ from the first one's, or None."""
+    for name in first:
+        if name not in here:
+            return f"'{name}' is not bound here"
+    for name in here:
+        if name not in first:
+            return f"'{name}' is not bound by the first alternative"
+    for name, bound in here.items():
+        other = first[name]
+        if bound.ty != other.ty:
+            return (f"'{name}' is '{display_type(bound.ty)}' here and "
+                    f"'{display_type(other.ty)}' in the first alternative")
+        if bound.mode != other.mode:
+            return (f"'{name}' is {_MODE_WORDS[bound.mode]} here and "
+                    f"{_MODE_WORDS[other.mode]} in the first alternative")
+    return None
+
+
+def reject_poke_binding_into_a_constant(validator: 'TypeValidator', match: 's.Match') -> None:
     """A `poke` pattern binding needs a scrutinee with storage (#685).
 
     `Variant(poke x)` binds a POINTER into the scrutinee's payload, and a write through
-    it reaches that storage. A constant is read-only there, so the write landed in
-    `.rodata` and the program stopped -- the same question a `poke self` call asks, at
-    the one position that never asked it. A `peek` and a bare binding READ the payload,
-    and reading a constant is legal. Each element of a tuple-literal scrutinee is its own
-    scrutinee (ruling 3 of the tuple design), so each element asks it for the bindings
-    of its own position.
+    it reaches that storage. A constant is read-only there (CE2400). A `peek` and a bare
+    binding READ the payload, and reading a constant is legal. The root of the scrutinee
+    place decides: a field or an element of a constant is in the constant.
     """
-    for scrutinee, items in _scrutinee_positions(stmt):
-        root = walk_place(scrutinee, Step.MEMBER | Step.INDEX).name
-        if root is None or root.id in validator.variable_types:
-            continue
-        binding = next((b for item in items for b in _poke_bindings(item)), None)
-        if binding is None:
-            continue
-        reject_borrow_of_constant(validator.err, root.id,
-                                  validator.const_sig(root.id),
-                                  binding.loc or stmt.loc, mode=binding.mode)
-
-
-def _scrutinee_positions(stmt: Match) -> Iterator[Tuple[Expr, List[object]]]:
-    """Each scrutinee expression with the pattern items that read it."""
-    if not isinstance(stmt.scrutinee, TupleLiteral):
-        yield stmt.scrutinee, [arm.pattern for arm in stmt.arms]
+    root = walk_place(match.scrutinee, Step.MEMBER | Step.INDEX).node
+    if not isinstance(root, e.ConstRef):
         return
-    for index, element in enumerate(stmt.scrutinee.elements):
-        yield element, [alt.elements[index] for arm in stmt.arms
-                        for alt in alternatives_of(arm.pattern)
-                        if isinstance(alt, TuplePattern) and index < len(alt.elements)]
+    binding = next((b for arm in match.arms for b in _poke_bindings(arm.pattern)), None)
+    if binding is None:
+        return
+    written = validator.decl_name(root.const_id)
+    record = constant_record(validator, written)
+    reject_borrow_of_constant(validator.err, written,
+                              record if isinstance(record, ConstSig) else None,
+                              validator.body_locals[binding.local].loc, mode="poke")
 
 
-def _poke_bindings(item: object) -> Iterator[RefBinding]:
-    """The `poke` bindings of a pattern item, at any depth, in source order."""
-    if isinstance(item, RefBinding):
-        if receiver_mode(item.mode) is ParamMode.POKE:
+def _poke_bindings(item: p.ShirPattern | p.PatBinding) -> Iterator[p.PatBinding]:
+    """The `poke` bindings of a pattern item, at any depth, in source order. The binding
+    of `Own(poke h)` points into the heap, not into the scrutinee."""
+    if isinstance(item, p.PatBinding):
+        if isinstance(item.by, Ref) and item.by.mode is BorrowMode.POKE:
             yield item
-    elif isinstance(item, Pattern):
-        for binding in item.bindings:
-            yield from _poke_bindings(binding)
-    elif isinstance(item, TuplePattern):
-        for element in item.elements:
-            yield from _poke_bindings(element)
-    elif isinstance(item, OrPattern):
+    elif isinstance(item, p.Variant):
+        for sub in item.items:
+            yield from _poke_bindings(sub)
+    elif isinstance(item, p.Tuple):
+        for sub in item.elements:
+            yield from _poke_bindings(sub)
+    elif isinstance(item, p.Or):
         for alternative in item.alternatives:
             yield from _poke_bindings(alternative)
-    elif isinstance(item, OwnPattern) and not isinstance(item.inner_pattern, str):
-        yield from _poke_bindings(item.inner_pattern)
+    elif isinstance(item, p.Own) and not isinstance(item.inner, p.PatBinding):
+        yield from _poke_bindings(item.inner)
 
 
+def _spell(validator: 'TypeValidator', pattern: p.ShirPattern | p.PatBinding) -> str:
+    """A pattern as it is written, for a diagnostic."""
+    return spell_pattern(pattern, lambda decl: validator.decl_name(decl),
+                         lambda local: validator.body_locals[local].name)
 
 
 def _first_values(validator: 'TypeValidator', alt: p.Literal | p.IntRange,
@@ -439,7 +740,7 @@ def _first_values(validator: 'TypeValidator', alt: p.Literal | p.IntRange,
                 value=_spell_value(value, _radix_of(alt)), first=first)
         if isinstance(alt, p.Literal):
             return _DROPPED
-    seen.integers.append((key, spell_pattern(alt)))
+    seen.integers.append((key, _spell(validator, alt)))
     return row
 
 
@@ -457,18 +758,6 @@ def _spell_value(value: int, radix: int) -> str:
     if prefix is None:
         return str(value)
     return f"{value} ({format(value, '#' + prefix)})"
-
-
-def _report_repeat(validator: 'TypeValidator', alt: Pattern | LiteralPattern,
-                   first: str) -> None:
-    """An alternative that repeats one above it: CE2075 for a value, CE2041 for a variant.
-
-    A string value prints as the first arm spells it, quotes included.
-    """
-    if isinstance(alt, LiteralPattern):
-        er.emit(validator.reporter, er.ERR.CE2075, alt.loc, value=first, first=first)
-    else:
-        er.emit(validator.reporter, er.ERR.CE2041, alt.loc, variant=alt.variant_name)
 
 
 def _add_row(arms: ArmRows, idx: int, pattern: object,
@@ -505,8 +794,6 @@ def _alternatives_row(pattern: object, kept: List[Tuple[object, Pat]]) -> Pat:
                     for alt, _piece in kept))
 
 
-
-
 def _wildcard_row(validator: 'TypeValidator', arms: ArmRows, idx: int, count: int,
                   pattern: p.Wildcard) -> None:
     """A `_` arm: it must be the last arm (CE2041), and it matches every value."""
@@ -532,333 +819,6 @@ def reject_other_enum(validator: 'TypeValidator', written: str,
     if subject_span is not None:
         diagnostic.note_at(f"{subject_label} '{spelling}'", subject_span)
     diagnostic.emit()
-
-
-def collect_and_validate_patterns(validator: 'TypeValidator', stmt: Match,
-                                  scrutinee_type: Type) -> ArmRows:
-    """Validate each arm of an enum or tuple match, and give the checker its rows."""
-    arms = ArmRows()
-    signatures: Set[str] = set()
-    top_note: _Note = ("the value matched here is", stmt.scrutinee.loc)
-
-    for idx, arm in enumerate(stmt.arms):
-        pattern = arm.pattern
-
-        if isinstance(pattern, WildcardPattern):
-            _wildcard_row(validator, arms, idx, len(stmt.arms), pattern)
-            _walk_arm_body(validator, arm)
-            continue
-
-        pieces = [(alt, _enum_alternative(validator, alt, scrutinee_type, top_note,
-                                          signatures))
-                  for alt in alternatives_of(pattern)]
-        if isinstance(pattern, OrPattern) and all(piece is not None for _alt, piece in pieces):
-            # A binding that differs between the alternatives leaves the arm body with no
-            # one type for the name, so the arm is an error like a pattern with a fault.
-            if _reject_binding_mismatch(validator, pattern, scrutinee_type):
-                pieces.append((pattern, None))
-        if _add_row(arms, idx, pattern, pieces) is None:
-            continue
-
-        saved_vars = validator.variable_types.copy()
-        _register_bindings(validator, pattern, scrutinee_type)
-
-        _walk_arm_body(validator, arm)
-
-        validator.variable_types = saved_vars
-
-    return arms
-
-
-def _enum_alternative(validator: 'TypeValidator', alt: object, scrutinee_type: Type,
-                      note: _Note, signatures: Set[str]) -> Optional[Pat | _Dropped]:
-    """One top-level alternative of an enum or a tuple arm: its place in the row, or None
-    after an error. A variant that an arm or an alternative above already names is
-    CE2041."""
-    if isinstance(alt, WildcardPattern):
-        return WILD
-    if isinstance(alt, (LiteralPattern, RangePattern)) or (
-            isinstance(alt, Pattern) and not isinstance(scrutinee_type, EnumType)):
-        # A literal or a range arm needs an integer (#415) or a string scrutinee, and an
-        # enum pattern arm an enum scrutinee.
-        _reject_arm_kind(validator, alt, scrutinee_type)
-        return None
-    if isinstance(alt, Pattern):
-        signature = get_pattern_signature(alt)
-        if signature in signatures and isinstance(scrutinee_type, EnumType) \
-                and _names_the_scrutinee(validator, alt, scrutinee_type):
-            _report_repeat(validator, alt, alt.variant_name)
-            return _DROPPED
-        signatures.add(signature)
-    return _check_item(validator, alt, scrutinee_type, note)
-
-
-def _names_the_scrutinee(validator: 'TypeValidator', pattern: Pattern,
-                         scrutinee_type: EnumType) -> bool:
-    """Does an arm's enum pattern name a variant of the scrutinee's own enum?"""
-    return (_names_enum(validator, pattern.enum_name, scrutinee_type)
-            and scrutinee_type.get_variant(pattern.variant_name) is not None)
-
-
-def _names_enum(validator: 'TypeValidator', written: str, enum_type: EnumType) -> bool:
-    """Does a pattern's written enum name name `enum_type`?
-
-    For a generic enum the pattern uses the base name (`Maybe`), and the type carries its
-    type arguments (`Maybe<i32>`).
-    """
-    if written == enum_type.name:
-        return True
-    return (written in validator.generic_enum_table.by_name
-            and generic_base_of(enum_type) == written)
-
-
-def _check_item(validator: 'TypeValidator', item: object, ty: Type,
-                note: _Note) -> Optional[Pat]:
-    """Validate one pattern position against the type of the value it reads.
-
-    The answer is the position for the checker's matrix, or None after an error.
-    """
-    ty = _resolve(validator, ty)
-    if isinstance(item, (str, RefBinding, NomBinding)):
-        return WILD
-    if isinstance(item, LiteralPattern):
-        return check_literal_pattern(validator, item, ty)
-    if isinstance(item, RangePattern):
-        return check_range_pattern(validator, item, ty)
-    if isinstance(item, TuplePattern):
-        return _check_tuple_pattern(validator, item, ty, note)
-    if isinstance(item, Pattern):
-        return _check_enum_pattern(validator, item, ty, note)
-    if isinstance(item, OwnPattern):
-        return _check_own_pattern(validator, item, ty, note)
-    if isinstance(item, OrPattern):
-        return _check_alternatives(validator, item, ty, note)
-    raise_internal_error("CE0121", pattern=pattern_source(item))
-    return None
-
-
-def _check_alternatives(validator: 'TypeValidator', pattern: OrPattern, ty: Type,
-                        note: _Note) -> Optional[Pat]:
-    """`|` alternatives in a pattern position: each one is a pattern of the position.
-
-    An alternative that repeats a value or a variant of an earlier one is the repeat error
-    of its kind (CE2075, CE2041), and each alternative binds what the first one binds
-    (CE2126). An integer literal or range that shares a value with an earlier one is
-    CE2075 by the rule of the top of an arm (`_first_values`).
-    """
-    pieces: List[Tuple[object, Optional[Pat | _Dropped]]] = []
-    firsts: dict[str, object] = {}
-    seen = _Seen()
-    for alt in pattern.alternatives:
-        piece: Optional[Pat | _Dropped] = _check_item(validator, alt, ty, note)
-        if isinstance(alt, (LiteralPattern, RangePattern)) and isinstance(piece, Ctor) \
-                and isinstance(piece.key, IntRange):
-            pieces.append((alt, _first_values(validator, alt, piece, seen)))
-            continue
-        signature = _item_signature(alt)
-        if piece is not None and isinstance(alt, (Pattern, LiteralPattern)) \
-                and signature in firsts:
-            first = firsts[signature]
-            _report_repeat(validator, alt, getattr(first, "display", ""))
-            piece = _DROPPED
-        firsts.setdefault(signature, alt)
-        pieces.append((alt, piece))
-    if any(piece is None for _alt, piece in pieces):
-        return None
-    if _reject_binding_mismatch(validator, pattern, ty):
-        return None
-    return _alternatives_row(pattern, [(alt, piece) for alt, piece in pieces
-                                       if isinstance(piece, (Wild, Ctor, Or))])
-
-
-
-
-
-
-
-
-def _check_tuple_pattern(validator: 'TypeValidator', pattern: TuplePattern, ty: Type,
-                         note: _Note) -> Optional[Pat]:
-    """A tuple pattern: a tuple value, one item for each element (CE2117, CE2120)."""
-    if not is_tuple_type(ty):
-        er.emit(validator.reporter, er.ERR.CE2117, pattern.loc, type=display_type(ty))
-        return None
-    elements = tuple_elements(ty)
-    if len(pattern.elements) != len(elements):
-        er.emit(validator.reporter, er.ERR.CE2120, pattern.loc,
-                count=len(pattern.elements), type=display_type(ty), arity=len(elements))
-        return None
-    spelling = display_type(ty)
-    args = []
-    for index, (item, element_type) in enumerate(zip(pattern.elements, elements, strict=True)):
-        sub = _check_item(validator, item, element_type,
-                          (f"element {index} of '{spelling}' is", note[1]))
-        if sub is None:
-            return None
-        args.append(sub)
-    return Ctor(TUPLE_KEY, tuple(args))
-
-
-def _check_enum_pattern(validator: 'TypeValidator', pattern: Pattern, ty: Type,
-                        note: _Note) -> Optional[Pat]:
-    """An enum pattern: the enum of the value, one of its variants, and its payload."""
-    # `geo.Sign.Plus ->`: the qualifier is checked here and folds away, so every rule
-    # below reads the bare enum name (unit-namespaces.md section 5.2).
-    if pattern.namespace is not None:
-        from .qualified import reject_qualified_name
-        if reject_qualified_name(validator, pattern.namespace, pattern.enum_name,
-                                 pattern.enum_name_span or pattern.loc, kind="type"):
-            return None
-
-    if not isinstance(ty, EnumType):
-        er.emit(validator.reporter, er.ERR.CE2108, pattern.loc, got=display_type(ty))
-        return None
-
-    if not _names_enum(validator, pattern.enum_name, ty):
-        reject_other_enum(validator, pattern.enum_name,
-                          pattern.enum_name_span or pattern.loc, ty, note[0], note[1])
-        return None
-
-    variant = ty.get_variant(pattern.variant_name)
-    if variant is None:
-        er.emit(validator.reporter, er.ERR.CE2045, pattern.variant_name_span or pattern.loc,
-                variant=pattern.variant_name, enum=display_type(ty))
-        return None
-
-    if len(variant.associated_types) != len(pattern.bindings):
-        er.emit(validator.reporter, er.ERR.CE2044, pattern.loc,
-                variant=pattern.variant_name,
-                expected=len(variant.associated_types),
-                got=len(pattern.bindings))
-        return None
-
-    payload_note: _Note = (f"variant '{pattern.variant_name}' of '{display_type(ty)}' carries",
-                           pattern.variant_name_span or pattern.loc)
-    args = []
-    for binding, binding_type in zip(pattern.bindings, variant.associated_types, strict=True):
-        sub = _check_item(validator, binding, binding_type, payload_note)
-        if sub is None:
-            return None
-        args.append(sub)
-    return Ctor(pattern.variant_name, tuple(args))
-
-
-def _check_own_pattern(validator: 'TypeValidator', pattern: OwnPattern, ty: Type,
-                       note: _Note) -> Optional[Pat]:
-    """An `Own(...)` pattern: an `Own@(T)` value, and a pattern of its pointee."""
-    if not is_own_type(ty):
-        er.emit(validator.reporter, er.ERR.CE2109, pattern.loc, got=display_type(ty))
-        return None
-    if isinstance(pattern.inner_pattern, str):
-        return WILD
-    element_type = own_payload_type(ty)
-    if element_type is None:
-        er.emit(validator.reporter, er.ERR.CE2109, pattern.loc, got=display_type(ty))
-        return None
-    sub = _check_item(validator, pattern.inner_pattern, element_type, note)
-    return None if sub is None else Ctor(OWN_KEY, (sub,))
-
-
-def _register_bindings(validator: 'TypeValidator', item: object, ty: Type) -> None:
-    """Register the names a pattern item binds in `variable_types`, with their types.
-
-    A `peek` / `poke` binding (#300) IS a reference into the scrutinee's storage, so it
-    gets the reference type: every consumer that asks "is this name a borrow?" answers
-    truthfully, and inference auto-derefs the name. A `nom` binding (ruling R11) OWNS the
-    payload and has the payload's own type, as a bare binding has.
-    """
-    for bound in _bindings_of(validator, item, ty):
-        if bound.mode in ("peek", "poke"):
-            validator.variable_types[bound.name] = ReferenceType(bound.ty,
-                                                                 borrow_mode(bound.mode))
-        else:
-            validator.variable_types[bound.name] = bound.ty
-
-
-def _bindings_of(validator: 'TypeValidator', item: object, ty: Type) -> List[_Bound]:
-    """The names a pattern item binds, in source order, each with its type and mode.
-
-    `|` alternatives bind what their first alternative binds: `_reject_binding_mismatch`
-    holds the others to it.
-    """
-    ty = _resolve(validator, ty)
-    if isinstance(item, NomBinding):
-        return [_Bound(item.name, ty, "nom")]
-    if isinstance(item, RefBinding):
-        return [_Bound(item.name, ty, item.mode)]
-    if isinstance(item, str):
-        return [] if item == "_" else [_Bound(item, ty, "bare")]
-    if isinstance(item, OrPattern):
-        return _bindings_of(validator, item.alternatives[0], ty)
-    if isinstance(item, Pattern):
-        variant = ty.get_variant(item.variant_name) if isinstance(ty, EnumType) else None
-        if variant is None:
-            return []
-        return [bound for binding, binding_type in zip(item.bindings, variant.associated_types,
-                                                       strict=False)
-                for bound in _bindings_of(validator, binding, binding_type)]
-    if isinstance(item, TuplePattern):
-        return [bound for element, element_type in zip(item.elements, tuple_elements(ty),
-                                                       strict=False)
-                for bound in _bindings_of(validator, element, element_type)]
-    if isinstance(item, OwnPattern):
-        pointee = own_payload_type(ty)
-        if pointee is None:
-            return []
-        inner = item.inner_pattern
-        if isinstance(inner, str) and inner != "_" and item.inner_borrow is not None:
-            # `Own(poke x)` (#300 phase 1): the binding IS a reference to the pointee.
-            return [_Bound(inner, _resolve(validator, pointee), item.inner_borrow)]
-        return _bindings_of(validator, inner, pointee)
-    return []
-
-
-def _reject_binding_mismatch(validator: 'TypeValidator', pattern: OrPattern,
-                             ty: Type) -> bool:
-    """CE2126: an alternative that binds other names, types or modes than the first one.
-
-    The arm body reads one binding, whatever alternative matched, so every alternative
-    gives it the same names with the same types and the same modes. One error for each
-    alternative that differs, with a note at the first alternative. True when reported.
-    """
-    head = pattern.alternatives[0]
-    first = {bound.name: bound for bound in _bindings_of(validator, head, ty)}
-    reported = False
-    for alt in pattern.alternatives[1:]:
-        here = {bound.name: bound for bound in _bindings_of(validator, alt, ty)}
-        detail = _binding_difference(first, here)
-        if detail is None:
-            continue
-        diagnostic = er.emit_with(validator.reporter, er.ERR.CE2126,
-                                  getattr(alt, "loc", None) or pattern.loc,
-                                  alternative=pattern_source(alt), detail=detail)
-        head_span = getattr(head, "loc", None) or pattern.loc
-        if head_span is not None:
-            names = ", ".join(f"'{name}'" for name in first) or "no name"
-            diagnostic.note_at(f"the first alternative '{pattern_source(head)}' binds {names}",
-                               head_span)
-        diagnostic.emit()
-        reported = True
-    return reported
-
-
-def _binding_difference(first: dict[str, _Bound], here: dict[str, _Bound]) -> Optional[str]:
-    """How the bindings of an alternative differ from the first one's, or None."""
-    for name in first:
-        if name not in here:
-            return f"'{name}' is not bound here"
-    for name in here:
-        if name not in first:
-            return f"'{name}' is not bound by the first alternative"
-    for name, bound in here.items():
-        other = first[name]
-        if bound.ty != other.ty:
-            return (f"'{name}' is '{display_type(bound.ty)}' here and "
-                    f"'{display_type(other.ty)}' in the first alternative")
-        if bound.mode != other.mode:
-            return (f"'{name}' is {_MODE_WORDS[bound.mode]} here and "
-                    f"{_MODE_WORDS[other.mode]} in the first alternative")
-    return None
 
 
 def check_match_exhaustiveness(validator: 'TypeValidator', match: 's.Match',
@@ -887,8 +847,8 @@ def check_match_exhaustiveness(validator: 'TypeValidator', match: 's.Match',
             continue
         dead = match.arms[index].pattern
         diagnostic = er.emit_with(validator.reporter, er.ERR.CE2118, dead.loc,
-                                  pattern=spell_pattern(dead))
-        _note_covering_arms(diagnostic, match, covering)
+                                  pattern=_spell(validator, dead))
+        _note_covering_arms(validator, diagnostic, match, covering)
         _help_for_an_empty_range(diagnostic, dead, scrutinee_type)
         diagnostic.emit()
 
@@ -899,12 +859,12 @@ def check_match_exhaustiveness(validator: 'TypeValidator', match: 's.Match',
             continue
         alt, span = dead_alternative.label
         diagnostic = er.emit_with(validator.reporter, er.ERR.CE2118, span,
-                                  pattern=spell_pattern(alt))
-        _note_covering_arms(diagnostic, match, dead_alternative.arms)
+                                  pattern=_spell(validator, alt))
+        _note_covering_arms(validator, diagnostic, match, dead_alternative.arms)
         _help_for_an_empty_range(diagnostic, alt, scrutinee_type)
         for earlier, earlier_span in dead_alternative.alternatives:
             if earlier_span is not None:
-                diagnostic.note_at(f"the alternative '{spell_pattern(earlier)}' matches "
+                diagnostic.note_at(f"the alternative '{_spell(validator, earlier)}' matches "
                                    f"these values first", earlier_span)
         diagnostic.emit()
 
@@ -936,11 +896,12 @@ def _help_for_an_empty_range(diagnostic, pattern: object, ty: Type) -> None:
                         f"matches the one value {written}")
 
 
-def _note_covering_arms(diagnostic, match: 's.Match', covering: List[int]) -> None:
+def _note_covering_arms(validator: 'TypeValidator', diagnostic, match: 's.Match',
+                        covering: List[int]) -> None:
     """A note at each arm above that matches the values of a dead pattern first."""
     for above in covering:
         cover = match.arms[above].pattern
-        diagnostic.note_at(f"the arm '{spell_pattern(cover)}' matches these values first",
+        diagnostic.note_at(f"the arm '{_spell(validator, cover)}' matches these values first",
                            cover.loc)
 
 
@@ -1009,37 +970,3 @@ def _render_witness(validator: 'TypeValidator', pat: Pat, ty: Type) -> str:
             return str(pat.key.low)
         return f"{pat.key.low}..={pat.key.high}"
     return str(pat.key)
-
-
-def get_pattern_signature(pattern: 'Pattern') -> str:
-    """Generate a unique signature for a pattern including nested and Own patterns."""
-    signature = pattern.variant_name
-    if pattern.bindings:
-        signature += "(" + ",".join(_item_signature(b) for b in pattern.bindings) + ")"
-    return signature
-
-
-def _item_signature(item: object) -> str:
-    """The signature of one payload position; every binding reads as `_`.
-
-    A RefBinding (#300 phase 3) and a NomBinding (ruling R11) bind like a plain name: the
-    marker changes how the binding is materialized, not which values the arm matches, so
-    `Poly(p)`, `Poly(poke p)` and `Poly(nom p)` are duplicates of each other.
-    """
-    if isinstance(item, Pattern):
-        return get_pattern_signature(item)
-    if isinstance(item, TuplePattern):
-        return "(" + ",".join(_item_signature(e) for e in item.elements) + ")"
-    if isinstance(item, LiteralPattern):
-        # A string keeps its quotes, so `"1"` is not the integer 1 and `"_"` is not `_`.
-        return repr(item.value) if isinstance(item.value, str) else str(item.value)
-    if isinstance(item, RangePattern):
-        operator = "..=" if item.inclusive else ".."
-        return f"{_item_signature(item.low)}{operator}{_item_signature(item.high)}"
-    if isinstance(item, OwnPattern):
-        if isinstance(item.inner_pattern, str):
-            return "Own"
-        return f"Own({_item_signature(item.inner_pattern)})"
-    if isinstance(item, OrPattern):
-        return "|".join(_item_signature(alt) for alt in item.alternatives)
-    return "_"

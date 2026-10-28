@@ -1,0 +1,19 @@
+unit test_err_typeck_match_enum_duplicate
+
+ShirBody across
+  params : [(_0 "s": Sign, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Sign, "Plus", []), [Return(Lit(1))]), Arm(Variant(@Sign, "Minus", []), [Return(Lit(2))]), Arm(Variant(@Sign, "Plus", []), [Return(Lit(3))]), Arm(Variant(@Sign, "Zero", []), [Return(Lit(0))])], consumes: false)
+
+ShirBody within
+  params : [(_0 "s": Sign, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Or([Variant(@Sign, "Plus", []), Variant(@Sign, "Minus", []), Variant(@Sign, "Minus", [])]), [Return(Lit(1))]), Arm(Variant(@Sign, "Zero", []), [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, Call(Free(@across), [(EnumInit(@Sign, "Plus", []), Guaranteed)]), Call(Free(@within), [(EnumInit(@Sign, "Zero", []), Guaranteed)])))

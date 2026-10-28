@@ -24,11 +24,14 @@ their blocks; an `elif` is an `If` in the `else` block. The kind of a `while` lo
 `While` (ir.md 7.7). A loop over items is not typed yet. A `break` and a `continue` have
 no answer: the scope pass refuses one outside a loop.
 
-A `Match` checks its scrutinee (CE2048, `matching.matchable_type`). A match on an integer
-or a string writes its `MatchFacts`, checks the pattern of each arm, gives the arm its row
-for the one checker, and then walks the body of the arm. After the last arm, the one
-checker reads the rows (`matching.check_match_exhaustiveness`). A match on an enum or a
-tuple refuses a literal arm (CE2076) and stops (`Match`).
+A `Match` checks its scrutinee (CE2048, `matching.matchable_type`) and writes its
+`MatchFacts`. Then it checks the pattern of each arm, gives the arm its row for the one
+checker, and walks the body of the arm: a literal arm of a match on an integer or a string
+(`matching.check_literal_arm`), or a pattern arm of a match on an enum or a tuple, which
+also gives each binder its type (`matching.check_pattern_arm`). An arm of an enum or a
+tuple match whose pattern has an error does not walk its body. After the last arm, the one
+checker reads the rows (`matching.check_match_exhaustiveness`). A scrutinee with an error,
+or whose enum name the unit lost, stops the walk (`Match`).
 """
 from __future__ import annotations
 
@@ -41,8 +44,8 @@ from sushi_lang.semantics.passes.types.compatibility import (
     reject_mismatch, reject_return_mismatch, reject_unhandled_result)
 from sushi_lang.semantics.passes.types.constants import assignment_span
 from sushi_lang.semantics.passes.types.matching import (
-    ArmRows, check_literal_arm, check_match_exhaustiveness, literal_kind, matchable_type,
-    reject_arm_kinds)
+    ArmRows, check_literal_arm, check_match_exhaustiveness, check_pattern_arm, literal_kind,
+    matchable_type, reject_poke_binding_into_a_constant)
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
 from sushi_lang.semantics.passes.types.result_validation import (
     spells_a_result, validate_result_pattern)
@@ -224,19 +227,23 @@ def check_assert(validator: TypeValidator, node: s.Assert) -> None:
 
 
 def check_match(validator: TypeValidator, node: s.Match) -> None:
-    """A `match` on an integer (#415) or a string: its facts, then the pattern and the body
-    of each arm in the written order, then the coverage of the arms."""
+    """A `match`: its facts, then the pattern and the body of each arm in the written
+    order, then the coverage of the arms. An arm of an enum or a tuple match whose pattern
+    has an error does not walk its body."""
     ty = matchable_type(validator, node, visit.check_expr(validator, node.scrutinee))
-    kind = None if ty is None else literal_kind(ty)
-    if ty is None or kind is None:
-        if ty is not None:
-            reject_arm_kinds(validator, node, ty)
+    if ty is None:
         visit.stop_at(validator, node)
+    kind = literal_kind(ty)
     validator.body_answers().record_match(
         node.shir_id, MatchFacts(ty, ty if kind == "integer" else None))
+    if kind is None:
+        reject_poke_binding_into_a_constant(validator, node)
     rows = ArmRows()
     for index, arm in enumerate(node.arms):
-        check_literal_arm(validator, rows, node, index, ty)
+        if kind is not None:
+            check_literal_arm(validator, rows, node, index, ty)
+        elif not check_pattern_arm(validator, rows, node, index, ty):
+            continue
         check_block(validator, arm.body)
     check_match_exhaustiveness(validator, node, ty, rows)
 

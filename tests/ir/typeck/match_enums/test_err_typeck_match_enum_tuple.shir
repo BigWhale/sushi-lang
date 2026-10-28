@@ -1,0 +1,19 @@
+unit test_err_typeck_match_enum_tuple
+
+ShirBody first
+  params : [(_0 "m": Maybe@((i32, string)), Guaranteed)]
+  locals : [_1 "n": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Maybe, "Some", [Tuple([(_1, Bare), Wildcard])]), [Return(LocalRef(_1))]), Arm(Variant(@Maybe, "None", []), [Return(Lit(0))])], consumes: false)
+
+ShirBody wrong
+  params : [(_0 "m": Maybe@((i32, string)), Guaranteed)]
+  locals : [_1 "n"]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Maybe, "Some", [Tuple([(_1, Bare), Wildcard, Wildcard])]), [Return(LocalRef(_1))]), Arm(Variant(@Maybe, "None", []), [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Binary(+, Call(Free(@first), [(EnumInit(@Maybe, "None", []), Guaranteed)]), Call(Free(@wrong), [(EnumInit(@Maybe, "None", []), Guaranteed)])))

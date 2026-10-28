@@ -1,0 +1,31 @@
+# EXPECT_ERROR_CODES_EXACT: CE2040, CE2040
+# EXPECT_STDERR_CONTAINS: "non-exhaustive match pattern (missing variants: KeyPress, Resize)"
+# EXPECT_STDERR_CONTAINS: "non-exhaustive match pattern (missing variants: Maybe.Some(Color.Green))"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_enum_not_covered.shir
+#
+# A match on an enum names every variant, or has a `_` arm: CE2040 lists what is
+# missing. A plain match lists the names of the variants. A match that tests inside a
+# payload lists each missing pattern in source syntax.
+
+enum Event:
+    Click(i32, i32)
+    KeyPress(i32)
+    Resize(i32, i32)
+
+enum Color:
+    Red
+    Green
+
+fn handle(Event e) i32:
+    match e:
+        Event.Click(x, y) -> return x + y
+    return 0
+
+fn paint(Maybe@(Color) m) i32:
+    match m:
+        Maybe.Some(Color.Red) -> return 1
+        Maybe.None -> return 0
+    return 2
+
+fn main() i32:
+    return handle(Event.KeyPress(1)) + paint(Maybe.None)

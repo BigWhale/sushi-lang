@@ -1,0 +1,19 @@
+# EXPECT_ERROR_CODES_EXACT: CE2045
+# EXPECT_STDERR_CONTAINS: "enum variant 'Blue' not found in enum 'Light'"
+# EXPECT_STDERR_CONTAINS: "  |         Light.Blue -> return 2\n  `               --+-\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_enum_unknown_variant.shir
+#
+# A pattern that names a variant the enum does not declare is CE2045, at the variant.
+
+enum Light:
+    Red
+    Green
+
+fn shade(Light l) i32:
+    match l:
+        Light.Red -> return 1
+        Light.Blue -> return 2
+        _ -> return 0
+
+fn main() i32:
+    return shade(Light.Green)

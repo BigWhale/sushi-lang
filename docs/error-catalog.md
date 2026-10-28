@@ -733,16 +733,6 @@ An `expand(a in args):` walks the value pack `...Ts args` of its own function, a
 
 A bloom argument 'arr...' requires a variadic '...T' parameter and must be the sole, last trailing argument at the call site.
 
-### CE0121 {#ce0121}
-
-**Error** · internal
-
-**Message:** `could not resolve the concrete enum type for match pattern '{pattern}' - pattern bindings cannot be extracted`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-A pattern position holds an item that no pattern rule of the typecheck pass handles, so its bindings cannot be read. Before the switch to SHIR, the backend gave this error when the type checker did not write the AST field `Match.resolved_scrutinee_type`. That field is deleted: the typecheck pass writes the type of a scrutinee as the `MatchFacts` row of `TypeckResults` (docs/design/ir.md 7.3).
-
 ### CE0122 {#ce0122}
 
 **Error** · type

@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2073
+# EXPECT_STDERR_CONTAINS: "literal 300 out of range for u8"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_enum_literal_payload.shir
+#
+# A literal in a payload position is read at the type of that position, and an
+# alternative of `|` there is one more pattern of that position. `300` does not fit a `u8`.
+
+fn small(Maybe@(u8) m) i32:
+    match m:
+        Maybe.Some(1 | 2) -> return 1
+        Maybe.Some(300) -> return 2
+        _ -> return 0
+
+fn main() i32:
+    return small(Maybe.None)

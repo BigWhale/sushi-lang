@@ -185,7 +185,7 @@ PATTERN_FIELDS: dict[str, tuple[str, ...]] = {
     "Wildcard": (),
     "Literal": ("value", "written"),
     "IntRange": ("low", "high", "inclusive"),
-    "Variant": ("decl", "variant", "items"),
+    "Variant": ("decl", "variant", "items", "enum_loc", "variant_loc"),
     "Tuple": ("elements",),
     "Own": ("inner",),
     "Or": ("alternatives",),

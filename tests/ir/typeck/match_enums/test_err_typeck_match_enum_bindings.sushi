@@ -1,0 +1,40 @@
+# EXPECT_ERROR_CODES_EXACT: CE2126, CE2126, CE2126
+# EXPECT_STDERR_CONTAINS: "alternative 'Value.Pair(y, _)' binds differently from the first alternative: 'x' is not bound here"
+# EXPECT_STDERR_CONTAINS: "the first alternative 'Value.Int(x)' binds 'x'"
+# EXPECT_STDERR_CONTAINS: "alternative 'Value.Float(x)' binds differently from the first alternative: 'x' is 'f64' here and 'i32' in the first alternative"
+# EXPECT_STDERR_CONTAINS: "alternative 'Value.Wide(peek x)' binds differently from the first alternative: 'x' is a `peek` binding here and a bare binding in the first alternative"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_enum_bindings.shir
+#
+# The body of an arm reads one binding list, whatever alternative matched. So each
+# alternative binds the same names, with the same types and the same mode (CE2126),
+# with a note at the first alternative. Alternatives that agree share one local.
+
+enum Value:
+    Int(i32)
+    Wide(i32)
+    Float(f64)
+    Pair(i32, i32)
+
+fn agree(Value v) i32:
+    match v:
+        Value.Int(x) | Value.Wide(x) -> return x
+        _ -> return 0
+
+fn name(Value v) i32:
+    match v:
+        Value.Int(x) | Value.Pair(y, _) -> return x
+        _ -> return 0
+
+fn kind(Value v) i32:
+    match v:
+        Value.Int(x) | Value.Float(x) -> return x
+        _ -> return 0
+
+fn mode(Value v) i32:
+    match v:
+        Value.Int(x) | Value.Wide(peek x) -> return x
+        _ -> return 0
+
+fn main() i32:
+    let Value v = Value.Int(2)
+    return agree(v) + name(v) + kind(v) + mode(v)
