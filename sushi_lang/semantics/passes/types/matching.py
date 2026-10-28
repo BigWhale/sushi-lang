@@ -46,6 +46,7 @@ from sushi_lang.semantics.integer_patterns import goes_down, literal_value, patt
 from sushi_lang.semantics.integer_width import integer_range
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir.exprs import Constant, IntConst, StrConst
+from sushi_lang.semantics.shir.spelling import spell_pattern, spell_range
 from .exhaustiveness import (
     OWN_KEY, TUPLE_KEY, WILD, Ctor, IntegerColumn, IntRange, Or, Pat, Signature, Wild,
     analyze, covers, string_key,
@@ -272,12 +273,6 @@ def _other_quote_form(pattern: p.Literal) -> Optional[str]:
     return None
 
 
-def _range_source(pattern: p.IntRange) -> str:
-    """A range as it is written: `0x80..=0x8F`."""
-    operator = "..=" if pattern.inclusive else ".."
-    return f"{pattern.low.written}{operator}{pattern.high.written}"
-
-
 def check_wildcard_pattern(_validator: 'TypeValidator', _node: p.Wildcard,
                            _ty: Optional[Type]) -> Pat:
     """`_` matches every value of its position."""
@@ -327,7 +322,7 @@ def check_range_pattern(validator: 'TypeValidator', node: p.IntRange,
     if goes_down(node, ty):
         operator = "..=" if node.inclusive else ".."
         er.emit_with(validator.reporter, er.ERR.CE2125, node.loc,
-                     range=_range_source(node)) \
+                     range=spell_range(node)) \
             .help(f"a range pattern goes up: write "
                   f"'{node.high.written}{operator}{node.low.written}'") \
             .emit()
@@ -444,7 +439,7 @@ def _first_values(validator: 'TypeValidator', alt: p.Literal | p.IntRange,
                 value=_spell_value(value, _radix_of(alt)), first=first)
         if isinstance(alt, p.Literal):
             return _DROPPED
-    seen.integers.append((key, _spell_pattern(alt)))
+    seen.integers.append((key, spell_pattern(alt)))
     return row
 
 
@@ -452,21 +447,6 @@ def _radix_of(alt: p.Literal | p.IntRange) -> int:
     """The base an integer pattern is written in: the base of its first bound."""
     const = alt.low.value if isinstance(alt, p.IntRange) else alt.value
     return const.radix if isinstance(const, IntConst) else 10
-
-
-def _spell_pattern(pattern: p.ShirPattern | p.PatBinding) -> str:
-    """A pattern as a diagnostic shows it: as it is written."""
-    if isinstance(pattern, p.Wildcard):
-        return "_"
-    if isinstance(pattern, p.Literal):
-        return pattern.written
-    if isinstance(pattern, p.IntRange):
-        return _range_source(pattern)
-    if isinstance(pattern, p.Or):
-        return " | ".join(_spell_pattern(alt) for alt in pattern.alternatives)
-    raise_internal_error("CE0000", span=getattr(pattern, "loc", None),
-                         detail=f"no spelling of a {type(pattern).__name__} pattern yet")
-    return ""
 
 
 def _spell_value(value: int, radix: int) -> str:
@@ -907,7 +887,7 @@ def check_match_exhaustiveness(validator: 'TypeValidator', match: 's.Match',
             continue
         dead = match.arms[index].pattern
         diagnostic = er.emit_with(validator.reporter, er.ERR.CE2118, dead.loc,
-                                  pattern=_spell_pattern(dead))
+                                  pattern=spell_pattern(dead))
         _note_covering_arms(diagnostic, match, covering)
         _help_for_an_empty_range(diagnostic, dead, scrutinee_type)
         diagnostic.emit()
@@ -919,12 +899,12 @@ def check_match_exhaustiveness(validator: 'TypeValidator', match: 's.Match',
             continue
         alt, span = dead_alternative.label
         diagnostic = er.emit_with(validator.reporter, er.ERR.CE2118, span,
-                                  pattern=_spell_pattern(alt))
+                                  pattern=spell_pattern(alt))
         _note_covering_arms(diagnostic, match, dead_alternative.arms)
         _help_for_an_empty_range(diagnostic, alt, scrutinee_type)
         for earlier, earlier_span in dead_alternative.alternatives:
             if earlier_span is not None:
-                diagnostic.note_at(f"the alternative '{_spell_pattern(earlier)}' matches "
+                diagnostic.note_at(f"the alternative '{spell_pattern(earlier)}' matches "
                                    f"these values first", earlier_span)
         diagnostic.emit()
 
@@ -952,7 +932,7 @@ def _help_for_an_empty_range(diagnostic, pattern: object, ty: Type) -> None:
     low, high = pattern_interval(pattern, ty)
     if low > high:
         written = pattern.low.written
-        diagnostic.help(f"'{_range_source(pattern)}' matches no value: '{written}..={written}' "
+        diagnostic.help(f"'{spell_range(pattern)}' matches no value: '{written}..={written}' "
                         f"matches the one value {written}")
 
 
@@ -960,7 +940,7 @@ def _note_covering_arms(diagnostic, match: 's.Match', covering: List[int]) -> No
     """A note at each arm above that matches the values of a dead pattern first."""
     for above in covering:
         cover = match.arms[above].pattern
-        diagnostic.note_at(f"the arm '{_spell_pattern(cover)}' matches these values first",
+        diagnostic.note_at(f"the arm '{spell_pattern(cover)}' matches these values first",
                            cover.loc)
 
 

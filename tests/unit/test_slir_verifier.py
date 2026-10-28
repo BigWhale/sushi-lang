@@ -653,3 +653,52 @@ def test_a_cast_that_is_not_numeric_is_refused(source: Type, target: Type):
 
 def test_a_cast_of_a_boolean_constant_is_refused():
     _refused(_cast_of(p.Const(k.Bool(True)), I32, I32, BAD), "a numeric cast")
+
+
+# -- a switch on an integer ------------------------------------------------------------
+
+
+def _switch_on(ty: Type, cases: tuple[int, ...], span: Span = SPAN) -> SlirFunction:
+    """`switchInt(copy _1) -> [cases..., otherwise: bb1]` over the parameter `_1: ty`."""
+    switch = tm.SwitchInt(_copy(1), tuple((case, BlockId(1)) for case in cases), BlockId(1),
+                          span)
+    return _function([BLANK, ty], _block(0, switch),
+                     _block(1, _ret(), _set(0, r.Use(p.Const(k.Blank())))),
+                     params=((1, GUARANTEED),))
+
+
+@pytest.mark.parametrize("ty, cases", [
+    (BuiltinType.I8, (-1, 0, 127, -128)),     # a match on an i8: `0xff` is the case -1
+    (U8, (0, 47, 255)),
+    (BuiltinType.U64, ((1 << 64) - 1,)),
+    (BOOL, (0,)),                              # an `if`
+    (I32, (0, 1)),                             # the tag of a `Result`
+], ids=str)
+def test_a_switch_with_distinct_cases_in_the_range_of_its_operand_passes(
+        ty: Type, cases: tuple[int, ...]):
+    _passes(_switch_on(ty, cases))
+
+
+def test_a_switch_on_a_boolean_constant_passes():
+    switch = tm.SwitchInt(p.Const(k.Bool(False)), ((0, BlockId(1)),), BlockId(1), SPAN)
+    _passes(_function([BLANK], _block(0, switch),
+                      _block(1, _ret(), _set(0, r.Use(p.Const(k.Blank()))))))
+
+
+@pytest.mark.parametrize("ty, cases", [
+    (BuiltinType.I8, (255,)),      # a bit pattern that is not read at the type
+    (U8, (-1,)),
+    (U8, (256,)),
+    (BOOL, (2,)),
+    (I32, (3, 1, 3)),              # one value two times
+    (STRING, (0,)),                # no integer to switch on
+    (PAIR, (0,)),
+], ids=str)
+def test_a_switch_with_a_case_that_its_operand_cannot_hold_or_holds_twice_is_refused(
+        ty: Type, cases: tuple[int, ...]):
+    _refused(_switch_on(ty, cases, BAD), "an integer switch")
+
+
+def test_the_trap_after_the_last_arm_of_a_match_names_that_arm_and_passes():
+    trap = tm.Trap("RE2023", (p.Const(k.text("0x80..=0xff")),), SPAN)
+    _passes(_function([BLANK], _block(0, trap)))

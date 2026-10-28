@@ -126,9 +126,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/typeck.py", "capture_type",
      "kept for the closures group of Phase 5: lift and SLIR lowering read the type of each "
      "capture"),
-    ("sushi_lang/semantics/shir/typeck.py", "integer",
-     "kept for the match group of Phase 3: SHIR-to-SLIR lowering reads the integer type "
-     "of a literal arm and of a range arm"),
     ("sushi_lang/semantics/shir/ownership.py", "record_capture_ownership",
      "kept for the closures group C2: the borrow pass on SHIR writes the ownership of each "
      "capture"),

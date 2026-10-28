@@ -1,6 +1,7 @@
 """SHIR to SLIR: the control-flow arms of the lowering (docs/design/ir.md 8.9, 8.10).
 
-The arms of `if`, `while`, `break`, `continue` and `assert`, the lowering of a condition,
+The arms of `if`, `match` on an integer or a string, `while`, `break`, `continue` and
+`assert`, the lowering of a condition,
 the join of the paths of a statement with the drop state of each path, the short-circuit
 `and` and `or`, and `??`. Each arm is a free function that takes the `_Lowering` of
 `lower.py` first; the tables of `lower.py` name them. This module reads `lower.py` for its
@@ -9,14 +10,17 @@ types only, so no import cycle exists at run time.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, TypeAlias
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
-from sushi_lang.semantics.shir.callee import Conversion
+from sushi_lang.semantics.integer_patterns import literal_value, pattern_interval
+from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.shir import patterns as pt
+from sushi_lang.semantics.shir.callee import Conversion, Intrinsic
 from sushi_lang.semantics.shir.loop_kind import While
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.slir import constants as k
@@ -28,11 +32,17 @@ from sushi_lang.semantics.slir.drops import FlowState
 from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.shir.ids import ShirId
+from sushi_lang.semantics.shir.spelling import spell_pattern
+from sushi_lang.semantics.shir.typeck import MatchFacts
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
 from sushi_lang.internals.diagnostics import StageStop
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.slir.lower import _Arrival, _Block, _Lowering, _ShortCircuit, _Value
+
+
+#: An alternative of an arm of a match on an integer or a string.
+_Alternative: TypeAlias = pt.Wildcard | pt.Literal | pt.IntRange
 
 
 @dataclass(slots=True)
@@ -161,6 +171,156 @@ def assert_(low: _Lowering, stmt: s.Assert) -> None:
     low.placement.leave_scope()
     low.placement.restore(at_branch)
     low.block = next_
+
+
+def match(low: _Lowering, stmt: s.Match) -> None:
+    """A match on an integer or a string (ir.md 8.9): ONE switch on an integer whose arms
+    are literals, else a chain of tests in source order. Each arm starts from the state
+    after the scrutinee, and the arms that reach their end meet at the join. A match on any
+    other type stops (A4)."""
+    facts = low.typeck.match_facts_of(stmt.shir_id)
+    if facts is None or (facts.integer is None and facts.scrutinee != BuiltinType.STRING):
+        dispatch.stop(STAGE, stmt)
+    scrutinee = _scrutinee(low, stmt.scrutinee)
+    low.emit(low.placement.flush())
+    among, at_switch = low.placement.in_scope(), low.placement.state()
+    if facts.integer is not None and not any(
+            isinstance(alt, pt.IntRange) for case in stmt.arms for alt in _alternatives(case)):
+        arrivals = _one_switch(low, stmt, scrutinee, facts.integer, at_switch)
+    else:
+        arrivals = _chain(low, stmt, scrutinee, facts, at_switch)
+    if arrivals:
+        meet(low, low.new_block(), arrivals, among, stmt.loc)
+
+
+def _scrutinee(low: _Lowering, expr: e.ShirExpr) -> p.Operand:
+    """The operand that each test reads. A place and a constant are read where they are. A
+    new value, and a local that the match takes (`match nom r:`), go into a temporary of the
+    match statement, which drops it at its end."""
+    value: _Value
+    if isinstance(expr, (e.LocalRef, e.Lit, e.ConstRef)):
+        operand = low.operand(expr)
+        if not isinstance(operand, p.Move):
+            return operand
+        value = r.Use(operand)
+    else:
+        value = low.value(expr)
+    return p.Copy(p.Local(low.temporary(value, low.type_of(expr), expr.loc)))
+
+
+def _alternatives(case: pt.Arm) -> list[_Alternative]:
+    """The alternatives of an arm: a literal match has no pattern of another kind (CE2076,
+    CE2117)."""
+    pattern = case.pattern
+    alternatives: list[_Alternative] = []
+    for alt in pattern.alternatives if isinstance(pattern, pt.Or) else [pattern]:
+        if not isinstance(alt, (pt.Wildcard, pt.Literal, pt.IntRange)):
+            er.raise_internal_error("CE0000", span=pattern.loc,
+                                    detail=f"a {type(alt).__name__} arm reached the SLIR "
+                                           f"lowering of a literal match")
+        alternatives.append(alt)
+    return alternatives
+
+
+def _catches_all(case: pt.Arm) -> bool:
+    """`_`, or an arm with a `_` alternative: it has no test, and it is the last arm."""
+    return any(isinstance(alt, pt.Wildcard) for alt in _alternatives(case))
+
+
+def _one_switch(low: _Lowering, stmt: s.Match, scrutinee: p.Operand, ty: Type,
+                at_switch: FlowState) -> list[_Arrival]:
+    """`switchInt(v, [(literal, arm)...], otherwise: _ arm)`: a case for each literal
+    alternative, at the value that `ty` reads; `otherwise` is None when the arms cover `ty`."""
+    blocks = [low.new_block() for _ in stmt.arms]
+    cases: list[tuple[int, BlockId]] = []
+    otherwise: Optional[BlockId] = None
+    for case, block in zip(stmt.arms, blocks, strict=True):
+        if _catches_all(case):
+            otherwise = block.id
+            continue
+        cases += [(literal_value(_literal(alt).value, ty), block.id)
+                  for alt in _alternatives(case)]
+    low.jump(tm.SwitchInt(scrutinee, tuple(cases), otherwise, stmt.loc))
+    arrivals: list[_Arrival] = []
+    for case, block in zip(stmt.arms, blocks, strict=True):
+        low.placement.restore(at_switch)
+        arrivals += arm(low, block, case.body)
+    return arrivals
+
+
+def _chain(low: _Lowering, stmt: s.Match, scrutinee: p.Operand, facts: MatchFacts,
+           at_switch: FlowState) -> list[_Arrival]:
+    """The tests of each arm in source order. A failed test goes to the next alternative of
+    its arm, else to the first test of the next arm; after the last arm, to the trap
+    RE2023, which names that arm (ir.md 8.8)."""
+    arrivals: list[_Arrival] = []
+    entry = low.block
+    for index, case in enumerate(stmt.arms):
+        if _catches_all(case):
+            low.placement.restore(at_switch)
+            return arrivals + arm(low, entry, case.body)
+        alternatives = _alternatives(case)
+        counts = [2 if isinstance(alt, pt.IntRange) else 1 for alt in alternatives]
+        steps = [entry, *(low.new_block() for _ in range(sum(counts) - 1))]
+        body, missed = low.new_block(), low.new_block()
+        starts = [sum(counts[:at]) for at in range(len(counts))]
+        for alt, start, count in zip(alternatives, starts, counts, strict=True):
+            after = steps[start + count] if start + count < len(steps) else missed
+            _test(low, steps[start:start + count], alt, scrutinee, facts, body.id, after.id)
+        if index == len(stmt.arms) - 1:
+            missed.terminator = tm.Trap(
+                "RE2023", (p.Const(k.text(spell_pattern(case.pattern))),), stmt.loc)
+        low.placement.restore(at_switch)
+        arrivals += arm(low, body, case.body)
+        entry = missed
+    return arrivals
+
+
+def _test(low: _Lowering, steps: list[_Block], alt: _Alternative,
+          scrutinee: p.Operand, facts: MatchFacts, matched: BlockId, missed: BlockId) -> None:
+    """The test of one alternative in `steps`: a switch on an integer literal, `>=` and
+    `<=` for a range, a call of `eq` for a string. A test local is written in its block
+    and read by the switch of that block alone, so it gets no storage marker."""
+    span = alt.loc
+    if isinstance(alt, pt.IntRange) and facts.integer is not None:
+        ty = facts.integer
+        low_bound, high_bound = pattern_interval(alt, ty)
+        _compare(low, steps[0], r.Binary(">=", scrutinee, p.Const(k.Int(low_bound, ty))),
+                 steps[1].id, missed, span)
+        _compare(low, steps[1], r.Binary("<=", scrutinee, p.Const(k.Int(high_bound, ty))),
+                 matched, missed, span)
+        return
+    literal = _literal(alt)
+    (step,) = steps
+    if facts.integer is not None:
+        step.terminator = tm.SwitchInt(
+            scrutinee, ((literal_value(literal.value, facts.integer), matched),), missed, span)
+        return
+    if not isinstance(literal.value, e.StrConst):
+        er.raise_internal_error("CE0000", span=span,
+                                detail="a string match with an integer arm reached SLIR")
+    ty = facts.scrutinee
+    found = low.new_local(BuiltinType.BOOL, None, None)
+    step.statements.append(st.Call(
+        p.Local(found), st.Builtin(Intrinsic("eq"), (ty, ty)),
+        ((scrutinee, Convention.GUARANTEED),
+         (p.Const(k.text(literal.value.value)), Convention.GUARANTEED)), span))
+    step.terminator = tm.SwitchInt(p.Copy(p.Local(found)), ((0, missed),), matched, span)
+
+
+def _compare(low: _Lowering, step: _Block, test: r.Binary, matched: BlockId, missed: BlockId,
+             span: Span) -> None:
+    found = low.new_local(BuiltinType.BOOL, None, None)
+    step.statements.append(st.Assign(p.Local(found), test, span))
+    step.terminator = tm.SwitchInt(p.Copy(p.Local(found)), ((0, missed),), matched, span)
+
+
+def _literal(alt: _Alternative) -> pt.Literal:
+    if not isinstance(alt, pt.Literal):
+        er.raise_internal_error("CE0000", span=alt.loc,
+                                detail=f"a {type(alt).__name__} stands where a test reads a "
+                                       f"literal")
+    return alt
 
 
 def loop(low: _Lowering, stmt: s.Loop) -> None:

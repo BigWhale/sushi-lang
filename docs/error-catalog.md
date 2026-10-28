@@ -3828,9 +3828,9 @@ HashMap.insert() probed every bucket without finding a slot. A live map always r
 
 **Error** · runtime
 
-**Message:** `no match arm matched the value (expected {pattern})`
+**Message:** `no match arm matched the value (expected %.*s)`
 
-A match tested its last candidate arm, and the value did not match it. `{pattern}` is that arm. Exhaustiveness checking makes this unreachable: one checker reads every match, nested patterns and tuple patterns included, and a match that does not cover a value is the compile error [CE2040](#ce2040). The check stays in the program as a backstop.
+A match tested its last candidate arm, and the value did not match it. The text names that arm as it is written. Exhaustiveness checking makes this unreachable: one checker reads every match, nested patterns and tuple patterns included, and a match that does not cover a value is the compile error [CE2040](#ce2040). The check stays in the program as a backstop.
 
 ### RE2025 {#re2025}
 

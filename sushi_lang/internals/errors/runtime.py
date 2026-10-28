@@ -57,9 +57,10 @@ _add(ErrorMessage("RE2022", Severity.ERROR,
 
 # Pattern match exhaustion
 _add(ErrorMessage("RE2023", Severity.ERROR,
-    "no match arm matched the value (expected {pattern})",
+    "no match arm matched the value (expected %.*s)",
     Category.RUNTIME, "A match tested its last candidate arm, and the value did not match "
-    "it. `{pattern}` is that arm. Exhaustiveness checking makes this unreachable: one "
+    "it. The text names that arm as it is written: the trap gives its source text as a "
+    "string operand (docs/design/ir.md 8.8). Exhaustiveness checking makes this unreachable: one "
     "checker reads every match, nested patterns and tuple patterns included (ruling 17 of "
     "the tuple design), and a match that does not cover a value is the compile error "
     "CE2040. The check stays in the program as a backstop. Before ruling 17 the checker "

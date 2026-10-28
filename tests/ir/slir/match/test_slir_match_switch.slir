@@ -1,0 +1,197 @@
+unit test_slir_match_switch
+
+fn take(_1: string @owned) -> ~ {
+    let _0: ~
+    let _2: string
+    let _3: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin interp@(string, string)(const "moved " @guaranteed, copy _1 @guaranteed)
+    StorageLive(_3)
+    _3 = call builtin println@(string)(copy _2 @guaranteed)
+    StorageDead(_3)
+    Drop(_2)
+    StorageDead(_2)
+    _0 = const ~
+    Drop(_1)
+    return
+}
+
+fn kind(_1: i8 @guaranteed) -> i32 {
+    let _0: i32
+    let _2: i32                            // code
+
+  bb0:
+    StorageLive(_2)
+    _2 = const 0_i32
+    switchInt(copy _1) -> [0: bb1, 1: bb2, 2: bb2, 3: bb2, -1: bb3, otherwise: bb4]
+
+  bb1:
+    _2 = const 1_i32
+    goto -> bb5
+
+  bb2:
+    _2 = const 2_i32
+    goto -> bb5
+
+  bb3:
+    _2 = const 3_i32
+    goto -> bb5
+
+  bb4:
+    _2 = const 9_i32
+    goto -> bb5
+
+  bb5:
+    _0 = copy _2
+    StorageDead(_2)
+    return
+}
+
+fn letter(_1: u8 @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    switchInt(copy _1) -> [97: bb1, 98: bb2, 99: bb2, otherwise: bb3]
+
+  bb1:
+    _0 = const 1_i32
+    return
+
+  bb2:
+    _0 = const 2_i32
+    return
+
+  bb3:
+    _0 = const 0_i32
+    return
+}
+
+fn pick(_1: i32 @guaranteed) -> ~ {
+    let _0: ~
+    let _2: string                         // word
+    let _3: bool
+    let _4: ~
+    let _5: string                         // note
+    let _6: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin interp@(i32)(copy _1 @guaranteed)
+    StorageLive(_3)
+    _3 = const true
+    switchInt(copy _1) -> [1: bb1, otherwise: bb2]
+
+  bb1:
+    StorageLive(_4)
+    _4 = call @take(move _2 @owned)
+    _3 = const false
+    StorageDead(_4)
+    goto -> bb3
+
+  bb2:
+    StorageLive(_5)
+    _5 = const "kept"
+    StorageLive(_6)
+    _6 = call builtin println@(string)(copy _5 @guaranteed)
+    StorageDead(_6)
+    Drop(_5)
+    StorageDead(_5)
+    goto -> bb3
+
+  bb3:
+    _0 = const ~
+    DropIfSet(_2, _3)
+    StorageDead(_3)
+    StorageDead(_2)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32
+    let _2: ~
+    let _3: i32
+    let _4: ~
+    let _5: i32
+    let _6: ~
+    let _7: i8
+    let _8: i32
+    let _9: ~
+    let _10: i32
+    let _11: ~
+    let _12: i32
+    let _13: ~
+    let _14: i32
+    let _15: ~
+    let _16: i32
+    let _17: ~
+    let _18: ~
+    let _19: ~
+    let _20: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @kind(const 0_i8 @guaranteed)
+    StorageLive(_2)
+    _2 = call builtin println@(i32)(copy _1 @guaranteed)
+    StorageDead(_2)
+    StorageDead(_1)
+    StorageLive(_3)
+    _3 = call @kind(const 1_i8 @guaranteed)
+    StorageLive(_4)
+    _4 = call builtin println@(i32)(copy _3 @guaranteed)
+    StorageDead(_4)
+    StorageDead(_3)
+    StorageLive(_5)
+    _5 = call @kind(const 3_i8 @guaranteed)
+    StorageLive(_6)
+    _6 = call builtin println@(i32)(copy _5 @guaranteed)
+    StorageDead(_6)
+    StorageDead(_5)
+    StorageLive(_7)
+    _7 = neg const 1_i8
+    StorageLive(_8)
+    _8 = call @kind(copy _7 @guaranteed)
+    StorageLive(_9)
+    _9 = call builtin println@(i32)(copy _8 @guaranteed)
+    StorageDead(_9)
+    StorageDead(_8)
+    StorageDead(_7)
+    StorageLive(_10)
+    _10 = call @kind(const 100_i8 @guaranteed)
+    StorageLive(_11)
+    _11 = call builtin println@(i32)(copy _10 @guaranteed)
+    StorageDead(_11)
+    StorageDead(_10)
+    StorageLive(_12)
+    _12 = call @letter(const 97_u8 @guaranteed)
+    StorageLive(_13)
+    _13 = call builtin println@(i32)(copy _12 @guaranteed)
+    StorageDead(_13)
+    StorageDead(_12)
+    StorageLive(_14)
+    _14 = call @letter(const 99_u8 @guaranteed)
+    StorageLive(_15)
+    _15 = call builtin println@(i32)(copy _14 @guaranteed)
+    StorageDead(_15)
+    StorageDead(_14)
+    StorageLive(_16)
+    _16 = call @letter(const 122_u8 @guaranteed)
+    StorageLive(_17)
+    _17 = call builtin println@(i32)(copy _16 @guaranteed)
+    StorageDead(_17)
+    StorageDead(_16)
+    StorageLive(_18)
+    _18 = call @pick(const 0_i32 @guaranteed)
+    StorageDead(_18)
+    StorageLive(_19)
+    _19 = call @pick(const 1_i32 @guaranteed)
+    StorageDead(_19)
+    StorageLive(_20)
+    _20 = call @pick(const 2_i32 @guaranteed)
+    StorageDead(_20)
+    _0 = const 0_i32
+    return
+}

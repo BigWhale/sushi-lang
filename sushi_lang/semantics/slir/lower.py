@@ -12,9 +12,10 @@ checks a body that the lowering finished, and `SlirProgram` keeps it for the emi
 (`backend/slir/`).
 
 The lowering handles the parameters, a `let`, a rebind, a call statement, a `return`, an
-`if`, a `while` with its `break` and `continue`, an `assert`, over literals, names of
-constants, locals, the operators, `and` and `or` as control flow, the construction of an
-enum variant, a call of a free function, `print`, `println`, an interpolation and a `??`.
+`if`, a `match` on an integer or a string, a `while` with its `break` and `continue`, an
+`assert`, over literals, names of constants, locals, the operators, `and` and `or` as
+control flow, the construction of an enum variant, a call of a free function, `print`,
+`println`, an interpolation and a `??`.
 The operand of a value is the answer of `borrow` and the shape of the value alone (ir.md
 7.9): a `move` row gives `Move`; an `adopt` row gives `Copy` of a place, a constant for a
 literal or a name of a constant, and `Move` of the temporary of a new value. A value with
@@ -544,6 +545,7 @@ _STATEMENTS: dict[type, Callable[..., None]] = {
     s.ExprStmt: _Lowering.expr_stmt,
     s.Return: _Lowering.ret,
     s.If: ctl.if_,
+    s.Match: ctl.match,
     s.Loop: ctl.loop,
     s.Break: ctl.break_,
     s.Continue: ctl.continue_,

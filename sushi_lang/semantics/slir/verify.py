@@ -9,8 +9,9 @@ The structure comes first, statement by statement: a span on each statement and 
 one terminator for each block, blocks that exist, a type for each local and for each
 projection of a place, a `Move` out of no `Global`, a `Drop` of an owning type, a `bool`
 flag for a `DropIfSet`, no `and` or `or` in a `Binary`, a `Cast` between two numeric types
-or of one type, an `Int` constant in the range of its type, the conventions of a `Direct`
-callee, a receiver operand for a call of a built-in method, no copy of an owning value
+or of one type, an `Int` constant in the range of its type, a `SwitchInt` on an integer or a
+`bool` whose cases its type holds, each one time, the conventions of a `Direct` callee, a
+receiver operand for a call of a built-in method, no copy of an owning value
 other than a `string` into an `Owned` argument, and a registered `RExxxx` for a `Trap`, with
 one operand of the type that each printf conversion of its text takes. The type of a place
 also gives its root local, so a `Move` of a projection is a `Move` of its root.
@@ -80,6 +81,7 @@ OWNED_COPY = "no copy of an owning value into an owned argument"
 SHORT_CIRCUIT = "no short circuit in a binary"
 NUMERIC_CAST = "a numeric cast"
 CONSTANT_RANGE = "a constant in range"
+INTEGER_SWITCH = "an integer switch"
 TRAP = "registered trap"
 SPANS = "spans"
 
@@ -236,6 +238,7 @@ class _Check:
                                         f"of the function", term.span)
         if isinstance(term, tm.SwitchInt):
             self.operand(term.operand, term.span)
+            self.switch(term)
         if isinstance(term, tm.Trap):
             self.trap(term)
 
@@ -260,6 +263,24 @@ class _Check:
                 shown = "no type" if given is None else f"the type {display_type(given)}"
                 self.fail(TRAP, f"{show(arg)} has {shown}, and the conversion {conversion} of "
                                 f"{term.code} takes {display_type(wanted)}", term.span)
+
+    def switch(self, term: tm.SwitchInt) -> None:
+        """The operand is an integer or a `bool`, and its type holds each case value, which
+        comes one time. A match on an i8 gives `0xff` as the case -1."""
+        ty = self.operand_type(term.operand, term.span)
+        bounds = (0, 1) if ty == BuiltinType.BOOL else integer_range(ty)
+        if ty is None or bounds is None:
+            shown = "no type" if ty is None else f"the type {display_type(ty)}"
+            self.fail(INTEGER_SWITCH, f"{show(term.operand)} has {shown}, and a switch reads "
+                                      f"an integer or a bool", term.span)
+        seen: set[int] = set()
+        for value, _ in term.targets:
+            if not bounds[0] <= value <= bounds[1]:
+                self.fail(INTEGER_SWITCH, f"the case {value} is out of the range of "
+                                          f"{display_type(ty)}", term.span)
+            if value in seen:
+                self.fail(INTEGER_SWITCH, f"the case {value} comes two times", term.span)
+            seen.add(value)
 
     def place(self, place: p.Place, span: Span) -> _Typed:
         """The root and the type of `place`; each projection must fit the type of its base."""

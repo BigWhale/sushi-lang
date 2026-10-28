@@ -176,7 +176,6 @@ UNREFERENCED: set[str] = {
     "CE2111",                                 # Tier A: new() and from([])
     "CE6102",                                 # Tier A: type arguments after a dot
     "CE2094",                                 # Tier C: closures
-    "RE2023",                                 # Tier A (A3, A4): a match with no arm
     "RE2025",                                 # Tier D (D5): a null foreign return
 }
 
@@ -221,6 +220,12 @@ def test_re2020_format_matches_its_call_site():
 def test_re2026_format_takes_the_position_and_the_message():
     """RE2026's text is the format that a failed assert gives two strings to."""
     assert printf_conversions(REGISTRY["RE2026"].text) == ("%.*s", "%.*s")
+
+
+def test_re2023_format_takes_the_last_arm_of_the_match():
+    """RE2023's text is the format that the trap after the last arm of a match gives the
+    source text of that arm to."""
+    assert printf_conversions(REGISTRY["RE2023"].text) == ("%.*s",)
 
 
 def test_every_runtime_text_holds_only_conversions_that_a_trap_fills():
