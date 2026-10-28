@@ -4,13 +4,13 @@ ShirBody size
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    Match(LocalRef(_0), [Arm(Literal(0), [Return(Lit("zero"))]), Arm(IntRange(1, 9, inclusive: true), [Return(Lit("small"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Literal(0), [Return(adopt Lit("zero"))]), Arm(IntRange(1, 9, inclusive: true), [Return(adopt Lit("small"))]), Arm(Wildcard, [Return(adopt Lit("other"))])], consumes: false)
 
 ShirBody code
   params : [(_0 "s": string, Guaranteed)]
   locals : []
   block  :
-    Match(LocalRef(_0), [Arm(Or([Literal("get"), Literal("put")]), [Return(Lit(1))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Or([Literal("get"), Literal("put")]), [Return(adopt Lit(1))]), Arm(Wildcard, [Return(adopt Lit(0))])], consumes: false)
 
 ShirBody main
   params : []

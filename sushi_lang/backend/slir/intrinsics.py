@@ -12,6 +12,7 @@ from llvmlite import ir
 
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import constant_value, operand_value
+from sushi_lang.backend.types.contracts import emit_value_eq
 from sushi_lang.backend.types.display import emit_interpolation
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import statements as st
@@ -57,8 +58,20 @@ def _write(state: FunctionState, statement: st.Call, *, is_line: bool) -> ir.Val
     return constant_value(state, k.Blank())
 
 
+def _eq(state: FunctionState, statement: st.Call) -> ir.Value:
+    """The equality of two values of one type, through the contract seam. A match on a
+    string tests each literal arm with it. The answer is a `bool`."""
+    parts = operands(state, statement)
+    if len(parts) != 2 or parts[0][1] != parts[1][1]:
+        state.fault(f"an eq of {len(parts)} values of the types {[ty for _, ty in parts]}")
+    (left, ty), (right, _) = parts
+    answer = emit_value_eq(state.codegen, left, right, ty)
+    return state.builder.zext(answer, state.codegen.types.ll_type(BuiltinType.BOOL))
+
+
 #: One row for each intrinsic that the emitter handles, by the name of the intrinsic.
 INTRINSICS: dict[str, Callable[[FunctionState, st.Call], ir.Value]] = {
+    "eq": _eq,
     "interp": _interp,
     "print": _print,
     "println": _println,

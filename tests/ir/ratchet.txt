@@ -197,6 +197,7 @@ tests/control_flow/loop_break_continue/test_break_continue.sushi
 tests/control_flow/loop_break_continue/test_err_break_continue_outside_loop.sushi
 tests/control_flow/match_alternatives/test_alt_byte_literals.sushi
 tests/control_flow/match_alternatives/test_alt_integer_literals.sushi
+tests/control_flow/match_alternatives/test_alt_string_literals.sushi
 tests/control_flow/match_alternatives/test_err_alt_after_wildcard_alternative.sushi
 tests/control_flow/match_alternatives/test_err_alt_double_bar.sushi
 tests/control_flow/match_alternatives/test_err_alt_duplicate_int_across_arms.sushi
@@ -659,9 +660,14 @@ tests/ir/emit/two_units/test_emit_two_units.sushi
 tests/ir/lift/test_err_lift_empty_table.sushi
 tests/ir/shir/calls/test_shir_call_print.sushi
 tests/ir/shir/empty_body/test_shir_empty_body.sushi
+tests/ir/shir/error_holes/test_err_error_hole_const_named_argument.sushi
+tests/ir/shir/error_holes/test_err_error_hole_const_slice_element.sushi
+tests/ir/shir/error_holes/test_err_error_hole_const_slice_reversed.sushi
+tests/ir/shir/error_holes/test_err_error_hole_const_unknown_member.sushi
 tests/ir/shir/expressions/test_err_shir_expr_borrow_operand.sushi
 tests/ir/shir/literals/test_shir_literals.sushi
 tests/ir/shir/match/test_shir_match_integer.sushi
+tests/ir/shir/match/test_shir_match_string.sushi
 tests/ir/shir/names/test_err_shir_name_unresolved.sushi
 tests/ir/shir/operators/test_shir_operators.sushi
 tests/ir/shir/statements/test_err_shir_stmt_let_untyped.sushi
@@ -687,6 +693,7 @@ tests/ir/slir/conventions/test_slir_conventions.sushi
 tests/ir/slir/interp/test_slir_interp.sushi
 tests/ir/slir/let_rebind/test_slir_let_rebind.sushi
 tests/ir/slir/match/test_slir_match_ranges.sushi
+tests/ir/slir/match/test_slir_match_string.sushi
 tests/ir/slir/match/test_slir_match_switch.sushi
 tests/ir/slir/methods/test_slir_method_string_answer.sushi
 tests/ir/slir/methods/test_slir_method_temporary_receiver.sushi
@@ -781,6 +788,7 @@ tests/ir/typeck/paths/test_err_typeck_dead_statement.sushi
 tests/ir/typeck/paths/test_err_typeck_match_arm_falls_off.sushi
 tests/ir/typeck/paths/test_err_typeck_match_dead_statement.sushi
 tests/ir/typeck/paths/test_err_typeck_match_not_covered_ends_no_path.sushi
+tests/ir/typeck/paths/test_match_every_arm_returns.sushi
 tests/ir/typeck/results/test_err_typeck_bare_return_in_a_channel.sushi
 tests/ir/typeck/results/test_err_typeck_channel.sushi
 tests/ir/typeck/results/test_err_typeck_constructor_in_a_bare_body.sushi
@@ -1453,6 +1461,8 @@ tests/types/match_literals/test_err_match_string_on_enum.sushi
 tests/types/match_literals/test_err_match_string_on_int.sushi
 tests/types/match_literals/test_match_literal_basics.sushi
 tests/types/match_literals/test_match_literal_widths.sushi
+tests/types/match_literals/test_match_string_basics.sushi
+tests/types/match_literals/test_match_string_bytes.sushi
 tests/types/numeric_widths/test_err_mixed_divide.sushi
 tests/types/numeric_widths/test_err_mixed_float_arithmetic.sushi
 tests/types/numeric_widths/test_err_mixed_float_comparison.sushi
