@@ -1,0 +1,71 @@
+unit helpers/peek_levels
+
+unit test_emit_const_to_a_peek_parameter
+
+fn show_i32(_1: i32 @in_guaranteed) -> ~ {
+    let _0: ~
+    let _2: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin println@(i32)(copy _1 @guaranteed)
+    StorageDead(_2)
+    _0 = const ~
+    return
+}
+
+fn show_string(_1: string @in_guaranteed) -> ~ {
+    let _0: ~
+    let _2: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin println@(string)(copy _1 @guaranteed)
+    StorageDead(_2)
+    _0 = const ~
+    return
+}
+
+fn show_f64(_1: f64 @in_guaranteed) -> ~ {
+    let _0: ~
+    let _2: ~
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin println@(f64)(copy _1 @guaranteed)
+    StorageDead(_2)
+    _0 = const ~
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: ~
+    let _2: ~
+    let _3: ~
+    let _4: ~
+    let _5: ~
+    let _6: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @show_i32(const 3_i32 @in_guaranteed)
+    StorageDead(_1)
+    StorageLive(_2)
+    _2 = call @show_i32(const 4_i32 @in_guaranteed)
+    StorageDead(_2)
+    StorageLive(_3)
+    _3 = call @show_string(const "Mostly Harmless" @in_guaranteed)
+    StorageDead(_3)
+    StorageLive(_4)
+    _4 = call @show_f64(const 2.5_f64 @in_guaranteed)
+    StorageDead(_4)
+    StorageLive(_5)
+    _5 = call @show_i32(const 7_i32 @in_guaranteed)
+    StorageDead(_5)
+    StorageLive(_6)
+    _6 = call @show_string(const "behind an alias" @in_guaranteed)
+    StorageDead(_6)
+    _0 = const 0_i32
+    return
+}

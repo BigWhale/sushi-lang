@@ -1,27 +1,29 @@
 """SHIR to SLIR: the SLIR stage and the lowering of one body (docs/design/ir.md 8.2, 8.9, 8.10).
 
 `SlirStage` is the stage of one unit, after `borrow`. The borrow pass gives it each body
-that it finished with no error, with the tables that typecheck read the body in; a
-template check never comes (ir.md 4.3). `lower_function` makes the `SlirFunction` of the
-body from the body and its side tables. A construct that the lowering does not handle yet
-stops the body with the stop code CE0155 (`slir, <construct>`): the stage records the stop
-(`Stops.slir_stopped`) and the construct (`SlirStopped`, for the dump), and the analysis
-goes on with the next body. The verifier (`verify.py`, ir.md 8.13) checks a body that the
-lowering finished, and `SlirProgram` keeps it for the emitter (`backend/slir/`).
+that it finished with no error, with the tables that typecheck read the body in; a template
+check never comes (ir.md 4.3). The stage lowers no initializer body of a constant or a
+`var`: the global takes the value of the constant evaluator (ir.md 8.2). `lower_function`
+makes the `SlirFunction` of the body from the body and its side tables. A construct that the
+lowering does not handle yet stops the body with the stop code CE0155 (`slir, <construct>`):
+the stage records the stop (`Stops.slir_stopped`) and the construct (`SlirStopped`, for the
+dump), and the analysis goes on with the next body. The verifier (`verify.py`, ir.md 8.13)
+checks a body that the lowering finished, and `SlirProgram` keeps it for the emitter
+(`backend/slir/`).
 
 The lowering handles the parameters, a `let`, a rebind, a call statement, a `return`, an
 `if`, a `while` with its `break` and `continue`, over literals, names of constants, locals,
 the operators, `and` and `or` as control flow, the construction of an enum variant, a call
-of a free function, `print`, `println`, an interpolation and a `??`, and the initializer
-body of a constant or a `var`. The operand of a value is the answer of `borrow` and the
-shape of the value alone (ir.md 7.9): a `move` row gives `Move`; an `adopt` row gives
-`Copy` of a place, a constant for a literal or a name of a constant, and `Move` of the
-temporary of a new value. A value with no row is read with `Copy`. A literal and a name of
-a constant take the value that typecheck wrote for them (ir.md 8.5). A new value goes into
-the place that takes it (the local of a `let`, `_0`), else into a temporary of its
-statement. The store that consumes a `move` operand marks its local moved, not the place
-where the operand is built. Drop placement (`drops.py`) places every drop, every flag
-write and every `StorageDead`, and it joins the state of the locals where paths meet.
+of a free function, `print`, `println`, an interpolation and a `??`. The operand of a value
+is the answer of `borrow` and the shape of the value alone (ir.md 7.9): a `move` row gives
+`Move`; an `adopt` row gives `Copy` of a place, a constant for a literal or a name of a
+constant, and `Move` of the temporary of a new value. A value with no row is read with
+`Copy`. A literal and a name of a constant take the value that typecheck wrote for them
+(ir.md 8.5). A new value goes into the place that takes it (the local of a `let`, `_0`),
+else into a temporary of its statement. The store that consumes a `move` operand marks its
+local moved, not the place where the operand is built. Drop placement (`drops.py`) places
+every drop, every flag write and every `StorageDead`, and it joins the state of the locals
+where paths meet.
 
 A local whose state differs between the paths of a join gets a drop flag right after it
 (ir.md 8.10, rule 4), and so does a local whose state at a loop header is not the state
@@ -40,8 +42,7 @@ name of a struct, an enum or an array constant, and `ConstRef out of range` for 
 constant whose value its type cannot hold. The symbol, the unit and the return type of the
 function are facts of its declaration (ir.md 6.4). The unit is the declaring unit; a
 function that has none (a lifted lambda, the instance of a template of a binary library)
-goes into the module of the unit that holds its body. The initializer body of a constant or
-a `var` is a function too: it takes the symbol of its global and the declared type.
+goes into the module of the unit that holds its body.
 """
 from __future__ import annotations
 
@@ -60,7 +61,7 @@ from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
-from sushi_lang.semantics.shir.body import ShirBody, ShirLocal, TemplateCheck
+from sushi_lang.semantics.shir.body import Initializer, ShirBody, ShirLocal, TemplateCheck
 from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
@@ -103,12 +104,15 @@ class SlirStage:
 
     def lower_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
                    filename: Optional[str]) -> None:
-        """Lower the SHIR body of `decl` and record the outcome.
+        """Lower the SHIR body of `decl` and record the outcome. An initializer body has no
+        outcome.
 
         A stop ends the lowering of the body: the stage records it with the file of the
         body. The verifier checks a function that the lowering finished (ir.md 8.13), and
         the program keeps it for the emitter.
         """
+        if isinstance(body.origin, Initializer):
+            return
         name = self.shir.decls.name_of(body.fn_id)
         drops = drop_type_names(tables.perk_impls)
         try:

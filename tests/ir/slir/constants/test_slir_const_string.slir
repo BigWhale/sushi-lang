@@ -1,21 +1,5 @@
 unit test_slir_const_string
 
-fn GREETING() -> string {
-    let _0: string
-
-  bb0:
-    _0 = const "Mostly Harmless"
-    return
-}
-
-fn ALIAS() -> string {
-    let _0: string
-
-  bb0:
-    _0 = const "Mostly Harmless"
-    return
-}
-
 fn main() -> i32 {
     let _0: i32
     let _1: ~

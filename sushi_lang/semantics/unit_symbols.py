@@ -71,11 +71,10 @@ def function_symbol(name: str, unit_name: Optional[str]) -> str:
 def global_symbol(decl: "ConstDef", unit_name: Optional[str]) -> str:
     """The symbol of a unit-level global: a constant or a `var` (docs/design/ir.md 8.2).
 
-    The back end names the global with it, and SLIR lowering names the function of an
-    initializer body with it. A compiled library's declaration is a name of its library
-    unit (`scope_unit`, #1120). A `var` of a binary library takes its `link_symbol`. A
-    library constant's copy takes the unit that declared it (`home_unit`, #1101), so it
-    never takes the name of a function in the unit that holds the copy.
+    The back end names the global with it. A compiled library's declaration is a name of
+    its library unit (`scope_unit`, #1120). A `var` of a binary library takes its
+    `link_symbol`. A library constant's copy takes the unit that declared it (`home_unit`,
+    #1101), so it never takes the name of a function in the unit that holds the copy.
     """
     from sushi_lang.semantics.ast import VarDef
 

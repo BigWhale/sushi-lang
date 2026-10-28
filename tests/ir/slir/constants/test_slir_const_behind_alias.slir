@@ -1,21 +1,5 @@
 unit units/levels
 
-fn STEP() -> i32 {
-    let _0: i32
-
-  bb0:
-    _0 = const 3_i32
-    return
-}
-
-fn NAME() -> string {
-    let _0: string
-
-  bb0:
-    _0 = const "Mostly Harmless"
-    return
-}
-
 fn twice(_1: i32 @guaranteed) -> i32 {
     let _0: i32
 
