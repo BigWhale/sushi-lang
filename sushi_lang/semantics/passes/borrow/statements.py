@@ -161,6 +161,19 @@ def check_expr_stmt(checker: 'BorrowChecker', node: s.ExprStmt) -> None:
     clear_borrows(checker)
 
 
+def check_assert(checker: 'BorrowChecker', node: s.Assert) -> None:
+    """The condition is read at the entry. The message is read only on the failing path, so
+    the path that holds skips it and the two paths join."""
+    arms.check(checker, node.cond)
+    clear_borrows(checker)
+    if node.message is None:
+        return
+    entry = snapshot_flow(checker)
+    arms.check(checker, node.message)
+    clear_borrows(checker)
+    restore_flow(checker, FlowFacts.join([entry, snapshot_flow(checker)]))
+
+
 def check_if(checker: 'BorrowChecker', node: s.If) -> None:
     """Each block starts from the state after the condition; the paths that reach the code
     after the `if` JOIN.

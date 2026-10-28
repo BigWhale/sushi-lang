@@ -50,7 +50,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     s.If: st.check_if,
     s.Loop: st.check_loop,
     s.Match: stop_at,
-    s.Assert: stop_at,
+    s.Assert: st.check_assert,
     s.Break: st.check_break,
     s.Continue: st.check_continue,
     s.Expand: stop_at,

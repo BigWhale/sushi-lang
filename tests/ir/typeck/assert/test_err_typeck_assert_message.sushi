@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE2116
+# EXPECT_STDERR_CONTAINS: "the message of an assert must be a string, got i32"
+# EXPECT_DUMP_SHIR: test_err_typeck_assert_message.shir
+#
+# An assert takes a condition and an optional message. The message is a string: a literal
+# and an interpolation are legal. The last assert takes an `i32`, which is CE2116.
+
+fn main() i32:
+    let i32 n = 3
+    assert(n > 0)
+    assert(n > 0, "n is positive")
+    assert(n > 0, "n was {n}")
+    assert(n > 0, n)
+    return 0

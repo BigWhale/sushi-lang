@@ -170,8 +170,11 @@ tests/constants/struct_constants/test_err_const_struct_nested_function_call.sush
 tests/constants/take/test_const_plain_copies_out.sushi
 tests/constants/take/test_err_const_move_let.sushi
 tests/constants/take/test_err_const_move_nom_arg.sushi
+tests/control_flow/assert/test_err_assert_condition_not_bool.sushi
+tests/control_flow/assert/test_err_assert_false_needs_a_return.sushi
 tests/control_flow/assert/test_err_assert_fn_is_reserved.sushi
 tests/control_flow/assert/test_err_assert_is_reserved.sushi
+tests/control_flow/assert/test_err_assert_message_not_string.sushi
 tests/control_flow/block_scopes/test_nested_scopes.sushi
 tests/control_flow/conditions/test_err_result_and_operand.sushi
 tests/control_flow/conditions/test_err_result_blank_if.sushi
@@ -573,6 +576,7 @@ tests/generics/type_arg_arity/test_err_type_arg_arity_perk_impl.sushi
 tests/generics/type_arg_arity/test_err_type_arg_arity_too_few.sushi
 tests/generics/user_generic_enum/test_user_generic_minimal.sushi
 tests/generics/user_generic_struct/test_user_generic_struct_collect.sushi
+tests/ir/borrow/assert/test_err_borrow_assert_message_after_move.sushi
 tests/ir/borrow/borrowed_views/test_err_borrow_nested_try_over_a_borrowed_wrapper.sushi
 tests/ir/borrow/borrowed_views/test_err_borrow_triple_try_over_a_borrowed_wrapper.sushi
 tests/ir/borrow/casts/test_err_borrow_cast_reads_its_operand.sushi
@@ -652,6 +656,8 @@ tests/ir/spine/greet/test_spine_greet.sushi
 tests/ir/spine/interp_drops/test_spine_interp_drops.sushi
 tests/ir/spine/try_string/test_spine_try_string.sushi
 tests/ir/spine/use_after_move/test_err_spine_use_after_move.sushi
+tests/ir/typeck/assert/test_err_typeck_assert_condition.sushi
+tests/ir/typeck/assert/test_err_typeck_assert_message.sushi
 tests/ir/typeck/borrows/test_err_typeck_borrow_in_let.sushi
 tests/ir/typeck/borrows/test_err_typeck_borrow_operand.sushi
 tests/ir/typeck/calls/test_err_typeck_call_arg_count.sushi

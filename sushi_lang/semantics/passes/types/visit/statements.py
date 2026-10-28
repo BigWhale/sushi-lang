@@ -38,7 +38,8 @@ from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
 from sushi_lang.semantics.passes.types.result_validation import (
     spells_a_result, validate_result_pattern)
 from sushi_lang.semantics.passes.types.statements import reject_unspelled_result
-from sushi_lang.semantics.passes.types.utils import resolve_declared_type, validate_type_name
+from sushi_lang.semantics.passes.types.utils import (
+    names_no_type, resolve_declared_type, validate_type_name)
 from sushi_lang.semantics.passes.types.visit.operators import check_condition
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
@@ -46,7 +47,7 @@ from sushi_lang.semantics.shir.body import Initializer, ShirBody
 from sushi_lang.semantics.shir.loop_kind import While
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.type_predicates import is_instance_of
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, ReferenceType, Type
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, ReferenceType, Type, deref_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -194,6 +195,19 @@ def check_loop(validator: TypeValidator, node: s.Loop) -> None:
     check_condition(validator, node.source.cond)
     validator.body_answers().record_loop_kind(node.shir_id, While())
     check_block(validator, node.body)
+
+
+def check_assert(validator: TypeValidator, node: s.Assert) -> None:
+    """An `assert`: the condition is a `bool` (CE2005, CE2516), the message a `string`
+    (CE2116)."""
+    check_condition(validator, node.cond)
+    if node.message is None:
+        return
+    ty = visit.check_expr(validator, node.message, BuiltinType.STRING)
+    if (ty is None or deref_type(ty) == BuiltinType.STRING
+            or names_no_type(validator, ty)):
+        return
+    er.emit(validator.reporter, er.ERR.CE2116, node.message.loc, got=display_type(ty))
 
 
 def check_jump(_validator: TypeValidator, _node: s.Break | s.Continue) -> None:

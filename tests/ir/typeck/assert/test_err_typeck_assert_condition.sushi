@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODES_EXACT: CE2005
+# EXPECT_STDERR_CONTAINS: "condition must be bool"
+# EXPECT_DUMP_SHIR: test_err_typeck_assert_condition.shir
+#
+# The condition of an assert is a bool, as in every condition position. The assert with a
+# message checks its message too. The last assert takes an `i32`, which is CE2005.
+
+fn main() i32:
+    let i32 n = 3
+    assert(n == 3, "n is three")
+    assert(n)
+    return 0
