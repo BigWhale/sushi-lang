@@ -132,9 +132,10 @@ def iterator_method_modes() -> Any:
     """The parameter modes of the family (`BuiltinModes`): `new` takes `nom x`, and each
     adapter reads its modes from its signature row."""
     from sushi_lang.semantics.param_modes import BuiltinModes, ParamMode
-    rows = dict(BuiltinModes.from_signatures(ITERATOR_METHOD_SIGNATURES).rows)
+    signed = BuiltinModes.from_signatures(ITERATOR_METHOD_SIGNATURES)
+    rows = dict(signed.rows)
     rows["new"] = (ParamMode.NOM,)
-    return BuiltinModes(rows=MappingProxyType(rows))
+    return BuiltinModes(rows=MappingProxyType(rows), nom_self=signed.nom_self)
 
 
 def lent_whole(iterator: IteratorType) -> Optional[bool]:

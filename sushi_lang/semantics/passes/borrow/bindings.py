@@ -1,12 +1,14 @@
 """Registration and lifetime of the bindings a `match` arm or a `foreach` introduces.
 
-A literal arm binds no name (`is_literal_arm`). The registration of the binders of an enum
-or a tuple pattern reads the AST still: the group of the enum match ports it.
+A literal arm binds no name. A `Variant` binds the local of each bare `PatBinding` in it
+(`bare_binders`), and each arm declares its binders as read-only views of the payload
+(`declare_bare_binders`, docs/design/ir.md 7.9). The registration of a `poke`, `peek` or
+`nom` binder, of a `Tuple` and of an `Own` reads the AST still: later groups port it.
 """
 
 from __future__ import annotations
 from enum import Enum, auto
-from typing import Optional, TYPE_CHECKING
+from typing import Iterable, Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -18,6 +20,7 @@ from sushi_lang.semantics.constant_borrow import READ_ONLY_MODE
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import patterns as p
+from sushi_lang.semantics.shir.stmts import Bare
 from sushi_lang.semantics.typesys import ReferenceType, Type
 
 from .diagnostics import spelled
@@ -26,6 +29,8 @@ from sushi_lang.semantics.param_modes import borrow_mode
 from .state import BorrowState, record_owners
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.ids import LocalId
+
     from . import BorrowChecker
 
 from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
@@ -39,13 +44,47 @@ def release_binding_borrow(owner_state: Optional[BorrowState], binding: str) -> 
         ]
 
 
-def is_literal_arm(pattern: p.ShirPattern | p.PatBinding) -> bool:
-    """Does `pattern` bind no name: `_`, a literal, a range, or an `Or` of them?"""
+def bare_binders(pattern: p.ShirPattern | p.PatBinding,
+                 at: Optional[Span] = None) -> Optional[list[tuple[LocalId, Span]]]:
+    """The bare binders of a pattern, each with the span of the variant name that holds it,
+    in the written order. None when the pattern holds a form of a later group: a `poke`,
+    `peek` or `nom` binder, a `Tuple` or an `Own`.
+
+    The alternatives of `|` bind one local for each name (CE2126), so the first alternative
+    gives the binders, and each alternative must hold no form of a later group.
+    """
     if isinstance(pattern, (p.Wildcard, p.Literal, p.IntRange)):
-        return True
+        return []
+    if isinstance(pattern, p.PatBinding):
+        if not isinstance(pattern.by, Bare) or at is None:
+            return None
+        return [(pattern.local, at)]
+    if isinstance(pattern, p.Variant):
+        found: list[tuple[LocalId, Span]] = []
+        for item in pattern.items:
+            inner = bare_binders(item, pattern.variant_loc)
+            if inner is None:
+                return None
+            found.extend(inner)
+        return found
     if isinstance(pattern, p.Or):
-        return all(is_literal_arm(alternative) for alternative in pattern.alternatives)
-    return False
+        alternatives = [bare_binders(item, at) for item in pattern.alternatives]
+        if any(binders is None for binders in alternatives):
+            return None
+        return alternatives[0]
+    return None
+
+
+def declare_bare_binders(checker: 'BorrowChecker',
+                         binders: Iterable[tuple[LocalId, Span]]) -> None:
+    """Declare each binder of an arm as a read-only view of its payload (CE2414).
+
+    The note of CE2414 points at the name of the variant that binds it, as on `main`.
+    """
+    for local, at in binders:
+        checker.declare(BorrowState(name=checker.name_of(local), local=local,
+                                    var_type=checker.local_type(local),
+                                    is_borrowed_binding=True, bound_at_span=at))
 
 
 def walks_a_temporary(checker: 'BorrowChecker', iterable: Expr) -> bool:

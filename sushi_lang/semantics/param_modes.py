@@ -194,18 +194,22 @@ class BuiltinModes:
     parameter declares a mode; a method with no row borrows each argument. A container
     SLOT (`push`, `insert`, `Own.alloc`) is not a declared parameter: it takes ownership
     by position, as a struct field does, so it has no mode to read. A method with a
-    signature row (`or_err`, `map_err`) reads its modes from that row.
+    signature row (`or_err`, `map_err`) reads its modes from that row. `nom_self` names
+    each method whose signature row declares `nom self`: the method takes its receiver.
     """
     rows: Mapping[str, Tuple[ParamMode, ...]] = field(
         default_factory=lambda: MappingProxyType({}))
     slots: frozenset[str] = frozenset()
+    nom_self: frozenset[str] = frozenset()
 
     @classmethod
     def from_signatures(cls, signatures: Mapping[str, object]) -> 'BuiltinModes':
         """The table of a family whose rows are its signature rows (`or_err`, `map_err`)."""
         return cls(rows=MappingProxyType(
             {name: declared_modes(getattr(sig, "params", ()))
-             for name, sig in signatures.items()}))
+             for name, sig in signatures.items()}),
+            nom_self=frozenset(name for name, sig in signatures.items()
+                               if getattr(sig, "self_mode", None) == "nom"))
 
     def of(self, method: str, count: int) -> Optional[Tuple[ParamMode, ...]]:
         """The modes of a call with `count` arguments, or None for a container slot."""

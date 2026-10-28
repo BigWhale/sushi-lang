@@ -2,12 +2,21 @@
 
 The borrow pass reads it for CE2412, CE2408 and CE2430, and the typecheck pass reads
 `mutates` to refuse an in-place method on a constant (CE2096). It sits outside both
-passes, so the typecheck pass never imports the borrow pass.
+passes, so the typecheck pass never imports the borrow pass. The module also holds the
+partition of the method families by what a method does to its receiver, and the
+convention of a receiver (`receiver_convention`, docs/design/ir.md 8.3): the borrow pass
+and SLIR lowering read it.
 """
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.param_modes import Convention
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.shir.callee import BuiltinMethod
 
 
 @dataclass(frozen=True)
@@ -67,10 +76,35 @@ STRING_FAMILY = "string"
 RESULT_FAMILY = "result"
 MAYBE_FAMILY = "maybe"
 
-# The families whose methods only read their receiver: no method changes or consumes it.
-# The borrow pass reads the receiver of such a call, and SLIR lowering gives it the
-# `Guaranteed` convention. A family that is not here has no such rule yet.
+# The receiver of a built-in method: each family of `METHOD_TYPE_REGISTRY` is in exactly
+# one of the four sets below (ruling R-V, docs/design/ir.md 8.3).
+# Only reads: no method of the family changes or consumes its receiver.
 RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
+# Consumes: the family has a `nom self` method, so the answer is per method.
+CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY})
+# No rule yet: the set can only shrink.
+NO_RECEIVER_RULE_FAMILIES = frozenset({
+    "iterator", "foreign_ptr", "array_hash", "derived_hash", "derived_clone", "contract",
+    "function",
+})
+
+
+def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
+    """The convention of the receiver of a call of `method`, or None when its family has
+    no receiver rule yet: a family of `EFFECT_FAMILIES` or of `NO_RECEIVER_RULE_FAMILIES`.
+
+    A family of `RECEIVER_READ_FAMILIES` reads its receiver (`Guaranteed`). A method of a
+    family of `CONSUMING_RECEIVER_FAMILIES` takes its receiver (`Owned`) when it declares
+    `nom self`, and reads it otherwise. A family in no set is an internal error.
+    """
+    if method.family in RECEIVER_READ_FAMILIES:
+        return Convention.GUARANTEED
+    if method.family in CONSUMING_RECEIVER_FAMILIES:
+        return Convention.OWNED if method.nom_self else Convention.GUARANTEED
+    if method.family in EFFECT_FAMILIES | NO_RECEIVER_RULE_FAMILIES:
+        return None
+    raise_internal_error("CE0000", detail=f"the method family '{method.family}' is in no "
+                                          f"receiver set of `semantics/method_effects.py`")
 
 
 def callee_effect(method: str, family: Optional[str]) -> MethodEffect:

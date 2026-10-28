@@ -14,10 +14,11 @@ element groups, and the `return` of a `peek` return by its own group: each stops
 walk.
 
 An `if` checks each block from the state before it, and the paths that reach the code
-after it join. A `match` reads its scrutinee (`match nom r:` takes it), and its arms join
-as the blocks of an `if` do. A `while` loop checks its condition once, then its body in
-two rounds (`check_loop_body`): the paths of a `continue` and of the end of the body go
-round the back edge, and the paths of a `break` leave the loop. A loop over items is
+after it join. A `match` reads its scrutinee (`match nom r:` takes it), each arm declares
+its bare binders, and its arms join as the blocks of an `if` do. A `while` loop checks its
+condition once, then its body in two rounds (`check_loop_body`): the paths of a
+`continue` and of the end of the body go round the back edge, and the paths of a `break`
+leave the loop. A loop over items is
 checked by the iterators group, and it stops the walk. The end of a block that the path
 reaches, a `return`, a `break` and a `continue` are exits of the blocks that they leave
 (`flow.record_exit`), and a rebind is an exit of the old value of its local
@@ -25,11 +26,12 @@ reaches, a `return`, a `break` and a `continue` are exits of the blocks that the
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Callable, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 
+from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.nodes import ShirBlock
@@ -37,7 +39,7 @@ from sushi_lang.semantics.shir.paths import terminates
 from sushi_lang.semantics.typesys import ReferenceType
 
 from . import arms
-from .bindings import is_literal_arm, release_binding_borrow
+from .bindings import bare_binders, declare_bare_binders, release_binding_borrow
 from .borrows import clear_borrows
 from .consume import bind, binds_a_bare_literal_string, consume
 from .expressions import reject_a_use_after_the_change
@@ -175,9 +177,12 @@ def check_assert(checker: 'BorrowChecker', node: s.Assert) -> None:
     restore_flow(checker, FlowFacts.join([entry, snapshot_flow(checker)]))
 
 
-def join_exclusive_paths(checker: 'BorrowChecker', blocks: Sequence[ShirBlock | None]) -> None:
+def join_exclusive_paths(checker: 'BorrowChecker', blocks: Sequence[ShirBlock | None],
+                         enter: Optional[Callable[[int], None]] = None) -> None:
     """Check exclusive blocks, each from the state before them; the paths that reach the
-    code after them JOIN. `None` is a path that skips every block.
+    code after them JOIN. `None` is a path that skips every block. `enter` runs at the
+    start of each path, with the index of its block: an arm of a match declares its
+    binders there.
 
     A local is moved after the join when it is moved on ANY path, and moved on every path
     when it is moved on each one. Only the paths that reach the code after the blocks
@@ -186,11 +191,13 @@ def join_exclusive_paths(checker: 'BorrowChecker', blocks: Sequence[ShirBlock | 
     """
     entry = snapshot_flow(checker)
     paths: list[FlowFacts] = []
-    for block in blocks:
+    for index, block in enumerate(blocks):
         restore_flow(checker, entry)
         if block is None:
             paths.append(entry)
             continue
+        if enter is not None:
+            enter(index)
         check_block(checker, block)
         if not terminates(block, leaves_round=True):
             paths.append(snapshot_flow(checker))
@@ -208,16 +215,22 @@ def check_if(checker: 'BorrowChecker', node: s.If) -> None:
 def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
     """A match reads its scrutinee, and `match nom r:` takes it over, a consuming use. The
     arms are exclusive paths, and they join as the blocks of an `if` do. The arms cover
-    each value (the typecheck pass), so no path skips them. A literal arm binds no name; a
-    match with an arm that binds a name stops the walk: the group of the enum match checks
-    it."""
-    if not all(is_literal_arm(arm.pattern) for arm in node.arms):
+    each value (the typecheck pass), so no path skips them. Each arm declares its bare
+    binders of plain payloads before its body. A match with a binder of another kind, or
+    with a bare binder of a payload that owns, stops the walk: later groups check it."""
+    binders = [bare_binders(arm.pattern) for arm in node.arms]
+    if any(found is None for found in binders):
+        arms.stop_at(checker, node)
+    if any(checker.types.type_class(checker.local_type(local)) is TypeClass.MOVE
+           for found in binders for local, _at in found or ()):
         arms.stop_at(checker, node)
     arms.check(checker, node.scrutinee)
     if node.consumes:
         consume(checker, node.scrutinee)
     clear_borrows(checker)
-    join_exclusive_paths(checker, [arm.body for arm in node.arms])
+    join_exclusive_paths(checker, [arm.body for arm in node.arms],
+                         enter=lambda index: declare_bare_binders(checker,
+                                                                  binders[index] or ()))
 
 
 def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:

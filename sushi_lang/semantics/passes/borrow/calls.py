@@ -1,7 +1,7 @@
 """Call sites: which convention each argument has, and what that convention does.
 
 `check_call` is the arm of a SHIR call of a free function, of `print`/`println` and of a
-built-in method of the primitive or string family, with the conventions that the
+built-in method whose receiver the receiver partition reads, with the conventions that the
 typecheck pass gave (docs/design/ir.md 8.3). The other helpers
 read the AST of a method call and of a call through a function field: the groups that check
 those calls port them to SHIR (Phase 3 to 5).
@@ -15,7 +15,7 @@ from sushi_lang.semantics.ast import (
     Call, CallLike, DotCall, Expr, IndexAccess, MemberAccess, MethodCall,
     MethodLike, Name,
 )
-from sushi_lang.semantics.method_effects import RECEIVER_READ_FAMILIES
+from sushi_lang.semantics.method_effects import receiver_convention
 from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode, FunctionType
@@ -99,11 +99,12 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
 def _check_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Builtin) -> None:
     """The receiver of a built-in method call: a read of its place.
 
-    A method of a family of `RECEIVER_READ_FAMILIES` changes nothing in its receiver and
-    consumes nothing, so the receiver is read and stays the owner of its value. A family
-    with no arm here stops the walk.
+    A `Guaranteed` receiver (`receiver_convention`, docs/design/ir.md 8.3) is read and
+    stays the owner of its value. A family with no receiver rule stops the walk, and so
+    does an `Owned` receiver: B10 checks the `nom self` methods (`map_err`, `or_err`),
+    with the read-through of `or_err` and the method in the CE2405 note.
     """
-    if callee.method.family not in RECEIVER_READ_FAMILIES:
+    if receiver_convention(callee.method) is not Convention.GUARANTEED:
         dispatch.stop_at_family(arms.STAGE, node, callee.method.family)
     arms.check(checker, callee.recv)
 

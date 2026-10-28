@@ -4,7 +4,7 @@ ShirBody agree
   params : [(_0 "v": Value, Guaranteed)]
   locals : [_1 "x": i32]
   block  :
-    Match(LocalRef(_0), [Arm(Or([Variant(@Value, "Int", [(_1, Bare)]), Variant(@Value, "Wide", [(_1, Bare)])]), [Return(LocalRef(_1))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Or([Variant(@Value, "Int", [(_1, Bare)]), Variant(@Value, "Wide", [(_1, Bare)])]), [Return(adopt LocalRef(_1))]), Arm(Wildcard, [Return(adopt Lit(0))])], consumes: false)
 
 ShirBody name
   params : [(_0 "v": Value, Guaranteed)]

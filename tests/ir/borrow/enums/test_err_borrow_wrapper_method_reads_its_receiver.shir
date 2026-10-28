@@ -1,0 +1,50 @@
+unit test_err_borrow_wrapper_method_reads_its_receiver
+
+ShirBody make
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt EnumInit(@Maybe, "Some", [adopt Interp(["", LocalRef(_0), " towels"])]))
+
+ShirBody parse
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(<, LocalRef(_0), Lit(0)), then: [Return(adopt EnumInit(@Result, "Err", [adopt EnumInit(@StdError, "Error", [])]))])
+    Return(adopt EnumInit(@Result, "Ok", [adopt Interp(["", LocalRef(_0), ""])]))
+
+ShirBody eat
+  params : [(_0 "m": Maybe@(string), Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_0), "is_some"), []), Guaranteed)]))
+
+ShirBody reads
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "m": Maybe@(string), _2 "a": string, _3 "b": string, _4 "r": Result@(string, StdError), _5 "c": string, _6 "d": string, _7 "e": Maybe@(StdError)]
+  block  :
+    Assign(LocalRef(_1), adopt Call(Free(@make), [(LocalRef(_0), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_2), adopt Call(Builtin(LocalRef(_1), "realise"), [(Lit("none"), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_3), adopt Call(Builtin(LocalRef(_1), "expect"), [(Lit("Mostly Harmless"), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_4), adopt Call(Free(@parse), [(LocalRef(_0), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_5), adopt Call(Builtin(LocalRef(_4), "realise"), [(Lit("bad"), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_6), adopt Call(Builtin(LocalRef(_4), "expect"), [(Lit("Mostly Harmless"), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_7), adopt Call(Builtin(LocalRef(_4), "err"), []), is_init: true)
+    If(Binary(and, Binary(and, Binary(and, Binary(and, Call(Builtin(LocalRef(_1), "is_some"), []), Unary(not, Call(Builtin(LocalRef(_1), "is_none"), []))), Call(Builtin(LocalRef(_4), "is_ok"), [])), Unary(not, Call(Builtin(LocalRef(_4), "is_err"), []))), Call(Builtin(LocalRef(_7), "is_none"), [])), then: [Return(adopt Binary(+, Binary(+, Binary(+, Call(Builtin(LocalRef(_2), "len"), []), Call(Builtin(LocalRef(_3), "len"), [])), Call(Builtin(LocalRef(_5), "len"), [])), Call(Builtin(LocalRef(_6), "len"), [])))])
+    Return(adopt Lit(0))
+
+ShirBody moved
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "m": Maybe@(string)]
+  block  :
+    Assign(LocalRef(_1), adopt Call(Free(@make), [(LocalRef(_0), Guaranteed)]), is_init: true)
+    ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)]))
+    Return(adopt Call(Builtin(LocalRef(_1), "is_some"), []))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@reads), [(Lit(42), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@moved), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

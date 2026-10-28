@@ -1,0 +1,67 @@
+# EXPECT_ERROR_CODES_EXACT: CE2414
+# EXPECT_STDERR_CONTAINS: "cannot write to binding 'r': a match/foreach binding is a read-only view."
+# EXPECT_STDERR_CONTAINS: "'r' is bound here, as a read-only view"
+# EXPECT_DUMP_SHIR: test_err_borrow_enum_match_binds_plain_payloads.shir
+#
+# A bare binder of a plain payload is a read-only view of the payload. A position that
+# takes the binder takes a copy of it (`adopt`). The arms of an enum match join as the
+# arms of an integer match do.
+# - `area` binds the payloads of a parameter in each arm.
+# - `inner` binds through a nested variant, and two alternatives of `|` share one binder.
+# - `towel` moves an owning local in an arm that binds a name: `msg` is in the row of the
+#   conditionally moved locals.
+# - `taken` hands a plain local to the match with `nom`: the scrutinee is a copy.
+# - `grow` rebinds a binder: CE2414, with a note at the variant name that binds it.
+
+enum Shape:
+    Circle(i32)
+    Rect(i32, i32)
+    Dot
+
+enum Wrap:
+    One(Shape)
+    Two(Shape, i32)
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn area(Shape s) i32:
+    match s:
+        Shape.Circle(r) -> return r * 3
+        Shape.Rect(w, h) -> return w * h
+        Shape.Dot -> return 0
+
+fn inner(Wrap w) i32:
+    match w:
+        Wrap.One(Shape.Circle(r)) | Wrap.Two(Shape.Circle(r), _) -> return r
+        Wrap.One(_) -> return 1
+        Wrap.Two(Shape.Rect(a, _), n) -> return a + n
+        Wrap.Two(_, n) -> return n
+
+fn towel(i32 n) ~:
+    let string msg = "{n} towels"
+    let Maybe@(i32) m = Maybe.Some(n)
+    match m:
+        Maybe.Some(k) ->
+            if (k > 1):
+                eat(nom msg)
+        Maybe.None -> println("none")
+    println("done")
+
+fn taken(i32 n) i32:
+    let Shape s = Shape.Rect(n, 2)
+    match nom s:
+        Shape.Rect(w, h) -> return w + h
+        _ -> return 0
+
+fn grow(Shape s) i32:
+    match s:
+        Shape.Circle(r) ->
+            r := r + 1
+            return r
+        _ -> return 0
+
+fn main() i32:
+    towel(2)
+    println(area(Shape.Circle(2)) + inner(Wrap.Two(Shape.Rect(3, 4), 5)) + taken(7))
+    return grow(Shape.Dot)

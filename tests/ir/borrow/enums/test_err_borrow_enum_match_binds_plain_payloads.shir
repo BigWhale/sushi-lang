@@ -1,0 +1,50 @@
+unit test_err_borrow_enum_match_binds_plain_payloads
+
+ShirBody eat
+  params : [(_0 "text": string, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody area
+  params : [(_0 "s": Shape, Guaranteed)]
+  locals : [_1 "r": i32, _2 "w": i32, _3 "h": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Shape, "Circle", [(_1, Bare)]), [Return(adopt Binary(*, LocalRef(_1), Lit(3)))]), Arm(Variant(@Shape, "Rect", [(_2, Bare), (_3, Bare)]), [Return(adopt Binary(*, LocalRef(_2), LocalRef(_3)))]), Arm(Variant(@Shape, "Dot", []), [Return(adopt Lit(0))])], consumes: false)
+
+ShirBody inner
+  params : [(_0 "w": Wrap, Guaranteed)]
+  locals : [_1 "r": i32, _2 "a": i32, _3 "n": i32, _4 "n": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Or([Variant(@Wrap, "One", [Variant(@Shape, "Circle", [(_1, Bare)])]), Variant(@Wrap, "Two", [Variant(@Shape, "Circle", [(_1, Bare)]), Wildcard])]), [Return(adopt LocalRef(_1))]), Arm(Variant(@Wrap, "One", [Wildcard]), [Return(adopt Lit(1))]), Arm(Variant(@Wrap, "Two", [Variant(@Shape, "Rect", [(_2, Bare), Wildcard]), (_3, Bare)]), [Return(adopt Binary(+, LocalRef(_2), LocalRef(_3)))]), Arm(Variant(@Wrap, "Two", [Wildcard, (_4, Bare)]), [Return(adopt LocalRef(_4))])], consumes: false)
+
+ShirBody towel
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "msg": string, _2 "m": Maybe@(i32), _3 "k": i32]
+  cond_moved : [_1]
+  block  :
+    Assign(LocalRef(_1), adopt Interp(["", LocalRef(_0), " towels"]), is_init: true)
+    Assign(LocalRef(_2), adopt EnumInit(@Maybe, "Some", [adopt LocalRef(_0)]), is_init: true)
+    Match(LocalRef(_2), [Arm(Variant(@Maybe, "Some", [(_3, Bare)]), [If(Binary(>, LocalRef(_3), Lit(1)), then: [ExprStmt(Call(Free(@eat), [(move LocalRef(_1), Owned)]))])]), Arm(Variant(@Maybe, "None", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("none"), Guaranteed)]))])], consumes: false)
+    ExprStmt(Call(Intrinsic("println"), [(Lit("done"), Guaranteed)]))
+
+ShirBody taken
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "s": Shape, _2 "w": i32, _3 "h": i32]
+  block  :
+    Assign(LocalRef(_1), adopt EnumInit(@Shape, "Rect", [adopt LocalRef(_0), adopt Lit(2)]), is_init: true)
+    Match(adopt LocalRef(_1), [Arm(Variant(@Shape, "Rect", [(_2, Bare), (_3, Bare)]), [Return(adopt Binary(+, LocalRef(_2), LocalRef(_3)))]), Arm(Wildcard, [Return(adopt Lit(0))])], consumes: true)
+
+ShirBody grow
+  params : [(_0 "s": Shape, Guaranteed)]
+  locals : [_1 "r": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Shape, "Circle", [(_1, Bare)]), [Assign(LocalRef(_1), adopt Binary(+, LocalRef(_1), Lit(1)), is_init: false), Return(adopt LocalRef(_1))]), Arm(Wildcard, [Return(adopt Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@towel), [(Lit(2), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(+, Binary(+, Call(Free(@area), [(EnumInit(@Shape, "Circle", [adopt Lit(2)]), Guaranteed)]), Call(Free(@inner), [(EnumInit(@Wrap, "Two", [adopt EnumInit(@Shape, "Rect", [adopt Lit(3), adopt Lit(4)]), adopt Lit(5)]), Guaranteed)])), Call(Free(@taken), [(Lit(7), Guaranteed)])), Guaranteed)]))
+    Return(adopt Call(Free(@grow), [(EnumInit(@Shape, "Dot", []), Guaranteed)]))

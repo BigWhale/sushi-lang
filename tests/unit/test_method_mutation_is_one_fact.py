@@ -41,42 +41,111 @@ def test_every_array_method_the_table_marks_is_measured():
             "extend_back"} <= marked
 
 
-def test_a_family_reads_its_receiver_or_has_effect_rows_never_both():
-    """A family whose methods only read their receiver has no row of `METHOD_EFFECTS`, and
-    a family that the effect rows describe does not only read its receiver. Each name of
-    the two sets is a family of `METHOD_TYPE_REGISTRY`."""
-    from sushi_lang.semantics.method_effects import EFFECT_FAMILIES, RECEIVER_READ_FAMILIES
+#: The families with no receiver rule yet, at the day of the pin (ruling R-V). A family may
+#: leave the set and the pin together; none may join.
+PINNED_NO_RECEIVER_RULE = frozenset({
+    "iterator", "foreign_ptr", "array_hash", "derived_hash", "derived_clone", "contract",
+    "function",
+})
+
+
+def _receiver_sets():
+    from sushi_lang.semantics import method_effects as me
+    return {"only reads": me.RECEIVER_READ_FAMILIES, "effect": me.EFFECT_FAMILIES,
+            "consumes": me.CONSUMING_RECEIVER_FAMILIES,
+            "no rule yet": me.NO_RECEIVER_RULE_FAMILIES}
+
+
+def test_each_registry_family_is_in_exactly_one_receiver_set():
+    """The receiver sets are a TOTAL partition of the families of `METHOD_TYPE_REGISTRY`
+    (ruling R-V, docs/design/ir.md 8.3)."""
     from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 
-    registry = {family.name for family in METHOD_TYPE_REGISTRY.families}
-    assert RECEIVER_READ_FAMILIES, "no family reads its receiver"
-    assert RECEIVER_READ_FAMILIES.isdisjoint(EFFECT_FAMILIES)
-    unknown = (RECEIVER_READ_FAMILIES | EFFECT_FAMILIES) - registry
+    registry = [family.name for family in METHOD_TYPE_REGISTRY.families]
+    sets = _receiver_sets()
+    for name in registry:
+        holders = [label for label, families in sets.items() if name in families]
+        assert len(holders) == 1, f"the family {name!r} is in {holders}"
+    unknown = frozenset().union(*sets.values()) - set(registry)
     assert not unknown, f"no family of METHOD_TYPE_REGISTRY is named {sorted(unknown)}"
+    assert all(sets.values()), "a receiver set is empty"
 
 
-def test_the_borrow_pass_and_slir_lowering_read_the_one_set_of_read_receivers():
+def test_the_no_rule_set_only_shrinks():
+    from sushi_lang.semantics.method_effects import NO_RECEIVER_RULE_FAMILIES
+
+    grown = sorted(NO_RECEIVER_RULE_FAMILIES - PINNED_NO_RECEIVER_RULE)
+    assert not grown, f"a family may leave the no-rule set and never join it: {grown}"
+    stale = sorted(PINNED_NO_RECEIVER_RULE - NO_RECEIVER_RULE_FAMILIES)
+    assert not stale, f"delete the pin row together with the family: {stale}"
+
+
+def test_the_borrow_pass_and_slir_lowering_read_the_one_receiver_convention():
     from sushi_lang.semantics import method_effects
     from sushi_lang.semantics.passes.borrow import calls
     from sushi_lang.semantics.slir import lower
 
-    assert calls.RECEIVER_READ_FAMILIES is method_effects.RECEIVER_READ_FAMILIES
-    assert lower.RECEIVER_READ_FAMILIES is method_effects.RECEIVER_READ_FAMILIES
+    assert calls.receiver_convention is method_effects.receiver_convention
+    assert lower.receiver_convention is method_effects.receiver_convention
 
 
-def test_slir_lowering_gives_a_read_receiver_a_borrow_and_refuses_any_other_family():
-    """A receiver of another family can be consumed (`or_err`, `map_err`), so a borrow
-    there would be a silent fallback. Lowering gets no such call while the family has no
-    arm, and one that comes is an internal error."""
+def test_a_read_family_gives_a_borrow_and_a_family_with_no_answer_gives_none():
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    for name in me.RECEIVER_READ_FAMILIES:
+        callee = METHOD_TYPE_REGISTRY.family(name).callee("probe")
+        assert me.receiver_convention(callee) is Convention.GUARANTEED
+    for name in me.EFFECT_FAMILIES | me.NO_RECEIVER_RULE_FAMILIES:
+        callee = METHOD_TYPE_REGISTRY.family(name).callee("probe")
+        assert me.receiver_convention(callee) is None, name
+
+
+@pytest.mark.parametrize("family, arity", [
+    ("result", "RESULT_METHOD_ARITY"), ("maybe", "MAYBE_METHOD_ARITY")])
+def test_a_wrapper_method_takes_its_receiver_only_when_it_declares_nom_self(family, arity):
+    """The answer is per method, from the signature row of the method: `map_err` and
+    `or_err` take their receiver. `realise` and `expect` read it, as on `main`."""
+    from sushi_lang.semantics.generics import maybe, results
+    from sushi_lang.semantics.method_effects import receiver_convention
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    methods = getattr(results if family == "result" else maybe, arity)
+    answers = {name: receiver_convention(METHOD_TYPE_REGISTRY.family(family).callee(name))
+               for name in methods}
+    owned = {name for name, answer in answers.items() if answer is Convention.OWNED}
+    assert owned == ({"map_err"} if family == "result" else {"or_err"})
+    assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
+               if name not in owned)
+    assert {"realise", "expect"} <= set(answers) - owned
+
+
+def test_slir_lowering_refuses_a_receiver_with_no_convention():
+    """A family with no answer stops in `typecheck` or `borrow` first. A call of it in SLIR
+    lowering is an internal error, never a `Guaranteed` receiver by default."""
     from sushi_lang.internals.diagnostics import InternalCompilerError
     from sushi_lang.internals.report import Span
-    from sushi_lang.semantics.method_effects import RECEIVER_READ_FAMILIES
-    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+    from sushi_lang.semantics.shir import exprs as e
+    from sushi_lang.semantics.shir.callee import Builtin
+    from sushi_lang.semantics.shir.ids import LocalId, ShirId
     from sushi_lang.semantics.slir import lower
 
     span = Span(1, 1, 1, 2)
-    for family in RECEIVER_READ_FAMILIES:
-        assert lower.receiver_convention(family, span) is Convention.GUARANTEED
+    recv = e.LocalRef(ShirId(1), span, LocalId(0))
+    callee = Builtin(recv, METHOD_TYPE_REGISTRY.family("list").callee("len"))
     with pytest.raises(InternalCompilerError) as caught:
-        lower.receiver_convention("maybe", span)
+        lower._receiver_convention(callee, span)
+    assert caught.value.code == "CE0000"
+
+
+def test_a_family_in_no_receiver_set_is_an_internal_error():
+    from sushi_lang.internals.diagnostics import InternalCompilerError
+    from sushi_lang.semantics.method_effects import receiver_convention
+    from sushi_lang.semantics.shir.callee import BuiltinMethod
+
+    with pytest.raises(InternalCompilerError) as caught:
+        receiver_convention(BuiltinMethod("unheard_of", "probe"))
     assert caught.value.code == "CE0000"

@@ -116,8 +116,10 @@ class MethodFamily:
 
     def callee(self, method_name: str) -> BuiltinMethod:
         """The method of this family as a callee of SHIR (docs/design/ir.md 7.6). The one
-        maker of a `BuiltinMethod`, so its family is always a row of the table."""
-        return BuiltinMethod(self.name, method_name)
+        maker of a `BuiltinMethod`, so its family is always a row of the table, and the
+        receiver mode of the method is the one of the table of the family."""
+        return BuiltinMethod(self.name, method_name,
+                             nom_self=method_name in self.modes.nom_self)
 
     def claims(self, receiver_type: 'Type', method_name: str,
                validator: 'TypeValidator') -> bool:

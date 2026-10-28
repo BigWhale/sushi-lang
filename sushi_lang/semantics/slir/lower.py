@@ -56,7 +56,7 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.const_eval import AggregateConstant
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.integer_width import fits_integer_type
-from sushi_lang.semantics.method_effects import RECEIVER_READ_FAMILIES
+from sushi_lang.semantics.method_effects import receiver_convention
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import dispatch
@@ -483,7 +483,7 @@ class _Lowering:
                                     detail="a call with no callee reached SLIR")
         callee = self.callee(node, resolved)
         receiver = ((self.operand(resolved.callee.recv),
-                     receiver_convention(resolved.callee.method.family, node.loc)),) \
+                     _receiver_convention(resolved.callee, node.loc)),) \
             if isinstance(resolved.callee, Builtin) else ()
         return _CallValue(callee, receiver + tuple(self.argument(node, index, arg)
                                                    for index, arg in enumerate(node.args)))
@@ -566,17 +566,17 @@ _VALUES: dict[type, Callable[..., _Value]] = {
 }
 
 
-def receiver_convention(family: str, span: Span) -> Convention:
-    """The convention of the receiver of a built-in method of `family`: a borrow
-    (`Guaranteed`) for a family of `RECEIVER_READ_FAMILIES`. Any other family can change or
-    consume its receiver, and it stops in `typecheck` or `borrow` until its group gives it
-    a row, so its call here is an internal error."""
-    if family not in RECEIVER_READ_FAMILIES:
+def _receiver_convention(callee: Builtin, span: Span) -> Convention:
+    """The convention of the receiver of a built-in method: the answer of the receiver
+    partition (`receiver_convention`, docs/design/ir.md 8.3). A family with no answer stops
+    in `typecheck` or `borrow` first, so its call here is an internal error."""
+    convention = receiver_convention(callee.method)
+    if convention is None:
         er.raise_internal_error(
             "CE0000", span=span,
-            detail=f"a call of a method of the family '{family}' reached SLIR, and no "
-                   f"receiver convention is written for that family")
-    return Convention.GUARANTEED
+            detail=f"a call of a method of the family '{callee.method.family}' reached "
+                   f"SLIR, and no receiver convention is written for that family")
+    return convention
 
 
 def _moves(value: r.Rvalue | _CallValue) -> list[p.Place]:

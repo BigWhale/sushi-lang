@@ -6,7 +6,7 @@ ShirBody blow
   params : [(_0 "w": Wind, Guaranteed)]
   locals : [_1 "n": i32]
   block  :
-    Match(LocalRef(_0), [Arm(Variant(@rs.Wind, "Gust", [(_1, Bare)]), [Return(LocalRef(_1))]), Arm(Variant(@rs.Wind, "Calm", []), [Return(Lit(0))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Variant(@rs.Wind, "Gust", [(_1, Bare)]), [Return(adopt LocalRef(_1))]), Arm(Variant(@rs.Wind, "Calm", []), [Return(adopt Lit(0))])], consumes: false)
 
 ShirBody still
   params : [(_0 "w": Wind, Guaranteed)]
