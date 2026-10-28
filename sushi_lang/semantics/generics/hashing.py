@@ -17,10 +17,9 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.semantics.generics.cloning import CONTAINER_BASES
 from sushi_lang.semantics.generics.contract_walk import Override, Walk, decide, perk_override_of
 from sushi_lang.semantics.generics.types import GenericEnumType, GenericStructType
-from sushi_lang.semantics.derived_methods import DerivedMethodTable
+from sushi_lang.semantics.derived_methods import DerivedMethodTable, get_hash_emitter_factory
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.builtin_methods import derived_method
-from sushi_lang.sushi_stdlib.src.common import get_hash_emitter_factory
 
 
 # A kind a derived hash cannot read, and the phrase that says why. Named rather than

@@ -6,7 +6,7 @@ from sushi_lang.semantics.generics.hashing import container_hash_kind
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory, register_clone_emitter_factory
+from sushi_lang.semantics.derived_methods import register_hash_emitter_factory, register_clone_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 from sushi_lang.backend.types.value_hash import emit_value_hash, hash_override, reject_hash_arguments
 

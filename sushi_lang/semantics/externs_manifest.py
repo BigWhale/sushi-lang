@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from sushi_lang.semantics.typesys import BuiltinType, ForeignPtrType, Type
-from sushi_lang.sushi_stdlib.src.libc_declarations import LIBC_SIGNATURES
+from sushi_lang.sushi_stdlib.src.libc_signatures import LIBC_SIGNATURES
 
 #: The Sushi type that a C type of the reserved signatures is written as. `size_t` is
 #: `i64`, as the compiler lowers it.

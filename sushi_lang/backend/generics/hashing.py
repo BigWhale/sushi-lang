@@ -25,7 +25,7 @@ from sushi_lang.backend.types.value_hash import emit_value_hash, reject_hash_arg
 from sushi_lang.backend.utils import require_builder
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import StructType, Type
-from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory
+from sushi_lang.semantics.derived_methods import register_hash_emitter_factory
 
 
 def _held_type(container_type: StructType, position: int) -> Type:

@@ -8,7 +8,7 @@ from sushi_lang.backend.constants.llvm_values import ZERO_I32, make_i32_const
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import gep_utils
 from sushi_lang.backend.utils import require_builder
-from sushi_lang.sushi_stdlib.src.common import register_hash_emitter_factory
+from sushi_lang.semantics.derived_methods import register_hash_emitter_factory
 from sushi_lang.backend.types.hash_utils import emit_fnv1a_init, emit_fnv1a_combine
 from sushi_lang.backend.types.value_hash import emit_value_hash, reject_hash_arguments
 from sushi_lang.backend.memory.allocas import entry_alloca

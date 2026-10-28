@@ -7,9 +7,8 @@ from typing import Mapping
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import EnumType, StructType, Type
-from sushi_lang.semantics.derived_methods import DerivedMethodTable
+from sushi_lang.semantics.derived_methods import DerivedMethodTable, get_clone_emitter_factory
 from sushi_lang.semantics.generics.builtin_methods import derived_method
-from sushi_lang.sushi_stdlib.src.common import get_clone_emitter_factory
 
 # Named StructTypes that own heap through their own registries/method paths; a top-level
 # .clone() on these must fall through, not route through the auto-derived struct clone.

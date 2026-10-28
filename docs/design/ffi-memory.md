@@ -80,7 +80,7 @@ only in a unit that declares an `unsafe external` block ([`CE5014`](../error-cat
 as `ptr`: only a C call can leave an errno behind.
 
 The platform symbols (`__error` on macOS, `__errno_location` on Linux) are in the libc
-table, `LIBC_SIGNATURES` (`sushi_stdlib/src/libc_declarations.py`), as `int* (void)`, and
+table, `LIBC_SIGNATURES` (`sushi_stdlib/src/libc_signatures.py`), as `int* (void)`, and
 `declare_errno_location` selects the one for the platform. A user block that declares one
 of them has its own declaration, independent of the compiler's (#1099). The errno NUMBERS
 differ per platform and are in `<sys/platform>`. The order rule of the generators applies

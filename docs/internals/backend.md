@@ -325,7 +325,7 @@ registry text of each RExxxx code (`internals/errors/runtime.py`) is the format 
 read from the libc table. Each one is the first declaration of its name for [`CE5001`](../error-catalog.md#ce5001) (#1099).
 The compiler's declarations of a libc symbol and a user's declarations of it are
 independent (#1099). Every libc signature that the compiler declares is in one table,
-`LIBC_SIGNATURES` (`sushi_stdlib/src/libc_declarations.py`), and the generators and the
+`LIBC_SIGNATURES` (`sushi_stdlib/src/libc_signatures.py`), and the generators and the
 runtime declare through `declare_libc`. A call goes through the type of its own
 declaration: when the module already holds the symbol with another function type,
 `declare_extern` gives a bitcast of it to the caller's type. `_declare_one` and
