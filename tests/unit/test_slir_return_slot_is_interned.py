@@ -15,7 +15,7 @@ import inspect
 from pathlib import Path
 
 from sushi_lang.backend.slir import emit
-from sushi_lang.semantics.slir import lower
+from sushi_lang.semantics.slir import lower_signature
 
 SLIR_BACKEND = Path(emit.__file__).parent
 SPELLED_RESULT_READERS = ("resolved_result", "channel_result_of", "GenericTypeRef",
@@ -37,6 +37,6 @@ def test_the_prototype_check_reads_the_return_slot():
 
 
 def test_lowering_types_the_return_slot_through_the_one_derivation():
-    source = inspect.getsource(lower._return_type)
+    source = inspect.getsource(lower_signature.return_type_of)
     assert "channel_result(" in source
     assert "resolved_result" not in source

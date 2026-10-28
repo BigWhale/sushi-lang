@@ -48,26 +48,24 @@ from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import ExtendDef, FuncDef
-from sushi_lang.semantics.channel import channel_result, has_channel
 from sushi_lang.semantics import integer_ops
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.integer_width import integer_bit_width
 from sushi_lang.semantics.method_effects import RECEIVER_READ_FAMILIES
 from sushi_lang.semantics.ownership import Ownership
-from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer, ShirBody, ShirLocal, TemplateCheck
-from sushi_lang.semantics.shir.callee import Builtin, Conversion, Free, Intrinsic
+from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
-from sushi_lang.semantics.shir.loop_kind import While
-from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.typeck import ResolvedCall, TypeckResults
 from sushi_lang.semantics.slir import constants as k
+from sushi_lang.semantics.slir import lower_control as ctl
+from sushi_lang.semantics.slir.lower_control import LoopFrame
+from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
@@ -78,8 +76,7 @@ from sushi_lang.semantics.slir.function import (
 )
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.verify import SlirVerifier
-from sushi_lang.semantics.type_resolution import resolve_unknown_type
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type, owns_resource
+from sushi_lang.semantics.typesys import BuiltinType, Type, owns_resource
 from sushi_lang.semantics.unit_symbols import declaring_unit, function_symbol
 
 if TYPE_CHECKING:
@@ -168,17 +165,6 @@ class _Learned:
     unknown_at: frozenset[tuple[ShirId, ShirLocalId]] = frozenset()
 
 
-@dataclass(slots=True)
-class _LoopFrame:
-    """The loop that the walk is in: its header and exit blocks, the count of the scopes
-    outside its body, and the state of each `break` and of each path to the header."""
-    header: BlockId
-    exit: BlockId
-    depth: int
-    breaks: list[FlowState] = field(default_factory=list)
-    continues: list[FlowState] = field(default_factory=list)
-
-
 def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name: str,
                    unit: str, tables: SymbolTables, drops: frozenset[str]) -> SlirFunction:
     """The `SlirFunction` of one body that `borrow` finished, from the body and its tables.
@@ -191,8 +177,8 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     if isinstance(body.origin, Initializer):
         raise StageStop(STAGE, "Initializer", body.block.loc)
     home = declaring_unit(decl, unit)
-    symbol = _symbol(decl, home, body)
-    ret = _return_type(decl, tables, body)
+    symbol = symbol_of(decl, home, body)
+    ret = return_type_of(decl, tables, body)
     shir_locals = {local.id: local for local in body.locals}
     learned = _Learned()
     while True:
@@ -224,7 +210,7 @@ class _Lowering:
     blocks: list[_Block] = field(default_factory=lambda: [_Block(BlockId(0))])
     block: _Block = field(init=False)
     placement: DropPlacement = field(default_factory=DropPlacement)
-    loops: list[_LoopFrame] = field(default_factory=list)
+    loops: list[LoopFrame] = field(default_factory=list)
     declared: Optional[LocalId] = None
     found_flags: set[ShirLocalId] = field(default_factory=set)
     found_unknown: set[tuple[ShirId, ShirLocalId]] = field(default_factory=set)
@@ -347,146 +333,6 @@ class _Lowering:
             self.placement.leave_scope()
         self.declared = None
 
-    def arm(self, block: _Block, body: ShirBlock) -> list[_Arrival]:
-        """The statements of `body` in a scope of their own, from `block` on. The answer is
-        the edge into the join when the path reaches the end of `body`."""
-        self.block = block
-        self.placement.open_scope()
-        for stmt in body.statements:
-            self.statement(stmt)
-        if not self.alive:
-            self.placement.leave_scope()
-            return []
-        self.emit(self.placement.flush())
-        self.emit(self.placement.close_scope(body.loc))
-        return [(self.block, self.placement.state())]
-
-    def meet(self, join: _Block, arrivals: list[_Arrival], among: tuple[LocalId, ...],
-             span: Span) -> None:
-        """The paths `arrivals` meet at `join`, and lowering goes on from it."""
-        for block, _ in arrivals:
-            if block is not None:
-                block.terminator = tm.Goto(join.id, span)
-        self.block = join
-        self.learn(self.placement.join([state for _, state in arrivals], among), span)
-
-    def learn(self, locals_: tuple[LocalId, ...], span: Span,
-              loop: Optional[ShirId] = None) -> None:
-        """Record a local that needs a flag (rule 4), found at a join, and with `loop` that
-        the header of the loop does not know its state. Such a local must be marked
-        conditionally moved by `borrow` (rule 3). The walk goes on; its output is not used,
-        and the body is lowered again with what it found."""
-        for local in locals_:
-            shir = self.shir_of.get(local)
-            if shir is None:
-                er.raise_internal_error(
-                    "CE0000", span=span,
-                    detail=f"two paths give the temporary _{local.index} two states")
-            if not self.answers.ownership.is_conditionally_moved(shir):
-                er.raise_internal_error(
-                    "CE0000", span=span,
-                    detail=f"two paths give _{local.index} two states, and borrow does not "
-                           f"mark it conditionally moved")
-            self.found_flags.add(shir)
-            if loop is not None:
-                self.found_unknown.add((loop, shir))
-
-    def condition(self, expr: e.ShirExpr) -> tuple[p.Operand, Optional[LocalId]]:
-        """The operand that a switch reads, and the local that holds it, if any. The
-        temporaries of the condition die before the switch. A condition that is no local or
-        constant goes into a local of its own: it is live before its first write, an exit
-        inside the condition ends it, and the caller ends it at the top of each block that
-        the switch goes to (L12)."""
-        self.placement.open_statement()
-        value = self.value(expr)
-        local: Optional[LocalId] = None
-        if isinstance(value, r.Use) and isinstance(value.operand, (p.Const, p.Copy)):
-            operand = value.operand
-        else:
-            local = self.temporary(value, BuiltinType.BOOL, expr.loc)
-            self.placement.detach(local)
-            operand = p.Copy(p.Local(local))
-        self.emit(self.placement.close_scope(expr.loc))
-        return operand, local
-
-    def targets(self, local: Optional[LocalId], blocks: tuple[_Block, ...], span: Span) -> None:
-        """The storage of the condition local `local` ends at the top of each target block."""
-        if local is not None:
-            for block in blocks:
-                block.statements.append(st.StorageDead(local, span))
-
-    def if_(self, stmt: s.If) -> None:
-        """`switchInt(c, [(0, else)], otherwise: then)`; with no `else`, the zero edge goes to
-        the join, or to a block of its own when a condition local must end there (ir.md
-        8.9). The blocks: `then`, `else`, then the join (L5)."""
-        cond, local = self.condition(stmt.cond)
-        then, other = self.new_block(), self.new_block()
-        join = self.new_block() if stmt.otherwise is None and local is not None else None
-        self.jump(tm.SwitchInt(cond, ((0, other.id),), then.id, stmt.loc))
-        self.targets(local, (then, other), stmt.cond.loc)
-        among, at_branch = self.placement.in_scope(), self.placement.state()
-        arrivals = self.arm(then, stmt.then)
-        if stmt.otherwise is None:
-            zero: _Arrival = (None, at_branch) if join is None else (other, at_branch)
-            self.meet(other if join is None else join, [*arrivals, zero], among, stmt.loc)
-            return
-        self.placement.restore(at_branch)
-        arrivals += self.arm(other, stmt.otherwise)
-        if arrivals:
-            self.meet(self.new_block(), arrivals, among, stmt.loc)
-
-    def loop(self, stmt: s.Loop) -> None:
-        """A `while`: a header block that evaluates the condition and switches, the body,
-        which goes back to the header, and the exit block (ir.md 8.9). When a condition
-        local must end on the zero edge, that edge goes to a block of its own, which goes
-        to the exit, because a `break` goes to the exit too."""
-        source = stmt.source
-        if not (isinstance(source, s.Cond)
-                and isinstance(self.typeck.loop_kind_of(stmt.shir_id), While)):
-            dispatch.stop(STAGE, stmt)
-        header = self.new_block()
-        self.jump(tm.Goto(header.id, stmt.loc))
-        self.block = header
-        among = self.placement.in_scope()
-        for kept in among:
-            if (stmt.shir_id, self.shir_of.get(kept)) in self.learned.unknown_at:
-                self.placement.mark_unknown(kept)
-        at_header = self.placement.state()
-        cond, local = self.condition(source.cond)
-        body = self.new_block()
-        done = None if local is None else self.new_block()
-        exit_ = self.new_block()
-        self.jump(tm.SwitchInt(cond, ((0, (done or exit_).id),), body.id, stmt.loc))
-        self.targets(local, (body,) if done is None else (body, done), source.cond.loc)
-        after_cond = self.placement.state()
-        frame = _LoopFrame(header.id, exit_.id, self.placement.depth())
-        self.loops.append(frame)
-        for block, state in self.arm(body, stmt.body):
-            if block is not None:
-                block.terminator = tm.Goto(header.id, stmt.loc)
-            frame.continues.append(state)
-        self.loops.pop()
-        self.learn(at_header.changed_by(frame.continues, among), stmt.loc, stmt.shir_id)
-        self.meet(exit_, [(done, after_cond), *((None, state) for state in frame.breaks)],
-                  among, stmt.loc)
-
-    def break_(self, stmt: s.Break) -> None:
-        self.leave_round(stmt.loc, breaks=True)
-
-    def continue_(self, stmt: s.Continue) -> None:
-        self.leave_round(stmt.loc, breaks=False)
-
-    def leave_round(self, span: Span, *, breaks: bool) -> None:
-        """A `break` or a `continue`: the drops of each scope of the loop body that it
-        leaves (rule 2), then the jump to the exit or to the header."""
-        if not self.loops:
-            er.raise_internal_error("CE0000", span=span,
-                                    detail="a jump out of no loop reached SLIR")
-        frame = self.loops[-1]
-        self.emit(self.placement.exit_to(frame.depth, span))
-        (frame.breaks if breaks else frame.continues).append(self.placement.state())
-        self.jump(tm.Goto(frame.exit if breaks else frame.header, span))
-
     def assign(self, stmt: s.Assign) -> None:
         target = stmt.target
         if not isinstance(target, e.LocalRef):
@@ -538,7 +384,7 @@ class _Lowering:
         """Store `value` into `place`. The store is the statement that consumes each `move`
         operand of the value, so it marks the local of each one moved (ir.md 8.10, rule 3)."""
         if isinstance(value, _ShortCircuit):
-            self.short_circuit(place, value)
+            ctl.short_circuit(self, place, value)
             return
         if isinstance(value, _CallValue):
             self.emit([st.Call(place, value.callee, value.args, span)])
@@ -546,23 +392,6 @@ class _Lowering:
             self.emit([st.Assign(place, value, span)])
         for moved in _moves(value):
             self.placement.move(_root(moved), span)
-
-    def short_circuit(self, place: p.Place, value: _ShortCircuit) -> None:
-        """`and` and `or` as two blocks (ir.md 8.9): the left operand goes into `place`, a
-        switch on it skips the right block, and the right block writes `place` again. The
-        temporaries of the right operand die in its block."""
-        span = value.span
-        self.write(place, r.Use(value.lhs), span)
-        right, join = self.new_block(), self.new_block()
-        skip, other = (join, right) if value.op == "and" else (right, join)
-        self.jump(tm.SwitchInt(p.Copy(place), ((0, skip.id),), other.id, span))
-        among, at_branch = self.placement.in_scope(), self.placement.state()
-        self.block = right
-        self.placement.open_statement()
-        self.write(place, self.value(value.rhs), span)
-        self.emit(self.placement.flush())
-        self.emit(self.placement.close_scope(span))
-        self.meet(join, [(None, at_branch), (self.block, self.placement.state())], among, span)
 
     def temporary(self, value: _Value, ty: Type, span: Span) -> LocalId:
         """A new temporary of the statement that holds `value`."""
@@ -681,39 +510,6 @@ class _Lowering:
                 types.append(self.display_type(node.shir_id, index, part.loc))
         return _CallValue(st.Builtin(Intrinsic("interp"), tuple(types)), tuple(args))
 
-    def try_(self, node: e.Try) -> _Value:
-        """`??` (ir.md 8.9): the operand into a temporary, a switch on its discriminant with
-        no other value, an `Err` block that builds the `Err` into `_0`, leaves every scope
-        and returns, and the `Ok` block, where the payload moves into the place that takes
-        the value; each store moves the temporary. A `??` that calls a declared conversion
-        stops (`slir, conversion`), and a `??` over an owning wrapper that the body only reads
-        stops (`slir, borrowed try`)."""
-        facts = self.typeck.try_facts_of(node.shir_id)
-        choice = self.typeck.conversion_of(node.shir_id)
-        if isinstance(choice, Conversion):
-            raise StageStop(STAGE, "conversion", node.loc)
-        if facts is None or choice is None:
-            er.raise_internal_error("CE0000", span=node.loc,
-                                    detail="a ?? with no facts reached SLIR")
-        ty = self.type_of(node.inner)
-        value = self.value(node.inner)
-        if self.owns(ty) and isinstance(value, r.Use) and isinstance(value.operand, p.Copy):
-            raise StageStop(STAGE, "borrowed try", node.loc)
-        (ok_tag, ok), (err_tag, err) = _arms(ty, facts.success_tag, node.loc)
-        temp = self.temporary(value, ty, node.inner.loc)
-        tag = self.new_local(BuiltinType.I32, None, None)
-        self.emit([st.Assign(p.Local(tag), r.Discriminant(p.Local(temp)), node.loc)])
-        ok_block, err_block = self.new_block(), self.new_block()
-        targets = tuple(sorted([(ok_tag, ok_block.id), (err_tag, err_block.id)]))
-        self.jump(tm.SwitchInt(p.Copy(p.Local(tag)), targets, None, node.loc))
-        at_switch = self.placement.state()
-        self.block = err_block
-        payload = p.Move(p.Field(p.Downcast(p.Local(temp), err), 0))
-        self.finish(r.Aggregate(r.AggVariant(facts.returns, err), (payload,)), node.loc)
-        self.placement.restore(at_switch)
-        self.block = ok_block
-        return r.Use(p.Move(p.Field(p.Downcast(p.Local(temp), ok), 0)))
-
     def display_type(self, node: ShirId, part: int, span: Span) -> Type:
         ty = self.typeck.display_type_of(node, part)
         if ty is None:
@@ -726,10 +522,10 @@ _STATEMENTS: dict[type, Callable[..., None]] = {
     s.Assign: _Lowering.assign,
     s.ExprStmt: _Lowering.expr_stmt,
     s.Return: _Lowering.ret,
-    s.If: _Lowering.if_,
-    s.Loop: _Lowering.loop,
-    s.Break: _Lowering.break_,
-    s.Continue: _Lowering.continue_,
+    s.If: ctl.if_,
+    s.Loop: ctl.loop,
+    s.Break: ctl.break_,
+    s.Continue: ctl.continue_,
 }
 
 _VALUES: dict[type, Callable[..., _Value]] = {
@@ -741,7 +537,7 @@ _VALUES: dict[type, Callable[..., _Value]] = {
     e.EnumInit: _Lowering.enum_init,
     e.Call: _Lowering.call,
     e.Interp: _Lowering.interp,
-    e.Try: _Lowering.try_,
+    e.Try: ctl.try_,
 }
 
 
@@ -775,13 +571,6 @@ def _root(place: p.Place) -> LocalId:
     return place.id
 
 
-def _arms(ty: Type, success: int, span: Span) -> tuple[tuple[int, str], tuple[int, str]]:
-    """The tag and the name of the success variant and of the error variant of a `Result`."""
-    if not isinstance(ty, EnumType) or len(ty.variants) != 2:
-        er.raise_internal_error("CE0000", span=span, detail="a ?? over no Result reached SLIR")
-    return (success, ty.variants[success].name), (1 - success, ty.variants[1 - success].name)
-
-
 def _text(value: str) -> k.Str:
     return k.Str(value.encode("utf-8", "surrogatepass"))
 
@@ -804,39 +593,3 @@ def _constant(lit: e.Lit, typeck: TypeckResults, wraps: bool) -> k.Constant:
                 else value.value)
         return k.Int(held, ty)
     return k.Float(value.value, ty)
-
-
-def _symbol(decl: object, home: Optional[str], body: ShirBody) -> str:
-    """The symbol of the function in its module (`function_symbol`). A body that is not a
-    free function stops with the name of its kind."""
-    if not isinstance(decl, FuncDef) or len(body.params) > len(decl.params):
-        raise StageStop(STAGE, _kind(decl, body), body.block.loc)
-    return function_symbol(decl.name, home)
-
-
-def _kind(decl: object, body: ShirBody) -> str:
-    """The kind of a body that is not a free function. A perk method is a `FuncDef` whose
-    body has a receiver before its declared parameters."""
-    if isinstance(decl, FuncDef):
-        return "perk method"
-    if isinstance(decl, GenericFuncDef):
-        return "generic instance"
-    if isinstance(decl, ExtendDef):
-        return "conversion" if decl.is_conversion else "method"
-    er.raise_internal_error("CE0000", span=body.block.loc,
-                            detail=f"a body of {type(decl).__name__} reached SLIR")
-
-
-def _return_type(decl: object, tables: SymbolTables, body: ShirBody) -> Type:
-    """The type of the return slot: the `Result` of a channel, else the declared type."""
-    ret = getattr(decl, "ret", None)
-    if ret is None:
-        er.raise_internal_error("CE0000", span=body.block.loc,
-                                detail="a function with no return type reached SLIR")
-    if has_channel(decl):
-        result = channel_result(tables.structs, tables.enums, ret, getattr(decl, "err_type", None))
-        if result is None:
-            er.raise_internal_error("CE0000", span=body.block.loc,
-                                    detail="a function with a channel has no Result type")
-        return result
-    return resolve_unknown_type(ret, tables.structs.by_name, tables.enums.by_name)
