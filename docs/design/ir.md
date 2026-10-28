@@ -950,7 +950,18 @@ pass counts them, so `borrow` never meets a jump with no loop, and one that reac
 internal error.
 
 An error hole CARRIES the code of the error that it stands for (CE6102, CE6104, CE2122,
-CE2008, CE2045, CE1003; for a name with no declaration, the codes CE1001, CE1002 and CE0144). At
+CE2008, CE2045, CE1003; for a name with no declaration, the codes CE1001, CE1002 and CE0144).
+The error hole of a member of a type that is no variant (`Sign.Nope`, `geo.Sign.Nope`) also
+carries the data of its message: `member: UnknownMember(written, name, name_loc)`, the
+written type with its alias, the member, and the span of `.member`. Lowering sets it from
+the source; no pass fills it (S5). Every other hole has `member: None`. `typecheck` reads it:
+when the written type names an enum, the hole is [CE2045](../error-catalog.md#ce2045) at
+`name_loc`, and the diagnostic names the instance that the position gives to a generic
+enum, as for a `Static` call (7.3). A static of the name does not change it, because a
+static is a value only in a call. On a type that is no enum, the error is the error of
+another pass (CE2105, CE2007, CE2008), and the hole stops the walk of its body. The dump
+prints the member (`<hole: MemberAccess, error: CE2045 | ..., member: Sign.Nope>`). Ruled
+2026-10-28 (R20). At
 the end of the analysis, an error hole whose code no diagnostic reported is an internal
 error, CE0155. An error of the construct around the hole can come first, and the hole
 accepts its code too: in a constant or a `var` initializer the constant evaluator refuses
