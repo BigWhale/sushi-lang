@@ -8,8 +8,11 @@ by the back end when it declares and by the `.slib` producer when it records
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import (Dict, Generic, Iterator, List, Mapping, Optional, Protocol,
-                    TypeVar)
+from typing import (TYPE_CHECKING, Dict, Generic, Iterator, List, Mapping, Optional,
+                    Protocol, TypeVar)
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.ast import ConstDef
 
 V = TypeVar("V")
 
@@ -41,7 +44,7 @@ def emitted_symbol(name: str, unit_name: Optional[str] = None,
                     link_symbol: Optional[str] = None) -> str:
     """The symbol that a function, a constant or a unit variable EMITS.
 
-    The back end names each function and each constant global with it. A binary
+    The back end names each function with it, and each global through `global_symbol`. A binary
     library's record carries the `link_symbol` its producer gave the declaration, and
     that name wins, because the consumer cannot compute it. Every other declaration
     takes `mangle_unit_symbol`. CE5013 reads the same answer, so the check and the back
@@ -63,6 +66,23 @@ def function_symbol(name: str, unit_name: Optional[str]) -> str:
     if name == "main":
         return USER_MAIN_SYMBOL
     return emitted_symbol(name, unit_name)
+
+
+def global_symbol(decl: "ConstDef", unit_name: Optional[str]) -> str:
+    """The symbol of a unit-level global: a constant or a `var` (docs/design/ir.md 8.2).
+
+    The back end names the global with it, and SLIR lowering names the function of an
+    initializer body with it. A compiled library's declaration is a name of its library
+    unit (`scope_unit`, #1120). A `var` of a binary library takes its `link_symbol`. A
+    library constant's copy takes the unit that declared it (`home_unit`, #1101), so it
+    never takes the name of a function in the unit that holds the copy.
+    """
+    from sushi_lang.semantics.ast import VarDef
+
+    unit = decl.scope_unit or unit_name
+    if isinstance(decl, VarDef):
+        return emitted_symbol(decl.name, unit, decl.link_symbol)
+    return mangle_unit_symbol(decl.home_unit or unit, decl.name)
 
 
 def declaring_unit(fn: object, unit_name: Optional[str]) -> Optional[str]:

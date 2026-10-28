@@ -20,7 +20,9 @@ from sushi_lang.backend.llvm_types import LLVMTypeSystem
 from sushi_lang.backend.llvm_utils import LLVMUtils
 from sushi_lang.backend.runtime import LLVMRuntime
 from sushi_lang.backend.functions import LLVMFunctionManager
-from sushi_lang.semantics.unit_symbols import UnitKeyedSymbols, emitted_symbol, mangle_unit_symbol
+from sushi_lang.semantics.unit_symbols import (
+    UnitKeyedSymbols, emitted_symbol, global_symbol, mangle_unit_symbol,
+)
 from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
@@ -514,14 +516,14 @@ class LLVMCodegen:
 
     def _register_global_constant(self, name: str, llvm_type: ir.Type,
                                   value: Optional[ir.Constant],
-                                  unit_name: str | None = None, *,
-                                  storage: bool = False,
-                                  symbol: Optional[str] = None) -> None:
+                                  unit_name: str | None, *, symbol: str,
+                                  storage: bool = False) -> None:
         """Publish an evaluated constant as a read-only global, or a `var` as storage.
 
-        The global's NAME carries the declaring unit, exactly as a function symbol does:
-        two units may each declare a private `SCRATCH`, and the monolithic path puts both
-        into one module (`docs/design/unit-namespaces.md` section 9).
+        The global's NAME (`symbol`, from `global_symbol`) carries the declaring unit,
+        exactly as a function symbol does: two units may each declare a private `SCRATCH`,
+        and the monolithic path puts both into one module
+        (`docs/design/unit-namespaces.md` section 9).
 
         A constant is `internal` and `.rodata`: every module that reads it gets its own
         copy, which is harmless for a value. A unit variable (`storage`) is ONE storage
@@ -530,8 +532,7 @@ class LLVMCodegen:
         consumer of a binary library, under the manifest's `symbol` -- declares it with
         no initializer.
         """
-        global_var = ir.GlobalVariable(
-            self.module, llvm_type, name=emitted_symbol(name, unit_name, symbol))
+        global_var = ir.GlobalVariable(self.module, llvm_type, name=symbol)
         if storage:
             if value is None:
                 global_var.linkage = 'external'
@@ -550,7 +551,7 @@ class LLVMCodegen:
         ll_type = self.types.ll_type(var.ty)
         if var.link_symbol is not None or not defining:
             self._register_global_constant(var.name, ll_type, None, unit_name,
-                                           storage=True, symbol=var.link_symbol)
+                                           symbol=global_symbol(var, unit_name), storage=True)
             return
         from sushi_lang.semantics.const_eval import allocates_nothing
         if allocates_nothing(var.value):
@@ -565,7 +566,7 @@ class LLVMCodegen:
             if initializer is None:
                 return
         self._register_global_constant(var.name, ll_type, initializer, unit_name,
-                                       storage=True)
+                                       symbol=global_symbol(var, unit_name), storage=True)
 
     def _emit_global_constant(self, const: ConstDef,
                               unit_name: str | None = None, *,
@@ -605,7 +606,7 @@ class LLVMCodegen:
 
         self._register_global_constant(
             const.name, self.types.ll_type(const.ty), initializer, unit_name,
-            symbol=mangle_unit_symbol(symbol_unit, const.name))
+            symbol=global_symbol(const, unit_name))
 
     def _evaluate_constant_expression(self, expr, expected_type=None,
                                       unit_name=None) -> Optional["ConstantValue"]:

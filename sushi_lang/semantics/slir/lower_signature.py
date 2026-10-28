@@ -19,15 +19,14 @@ from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.tables import SymbolTables
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.typesys import Type
-from sushi_lang.semantics.unit_symbols import emitted_symbol, function_symbol
+from sushi_lang.semantics.unit_symbols import function_symbol, global_symbol
 
 
 def symbol_of(decl: object, home: Optional[str], body: ShirBody) -> str:
     """The symbol of the function in its module (`function_symbol`). A body that is not a
     free function stops with the name of its kind."""
     if isinstance(decl, ConstDef):
-        return emitted_symbol(decl.name, decl.home_unit or decl.scope_unit or home,
-                              getattr(decl, "link_symbol", None))
+        return global_symbol(decl, home)
     if not isinstance(decl, FuncDef) or len(body.params) > len(decl.params):
         raise StageStop(STAGE, kind_of(decl, body), body.block.loc)
     return function_symbol(decl.name, home)
