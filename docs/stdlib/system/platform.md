@@ -138,7 +138,7 @@ Each of `darwin/` and `linux/` has one file per platform module. Most of them ar
 re-export shims over `posix/`, because those calls are identical POSIX libc functions on
 both operating systems: `env.py`, `process.py` and `random.py` re-export `posix/`
 unchanged, and `time.py` adds only the clock ids of the platform. Four modules have real,
-distinct darwin/linux content: `stdio` (the stdin/stdout/stderr global symbol names),
+distinct darwin/linux content: `stdio` (the stderr global symbol name),
 `files` (the `open()` flag bit values for `O_CREAT`/`O_TRUNC`), `net` (the socket
 constants and structure layouts) and the clock ids in `time`.
 
@@ -410,7 +410,7 @@ Most new functionality should start as a single implementation in
 `sushi_stdlib/src/_platform/posix/myfeature.py` — the same function signature is a
 correct declaration on both macOS and Linux for nearly everything in libc. Only create
 separate `darwin/myfeature.py` and `linux/myfeature.py` files if the two operating
-systems genuinely disagree (as `stdio.py`'s handle names and `files.py`'s `O_CREAT`/
+systems genuinely disagree (as `stdio.py`'s stderr handle name and `files.py`'s `O_CREAT`/
 `O_TRUNC` bit values do):
 
 ```

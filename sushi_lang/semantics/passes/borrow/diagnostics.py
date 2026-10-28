@@ -342,9 +342,9 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: e.ShirExpr,
     # The OWNER's type answers the escape question: a read through it can only be
     # refused when what is read owns something, and it is the owner that holds it.
     owner_type = state.var_type if state is not None else None
-    # ONE branch, on purpose: a get-out `.clone()` still hits CE0019, and that is a real
-    # defect rather than a reason to word around it. The three RED `test_own_get_*` files
-    # hold the branch honest until it is fixed.
+    # ONE branch, on purpose: a get-out `.clone()` was a real defect (an internal error of
+    # the deleted AST emitter), not a reason to word around it. The three RED
+    # `test_own_get_*` files hold the branch honest until it is fixed.
     value_type = read_type(checker, expr)
     _note_opaque_mover(checker, diag, value_type)
     diag.help(escape_help(checker, text, owner_type, value_type,

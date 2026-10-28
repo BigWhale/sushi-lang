@@ -1,14 +1,14 @@
-"""Type inference from LLVM IR types back to Sushi language types."""
+"""Shape predicates over LLVM IR types: a string, an integer."""
 from __future__ import annotations
 
 from llvmlite import ir
 
 
 class TypeInference:
-    """Infers Sushi semantic types from LLVM IR types."""
+    """Answers whether an LLVM IR type has the shape of a string or an integer."""
 
     def __init__(self, i8: ir.IntType, i32: ir.IntType, string_struct: ir.LiteralStructType):
-        """Initialize type inference with LLVM type references."""
+        """Keep the LLVM types that the predicates compare against."""
         self.i8 = i8
         self.i32 = i32
         self.string_struct = string_struct

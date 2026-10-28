@@ -13,10 +13,9 @@ from pathlib import Path
 import pytest
 
 from sushi_lang.semantics.generics.monomorphize.transformer import TypeSubstitutor
-from sushi_lang.semantics.generics.type_strings import resolve_type_from_string
 from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
 from sushi_lang.semantics.param_modes import ParamMode
-from sushi_lang.semantics.type_resolution import resolve_type_recursively
+from sushi_lang.semantics.type_resolution import parse_type_string, resolve_type_recursively
 from sushi_lang.semantics.typesys import (
     BuiltinType,
     EnumType,
@@ -74,17 +73,6 @@ def test_type_substitutor_carries_the_metadata():
 # A manifest fn type: `str()` writes the marker, so reading it back must accept one. It
 # used to raise a CE0022 internal error on the parameter text `nom string`.
 
-class _Tables:
-    class _Structs:
-        by_name: dict = {}
-
-    class _Enums:
-        by_name = {"StdError": STDERROR}
-
-    struct_table = _Structs()
-    enum_table = _Enums()
-
-
 @pytest.mark.parametrize("modes", [
     (ParamMode.NOM,),
     (ParamMode.BORROW,),
@@ -92,7 +80,7 @@ class _Tables:
 def test_a_manifest_fn_type_round_trips_its_modes(modes):
     before = FunctionType(param_types=(STRING,), ok_type=I32,
                           err_type=STDERROR, param_modes=modes)
-    after = resolve_type_from_string(str(before), _Tables())
+    after = parse_type_string(str(before), {}, {"StdError": STDERROR})
     assert after.modes == modes
     assert after == before
 

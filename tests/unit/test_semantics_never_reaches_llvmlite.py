@@ -24,6 +24,12 @@ def _module_name(path: Path) -> str:
     return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
 
 
+def _is_type_checking(test: ast.expr) -> bool:
+    """The test is `TYPE_CHECKING` or `typing.TYPE_CHECKING`, and nothing else."""
+    return (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (
+        isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING")
+
+
 def _load_time_imports(body: list[ast.stmt]):
     """Each import statement that runs when a module with this body loads."""
     for node in body:
@@ -31,7 +37,7 @@ def _load_time_imports(body: list[ast.stmt]):
             yield node
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        elif isinstance(node, ast.If) and "TYPE_CHECKING" in ast.unparse(node.test):
+        elif isinstance(node, ast.If) and _is_type_checking(node.test):
             yield from _load_time_imports(node.orelse)
         else:
             for child in ast.iter_child_nodes(node):
@@ -115,6 +121,9 @@ def test_the_scan_follows_every_load_time_import():
         "try:\n    from p import h\nexcept ImportError:\n    pass": {"p", "p.h"},
         "class C:\n    from p import h": {"p", "p.h"},
         "if TYPE_CHECKING:\n    from p import h": set(),
+        "if typing.TYPE_CHECKING:\n    from p import h": set(),
+        "if TYPE_CHECKING:\n    pass\nelse:\n    from p import h": {"p", "p.h"},
+        "if not TYPE_CHECKING:\n    from p import h": {"p", "p.h"},
         "def f():\n    from p import h": set(),
     }
     for source, expected in sources.items():

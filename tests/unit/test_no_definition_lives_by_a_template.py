@@ -52,8 +52,7 @@ KEPT: dict[str, str] = {
         "kept for B4: the HashMap method family; the SLIR emitter calls it with operands "
         "there, and its AST argument half goes then",
     "sushi_lang/semantics/generics/type_strings.py:resolve_type_from_string":
-        "tests/unit/test_fn_type_metadata_survives.py and "
-        "tests/unit/test_missing_instance_names_the_source_spelling.py call it",
+        "tests/unit/test_missing_instance_names_the_source_spelling.py calls it",
 }
 
 #: The rows of `KEPT` at the day of the pin. A row may leave both; none may join.
