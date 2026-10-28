@@ -65,6 +65,8 @@ if TYPE_CHECKING:
 #: Where the type of a pattern position comes from, for the relational note of CE2107: a
 #: label and the span it points at.
 PositionNote = Tuple[str, Optional["Span"]]
+#: One position of a pattern: a pattern, or a binding.
+PatternItem = p.ShirPattern | p.PatBinding
 
 
 def _resolve(validator: 'TypeValidator', ty: Type) -> Type:
@@ -404,7 +406,13 @@ def _names_the_scrutinee(validator: 'TypeValidator', pattern: p.Variant,
 
 def _enum_name(validator: 'TypeValidator', pattern: p.Variant) -> str:
     """The written enum name of a pattern, without its alias."""
-    return validator.decl_name(pattern.decl).rpartition(".")[2]
+    return _written_enum(validator, pattern)[1]
+
+
+def _written_enum(validator: 'TypeValidator', pattern: p.Variant) -> Tuple[str, str]:
+    """The alias of a pattern's written enum name (empty when it has none), and the name."""
+    alias, _dot, name = validator.decl_name(pattern.decl).rpartition(".")
+    return alias, name
 
 
 def _names_enum(validator: 'TypeValidator', written: str, enum_type: EnumType) -> bool:
@@ -434,8 +442,8 @@ def check_variant_pattern(validator: 'TypeValidator', node: p.Variant, ty: Type,
     """An enum pattern: the enum of the value (CE2108, CE2107), one of its variants
     (CE2045), and one item for each value of its payload (CE2044). Behind an alias, the
     namespace holds the enum (CE2001, CE3005)."""
-    alias, dot, name = validator.decl_name(node.decl).rpartition(".")
-    if dot and reject_qualified_name(validator, alias, name, node.enum_loc, kind="type"):
+    alias, name = _written_enum(validator, node)
+    if alias and reject_qualified_name(validator, alias, name, node.enum_loc, kind="type"):
         return None
     if not isinstance(ty, EnumType):
         er.emit(validator.reporter, er.ERR.CE2108, node.loc, got=display_type(ty))
@@ -678,19 +686,35 @@ def reject_poke_binding_into_a_constant(validator: 'TypeValidator', match: 's.Ma
     `Variant(poke x)` binds a POINTER into the scrutinee's payload, and a write through
     it reaches that storage. A constant is read-only there (CE2400). A `peek` and a bare
     binding READ the payload, and reading a constant is legal. The root of the scrutinee
-    place decides: a field or an element of a constant is in the constant.
+    place decides: a field or an element of a constant is in the constant. Each element of
+    a tuple-literal scrutinee is its own scrutinee (ruling 3 of the tuple design), so each
+    element asks for the bindings of its own position.
     """
-    root = walk_place(match.scrutinee, Step.MEMBER | Step.INDEX).node
-    if not isinstance(root, e.ConstRef):
+    for scrutinee, items in _scrutinee_positions(match):
+        root = walk_place(scrutinee, Step.MEMBER | Step.INDEX).node
+        if not isinstance(root, e.ConstRef):
+            continue
+        binding = next((b for item in items for b in _poke_bindings(item)), None)
+        if binding is None:
+            continue
+        written = validator.decl_name(root.const_id)
+        record = constant_record(validator, written)
+        reject_borrow_of_constant(validator.err, written,
+                                  record if isinstance(record, ConstSig) else None,
+                                  validator.body_locals[binding.local].loc, mode="poke")
+
+
+def _scrutinee_positions(match: 's.Match') -> Iterator[Tuple[e.ShirExpr, List[PatternItem]]]:
+    """Each scrutinee expression with the pattern items that read it: the scrutinee and
+    each arm, or each element of a tuple literal and the item at its index of each tuple
+    alternative."""
+    if not isinstance(match.scrutinee, e.TupleInit):
+        yield match.scrutinee, [arm.pattern for arm in match.arms]
         return
-    binding = next((b for arm in match.arms for b in _poke_bindings(arm.pattern)), None)
-    if binding is None:
-        return
-    written = validator.decl_name(root.const_id)
-    record = constant_record(validator, written)
-    reject_borrow_of_constant(validator.err, written,
-                              record if isinstance(record, ConstSig) else None,
-                              validator.body_locals[binding.local].loc, mode="poke")
+    for index, part in enumerate(match.scrutinee.parts):
+        yield part, [alt.elements[index] for arm in match.arms
+                     for alt in _alternatives(arm.pattern)
+                     if isinstance(alt, p.Tuple) and index < len(alt.elements)]
 
 
 def _poke_bindings(item: p.ShirPattern | p.PatBinding) -> Iterator[p.PatBinding]:

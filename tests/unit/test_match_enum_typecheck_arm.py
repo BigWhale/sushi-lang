@@ -6,7 +6,8 @@ each binder the type of its payload position with no `peek` or `poke` (the mode 
 arms. The alternatives of `|` that bind one name share one local, which gets one row. A
 `Maybe` or a `Result` variant in a comparison takes the type of the other operand. The
 tests run the arms over SHIR built by hand, with a stand-in for the pass; they do not run
-the compiler.
+the compiler. Each element of a tuple-literal scrutinee asks the rule of a `poke` binding
+into a constant (CE2400) for the items at its own index.
 """
 from __future__ import annotations
 
@@ -15,7 +16,8 @@ from types import SimpleNamespace
 import pytest
 
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.passes.collect.constants import ConstSig
+from sushi_lang.semantics.passes.types import matching, visit
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
@@ -100,3 +102,29 @@ def test_a_wrapper_variant_takes_the_type_of_the_other_operand(flipped: bool) ->
     node = e.Binary(ShirId(4), SPAN, "==", lhs, rhs)
     assert visit.check_expr(_validator(answers, []), node) == BOOL
     assert answers.instance_of(none.shir_id) == MAYBE_I32
+
+
+@pytest.mark.parametrize("poked, refused", [(0, True), (1, False)])
+def test_each_element_of_a_tuple_literal_scrutinee_is_its_own_scrutinee(
+        poked: int, refused: bool) -> None:
+    """`match (K, n): (poke r, _)` with a constant `K` is CE2400 at the binding; a `poke`
+    binding at the position of the local `n` is legal."""
+    r, binding_loc = LocalId(1), Span(9, 10, 9, 16)
+    items: list = [p.Wildcard(ShirId(20), SPAN), p.Wildcard(ShirId(21), SPAN)]
+    items[poked] = p.PatBinding(r, s.Ref(BorrowMode.POKE))
+    scrutinee = e.TupleInit(ShirId(2), SPAN, [e.ConstRef(ShirId(3), SPAN, DeclId(2)),
+                                              e.LocalRef(ShirId(4), SPAN, LocalId(0))])
+    node = s.Match(ShirId(1), SPAN, scrutinee, [_arm(0, p.Tuple(ShirId(10), SPAN, items))],
+                   False)
+    reported: list[tuple[str, Span]] = []
+    builder = SimpleNamespace(emit=lambda: None)
+    builder.help = lambda _text: builder
+    validator = SimpleNamespace(
+        decl_name=lambda _decl: "K", const_table=None,
+        namespaces=SimpleNamespace(
+            constant_record=lambda written, _table: ConstSig(name=written, const_type=I32)),
+        err=SimpleNamespace(emit_with=lambda code, span, **_params: (
+            reported.append((code.code, span)), builder)[1]),
+        body_locals={r: ShirLocal(r, "r", None, binding_loc)})
+    matching.reject_poke_binding_into_a_constant(validator, node)
+    assert reported == ([("CE2400", binding_loc)] if refused else [])

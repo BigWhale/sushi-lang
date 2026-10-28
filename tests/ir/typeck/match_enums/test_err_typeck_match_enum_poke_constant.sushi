@@ -1,6 +1,5 @@
 # EXPECT_ERROR_CODES_EXACT: CE2400
 # EXPECT_STDERR_CONTAINS: "cannot borrow 'TONE' with `poke`"
-# EXPECT_STDERR_CONTAINS: "cannot borrow 'TONE' with `poke`"
 # EXPECT_STDERR_CONTAINS: "a constant is read-only storage: `peek` reads it, and `poke` writes it; declare a `var` for storage that you can write"
 # EXPECT_DUMP_SHIR: test_err_typeck_match_enum_poke_constant.shir
 #
