@@ -4,7 +4,7 @@ The constant evaluator reads the initializer at the declared type first, with th
 of the pass (docs/design/ir.md 7.3, Q5). After an error of the evaluator, the initializer
 body is not walked. Else the walk checks the body (`visit/statements.py`), and the value
 that the evaluator gave is the value row of its `Return`. An empty container allocates
-nothing, so the evaluator does not read it.
+nothing, so the evaluator does not read it, and it has no value.
 """
 from __future__ import annotations
 
@@ -27,10 +27,11 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class InitializerFacts:
-    """What the `Return` of an initializer body reads: the declaration, and the value that
-    the constant evaluator gave it (None for an empty container)."""
+    """What the `Return` of an initializer body reads: the declaration, the value that the
+    constant evaluator gave it, and whether it is an empty container, which has no value."""
     decl: ConstDef
     value: Optional[ConstantValue]
+    empty: bool
 
 
 def assignment_span(const: ConstDef) -> Optional[Span]:
@@ -80,14 +81,15 @@ def _validate_constant(self, const: ConstDef) -> None:
             sig.const_type = resolved
 
     value = None
-    if not (is_var and allocates_nothing(const.value)):
+    empty = is_var and allocates_nothing(const.value)
+    if not empty:
         offered = self.errors_offered()
         value = self.constant_evaluator(self.reporter).evaluate(const.value, const.ty, const.loc)
         if self.errors_offered() != offered:
             return
 
     # The initializer is the SHIR body of the constant (docs/design/ir.md 6.3).
-    self.initializer = InitializerFacts(const, value)
+    self.initializer = InitializerFacts(const, value, empty)
     try:
         self.check_body(const)
     finally:

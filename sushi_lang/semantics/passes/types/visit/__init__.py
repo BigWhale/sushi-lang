@@ -50,6 +50,13 @@ def stop_at(validator: TypeValidator, node: Any, _expected: Optional[Type] = Non
     dispatch.stop(STAGE, node, facts)
 
 
+def stop_with_no_value(node: Any) -> NoReturn:
+    """The stop at a constant that has no value and no error (`ConstRef with no value`), or
+    at the `Return` of such an initializer (`Return with no value`): a function-typed
+    constant, for example. After an error of the initializer, the error is the diagnostic."""
+    dispatch.stop(STAGE, node, state="with no value")
+
+
 def _arm(node: Any) -> Callable[..., Any]:
     return dispatch.arm_of(ARMS, node, STAGE)
 

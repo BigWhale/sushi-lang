@@ -9,7 +9,8 @@ A literal takes the type of its position when the position gives one of its kind
 its default (`int_literal_default`). An integer literal holds a value at that type
 (`held_value`, ir.md 8.5). A local answers the type that the table holds for it. A constant
 answers its declared type, and its value, from the constant table (Q5). A constant with no
-value has an error of its own initializer, so the body that reads it does not go on.
+value stops the walk (`ConstRef with no value`): after an error of its initializer, that
+error is the diagnostic.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics import integer_ops
 from sushi_lang.semantics.passes.collect.constants import ConstSig
+from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.inference import (
     float_literal_fits, int_literal_default, int_literal_fits)
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
@@ -140,12 +142,10 @@ def check_const_ref(validator: TypeValidator, node: e.ConstRef,
 
 def _record_constant_value(validator: TypeValidator, node: e.ConstRef,
                            record: Union[ConstSig, StdlibFunction]) -> None:
-    """The value row of `node`. A constant with no value has an error of its own
-    initializer, and the body that reads it does not go on (`refused_before`)."""
+    """The value row of `node`, or the stop at a constant with no value."""
     value = validator.constant_value(record)
     if value is None:
-        validator.refused_before = True
-        return
+        visit.stop_with_no_value(node)
     validator.body_answers().record_value(node.shir_id, value)
 
 

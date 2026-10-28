@@ -102,9 +102,7 @@ class TypeValidator:
         self.refused_locals: set['LocalId'] = set()
         self.folder: Optional[Folder] = None
         # True when the body holds an error that an earlier pass reported: the collect
-        # pass refuses a `??` in a bare body (CE0131), and its node has no answer. True
-        # too when the body reads a constant with no value: the check of its initializer
-        # reports the error.
+        # pass refuses a `??` in a bare body (CE0131), and its node has no answer.
         self.refused_before = False
         # The initializer that the body half walks: its declaration and the value that the
         # constant evaluator gave it (docs/design/ir.md 7.3), or None.

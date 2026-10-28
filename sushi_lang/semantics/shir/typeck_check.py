@@ -15,9 +15,9 @@ once (`walk.py`) and asks the table:
 - each target of a `Destructure`, at each level, has an element type;
 - an integer literal and a `ConstRef` have a value.
 
-A `ConstRef` of a constant with no value reads an error of that constant, and the body
-that holds it does not reach this check. An initializer needs no value row: a `var` of an empty container has
-no value.
+A `ConstRef` of a constant with no value stops the walk (`ConstRef with no value`), so its
+body does not reach this check. An initializer needs no value row: a `var` of an empty
+container has no value, and any other initializer with no value stops the walk.
 
 The captures of a lambda are in `Bindings` and not in the body, so the check cannot count
 them: the type of a capture has no check here.

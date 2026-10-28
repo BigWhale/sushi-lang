@@ -8,6 +8,8 @@ pass does not handle yet: it ends the walk of the body with the stop code CE0155
 names the stage and the construct, at the span of the node. The construct is the class of
 the node. For a `Call`, it names the kind of the target too (`construct_of`), or the
 family of a method call that the ladder resolved and whose arm the pass does not have yet.
+A stop at a node in a state that the pass cannot handle yet names the state after the class
+(`ConstRef with no value`).
 """
 from __future__ import annotations
 
@@ -85,9 +87,11 @@ def _target_kind(target: e.CallTarget, facts: CallFacts) -> str:
 
 
 def stop(stage: str, node: Any, facts: Optional[CallFacts] = None, *,
-         family: Optional[str] = None) -> NoReturn:
-    """The stop of the pass `stage` at a construct that it does not handle yet."""
-    raise StageStop(stage, construct_of(node, facts, family=family), node.loc)
+         family: Optional[str] = None, state: Optional[str] = None) -> NoReturn:
+    """The stop of the pass `stage` at a construct that it does not handle yet, or at a
+    node in the `state` that it does not handle yet."""
+    construct = construct_of(node, facts, family=family)
+    raise StageStop(stage, construct if state is None else f"{construct} {state}", node.loc)
 
 
 def stop_at_family(stage: str, node: Any, family: str) -> NoReturn:

@@ -17,6 +17,7 @@ channel (CE2031, CE2039). A `Return` of a bare body checks its value at the decl
 return type, and refuses a `Result` constructor (CE2091). A `Return` of an initializer
 checks its value at the declared type of the constant or `var` (CE2002 at `name = value`),
 and writes the value that the constant evaluator gave it (`passes/types/constants.py`).
+An initializer that has no value, and is no empty container, stops the walk.
 
 An `If` and a `Loop` with a `Cond` source check their condition (`check_condition`) and
 their blocks; an `elif` is an `If` in the `else` block. The kind of a `while` loop is
@@ -148,7 +149,8 @@ def check_return(validator: TypeValidator, node: s.Return) -> None:
 
 def _check_initializer(validator: TypeValidator, node: s.Return) -> None:
     """The `Return` of an initializer body: the value at the declared type, as a `let`
-    checks it, and the value row of the `Return` (docs/design/ir.md 7.3)."""
+    checks it, and the value row of the `Return` (docs/design/ir.md 7.3). An initializer
+    that fits and has no value, and is no empty container, stops the walk."""
     facts = validator.initializer
     if facts is None:
         er.raise_internal_error("CE0000", span=node.loc,
@@ -157,8 +159,11 @@ def _check_initializer(validator: TypeValidator, node: s.Return) -> None:
     got = visit.check_expr(validator, node.value, const.ty)
     if reject_mismatch(validator, got, const.ty, assignment_span(const), const.type_span):
         return
-    if got is not None and facts.value is not None:
-        validator.body_answers().record_value(node.shir_id, facts.value)
+    if got is None or facts.empty:
+        return
+    if facts.value is None:
+        visit.stop_with_no_value(node)
+    validator.body_answers().record_value(node.shir_id, facts.value)
 
 
 def _check_channel_return(validator: TypeValidator, value: e.ShirExpr, channel: Type) -> None:
