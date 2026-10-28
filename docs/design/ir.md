@@ -33,7 +33,11 @@ by rulings R17 and R18 (group A3): 7.3 (a pattern has its own table of arms, and
 writes no type row) and 7.8 (a `Literal` and each bound of an `IntRange` keep the source
 text, which a diagnostic quotes). Amended on 2026-10-28 by group A3 (borrow): 7.9 (the
 arms of a `Match` join as the blocks of an `If` do, and its scrutinee is a read, or a
-consuming use with `consumes`).
+consuming use with `consumes`). Amended on 2026-10-28 by group A3 (SLIR): 8.6 (the
+intrinsic `eq`, the value equality of a test of a match), 8.8 (the trap RE2023 after the last
+arm of a match carries the source text of that arm as a `string` operand), 8.9 (the lowering
+of a `Match` on an integer or a string; the `bool` local of a test gets no storage marker)
+and 8.13 (the rule of a switch on an integer).
 
 ## The decisions, in one place
 
@@ -1864,7 +1868,7 @@ SlirCallee = Direct(symbol: str, name: str)              # free fn, method, exte
            | Indirect(Operand)                           # a closure's fn_ptr
 
 BuiltinName = BuiltinMethod                              # a row of METHOD_TYPE_REGISTRY (7.6)
-            | Intrinsic(name: str)                       # `println`, `print`, `interp`
+            | Intrinsic(name: str)                       # `println`, `print`, `interp`, `eq`
 ```
 
 `DropIfSet` replaces the string-keyed drop-flag table of 1.4. The flag is an ordinary SLIR
@@ -1885,6 +1889,11 @@ An `Intrinsic` callee of SHIR (7.6) has no row of `METHOD_TYPE_REGISTRY`, so it 
 `Builtin(Intrinsic(name), types)`: `types` holds the type of each operand, and the
 printer writes it as `builtin println@(string)`. An interpolation lowers to the intrinsic
 `interp` (8.9).
+
+The test of a string arm of a `match` lowers to the intrinsic `eq`, the value equality: two
+`Guaranteed` operands of one type, `types` holds that type for each operand, and the
+destination is a `bool` local. The backend expands it with the contract seam `emit_value_eq`
+(Q7), so the equality of a type has one home.
 
 A `Builtin(recv, BuiltinMethod)` callee of SHIR lowers to `Builtin(BuiltinMethod, [])`: a
 method has no operand types in the callee, because each operand is a place or a constant
@@ -1955,6 +1964,12 @@ and `assertion failed at f.sushi:3:5` for a bare `assert`. A value that the comp
 such as the position, is a constant operand: the text of RE2026 holds no `{name}` slot,
 because the backend would put the file name in a printf format string.
 
+The trap after the last arm of a `match` is [RE2023](../error-catalog.md#re2023), and its
+text is `no match arm matched the value (expected %.*s)`. Its one operand is the source text
+of that arm, a `Str` constant, as a diagnostic quotes it (7.8). The typecheck pass refuses a
+match that misses a value (CE2040, CE2074), so no program reaches this trap: it is the
+backstop of the checker, as on the AST backend.
+
 ### 8.9 SHIR to SLIR, construct by construct
 
 | SHIR | SLIR |
@@ -1963,8 +1978,9 @@ because the backend would put the file name in a printf format string.
 | `Binary(and/or)` | **two blocks.** Short-circuit is control flow, never an rvalue. The left operand goes into the place that takes the value; a `SwitchInt` on it goes to the join (`and` on a zero, `or` on any other value) or to the right block, which writes the same place and goes to the join. The temporaries of the right operand die in its block |
 | `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` that calls a declared conversion is a stop of the lowering for now (`slir, conversion`) |
 | `Match` on an enum | `Discriminant` + `SwitchInt`; one block per arm; payload through `Downcast` + `Field` |
-| `Match` on an integer | `SwitchInt` on the value; with a `Range` arm, a chain of compares in source order |
-| `Match` on a string, a tuple, or with `Or` arms | a chain of tests in source order, each a `Call` to the value equality and a `SwitchInt` on its bool |
+| `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |
+| `Match` on a string | a chain of tests in source order (see below): each a `Call` of the intrinsic `eq` (8.6) into a `bool` local, and a `SwitchInt` on it |
+| `Match` on a tuple, or with `Or` arms on an enum | a chain of tests in source order, each a `Call` to the value equality and a `SwitchInt` on its bool |
 | `Loop`, kind `While` | header block, `SwitchInt`, body, `Goto` header. The blocks are made in the order header, the blocks of the condition (an `and` or an `or` in it), body, the zero block (when the condition has a local, see below), exit |
 | `Break`, `Continue` | the drops of each scope of the loop body that it leaves (8.10, rule 2), then `Goto` the exit or the header |
 | `Loop`, kind `CountedRange` | counter local, header, compare, body, step, `Goto` header |
@@ -1993,8 +2009,25 @@ top of each block that its `SwitchInt` goes to (the rule of rustc); an exit insi
 condition (the error path of a `Try`) ends it too. So each target of that `SwitchInt` is a
 block that only the switch reaches: an `If` with no `else` sends its zero edge to a block
 of its own that goes to the join, and a `While` sends its zero edge to a block of its own
-that goes to the exit, which a `Break` reaches too. Only the local of a `Discriminant`,
-which the terminator of its own block reads, gets no storage marker.
+that goes to the exit, which a `Break` reaches too. Only a local that its own block writes
+and that the terminator of that block alone reads gets no storage marker: the local of a
+`Discriminant`, and the `bool` local of a test of a `match`.
+
+A `Match` on an integer or a string evaluates its scrutinee in the scope of the match
+statement. A place is read with `Copy` in each test. A new value, and a scrutinee that the
+match takes (`consumes`), go into a temporary of the statement: each test reads the
+temporary, and the statement drops it at its end, or at the exit of an arm (a `return`, a
+`break`, a `continue`). In a chain, a failed test goes to the test of the next alternative
+of its arm, else to the first test of the next arm; after the last arm it goes to the trap
+RE2023 (8.8). A `_` arm, and an arm with a `_` alternative, has no test, and it is the last
+arm (CE2041, CE2118). Each arm body is a scope of its own, and each arm starts from the state
+of the locals after the scrutinee. The arms that reach their end meet at the join, as the
+blocks of an `If` do. The first test is in the block of the scrutinee. The blocks are made
+in source order: for each arm of a chain, the blocks of its tests after the first, the block
+of its body, then the block where its last test fails (the first test of the next arm, or
+the trap); the blocks inside the body of an arm come after these. With one switch, the arm
+blocks come in source order. The join is made after the arms, and no join is made when no
+arm reaches it.
 
 Four SHIR nodes vanish at this boundary: `Try`, `Interp`, `Destructure` and `Take`. They
 were kept in SHIR only so that `typecheck` and `borrow` could report against the source
@@ -2225,6 +2258,8 @@ Runs after lowering, before the backend. It checks:
 - no `Copy` of an owning value into an `Owned` argument, except a `string` (7.9)
 - a call of a `BuiltinMethod` has a receiver operand, the first operand
 - no `Binary` carries `and` or `or` (8.9)
+- a switch on an integer: the operand of a `SwitchInt` is an integer or a `bool`, and each
+  case value is in the range of its type, with no value two times
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
