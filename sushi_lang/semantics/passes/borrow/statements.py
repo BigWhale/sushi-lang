@@ -14,11 +14,12 @@ element groups, and the `return` of a `peek` return by its own group: each stops
 walk.
 
 An `if` checks each block from the state before it, and the paths that reach the code
-after it join. A `while` loop checks its condition once, then its body in two rounds
-(`check_loop_body`): the paths of a `continue` and of the end of the body go round the
-back edge, and the paths of a `break` leave the loop. A loop over items is checked by the
-iterators group, and it stops the walk. The end of a block that the path reaches, a
-`return`, a `break` and a `continue` are exits of the blocks that they leave
+after it join. A `match` reads its scrutinee (`match nom r:` takes it), and its arms join
+as the blocks of an `if` do. A `while` loop checks its condition once, then its body in
+two rounds (`check_loop_body`): the paths of a `continue` and of the end of the body go
+round the back edge, and the paths of a `break` leave the loop. A loop over items is
+checked by the iterators group, and it stops the walk. The end of a block that the path
+reaches, a `return`, a `break` and a `continue` are exits of the blocks that they leave
 (`flow.record_exit`), and a rebind is an exit of the old value of its local
 (`flow.record_rebind`).
 """
@@ -36,7 +37,7 @@ from sushi_lang.semantics.shir.paths import terminates
 from sushi_lang.semantics.typesys import ReferenceType
 
 from . import arms
-from .bindings import release_binding_borrow
+from .bindings import is_literal_arm, release_binding_borrow
 from .borrows import clear_borrows
 from .consume import bind, binds_a_bare_literal_string, consume
 from .expressions import reject_a_use_after_the_change
@@ -196,6 +197,28 @@ def check_if(checker: 'BorrowChecker', node: s.If) -> None:
             continue
         check_block(checker, block)
         if not terminates(block, leaves_round=True):
+            paths.append(snapshot_flow(checker))
+    restore_flow(checker, FlowFacts.join(paths))
+
+
+def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
+    """A match reads its scrutinee, and `match nom r:` takes it over, a consuming use. The
+    arms are exclusive paths, and they join as the blocks of an `if` do. The arms cover
+    each value (the typecheck pass), so no path skips them. A literal arm binds no name; a
+    match with an arm that binds a name stops the walk: the group of the enum match checks
+    it."""
+    if not all(is_literal_arm(arm.pattern) for arm in node.arms):
+        arms.stop_at(checker, node)
+    arms.check(checker, node.scrutinee)
+    if node.consumes:
+        consume(checker, node.scrutinee)
+    clear_borrows(checker)
+    entry = snapshot_flow(checker)
+    paths: list[FlowFacts] = []
+    for arm in node.arms:
+        restore_flow(checker, entry)
+        check_block(checker, arm.body)
+        if not terminates(arm.body, leaves_round=True):
             paths.append(snapshot_flow(checker))
     restore_flow(checker, FlowFacts.join(paths))
 

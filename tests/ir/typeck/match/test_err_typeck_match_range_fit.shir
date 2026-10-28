@@ -4,7 +4,7 @@ ShirBody high
   params : [(_0 "b": i8, Guaranteed)]
   locals : []
   block  :
-    Match(LocalRef(_0), [Arm(IntRange(0x80, 0xff, inclusive: true), [Return(Lit("negative"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+    Match(LocalRef(_0), [Arm(IntRange(0x80, 0xff, inclusive: true), [Return(adopt Lit("negative"))]), Arm(Wildcard, [Return(adopt Lit("other"))])], consumes: false)
 
 ShirBody any
   params : [(_0 "b": u8, Guaranteed)]

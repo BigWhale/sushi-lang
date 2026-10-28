@@ -1,0 +1,45 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'w'"
+# EXPECT_DUMP_SHIR: test_err_borrow_match_reads_its_scrutinee.shir
+#
+# A match with no `nom` reads its scrutinee, and the scrutinee stays with its owner.
+# - `word_code` matches a parameter that borrows a string: a read, with no error.
+# - `twice` matches one local two times: the first match does not take it.
+# - `temporary` matches a string that an interpolation makes: a read of a temporary.
+# - `after_move` matches a local after a move of it: CE2405 at the scrutinee.
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn word_code(string word) i32:
+    match word:
+        "get" -> return 1
+        _ -> return 2
+
+fn twice() i32:
+    let string w = "{1} towels"
+    let i32 n = 0
+    match w:
+        "1 towels" -> n := 1
+        _ -> n := 2
+    match w:
+        "1 towels" -> return n
+        _ -> return 0
+
+fn temporary(i32 n) i32:
+    match "{n}":
+        "1" -> return 1
+        _ -> return 2
+
+fn after_move() i32:
+    let string w = "{2} towels"
+    eat(nom w)
+    match w:
+        "x" -> return 1
+        _ -> return 2
+
+fn main() i32:
+    println(word_code("get"))
+    println(twice())
+    println(temporary(1))
+    return after_move()

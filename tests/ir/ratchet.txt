@@ -80,6 +80,7 @@ tests/borrow/borrowed_return/test_err_br_lambda.sushi
 tests/borrow/borrowed_return/test_err_br_nom_self.sushi
 tests/borrow/borrowed_return/test_err_br_perk_contract.sushi
 tests/borrow/borrowed_return/test_err_br_perk_implementation.sushi
+tests/borrow/move_note_at_join/test_err_move_in_match_arm_rebind_in_other.sushi
 tests/borrow/nested_own_take/test_err_nested_own_nom_match_nom.sushi
 tests/borrow/nested_own_take/test_err_nested_own_nom_plain_match.sushi
 tests/borrow/nested_own_take/test_err_nested_own_nom_temporary.sushi
@@ -619,6 +620,9 @@ tests/ir/borrow/control_flow/test_err_borrow_move_before_a_rebind.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_before_break.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_in_both_arms.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_in_one_arm.sushi
+tests/ir/borrow/match/test_err_borrow_match_move_in_one_arm.sushi
+tests/ir/borrow/match/test_err_borrow_match_nom_scrutinee.sushi
+tests/ir/borrow/match/test_err_borrow_match_reads_its_scrutinee.sushi
 tests/ir/borrow/methods/test_borrow_string_method_reaches_slir.sushi
 tests/ir/borrow/methods/test_err_borrow_method_argument_after_move.sushi
 tests/ir/borrow/methods/test_err_borrow_method_receiver_after_move.sushi

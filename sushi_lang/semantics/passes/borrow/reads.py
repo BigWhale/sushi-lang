@@ -7,7 +7,7 @@ narrower copy that forgot the `??` is exactly how `outer.get(0)??.push(5)` went 
 
 Port templates: the probes that read the AST take an AST node, and no SHIR pass has one.
 No pass reaches them today. The group that checks each construct ports its probes to SHIR
-inputs before a SHIR caller is connected: A3 or A4 a `match` (`root_owner`), A4 an enum
+inputs before a SHIR caller is connected: A4 a `match` (`root_owner`) and an enum
 constant (`is_bare_enum_constant`), A5 a field (`_field_type`), A6 an element and a slice
 (`chain_call_boundary`, `slice_on_path`), A6 or B2 a container get-out (`called_on`,
 `reads_through_owner`, `receiver_type`, `names_kept_storage`), A8 a constant

@@ -4,17 +4,17 @@ ShirBody kind
   params : [(_0 "n": i32, Guaranteed)]
   locals : [_1 "out": string]
   block  :
-    Assign(LocalRef(_1), Lit("other"), is_init: true)
-    Match(LocalRef(_0), [Arm(Literal(0), [Assign(LocalRef(_1), Lit("zero"), is_init: false)]), Arm(Or([Literal(1), Literal(2), Literal(3)]), [Assign(LocalRef(_1), Lit("small"), is_init: false)]), Arm(IntRange(0x10, 0x1f, inclusive: true), [Assign(LocalRef(_1), Lit("hex"), is_init: false)]), Arm(IntRange(-9, -1, inclusive: false), [Assign(LocalRef(_1), Lit("minus"), is_init: false)]), Arm(Or([Literal(-1), Literal(0x7f)]), [Assign(LocalRef(_1), Lit("other"), is_init: false)]), Arm(Wildcard, [Assign(LocalRef(_1), Lit("other"), is_init: false)])], consumes: false)
-    Return(LocalRef(_1))
+    Assign(LocalRef(_1), adopt Lit("other"), is_init: true)
+    Match(LocalRef(_0), [Arm(Literal(0), [Assign(LocalRef(_1), adopt Lit("zero"), is_init: false)]), Arm(Or([Literal(1), Literal(2), Literal(3)]), [Assign(LocalRef(_1), adopt Lit("small"), is_init: false)]), Arm(IntRange(0x10, 0x1f, inclusive: true), [Assign(LocalRef(_1), adopt Lit("hex"), is_init: false)]), Arm(IntRange(-9, -1, inclusive: false), [Assign(LocalRef(_1), adopt Lit("minus"), is_init: false)]), Arm(Or([Literal(-1), Literal(0x7f)]), [Assign(LocalRef(_1), adopt Lit("other"), is_init: false)]), Arm(Wildcard, [Assign(LocalRef(_1), adopt Lit("other"), is_init: false)])], consumes: false)
+    Return(adopt LocalRef(_1))
 
 ShirBody byte_kind
   params : [(_0 "b": u8, Guaranteed)]
   locals : [_1 "out": string]
   block  :
-    Assign(LocalRef(_1), Lit("other"), is_init: true)
-    Match(LocalRef(_0), [Arm(Literal(a'/'), [Assign(LocalRef(_1), Lit("slash"), is_init: false)]), Arm(IntRange(a'0', a'9', inclusive: true), [Assign(LocalRef(_1), Lit("digit"), is_init: false)]), Arm(Wildcard, [Assign(LocalRef(_1), Lit("other"), is_init: false)])], consumes: false)
-    Return(LocalRef(_1))
+    Assign(LocalRef(_1), adopt Lit("other"), is_init: true)
+    Match(LocalRef(_0), [Arm(Literal(a'/'), [Assign(LocalRef(_1), adopt Lit("slash"), is_init: false)]), Arm(IntRange(a'0', a'9', inclusive: true), [Assign(LocalRef(_1), adopt Lit("digit"), is_init: false)]), Arm(Wildcard, [Assign(LocalRef(_1), adopt Lit("other"), is_init: false)])], consumes: false)
+    Return(adopt LocalRef(_1))
 
 ShirBody main
   params : []

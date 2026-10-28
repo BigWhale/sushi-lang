@@ -4,7 +4,7 @@ ShirBody early
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    Match(LocalRef(_0), [Arm(Literal(1), [Return(Lit("one"))]), Arm(Or([Literal(2), Wildcard]), [Return(Lit("other"))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Literal(1), [Return(adopt Lit("one"))]), Arm(Or([Literal(2), Wildcard]), [Return(adopt Lit("other"))])], consumes: false)
 
 ShirBody late
   params : [(_0 "n": i32, Guaranteed)]

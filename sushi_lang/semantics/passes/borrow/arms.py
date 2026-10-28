@@ -8,8 +8,8 @@ internal error at the span of the node, and the arm of a construct that the pass
 check yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
 
 `statements.py` walks a block and holds the statement arms, among them the branch, the
-`while` loop, the `break` and the `continue`; `expressions.py` holds the expression arms,
-and `calls.py` the arm of a call.
+`match`, the `while` loop, the `break` and the `continue`; `expressions.py` holds the
+expression arms, and `calls.py` the arm of a call.
 """
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     s.Return: st.check_return,
     s.If: st.check_if,
     s.Loop: st.check_loop,
-    s.Match: stop_at,
+    s.Match: st.check_match,
     s.Assert: st.check_assert,
     s.Break: st.check_break,
     s.Continue: st.check_continue,

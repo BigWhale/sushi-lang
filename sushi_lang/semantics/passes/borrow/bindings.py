@@ -1,4 +1,8 @@
-"""Registration and lifetime of the bindings a `match` arm or a `foreach` introduces."""
+"""Registration and lifetime of the bindings a `match` arm or a `foreach` introduces.
+
+A literal arm binds no name (`is_literal_arm`). The registration of the binders of an enum
+or a tuple pattern reads the AST still: the group of the enum match ports it.
+"""
 
 from __future__ import annotations
 from enum import Enum, auto
@@ -13,6 +17,7 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.semantics.constant_borrow import READ_ONLY_MODE
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.typesys import ReferenceType, Type
 
 from .diagnostics import spelled
@@ -32,6 +37,15 @@ def release_binding_borrow(owner_state: Optional[BorrowState], binding: str) -> 
         owner_state.binding_borrows = [
             entry for entry in owner_state.binding_borrows if entry[0] != binding
         ]
+
+
+def is_literal_arm(pattern: p.ShirPattern | p.PatBinding) -> bool:
+    """Does `pattern` bind no name: `_`, a literal, a range, or an `Or` of them?"""
+    if isinstance(pattern, (p.Wildcard, p.Literal, p.IntRange)):
+        return True
+    if isinstance(pattern, p.Or):
+        return all(is_literal_arm(alternative) for alternative in pattern.alternatives)
+    return False
 
 
 def walks_a_temporary(checker: 'BorrowChecker', iterable: Expr) -> bool:
