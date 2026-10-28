@@ -25,7 +25,7 @@ reaches, a `return`, a `break` and a `continue` are exits of the blocks that the
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
@@ -175,22 +175,18 @@ def check_assert(checker: 'BorrowChecker', node: s.Assert) -> None:
     restore_flow(checker, FlowFacts.join([entry, snapshot_flow(checker)]))
 
 
-def check_if(checker: 'BorrowChecker', node: s.If) -> None:
-    """Each block starts from the state after the condition; the paths that reach the code
-    after the `if` JOIN.
+def join_exclusive_paths(checker: 'BorrowChecker', blocks: Sequence[ShirBlock | None]) -> None:
+    """Check exclusive blocks, each from the state before them; the paths that reach the
+    code after them JOIN. `None` is a path that skips every block.
 
-    A local is moved after the `if` when it is moved on ANY path, and moved on every path
-    when it is moved on each one. Only the paths that reach the code after the `if`
+    A local is moved after the join when it is moved on ANY path, and moved on every path
+    when it is moved on each one. Only the paths that reach the code after the blocks
     contribute: a block that ends in a `return`, a `break` or a `continue` leaves by its
-    own exit, so its move reaches no other block and no statement below (#287). With no
-    `else`, the path that skips the `then` block is a path too. An `elif` is an `if` in
-    the `else` block.
+    own exit, so its move reaches no other block and no statement below (#287).
     """
-    arms.check(checker, node.cond)
-    clear_borrows(checker)
     entry = snapshot_flow(checker)
     paths: list[FlowFacts] = []
-    for block in (node.then, node.otherwise):
+    for block in blocks:
         restore_flow(checker, entry)
         if block is None:
             paths.append(entry)
@@ -199,6 +195,14 @@ def check_if(checker: 'BorrowChecker', node: s.If) -> None:
         if not terminates(block, leaves_round=True):
             paths.append(snapshot_flow(checker))
     restore_flow(checker, FlowFacts.join(paths))
+
+
+def check_if(checker: 'BorrowChecker', node: s.If) -> None:
+    """The two blocks are exclusive paths. With no `else`, the path that skips the `then`
+    block is a path too. An `elif` is an `if` in the `else` block."""
+    arms.check(checker, node.cond)
+    clear_borrows(checker)
+    join_exclusive_paths(checker, (node.then, node.otherwise))
 
 
 def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
@@ -213,14 +217,7 @@ def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
     if node.consumes:
         consume(checker, node.scrutinee)
     clear_borrows(checker)
-    entry = snapshot_flow(checker)
-    paths: list[FlowFacts] = []
-    for arm in node.arms:
-        restore_flow(checker, entry)
-        check_block(checker, arm.body)
-        if not terminates(arm.body, leaves_round=True):
-            paths.append(snapshot_flow(checker))
-    restore_flow(checker, FlowFacts.join(paths))
+    join_exclusive_paths(checker, [arm.body for arm in node.arms])
 
 
 def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
