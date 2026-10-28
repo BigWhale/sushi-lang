@@ -21,6 +21,9 @@ that an integer literal holds, and the value of a constant, as a row of `TypeckR
 Amended on 2026-10-28 by group A8: 7.3, 7.4 and 7.9 (`borrow` walks an initializer body, and
 refuses a `poke` of a constant with CE2400; a `poke` of a constant is no error hole), and 8.2
 and 8.5 (SLIR lowers an initializer body and a `ConstRef` from the value rows of `typecheck`).
+Amended on 2026-10-28 by group A8 (emit): 7.9, 8.2 and 8.5 (an initializer body does not go
+to SLIR; the global of a constant or a `var` takes the value of the constant evaluator, in
+the declaration round of the backend, and that is the one path).
 
 ## The decisions, in one place
 
@@ -1423,7 +1426,8 @@ body with an error of `typecheck` does not reach the arm either: `let i32 y = po
 CE2002 alone.
 
 When the walk of a body ends with no stop and with no error, `check_ownership` runs, and
-the body goes to the SLIR lowering (8.2). The pipeline reports the first stop of
+the body goes to the SLIR lowering (8.2). The SLIR stage takes no initializer body
+(8.2). The pipeline reports the first stop of
 `typecheck`, then the first stop of `lift`, then the first stop of `borrow`, then an error
 hole, then the first stop of the SLIR lowering; with no stop, the backend emits each body from
 its SLIR (8.2).
@@ -1632,12 +1636,16 @@ after the analysis: a stop of `typecheck`, else of `lift`, else of `borrow`, els
 hole, else a stop of the lowering. When nothing stopped, the program goes on to the
 backend.
 
-**An initializer body.** The lowering makes a function from the initializer body of a
-constant or a `var` (6.3), as from any other body: its `Return` writes `_0`. The function
-takes the symbol of its global (`emitted_symbol`, `unit_symbols.py`) and the declared type as
-the type of `_0`. The emitter does not emit it: the global takes the value of the constant
-evaluator (Q5) in the declaration round. The dump shows the function, and the verifier
-checks it.
+**An initializer body.** The SLIR stage does not lower the initializer body of a constant or
+a `var` (6.3). The body gives `typecheck` and `borrow` a SHIR node to check, and nothing
+more. The value of the constant is the value of the constant evaluator (Q5). The backend
+makes the global of each constant and each `var` from that value, in its declaration round
+(`codegen_llvm.py`, `_emit_global_constant`), and names it with `global_symbol`
+(`unit_symbols.py`). This is the one path of a global: no SLIR function makes the value of a
+global, and the dump shows no function for an initializer. A constant is an `internal`
+`.rodata` global in each module. A `var` is defined in the module of its unit, and
+declared in each other module. A body reads a constant as a `Const` operand (8.5), and
+never reads its global.
 
 **The emitter.** The package is `backend/slir/`, and it follows the backend rule: free
 functions, and one state object for each function (`FunctionState`: the codegen, the
@@ -1793,9 +1801,10 @@ result.
 **The value of a `ConstRef`.** A `ConstRef` is a `Const` operand with any row. Lowering
 reads the value row of the `ConstRef` (7.3), which holds the value of the constant (Q5), and
 makes the `Constant` of that value. A string constant is a `Str`: a literal, which owns no
-heap. So an `adopt` of a string constant (the `Return` of `const string ALIAS = GREETING`)
-gives the literal to `_0`, as an `adopt` of a literal-bound string does. A `move` row on a
-`ConstRef` does not reach SLIR: `borrow` refuses it with CE2436. A struct, an enum or an
+heap, as a literal-bound string. A `move` row on a `ConstRef` does not reach SLIR: `borrow`
+refuses it with CE2436. A `Const` argument of an `InGuaranteed` parameter (`show(peek STEP)`)
+has no place: the emitter stores the value in a slot of the entry block and passes the
+address of the slot. A struct, an enum or an
 array value stops the lowering (`aggregate constant`). The constant evaluator does not wrap
 a literal that spells bits (`const i8 B = 0xFF` holds 255), and it gives a value to an
 initializer with a range error. A value that its type cannot hold stops the lowering
