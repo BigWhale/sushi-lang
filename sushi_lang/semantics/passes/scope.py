@@ -41,6 +41,13 @@ _NOT_A_POKE_CONTAINER: frozenset[BareName] = frozenset({
 })
 
 
+# The rungs of a name that SHIR keeps as a `ConstRef` or a `StorageRef`. The borrow pass
+# asks the gate at a `ConstRef`, bare or behind an alias, and a `var` takes both modes.
+_RECORDS_THE_BORROW_PASS_READS: frozenset[BareName] = frozenset({
+    BareName.CONSTANT, BareName.STDLIB_CONSTANT,
+})
+
+
 def _declared_as(scope: Dict[str, 'VariableInfo'], name: str) -> Optional['VariableInfo']:
     """The variable of ``scope`` whose written name is ``name``, or None."""
     found = scope.get(name)
@@ -476,11 +483,10 @@ class ScopeAnalyzer:
             self._reject_type_as_value(name, usage_span)
         elif rung is BareName.NOTHING:
             self.err.emit(er.ERR.CE1001, usage_span, name=name)
-        else:
-            # A unit `var` takes every mode and a constant takes a read (#713); a
-            # function value, a stdlib constant and a namespace are storage of no kind.
-            reject_borrow_of_constant(self.err, name, self._const_sig(name),
-                                      usage_span, mode=mode, no_frame_slot=True)
+        elif rung not in _RECORDS_THE_BORROW_PASS_READS:
+            # A function value and a namespace are storage of no kind.
+            reject_borrow_of_constant(self.err, name, None, usage_span, mode=mode,
+                                      no_frame_slot=True)
 
     def _record_capture(self, name: str, resolved_index: int, span: Optional[Span]) -> None:
         """Record `name` as a capture for every enclosing lambda it is free in."""

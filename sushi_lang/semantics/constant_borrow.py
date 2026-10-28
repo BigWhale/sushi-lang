@@ -22,12 +22,14 @@ constant table. `ConstantTable.by_name` holds one record per NAME over the whole
 program and is first-wins, so a unit whose own `var` shared a name with an earlier
 unit's `const` was refused, and a unit whose own `const` shared a name with an earlier
 unit's `var` was let through to write read-only memory. Every caller passes what the
-SCOPED lookup answered -- `TypeValidator.const_sig`, or
-`ConstantTable.lookup(name, unit, scope)` -- because the question is per unit.
+SCOPED lookup answered -- `TypeValidator.const_sig`, `NamespaceTable.constant_record`,
+or `ConstantTable.lookup(name, unit, scope)` -- because the question is per unit.
 
-The module sits beside the passes rather than inside one: the scope pass and the
-typecheck pass both ask, and neither owns the other, which is the shape
-`semantics/name_ladder.py` and `semantics/param_modes.py` already have.
+The module sits beside the passes rather than inside one: the scope pass and the borrow
+pass both ask, and neither owns the other, which is the shape `semantics/name_ladder.py`
+and `semantics/param_modes.py` already have. The borrow pass asks at a `ConstRef` place,
+bare or behind an alias (docs/design/ir.md 7.9); the scope pass asks for a name that SHIR
+keeps as no `ConstRef`, a top-level function or a namespace.
 """
 from __future__ import annotations
 
@@ -72,11 +74,9 @@ def reject_borrow_of_constant(err: 'PassErrorReporter', name: str,
 
     `sig` is what the SCOPED constant lookup answered for `name`. `mode` is the word the
     position writes -- `peek` or `poke` -- because the record permits a read and refuses
-    a write. `no_frame_slot` is for a caller that has already read the name ladder and
-    knows the name reaches something with no storage even though no constant record
-    holds it -- a top-level function, a registry stdlib constant, an FFI
-    namespace. Only the scope pass can tell those apart, so only the scope pass passes
-    it.
+    a write. `no_frame_slot` is for a caller that knows the name reaches something with
+    no storage even though no constant record holds it: the scope pass for a top-level
+    function and an FFI namespace, and the borrow pass for a registry stdlib constant.
     """
     if has_an_address(sig):
         if mode == READ_ONLY_MODE or may_be_written(sig):

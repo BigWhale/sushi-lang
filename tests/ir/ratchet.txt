@@ -552,6 +552,8 @@ tests/generics/user_generic_struct/test_user_generic_struct_collect.sushi
 tests/ir/borrow/borrowed_views/test_err_borrow_nested_try_over_a_borrowed_wrapper.sushi
 tests/ir/borrow/borrowed_views/test_err_borrow_triple_try_over_a_borrowed_wrapper.sushi
 tests/ir/borrow/casts/test_err_borrow_cast_reads_its_operand.sushi
+tests/ir/borrow/constants/test_err_borrow_constant_initializer_adopts.sushi
+tests/ir/borrow/constants/test_err_borrow_poke_of_a_constant_behind_an_alias.sushi
 tests/ir/borrow/control_flow/test_err_borrow_continue_before_move.sushi
 tests/ir/borrow/control_flow/test_err_borrow_let_borrow_across_a_branch.sushi
 tests/ir/borrow/control_flow/test_err_borrow_move_before_a_rebind.sushi
@@ -1416,6 +1418,7 @@ tests/units/struct_after_enum/test_err_struct_after_enum_uses.sushi
 tests/units/struct_after_enum/test_err_struct_after_generic_enum.sushi
 tests/var/basics/test_err_var_is_not_an_array_size.sushi
 tests/var/borrow/test_err_var_poke_constant_still_refused.sushi
+tests/var/namespaces/test_err_poke_constant_behind_alias.sushi
 tests/var/visibility/test_err_public_var_private_type.sushi
 tests/variadic/expand_binder_lints/test_err_expand_discard_is_no_value.sushi
 tests/variadic/expand_placement/test_err_expand_in_conversion.sushi

@@ -4,7 +4,7 @@ ShirBody START (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit(40))
+    Return(adopt Lit(40))
 
 ShirBody grow
   params : [(_0 "text": string, Inout)]

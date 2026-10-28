@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2400
+# EXPECT_STDERR_CONTAINS: "cannot borrow 'STEP' with `poke`"
+# EXPECT_STDERR_CONTAINS: ":13:25"
+#
+# A reference `let` borrows its place. A `let peek` of a constant reads read-only storage,
+# and a `let poke` of a constant writes there, so the borrow pass refuses the `poke`
+# (CE2400) at the place, as it refuses a `poke` argument.
+
+const i32 STEP = 3
+
+fn main() i32:
+    let peek i32 seen = STEP
+    let poke i32 slot = STEP
+    slot := slot + 1
+    return seen

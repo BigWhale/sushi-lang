@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2400
+# EXPECT_STDERR_CONTAINS: "cannot borrow 'STEP' with `poke`"
+# EXPECT_STDERR_CONTAINS: ":20:15"
+# EXPECT_DUMP_SHIR: test_err_borrow_poke_of_a_constant_behind_an_alias.shir
+#
+# A constant behind an alias is the declaration that the alias holds. A `peek` of it reads
+# read-only storage, and a `poke` of it writes there, so the borrow pass refuses the `poke`
+# (CE2400) at the place, as for a bare name.
+
+use "units/steps" as t
+
+fn show(peek i32 n) ~:
+    println(n)
+
+fn bump(poke i32 n) ~:
+    n := n + 1
+
+fn main() i32:
+    show(peek t.STEP)
+    bump(poke t.STEP)
+    return 0

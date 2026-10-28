@@ -4,7 +4,7 @@ ShirBody LIMIT (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit(42))
+    Return(adopt Lit(42))
 
 ShirBody main
   params : []

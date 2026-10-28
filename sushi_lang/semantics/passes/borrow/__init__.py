@@ -15,8 +15,9 @@ second round starts from the fixed point and reports.
 
 A construct that the pass does not check yet stops the walk of its body with the stop code
 CE0155 (`borrow, <class>`), and the pass records the stop. The body of a constant or `var`
-initializer stops too (`borrow, Initializer`): a constant that it names is no move. A body
-that the walk finished with no error writes its conditionally moved locals, has its table
+initializer is walked as any other body: the constant evaluator makes its value, so a
+constant that it names is read, not moved (`consume.source_provenance`). A body that the
+walk finished with no error writes its conditionally moved locals, has its table
 checked (`check_ownership`, CE0157), and goes to the stage after the pass, the SLIR
 lowering (`slir/lower.py`).
 """
@@ -28,14 +29,15 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
+from sushi_lang.semantics.namespaces import NamespaceTable, body_namespaces
 from sushi_lang.semantics.param_modes import Convention
-from sushi_lang.semantics.shir.body import Initializer, TemplateCheck
+from sushi_lang.semantics.passes.collect import ConstSig
+from sushi_lang.semantics.shir.body import TemplateCheck
 from sushi_lang.semantics.shir.ownership_check import check_ownership
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, ReferenceType, Type
 
 # The table of arms first: the arm modules import it, and it imports them.
 from . import arms  # noqa: F401
-from .arms import STAGE
 from .borrows import BY_ADDRESS
 from .consume import binds_a_bare_literal_string
 from .destroy_effects import compute_destroy_effects
@@ -47,6 +49,7 @@ from .types import TypeQueries
 from .writes import READONLY_RECEIVERS
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.shir import exprs as e
     from sushi_lang.semantics.shir.body import ShirBody, ShirLocal, ShirParam
     from sushi_lang.semantics.shir.ids import DeclId, LocalId
     from sushi_lang.semantics.shir.lowering import LoweredProgram
@@ -63,7 +66,8 @@ class BorrowChecker:
                  shir: LoweredProgram,
                  stops: Stops,
                  next_stage: Callable[..., None],
-                 destroy_effects: Dict[str, FrozenSet[int]]):
+                 destroy_effects: Dict[str, FrozenSet[int]],
+                 namespaces: Optional[NamespaceTable] = None):
         self.reporter = reporter
         self.err = PassErrorReporter(reporter)
         # The tables that a type of the body is resolved in: the program's, or the overlay
@@ -76,6 +80,10 @@ class BorrowChecker:
         # fn name -> the poke param indices it destroys (#168), over EVERY unit, so a
         # cross-unit callee is not a blind spot (the `effects` pass).
         self.destroy_effects = destroy_effects
+        # The names of the unit, and the names that the body resolves in (`_enter`): the
+        # names of its unit, or of the library unit of a library copy (#1120).
+        self.unit_names = namespaces if namespaces is not None else NamespaceTable()
+        self.names = self.unit_names
         # The body that the pass walks, its tables and its locals.
         self.body: Optional[ShirBody] = None
         self.typeck: Optional[TypeckResults] = None
@@ -118,8 +126,6 @@ class BorrowChecker:
         offered = sum(self.reporter.errors_offered.values())
         has_receiver = bool(body.params) and self.name_of(body.params[0].local) == "self"
         try:
-            if isinstance(body.origin, Initializer):
-                raise StageStop(STAGE, "Initializer", body.block.loc)
             for param in body.params:
                 self._declare_param(param, has_receiver=has_receiver)
             self.block_locals.append([param.local for param in body.params])
@@ -144,6 +150,8 @@ class BorrowChecker:
 
     def _enter(self, decl: object, body: ShirBody, tables: SymbolTables) -> None:
         self.tables, self.types = tables, TypeQueries(tables)
+        self.names = (body_namespaces(decl, getattr(tables, "namespaces", None))
+                      or self.unit_names)
         self.body = body
         self.typeck = self.shir.typeck_of(body)
         self.ownership = self.shir.ownership_table_of(body)
@@ -188,6 +196,13 @@ class BorrowChecker:
     def decl_name(self, decl: DeclId) -> str:
         """The written name of a declaration that a SHIR node names."""
         return self.shir.decls.name_of(decl)
+
+    def constant_sig(self, node: e.ConstRef) -> Optional[ConstSig]:
+        """The record of the constant that `node` names in the scope of the body. A stdlib
+        constant has none."""
+        record = self.names.constant_record(self.decl_name(node.const_id),
+                                            self.tables.constants)
+        return record if isinstance(record, ConstSig) else None
 
     def local_type(self, local: LocalId) -> Optional[Type]:
         return self.answers().local_type(local)

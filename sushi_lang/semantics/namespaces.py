@@ -466,6 +466,19 @@ class NamespaceTable:
         bound = self._bound.get(alias)
         return None if bound is None else bound.loc
 
+    def constant_record(self, written: str, constants: Any) -> Any:
+        """What the written name of a constant names in this unit, or None.
+
+        Behind an alias (`geo.SIZE`), what the namespace holds. A bare name, the constant
+        or `var` of `constants` that the scope reaches. A stdlib constant that a flat
+        import brings is not here.
+        """
+        alias, dot, name = written.rpartition(".")
+        if dot:
+            binding = self.lookup(alias, name)
+            return None if binding is None else binding.record
+        return constants.lookup(written, scope=self.scope)
+
 
 def body_namespaces(node: Any,
                     tables: Optional[Mapping[str, NamespaceTable]]) -> Optional[NamespaceTable]:

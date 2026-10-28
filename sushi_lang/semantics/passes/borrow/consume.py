@@ -18,6 +18,7 @@ from sushi_lang.semantics.ast import Expr, IndexAccess, Lambda, Let, Name
 from sushi_lang.semantics.ownership import Ownership, Provenance, TypeClass, classify
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
+from sushi_lang.semantics.shir.body import Initializer
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
 from .diagnostics import (
@@ -65,13 +66,17 @@ def reconcile_closure_bind(checker: 'BorrowChecker', stmt: Let) -> None:
 def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
     """Where the value at a consuming use came from -- the half only semantics knows.
 
-    A local has the provenance of its state. A constant is storage that the program keeps
-    (#726): it is not FRESH, so a take of an owning one is refused. `r??` yields what `r`
-    holds, and the payload has the provenance of `r` (#548): a borrowed `r` keeps its
-    owner, so the payload is a read through it; an owned `r` was SPENT by the `??` itself
+    The constant evaluator makes each value of an initializer body, so that value is FRESH,
+    and a constant that the initializer names is read, not moved. In any other body, a local
+    has the provenance of its state. A constant is storage that the program keeps (#726):
+    it is not FRESH, so a take of an owning one is refused. `r??` yields what `r` holds,
+    and the payload has the provenance of `r` (#548): a borrowed `r` keeps its owner, so
+    the payload is a read through it; an owned `r` was SPENT by the `??` itself
     (`unwrap_place`), so nothing owns the payload now and the position adopts it.
     Anything else makes a new value.
     """
+    if isinstance(checker.body.origin, Initializer):
+        return Provenance.FRESH
     if isinstance(node, e.LocalRef):
         return name_provenance(checker, node.local)
     if isinstance(node, e.ConstRef):

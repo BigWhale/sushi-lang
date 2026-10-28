@@ -1,0 +1,22 @@
+# EXPECT_ERROR_CODES_EXACT: CE2436
+# EXPECT_STDERR_CONTAINS: "cannot move 'GREETING': it is a constant"
+# EXPECT_DUMP_SHIR: test_err_borrow_constant_initializer_adopts.shir
+#
+# The constant evaluator makes the value of an initializer, so the `Return` of an
+# initializer body adopts its value, a plain one and an owning one alike. A constant that
+# an initializer names is read, not moved: `const string ALIAS = GREETING` is no take of
+# `GREETING`. In a function body, a `nom` argument of an owning constant is a take, and a
+# constant is never moved out of (CE2436).
+
+const i32 BASE = 40
+const i32 ANSWER = BASE + 2
+const string GREETING = "Mostly Harmless"
+const string ALIAS = GREETING
+
+fn eat(nom string text) ~:
+    println(text)
+
+fn main() i32:
+    println(ALIAS)
+    eat(nom GREETING)
+    return ANSWER

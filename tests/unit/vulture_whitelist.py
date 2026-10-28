@@ -372,7 +372,7 @@ TEST_WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("tests/unit/test_pack_substitution.py", "ret_span", _READ_BY_CODE),
     ("tests/unit/test_pack_substitution.py", "err_span", _READ_BY_CODE),
     ("tests/unit/test_lambda_annotate_seam.py", "infer_expression_type", _READ_BY_CODE),
-    ("tests/unit/test_borrow_dispatch_is_total.py", "decl_name", _READ_BY_CODE),
+    ("tests/unit/test_borrow_of_constant_matrix.py", "emit_with", _READ_BY_CODE),
     ("tests/unit/test_library_registration_records.py", "loaded_libraries", _READ_BY_CODE),
     ("tests/unit/test_drop_invalidates_cache.py", "file_path", _READ_BY_CODE),
     ("tests/unit/test_drop_invalidates_cache.py", "public_symbols", _READ_BY_CODE),

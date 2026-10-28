@@ -4,13 +4,13 @@ ShirBody LIMIT (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit(3))
+    Return(adopt Lit(3))
 
 ShirBody GREETING (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit("Mostly Harmless"))
+    Return(adopt Lit("Mostly Harmless"))
 
 ShirBody show
   params : [(_0 "n": i32, InGuaranteed)]

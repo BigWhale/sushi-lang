@@ -13,6 +13,7 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
@@ -33,19 +34,18 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     """Borrow `place` for the statement: `peek x`, `poke x`.
 
     A place is a local or a constant here; a field of a local comes with the field group. A
-    constant is storage that the program keeps, so it has an address and no borrow state:
-    a `peek` of it reads it. A `poke` of it is always refused (CE2400), and lowering keeps
-    it as an error hole, so a `poke` of a constant here is an internal error at its span. A call result, a literal and
-    a construction are temporaries and have no address: CE2404.
+    constant is read-only storage that the program keeps, so it has an address and no
+    borrow state: a `peek` of it reads it, and a `poke` of it is CE2400 at the place, bare
+    or behind an alias. A stdlib constant has no record and no storage, so both modes are
+    CE2400 (`reject_borrow_of_constant`). A call result, a literal and a construction are
+    temporaries and have no address: CE2404.
     """
     is_poke = mode is BorrowMode.POKE
     if isinstance(place, e.ConstRef):
-        if is_poke:
-            er.raise_internal_error(
-                "CE0000", span=span,
-                detail=f"a `poke` of the constant '{checker.decl_name(place.const_id)}' "
-                       f"reached the borrow pass; a pass before it refuses a write to a "
-                       f"constant")
+        name = checker.decl_name(place.const_id).rpartition(".")[2]
+        sig = checker.constant_sig(place)
+        reject_borrow_of_constant(checker.err, name, sig, place.loc, mode=mode.value,
+                                  no_frame_slot=sig is None)
         return
     if not isinstance(place, e.LocalRef):
         checker.err.emit(er.ERR.CE2404, span, expr=spelled(checker, place))

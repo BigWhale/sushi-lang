@@ -4,13 +4,13 @@ ShirBody counter (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit(0))
+    Return(adopt Lit(0))
 
 ShirBody name (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit("Ford"))
+    Return(adopt Lit("Ford"))
 
 ShirBody ready (Initializer)
   params : []

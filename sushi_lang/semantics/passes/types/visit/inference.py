@@ -628,18 +628,6 @@ class TypeInferenceVisitor(NodeVisitor[Optional[Type]]):
         if inner_type is None:
             return None
 
-        ref = getattr(node.expr, "namespace_ref", None)
-        if ref is not None and ref.kind == "constant":
-            # `poke geo.SIZE`: the alias reaches the record, and the record decides. The
-            # spelling changes nothing -- a write to a constant is CE2400 here too, and
-            # a `peek` reads it as it reads the bare name (#713).
-            from sushi_lang.semantics.constant_borrow import (
-                reject_borrow_of_constant)
-            sig = self.type_validator.const_table.lookup(ref.name, ref.origin)
-            if reject_borrow_of_constant(self.type_validator.err, ref.name, sig,
-                                         node.expr.loc, mode=node.mutability):
-                return None
-
         from sushi_lang.semantics.param_modes import borrow_mode
         return ReferenceType(referenced_type=inner_type,
                              mutability=borrow_mode(node.mutability))

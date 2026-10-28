@@ -869,7 +869,7 @@ class SemanticAnalyzer:
         slir = SlirStage(self.shir, self.slir, stops=self.stops, unit=unit.name)
         borrow = BorrowChecker(reporter, tables=self.tables, shir=self.shir, stops=self.stops,
                                next_stage=slir.lower_body,
-                               destroy_effects=self.destroy_effects)
+                               destroy_effects=self.destroy_effects, namespaces=namespaces)
         lift = LiftPass(self.shir, stops=self.stops, next_stage=borrow.check_body)
         typecheck = TypeValidator(
             reporter, self.tables, current_unit_name=unit.name,

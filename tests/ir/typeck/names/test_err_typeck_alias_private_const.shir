@@ -4,13 +4,13 @@ ShirBody HIDDEN (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit(3))
+    Return(adopt Lit(3))
 
 ShirBody SHOWN (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit(4))
+    Return(adopt Lit(4))
 
 unit test_err_typeck_alias_private_const
 

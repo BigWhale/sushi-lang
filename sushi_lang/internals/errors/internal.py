@@ -494,7 +494,7 @@ _add(ErrorMessage("CE0155", Severity.ERROR,
     "construction (CE6104), written type arguments after a dot or on a struct "
     "construction (CE6102), a slice with a reversed range (CE2122), a call of a name "
     "that the namespace does not hold (CE2008), a member of a type that is no "
-    "variant (CE2045), a `poke` of a constant (CE2400), and a `break` or a `continue` "
+    "variant (CE2045), and a `break` or a `continue` "
     "outside a loop (CE1003). The code does not come for a unit "
     "in which the scope pass reported an error either: a type name written as a value is "
     "a hole there, and the error of the scope pass (CE2105) is the diagnostic. Each of those "

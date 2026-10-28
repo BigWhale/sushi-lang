@@ -156,9 +156,7 @@ def constant_record(validator: TypeValidator,
     Behind an alias (`geo.SIZE`), what the namespace holds; a bare name, the constant of the
     unit's scope, else the stdlib constant that a flat import brings.
     """
-    alias, dot, name = written.rpartition(".")
-    if dot:
-        binding = validator.namespaces.lookup(alias, name)
-        return None if binding is None else binding.record
-    sig = validator.const_sig(written)
-    return sig if sig is not None else lookup_stdlib_constant(written, validator.scope)
+    record = validator.namespaces.constant_record(written, validator.const_table)
+    if record is not None or "." in written:
+        return record
+    return lookup_stdlib_constant(written, validator.scope)
