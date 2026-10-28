@@ -178,13 +178,13 @@ AST_STATEMENT_ROWS: dict[str, tuple[str, ...]] = {
 
 #: ir.md 7.8, the pattern nodes and their fields in the written order. Two names change,
 #: because the expression level has them: the pattern `Range` is `IntRange`, and the
-#: binding mode `Take` is `Nom`. `IntRange` keeps the written bounds and `inclusive`:
-#: the values that the bounds give depend on the type at the position, and lowering has
-#: no types. An alternative of `Or` can be a binding, as in the AST (`Maybe.Some(x | y)`).
+#: binding mode `Take` is `Nom`. `IntRange` keeps the written bounds, `inclusive` and the
+#: span of each bound: the values that the bounds give depend on the type at the position,
+#: and lowering has no types. An alternative of `Or` can be a binding, as in the AST (`Maybe.Some(x | y)`).
 PATTERN_FIELDS: dict[str, tuple[str, ...]] = {
     "Wildcard": (),
     "Literal": ("value",),
-    "IntRange": ("low", "high", "inclusive"),
+    "IntRange": ("low", "high", "inclusive", "low_loc", "high_loc"),
     "Variant": ("decl", "variant", "items"),
     "Tuple": ("elements",),
     "Own": ("inner",),

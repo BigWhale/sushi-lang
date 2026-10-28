@@ -1,0 +1,24 @@
+# EXPECT_ERROR_CODES_EXACT: CE2076
+# EXPECT_STDERR_CONTAINS: "match arm does not fit the scrutinee: string literal arm on a 'u8' scrutinee"
+# EXPECT_STDERR_CONTAINS: "write `a'/'` for the byte"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_arm_kind.shir
+#
+# A byte arm and a byte range are integer arms, so a `u8` scrutinee takes them. A string
+# arm on a `u8` scrutinee is CE2076, and the help names the byte with the same character.
+
+fn byte_kind(u8 b) string:
+    match b:
+        a'/' -> return "slash"
+        a'0'..=a'9' -> return "digit"
+        0x41..0x5b -> return "upper"
+        _ -> return "other"
+
+fn slash(u8 b) string:
+    match b:
+        '/' -> return "slash"
+        _ -> return "other"
+
+fn main() i32:
+    println(byte_kind(47))
+    println(slash(47))
+    return 0

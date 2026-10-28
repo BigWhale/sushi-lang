@@ -305,9 +305,8 @@ class FunctionCollector:
             if stmt.scrutinee is not None:
                 self.expression_scanner.scan_expression(stmt.scrutinee, False)
             # A pattern binding is a LOCAL, and a generic called with one needs its type
-            # exactly as a `let` local's is needed. `resolved_scrutinee_type` is stamped by
-            # the typecheck pass, which runs after this one, so the scrutinee is typed here
-            # (#539).
+            # exactly as a `let` local's is needed. The typecheck pass runs after this one,
+            # so the scrutinee is typed here (#539).
             scrutinee_type = self._infer_scrutinee_type(stmt.scrutinee)
             for arm in stmt.arms:
                 from sushi_lang.semantics.ast import Block

@@ -79,9 +79,6 @@ _OWNERSHIPS: dict[Ownership, str] = {
     Ownership.REJECT: "reject",
 }
 
-_INT_PREFIXES: dict[int, Callable[[int], str]] = {16: hex, 8: oct, 2: bin}
-
-
 @dataclass(frozen=True, slots=True)
 class ShirPrinter:
     """The text of one value of a body. `decls` names each `DeclId`; `answers`,
@@ -142,10 +139,7 @@ def _optional(name: str, text: str | None) -> tuple[str, ...]:
 
 
 def _int(_pr: ShirPrinter, const: e.IntConst) -> str:
-    if const.byte_spelling is not None:
-        return const.byte_spelling
-    spell = _INT_PREFIXES.get(const.radix)
-    return str(const.value) if spell is None else spell(const.value)
+    return const.spelling()
 
 
 def _arg(pr: ShirPrinter, arg: e.Arg, convention: Optional[Convention] = None) -> str:

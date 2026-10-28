@@ -1,9 +1,19 @@
-"""Pattern matching validation for type validation.
+"""Pattern matching in the typecheck pass (docs/design/ir.md 7.8).
 
-Port templates: `validate_match_scrutinee` and `_walk_arm_body` call
-`TypeValidator.validate_expression`, and that API is deleted. No pass reaches them
-today. Group A3 or A4 (`match`), whichever comes first, ports them to SHIR inputs before
-a SHIR pass calls them.
+The SHIR half checks a `match` on an integer (#415) or a string. `matchable_type` is the
+rule of the scrutinee (CE2048), `check_literal_arm` checks the pattern of one arm and gives
+it its row, and `reject_arm_kinds` refuses a literal arm on an enum or a tuple scrutinee
+(CE2076). The pattern arms of the table of the pass (`visit.ARMS`) are
+`check_wildcard_pattern`, `check_literal_pattern` and `check_range_pattern`. Each one reads
+its pattern at the type of its position and answers the place of the pattern in the matrix
+of the one checker (`exhaustiveness.py`), or None after an error. A literal and the bounds
+of a range are values of that type (`semantics/integer_patterns.py`).
+
+Port templates: the rest of the module reads AST patterns. `collect_and_validate_patterns`
+checks the arms of a match on an enum or a tuple (group A4), `reject_poke_binding_into_a_constant`
+refuses a `poke` binding into a constant (group A4), and `check_match_exhaustiveness` runs
+the one checker over the rows (P3.A3.tc2). No pass reaches them. Where a template calls a
+SHIR helper of this module, the group that ports the template gives it SHIR patterns.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -12,6 +22,7 @@ from typing import TYPE_CHECKING, Iterator, List, Optional, Set, Tuple
 from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.passes.types.inference import int_literal_fits
 from sushi_lang.semantics.passes.types.visibility import name_is_contested
 from sushi_lang.semantics.typesys import (
     BuiltinType, EnumType, ReferenceType, StructType, Type,
@@ -30,6 +41,8 @@ from sushi_lang.semantics.generics.tuples import display_tuple, is_tuple_type, t
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.integer_patterns import goes_down, literal_value, pattern_interval
 from sushi_lang.semantics.integer_width import integer_range
+from sushi_lang.semantics.shir import patterns as p
+from sushi_lang.semantics.shir.exprs import Constant, IntConst, StrConst
 from .exhaustiveness import (
     OWN_KEY, TUPLE_KEY, WILD, Ctor, IntegerColumn, IntRange, Or, Pat, Signature, Wild,
     analyze, covers, string_key,
@@ -41,22 +54,10 @@ from sushi_lang.semantics.type_predicates import BUILTIN_INTEGER_TYPES
 _INTEGER_SCRUTINEES = BUILTIN_INTEGER_TYPES
 
 
-def _literal_kind(value: int | str) -> str:
-    """The kind of a literal pattern's value, for the `{kind}` slots: integer or string."""
-    return "string" if isinstance(value, str) else "integer"
-
-
-def _scrutinee_literal_kind(ty: Type) -> Optional[str]:
-    """The literal kind a scrutinee type takes, or None when it takes no literal arm."""
-    if ty == BuiltinType.STRING:
-        return "string"
-    if ty in _INTEGER_SCRUTINEES:
-        return "integer"
-    return None
-
 if TYPE_CHECKING:
     from . import TypeValidator
     from sushi_lang.internals.report import Span
+    from sushi_lang.semantics.shir import stmts as s
 
 # Where the type of a pattern position comes from, for the relational note of CE2107: a
 # label and the span it points at.
@@ -106,7 +107,7 @@ _MODE_WORDS = {"bare": "a bare binding", "peek": "a `peek` binding",
 
 
 @dataclass
-class _ArmRows:
+class ArmRows:
     """What the arms of one match give the checker.
 
     `rows[i]` is arm i's pattern for the matrix, or None for an arm left out (a duplicate
@@ -120,35 +121,234 @@ class _ArmRows:
     after_wildcard: Optional[int] = None
 
 
-def validate_match_statement(validator: 'TypeValidator', stmt: Match) -> None:
-    """Validate a match statement: the scrutinee, each arm's pattern, and the coverage."""
-    scrutinee_type = validate_match_scrutinee(validator, stmt)
-    if scrutinee_type is None:
+# -- the SHIR half -----------------------------------------------------------------------
+
+#: The characters that a byte literal writes as an escape.
+_BYTE_ESCAPES = {"\n": "\\n", "\t": "\\t", "\r": "\\r", "\0": "\\0", "\\": "\\\\",
+                 "'": "\\'"}
+
+
+def literal_kind(ty: Type) -> Optional[str]:
+    """The literal kind that a scrutinee type takes, or None when it takes no literal arm."""
+    if ty == BuiltinType.STRING:
+        return "string"
+    if ty in _INTEGER_SCRUTINEES:
+        return "integer"
+    return None
+
+
+def _constant_kind(const: Constant) -> str:
+    """The kind of the value of a literal pattern, for the `{kind}` slots."""
+    return "string" if isinstance(const, StrConst) else "integer"
+
+
+def _alternatives(pattern: p.ShirPattern) -> List[p.ShirPattern | p.PatBinding]:
+    """The alternatives of the pattern of an arm: its own list for `|`, else itself."""
+    if isinstance(pattern, p.Or):
+        return list(pattern.alternatives)
+    return [pattern]
+
+
+def matchable_type(validator: 'TypeValidator', match: 's.Match',
+                   ty: Optional[Type]) -> Optional[Type]:
+    """The type of the scrutinee `ty` of a match: an enum, an integer (#415), a string or a
+    tuple. None after an error: the scrutinee has one, or its type has no match (CE2048)."""
+    if ty is None:
+        return None
+    ty = _resolve(validator, ty)
+    if isinstance(ty, ReferenceType) and is_tuple_type(ty):
+        ty = _resolve(validator, ty.referenced_type)
+    if isinstance(ty, EnumType) or literal_kind(ty) is not None:
+        return ty
+    if isinstance(ty, StructType) and is_tuple_type(ty):
+        return ty
+    # A type name this unit lost (#863): the value has the type of the winner, and the
+    # CE0004 or CE0006 of the declaration is the one fault.
+    if isinstance(ty, StructType) and name_is_contested(validator, "struct", ty.name):
+        return None
+    er.emit(validator.reporter, er.ERR.CE2048, match.scrutinee.loc, got=display_type(ty))
+    return None
+
+
+def reject_arm_kinds(validator: 'TypeValidator', match: 's.Match', ty: Type) -> None:
+    """A literal arm and a range arm do not fit an enum or a tuple scrutinee, and an enum
+    pattern arm does not fit a tuple scrutinee (CE2076). A contested enum name has no
+    declaration that this unit can trust (D2), so its arms are not read."""
+    if isinstance(ty, EnumType) and name_is_contested(validator, "enum", ty.name):
         return
+    for arm in match.arms:
+        for alt in _alternatives(arm.pattern):
+            if isinstance(alt, (p.Literal, p.IntRange)) or (
+                    isinstance(alt, p.Variant) and not isinstance(ty, EnumType)):
+                _reject_arm_kind(validator, alt, ty)
 
-    if not isinstance(scrutinee_type, EnumType) and not is_tuple_type(scrutinee_type):
-        # An integer (#415) or a string scrutinee dispatches on literal arms.
-        validate_literal_match(validator, stmt, scrutinee_type)
+
+def check_literal_arm(validator: 'TypeValidator', rows: 'ArmRows', match: 's.Match',
+                      index: int, ty: Type) -> None:
+    """The pattern of arm `index` of a match on an integer (#415) or a string, and its row.
+
+    Each alternative is an arm of the kind of the scrutinee (CE2076). An integer literal
+    takes the type of the scrutinee under the fit rule of a context-typed literal (CE2073),
+    so a non-decimal literal is a bit pattern. A `_` arm is the last arm (CE2041).
+    """
+    pattern = match.arms[index].pattern
+    if isinstance(pattern, p.Wildcard):
+        _wildcard_row(validator, rows, index, len(match.arms), pattern)
         return
+    kind = literal_kind(ty)
+    _add_row(rows, index, pattern, [(alt, _literal_alternative(validator, alt, ty, kind))
+                                    for alt in _alternatives(pattern)])
 
-    # A contested enum name has no trustworthy declaration for this unit: it declared
-    # the name itself and already heard why its own declaration lost (CE0004, CE2046,
-    # CE3011). Checking its arms against the winner's variants would report a variant it
-    # never wrote and an exhaustiveness it cannot satisfy (D2).
-    if isinstance(scrutinee_type, EnumType) and name_is_contested(
-            validator, "enum", scrutinee_type.name):
-        return
 
-    # Stash the resolved concrete type on the node so the backend does not have to
-    # re-derive it from the scrutinee expression (which it cannot always do; a miss there
-    # silently drops pattern bindings and surfaces as CE0055).
-    stmt.resolved_scrutinee_type = scrutinee_type
+def _literal_alternative(validator: 'TypeValidator', alt: p.ShirPattern | p.PatBinding,
+                         ty: Type, kind: Optional[str]) -> Optional[Pat]:
+    """One top-level alternative of a literal arm: its place in the row, or None after an
+    error."""
+    if isinstance(alt, p.Wildcard):
+        return check_wildcard_pattern(validator, alt, ty)
+    if isinstance(alt, p.IntRange) and (kind == "integer" or _has_string_bound(alt)):
+        return check_range_pattern(validator, alt, ty)
+    if isinstance(alt, p.Literal) and _constant_kind(alt.value) == kind:
+        return check_literal_pattern(validator, alt, ty)
+    if isinstance(alt, p.Tuple):
+        er.emit(validator.reporter, er.ERR.CE2117, alt.loc, type=display_type(ty))
+    elif isinstance(alt, (p.Variant, p.Literal, p.IntRange)):
+        _reject_arm_kind(validator, alt, ty)
+    else:
+        raise_internal_error("CE0000", span=getattr(alt, "loc", None),
+                             detail=f"no arm of a literal match is a {type(alt).__name__}")
+    return None
 
-    reject_poke_binding_into_a_constant(validator, stmt)
 
-    arms = collect_and_validate_patterns(validator, stmt, scrutinee_type)
+def _reject_arm_kind(validator: 'TypeValidator', pattern: p.Literal | p.IntRange | p.Variant,
+                     scrutinee_type: Type) -> None:
+    """An arm whose kind does not fit the scrutinee (CE2076)."""
+    if isinstance(pattern, p.Literal):
+        arm_kind = f"{_constant_kind(pattern.value)} literal"
+    elif isinstance(pattern, p.IntRange):
+        arm_kind = "integer range"
+    else:
+        arm_kind = "enum-pattern"
+    report = er.emit_with(validator.reporter, er.ERR.CE2076, pattern.loc,
+                          arm_kind=arm_kind, scrutinee_type=display_type(scrutinee_type))
+    other_quote = _other_quote_form(pattern.value) if isinstance(pattern, p.Literal) else None
+    if other_quote is not None:
+        report = report.help(other_quote)
+    report.emit()
 
-    check_match_exhaustiveness(validator, stmt, scrutinee_type, arms)
+
+def _other_quote_form(const: Constant) -> Optional[str]:
+    """The help for an arm written in the wrong quote form, the byte `a'/'` against the
+    string `'/'`, when the other form holds the same one character from 0 to 127."""
+    if isinstance(const, IntConst) and const.byte_spelling is not None and const.value <= 127:
+        return f"write `{const.byte_spelling[1:]}` for a string arm"
+    if isinstance(const, StrConst) and len(const.value) == 1 and ord(const.value) <= 127:
+        return f"write `a'{_byte_text(const.value)}'` for the byte"
+    return None
+
+
+def _byte_text(char: str) -> str:
+    """One character from 0 to 127 as a byte literal writes it between its quotes."""
+    if char in _BYTE_ESCAPES:
+        return _BYTE_ESCAPES[char]
+    return char if " " <= char <= "~" else f"\\x{ord(char):02x}"
+
+
+def _range_source(pattern: p.IntRange) -> str:
+    """A range of integer bounds as it is written: `0x80..=0x8f`."""
+    if not isinstance(pattern.low, IntConst) or not isinstance(pattern.high, IntConst):
+        raise_internal_error("CE0000", span=pattern.loc,
+                             detail="the range has a bound that is no integer")
+        return ""
+    operator = "..=" if pattern.inclusive else ".."
+    return f"{pattern.low.spelling()}{operator}{pattern.high.spelling()}"
+
+
+def check_wildcard_pattern(_validator: 'TypeValidator', _node: p.Wildcard,
+                           _ty: Optional[Type]) -> Pat:
+    """`_` matches every value of its position."""
+    return WILD
+
+
+def check_literal_pattern(validator: 'TypeValidator', node: p.Literal,
+                          ty: Type) -> Optional[Pat]:
+    """A literal pattern: a value of the kind of the literal, and an integer literal that
+    fits.
+
+    A string literal reads a `string` value (CE2119). An integer literal reads an integer
+    value (CE2119) and fits its type (CE2073). Its key is its value as that type reads it.
+    """
+    if isinstance(node.value, StrConst):
+        if ty != BuiltinType.STRING:
+            er.emit(validator.reporter, er.ERR.CE2119, node.loc,
+                    kind="a string", got=display_type(ty))
+            return None
+        return Ctor(string_key(node.value.value))
+    if not _reads_an_integer(validator, node.loc, ty) \
+            or not _bound_fits(validator, node.value, node.loc, ty):
+        return None
+    value = literal_value(node.value, ty)
+    return Ctor(IntRange(value, value))
+
+
+def check_range_pattern(validator: 'TypeValidator', node: p.IntRange,
+                        ty: Type) -> Optional[Pat]:
+    """A range pattern: two integer bounds that fit the type at its position, going up.
+
+    A string bound is CE2072, once for the range. A range reads an integer value (CE2119),
+    each bound fits the type (CE2073), and a range whose start is above its end is CE2125.
+    `5..5` is legal and matches no value: the checker reports it as a dead arm (CE2118).
+    """
+    if _has_string_bound(node):
+        loc = node.low_loc if isinstance(node.low, StrConst) else node.high_loc
+        er.emit(validator.reporter, er.ERR.CE2072, loc,
+                got=display_type(BuiltinType.STRING), expected="an integer literal")
+        return None
+    if not _reads_an_integer(validator, node.loc, ty):
+        return None
+    fits = [_bound_fits(validator, bound, loc, ty)
+            for bound, loc in ((node.low, node.low_loc), (node.high, node.high_loc))]
+    if not all(fits):
+        return None
+    if goes_down(node, ty):
+        operator = "..=" if node.inclusive else ".."
+        er.emit_with(validator.reporter, er.ERR.CE2125, node.loc,
+                     range=_range_source(node)) \
+            .help(f"a range pattern goes up: write "
+                  f"'{node.high.spelling()}{operator}{node.low.spelling()}'") \
+            .emit()
+        return None
+    low, high = pattern_interval(node, ty)
+    return Ctor(IntRange(low, high))
+
+
+def _has_string_bound(pattern: p.IntRange) -> bool:
+    """Does a range pattern have a string bound (CE2072)?"""
+    return any(isinstance(bound, StrConst) for bound in (pattern.low, pattern.high))
+
+
+def _reads_an_integer(validator: 'TypeValidator', loc: 'Span', ty: Type) -> bool:
+    """An integer literal or range reads an integer value (CE2119)."""
+    if isinstance(ty, BuiltinType) and ty in _INTEGER_SCRUTINEES:
+        return True
+    er.emit(validator.reporter, er.ERR.CE2119, loc, kind="an integer", got=display_type(ty))
+    return False
+
+
+def _bound_fits(validator: 'TypeValidator', const: Constant, loc: 'Span', ty: Type) -> bool:
+    """An integer literal fits the type it reads (CE2073), by the context-typed rule."""
+    if not isinstance(const, IntConst):
+        raise_internal_error("CE0000", span=loc,
+                             detail="an integer pattern holds no integer")
+        return False
+    if isinstance(ty, BuiltinType) and int_literal_fits(const.value, const.radix, ty):
+        return True
+    er.emit(validator.reporter, er.ERR.CE2073, loc, literal=const.spelling(),
+            type=display_type(ty))
+    return False
+
+
+# -- the port templates (AST) --------------------------------------------------------------
 
 
 def reject_poke_binding_into_a_constant(validator: 'TypeValidator',
@@ -204,79 +404,6 @@ def _poke_bindings(item: object) -> Iterator[RefBinding]:
         yield from _poke_bindings(item.inner_pattern)
 
 
-def validate_match_scrutinee(validator: 'TypeValidator', stmt: Match) -> Optional[Type]:
-    """Validate the scrutinee is matchable: an enum, an integer (#415), a string, or a tuple."""
-    validator.validate_expression(stmt.scrutinee)
-    scrutinee_type = validator.infer_expression_type(stmt.scrutinee)
-
-    if scrutinee_type is None:
-        # A scrutinee with no type is refused by the check that found the fault. With no
-        # error at all, the arms would go unchecked and the backend would guess (#1005).
-        # The reporter drops a repeat in an instance body, and a refusal of a call site
-        # is reported at its first site only, so the test is "any error offered".
-        if not validator.reporter.has_offered_errors:
-            raise_internal_error(
-                "CE0015", message="match scrutinee has no type and no diagnostic says why")
-        return None
-
-    # An unresolved generic scrutinee (e.g. an indexed element of a Maybe<i32>[]
-    # array, or a method returning Maybe<T>) infers to a GenericTypeRef/UnknownType.
-    # Resolve it to its concrete monomorphized enum so pattern matching sees a real
-    # EnumType instead of rejecting it (CE2048).
-    scrutinee_type = _resolve(validator, scrutinee_type)
-    if isinstance(scrutinee_type, ReferenceType) and is_tuple_type(scrutinee_type):
-        scrutinee_type = _resolve(validator, scrutinee_type.referenced_type)
-
-    if isinstance(scrutinee_type, EnumType) or _scrutinee_literal_kind(scrutinee_type):
-        return scrutinee_type
-    if isinstance(scrutinee_type, StructType) and is_tuple_type(scrutinee_type):
-        return scrutinee_type
-
-    # A type name this unit lost (#863): the value has the winner's type, and the
-    # declaration's CE0004 / CE0006 is the one fault.
-    if isinstance(scrutinee_type, StructType) and name_is_contested(
-            validator, "struct", scrutinee_type.name):
-        return None
-
-    er.emit(validator.reporter, er.ERR.CE2048, stmt.scrutinee.loc, got=display_type(scrutinee_type))
-    return None
-
-
-def validate_literal_match(validator: 'TypeValidator', stmt: Match,
-                           scrutinee_type: Type) -> None:
-    """Validate a match on an integer (#415) or a string scrutinee: literal and range arms.
-
-    Each literal arm must be of the scrutinee's kind (CE2076 otherwise). An integer
-    literal takes the scrutinee's type under the same fit rule as any context-typed
-    literal (a non-decimal literal is a bit pattern). Duplicates are duplicates by VALUE,
-    so `0x2a` and `42` are one arm, `0xff` and `-1` are one arm on an i8, and `"a"` and
-    `'a'` are one arm. A range that shares a value with an arm above is CE2075 too. The
-    one checker answers the coverage: the integer arms cover the type, or a `_` arm does
-    (CE2074); the values of a string cannot be listed, so a string match needs the `_`.
-    """
-    kind = _scrutinee_literal_kind(scrutinee_type)
-    # The backend switches on the value of an integer match. A string match has no
-    # switch: it reads `resolved_scrutinee_type`, as a tuple match does.
-    if kind == "integer":
-        stmt.integer_match_type = scrutinee_type
-    else:
-        stmt.resolved_scrutinee_type = scrutinee_type
-
-    arms = _ArmRows()
-    seen = _Seen()
-    for idx, arm in enumerate(stmt.arms):
-        pattern = arm.pattern
-
-        if isinstance(pattern, WildcardPattern):
-            _wildcard_row(validator, arms, idx, len(stmt.arms), pattern)
-        else:
-            pieces = [(alt, _literal_alternative(validator, alt, scrutinee_type, kind, seen))
-                      for alt in alternatives_of(pattern)]
-            _add_row(arms, idx, pattern, pieces)
-
-        _walk_arm_body(validator, arm)
-
-    check_match_exhaustiveness(validator, stmt, scrutinee_type, arms)
 
 
 @dataclass
@@ -288,31 +415,6 @@ class _Seen:
     """
     strings: dict[str, str] = field(default_factory=dict)
     integers: List[Tuple[IntRange, str]] = field(default_factory=list)
-
-
-def _literal_alternative(validator: 'TypeValidator', alt: object, scrutinee_type: Type,
-                         kind: Optional[str], seen: _Seen) -> Optional[Pat | _Dropped]:
-    """One top-level alternative of a literal arm: its place in the row, or None after an
-    error. A value that an arm or an alternative above already matches is CE2075."""
-    if isinstance(alt, WildcardPattern):
-        return WILD
-    if isinstance(alt, RangePattern) and (kind == "integer" or _has_string_bound(alt)):
-        return _first_values(validator, alt, _check_range(validator, alt, scrutinee_type),
-                             seen)
-    if isinstance(alt, LiteralPattern) and _literal_kind(alt.value) == kind:
-        row = _check_literal(validator, alt, scrutinee_type)
-        if row is None or isinstance(alt.value, int):
-            return _first_values(validator, alt, row, seen)
-        if alt.value in seen.strings:
-            _report_repeat(validator, alt, seen.strings[alt.value])
-            return _DROPPED
-        seen.strings[alt.value] = alt.display
-        return row
-    if isinstance(alt, TuplePattern):
-        _check_tuple_pattern(validator, alt, scrutinee_type, ("", None))
-    elif isinstance(alt, (Pattern, LiteralPattern, RangePattern)):
-        _reject_arm_kind(validator, alt, scrutinee_type)
-    return None
 
 
 def _first_values(validator: 'TypeValidator', alt: LiteralPattern | RangePattern,
@@ -370,7 +472,7 @@ def _report_repeat(validator: 'TypeValidator', alt: Pattern | LiteralPattern,
         er.emit(validator.reporter, er.ERR.CE2041, alt.loc, variant=alt.variant_name)
 
 
-def _add_row(arms: _ArmRows, idx: int, pattern: object,
+def _add_row(arms: ArmRows, idx: int, pattern: object,
              pieces: List[Tuple[object, Optional[Pat | _Dropped]]]) -> Optional[Pat]:
     """Give arm `idx` its row from the places of its alternatives, and answer it.
 
@@ -404,36 +506,9 @@ def _alternatives_row(pattern: object, kept: List[Tuple[object, Pat]]) -> Pat:
                     for alt, _piece in kept))
 
 
-def _reject_arm_kind(validator: 'TypeValidator',
-                     pattern: Pattern | LiteralPattern | RangePattern,
-                     scrutinee_type: Type) -> None:
-    """An arm whose kind does not fit the scrutinee (CE2076)."""
-    if isinstance(pattern, LiteralPattern):
-        arm_kind = f"{_literal_kind(pattern.value)} literal"
-    elif isinstance(pattern, RangePattern):
-        arm_kind = "integer range"
-    else:
-        arm_kind = "enum-pattern"
-    report = er.emit_with(validator.reporter, er.ERR.CE2076, pattern.loc,
-                          arm_kind=arm_kind, scrutinee_type=display_type(scrutinee_type))
-    other_quote = _other_quote_form(pattern) if isinstance(pattern, LiteralPattern) else None
-    if other_quote is not None:
-        report = report.help(other_quote)
-    report.emit()
 
 
-def _other_quote_form(pattern: LiteralPattern) -> Optional[str]:
-    """The help for an arm written in the wrong quote form, the byte `a'/'` against the
-    string `'/'`, when the other form holds the same one character from 0 to 127."""
-    if pattern.is_byte and isinstance(pattern.value, int) and pattern.value <= 127:
-        return f"write `{pattern.display[1:]}` for a string arm"
-    if (isinstance(pattern.value, str) and len(pattern.value) == 1
-            and ord(pattern.value) <= 127):
-        return f"write `a'{pattern.display[1:-1]}'` for the byte"
-    return None
-
-
-def _wildcard_row(validator: 'TypeValidator', arms: _ArmRows, idx: int, count: int,
+def _wildcard_row(validator: 'TypeValidator', arms: ArmRows, idx: int, count: int,
                   pattern: WildcardPattern) -> None:
     """A `_` arm: it must be the last arm (CE2041), and it matches every value."""
     if idx != count - 1:
@@ -461,9 +536,9 @@ def reject_other_enum(validator: 'TypeValidator', written: str,
 
 
 def collect_and_validate_patterns(validator: 'TypeValidator', stmt: Match,
-                                  scrutinee_type: Type) -> _ArmRows:
+                                  scrutinee_type: Type) -> ArmRows:
     """Validate each arm of an enum or tuple match, and give the checker its rows."""
-    arms = _ArmRows()
+    arms = ArmRows()
     signatures: Set[str] = set()
     top_note: _Note = ("the value matched here is", stmt.scrutinee.loc)
 
@@ -548,9 +623,9 @@ def _check_item(validator: 'TypeValidator', item: object, ty: Type,
     if isinstance(item, (str, RefBinding, NomBinding)):
         return WILD
     if isinstance(item, LiteralPattern):
-        return _check_literal(validator, item, ty)
+        return check_literal_pattern(validator, item, ty)
     if isinstance(item, RangePattern):
-        return _check_range(validator, item, ty)
+        return check_range_pattern(validator, item, ty)
     if isinstance(item, TuplePattern):
         return _check_tuple_pattern(validator, item, ty, note)
     if isinstance(item, Pattern):
@@ -597,80 +672,10 @@ def _check_alternatives(validator: 'TypeValidator', pattern: OrPattern, ty: Type
                                        if isinstance(piece, (Wild, Ctor, Or))])
 
 
-def _check_literal(validator: 'TypeValidator', pattern: LiteralPattern,
-                   ty: Type) -> Optional[Pat]:
-    """A literal pattern: a value of the literal's kind, and an integer literal that fits.
-
-    A string literal reads a `string` value. An integer literal reads an integer value
-    and must fit its type; its key is its value as that type reads it.
-    """
-    if isinstance(pattern.value, str):
-        if ty != BuiltinType.STRING:
-            er.emit(validator.reporter, er.ERR.CE2119, pattern.loc,
-                    kind="a string", got=display_type(ty))
-            return None
-        return Ctor(string_key(pattern.value))
-    if not _reads_an_integer(validator, pattern, ty) or not _bound_fits(validator, pattern, ty):
-        return None
-    value = literal_value(pattern, ty)
-    return Ctor(IntRange(value, value))
 
 
-def _check_range(validator: 'TypeValidator', pattern: RangePattern,
-                 ty: Type) -> Optional[Pat]:
-    """A range pattern: two integer bounds that fit the type at its position, going up.
-
-    A string bound is CE2072, once for the range. A range reads an integer value (CE2119), each bound fits
-    the type (CE2073), and a range whose start is above its end is CE2125. `5..5` is
-    legal and matches no value: the checker reports it as a dead arm (CE2118).
-    """
-    if _has_string_bound(pattern):
-        bound = pattern.low if isinstance(pattern.low.value, str) else pattern.high
-        er.emit(validator.reporter, er.ERR.CE2072, bound.loc,
-                got=display_type(BuiltinType.STRING), expected="an integer literal")
-        return None
-    if not _reads_an_integer(validator, pattern, ty):
-        return None
-    fits = [_bound_fits(validator, bound, ty) for bound in (pattern.low, pattern.high)]
-    if not all(fits):
-        return None
-    if goes_down(pattern, ty):
-        operator = "..=" if pattern.inclusive else ".."
-        er.emit_with(validator.reporter, er.ERR.CE2125, pattern.loc,
-                     range=pattern_source(pattern)) \
-            .help(f"a range pattern goes up: write "
-                  f"'{pattern.high.display}{operator}{pattern.low.display}'") \
-            .emit()
-        return None
-    low, high = pattern_interval(pattern, ty)
-    return Ctor(IntRange(low, high))
 
 
-def _has_string_bound(pattern: RangePattern) -> bool:
-    """Does a range pattern have a string bound (CE2072)?"""
-    return any(isinstance(bound.value, str) for bound in (pattern.low, pattern.high))
-
-
-def _reads_an_integer(validator: 'TypeValidator', pattern: LiteralPattern | RangePattern,
-                      ty: Type) -> bool:
-    """An integer literal or range reads an integer value (CE2119)."""
-    if isinstance(ty, BuiltinType) and ty in _INTEGER_SCRUTINEES:
-        return True
-    er.emit(validator.reporter, er.ERR.CE2119, pattern.loc,
-            kind="an integer", got=display_type(ty))
-    return False
-
-
-def _bound_fits(validator: 'TypeValidator', pattern: LiteralPattern, ty: Type) -> bool:
-    """An integer literal fits the type it reads (CE2073), by the context-typed rule."""
-    from sushi_lang.semantics.passes.types.inference import int_literal_fits
-
-    if isinstance(pattern.value, int) and isinstance(ty, BuiltinType) \
-            and int_literal_fits(pattern.value, pattern.radix, ty):
-        return True
-    er.emit(validator.reporter, er.ERR.CE2073, pattern.loc,
-            literal=pattern.display, type=display_type(ty))
-    return False
 
 
 def _check_tuple_pattern(validator: 'TypeValidator', pattern: TuplePattern, ty: Type,
@@ -858,14 +863,14 @@ def _binding_difference(first: dict[str, _Bound], here: dict[str, _Bound]) -> Op
 
 
 def check_match_exhaustiveness(validator: 'TypeValidator', stmt: Match, scrutinee_type: Type,
-                               arms: _ArmRows) -> None:
+                               arms: ArmRows) -> None:
     """Run the one checker over the arms: the missing patterns, and the dead arms."""
     if arms.invalid:
         return
     result = analyze(lambda ty: _signature(validator, ty), arms.rows, scrutinee_type)
 
     if result.missing:
-        kind = _scrutinee_literal_kind(scrutinee_type)
+        kind = literal_kind(scrutinee_type)
         if kind is not None:
             er.emit(validator.reporter, er.ERR.CE2074, stmt.loc, kind=kind,
                     missing=_first_missing(stmt, scrutinee_type, result.missing[0]))

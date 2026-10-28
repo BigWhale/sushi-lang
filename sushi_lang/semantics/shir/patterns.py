@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TypeAlias
 
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir.exprs import Constant
 from sushi_lang.semantics.shir.ids import DeclId, LocalId
 from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode
@@ -44,10 +45,13 @@ class Literal(ShirNode):
 
 @dataclass(slots=True)
 class IntRange(ShirNode):
-    """`0x80..=0x8f`: an integer range. `inclusive` is the `..=` form."""
+    """`0x80..=0x8f`: an integer range. `inclusive` is the `..=` form. `low_loc` and
+    `high_loc` are the spans of the written bounds."""
     low: Constant
     high: Constant
     inclusive: bool
+    low_loc: Span
+    high_loc: Span
 
 
 @dataclass(slots=True)

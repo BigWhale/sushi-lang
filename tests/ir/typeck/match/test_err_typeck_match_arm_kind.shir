@@ -1,0 +1,21 @@
+unit test_err_typeck_match_arm_kind
+
+ShirBody byte_kind
+  params : [(_0 "b": u8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal(a'/'), [Return(Lit("slash"))]), Arm(IntRange(a'0', a'9', inclusive: true), [Return(Lit("digit"))]), Arm(IntRange(0x41, 0x5b, inclusive: false), [Return(Lit("upper"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody slash
+  params : [(_0 "b": u8, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Literal("/"), [Return(Lit("slash"))]), Arm(Wildcard, [Return(Lit("other"))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@byte_kind), [(Lit(47), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@slash), [(Lit(47), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

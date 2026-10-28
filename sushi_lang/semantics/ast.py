@@ -862,15 +862,6 @@ class Match(Stmt):
     """Match statement: match expr: pattern -> body"""
     scrutinee: "Expr"
     arms: List[MatchArm]
-    # Concrete monomorphized enum type of the scrutinee, resolved by the type
-    # checker (the typecheck pass) and consumed by the backend. Stored here because the
-    # backend cannot always re-derive it from the scrutinee expression alone
-    # (e.g. an indexed element, a fn-field call, or a user method returning
-    # Maybe/Result), and a miss would otherwise silently drop pattern bindings.
-    resolved_scrutinee_type: Optional[Type] = None
-    # An INTEGER scrutinee instead (#415). The backend dispatches on this; an EnumType
-    # scrutinee uses `resolved_scrutinee_type` above.
-    integer_match_type: Optional[Type] = None
     # `match nom r:` (ruling R11). The match CONSUMES a scrutinee that names storage,
     # which is what makes a `nom` payload binding legal on it. A temporary scrutinee is
     # owned by construction and needs no marker.

@@ -1,0 +1,22 @@
+# EXPECT_ERROR_CODES_EXACT: CE2073
+# EXPECT_STDERR_CONTAINS: "literal 300 out of range for u8"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_literal_fit.shir
+#
+# A literal arm is read at the type of the scrutinee. On an i8, `0xff` is a bit pattern
+# and fits, and `-128` fits. On a u8, 300 does not fit: CE2073.
+
+fn signed(i8 b) string:
+    match b:
+        0xff -> return "minus one"
+        -128 -> return "lowest"
+        _ -> return "other"
+
+fn unsigned(u8 t) string:
+    match t:
+        300 -> return "impossible"
+        _ -> return "other"
+
+fn main() i32:
+    println(signed(1))
+    println(unsigned(7))
+    return 0

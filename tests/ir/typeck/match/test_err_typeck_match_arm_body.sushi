@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_DUMP_SHIR: test_err_typeck_match_arm_body.shir
+#
+# The body of each arm is typed after its pattern. An arm written as one expression is a
+# block of one statement. The `let` in the last arm takes a string at an `i32`: CE2002.
+
+fn f(string s) i32:
+    let i32 out = 0
+    match s:
+        "one" -> out := 1
+        "two" ->
+            let i32 two = 2
+            out := two
+        _ ->
+            let i32 bad = "three"
+            out := bad
+    return out
+
+fn main() i32:
+    println(f("one"))
+    return 0

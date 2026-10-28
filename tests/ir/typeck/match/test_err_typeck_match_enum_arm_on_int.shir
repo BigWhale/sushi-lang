@@ -1,0 +1,14 @@
+unit test_err_typeck_match_enum_arm_on_int
+
+ShirBody name
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Match(LocalRef(_0), [Arm(Or([Literal(1), Variant(@Color, "Red", [])]), [Return(Lit(1))]), Arm(Wildcard, [Return(Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@name), [(Lit(1), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

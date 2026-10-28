@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2072
+# EXPECT_STDERR_CONTAINS: "Got string, expected an integer literal"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_range_string_bound.shir
+#
+# A bound of a range arm is an integer literal. A string bound is CE2072, on a string
+# scrutinee too.
+
+fn letter(string s) string:
+    match s:
+        "a".."z" -> return "letter"
+        _ -> return "other"
+
+fn main() i32:
+    println(letter("a"))
+    return 0

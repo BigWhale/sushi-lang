@@ -120,9 +120,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/typeck.py", "record_range_value",
      "kept for the range group of Phase 3: the typecheck pass on SHIR writes whether a "
      "range is a value"),
-    ("sushi_lang/semantics/shir/typeck.py", "record_match",
-     "kept for the match groups of Phase 3: the typecheck pass on SHIR writes the facts "
-     "of a match"),
     ("sushi_lang/semantics/shir/typeck.py", "record_element",
      "kept for the struct and tuple group of Phase 3: the typecheck pass on SHIR writes "
      "the type of each target of a destructure"),
@@ -158,7 +155,13 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "calls/user_defined.py", "validate_indirect_call", _port("C2")),
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
     (_TYPES + "calls/user_defined.py", "check_stdlib_function", _TIER_A),
-    (_TYPES + "matching.py", "validate_match_statement", _port("A3 or A4")),
+    (_TYPES + "matching.py", "collect_and_validate_patterns", _port("A4")),
+    (_TYPES + "matching.py", "reject_poke_binding_into_a_constant",
+     "kept for A4: a port template that reads AST patterns; group A4 ports it to SHIR "
+     "inputs with the Variant pattern, which holds a poke binding"),
+    (_TYPES + "matching.py", "check_match_exhaustiveness",
+     "kept for P3.A3.tc2: a port template that reads AST arms; the chunk ports the one "
+     "checker to the rows of the SHIR match arm, in place of its coverage stop"),
     (_TYPES + "statements.py", "stamp_rebind_places", _TIER_A),
     (_TYPES + "statements.py", "validate_rebind_statement", _port("A5")),
     (_TYPES + "statements.py", "validate_let_destructure", _port("A5")),
@@ -292,8 +295,6 @@ _FACTS = (
     ("walks_in_place", "passes/borrow/iterators.py", "C3",
      "the walk in place of a loop; tests/unit/test_walk_fields_have_one_writer.py reads its "
      "writer"),
-    ("resolved_scrutinee_type", _TYPES_PASS + "matching.py", "A3 and A4", "the type of a scrutinee"),
-    ("integer_match_type", _TYPES_PASS + "matching.py", "A3", "the type of an integer match"),
     ("inferred_element_type", _TYPES_PASS + "inference.py", "A6", "the type of an index access"),
     ("variadic_arg_types", _TYPES_PASS + "externals.py", "D5",
      "the promoted types of a C vararg call"),

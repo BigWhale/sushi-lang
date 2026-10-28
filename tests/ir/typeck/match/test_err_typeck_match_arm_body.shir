@@ -1,0 +1,16 @@
+unit test_err_typeck_match_arm_body
+
+ShirBody f
+  params : [(_0 "s": string, Guaranteed)]
+  locals : [_1 "out": i32, _2 "two": i32, _3 "bad": i32]
+  block  :
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Literal("one"), [Assign(LocalRef(_1), Lit(1), is_init: false)]), Arm(Literal("two"), [Assign(LocalRef(_2), Lit(2), is_init: true), Assign(LocalRef(_1), LocalRef(_2), is_init: false)]), Arm(Wildcard, [Assign(LocalRef(_3), Lit("three"), is_init: true), Assign(LocalRef(_1), LocalRef(_3), is_init: false)])], consumes: false)
+    Return(LocalRef(_1))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@f), [(Lit("one"), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

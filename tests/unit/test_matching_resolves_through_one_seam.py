@@ -83,17 +83,20 @@ def test_no_import_hides_inside_a_function_body():
 
     Seven of them re-imported `UnknownType`, which the module header already held.
     One re-imported `BorrowMode` and `ReferenceType` twice, and one re-imported
-    `RefBinding`. The two that stay are the ones that would close an import cycle.
+    `RefBinding`. The one that stays would close an import cycle. `int_literal_fits` is
+    imported at the top since the SHIR match arm made this module live: no cycle closes.
     """
     hidden = [alias.name
               for node in _TREE.body if isinstance(node, ast.FunctionDef)
               for inner in ast.walk(node)
               if isinstance(inner, (ast.Import, ast.ImportFrom))
               for alias in inner.names]
-    assert sorted(hidden) == ["int_literal_fits", "reject_qualified_name"], hidden
+    assert sorted(hidden) == ["reject_qualified_name"], hidden
 
 
 def test_the_arm_body_is_walked_from_one_place():
+    """The AST template walks an arm body in `_walk_arm_body` alone. A match on an integer
+    or a string walks its arm bodies in the SHIR match arm (`visit/statements.py`)."""
     walker = _function("_walk_arm_body")
     shapes = [node for node in ast.walk(_TREE)
               if isinstance(node, ast.Attribute) and node.attr == "body"
@@ -101,4 +104,4 @@ def test_the_arm_body_is_walked_from_one_place():
     inside = {id(node) for node in ast.walk(walker)}
     assert shapes, "no arm body is read at all"
     assert all(id(node) in inside for node in shapes), len(shapes)
-    assert len(_calls("_walk_arm_body")) == 3, len(_calls("_walk_arm_body"))
+    assert len(_calls("_walk_arm_body")) == 2, len(_calls("_walk_arm_body"))

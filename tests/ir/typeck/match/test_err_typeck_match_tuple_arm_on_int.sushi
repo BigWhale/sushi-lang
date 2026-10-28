@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2117
+# EXPECT_STDERR_CONTAINS: "cannot destructure 'i32': it is not a tuple"
+# EXPECT_DUMP_SHIR: test_err_typeck_match_tuple_arm_on_int.shir
+#
+# A tuple pattern reads a tuple. An arm of an integer match that is a tuple pattern is
+# CE2117.
+
+fn pair(i32 n) i32:
+    match n:
+        (1, 2) -> return 1
+        _ -> return 0
+
+fn main() i32:
+    println(pair(1))
+    return 0

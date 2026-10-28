@@ -23,6 +23,12 @@ An `If` and a `Loop` with a `Cond` source check their condition (`check_conditio
 their blocks; an `elif` is an `If` in the `else` block. The kind of a `while` loop is
 `While` (ir.md 7.7). A loop over items is not typed yet. A `break` and a `continue` have
 no answer: the scope pass refuses one outside a loop.
+
+A `Match` checks its scrutinee (CE2048, `matching.matchable_type`). A match on an integer
+or a string writes its `MatchFacts`, checks the pattern of each arm, gives the arm its row
+for the one checker, and then walks the body of the arm. The checker does not read the rows
+yet, so the walk stops after the last arm (`Match exhaustiveness`). A match on an enum or a
+tuple refuses a literal arm (CE2076) and stops (`Match`).
 """
 from __future__ import annotations
 
@@ -34,6 +40,8 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.compatibility import (
     reject_mismatch, reject_return_mismatch, reject_unhandled_result)
 from sushi_lang.semantics.passes.types.constants import assignment_span
+from sushi_lang.semantics.passes.types.matching import (
+    ArmRows, check_literal_arm, literal_kind, matchable_type, reject_arm_kinds)
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
 from sushi_lang.semantics.passes.types.result_validation import (
     spells_a_result, validate_result_pattern)
@@ -46,6 +54,7 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer, ShirBody
 from sushi_lang.semantics.shir.loop_kind import While
 from sushi_lang.semantics.shir.nodes import ShirBlock
+from sushi_lang.semantics.shir.typeck import MatchFacts
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, ReferenceType, Type, deref_type
 
@@ -208,6 +217,24 @@ def check_assert(validator: TypeValidator, node: s.Assert) -> None:
             or names_no_type(validator, ty)):
         return
     er.emit(validator.reporter, er.ERR.CE2116, node.message.loc, got=display_type(ty))
+
+
+def check_match(validator: TypeValidator, node: s.Match) -> None:
+    """A `match` on an integer (#415) or a string: its facts, then the pattern and the body
+    of each arm in the written order."""
+    ty = matchable_type(validator, node, visit.check_expr(validator, node.scrutinee))
+    kind = None if ty is None else literal_kind(ty)
+    if ty is None or kind is None:
+        if ty is not None:
+            reject_arm_kinds(validator, node, ty)
+        visit.stop_at(validator, node)
+    validator.body_answers().record_match(
+        node.shir_id, MatchFacts(ty, ty if kind == "integer" else None))
+    rows = ArmRows()
+    for index, arm in enumerate(node.arms):
+        check_literal_arm(validator, rows, node, index, ty)
+        check_block(validator, arm.body)
+    visit.stop_at_coverage(node)
 
 
 def check_jump(_validator: TypeValidator, _node: s.Break | s.Continue) -> None:
