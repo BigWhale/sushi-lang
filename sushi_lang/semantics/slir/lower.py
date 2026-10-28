@@ -10,12 +10,14 @@ goes on with the next body. The verifier (`verify.py`, ir.md 8.13) checks a body
 lowering finished, and `SlirProgram` keeps it for the emitter (`backend/slir/`).
 
 The lowering handles the parameters, a `let`, a rebind, a call statement, a `return`, an
-`if`, a `while` with its `break` and `continue`, over literals, locals, the operators,
-`and` and `or` as control flow, the construction of an enum variant, a call of a free
-function, `print`, `println`, an interpolation and a `??`. The operand of a value is the
-answer of `borrow` and the shape of the value alone (ir.md 7.9): a `move` row gives
-`Move`; an `adopt` row gives `Copy` of a place, a constant for a literal, and `Move` of the
-temporary of a new value. A value with no row is read with `Copy`. A new value goes into
+`if`, a `while` with its `break` and `continue`, over literals, names of constants, locals,
+the operators, `and` and `or` as control flow, the construction of an enum variant, a call
+of a free function, `print`, `println`, an interpolation and a `??`, and the initializer
+body of a constant or a `var`. The operand of a value is the answer of `borrow` and the
+shape of the value alone (ir.md 7.9): a `move` row gives `Move`; an `adopt` row gives
+`Copy` of a place, a constant for a literal or a name of a constant, and `Move` of the
+temporary of a new value. A value with no row is read with `Copy`. A literal and a name of
+a constant take the value that typecheck wrote for them (ir.md 8.5). A new value goes into
 the place that takes it (the local of a `let`, `_0`), else into a temporary of its
 statement. The store that consumes a `move` operand marks its local moved, not the place
 where the operand is built. Drop placement (`drops.py`) places every drop, every flag
@@ -27,18 +29,19 @@ that a back edge brings. The walk finds such a local only at the join, after the
 that must make the flag. So a walk records what it finds (`_Learned`) and goes on, and the
 body is lowered again with what the walks found, until a walk finds nothing new.
 
-The construct of a stop is the SHIR class of the node, or one of these names: `Initializer`
-for the body of a constant; `generic instance`, `conversion`, `perk method` and `method`
-for the body of a monomorphized generic instance, of a conversion, of a perk method and of
-an extension method; `borrowed view` for a `reject` row, `borrowed rebind` for a rebind of
-a borrowed parameter that owns, `borrowed try` for a `??` over an owning wrapper that the
-body only reads, `conversion` also for a `??` that calls a declared conversion, `library
-function` for a callee whose declaring unit the typecheck row does not name, and `bloom`
-for a bloom argument. The
-symbol, the unit and the return type of the function are facts of its declaration (ir.md
-6.4). The unit is the declaring unit; a function that has none (a lifted lambda, the
-instance of a template of a binary library) goes into the module of the unit that holds
-its body.
+The construct of a stop is the SHIR class of the node, or one of these names: `generic
+instance`, `conversion`, `perk method` and `method` for the body of a monomorphized generic
+instance, of a conversion, of a perk method and of an extension method; `borrowed view` for
+a `reject` row, `borrowed rebind` for a rebind of a borrowed parameter that owns, `borrowed
+try` for a `??` over an owning wrapper that the body only reads, `conversion` also for a
+`??` that calls a declared conversion, `library function` for a callee whose declaring unit
+the typecheck row does not name, `bloom` for a bloom argument, `aggregate constant` for a
+name of a struct, an enum or an array constant, and `ConstRef out of range` for a name of a
+constant whose value its type cannot hold. The symbol, the unit and the return type of the
+function are facts of its declaration (ir.md 6.4). The unit is the declaring unit; a
+function that has none (a lifted lambda, the instance of a template of a binary library)
+goes into the module of the unit that holds its body. The initializer body of a constant or
+a `var` is a function too: it takes the symbol of its global and the declared type.
 """
 from __future__ import annotations
 
@@ -48,16 +51,16 @@ from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics import integer_ops
+from sushi_lang.semantics.const_eval import AggregateConstant
 from sushi_lang.semantics.drop_set import drop_type_names
-from sushi_lang.semantics.integer_width import integer_bit_width
+from sushi_lang.semantics.integer_width import fits_integer_type
 from sushi_lang.semantics.method_effects import RECEIVER_READ_FAMILIES
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
-from sushi_lang.semantics.shir.body import Initializer, ShirBody, ShirLocal, TemplateCheck
+from sushi_lang.semantics.shir.body import ShirBody, ShirLocal, TemplateCheck
 from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
@@ -174,8 +177,6 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     body = answers.body
     if isinstance(body.origin, TemplateCheck):
         er.raise_internal_error("CE0000", detail=f"the template check '{name}' reached SLIR")
-    if isinstance(body.origin, Initializer):
-        raise StageStop(STAGE, "Initializer", body.block.loc)
     home = declaring_unit(decl, unit)
     symbol = symbol_of(decl, home, body)
     ret = return_type_of(decl, tables, body)
@@ -409,26 +410,43 @@ class _Lowering:
             dispatch.stop(STAGE, expr)
         return arm(self, expr)
 
-    def operand(self, expr: e.ShirExpr, wraps: bool = False) -> p.Operand:
-        """The operand of `expr`, from its `Ownership` row and its shape (ir.md 7.9). An
-        integer literal holds the value that its type holds: a bit pattern (a radix other
-        than 10) always wraps, and a decimal one wraps when `wraps` is set (the operand of a
-        cast or of a negation, where typecheck reads the magnitude)."""
+    def operand(self, expr: e.ShirExpr) -> p.Operand:
+        """The operand of `expr`, from its `Ownership` row and its shape (ir.md 7.9). A
+        literal and a name of a constant are a constant with any other row: an `adopt` of a
+        string constant takes a literal, which owns no heap."""
         row = self.answers.ownership.ownership_of(expr.shir_id)
         if row is Ownership.REJECT:
             raise StageStop(STAGE, "borrowed view", expr.loc)
-        if isinstance(expr, e.Lit):
-            return p.Const(_constant(expr, self.typeck, wraps))
         if isinstance(expr, e.LocalRef):
             place = p.Local(self.local_of(expr.local, expr.loc))
             return p.Move(place) if row is Ownership.MOVE else p.Copy(place)
         if row is Ownership.MOVE:
             er.raise_internal_error("CE0000", span=expr.loc,
                                     detail=f"a move row on a {type(expr).__name__}, which is no place")
+        if isinstance(expr, e.Lit):
+            return p.Const(k.of_literal(expr, self.typeck))
+        if isinstance(expr, e.ConstRef):
+            return p.Const(self.constant(expr))
         temp = self.temporary(self.value(expr), self.type_of(expr), expr.loc)
         return p.Move(p.Local(temp)) if row is Ownership.ADOPT else p.Copy(p.Local(temp))
 
-    def leaf(self, expr: e.Lit | e.LocalRef) -> _Value:
+    def constant(self, ref: e.ConstRef) -> k.Constant:
+        """The value of the constant that `ref` names, from its typecheck row. A struct, an
+        enum or an array value has no constant kind yet (A4, A5, A6). An integer that its
+        type cannot hold stops (`ConstRef out of range`): the constant evaluator does not
+        wrap a bit pattern, and it gives a value to an initializer with a range error."""
+        value = self.typeck.value_of(ref.shir_id)
+        if isinstance(value, AggregateConstant):
+            raise StageStop(STAGE, "aggregate constant", ref.loc)
+        if value is None:
+            er.raise_internal_error("CE0000", span=ref.loc,
+                                    detail="a constant with no value reached SLIR")
+        constant = k.of_scalar(value)
+        if isinstance(constant, k.Int) and not fits_integer_type(constant.value, constant.ty):
+            dispatch.stop(STAGE, ref, state="out of range")
+        return constant
+
+    def leaf(self, expr: e.Lit | e.LocalRef | e.ConstRef) -> _Value:
         return r.Use(self.operand(expr))
 
     def binary(self, node: e.Binary) -> _Value:
@@ -437,13 +455,12 @@ class _Lowering:
         return r.Binary(node.op, self.operand(node.lhs), self.operand(node.rhs))
 
     def unary(self, node: e.Unary) -> _Value:
-        return r.Unary(node.op, self.operand(node.operand, wraps=node.op == "neg"))
+        return r.Unary(node.op, self.operand(node.operand))
 
     def cast(self, node: e.Cast) -> _Value:
         """A numeric cast, or a cast to the type of its operand. A cast that calls a
-        conversion stops in `typecheck`, so no row here calls one. An integer literal under a
-        cast holds the value that the cast gives at its type (`300 as u8` holds 44)."""
-        return r.Cast(self.operand(node.operand, wraps=True), self.type_of(node))
+        conversion stops in `typecheck`, so no row here calls one."""
+        return r.Cast(self.operand(node.operand), self.type_of(node))
 
     def enum_init(self, node: e.EnumInit) -> _Value:
         """An enum variant as an aggregate of its instance type (L10)."""
@@ -503,7 +520,7 @@ class _Lowering:
             if isinstance(part, str):
                 if not part:
                     continue
-                args.append((p.Const(_text(part)), Convention.GUARANTEED))
+                args.append((p.Const(k.text(part)), Convention.GUARANTEED))
                 types.append(BuiltinType.STRING)
             else:
                 args.append((self.operand(part), Convention.GUARANTEED))
@@ -531,6 +548,7 @@ _STATEMENTS: dict[type, Callable[..., None]] = {
 _VALUES: dict[type, Callable[..., _Value]] = {
     e.Lit: _Lowering.leaf,
     e.LocalRef: _Lowering.leaf,
+    e.ConstRef: _Lowering.leaf,
     e.Binary: _Lowering.binary,
     e.Unary: _Lowering.unary,
     e.Cast: _Lowering.cast,
@@ -569,27 +587,3 @@ def _root(place: p.Place) -> LocalId:
     if not isinstance(place, p.Local):
         er.raise_internal_error("CE0000", detail=f"SLIR lowering moves out of {place}")
     return place.id
-
-
-def _text(value: str) -> k.Str:
-    return k.Str(value.encode("utf-8", "surrogatepass"))
-
-
-def _constant(lit: e.Lit, typeck: TypeckResults, wraps: bool) -> k.Constant:
-    """The SLIR constant of a literal, at the type that typecheck gave it."""
-    value = lit.value
-    if isinstance(value, e.BoolConst):
-        return k.Bool(value.value)
-    if isinstance(value, e.BlankConst):
-        return k.Blank()
-    if isinstance(value, e.StrConst):
-        return _text(value.value)
-    ty = typeck.type_of(lit.shir_id)
-    if ty is None:
-        er.raise_internal_error("CE0000", span=lit.loc, detail="a literal with no type reached SLIR")
-    if isinstance(value, e.IntConst):
-        held = (integer_ops.cast(value.value, ty)
-                if (wraps or value.radix != 10) and integer_bit_width(ty) is not None
-                else value.value)
-        return k.Int(held, ty)
-    return k.Float(value.value, ty)

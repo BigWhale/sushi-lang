@@ -1,0 +1,32 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "42\n44\n-128\n255\n0.5\ntrue\n-128\n-1\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_const_scalar.slir
+#
+# The initializer body of a constant and of a `var` is a function of one block, which
+# writes the value of the initializer into `_0`. A name of a constant is a constant
+# operand with the value that typecheck wrote for it. An integer literal holds the value
+# that typecheck wrote for it too: `300 as u8` holds 44 and `-128` as an `i8` holds -128,
+# in an initializer and in a body alike, and `0xFF` as an `i8` holds -1 in a body.
+
+const i32 ANSWER = 42
+const u8 WRAPPED = 300 as u8
+const i8 SMALLEST = -128
+const u8 MASK = 0xFF
+const i32 NEXT = ANSWER + 1
+const f64 HALF = 0.5
+const bool READY = true
+var i32 counter = 7
+
+fn main() i32:
+    println(ANSWER)
+    println(WRAPPED)
+    println(SMALLEST)
+    println(MASK)
+    println(HALF)
+    println(READY)
+    let i8 low = -128
+    let i8 bits = 0xFF
+    println(low)
+    println(bits)
+    return NEXT - 43

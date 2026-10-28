@@ -1,0 +1,113 @@
+unit test_slir_const_scalar
+
+fn ANSWER() -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 42_i32
+    return
+}
+
+fn WRAPPED() -> u8 {
+    let _0: u8
+
+  bb0:
+    _0 = const 44_u8 as u8
+    return
+}
+
+fn SMALLEST() -> i8 {
+    let _0: i8
+
+  bb0:
+    _0 = neg const -128_i8
+    return
+}
+
+fn MASK() -> u8 {
+    let _0: u8
+
+  bb0:
+    _0 = const 255_u8
+    return
+}
+
+fn NEXT() -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 42_i32 + const 1_i32
+    return
+}
+
+fn HALF() -> f64 {
+    let _0: f64
+
+  bb0:
+    _0 = const 0.5_f64
+    return
+}
+
+fn READY() -> bool {
+    let _0: bool
+
+  bb0:
+    _0 = const true
+    return
+}
+
+fn counter() -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 7_i32
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: ~
+    let _2: ~
+    let _3: ~
+    let _4: ~
+    let _5: ~
+    let _6: ~
+    let _7: i8                             // low
+    let _8: i8                             // bits
+    let _9: ~
+    let _10: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call builtin println@(i32)(const 42_i32 @guaranteed)
+    StorageDead(_1)
+    StorageLive(_2)
+    _2 = call builtin println@(u8)(const 44_u8 @guaranteed)
+    StorageDead(_2)
+    StorageLive(_3)
+    _3 = call builtin println@(i8)(const -128_i8 @guaranteed)
+    StorageDead(_3)
+    StorageLive(_4)
+    _4 = call builtin println@(u8)(const 255_u8 @guaranteed)
+    StorageDead(_4)
+    StorageLive(_5)
+    _5 = call builtin println@(f64)(const 0.5_f64 @guaranteed)
+    StorageDead(_5)
+    StorageLive(_6)
+    _6 = call builtin println@(bool)(const true @guaranteed)
+    StorageDead(_6)
+    StorageLive(_7)
+    _7 = neg const -128_i8
+    StorageLive(_8)
+    _8 = const -1_i8
+    StorageLive(_9)
+    _9 = call builtin println@(i8)(copy _7 @guaranteed)
+    StorageDead(_9)
+    StorageLive(_10)
+    _10 = call builtin println@(i8)(copy _8 @guaranteed)
+    StorageDead(_10)
+    _0 = const 43_i32 - const 43_i32
+    StorageDead(_8)
+    StorageDead(_7)
+    return
+}

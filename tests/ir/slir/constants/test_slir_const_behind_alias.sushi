@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\ntrue\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_const_behind_alias.slir
+#
+# A constant behind an alias and a stdlib constant are constant operands, as a bare
+# constant is. A call behind an alias calls the function of the user unit by its symbol.
+
+use <math>
+use "units/levels" as lv
+
+fn main() i32:
+    let f64 half = PI / 2.0
+    let i32 six = lv.twice(lv.STEP)
+    println(lv.NAME)
+    println(half > 1.5)
+    return six - 6

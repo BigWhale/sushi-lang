@@ -54,3 +54,11 @@ def _callers(name: str) -> list[str]:
 
 def test_the_writer_of_a_type_row_is_the_one_caller() -> None:
     assert _callers("held_value") == ["semantics/passes/types/visit/__init__.py"]
+
+
+def test_slir_lowering_decides_no_held_value() -> None:
+    """SLIR lowering reads the value row; it never calls the integer kernel (ruling R-W)."""
+    slir = ROOT / "semantics" / "slir"
+    importers = [path.name for path in sorted(slir.glob("*.py"))
+                 if "integer_ops" in path.read_text(encoding="utf-8")]
+    assert importers == []

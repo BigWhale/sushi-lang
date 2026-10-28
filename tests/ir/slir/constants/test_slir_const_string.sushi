@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\nMostly Harmless\nMostly Harmless!\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_const_string.slir
+#
+# A string constant is a string literal: it owns no heap. The initializer of `ALIAS`
+# adopts the value of `GREETING`, so `_0` takes the literal. In `main` each name of a
+# string constant is a constant operand that a call borrows.
+
+const string GREETING = "Mostly Harmless"
+const string ALIAS = GREETING
+
+fn main() i32:
+    println(GREETING)
+    println(ALIAS)
+    println("{ALIAS}!")
+    return GREETING.len() - 15
