@@ -35,9 +35,10 @@ reference type, and the position that holds it decides whether it takes one.
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Callable, Mapping, Optional
+from typing import TYPE_CHECKING, Callable, Mapping, Optional, Sequence
 
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ffi_boundary import ERRNO_FUNCTION
 from sushi_lang.semantics.generics.contracts import DISPLAY
@@ -46,9 +47,8 @@ from sushi_lang.semantics.generics.opaque import explain_unpromised
 from sushi_lang.semantics.generics.primitives import primitive_method_return_type
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.maybe import (
-    MAYBE_METHOD_SIGNATURES, maybe_method_return_type, maybe_payload)
-from sushi_lang.semantics.generics.results import (
-    RESULT_METHOD_SIGNATURES, result_method_return_type)
+    MAYBE_METHOD_SIGNATURES, WrapperMethodRow, maybe_method_row, maybe_payload)
+from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES, result_method_row
 from sushi_lang.semantics.method_effects import (
     MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.param_modes import Convention, declared_modes, param_mode
@@ -183,15 +183,27 @@ def _check_string_method(validator: 'TypeValidator', node: e.Call, receiver: Typ
     miscount = reject_builtin_miscount(validator.reporter, node.loc, name, len(node.args),
                                        f"{display_type(receiver)}.{name}", family.arity)
     if not miscount and spec is not None:
-        modes = family.modes.of(name, len(node.args)) or ()
-        declared = Parameters(node.shir_id, modes, [f"#{i}" for i in range(1, len(modes) + 1)])
-        check_arguments(validator, spec.name, spec.arg_types, node.args, node.loc,
-                        mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
-                        declared=declared, also_accepts=spec.also_accepts)
+        _check_builtin_arguments(validator, node, name, family, spec.arg_types,
+                                 er.ERR.CE2006, callee_name=spec.name,
+                                 also_accepts=spec.also_accepts)
     yielded = string_method_return_type(validator, name)
     if isinstance(yielded, DynamicArrayType):
         dispatch.stop_at_family(visit.STAGE, node, STRING_ARRAY_STOP)
     return yielded
+
+
+def _check_builtin_arguments(validator: TypeValidator, node: e.Call, name: str,
+                             family: MethodFamily, params: Sequence[Type],
+                             mismatch_code: er.ErrorMessage, *,
+                             callee_name: Optional[str] = None,
+                             also_accepts: Sequence[Sequence[Type]] = ()) -> None:
+    """The arguments of the built-in method `name` whose count fits, through the one
+    argument check: each argument at the type of its row, with the mode of its row."""
+    modes = family.modes.of(name, len(node.args)) or ()
+    declared = Parameters(node.shir_id, modes, [f"#{i}" for i in range(1, len(modes) + 1)])
+    check_arguments(validator, callee_name or name, params, node.args, node.loc,
+                    mismatch_code=mismatch_code, arity_code=er.ERR.CE2009,
+                    declared=declared, also_accepts=also_accepts)
 
 
 def _check_result_method(validator: TypeValidator, node: e.Call, receiver: Type,
@@ -200,9 +212,9 @@ def _check_result_method(validator: TypeValidator, node: e.Call, receiver: Type,
     walk with the label of the family, as it is not typed yet."""
     if name in RESULT_METHOD_SIGNATURES:
         dispatch.stop_at_family(visit.STAGE, node, family.name)
-    yielded = result_method_return_type(receiver, name, validator.enum_table,
-                                        validator.struct_table.by_name)
-    return _check_wrapper_method(validator, node, receiver, name, family, yielded)
+    row = result_method_row(receiver, name, validator.enum_table,
+                            validator.struct_table.by_name)
+    return _check_wrapper_method(validator, node, receiver, name, family, row)
 
 
 def _check_maybe_method(validator: TypeValidator, node: e.Call, receiver: Type,
@@ -211,35 +223,30 @@ def _check_maybe_method(validator: TypeValidator, node: e.Call, receiver: Type,
     with the label of the family, as it is not typed yet."""
     if name in MAYBE_METHOD_SIGNATURES:
         dispatch.stop_at_family(visit.STAGE, node, family.name)
-    yielded = maybe_method_return_type(maybe_payload(receiver), name)
-    return _check_wrapper_method(validator, node, receiver, name, family, yielded)
+    row = maybe_method_row(maybe_payload(receiver), name)
+    return _check_wrapper_method(validator, node, receiver, name, family, row)
 
 
 def _check_wrapper_method(validator: TypeValidator, node: e.Call, receiver: Type,
                           name: str, family: MethodFamily,
-                          yielded: Optional[Type]) -> Optional[Type]:
-    """A method of a `Result` or a `Maybe` takes the arguments of its row and yields
-    `yielded`, the type of its row.
+                          row: Optional[WrapperMethodRow]) -> Optional[Type]:
+    """A method of a `Result` or a `Maybe` takes the arguments of its row and yields the
+    type of its row.
 
     A wrong count is CE2009 and skips the argument types. `realise` on a `~` payload is
-    CE2506, and its default is not checked. The default of `realise` has the payload type,
-    and the message of `expect` is a string: a value of another type is CE2503 at the
-    argument. The call yields its type after CE2009 and CE2503.
+    CE2506, and its default is not checked. An argument of another type than its row is
+    CE2503 at the argument. The call yields its type after each fault.
     """
+    if row is None:
+        raise_internal_error("CE0094", method=name)
     if reject_builtin_miscount(validator.reporter, node.loc, name, len(node.args),
                                f"{display_type(receiver)}.{name}", family.arity):
-        return yielded
-    if name == "realise" and yielded == BuiltinType.BLANK:
+        return row.returns
+    if name == "realise" and row.returns == BuiltinType.BLANK:
         er.emit(validator.reporter, er.ERR.CE2506, node.loc, ty=display_type(receiver))
-        return None
-    params = {"realise": [yielded], "expect": [BuiltinType.STRING]}.get(name)
-    if params is not None:
-        modes = family.modes.of(name, len(node.args)) or ()
-        declared = Parameters(node.shir_id, modes, [f"#{i}" for i in range(1, len(modes) + 1)])
-        check_arguments(validator, name, params, node.args, node.loc,
-                        mismatch_code=er.ERR.CE2503, arity_code=er.ERR.CE2009,
-                        declared=declared)
-    return yielded
+        return row.returns
+    _check_builtin_arguments(validator, node, name, family, row.params, er.ERR.CE2503)
+    return row.returns
 
 
 FamilyArm = Callable[['TypeValidator', e.Call, Type, str, MethodFamily], Optional[Type]]

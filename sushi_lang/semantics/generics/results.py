@@ -9,6 +9,8 @@ from sushi_lang.semantics.generics.interned import interned_name
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.builtin_signatures import BuiltinParam, BuiltinSignature
+from sushi_lang.semantics.generics.maybe import (
+    WrapperMethodRow, ensure_maybe_type_in_table, payload_method_row)
 from sushi_lang.semantics.generics.types import GenericTypeRef, TypeParameter
 from sushi_lang.semantics.param_modes import BuiltinModes, ParamMode
 from sushi_lang.semantics.passes.derive import derive_for_enum
@@ -44,22 +46,20 @@ def is_builtin_result_method(method_name: str) -> bool:
     return method_name in RESULT_METHOD_ARITY
 
 
-def result_method_return_type(result_type: EnumType, method_name: str, enum_table: Any,
-                              struct_table: Optional[dict] = None) -> Optional[Type]:
-    """The type that a `Result@(T, E)` method with no signature row yields.
+def result_method_row(result_type: EnumType, method_name: str, enum_table: Any,
+                      struct_table: Optional[dict] = None) -> Optional[WrapperMethodRow]:
+    """The row of a `Result@(T, E)` method with no signature row.
 
-    `is_ok` and `is_err` yield a bool, `realise` and `expect` the payload `T`, and `err`
-    a `Maybe@(E)`.
+    `is_ok` and `is_err` yield a bool, and `err` a `Maybe@(E)`; `realise` and `expect` are
+    the rows that a `Maybe` shares.
     """
     if method_name in ("is_ok", "is_err"):
-        return BuiltinType.BOOL
+        return WrapperMethodRow((), BuiltinType.BOOL)
     ok, err = result_ok_err(result_type)
-    if method_name in ("realise", "expect"):
-        return ok
     if method_name == "err":
-        from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-        return ensure_maybe_type_in_table(enum_table, err, struct_table=struct_table)
-    return None
+        return WrapperMethodRow((), ensure_maybe_type_in_table(enum_table, err,
+                                                               struct_table=struct_table))
+    return payload_method_row(ok, method_name)
 
 
 def is_result_enum(t: Any) -> bool:

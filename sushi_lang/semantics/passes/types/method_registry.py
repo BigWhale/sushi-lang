@@ -355,16 +355,16 @@ class ResultMethodInferrer:
 
     def infer_return_type(self) -> Optional['Type']:
         from sushi_lang.semantics.generics.results import (
-            RESULT_METHOD_SIGNATURES, result_method_return_type)
+            RESULT_METHOD_SIGNATURES, result_method_row)
         signature = RESULT_METHOD_SIGNATURES.get(self.call.method)
         if signature is not None:
             from sushi_lang.semantics.passes.types.calls.builtin_signature import (
                 builtin_call_return_type)
             return builtin_call_return_type(self.validator, signature,
                                             self.receiver_type, self.call)
-        return result_method_return_type(self.receiver_type, self.call.method,
-                                         self.validator.enum_table,
-                                         self.validator.struct_table.by_name)
+        row = result_method_row(self.receiver_type, self.call.method,
+                                self.validator.enum_table, self.validator.struct_table.by_name)
+        return None if row is None else row.returns
 
 
 @dataclass

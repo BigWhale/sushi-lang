@@ -2,6 +2,7 @@
 
 The typecheck arm of the family is `passes/types/visit/calls.py:_check_maybe_method`.
 """
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Mapping, Optional
 
@@ -38,13 +39,35 @@ def is_builtin_maybe_method(method_name: str) -> bool:
     return method_name in MAYBE_METHOD_ARITY
 
 
+@dataclass(frozen=True)
+class WrapperMethodRow:
+    """A `Maybe@(T)` or `Result@(T, E)` method with no signature row: the type of each
+    argument, and the type that the call yields."""
+    params: tuple[Type, ...]
+    returns: Type
+
+
+def payload_method_row(payload_type: Type, method_name: str) -> Optional[WrapperMethodRow]:
+    """The two methods that a `Maybe` and a `Result` share, from the payload type T:
+    `realise(T) T` and `expect(string) T`."""
+    if method_name == "realise":
+        return WrapperMethodRow((payload_type,), payload_type)
+    if method_name == "expect":
+        return WrapperMethodRow((BuiltinType.STRING,), payload_type)
+    return None
+
+
+def maybe_method_row(payload_type: Type, method_name: str) -> Optional[WrapperMethodRow]:
+    """The row of a `Maybe<T>` method with no signature row, given the payload type T."""
+    if method_name in ("is_some", "is_none"):
+        return WrapperMethodRow((), BuiltinType.BOOL)
+    return payload_method_row(payload_type, method_name)
+
+
 def maybe_method_return_type(payload_type: Type, method_name: str) -> Optional[Type]:
     """Return type of a Maybe<T> method, given the payload type T."""
-    if method_name in ("realise", "expect"):
-        return payload_type
-    if method_name in ("is_some", "is_none"):
-        return BuiltinType.BOOL
-    return None
+    row = maybe_method_row(payload_type, method_name)
+    return None if row is None else row.returns
 
 
 def maybe_payload(maybe_type: EnumType) -> Type:

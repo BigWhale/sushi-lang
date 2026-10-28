@@ -8,9 +8,10 @@ ShirBody step
 
 ShirBody main
   params : []
-  locals : [_0 "m": Maybe@(~)]
+  locals : [_0 "m": Maybe@(~), _1 "x": i32]
   block  :
     Assign(LocalRef(_0), EnumInit(@Maybe, "Some", [Lit(Blank)]), is_init: true)
     ExprStmt(Call(Builtin(Call(Free(@step), []), "realise"), [Lit(Blank)]))
     ExprStmt(Call(Builtin(LocalRef(_0), "realise"), [Lit(Blank)]))
-    Return(Lit(0))
+    Assign(LocalRef(_1), Call(Builtin(Call(Free(@step), []), "realise"), [Lit(0)]), is_init: true)
+    Return(LocalRef(_1))
