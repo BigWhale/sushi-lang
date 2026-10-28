@@ -1,10 +1,10 @@
 """SHIR to SLIR: the control-flow arms of the lowering (docs/design/ir.md 8.9, 8.10).
 
-The arms of `if`, `while`, `break` and `continue`, the lowering of a condition, the join of
-the paths of a statement with the drop state of each path, the short-circuit `and` and `or`,
-and `??`. Each arm is a free function that takes the `_Lowering` of `lower.py` first; the
-tables of `lower.py` name them. This module reads `lower.py` for its types only, so no import
-cycle exists at run time.
+The arms of `if`, `while`, `break`, `continue` and `assert`, the lowering of a condition,
+the join of the paths of a statement with the drop state of each path, the short-circuit
+`and` and `or`, and `??`. Each arm is a free function that takes the `_Lowering` of
+`lower.py` first; the tables of `lower.py` name them. This module reads `lower.py` for its
+types only, so no import cycle exists at run time.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.callee import Conversion
 from sushi_lang.semantics.shir.loop_kind import While
 from sushi_lang.semantics.shir.nodes import ShirBlock
+from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
@@ -137,6 +138,29 @@ def if_(low: _Lowering, stmt: s.If) -> None:
     arrivals += arm(low, other, stmt.otherwise)
     if arrivals:
         meet(low, low.new_block(), arrivals, among, stmt.loc)
+
+
+def assert_(low: _Lowering, stmt: s.Assert) -> None:
+    """`switchInt(c, [(0, fail)], otherwise: next)` (ir.md 8.9). The failing block evaluates
+    the message in a scope of its own and ends in the trap RE2026, which reads the position
+    of the `assert` and the message (ir.md 8.8) and drops nothing. A bare `assert` gives the
+    empty message, and its position has no `: `. The next block goes on from the state
+    before the failing block."""
+    cond, local = condition(low, stmt.cond)
+    fail, next_ = low.new_block(), low.new_block()
+    low.jump(tm.SwitchInt(cond, ((0, fail.id),), next_.id, stmt.loc))
+    targets(local, (fail, next_), stmt.cond.loc)
+    at_branch = low.placement.state()
+    low.block = fail
+    low.placement.open_statement()
+    position = f"{stmt.label}:{stmt.loc.line}:{stmt.loc.col}"
+    message: p.Operand = p.Const(k.text(""))
+    if stmt.message is not None:
+        position, message = f"{position}: ", low.operand(stmt.message)
+    low.block.terminator = tm.Trap("RE2026", (p.Const(k.text(position)), message), stmt.loc)
+    low.placement.leave_scope()
+    low.placement.restore(at_branch)
+    low.block = next_
 
 
 def loop(low: _Lowering, stmt: s.Loop) -> None:

@@ -12,6 +12,7 @@ from typing import Mapping, Optional, get_args
 import pytest
 
 from sushi_lang.internals.diagnostics import InternalCompilerError
+from sushi_lang.internals.errors.registry import REGISTRY, Category, ErrorMessage, Severity
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.passes.collect.functions import FuncSig, FunctionTable, Param
@@ -466,6 +467,50 @@ def test_a_trap_that_names_no_runtime_code_with_its_operand_count_is_refused(cod
 def test_a_trap_with_the_operands_of_its_text_passes():
     trap = tm.Trap("RE2020", (p.Const(k.Int(5, I32)), p.Const(k.Int(3, I32))), SPAN)
     _passes(_function([BLANK], _block(0, trap)))
+
+
+def test_a_trap_that_reads_an_i32_local_for_a_d_conversion_passes():
+    trap = tm.Trap("RE2020", (_copy(1), p.Const(k.Int(3, I32))), SPAN)
+    _passes(_function([BLANK, I32], _block(0, trap, _live(1),
+                                           _set(1, r.Use(p.Const(k.Int(5, I32)))))))
+
+
+@pytest.mark.parametrize("position, message", [
+    ("probe.sushi:7:5", ""),                 # a bare assert: no `: `, an empty message
+    ("probe.sushi:7:5: ", "the count is 3"),  # an assert with a message
+])
+def test_an_assert_trap_with_the_position_and_a_constant_message_passes(position: str,
+                                                                        message: str):
+    trap = tm.Trap("RE2026", (p.Const(k.text(position)), p.Const(k.text(message))), SPAN)
+    _passes(_function([BLANK], _block(0, trap)))
+
+
+def test_an_assert_trap_that_reads_its_message_from_a_live_local_passes():
+    """The trap reads the message and drops nothing: the program ends there."""
+    trap = tm.Trap("RE2026", (p.Const(k.text("probe.sushi:7:5: ")), _copy(1)), SPAN)
+    _passes(_function([BLANK, STRING], _block(0, trap, _live(1), _text(1))))
+
+
+@pytest.mark.parametrize("code, args", [
+    ("RE2020", (p.Const(k.text("5")), p.Const(k.Int(3, I32)))),   # %d takes an i32
+    ("RE2020", (p.Const(k.Int(5, BuiltinType.I64)), p.Const(k.Int(3, I32)))),  # not an i64
+    ("RE2026", (p.Const(k.text("probe.sushi:7:5")), p.Const(k.Int(0, I32)))),  # %.*s, a string
+    ("RE2026", (p.Const(k.Bool(True)), p.Const(k.text("")))),     # the position is a string
+    ("RE2026", (p.Const(k.text("probe.sushi:7:5")),)),             # its text prints two values
+    ("RE2026", ()),                                                 # a bare assert has two
+    ("RE2020", (p.Copy(p.Global("unit$g")), p.Const(k.Int(3, I32)))),  # no type to read
+])
+def test_a_trap_operand_of_the_wrong_type_for_its_conversion_is_refused(
+        code: str, args: tuple[p.Operand, ...]):
+    _refused(_function([BLANK], _block(0, tm.Trap(code, args, BAD))), "registered trap")
+
+
+def test_a_trap_whose_text_holds_a_conversion_that_no_operand_fills_is_refused(monkeypatch):
+    monkeypatch.setitem(REGISTRY, "RE9998", ErrorMessage("RE9998", Severity.ERROR,
+                                                         "a ratio of %f", Category.RUNTIME))
+    error = _refused(_function([BLANK], _block(0, tm.Trap("RE9998", (p.Const(k.Int(1, I32)),),
+                                                          BAD))), "registered trap")
+    assert "%f" in error.params["detail"]
 
 
 def test_a_statement_with_no_span_is_refused():

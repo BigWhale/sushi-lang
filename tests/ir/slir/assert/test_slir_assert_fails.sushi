@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: "before\n"
+# EXPECT_STDERR_CONTAINS: "Runtime Error RE2026: assertion failed at "
+# EXPECT_STDERR_CONTAINS: "test_slir_assert_fails.sushi:18:5: the count was 3\n"
+# EXPECT_DUMP_SLIR: test_slir_assert_fails.slir
+#
+# A false assert stops the program. The trap reads its message from the local `why`, which
+# is live at the trap, and it drops nothing: the program ends there (ir.md 8.13). The block
+# that goes on drops `why` at the end of the body. `assert(false)` switches on a constant.
+
+fn never() ~:
+    assert(false)
+
+fn main() i32:
+    let i32 count = 3
+    let string why = "the count was {count}"
+    println("before")
+    assert(count == 4, why)
+    never()
+    println("after")
+    return 0

@@ -7,6 +7,8 @@ from pathlib import Path
 
 
 from sushi_lang.internals.errors import REGISTRY, Category, Severity, _fmt
+from sushi_lang.internals.errors.runtime import printf_conversions
+from sushi_lang.semantics.slir.verify import TRAP_OPERAND_TYPES
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "sushi_lang"
 TEST_ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +30,7 @@ REFERENCE_PATTERNS = [
     re.compile(r"""AstBuilderICE\(\s*["'](C[EW]\d{4})["']"""),
     re.compile(r"""LibraryError\(\s*["'](C[EW]\d{4})["']"""),
     re.compile(r"""emit_runtime_error(?:_with_values)?\(\s*["'](RE\d{4})["']"""),
+    re.compile(r"""Trap\(\s*["'](RE\d{4})["']"""),
 ]
 
 # The packager raises an NE code through NoriError and its subclasses, and recasts one
@@ -174,7 +177,6 @@ UNREFERENCED: set[str] = {
     "CE6102",                                 # Tier A: type arguments after a dot
     "CE2094",                                 # Tier C: closures
     "RE2023",                                 # Tier A (A3, A4): a match with no arm
-    "RE2026",                                 # Tier A (A11): a failed assert
     "RE2025",                                 # Tier D (D5): a null foreign return
 }
 
@@ -214,6 +216,19 @@ def test_re2020_format_matches_its_call_site():
     assert re.findall(r"%[a-zA-Z]", text) == ["%d", "%d"], (
         f"RE2020's text must take exactly two %d (index, size): {text!r}"
     )
+
+
+def test_re2026_format_takes_the_position_and_the_message():
+    """RE2026's text is the format that a failed assert gives two strings to."""
+    assert printf_conversions(REGISTRY["RE2026"].text) == ("%.*s", "%.*s")
+
+
+def test_every_runtime_text_holds_only_conversions_that_a_trap_fills():
+    """The SLIR verifier gives each conversion of a runtime text the type of its operand."""
+    unknown = {code: printf_conversions(msg.text) for code, msg in REGISTRY.items()
+               if msg.category is Category.RUNTIME
+               and not set(printf_conversions(msg.text)) <= set(TRAP_OPERAND_TYPES)}
+    assert unknown == {}
 
 
 def test_every_registered_code_has_a_severity_and_category():

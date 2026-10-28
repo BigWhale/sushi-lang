@@ -3844,9 +3844,9 @@ An `unsafe external` function declared to return a plain `string` or `ptr` answe
 
 **Error** · runtime
 
-**Message:** `assertion failed at {where}`
+**Message:** `assertion failed at %.*s%.*s`
 
-An `assert(cond)` or `assert(cond, message)` found its condition false. `{where}` is the file, the line and the column of the `assert`, with the file named as a compile-time diagnostic names it; a message, when there is one, follows after `: `. An assert states an invariant, so a failure is a defect and not data: the program stops with exit code 1, and no error channel catches it. A failure that a caller can handle belongs in the channel, `| E`. See [the assert design](design/assert.md).
+An `assert(cond)` or `assert(cond, message)` found its condition false. The text gives the file, the line and the column of the `assert`, with the file named as a compile-time diagnostic names it; a message, when there is one, follows after `: `. An assert states an invariant, so a failure is a defect and not data: the program stops with exit code 1, and no error channel catches it. A failure that a caller can handle belongs in the channel, `| E`. See [the assert design](design/assert.md).
 
 ### RE2027 {#re2027}
 

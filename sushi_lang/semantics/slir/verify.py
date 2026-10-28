@@ -11,8 +11,9 @@ projection of a place, a `Move` out of no `Global`, a `Drop` of an owning type, 
 flag for a `DropIfSet`, no `and` or `or` in a `Binary`, a `Cast` between two numeric types
 or of one type, an `Int` constant in the range of its type, the conventions of a `Direct`
 callee, a receiver operand for a call of a built-in method, no copy of an owning value
-other than a `string` into an `Owned` argument, and a registered `RExxxx` for a `Trap`. The type of a place also gives its root local, so a
-`Move` of a projection is a `Move` of its root.
+other than a `string` into an `Owned` argument, and a registered `RExxxx` for a `Trap`, with
+one operand of the type that each printf conversion of its text takes. The type of a place
+also gives its root local, so a `Move` of a projection is a `Move` of its root.
 
 Then a dataflow over the CFG gives each local, at each point, the set of states that the
 paths to that point can give it: uninit, live, moved or dropped, with the value of its drop
@@ -32,13 +33,13 @@ the internal error CE0000: a `BeginBorrow` or an `EndBorrow`, a projection of a 
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from functools import partial
 from typing import TYPE_CHECKING, Callable, NoReturn, Optional, TypeAlias, get_args
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import REGISTRY, Category
+from sushi_lang.internals.errors.runtime import printf_conversions
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.integer_width import fits_integer_type, integer_range
@@ -83,7 +84,9 @@ TRAP = "registered trap"
 SPANS = "spans"
 
 _TERMINATORS = get_args(tm.SlirTerminator)
-_PRINTF = re.compile(r"%[-+ #0-9.]*[a-zA-Z%]")
+
+#: The type of the operand that each printf conversion of a runtime text takes (ir.md 8.8).
+TRAP_OPERAND_TYPES: dict[str, Type] = {"%d": BuiltinType.I32, "%.*s": BuiltinType.STRING}
 
 # The state of a local on one path, and the value of its drop flag there.
 _UNINIT, _LIVE, _MOVED, _DROPPED = "uninit", "live", "moved", "dropped"
@@ -237,15 +240,26 @@ class _Check:
             self.trap(term)
 
     def trap(self, term: tm.Trap) -> None:
+        """One operand for each printf conversion of the registry text, of the type that
+        the conversion takes."""
         message = REGISTRY.get(term.code)
         if message is None or message.category is not Category.RUNTIME:
             self.fail(TRAP, f"{term.code} is no registered runtime code", term.span)
-        wanted = sum(1 for hit in _PRINTF.findall(message.text) if hit != "%%")
-        if len(term.args) != wanted:
-            self.fail(TRAP, f"{term.code} prints {wanted} values, and the trap gives "
+        conversions = printf_conversions(message.text)
+        if len(term.args) != len(conversions):
+            self.fail(TRAP, f"{term.code} prints {len(conversions)} values, and the trap gives "
                             f"{len(term.args)}", term.span)
-        for arg in term.args:
+        for conversion, arg in zip(conversions, term.args, strict=True):
             self.operand(arg, term.span)
+            wanted = TRAP_OPERAND_TYPES.get(conversion)
+            if wanted is None:
+                self.fail(TRAP, f"the text of {term.code} holds the conversion {conversion}, "
+                                f"which no trap operand fills", term.span)
+            given = self.operand_type(arg, term.span)
+            if given != wanted:
+                shown = "no type" if given is None else f"the type {display_type(given)}"
+                self.fail(TRAP, f"{show(arg)} has {shown}, and the conversion {conversion} of "
+                                f"{term.code} takes {display_type(wanted)}", term.span)
 
     def place(self, place: p.Place, span: Span) -> _Typed:
         """The root and the type of `place`; each projection must fit the type of its base."""
@@ -299,6 +313,8 @@ class _Check:
             constant = operand.constant
             if isinstance(constant, (k.Int, k.Float)):
                 return constant.ty
+            if isinstance(constant, k.Str):
+                return BuiltinType.STRING
             return BuiltinType.BOOL if isinstance(constant, k.Bool) else None
         ty = self.place(operand.place, span).ty
         return None if isinstance(ty, _Payload) else ty

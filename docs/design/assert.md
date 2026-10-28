@@ -94,15 +94,15 @@ The trap path does not free the message or the other values in scope: the proces
 
 ## The implementation
 
-- **One code, [RE2026](../error-catalog.md#re2026).** The text in the registry is `assertion failed at {where}`.
-  `{where}` is `file:line:col`, and the backend formats it at COMPILE time, as [RE2023](../error-catalog.md#re2023)
-  formats `{pattern}`.
+- **One code, [RE2026](../error-catalog.md#re2026).** The text in the registry is the printf
+  format `assertion failed at %.*s%.*s` (ruling R-U). An `assert` lowers to a `SwitchInt`
+  and a `Trap("RE2026", [position, message])` in SLIR (`ir.md` 8.8, 8.9). The position is
+  a constant string, `file:line:col`, and it ends in `: ` when a message follows. A bare
+  `assert` gives the empty string as its message. So both forms print the text that they
+  printed before SLIR, and the file name never goes into the format string.
 - **The message is a run-time value.** A Sushi string is `{i8* data, i32 size, i8 owned}`
-  and has no NUL terminator, so the backend prints it with `%.*s` from its size and its
-  data. This is `emit_runtime_error_with_message` in `RuntimeErrors`
-  (`backend/runtime/errors.py`): it prints the compile-time text, then `: ` and the
-  message, then the newline. An `assert` lowers to a `SwitchInt` and a `Trap` in SLIR, and
-  the `Assert` group A11 connects the `Trap` to this emitter.
+  and has no NUL terminator, so the trap emitter prints each `%.*s` operand from its size
+  and its data, then the newline.
 - **The message is a value of the fail block.** It is built in that block, and the `Trap`
   ends the block, so no drop of a value made there reaches the passing path.
 - **The file name is stamped on the node.** The AST builder writes
