@@ -854,6 +854,9 @@ the family, and it skips the argument types. The one argument check reads the de
 is [CE2503](../error-catalog.md#ce2503) at the argument, and each argument borrows. The
 call yields its type after either fault. `realise` on a `~` payload is
 [CE2506](../error-catalog.md#ce2506) at the call, and the pass does not check its default.
+The call still yields `~`, so a binding of another type is a mismatch too, as on `main`.
+One table row holds the argument types and the return type of each method
+(`WrapperMethodRow`, `semantics/generics/maybe.py` and `results.py`).
 A method with a signature row (`map_err`, `or_err`, group B10) stops the walk with the
 label of its family, `typecheck, Call(method result)` or `Call(method maybe)`.
 
