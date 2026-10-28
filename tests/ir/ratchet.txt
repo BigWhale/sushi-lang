@@ -658,6 +658,9 @@ tests/ir/typeck/methods/test_err_typeck_method_string_return_mismatch.sushi
 tests/ir/typeck/methods/test_err_typeck_method_unknown_on_call.sushi
 tests/ir/typeck/methods/test_err_typeck_method_unknown_on_literal.sushi
 tests/ir/typeck/methods/test_err_typeck_method_unknown_on_string.sushi
+tests/ir/typeck/names/test_err_typeck_alias_call.sushi
+tests/ir/typeck/names/test_err_typeck_alias_const_value.sushi
+tests/ir/typeck/names/test_err_typeck_alias_private_call.sushi
 tests/ir/typeck/names/test_err_typeck_alias_private_const.sushi
 tests/ir/typeck/names/test_err_typeck_const_ref.sushi
 tests/ir/typeck/operators/test_err_typeck_arithmetic.sushi

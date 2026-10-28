@@ -1,0 +1,29 @@
+unit units/mathx
+
+ShirBody LIMIT (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(Lit(10))
+
+ShirBody twice
+  params : [(_0 "x": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(+, LocalRef(_0), LocalRef(_0)))
+
+ShirBody secret
+  params : [(_0 "x": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+unit test_err_typeck_alias_call
+
+ShirBody main
+  params : []
+  locals : [_0 "ok": i32, _1 "bad": i32]
+  block  :
+    Assign(LocalRef(_0), Call(Free(@mx.twice), [(Lit(3), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_1), Call(Free(@mx.twice), [Lit("Mostly Harmless")]), is_init: true)
+    Return(Binary(+, LocalRef(_0), LocalRef(_1)))

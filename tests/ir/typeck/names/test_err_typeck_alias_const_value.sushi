@@ -1,0 +1,14 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_DUMP_SHIR: test_err_typeck_alias_const_value.shir
+#
+# A constant behind an alias is a `ConstRef`. It takes the declared type of the constant and
+# the value of the constant, as a bare name does. `mx.LIMIT` is an `i32`, so a string
+# binding of it is CE2002.
+
+use "units/mathx" as mx
+
+fn main() i32:
+    let i32 limit = mx.LIMIT
+    let string word = mx.LIMIT
+    word
+    return limit
