@@ -27,6 +27,8 @@ the declaration round of the backend, and that is the one path).
 Amended on 2026-10-28 by ruling R-U (group A11): 8.8, 8.9 and 8.13 (a `Trap` gives one
 operand of a fixed type to each printf conversion of its registry text; the trap of an
 `assert` carries its position and its message as two `string` operands).
+Amended on 2026-10-28 by group A3: 7.8 (an `IntRange` keeps the span of each bound, where a
+diagnostic of that bound points).
 
 ## The decisions, in one place
 
@@ -1213,7 +1215,8 @@ The item mode, owned or lent, follows from the type (`IteratorType.peeks`).
 ```
 Pattern = Wildcard
         | Literal(value: Constant)               # an integer, a byte or a string
-        | IntRange(low: Constant, high: Constant, inclusive: bool)   # 0x80..=0x8f
+        | IntRange(low: Constant, high: Constant, inclusive: bool,   # 0x80..=0x8f
+                   low_loc: Span, high_loc: Span)
         | Variant(decl: DeclId, variant: str, items: [Pattern | PatBinding])
         | Tuple(elements: [Pattern | PatBinding])
         | Own(inner: Pattern | PatBinding)       # Own(poke h) -- unwraps Own@(T)
@@ -1236,8 +1239,11 @@ the source writes as one expression is a block of one `ExprStmt`.
 An INTEGER scrutinee and a STRING scrutinee use `Literal` arms; the kinds never mix
 ([CE2076](../error-catalog.md#ce2076)), and that is checked on SHIR. `IntRange` is an
 INTEGER pattern only: the AST's `RangePattern` (`a..b` or `a..=b`) lowers to its written
-bounds and `inclusive`. Lowering has no types, so `typecheck` reads the bounds as values of
-the type at the position: `0..10` matches 0 to 9, and `0x80..=0xff` on an i8 matches -128
+bounds, `inclusive` and the span of each bound: a bound that does not fit the type
+([CE2073](../error-catalog.md#ce2073)) and a string bound
+([CE2072](../error-catalog.md#ce2072)) are errors at that bound, as `marker_loc` (7.4) gives
+the span of a written marker. Lowering has no types, so `typecheck` reads the bounds as values
+of the type at the position: `0..10` matches 0 to 9, and `0x80..=0xff` on an i8 matches -128
 to -1. A `Literal` integer is a value of that type in the same way. A bound is a literal and
 not an expression, so lowering does not call the constant evaluator for it, and a constant
 keeps its spelling (a radix, a byte). `Variant` names its enum by the written name, the
