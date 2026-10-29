@@ -174,10 +174,16 @@ def test_a_builtin_method_is_made_by_its_family():
         f"a BuiltinMethod is made in {makers}; make it with MethodFamily.callee")
 
 
+def test_a_builtin_method_states_its_receiver_mode():
+    """`nom_self` has no default: a maker of a `BuiltinMethod` cannot forget the mode."""
+    field = {f.name: f for f in dataclasses.fields(BuiltinMethod)}["nom_self"]
+    assert field.default is dataclasses.MISSING
+
+
 @pytest.mark.parametrize("family", [f.name for f in METHOD_TYPE_REGISTRY.families])
 def test_a_family_names_itself_in_its_callee(family):
     method = METHOD_TYPE_REGISTRY.family(family).callee("probe")
-    assert method == BuiltinMethod(family, "probe")
+    assert method == BuiltinMethod(family, "probe", nom_self=False)
 
 
 def test_no_second_view_of_a_call():

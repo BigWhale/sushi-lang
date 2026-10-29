@@ -20,7 +20,6 @@ import ast
 import re
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional
 
 import pytest
 
@@ -34,6 +33,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.body import Initializer, Instance
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import ShirId
+from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
 from sushi_lang.semantics.typesys import BorrowMode, BuiltinType
 
 
@@ -152,10 +152,12 @@ class _Errors:
         return _Diagnostic(self.emitted, code, span, params)
 
 
-def _checker(record: Optional[ConstSig]) -> SimpleNamespace:
+def _checker(record: object) -> SimpleNamespace:
+    """A stand-in for the pass whose lookup answers `record`: a `ConstSig`, or the record of
+    a stdlib constant."""
     decls = DeclNames()
     return SimpleNamespace(err=_Errors(), decls=decls, decl_name=decls.name_of,
-                           constant_sig=lambda _node: record)
+                           constant_record=lambda _node: record)
 
 
 def _ref(checker: SimpleNamespace, written: str) -> e.ConstRef:
@@ -183,8 +185,9 @@ def test_a_peek_of_a_constant_reads_it():
 @pytest.mark.parametrize("mode", [BorrowMode.PEEK, BorrowMode.POKE], ids=["peek", "poke"])
 @pytest.mark.parametrize("written", ["PI", "m.PI"], ids=["bare", "behind_an_alias"])
 def test_a_stdlib_constant_has_no_storage(written: str, mode: BorrowMode):
-    """A stdlib constant has no record and no storage, so both modes are refused."""
-    checker = _checker(None)
+    """A stdlib constant has a record that is no `ConstSig`, and no storage, so both modes are
+    refused."""
+    checker = _checker(lookup_stdlib_constant("PI", None))
     check_borrow(checker, _ref(checker, written), mode, _AT)  # type: ignore[arg-type]
     assert checker.err.emitted == [(er.ERR.CE2400, _AT, {"name": "PI", "mode": mode.value})]
 

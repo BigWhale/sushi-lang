@@ -17,12 +17,13 @@ from sushi_lang.semantics.typesys import Type
 class BuiltinMethod:
     """A method of a row of `METHOD_TYPE_REGISTRY`: the family, and the method name.
     `nom_self` is True for a method that takes its receiver (its row declares `nom self`).
+    It has no default, so a maker states the mode.
 
     `MethodFamily.callee` makes it, so the family is a row of the table (gate:
     `tests/unit/test_dotcall_ladder_is_one.py`)."""
     family: str
     name: str
-    nom_self: bool = False
+    nom_self: bool
 
 
 @dataclass(frozen=True, slots=True)

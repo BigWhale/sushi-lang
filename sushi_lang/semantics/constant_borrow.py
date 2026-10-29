@@ -25,11 +25,13 @@ unit's `var` was let through to write read-only memory. Every caller passes what
 SCOPED lookup answered -- `TypeValidator.const_sig`, `NamespaceTable.constant_record`,
 or `ConstantTable.lookup(name, unit, scope)` -- because the question is per unit.
 
-The module sits beside the passes rather than inside one: the scope pass and the borrow
-pass both ask, and neither owns the other, which is the shape `semantics/name_ladder.py`
-and `semantics/param_modes.py` already have. The borrow pass asks at a `ConstRef` place,
-bare or behind an alias (docs/design/ir.md 7.9); the scope pass asks for a name that SHIR
-keeps as no `ConstRef`, a top-level function or a namespace.
+The module sits beside the passes rather than inside one: the scope pass, the typecheck
+pass and the borrow pass all ask, and none owns another, which is the shape
+`semantics/name_ladder.py` and `semantics/param_modes.py` already have. The borrow pass asks
+at a `ConstRef` place, bare or behind an alias (docs/design/ir.md 7.9); the typecheck pass
+asks at a `poke` binding into a constant, one scrutinee for each element of a tuple literal;
+the scope pass asks for a name that SHIR keeps as no `ConstRef`, a top-level function or a
+namespace.
 """
 from __future__ import annotations
 

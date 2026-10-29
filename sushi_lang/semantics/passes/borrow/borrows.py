@@ -16,6 +16,7 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.passes.collect import ConstSig
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import BorrowMode
 from .diagnostics import emit_use_after_move, spelled
@@ -43,7 +44,8 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     is_poke = mode is BorrowMode.POKE
     if isinstance(place, e.ConstRef):
         name = checker.decl_name(place.const_id).rpartition(".")[2]
-        sig = checker.constant_sig(place)
+        record = checker.constant_record(place)
+        sig = record if isinstance(record, ConstSig) else None
         reject_borrow_of_constant(checker.err, name, sig, place.loc, mode=mode.value,
                                   no_frame_slot=sig is None)
         return

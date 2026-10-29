@@ -147,5 +147,5 @@ def test_a_family_in_no_receiver_set_is_an_internal_error():
     from sushi_lang.semantics.shir.callee import BuiltinMethod
 
     with pytest.raises(InternalCompilerError) as caught:
-        receiver_convention(BuiltinMethod("unheard_of", "probe"))
+        receiver_convention(BuiltinMethod("unheard_of", "probe", nom_self=False))
     assert caught.value.code == "CE0000"

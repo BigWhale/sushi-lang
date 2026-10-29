@@ -262,7 +262,7 @@ SHAPES: list[tuple[object, str]] = [
     (st.StorageDead(_l(3), SPAN), "StorageDead(_3)"),
     (st.Call(_local(4), st.Indirect(_copy(3)), ((_const(k.Int(1, I32)), GUARANTEED),), SPAN),
      "_4 = call indirect(copy _3)(const 1_i32 @guaranteed)"),
-    (st.Call(_local(4), st.Builtin(BuiltinMethod("string", "len"), ()),
+    (st.Call(_local(4), st.Builtin(BuiltinMethod("string", "len", nom_self=False), ()),
              ((_copy(1), Convention.IN_GUARANTEED),), SPAN),
      "_4 = call builtin string.len(copy _1 @in_guaranteed)"),
     (st.Call(_local(2), st.Direct("test$bump", "bump"), ((_copy(1), Convention.INOUT),), SPAN),

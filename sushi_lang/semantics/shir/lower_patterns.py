@@ -146,11 +146,11 @@ def _own(lw: BodyLowerer, node: a.OwnPattern, _owner: Optional[a.Node]) -> Item:
 
 def _or(lw: BodyLowerer, node: a.OrPattern, owner: Optional[a.Node]) -> Item:
     """`x | y`: each alternative in the position of the `|`, so its owner is the same. A bare
-    `_` has no span of its own in the AST: it takes the span of the `|` list."""
+    name, `_` too, has no span of its own in the AST: it takes the span of the `|` list."""
     ident = lw.ident()
     loc = lw.span(node)
-    return p.Or(ident, loc, [p.Wildcard(lw.ident(), loc) if alt == "_" else item(lw, alt, owner)
-                             for alt in node.alternatives])
+    return p.Or(ident, loc, [_named(lw, alt, owner, s.Bare(), loc) if isinstance(alt, str)
+                             else item(lw, alt, owner) for alt in node.alternatives])
 
 
 LowerPattern: TypeAlias = Callable[["BodyLowerer", Any, Optional[a.Node]], Item]

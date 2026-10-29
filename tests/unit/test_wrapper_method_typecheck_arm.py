@@ -76,7 +76,7 @@ def test_a_test_method_yields_a_bool_and_keeps_its_callee(monkeypatch, receiver,
     yielded = calls.check_call(_validator(answers), call, None)  # type: ignore[arg-type]
     assert yielded == BuiltinType.BOOL
     assert answers.callee_of(call.shir_id) == ResolvedCall(
-        Builtin(call.target.recv, BuiltinMethod(family, method)))  # type: ignore[union-attr]
+        Builtin(call.target.recv, BuiltinMethod(family, method, nom_self=False)))  # type: ignore[union-attr]
 
 
 def test_the_rows_with_a_signature_are_the_untyped_rows():

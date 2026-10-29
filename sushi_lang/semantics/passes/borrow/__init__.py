@@ -23,7 +23,7 @@ lowering (`slir/lower.py`).
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Callable, Dict, FrozenSet, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Optional, Set
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
@@ -31,7 +31,6 @@ from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.namespaces import NamespaceTable, body_namespaces
 from sushi_lang.semantics.param_modes import Convention
-from sushi_lang.semantics.passes.collect import ConstSig
 from sushi_lang.semantics.shir.body import TemplateCheck
 from sushi_lang.semantics.shir.ownership_check import check_ownership
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, ReferenceType, Type
@@ -197,12 +196,17 @@ class BorrowChecker:
         """The written name of a declaration that a SHIR node names."""
         return self.shir.decls.name_of(decl)
 
-    def constant_sig(self, node: e.ConstRef) -> Optional[ConstSig]:
-        """The record of the constant that `node` names in the scope of the body. A stdlib
-        constant has none."""
+    def constant_record(self, node: e.ConstRef) -> Any:
+        """The record of the constant that `node` names in the scope of the body: a
+        `ConstSig`, or the record of a stdlib constant. `typecheck` resolved the name, so a
+        lookup that misses is an internal error."""
         record = self.names.constant_record(self.decl_name(node.const_id),
                                             self.tables.constants)
-        return record if isinstance(record, ConstSig) else None
+        if record is None:
+            er.raise_internal_error("CE0000", span=node.loc,
+                                    detail=f"the constant '{self.decl_name(node.const_id)}' "
+                                           f"has no record in the borrow pass")
+        return record
 
     def local_type(self, local: LocalId) -> Optional[Type]:
         return self.answers().local_type(local)

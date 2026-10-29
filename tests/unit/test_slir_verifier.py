@@ -405,7 +405,7 @@ def test_a_var_arg_callee_checks_the_convention_of_its_declared_prefix():
 
 
 def _method(*args: tuple[p.Operand, Convention]) -> st.Call:
-    return st.Call(_local(1), st.Builtin(BuiltinMethod("string", "len"), ()), args, BAD)
+    return st.Call(_local(1), st.Builtin(BuiltinMethod("string", "len", nom_self=False), ()), args, BAD)
 
 
 def test_a_built_in_method_call_with_no_receiver_operand_is_refused():

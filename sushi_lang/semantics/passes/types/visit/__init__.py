@@ -2,25 +2,26 @@
 
 ONE table, `ARMS`, gives the arm of each statement and expression class: each member of
 `ShirStmt` and `ShirExpr`. A pattern has its own table, `PATTERN_ARMS`, with a row for each
-member of `ShirPattern` (ruling R17; gate for both: `tests/unit/test_typecheck_table_is_total.py`).
-A statement arm takes the pass and one node (`check`). An expression arm takes the type of
-its position too, and answers the type of its node (`check_expr`), which the dispatch
-writes into the `TypeckResults` of the body. A pattern arm takes the type of its position
-and a note that says where that type comes from, and answers the place of the pattern in
-the matrix of the one checker (`check_pattern`): a pattern has no type, so its dispatch
-writes no row. The lookup of an arm and the stop are the one
-dispatch of the SHIR passes (`shir/dispatch.py`), which the borrow pass reads too: a class
-with no row is an internal error, and the arm of a construct that the pass does not type
-yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
+member of `ShirPattern` (ruling R17; gate for both:
+`tests/unit/test_typecheck_table_is_total.py`). A statement arm takes the pass and one node
+(`check`). An expression arm takes the type of its position too, and answers the type of
+its node (`check_expr`), which the dispatch writes into the `TypeckResults` of the body. A
+pattern arm takes the type of its position and a note that says where that type comes from,
+and answers the place of the pattern in the matrix of the one checker (`check_pattern`): a
+pattern has no type, so its dispatch writes no row. The lookup of an arm and the stop are
+the one dispatch of the SHIR passes (`shir/dispatch.py`), which the borrow pass reads too:
+a class with no row is an internal error, and the arm of a construct that the pass does not
+type yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
 
 `statements.py` walks a block and holds the statement arms, `expressions.py` the expression
 arms of the leaves, `operators.py` the arms of the operators and the check of a condition,
 `calls.py` the arms of a call, an interpolated string and a borrow, and `results.py` the
 arm of an enum construction. The pattern arms are in `passes/types/matching.py`. The arms
-of `??` and of `as` are `check_try` and `check_cast` of `passes/types/expressions.py`, because the callers of the conversion lookup
-are in that module. The AST inference visitor of `inference.py` is not part of this walk: it
-is the inference of the early passes (`ReadOnlyInferrer`), until they stop inferring.
-`helpers.py` holds the lambda and function-value helpers that it reads.
+of `??` and of `as` are `check_try` and `check_cast` of `passes/types/expressions.py`,
+because the callers of the conversion lookup are in that module. The AST inference visitor
+of `inference.py` is not part of this walk: it is the inference of the early passes
+(`ReadOnlyInferrer`), until they stop inferring. `helpers.py` holds the lambda and
+function-value helpers that it reads.
 """
 from __future__ import annotations
 

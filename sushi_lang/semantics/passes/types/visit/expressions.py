@@ -27,7 +27,6 @@ from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
 from sushi_lang.semantics.passes.types.visibility import (
     reject_ambiguous_name, reject_private_kept, reject_private_name)
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.stdlib_registry import lookup_stdlib_constant
 from sushi_lang.semantics.type_predicates import is_float_type, is_integer_type
 from sushi_lang.semantics.typesys import BuiltinType, Type
 
@@ -151,12 +150,6 @@ def _record_constant_value(validator: TypeValidator, node: e.ConstRef,
 
 def constant_record(validator: TypeValidator,
                     written: str) -> Optional[Union[ConstSig, StdlibFunction]]:
-    """The record of the constant that the written name of a `ConstRef` names in this body.
-
-    Behind an alias (`geo.SIZE`), what the namespace holds; a bare name, the constant of the
-    unit's scope, else the stdlib constant that a flat import brings.
-    """
-    record = validator.namespaces.constant_record(written, validator.const_table)
-    if record is not None or "." in written:
-        return record
-    return lookup_stdlib_constant(written, validator.scope)
+    """The record of the constant that the written name of a `ConstRef` names in this body
+    (`NamespaceTable.constant_record`)."""
+    return validator.namespaces.constant_record(written, validator.const_table)

@@ -186,9 +186,9 @@ def _typeck(decls: DeclNames, named: dict[str, e.ExprNode | s.Loop]) -> TypeckRe
     assert isinstance(producer, e.Call)
     for name in ("producer", "cursor_iter"):
         table.record_callee(named[name].shir_id,
-                            ResolvedCall(Builtin(xs, BuiltinMethod("array", "iter"))))
+                            ResolvedCall(Builtin(xs, BuiltinMethod("array", "iter", nom_self=False))))
     table.record_callee(named["map_call"].shir_id,
-                        ResolvedCall(Builtin(producer, BuiltinMethod("iterator", "map"))))
+                        ResolvedCall(Builtin(producer, BuiltinMethod("iterator", "map", nom_self=False))))
     table.record_callee(named["fail_call"].shir_id, ResolvedCall(Free(decls.refer("fail"))))
     table.record_loop_kind(named["cursor_loop"].shir_id, Cursor())
     table.record_loop_kind(named["value_loop"].shir_id, IteratorValue())

@@ -1,6 +1,8 @@
 """Declaration signature validation for type validation (the typecheck pass)."""
 from __future__ import annotations
 
+from typing import Collection
+
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.ast import FuncDef, ExtendDef, ExtendWithDef, PerkDef
 from sushi_lang.semantics.ast_walk import is_template_copy
@@ -22,6 +24,7 @@ from .perks import (
     validate_perk_implementation,
 )
 from sushi_lang.semantics.namespaces import in_body_scope
+from sushi_lang.semantics.shir.ids import ShirId
 
 
 # The positions `run()`'s per-declaration loop never reaches. A function, an
@@ -126,7 +129,7 @@ def unit_tables(self):
     return getattr(getattr(self, "tables", None), "namespaces", None)
 
 
-def _reject_path_faults(self, node, body, uncovered=frozenset()) -> None:
+def _reject_path_faults(self, node, body, uncovered: Collection[ShirId] = frozenset()) -> None:
     """CE0140, then CE0107, for the SHIR body of one function or method, and the faults
     of a borrowed return of its declaration. `uncovered` holds the matches of the body
     whose arms miss a value.
