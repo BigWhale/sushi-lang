@@ -358,8 +358,8 @@ _add(ErrorMessage("CE0093", Severity.ERROR,
     Category.INTERNAL, "Maybe.Some variant has incorrect number of associated types."))
 
 _add(ErrorMessage("CE0094", Severity.ERROR,
-    "unknown Maybe@(T) method: {method}",
-    Category.INTERNAL, "Maybe@(T) method not implemented."))
+    "unknown Result@(T, E) or Maybe@(T) method: {method}",
+    Category.INTERNAL, "A method of Result@(T, E) or Maybe@(T) has no row of its family: the typecheck pass has no argument row for it, or the backend has no emitter for it. The family table names every method, so no program reaches this error."))
 
 # CE0095 ("expect() expects 1 argument") is retired. The emitter of `expect` raised it;
 # SLIR lowering now lowers `expect` as an assert, and no emitter of `expect` is left. The

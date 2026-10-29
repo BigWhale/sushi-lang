@@ -6,7 +6,7 @@ the operands (ruling Q7). Every operand is evaluated before the family emits any
 """
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable, Protocol, Sequence
 
 from llvmlite import ir
 
@@ -52,7 +52,15 @@ def _string(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> 
 _MethodRow = Callable[[FunctionState, BuiltinMethod, st.Call], ir.Value]
 
 
-def _wrapper(emit: Callable[..., ir.Value]) -> _MethodRow:
+class _WrapperEmitter(Protocol):
+    """The emitter of the `result` or the `maybe` family: the codegen, the method name, the
+    value and the type of the receiver, and the values of the arguments."""
+
+    def __call__(self, codegen: Any, method: str, receiver: ir.Value,
+                 receiver_type: EnumType, args: Sequence[ir.Value], /) -> ir.Value: ...
+
+
+def _wrapper(emit: _WrapperEmitter) -> _MethodRow:
     """The row of the `result` or the `maybe` family, over its emitter `emit`. Every
     operand is `Guaranteed` (ir.md 8.3), so the family copies an owning value that it
     answers."""

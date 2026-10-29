@@ -48,7 +48,7 @@ class RuntimeErrors:
 
         full_message = f"Runtime Error {error_code}: {message_for(error_code, **params)}\n"
 
-        arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(full_message) + 1)
+        arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(full_message.encode('utf-8')) + 1)
         msg_name = _message_global_name(error_code, full_message)
 
         existing = self.codegen.module.globals.get(msg_name)
@@ -85,7 +85,7 @@ class RuntimeErrors:
         # Create format string: "Runtime Error RE2020: <registry text>\n"
         full_format = f"Runtime Error {error_code}: {message_for(error_code)}\n"
 
-        arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(full_format) + 1)
+        arr_ty = ir.ArrayType(ir.IntType(INT8_BIT_WIDTH), len(full_format.encode('utf-8')) + 1)
         fmt_name = _message_global_name(error_code, full_format, kind="fmt")
 
         existing = self.codegen.module.globals.get(fmt_name)

@@ -528,11 +528,11 @@ Maybe.Some variant has incorrect number of associated types.
 
 **Error** · internal
 
-**Message:** `unknown Maybe@(T) method: {method}`
+**Message:** `unknown Result@(T, E) or Maybe@(T) method: {method}`
 
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
-Maybe@(T) method not implemented.
+A method of Result@(T, E) or Maybe@(T) has no row of its family: the typecheck pass has no argument row for it, or the backend has no emitter for it. The family table names every method, so no program reaches this error.
 
 ### CE0100 {#ce0100}
 

@@ -91,6 +91,11 @@ _add(ErrorMessage("CE0120", Severity.ERROR,
     "{message}",
     Category.FUNC, "A bloom argument 'arr...' requires a variadic '...T' parameter and must be the sole, last trailing argument at the call site."))
 
+# CE0121 ("could not resolve the concrete enum type for match pattern") is retired. It was the
+# backstop of the AST dispatch of a pattern in the typecheck pass; the pass types a pattern on
+# SHIR through one table now (`PATTERN_ARMS`), and a class with no row is an internal error
+# there (docs/design/ir.md 7.3). The number is not reused.
+
 _add(ErrorMessage("CE0122", Severity.ERROR,
     "generic type '{name}' is infinitely recursive - monomorphization exceeded the maximum depth",
     Category.TYPE, "A generic type instantiation nests without bound (e.g. a type parameter that grows on each self-reference), so monomorphization cannot terminate. A finite self-reference through an opaque pointer (Own@(T)) is fine; an ever-growing type argument is not."))
