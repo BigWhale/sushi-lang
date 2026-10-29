@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
     from sushi_lang.semantics.const_eval import ConstantValue
 
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import ConstDef, ExtendDef, FuncDef, VarDef
 from sushi_lang.semantics.units import Unit
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
@@ -19,6 +20,7 @@ from sushi_lang.sushi_stdlib.src.libc_declarations import declare_libc
 from sushi_lang.backend.llvm_types import LLVMTypeSystem
 from sushi_lang.backend.llvm_utils import LLVMUtils
 from sushi_lang.backend.runtime import LLVMRuntime
+from sushi_lang.backend.runtime.strings import literal_fat_pointer
 from sushi_lang.backend.functions import LLVMFunctionManager
 from sushi_lang.semantics.unit_symbols import (
     UnitKeyedSymbols, emitted_symbol, global_symbol, mangle_unit_symbol,
@@ -271,7 +273,8 @@ class LLVMCodegen:
             for const in unit.ast.constants:
                 # A unit variable is defined by its own unit's module only.
                 self._emit_global_constant(const, unit.name,
-                                           defining=unit.name == target_unit.name)
+                                           defining=unit.name == target_unit.name,
+                                           filename=str(unit.file_path))
 
         # The target unit declares ALL its functions, public and private, because this
         # module holds their bodies; another unit declares only its PUBLIC functions,
@@ -325,7 +328,7 @@ class LLVMCodegen:
 
             before = set(self.module.globals) if unit.name in weak_units else None
             for const in unit.ast.constants:
-                self._emit_global_constant(const, unit.name)
+                self._emit_global_constant(const, unit.name, filename=str(unit.file_path))
             if before is not None:
                 weaken_foreign_globals(self.module, before)
 
@@ -507,12 +510,7 @@ class LLVMCodegen:
         data_global.global_constant = True
         data_global.initializer = ir.Constant(array_type, bytearray(string_data))
         data_global.unnamed_addr = True
-
-        zero = ir.Constant(self.i32, 0)
-        data_ptr = data_global.gep([zero, zero])
-
-        return ir.Constant.literal_struct(
-            [data_ptr, ir.Constant(self.i32, size), ir.Constant(self.i8, 0)])
+        return literal_fat_pointer(data_global)
 
     def _register_global_constant(self, name: str, llvm_type: ir.Type,
                                   value: Optional[ir.Constant],
@@ -546,7 +544,7 @@ class LLVMCodegen:
         self.constants.declare(name, global_var, unit=unit_name)
 
     def _emit_unit_variable(self, var: VarDef, unit_name: str | None,
-                            defining: bool) -> None:
+                            defining: bool, filename: Optional[str]) -> None:
         """Define a `var`'s storage in its own unit's module; declare it everywhere else."""
         ll_type = self.types.ll_type(var.ty)
         if var.link_symbol is not None or not defining:
@@ -562,7 +560,8 @@ class LLVMCodegen:
             if const_value is None:
                 return
             initializer = self._materialize_constant(
-                const_value, mangle_unit_symbol(unit_name, f".str_data.{var.name}"))
+                const_value, mangle_unit_symbol(unit_name, f".str_data.{var.name}"),
+                var.loc, filename)
             if initializer is None:
                 return
         self._register_global_constant(var.name, ll_type, initializer, unit_name,
@@ -570,7 +569,8 @@ class LLVMCodegen:
 
     def _emit_global_constant(self, const: ConstDef,
                               unit_name: str | None = None, *,
-                              defining: bool = True) -> None:
+                              defining: bool = True,
+                              filename: Optional[str] = None) -> None:
         """Emit a global constant definition, or a unit variable's storage.
 
         The route is the VALUE the evaluator produced, never the shape of the
@@ -587,7 +587,7 @@ class LLVMCodegen:
         unit_name = const.scope_unit or unit_name
 
         if isinstance(const, VarDef):
-            self._emit_unit_variable(const, unit_name, defining)
+            self._emit_unit_variable(const, unit_name, defining, filename)
             return
 
         # Materializing at the DECLARED type keeps a context-typed literal at its own
@@ -600,7 +600,8 @@ class LLVMCodegen:
         # it never takes the name of a function in the unit that holds the copy (#1101).
         symbol_unit = const.home_unit or unit_name
         initializer = self._materialize_constant(
-            const_value, mangle_unit_symbol(symbol_unit, f".str_data.{const.name}"))
+            const_value, mangle_unit_symbol(symbol_unit, f".str_data.{const.name}"),
+            const.loc, filename)
         if initializer is None:
             return  # Skip unsupported types
 
@@ -613,8 +614,10 @@ class LLVMCodegen:
         """Evaluate a constant expression at compile time, as a value not an initializer."""
         return self.constant_evaluator(unit_name).evaluate(expr, expected_type, None)
 
-    def _materialize_constant(self, value, data_name: str) -> Optional[ir.Constant]:
-        """An evaluated constant as an LLVM initializer.
+    def _materialize_constant(self, value, data_name: str, span: Optional[Span],
+                              filename: Optional[str]) -> Optional[ir.Constant]:
+        """An evaluated constant as an LLVM initializer. An enum value goes through the one
+        converter of an enum constant, which stops (CE0155) on a value it cannot convert yet.
 
         A string is finished here rather than in the evaluator: its bytes need a module
         to live in, and the evaluator has none, which is why `const_value_to_llvm` hands
@@ -628,22 +631,19 @@ class LLVMCodegen:
         # would build a homogeneous array out of them and mis-type the initializer.
         if isinstance(value, AggregateConstant):
             if isinstance(value.semantic_type, StructType):
-                fields = [self._materialize_constant(field, f"{data_name}.{i}")
+                fields = [self._materialize_constant(field, f"{data_name}.{i}", span, filename)
                           for i, field in enumerate(value.elements)]
                 if any(f is None for f in fields):
                     return None
                 return ir.Constant(self.types.ll_type(value.semantic_type), fields)
 
             if isinstance(value.semantic_type, EnumType):
-                from sushi_lang.backend.constants.enum_initializers import enum_initializer
-                from sushi_lang.semantics.slir.constants import Aggregate, of_value
-                constant = of_value(value)
-                if not isinstance(constant, Aggregate):
-                    return None
-                return enum_initializer(constant, self.types, self._constant_string_value,
-                                        data_name)
+                from sushi_lang.backend.constants.enum_initializers import (
+                    constant_of, enum_initializer)
+                return enum_initializer(constant_of(value, span, filename), self.types,
+                                        self._constant_string_value, data_name)
 
-            elements = [self._materialize_constant(element, f"{data_name}.{i}")
+            elements = [self._materialize_constant(element, f"{data_name}.{i}", span, filename)
                         for i, element in enumerate(value.elements)]
             if not elements or any(e is None for e in elements):
                 return None

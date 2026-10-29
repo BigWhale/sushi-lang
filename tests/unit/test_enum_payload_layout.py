@@ -3,17 +3,21 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 from llvmlite import ir
 
 from sushi_lang.backend.enum_utils import unpack_all_variant_fields
-from sushi_lang.backend.constants.enum_initializers import enum_initializer
+from sushi_lang.backend.constants.enum_initializers import constant_of, enum_initializer
 from sushi_lang.backend.expressions.enums import emit_enum_variant_value
 from sushi_lang.backend.types.core import LLVMTypeSystem
 from sushi_lang.backend.types.core.sizing import TypeSizing, align_up
+from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.report import Span
+from sushi_lang.semantics.const_eval import AggregateConstant, ScalarConstant
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.typesys import (
-    BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo,
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo, StructType,
 )
 
 
@@ -176,3 +180,33 @@ def test_constant_has_no_layout_of_its_own():
     types.sizing.payload_field_offsets = lambda _ts: [4, 0]
     moved = enum_initializer(constant, types, None, "")
     assert [word.constant for word in moved.constant[1].constant] == [7 | 5 << 32]
+
+
+def _one(value: int) -> ScalarConstant:
+    return ScalarConstant(value, BuiltinType.I32)
+
+
+@pytest.mark.parametrize("payload", [
+    AggregateConstant([_one(1), _one(2)],
+                      StructType(name="Point", fields=(("x", BuiltinType.I32),
+                                                       ("y", BuiltinType.I32)))),
+    AggregateConstant([_one(1), _one(2)], ArrayType(BuiltinType.I32, 2)),
+], ids=["struct", "array"])
+def test_a_global_with_no_constant_of_its_payload_stops(payload: AggregateConstant) -> None:
+    """The global of an enum value whose payload is a struct or an array has no SLIR
+    constant yet (A5, A6). Its declaration stops loudly; it never skips the global."""
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(payload.semantic_type,)))
+    value = AggregateConstant([payload], enum_type, "A")
+    span = Span(4, 1, 4, 30)
+    with pytest.raises(StageStop) as caught:
+        constant_of(value, span, "f.sushi")
+    assert caught.value.code == "CE0155"
+    assert caught.value.params == {"stage": "emit", "construct": "aggregate constant"}
+    assert caught.value.span == span
+
+
+def test_a_global_of_an_enum_value_is_its_slir_constant() -> None:
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(BuiltinType.I32,)))
+    value = AggregateConstant([_one(5)], enum_type, "A")
+    assert constant_of(value, None, None) == k.Aggregate(
+        enum_type, (k.Int(5, BuiltinType.I32),), "A")

@@ -58,38 +58,14 @@ ENTRY_STATE_INDICES = [ZERO_I32, TWO_I32]   # Entry.state (index 2, internal onl
 
 
 def const_value_to_llvm(value: 'ConstantValue', types) -> Optional[ir.Constant]:
-    """An evaluated `ConstantValue` as an LLVM constant, or None where it needs a module.
+    """An evaluated scalar `ConstantValue` as an LLVM constant, or None where it needs a
+    module. `_materialize_constant` answers an aggregate before it calls this.
 
     Lives here and not on `ConstantValue` because the evaluator is a semantic helper and
     may not name an LLVM type (IR.md Phase 0). A string returns None: its bytes need a
     module to live in, so `_materialize_constant` finishes one.
     """
-    from sushi_lang.semantics.typesys import BuiltinType, StructType, EnumType
-    from sushi_lang.semantics.const_eval import AggregateConstant
-
-    if isinstance(value, AggregateConstant):
-        if isinstance(value.semantic_type, StructType):
-            # A struct is an aggregate whose fields have types of their own, so it is
-            # asked before the array arm below -- that one reads `elements[0].type` for
-            # every slot.
-            field_constants = [const_value_to_llvm(field, types) for field in value.elements]
-            if any(c is None for c in field_constants):
-                return None
-            return ir.Constant(types.ll_type(value.semantic_type), field_constants)
-        if isinstance(value.semantic_type, EnumType):
-            # No module here either, so a string payload answers None like a bare string.
-            from sushi_lang.backend.constants.enum_initializers import enum_initializer
-            from sushi_lang.semantics.slir.constants import Aggregate, of_value
-            constant = of_value(value)
-            if not isinstance(constant, Aggregate):
-                return None
-            return enum_initializer(constant, types, None, "")
-        element_constants = [const_value_to_llvm(elem, types) for elem in value.elements]
-        if any(c is None for c in element_constants):
-            return None
-        element_type = element_constants[0].type
-        array_type = ir.ArrayType(element_type, len(element_constants))
-        return ir.Constant(array_type, element_constants)
+    from sushi_lang.semantics.typesys import BuiltinType
 
     if value.semantic_type == BuiltinType.BOOL:
         return ir.Constant(types.i8, 1 if value.value else 0)

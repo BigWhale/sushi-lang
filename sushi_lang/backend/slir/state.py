@@ -20,6 +20,12 @@ if TYPE_CHECKING:
 STAGE = "emit"
 
 
+def stop(construct: str, span: Optional[Span], filename: Optional[str]) -> NoReturn:
+    """CE0155 `emit, <construct>`: the one stop of the stage `emit`, for a shape that the
+    emitter does not handle yet."""
+    raise StageStop(STAGE, construct, span, filename)
+
+
 @dataclass(slots=True)
 class FunctionState:
     """One function while the emitter fills it: the codegen, the LLVM function and its
@@ -39,8 +45,8 @@ class FunctionState:
     def stop(self, shape: object) -> NoReturn:
         """CE0155 `emit, <class>` for a SLIR shape that the emitter does not handle yet. A
         string is the name of a construct that the class does not tell apart."""
-        construct = shape if isinstance(shape, str) else type(shape).__name__
-        raise StageStop(STAGE, construct, self.span, self.filename)
+        stop(shape if isinstance(shape, str) else type(shape).__name__, self.span,
+             self.filename)
 
     def type_of(self, local: LocalId) -> Type:
         """The type of a local. The verifier makes sure that the id of a local is its

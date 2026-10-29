@@ -2,7 +2,8 @@
 
 The one converter of an enum constant: the SLIR emitter and the declaration round of a
 global both call `enum_initializer` with a SLIR `Constant` (the round makes one from the
-evaluator value through `constants.of_value`). A payload-free variant is a tag over the
+evaluator value through `constant_of`, over `constants.of_value`; a value with no SLIR
+constant yet stops with `emit, aggregate constant`). A payload-free variant is a tag over the
 zero value. A payload-carrying one is the tag plus its constant payloads, written into the
 data words at the offsets `TypeSizing.payload_field_offsets` gives -- the ONE layout
 authority, so a constant and a run-time construction cannot disagree about where a field
@@ -16,14 +17,19 @@ exactly one word, and that word becomes a `ptrtoint` constant expression instead
 from __future__ import annotations
 
 import struct
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Sequence
 
 from llvmlite import ir
 
+from sushi_lang.backend.slir.state import stop
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.typesys import (
     BuiltinType, StructType, EnumType, ArrayType, Type)
 from sushi_lang.backend.constants.sizes import ENUM_TAG_SIZE_BYTES
+
+if TYPE_CHECKING:
+    from sushi_lang.semantics.const_eval import AggregateConstant
 
 # `(text, data_name)` -> the `{i8* data, i32 size, i8 owned}` constant, with its backing
 # bytes placed in the module. None where no module is at hand, and a string payload then
@@ -59,6 +65,16 @@ class _PayloadBytes:
             chunk = self.bytes[index * WORD_BYTES:(index + 1) * WORD_BYTES]
             words.append(ir.Constant(i64, int.from_bytes(chunk, "little", signed=True)))
         return words
+
+
+def constant_of(value: 'AggregateConstant', span: Optional[Span],
+                filename: Optional[str]) -> k.Aggregate:
+    """The SLIR constant of an enum value of the evaluator. A struct or an array value,
+    also in a payload, has none yet (A5, A6), and the global of it stops."""
+    constant = k.of_value(value)
+    if not isinstance(constant, k.Aggregate):
+        stop("aggregate constant", span, filename)
+    return constant
 
 
 def enum_initializer(value: k.Aggregate, types,

@@ -70,14 +70,20 @@ def _payload_types(state: FunctionState, base: p.Place, variant: str,
     return tuple(info.associated_types)
 
 
+def _enum(state: FunctionState, ty: Type) -> EnumType:
+    """`ty`, which must be an enum."""
+    if not isinstance(ty, EnumType):
+        state.fault(f"{ty} is no enum")
+    return ty
+
+
 def _variant(state: FunctionState, ty: Type, variant: str) -> tuple[EnumType, EnumVariantInfo]:
     """The enum `ty` and its variant `variant`."""
-    if not isinstance(ty, EnumType):
-        state.fault(f"the variant '{variant}' of {ty}, which is no enum")
-    info = ty.get_variant(variant)
+    enum_type = _enum(state, ty)
+    info = enum_type.get_variant(variant)
     if info is None:
-        state.fault(f"{ty} has no variant '{variant}'")
-    return ty, info
+        state.fault(f"{enum_type} has no variant '{variant}'")
+    return enum_type, info
 
 
 def _payload(state: FunctionState, ty: Type, variant: str,
@@ -256,9 +262,7 @@ def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
 
 def _discriminant(state: FunctionState, rvalue: r.Discriminant) -> ir.Value:
     """The tag of the enum in a place, as an `i32`."""
-    ty = type_of_place(state, rvalue.place)
-    if not isinstance(ty, EnumType):
-        state.fault(f"{rvalue.place} holds {ty}, not an enum")
+    _enum(state, type_of_place(state, rvalue.place))
     value = state.builder.load(place_address(state, rvalue.place))
     return enum_utils.extract_enum_tag(state.codegen, value)
 

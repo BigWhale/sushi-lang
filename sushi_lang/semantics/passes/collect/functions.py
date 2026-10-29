@@ -503,7 +503,7 @@ class GenericExtensionMethod:
     err_type: Optional[Type] = None  # `| E`: instances return Result@(ret, E) (ruling 1)
     err_span: Optional[Span] = None
     # Method-level type parameters (`name@(U)`): SEPARATE from the receiver-derived
-    # `type_params`, whose CE0096 strict zip stays untouched. Solved at the call site.
+    # `type_params`, whose strict zip stays untouched. Solved at the call site.
     method_type_params: Tuple[BoundedTypeParam, ...] = ()
     is_static: bool = False          # no receiver, called on the type name (#542)
     is_public: bool = False          # the `public` marker; the declaring unit is `unit_name`
