@@ -105,12 +105,12 @@ The trap path does not free the message or the other values in scope: the proces
   and its data, then the newline.
 - **The message is a value of the fail block.** It is built in that block, and the `Trap`
   ends the block, so no drop of a value made there reaches the passing path.
-- **The file name is stamped on the node.** The AST builder writes
-  `Assert.source_label` when it builds the node, so a monomorphized copy and an `expand`
-  copy carry it with no extra step. The name is `display_filename`
-  (`internals/report.py`), the one function a diagnostic prints its file through. A parse
-  that has no reporter (a bundled stdlib module, a source library, a library template)
-  passes `source_label` to `parse_to_ast`, the same label its diagnostics use.
+- **The file name is the file of the body.** SLIR lowering reads the name one time for
+  each body, through `display_filename` (`internals/report.py`), the one function a
+  diagnostic prints its file through, and the trap of each `assert` and each `expect` in
+  the body takes it. The node holds no file name, so a monomorphized copy and an `expand`
+  copy need no extra step. The body of a library template has the label of its slice as
+  its file (`<template:lib:name>`), the same label its diagnostics use.
 - **The label is in the unit's cache key.** It is relative to the working directory of the
   build, so the unit fingerprint (`compiler/fingerprint.py`) hashes it beside the source.
   Without it, a build from another directory with one `--cache-dir` reused an object that
