@@ -3,11 +3,11 @@
 # EXPECT_NO_LEAKS
 # EXPECT_DUMP_SLIR: test_slir_const_scalar.slir
 #
-# The initializer body of a constant and of a `var` is a function of one block, which
-# writes the value of the initializer into `_0`. A name of a constant is a constant
-# operand with the value that typecheck wrote for it. An integer literal holds the value
-# that typecheck wrote for it too: `300 as u8` holds 44 and `-128` as an `i8` holds -128,
-# in an initializer and in a body alike, and `0xFF` as an `i8` holds -1 in a body.
+# The initializer body of a constant and of a `var` does not go to SLIR: the global of each
+# takes the value of the constant evaluator, so the dump shows `main` alone. A name of a
+# constant is a constant operand with the value that typecheck wrote for it: `300 as u8`
+# holds 44. An integer literal in a body holds the value that typecheck wrote for it too:
+# `-128` as an `i8` holds -128, and `0xFF` as an `i8` holds -1.
 
 const i32 ANSWER = 42
 const u8 WRAPPED = 300 as u8

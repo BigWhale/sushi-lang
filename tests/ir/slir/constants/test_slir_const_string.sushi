@@ -3,9 +3,10 @@
 # EXPECT_NO_LEAKS
 # EXPECT_DUMP_SLIR: test_slir_const_string.slir
 #
-# A string constant is a string literal: it owns no heap. The initializer of `ALIAS`
-# adopts the value of `GREETING`, so `_0` takes the literal. In `main` each name of a
-# string constant is a constant operand that a call borrows.
+# A string constant is a string literal: it owns no heap. The global of `ALIAS` takes the
+# value of the constant evaluator, the literal of `GREETING`; its initializer body does not
+# go to SLIR. In `main` each name of a string constant is a constant operand that a call
+# borrows.
 
 const string GREETING = "Mostly Harmless"
 const string ALIAS = GREETING

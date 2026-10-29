@@ -3,9 +3,9 @@
 # EXPECT_NO_LEAKS
 # EXPECT_DUMP_SLIR: test_slir_expect_owning.slir
 #
-# `expect` on a receiver that keeps its value reads an owning payload with a `Clone`, and
-# the receiver keeps it (ir.md 8.9). On a temporary receiver with an `adopt` row, the
-# payload moves out of the temporary.
+# `expect` reads an owning payload with a `Clone`, because its receiver is a read (ir.md
+# 8.9): a named receiver keeps its value, and a temporary receiver is dropped after its
+# statement.
 
 fn named(bool ok) Maybe@(string):
     if (ok):
