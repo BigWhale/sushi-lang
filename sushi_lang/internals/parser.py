@@ -354,15 +354,13 @@ def parse_error_hint(e: UnexpectedInput, src: str = "") -> Optional[str]:
 
 
 def parse_to_ast(src: str, dump_parse: bool = False,
-                 reporter: Optional[Reporter] = None,
-                 source_label: Optional[str] = None):
+                 reporter: Optional[Reporter] = None):
     """Parse source code into an AST.
 
     `reporter` is the file's own. With one the AST builder batches its diagnostics
     into it instead of stopping at the first (#641), and the caller stops on
     `has_errors`. A caller that parses a source of its own -- a library template, a
-    bundled stdlib module -- passes none and reads one exception. `source_label` names
-    such a source as its diagnostics do; an `assert` prints it at run time.
+    bundled stdlib module -- passes none and reads one exception.
     """
     try:
         tree = build_parser().parse(src, start="start")
@@ -375,5 +373,5 @@ def parse_to_ast(src: str, dump_parse: bool = False,
     if dump_parse:
         print(tree.pretty())
 
-    ast_builder = ASTBuilder(reporter, source_label)
+    ast_builder = ASTBuilder(reporter)
     return ast_builder.build(tree), tree

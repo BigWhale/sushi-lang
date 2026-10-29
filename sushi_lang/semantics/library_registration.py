@@ -339,7 +339,7 @@ class LibraryRegistration:
         and the record (`what`). It is never reported at the consumer's `use` line.
         """
         try:
-            program = parse_one_declaration(source, what, label)
+            program = parse_one_declaration(source, what)
         except TemplateSourceError as e:
             raise SushiError("CE3512", path=self._library_file(lib_name),
                              reason=str(e)) from e
@@ -742,7 +742,7 @@ class LibraryRegistration:
             label = _slice_label(lib_name, f"{base} with {perk_name}")
             try:
                 program = parse_one_declaration(
-                    source, f"perk implementation '{base} with {perk_name}'", label)
+                    source, f"perk implementation '{base} with {perk_name}'")
             except TemplateSourceError:
                 er.emit(self.reporter, er.ERR.CW3506, None, type=base)
                 continue
@@ -978,7 +978,7 @@ class LibraryRegistration:
         for lib_name, manifest, record in self._template_records("generic_extensions"):
             label = _slice_label(lib_name, f"{record.get('type')} {record.get('name')}")
             try:
-                program = deserialize_extension(record, label)
+                program = deserialize_extension(record)
             except TemplateSourceError as e:
                 raise SushiError("CE3512", path=self._library_file(lib_name),
                                  reason=str(e)) from e

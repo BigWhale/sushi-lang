@@ -1,16 +1,16 @@
 """SHIR to SLIR: the control-flow arms of the lowering (docs/design/ir.md 8.9, 8.10).
 
 The arms of `if`, `match`, `while`, `break`, `continue` and `assert`, the lowering of
-`expect` as an `assert`, the lowering of a condition,
-the join of the paths of a statement with the drop state of each path, the short-circuit
-`and` and `or`, and `??`. Each arm is a free function that takes the `_Lowering` of
-`lower.py` first; the tables of `lower.py` name them. This module reads `lower.py` for its
+`expect` as an `assert`, the lowering of a condition, the join of the paths of a statement
+with the drop state of each path, the short-circuit `and` and `or`, and `??`. Each arm is a
+free function that takes the `_Lowering` of `lower.py` first; the tables of `lower.py` name
+them. This module reads `lower.py` for its
 types only, so no import cycle exists at run time.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional, Sequence, TypeAlias
+from typing import TYPE_CHECKING, Callable, Optional, Sequence, TypeAlias
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -177,23 +177,35 @@ def if_(low: _Lowering, stmt: s.If) -> None:
 
 
 def assert_(low: _Lowering, stmt: s.Assert) -> None:
-    """`switchInt(c, [(0, fail)], otherwise: next)` (ir.md 8.9). The failing block evaluates
-    the message in a scope of its own and ends in the trap RE2026, which reads the position
-    of the `assert` and the message (ir.md 8.8) and drops nothing. A bare `assert` gives the
-    empty message, and its position has no `: `. The next block goes on from the state
-    before the failing block."""
+    """`switchInt(c, [(0, fail)], otherwise: next)` (ir.md 8.9). The failing block ends in
+    the trap RE2026, which reads the position of the `assert` and the message (ir.md 8.8). A
+    bare `assert` gives the empty message, and its position has no `: `."""
     cond, local = condition(low, stmt.cond)
     fail, next_ = low.new_block(), low.new_block()
     low.jump(tm.SwitchInt(cond, ((0, fail.id),), next_.id, stmt.loc))
     targets(local, (fail, next_), stmt.cond.loc)
+    _trap_path(low, fail, next_, stmt.loc,
+               lambda at: tm.Trap("RE2026", _assert_operands(low, stmt, at), stmt.loc))
+
+
+def _assert_operands(low: _Lowering, stmt: s.Assert, at: str) -> tuple[p.Operand, p.Operand]:
+    """The position of an `assert` and its message."""
+    if stmt.message is None:
+        return p.Const(k.text(at)), p.Const(k.text(""))
+    return p.Const(k.text(f"{at}: ")), low.operand(stmt.message)
+
+
+def _trap_path(low: _Lowering, fail: _Block, next_: _Block, span: Span,
+               trap: Callable[[str], tm.Trap]) -> None:
+    """The failing block of an `assert` or an `expect` (ir.md 8.9): it makes the trap from
+    the position `file:line:col` (the file of the body, as a diagnostic names it) and
+    evaluates its operands in a scope of its own, and the trap drops nothing. The next block
+    goes on from the state before the failing block."""
     at_branch = low.placement.state()
     low.block = fail
     low.placement.open_statement()
-    position = f"{stmt.label}:{stmt.loc.line}:{stmt.loc.col}"
-    message: p.Operand = p.Const(k.text(""))
-    if stmt.message is not None:
-        position, message = f"{position}: ", low.operand(stmt.message)
-    low.block.terminator = tm.Trap("RE2026", (p.Const(k.text(position)), message), stmt.loc)
+    terminator = trap(f"{low.label}:{span.line}:{span.col}")
+    low.block.terminator = terminator
     low.placement.leave_scope()
     low.placement.restore(at_branch)
     low.block = next_
@@ -292,10 +304,11 @@ def _place(operand: p.Operand) -> p.Place:
 def _variant_of(ty: Type, variant: str, span: Span) -> tuple[int, tuple[Type, ...]]:
     """The tag and the payload types of the variant `variant` of the enum `ty`."""
     info = ty.get_variant(variant) if isinstance(ty, EnumType) else None
-    if info is None or not isinstance(ty, EnumType):
+    tag = ty.get_variant_index(variant) if isinstance(ty, EnumType) else None
+    if info is None or tag is None:
         er.raise_internal_error("CE0000", span=span,
                                 detail=f"the variant '{variant}' of no enum reached SLIR")
-    return ty.variants.index(info), tuple(info.associated_types)
+    return tag, tuple(info.associated_types)
 
 
 def _case(test: _Test) -> Optional[int]:
@@ -585,15 +598,8 @@ def expect(low: _Lowering, node: e.Call, callee: Builtin) -> _Value:
     low.emit([st.Assign(p.Local(found), r.Discriminant(receiver.place), node.loc)])
     fail, next_ = low.new_block(), low.new_block()
     low.jump(tm.SwitchInt(p.Copy(p.Local(found)), ((tag, next_.id),), fail.id, node.loc))
-    at_branch = low.placement.state()
-    low.block = fail
-    low.placement.open_statement()
     (message,) = node.args
-    position = f"{low.label}:{node.loc.line}:{node.loc.col}"
-    low.block.terminator = tm.Trap(
-        "RE2029", (p.Const(k.text(position)), low.operand(message.value)), node.loc)
-    low.placement.leave_scope()
-    low.placement.restore(at_branch)
-    low.block = next_
+    _trap_path(low, fail, next_, node.loc, lambda at: tm.Trap(
+        "RE2029", (p.Const(k.text(at)), low.operand(message.value)), node.loc))
     value = p.Copy(p.Field(p.Downcast(receiver.place, success), 0))
     return r.Clone(value) if low.owns(payload[0]) else r.Use(value)

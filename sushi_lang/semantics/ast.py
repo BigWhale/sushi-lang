@@ -610,9 +610,6 @@ class Assert(Stmt):
     """`assert(cond)` / `assert(cond, message)`: a trap when `cond` is false."""
     cond: "Expr"
     message: Optional["Expr"] = None
-    # The file name a diagnostic in this unit shows, stamped by the AST builder: the
-    # backend prints it with `loc` when the condition is false.
-    source_label: str = "<input>"
 
 @dataclass(slots=True)
 class If(Stmt):

@@ -250,7 +250,7 @@ class _Check:
 
     def trap(self, term: tm.Trap) -> None:
         """One operand for each printf conversion of the registry text, of the type that
-        the conversion takes."""
+        the conversion takes. The trap reads each operand, so a `Move` is refused."""
         message = REGISTRY.get(term.code)
         if message is None or message.category is not Category.RUNTIME:
             self.fail(TRAP, f"{term.code} is no registered runtime code", term.span)
@@ -260,6 +260,9 @@ class _Check:
                             f"{len(term.args)}", term.span)
         for conversion, arg in zip(conversions, term.args, strict=True):
             self.operand(arg, term.span)
+            if isinstance(arg, p.Move):
+                self.fail(TRAP, f"{show(arg)} moves; the trap of {term.code} reads each "
+                                f"operand", term.span)
             wanted = TRAP_OPERAND_TYPES.get(conversion)
             if wanted is None:
                 self.fail(TRAP, f"the text of {term.code} holds the conversion {conversion}, "

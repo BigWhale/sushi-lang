@@ -671,11 +671,11 @@ def _item_mode(marker: Optional[str]) -> s.ItemMode:
 
 
 def _assert(lw: BodyLowerer, node: a.Assert) -> s.Assert:
-    """`assert(cond, message)`. `label` is the file name that the AST builder gives the unit."""
+    """`assert(cond, message)`."""
     ident = lw.ident()
     cond = lw.expr(node.cond)
     message = None if node.message is None else lw.expr(node.message)
-    return s.Assert(ident, lw.span(node), cond, message, node.source_label)
+    return s.Assert(ident, lw.span(node), cond, message)
 
 
 def _break(lw: BodyLowerer, node: a.Break) -> s.Break | Hole:

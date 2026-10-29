@@ -137,7 +137,7 @@ STATEMENT_FIELDS: dict[str, tuple[str, ...]] = {
     "If": ("cond", "then", "otherwise"),
     "Loop": ("source", "body"),
     "Match": ("scrutinee", "arms", "consumes"),
-    "Assert": ("cond", "message", "label"),
+    "Assert": ("cond", "message"),
     "Break": (),
     "Continue": (),
     "Expand": ("binder", "pack", "body"),

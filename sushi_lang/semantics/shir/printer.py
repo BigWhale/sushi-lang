@@ -242,8 +242,7 @@ def _if(pr: ShirPrinter, stmt: s.If) -> str:
 
 def _assert(pr: ShirPrinter, stmt: s.Assert) -> str:
     message = None if stmt.message is None else pr.show(stmt.message)
-    return _node("Assert", pr.show(stmt.cond), *_optional("message", message),
-                 f"label: {quoted(stmt.label)}")
+    return _node("Assert", pr.show(stmt.cond), *_optional("message", message))
 
 
 def _hole(pr: ShirPrinter, n: Hole) -> str:

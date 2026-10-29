@@ -123,10 +123,10 @@ class Match(ShirNode):
 
 @dataclass(slots=True)
 class Assert(ShirNode):
-    """The message is evaluated only when `cond` fails. `label` is the source text."""
+    """The message is evaluated only when `cond` fails. SLIR lowering names the file of the
+    body in the position of the trap."""
     cond: ShirExpr
     message: Optional[ShirExpr]
-    label: str
 
 
 @dataclass(slots=True)

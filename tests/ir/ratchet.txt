@@ -786,6 +786,7 @@ tests/ir/emit/stop/test_err_emit_stop_writes_nothing.sushi
 tests/ir/emit/strings/test_emit_strings.sushi
 tests/ir/emit/two_units/test_emit_two_units.sushi
 tests/ir/lift/test_err_lift_empty_table.sushi
+tests/ir/shir/asserts/test_shir_assert_forms.sushi
 tests/ir/shir/calls/test_shir_call_print.sushi
 tests/ir/shir/constructors/test_shir_ctor_result_maybe.sushi
 tests/ir/shir/empty_body/test_shir_empty_body.sushi

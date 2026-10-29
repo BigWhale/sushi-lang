@@ -492,6 +492,12 @@ def test_an_assert_trap_that_reads_its_message_from_a_live_local_passes():
     _passes(_function([BLANK, STRING], _block(0, trap, _live(1), _text(1))))
 
 
+def test_a_trap_that_moves_an_operand_is_refused():
+    """A trap reads each operand as a `Guaranteed` argument (ir.md 8.8): a `Move` is refused."""
+    trap = tm.Trap("RE2026", (p.Const(k.text("probe.sushi:7:5: ")), _move(1)), BAD)
+    _refused(_function([BLANK, STRING], _block(0, trap, _live(1), _text(1))), "registered trap")
+
+
 @pytest.mark.parametrize("code, args", [
     ("RE2020", (p.Const(k.text("5")), p.Const(k.Int(3, I32)))),   # %d takes an i32
     ("RE2020", (p.Const(k.Int(5, BuiltinType.I64)), p.Const(k.Int(3, I32)))),  # not an i64

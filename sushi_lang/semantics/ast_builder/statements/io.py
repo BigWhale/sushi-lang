@@ -33,5 +33,4 @@ def parse_assert_stmt(node: Tree, ast_builder: 'ASTBuilder') -> Assert:
     if not exprs or len(exprs) > 2:
         ice(node, f"expected a condition and at most one message, got {len(exprs)}")
     message = ast_builder._expr(exprs[1]) if len(exprs) == 2 else None
-    return Assert(cond=ast_builder._expr(exprs[0]), message=message,
-                  source_label=ast_builder.source_label, loc=span_of(node))
+    return Assert(cond=ast_builder._expr(exprs[0]), message=message, loc=span_of(node))

@@ -5,6 +5,6 @@ ShirBody main
   locals : [_0 "n": i32]
   block  :
     Assign(LocalRef(_0), Lit(3), is_init: true)
-    Assert(Binary(==, LocalRef(_0), Lit(3)), message: Lit("n is three"), label: "./tests/ir/typeck/assert/test_err_typeck_assert_condition.sushi")
-    Assert(LocalRef(_0), label: "./tests/ir/typeck/assert/test_err_typeck_assert_condition.sushi")
+    Assert(Binary(==, LocalRef(_0), Lit(3)), message: Lit("n is three"))
+    Assert(LocalRef(_0))
     Return(Lit(0))
