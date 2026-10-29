@@ -49,7 +49,11 @@ an enum match in `borrow`). Amended on 2026-10-29 by group A4 (SLIR): 8.5 (a con
 `Aggregate` of an enum names its variant), 8.6 (`expect` is no call), 8.8 (the trap RE2029 of
 `expect`), 8.9 (the lowering of a `Match` on an enum: one switch on the tag, or a chain of
 tests in source order, and the binders of each path; the lowering of `expect`), and 8.13 (the
-rules of an enum value and of a switch on a tag).
+rules of an enum value and of a switch on a tag). Amended on 2026-10-29 by group A4 (emit):
+8.5 (the backend turns a constant `Aggregate` of a variant into an `ir.Constant` through the
+one converter that the global of a `const` uses too) and the emitter paragraph of 8.2 (one
+check of a variant against the semantic types of its payload, for the rvalue and for the
+constant).
 
 ## The decisions, in one place
 
@@ -1787,13 +1791,16 @@ its own, because lowering placed every drop. `Drop` goes through the one destroy
 an enum goes to the destroy half of its lifecycle handler. `DropIfSet` loads its flag and
 drops only while the flag is `true`. An enum is `{i32 tag, [K x i64] data}`: an
 `Aggregate` of a variant goes through the enum emitter with one value for each payload,
+which the emitter writes at the offsets of the layout authority (a constant `Aggregate`
+goes through the converter of 8.5),
 `Discriminant` reads the tag as an `i32`, and the place `Field(Downcast(p, v), i)` is the
 address of payload field `i` at the offset that the one layout authority gives
 (`TypeSizing.payload_field_offsets`). The emitter reads the semantic type of the place,
-never a layout match, and an `Aggregate` whose payload types do not agree with the variant
-is an internal error. A `Builtin` call of an intrinsic goes through one row of
-`INTRINSICS` (`intrinsics.py`), which evaluates every operand before the family emits
-(11.9): `interp` appends each part to one string builder (a string part as its bytes, any
+never a layout match. One check holds each `Aggregate` of a variant: the variant is a
+variant of its enum, and the semantic type of each part is the type of its payload field
+(not only the LLVM type). A part that does not agree is an internal error. A `Builtin`
+call of an intrinsic goes through one row of `INTRINSICS` (`intrinsics.py`), which
+evaluates every operand before the family emits (11.9): `interp` appends each part to one string builder (a string part as its bytes, any
 other part as its string form, `emit_value_fmt`) and answers a fresh owned string, also for
 one string part; `print` and `println` of a string, an integer, a float or a `bool` call
 the print emitter. The print of a value that prints by its `Display` form still stops.
@@ -1918,7 +1925,12 @@ Constant = Int(value: int, ty: Type)
 ```
 
 Produced by the constant evaluator on the AST (ruling Q5) and carried through unchanged.
-Only the backend turns one into an `ir.Constant`.
+Only the backend turns one into an LLVM value. A scalar becomes an `ir.Constant`, and a
+`Str` comes from the string constant seam. An `Aggregate` of a variant becomes an
+`ir.Constant` through one converter (`enum_initializer`): the declaration round of the
+global of a `const` calls it too, with the `Constant` of the evaluator value (`of_value`).
+The converter writes each payload value at the offset of the layout authority, so a
+constant and a run-time value of an enum have one layout.
 
 **The value that an integer literal holds.** `typecheck` decides it one time, and writes it
 as the value row of the literal (7.3, ruling R-W), beside the type of the literal: the one
