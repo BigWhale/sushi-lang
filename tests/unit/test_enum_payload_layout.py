@@ -11,7 +11,7 @@ from sushi_lang.backend.constants.enum_initializers import constant_of, enum_ini
 from sushi_lang.backend.expressions.enums import emit_enum_variant_value
 from sushi_lang.backend.types.core import LLVMTypeSystem
 from sushi_lang.backend.types.core.sizing import TypeSizing, align_up
-from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.const_eval import AggregateConstant, ScalarConstant
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
@@ -210,3 +210,32 @@ def test_a_global_of_an_enum_value_is_its_slir_constant() -> None:
     value = AggregateConstant([_one(5)], enum_type, "A")
     assert constant_of(value, None, None) == k.Aggregate(
         enum_type, (k.Int(5, BuiltinType.I32),), "A")
+
+
+def _faulty(constant: k.Aggregate) -> None:
+    """The one converter refuses `constant` with an internal error; it never answers None."""
+    with pytest.raises(InternalCompilerError):
+        enum_initializer(constant, LLVMTypeSystem(), None, "")
+
+
+def test_the_converter_checks_the_type_of_each_part() -> None:
+    """The one check of a variant runs on every path of a constant: a part of another
+    integer type than its payload field is an internal error."""
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(BuiltinType.I32,)))
+    _faulty(k.Aggregate(enum_type, (k.Int(5, BuiltinType.I64),), "A"))
+
+
+def test_the_converter_checks_a_nested_variant() -> None:
+    inner = _enum(EnumVariantInfo(name="X", associated_types=(BuiltinType.I32,)))
+    outer = EnumType(name="Outer", variants=(EnumVariantInfo(name="A", associated_types=(inner,)),))
+    _faulty(k.Aggregate(outer, (k.Aggregate(inner, (k.Int(5, BuiltinType.U8),), "X"),), "A"))
+
+
+def test_the_converter_refuses_a_variant_that_its_enum_does_not_declare() -> None:
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=()))
+    _faulty(k.Aggregate(enum_type, (), "B"))
+
+
+def test_a_string_part_with_no_finisher_is_an_internal_error() -> None:
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(BuiltinType.STRING,)))
+    _faulty(k.Aggregate(enum_type, (k.text("x"),), "A"))

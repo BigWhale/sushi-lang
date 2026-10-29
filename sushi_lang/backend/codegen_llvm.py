@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
     from sushi_lang.semantics.const_eval import ConstantValue
 
+from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import ConstDef, ExtendDef, FuncDef, VarDef
 from sushi_lang.semantics.units import Unit
@@ -29,6 +30,7 @@ from sushi_lang.backend.llvm_optimization import LLVMOptimizer
 from sushi_lang.backend.string_constants import StringConstantManager
 from sushi_lang.backend.stdlib_linker import StdlibLinker
 from sushi_lang.backend.slir import emit as slir_emit
+from sushi_lang.backend.slir.state import stop
 from sushi_lang.semantics.externs_manifest import USER_MAIN_SYMBOL
 # Registers the hash() emitter factories that semantics/generics/hashing.py
 # resolves when it emits an auto-derived hash(). The derive pass registers the method
@@ -404,7 +406,6 @@ class LLVMCodegen:
         """Define the body of `decl` from its `SlirFunction`. The body of `main` is
         `user_main`, and the C `main` that calls it comes after it."""
         if self.slir_bodies is None:
-            from sushi_lang.internals.errors import raise_internal_error
             raise_internal_error("CE0000", detail="the backend defines a body with no SLIR "
                                                   "of the program")
         function = self.slir_bodies.function_of(decl)
@@ -554,16 +555,12 @@ class LLVMCodegen:
         from sushi_lang.semantics.const_eval import allocates_nothing
         if allocates_nothing(var.value):
             # The empty descriptor `{0, 0, null}` is the zero value of its type.
-            initializer: Optional[ir.Constant] = ir.Constant(ll_type, None)
+            initializer = ir.Constant(ll_type, None)
         else:
-            const_value = self._evaluate_constant_expression(var.value, var.ty, unit_name)
-            if const_value is None:
-                return
+            const_value = self._value_of_global(var, unit_name, filename)
             initializer = self._materialize_constant(
                 const_value, mangle_unit_symbol(unit_name, f".str_data.{var.name}"),
                 var.loc, filename)
-            if initializer is None:
-                return
         self._register_global_constant(var.name, ll_type, initializer, unit_name,
                                        symbol=global_symbol(var, unit_name), storage=True)
 
@@ -577,10 +574,12 @@ class LLVMCodegen:
         expression that produced it. Matching a string constant syntactically meant
         `const string ALIAS = GREETING` registered no global at all and every use said
         CE0055, an internal error, on a valid program (#441; #260 was the same hazard
-        for a literal array).
+        for a literal array). The round makes a global or stops the compile; it never
+        drops one (docs/design/ir.md 8.2).
         """
         if const.ty is None:
-            return  # Skip constants with no type (should be caught in semantic analysis)
+            raise_internal_error("CE0000", span=const.loc, filename=filename,
+                                 detail=f"the constant '{const.name}' has no type")
 
         # A compiled library's constant is a name of the library unit, and its
         # initializer reads that unit's scope (#1120).
@@ -592,9 +591,7 @@ class LLVMCodegen:
 
         # Materializing at the DECLARED type keeps a context-typed literal at its own
         # width: `const u8 MAX = 200` yields a u8 initializer, not an i32 one.
-        const_value = self._evaluate_constant_expression(const.value, const.ty, unit_name)
-        if const_value is None:
-            return  # Skip non-constant expressions
+        const_value = self._value_of_global(const, unit_name, filename)
 
         # A library constant's copy takes the symbol of the unit that declared it, so
         # it never takes the name of a function in the unit that holds the copy (#1101).
@@ -602,8 +599,6 @@ class LLVMCodegen:
         initializer = self._materialize_constant(
             const_value, mangle_unit_symbol(symbol_unit, f".str_data.{const.name}"),
             const.loc, filename)
-        if initializer is None:
-            return  # Skip unsupported types
 
         self._register_global_constant(
             const.name, self.types.ll_type(const.ty), initializer, unit_name,
@@ -614,8 +609,17 @@ class LLVMCodegen:
         """Evaluate a constant expression at compile time, as a value not an initializer."""
         return self.constant_evaluator(unit_name).evaluate(expr, expected_type, None)
 
+    def _value_of_global(self, const: ConstDef, unit_name: str | None,
+                         filename: Optional[str]) -> "ConstantValue":
+        """The value of the initializer of a constant or a `var`. A constant with no value (a
+        function-typed constant) stops (`emit, constant with no value`)."""
+        value = self._evaluate_constant_expression(const.value, const.ty, unit_name)
+        if value is None:
+            stop("constant with no value", const.loc, filename)
+        return value
+
     def _materialize_constant(self, value, data_name: str, span: Optional[Span],
-                              filename: Optional[str]) -> Optional[ir.Constant]:
+                              filename: Optional[str]) -> ir.Constant:
         """An evaluated constant as an LLVM initializer. An enum value goes through the one
         converter of an enum constant, which stops (CE0155) on a value it cannot convert yet.
 
@@ -633,27 +637,31 @@ class LLVMCodegen:
             if isinstance(value.semantic_type, StructType):
                 fields = [self._materialize_constant(field, f"{data_name}.{i}", span, filename)
                           for i, field in enumerate(value.elements)]
-                if any(f is None for f in fields):
-                    return None
                 return ir.Constant(self.types.ll_type(value.semantic_type), fields)
 
             if isinstance(value.semantic_type, EnumType):
                 from sushi_lang.backend.constants.enum_initializers import (
                     constant_of, enum_initializer)
                 return enum_initializer(constant_of(value, span, filename), self.types,
-                                        self._constant_string_value, data_name)
+                                        self._constant_string_value, data_name,
+                                        span=span, filename=filename)
 
             elements = [self._materialize_constant(element, f"{data_name}.{i}", span, filename)
                         for i, element in enumerate(value.elements)]
-            if not elements or any(e is None for e in elements):
-                return None
+            if not elements:
+                raise_internal_error("CE0000", span=span, filename=filename,
+                                     detail="an array constant with no element")
             return ir.Constant(ir.ArrayType(elements[0].type, len(elements)), elements)
 
         if value.semantic_type == BuiltinType.STRING:
             return self._constant_string_value(value.value, data_name)
 
         from sushi_lang.backend.constants.llvm_values import const_value_to_llvm
-        return const_value_to_llvm(value, self.types)
+        scalar = const_value_to_llvm(value, self.types)
+        if scalar is None:
+            raise_internal_error("CE0000", span=span, filename=filename,
+                                 detail=f"a constant of {value.semantic_type} has no LLVM constant")
+        return scalar
 
 
 

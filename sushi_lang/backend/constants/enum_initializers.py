@@ -3,8 +3,10 @@
 The one converter of an enum constant: the SLIR emitter and the declaration round of a
 global both call `enum_initializer` with a SLIR `Constant` (the round makes one from the
 evaluator value through `constant_of`, over `constants.of_value`; a value with no SLIR
-constant yet stops with `emit, aggregate constant`). A payload-free variant is a tag over the
-zero value. A payload-carrying one is the tag plus its constant payloads, written into the
+constant yet stops with `emit, aggregate constant`). The converter first runs the one check
+of a variant (`checked_variant`, which the rvalue of the SLIR emitter calls too) over the
+value, at every depth, so a value that it cannot write after the check is an internal
+error. A payload-free variant is a tag over the zero value. A payload-carrying one is the tag plus its constant payloads, written into the
 data words at the offsets `TypeSizing.payload_field_offsets` gives -- the ONE layout
 authority, so a constant and a run-time construction cannot disagree about where a field
 sits. Each value is written at the declared type of its field. The bytes are
@@ -17,24 +19,27 @@ exactly one word, and that word becomes a `ptrtoint` constant expression instead
 from __future__ import annotations
 
 import struct
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, Callable, Dict, List, NoReturn, Optional, Sequence
 
 from llvmlite import ir
 
 from sushi_lang.backend.slir.state import stop
+from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.typesys import (
-    BuiltinType, StructType, EnumType, ArrayType, Type)
+    BuiltinType, StructType, EnumType, EnumVariantInfo, ArrayType, Type)
 from sushi_lang.backend.constants.sizes import ENUM_TAG_SIZE_BYTES
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.const_eval import AggregateConstant
 
 # `(text, data_name)` -> the `{i8* data, i32 size, i8 owned}` constant, with its backing
-# bytes placed in the module. None where no module is at hand, and a string payload then
-# answers None exactly as a bare string constant does.
+# bytes placed in the module.
 StringFinisher = Callable[[str, str], ir.Constant]
+
+# The internal error of a caller, with the detail of the fault.
+Fault = Callable[[str], NoReturn]
 
 WORD_BYTES = 8
 
@@ -77,31 +82,83 @@ def constant_of(value: 'AggregateConstant', span: Optional[Span],
     return constant
 
 
+def enum_of(ty: Type, fault: Fault) -> EnumType:
+    """`ty`, which must be an enum."""
+    if not isinstance(ty, EnumType):
+        fault(f"{ty} is no enum")
+    return ty
+
+
+def variant_of(ty: Type, variant: str, fault: Fault) -> tuple[EnumType, EnumVariantInfo]:
+    """The enum `ty` and its variant `variant`."""
+    enum_type = enum_of(ty, fault)
+    info = enum_type.get_variant(variant)
+    if info is None:
+        fault(f"{enum_type} has no variant '{variant}'")
+    return enum_type, info
+
+
+def checked_variant(ty: Type, variant: str, parts: Sequence[Type],
+                    fault: Fault) -> tuple[EnumType, EnumVariantInfo]:
+    """The one check of an `Aggregate` of a variant, as an rvalue and as a constant:
+    `variant` is a variant of the enum `ty`, and the semantic type of each part is the type
+    of its payload field."""
+    enum_type, info = variant_of(ty, variant, fault)
+    if tuple(parts) != tuple(info.associated_types):
+        fault(f"the payload of {enum_type}.{variant} is "
+              f"({', '.join(map(str, parts))}), not "
+              f"({', '.join(map(str, info.associated_types))})")
+    return enum_type, info
+
+
+def _check_constant(constant: k.Constant, fault: Fault) -> None:
+    """The one check for each variant in a constant, at every depth."""
+    if isinstance(constant, k.Aggregate):
+        if constant.variant is not None:
+            checked_variant(constant.ty, constant.variant,
+                            [_type_of(part, fault) for part in constant.parts], fault)
+        for part in constant.parts:
+            _check_constant(part, fault)
+
+
+def _type_of(constant: k.Constant, fault: Fault) -> Type:
+    """The semantic type of a constant."""
+    if isinstance(constant, (k.Int, k.Float, k.Aggregate)):
+        return constant.ty
+    if isinstance(constant, k.Bool):
+        return BuiltinType.BOOL
+    if isinstance(constant, k.Blank):
+        return BuiltinType.BLANK
+    if isinstance(constant, k.Str):
+        return BuiltinType.STRING
+    fault(f"the constant {constant} has no type of a payload")
+
+
 def enum_initializer(value: k.Aggregate, types,
                      finish_string: Optional[StringFinisher],
-                     data_name: str) -> Optional[ir.Constant]:
-    """The `{i32 tag, [K x i64] data}` constant for an enum variant constant.
+                     data_name: str, *, span: Optional[Span] = None,
+                     filename: Optional[str] = None) -> ir.Constant:
+    """The `{i32 tag, [K x i64] data}` constant for an enum variant constant. A value that
+    the check of its variants refuses, or that the converter cannot write, is an internal
+    error at `span`: a string payload with no finisher is one."""
+    def fault(detail: str) -> NoReturn:
+        raise_internal_error("CE0000", span=span, filename=filename,
+                             detail=f"the enum constant {value}: {detail}")
 
-    None when a payload needs a module and none was given (a string, with no finisher),
-    which is the same answer `const_value_to_llvm` gives a bare string.
-    """
-    enum_type = value.ty
-    if not isinstance(enum_type, EnumType) or value.variant is None:
-        return None
+    if value.variant is None:
+        fault("it names no variant")
+    _check_constant(value, fault)
+    enum_type, variant = variant_of(value.ty, value.variant, fault)
     llvm_enum = types.get_enum_type(enum_type)
     data_type = llvm_enum.elements[1]
-
     tag = enum_type.get_variant_index(value.variant)
-    variant = enum_type.get_variant(value.variant)
-    if tag is None or variant is None:
-        return None
     if not value.parts:
         data = ir.Constant(data_type, None)
     else:
         blob = _PayloadBytes(data_type.count * WORD_BYTES)
         if not _write_fields(blob, 0, variant.associated_types, value.parts, types,
                              finish_string, data_name):
-            return None
+            fault("a payload value has no constant bytes")
         data = ir.Constant(data_type, blob.words(types.i64))
     return ir.Constant(llvm_enum, [ir.Constant(types.i32, tag), data])
 
