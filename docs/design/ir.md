@@ -20,7 +20,8 @@ the gate names). Amended on 2026-10-28 by ruling R-W: 7.3 and 8.5 (`typecheck` w
 that an integer literal holds, and the value of a constant, as a row of `TypeckResults`).
 Amended on 2026-10-28 by group A8: 7.3, 7.4 and 7.9 (`borrow` walks an initializer body, and
 refuses a `poke` of a constant with CE2400; a `poke` of a constant is no error hole), and 8.2
-and 8.5 (SLIR lowers an initializer body and a `ConstRef` from the value rows of `typecheck`).
+and 8.5 (SLIR lowers an initializer body and a `ConstRef` from the value rows of `typecheck`;
+the next amendment takes back the initializer body).
 Amended on 2026-10-28 by group A8 (emit): 7.9, 8.2 and 8.5 (an initializer body does not go
 to SLIR; the global of a constant or a `var` takes the value of the constant evaluator, in
 the declaration round of the backend, and that is the one path).
@@ -56,6 +57,14 @@ check of a variant against the semantic types of its payload, for the rvalue and
 constant). Amended on 2026-10-29 by group A4 (emit): the emitter paragraph of 8.2 (the
 `result` and `maybe` families have a row of `METHOD_FAMILIES`; every operand of such a call is
 `Guaranteed`, so the family copies an owning value that it answers).
+Amended on 2026-10-29 by the final review of run 2 of Phase 3: 4.2 (the trap emitter of
+SLIR), 6.3 (`borrow` checks an initializer body too), 7.3 (`typecheck` writes no value row
+for an initializer), 7.5 and 8.8 (an `Assert` holds no file name; the position of a trap
+names the file of the body), 7.9 (an initializer body is the one place where an owning value
+gets `ADOPT`), and 8.2, 8.5 and 8.13 (the declaration round of a global stops the compile
+where it cannot make a global, and never drops one; the one check of a variant runs for each
+constant `Aggregate`, on both paths; the emit stops `aggregate constant` and `constant with
+no value`; a `Trap` takes no `Move` operand).
 
 ## The decisions, in one place
 
@@ -327,8 +336,8 @@ Sushi nothing here, because Rust never needed the concept.
 
 ### 4.2 Sushi does not unwind
 
-`emit_runtime_error`, `emit_runtime_error_with_values` and
-`emit_runtime_error_with_message` (`backend/runtime/errors.py`) write to stderr and call
+`emit_runtime_error` and `emit_runtime_error_with_values` (`backend/runtime/errors.py`),
+and the emitter of a SLIR `Trap` (`backend/slir/emit.py`), write to stderr and call
 `exit(1)`. There are no exceptions; an error is a `Result` value, and a trap stops the
 program. The backend emits no `invoke` and no `landingpad`.
 
@@ -518,10 +527,10 @@ check a body expression (the propagation of the declared type, the assignment ch
 for a `var` it decides the element type of an empty container (`List.new()`, `from([])`).
 After the move those helpers read SHIR. The other two choices put the same rule in two
 places: type checks of its own in the constant evaluator, or AST copies of the helpers. The
-VALUE of a constant stays the evaluator's (Q5). The body only gives `typecheck` a SHIR node
-to check. Ruled 2026-10-11. The block of the body holds one statement: a `Return` of the
-initializer, because the initializer gives the value of the body as a `return` gives the
-value of a function.
+VALUE of a constant stays the evaluator's (Q5). The body only gives `typecheck` and
+`borrow` a SHIR node to check; it does not go to SLIR (8.2). Ruled 2026-10-11. The block of
+the body holds one statement: a `Return` of the initializer, because the initializer gives
+the value of the body as a `return` gives the value of a function.
 
 ### 6.4 Enforcement, not convention
 
@@ -701,7 +710,7 @@ than types:
 | the display type of each hole of an `Interp`, and of a `print` argument | the node's `shir_id`, per part |
 | the scrutinee type of a `Match`, and its integer type for literal and range arms | the `Match`'s `shir_id` |
 | the element type of each target of a `Destructure` | the statement's `shir_id`, per target |
-| the value that an integer literal holds (8.5), the value of the constant that a `ConstRef` names, and the value of a constant or `var` initializer | the `Lit`'s or the `ConstRef`'s `shir_id`; the `shir_id` of the `Return` of the initializer body |
+| the value that an integer literal holds (8.5), and the value of the constant that a `ConstRef` names | the `Lit`'s or the `ConstRef`'s `shir_id` |
 
 **This is not the stamp channel returning.** Four differences, and each one is a reason a
 stamp went wrong (1.2):
@@ -736,23 +745,23 @@ the method (`BuiltinMethod`). The conversion row of a `Cast` and of a `Try` hold
 `Conversion` callee, or `NoConversion` for a numeric cast and for a `??` that keeps its
 error type. The facts of a `Try` are one record (`TryFacts`), and so are the scrutinee type
 and the integer type of a `Match` (`MatchFacts`). The value row holds a value of the constant
-evaluator (`ConstantValue`, `semantics/const_eval.py`), one shape for the three keys: the value
-that an integer literal holds at its type, the value of the constant that a `ConstRef` names
-(from the constant table, Q5), and the value of an initializer.
+evaluator (`ConstantValue`, `semantics/const_eval.py`), one shape for the two keys: the value
+that an integer literal holds at its type, and the value of the constant that a `ConstRef`
+names (from the constant table, Q5). An initializer has no value row: no stage reads one,
+because the backend makes the global of a constant from the evaluator (8.2).
 
-The completeness check is `check_answers` in `semantics/shir/typeck_check.py`. It walks
-the body through the one walk of the SHIR tree (`semantics/shir/walk.py`). A missing answer
-is the internal error [CE0156](../error-catalog.md#ce0156), which names the answer, the
-class of the node, its position and the body. Each expression node needs a type, the
-reference of a call target too. An integer literal and a `ConstRef` need a value too. A
-`ConstRef` of a constant that has no value stops the walk of its body with
-`typecheck, ConstRef with no value`, and an initializer with no value that is no empty
-container stops with `typecheck, Return with no value`: a function-typed constant
-(`const fn() -> i32 F = area`) has no value and no error yet. When the initializer has an
-error, that error is the diagnostic, and the stop does not show. The check asks for no value
-row of an initializer: a `var` whose initializer is an empty container has no value (its
-global is zero). The captures of a lambda are in `Bindings` and not in the body, so the check
-cannot count them.
+The completeness check is `check_answers` in `semantics/shir/typeck_check.py`. It walks the
+body through the one walk of the SHIR tree (`semantics/shir/walk.py`). A missing answer is
+the internal error [CE0156](../error-catalog.md#ce0156), which names the answer, the class
+of the node, its position and the body. Each expression node needs a type, the reference of
+a call target too. An integer literal and a `ConstRef` need a value too. A `ConstRef` of a
+constant that has no value stops the walk of its body with `typecheck, ConstRef with no
+value`, and an initializer with no value that is no empty container stops with `typecheck,
+Return with no value`: a function-typed constant (`const fn() -> i32 F = area`) has no value
+and no error yet. When the initializer has an error, that error is the diagnostic, and the
+stop does not show. A `var` whose initializer is an empty container has no value, and it
+does not stop: its global is zero. The captures of a lambda are in `Bindings` and not in the
+body, so the check cannot count them.
 
 The body half of `typecheck` walks a SHIR body through ONE table of arms keyed on the SHIR
 class, with a row for each member of `ShirStmt` and `ShirExpr` (`ARMS`), and a pattern
@@ -802,17 +811,18 @@ is `NoConversion` when the two error types are one type; with no declared conver
 between two error types, the `??` is [CE2511](../error-catalog.md#ce2511).
 
 **An initializer body.** Before the walk of the initializer body of a constant or a `var`
-(6.3), the constant evaluator reads the initializer at the declared type, with the reporter of
-the pass (Q5). It reports what is not constant ([CE0108](../error-catalog.md#ce0108)), an
+(6.3), the constant evaluator reads the initializer at the declared type, with the reporter
+of the pass (Q5). It reports what is not constant ([CE0108](../error-catalog.md#ce0108)), an
 overflow ([CE2077](../error-catalog.md#ce2077)), a division by zero and a cycle
 ([CE0109](../error-catalog.md#ce0109)), and the walk does not run after an error of the
-evaluator. An empty container (`List.new()`, `from([])`) allocates nothing: the evaluator does
-not read it. The `Return` of the body checks its value at the declared type, as a `let` does: a
-value that does not fit is [CE2002](../error-catalog.md#ce2002) at `name = value`, with a note
-at the declared type. The value that the evaluator gave is the value row of the `Return`.
-The `borrow` pass walks an initializer body as any other body. The constant evaluator makes
-each value of an initializer, so each value there is a new value: the `Return` adopts its
-value, and a constant that the initializer names is read, not moved (7.9).
+evaluator. An empty container (`List.new()`, `from([])`) allocates nothing: the evaluator
+does not read it. The `Return` of the body checks its value at the declared type, as a `let`
+does: a value that does not fit is [CE2002](../error-catalog.md#ce2002) at `name = value`,
+with a note at the declared type. The value that the evaluator gave only decides the stop
+above; the pass writes no row for it. The `borrow` pass walks an initializer body as any
+other body. The constant evaluator makes each value of an initializer, so each value there
+is a new value: the `Return` adopts its value, and a constant that the initializer names is
+read, not moved (7.9).
 
 **A cast.** The arm of `as` (`check_cast`, `passes/types/expressions.py`) answers the
 target type. A cast between two numeric types, and a cast to the type of its operand, call
@@ -1139,7 +1149,7 @@ forwards the array operand itself, as a `Move`.
 | `If` | `cond: Expr`, `then: ShirBlock`, `otherwise: ShirBlock \| None` |
 | `Loop` | `source: LoopSource`, `body: ShirBlock`; the walk kind is `typecheck`'s (7.7) |
 | `Match` | `scrutinee: Expr`, `arms: [Arm]`, `consumes: bool`; `match nom r:` |
-| `Assert` | `cond: Expr`, `message: Expr \| None`, `label: str` |
+| `Assert` | `cond: Expr`, `message: Expr \| None` |
 | `Break` / `Continue` | none |
 | `Expand` | `binder: LocalId`, `pack: str`, `body: ShirBlock`; a template check body only (4.5) |
 
@@ -1197,9 +1207,8 @@ OWNS from an owned value and BORROWS from a borrow (`tuples.md`). `borrow` decid
 and SLIR lowering writes the field moves or the field views.
 
 `Assert` keeps its message as an expression, because the message is evaluated only when
-the condition fails (`assert.md`). `label` is the file name that a diagnostic of the unit
-shows, set by the AST builder: the program prints it with the line and the column of the
-`assert` when the condition fails ([RE2026](../error-catalog.md#re2026)).
+the condition fails (`assert.md`). It holds no file name: SLIR lowering names the file of
+the body in the position of the trap (8.8).
 
 ### 7.6 `Callee`: a closed set
 
@@ -1411,7 +1420,10 @@ The rows of `OwnershipResults`:
   directly from a literal: such a string owns no heap and copies freely. Its local keeps
   its drop at each exit, and the emitter guards the drop of a string with the `owned`
   byte of the string, so that drop frees nothing. So the verifier refuses a `Copy` of an
-  owning value into an `Owned` argument for every type except `string` (8.13). `REJECT` is
+  owning value into an `Owned` argument for every type except `string` (8.13). An
+  initializer body is the one exception: there each value is new, so a `ConstRef` of an
+  owning constant gets `ADOPT` too, and no rule above applies, because an initializer body
+  never goes to SLIR (8.2). `REJECT` is
   an error of `borrow`, except at two positions, where it is a borrowed view with no
   error: the value of an `Assign` with `is_init` (a let-borrow of the owner) and the
   operand of a `Try` that reads through a borrowed owning wrapper. SLIR lowering does not
@@ -1493,7 +1505,17 @@ too: a class with no row is an internal error at the span of the node, and the a
 construct that the pass does not check yet stops the walk of its body with the stop code
 (`borrow, <class>`). A statement of a copy of an unrolled `expand` that ends the path,
 with more statements after it in its block, stops the walk too (`borrow, Expand`): the
-group of the copies decides the statements that no path reaches. A call of a built-in method has its arm when `receiver_convention` (8.3) gives its receiver the convention `Guaranteed`: each method of the primitive family and of the `string` family, and each method of the `result` and `maybe` families that does not declare `nom self`. The arm reads the receiver (a use after a move is CE2405), and the receiver stays with its owner. Then it reads each argument by its convention row, as a call of a free function does. A call of a method of another family, and a call with an `Owned` receiver, have no arm in the pass yet: each stops the walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages make this stop with the one helper `dispatch.stop_at_family`. The typecheck pass records only the callees `Free`, `Intrinsic` and `Builtin`, so a call with another callee in this pass is an internal error. The state of the walk
+group of the copies decides the statements that no path reaches. A call of a built-in method
+has its arm when `receiver_convention` (8.3) gives its receiver the convention `Guaranteed`:
+each method of the primitive family and of the `string` family, and each method of the
+`result` and `maybe` families that does not declare `nom self`. The arm reads the receiver
+(a use after a move is CE2405), and the receiver stays with its owner. Then it reads each
+argument by its convention row, as a call of a free function does. A call of a method of
+another family, and a call with an `Owned` receiver, have no arm in the pass yet: each stops
+the walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages
+make this stop with the one helper `dispatch.stop_at_family`. The typecheck pass records
+only the callees `Free`, `Intrinsic` and `Builtin`, so a call with another callee in this
+pass is an internal error. The state of the walk
 (`BorrowState`, `FlowFacts`) is keyed by `LocalId`, because a hidden local has no source
 name, and a diagnostic names a local by the name of its `ShirLocal`. The pass decides the
 `Ownership` of each consuming use ONE time, with `classify()`, and one function writes the
@@ -1712,8 +1734,9 @@ index. No statement has an empty span (G9).
 
 **Where SLIR lives.** The package is `semantics/slir/`, and it never imports the backend:
 the node modules (`ids.py`, `places.py`, `constants.py`, `rvalues.py`, `statements.py`,
-`terminators.py`, `function.py`), the lowering (`lower.py`), the drop placement of 8.10
-(`drops.py`, the one module that builds a `Drop` or a `DropIfSet`; gate:
+`terminators.py`, `function.py`), the lowering (`lower.py`, with the control-flow arms in
+`lower_control.py` and the facts of a declaration in `lower_signature.py`), the drop
+placement of 8.10 (`drops.py`, the one module that builds a `Drop` or a `DropIfSet`; gate:
 `tests/unit/test_slir_drop_placement_is_one.py`), the verifier of 8.13 (`verify.py`) and
 the printer of `--dump-slir` (`printer.py`). Every class is a slotted dataclass, and every
 statement and terminator has a required `span` (gate:
@@ -1735,14 +1758,13 @@ rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns, `borrowed try
 twice), `conversion` also for a `Try` that calls a declared conversion (today `typecheck`
 stops there first), `library function` for a free callee whose row names no declaring unit
 (a function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
-argument, `aggregate constant` for a `ConstRef` whose value is a struct, an enum or an array
-(the groups of those kinds give its `Constant`), and `ConstRef out of range` for a
-`ConstRef` whose value its type cannot hold (8.5). The dump prints such a function as ONE
-line in place of its body, `fn <name>: stopped (slir, <construct>)`,
-so that a golden file shows the progress of each function. The pipeline reports one stop
-after the analysis: a stop of `typecheck`, else of `lift`, else of `borrow`, else an error
-hole, else a stop of the lowering. When nothing stopped, the program goes on to the
-backend.
+argument, `aggregate constant` for a `ConstRef` whose value is a struct or an array, also as
+a payload of an enum value (groups A5 and A6 give its `Constant`), and `ConstRef out of
+range` for a `ConstRef` whose value its type cannot hold (8.5). The dump prints such a
+function as ONE line in place of its body, `fn <name>: stopped (slir, <construct>)`, so that
+a golden file shows the progress of each function. The pipeline reports one stop after the
+analysis: a stop of `typecheck`, else of `lift`, else of `borrow`, else an error hole, else
+a stop of the lowering. When nothing stopped, the program goes on to the backend.
 
 **An initializer body.** The SLIR stage does not lower the initializer body of a constant or
 a `var` (6.3). The body gives `typecheck` and `borrow` a SHIR node to check, and nothing
@@ -1753,7 +1775,13 @@ makes the global of each constant and each `var` from that value, in its declara
 global, and the dump shows no function for an initializer. A constant is an `internal`
 `.rodata` global in each module. A `var` is defined in the module of its unit, and
 declared in each other module. A body reads a constant as a `Const` operand (8.5), and
-never reads its global.
+never reads its global. The round makes a global for each constant and each `var`, or it
+stops the compile; it never drops one. A value of an enum whose payload holds a struct or
+an array has no SLIR constant yet, and its global stops with `emit, aggregate constant` at
+the declaration (groups A5 and A6 give its `Constant`). A constant that the evaluator gives
+no value (a function-typed constant, group C2) stops with `emit, constant with no value`.
+Every other fault of the round is an internal error: a constant with no type, a scalar of
+a type that has no LLVM constant, and a value that the converter of 8.5 cannot write.
 
 **The emitter.** The package is `backend/slir/`, and it follows the backend rule: free
 functions, and one state object for each function (`FunctionState`: the codegen, the
@@ -1782,42 +1810,44 @@ integer, a float or a `bool`, and any other operand type stops the emitter.
 `SwitchInt` with `otherwise: None` goes to a block that holds `unreachable`.
 
 Each family of the backend gets LLVM values and semantic types, never an AST node (Q7);
-where a family took an AST node, its value half is cut out. The AST body emitter is
-deleted: its statement, expression, call dispatch and ownership layers went (8.12), and
-so did the AST entry of each family that has a value half. A family that has no value
-half yet keeps its AST argument half, with no caller, until the group of its construct
-gives it operands. A `Str` constant comes from the string constant seam and owns
-no heap (owned flag 0). `Copy` and `Move` both load the value: a `Move` emits no code of
-its own, because lowering placed every drop. `Drop` goes through the one destroy seam
-(`emit_value_destructor`): a string frees its buffer only when its owned flag is set, and
-an enum goes to the destroy half of its lifecycle handler. `DropIfSet` loads its flag and
-drops only while the flag is `true`. An enum is `{i32 tag, [K x i64] data}`: an
-`Aggregate` of a variant goes through the enum emitter with one value for each payload,
-which the emitter writes at the offsets of the layout authority (a constant `Aggregate`
-goes through the converter of 8.5),
-`Discriminant` reads the tag as an `i32`, and the place `Field(Downcast(p, v), i)` is the
-address of payload field `i` at the offset that the one layout authority gives
+where a family took an AST node, its value half is cut out. The AST body emitter is deleted:
+its statement, expression, call dispatch and ownership layers went (8.12), and so did the
+AST entry of each family that has a value half. A family that has no value half yet keeps
+its AST argument half, with no caller, until the group of its construct gives it operands. A
+`Str` constant comes from the string constant seam and owns no heap (owned flag 0). `Copy`
+and `Move` both load the value: a `Move` emits no code of its own, because lowering placed
+every drop. `Drop` goes through the one destroy seam (`emit_value_destructor`): a string
+frees its buffer only when its owned flag is set, and an enum goes to the destroy half of
+its lifecycle handler. `DropIfSet` loads its flag and drops only while the flag is `true`.
+An enum is `{i32 tag, [K x i64] data}`: an `Aggregate` of a variant goes through the enum
+emitter with one value for each payload, which the emitter writes at the offsets of the
+layout authority (a constant `Aggregate` goes through the converter of 8.5), `Discriminant`
+reads the tag as an `i32`, and the place `Field(Downcast(p, v), i)` is the address of
+payload field `i` at the offset that the one layout authority gives
 (`TypeSizing.payload_field_offsets`). The emitter reads the semantic type of the place,
 never a layout match. One check holds each `Aggregate` of a variant: the variant is a
 variant of its enum, and the semantic type of each part is the type of its payload field
-(not only the LLVM type). A part that does not agree is an internal error. A `Builtin`
-call of an intrinsic goes through one row of `INTRINSICS` (`intrinsics.py`), which
-evaluates every operand before the family emits (11.9): `interp` appends each part to one string builder (a string part as its bytes, any
-other part as its string form, `emit_value_fmt`) and answers a fresh owned string, also for
-one string part; `print` and `println` of a string, an integer, a float or a `bool` call
-the print emitter. The print of a value that prints by its `Display` form still stops.
-A `Builtin` call of a `BuiltinMethod` goes to one row of `METHOD_FAMILIES`
-(`backend/slir/methods.py`), by the family of the method. The receiver is the first
-operand, and every operand is evaluated before the family emits. The family keeps its
-emitters and gives them the operand values (Q7). The primitive family, the `string`
-family, the `result` family and the `maybe` family have a row. A family with no row stops.
-Each operand of a call of the `result` or the `maybe` family is `Guaranteed` (8.3); any
-other convention is an internal error. So the family copies the value that it answers when
-that value owns heap (`copy_out`): `realise` copies the payload on the success path and the
-default on the other path, and `err` copies the error into the `Some`. Each copy is made on
-its own path only, because on the other path the payload field holds the bytes of the other
-variant. The caller keeps the receiver and the default, and drops a temporary of either
-after the call (8.10).
+(not only the LLVM type). A part that does not agree is an internal error. The check is one
+function (`checked_variant`, `backend/constants/enum_initializers.py`): the rvalue calls it,
+and the converter of 8.5 calls it for each variant of a constant, at every depth, so a
+constant in a body and the global of a `const` go through the same check. A `Builtin` call
+of an intrinsic goes through one row of `INTRINSICS` (`intrinsics.py`), which evaluates
+every operand before the family emits (11.9): `interp` appends each part to one string
+builder (a string part as its bytes, any other part as its string form, `emit_value_fmt`)
+and answers a fresh owned string, also for one string part; `print` and `println` of a
+string, an integer, a float or a `bool` call the print emitter. The print of a value that
+prints by its `Display` form still stops. A `Builtin` call of a `BuiltinMethod` goes to one
+row of `METHOD_FAMILIES` (`backend/slir/methods.py`), by the family of the method. The
+receiver is the first operand, and every operand is evaluated before the family emits. The
+family keeps its emitters and gives them the operand values (Q7). The primitive family, the
+`string` family, the `result` family and the `maybe` family have a row. A family with no row
+stops. Each operand of a call of the `result` or the `maybe` family is `Guaranteed` (8.3);
+any other convention is an internal error. So the family copies the value that it answers
+when that value owns heap (`copy_out`): `realise` copies the payload on the success path and
+the default on the other path, and `err` copies the error into the `Some`. Each copy is made
+on its own path only, because on the other path the payload field holds the bytes of the
+other variant. The caller keeps the receiver and the default, and drops a temporary of
+either after the call (8.10).
 
 While the migration is in progress, a SLIR shape that the emitter does not handle yet
 stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
@@ -1826,7 +1856,10 @@ terminator. Where one class holds two shapes, the stop names the shape, so that 
 stop-code census counts each one: `emit, Display print` for the print of a value that
 prints by its `Display` form, `emit, intrinsic <name>` for an intrinsic with no row
 of `INTRINSICS`, and `emit, <family> method` for a `BuiltinMethod` whose family has no row
-of `METHOD_FAMILIES`. The stop
+of `METHOD_FAMILIES`. The declaration round of a global stops with two names, at the span of
+the declaration: `emit, aggregate constant` and `emit, constant with no value` (see the
+initializer body above). Every stop of the stage goes through one function, `stop`
+(`backend/slir/state.py`). The stop
 comes before any output: the incremental path builds the module of every unit before it
 writes the first object, so no object, no binary and no `.ll` text is written. This order
 serves the migration alone: when no shape stops the emitter, the path can again build and
@@ -1938,8 +1971,10 @@ Only the backend turns one into an LLVM value. A scalar becomes an `ir.Constant`
 `Str` comes from the string constant seam. An `Aggregate` of a variant becomes an
 `ir.Constant` through one converter (`enum_initializer`): the declaration round of the
 global of a `const` calls it too, with the `Constant` of the evaluator value (`of_value`).
-The converter writes each payload value at the offset of the layout authority, so a
-constant and a run-time value of an enum have one layout.
+The converter first runs the one check of a variant (8.2) over the value, at every depth.
+Then it writes each payload value at the offset of the layout authority, so a constant and
+a run-time value of an enum have one layout. A value that the converter cannot write after
+the check is an internal error: the converter always gives an `ir.Constant`.
 
 **The value that an integer literal holds.** `typecheck` decides it one time, and writes it
 as the value row of the literal (7.3, ruling R-W), beside the type of the literal: the one
@@ -1965,7 +2000,9 @@ address of the slot. An enum value is an `Aggregate` of its
 enum type that names its variant (`variant`), with one part for each value of the payload, in
 order; a payload value is made by the same rule. The printer writes it as the construction of
 the variant: `Sign::Plus`, `Shape::Circle(5_i32)`. A struct or an array value, also as a
-payload value, stops the lowering (`aggregate constant`). The constant evaluator does not wrap
+payload value, stops the lowering (`slir, aggregate constant`). The global of an enum
+constant with such a payload stops the declaration round of the backend with
+`emit, aggregate constant` (8.2). The constant evaluator does not wrap
 a literal that spells bits (`const i8 B = 0xFF` holds 255), and it gives a value to an
 initializer with a range error. A value that its type cannot hold stops the lowering
 (`ConstRef out of range`), so lowering decides no value and the verifier rule holds.
@@ -2070,20 +2107,22 @@ Unreachable
 print values: [RE2020](../error-catalog.md#re2020) prints the index and the size. Each printf
 conversion of the text takes one operand, in order, and the conversion gives the type of
 that operand: `%d` takes an `i32`, and `%.*s` takes a `string`. The trap reads each operand
-as a `Guaranteed` argument, and it drops nothing, because the program ends there. The trap
+as a `Guaranteed` argument, so an operand is a `Copy` or a `Const` and never a `Move`, and
+it drops nothing, because the program ends there. The trap
 emitter prints a `string` operand with `%.*s` from its fields, the size and the data,
 because a Sushi string has no NUL at its end. A text holds no conversion of another kind.
 
 The trap of an `assert` is [RE2026](../error-catalog.md#re2026) (ruling R-U), and its text
 is `assertion failed at %.*s%.*s`. The first operand is the position of the `assert`, a
-`Str` constant: the `label` of the SHIR node (7.5), the line and the column
-(`file:line:col`). The second operand is the message. With a message, the position ends in
-`: `, and the operand of the message is the value of the message expression. With no
-message, the second operand is the empty string, and the position has no `: `. So the two
-forms print the text of the AST backend: `assertion failed at f.sushi:3:5: the message`,
-and `assertion failed at f.sushi:3:5` for a bare `assert`. A value that the compiler knows,
-such as the position, is a constant operand: the text of RE2026 holds no `{name}` slot,
-because the backend would put the file name in a printf format string.
+`Str` constant: the file of the body as a diagnostic names it (`display_filename`, which
+SLIR lowering reads one time for each body), the line and the column (`file:line:col`). The
+second operand is the message. With a message, the position ends in `: `, and the operand of
+the message is the value of the message expression. With no message, the second operand is
+the empty string, and the position has no `: `. So the two forms print the text of the AST
+backend: `assertion failed at f.sushi:3:5: the message`, and `assertion failed at
+f.sushi:3:5` for a bare `assert`. A value that the compiler knows, such as the position, is
+a constant operand: the text of RE2026 holds no `{name}` slot, because the backend would put
+the file name in a printf format string.
 
 The trap of `expect` is [RE2029](../error-catalog.md#re2029), and its text is
 `expect failed at %.*s: %.*s`. The first operand is the position of the call, a `Str`
@@ -2416,8 +2455,8 @@ Runs after lowering, before the backend. It checks:
   (8.5)
 - every `Trap` code is a registered RExxxx, with one operand for each printf conversion of
   its registry text, of the type that the conversion takes (8.8): `%d` an `i32`, `%.*s` a
-  `string`. A conversion of another kind, and an operand whose type SLIR does not hold (a
-  `Global`), are refused
+  `string`. A conversion of another kind, an operand whose type SLIR does not hold (a
+  `Global`), and a `Move` operand are refused
 - every statement and terminator carries a `Span` (G9)
 
 **As built.** The verifier is `semantics/slir/verify.py`. The SLIR stage gives it each
