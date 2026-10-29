@@ -1,0 +1,38 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "plus\n5\nsquare 3\ntrue\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_enum_constant.slir
+#
+# A name of an enum constant is a constant `Aggregate` that names its variant, with one part
+# for each value of the payload; a payload that is an enum is made by the same rule (ir.md
+# 8.5). A match on a constant puts the value into a temporary, because a `Discriminant`
+# reads a place.
+
+enum Sign:
+    Plus
+    Minus
+
+enum Shape:
+    Circle(i32)
+    Square(i32)
+
+const Sign UP = Sign.Plus
+const Shape BALL = Shape.Circle(5)
+const Maybe@(Shape) SOME_BOX = Maybe.Some(Shape.Square(3))
+const Maybe@(i32) NOTHING = Maybe.None
+
+fn size(Shape s) i32:
+    match s:
+        Shape.Circle(r) -> return r
+        Shape.Square(w) -> return w
+
+fn main() i32:
+    match UP:
+        Sign.Plus -> println("plus")
+        Sign.Minus -> println("minus")
+    println(size(BALL))
+    match SOME_BOX:
+        Maybe.Some(Shape.Square(w)) -> println("square {w}")
+        _ -> println("other")
+    println(NOTHING.is_none())
+    return 0

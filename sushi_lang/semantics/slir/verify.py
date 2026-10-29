@@ -10,7 +10,10 @@ one terminator for each block, blocks that exist, a type for each local and for 
 projection of a place, a `Move` out of no `Global`, a `Drop` of an owning type, a `bool`
 flag for a `DropIfSet`, no `and` or `or` in a `Binary`, a `Cast` between two numeric types
 or of one type, an `Int` constant in the range of its type, a `SwitchInt` on an integer or a
-`bool` whose cases its type holds, each one time, the conventions of a `Direct` callee, a
+`bool` whose cases its type holds, each one time, a tag of its enum for each case of a switch
+on the local that a `Discriminant` of its block writes, a `Discriminant` of an enum, a
+variant (an rvalue or a constant) that its enum declares with each value of its payload, the
+conventions of a `Direct` callee, a
 receiver operand for a call of a built-in method, no copy of an owning value
 other than a `string` into an `Owned` argument, and a registered `RExxxx` for a `Trap`, with
 one operand of the type that each printf conversion of its text takes. The type of a place
@@ -82,6 +85,8 @@ SHORT_CIRCUIT = "no short circuit in a binary"
 NUMERIC_CAST = "a numeric cast"
 CONSTANT_RANGE = "a constant in range"
 INTEGER_SWITCH = "an integer switch"
+TAG_SWITCH = "a switch on a tag"
+ENUM_VALUE = "an enum value"
 TRAP = "registered trap"
 SPANS = "spans"
 
@@ -239,6 +244,7 @@ class _Check:
         if isinstance(term, tm.SwitchInt):
             self.operand(term.operand, term.span)
             self.switch(term)
+            self.tag_switch(term, block)
         if isinstance(term, tm.Trap):
             self.trap(term)
 
@@ -282,6 +288,34 @@ class _Check:
                 self.fail(INTEGER_SWITCH, f"the case {value} comes two times", term.span)
             seen.add(value)
 
+    def tag_switch(self, term: tm.SwitchInt, block: SlirBlock) -> None:
+        """A switch on the local that a `Discriminant` of its own block writes: each case is
+        the tag of a variant of that enum."""
+        operand = term.operand
+        if not (isinstance(operand, p.Copy) and isinstance(operand.place, p.Local)):
+            return
+        writes = [stmt.rvalue for stmt in block.statements
+                  if isinstance(stmt, st.Assign) and stmt.place == operand.place]
+        if not writes or not isinstance(writes[-1], r.Discriminant):
+            return
+        enum = self.place(writes[-1].place, term.span).ty
+        if not isinstance(enum, EnumType):
+            return
+        for value, _ in term.targets:
+            if not 0 <= value < len(enum.variants):
+                self.fail(TAG_SWITCH, f"the case {value} is the tag of no variant of "
+                                      f"{display_type(enum)}", term.span)
+
+    def enum_variant(self, ty: Type, variant: str, count: int, span: Span) -> None:
+        """`ty` is an enum that declares `variant` with `count` payload values."""
+        info = ty.get_variant(variant) if isinstance(ty, EnumType) else None
+        if info is None:
+            self.fail(ENUM_VALUE, f"{display_type(ty)} declares no variant '{variant}'", span)
+        if len(info.associated_types) != count:
+            self.fail(ENUM_VALUE, f"the variant {variant} of {display_type(ty)} holds "
+                                  f"{len(info.associated_types)} values, and it is given "
+                                  f"{count}", span)
+
     def place(self, place: p.Place, span: Span) -> _Typed:
         """The root and the type of `place`; each projection must fit the type of its base."""
         if isinstance(place, p.Global):
@@ -302,11 +336,17 @@ class _Check:
             self.fail(GLOBAL_MOVE, f"{show(operand)} takes the value of a global", span)
 
     def constant(self, constant: k.Constant, span: Span) -> None:
-        """An integer constant holds a value that its type can hold."""
+        """An integer constant holds a value that its type can hold. A variant is a variant of
+        its enum, and each part is a constant by the same rules."""
         if isinstance(constant, k.Int) and integer_range(constant.ty) is not None \
                 and not fits_integer_type(constant.value, constant.ty):
             self.fail(CONSTANT_RANGE, f"{constant.value} is out of the range of "
                                       f"{display_type(constant.ty)}", span)
+        if isinstance(constant, k.Aggregate):
+            if constant.variant is not None:
+                self.enum_variant(constant.ty, constant.variant, len(constant.parts), span)
+            for part in constant.parts:
+                self.constant(part, span)
 
     def rvalue(self, value: r.Rvalue, span: Span) -> None:
         if isinstance(value, r.Binary) and value.op in ("and", "or"):
@@ -318,6 +358,11 @@ class _Check:
                 self.place(part, span)
         if isinstance(value, r.Cast):
             self.cast(value, span)
+        if isinstance(value, r.Discriminant) \
+                and not isinstance(self.place(value.place, span).ty, (EnumType, type(None))):
+            self.fail(ENUM_VALUE, f"{show(value)} reads a value that is no enum", span)
+        if isinstance(value, r.Aggregate) and isinstance(value.kind, r.AggVariant):
+            self.enum_variant(value.kind.ty, value.kind.variant, len(value.parts), span)
 
     def cast(self, value: r.Cast, span: Span) -> None:
         """A cast joins two numeric types, or keeps one type. Its operand has a known type

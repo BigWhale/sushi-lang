@@ -229,6 +229,8 @@ SHAPES: list[tuple[object, str]] = [
     (_const(k.Str('Mostly "Harmless"\n'.encode())), 'const "Mostly \\"Harmless\\"\\n"'),
     (_const(k.Aggregate(TRIPLE, (k.Int(2, I32), k.Int(3, I32), k.Int(5, I32)))),
      "const i32[3](2_i32, 3_i32, 5_i32)"),
+    (_const(k.Aggregate(STD_ERROR, (), "Error")), "const StdError::Error"),
+    (_const(k.Aggregate(RESULT_STRING, (k.Str(b"towel"),), "Ok")), 'const Result::Ok("towel")'),
     (_const(k.FnRef("test$helper")), "const fn test$helper"),
     # rvalues (ir.md 8.7, L10)
     (r.Use(_copy(1)), "copy _1"),

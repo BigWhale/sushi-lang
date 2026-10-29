@@ -1,0 +1,90 @@
+unit test_slir_expect_owning
+
+fn named(_1: bool @guaranteed) -> Maybe@(string) {
+    let _0: Maybe@(string)
+
+  bb0:
+    switchInt(copy _1) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    _0 = Maybe::Some(const "crew")
+    return
+
+  bb2:
+    _0 = Maybe::None
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: Maybe@(string)                 // m
+    let _2: i32
+    let _3: string                         // got
+    let _4: ~
+    let _5: i32
+    let _6: string                         // again
+    let _7: string
+    let _8: ~
+    let _9: Maybe@(string)
+    let _10: i32
+    let _11: string
+    let _12: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = Maybe::Some(const "towel")
+    _2 = discriminant(_1)
+    switchInt(copy _2) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    trap RE2029(const "./tests/ir/slir/enums/test_slir_expect_owning.sushi:17:22", const "no towel")
+
+  bb2:
+    StorageLive(_3)
+    _3 = clone(copy ((_1 as Some).0))
+    StorageLive(_4)
+    _4 = call builtin println@(string)(copy _3 @guaranteed)
+    StorageDead(_4)
+    _5 = discriminant(_1)
+    switchInt(copy _5) -> [0: bb4, otherwise: bb3]
+
+  bb3:
+    trap RE2029(const "./tests/ir/slir/enums/test_slir_expect_owning.sushi:19:24", const "no towel")
+
+  bb4:
+    StorageLive(_6)
+    _6 = clone(copy ((_1 as Some).0))
+    StorageLive(_7)
+    _7 = call builtin interp@(string, string)(const "kept " @guaranteed, copy _6 @guaranteed)
+    StorageLive(_8)
+    _8 = call builtin println@(string)(copy _7 @guaranteed)
+    StorageDead(_8)
+    Drop(_7)
+    StorageDead(_7)
+    StorageLive(_9)
+    _9 = call @named(const true @guaranteed)
+    _10 = discriminant(_9)
+    switchInt(copy _10) -> [0: bb6, otherwise: bb5]
+
+  bb5:
+    trap RE2029(const "./tests/ir/slir/enums/test_slir_expect_owning.sushi:21:13", const "no crew")
+
+  bb6:
+    StorageLive(_11)
+    _11 = clone(copy ((_9 as Some).0))
+    StorageLive(_12)
+    _12 = call builtin println@(string)(copy _11 @guaranteed)
+    StorageDead(_12)
+    Drop(_11)
+    StorageDead(_11)
+    Drop(_9)
+    StorageDead(_9)
+    _0 = const 0_i32
+    Drop(_6)
+    StorageDead(_6)
+    Drop(_3)
+    StorageDead(_3)
+    Drop(_1)
+    StorageDead(_1)
+    return
+}

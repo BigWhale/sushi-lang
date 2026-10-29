@@ -1,0 +1,35 @@
+# EXPECT_RUNTIME_EXIT: 1
+# EXPECT_STDOUT_EXACT: "42\n7\n5\n"
+# EXPECT_STDERR_CONTAINS: "Runtime Error RE2029: expect failed at "
+# EXPECT_STDERR_CONTAINS: "test_slir_expect.sushi:33:19: no half of 3\n"
+# EXPECT_DUMP_SLIR: test_slir_expect.slir
+#
+# `expect` lowers as an `assert` does (ir.md 8.9): a `Discriminant` of the receiver and a
+# switch on it. The success tag goes on to the next block, which reads the payload through
+# `Downcast` and `Field`. Any other tag goes to the failing block, which evaluates the
+# message and ends in the trap RE2029 with the position of the call and the message (ir.md
+# 8.8). So the interpolation of a message is built only on the failing path.
+
+error Odd:
+    Value(i32)
+
+fn half(i32 n) i32 | Odd:
+    if (n % 2 == 1):
+        return Result.Err(Odd.Value(n))
+    return Result.Ok(n / 2)
+
+fn find(i32 n) Maybe@(i32):
+    if (n > 0):
+        return Maybe.Some(n)
+    return Maybe.None
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(42)
+    println(m.expect("no value"))
+    println(find(7).expect("not found"))
+    let i32 n = 10
+    println(half(n).expect("no half of {n}"))
+    let i32 odd = 3
+    let i32 got = half(odd).expect("no half of {odd}")
+    println(got)
+    return 0

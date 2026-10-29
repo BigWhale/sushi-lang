@@ -3854,6 +3854,14 @@ An `assert(cond)` or `assert(cond, message)` found its condition false. The text
 
 A slice `data[a..b]` views the elements a to b-1 of an array, and `data[a..=b]` the elements a to b (see [the slice design](design/slices.md)). The range must hold `0 <= a <= b <= len()`, and a range outside that stops the program, as an index out of range does ([RE2020](#re2020)). This is not the clamp rule of `.s()` and `.ss()`, which are the copies. The text gives the end as an exclusive end, so `data[1..=3]` on an array of size 3 prints `1..4`. `a == b` is an empty view and is legal. Readable bounds that go down are the compile error [CE2125](#ce2125); computed bounds that go down are this error, and not an empty view. The `dont_panic` marker does not remove this check: a bad slice is a descriptor with a wrong length that leaves the marked body, and every callee checks against that length. The check runs once, when the slice is made.
 
+### RE2029 {#re2029}
+
+**Error** · runtime
+
+**Message:** `expect failed at %.*s: %.*s`
+
+`.expect(message)` found an `Err` in a `Result`, or `None` in a `Maybe`. The text gives the file, the line and the column of the call, with the file named as a compile-time diagnostic names it, and then the message. The message is evaluated only when the call fails. The program stops with exit code 1, and no error channel catches it. Use `??`, `.realise(default)` or `match` when a caller can handle the failure.
+
 ## NExxxx: Nori package manager errors {#nexxxx}
 
 The package manager, `nori`, gives these errors. The ranges are: NE00xx internal, NE10xx the manifest, NE20xx the archive, NE30xx the installed packages, NE40xx the operating system, NE50xx the package repository.

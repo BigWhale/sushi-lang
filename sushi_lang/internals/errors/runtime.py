@@ -85,6 +85,17 @@ _add(ErrorMessage("RE2026", Severity.ERROR,
     "with exit code 1, and no error channel catches it. A failure that a caller can handle "
     "belongs in the channel, `| E` (docs/design/assert.md)."))
 
+# An expect on an Err or a None. The text is the printf format: two %.*s, the position of
+# the call and the message.
+_add(ErrorMessage("RE2029", Severity.ERROR,
+    "expect failed at %.*s: %.*s",
+    Category.RUNTIME, "`.expect(message)` found an `Err` in a `Result`, or `None` in a `Maybe`. "
+    "The text gives the file, the line and the column of the call, with the file named as a "
+    "compile-time diagnostic names it, and then the message. The message is evaluated only "
+    "when the call fails. The program stops with exit code 1, and no error channel catches "
+    "it. Use `??`, `.realise(default)` or `match` when a caller can handle the failure "
+    "(docs/design/ir.md 8.8)."))
+
 # A foreign return declared non-null (#1085)
 _add(ErrorMessage("RE2025", Severity.ERROR,
     "a foreign call returned a null pointer where its declaration says non-null",

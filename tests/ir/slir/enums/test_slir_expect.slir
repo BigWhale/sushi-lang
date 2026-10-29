@@ -1,0 +1,161 @@
+unit test_slir_expect
+
+fn half(_1: i32 @guaranteed) -> Result@(i32, Odd) {
+    let _0: Result@(i32, Odd)
+    let _2: i32
+    let _3: bool
+    let _4: Odd
+    let _5: i32
+
+  bb0:
+    StorageLive(_2)
+    _2 = copy _1 % const 2_i32
+    StorageLive(_3)
+    _3 = copy _2 == const 1_i32
+    StorageDead(_2)
+    switchInt(copy _3) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    StorageDead(_3)
+    StorageLive(_4)
+    _4 = Odd::Value(copy _1)
+    _0 = Result::Err(move _4)
+    StorageDead(_4)
+    return
+
+  bb2:
+    StorageDead(_3)
+    goto -> bb3
+
+  bb3:
+    StorageLive(_5)
+    _5 = copy _1 / const 2_i32
+    _0 = Result::Ok(move _5)
+    StorageDead(_5)
+    return
+}
+
+fn find(_1: i32 @guaranteed) -> Maybe@(i32) {
+    let _0: Maybe@(i32)
+    let _2: bool
+
+  bb0:
+    StorageLive(_2)
+    _2 = copy _1 > const 0_i32
+    switchInt(copy _2) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    StorageDead(_2)
+    _0 = Maybe::Some(copy _1)
+    return
+
+  bb2:
+    StorageDead(_2)
+    goto -> bb3
+
+  bb3:
+    _0 = Maybe::None
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: Maybe@(i32)                    // m
+    let _2: i32
+    let _3: i32
+    let _4: ~
+    let _5: Maybe@(i32)
+    let _6: i32
+    let _7: i32
+    let _8: ~
+    let _9: i32                            // n
+    let _10: Result@(i32, Odd)
+    let _11: i32
+    let _12: string
+    let _13: i32
+    let _14: ~
+    let _15: i32                           // odd
+    let _16: Result@(i32, Odd)
+    let _17: i32
+    let _18: string
+    let _19: i32                           // got
+    let _20: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = Maybe::Some(const 42_i32)
+    _2 = discriminant(_1)
+    switchInt(copy _2) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    trap RE2029(const "./tests/ir/slir/enums/test_slir_expect.sushi:28:13", const "no value")
+
+  bb2:
+    StorageLive(_3)
+    _3 = copy ((_1 as Some).0)
+    StorageLive(_4)
+    _4 = call builtin println@(i32)(copy _3 @guaranteed)
+    StorageDead(_4)
+    StorageDead(_3)
+    StorageLive(_5)
+    _5 = call @find(const 7_i32 @guaranteed)
+    _6 = discriminant(_5)
+    switchInt(copy _6) -> [0: bb4, otherwise: bb3]
+
+  bb3:
+    trap RE2029(const "./tests/ir/slir/enums/test_slir_expect.sushi:29:13", const "not found")
+
+  bb4:
+    StorageLive(_7)
+    _7 = copy ((_5 as Some).0)
+    StorageLive(_8)
+    _8 = call builtin println@(i32)(copy _7 @guaranteed)
+    StorageDead(_8)
+    StorageDead(_7)
+    StorageDead(_5)
+    StorageLive(_9)
+    _9 = const 10_i32
+    StorageLive(_10)
+    _10 = call @half(copy _9 @guaranteed)
+    _11 = discriminant(_10)
+    switchInt(copy _11) -> [0: bb6, otherwise: bb5]
+
+  bb5:
+    StorageLive(_12)
+    _12 = call builtin interp@(string, i32)(const "no half of " @guaranteed, copy _9 @guaranteed)
+    trap RE2029(const "./tests/ir/slir/enums/test_slir_expect.sushi:31:13", copy _12)
+
+  bb6:
+    StorageLive(_13)
+    _13 = copy ((_10 as Ok).0)
+    StorageLive(_14)
+    _14 = call builtin println@(i32)(copy _13 @guaranteed)
+    StorageDead(_14)
+    StorageDead(_13)
+    StorageDead(_10)
+    StorageLive(_15)
+    _15 = const 3_i32
+    StorageLive(_16)
+    _16 = call @half(copy _15 @guaranteed)
+    _17 = discriminant(_16)
+    switchInt(copy _17) -> [0: bb8, otherwise: bb7]
+
+  bb7:
+    StorageLive(_18)
+    _18 = call builtin interp@(string, i32)(const "no half of " @guaranteed, copy _15 @guaranteed)
+    trap RE2029(const "./tests/ir/slir/enums/test_slir_expect.sushi:33:19", copy _18)
+
+  bb8:
+    StorageLive(_19)
+    _19 = copy ((_16 as Ok).0)
+    StorageDead(_16)
+    StorageLive(_20)
+    _20 = call builtin println@(i32)(copy _19 @guaranteed)
+    StorageDead(_20)
+    _0 = const 0_i32
+    StorageDead(_19)
+    StorageDead(_15)
+    StorageDead(_9)
+    StorageDead(_1)
+    return
+}

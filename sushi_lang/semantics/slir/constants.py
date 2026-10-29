@@ -8,13 +8,13 @@ lowering reads the row and decides no value.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, Optional, TypeAlias
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.const_eval import ScalarConstant
+from sushi_lang.semantics.const_eval import ConstantValue, ScalarConstant
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.type_predicates import is_float_type
-from sushi_lang.semantics.typesys import BuiltinType, Type
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.typeck import TypeckResults
@@ -50,9 +50,10 @@ class Str:
 
 @dataclass(frozen=True, slots=True)
 class Aggregate:
-    """A constant array, struct or enum variant."""
+    """A constant array, struct or enum variant. `variant` names the variant of an enum."""
     ty: Type
     parts: tuple[Constant, ...]
+    variant: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +89,21 @@ def of_literal(lit: e.Lit, typeck: TypeckResults) -> Constant:
     if ty is None:
         er.raise_internal_error("CE0000", span=lit.loc, detail="a literal with no type reached SLIR")
     return Float(value.value, ty)
+
+
+def of_value(value: ConstantValue) -> Optional[Constant]:
+    """The constant of a value that typecheck wrote: a scalar, or an enum variant whose
+    payload values are made by the same rule. None for a struct or an array value, also in
+    a payload (A5, A6)."""
+    if isinstance(value, ScalarConstant):
+        return of_scalar(value)
+    if not isinstance(value.semantic_type, EnumType) or value.variant is None:
+        return None
+    parts = [of_value(part) for part in value.elements]
+    if any(part is None for part in parts):
+        return None
+    return Aggregate(value.semantic_type, tuple(part for part in parts if part is not None),
+                     value.variant)
 
 
 def of_scalar(value: ScalarConstant) -> Constant:

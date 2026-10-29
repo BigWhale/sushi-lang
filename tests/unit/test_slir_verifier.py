@@ -26,7 +26,8 @@ from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLoca
 from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
 from sushi_lang.semantics.slir.verify import DeclaredParams, declared_params, verify_function
 from sushi_lang.semantics.typesys import (
-    BorrowMode, BuiltinType, DynamicArrayType, StructType, Type, UnknownType,
+    BorrowMode, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo, StructType, Type,
+    UnknownType,
 )
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 
@@ -701,4 +702,94 @@ def test_a_switch_with_a_case_that_its_operand_cannot_hold_or_holds_twice_is_ref
 
 def test_the_trap_after_the_last_arm_of_a_match_names_that_arm_and_passes():
     trap = tm.Trap("RE2023", (p.Const(k.text("0x80..=0xff")),), SPAN)
+    _passes(_function([BLANK], _block(0, trap)))
+
+
+# -- a switch on a tag and an enum value ------------------------------------------------
+
+SHAPE = EnumType(name="Shape", variants=(
+    EnumVariantInfo(name="Circle", associated_types=(I32,)),
+    EnumVariantInfo(name="Rect", associated_types=(I32, I32)),
+    EnumVariantInfo(name="Dot", associated_types=())))
+
+
+def _tag_switch(cases: tuple[int, ...], span: Span = SPAN) -> SlirFunction:
+    """`_2 = discriminant(_1)`, then a switch on `_2` over the parameter `_1: Shape`."""
+    switch = tm.SwitchInt(_copy(2), tuple((case, BlockId(1)) for case in cases), None, span)
+    return _function([BLANK, SHAPE, I32], _block(0, switch, _set(2, r.Discriminant(_local(1)))),
+                     _block(1, _ret(), _set(0, r.Use(p.Const(k.Blank())))),
+                     params=((1, GUARANTEED),))
+
+
+def test_a_switch_on_the_tags_of_an_enum_passes():
+    _passes(_tag_switch((0, 1, 2)))
+
+
+@pytest.mark.parametrize("cases", [(3,), (-1,), (0, 7)], ids=str)
+def test_a_switch_on_a_tag_with_a_case_that_names_no_variant_is_refused(cases: tuple[int, ...]):
+    _refused(_tag_switch(cases, BAD), "a switch on a tag")
+
+
+def test_a_switch_on_a_local_that_another_block_writes_is_an_integer_switch():
+    """The tag rule reads the `Discriminant` of the block of the switch alone."""
+    switch = tm.SwitchInt(_copy(2), ((7, BlockId(2)),), BlockId(2), SPAN)
+    _passes(_function([BLANK, SHAPE, I32],
+                      _block(0, _goto(1), _set(2, r.Discriminant(_local(1)))),
+                      _block(1, switch),
+                      _block(2, _ret(), _set(0, r.Use(p.Const(k.Blank())))),
+                      params=((1, GUARANTEED),)))
+
+
+def test_a_discriminant_of_a_value_that_is_no_enum_is_refused():
+    _refused(_function([BLANK, I32, I32], _block(0, _ret(), _set(2, r.Discriminant(_local(1)), BAD),
+                                                 _set(0, r.Use(p.Const(k.Blank())))),
+                       params=((1, GUARANTEED),)), "an enum value")
+
+
+def _variant(parts: tuple[p.Operand, ...], variant: str = "Rect", ty: Type = SHAPE,
+             span: Span = SPAN) -> SlirFunction:
+    value = r.Aggregate(r.AggVariant(ty, variant), parts)
+    return _function([BLANK, ty], _block(0, _ret(), _live(1), _set(1, value, span), _dead(1),
+                                         _set(0, r.Use(p.Const(k.Blank())))))
+
+
+def test_a_variant_with_one_part_for_each_value_of_its_payload_passes():
+    _passes(_variant((p.Const(k.Int(3, I32)), p.Const(k.Int(4, I32)))))
+    _passes(_variant((), "Dot"))
+
+
+@pytest.mark.parametrize("parts, variant, ty", [
+    ((p.Const(k.Int(3, I32)),), "Rect", SHAPE),        # one part of two
+    ((p.Const(k.Int(3, I32)),), "Dot", SHAPE),          # a part of no payload
+    ((), "Gone", SHAPE),                                # no such variant
+    ((), "Rect", PAIR),                                 # no enum
+], ids=["count", "no payload", "variant", "no enum"])
+def test_a_variant_that_its_enum_does_not_declare_is_refused(
+        parts: tuple[p.Operand, ...], variant: str, ty: Type):
+    _refused(_variant(parts, variant, ty, BAD), "an enum value")
+
+
+def _constant(value: k.Constant, span: Span = SPAN) -> SlirFunction:
+    return _function([BLANK, SHAPE], _block(0, _ret(), _live(1),
+                                            _set(1, r.Use(p.Const(value)), span), _dead(1),
+                                            _set(0, r.Use(p.Const(k.Blank())))))
+
+
+def test_a_constant_variant_with_its_payload_passes():
+    _passes(_constant(k.Aggregate(SHAPE, (k.Int(5, I32),), "Circle")))
+    _passes(_constant(k.Aggregate(SHAPE, (), "Dot")))
+
+
+@pytest.mark.parametrize("value", [
+    k.Aggregate(SHAPE, (), "Circle"),
+    k.Aggregate(SHAPE, (k.Int(5, I32),), "Gone"),
+    k.Aggregate(PAIR, (), "Circle"),
+], ids=["count", "variant", "no enum"])
+def test_a_constant_variant_that_its_enum_does_not_declare_is_refused(value: k.Constant):
+    _refused(_constant(value, BAD), "an enum value")
+
+
+def test_an_expect_trap_with_the_position_and_the_message_passes():
+    trap = tm.Trap("RE2029", (p.Const(k.text("f.sushi:3:5")), p.Const(k.text("no value"))),
+                   SPAN)
     _passes(_function([BLANK], _block(0, trap)))

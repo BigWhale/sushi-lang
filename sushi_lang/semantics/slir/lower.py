@@ -12,10 +12,9 @@ checks a body that the lowering finished, and `SlirProgram` keeps it for the emi
 (`backend/slir/`).
 
 The lowering handles the parameters, a `let`, a rebind, a call statement, a `return`, an
-`if`, a `match` on an integer or a string, a `while` with its `break` and `continue`, an
-`assert`, over literals, names of constants, locals, the operators, `and` and `or` as
-control flow, the construction of an enum variant, a call of a free function, `print`,
-`println`, an interpolation and a `??`.
+`if`, a `match`, a `while` with its `break` and `continue`, an `assert`, over literals, names
+of constants, locals, the operators, `and` and `or` as control flow, the construction of an
+enum variant, a call, an interpolation, a `??` and `expect`.
 The operand of a value is the answer of `borrow` and the shape of the value alone (ir.md
 7.9): a `move` row gives `Move`; an `adopt` row gives `Copy` of a place, a constant for a
 literal or a name of a constant, and `Move` of the temporary of a new value. A value with
@@ -39,7 +38,7 @@ a `reject` row, `borrowed rebind` for a rebind of a borrowed parameter that owns
 try` for a `??` over an owning wrapper that the body only reads, `conversion` also for a
 `??` that calls a declared conversion, `library function` for a callee whose declaring unit
 the typecheck row does not name, `bloom` for a bloom argument, `aggregate constant` for a
-name of a struct, an enum or an array constant, and `ConstRef out of range` for a name of a
+name of a struct or an array constant, and `ConstRef out of range` for a name of a
 constant whose value its type cannot hold. The symbol, the unit and the return type of the
 function are facts of its declaration (ir.md 6.4). The unit is the declaring unit; a
 function that has none (a lifted lambda, the instance of a template of a binary library)
@@ -52,8 +51,7 @@ from typing import TYPE_CHECKING, Callable, Optional, TypeAlias
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
-from sushi_lang.internals.report import Span
-from sushi_lang.semantics.const_eval import AggregateConstant
+from sushi_lang.internals.report import Span, display_filename
 from sushi_lang.semantics.drop_set import drop_type_names
 from sushi_lang.semantics.integer_width import fits_integer_type
 from sushi_lang.semantics.method_effects import receiver_convention
@@ -118,7 +116,8 @@ class SlirStage:
         drops = drop_type_names(tables.perk_impls)
         try:
             function = lower_function(decl, self.shir.tables_of(body), decls=self.shir.decls,
-                                      name=name, unit=self.unit, tables=tables, drops=drops)
+                                      name=name, unit=self.unit, tables=tables, drops=drops,
+                                      label=display_filename(filename or "<input>"))
         except StageStop as stop:
             stop.filename = filename
             self.stops.slir_stopped(stop)
@@ -174,8 +173,10 @@ class _Learned:
 
 
 def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name: str,
-                   unit: str, tables: SymbolTables, drops: frozenset[str]) -> SlirFunction:
+                   unit: str, tables: SymbolTables, drops: frozenset[str],
+                   label: str) -> SlirFunction:
     """The `SlirFunction` of one body that `borrow` finished, from the body and its tables.
+    `label` names the file of the body in the position of a trap.
 
     Raises `StageStop` at the first construct that the lowering does not handle yet.
     """
@@ -188,7 +189,7 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     shir_locals = {local.id: local for local in body.locals}
     learned = _Learned()
     while True:
-        lowering = _Lowering(answers, decls, drops, shir_locals, learned)
+        lowering = _Lowering(answers, decls, drops, shir_locals, learned, label)
         lowering.new_local(ret, None, None)
         params = lowering.parameters()
         lowering.lower_block(ret)
@@ -210,6 +211,7 @@ class _Lowering:
     drops: frozenset[str]
     shir_locals: dict[ShirLocalId, ShirLocal]
     learned: _Learned
+    label: str
     locals: list[SlirLocal] = field(default_factory=list)
     ids: dict[ShirLocalId, LocalId] = field(default_factory=dict)
     shir_of: dict[LocalId, ShirLocalId] = field(default_factory=dict)
@@ -436,17 +438,17 @@ class _Lowering:
         return p.Move(p.Local(temp)) if row is Ownership.ADOPT else p.Copy(p.Local(temp))
 
     def constant(self, ref: e.ConstRef) -> k.Constant:
-        """The value of the constant that `ref` names, from its typecheck row. A struct, an
-        enum or an array value has no constant kind yet (A4, A5, A6). An integer that its
-        type cannot hold stops (`ConstRef out of range`): the constant evaluator does not
-        wrap a bit pattern, and it gives a value to an initializer with a range error."""
+        """The value of the constant that `ref` names, from its typecheck row. A struct or an
+        array value has no constant kind yet (A5, A6). An integer that its type cannot hold
+        stops (`ConstRef out of range`): the constant evaluator does not wrap a bit pattern,
+        and it gives a value to an initializer with a range error."""
         value = self.typeck.value_of(ref.shir_id)
-        if isinstance(value, AggregateConstant):
-            raise StageStop(STAGE, "aggregate constant", ref.loc)
         if value is None:
             er.raise_internal_error("CE0000", span=ref.loc,
                                     detail="a constant with no value reached SLIR")
-        constant = k.of_scalar(value)
+        constant = k.of_value(value)
+        if constant is None:
+            raise StageStop(STAGE, "aggregate constant", ref.loc)
         if isinstance(constant, k.Int) and not fits_integer_type(constant.value, constant.ty):
             dispatch.stop(STAGE, ref, state="out of range")
         return constant
@@ -481,6 +483,8 @@ class _Lowering:
         if resolved is None:
             er.raise_internal_error("CE0000", span=node.loc,
                                     detail="a call with no callee reached SLIR")
+        if isinstance(resolved.callee, Builtin) and ctl.lowers_as_assert(resolved.callee.method):
+            return ctl.expect(self, node, resolved.callee)
         callee = self.callee(node, resolved)
         receiver = ((self.operand(resolved.callee.recv),
                      _receiver_convention(resolved.callee, node.loc)),) \

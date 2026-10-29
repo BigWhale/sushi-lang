@@ -112,14 +112,21 @@ def _builtin(callee: st.Builtin) -> str:
     return f"builtin {show(callee.method)}{types}"
 
 
-def _variant(kind: r.AggVariant) -> str:
-    return f"{generic_base_of(kind.ty) or _type(kind.ty)}::{kind.variant}"
+def _variant(ty: Type, variant: str, parts: Sequence[object]) -> str:
+    head = f"{generic_base_of(ty) or _type(ty)}::{variant}"
+    return f"{head}({_each(parts)})" if parts else head
+
+
+def _constant_aggregate(c: k.Aggregate) -> str:
+    if c.variant is not None:
+        return _variant(c.ty, c.variant, c.parts)
+    return f"{_type(c.ty)}({_each(c.parts)})"
 
 
 def _aggregate(agg: r.Aggregate) -> str:
+    if isinstance(agg.kind, r.AggVariant):
+        return _variant(agg.kind.ty, agg.kind.variant, agg.parts)
     head = show(agg.kind)
-    if isinstance(agg.kind, r.AggVariant) and not agg.parts:
-        return head
     opening, closing = ("[", "]") if isinstance(agg.kind, r.AggArray) else ("(", ")")
     return f"{head}{opening}{_each(agg.parts)}{closing}"
 
@@ -151,12 +158,12 @@ PRINTERS: dict[type, Render] = {
     k.Bool: lambda c: "true" if c.value else "false",
     k.Blank: lambda _c: "~",
     k.Str: lambda c: quoted(c.value.decode("utf-8", "surrogatepass")),
-    k.Aggregate: lambda c: f"{_type(c.ty)}({_each(c.parts)})",
+    k.Aggregate: _constant_aggregate,
     k.FnRef: lambda c: f"fn {c.symbol}",
     # the kinds of an aggregate, as the head of its text (ir.md 8.7)
     r.AggStruct: lambda kind: _type(kind.ty),
     r.AggTuple: lambda _kind: "",
-    r.AggVariant: _variant,
+    r.AggVariant: lambda kind: _variant(kind.ty, kind.variant, ()),
     r.AggArray: lambda _kind: "",
     r.AggClosure: lambda _kind: "closure",
     r.AggIterator: lambda _kind: "iterator",
