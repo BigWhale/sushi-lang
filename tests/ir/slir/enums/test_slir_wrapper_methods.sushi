@@ -1,0 +1,65 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "true false 42 7\ntrue false 5 -1\nfalse true -2\nnone\nodd 5\ntok 4 tok 4\nfallback 2\ntok 6\nbad -1\nbad -3\ntrue true false\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_wrapper_methods.slir
+#
+# The methods of `Result` and `Maybe` that read their receiver: `is_ok`, `is_err`,
+# `is_some`, `is_none`, `realise` and `err` (ir.md 8.3, 8.6). The receiver and the argument
+# are `Guaranteed` operands, so a named wrapper stays usable after a call, and the emitter
+# copies an owning payload, an owning default and an owning error out. A temporary receiver
+# and a temporary default are dropped after the call. The comparison with a variant reads
+# the derived `Eq` of the wrapper.
+
+error Odd:
+    Value(i32)
+
+error TokenError:
+    Bad(string)
+
+fn half(i32 n) i32 | Odd:
+    if (n % 2 == 1):
+        return Result.Err(Odd.Value(n))
+    return Result.Ok(n / 2)
+
+fn tokenize(i32 n) string | TokenError:
+    if (n < 0):
+        return Result.Err(TokenError.Bad("bad {n}"))
+    return Result.Ok("tok {n}")
+
+fn find(i32 n) Maybe@(i32):
+    if (n > 0):
+        return Maybe.Some(n)
+    return Maybe.None
+
+fn reason(Maybe@(TokenError) e) string:
+    match e:
+        Maybe.Some(TokenError.Bad(_)) -> return "bad"
+        Maybe.None -> return "none"
+
+fn main() i32:
+    let Maybe@(i32) m = Maybe.Some(42)
+    println("{m.is_some()} {m.is_none()} {m.realise(0)} {find(7).realise(-1)}")
+    let Result@(i32, Odd) r = half(10)
+    println("{r.is_ok()} {r.is_err()} {r.realise(-1)} {half(3).realise(-1)}")
+    let Result@(i32, Odd) bad = half(5)
+    println("{bad.is_ok()} {bad.is_err()} {find(0).realise(-2)}")
+    if (r.err().is_none()):
+        println("none")
+    match bad.err():
+        Maybe.Some(Odd.Value(n)) -> println("odd {n}")
+        Maybe.None -> println("even")
+    let Result@(string, TokenError) tok = tokenize(4)
+    let string first = tok.realise("fallback")
+    println("{first} {tok.realise('again')}")
+    println(tokenize(-2).realise("fallback {2}"))
+    let string fresh = tokenize(6).realise("fallback {6}")
+    println(fresh)
+    let Result@(string, TokenError) failed = tokenize(-1)
+    let Maybe@(TokenError) kept = failed.err()
+    println("{reason(kept)} {failed.realise('-1')}")
+    println("{reason(tokenize(-3).err())} {tokenize(-3).realise('-3')}")
+    let i32 count = 0
+    while (find(count).is_none()):
+        count := count + 1
+    println("{m == Maybe.Some(42)} {find(0) == Maybe.None} {r != Result.Ok(5)}")
+    return 0

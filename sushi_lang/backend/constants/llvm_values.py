@@ -20,8 +20,6 @@ ZERO_I32 = ir.Constant(ir.IntType(INT32_BIT_WIDTH), 0)
 ONE_I32 = ir.Constant(ir.IntType(INT32_BIT_WIDTH), 1)
 TWO_I32 = ir.Constant(ir.IntType(INT32_BIT_WIDTH), 2)
 
-ONE_I64 = ir.Constant(ir.IntType(INT64_BIT_WIDTH), 1)
-
 
 def make_i8_const(value: int) -> ir.Constant:
     """Create an i8 constant."""

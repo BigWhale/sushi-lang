@@ -1,6 +1,6 @@
 """Built-in extension methods for Maybe<T> generic enum type."""
 
-from typing import Any, Optional, TYPE_CHECKING, cast
+from typing import Any, Optional, Sequence, TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -14,26 +14,22 @@ from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
 
 def emit_builtin_maybe_method(
     codegen: Any,
-    call: MethodCall | DotCall,
+    method: str,
     maybe_value: ir.Value,
     maybe_type: EnumType,
-    to_i1: bool
+    args: Sequence[ir.Value],
 ) -> ir.Value:
-    """Emit LLVM code for Maybe<T> built-in methods."""
+    """A method of `Maybe@(T)` that reads its receiver, over the values of its operands
+    (docs/design/ir.md 8.6). `expect` lowers as an assert and is no call."""
     from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check, emit_enum_realise
 
-    if call.method == "is_some":
-        return codegen.utils.bool_answer(
-            emit_enum_tag_check(codegen, maybe_value, 0, "is_some"), to_i1)
-    elif call.method == "is_none":
-        return codegen.utils.bool_answer(
-            emit_enum_tag_check(codegen, maybe_value, 1, "is_none"), to_i1)
-    elif call.method == "realise":
-        return emit_enum_realise(codegen, call, maybe_value, maybe_type, "Some")
-    elif call.method == "expect":
-        return _emit_maybe_expect(codegen, call, maybe_value, maybe_type)
-    else:
-        raise_internal_error("CE0094", method=call.method)
+    if method == "is_some":
+        return codegen.utils.as_i8(emit_enum_tag_check(codegen, maybe_value, 0, "is_some"))
+    if method == "is_none":
+        return codegen.utils.as_i8(emit_enum_tag_check(codegen, maybe_value, 1, "is_none"))
+    if method == "realise":
+        return emit_enum_realise(codegen, maybe_value, maybe_type, "Some", args)
+    raise_internal_error("CE0094", method=method)
 
 
 def emit_maybe_signature_method(
@@ -106,19 +102,6 @@ def _emit_maybe_or_err(
                           result_slot)
 
     return builder.load(result_slot, name="or_err_value")
-
-
-def _emit_maybe_expect(
-    codegen: Any,
-    call: MethodCall | DotCall,
-    maybe_value: ir.Value,
-    maybe_type: EnumType
-) -> ir.Value:
-    """Emit `maybe.expect(message)` -- Some payload, or "ERROR: msg" to stderr and exit(1)."""
-    from sushi_lang.backend.generics.enum_methods_base import emit_enum_expect
-    return emit_enum_expect(codegen, call, maybe_value, maybe_type,
-                            success_variant_name="Some", label="maybe",
-                            missing_variant_code="CE0092", assoc_count_code="CE0093")
 
 
 def ensure_maybe_type_exists(codegen: 'LLVMCodegen', value_type: Type) -> Optional[EnumType]:

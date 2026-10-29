@@ -11,8 +11,8 @@ ShirBody maybe
   params : [(_0 "has": bool, Guaranteed)]
   locals : []
   block  :
-    If(LocalRef(_0), then: [Return(EnumInit(@Maybe, "Some", [Lit(7)]))])
-    Return(EnumInit(@Maybe, "None", []))
+    If(LocalRef(_0), then: [Return(adopt EnumInit(@Maybe, "Some", [adopt Lit(7)]))])
+    Return(adopt EnumInit(@Maybe, "None", []))
 
 ShirBody keep
   params : [(_0 "s": string, Owned)]
@@ -24,10 +24,10 @@ ShirBody main
   params : []
   locals : [_0 "s": string]
   block  :
-    ExprStmt(Call(Intrinsic("println"), [(Call(Dotted(Call(Named(GlobalRef(@half)), [Lit(8)]), "realise"), [Lit(0)]), Guaranteed)]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@half)), [Lit(3)]), "realise"), [Lit(0)])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@maybe)), [Lit(true)]), "realise"), [Lit(0)])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@maybe)), [Lit(false)]), "realise"), [Lit(0)])]))
-    Assign(LocalRef(_0), Lit("Mostly Harmless"), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@keep)), [(LocalRef(_0), Owned)]), "realise"), [Lit("none")])]))
-    Return(Lit(0))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@half), [(Lit(8), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@half), [(Lit(3), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@maybe), [(Lit(true), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@maybe), [(Lit(false), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    Assign(LocalRef(_0), adopt Lit("Mostly Harmless"), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@keep), [(adopt LocalRef(_0), Owned)]), "realise"), [(Lit("none"), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

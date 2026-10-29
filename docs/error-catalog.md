@@ -534,16 +534,6 @@ Maybe.Some variant has incorrect number of associated types.
 
 Maybe@(T) method not implemented.
 
-### CE0095 {#ce0095}
-
-**Error** · internal
-
-**Message:** `expect() expects 1 argument, got {got}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Maybe.expect() method called with incorrect arguments.
-
 ### CE0100 {#ce0100}
 
 **Error** · internal

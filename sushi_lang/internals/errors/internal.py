@@ -361,9 +361,9 @@ _add(ErrorMessage("CE0094", Severity.ERROR,
     "unknown Maybe@(T) method: {method}",
     Category.INTERNAL, "Maybe@(T) method not implemented."))
 
-_add(ErrorMessage("CE0095", Severity.ERROR,
-    "expect() expects 1 argument, got {got}",
-    Category.INTERNAL, "Maybe.expect() method called with incorrect arguments."))
+# CE0095 ("expect() expects 1 argument") is retired. The emitter of `expect` raised it;
+# SLIR lowering now lowers `expect` as an assert, and no emitter of `expect` is left. The
+# number is not reused.
 
 # Intrinsic/Builtin Operations (CE0096-CE0098)
 # CE0096 ("invalid intrinsic operation") is retired. Only the payload count check of the
