@@ -53,7 +53,9 @@ rules of an enum value and of a switch on a tag). Amended on 2026-10-29 by group
 8.5 (the backend turns a constant `Aggregate` of a variant into an `ir.Constant` through the
 one converter that the global of a `const` uses too) and the emitter paragraph of 8.2 (one
 check of a variant against the semantic types of its payload, for the rvalue and for the
-constant).
+constant). Amended on 2026-10-29 by group A4 (emit): the emitter paragraph of 8.2 (the
+`result` and `maybe` families have a row of `METHOD_FAMILIES`; every operand of such a call is
+`Guaranteed`, so the family copies an owning value that it answers).
 
 ## The decisions, in one place
 
@@ -1807,8 +1809,15 @@ the print emitter. The print of a value that prints by its `Display` form still 
 A `Builtin` call of a `BuiltinMethod` goes to one row of `METHOD_FAMILIES`
 (`backend/slir/methods.py`), by the family of the method. The receiver is the first
 operand, and every operand is evaluated before the family emits. The family keeps its
-emitters and gives them the operand values (Q7). The primitive family and the `string`
-family have a row. A family with no row stops.
+emitters and gives them the operand values (Q7). The primitive family, the `string`
+family, the `result` family and the `maybe` family have a row. A family with no row stops.
+Each operand of a call of the `result` or the `maybe` family is `Guaranteed` (8.3); any
+other convention is an internal error. So the family copies the value that it answers when
+that value owns heap (`copy_out`): `realise` copies the payload on the success path and the
+default on the other path, and `err` copies the error into the `Some`. Each copy is made on
+its own path only, because on the other path the payload field holds the bytes of the other
+variant. The caller keeps the receiver and the default, and drops a temporary of either
+after the call (8.10).
 
 While the migration is in progress, a SLIR shape that the emitter does not handle yet
 stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
