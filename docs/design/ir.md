@@ -45,7 +45,11 @@ match on an enum or a tuple, and the type row of a binder), and 7.3 again (the a
 borrow): 8.3 (the receiver of a built-in method: each family is in one set of a total
 partition, and the `result` and `maybe` families give a per-method answer), 7.9 and 8.6
 (the `borrow` pass and SLIR lowering read that answer), and 7.9 again (the bare binders of
-an enum match in `borrow`).
+an enum match in `borrow`). Amended on 2026-10-29 by group A4 (SLIR): 8.5 (a constant
+`Aggregate` of an enum names its variant), 8.6 (`expect` is no call), 8.8 (the trap RE2029 of
+`expect`), 8.9 (the lowering of a `Match` on an enum: one switch on the tag, or a chain of
+tests in source order, and the binders of each path; the lowering of `expect`), and 8.13 (the
+rules of an enum value and of a switch on a tag).
 
 ## The decisions, in one place
 
@@ -1908,7 +1912,8 @@ Constant = Int(value: int, ty: Type)
          | Bool(value: bool)
          | Blank                                  # `~`
          | Str(bytes: bytes)                      # a literal; owns no heap
-         | Aggregate(ty: Type, parts: [Constant]) # a const array, struct or enum variant
+         | Aggregate(ty: Type, parts: [Constant], variant: str | None)
+                                                  # a const array, struct or enum variant
          | FnRef(symbol: str)
 ```
 
@@ -1935,8 +1940,11 @@ makes the `Constant` of that value. A string constant is a `Str`: a literal, whi
 heap, as a literal-bound string. A `move` row on a `ConstRef` does not reach SLIR: `borrow`
 refuses it with CE2436. A `Const` argument of an `InGuaranteed` parameter (`show(peek STEP)`)
 has no place: the emitter stores the value in a slot of the entry block and passes the
-address of the slot. A struct, an enum or an
-array value stops the lowering (`aggregate constant`). The constant evaluator does not wrap
+address of the slot. An enum value is an `Aggregate` of its
+enum type that names its variant (`variant`), with one part for each value of the payload, in
+order; a payload value is made by the same rule. The printer writes it as the construction of
+the variant: `Sign::Plus`, `Shape::Circle(5_i32)`. A struct or an array value, also as a
+payload value, stops the lowering (`aggregate constant`). The constant evaluator does not wrap
 a literal that spells bits (`const i8 B = 0xFF` holds 255), and it gives a value to an
 initializer with a range error. A value that its type cannot hold stops the lowering
 (`ConstRef out of range`), so lowering decides no value and the verifier rule holds.
@@ -1995,7 +2003,9 @@ partition (`receiver_convention`, 8.3). A family with no answer stops in `typech
 `borrow` first, so its call in lowering is the internal error CE0000, never a `Guaranteed`
 receiver by default. The printer writes the call as
 `builtin string.len(copy _1 @guaranteed)`. A method that answers a `string` writes it into a
-fresh owning local like any other call, and the drop placement drops it (8.10).
+fresh owning local like any other call, and the drop placement drops it (8.10). The method
+`expect` of a `Result` or a `Maybe` is the one exception: it lowers to no call, as an
+`assert` (8.9).
 
 ### 8.7 Rvalues
 
@@ -2054,6 +2064,13 @@ and `assertion failed at f.sushi:3:5` for a bare `assert`. A value that the comp
 such as the position, is a constant operand: the text of RE2026 holds no `{name}` slot,
 because the backend would put the file name in a printf format string.
 
+The trap of `expect` is [RE2029](../error-catalog.md#re2029), and its text is
+`expect failed at %.*s: %.*s`. The first operand is the position of the call, a `Str`
+constant (`file:line:col`, with the file named as for an `assert`). The second operand is the
+message, which the failing block evaluates (7.4). The AST backend printed `ERROR: ` and the
+message, with no code and no position; the trap prints its code and the position, as the
+trap of an `assert` does. The exit code stays 1.
+
 The trap after the last arm of a `match` is [RE2023](../error-catalog.md#re2023), and its
 text is `no match arm matched the value (expected %.*s)`. Its one operand is the source text
 of that arm, a `Str` constant, as a diagnostic quotes it (7.8). The typecheck pass refuses a
@@ -2067,10 +2084,10 @@ backstop of the checker, as on the AST backend.
 | `If(c, t, e)` | `SwitchInt(c, [(0, else_bb)], otherwise: then_bb)`; with no `else`, the zero edge goes to the join, or to a block of its own that goes to the join when the condition has a local (see below). The blocks are made in the order `then`, `else` or the zero block, join; with no `else` and no condition local, the join is the zero target. With an `else`, the join is made after the two arms, and no join is made when no block reaches it |
 | `Binary(and/or)` | **two blocks.** Short-circuit is control flow, never an rvalue. The left operand goes into the place that takes the value; a `SwitchInt` on it goes to the join (`and` on a zero, `or` on any other value) or to the right block, which writes the same place and goes to the join. The temporaries of the right operand die in its block |
 | `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` that calls a declared conversion is a stop of the lowering for now (`slir, conversion`) |
-| `Match` on an enum | `Discriminant` + `SwitchInt`; one block per arm; payload through `Downcast` + `Field` |
+| `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field` |
 | `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |
 | `Match` on a string | a chain of tests in source order (see below): each a `Call` of the intrinsic `eq` (8.6) into a `bool` local, and a `SwitchInt` on it |
-| `Match` on a tuple, or with `Or` arms on an enum | a chain of tests in source order, each a `Call` to the value equality and a `SwitchInt` on its bool |
+| `Match` on a tuple | a chain of tests in source order, each a `Call` to the value equality and a `SwitchInt` on its bool |
 | `Loop`, kind `While` | header block, `SwitchInt`, body, `Goto` header. The blocks are made in the order header, the blocks of the condition (an `and` or an `or` in it), body, the zero block (when the condition has a local, see below), exit |
 | `Break`, `Continue` | the drops of each scope of the loop body that it leaves (8.10, rule 2), then `Goto` the exit or the header |
 | `Loop`, kind `CountedRange` | counter local, header, compare, body, step, `Goto` header |
@@ -2087,6 +2104,7 @@ backstop of the checker, as on the AST backend.
 | `Index` write (`arr[i] := v`) | the same bounds check; the target slot is a consuming position |
 | `Slice` | range compare, `SwitchInt`, `Trap("RE2028")` on the failing edge, then `Slice`; never unchecked |
 | `Assert` | `SwitchInt(c, [(0, fail_bb)], otherwise: next_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2026", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state of the locals before the failing block. The blocks are made in the order fail, next. A condition local ends at the top of the two blocks, as for an `If` |
+| `expect(msg)` on a `Result` or a `Maybe` | the receiver into a place (a constant into a temporary), `Discriminant` into a local, and `SwitchInt(tag, [(success tag, next_bb)], otherwise: fail_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2029", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state before the failing block, and reads the payload through `Downcast` + `Field`: a `Copy` of a plain payload and a `Clone` of an owning one, because the receiver is a read (8.3); a new value as the receiver is a temporary that its statement drops. The blocks are made in the order fail, next |
 | `Destructure` | one `Field` place per target: `Move` from an owned value, a view from a borrow. For `Place` targets: the value into a temp first, then each place from left to right, a rebind of each (rule 6 of 8.10) |
 | `Take` | `Move` of the field; the other owning fields of the receiver get `Drop`, and `drop()` does not run (`borrow-model.md` §10c) |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
@@ -2103,21 +2121,37 @@ that goes to the exit, which a `Break` reaches too. Only a local that its own bl
 and that the terminator of that block alone reads gets no storage marker: the local of a
 `Discriminant`, and the `bool` local of a test of a `match`.
 
-A `Match` on an integer or a string evaluates its scrutinee in the scope of the match
-statement. A place is read with `Copy` in each test. A new value, and a scrutinee that the
-match takes (`consumes`), go into a temporary of the statement: each test reads the
-temporary, and the statement drops it at its end, or at the exit of an arm (a `return`, a
-`break`, a `continue`). In a chain, a failed test goes to the test of the next alternative
-of its arm, else to the first test of the next arm; after the last arm it goes to the trap
-RE2023 (8.8). A `_` arm, and an arm with a `_` alternative, has no test, and it is the last
-arm (CE2041, CE2118). Each arm body is a scope of its own, and each arm starts from the state
-of the locals after the scrutinee. The arms that reach their end meet at the join, as the
-blocks of an `If` do. The first test is in the block of the scrutinee. The blocks are made
-in source order: for each arm of a chain, the blocks of its tests after the first, the block
-of its body, then the block where its last test fails (the first test of the next arm, or
-the trap); the blocks inside the body of an arm come after these. With one switch, the arm
-blocks come in source order. The join is made after the arms, and no join is made when no
-arm reaches it.
+A `Match` evaluates its scrutinee in the scope of the match statement. A place is read with
+`Copy` in each test. A new value, and a scrutinee that the match takes (`consumes`), go into a
+temporary of the statement: each test reads the temporary, and the statement drops it at its
+end, or at the exit of an arm (a `return`, a `break`, a `continue`). A constant of an enum
+goes into a temporary too, because a `Discriminant` reads a place.
+
+The pattern of an arm gives one or more PATHS. A path is the list of the tests of the
+pattern, depth first and from left to right, and the binders that it writes, each with its
+place. An `Or`, at any depth, gives one path for each alternative. The test of a variant is a
+`Discriminant` of its place into a local and a `SwitchInt` on that local with one case, the
+tag of the variant; the tests of its items follow, each at the place
+`Field(Downcast(place, variant), index)`. The test of a literal or of a range is the test
+above, on a `Copy` of its place, at the type of that place. A binder and `_` test nothing.
+In a chain, a failed test goes to the first test of the next path of its arm, else to the
+first test of the next arm; after the last arm it goes to the trap RE2023 (8.8). An arm with
+a path of no test (`_`, or an arm with a `_` alternative) has no test, and it is the last arm
+(CE2041, CE2118).
+
+The binders of an arm are locals of the scope of its body. Each one gets `StorageLive` and
+the `Copy` of its place: a binder is bare and its payload is plain, because `borrow` stops
+on any other binder (7.9). With one path, the block of the body writes the binders first.
+With two or more paths that write a binder, each path ends in a block of its own that writes
+the binders of that path and goes to the body. Each arm body is a scope of its own, and each
+arm starts from the state of the locals after the scrutinee. The arms that reach their end
+meet at the join, as the blocks of an `If` do. The first test is in the block of the
+scrutinee. The blocks are made in source order: for each arm of a chain, the blocks of its
+tests after the first, the blocks of its paths that write binders, the block of its body,
+then the block where its last test fails (the first test of the next arm, or the trap); the
+blocks inside the body of an arm come after these. With one switch, for each arm in source
+order, the blocks of its paths that write binders, then the block of the arm. The join is
+made after the arms, and no join is made when no arm reaches it.
 
 Four SHIR nodes vanish at this boundary: `Try`, `Interp`, `Destructure` and `Take`. They
 were kept in SHIR only so that `typecheck` and `borrow` could report against the source
@@ -2350,6 +2384,11 @@ Runs after lowering, before the backend. It checks:
 - no `Binary` carries `and` or `or` (8.9)
 - a switch on an integer: the operand of a `SwitchInt` is an integer or a `bool`, and each
   case value is in the range of its type, with no value two times
+- a switch on a tag: when the operand of a `SwitchInt` is the local that a `Discriminant` of
+  its own block writes, each case value is the tag of a variant of that enum
+- an enum value: a `Discriminant` reads a place of an enum type, and an `Aggregate` of a
+  variant, an rvalue or a constant, names a variant of its enum type and gives one part for
+  each value of its payload
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
