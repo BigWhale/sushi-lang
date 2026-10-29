@@ -79,8 +79,10 @@ def test_an_empty_container_has_no_value_and_does_not_stop(monkeypatch) -> None:
     assert answers.value_of(ret.shir_id) is None
 
 
-def test_an_initializer_with_a_value_writes_its_row(monkeypatch) -> None:
+def test_an_initializer_with_a_value_does_not_stop_and_writes_no_row(monkeypatch) -> None:
+    """No stage reads a value row of an initializer: the backend makes the global from the
+    constant evaluator (docs/design/ir.md 7.3, 8.2)."""
     ret, answers, validator = _initializer(monkeypatch, value=ScalarConstant(6, I32),
                                            empty=False)
     statements._check_initializer(validator, ret)  # type: ignore[arg-type]
-    assert answers.value_of(ret.shir_id) == ScalarConstant(6, I32)
+    assert answers.value_of(ret.shir_id) is None

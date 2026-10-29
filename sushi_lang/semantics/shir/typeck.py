@@ -13,9 +13,9 @@ A row for a position is keyed by the node and the position: a call argument and 
 the parts, a capture of a lambda by the captured local, and a target of a `Destructure` by
 its path, the index of the target and then its index in each `Nested` level.
 
-The value row holds a value of the constant evaluator, one shape for three keys: the value
-that an integer literal holds at its type (ir.md 8.5, ruling R-W), the value of the constant
-that a `ConstRef` names, and the value of an initializer, keyed by the `Return` of its body.
+The value row holds a value of the constant evaluator, one shape for two keys: the value
+that an integer literal holds at its type (ir.md 8.5, ruling R-W), and the value of the
+constant that a `ConstRef` names. An initializer has no value row (ir.md 7.3).
 """
 from __future__ import annotations
 
@@ -143,8 +143,7 @@ class TypeckResults(SideTable):
         return self._element_types.get((node, target))
 
     def value_of(self, node: ShirId) -> Optional[ConstantValue]:
-        """The value of an integer literal, of a `ConstRef`, or of the `Return` of an
-        initializer body."""
+        """The value of an integer literal or of a `ConstRef`."""
         return self._values.get(node)
 
     # -- the write API: the typecheck pass alone calls it --------------------------------

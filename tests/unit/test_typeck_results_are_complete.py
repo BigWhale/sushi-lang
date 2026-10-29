@@ -179,17 +179,17 @@ def _initializer_answers(body: ShirBody, ref: e.ConstRef, one: e.Lit, ret: s.Ret
         table.record_value(ref.shir_id, ScalarConstant(42, BuiltinType.I32))
     if skip != "literal":
         table.record_value(one.shir_id, ScalarConstant(1, BuiltinType.I32))
-    if skip != "initializer":
-        table.record_value(ret.shir_id, ScalarConstant(43, BuiltinType.I32))
     return table
 
 
 def test_a_full_initializer_table_has_no_gap() -> None:
+    """The table of an initializer body holds no value row of its `Return`: no stage reads
+    one (ir.md 7.3)."""
     body, decls, ref, one, ret = _initializer()
     table = _initializer_answers(body, ref, one, ret)
     assert missing_answers(body, table) == []
     check_answers(body, table, decls)
-    assert table.value_of(ret.shir_id) == ScalarConstant(43, BuiltinType.I32)
+    assert table.value_of(ret.shir_id) is None
 
 
 @pytest.mark.parametrize("skip", ["constant", "literal"])
@@ -198,10 +198,3 @@ def test_a_constant_and_an_integer_literal_need_a_value(skip: str) -> None:
     node = ref if skip == "constant" else one
     gaps = missing_answers(body, _initializer_answers(body, ref, one, ret, skip=skip))
     assert gaps == [MissingAnswer("value", type(node).__name__, node.loc)]
-
-
-def test_an_initializer_needs_no_value_row() -> None:
-    """A `var` of an empty container has no value: its global is zero (ir.md 7.3)."""
-    body, _decls, ref, one, ret = _initializer()
-    assert missing_answers(body, _initializer_answers(body, ref, one, ret,
-                                                      skip="initializer")) == []

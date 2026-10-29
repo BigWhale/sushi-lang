@@ -163,8 +163,9 @@ def check_return(validator: TypeValidator, node: s.Return) -> None:
 
 def _check_initializer(validator: TypeValidator, node: s.Return) -> None:
     """The `Return` of an initializer body: the value at the declared type, as a `let`
-    checks it, and the value row of the `Return` (docs/design/ir.md 7.3). An initializer
-    that fits and has no value, and is no empty container, stops the walk."""
+    checks it. An initializer that fits and has no value, and is no empty container, stops
+    the walk. The pass writes no value row: the backend makes the global from the constant
+    evaluator (docs/design/ir.md 7.3, 8.2)."""
     facts = validator.initializer
     if facts is None:
         er.raise_internal_error("CE0000", span=node.loc,
@@ -177,7 +178,6 @@ def _check_initializer(validator: TypeValidator, node: s.Return) -> None:
         return
     if facts.value is None:
         visit.stop_with_no_value(node)
-    validator.body_answers().record_value(node.shir_id, facts.value)
 
 
 def _check_channel_return(validator: TypeValidator, value: e.ShirExpr, channel: Type) -> None:
