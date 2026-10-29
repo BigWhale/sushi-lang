@@ -48,6 +48,16 @@ class StringOperations:
 
         return struct_complete
 
+    def string_literal_constant(self, string_value: str) -> ir.Constant:
+        """The fat pointer of a string literal as a constant, over the deduplicated global
+        of its bytes. It owns no heap (owned=0)."""
+        global_str = self.codegen.string_manager.get_or_create_raw(string_value)
+        zero = ir.Constant(self.codegen.i32, 0)
+        size = len(string_value.encode('utf-8'))
+        return ir.Constant.literal_struct([global_str.gep([zero, zero]),
+                                           ir.Constant(self.codegen.i32, size),
+                                           ir.Constant(self.codegen.i8, 0)])
+
     def emit_string_comparison(self, op: str, lhs: ir.Value, rhs: ir.Value) -> ir.Value:
         """Generate string comparison for fat pointer structs."""
         if self.codegen.builder is None:

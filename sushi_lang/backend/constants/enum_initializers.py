@@ -1,9 +1,12 @@
 """An enum constant as its `{i32 tag, [K x i64] data}` initializer (#551).
 
-A payload-free variant is a tag over the zero value. A payload-carrying one is the tag
-plus its constant payloads, written into the data words at the offsets
-`TypeSizing.payload_field_offsets` gives -- the ONE layout authority, so a constant and
-a run-time construction cannot disagree about where a field sits. The bytes are
+The one converter of an enum constant: the SLIR emitter and the declaration round of a
+global both call `enum_initializer` with a SLIR `Constant` (the round makes one from the
+evaluator value through `constants.of_value`). A payload-free variant is a tag over the
+zero value. A payload-carrying one is the tag plus its constant payloads, written into the
+data words at the offsets `TypeSizing.payload_field_offsets` gives -- the ONE layout
+authority, so a constant and a run-time construction cannot disagree about where a field
+sits. Each value is written at the declared type of its field. The bytes are
 little-endian, which is every platform Sushi ships on (x86_64, arm64).
 
 A pointer -- the data word of a string's fat pointer -- cannot be spelled as bytes: it
@@ -13,16 +16,14 @@ exactly one word, and that word becomes a `ptrtoint` constant expression instead
 from __future__ import annotations
 
 import struct
-from typing import Callable, Dict, List, Optional, Sequence, TYPE_CHECKING
+from typing import Callable, Dict, List, Optional, Sequence
 
 from llvmlite import ir
 
+from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.typesys import (
     BuiltinType, StructType, EnumType, ArrayType, Type)
 from sushi_lang.backend.constants.sizes import ENUM_TAG_SIZE_BYTES
-
-if TYPE_CHECKING:
-    from sushi_lang.semantics.const_eval import AggregateConstant, ConstantValue
 
 # `(text, data_name)` -> the `{i8* data, i32 size, i8 owned}` constant, with its backing
 # bytes placed in the module. None where no module is at hand, and a string payload then
@@ -60,27 +61,29 @@ class _PayloadBytes:
         return words
 
 
-def enum_initializer(value: 'AggregateConstant', types,
+def enum_initializer(value: k.Aggregate, types,
                      finish_string: Optional[StringFinisher],
                      data_name: str) -> Optional[ir.Constant]:
-    """The `{i32 tag, [K x i64] data}` constant for an evaluated enum value.
+    """The `{i32 tag, [K x i64] data}` constant for an enum variant constant.
 
     None when a payload needs a module and none was given (a string, with no finisher),
     which is the same answer `const_value_to_llvm` gives a bare string.
     """
-    enum_type = value.semantic_type
+    enum_type = value.ty
+    if not isinstance(enum_type, EnumType) or value.variant is None:
+        return None
     llvm_enum = types.get_enum_type(enum_type)
     data_type = llvm_enum.elements[1]
 
     tag = enum_type.get_variant_index(value.variant)
-    if tag is None:
+    variant = enum_type.get_variant(value.variant)
+    if tag is None or variant is None:
         return None
-    if not value.elements:
+    if not value.parts:
         data = ir.Constant(data_type, None)
     else:
         blob = _PayloadBytes(data_type.count * WORD_BYTES)
-        variant = enum_type.get_variant(value.variant)
-        if not _write_fields(blob, 0, variant.associated_types, value.elements, types,
+        if not _write_fields(blob, 0, variant.associated_types, value.parts, types,
                              finish_string, data_name):
             return None
         data = ir.Constant(data_type, blob.words(types.i64))
@@ -88,74 +91,75 @@ def enum_initializer(value: 'AggregateConstant', types,
 
 
 def _write_fields(blob: _PayloadBytes, base: int, field_types: Sequence[Type],
-                  values: Sequence['ConstantValue'], types,
+                  values: Sequence[k.Constant], types,
                   finish_string: Optional[StringFinisher], data_name: str) -> bool:
     """Write a naturally aligned field sequence -- a payload, or a struct's fields."""
+    if len(values) != len(field_types):
+        return False
     offsets = types.payload_field_offsets(list(field_types))
-    for index, (field_value, offset) in enumerate(zip(values, offsets, strict=True)):
-        if not _write(blob, base + offset, field_value, types, finish_string,
+    for index, (field_type, field_value, offset) in enumerate(
+            zip(field_types, values, offsets, strict=True)):
+        if not _write(blob, base + offset, field_type, field_value, types, finish_string,
                       f"{data_name}.{index}"):
             return False
     return True
 
 
-def _write(blob: _PayloadBytes, offset: int, value: 'ConstantValue', types,
+def _write(blob: _PayloadBytes, offset: int, ty: Type, value: k.Constant, types,
            finish_string: Optional[StringFinisher], data_name: str) -> bool:
-    """Write one constant value at `offset`; False when it needs a module and has none."""
-    from sushi_lang.semantics.const_eval import AggregateConstant
-
-    ty = value.semantic_type
-
-    if isinstance(value, AggregateConstant):
+    """Write one constant value of the type `ty` at `offset`; False when it needs a module
+    and has none, or when the value is no value of `ty`."""
+    if isinstance(value, k.Aggregate):
         if isinstance(ty, StructType):
             return _write_fields(blob, offset,
                                  [field_type for _name, field_type in ty.fields],
-                                 value.elements, types, finish_string, data_name)
+                                 value.parts, types, finish_string, data_name)
 
-        if isinstance(ty, EnumType):
+        if isinstance(ty, EnumType) and value.variant is not None:
             tag = ty.get_variant_index(value.variant)
-            if tag is None:
+            variant = ty.get_variant(value.variant)
+            if tag is None or variant is None:
                 return False
             blob.bytes[offset:offset + 4] = tag.to_bytes(4, "little")
-            if not value.elements:
+            if not value.parts:
                 return True
-            variant = ty.get_variant(value.variant)
             return _write_fields(blob, offset + ENUM_TAG_SIZE_BYTES,
-                                 variant.associated_types, value.elements, types,
+                                 variant.associated_types, value.parts, types,
                                  finish_string, data_name)
 
         if isinstance(ty, ArrayType):
             stride = types.get_type_size_bytes(ty.base_type)
-            for index, element in enumerate(value.elements):
-                if not _write(blob, offset + index * stride, element, types,
+            for index, element in enumerate(value.parts):
+                if not _write(blob, offset + index * stride, ty.base_type, element, types,
                               finish_string, f"{data_name}.{index}"):
                     return False
             return True
 
         return False
 
-    if ty == BuiltinType.BOOL:
+    if isinstance(value, k.Bool) and ty == BuiltinType.BOOL:
         blob.bytes[offset] = 1 if value.value else 0
         return True
 
-    if ty in _INTEGER_TYPES:
+    if isinstance(value, k.Int) and ty in _INTEGER_TYPES:
         size = types.get_type_size_bytes(ty)
         blob.bytes[offset:offset + size] = (value.value % (1 << (8 * size))).to_bytes(
             size, "little")
         return True
 
-    if ty == BuiltinType.F32:
+    if isinstance(value, k.Float) and ty == BuiltinType.F32:
         blob.bytes[offset:offset + 4] = struct.pack("<f", value.value)
         return True
 
-    if ty == BuiltinType.F64:
+    if isinstance(value, k.Float) and ty == BuiltinType.F64:
         blob.bytes[offset:offset + 8] = struct.pack("<d", value.value)
         return True
 
-    if ty == BuiltinType.STRING:
+    if isinstance(value, k.Str) and ty == BuiltinType.STRING:
         if finish_string is None:
             return False
-        data_pointer, size, owned = finish_string(value.value, data_name).constant
+        text = value.value.decode("utf-8", "surrogatepass")
+        data_pointer, size, owned = finish_string(text, data_name).constant
         blob.pointers[offset // WORD_BYTES] = data_pointer
         size_at = offset + STRING_SIZE_OFFSET
         blob.bytes[size_at:size_at + 4] = size.constant.to_bytes(4, "little")

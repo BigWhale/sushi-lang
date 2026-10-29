@@ -8,15 +8,19 @@ not an integer, a float, a `bool` or an enum comparison stops with the class of 
 An enum is `{i32 tag, [K x i64] data}`. The tag, a variant and the address of a payload
 field come from the one layout authority (`TypeSizing.payload_field_offsets`, read through
 `enum_utils` and the enum emitter), at the semantic type of the place, never from a layout
-match.
+match. An `Aggregate` of a variant, as an rvalue and as a constant, goes through one check
+of the variant against the semantic types of its payload. Then the rvalue goes through the
+enum emitter, and the constant through the one converter of an enum constant
+(`enum_initializer`), which the global of a `const` reads too.
 """
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 from llvmlite import ir
 
 from sushi_lang.backend import enum_utils
+from sushi_lang.backend.constants.enum_initializers import enum_initializer
 from sushi_lang.backend.expressions.casts import emit_value_cast
 from sushi_lang.backend.expressions.enums import emit_enum_variant_value
 from sushi_lang.backend.expressions.literals import emit_int_constant
@@ -30,7 +34,7 @@ from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.type_predicates import is_numeric_type
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, EnumVariantInfo, Type
 
 
 def place_address(state: FunctionState, place: p.Place) -> ir.Value:
@@ -60,18 +64,41 @@ def _payload_types(state: FunctionState, base: p.Place, variant: str,
                    index: int) -> tuple[Type, ...]:
     """The payload types of the variant `variant` of the enum in `base`, which has a
     payload field `index`."""
-    info = enum_of(state, base).get_variant(variant)
-    if info is None or not 0 <= index < len(info.associated_types):
-        state.fault(f"the enum of {base} has no field {index} in a variant '{variant}'")
+    _, info = _variant(state, type_of_place(state, base), variant)
+    if not 0 <= index < len(info.associated_types):
+        state.fault(f"the variant '{variant}' of {base} has no field {index}")
     return tuple(info.associated_types)
 
 
-def enum_of(state: FunctionState, place: p.Place) -> EnumType:
-    """The semantic type of a place that holds an enum."""
-    ty = type_of_place(state, place)
+def _variant(state: FunctionState, ty: Type, variant: str) -> tuple[EnumType, EnumVariantInfo]:
+    """The enum `ty` and its variant `variant`."""
     if not isinstance(ty, EnumType):
-        state.fault(f"{place} holds {ty}, not an enum")
-    return ty
+        state.fault(f"the variant '{variant}' of {ty}, which is no enum")
+    info = ty.get_variant(variant)
+    if info is None:
+        state.fault(f"{ty} has no variant '{variant}'")
+    return ty, info
+
+
+def _payload(state: FunctionState, ty: Type, variant: str,
+             parts: Sequence[Type]) -> tuple[EnumType, EnumVariantInfo]:
+    """The one check of an `Aggregate` of a variant: `variant` is a variant of the enum
+    `ty`, and the semantic type of each part is the type of its payload field."""
+    enum_type, info = _variant(state, ty, variant)
+    if tuple(parts) != tuple(info.associated_types):
+        state.fault(f"the payload of {enum_type}.{variant} is "
+                    f"({', '.join(map(str, parts))}), not "
+                    f"({', '.join(map(str, info.associated_types))})")
+    return enum_type, info
+
+
+def _check_constant(state: FunctionState, constant: k.Constant) -> None:
+    """The one check for each variant in a constant, at every depth."""
+    if isinstance(constant, k.Aggregate) and constant.variant is not None:
+        _payload(state, constant.ty, constant.variant,
+                 [type_of_constant(state, part) for part in constant.parts])
+        for part in constant.parts:
+            _check_constant(state, part)
 
 
 def operand_value(state: FunctionState, operand: p.Operand) -> ir.Value:
@@ -94,7 +121,8 @@ def type_of_operand(state: FunctionState, operand: p.Operand) -> Type:
 
 def constant_value(state: FunctionState, constant: k.Constant) -> ir.Value:
     """An LLVM value of a constant. A string literal comes from the string constant seam,
-    and it owns no heap (its owned flag is 0)."""
+    and it owns no heap (its owned flag is 0). A variant goes through the one converter of an
+    enum constant."""
     codegen = state.codegen
     if isinstance(constant, k.Int):
         return emit_int_constant(codegen, constant.ty, constant.value)
@@ -104,7 +132,19 @@ def constant_value(state: FunctionState, constant: k.Constant) -> ir.Value:
     if isinstance(constant, k.Str):
         return codegen.runtime.strings.emit_string_literal(
             constant.value.decode("utf-8", "surrogatepass"))
+    if isinstance(constant, k.Aggregate) and constant.variant is not None:
+        _check_constant(state, constant)
+        value = enum_initializer(constant, codegen.types, _literal_constant(state), "")
+        if value is None:
+            state.fault(f"the constant {constant} has no LLVM constant")
+        return value
     state.stop(constant)
+
+
+def _literal_constant(state: FunctionState) -> Callable[[str, str], ir.Constant]:
+    """The string finisher of a constant payload: the constant fat pointer of a literal."""
+    strings = state.codegen.runtime.strings
+    return lambda text, _name: strings.string_literal_constant(text)
 
 
 def type_of_constant(state: FunctionState, constant: k.Constant) -> Type:
@@ -116,6 +156,8 @@ def type_of_constant(state: FunctionState, constant: k.Constant) -> Type:
         return BuiltinType.BLANK
     if isinstance(constant, k.Str):
         return BuiltinType.STRING
+    if isinstance(constant, k.Aggregate) and constant.variant is not None:
+        return constant.ty
     state.stop(constant)
 
 
@@ -202,29 +244,21 @@ def _scalar_type(state: FunctionState, rvalue: r.Rvalue, ty: Type) -> Type:
 
 
 def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
-    """An enum variant, through the enum emitter. The type of each payload operand must
-    agree with the variant. Any other kind of aggregate stops with its class."""
+    """An enum variant. Any other kind of aggregate stops with its class."""
     kind = rvalue.kind
     if not isinstance(kind, r.AggVariant):
         state.stop(kind)
-    if not isinstance(kind.ty, EnumType):
-        state.fault(f"the variant '{kind.variant}' of {kind.ty}, which is no enum")
-    info = kind.ty.get_variant(kind.variant)
-    if info is None or len(info.associated_types) != len(rvalue.parts):
-        state.fault(f"{kind.ty} has no variant '{kind.variant}' of {len(rvalue.parts)} "
-                    f"payload values")
-    ll_type = state.codegen.types.ll_type
-    for part, field_type in zip(rvalue.parts, info.associated_types, strict=True):
-        if ll_type(type_of_operand(state, part)) != ll_type(field_type):
-            state.fault(f"a payload of {kind.ty}.{kind.variant} is "
-                        f"{type_of_operand(state, part)}, not {field_type}")
+    enum_type, info = _payload(state, kind.ty, kind.variant,
+                               [type_of_operand(state, part) for part in rvalue.parts])
     values = [operand_value(state, part) for part in rvalue.parts]
-    return emit_enum_variant_value(state.codegen, kind.ty, kind.variant, values)
+    return emit_enum_variant_value(state.codegen, enum_type, info, values)
 
 
 def _discriminant(state: FunctionState, rvalue: r.Discriminant) -> ir.Value:
     """The tag of the enum in a place, as an `i32`."""
-    enum_of(state, rvalue.place)
+    ty = type_of_place(state, rvalue.place)
+    if not isinstance(ty, EnumType):
+        state.fault(f"{rvalue.place} holds {ty}, not an enum")
     value = state.builder.load(place_address(state, rvalue.place))
     return enum_utils.extract_enum_tag(state.codegen, value)
 

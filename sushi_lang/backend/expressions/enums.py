@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Sequence
 
 from llvmlite import ir
-from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend import enum_utils
 from sushi_lang.backend.memory.allocas import entry_alloca
 
@@ -15,20 +14,21 @@ if TYPE_CHECKING:
 def emit_enum_variant_value(
     codegen: 'LLVMCodegen',
     enum_type: 'EnumType',
-    variant_name: str,
+    variant: 'EnumVariantInfo',
     values: Sequence[ir.Value]
 ) -> ir.Value:
-    """An enum value of one variant, with each payload value packed at its offset.
+    """An enum value of the variant `variant` of `enum_type`, with each payload value
+    packed at its offset.
 
-    The payload values are evaluated already, and the enum takes each one as it is.
+    The caller checked the variant and the payload values against it. The payload values
+    are evaluated already, and the enum takes each one as it is.
     """
-    variant = _variant(enum_type, variant_name, len(values))
-    variant_index = enum_type.get_variant_index(variant_name)
+    variant_index = enum_type.get_variant_index(variant.name)
     llvm_enum_type = codegen.types.get_enum_type(enum_type)
 
     enum_value = enum_utils.construct_enum_variant(
         codegen, llvm_enum_type, variant_index,
-        data=None, name_prefix=f"{enum_type.name}_{variant_name}"
+        data=None, name_prefix=f"{enum_type.name}_{variant.name}"
     )
     if not values:
         return enum_value
@@ -44,32 +44,18 @@ def emit_enum_variant_value(
     temp_alloca = entry_alloca(codegen.builder, data_array_type, "enum_data_temp")
     data_ptr = codegen.builder.bitcast(temp_alloca, codegen.types.str_ptr, name="data_ptr")
 
-    # Pack each value at its offset from the ONE layout authority -- extraction,
-    # destroy, clone and hash all read the same offsets, so construct and extract
-    # cannot disagree (they used to derive offsets from two different size walks).
-    # Natural alignment throughout: the base is 8-aligned and the offset is naturally
-    # aligned (#300 phase 2), so the packed-layout `align=1` workaround (#145) is gone.
-    field_offsets = codegen.types.payload_field_offsets(variant.associated_types)
-    for i, (value, offset) in enumerate(zip(values, field_offsets, strict=True)):
-        arg_ptr_i8 = codegen.builder.gep(data_ptr, [ir.Constant(codegen.types.i32, offset)],
-                                         name=f"arg{i}_ptr")
-        arg_ptr_typed = codegen.builder.bitcast(arg_ptr_i8, ir.PointerType(value.type),
-                                                name=f"arg{i}_ptr_typed")
-        codegen.builder.store(value, arg_ptr_typed)
+    # Each value goes at its offset from the ONE layout authority, through the address
+    # helper that the payload reads use too, so construct and extract cannot disagree.
+    field_types = variant.associated_types
+    field_offsets = codegen.types.payload_field_offsets(field_types)
+    for i, (value, field_type, offset) in enumerate(
+            zip(values, field_types, field_offsets, strict=True)):
+        address = enum_utils.variant_field_address(codegen, data_ptr, field_type, offset,
+                                                   name=f"arg{i}")
+        codegen.builder.store(value, address)
 
     packed_data = codegen.builder.load(temp_alloca, name="packed_data")
     return enum_utils.set_enum_data(
         codegen, enum_value, packed_data,
-        name=f"{enum_type.name}_{variant_name}_data"
+        name=f"{enum_type.name}_{variant.name}_data"
     )
-
-
-def _variant(enum_type: 'EnumType', variant_name: str, count: int) -> 'EnumVariantInfo':
-    """The variant `variant_name` of `enum_type`, which takes `count` payload values."""
-    variant = enum_type.get_variant(variant_name)
-    if variant is None:
-        raise_internal_error("CE0034", variant=variant_name, enum=enum_type.name)
-    if count != len(variant.associated_types):
-        raise_internal_error("CE0096", operation=f"Variant {enum_type.name}.{variant_name} expects {len(variant.associated_types)} arguments, got {count}"
-        )
-    return variant

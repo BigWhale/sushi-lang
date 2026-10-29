@@ -109,9 +109,9 @@ _add(ErrorMessage("CE0032", Severity.ERROR,
     Category.INTERNAL, "Type mismatch: expected struct type but got different type."))
 
 # Enum Operations (CE0033-CE0040)
-_add(ErrorMessage("CE0034", Severity.ERROR,
-    "variant '{variant}' not found in enum '{enum}'",
-    Category.INTERNAL, "Enum variant lookup failed - semantic analysis should prevent this."))
+# CE0034 ("variant not found in enum") is retired. The enum packer raised it; the SLIR
+# emitter now checks a variant one time, before the packer, as an internal error of the
+# emitter. The number is not reused.
 
 _add(ErrorMessage("CE0035", Severity.ERROR,
     "enum '{enum}' missing required variant '{variant}'",
@@ -366,9 +366,9 @@ _add(ErrorMessage("CE0095", Severity.ERROR,
     Category.INTERNAL, "Maybe.expect() method called with incorrect arguments."))
 
 # Intrinsic/Builtin Operations (CE0096-CE0098)
-_add(ErrorMessage("CE0096", Severity.ERROR,
-    "invalid intrinsic operation: {operation}",
-    Category.INTERNAL, "Intrinsic operation not recognized."))
+# CE0096 ("invalid intrinsic operation") is retired. Only the payload count check of the
+# enum packer raised it, and the one variant check of the SLIR emitter replaces it. The
+# number is not reused.
 
 
 # Expression Type Validation (CE0099-CE0100)

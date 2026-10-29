@@ -214,16 +214,6 @@ Method not found for this type - semantic analysis should prevent this.
 
 Type mismatch: expected struct type but got different type.
 
-### CE0034 {#ce0034}
-
-**Error** · internal
-
-**Message:** `variant '{variant}' not found in enum '{enum}'`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Enum variant lookup failed - semantic analysis should prevent this.
-
 ### CE0035 {#ce0035}
 
 **Error** · internal
@@ -553,16 +543,6 @@ Maybe@(T) method not implemented.
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 Maybe.expect() method called with incorrect arguments.
-
-### CE0096 {#ce0096}
-
-**Error** · internal
-
-**Message:** `invalid intrinsic operation: {operation}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Intrinsic operation not recognized.
 
 ### CE0100 {#ce0100}
 

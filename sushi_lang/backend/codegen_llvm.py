@@ -636,7 +636,11 @@ class LLVMCodegen:
 
             if isinstance(value.semantic_type, EnumType):
                 from sushi_lang.backend.constants.enum_initializers import enum_initializer
-                return enum_initializer(value, self.types, self._constant_string_value,
+                from sushi_lang.semantics.slir.constants import Aggregate, of_value
+                constant = of_value(value)
+                if not isinstance(constant, Aggregate):
+                    return None
+                return enum_initializer(constant, self.types, self._constant_string_value,
                                         data_name)
 
             elements = [self._materialize_constant(element, f"{data_name}.{i}")

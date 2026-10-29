@@ -6,9 +6,12 @@ from types import SimpleNamespace
 from llvmlite import ir
 
 from sushi_lang.backend.enum_utils import unpack_all_variant_fields
+from sushi_lang.backend.constants.enum_initializers import enum_initializer
+from sushi_lang.backend.expressions.enums import emit_enum_variant_value
 from sushi_lang.backend.types.core import LLVMTypeSystem
 from sushi_lang.backend.types.core.sizing import TypeSizing, align_up
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
+from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.typesys import (
     BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo,
 )
@@ -123,3 +126,53 @@ def test_unpack_has_no_layout_of_its_own():
     field_types = (BuiltinType.I32, BuiltinType.I32, BuiltinType.I64)
     types.sizing.payload_field_offsets = lambda _ts: [8, 16, 24]
     assert _unpacked_offsets(types, field_types) == [8, 16, 24]
+
+
+def _packed_offsets(types: LLVMTypeSystem, field_types) -> list[int]:
+    """Run the real enum packer and read back the byte offset of each store."""
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=tuple(field_types)))
+    module = ir.Module()
+    fn = ir.Function(module, ir.FunctionType(ir.VoidType(), []), "f")
+    builder = ir.IRBuilder(fn.append_basic_block("entry"))
+    codegen = SimpleNamespace(types=types, builder=builder)
+    values = [ir.Constant(types.ll_type(ty), None) for ty in field_types]
+    emit_enum_variant_value(codegen, enum_type, enum_type.variants[0], values)
+    offsets = []
+    for instruction in fn.blocks[0].instructions:
+        if instruction.opname != "store" or instruction.operands[0] not in values:
+            continue
+        address = instruction.operands[1]
+        while getattr(address, "opname", "") == "bitcast":
+            address = address.operands[0]
+        offsets.append(address.indices[0].constant if address.opname == "getelementptr" else 0)
+    return offsets
+
+
+def test_pack_reads_the_authority():
+    """The enum packer stores each payload value at the offset payload_field_offsets gives."""
+    types = LLVMTypeSystem()
+    field_types = (BuiltinType.I8, BuiltinType.STRING, BuiltinType.I32, BuiltinType.F64)
+    assert _packed_offsets(types, field_types) == types.payload_field_offsets(field_types)
+
+
+def test_pack_has_no_layout_of_its_own():
+    """A changed authority moves every store: the packer keeps no second offset walk."""
+    types = LLVMTypeSystem()
+    field_types = (BuiltinType.I32, BuiltinType.I32, BuiltinType.I64)
+    types.sizing.payload_field_offsets = lambda _ts: [8, 16, 24]
+    assert _packed_offsets(types, field_types) == [8, 16, 24]
+
+
+def test_constant_has_no_layout_of_its_own():
+    """The one converter of an enum constant writes each payload value at the offset of
+    the authority: a changed authority moves the bytes."""
+    types = LLVMTypeSystem()
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(BuiltinType.I32,
+                                                                   BuiltinType.I32)))
+    constant = k.Aggregate(enum_type, (k.Int(5, BuiltinType.I32), k.Int(7, BuiltinType.I32)),
+                           "A")
+    natural = enum_initializer(constant, types, None, "")
+    assert [word.constant for word in natural.constant[1].constant] == [5 | 7 << 32]
+    types.sizing.payload_field_offsets = lambda _ts: [4, 0]
+    moved = enum_initializer(constant, types, None, "")
+    assert [word.constant for word in moved.constant[1].constant] == [7 | 5 << 32]

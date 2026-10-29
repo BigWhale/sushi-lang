@@ -81,7 +81,11 @@ def const_value_to_llvm(value: 'ConstantValue', types) -> Optional[ir.Constant]:
         if isinstance(value.semantic_type, EnumType):
             # No module here either, so a string payload answers None like a bare string.
             from sushi_lang.backend.constants.enum_initializers import enum_initializer
-            return enum_initializer(value, types, None, "")
+            from sushi_lang.semantics.slir.constants import Aggregate, of_value
+            constant = of_value(value)
+            if not isinstance(constant, Aggregate):
+                return None
+            return enum_initializer(constant, types, None, "")
         element_constants = [const_value_to_llvm(elem, types) for elem in value.elements]
         if any(c is None for c in element_constants):
             return None
