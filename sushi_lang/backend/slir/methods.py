@@ -6,7 +6,7 @@ the operands (ruling Q7). Every operand is evaluated before the family emits any
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Protocol, Sequence
+from typing import Any, Callable, Sequence
 
 from llvmlite import ir
 
@@ -52,12 +52,9 @@ def _string(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> 
 _MethodRow = Callable[[FunctionState, BuiltinMethod, st.Call], ir.Value]
 
 
-class _WrapperEmitter(Protocol):
-    """The emitter of the `result` or the `maybe` family: the codegen, the method name, the
-    value and the type of the receiver, and the values of the arguments."""
-
-    def __call__(self, codegen: Any, method: str, receiver: ir.Value,
-                 receiver_type: EnumType, args: Sequence[ir.Value], /) -> ir.Value: ...
+#: The emitter of the `result` or the `maybe` family: the codegen, the method name, the
+#: value and the type of the receiver, and the values of the arguments.
+_WrapperEmitter = Callable[[Any, str, ir.Value, EnumType, Sequence[ir.Value]], ir.Value]
 
 
 def _wrapper(emit: _WrapperEmitter) -> _MethodRow:
