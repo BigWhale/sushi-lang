@@ -821,7 +821,9 @@ between two error types, the `??` is [CE2511](../error-catalog.md#ce2511).
 **A struct construction.** A `StructInit` of a struct that is not generic is an instance
 of that struct, also behind an alias: the struct is the one that the namespace holds. Each
 field goes through the one argument check (`arguments.check_arguments`) at the type of its
-field, in the declaration order. A positional construction with a wrong count is
+field, in the declaration order. A struct is never variadic: a bloom argument (`xs...`)
+is [CE0120](../error-catalog.md#ce0120) at the argument, and the fields are then not checked,
+as on a method call. A positional construction with a wrong count is
 [CE2027](../error-catalog.md#ce2027) at `decl_loc`, and a field that does not fit is
 CE2028, or CE2083 in a named construction, at the field. A named construction with
 `names` is [CE2080](../error-catalog.md#ce2080) (a name that the struct does not
@@ -829,7 +831,8 @@ declare), else [CE2081](../error-catalog.md#ce2081) (a repeated name), else
 [CE2082](../error-catalog.md#ce2082) (a missing field), at `decl_loc`, and each field is
 then checked with no type of its position. A private struct of another unit behind an
 alias is [CE3005](../error-catalog.md#ce3005) at `decl_loc`, and its fields are not
-checked. A `StructInit` of a type name that is no struct (`Sign(1)`) is
+checked; a named one is then CE6104 at the construction, as the old pipeline reports it. A
+`StructInit` of a type name that is no struct (`Sign(1)`) is
 [CE2008](../error-catalog.md#ce2008) at `decl_loc`, and a named one (`Sign(x: 1)`) is
 [CE6104](../error-catalog.md#ce6104) at the construction too; a name whose function the
 `collect` pass refused ([CE1005](../error-catalog.md#ce1005)) gives no second error, and
@@ -1063,7 +1066,9 @@ another pass (CE2105, CE2007, CE2008), and the hole stops the walk of its body. 
 prints the member (`<hole: MemberAccess, error: CE2045 | ..., member: Sign.Nope>`). Ruled
 2026-10-28 (R20). The error hole of a bare call with written type arguments on a type name
 (`Pair@(i32, i32)(1, 2)`, the `Call` hole of CE6102) is [CE6102](../error-catalog.md#ce6102)
-at the hole: `typecheck` reports it (note 108). Each other hole of CE6102 is a `DotCall` or a
+at the hole: `typecheck` reports it (note 108). Its help names the construction as the
+source writes it (`let Pair@(i32, i32) v = Pair(1, 2)`), from the text of the hole. Each
+other hole of CE6102 is a `DotCall` or a
 `MethodCall` hole, which a later group types, and it stops the walk of its body. At
 the end of the analysis, an error hole whose code no diagnostic reported is an internal
 error, CE0155. An error of the construct around the hole can come first, and the hole
@@ -1120,7 +1125,7 @@ written name of each field. `typecheck` reports the fault (CE2080, CE2081, CE208
 
 `decl_loc` is where a diagnostic of the written type points: the written type name of a
 bare construction (`Vec`), and the whole construction behind an alias (`geo.Vec(1, 2)`),
-as the old pipeline points. Ruled 2026-11-03 (R25). `named` is true for every named
+as the old pipeline points. Ruled 2026-11-03 (R25, R29). `named` is true for every named
 construction, also when `names` is `None`: a field that does not fit is
 [CE2083](../error-catalog.md#ce2083) in a named construction and
 [CE2028](../error-catalog.md#ce2028) in a positional one, and `written_order` cannot tell
@@ -1128,11 +1133,14 @@ the two apart when the source writes the fields in the declaration order. Loweri
 both fields from the source; no pass fills them (S5).
 
 A bare call `S(...)` whose name the `scope` pass resolves to a function is a
-`StructInit` too when `S` is a struct and the unit declares no function `S`: the struct
-takes the call before a function of another unit (#1076). Lowering asks
-`DeclLookup.constructs_struct`, which reads `name_ladder.call_constructs_struct`, the one
-answer that the early passes also read. The unit's own function takes the call, and the
-call stays a `Call`.
+`StructInit` too when `S` is a struct, the unit declares no concrete function `S`, and no
+generic function `S` is in the scope of the unit, its own or an imported one: the struct
+takes the call only before a CONCRETE function of another unit (#1076). The rungs are the
+rungs of the old call ladder, in its order: a concrete function of the unit, then a
+generic function of the scope (`GenericFunctionTable.lookup`), then the struct. Lowering
+asks `DeclLookup.constructs_struct`, which reads the generic function table and
+`name_ladder.call_constructs_struct`, the answer that the early passes also read. Each
+other call stays a `Call`. Ruled 2026-11-03 (R30).
 
 `T.m(...)` and the bare `T.m` on a type name are an `EnumInit` when the enum declaration of
 `T` has the variant `m`; else `T.m(...)` is a `Static` call (#542). `decl_loc` is the span
