@@ -183,7 +183,7 @@ def check_struct_fields(validator: 'TypeValidator', node: e.StructInit,
                 visit.check_expr(validator, arg.value)
         return
     check_arguments(validator, display_type(struct),
-                    [_resolve_field_type(validator, ty) for _name, ty in struct.fields],
+                    [resolve_field_type(validator, ty) for _name, ty in struct.fields],
                     node.fields, node.decl_loc,
                     mismatch_code=er.ERR.CE2083 if node.named else er.ERR.CE2028,
                     arity_code=er.ERR.CE2027,
@@ -214,7 +214,7 @@ def reject_field_names(validator: 'TypeValidator', struct: Any, names: Sequence[
     return False
 
 
-def _resolve_field_type(validator: 'TypeValidator', field_type: Type) -> Type:
+def resolve_field_type(validator: 'TypeValidator', field_type: Type) -> Type:
     """The concrete type a field's DECLARED type names.
 
     `resolve_declared_type` answers for every kind but one: a written wrapper may name an

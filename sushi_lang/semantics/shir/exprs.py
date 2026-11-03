@@ -97,9 +97,13 @@ class GlobalRef(ExprNode):
 
 @dataclass(slots=True)
 class Field(ExprNode):
-    """A struct field, or a tuple element (`"0"`). The index is `typecheck`'s."""
+    """A struct field, or a tuple element (`"0"`). The index is `typecheck`'s.
+
+    `member_loc` is the span of `.name`, where a diagnostic of the member points.
+    """
     base: ShirExpr
     name: str
+    member_loc: Span
 
 
 @dataclass(slots=True)

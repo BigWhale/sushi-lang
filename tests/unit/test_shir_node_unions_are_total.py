@@ -44,14 +44,14 @@ _BASE_FIELDS = ("shir_id", "loc")
 #: `ret` and `err`, the written return type and error type, and `expr_body`, the written
 #: shape of its body; `StructInit` adds `written_order` (ruling R1), `names`, the
 #: written names of a named construction whose names are not the declared fields, `named`
-#: and `decl_loc` (ruling R25).
+#: and `decl_loc` (ruling R25). `Field` adds `member_loc`, the span of its member.
 EXPRESSION_FIELDS: dict[str, tuple[str, ...]] = {
     "Lit": ("value",),
     "LocalRef": ("local",),
     "ConstRef": ("const_id",),
     "StorageRef": ("decl",),
     "GlobalRef": ("decl",),
-    "Field": ("base", "name"),
+    "Field": ("base", "name", "member_loc"),
     "Index": ("base", "index", "unchecked"),
     "Slice": ("base", "start", "end", "inclusive"),
     "Call": ("target", "args"),

@@ -1,0 +1,13 @@
+unit test_err_typeck_tuple_mismatch
+
+ShirBody main
+  params : []
+  locals : [_0 "t": (i64, i32), _1 "u": (i32, (bool, string)), _2 "c": bool, _3 "w": (string, i32)]
+  block  :
+    Assign(LocalRef(_0), TupleInit([Lit(1), Lit(2)]), is_init: true)
+    Assign(LocalRef(_1), TupleInit([Lit(1), TupleInit([Lit(true), Lit("Mostly Harmless")])]), is_init: true)
+    Assign(LocalRef(_2), Field(Field(LocalRef(_1), "1"), "0"), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", Field(LocalRef(_0), "0"), " ", LocalRef(_2), " ", Field(Field(LocalRef(_1), "1"), "1"), ""]), Guaranteed)]))
+    Assign(LocalRef(_3), TupleInit([Lit(1), Lit(1)]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_3), "1"), Guaranteed)]))
+    Return(Lit(0))

@@ -84,6 +84,7 @@ tests/basic/unused_warnings/test_warn_unused_result_function.sushi
 tests/basic/unused_warnings/test_warn_unused_simple.sushi
 tests/basic/unused_warnings/test_warn_unused_vars.sushi
 tests/borrow/borrowed_return/test_err_br_lambda.sushi
+tests/borrow/borrowed_return/test_err_br_no_source.sushi
 tests/borrow/borrowed_return/test_err_br_nom_self.sushi
 tests/borrow/borrowed_return/test_err_br_perk_contract.sushi
 tests/borrow/borrowed_return/test_err_br_perk_implementation.sushi
@@ -192,6 +193,7 @@ tests/constants/scalar_folding/test_constants_simple.sushi
 tests/constants/string_constants/test_constants_string_debug.sushi
 tests/constants/string_constants/test_constants_string_order.sushi
 tests/constants/struct_constants/test_err_const_struct_calls_a_function.sushi
+tests/constants/struct_constants/test_err_const_struct_field_write.sushi
 tests/constants/struct_constants/test_err_const_struct_nested_function_call.sushi
 tests/constants/take/test_const_plain_copies_out.sushi
 tests/constants/take/test_err_const_move_let.sushi
@@ -299,6 +301,7 @@ tests/control_flow/while_loops/test_while_loops.sushi
 tests/control_flow/while_loops/test_while_result.sushi
 tests/diagnostics/arity_count/test_err_function_arity_of_one.sushi
 tests/diagnostics/batching/test_err_many_bad_literals.sushi
+tests/diagnostics/borrow_help/test_err_borrow_help_spells_a_member_chain.sushi
 tests/diagnostics/call_span/test_err_bare_call_span_starts_at_callee.sushi
 tests/diagnostics/call_span/test_err_propagation_in_main_span.sushi
 tests/diagnostics/channel_texts/test_err_realise_on_blank_channel.sushi
@@ -334,6 +337,8 @@ tests/diagnostics/hole_span_fields/test_err_hole_ptr_type_arg.sushi
 tests/diagnostics/interned_spelling/test_err_spelling_match_variant.sushi
 tests/diagnostics/interned_spelling/test_err_spelling_nested_variant.sushi
 tests/diagnostics/interned_spelling/test_err_spelling_perk_impl.sushi
+tests/diagnostics/member_access_span/test_err_no_field_in_hole_span.sushi
+tests/diagnostics/member_access_span/test_err_no_field_span.sushi
 tests/diagnostics/output_path/test_err_output_dir_missing_library.sushi
 tests/diagnostics/output_path/test_err_output_dir_missing_program.sushi
 tests/diagnostics/output_path/test_err_output_parent_is_a_file.sushi
@@ -449,6 +454,7 @@ tests/extensions/array_template_shadows_builtin/test_err_array_template_shadows_
 tests/extensions/array_template_shadows_builtin/test_err_array_template_shadows_len_no_call.sushi
 tests/extensions/array_template_shadows_builtin/test_err_array_template_shadows_push.sushi
 tests/extensions/array_template_shadows_builtin/test_err_array_template_shadows_two.sushi
+tests/extensions/channel_return/test_err_channel_bare_blank_return.sushi
 tests/extensions/channel_return/test_err_channel_bare_return.sushi
 tests/extensions/error_channel/test_err_bare_err_constructor.sushi
 tests/extensions/error_channel/test_err_bare_try.sushi
@@ -457,6 +463,7 @@ tests/extensions/extension_basics/test_err_extension_self_usage.sushi
 tests/extensions/extension_basics/test_err_extension_unknown_type.sushi
 tests/extensions/extension_basics/test_err_result_return_in_extension.sushi
 tests/extensions/extension_return_is_checked/test_err_issue212_extension_return_type_mismatch.sushi
+tests/extensions/extension_return_is_checked/test_err_issue212_perk_impl_return_type_mismatch.sushi
 tests/extensions/fall_off/test_err_channel_extension_reaches_its_end.sushi
 tests/extensions/fall_off/test_err_channel_extension_reaches_its_end_on_one_path.sushi
 tests/extensions/fall_off/test_err_perk_channel_method_reaches_its_end.sushi
@@ -644,6 +651,7 @@ tests/generics/checked_templates/constraint_methods/test_err_checked_two_homes.s
 tests/generics/checked_templates/contracts/test_err_checked_arith.sushi
 tests/generics/checked_templates/contracts/test_err_checked_cast_of_t.sushi
 tests/generics/checked_templates/contracts/test_err_checked_eq_no_constraint.sushi
+tests/generics/checked_templates/contracts/test_err_checked_field_of_t.sushi
 tests/generics/checked_templates/contracts/test_err_checked_hashmap_key.sushi
 tests/generics/checked_templates/contracts/test_err_checked_hole_no_display.sushi
 tests/generics/checked_templates/contracts/test_err_checked_ord_with_eq_only.sushi
@@ -664,6 +672,8 @@ tests/generics/checked_templates/packs/test_err_checked_pack_two_homes.sushi
 tests/generics/checked_templates/packs/test_err_pack_on_extension_method_is_no_ice.sushi
 tests/generics/checked_templates/packs/test_err_pack_on_extension_method_value_pack_is_no_ice.sushi
 tests/generics/checked_templates/packs/test_err_pack_on_static_method_is_no_ice.sushi
+tests/generics/checked_templates/perk_templates/test_err_checked_perk_called_twice_one_fault.sushi
+tests/generics/checked_templates/perk_templates/test_err_checked_perk_display_no_bound.sushi
 tests/generics/checked_templates/statement_rules/test_err_template_arr_missing_return.sushi
 tests/generics/checked_templates/statement_rules/test_err_template_called_twice_one_fault.sushi
 tests/generics/checked_templates/statement_rules/test_err_template_ext_dead_statement.sushi
@@ -891,6 +901,14 @@ tests/ir/typeck/enums/test_err_typeck_enum_channel_unknown_variant.sushi
 tests/ir/typeck/enums/test_err_typeck_enum_maybe_payload.sushi
 tests/ir/typeck/enums/test_err_typeck_enum_maybe_unknown_variant.sushi
 tests/ir/typeck/enums/test_err_typeck_enum_unknown_variant.sushi
+tests/ir/typeck/fields/test_err_typeck_field_method_name.sushi
+tests/ir/typeck/fields/test_err_typeck_field_of_alias_constant.sushi
+tests/ir/typeck/fields/test_err_typeck_field_of_maybe.sushi
+tests/ir/typeck/fields/test_err_typeck_field_read_type.sushi
+tests/ir/typeck/fields/test_err_typeck_field_unknown.sushi
+tests/ir/typeck/fields/test_err_typeck_field_write_constant.sushi
+tests/ir/typeck/fields/test_err_typeck_field_write_type.sushi
+tests/ir/typeck/fields/test_err_typeck_field_write_unknown.sushi
 tests/ir/typeck/literals/test_err_typeck_literal_context.sushi
 tests/ir/typeck/literals/test_err_typeck_literal_default.sushi
 tests/ir/typeck/match/test_err_typeck_match_arm_body.sushi
@@ -926,6 +944,7 @@ tests/ir/typeck/match_enums/test_err_typeck_match_enum_own.sushi
 tests/ir/typeck/match_enums/test_err_typeck_match_enum_poke_constant.sushi
 tests/ir/typeck/match_enums/test_err_typeck_match_enum_tuple.sushi
 tests/ir/typeck/match_enums/test_err_typeck_match_enum_unknown_variant.sushi
+tests/ir/typeck/match_enums/test_err_typeck_match_tuple_poke_constant.sushi
 tests/ir/typeck/methods/test_err_typeck_known_method_on_refused_let.sushi
 tests/ir/typeck/methods/test_err_typeck_method_on_refused_let.sushi
 tests/ir/typeck/methods/test_err_typeck_method_primitive_miscount.sushi
@@ -989,6 +1008,12 @@ tests/ir/typeck/structs/test_err_typeck_struct_not_a_struct.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_repeated_field.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_type_args.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_unknown_field.sushi
+tests/ir/typeck/tuples/test_err_typeck_tuple_borrow_part.sushi
+tests/ir/typeck/tuples/test_err_typeck_tuple_count.sushi
+tests/ir/typeck/tuples/test_err_typeck_tuple_mismatch.sushi
+tests/ir/typeck/tuples/test_err_typeck_tuple_part_range.sushi
+tests/ir/typeck/tuples/test_err_typeck_tuple_past_end.sushi
+tests/ir/typeck/tuples/test_err_typeck_tuple_poke_part_no_type.sushi
 tests/iterators/written_type/test_err_wt_alias_bare_name.sushi
 tests/iterators/written_type/test_err_wt_arity.sushi
 tests/iterators/written_type/test_err_wt_drop_item_modes_differ.sushi
@@ -1362,6 +1387,7 @@ tests/operators/ord_derived/test_err_bare_bool_order_stays.sushi
 tests/operators/ord_derived/test_err_ord_constraint_fn_struct.sushi
 tests/operators/overflow_in_nested_positions/test_err_overflow_in_interpolation_hole.sushi
 tests/operators/overflow_in_nested_positions/test_err_overflow_in_negated_hole.sushi
+tests/operators/overflow_in_nested_positions/test_err_overflow_in_tuple_element.sushi
 tests/operators/parenthesized_or/test_paren_or_chains_and_nests.sushi
 tests/operators/parenthesized_or/test_paren_or_keeps_both_operands.sushi
 tests/operators/parenthesized_or/test_paren_or_short_circuits.sushi
@@ -1394,6 +1420,7 @@ tests/perks/array_template/test_err_at_nested_target.sushi
 tests/perks/array_template/test_err_at_second_home.sushi
 tests/perks/array_template/test_err_at_then_concrete.sushi
 tests/perks/array_template/test_err_concrete_then_at.sushi
+tests/perks/channel_return/test_err_perk_channel_bare_return.sushi
 tests/perks/clone/test_err_clone_bound_on_struct_refuses_a_handle.sushi
 tests/perks/clone/test_err_clone_constraint_generic_drop_instance.sushi
 tests/perks/clone/test_err_clone_file.sushi
@@ -1517,6 +1544,7 @@ tests/references/nom_self/test_err_nom_argument_keeps_ce2405.sushi
 tests/references/nom_self/test_err_nom_self_after_the_first_position.sushi
 tests/references/nom_self/test_err_nom_self_on_a_plain_function.sushi
 tests/references/pattern_modes/test_err_pattern_own_nom.sushi
+tests/references/pattern_ref_place/test_err_pattern_poke_of_a_constant_place.sushi
 tests/references/poke_self_receiver/test_err_perk_self_mode_mismatch.sushi
 tests/references/poke_self_receiver/test_err_poke_self_not_first.sushi
 tests/references/poke_self_receiver/test_err_poke_self_plain_fn.sushi
@@ -1600,6 +1628,7 @@ tests/strings/slir_methods/test_string_method_poke_receiver.sushi
 tests/strings/slir_methods/test_string_method_search_family.sushi
 tests/strings/string_temporary_cleanup/test_run_issue295_print_frame_early_exit_leak.sushi
 tests/strings/to_str_on_string/test_to_str_of_literal_local.sushi
+tests/tuples/derived_contracts/test_err_tuple_compare_mixed.sushi
 tests/tuples/exhaustiveness/test_err_tuple_dead_arm_after_wild.sushi
 tests/tuples/exhaustiveness/test_err_tuple_dead_arm_duplicate.sushi
 tests/tuples/exhaustiveness/test_err_tuple_dead_arm_two_covers.sushi
@@ -1613,6 +1642,7 @@ tests/tuples/exhaustiveness/test_err_tuple_integer_no_wildcard_once.sushi
 tests/tuples/exhaustiveness/test_err_tuple_missing_in_payload.sushi
 tests/tuples/exhaustiveness/test_err_tuple_missing_integer.sushi
 tests/tuples/exhaustiveness/test_err_tuple_missing_literal_in_payload.sushi
+tests/tuples/exhaustiveness/test_err_tuple_missing_literal_scrutinee.sushi
 tests/tuples/exhaustiveness/test_err_tuple_missing_pair.sushi
 tests/tuples/exhaustiveness/test_err_tuple_missing_second_element.sushi
 tests/tuples/exhaustiveness/test_err_tuple_nested_enum_deep.sushi
@@ -1620,7 +1650,12 @@ tests/tuples/exhaustiveness/test_err_tuple_nested_enum_missing.sushi
 tests/tuples/exhaustiveness/test_err_tuple_plain_enum_names.sushi
 tests/tuples/exhaustiveness/test_err_tuple_wildcard_not_last_once.sushi
 tests/tuples/exhaustiveness/test_err_tuple_wildcard_not_last_tuple_once.sushi
+tests/tuples/match_patterns/test_err_tuple_pattern_arm_kind.sushi
+tests/tuples/match_patterns/test_err_tuple_pattern_count.sushi
+tests/tuples/match_patterns/test_err_tuple_pattern_enum_on_bool.sushi
 tests/tuples/match_patterns/test_err_tuple_pattern_literal_in_payload_on_string.sushi
+tests/tuples/match_patterns/test_err_tuple_pattern_literal_on_string.sushi
+tests/tuples/match_patterns/test_err_tuple_pattern_literal_out_of_range.sushi
 tests/tuples/match_patterns/test_err_tuple_pattern_not_a_tuple.sushi
 tests/tuples/match_patterns/test_err_tuple_pattern_poke_in_payload.sushi
 tests/tuples/match_patterns/test_err_tuple_pattern_struct_scrutinee.sushi
@@ -1631,6 +1666,7 @@ tests/tuples/refusals/test_err_tuple_expand.sushi
 tests/tuples/refusals/test_err_tuple_extension_target.sushi
 tests/tuples/refusals/test_err_tuple_ffi_signature.sushi
 tests/tuples/refusals/test_err_tuple_index_exponent.sushi
+tests/tuples/refusals/test_err_tuple_index_past_end.sushi
 tests/tuples/refusals/test_err_tuple_index_underscore.sushi
 tests/tuples/refusals/test_err_tuple_infinite_type.sushi
 tests/tuples/refusals/test_err_tuple_perk_target.sushi
@@ -1702,6 +1738,8 @@ tests/types/generic_error_channel/test_err_struct_error_in_the_long_form.sushi
 tests/types/generic_error_channel/test_err_wrapper_error_in_the_long_form.sushi
 tests/types/generic_error_channel/test_generic_enum_in_the_long_form.sushi
 tests/types/hash_held_values/test_err_hash_held_override_key_equality.sushi
+tests/types/keyword_member_name/test_err_extend_is_a_member_name.sushi
+tests/types/keyword_member_name/test_err_new_is_a_member_name.sushi
 tests/types/literal_typing/test_err_int_literal_overflow.sushi
 tests/types/literal_typing/test_err_int_literal_overflow_expr.sushi
 tests/types/literal_typing/test_err_lit_arg_out_of_range.sushi
@@ -1739,7 +1777,12 @@ tests/types/match_literals/test_match_literal_basics.sushi
 tests/types/match_literals/test_match_literal_widths.sushi
 tests/types/match_literals/test_match_string_basics.sushi
 tests/types/match_literals/test_match_string_bytes.sushi
+tests/types/member_read_enum/test_err_plain_enum_field_read.sushi
+tests/types/member_read_enum/test_err_result_field_read.sushi
 tests/types/member_read_enum/test_namespaced_variant_is_not_a_field_read.sushi
+tests/types/member_read_non_struct/test_err_nested_non_struct_field_read.sushi
+tests/types/member_read_non_struct/test_err_primitive_field_read.sushi
+tests/types/member_read_non_struct/test_err_string_method_read_as_a_field.sushi
 tests/types/numeric_widths/test_err_mixed_divide.sushi
 tests/types/numeric_widths/test_err_mixed_float_arithmetic.sushi
 tests/types/numeric_widths/test_err_mixed_float_comparison.sushi
@@ -1873,6 +1916,7 @@ tests/types/result/warnings/test_warn_unused_result.sushi
 tests/types/result_maybe/test_err_result_single_arg_annotation.sushi
 tests/types/result_maybe/test_result_types.sushi
 tests/types/structs/test_err_struct_duplicate_field.sushi
+tests/types/structs/test_err_struct_field_access.sushi
 tests/types/structs/test_err_struct_field_count.sushi
 tests/types/structs/test_err_struct_field_type.sushi
 tests/types/structs/test_err_struct_missing_field.sushi
@@ -1900,6 +1944,9 @@ tests/types/unary_literal_context/test_run_const_not_of_a_literal.sushi
 tests/types/unary_literal_context/test_run_not_of_a_literal_takes_the_declared_type.sushi
 tests/types/unary_literal_context/test_run_not_over_an_expression.sushi
 tests/types/unary_literal_context/test_run_not_types_from_its_sibling.sushi
+tests/types/unknown_field/test_err_method_read_as_a_field.sushi
+tests/types/unknown_field/test_err_unknown_field_assigned.sushi
+tests/types/unknown_field/test_err_unknown_field_read.sushi
 tests/units/contested_type/test_contested_control_enum.sushi
 tests/units/contested_type/test_err_contested_enum_uses.sushi
 tests/units/contested_type/test_err_contested_struct_uses.sushi

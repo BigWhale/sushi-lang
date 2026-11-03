@@ -76,7 +76,7 @@ CASES = [
     (e.Named(_global(3)), "Call(extern)"),
     (e.Named(_global(4)), "Call(stdlib)"),
     (e.Named(LOCAL), "Call(fn value)"),
-    (e.Named(_node(e.Field, LOCAL, "handler")), "Call(fn value)"),
+    (e.Named(_node(e.Field, LOCAL, "handler", SPAN)), "Call(fn value)"),
 ]
 
 

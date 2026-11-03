@@ -19,6 +19,7 @@ from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.passes.collect import ConstSig
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import BorrowMode
+from . import arms
 from .diagnostics import emit_use_after_move, spelled
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
@@ -34,11 +35,12 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
                  span: Optional[Span]) -> None:
     """Borrow `place` for the statement: `peek x`, `poke x`.
 
-    A place is a local or a constant here; a field of a local comes with the field group. A
-    constant is read-only storage that the program keeps, so it has an address and no
-    borrow state: a `peek` of it reads it, and a `poke` of it is CE2400 at the place, bare
-    or behind an alias. A stdlib constant has no record and no storage, so both modes are
-    CE2400 (`reject_borrow_of_constant`). A call result, a literal and a construction are
+    A place is a local or a constant here. A field place is not checked yet: it comes with
+    the field group, and it stops the walk (`borrow, Field`). A constant is read-only
+    storage that the program keeps, so it has an address and no borrow state: a `peek` of it
+    reads it, and a `poke` of it is CE2400 at the place, bare or behind an alias. A stdlib
+    constant has no record and no storage, so both modes are CE2400
+    (`reject_borrow_of_constant`). A call result, a literal and a construction are
     temporaries and have no address: CE2404.
     """
     is_poke = mode is BorrowMode.POKE
@@ -49,6 +51,8 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
         reject_borrow_of_constant(checker.err, name, sig, place.loc, mode=mode.value,
                                   no_frame_slot=sig is None)
         return
+    if isinstance(place, e.Field):
+        arms.stop_at(checker, place)
     if not isinstance(place, e.LocalRef):
         checker.err.emit(er.ERR.CE2404, span, expr=spelled(checker, place))
         return

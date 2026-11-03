@@ -1,0 +1,19 @@
+unit units/fieldgeo
+
+ShirBody ORIGIN (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(StructInit(@Point, [Lit(3), Lit(4)], written_order: [0, 1]))
+
+unit test_err_typeck_field_of_alias_constant
+
+ShirBody main
+  params : []
+  locals : [_0 "y": i32, _1 "b": bool]
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Field(ConstRef(@geo.ORIGIN), "y"), Guaranteed)]))
+    Assign(LocalRef(_0), Field(ConstRef(@geo.ORIGIN), "y"), is_init: true)
+    Assign(LocalRef(_1), Field(ConstRef(@geo.ORIGIN), "x"), is_init: true)
+    If(LocalRef(_1), then: [Return(Lit(1))])
+    Return(LocalRef(_0))

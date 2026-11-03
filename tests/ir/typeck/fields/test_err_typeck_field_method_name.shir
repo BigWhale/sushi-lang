@@ -1,0 +1,11 @@
+unit test_err_typeck_field_method_name
+
+ShirBody main
+  params : []
+  locals : [_0 "b": Bag, _1 "l": string, _2 "n": i32]
+  block  :
+    Assign(LocalRef(_0), StructInit(@Bag, [Lit("Mostly Harmless")], written_order: [0]), is_init: true)
+    Assign(LocalRef(_1), Field(LocalRef(_0), "label"), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+    Assign(LocalRef(_2), Field(Field(LocalRef(_0), "label"), "len"), is_init: true)
+    Return(LocalRef(_2))

@@ -1,0 +1,25 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "type mismatch: cannot assign bool to i32."
+# EXPECT_STDERR_CONTAINS: "  |     o.weight := true\n  `     --------+-------\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_field_write_type.shir
+#
+# A field write checks its value at the type of the field: a field of a local, a field
+# two levels down, and an element of a tuple. A literal takes the type of the field. A
+# value that does not fit is CE2002 at the statement.
+
+struct Inner:
+    i64 depth
+
+struct Outer:
+    Inner inner
+    i32 weight
+
+fn main() i32:
+    let Outer o = Outer(Inner(3), 1)
+    let (i32, string) t = (1, "a")
+    o.weight := 2
+    o.inner.depth := 4
+    t.0 := 5
+    t.1 := "b"
+    o.weight := true
+    return 0

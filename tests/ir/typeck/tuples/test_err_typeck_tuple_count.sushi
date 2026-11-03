@@ -1,0 +1,12 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "type mismatch: cannot assign (i32, i32, i32) to (i32, string)."
+# EXPECT_STDERR_CONTAINS: "  |     let (i32, string) t = (1, 2, 3)\n  `                           ----+----\n"
+# EXPECT_STDERR_CONTAINS: "= note: declared here"
+# EXPECT_DUMP_SHIR: test_err_typeck_tuple_count.shir
+#
+# A tuple with more parts than the tuple of its position gets no element types: each
+# part has its default type, and the position compares the whole tuple (CE2002).
+
+fn main() i32:
+    let (i32, string) t = (1, 2, 3)
+    return t.0

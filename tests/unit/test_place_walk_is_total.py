@@ -124,7 +124,7 @@ def _shir_chain():
     """`a.f[0].m()??` over SHIR -- one node of each step kind, off the local `a`."""
     ids: IdAllocator[ShirId] = IdAllocator(ShirId)
     a = e.LocalRef(ids.allocate(), _SPAN, LocalId(0))
-    member = e.Field(ids.allocate(), _SPAN, a, "f")
+    member = e.Field(ids.allocate(), _SPAN, a, "f", _SPAN)
     index = e.Index(ids.allocate(), _SPAN, member,
                     e.Lit(ids.allocate(), _SPAN, e.IntConst(0)), False)
     call = e.Call(ids.allocate(), _SPAN, e.Dotted(index, "m"), [])

@@ -43,6 +43,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import Convention, ParamMode
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.ids import ShirId
@@ -198,13 +199,15 @@ def _spell_place(validator: 'TypeValidator', value: e.ShirExpr) -> Optional[str]
     """The source spelling of a PLACE the user can borrow, or None when there is none.
 
     The help offers the argument back to the user, so it must be text the user could type.
-    A local spells its name; anything else has no spelling here and is offered no help. A
-    field read is a place too, and its spelling comes with the one SHIR place walk.
+    A local spells its name, and a field chain off a local spells the local and then each
+    field (`b.inner.label`), through the one place walk. Anything else has no spelling here
+    and is offered no help.
     """
-    if isinstance(value, e.LocalRef):
-        local = validator.body_locals.get(value.local)
-        return None if local is None else local.name
-    return None
+    walked = walk_place(value, Step.MEMBER)
+    local = None if walked.local is None else validator.body_locals.get(walked.local)
+    if local is None or local.name is None:
+        return None
+    return ".".join([local.name, *(field.name for field in reversed(walked.path))])
 
 
 def _mismatch_span(arg: e.Arg) -> Optional[Span]:

@@ -1,0 +1,37 @@
+# EXPECT_ERROR_CODES_EXACT: CE2106
+# EXPECT_STDERR_CONTAINS: "'Point' has no field 'z'."
+# EXPECT_STDERR_CONTAINS: "  |     keep(p.z)\n  `           -+\n"
+# EXPECT_STDERR_CONTAINS: "= help: 'Point' declares 'x', 'y'"
+# EXPECT_DUMP_SHIR: test_err_typeck_field_unknown.shir
+#
+# A field read answers the type of its field: off a local, off a parameter, off a
+# chain, off a call and off a construction. A name that the struct does not declare is
+# CE2106 at the member, and the help names the fields of the struct.
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Seg:
+    Point a
+    Point b
+
+fn make() Point:
+    return Point(5, 6)
+
+fn keep(i32 v) i32:
+    return v
+
+fn width(Seg s) i32:
+    return s.b.x - s.a.x
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    let Seg s = Seg(p, Point(3, 4))
+    keep(p.x)
+    keep(s.a.y)
+    keep(make().y)
+    keep(Point(7, 8).x)
+    keep(width(s))
+    keep(p.z)
+    return 0

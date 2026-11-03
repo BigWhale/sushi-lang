@@ -114,9 +114,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/typeck.py", "record_capture",
      "kept for the closures group of Phase 5: the typecheck pass on SHIR writes the type "
      "of each capture"),
-    ("sushi_lang/semantics/shir/typeck.py", "record_field_index",
-     "kept for the struct and tuple group of Phase 3: the typecheck pass on SHIR writes "
-     "the index of a field"),
     ("sushi_lang/semantics/shir/typeck.py", "record_range_value",
      "kept for the range group of Phase 3: the typecheck pass on SHIR writes whether a "
      "range is a value"),
@@ -153,10 +150,9 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
     (_TYPES + "calls/user_defined.py", "check_stdlib_function", _TIER_A),
     (_TYPES + "statements.py", "stamp_rebind_places", _TIER_A),
-    (_TYPES + "statements.py", "validate_rebind_statement", _port("A5")),
+    (_TYPES + "statements.py", "validate_rebind_statement", _port("A6")),
     (_TYPES + "statements.py", "validate_let_destructure", _port("A5")),
     (_TYPES + "expressions.py", "refuse_range_value", _port("A7")),
-    (_TYPES + "expressions.py", "reject_unknown_field", _TIER_A),
     (_TYPES + "expressions.py", "validate_array_literal", _port("A6")),
     (_TYPES + "expressions.py", "validate_index_access", _port("A6")),
     (_TYPES + "calls/enums.py", "_refuse_untyped_constructor", _port("C1")),

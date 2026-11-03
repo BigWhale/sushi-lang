@@ -198,7 +198,8 @@ def lower_member(lw: BodyLowerer, node: a.MemberAccess) -> e.ShirExpr:
     if ty is not None:
         return _unit_variant(lw, node, ty)
     ident = lw.ident()
-    return e.Field(ident, lw.span(node), lw.expr(node.receiver), node.member)
+    return e.Field(ident, lw.span(node), lw.expr(node.receiver), node.member,
+                   node.member_span or lw.span(node))
 
 
 def _namespace_member(lw: BodyLowerer, node: a.MemberAccess, alias: str) -> e.ShirExpr:

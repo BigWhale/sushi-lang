@@ -119,7 +119,8 @@ def sample() -> Sample:
     pair = expr("struct", e.StructInit, 11, decls.refer("Pair"),
                 [e.Arg(local(3), None), e.Arg(local(4), None)], (0, 1), None, False,
                 span(11))
-    access = stmt("access", s.ExprStmt, 11, expr("field", e.Field, 11, pair, "first"))
+    access = stmt("access", s.ExprStmt, 11, expr("field", e.Field, 11, pair, "first",
+                                                         span(11)))
     ok = expr("enum", e.EnumInit, 12, decls.refer("Result"), "Ok",
               [e.Arg(lit(e.BlankConst(), 12), None)], span(12))
     ret = stmt("return", s.Return, 12, ok)

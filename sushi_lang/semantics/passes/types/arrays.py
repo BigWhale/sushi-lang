@@ -33,6 +33,7 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import CONTAINER_INSERT_METHODS, effect_of
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.shir.exprs import ConstRef
 from sushi_lang.semantics.typesys import (ArrayType, BuiltinType, DynamicArrayType,
                                           Type, deref_type)
 from .utils import validate_constant_array_index
@@ -40,6 +41,7 @@ from sushi_lang.semantics.type_predicates import is_numeric_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
+    from sushi_lang.semantics.shir.exprs import ShirExpr
 
 
 ArrayReceiver = Union[ArrayType, DynamicArrayType]
@@ -585,13 +587,31 @@ def reject_write_to_constant(target: Optional[Expr], what: str, loc: Optional[Sp
                              validator: Optional['TypeValidator']) -> bool:
     """Reject a write that would reach a global constant (CE2096).
 
-    Three writers ask here: an in-place method, an indexed assignment, and an assignment
-    to a field. The store would land in .rodata, which is undefined behaviour rather
-    than a diagnostic. A `poke self` method call is the fourth writer and does NOT come
+    Two AST writers ask here: an in-place method and an indexed assignment. A field write
+    over SHIR asks `reject_write_into_constant`. The store would land in .rodata, which is
+    undefined behaviour rather than a diagnostic. A `poke self` method call does NOT come
     here: it takes an ADDRESS rather than storing, and CE2400 already says a constant
     has no frame slot to borrow.
     """
     name = _names_an_unshadowed_constant(target, validator)
+    return _report_write_to_constant(reporter, name, what, loc)
+
+
+def reject_write_into_constant(validator: 'TypeValidator', place: 'ShirExpr', what: str,
+                               loc: Optional[Span]) -> bool:
+    """CE2096 when the root of the SHIR place `place` is a constant, at any depth. The scope
+    pass resolved the name, so a local of the same name is a `LocalRef` and not a
+    constant."""
+    root = walk_place(place, Step.MEMBER | Step.INDEX).node
+    name = None
+    if isinstance(root, ConstRef):
+        name = validator.decl_name(root.const_id).rpartition(".")[2]
+    return _report_write_to_constant(validator.reporter, name, what, loc)
+
+
+def _report_write_to_constant(reporter: Reporter, name: Optional[str], what: str,
+                              loc: Optional[Span]) -> bool:
+    """The one emitter of CE2096: a write into the constant `name`, when there is one."""
     if name is None:
         return False
     er.emit(reporter, er.ERR.CE2096, loc, what=what, name=name)

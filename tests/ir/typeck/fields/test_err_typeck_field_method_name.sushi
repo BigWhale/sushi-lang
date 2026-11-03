@@ -1,0 +1,19 @@
+# EXPECT_ERROR_CODES_EXACT: CE2106
+# EXPECT_STDERR_CONTAINS: "'string' has no field 'len'."
+# EXPECT_STDERR_CONTAINS: "  |     let i32 n = b.label.len\n  `                        --+-\n"
+# EXPECT_STDERR_CONTAINS: "= note: 'string.len()' is a method, not a field"
+# EXPECT_STDERR_CONTAINS: "= help: call it: write the parentheses"
+# EXPECT_DUMP_SHIR: test_err_typeck_field_method_name.shir
+#
+# A `string` has no field. `len` is one of its methods, so the note says that the name is
+# a method and the help says to write the parentheses.
+
+struct Bag:
+    string label
+
+fn main() i32:
+    let Bag b = Bag("Mostly Harmless")
+    let string l = b.label
+    println(l)
+    let i32 n = b.label.len
+    return n

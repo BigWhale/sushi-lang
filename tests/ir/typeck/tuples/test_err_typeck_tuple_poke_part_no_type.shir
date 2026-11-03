@@ -1,0 +1,9 @@
+unit test_err_typeck_tuple_poke_part_no_type
+
+ShirBody main
+  params : []
+  locals : [_0 "s": string]
+  block  :
+    Assign(LocalRef(_0), Lit("Mostly Harmless"), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Field(TupleInit([Borrow(LocalRef(_0), Poke), Lit(1)]), "1"), Guaranteed)]))
+    Return(Lit(0))

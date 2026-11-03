@@ -5,19 +5,20 @@ table of the pass (`visit.ARMS`). The body walk starts here, and an arm that hol
 calls it again. `check_params` gives each parameter its type before the walk: the written
 type, resolved, with no `peek` or `poke` (the convention holds the mode, ir.md 4.1).
 
-An `Assign` of a local is a `let` (`is_init`) or a rebind; the value is checked at the
-type of the local. A `let` writes the type of its local, and a `let` that writes none is
-CE2007, except for a hidden local, which takes the type of its value. A `let` whose value
-does not fit keeps its written type, and the pass records the local as refused: a method
-call on it reports nothing more. An `Assign` of any
+An `Assign` of a local is a `let` (`is_init`) or a rebind; the value is checked at the type
+of the local. A `let` writes the type of its local, and a `let` that writes none is CE2007,
+except for a hidden local, which takes the type of its value. A `let` whose value does not
+fit keeps its written type, and the pass records the local as refused: a method call on it
+reports nothing more. An `Assign` of a `Field` is a field write: the value is checked at the
+type of the field, and a write into a field of a constant is CE2096. An `Assign` of any
 other place, and a reference `let`, are not typed yet. An expression statement drops its
 value, and a dropped `Result` of a value is CW2001. A `Return` of a body with a channel
 spells `Result.Ok(...)` or `Result.Err(...)` (CE2030), checked at the `Result` of the
-channel (CE2031, CE2039). A `Return` of a bare body checks its value at the declared
-return type, and refuses a `Result` constructor (CE2091). A `Return` of an initializer
-checks its value at the declared type of the constant or `var` (CE2002 at `name = value`),
-and writes the value that the constant evaluator gave it (`passes/types/constants.py`).
-An initializer that has no value, and is no empty container, stops the walk.
+channel (CE2031, CE2039). A `Return` of a bare body checks its value at the declared return
+type, and refuses a `Result` constructor (CE2091). A `Return` of an initializer checks its
+value at the declared type of the constant or `var` (CE2002 at `name = value`), and writes
+the value that the constant evaluator gave it (`passes/types/constants.py`). An initializer
+that has no value, and is no empty container, stops the walk.
 
 An `If` and a `Loop` with a `Cond` source check their condition (`check_condition`) and
 their blocks; an `elif` is an `If` in the `else` block. The kind of a `while` loop is
@@ -40,6 +41,7 @@ from typing import TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.passes.types.arrays import reject_write_into_constant
 from sushi_lang.semantics.passes.types.compatibility import (
     reject_mismatch, reject_return_mismatch, reject_unhandled_result)
 from sushi_lang.semantics.passes.types.constants import assignment_span
@@ -81,12 +83,19 @@ def check_block(validator: TypeValidator, block: ShirBlock) -> None:
 
 
 def check_assign(validator: TypeValidator, node: s.Assign) -> None:
-    if not isinstance(node.target, e.LocalRef):
-        visit.stop_at(validator, node)
-    if node.is_init:
-        _check_let(validator, node, node.target)
+    """A `let`, a rebind of a local, or a field write. A write into a field of a constant
+    is CE2096, and its value is then checked at no type."""
+    target = node.target
+    if node.is_init and isinstance(target, e.LocalRef):
+        _check_let(validator, node, target)
         return
-    ty = visit.check_expr(validator, node.target)
+    if node.is_init or not isinstance(target, (e.LocalRef, e.Field)):
+        visit.stop_at(validator, node)
+    ty = visit.check_expr(validator, target)
+    if isinstance(target, e.Field) and reject_write_into_constant(
+            validator, target, "assign to a field of", node.loc):
+        visit.check_expr(validator, node.value)
+        return
     got = visit.check_expr(validator, node.value, ty)
     if ty is not None:
         reject_mismatch(validator, got, ty, node.loc, None)

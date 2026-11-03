@@ -1,0 +1,8 @@
+unit test_err_typeck_tuple_part_range
+
+ShirBody main
+  params : []
+  locals : [_0 "t": (u8, i32)]
+  block  :
+    Assign(LocalRef(_0), TupleInit([Lit(300), Lit(1)]), is_init: true)
+    Return(Field(LocalRef(_0), "1"))

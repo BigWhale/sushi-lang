@@ -1,0 +1,9 @@
+unit test_err_typeck_tuple_borrow_part
+
+ShirBody main
+  params : []
+  locals : [_0 "s": string, _1 "t": (string, i32)]
+  block  :
+    Assign(LocalRef(_0), Lit("Mostly Harmless"), is_init: true)
+    Assign(LocalRef(_1), TupleInit([Borrow(LocalRef(_0), Peek), Lit(1)]), is_init: true)
+    Return(Field(LocalRef(_1), "1"))

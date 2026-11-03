@@ -1,0 +1,23 @@
+# EXPECT_ERROR_CODES_EXACT: CE2106
+# EXPECT_STDERR_CONTAINS: "'Maybe@(Point)' has no field 'x'."
+# EXPECT_STDERR_CONTAINS: "  |     let i32 v = find(true).x\n  `                           -+\n"
+# EXPECT_STDERR_CONTAINS: "= note: 'Maybe@(Point)' is an enum: it carries variants, not fields"
+# EXPECT_STDERR_CONTAINS: "= help: take the value first with '.realise(default)', match, or '.or_err(nom e)??'"
+# EXPECT_DUMP_SHIR: test_err_typeck_field_of_maybe.shir
+#
+# A `Maybe` is an enum: it carries variants and no fields. A field of its payload is not
+# a field of the `Maybe`, so the read is CE2106 with a note and a help that says how to
+# take the value first.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn find(bool hit) Maybe@(Point):
+    if (hit):
+        return Maybe.Some(Point(1, 2))
+    return Maybe.None
+
+fn main() i32:
+    let i32 v = find(true).x
+    return v

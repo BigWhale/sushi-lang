@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE2106
+# EXPECT_STDERR_CONTAINS: "'Point' has no field 'weigth'."
+# EXPECT_STDERR_CONTAINS: "  |     p.weigth := 3\n  `      ---+---\n"
+# EXPECT_STDERR_CONTAINS: "= help: did you mean 'weight'?"
+# EXPECT_DUMP_SHIR: test_err_typeck_field_write_unknown.shir
+#
+# The target of a field write is a field read of its place, so a name that the struct
+# does not declare is CE2106 at the member of the target, with the near field in the help.
+
+struct Point:
+    i32 weight
+
+fn main() i32:
+    let Point p = Point(1)
+    p.weight := p.weight
+    p.weigth := 3
+    return 0

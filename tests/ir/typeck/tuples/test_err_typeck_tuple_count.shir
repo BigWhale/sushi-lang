@@ -1,0 +1,8 @@
+unit test_err_typeck_tuple_count
+
+ShirBody main
+  params : []
+  locals : [_0 "t": (i32, string)]
+  block  :
+    Assign(LocalRef(_0), TupleInit([Lit(1), Lit(2), Lit(3)]), is_init: true)
+    Return(Field(LocalRef(_0), "0"))

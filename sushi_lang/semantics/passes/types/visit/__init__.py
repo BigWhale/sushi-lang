@@ -14,14 +14,14 @@ a class with no row is an internal error, and the arm of a construct that the pa
 type yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
 
 `statements.py` walks a block and holds the statement arms, `expressions.py` the expression
-arms of the leaves and of a struct construction, `operators.py` the arms of the operators
-and the check of a condition, `calls.py` the arms of a call, an interpolated string and a
-borrow, and `results.py` the arm of an enum construction. The pattern arms are in
-`passes/types/matching.py`. The arms of `??` and of `as` are `check_try` and `check_cast`
-of `passes/types/expressions.py`, because the callers of the conversion lookup are in that
-module. The AST inference visitor of `inference.py` is not part of this walk: it is the
-inference of the early passes (`ReadOnlyInferrer`), until they stop inferring. `helpers.py` holds the lambda and
-function-value helpers that it reads.
+arms of the leaves and of a struct construction, `fields.py` the arms of a field read and of
+a tuple, `operators.py` the arms of the operators and the check of a condition, `calls.py`
+the arms of a call, an interpolated string and a borrow, and `results.py` the arm of an enum
+construction. The pattern arms are in `passes/types/matching.py`. The arms of `??` and of
+`as` are `check_try` and `check_cast` of `passes/types/expressions.py`, because the callers
+of the conversion lookup are in that module. The AST inference visitor of `inference.py` is
+not part of this walk: it is the inference of the early passes (`ReadOnlyInferrer`), until
+they stop inferring. `helpers.py` holds the lambda and function-value helpers that it reads.
 """
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, Callable, NoReturn, Optional
 
 from sushi_lang.semantics.passes.types.visit import calls as ca
 from sushi_lang.semantics.passes.types.visit import expressions as ex
+from sushi_lang.semantics.passes.types.visit import fields as fd
 from sushi_lang.semantics.passes.types.visit import operators as op
 from sushi_lang.semantics.passes.types.visit import results as rs
 from sushi_lang.semantics.passes.types.visit import statements as st
@@ -127,7 +128,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.ConstRef: ex.check_const_ref,
     e.StorageRef: stop_at,
     e.GlobalRef: stop_at,
-    e.Field: stop_at,
+    e.Field: fd.check_field,
     e.Index: stop_at,
     e.Slice: stop_at,
     e.Call: ca.check_call,
@@ -140,7 +141,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.Lambda: stop_at,
     e.StructInit: ex.check_struct_init,
     e.EnumInit: rs.check_enum_init,
-    e.TupleInit: stop_at,
+    e.TupleInit: fd.check_tuple_init,
     e.ArrayInit: stop_at,
     e.Range: stop_at,
     e.Interp: ca.check_interp,

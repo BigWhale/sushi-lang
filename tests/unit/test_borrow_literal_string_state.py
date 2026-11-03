@@ -50,7 +50,7 @@ def test_an_interpolation_owns_its_buffer():
 
 @pytest.mark.parametrize("init", [
     _local(0),
-    e.Field(ShirId(3), _AT, _local(0), "name"),
+    e.Field(ShirId(3), _AT, _local(0), "name", _AT),
     e.Interp(ShirId(4), _AT, ["a"]),
     e.Lit(ShirId(5), _AT, e.IntConst(5)),
 ], ids=["local", "field_read", "interpolation_with_no_expressions", "integer_literal"])

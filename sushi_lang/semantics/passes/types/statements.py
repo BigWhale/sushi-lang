@@ -171,13 +171,6 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
             validator.validate_expression(stmt.value)
             return
 
-        # A field of a constant is .rodata like any other part of it (CE2096).
-        from .arrays import reject_write_to_constant
-        if reject_write_to_constant(stmt.target, "assign to a field of",
-                                    stmt.loc, validator.reporter, validator):
-            validator.validate_expression(stmt.value)
-            return
-
         actual_type = validator.infer_expression_type(stmt.target)
         if actual_type is None:
             validator.validate_expression(stmt.value)
