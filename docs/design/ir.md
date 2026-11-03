@@ -66,7 +66,10 @@ names the file of the body), 7.9 (an initializer body is the one place where an 
 gets `ADOPT`), and 8.2, 8.5 and 8.13 (the declaration round of a global stops the compile
 where it cannot make a global, and never drops one; the one check of a variant runs for each
 constant `Aggregate`, on both paths; the emit stops `aggregate constant` and `constant with
-no value`; a `Trap` takes no `Move` operand).
+no value`; a `Trap` takes no `Move` operand). Amended on 2026-11-03 by rulings R-AD and
+R-AE: the header, 7.3, 7.8, 8.8, 8.9 and 11 (the failure text of `expect` is `Runtime Error
+RE2029: expect failed at <file:line:col>: <msg>` with exit code 1, the one user-visible
+change; a pattern value has no `TypeckResults` row).
 
 ## The decisions, in one place
 
@@ -301,7 +304,8 @@ not change. When somebody proposes to finish the job, the answer is section 6.
 Expect a small slowdown until the optimization work starts.
 
 **N4. New language features.** No user-visible change. Every behaviour test passes before
-and after, unchanged.
+and after, unchanged. There is ONE exception: the failure text of `expect` is `Runtime Error
+RE2029: expect failed at <file:line:col>: <msg>`, with exit code 1 (8.8, 11).
 
 **N5. Changing the pass order.** The names and the order in the
 `SemanticAnalyzer.check()` docstring stay.
@@ -693,8 +697,8 @@ ShirNode      : shir_id, loc      # and its own operands. NO type field
 TypeckResults : one owner, written by `typecheck`, completeness-checked when it ends
 ```
 
-**Ruling S5: every answer `typecheck` gives lives in `TypeckResults`.** That covers more
-than types:
+**Ruling S5: every answer `typecheck` gives lives in `TypeckResults`.** The one exception is
+the value of a pattern (7.8, ruling R-AE). That covers more than types:
 
 | Decision | Keyed by |
 |---|---|
@@ -2756,7 +2760,7 @@ The plan is written elsewhere; these are the design-level invariants it must hon
    kept. A named struct construction takes the written order, and a repeat run takes the
    value first (7.4). `expect` keeps its lazy message (7.4).
 10. **One user-visible change.** Every run-time stop is one `Trap` that prints `Runtime
-   Error RExxxx: ...`, so `expect` has a code. The failure text of `expect` on an `Err` or a
-   `None` is `Runtime Error RE2029: expect failed at <file:line:col>: <msg>`, with exit
-   code 1 (8.8). It is the one exception to the rule that no behaviour changes. The
-   CHANGELOG states the change at the merge.
+    Error RExxxx: ...`, so `expect` has a code. The failure text of `expect` on an `Err` or a
+    `None` is `Runtime Error RE2029: expect failed at <file:line:col>: <msg>`, with exit
+    code 1 (8.8). It is the one exception to the rule that no behaviour changes. The
+    CHANGELOG states the change at the merge.
