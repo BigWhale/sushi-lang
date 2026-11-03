@@ -814,6 +814,23 @@ the tag of `Ok`, the two payload types and the `Result` of the channel. Its conv
 is `NoConversion` when the two error types are one type; with no declared conversion
 between two error types, the `??` is [CE2511](../error-catalog.md#ce2511).
 
+**A struct construction.** A `StructInit` of a struct that is not generic is an instance
+of that struct, also behind an alias: the struct is the one that the namespace holds. Each
+field goes through the one argument check (`arguments.check_arguments`) at the type of its
+field, in the declaration order. A positional construction with a wrong count is
+[CE2027](../error-catalog.md#ce2027) at `decl_loc`, and a field that does not fit is
+CE2028, or CE2083 in a named construction, at the field. A named construction with
+`names` is [CE2080](../error-catalog.md#ce2080) (a name that the struct does not
+declare), else [CE2081](../error-catalog.md#ce2081) (a repeated name), else
+[CE2082](../error-catalog.md#ce2082) (a missing field), at `decl_loc`, and each field is
+then checked with no type of its position. A private struct of another unit behind an
+alias is [CE3005](../error-catalog.md#ce3005) at `decl_loc`, and its fields are not
+checked. A `StructInit` of a type name that is no struct (`Sign(1)`) is
+[CE2008](../error-catalog.md#ce2008) at `decl_loc`. A construction gives its fields no
+convention: a field takes its value by position (7.9). A node that has an error has no
+answer. A generic struct of the program, and a struct whose name the unit lost (D2), are not
+typed yet, and stop the walk of their body (C1).
+
 **An initializer body.** Before the walk of the initializer body of a constant or a `var`
 (6.3), the constant evaluator reads the initializer at the declared type, with the reporter
 of the pass (Q5). It reports what is not constant ([CE0108](../error-catalog.md#ce0108)), an
@@ -940,7 +957,7 @@ not reach prints as lowering made it.
 | `Take` | `place: Expr`; a marked field take `nom s.out` in a `let` or a `return` |
 | `Try` | `inner: Expr`; `??`, kept whole for `borrow` and for G7 |
 | `Lambda` | `params: [LambdaParam]`, `ret: TypeRef \| None`, `err: TypeRef \| None`, `body: ShirBlock`, `expr_body: bool`; the captures are in `Bindings`. It stays in the tree through `borrow`; `lift` describes it in `LiftResults` (Q8) |
-| `StructInit` | `decl: DeclId`, `fields: [Arg]`, `written_order: [int]`, `names: [str] \| None`; `fields` in the declaration order |
+| `StructInit` | `decl: DeclId`, `fields: [Arg]`, `written_order: [int]`, `names: [str] \| None`, `named: bool`, `decl_loc: Span`; `fields` in the declaration order; `named` is true for a named construction; `decl_loc` is where a diagnostic of the written type points |
 | `EnumInit` | `decl: DeclId`, `variant: str`, `payload: [Arg]`, `decl_loc: Span`; `decl_loc` is the span of the written type path (`geo.Sign`) |
 | `TupleInit` | `parts: [Expr]` |
 | `ArrayInit` | `kind: Fixed \| Dynamic`, `runs: [ArrayRun]` |
@@ -1007,7 +1024,10 @@ enum, as for a `Static` call (7.3). A static of the name does not change it, bec
 static is a value only in a call. On a type that is no enum, the error is the error of
 another pass (CE2105, CE2007, CE2008), and the hole stops the walk of its body. The dump
 prints the member (`<hole: MemberAccess, error: CE2045 | ..., member: Sign.Nope>`). Ruled
-2026-10-28 (R20). At
+2026-10-28 (R20). The error hole of a bare call with written type arguments on a type name
+(`Pair@(i32, i32)(1, 2)`, the `Call` hole of CE6102) is [CE6102](../error-catalog.md#ce6102)
+at the hole: `typecheck` reports it (note 108). Each other hole of CE6102 is a `DotCall` or a
+`MethodCall` hole, which a later group types, and it stops the walk of its body. At
 the end of the analysis, an error hole whose code no diagnostic reported is an internal
 error, CE0155. An error of the construct around the hole can come first, and the hole
 accepts its code too: in a constant or a `var` initializer the constant evaluator refuses
@@ -1060,6 +1080,22 @@ missing name), or whose name has no struct declaration, has an error. Lowering k
 written: `fields` in the written order, `written_order` the identity, and `names` the
 written name of each field. `typecheck` reports the fault (CE2080, CE2081, CE2082) from
 `names`. In every other construction `names` is `None`. Ruled 2026-10-12.
+
+`decl_loc` is where a diagnostic of the written type points: the written type name of a
+bare construction (`Vec`), and the whole construction behind an alias (`geo.Vec(1, 2)`),
+as the old pipeline points. Ruled 2026-11-03 (R25). `named` is true for every named
+construction, also when `names` is `None`: a field that does not fit is
+[CE2083](../error-catalog.md#ce2083) in a named construction and
+[CE2028](../error-catalog.md#ce2028) in a positional one, and `written_order` cannot tell
+the two apart when the source writes the fields in the declaration order. Lowering sets
+both fields from the source; no pass fills them (S5).
+
+A bare call `S(...)` whose name the `scope` pass resolves to a function is a
+`StructInit` too when `S` is a struct and the unit declares no function `S`: the struct
+takes the call before a function of another unit (#1076). Lowering asks
+`DeclLookup.constructs_struct`, which reads `name_ladder.call_constructs_struct`, the one
+answer that the early passes also read. The unit's own function takes the call, and the
+call stays a `Call`.
 
 `T.m(...)` and the bare `T.m` on a type name are an `EnumInit` when the enum declaration of
 `T` has the variant `m`; else `T.m(...)` is a `Static` call (#542). `decl_loc` is the span
@@ -1639,7 +1675,7 @@ prints the rows that the walk wrote before the stop.
 |---|---|
 | `Name` | `LocalRef` / `ConstRef` / `StorageRef` / `GlobalRef`, from `Bindings` |
 | `IntLit`, `FloatLit`, `BoolLit`, `BlankLit`, `StringLit` | `Lit` |
-| `Call`, `MethodCall`, `DotCall` | `Call` with a `CallTarget`, the written type arguments on a `Named` target; a struct name gives `StructInit`, also behind an alias; a variant of an enum gives `EnumInit` |
+| `Call`, `MethodCall`, `DotCall` | `Call` with a `CallTarget`, the written type arguments on a `Named` target; a struct name gives `StructInit`, also behind an alias and also when the name is a function of another unit (#1076); a variant of an enum gives `EnumInit` |
 | `Print`, `PrintLn` | `ExprStmt` of a `Call` with a `BuiltinFn` target |
 | `Let`, `Rebind` | `Assign` with `is_init`; a `Let` with targets gives `Destructure`; the split tuple rebind of the AST builder gives one `Destructure` with `Place` targets |
 | `If` | `If`; each `elif` is an `If`, the one statement of the `otherwise` block of the arm before it |
