@@ -838,6 +838,36 @@ convention: a field takes its value by position (7.9). A node that has an error 
 answer. A generic struct of the program, and a struct whose name the unit lost (D2), are not
 typed yet, and stop the walk of their body (C1).
 
+**A field read.** A `Field` checks its base at no type of its position. The type of the
+base with no `peek` or `poke` decides the field. A field of a struct, and an element of a
+tuple (`t.0`), answers the type that the struct declares for it, and its index is the
+field index row. A field of a constant is a field read too, also behind an alias
+(`geo.ORIGIN.y`, ruling R-J). A name that the type does not declare is
+[CE2106](../error-catalog.md#ce2106) at `member_loc`. A struct, a tuple, an enum (a
+`Maybe` and a `Result` too), an array, a primitive, a `string`, a function type, a `ptr`
+and an opaque type parameter can have this fault. A note says when the name is a method of
+the type, and a help names the field that is near, or the fields of the type. A base of a
+type whose name the unit lost (D2), and a base of a type that has no rule here yet, stop
+the walk with `typecheck, Field`.
+
+**A tuple.** A `TupleInit` checks each part at the element type of its position, when the
+type of its position is a tuple with as many elements, else at no type. It answers the
+tuple of the part types with no `peek` or `poke` (`intern_tuple`), and that tuple is its
+instance row too. A tuple that does not fit its position is a fault of the position, which
+compares the whole tuple: `let (string, i32) t = (1, 1)` is CE2002 at `(1, 1)`. A `Borrow`
+in a tuple part is CE2002 at the part (ruling R-I). A tuple holds values, so a part does
+not take a `peek T` or a `poke T`: `(peek s, 1)` is "cannot assign peek string to
+string", also where the position gives no type. A tuple with an error in a part has no
+answer.
+
+**A field write.** An `Assign` whose target is a `Field` is a field write. The target is
+checked as a field read, and the value at the type of the field: a value that does not
+fit is CE2002 at the statement. A write into a field of a constant, at any depth, is
+[CE2096](../error-catalog.md#ce2096) at the statement, and the value is then checked at no
+type. The rules of a write through a borrow and of a read-only place are rules of
+`borrow`. An `Assign` of an `Index`, of a `var` and of any other place that is not a
+`LocalRef` or a `Field` is not typed yet.
+
 **An initializer body.** Before the walk of the initializer body of a constant or a `var`
 (6.3), the constant evaluator reads the initializer at the declared type, with the reporter
 of the pass (Q5). It reports what is not constant ([CE0108](../error-catalog.md#ce0108)), an
@@ -953,7 +983,7 @@ not reach prints as lowering made it.
 | `ConstRef` | `const_id: DeclId`; the value is already computed (ruling Q5) |
 | `StorageRef` | `decl: DeclId`; a unit-level `var`, a PLACE with an address (`unit-storage.md`) |
 | `GlobalRef` | `decl: DeclId`; a function used as a value, or a C global of an `unsafe external` block (`libc.environ`) |
-| `Field` | `base: Expr`, `name: str`; a struct field or a tuple element (`"0"`). The index is `typecheck`'s (S5) |
+| `Field` | `base: Expr`, `name: str`, `member_loc: Span`; a struct field or a tuple element (`"0"`). `member_loc` is the span of `.name`, where a diagnostic of the member points. The index is `typecheck`'s (S5) |
 | `Index` | `base: Expr`, `index: Expr`, `unchecked: bool` (4.9) |
 | `Slice` | `base: Expr`, `start: Expr`, `end: Expr`, `inclusive: bool`; a borrowed view (`slices.md`) |
 | `Call` | `target: CallTarget`, `args: [Arg]`; the resolved `Callee` is `typecheck`'s (S5) |
