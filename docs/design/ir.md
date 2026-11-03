@@ -645,7 +645,7 @@ ShirParam
   local      : LocalId
   ty         : TypeRef                   # the declared type (7.4)
   convention : Convention          # from the declared mode -- section 8.3
-  loc        : Span
+  loc        : Span                # of the receiver: the type that the method extends
   pack       : bool                # the written `...` of a value pack parameter
 
 CopyRange
@@ -1673,14 +1673,18 @@ scrutinee, and a `Match` with `consumes` takes it over, a consuming use. Its arm
 exclusive paths: each arm starts from the state after the scrutinee, and the paths that
 reach the code after the match join as the blocks of an `If` do. The arms cover each value
 (`typecheck` refuses a match that misses one), so no path skips the arms. A literal arm
-(`Wildcard`, `Literal`, `IntRange`, and an `Or` of them) binds no name. A `Variant` binds
-the local of each `PatBinding` in it, at any depth. Each arm declares its binders before
-its body: a bare binder of a plain payload is a read-only view of the payload (CE2414 for
-a write or a rebind, with a note at the name of the variant that binds it), and a position
-that takes it takes a copy (`ADOPT`). The alternatives of `|` share one local, and the
-first alternative gives the span of the note. A `Match` with an arm that binds a name in
-another way stops the walk (`borrow, Match`): a `poke`, `peek` or `nom` binder (B7, B8), a
-bare binder of a payload that owns (B3), a `Tuple` (A5) and an `Own` (B5). A `Loop` with a
+(`Wildcard`, `Literal`, `IntRange`, and an `Or` of them) binds no name. A `Variant` and a
+`Tuple` bind the local of each `PatBinding` in them, at any depth. Each arm declares its
+binders before its body: a bare binder of a plain payload or of a plain tuple part is a
+read-only view of it (CE2414 for a write or a rebind, with a note at the name of the
+variant, or at the tuple pattern, that binds it), and a position that takes it takes a
+copy (`ADOPT`). The alternatives of `|` share one local, and the first alternative gives
+the span of the note. A tuple literal as the scrutinee is checked as any `TupleInit`: each
+part of plain values is a copy. A `Match` with an arm that binds a name in another way
+stops the walk (`borrow, Match`): a `poke`, `peek` or `nom` binder (B7, B8), a bare binder
+of a payload or a part that owns (B3) and an `Own` (B5); so does a match on a tuple literal
+that owns, because the literal takes each part (ruling R24 keeps a match on a plain tuple
+in A5). A `Loop` with a
 `Cond` source reads its condition once, at the entry, and checks its body in two rounds.
 The first round is a DISCOVERY round: it reports no error, writes no row and records no
 exit, and it gives the facts that come round the back edge (the end of the body and each
@@ -1691,6 +1695,39 @@ iterators group's (C3) and stops the walk. A `While` loop has no iterator, so it
 walk-in-place row: that row is a fact of a `Protocol` or an `IteratorValue` walk alone.
 `walk_place` (`semantics/places.py`) reads a SHIR place through the adapter of its tree,
 with the same `Step` and `Walked` as the AST walk of the `scope` pass.
+
+**A field in `borrow`.** The pass tracks whole locals, not the places in them, so each rule
+of a field place is a rule of the ROOT of the place, which `walk_place` finds through the
+field steps (`reads.borrow_owner`). A `Field` reads its base: a read of a field of a moved
+local is CE2405 at the local. A field is storage that the owner of its base keeps, so a
+consuming use of it is a read through that owner (`Provenance.BORROWED`): a plain field
+gets `ADOPT`, also off a constant and off a call, and an owning field gets `REJECT`, which
+is CE2411 at the field and a let-borrow of the root at a `let`. So a field of a
+constant is never taken: `K.name` of a `string` field is CE2411 in a `return` and a
+borrowed view in a `let`, and the program does not drop the constant. An unmarked argument
+that reads an owning field is a shared borrow of the root for the call (CE2407 beside a
+`poke` of the root). A `peek` or a `poke` of a field borrows its root, with the rules of a
+borrow of a local (CE2403, CE2407, CE2408, CE2412); a field of a constant goes to
+`reject_borrow_of_constant` at the name of the constant, and a field of a temporary is
+CE2404. A field write goes through `reject_readonly_write` at the root, at the statement:
+CE2408, CE2414, CE2421, CE2422, CE2426, and CE2429 for a root past a call boundary, with a
+note at the boundary. Then the field is read, the value is checked, a change of the root
+invalidates each let-borrow of it (`check_owner_not_borrowed`, CE2412 at a later use), and
+the value is a consuming use. Each field of a `StructInit`, in the written order (R1), and
+each part of a `TupleInit` is a consuming use by its position, as each payload of an
+`EnumInit` is. A root that a later group checks (an `Index`, a `Slice`, a `StorageRef`, a
+`GlobalRef`) stops the walk with its class. A marked field take is B7's: a `Take`, and a `nom`
+argument of an owning field (`f(nom s.out)`, `borrow, Field take`), stop the walk.
+
+**A destructure in `borrow`.** The value is checked first. A value of plain elements is a
+consuming use, a copy (`ADOPT`), and SLIR lowering reads that one row (8.9). A `let`
+declares each binder, at any nesting level, as a local of its own. A rebind form then
+rebinds each place from left to right, at the span of the place: a `LocalRef` through the
+gates of a rebind of a local (CE2408, CE2414, CE2426 for a view of another value's storage;
+a by-value parameter is storage of its own and is rebindable), and a `Field` through the
+gates of a field write. A value that owns stops the walk (`borrow, Destructure`) after the
+gates of the places: each binder owns or borrows an element of it, and Tier B checks that. So
+a rebind of a view is its error also when the value owns.
 
 **The conditionally moved locals.** The state of a local holds two facts: moved on SOME
 path (the join is a union, and a use after it is CE2405) and moved on EVERY path (the join
