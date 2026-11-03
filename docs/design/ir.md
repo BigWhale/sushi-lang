@@ -826,7 +826,10 @@ declare), else [CE2081](../error-catalog.md#ce2081) (a repeated name), else
 then checked with no type of its position. A private struct of another unit behind an
 alias is [CE3005](../error-catalog.md#ce3005) at `decl_loc`, and its fields are not
 checked. A `StructInit` of a type name that is no struct (`Sign(1)`) is
-[CE2008](../error-catalog.md#ce2008) at `decl_loc`. A construction gives its fields no
+[CE2008](../error-catalog.md#ce2008) at `decl_loc`, and a named one (`Sign(x: 1)`) is
+[CE6104](../error-catalog.md#ce6104) at the construction too; a name whose function the
+`collect` pass refused ([CE1005](../error-catalog.md#ce1005)) gives no second error, and
+the body holds that error. A construction gives its fields no
 convention: a field takes its value by position (7.9). A node that has an error has no
 answer. A generic struct of the program, and a struct whose name the unit lost (D2), are not
 typed yet, and stop the walk of their body (C1).
