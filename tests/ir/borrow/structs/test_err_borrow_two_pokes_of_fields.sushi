@@ -1,0 +1,26 @@
+# EXPECT_ERROR_CODES_EXACT: CE2403
+# EXPECT_STDERR_CONTAINS: "'p' already has an active poke borrow (only one exclusive borrow allowed)"
+# EXPECT_STDERR_CONTAINS: "first borrowed here"
+# EXPECT_STDERR_CONTAINS: ":25:20"
+# EXPECT_DUMP_SHIR: test_err_borrow_two_pokes_of_fields.shir
+#
+# A borrow of a field is counted on the root of the field. A `poke` of a field of each of
+# two locals in one call is legal.
+# A `poke` of two fields of one local in one call is CE2403 at the second, with a note at
+# the first.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn swap(poke i32 a, poke i32 b) ~:
+    let i32 t = a
+    a := b
+    b := t
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    let Point q = Point(3, 4)
+    swap(poke p.x, poke q.y)
+    swap(poke p.x, poke p.y)
+    return p.x

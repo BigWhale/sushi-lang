@@ -69,7 +69,9 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
     The constant evaluator makes each value of an initializer body, so that value is FRESH,
     and a constant that the initializer names is read, not moved. In any other body, a local
     has the provenance of its state. A constant is storage that the program keeps (#726):
-    it is not FRESH, so a take of an owning one is refused. `r??` yields what `r` holds,
+    it is not FRESH, so a take of an owning one is refused. A field is storage that the
+    owner of its base keeps, so it is a read through that owner (BORROWED): a plain one is
+    a copy, and a take of an owning one is refused. `r??` yields what `r` holds,
     and the payload has the provenance of `r` (#548): a borrowed `r` keeps its owner, so
     the payload is a read through it; an owned `r` was SPENT by the `??` itself
     (`unwrap_place`), so nothing owns the payload now and the position adopts it.
@@ -81,6 +83,8 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
         return name_provenance(checker, node.local)
     if isinstance(node, e.ConstRef):
         return Provenance.OWNED
+    if isinstance(node, e.Field):
+        return Provenance.BORROWED
     if isinstance(node, e.Try) and isinstance(node.inner, e.LocalRef):
         if name_provenance(checker, node.inner.local) is Provenance.BORROWED:
             return Provenance.BORROWED

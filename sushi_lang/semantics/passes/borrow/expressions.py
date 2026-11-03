@@ -2,9 +2,10 @@
 
 A read of a local reports a use after a move (CE2405, CE2435), after a destroy (CE2406)
 and after a change of the owner of a `let`-borrow (CE2412). A literal and a constant read
-nothing that the body owns. An operator reads its operands, and an interpolated string
-reads its holes. Each payload of an enum construction is a consuming use, and so is the
-operand of a `??`: the pass decides its `Ownership` and writes the row (`consume.py`). A
+nothing that the body owns. An operator reads its operands, an interpolated string reads
+its holes, and a field reads its base. Each field of a struct construction, each part of a
+tuple and each payload of an enum construction is a consuming use, and so is the operand
+of a `??`: the pass decides its `Ownership` and writes the row (`consume.py`). A
 `Borrow` borrows its place for the statement.
 """
 
@@ -13,12 +14,15 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ownership import TypeClass
+from sushi_lang.semantics.ownership import Provenance, TypeClass
+from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.places import Step, walk_place
+from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 
 from . import arms
 from .borrows import check_borrow as borrow_place
-from .consume import consume, unwrap_place
+from .consume import consume, name_provenance, unwrap_place
 from .diagnostics import emit_use_after_move, emit_use_of_invalidated_borrow
 from .flow import record_exit
 from .reads import read_type
@@ -88,11 +92,52 @@ def check_interp(checker: 'BorrowChecker', node: e.Interp) -> None:
             arms.check(checker, part)
 
 
+def check_field(checker: 'BorrowChecker', node: e.Field) -> None:
+    """A field read reads its base, so a read of a field of a moved local is CE2405 at the
+    local. The value is a borrow of the root: a position that takes it decides that."""
+    arms.check(checker, node.base)
+
+
+def check_struct_init(checker: 'BorrowChecker', node: e.StructInit) -> None:
+    """A construction consumes each field by POSITION, in the order that the source writes
+    the fields (ruling R1)."""
+    for position in node.written_order:
+        arg = node.fields[position]
+        stop_at_a_field_take(checker, arg)
+        _take_by_position(checker, arg.value)
+
+
+def check_tuple_init(checker: 'BorrowChecker', node: e.TupleInit) -> None:
+    """A tuple consumes each part by POSITION."""
+    for part in node.parts:
+        _take_by_position(checker, part)
+
+
 def check_enum_init(checker: 'BorrowChecker', node: e.EnumInit) -> None:
     """A construction consumes each payload by POSITION, marked or not (#134)."""
     for arg in node.payload:
-        arms.check(checker, arg.value)
-        consume(checker, arg.value)
+        stop_at_a_field_take(checker, arg)
+        _take_by_position(checker, arg.value)
+
+
+def _take_by_position(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
+    arms.check(checker, value)
+    consume(checker, value)
+
+
+def stop_at_a_field_take(checker: 'BorrowChecker', arg: e.Arg) -> None:
+    """A `nom` argument of an owning field, one step off a local that the body OWNS, is a
+    marked field take (`f(nom s.out)`), which spends its root: group B7 checks it, so it
+    stops the walk (`borrow, Field take`). The marker on a plain field is inert, and the
+    field is a copy. A take through a borrow is no take: it is the consuming use of a
+    borrow (CE2411), as on `main`."""
+    value = walk_place(arg.value, Step.TRY).node
+    if (arg.marker is Convention.OWNED and isinstance(value, e.Field)
+            and isinstance(value.base, e.LocalRef)
+            and checker.borrow_state.get(value.base.local) is not None
+            and name_provenance(checker, value.base.local) is Provenance.OWNED
+            and checker.types.type_class(read_type(checker, value)) is TypeClass.MOVE):
+        dispatch.stop(arms.STAGE, value, state="take")
 
 
 def check_try(checker: 'BorrowChecker', node: e.Try) -> None:

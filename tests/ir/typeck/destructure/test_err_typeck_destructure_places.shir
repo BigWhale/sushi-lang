@@ -4,7 +4,7 @@ ShirBody pair
   params : []
   locals : []
   block  :
-    Return(TupleInit([Lit(3), Lit(4)]))
+    Return(adopt TupleInit([adopt Lit(3), adopt Lit(4)]))
 
 ShirBody main
   params : []

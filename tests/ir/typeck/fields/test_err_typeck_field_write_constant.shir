@@ -4,7 +4,7 @@ ShirBody ORIGIN (Initializer)
   params : []
   locals : []
   block  :
-    Return(StructInit(@Point, [Lit(3), Lit(4)], written_order: [0, 1]))
+    Return(adopt StructInit(@Point, [adopt Lit(3), adopt Lit(4)], written_order: [0, 1]))
 
 unit test_err_typeck_field_write_constant
 

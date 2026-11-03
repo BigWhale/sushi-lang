@@ -1,0 +1,28 @@
+# EXPECT_ERROR_CODES_EXACT: CE2414
+# EXPECT_STDERR_CONTAINS: "cannot write to binding 'q': a match/foreach binding is a read-only view."
+# EXPECT_STDERR_CONTAINS: "'q' is bound here, as a read-only view"
+# EXPECT_STDERR_CONTAINS: ":23:14"
+# EXPECT_DUMP_SHIR: test_err_borrow_destructure_field_of_a_binder.shir
+#
+# A place of a destructure that is a field of a bare binder of a match writes through a
+# read-only view: CE2414 at the place, with a note at the name of the variant that binds
+# the binder.
+
+struct Point:
+    i32 x
+    i32 y
+
+enum Shape:
+    Sq(Point)
+    Dot
+
+fn grow(Shape s) i32:
+    match s:
+        Shape.Sq(q) ->
+            let i32 b = 0
+            (q.x, b) := (1, 2)
+            return b
+        Shape.Dot -> return 0
+
+fn main() i32:
+    return grow(Shape.Dot)

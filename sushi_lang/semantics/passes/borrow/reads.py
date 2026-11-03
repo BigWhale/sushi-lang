@@ -8,8 +8,7 @@ narrower copy that forgot the `??` is exactly how `outer.get(0)??.push(5)` went 
 Port templates: the probes that read the AST take an AST node, and no SHIR pass has one.
 No pass reaches them today. The group that checks each construct ports its probes to SHIR
 inputs before a SHIR caller is connected: B7 a `nom` binder of a match (`root_owner`),
-A5 a field (`_field_type`), A6 an element and a slice (`chain_call_boundary`,
-`slice_on_path`), A6 or B2 a container get-out (`called_on`, `reads_through_owner` with
+A6 an element and a slice, A6 or B2 a container get-out (`called_on`, `reads_through_owner` with
 `is_bare_enum_constant`, `receiver_type`, `names_kept_storage`), A8 a constant
 (`constant_sig`, `constant_type`), and D1 a `var` (`unit_variables`).
 """
@@ -33,7 +32,7 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.places import Step, unwrap_try, walk_place
 from sushi_lang.semantics.ownership import is_get_out_container
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.typesys import ReferenceType, StructType, Type
+from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId
@@ -63,18 +62,19 @@ def root_owner(expr: Optional[Expr]) -> Optional[str]:
 
 def borrow_owner(node: object) -> Optional[LocalId]:
     """The local that a borrow of the SHIR place `node` is counted on, and that a binding
-    into `node` freezes: a local, under each `??` that reads it.
+    into `node` freezes: the root local, under each field step and each `??` that reads
+    it. The pass tracks whole locals, not the places in them.
 
-    A field and an element step come with the groups that check a field and an element.
+    An element step comes with the group that checks an element.
     """
-    return walk_place(node, Step.TRY).local
+    return walk_place(node, Step.MEMBER | Step.TRY).local
 
 
-def chain_call_boundary(expr: Optional[Expr]) -> Optional[Span]:
+def chain_call_boundary(expr: object) -> Optional[Span]:
     """The boundary that keeps a write receiver from reaching a root, or None (#352).
 
-    A write receiver must reach its root -- a NAME -- through member and index steps
-    only. Whatever else the walk stops at (a method call, a `??`, a plain call, an
+    A write receiver must reach its root -- a NAME, or the local of a SHIR place --
+    through member and index steps only. Whatever else the walk stops at (a method call, a `??`, a plain call, an
     inline constructor) yields a temporary copy, so a write receiver whose chain
     crosses it cannot reach the storage it appears to write. Deliberately inverted --
     "a Name is fine" rather than a list of boundary kinds -- so a new expression kind
@@ -82,19 +82,19 @@ def chain_call_boundary(expr: Optional[Expr]) -> Optional[Span]:
     of the CE2429 diagnostic.
     """
     end = walk_place(expr, Step.MEMBER | Step.INDEX).node
-    if end is None or isinstance(end, Name):
+    if end is None or isinstance(end, (Name, e.LocalRef)):
         return None
     return end.loc
 
 
-def slice_on_path(expr: Optional[Expr]) -> Optional[IndexAccess]:
+def slice_on_path(expr: object) -> Optional[IndexAccess | e.Slice]:
     """The slice a write through `expr` crosses, or None (S4, docs/design/slices.md).
 
     A slice is a read-only view: a write through it is lost from no one, but a growth
     through it would move storage that the array keeps.
     """
     for node in walk_place(expr, Step.MEMBER | Step.INDEX).path:
-        if isinstance(node, IndexAccess) and node.is_slice:
+        if (isinstance(node, IndexAccess) and node.is_slice) or isinstance(node, e.Slice):
             return node
     return None
 
@@ -229,12 +229,3 @@ def unit_variables(checker: 'BorrowChecker'):
     visible = {**constants.by_name, **own}
     return [(name, sig) for name, sig in visible.items() if sig.is_var]
 
-
-def _field_type(checker: 'BorrowChecker', expr: MemberAccess) -> Optional[Type]:
-    """The declared type of the field a `MemberAccess` names."""
-    receiver = checker.types.resolve_named(read_type(checker, expr.receiver))
-    if isinstance(receiver, ReferenceType):
-        receiver = checker.types.resolve_named(receiver.referenced_type)
-    if isinstance(receiver, StructType):
-        return receiver.get_field_type(expr.member)
-    return None

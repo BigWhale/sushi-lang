@@ -1,0 +1,28 @@
+unit test_err_borrow_poke_field_of_a_constant
+
+ShirBody ORIGIN (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt StructInit(@Point, [adopt Lit(0), adopt Lit(0)], written_order: [0, 1]))
+
+ShirBody inc
+  params : [(_0 "v": i32, Inout)]
+  locals : []
+  block  :
+    Assign(LocalRef(_0), adopt Binary(+, LocalRef(_0), Lit(1)), is_init: false)
+
+ShirBody show
+  params : [(_0 "v": i32, InGuaranteed)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "n": i32]
+  block  :
+    ExprStmt(Call(Free(@show), [(Field(ConstRef(@ORIGIN), "y"), InGuaranteed)]))
+    Assign(LocalRef(_0), adopt Lit(0), is_init: true)
+    ExprStmt(Call(Free(@inc), [(Field(ConstRef(@ORIGIN), "x"), Inout)]))
+    Return(adopt LocalRef(_0))

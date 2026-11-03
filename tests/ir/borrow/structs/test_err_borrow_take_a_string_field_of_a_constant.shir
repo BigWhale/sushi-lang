@@ -1,0 +1,21 @@
+unit test_err_borrow_take_a_string_field_of_a_constant
+
+ShirBody K (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt StructInit(@Named, [adopt Lit("towel"), adopt Lit(42)], written_order: [0, 1]))
+
+ShirBody name
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Field(ConstRef(@K), "n"), Guaranteed)]))
+    Return(reject Field(ConstRef(@K), "name"))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@name), []), Guaranteed)]))
+    Return(adopt Lit(0))

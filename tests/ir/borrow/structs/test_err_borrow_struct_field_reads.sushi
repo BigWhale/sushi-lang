@@ -1,0 +1,66 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 'b'"
+# EXPECT_STDERR_CONTAINS: "'b' was moved here"
+# EXPECT_STDERR_CONTAINS: ":57:13"
+# EXPECT_DUMP_SHIR: test_err_borrow_struct_field_reads.shir
+#
+# A field read is a read of its root. A position that takes a plain field takes a copy of
+# it (`adopt`), also off a constant and off a call. A construction takes each field by
+# position, in the written order. A write of a field of a local or of a `poke` parameter
+# reaches its storage, and so does a `poke` borrow of a field. A `let` of a string field of
+# a constant is a let-borrow (`reject`, no error). A read of a field after a move of its
+# root is CE2405 at the root, with a note at the move.
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Seg:
+    Point a
+    Point b
+
+struct Box:
+    string name
+    i32 n
+
+const Point ORIGIN = Point(3, 4)
+const Box K = Box("towel", 42)
+
+fn inc(poke i32 v) ~:
+    v := v + 1
+
+fn eat(nom Box b) ~:
+    println(b.name)
+
+fn make() Point:
+    return Point(y: 2, x: 1)
+
+fn total(Point p) i32:
+    return p.x + p.y
+
+fn shift(poke Point p) ~:
+    p.x := p.x + 10
+    inc(poke p.y)
+
+fn origin() i32:
+    let i32 x = ORIGIN.x
+    let Point p = ORIGIN
+    let Seg s = Seg(p, Point(x, make().y))
+    println(K.name)
+    let string name = K.name
+    println(name)
+    return x + s.b.y + K.n
+
+fn moved() ~:
+    let Box b = Box("Mostly Harmless", 42)
+    eat(nom b)
+    println(b.n)
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    shift(poke p)
+    p.y := 5
+    inc(poke p.x)
+    println(total(p) + origin())
+    moved()
+    return 0

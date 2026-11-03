@@ -1,0 +1,28 @@
+# EXPECT_ERROR_CODES_EXACT: CE2408
+# EXPECT_STDERR_CONTAINS: "cannot modify 's' through peek reference (read-only)"
+# EXPECT_STDERR_CONTAINS: "'s' is declared here as a read-only borrow"
+# EXPECT_STDERR_CONTAINS: ":23:5"
+# EXPECT_DUMP_SHIR: test_err_borrow_field_write_through_peek.shir
+#
+# A `peek` parameter is a read-only borrow. A read of its fields is legal at any depth, and
+# a write of a field at any depth is CE2408 at the statement, with a note at the parameter.
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Seg:
+    Point a
+    Point b
+
+fn length(peek Seg s) i32:
+    return s.b.x - s.a.x
+
+fn set(peek Seg s) ~:
+    println(s.a.y)
+    s.a.x := 3
+
+fn main() i32:
+    let Seg s = Seg(Point(1, 2), Point(3, 4))
+    set(peek s)
+    return length(peek s)

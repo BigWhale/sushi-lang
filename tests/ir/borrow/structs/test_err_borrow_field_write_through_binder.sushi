@@ -1,0 +1,28 @@
+# EXPECT_ERROR_CODES_EXACT: CE2414
+# EXPECT_STDERR_CONTAINS: "cannot write to binding 'q': a match/foreach binding is a read-only view."
+# EXPECT_STDERR_CONTAINS: "'q' is bound here, as a read-only view"
+# EXPECT_STDERR_CONTAINS: ":23:13"
+# EXPECT_DUMP_SHIR: test_err_borrow_field_write_through_binder.shir
+#
+# A bare binder of a plain struct payload is a read-only view of the payload. A read of its
+# fields is legal, and a write of a field is CE2414 at the statement, with a note at the
+# name of the variant that binds it.
+
+struct Point:
+    i32 x
+    i32 y
+
+enum Shape:
+    Sq(Point)
+    Dot
+
+fn grow(Shape s) i32:
+    match s:
+        Shape.Sq(q) ->
+            println(q.y)
+            q.x := 1
+            return q.x
+        Shape.Dot -> return 0
+
+fn main() i32:
+    return grow(Shape.Sq(Point(1, 2)))

@@ -4,7 +4,7 @@ ShirBody first
   params : [(_0 "m": Maybe@((i32, string)), Guaranteed)]
   locals : [_1 "n": i32]
   block  :
-    Match(LocalRef(_0), [Arm(Variant(@Maybe, "Some", [Tuple([(_1, Bare), Wildcard])]), [Return(LocalRef(_1))]), Arm(Variant(@Maybe, "None", []), [Return(Lit(0))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Variant(@Maybe, "Some", [Tuple([(_1, Bare), Wildcard])]), [Return(adopt LocalRef(_1))]), Arm(Variant(@Maybe, "None", []), [Return(adopt Lit(0))])], consumes: false)
 
 ShirBody wrong
   params : [(_0 "m": Maybe@((i32, string)), Guaranteed)]

@@ -4,7 +4,7 @@ ShirBody ORIGIN (Initializer)
   params : []
   locals : []
   block  :
-    Return(StructInit(@Point, [Lit(0), Lit(0)], written_order: [0, 1]))
+    Return(adopt StructInit(@Point, [adopt Lit(0), adopt Lit(0)], written_order: [0, 1]))
 
 ShirBody main
   params : []

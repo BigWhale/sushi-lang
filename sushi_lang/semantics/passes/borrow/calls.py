@@ -30,6 +30,7 @@ from .borrows import BY_ADDRESS, acquire_borrow, check_borrow, register_implicit
 from .iterators import take_lent_iterator
 from .consume import consume, consume_each, read_through_receiver, source_provenance
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, spelled
+from .expressions import stop_at_a_field_take
 from .methods import CONTAINER_INSERT_METHODS, callee_effect
 from .reads import OWNER_STEPS, borrow_owner, called_on, read_type
 from .state import BorrowState
@@ -85,6 +86,7 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
              for arg, convention in zip(node.args, conventions, strict=True)]
     for arg, mode in zip(node.args, modes, strict=True):
         if mode is None:
+            stop_at_a_field_take(checker, arg)
             arms.check(checker, arg.value)
         else:
             check_borrow(checker, arg.value, mode, arg.marker_loc or arg.value.loc)

@@ -1,0 +1,76 @@
+unit test_err_borrow_struct_field_reads
+
+ShirBody ORIGIN (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt StructInit(@Point, [adopt Lit(3), adopt Lit(4)], written_order: [0, 1]))
+
+ShirBody K (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt StructInit(@Box, [adopt Lit("towel"), adopt Lit(42)], written_order: [0, 1]))
+
+ShirBody inc
+  params : [(_0 "v": i32, Inout)]
+  locals : []
+  block  :
+    Assign(LocalRef(_0), adopt Binary(+, LocalRef(_0), Lit(1)), is_init: false)
+
+ShirBody eat
+  params : [(_0 "b": Box, Owned)]
+  locals : []
+  block  :
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_0), "name"), Guaranteed)]))
+
+ShirBody make
+  params : []
+  locals : []
+  block  :
+    Return(adopt StructInit(@Point, [adopt Lit(1), adopt Lit(2)], written_order: [1, 0], named: true))
+
+ShirBody total
+  params : [(_0 "p": Point, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(+, Field(LocalRef(_0), "x"), Field(LocalRef(_0), "y")))
+
+ShirBody shift
+  params : [(_0 "p": Point, Inout)]
+  locals : []
+  block  :
+    Assign(Field(LocalRef(_0), "x"), adopt Binary(+, Field(LocalRef(_0), "x"), Lit(10)), is_init: false)
+    ExprStmt(Call(Free(@inc), [(Field(LocalRef(_0), "y"), Inout)]))
+
+ShirBody origin
+  params : []
+  locals : [_0 "x": i32, _1 "p": Point, _2 "s": Seg, _3 "name": string]
+  block  :
+    Assign(LocalRef(_0), adopt Field(ConstRef(@ORIGIN), "x"), is_init: true)
+    Assign(LocalRef(_1), adopt ConstRef(@ORIGIN), is_init: true)
+    Assign(LocalRef(_2), adopt StructInit(@Seg, [adopt LocalRef(_1), adopt StructInit(@Point, [adopt LocalRef(_0), adopt Field(Call(Free(@make), []), "y")], written_order: [0, 1])], written_order: [0, 1]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Field(ConstRef(@K), "name"), Guaranteed)]))
+    Assign(LocalRef(_3), reject Field(ConstRef(@K), "name"), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_3), Guaranteed)]))
+    Return(adopt Binary(+, Binary(+, LocalRef(_0), Field(Field(LocalRef(_2), "b"), "y")), Field(ConstRef(@K), "n")))
+
+ShirBody moved
+  params : []
+  locals : [_0 "b": Box]
+  block  :
+    Assign(LocalRef(_0), adopt StructInit(@Box, [adopt Lit("Mostly Harmless"), adopt Lit(42)], written_order: [0, 1]), is_init: true)
+    ExprStmt(Call(Free(@eat), [(move LocalRef(_0), Owned)]))
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_0), "n"), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "p": Point]
+  block  :
+    Assign(LocalRef(_0), adopt StructInit(@Point, [adopt Lit(1), adopt Lit(2)], written_order: [0, 1]), is_init: true)
+    ExprStmt(Call(Free(@shift), [(LocalRef(_0), Inout)]))
+    Assign(Field(LocalRef(_0), "y"), adopt Lit(5), is_init: false)
+    ExprStmt(Call(Free(@inc), [(Field(LocalRef(_0), "x"), Inout)]))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(+, Call(Free(@total), [(LocalRef(_0), Guaranteed)]), Call(Free(@origin), [])), Guaranteed)]))
+    ExprStmt(Call(Free(@moved), []))
+    Return(adopt Lit(0))

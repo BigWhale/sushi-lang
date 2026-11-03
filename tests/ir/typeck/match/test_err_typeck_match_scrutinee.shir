@@ -24,5 +24,5 @@ ShirBody main
   block  :
     ExprStmt(Call(Intrinsic("println"), [(Call(Free(@kind), [(Lit(2), Guaranteed)]), Guaranteed)]))
     ExprStmt(Call(Intrinsic("println"), [(Call(Free(@command), [(Lit("get"), Guaranteed)]), Guaranteed)]))
-    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@where), [(StructInit(@Point, [Lit(1), Lit(2)], written_order: [0, 1]), Guaranteed)]), Guaranteed)]))
-    Return(Lit(0))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@where), [(StructInit(@Point, [adopt Lit(1), adopt Lit(2)], written_order: [0, 1]), Guaranteed)]), Guaranteed)]))
+    Return(adopt Lit(0))

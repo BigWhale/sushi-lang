@@ -10,6 +10,7 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import Expr, MemberAccess, MethodLike
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
+from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import ReferenceType
 
 from .diagnostics import parameter_escape, spelled, write_escape
@@ -158,7 +159,7 @@ def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike,
 
 def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
                           span: Optional[Span], what: str,
-                          receiver: Optional[Expr] = None,
+                          receiver: Optional[Expr | e.ShirExpr] = None,
                           *, rebind: bool = False) -> bool:
     """THE gate: a write that cannot reach the value it appears to write is rejected.
 
@@ -167,8 +168,8 @@ def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
     Half the table answers differently there (`refuses_a_rebind`), which is why the
     position is an argument and not a second gate -- one of those grew beside this one
     and covered a single kind, so a match binding was rebindable and freed the owner's
-    payload (#590). `receiver` is the AST receiver of a write through a place, which the
-    field and element groups port to SHIR.
+    payload (#590). `receiver` is the receiver of a write through a place: the base of a
+    SHIR field, or an AST receiver of a port template.
     """
     # The sixth kind keys on SHAPE, not on the state of a name (#352, #407): past a call
     # boundary the receiver is a temporary copy, whatever the root's mode is -- so this
@@ -215,7 +216,7 @@ def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
     return False
 
 
-def reject_write_through_slice(checker: 'BorrowChecker', receiver: Expr,
+def reject_write_through_slice(checker: 'BorrowChecker', receiver: Expr | e.ShirExpr,
                                 span: Optional[Span], what: str) -> bool:
     """CE2426 for a write whose receiver crosses a slice (S4). True when refused.
 
@@ -226,10 +227,11 @@ def reject_write_through_slice(checker: 'BorrowChecker', receiver: Expr,
     if view is None:
         return False
     text = spelled(checker, view)
+    array = view.base if isinstance(view, e.Slice) else view.array
     diag = checker.err.emit_with(er.ERR.CE2426, span, name=text)
     if view.loc is not None:
         diag.note_at(f"'{text}' is a slice, a read-only view of the storage of "
-                     f"'{spelled(checker, view.array)}'", view.loc)
+                     f"'{spelled(checker, array)}'", view.loc)
     diag.help(f"the write ({what}) would go through a view, and a growth would move "
               "storage that the array keeps; write to the array directly, or copy the "
               "part with `.ss(start, count)`")

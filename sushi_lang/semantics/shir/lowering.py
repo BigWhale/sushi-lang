@@ -336,6 +336,16 @@ def _owner_type(decl: Declaration, ctx: LoweringContext) -> Optional[TypeRef]:
     return None
 
 
+def _owner_type_span(decl: Declaration, ctx: LoweringContext) -> Optional[Span]:
+    """Where the type that a method extends is written: the span of its receiver, where a
+    note about the receiver points."""
+    if isinstance(decl, ExtendDef):
+        return decl.target_type_span
+    if isinstance(decl, FuncDef) and ctx.owner is not None:
+        return ctx.owner.target_type_span
+    return None
+
+
 def _written_name(decl: Declaration, ctx: LoweringContext) -> str:
     """The name of the declaration as the source writes it; a method has its type before it.
 
@@ -371,7 +381,8 @@ def _frame(decl: Declaration, bindings: Bindings,
             isinstance(decl, ExtendDef) and decl.is_static):
         local = binder_local(bindings, decl, "self")
         params.append(ShirParam(local, receiver, receiver_mode(decl.self_mode).convention,
-                                _span(decl.self_mode_span, decl.name_span, decl.loc),
+                                _span(_owner_type_span(decl, ctx), decl.self_mode_span,
+                                      decl.name_span, decl.loc),
                                 pack=False))
         locals_.append(ShirLocal(local, "self", None, None))
     for param in decl.params:

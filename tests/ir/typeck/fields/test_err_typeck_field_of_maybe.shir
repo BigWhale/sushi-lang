@@ -4,8 +4,8 @@ ShirBody find
   params : [(_0 "hit": bool, Guaranteed)]
   locals : []
   block  :
-    If(LocalRef(_0), then: [Return(EnumInit(@Maybe, "Some", [StructInit(@Point, [Lit(1), Lit(2)], written_order: [0, 1])]))])
-    Return(EnumInit(@Maybe, "None", []))
+    If(LocalRef(_0), then: [Return(adopt EnumInit(@Maybe, "Some", [adopt StructInit(@Point, [adopt Lit(1), adopt Lit(2)], written_order: [0, 1])]))])
+    Return(adopt EnumInit(@Maybe, "None", []))
 
 ShirBody main
   params : []

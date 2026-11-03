@@ -1,0 +1,27 @@
+# EXPECT_ERROR_CODES_EXACT: CE2407
+# EXPECT_STDERR_CONTAINS: "first borrowed here"
+# EXPECT_STDERR_CONTAINS: ":26:10"
+# EXPECT_DUMP_SHIR: test_err_borrow_owning_field_beside_a_poke_of_its_root.shir
+#
+# An unmarked argument that reads an owning field is a shared borrow of the root of the
+# field for the call. A plain field beside a `poke` of its root is a copy and is legal, and
+# so is an owning field of another local. An owning field beside a `poke` of its root in
+# one call is CE2407.
+
+struct Box:
+    string name
+    i32 n
+
+fn both(string s, poke Box b) ~:
+    b.n := s.len()
+
+fn count(i32 n, poke Box b) ~:
+    b.n := n
+
+fn main() i32:
+    let Box a = Box("Mostly Harmless", 1)
+    let Box b = Box("towel", 2)
+    count(b.n, poke b)
+    both(a.name, poke b)
+    both(b.name, poke b)
+    return b.n

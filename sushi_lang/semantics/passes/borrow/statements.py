@@ -8,10 +8,12 @@ An `Assign` of a local is a `let` (`is_init`) or a rebind. A `let` BINDS: it dec
 local, then takes its value by the decision of a consuming use (`bind`). A rebind
 RE-INITIALIZES the local: it is refused through a view of another value's storage
 (`reject_readonly_write`), it takes its value as a consuming use, and every fact about the
-old value goes. A `return` hands its value to the caller, a consuming use. An expression
-statement reads its value. The `Assign` of any other place is checked by the field and
-element groups, and the `return` of a `peek` return by its own group: each stops the
-walk.
+old value goes. A write of a field changes its root in place: it is refused through a
+read-only view of the root, and it takes its value as a consuming use. A destructure
+takes its value as a consuming use, declares its binders, and rebinds its places from left
+to right. A `return` hands its value to the caller, a consuming use. An expression
+statement reads its value. The `Assign` of an element is checked by the element group,
+and the `return` of a `peek` return by its own group: each stops the walk.
 
 An `if` checks each block from the state before it, and the paths that reach the code
 after it join. A `match` reads its scrutinee (`match nom r:` takes it), each arm declares
@@ -30,8 +32,10 @@ from typing import TYPE_CHECKING, Callable, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.report import Span
 
 from sushi_lang.semantics.ownership import TypeClass
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.nodes import ShirBlock
@@ -40,7 +44,7 @@ from sushi_lang.semantics.typesys import ReferenceType
 
 from . import arms
 from .bindings import bare_binders, declare_bare_binders, release_binding_borrow
-from .borrows import clear_borrows
+from .borrows import LATER_ROOTS, clear_borrows
 from .consume import bind, binds_a_bare_literal_string, consume
 from .expressions import reject_a_use_after_the_change
 from .flow import (
@@ -52,6 +56,7 @@ from .flow import (
     restore_flow,
     snapshot_flow,
 )
+from .reads import borrow_owner, read_type
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -87,9 +92,11 @@ def check_block(checker: 'BorrowChecker', block: ShirBlock) -> None:
 
 
 def check_assign(checker: 'BorrowChecker', node: s.Assign) -> None:
-    if not isinstance(node.target, e.LocalRef):
+    if isinstance(node.target, e.Field):
+        _check_field_write(checker, node, node.target)
+    elif not isinstance(node.target, e.LocalRef):
         arms.stop_at(checker, node)
-    if node.is_init:
+    elif node.is_init:
         _check_let(checker, node, node.target.local)
     else:
         _check_rebind(checker, node, node.target.local)
@@ -116,35 +123,133 @@ def _check_let(checker: 'BorrowChecker', node: s.Assign, local: LocalId) -> None
 
 def _check_rebind(checker: 'BorrowChecker', node: s.Assign, local: LocalId) -> None:
     """`x := v`: the local takes ownership of a new value."""
-    state = checker.borrow_state.get(local)
     # No "rebind while borrowed" check here, deliberately: this runs BEFORE the value
     # walk, and moving it after would reject `x := f(peek x)`. CE2401 lives at the
     # consuming use instead.
-    if state is not None:
-        # THE gate, in the rebind position: a name that is a view of another value's
-        # storage cannot be rebound, a name with storage of its own can. A `poke`
-        # reference is the middle case and stays legal -- the store goes through the
-        # pointer, which is what the mode is for.
-        refused = reject_readonly_write(checker, local, node.loc, "rebind the name",
-                                        rebind=True)
-        # The store goes through the pointer, so it is a USE of the reference: after a
-        # change of its owner it writes into storage the owner no longer holds.
-        if not refused and isinstance(state.var_type, ReferenceType):
-            reject_a_use_after_the_change(checker, local, node.target.loc)
-        # Option B: RE-DERIVE, never inherit. A rebind can only CLEAR this flag, never
-        # set it on a value that owns heap.
-        state.owns_no_heap = binds_a_bare_literal_string(state.var_type, node.value)
+    _reject_readonly_rebind(checker, node.target, node.loc, node.value)
     arms.check(checker, node.value)
     # Replacing what the owner holds invalidates every binding reading out of it (#242).
     check_owner_not_borrowed(checker, local, node.loc, "assign", place=node.target)
     consume(checker, node.value)
-    # The rebind drops the old value, so it is an exit of that value: one moved on some
-    # paths only needs the drop flag (`flow.record_rebind`).
+    _reinitialize(checker, local)
+
+
+def _reject_readonly_rebind(checker: 'BorrowChecker', target: e.LocalRef,
+                            span: Optional[Span], value: Optional[e.ShirExpr]) -> None:
+    """The gates of a rebind of a local, before its value. `value` is None for a place of a
+    destructure, which takes an element and never a literal."""
+    state = checker.borrow_state.get(target.local)
+    if state is None:
+        return
+    # THE gate, in the rebind position: a name that is a view of another value's storage
+    # cannot be rebound, a name with storage of its own can. A `poke` reference is the
+    # middle case and stays legal -- the store goes through the pointer, which is what
+    # the mode is for.
+    refused = reject_readonly_write(checker, target.local, span, "rebind the name",
+                                    rebind=True)
+    # The store goes through the pointer, so it is a USE of the reference: after a change
+    # of its owner it writes into storage the owner no longer holds.
+    if not refused and isinstance(state.var_type, ReferenceType):
+        reject_a_use_after_the_change(checker, target.local, target.loc)
+    # Option B: RE-DERIVE, never inherit. A rebind can only CLEAR this flag, never set it
+    # on a value that owns heap.
+    state.owns_no_heap = binds_a_bare_literal_string(state.var_type, value)
+
+
+def _reinitialize(checker: 'BorrowChecker', local: LocalId) -> None:
+    """The rebind drops the old value, so it is an exit of that value: one moved on some
+    paths only needs the drop flag (`flow.record_rebind`). A rebind RE-INITIALIZES, so a
+    previous move no longer holds. The value was checked before, so `s := "{s}-x"` still
+    reports the moved `s`."""
     record_rebind(checker, local)
-    # A rebind RE-INITIALIZES, so a previous move no longer holds. The value was checked
-    # above, so `s := "{s}-x"` still reports the moved `s`.
+    state = checker.borrow_state.get(local)
     if state is not None:
         reinitialize(state)
+
+
+def _check_field_write(checker: 'BorrowChecker', node: s.Assign, target: e.Field) -> None:
+    """`p.x := v`: a write of a field changes its root in place, and takes the value as a
+    consuming use."""
+    _reject_readonly_field_write(checker, target, node.loc)
+    arms.check(checker, node.value)
+    # Replacing what the owner holds invalidates every binding reading out of it (#242).
+    check_owner_not_borrowed(checker, borrow_owner(target), node.loc, "assign",
+                             place=target)
+    consume(checker, node.value)
+
+
+def _reject_readonly_field_write(checker: 'BorrowChecker', target: e.Field,
+                                 span: Optional[Span]) -> None:
+    """The gate of a write of a field, then the read of the field. A write is allowed
+    unless its root is a read-only view, where the store cannot reach what it writes, or
+    a temporary (CE2429). A root that a later group checks stops the walk."""
+    root = walk_place(target, Step.MEMBER).node
+    if isinstance(root, LATER_ROOTS):
+        arms.stop_at(checker, root)
+    reject_readonly_write(checker, borrow_owner(target), span, "assign to a field",
+                          receiver=target.base)
+    arms.check(checker, target)
+
+
+def check_destructure(checker: 'BorrowChecker', node: s.Destructure) -> None:
+    """`let (a, b) = v` and `(a, b) := v` of plain values (docs/design/ir.md 7.5).
+
+    The value is checked first, and it is a consuming use: a plain value is a copy. A `let`
+    declares each binder as a local of its own, at any nesting level. A rebind form then
+    rebinds each place from left to right, through the gates of a rebind of a local or of
+    a write of a field, at the span of the place. A value that owns stops the walk after
+    the gates of the places: each binder owns or borrows an element of it, and a later
+    group checks that.
+    """
+    arms.check(checker, node.value)
+    owns = checker.types.type_class(read_type(checker, node.value)) is TypeClass.MOVE
+    if not owns:
+        consume(checker, node.value)
+    targets = _targets(node.targets)
+    for target in targets:
+        if isinstance(target, s.Place):
+            _rebind_place(checker, target.target)
+    if owns:
+        arms.stop_at(checker, node)
+    for target in targets:
+        if not isinstance(target, s.Place):
+            _declare_binder(checker, target)
+    clear_borrows(checker)
+
+
+def _targets(targets: Sequence[s.DestructureTarget]) -> list[LocalId | s.Place]:
+    """The binders and the places of a destructure, from left to right, at any nesting
+    level. A `_` binds nothing."""
+    found: list[LocalId | s.Place] = []
+    for target in targets:
+        if isinstance(target, s.Nested):
+            found.extend(_targets(target.targets))
+        elif not isinstance(target, s.Discard):
+            found.append(target)
+    return found
+
+
+def _declare_binder(checker: 'BorrowChecker', local: LocalId) -> None:
+    shir_local = checker.locals.get(local)
+    checker.declare(BorrowState(name=checker.name_of(local), local=local,
+                                var_type=checker.local_type(local),
+                                declared_at_span=shir_local.loc if shir_local else None))
+    checker.block_locals[-1].append(local)
+
+
+def _rebind_place(checker: 'BorrowChecker', place: e.ShirExpr) -> None:
+    """A place of a rebind form takes its element: a local is rebound, and a field is
+    written. Typecheck gives a place of no other kind no answer, and stops first."""
+    if isinstance(place, e.Field):
+        _reject_readonly_field_write(checker, place, place.loc)
+        check_owner_not_borrowed(checker, borrow_owner(place), place.loc, "assign",
+                                 place=place)
+        return
+    if not isinstance(place, e.LocalRef):
+        arms.stop_at(checker, place)
+    _reject_readonly_rebind(checker, place, place.loc, None)
+    check_owner_not_borrowed(checker, place.local, place.loc, "assign", place=place)
+    _reinitialize(checker, place.local)
 
 
 def check_return(checker: 'BorrowChecker', node: s.Return) -> None:
@@ -216,13 +321,18 @@ def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
     """A match reads its scrutinee, and `match nom r:` takes it over, a consuming use. The
     arms are exclusive paths, and they join as the blocks of an `if` do. The arms cover
     each value (the typecheck pass), so no path skips them. Each arm declares its bare
-    binders of plain payloads before its body. A match with a binder of another kind, or
-    with a bare binder of a payload that owns, stops the walk: later groups check it."""
+    binders of plain payloads and plain tuple parts before its body. A match with a binder
+    of another kind, with a bare binder of a payload or part that owns, or with a tuple
+    literal that owns as its scrutinee, stops the walk: later groups check it. A tuple
+    literal of plain parts is checked as any tuple: each part is a copy."""
     binders = [bare_binders(arm.pattern) for arm in node.arms]
     if any(found is None for found in binders):
         arms.stop_at(checker, node)
     if any(checker.types.type_class(checker.local_type(local)) is TypeClass.MOVE
            for found in binders for local, _at in found or ()):
+        arms.stop_at(checker, node)
+    if (isinstance(node.scrutinee, e.TupleInit) and checker.types.type_class(
+            read_type(checker, node.scrutinee)) is TypeClass.MOVE):
         arms.stop_at(checker, node)
     arms.check(checker, node.scrutinee)
     if node.consumes:

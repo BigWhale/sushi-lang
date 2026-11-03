@@ -1,0 +1,51 @@
+unit test_err_borrow_tuple_match_binds_plain_parts
+
+ShirBody pair
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt TupleInit([adopt LocalRef(_0), adopt Binary(+, LocalRef(_0), Lit(1))]))
+
+ShirBody first
+  params : [(_0 "t": (i32, i32), Guaranteed)]
+  locals : [_1 "y": i32, _2 "x": i32, _3 "x": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Tuple([Literal(0), (_1, Bare)]), [Return(adopt LocalRef(_1))]), Arm(Tuple([(_2, Bare), Or([Literal(1), Literal(2)])]), [Return(adopt LocalRef(_2))]), Arm(Tuple([(_3, Bare), Wildcard]), [Return(adopt Binary(+, LocalRef(_3), Lit(1)))])], consumes: false)
+
+ShirBody both
+  params : [(_0 "a": i32, Guaranteed), (_1 "b": i32, Guaranteed)]
+  locals : [_2 "x": i32, _3 "y": i32]
+  block  :
+    Match(TupleInit([adopt LocalRef(_0), adopt LocalRef(_1)]), [Arm(Tuple([Literal(0), Literal(0)]), [Return(adopt Lit(0))]), Arm(Tuple([(_2, Bare), (_3, Bare)]), [Return(adopt Binary(*, LocalRef(_2), LocalRef(_3)))])], consumes: false)
+
+ShirBody inner
+  params : [(_0 "m": Maybe@((i32, i32)), Guaranteed)]
+  locals : [_1 "x": i32, _2 "y": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Maybe, "Some", [Tuple([(_1, Bare), (_2, Bare)])]), [Return(adopt Binary(+, LocalRef(_1), LocalRef(_2)))]), Arm(Variant(@Maybe, "None", []), [Return(adopt Lit(0))])], consumes: false)
+
+ShirBody outer
+  params : [(_0 "t": (Maybe@(i32), i32), Guaranteed)]
+  locals : [_1 "v": i32, _2 "k": i32, _3 "k": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Tuple([Variant(@Maybe, "Some", [(_1, Bare)]), (_2, Bare)]), [Return(adopt Binary(+, LocalRef(_1), LocalRef(_2)))]), Arm(Tuple([Variant(@Maybe, "None", []), (_3, Bare)]), [Return(adopt LocalRef(_3))])], consumes: false)
+
+ShirBody taken
+  params : [(_0 "n": i32, Guaranteed)]
+  locals : [_1 "t": (i32, i32), _2 "x": i32, _3 "y": i32]
+  block  :
+    Assign(LocalRef(_1), adopt Call(Free(@pair), [(LocalRef(_0), Guaranteed)]), is_init: true)
+    Match(adopt LocalRef(_1), [Arm(Tuple([(_2, Bare), (_3, Bare)]), [Return(adopt Binary(-, LocalRef(_2), LocalRef(_3)))])], consumes: true)
+
+ShirBody pick
+  params : [(_0 "t": (i32, i32), Guaranteed)]
+  locals : [_1 "y": i32]
+  block  :
+    Match(LocalRef(_0), [Arm(Tuple([Literal(1), (_1, Bare)]), [Assign(LocalRef(_1), adopt Lit(2), is_init: false), Return(adopt LocalRef(_1))]), Arm(Wildcard, [Return(adopt Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32]
+  block  :
+    Assign(LocalRef(_0), adopt Binary(+, Binary(+, Call(Free(@first), [(Call(Free(@pair), [(Lit(1), Guaranteed)]), Guaranteed)]), Call(Free(@both), [(Lit(2), Guaranteed), (Lit(3), Guaranteed)])), Call(Free(@inner), [(EnumInit(@Maybe, "Some", [adopt TupleInit([adopt Lit(1), adopt Lit(2)])]), Guaranteed)])), is_init: true)
+    Return(adopt Binary(+, Binary(+, Binary(+, LocalRef(_0), Call(Free(@outer), [(TupleInit([adopt EnumInit(@Maybe, "Some", [adopt Lit(1)]), adopt Lit(2)]), Guaranteed)])), Call(Free(@taken), [(Lit(3), Guaranteed)])), Call(Free(@pick), [(TupleInit([adopt Lit(1), adopt Lit(2)]), Guaranteed)])))

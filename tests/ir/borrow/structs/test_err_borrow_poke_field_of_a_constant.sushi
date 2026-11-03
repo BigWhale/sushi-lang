@@ -1,0 +1,25 @@
+# EXPECT_ERROR_CODES_EXACT: CE2400
+# EXPECT_STDERR_CONTAINS: "cannot borrow 'ORIGIN' with `poke`"
+# EXPECT_STDERR_CONTAINS: ":24:14"
+# EXPECT_DUMP_SHIR: test_err_borrow_poke_field_of_a_constant.shir
+#
+# A borrow of a field of a constant is a borrow of the constant. A `peek` of it reads
+# read-only storage, and a `poke` of it is CE2400 at the name of the constant.
+
+struct Point:
+    i32 x
+    i32 y
+
+const Point ORIGIN = Point(0, 0)
+
+fn inc(poke i32 v) ~:
+    v := v + 1
+
+fn show(peek i32 v) ~:
+    println(v)
+
+fn main() i32:
+    show(peek ORIGIN.y)
+    let i32 n = 0
+    inc(poke ORIGIN.x)
+    return n

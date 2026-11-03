@@ -1,0 +1,25 @@
+# EXPECT_ERROR_CODES_EXACT: CE2422
+# EXPECT_STDERR_CONTAINS: "cannot write through 'p': a by-value function parameter is a read-only borrow"
+# EXPECT_STDERR_CONTAINS: "'p' is declared here, as a by-value parameter of a function"
+# EXPECT_STDERR_CONTAINS: ":21:5"
+# EXPECT_DUMP_SHIR: test_err_borrow_field_write_through_value_param.shir
+#
+# A parameter with no mode is a borrow too. A write of a field of a local copy of it is
+# legal, and a write of a field of the parameter is CE2422 at the statement, with a note at
+# the parameter.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn moved(Point p) i32:
+    let Point q = p
+    q.x := q.x + 1
+    return q.x
+
+fn set(Point p) ~:
+    p.x := 1
+
+fn main() i32:
+    set(Point(1, 2))
+    return moved(Point(3, 4))

@@ -1,0 +1,49 @@
+# EXPECT_ERROR_CODES_EXACT: CE2408
+# EXPECT_STDERR_CONTAINS: "cannot modify 'p' through peek reference (read-only)"
+# EXPECT_STDERR_CONTAINS: "'p' is declared here as a read-only borrow"
+# EXPECT_STDERR_CONTAINS: ":42:6"
+# EXPECT_DUMP_SHIR: test_err_borrow_destructure_plain_values.shir
+#
+# A destructure of plain values takes its value as a copy (`adopt`). A `let` declares each
+# binder as a local of its own, also at a nested level and from a borrowed parameter, so a
+# rebind of a binder is legal. A rebind form evaluates its value first, then rebinds each
+# place from left to right: a local, a by-value parameter, and a field of a local or of a
+# `poke` parameter. A place that is a field of a `peek` parameter is CE2408 at the place,
+# with a note at the parameter.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn pair() (i32, i32):
+    return (1, 2)
+
+fn sum((i32, i32) t) i32:
+    let (a, b) = t
+    a := a + 1
+    let ((c, _), d) = ((a, b), 3)
+    return a + b + c + d
+
+fn swap(i32 a) i32:
+    let i32 b = 2
+    (a, b) := (b, a)
+    let Point p = Point(1, 2)
+    (p.x, b) := pair()
+    ((p.y, a), b) := ((b, p.x), a)
+    return a + b + p.x
+
+fn shift(poke Point p) ~:
+    let i32 b = 0
+    (p.x, b) := (p.y, p.x)
+    println(b)
+
+fn set(peek Point p) ~:
+    let i32 b = 0
+    (p.x, b) := (1, 2)
+    println(b)
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    shift(poke p)
+    set(peek p)
+    return sum(pair()) + swap(1)

@@ -17,10 +17,12 @@ from sushi_lang.semantics.constant_borrow import reject_borrow_of_constant
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.passes.collect import ConstSig
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import BorrowMode
 from . import arms
 from .diagnostics import emit_use_after_move, spelled
+from .reads import read_type
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -30,34 +32,40 @@ if TYPE_CHECKING:
 #: The mode of the borrow that a value passed by address takes (docs/design/ir.md 8.3).
 BY_ADDRESS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
 
+#: The roots of a place that a later group checks: an element and a slice (A6), a `var`
+#: (A9) and a function used as a value.
+LATER_ROOTS = (e.Index, e.Slice, e.StorageRef, e.GlobalRef)
+
 
 def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
                  span: Optional[Span]) -> None:
-    """Borrow `place` for the statement: `peek x`, `poke x`.
+    """Borrow `place` for the statement: `peek x`, `poke x`, `peek x.f`, `poke x.f.g`.
 
-    A place is a local or a constant here. A field place is not checked yet: it comes with
-    the field group, and it stops the walk (`borrow, Field`). A constant is read-only
-    storage that the program keeps, so it has an address and no borrow state: a `peek` of it
-    reads it, and a `poke` of it is CE2400 at the place, bare or behind an alias. A stdlib
+    A borrow of a field is counted on the ROOT of the place: the pass tracks whole locals,
+    not the places in them. A constant is read-only storage that the program keeps, so it
+    has an address and no borrow state: a `peek` of it or of its field reads it, and a
+    `poke` is CE2400 at the name of the constant, bare or behind an alias. A stdlib
     constant has no record and no storage, so both modes are CE2400
     (`reject_borrow_of_constant`). A call result, a literal and a construction are
-    temporaries and have no address: CE2404.
+    temporaries and have no address, and nor does a field of one: CE2404. A root that a
+    later group checks (`LATER_ROOTS`) stops the walk.
     """
     is_poke = mode is BorrowMode.POKE
-    if isinstance(place, e.ConstRef):
-        name = checker.decl_name(place.const_id).rpartition(".")[2]
-        record = checker.constant_record(place)
+    root = walk_place(place, Step.MEMBER).node
+    if isinstance(root, e.ConstRef):
+        name = checker.decl_name(root.const_id).rpartition(".")[2]
+        record = checker.constant_record(root)
         sig = record if isinstance(record, ConstSig) else None
-        reject_borrow_of_constant(checker.err, name, sig, place.loc, mode=mode.value,
+        reject_borrow_of_constant(checker.err, name, sig, root.loc, mode=mode.value,
                                   no_frame_slot=sig is None)
         return
-    if isinstance(place, e.Field):
-        arms.stop_at(checker, place)
-    if not isinstance(place, e.LocalRef):
+    if isinstance(root, LATER_ROOTS):
+        arms.stop_at(checker, root)
+    if not isinstance(root, e.LocalRef):
         checker.err.emit(er.ERR.CE2404, span, expr=spelled(checker, place))
         return
 
-    state = checker.borrow_state.get(place.local)
+    state = checker.borrow_state.get(root.local)
     if state is None:
         return
 
@@ -68,11 +76,11 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     if is_poke:
         # A `poke` of a read-only receiver hands the write to a callee, which upgrades
         # the borrow (CE2408 / CE2414 / CE2421). A `peek` stays legal.
-        if reject_readonly_write(checker, place.local, span, "take a `poke` borrow"):
+        if reject_readonly_write(checker, root.local, span, "take a `poke` borrow"):
             return
         # A `poke` may mutate or free, so it conflicts with a live `let`-borrow like a
         # mutating method (#242). CE2412 not CE2407: the user wrote no `peek`.
-        check_owner_not_borrowed(checker, place.local, span, "take `poke`", place=place)
+        check_owner_not_borrowed(checker, root.local, span, "take `poke`", place=place)
 
     acquire_borrow(checker, state, span, is_poke=is_poke)
 
@@ -118,15 +126,19 @@ def _conflict(checker: 'BorrowChecker', code: ErrorMessage, state: BorrowState,
 def register_implicit_borrow(checker: 'BorrowChecker', arg: e.ShirExpr) -> None:
     """Count an unmarked argument of an owning local as the shared borrow it now is.
 
-    A field or an element read whose value owns a resource is a shared borrow of its root
-    owner by the same rule; the field group adds it.
+    A field read whose value owns a resource is a shared borrow of its ROOT owner by the
+    same rule: the callee reads storage that a `poke` of the owner can move. A plain field
+    is a copy. An element read comes with the element group.
     """
-    if not isinstance(arg, e.LocalRef):
+    walked = walk_place(arg, Step.MEMBER)
+    if walked.local is None:
         return
-    state = checker.borrow_state.get(arg.local)
+    state = checker.borrow_state.get(walked.local)
     if state is None or state.is_moved:
         return
-    if checker.types.type_class_of_source(state, state.var_type) is not TypeClass.MOVE:
+    owns = (checker.types.type_class(read_type(checker, arg)) if walked.path
+            else checker.types.type_class_of_source(state, state.var_type))
+    if owns is not TypeClass.MOVE:
         return
     acquire_borrow(checker, state, arg.loc, is_poke=False)
 

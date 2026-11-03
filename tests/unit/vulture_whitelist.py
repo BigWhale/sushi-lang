@@ -186,7 +186,6 @@ WHITELIST += (
     (_BORROW + "calls.py", "settle_receiver", _kept("A", "A10: method calls")),
     (_BORROW + "calls.py", "settle_method_args", _kept("A", "A10: method calls")),
     (_BORROW + "writes.py", "maybe_reject_mutation", _kept("A", "A10: method calls")),
-    (_BORROW + "reads.py", "_field_type", _ast_probe("A5")),
     (_BORROW + "reads.py", "constant_type", _ast_probe("A8")),
     (_BORROW + "calls.py", "reject_self_aliasing_copy", _kept("B", "B1: owning arrays")),
     (_BORROW + "consume.py", "reject_slice_of_temporary", _kept("B", "B1: owning arrays")),

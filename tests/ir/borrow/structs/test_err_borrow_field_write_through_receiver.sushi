@@ -1,0 +1,24 @@
+# EXPECT_ERROR_CODES_EXACT: CE2421
+# EXPECT_STDERR_CONTAINS: "cannot write through 'self': a method receiver is a read-only borrow"
+# EXPECT_STDERR_CONTAINS: "'self' is the receiver of a method on this type, a read-only borrow"
+# EXPECT_STDERR_CONTAINS: ":21:5"
+# EXPECT_DUMP_SHIR: test_err_borrow_field_write_through_receiver.shir
+#
+# The receiver of a method is a read-only borrow unless it is declared `poke self`. A
+# method with a `poke self` receiver writes a field of its receiver. A method with a plain
+# receiver reads its fields, and a write of one is CE2421 at the statement, with a note at
+# the receiver.
+
+struct Point:
+    i32 x
+    i32 y
+
+extend Point grow(poke self) ~:
+    self.x := self.x + self.y
+
+extend Point bump() ~:
+    println(self.x)
+    self.x := 1
+
+fn main() i32:
+    return 0

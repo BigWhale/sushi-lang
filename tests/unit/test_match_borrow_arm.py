@@ -1,9 +1,10 @@
 """The borrow arm of a `match` (docs/design/ir.md 7.9).
 
 A literal arm binds no name: `_`, a literal, a range, and an `Or` of them. A `Variant`
-binds the local of each bare `PatBinding` in it, with the span of the variant name that
-holds it. A `poke`, `peek` or `nom` binder, a `Tuple` and an `Own` are the patterns of
-later groups: a match with one of them stops the walk with `borrow, Match`. The tests run
+and a `Tuple` bind the local of each bare `PatBinding` in them, with the span of the
+variant name or of the tuple pattern that holds it. A `poke`, `peek` or `nom` binder and an
+`Own` are the patterns of later groups: a match with one of them stops the walk with
+`borrow, Match`, and so does a match on a tuple literal that owns. The tests run
 the arm over SHIR built by hand, with a stand-in for the pass; they do not run the
 compiler.
 """
@@ -73,15 +74,30 @@ def test_the_alternatives_of_or_share_one_binder_with_the_span_of_the_first() ->
     assert bare_binders(p.Or(ShirId(44), SPAN, [first, second])) == [(LocalId(1), NAME)]
 
 
+TUPLE = Span(4, 9, 4, 18)
+
+
+def test_a_tuple_binds_each_bare_part_at_the_tuple_pattern() -> None:
+    """A part binder takes the span of its tuple pattern, a variant in a part the span of its
+    variant name, and a tuple in a payload the span of the tuple, as on `main`."""
+    nested = p.Tuple(ShirId(45), INNER, [p.PatBinding(LocalId(3), s.Bare()), _lit(1)])
+    tuple_ = p.Tuple(ShirId(46), TUPLE, [p.PatBinding(LocalId(1), s.Bare()),
+                                         _variant(local=2, at=NAME),
+                                         _variant(local=4, at=NAME, items=[nested]),
+                                         p.Wildcard(ShirId(47), SPAN)])
+    assert bare_binders(tuple_) == [(LocalId(1), TUPLE), (LocalId(2), NAME),
+                                    (LocalId(3), INNER)]
+
+
 @pytest.mark.parametrize("pattern", [
     _variant(s.Ref(BorrowMode.POKE)),
     _variant(s.Ref(BorrowMode.PEEK)),
     _variant(p.Nom()),
     _variant(items=[_variant(p.Nom(), local=2)]),
-    p.Tuple(ShirId(41), SPAN, [_lit(1), p.Wildcard(ShirId(42), SPAN)]),
+    p.Tuple(ShirId(41), SPAN, [_lit(1), p.PatBinding(LocalId(2), p.Nom())]),
     p.Own(ShirId(43), SPAN, p.PatBinding(LocalId(2), s.Bare())),
     p.Or(ShirId(44), SPAN, [_variant(), _variant(p.Nom())]),
-], ids=["poke", "peek", "nom", "nested-nom", "tuple", "own", "or-with-nom"])
+], ids=["poke", "peek", "nom", "nested-nom", "tuple-with-nom", "own", "or-with-nom"])
 def test_a_pattern_of_a_later_group_has_no_bare_binders(pattern: p.ShirPattern) -> None:
     assert bare_binders(pattern) is None
 
@@ -127,4 +143,36 @@ def test_a_bare_binder_of_a_payload_that_owns_stops_with_borrow_match() -> None:
                    [_arm(_variant()), _arm(p.Wildcard(ShirId(20), SPAN))], False)
     with pytest.raises(StageStop) as caught:
         statements.check_match(_Checker(BuiltinType.STRING), node)  # type: ignore[arg-type]
+    assert caught.value.params == {"stage": "borrow", "construct": "Match"}
+
+
+class _TupleTypes:
+    """The stand-in of the type queries: a tuple of a `string` owns."""
+
+    def type_class(self, ty: object) -> TypeClass:
+        return TypeClass.MOVE if ty == "owning tuple" else TypeClass.PLAIN
+
+
+class _TupleChecker:
+    """The stand-in of the pass: the type row of the scrutinee, and no state."""
+    types = _TupleTypes()
+
+    def local_type(self, _local: LocalId) -> object:
+        return BuiltinType.INT32
+
+    def answers(self) -> "_TupleChecker":
+        return self
+
+    def type_of(self, _shir_id: ShirId) -> object:
+        return "owning tuple"
+
+
+def test_a_match_on_a_tuple_literal_that_owns_stops_with_borrow_match() -> None:
+    """The stop comes before the arm reads the scrutinee: a tuple literal takes each part, and
+    a part that owns is a move that a later group checks."""
+    scrutinee = e.TupleInit(ShirId(2), SPAN, [e.LocalRef(ShirId(3), SPAN, LocalId(0)),
+                                              e.LocalRef(ShirId(4), SPAN, LocalId(1))])
+    node = s.Match(ShirId(1), SPAN, scrutinee, [_arm(p.Wildcard(ShirId(20), SPAN))], False)
+    with pytest.raises(StageStop) as caught:
+        statements.check_match(_TupleChecker(), node)  # type: ignore[arg-type]
     assert caught.value.params == {"stage": "borrow", "construct": "Match"}

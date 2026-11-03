@@ -4,7 +4,7 @@ ShirBody make
   params : []
   locals : []
   block  :
-    Return(StructInit(@Point, [Lit(5), Lit(6)], written_order: [0, 1]))
+    Return(adopt StructInit(@Point, [adopt Lit(5), adopt Lit(6)], written_order: [0, 1]))
 
 ShirBody keep
   params : [(_0 "v": i32, Guaranteed)]
@@ -16,7 +16,7 @@ ShirBody width
   params : [(_0 "s": Seg, Guaranteed)]
   locals : []
   block  :
-    Return(Binary(-, Field(Field(LocalRef(_0), "b"), "x"), Field(Field(LocalRef(_0), "a"), "x")))
+    Return(adopt Binary(-, Field(Field(LocalRef(_0), "b"), "x"), Field(Field(LocalRef(_0), "a"), "x")))
 
 ShirBody main
   params : []

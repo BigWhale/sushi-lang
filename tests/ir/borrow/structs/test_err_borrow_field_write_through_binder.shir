@@ -1,0 +1,13 @@
+unit test_err_borrow_field_write_through_binder
+
+ShirBody grow
+  params : [(_0 "s": Shape, Guaranteed)]
+  locals : [_1 "q": Point]
+  block  :
+    Match(LocalRef(_0), [Arm(Variant(@Shape, "Sq", [(_1, Bare)]), [ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_1), "y"), Guaranteed)])), Assign(Field(LocalRef(_1), "x"), adopt Lit(1), is_init: false), Return(adopt Field(LocalRef(_1), "x"))]), Arm(Variant(@Shape, "Dot", []), [Return(adopt Lit(0))])], consumes: false)
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Return(adopt Call(Free(@grow), [(EnumInit(@Shape, "Sq", [adopt StructInit(@Point, [adopt Lit(1), adopt Lit(2)], written_order: [0, 1])]), Guaranteed)]))

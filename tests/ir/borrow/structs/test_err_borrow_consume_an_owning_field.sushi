@@ -1,0 +1,26 @@
+# EXPECT_ERROR_CODES_EXACT: CE2411
+# EXPECT_STDERR_CONTAINS: "cannot consume 'b.name': another owner keeps this value."
+# EXPECT_STDERR_CONTAINS: "'b' owns this value and still frees it"
+# EXPECT_STDERR_CONTAINS: ":22:12"
+# EXPECT_DUMP_SHIR: test_err_borrow_consume_an_owning_field.shir
+#
+# A field read is a borrow of its root. A read of a string field by a borrowed parameter is
+# legal, and a take of a plain field is a copy. A take of a string field by a position that
+# takes it over (here a `return`) is CE2411 at the field, with a note at the owner.
+
+struct Box:
+    string name
+    i32 n
+
+fn show(string s) ~:
+    println(s)
+
+fn name_of(Box b) string:
+    show(b.name)
+    let i32 n = b.n
+    println(n)
+    return b.name
+
+fn main() i32:
+    println(name_of(Box("Mostly Harmless", 42)))
+    return 0

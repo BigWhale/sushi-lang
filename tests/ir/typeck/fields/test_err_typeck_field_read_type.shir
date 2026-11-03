@@ -4,7 +4,7 @@ ShirBody first
   params : [(_0 "p": Point, InGuaranteed)]
   locals : []
   block  :
-    Return(Field(LocalRef(_0), "x"))
+    Return(adopt Field(LocalRef(_0), "x"))
 
 ShirBody main
   params : []
