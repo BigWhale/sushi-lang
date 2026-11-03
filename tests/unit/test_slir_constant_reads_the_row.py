@@ -20,7 +20,7 @@ from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.slir import constants as k
-from sushi_lang.semantics.slir.lower import _Lowering
+from sushi_lang.semantics.slir.lower import Lowering
 from sushi_lang.semantics.typesys import ArrayType, BuiltinType
 
 SPAN = Span(3, 5, 3, 12)
@@ -68,7 +68,7 @@ def _constant_of(value: ConstantValue) -> k.Constant:
     ref = e.ConstRef(ShirId(2), SPAN, DeclNames().refer("STEP"))
     answers = TypeckResults()
     answers.record_value(ref.shir_id, value)
-    return _Lowering.constant(SimpleNamespace(typeck=answers), ref)  # type: ignore[arg-type]
+    return Lowering.constant(SimpleNamespace(typeck=answers), ref)  # type: ignore[arg-type]
 
 
 def test_a_name_of_a_constant_takes_its_value_row() -> None:

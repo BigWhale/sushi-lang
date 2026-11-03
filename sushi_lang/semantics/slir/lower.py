@@ -14,16 +14,15 @@ checks a body that the lowering finished, and `SlirProgram` keeps it for the emi
 The lowering handles the parameters, a `let`, a rebind, a call statement, a `return`, an
 `if`, a `match`, a `while` with its `break` and `continue`, an `assert`, over literals, names
 of constants, locals, the operators, `and` and `or` as control flow, the construction of an
-enum variant, a call, an interpolation, a `??` and `expect`.
-The operand of a value is the answer of `borrow` and the shape of the value alone (ir.md
-7.9): a `move` row gives `Move`; an `adopt` row gives `Copy` of a place, a constant for a
-literal or a name of a constant, and `Move` of the temporary of a new value. A value with
-no row is read with `Copy`. A literal and a name of a constant take the value that typecheck
-wrote for them (ir.md 8.5). A new value goes into the place that takes it (the local of a `let`, `_0`),
-else into a temporary of its statement. The store that consumes a `move` operand marks its
-local moved, not the place where the operand is built. Drop placement (`drops.py`) places
-every drop, every flag write and every `StorageDead`, and it joins the state of the locals
-where paths meet.
+enum variant, a call, an interpolation, a `??` and `expect`. The operand of a value is the
+answer of `borrow` and the shape of the value alone (ir.md 7.9): a `move` row gives `Move`;
+an `adopt` row gives `Copy` of a place, a constant for a literal or a name of a constant,
+and `Move` of the temporary of a new value. A value with no row is read with `Copy`. A
+literal and a name of a constant take the value that typecheck wrote for them (ir.md 8.5).
+A new value goes into the place that takes it (the local of a `let`, `_0`), else into a
+temporary of its statement. The store that consumes a `move` operand marks its local moved,
+not the place where the operand is built. Drop placement (`drops.py`) places every drop,
+every flag write and every `StorageDead`, and joins the state of the locals at a join.
 
 A local whose state differs between the paths of a join gets a drop flag right after it
 (ir.md 8.10, rule 4), and so does a local whose state at a loop header is not the state
@@ -67,8 +66,7 @@ from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import ResolvedCall, TypeckResults
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import lower_control as ctl
-from sushi_lang.semantics.slir.lower_control import LoopFrame
-from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
+from sushi_lang.semantics.slir import lower_match
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
@@ -78,6 +76,8 @@ from sushi_lang.semantics.slir.function import (
     STAGE, SlirBlock, SlirFunction, SlirLocal, SlirProgram, SlirStopped,
 )
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
+from sushi_lang.semantics.slir.lower_control import LoopFrame
+from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
 from sushi_lang.semantics.slir.verify import SlirVerifier
 from sushi_lang.semantics.typesys import BuiltinType, Type, owns_resource
 from sushi_lang.semantics.unit_symbols import declaring_unit, function_symbol
@@ -128,7 +128,7 @@ class SlirStage:
 
 
 @dataclass(slots=True)
-class _Block:
+class Block:
     """A block while lowering fills it: its statements, and its terminator at the end."""
     id: BlockId
     statements: list[st.SlirStatement] = field(default_factory=list)
@@ -149,7 +149,7 @@ class _CallValue:
 
 
 @dataclass(frozen=True, slots=True)
-class _ShortCircuit:
+class ShortCircuit:
     """`and` or `or`, before lowering knows the place that takes its value: the left operand,
     and the right operand that a block of its own evaluates (ir.md 8.9)."""
     op: str
@@ -158,10 +158,10 @@ class _ShortCircuit:
     span: Span
 
 
-_Value: TypeAlias = r.Rvalue | _CallValue | _ShortCircuit
+Value: TypeAlias = r.Rvalue | _CallValue | ShortCircuit
 #: An edge into a join: the block that jumps to it (None when its terminator names the
 #: join already), and the state of the locals on that path.
-_Arrival: TypeAlias = tuple[Optional[_Block], FlowState]
+Arrival: TypeAlias = tuple[Optional[Block], FlowState]
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,7 +189,7 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     shir_locals = {local.id: local for local in body.locals}
     learned = _Learned()
     while True:
-        lowering = _Lowering(answers, decls, drops, shir_locals, learned, label)
+        lowering = Lowering(answers, decls, drops, shir_locals, learned, label)
         lowering.new_local(ret, None, None)
         params = lowering.parameters()
         lowering.lower_block(ret)
@@ -204,7 +204,7 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
 
 
 @dataclass(slots=True)
-class _Lowering:
+class Lowering:
     """The lowering of one body: its SLIR locals, its block and its drop placement."""
     answers: BodyTables
     decls: DeclNames
@@ -215,8 +215,8 @@ class _Lowering:
     locals: list[SlirLocal] = field(default_factory=list)
     ids: dict[ShirLocalId, LocalId] = field(default_factory=dict)
     shir_of: dict[LocalId, ShirLocalId] = field(default_factory=dict)
-    blocks: list[_Block] = field(default_factory=lambda: [_Block(BlockId(0))])
-    block: _Block = field(init=False)
+    blocks: list[Block] = field(default_factory=lambda: [Block(BlockId(0))])
+    block: Block = field(init=False)
     placement: DropPlacement = field(default_factory=DropPlacement)
     loops: list[LoopFrame] = field(default_factory=list)
     declared: Optional[LocalId] = None
@@ -296,9 +296,9 @@ class _Lowering:
         """Whether the path that lowering is on goes on: its block has no terminator."""
         return self.block.terminator is None
 
-    def new_block(self) -> _Block:
+    def new_block(self) -> Block:
         """The next block: ids in the order that lowering makes the blocks (L5)."""
-        block = _Block(BlockId(len(self.blocks)))
+        block = Block(BlockId(len(self.blocks)))
         self.blocks.append(block)
         return block
 
@@ -366,7 +366,7 @@ class _Lowering:
         if owning and self.placement.is_borrowed(ident):
             raise StageStop(STAGE, "borrowed rebind", stmt.loc)
         value = self.value(stmt.value)
-        if isinstance(value, _ShortCircuit) or (self.placement.holds_live_value(ident) and not (
+        if isinstance(value, ShortCircuit) or (self.placement.holds_live_value(ident) and not (
                 isinstance(value, r.Use) and isinstance(value.operand, p.Const))):
             ty = self.type_of(stmt.value)
             temp = p.Local(self.temporary(value, ty, stmt.value.loc))
@@ -382,16 +382,16 @@ class _Lowering:
     def ret(self, stmt: s.Return) -> None:
         self.finish(self.value(stmt.value), stmt.loc)
 
-    def finish(self, value: _Value, span: Span) -> None:
+    def finish(self, value: Value, span: Span) -> None:
         """`_0` first, then the drops of the exit, then the `return` (L14)."""
         self.write(p.Local(RETURN_SLOT), value, span)
         self.emit(self.placement.exit_function(span))
         self.block.terminator = tm.Return(span)
 
-    def write(self, place: p.Place, value: _Value, span: Span) -> None:
+    def write(self, place: p.Place, value: Value, span: Span) -> None:
         """Store `value` into `place`. The store is the statement that consumes each `move`
         operand of the value, so it marks the local of each one moved (ir.md 8.10, rule 3)."""
-        if isinstance(value, _ShortCircuit):
+        if isinstance(value, ShortCircuit):
             ctl.short_circuit(self, place, value)
             return
         if isinstance(value, _CallValue):
@@ -401,7 +401,7 @@ class _Lowering:
         for moved in _moves(value):
             self.placement.move(_root(moved), span)
 
-    def temporary(self, value: _Value, ty: Type, span: Span) -> LocalId:
+    def temporary(self, value: Value, ty: Type, span: Span) -> LocalId:
         """A new temporary of the statement that holds `value`."""
         ident = self.new_local(ty, None, None)
         self.placement.temporary(ident, self.owns(ty))
@@ -411,7 +411,7 @@ class _Lowering:
 
     # -- values and operands -------------------------------------------------------------
 
-    def value(self, expr: e.ShirExpr) -> _Value:
+    def value(self, expr: e.ShirExpr) -> Value:
         arm = _VALUES.get(type(expr))
         if arm is None:
             dispatch.stop(STAGE, expr)
@@ -453,23 +453,23 @@ class _Lowering:
             dispatch.stop(STAGE, ref, state="out of range")
         return constant
 
-    def leaf(self, expr: e.Lit | e.LocalRef | e.ConstRef) -> _Value:
+    def leaf(self, expr: e.Lit | e.LocalRef | e.ConstRef) -> Value:
         return r.Use(self.operand(expr))
 
-    def binary(self, node: e.Binary) -> _Value:
+    def binary(self, node: e.Binary) -> Value:
         if node.op in ("and", "or"):
-            return _ShortCircuit(node.op, self.operand(node.lhs), node.rhs, node.loc)
+            return ShortCircuit(node.op, self.operand(node.lhs), node.rhs, node.loc)
         return r.Binary(node.op, self.operand(node.lhs), self.operand(node.rhs))
 
-    def unary(self, node: e.Unary) -> _Value:
+    def unary(self, node: e.Unary) -> Value:
         return r.Unary(node.op, self.operand(node.operand))
 
-    def cast(self, node: e.Cast) -> _Value:
+    def cast(self, node: e.Cast) -> Value:
         """A numeric cast, or a cast to the type of its operand. A cast that calls a
         conversion stops in `typecheck`, so no row here calls one."""
         return r.Cast(self.operand(node.operand), self.type_of(node))
 
-    def enum_init(self, node: e.EnumInit) -> _Value:
+    def enum_init(self, node: e.EnumInit) -> Value:
         """An enum variant as an aggregate of its instance type (L10)."""
         ty = self.typeck.instance_of(node.shir_id)
         if ty is None:
@@ -478,7 +478,7 @@ class _Lowering:
         return r.Aggregate(r.AggVariant(ty, node.variant),
                            tuple(self.operand(arg.value) for arg in node.payload))
 
-    def call(self, node: e.Call) -> _Value:
+    def call(self, node: e.Call) -> Value:
         resolved = self.typeck.callee_of(node.shir_id)
         if resolved is None:
             er.raise_internal_error("CE0000", span=node.loc,
@@ -520,7 +520,7 @@ class _Lowering:
                                     detail="an argument with no convention reached SLIR")
         return self.operand(arg.value), convention
 
-    def interp(self, node: e.Interp) -> _Value:
+    def interp(self, node: e.Interp) -> Value:
         """ONE call of the intrinsic `interp`: a `Guaranteed` operand for each part, with
         its display type; an empty text part gives none (L17)."""
         args: list[tuple[p.Operand, Convention]] = []
@@ -545,27 +545,27 @@ class _Lowering:
 
 
 _STATEMENTS: dict[type, Callable[..., None]] = {
-    s.Assign: _Lowering.assign,
-    s.ExprStmt: _Lowering.expr_stmt,
-    s.Return: _Lowering.ret,
+    s.Assign: Lowering.assign,
+    s.ExprStmt: Lowering.expr_stmt,
+    s.Return: Lowering.ret,
     s.If: ctl.if_,
-    s.Match: ctl.match,
+    s.Match: lower_match.match,
     s.Loop: ctl.loop,
     s.Break: ctl.break_,
     s.Continue: ctl.continue_,
     s.Assert: ctl.assert_,
 }
 
-_VALUES: dict[type, Callable[..., _Value]] = {
-    e.Lit: _Lowering.leaf,
-    e.LocalRef: _Lowering.leaf,
-    e.ConstRef: _Lowering.leaf,
-    e.Binary: _Lowering.binary,
-    e.Unary: _Lowering.unary,
-    e.Cast: _Lowering.cast,
-    e.EnumInit: _Lowering.enum_init,
-    e.Call: _Lowering.call,
-    e.Interp: _Lowering.interp,
+_VALUES: dict[type, Callable[..., Value]] = {
+    e.Lit: Lowering.leaf,
+    e.LocalRef: Lowering.leaf,
+    e.ConstRef: Lowering.leaf,
+    e.Binary: Lowering.binary,
+    e.Unary: Lowering.unary,
+    e.Cast: Lowering.cast,
+    e.EnumInit: Lowering.enum_init,
+    e.Call: Lowering.call,
+    e.Interp: Lowering.interp,
     e.Try: ctl.try_,
 }
 
