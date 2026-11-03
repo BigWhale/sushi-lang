@@ -823,7 +823,10 @@ of that struct, also behind an alias: the struct is the one that the namespace h
 field goes through the one argument check (`arguments.check_arguments`) at the type of its
 field, in the declaration order. A struct is never variadic: a bloom argument (`xs...`)
 is [CE0120](../error-catalog.md#ce0120) at the argument, and the fields are then not checked,
-as on a method call. A positional construction with a wrong count is
+as on a method call. Two parts of the old output stay different: the caret covers the value
+(`xs`) and not `xs...`, as on a function call, because an `Arg` keeps no span of the spread;
+and the `borrow` pass does not walk a body with an error of `typecheck`, so the CE2411 that
+the old pipeline adds for the moved `xs` does not come. A positional construction with a wrong count is
 [CE2027](../error-catalog.md#ce2027) at `decl_loc`, and a field that does not fit is
 CE2028, or CE2083 in a named construction, at the field. A named construction with
 `names` is [CE2080](../error-catalog.md#ce2080) (a name that the struct does not
