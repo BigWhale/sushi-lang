@@ -69,7 +69,11 @@ constant `Aggregate`, on both paths; the emit stops `aggregate constant` and `co
 no value`; a `Trap` takes no `Move` operand). Amended on 2026-11-03 by rulings R-AD and
 R-AE: the header, 7.3, 7.8, 8.8, 8.9 and 11 (the failure text of `expect` is `Runtime Error
 RE2029: expect failed at <file:line:col>: <msg>` with exit code 1, the one user-visible
-change; a pattern value has no `TypeckResults` row).
+change; a pattern value has no `TypeckResults` row). Amended on 2026-11-04 by group A5
+(SLIR): 8.2 (the modules of the lowering), 8.5 (a constant `Aggregate` of a struct), 8.9 (the
+lowering of a struct and a tuple construction in the written order, of a field read and a
+field write, and of a destructure of plain values) and 8.13 (the rule of a struct value, and
+the part types of an enum value).
 
 ## The decisions, in one place
 
@@ -1887,7 +1891,9 @@ index. No statement has an empty span (G9).
 **Where SLIR lives.** The package is `semantics/slir/`, and it never imports the backend:
 the node modules (`ids.py`, `places.py`, `constants.py`, `rvalues.py`, `statements.py`,
 `terminators.py`, `function.py`), the lowering (`lower.py`, with the control-flow arms in
-`lower_control.py` and the facts of a declaration in `lower_signature.py`), the drop
+`lower_control.py`, the arm of a `match` in `lower_match.py`, the arms of a struct and a
+tuple in `lower_aggregate.py`, a value before its place in `lower_values.py` and the facts of
+a declaration in `lower_signature.py`), the drop
 placement of 8.10 (`drops.py`, the one module that builds a `Drop` or a `DropIfSet`; gate:
 `tests/unit/test_slir_drop_placement_is_one.py`), the verifier of 8.13 (`verify.py`) and
 the printer of `--dump-slir` (`printer.py`). Every class is a slotted dataclass, and every
@@ -2151,10 +2157,15 @@ has no place: the emitter stores the value in a slot of the entry block and pass
 address of the slot. An enum value is an `Aggregate` of its
 enum type that names its variant (`variant`), with one part for each value of the payload, in
 order; a payload value is made by the same rule. The printer writes it as the construction of
-the variant: `Sign::Plus`, `Shape::Circle(5_i32)`. A struct or an array value, also as a
-payload value, stops the lowering (`slir, aggregate constant`). The global of an enum
-constant with such a payload stops the declaration round of the backend with
-`emit, aggregate constant` (8.2). The constant evaluator does not wrap
+the variant: `Sign::Plus`, `Shape::Circle(5_i32)`. A struct value is an `Aggregate` of its
+struct type with no variant, with one part for each field in the declaration order, and a
+field value is made by the same rule. The printer writes it as the construction of the
+struct: `Point(3_i32, 4_i32)`. The converter of an enum constant writes a struct value in a
+payload field by field, at the offsets of the layout authority. An array value, also as a
+payload or a field value, stops the lowering (`slir, aggregate constant`). The global of a
+constant with such a value stops the declaration round of the backend with
+`emit, aggregate constant` (8.2). The emitter of a function stops there too at a struct
+constant, until the emit chunk of group A5 takes it. The constant evaluator does not wrap
 a literal that spells bits (`const i8 B = 0xFF` holds 255), and it gives a value to an
 initializer with a range error. A value that its type cannot hold stops the lowering
 (`ConstRef out of range`), so lowering decides no value and the verifier rule holds.
@@ -2318,7 +2329,10 @@ backstop of the checker, as on the AST backend.
 | `Slice` | range compare, `SwitchInt`, `Trap("RE2028")` on the failing edge, then `Slice`; never unchecked |
 | `Assert` | `SwitchInt(c, [(0, fail_bb)], otherwise: next_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2026", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state of the locals before the failing block. The blocks are made in the order fail, next. A condition local ends at the top of the two blocks, as for an `If` |
 | `expect(msg)` on a `Result` or a `Maybe` | the receiver into a place (a constant into a temporary), `Discriminant` into a local, and `SwitchInt(tag, [(success tag, next_bb)], otherwise: fail_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2029", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state before the failing block, and reads the payload through `Downcast` + `Field`: a `Copy` of a plain payload and a `Clone` of an owning one, because the receiver is a read (8.3); a new value as the receiver is a temporary that its statement drops. The blocks are made in the order fail, next |
-| `Destructure` | one `Field` place per target: `Move` from an owned value, a view from a borrow. For `Place` targets: the value into a temp first, then each place from left to right, a rebind of each (rule 6 of 8.10) |
+| `StructInit`, `TupleInit` | each field (each part) in the WRITTEN order (R1, 7.4), then ONE `Aggregate(Struct)` (`Aggregate(Tuple)`) of the instance type, with the parts in the declaration order. A new value goes into a temporary of the statement in that order. A place, or a constant, is read at the `Aggregate`. A place is copied into a temporary first when a later field in the written order can call a function, because the call can change the place through a `poke`; a literal, a name of a constant, a place, an operator and a construction over such values call none. A literal and a name of a constant never change, so they get no temporary |
+| `Field` read | a place: `Copy` of `Field(place, index)`, with the index of the typecheck row; a field of a field is a projection of the projection. A base that is no place (a new value, a constant) goes into a temporary of the statement first, and the field is a `Copy` of the projection of the temporary; the statement drops the temporary at its end (rule 2) |
+| a field write (`p.x := v`) | the new value first, then the store into `Field(place, index)`. A new value that is `and` or `or` goes into a temporary first, because its left operand is written before its right operand reads the place (rule 6) |
+| `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. `borrow` stops on a value that owns (7.9), so each element is plain |
 | `Take` | `Move` of the field; the other owning fields of the receiver get `Drop`, and `drop()` does not run (`borrow-model.md` §10c) |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
 | a `string` argument to an `i8*` callee | an explicit conversion into an owning temp local, dropped by the rules of 8.10. The C-string marshalling becomes visible IR, still one lowering site, and `run()` stays the one exception |
@@ -2333,6 +2347,13 @@ of its own that goes to the join, and a `While` sends its zero edge to a block o
 that goes to the exit, which a `Break` reaches too. Only a local that its own block writes
 and that the terminator of that block alone reads gets no storage marker: the local of a
 `Discriminant`, and the `bool` local of a test of a `match`.
+
+A construction, a field and a destructure of a value that owns stop the lowering: a
+`StructInit` or a `TupleInit` of a type that owns (`StructInit owning`, `TupleInit owning`),
+a field of a temporary that owns (`owning temporary`), and a write of a field that owns
+(`owning field write`). Their drops and their moves are Tier B. A struct with a field of a
+reference type is [CE2415](../error-catalog.md#ce2415) at its declaration, and a body that
+constructs one still reaches SLIR, so the construction stops (`StructInit reference field`).
 
 A `Match` evaluates its scrutinee in the scope of the match statement. A place is read with
 `Copy` in each test. A new value, and a scrutinee that the match takes (`consumes`), go into a
@@ -2601,7 +2622,10 @@ Runs after lowering, before the backend. It checks:
   its own block writes, each case value is the tag of a variant of that enum
 - an enum value: a `Discriminant` reads a place of an enum type, and an `Aggregate` of a
   variant, an rvalue or a constant, names a variant of its enum type and gives one part for
-  each value of its payload
+  each value of its payload, of the type of that value
+- a struct value: an `Aggregate(Struct)` or an `Aggregate(Tuple)` rvalue, and a constant
+  `Aggregate` with no variant, is of a struct type and gives one part for each field, of the
+  type of that field. One check of the parts serves an enum value and a struct value
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
