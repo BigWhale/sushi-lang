@@ -396,21 +396,35 @@ def _call(lw: BodyLowerer, node: a.Call) -> e.ShirExpr:
 
     The written type arguments stand on the callee (`identity@(i32)(5)`), as written.
     A struct name as the callee is a construction (`StructInit`), and only a construction
-    takes a named argument. A construction takes no written type arguments, so
-    `Pair@(i32, i32)(1, 2)` is an error hole: the language refuses it (CE6102, from the
-    typecheck pass of group A5). A named argument on another callee is an error hole too
-    (CE6104).
+    takes a named argument. A function of another unit does not take the call from a
+    struct of its name (#1076): the call is a construction when the unit declares no
+    function of the name (`DeclLookup.constructs_struct`). A construction takes no written
+    type arguments, so `Pair@(i32, i32)(1, 2)` is an error hole: the language refuses it
+    (CE6102, which the typecheck pass reports). A named argument on another callee is an
+    error hole too (CE6104).
     """
-    found = lw.bindings.resolution_of(node.callee)
-    if isinstance(found, bd.TypeName):
+    constructed = _constructed_type(lw, lw.bindings.resolution_of(node.callee))
+    if constructed is not None:
         if node.type_args:
             return lw.error_hole(node, "CE6102")
-        return struct_init(lw, node, found.name, found.name, node.args, node.field_names)
+        return struct_init(lw, node, constructed, constructed, node.args, node.field_names,
+                           lw.span(node.callee))
     if node.field_names is not None:
         return lw.error_hole(node, "CE6104")
     ident = lw.ident()
     return e.Call(ident, lw.span(node), e.Named(lw.expr(node.callee), _type_args(node)),
                   _arguments(lw, node.args))
+
+
+def _constructed_type(lw: BodyLowerer, found: Optional[bd.Resolution]) -> Optional[str]:
+    """The type name that a bare callee constructs, or None for a call: a type name, and a
+    name of a function of another unit that a struct of the unit takes (#1076)."""
+    if isinstance(found, bd.TypeName):
+        return found.name
+    if (isinstance(found, bd.Function) and lw.lookup is not None
+            and lw.lookup.constructs_struct(found.name)):
+        return found.name
+    return None
 
 
 def _type_args(node: a.Call | a.DotCall | a.MethodCall) -> tuple[TypeRef, ...]:
@@ -461,7 +475,7 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
                                                                 node.method)
     if kind == "struct" and not _type_args(node):
         return struct_init(lw, node, f"{alias}.{node.method}", node.method, node.args,
-                           node.field_names)
+                           node.field_names, lw.span(node))
     if kind == "struct":
         return lw.error_hole(node, "CE6102")
     if node.field_names is not None:

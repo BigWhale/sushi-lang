@@ -260,11 +260,16 @@ class StructInit(ExprNode):
     fields (an unknown, a repeated or a missing name) or whose name has no struct. Then
     `fields` is in the written order, `written_order` is the identity, and `names` holds
     the written name of each field, for the typecheck pass to report.
+
+    `named` is true for each named construction. `decl_loc` is where a diagnostic of the
+    written type points: the type name (`Vec`), or the whole construction behind an alias.
     """
     decl: DeclId
     fields: list[Arg]
     written_order: tuple[int, ...]
     names: Optional[tuple[str, ...]]
+    named: bool
+    decl_loc: Span
 
 
 @dataclass(slots=True)

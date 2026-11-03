@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2027
+# EXPECT_STDERR_CONTAINS: "struct 'Point' expects 2 field(s), got 3"
+# EXPECT_STDERR_CONTAINS: "  |     keep(Point(1, 2, 3))\n  `          --+--\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_struct_field_count.shir
+#
+# A struct construction is an instance of the struct. `Point(1, 2)` and the named
+# `Point(y: 2, x: 1)` are typed. A positional construction with a wrong count of fields
+# is CE2027 at the written type.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn keep(Point p) Point:
+    return p
+
+fn main() i32:
+    keep(Point(1, 2))
+    keep(Point(y: 2, x: 1))
+    keep(Point(1, 2, 3))
+    return 0

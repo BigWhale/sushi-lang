@@ -10,7 +10,8 @@ another unit is CE3005. A node that has an error has no answer.
 
 Lowering makes `T.m(...)` a `Static` call when the enum `T` has no variant `m`. When no
 unit declares a method `m`, the dot of the enum holds no such member: CE2045. The bare
-`T.m` is an error hole that keeps the member, and it is CE2045 too.
+`T.m` is an error hole that keeps the member, and it is CE2045 too. The hole of a bare
+call with written type arguments on a type name (`Pair@(i32, i32)(1, 2)`) is CE6102.
 
 A wrapper variant whose position gives no instance, a variant of a generic enum of the
 program, and a variant of an enum whose name the unit lost (D2) are not typed yet, and stop
@@ -30,10 +31,10 @@ from sushi_lang.semantics.passes.types.calls.enums import (
 from sushi_lang.semantics.passes.types.utils import reject_unpromised_arguments
 from sushi_lang.semantics.passes.types.visibility import name_is_contested, reject_private_type
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.shir.lower_aggregates import written_name
 from sushi_lang.semantics.shir.nodes import Hole
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import EnumType, Type
+from sushi_lang.semantics.written_types import written_name
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -72,7 +73,14 @@ def reject_unknown_variant(validator: TypeValidator, node: e.Call, target: e.Sta
 def check_hole(validator: TypeValidator, node: Hole,
                expected: Optional[Type] = None) -> None:
     """The error hole of a member of an enum that is no variant (`Sign.Nope`) is CE2045 at
-    the member (ir.md 7.4). Every other hole stops the walk of its body."""
+    the member, and the `Call` hole of written type arguments on a type name
+    (`Pair@(i32, i32)(1, 2)`) is CE6102 at the hole (ir.md 7.4). Every other hole stops the
+    walk of its body."""
+    if node.ast_class == "Call" and "CE6102" in node.codes:
+        er.emit_with(validator.reporter, er.ERR.CE6102, node.loc).help(
+            "write the type arguments on the type of the position, e.g. "
+            "`let Pair@(i32, i32) p = Pair(1, 2)`").emit()
+        return
     member = node.member
     if member is None or not _reject_member(validator, member.written, member.name,
                                             member.name_loc, expected):

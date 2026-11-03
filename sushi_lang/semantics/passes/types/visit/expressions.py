@@ -11,6 +11,14 @@ its default (`int_literal_default`). An integer literal holds a value at that ty
 answers its declared type, and its value, from the constant table (Q5). A constant with no
 value stops the walk (`ConstRef with no value`): after an error of its initializer, that
 error is the diagnostic.
+
+A struct construction is an instance of the struct that its written type names: behind an
+alias, the struct that the namespace holds. Its fields are checked at the types of the
+fields (`calls/structs.py`). A private struct of another unit behind an alias is CE3005,
+and a type name that is no struct is CE2008, with CE6104 for a named argument. A name whose
+function the collect pass refused (CE1005) gives no second error, and the body holds that
+error (`refused_before`). A generic struct of the program, and a struct whose name the unit
+lost (D2), are not typed yet, and stop the walk of their body.
 """
 from __future__ import annotations
 
@@ -21,14 +29,18 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics import integer_ops
 from sushi_lang.semantics.passes.collect.constants import ConstSig
 from sushi_lang.semantics.passes.types import visit
+from sushi_lang.semantics.passes.types.calls.structs import check_struct_fields
 from sushi_lang.semantics.passes.types.inference import (
     float_literal_fits, int_literal_default, int_literal_fits)
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
+from sushi_lang.semantics.passes.types.utils import reject_named_argument
 from sushi_lang.semantics.passes.types.visibility import (
-    reject_ambiguous_name, reject_private_kept, reject_private_name)
+    name_was_refused, reject_ambiguous_name, reject_private_kept, reject_private_name,
+    reject_private_type, type_name_is_contested)
+from sushi_lang.semantics.passes.types.visit.calls import reject_undefined_function
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.type_predicates import is_float_type, is_integer_type
-from sushi_lang.semantics.typesys import BuiltinType, Type
+from sushi_lang.semantics.typesys import BuiltinType, StructType, Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -153,3 +165,46 @@ def constant_record(validator: TypeValidator,
     """The record of the constant that the written name of a `ConstRef` names in this body
     (`NamespaceTable.constant_record`)."""
     return validator.namespaces.constant_record(written, validator.const_table)
+
+
+def check_struct_init(validator: TypeValidator, node: e.StructInit,
+                      _expected: Optional[Type]) -> Optional[Type]:
+    """The struct that the construction builds, with its fields checked; none after an
+    error of the construction or of a field."""
+    offered = validator.errors_offered()
+    struct = _constructed_struct(validator, node)
+    if struct is not None:
+        check_struct_fields(validator, node, struct)
+    if struct is None or validator.errors_offered() != offered:
+        return None
+    validator.body_answers().record_instance(node.shir_id, struct)
+    return struct
+
+
+def _constructed_struct(validator: TypeValidator,
+                        node: e.StructInit) -> Optional[StructType]:
+    """The struct that the written type of a construction names, or None after its error;
+    the walk stops where the construction is not typed yet."""
+    written = validator.decl_name(node.decl)
+    alias, dot, name = written.rpartition(".")
+    if dot:
+        binding = validator.namespaces.lookup(alias, name)
+        if binding is None or binding.kind != "struct":
+            visit.stop_at(validator, node)
+        name = binding.name
+    if (name in validator.generic_struct_table.by_name
+            or type_name_is_contested(validator, name)):
+        visit.stop_at(validator, node)
+    struct = validator.struct_table.by_name.get(name)
+    if struct is None:
+        reject_undefined_function(validator, name, node.decl_loc)
+        if node.names:
+            reject_named_argument(validator, node.names[0], node.loc)
+        if name_was_refused(validator, name):
+            validator.refused_before = True
+        for arg in node.fields:
+            visit.check_expr(validator, arg.value)
+        return None
+    if dot and reject_private_type(validator, name, node.decl_loc):
+        return None
+    return struct

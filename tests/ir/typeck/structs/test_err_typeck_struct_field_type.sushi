@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2028
+# EXPECT_STDERR_CONTAINS: "field 'y' expects type 'i32', got 'bool'"
+# EXPECT_STDERR_CONTAINS: "  |     keep(Point(1, true))\n  `                   --+-\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_struct_field_type.shir
+#
+# Each field of a positional construction is checked at the type of its field. A value
+# that does not fit is CE2028 at the value.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn keep(Point p) Point:
+    return p
+
+fn main() i32:
+    keep(Point(1, true))
+    return 0

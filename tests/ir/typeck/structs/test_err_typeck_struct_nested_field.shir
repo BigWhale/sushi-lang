@@ -1,0 +1,21 @@
+unit test_err_typeck_struct_nested_field
+
+ShirBody keep_line
+  params : [(_0 "l": Line, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody keep_label
+  params : [(_0 "l": Label, Owned)]
+  locals : []
+  block  :
+    Return(move LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@keep_label), [(StructInit(@Label, [Lit("Mostly Harmless"), EnumInit(@Maybe, "Some", [StructInit(@Point, [Lit(1), Lit(2)], written_order: [0, 1])])], written_order: [0, 1]), Owned)]))
+    ExprStmt(Call(Free(@keep_line), [StructInit(@Line, [StructInit(@Point, [Lit(1), Lit(2)], written_order: [0, 1]), StructInit(@Point, [Lit(3), Lit(true)], written_order: [0, 1])], written_order: [0, 1])]))
+    Return(Lit(0))

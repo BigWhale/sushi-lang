@@ -1,0 +1,14 @@
+unit test_err_typeck_struct_type_args
+
+ShirBody keep
+  params : [(_0 "p": Pair@(i32, i32), Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@keep), [<hole: Call, error: CE6102>]))
+    Return(Lit(0))

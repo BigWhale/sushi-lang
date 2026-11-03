@@ -793,6 +793,10 @@ tests/ir/emit/two_units/test_emit_two_units.sushi
 tests/ir/lift/test_err_lift_empty_table.sushi
 tests/ir/shir/asserts/test_shir_assert_forms.sushi
 tests/ir/shir/calls/test_shir_call_print.sushi
+tests/ir/shir/constructors/test_err_shir_ctor_missing_field.sushi
+tests/ir/shir/constructors/test_err_shir_ctor_no_struct.sushi
+tests/ir/shir/constructors/test_err_shir_ctor_repeated_field.sushi
+tests/ir/shir/constructors/test_err_shir_ctor_unknown_field.sushi
 tests/ir/shir/constructors/test_shir_ctor_result_maybe.sushi
 tests/ir/shir/empty_body/test_shir_empty_body.sushi
 tests/ir/shir/error_holes/test_err_error_hole_const_named_argument.sushi
@@ -972,6 +976,19 @@ tests/ir/typeck/statements/test_err_typeck_let_of_a_result.sushi
 tests/ir/typeck/statements/test_err_typeck_let_untyped.sushi
 tests/ir/typeck/statements/test_err_typeck_rebind.sushi
 tests/ir/typeck/statements/test_err_typeck_return_mismatch.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_alias_field_count.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_alias_field_type.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_alias_private.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_call_form.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_field_count.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_field_type.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_missing_field.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_named_field_type.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_nested_field.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_not_a_struct.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_repeated_field.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_type_args.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_unknown_field.sushi
 tests/iterators/written_type/test_err_wt_alias_bare_name.sushi
 tests/iterators/written_type/test_err_wt_arity.sushi
 tests/iterators/written_type/test_err_wt_drop_item_modes_differ.sushi
@@ -1281,6 +1298,7 @@ tests/namespaces/stdlib_constants/test_own_const_named_pi_without_import.sushi
 tests/operators/arithmetic_operands/test_arithmetic_on_numbers_is_untouched.sushi
 tests/operators/arithmetic_operands/test_err_arithmetic_with_a_bool.sushi
 tests/operators/arithmetic_operands/test_err_arithmetic_with_a_string.sushi
+tests/operators/arithmetic_operands/test_err_arithmetic_with_a_struct.sushi
 tests/operators/arithmetic_operands/test_err_arithmetic_with_an_enum.sushi
 tests/operators/arithmetic_operands/test_err_arithmetic_with_an_unhandled_result.sushi
 tests/operators/arithmetic_operands/test_err_divide_by_a_constant_zero.sushi
@@ -1336,6 +1354,7 @@ tests/operators/logical_operands/test_err_and_integer_operand.sushi
 tests/operators/logical_operands/test_err_not_integer_operand.sushi
 tests/operators/logical_operands/test_err_not_string_operand.sushi
 tests/operators/logical_operands/test_err_or_float_operand.sushi
+tests/operators/logical_operands/test_err_xor_struct_operand.sushi
 tests/operators/operator_precedence/test_combined_operators.sushi
 tests/operators/operator_precedence/test_operator_precedence.sushi
 tests/operators/ord_derived/test_enum_ord_relations.sushi
@@ -1604,6 +1623,7 @@ tests/tuples/exhaustiveness/test_err_tuple_wildcard_not_last_tuple_once.sushi
 tests/tuples/match_patterns/test_err_tuple_pattern_literal_in_payload_on_string.sushi
 tests/tuples/match_patterns/test_err_tuple_pattern_not_a_tuple.sushi
 tests/tuples/match_patterns/test_err_tuple_pattern_poke_in_payload.sushi
+tests/tuples/match_patterns/test_err_tuple_pattern_struct_scrutinee.sushi
 tests/tuples/match_patterns/test_tuple_match_literal_in_payload.sushi
 tests/tuples/refusals/test_err_tuple_cast.sushi
 tests/tuples/refusals/test_err_tuple_destructure_mode.sushi
@@ -1686,6 +1706,7 @@ tests/types/literal_typing/test_err_int_literal_overflow.sushi
 tests/types/literal_typing/test_err_int_literal_overflow_expr.sushi
 tests/types/literal_typing/test_err_lit_arg_out_of_range.sushi
 tests/types/literal_typing/test_err_lit_arith_out_of_range.sushi
+tests/types/literal_typing/test_err_lit_field_out_of_range.sushi
 tests/types/literal_typing/test_err_lit_i32_annotated_overflow.sushi
 tests/types/literal_typing/test_err_lit_negative_unsigned.sushi
 tests/types/literal_typing/test_err_lit_out_of_range.sushi
@@ -1851,7 +1872,13 @@ tests/types/result/try_operand/test_err_try_on_result_shaped_user_enum.sushi
 tests/types/result/warnings/test_warn_unused_result.sushi
 tests/types/result_maybe/test_err_result_single_arg_annotation.sushi
 tests/types/result_maybe/test_result_types.sushi
+tests/types/structs/test_err_struct_duplicate_field.sushi
+tests/types/structs/test_err_struct_field_count.sushi
+tests/types/structs/test_err_struct_field_type.sushi
+tests/types/structs/test_err_struct_missing_field.sushi
+tests/types/structs/test_err_struct_named_type_mismatch.sushi
 tests/types/structs/test_err_struct_undefined.sushi
+tests/types/structs/test_err_struct_unknown_field.sushi
 tests/types/type_funnel/test_err_fn_type_param_unknown_type.sushi
 tests/types/type_funnel/test_err_fn_type_return_unknown_type.sushi
 tests/types/type_funnel/test_err_peek_unknown_type.sushi

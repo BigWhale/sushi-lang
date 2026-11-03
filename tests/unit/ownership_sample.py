@@ -150,7 +150,7 @@ def sample() -> Sample:
                   [e.Arg(expr("some", e.EnumInit, 6, decls.refer("Maybe"), "Some",
                               [e.Arg(lit("nine", e.IntConst(9), 6), None)], span(6)),
                          None)],
-                  (0,), None)),
+                  (0,), None, False, span(6))),
         stmt(s.Match, 7, local("b_ref", 1, 7),
              [p.Arm(p.Wildcard(ids.allocate(), span(8)), block(8))], True),
         stmt(s.Assign, 8, local(None, 8, 8),

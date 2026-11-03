@@ -42,8 +42,9 @@ _BASE_FIELDS = ("shir_id", "loc")
 
 #: ir.md 7.4, the expression nodes and their fields in the written order. `Lambda` adds
 #: `ret` and `err`, the written return type and error type, and `expr_body`, the written
-#: shape of its body; `StructInit` adds `written_order` (ruling R1) and `names`, the
-#: written names of a named construction whose names are not the declared fields.
+#: shape of its body; `StructInit` adds `written_order` (ruling R1), `names`, the
+#: written names of a named construction whose names are not the declared fields, `named`
+#: and `decl_loc` (ruling R25).
 EXPRESSION_FIELDS: dict[str, tuple[str, ...]] = {
     "Lit": ("value",),
     "LocalRef": ("local",),
@@ -61,7 +62,7 @@ EXPRESSION_FIELDS: dict[str, tuple[str, ...]] = {
     "Take": ("place",),
     "Try": ("inner",),
     "Lambda": ("params", "ret", "err", "body", "expr_body"),
-    "StructInit": ("decl", "fields", "written_order", "names"),
+    "StructInit": ("decl", "fields", "written_order", "names", "named", "decl_loc"),
     "EnumInit": ("decl", "variant", "payload", "decl_loc"),
     "TupleInit": ("parts",),
     "ArrayInit": ("kind", "runs"),

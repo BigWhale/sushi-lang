@@ -1,0 +1,14 @@
+unit test_err_typeck_struct_repeated_field
+
+ShirBody keep
+  params : [(_0 "p": Point, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@keep), [StructInit(@Point, [Lit(1), Lit(2), Lit(3)], written_order: [0, 1, 2], names: ["x", "y", "x"], named: true)]))
+    Return(Lit(0))

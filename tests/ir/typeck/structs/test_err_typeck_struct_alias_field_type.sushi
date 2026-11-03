@@ -1,0 +1,19 @@
+# EXPECT_ERROR_CODES_EXACT: CE2028
+# EXPECT_STDERR_CONTAINS: "field 'y' expects type 'i32', got 'f64'"
+# EXPECT_STDERR_CONTAINS: "  |     keep(pl.Vec(1, 2.5))\n  `                    -+-\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_struct_alias_field_type.shir
+#
+# A construction behind an alias is an instance of the struct that the namespace holds.
+# `pl.Vec(1, 2)` and the named `pl.Vec(y: 2, x: 1)` are typed. A field that does not fit
+# is CE2028, as with a bare struct name.
+
+use "units/plane" as pl
+
+fn keep(pl.Vec v) pl.Vec:
+    return v
+
+fn main() i32:
+    keep(pl.Vec(1, 2))
+    keep(pl.Vec(y: 2, x: 1))
+    keep(pl.Vec(1, 2.5))
+    return 0

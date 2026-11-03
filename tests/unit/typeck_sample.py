@@ -117,7 +117,8 @@ def sample() -> Sample:
             p.Arm(p.Wildcard(ids.allocate(), span(10)), block(10))]
     match = stmt("match", s.Match, 8, expr("cast", e.Cast, 8, local(3), I64), arms, False)
     pair = expr("struct", e.StructInit, 11, decls.refer("Pair"),
-                [e.Arg(local(3), None), e.Arg(local(4), None)], (0, 1), None)
+                [e.Arg(local(3), None), e.Arg(local(4), None)], (0, 1), None, False,
+                span(11))
     access = stmt("access", s.ExprStmt, 11, expr("field", e.Field, 11, pair, "first"))
     ok = expr("enum", e.EnumInit, 12, decls.refer("Result"), "Ok",
               [e.Arg(lit(e.BlankConst(), 12), None)], span(12))

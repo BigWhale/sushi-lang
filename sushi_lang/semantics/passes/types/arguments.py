@@ -15,7 +15,7 @@ mode (CE2427), and each argument that fits gets its convention, a row of the
 `TypeckResults` of the body. A construction has no declared modes and gives none.
 
 What legitimately differs between the callers is a four-tuple -- the callee's display
-name, the parameter types, the arity code and the mismatch code -- plus three policy
+name, the parameter types, the arity code and the mismatch code -- plus four policy
 questions, each a keyword:
 
   ``minimum_arity``  a variadic callee's FIXED prefix. More arguments than parameters is
@@ -25,10 +25,13 @@ questions, each a keyword:
   ``also_accepts``   per parameter, the other types it takes (`string.join` takes a
                      `List@(string)` beside a `string[]`). The mismatch names the
                      declared type, and the help names the others.
+  ``field_names``    per parameter, the field that it fills, for a mismatch code whose
+                     text names the field (a struct construction: CE2028, CE2083).
 
 The codes travel IN, so this module spells neither the arity code nor the mismatch code.
 That is what lets the enum constructor read the same check with CE2049/CE2050, which name
-a VARIANT where the function pair names a function. The gate is
+a VARIANT where the function pair names a function, and the struct constructor with
+CE2027 and CE2028 or CE2083. The gate is
 ``tests/unit/test_argument_check_is_one.py``.
 """
 from __future__ import annotations
@@ -76,6 +79,7 @@ def check_arguments(
     minimum_arity: bool = False,
     stop_on_arity: bool = False,
     also_accepts: Sequence[Sequence[Type]] = (),
+    field_names: Sequence[str] = (),
 ) -> bool:
     """Measure `args` against `params`, and answer whether the COUNT fit.
 
@@ -105,8 +109,9 @@ def check_arguments(
             fits = (types_compatible(validator, actual, expected)
                     or any(types_compatible(validator, actual, other) for other in others))
             if not fits:
+                field = field_names[index - 1] if index <= len(field_names) else None
                 _emit_mismatch(validator, mismatch_code, callee_name, arg, index,
-                               expected, actual, others)
+                               expected, actual, others, field)
         if declared is not None and index <= len(declared.modes):
             mode = declared.modes[index - 1]
             if reject_nom_marker(validator, arg, mode, declared.names[index - 1]):
@@ -178,6 +183,17 @@ def _callee_key(code: er.ErrorMessage, callee_name: str) -> Dict[str, str]:
     return {}
 
 
+def _field_key(code: er.ErrorMessage, field: Optional[str]) -> Dict[str, str]:
+    """The placeholder a code's registry text spells for the field that an argument fills:
+    `{field_name}` (CE2028) or `{field}` (CE2083); none when no field is given."""
+    if field is None:
+        return {}
+    for key in ("field_name", "field"):
+        if "{" + key + "}" in code.text:
+            return {key: field}
+    return {}
+
+
 def _spell_place(validator: 'TypeValidator', value: e.ShirExpr) -> Optional[str]:
     """The source spelling of a PLACE the user can borrow, or None when there is none.
 
@@ -201,12 +217,12 @@ def _mismatch_span(arg: e.Arg) -> Optional[Span]:
 
 def _emit_mismatch(validator: 'TypeValidator', code: er.ErrorMessage, callee_name: str,
                    arg: e.Arg, index: int, expected_ty: Type, actual_ty: Type,
-                   others: Sequence[Type] = ()) -> None:
+                   others: Sequence[Type] = (), field: Optional[str] = None) -> None:
     """Report the mismatch, and say how to borrow when the parameter wants a borrow."""
     diag = er.emit_with(validator.reporter, code, _mismatch_span(arg),
                         index=index, expected=display_type(expected_ty),
                         got=display_type(actual_ty),
-                        **_callee_key(code, callee_name))
+                        **_callee_key(code, callee_name), **_field_key(code, field))
     place = None
     if isinstance(expected_ty, ReferenceType) and arg.marker not in _BORROWS:
         place = _spell_place(validator, arg.value)

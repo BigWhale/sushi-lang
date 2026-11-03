@@ -1,0 +1,13 @@
+# EXPECT_ERROR_CODES_EXACT: CE3005
+# EXPECT_STDERR_CONTAINS: "cannot use private struct 'Hidden'"
+# EXPECT_STDERR_CONTAINS: "  |     pl.Hidden(1)\n  `     ------+-----\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_struct_alias_private.shir
+#
+# A construction of a private struct of another unit behind an alias is CE3005, as a call
+# of a private function is. Behind an alias, the caret covers the whole construction.
+
+use "units/plane" as pl
+
+fn main() i32:
+    pl.Hidden(1)
+    return 0

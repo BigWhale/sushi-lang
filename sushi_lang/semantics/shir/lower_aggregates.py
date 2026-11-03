@@ -9,9 +9,12 @@ call shape gives a construction through `_call` and `_dotted` there, and calls
 What a written name before a dot denotes decides each node, and lowering reads it from
 `Bindings` and from the declaration tables (`DeclLookup`), never from a type:
 
-- A struct name as the callee is a `StructInit`. A named construction gives `fields` in
-  the declaration order of the struct, and `written_order` keeps the order that the source
-  writes, which is the order of evaluation (ruling R1). SHIR has no temporary for it:
+- A struct name as the callee is a `StructInit`, also when the name is a function of
+  another unit and the unit declares no function of the name (#1076). It keeps
+  `decl_loc`, where a diagnostic of its written type points, and `named`, true for a
+  named construction. A named construction gives `fields` in the declaration order of
+  the struct, and `written_order` keeps the order that the source writes, which is the
+  order of evaluation (ruling R1). SHIR has no temporary for it:
   SHIR-to-SLIR lowering evaluates the fields in `written_order` where it lowers the
   expression. A named construction whose names are not the fields of a struct (an
   unknown, a repeated or a missing name), or whose name has no struct, keeps its fields
@@ -49,44 +52,38 @@ from sushi_lang.semantics.shir import bindings as bd
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.lookup import GLOBAL_KINDS, VARIABLE_KIND, DeclLookup
 from sushi_lang.semantics.shir.nodes import UnknownMember
-from sushi_lang.semantics.typesys import BuiltinType, UnknownType
+from sushi_lang.semantics.written_types import WrittenType, written_name
 
 if TYPE_CHECKING:
+    from sushi_lang.internals.report import Span
     from sushi_lang.semantics.shir.lower_nodes import BodyLowerer
-
-#: A type as written before a dot: a type name, or a type behind an alias.
-WrittenType = BuiltinType | UnknownType
-
-
-def written_name(ty: WrittenType) -> str:
-    """The name of a type as the source writes it, with its alias (`geo.Sign`)."""
-    namespace = ty.namespace if isinstance(ty, UnknownType) else None
-    return str(ty) if namespace is None else f"{namespace}.{ty}"
 
 
 # -- constructions ---------------------------------------------------------------------
 
 
 def struct_init(lw: BodyLowerer, node: Any, written: str, declared: str, args: list[Any],
-                names: Optional[list[str]]) -> e.ShirExpr:
+                names: Optional[list[str]], decl_loc: Span) -> e.ShirExpr:
     """`S(...)`, `S(f: ...)` or `ns.S(...)`: the struct `written`, which the table calls `declared`.
 
     A positional construction keeps its arguments as written. A named one puts them in the
     declaration order, and `written_order` keeps the order of evaluation (ruling R1). A
     named one whose names are not the fields of the struct keeps the written order and
-    the written names.
+    the written names. `decl_loc` is where a diagnostic of the written type points (R25).
     """
     positions = None if names is None else _declared_positions(lw.lookup, declared, names)
     ident = lw.ident()
     written_args = lw.arguments(args)
     decl = lw.decls.refer(written)
+    named = names is not None
     if positions is None:
         kept = None if names is None else tuple(names)
         return e.StructInit(ident, lw.span(node), decl, written_args, tuple(range(len(args))),
-                            kept)
+                            kept, named, decl_loc)
     fields = [arg for _position, arg in sorted(zip(positions, written_args, strict=True),
                                                key=lambda pair: pair[0])]
-    return e.StructInit(ident, lw.span(node), decl, fields, tuple(positions), None)
+    return e.StructInit(ident, lw.span(node), decl, fields, tuple(positions), None, named,
+                        decl_loc)
 
 
 def _declared_positions(lookup: Optional[DeclLookup], declared: str,

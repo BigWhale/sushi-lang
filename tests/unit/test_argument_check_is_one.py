@@ -36,13 +36,13 @@ _CEILING = {
 
 #: The reader above sees a code SPELLED at the emit. A module that carries the code in a
 #: table row and emits `er.emit(reporter, row.code, ...)` is invisible to it, so a copy of
-#: the loop could hide behind one indirection. These are the four positions that legitimately
-#: do it -- the seam, whose codes travel IN, and the two tables that hold a code per row --
-#: and the count is pinned so a fifth cannot appear unseen. A row may only go DOWN.
+#: the loop could hide behind one indirection. These are the three positions that
+#: legitimately do it -- the seam, whose codes travel IN, and the table that holds a code
+#: per row -- and the count is pinned so a fourth cannot appear unseen. A row may only go
+#: DOWN. The struct construction reads the seam since group A5.
 _INDIRECT_CEILING = {
     "arguments.py": 2,
     "arrays.py": 1,
-    "calls/structs.py": 1,
 }
 
 #: The modules that must reach the seam, one per converted copy. `visit/calls.py` is the
@@ -53,6 +53,7 @@ _CALLERS = (
     "calls/user_defined.py",
     "calls/statics.py",
     "calls/enums.py",
+    "calls/structs.py",
     "externals.py",
 )
 

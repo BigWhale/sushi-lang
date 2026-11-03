@@ -1,0 +1,8 @@
+unit test_err_typeck_struct_not_a_struct
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(StructInit(@Sign, [Lit(1)], written_order: [0]))
+    Return(Lit(0))

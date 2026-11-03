@@ -4,5 +4,5 @@ ShirBody main
   params : []
   locals : [_0 "v": Vec]
   block  :
-    Assign(LocalRef(_0), StructInit(@Vec, [Lit(1)], written_order: [0], names: ["y"]), is_init: true)
+    Assign(LocalRef(_0), StructInit(@Vec, [Lit(1)], written_order: [0], names: ["y"], named: true), is_init: true)
     Return(Field(LocalRef(_0), "x"))

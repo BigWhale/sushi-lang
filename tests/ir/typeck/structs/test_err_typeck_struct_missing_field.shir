@@ -1,0 +1,14 @@
+unit test_err_typeck_struct_missing_field
+
+ShirBody keep
+  params : [(_0 "p": Point, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@keep), [StructInit(@Point, [Lit(1)], written_order: [0], names: ["x"], named: true)]))
+    Return(Lit(0))

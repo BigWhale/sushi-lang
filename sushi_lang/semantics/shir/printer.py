@@ -197,7 +197,7 @@ def _struct_init(pr: ShirPrinter, init: e.StructInit) -> str:
              else "[" + ", ".join(quoted(name) for name in init.names) + "]")
     return _node("StructInit", pr.decl(init.decl), pr.each(init.fields),
                  f"written_order: [{', '.join(str(i) for i in init.written_order)}]",
-                 *_optional("names", names))
+                 *_optional("names", names), *_optional("named", "true" if init.named else None))
 
 
 def _interp_part(pr: ShirPrinter, part: str | e.ShirExpr) -> str:

@@ -1135,7 +1135,7 @@ All paths are under `semantics/passes/`.
 | `types/visibility.py` | the pass's view of the visibility seam |
 | `types/qualified.py` | a type name behind an alias (`geo.Vec`) |
 | `types/externals.py` | the FFI checks (the `externs` and `ffi-clash` passes also run from here) |
-| `types/perks.py`, `types/field_matcher.py`, `types/inference.py`, `types/utils.py` | perk checks, named struct arguments, inference helpers, shared helpers |
+| `types/perks.py`, `types/inference.py`, `types/utils.py` | perk checks, inference helpers, shared helpers |
 
 The type predicates (`is_numeric_type`, `is_integer_type`, `is_float_type` and the others)
 are in `semantics/type_predicates.py`.

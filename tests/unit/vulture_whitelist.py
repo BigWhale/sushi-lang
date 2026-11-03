@@ -160,6 +160,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "expressions.py", "validate_array_literal", _port("A6")),
     (_TYPES + "expressions.py", "validate_index_access", _port("A6")),
     (_TYPES + "calls/enums.py", "_refuse_untyped_constructor", _port("C1")),
+    (_TYPES + "calls/structs.py", "_refuse_unsolved_struct_constructor", _port("C1")),
     (_TYPES + "calls/namespaced.py", "validate_namespaced_call", _port("A8")),
     (_TYPES + "calls/statics.py", "validate_static_call", _TIER_A),
     (_TYPES + "statements.py", "validate_let_reference", _port("B8")),

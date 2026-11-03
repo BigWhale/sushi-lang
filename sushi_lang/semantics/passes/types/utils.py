@@ -9,7 +9,7 @@ A5 ports the struct template, it merges the two refusals into one.
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, AbstractSet, Callable, List, Optional
+from typing import TYPE_CHECKING, AbstractSet, Any, Callable, List, Optional
 
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.generics.interned import interned_name
@@ -645,7 +645,12 @@ def reject_named_args(validator: 'TypeValidator', node) -> None:
     names = getattr(node, "field_names", None)
     if not names:
         return
-    er.emit_with(validator.reporter, er.ERR.CE6104, node.loc, name=names[0]) \
+    reject_named_argument(validator, names[0], node.loc)
+    node.field_names = None
+
+
+def reject_named_argument(validator: 'TypeValidator', name: str, loc: Any) -> None:
+    """CE6104 for the named argument `name` of a callee that is not a struct."""
+    er.emit_with(validator.reporter, er.ERR.CE6104, loc, name=name) \
         .help("pass the arguments in declaration order") \
         .emit()
-    node.field_names = None

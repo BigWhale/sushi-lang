@@ -57,8 +57,7 @@ from sushi_lang.semantics.passes.types.arguments import (
     Parameters, check_arguments, reject_misplaced_spread)
 from sushi_lang.semantics.passes.types.calls.dotcall import (
     MethodRung, reject_unknown_method, resolve_dotted)
-from sushi_lang.semantics.passes.types.calls.user_defined import (
-    generic_struct_takes_the_call, own_concrete_function, struct_takes_the_call)
+from sushi_lang.semantics.passes.types.calls.user_defined import own_concrete_function
 from sushi_lang.semantics.passes.types.method_registry import (
     MethodFamily, string_method_return_type)
 from sushi_lang.semantics.passes.types.expressions import top_level_contract
@@ -265,21 +264,20 @@ def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
                        name: str) -> Optional[FuncSig]:
     """The concrete function that a bare name calls in this unit, or None after its error.
 
-    A generic function, a construction, a stdlib function and `errno()` are not typed
-    here, and their call stops the walk of its body.
+    A generic function, a stdlib function and `errno()` are not typed here, and their call
+    stops the walk of its body. A bare call that constructs a struct is a `StructInit`
+    (lowering, #1076), never a call.
     """
     own = own_concrete_function(validator.func_table, name, validator.current_unit_name)
     if ((own is None and validator.generic_sig(name) is not None)
-            or struct_takes_the_call(validator, name)
-            or type_name_is_contested(validator, name)
-            or generic_struct_takes_the_call(validator, name)):
+            or type_name_is_contested(validator, name)):
         visit.stop_at(validator, node)
     sig = validator.func_sig(name)
     if sig is None:
         if (validator.func_table.lookup_stdlib_by_name(name, validator.scope) is not None
                 or name == ERRNO_FUNCTION):
             visit.stop_at(validator, node)
-        _reject_undefined(validator, name, ref.loc)
+        reject_undefined_function(validator, name, ref.loc)
         return None
     if reject_ambiguous_name(validator, "function", name, ref.loc):
         return None
@@ -299,7 +297,7 @@ def _function_behind_alias(validator: TypeValidator, node: e.Call, alias: str,
     return binding.record
 
 
-def _reject_undefined(validator: TypeValidator, name: str, loc: Span) -> None:
+def reject_undefined_function(validator: TypeValidator, name: str, loc: Span) -> None:
     """CE2008 for a name that no function of the unit's scope takes.
 
     A name that a library keeps is refused as kept (#469), and a name that the unit

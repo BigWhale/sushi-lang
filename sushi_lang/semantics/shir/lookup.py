@@ -11,6 +11,8 @@ type, so lowering reads the tables that the collect and namespaces passes made:
   type.
 - A named struct construction gives its fields in the declaration order, so lowering
   reads the field names of the struct declaration.
+- A bare call `S(...)` on a struct `S` constructs it, unless the unit declares a function
+  `S` (#1076), also when the scope pass resolved `S` to a function of another unit.
 - A template as written is the body of its template check (ir.md 4.3). Its origin names
   the template with the identity that the check gives it, from the record that the
   collect pass filed for the declaration.
@@ -22,6 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Mapping, Optional
 
+from sushi_lang.semantics.name_ladder import call_constructs_struct
 from sushi_lang.semantics.namespaces import body_namespaces
 
 if TYPE_CHECKING:
@@ -31,7 +34,7 @@ if TYPE_CHECKING:
     )
     from sushi_lang.semantics.namespaces import NamespaceTable
     from sushi_lang.semantics.passes.collect.functions import (
-        GenericExtensionTable, GenericFunctionTable,
+        FunctionTable, GenericExtensionTable, GenericFunctionTable,
     )
     from sushi_lang.semantics.passes.collect.perks import GenericPerkImplTable
     from sushi_lang.semantics.tables import SymbolTables
@@ -63,6 +66,7 @@ class DeclLookup:
     generic_funcs: GenericFunctionTable
     generic_extensions: GenericExtensionTable
     generic_perk_impls: GenericPerkImplTable
+    funcs: FunctionTable
     unit: str
 
     @classmethod
@@ -70,7 +74,7 @@ class DeclLookup:
         """The lookup of the program tables, in the scope of the unit `unit`."""
         return cls(tables.enums.by_name, tables.generic_enums.by_name, tables.structs.by_name,
                    tables.generic_structs.by_name, tables.namespaces, tables.generic_funcs,
-                   tables.generic_extensions, tables.generic_perk_impls, unit)
+                   tables.generic_extensions, tables.generic_perk_impls, tables.funcs, unit)
 
     def template_of(self, decl: object, owner: Optional[ExtendWithDef]) -> Optional[TemplateId]:
         """The template that the written body `decl` is, or None for a body of no template.
@@ -108,6 +112,12 @@ class DeclLookup:
         """The field names of the struct `type_name` in the declaration order, or None."""
         struct = self.structs.get(type_name) or self.generic_structs.get(type_name)
         return None if struct is None else tuple(name for name, _ty in struct.fields)
+
+    def constructs_struct(self, name: str) -> bool:
+        """True when the bare call `name(...)` constructs the struct `name` in this unit:
+        a struct or a generic struct of the name, and no function of the unit (#1076)."""
+        structs = self.structs if name in self.structs else self.generic_structs
+        return call_constructs_struct(name, structs, self.funcs, self.unit)
 
     def member_kind(self, body: object, alias: str, member: str) -> Optional[str]:
         """The kind of the declaration that `alias.member` names in `body`, or None.

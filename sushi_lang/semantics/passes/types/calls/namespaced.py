@@ -39,16 +39,13 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
         validate_external_call_args(validator, node)
         return
 
-    if binding.kind == "struct":
-        _validate_struct_construction(validator, node, binding)
-        return
-
     if binding.kind == "generic function":
         _validate_generic_call(validator, node, binding)
         return
 
     if binding.kind != "function":
-        # A member that exists and is not callable: a constant, an enum, or a perk.
+        # A member that exists and is not callable: a constant, an enum, or a perk. A
+        # struct construction behind a dot is a `StructInit` on SHIR (ir.md 7.3).
         for arg in node.args:
             validator.validate_expression(arg)
         _reject_unknown_member(validator, node.receiver, node.method, node.loc)
@@ -71,44 +68,6 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
     from .user_defined import validate_call_arguments
     validate_call_arguments(validator, _written(node.receiver, node.method),
                             binding.record, node.args, node.loc)
-
-
-def _validate_struct_construction(validator: 'TypeValidator', node: 'DotCall',
-                                  binding: 'Binding') -> None:
-    """A struct constructor behind a dot: `geo.Vec(1, 2)`.
-
-    Read through a stand-in `Call`, the device every other kind behind the dot uses,
-    so construction is measured by exactly the rules the bare form is measured by. A
-    struct is one declaration per program under phase 1 (Ruling 6), so the stamp tells
-    the back end WHAT to emit and the name is the whole address.
-    """
-    from sushi_lang.semantics.ast import Call, Name
-    from sushi_lang.semantics.passes.types.visibility import reject_private_type
-    from .structs import validate_generic_struct_constructor, validate_struct_constructor
-
-    if reject_private_type(validator, binding.name, node.loc):
-        return
-
-    # A GENERIC struct is built as the flat form builds it (#1151): the instance the
-    # declared type stamped, or else the one the arguments solve (#1150).
-    stamped = getattr(node, "resolved_struct_type", None)
-    generic = binding.name in validator.generic_struct_table.by_name
-    name = stamped.name if generic and stamped is not None else binding.name
-    stand_in = Call(callee=Name(id=name, loc=node.loc), args=node.args,
-                    field_names=node.field_names, loc=node.loc)
-    if generic and stamped is None:
-        constructed = validate_generic_struct_constructor(
-            validator, stand_in, _written(node.receiver, node.method))
-    else:
-        validate_struct_constructor(validator, stand_in)
-        constructed = validator.struct_table.by_name.get(name)
-    # A named construction is put in declaration order on the stand-in, as the bare
-    # form is on its own node. The node is what every later reader emits from, so
-    # the order comes back with it, and the names are spent.
-    node.args = stand_in.args
-    node.field_names = stand_in.field_names
-    node.resolved_struct_type = constructed
-    _stamp(node, binding, name=constructed.name if constructed is not None else None)
 
 
 def _constructed_struct(validator: 'TypeValidator', node: 'DotCall',

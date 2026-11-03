@@ -14,13 +14,13 @@ a class with no row is an internal error, and the arm of a construct that the pa
 type yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
 
 `statements.py` walks a block and holds the statement arms, `expressions.py` the expression
-arms of the leaves, `operators.py` the arms of the operators and the check of a condition,
-`calls.py` the arms of a call, an interpolated string and a borrow, and `results.py` the
-arm of an enum construction. The pattern arms are in `passes/types/matching.py`. The arms
-of `??` and of `as` are `check_try` and `check_cast` of `passes/types/expressions.py`,
-because the callers of the conversion lookup are in that module. The AST inference visitor
-of `inference.py` is not part of this walk: it is the inference of the early passes
-(`ReadOnlyInferrer`), until they stop inferring. `helpers.py` holds the lambda and
+arms of the leaves and of a struct construction, `operators.py` the arms of the operators
+and the check of a condition, `calls.py` the arms of a call, an interpolated string and a
+borrow, and `results.py` the arm of an enum construction. The pattern arms are in
+`passes/types/matching.py`. The arms of `??` and of `as` are `check_try` and `check_cast`
+of `passes/types/expressions.py`, because the callers of the conversion lookup are in that
+module. The AST inference visitor of `inference.py` is not part of this walk: it is the
+inference of the early passes (`ReadOnlyInferrer`), until they stop inferring. `helpers.py` holds the lambda and
 function-value helpers that it reads.
 """
 from __future__ import annotations
@@ -138,7 +138,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.Take: stop_at,
     e.Try: check_try,
     e.Lambda: stop_at,
-    e.StructInit: stop_at,
+    e.StructInit: ex.check_struct_init,
     e.EnumInit: rs.check_enum_init,
     e.TupleInit: stop_at,
     e.ArrayInit: stop_at,

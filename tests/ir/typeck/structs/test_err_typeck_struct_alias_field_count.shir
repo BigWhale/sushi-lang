@@ -1,0 +1,16 @@
+unit units/plane
+
+unit test_err_typeck_struct_alias_field_count
+
+ShirBody keep
+  params : [(_0 "v": Vec, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(Call(Free(@keep), [StructInit(@pl.Vec, [Lit(1)], written_order: [0])]))
+    Return(Lit(0))
