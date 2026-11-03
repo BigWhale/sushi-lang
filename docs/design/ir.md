@@ -874,6 +874,28 @@ type. The rules of a write through a borrow and of a read-only place are rules o
 `borrow`. An `Assign` of an `Index`, of a `var` and of any other place that is not a
 `LocalRef` or a `Field` is not typed yet.
 
+**A destructure.** A `Destructure` first finds what each target wants (ruling R-D). A
+binder with a written type wants that type, and the written type is checked as the type of
+a `let` is checked ([CE2001](../error-catalog.md#ce2001)). A `Place` wants the type of its
+place. The place is a `LocalRef` or a `Field`, and it is checked as the target of a rebind
+or of a field write: a field of a constant is CE2096 at the place. A `Place` of any other
+place is not typed yet. A bare binder and a `_` want no type, and a `Nested` target wants
+what its targets want. Then the value is checked. A `TupleInit` with one part for each
+target checks each part at what its target wants, also at a nested level, so a literal takes
+the type of its binder or of its place: `let (u8 a, b) = (300, 1)` is
+[CE2073](../error-catalog.md#ce2073), and `(small, big) := (200, 5000000000)` types each
+literal as `small := 200` does. Any other value is checked at no type. A `Result` value is
+[CE2505](../error-catalog.md#ce2505) at the value. Then each target takes its element, and
+the path of the target keys its element type row. The value has one element for each
+target, else it is [CE2117](../error-catalog.md#ce2117) (no tuple) or
+[CE2120](../error-catalog.md#ce2120) (the count), at the value for the top level and at
+`Nested.loc` for a nested level. A bare binder takes the type of its element. A binder with
+a written type takes that type, and a place keeps its own type: an element that does not fit
+is CE2002 at the written type or at the place, with no note, and the binder is refused as
+the local of a `let` is refused. After an error of the value or of a level, a bare binder of
+that level has no type, so a later use of it adds no diagnostic. Whether a target owns or
+borrows its element is a rule of `borrow`.
+
 **An initializer body.** Before the walk of the initializer body of a constant or a `var`
 (6.3), the constant evaluator reads the initializer at the declared type, with the reporter
 of the pass (Q5). It reports what is not constant ([CE0108](../error-catalog.md#ce0108)), an
@@ -1231,7 +1253,7 @@ forwards the array operand itself, as a `Move`.
 | Node | Fields |
 |---|---|
 | `Assign` | `target: Expr`, `value: Expr`, `is_init: bool`; `Let` and `Rebind` collapse here |
-| `Destructure` | `targets: [LocalId \| Place \| Discard \| Nested]`, `value: Expr`; `let (a, b) = v`, `Nested(targets)` for `let ((a, b), c) = v`, and `Place(target: Expr)` for each place of a tuple rebind `(a, b) := v` |
+| `Destructure` | `targets: [LocalId \| Place \| Discard \| Nested]`, `value: Expr`; `let (a, b) = v`, `Nested(targets, loc: Span)` for `let ((a, b), c) = v`, and `Place(target: Expr)` for each place of a tuple rebind `(a, b) := v`. `Nested.loc` is the span of the nested target, where a diagnostic of its level points |
 | `ExprStmt` | `value: Expr` |
 | `Return` | `value: Expr` |
 | `If` | `cond: Expr`, `then: ShirBlock`, `otherwise: ShirBlock \| None` |
