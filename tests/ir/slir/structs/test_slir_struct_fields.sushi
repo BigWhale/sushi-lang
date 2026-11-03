@@ -1,0 +1,58 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "1\n4\n3\n5\n6\n2\n7\n8\nfalse\n12 13\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_struct_fields.slir
+#
+# A field read of a place is a `Copy` of its `Field` projection, with the index of the
+# typecheck row; a field of a field is a projection of the projection (ir.md 8.9). A field
+# of a parameter reads the place of the parameter. A base that is no place (a call, a
+# construction) goes into a temporary of the statement, and the field is a `Copy` of its
+# projection. A field write computes the new value first, then stores into the projection;
+# `and` goes into a temporary first, because its right operand reads the place again.
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Seg:
+    Point a
+    Point b
+
+struct Flags:
+    bool on
+    i32 n
+
+fn make() Point:
+    return Point(5, 6)
+
+fn sum(Point p) i32:
+    return p.x + p.y
+
+fn moved(poke Point p) ~:
+    p.x := p.x + 10
+    p.y := 13
+
+fn show(peek Seg s) i32:
+    return s.b.x
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    println(p.x)
+    let Seg s = Seg(p, Point(3, 4))
+    println(s.b.y)
+    println(s.b.x)
+    println(make().x)
+    let i32 y = make().y
+    println(y)
+    println(Point(9, 2).y)
+    s.a.x := 7
+    println(s.a.x)
+    s.b.x := sum(Point(3, 5))
+    println(show(peek s))
+    let Flags f = Flags(true, 0)
+    f.on := f.n > 0 and f.on
+    println(f.on)
+    let Point q = Point(2, 3)
+    moved(poke q)
+    println("{q.x} {q.y}")
+    return 0

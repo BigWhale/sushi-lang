@@ -74,8 +74,8 @@ class _PayloadBytes:
 
 def constant_of(value: 'AggregateConstant', span: Optional[Span],
                 filename: Optional[str]) -> k.Aggregate:
-    """The SLIR constant of an enum value of the evaluator. A struct or an array value,
-    also in a payload, has none yet (A5, A6), and the global of it stops."""
+    """The SLIR constant of an enum value of the evaluator. An array value, also in a
+    payload, has none yet (A6), and the global of it stops."""
     constant = k.of_value(value)
     if not isinstance(constant, k.Aggregate):
         stop("aggregate constant", span, filename)

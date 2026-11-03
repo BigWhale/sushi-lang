@@ -35,7 +35,8 @@ from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.slir.lower import Arrival, Block, Lowering, ShortCircuit, Value
+    from sushi_lang.semantics.slir.lower import Arrival, Block, Lowering
+    from sushi_lang.semantics.slir.lower_values import ShortCircuit, Value
 
 
 #: The binders that one path of an arm writes, and the block that writes them: None for the

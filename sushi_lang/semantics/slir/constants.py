@@ -14,7 +14,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.const_eval import ConstantValue, ScalarConstant
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.type_predicates import is_float_type
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, StructType, Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.typeck import TypeckResults
@@ -92,12 +92,14 @@ def of_literal(lit: e.Lit, typeck: TypeckResults) -> Constant:
 
 
 def of_value(value: ConstantValue) -> Optional[Constant]:
-    """The constant of a value that typecheck wrote: a scalar, or an enum variant whose
-    payload values are made by the same rule. None for a struct or an array value, also in
-    a payload (A5, A6)."""
+    """The constant of a value that typecheck wrote: a scalar, an enum variant or a struct,
+    whose payload values and field values are made by the same rule. None for an array
+    value, also in a payload or a field (A6)."""
     if isinstance(value, ScalarConstant):
         return of_scalar(value)
-    if not isinstance(value.semantic_type, EnumType) or value.variant is None:
+    ty = value.semantic_type
+    if not (isinstance(ty, StructType)
+            or (isinstance(ty, EnumType) and value.variant is not None)):
         return None
     parts = [of_value(part) for part in value.elements]
     if any(part is None for part in parts):

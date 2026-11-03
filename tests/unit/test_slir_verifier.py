@@ -799,3 +799,90 @@ def test_an_expect_trap_with_the_position_and_the_message_passes():
     trap = tm.Trap("RE2029", (p.Const(k.text("f.sushi:3:5")), p.Const(k.text("no value"))),
                    SPAN)
     _passes(_function([BLANK], _block(0, trap)))
+
+
+@pytest.mark.parametrize("parts", [
+    (p.Const(k.Bool(True)), p.Const(k.Int(4, I32))),      # a bool for an i32
+    (p.Const(k.Str(b"x")),),                              # a string for an i32
+], ids=["bool", "string"])
+def test_a_variant_with_a_part_of_another_type_than_its_payload_is_refused(
+        parts: tuple[p.Operand, ...]):
+    variant = "Rect" if len(parts) == 2 else "Circle"
+    _refused(_variant(parts, variant, SHAPE, BAD), "an enum value")
+
+
+def test_a_constant_variant_with_a_part_of_another_type_than_its_payload_is_refused():
+    _refused(_constant(k.Aggregate(SHAPE, (k.Bool(True),), "Circle"), BAD), "an enum value")
+
+
+# -- a struct value and a field place ---------------------------------------------------
+
+TUPLE = StructType(name="$Tuple<i32, bool>", fields=(("0", I32), ("1", BOOL)))
+SEG = StructType(name="Seg", fields=(("a", PAIR), ("n", I32)))
+NAMED = StructType(name="Named", fields=(("name", STRING), ("n", I32)))
+
+
+def _struct(value: r.Rvalue, ty: Type, span: Span = SPAN) -> SlirFunction:
+    """`_1 = value` over the parameter `_2: i32`, with `_1` of the type `ty`."""
+    return _function([BLANK, ty, I32], _block(0, _ret(), _live(1), _set(1, value, span),
+                                              _dead(1), _set(0, r.Use(p.Const(k.Blank())))),
+                     params=((2, GUARANTEED),))
+
+
+def test_a_struct_and_a_tuple_with_one_part_of_the_type_of_each_field_pass():
+    _passes(_struct(r.Aggregate(r.AggStruct(PAIR), (_copy(2), p.Const(k.Int(4, I32)))), PAIR))
+    _passes(_struct(r.Aggregate(r.AggTuple(TUPLE), (_copy(2), p.Const(k.Bool(True)))), TUPLE))
+    _passes(_struct(r.Use(p.Const(k.Aggregate(SEG, (k.Aggregate(PAIR, (k.Int(1, I32),
+                                                                       k.Int(2, I32))),
+                                                    k.Int(3, I32))))), SEG))
+
+
+@pytest.mark.parametrize("value", [
+    r.Aggregate(r.AggStruct(PAIR), (_copy(2),)),                             # one part of two
+    r.Aggregate(r.AggStruct(PAIR), (_copy(2), p.Const(k.Bool(True)))),       # a bool for an i32
+    r.Aggregate(r.AggTuple(TUPLE), (p.Const(k.Bool(True)), _copy(2))),       # parts swapped
+    r.Aggregate(r.AggStruct(I32), ()),                                       # no struct
+    r.Use(p.Const(k.Aggregate(PAIR, (k.Int(1, I32),)))),                     # constant count
+    r.Use(p.Const(k.Aggregate(PAIR, (k.Int(1, I32), k.Str(b"x"))))),         # constant type
+    r.Use(p.Const(k.Aggregate(SEG, (k.Aggregate(PAIR, (k.Int(1, I32), k.Bool(False))),
+                                    k.Int(3, I32))))),                       # a field of a field
+    r.Use(p.Const(k.Aggregate(I32, ()))),                                    # constant no struct
+], ids=["count", "type", "tuple", "no struct", "constant count", "constant type",
+        "nested constant", "constant no struct"])
+def test_a_struct_value_that_its_type_does_not_declare_is_refused(value: r.Rvalue):
+    _refused(_struct(value, PAIR, BAD), "a struct value")
+
+
+def test_a_write_and_a_read_of_the_fields_of_a_struct_local_pass():
+    _passes(_function([BLANK, PAIR, I32], _block(
+        0, _ret(), _live(1), _set(1, r.Aggregate(r.AggStruct(PAIR), (p.Const(k.Int(1, I32)),
+                                                                     p.Const(k.Int(2, I32))))),
+        st.Assign(p.Field(_local(1), 0), r.Use(p.Const(k.Int(5, I32))), SPAN), _live(2),
+        _set(2, r.Use(p.Copy(p.Field(_local(1), 1)))), _dead(2), _dead(1),
+        _set(0, r.Use(p.Const(k.Blank()))))))
+
+
+def test_a_write_of_a_field_of_a_local_that_holds_no_value_is_refused():
+    write = st.Assign(p.Field(_local(1), 0), r.Use(p.Const(k.Int(5, I32))), BAD)
+    _refused(_function([BLANK, PAIR], _block(0, _ret(), _live(1), write, _dead(1),
+                                             _set(0, r.Use(p.Const(k.Blank()))))),
+             "no use of a local outside its storage")
+
+
+def test_a_move_of_a_field_moves_its_whole_local():
+    """No local is moved in part: a read of a sibling field after the move is refused."""
+    _refused(_function(
+        [BLANK, NAMED, STRING, I32],
+        _block(0, _ret(), _set(2, r.Use(p.Move(p.Field(_local(1), 0)))),
+               _set(3, r.Use(p.Copy(p.Field(_local(1), 1))), BAD), _drop(2)),
+        params=((1, OWNED),),
+    ), "no use after a move")
+
+
+def test_a_drop_of_a_local_after_a_move_of_its_field_is_refused():
+    _refused(_function(
+        [BLANK, NAMED, STRING],
+        _block(0, _ret(), _set(2, r.Use(p.Move(p.Field(_local(1), 0)))), _drop(2),
+               _drop(1, BAD), _set(0, r.Use(p.Const(k.Blank())))),
+        params=((1, OWNED),),
+    ), "no use after a move")

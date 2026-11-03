@@ -1,0 +1,28 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "3\n4\n7\n5\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_struct_constant.slir
+#
+# A name of a struct constant is a constant `Aggregate` of its struct type with no variant,
+# with one part for each field in the declaration order; a field that is a struct is made
+# by the same rule (ir.md 8.5). The value is the value row of the name. A field of a
+# constant reads the projection of a temporary that holds the constant (ir.md 8.9).
+
+struct Point:
+    i32 x
+    i32 y
+
+struct Seg:
+    Point a
+    i32 n
+
+const Point ORIGIN = Point(3, 4)
+const Seg LINE = Seg(Point(7, 8), 5)
+
+fn main() i32:
+    println(ORIGIN.x)
+    let Point p = ORIGIN
+    println(p.y)
+    println(LINE.a.x)
+    println(LINE.n)
+    return 0

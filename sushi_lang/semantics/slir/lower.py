@@ -14,15 +14,16 @@ checks a body that the lowering finished, and `SlirProgram` keeps it for the emi
 The lowering handles the parameters, a `let`, a rebind, a call statement, a `return`, an
 `if`, a `match`, a `while` with its `break` and `continue`, an `assert`, over literals, names
 of constants, locals, the operators, `and` and `or` as control flow, the construction of an
-enum variant, a call, an interpolation, a `??` and `expect`. The operand of a value is the
-answer of `borrow` and the shape of the value alone (ir.md 7.9): a `move` row gives `Move`;
-an `adopt` row gives `Copy` of a place, a constant for a literal or a name of a constant,
-and `Move` of the temporary of a new value. A value with no row is read with `Copy`. A
-literal and a name of a constant take the value that typecheck wrote for them (ir.md 8.5).
-A new value goes into the place that takes it (the local of a `let`, `_0`), else into a
-temporary of its statement. The store that consumes a `move` operand marks its local moved,
-not the place where the operand is built. Drop placement (`drops.py`) places every drop,
-every flag write and every `StorageDead`, and joins the state of the locals at a join.
+enum variant, of a struct and of a tuple, a field read and write, a destructure, a call, an
+interpolation, a `??` and `expect`. The operand of a value is the answer of `borrow` and
+the shape of the value alone (ir.md 7.9): a `move` row gives `Move`; an `adopt` row gives
+`Copy` of a place, a constant for a literal or a name of a constant, and `Move` of the
+temporary of a new value. A value with no row is read with `Copy`. A literal and a name
+of a constant take the value that typecheck wrote for them (ir.md 8.5). A new value goes
+into the place that takes it (the local of a `let`, `_0`), else into a temporary of its
+statement. The store that consumes a `move` operand marks its local moved, not the place
+where the operand is built. Drop placement (`drops.py`) places every drop, every flag write
+and every `StorageDead`, and joins the state of the locals at a join.
 
 A local whose state differs between the paths of a join gets a drop flag right after it
 (ir.md 8.10, rule 4), and so does a local whose state at a loop header is not the state
@@ -37,11 +38,13 @@ a `reject` row, `borrowed rebind` for a rebind of a borrowed parameter that owns
 try` for a `??` over an owning wrapper that the body only reads, `conversion` also for a
 `??` that calls a declared conversion, `library function` for a callee whose declaring unit
 the typecheck row does not name, `bloom` for a bloom argument, `aggregate constant` for a
-name of a struct or an array constant, and `ConstRef out of range` for a name of a
-constant whose value its type cannot hold. The symbol, the unit and the return type of the
-function are facts of its declaration (ir.md 6.4). The unit is the declaring unit; a
-function that has none (a lifted lambda, the instance of a template of a binary library)
-goes into the module of the unit that holds its body.
+name of an array constant, the stops of `lower_aggregate.py` (`StructInit owning`,
+`TupleInit owning`, `owning temporary`, `owning field write`, `StructInit reference field`),
+and `ConstRef out of range` for a name of a constant whose value its type cannot hold. The
+symbol, the unit and the return type of the function are facts of its declaration (ir.md
+6.4). The unit is the declaring unit; a function that has none (a lifted lambda, the
+instance of a template of a binary library) goes into the module of the unit that holds its
+body.
 """
 from __future__ import annotations
 
@@ -65,6 +68,7 @@ from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import ResolvedCall, TypeckResults
 from sushi_lang.semantics.slir import constants as k
+from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import lower_control as ctl
 from sushi_lang.semantics.slir import lower_match
 from sushi_lang.semantics.slir import places as p
@@ -78,6 +82,7 @@ from sushi_lang.semantics.slir.function import (
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.lower_control import LoopFrame
 from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
+from sushi_lang.semantics.slir.lower_values import CallValue, ShortCircuit, Value
 from sushi_lang.semantics.slir.verify import SlirVerifier
 from sushi_lang.semantics.typesys import BuiltinType, Type, owns_resource
 from sushi_lang.semantics.unit_symbols import declaring_unit, function_symbol
@@ -141,24 +146,6 @@ class Block:
         return SlirBlock(self.id, tuple(self.statements), self.terminator)
 
 
-@dataclass(frozen=True, slots=True)
-class _CallValue:
-    """A call, before lowering knows the place that takes its value."""
-    callee: st.SlirCallee
-    args: tuple[tuple[p.Operand, Convention], ...]
-
-
-@dataclass(frozen=True, slots=True)
-class ShortCircuit:
-    """`and` or `or`, before lowering knows the place that takes its value: the left operand,
-    and the right operand that a block of its own evaluates (ir.md 8.9)."""
-    op: str
-    lhs: p.Operand
-    rhs: e.ShirExpr
-    span: Span
-
-
-Value: TypeAlias = r.Rvalue | _CallValue | ShortCircuit
 #: An edge into a join: the block that jumps to it (None when its terminator names the
 #: join already), and the state of the locals on that path.
 Arrival: TypeAlias = tuple[Optional[Block], FlowState]
@@ -343,6 +330,9 @@ class Lowering:
 
     def assign(self, stmt: s.Assign) -> None:
         target = stmt.target
+        if isinstance(target, e.Field) and not stmt.is_init:
+            agg.field_write(self, stmt, target)
+            return
         if not isinstance(target, e.LocalRef):
             dispatch.stop(STAGE, target)
         if stmt.is_init:
@@ -394,7 +384,7 @@ class Lowering:
         if isinstance(value, ShortCircuit):
             ctl.short_circuit(self, place, value)
             return
-        if isinstance(value, _CallValue):
+        if isinstance(value, CallValue):
             self.emit([st.Call(place, value.callee, value.args, span)])
         else:
             self.emit([st.Assign(place, value, span)])
@@ -424,8 +414,8 @@ class Lowering:
         row = self.answers.ownership.ownership_of(expr.shir_id)
         if row is Ownership.REJECT:
             raise StageStop(STAGE, "borrowed view", expr.loc)
-        if isinstance(expr, e.LocalRef):
-            place = p.Local(self.local_of(expr.local, expr.loc))
+        if isinstance(expr, e.LocalRef) or (isinstance(expr, e.Field) and row is not Ownership.MOVE):
+            place = agg.place_of(self, expr)
             return p.Move(place) if row is Ownership.MOVE else p.Copy(place)
         if row is Ownership.MOVE:
             er.raise_internal_error("CE0000", span=expr.loc,
@@ -438,8 +428,8 @@ class Lowering:
         return p.Move(p.Local(temp)) if row is Ownership.ADOPT else p.Copy(p.Local(temp))
 
     def constant(self, ref: e.ConstRef) -> k.Constant:
-        """The value of the constant that `ref` names, from its typecheck row. A struct or an
-        array value has no constant kind yet (A5, A6). An integer that its type cannot hold
+        """The value of the constant that `ref` names, from its typecheck row. An array
+        value has no constant kind yet (A6). An integer that its type cannot hold
         stops (`ConstRef out of range`): the constant evaluator does not wrap a bit pattern,
         and it gives a value to an initializer with a range error."""
         value = self.typeck.value_of(ref.shir_id)
@@ -489,8 +479,8 @@ class Lowering:
         receiver = ((self.operand(resolved.callee.recv),
                      _receiver_convention(resolved.callee, node.loc)),) \
             if isinstance(resolved.callee, Builtin) else ()
-        return _CallValue(callee, receiver + tuple(self.argument(node, index, arg)
-                                                   for index, arg in enumerate(node.args)))
+        return CallValue(callee, receiver + tuple(self.argument(node, index, arg)
+                                                  for index, arg in enumerate(node.args)))
 
     def callee(self, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee:
         """A free function by its symbol and its source name; an intrinsic with the display
@@ -534,7 +524,7 @@ class Lowering:
             else:
                 args.append((self.operand(part), Convention.GUARANTEED))
                 types.append(self.display_type(node.shir_id, index, part.loc))
-        return _CallValue(st.Builtin(Intrinsic("interp"), tuple(types)), tuple(args))
+        return CallValue(st.Builtin(Intrinsic("interp"), tuple(types)), tuple(args))
 
     def display_type(self, node: ShirId, part: int, span: Span) -> Type:
         ty = self.typeck.display_type_of(node, part)
@@ -546,6 +536,7 @@ class Lowering:
 
 _STATEMENTS: dict[type, Callable[..., None]] = {
     s.Assign: Lowering.assign,
+    s.Destructure: agg.destructure,
     s.ExprStmt: Lowering.expr_stmt,
     s.Return: Lowering.ret,
     s.If: ctl.if_,
@@ -564,6 +555,9 @@ _VALUES: dict[type, Callable[..., Value]] = {
     e.Unary: Lowering.unary,
     e.Cast: Lowering.cast,
     e.EnumInit: Lowering.enum_init,
+    e.StructInit: agg.struct_init,
+    e.TupleInit: agg.tuple_init,
+    e.Field: agg.field,
     e.Call: Lowering.call,
     e.Interp: Lowering.interp,
     e.Try: ctl.try_,
@@ -583,9 +577,9 @@ def _receiver_convention(callee: Builtin, span: Span) -> Convention:
     return convention
 
 
-def _moves(value: r.Rvalue | _CallValue) -> list[p.Place]:
+def _moves(value: r.Rvalue | CallValue) -> list[p.Place]:
     """The place of each `move` operand of a value."""
-    parts = (tuple(operand for operand, _ in value.args) if isinstance(value, _CallValue)
+    parts = (tuple(operand for operand, _ in value.args) if isinstance(value, CallValue)
              else r.operands_of(value))
     return [part.place for part in parts if isinstance(part, p.Move)]
 

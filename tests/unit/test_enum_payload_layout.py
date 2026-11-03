@@ -186,15 +186,29 @@ def _one(value: int) -> ScalarConstant:
     return ScalarConstant(value, BuiltinType.I32)
 
 
+POINT = StructType(name="Point", fields=(("x", BuiltinType.I32), ("y", BuiltinType.I32)))
+
+
+def test_a_global_with_a_struct_payload_writes_each_field_at_the_authority_offset() -> None:
+    """A struct value in a payload is a SLIR constant (A5). The one converter writes its
+    fields at the offsets of the layout authority, inside the offset of the payload."""
+    enum_type = _enum(EnumVariantInfo(name="A", associated_types=(POINT,)))
+    value = AggregateConstant([AggregateConstant([_one(1), _one(2)], POINT)], enum_type, "A")
+    constant = constant_of(value, None, None)
+    assert constant == k.Aggregate(enum_type, (k.Aggregate(
+        POINT, (k.Int(1, BuiltinType.I32), k.Int(2, BuiltinType.I32))),), "A")
+    words = enum_initializer(constant, LLVMTypeSystem(), None, "").constant[1].constant
+    assert [word.constant for word in words] == [1 | 2 << 32]
+
+
 @pytest.mark.parametrize("payload", [
-    AggregateConstant([_one(1), _one(2)],
-                      StructType(name="Point", fields=(("x", BuiltinType.I32),
-                                                       ("y", BuiltinType.I32)))),
     AggregateConstant([_one(1), _one(2)], ArrayType(BuiltinType.I32, 2)),
-], ids=["struct", "array"])
+    AggregateConstant([AggregateConstant([_one(1)], ArrayType(BuiltinType.I32, 1))],
+                      StructType(name="Row", fields=(("row", ArrayType(BuiltinType.I32, 1)),))),
+], ids=["array", "array in a struct"])
 def test_a_global_with_no_constant_of_its_payload_stops(payload: AggregateConstant) -> None:
-    """The global of an enum value whose payload is a struct or an array has no SLIR
-    constant yet (A5, A6). Its declaration stops loudly; it never skips the global."""
+    """The global of an enum value whose payload holds an array has no SLIR constant yet
+    (A6). Its declaration stops loudly; it never skips the global."""
     enum_type = _enum(EnumVariantInfo(name="A", associated_types=(payload.semantic_type,)))
     value = AggregateConstant([payload], enum_type, "A")
     span = Span(4, 1, 4, 30)

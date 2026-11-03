@@ -12,8 +12,9 @@ flag for a `DropIfSet`, no `and` or `or` in a `Binary`, a `Cast` between two num
 or of one type, an `Int` constant in the range of its type, a `SwitchInt` on an integer or a
 `bool` whose cases its type holds, each one time, a tag of its enum for each case of a switch
 on the local that a `Discriminant` of its block writes, a `Discriminant` of an enum, a
-variant (an rvalue or a constant) that its enum declares with each value of its payload, the
-conventions of a `Direct` callee, a
+variant (an rvalue or a constant) that its enum declares with each value of its payload, a
+struct or a tuple (an rvalue or a constant) with each field of its type, each part of the
+type of its payload value or of its field, the conventions of a `Direct` callee, a
 receiver operand for a call of a built-in method, no copy of an owning value
 other than a `string` into an `Owned` argument, and a registered `RExxxx` for a `Trap`, with
 one operand of the type that each printf conversion of its text takes. The type of a place
@@ -39,7 +40,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import TYPE_CHECKING, Callable, NoReturn, Optional, TypeAlias, get_args
+from typing import TYPE_CHECKING, Callable, NoReturn, Optional, Sequence, TypeAlias, get_args
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import REGISTRY, Category
@@ -87,6 +88,7 @@ CONSTANT_RANGE = "a constant in range"
 INTEGER_SWITCH = "an integer switch"
 TAG_SWITCH = "a switch on a tag"
 ENUM_VALUE = "an enum value"
+STRUCT_VALUE = "a struct value"
 TRAP = "registered trap"
 SPANS = "spans"
 
@@ -309,15 +311,34 @@ class _Check:
                 self.fail(TAG_SWITCH, f"the case {value} is the tag of no variant of "
                                       f"{display_type(enum)}", term.span)
 
-    def enum_variant(self, ty: Type, variant: str, count: int, span: Span) -> None:
-        """`ty` is an enum that declares `variant` with `count` payload values."""
+    def enum_variant(self, ty: Type, variant: str, parts: list[Optional[Type]],
+                     span: Span) -> None:
+        """`ty` is an enum that declares `variant` with a payload value for each part."""
         info = ty.get_variant(variant) if isinstance(ty, EnumType) else None
         if info is None:
             self.fail(ENUM_VALUE, f"{display_type(ty)} declares no variant '{variant}'", span)
-        if len(info.associated_types) != count:
-            self.fail(ENUM_VALUE, f"the variant {variant} of {display_type(ty)} holds "
-                                  f"{len(info.associated_types)} values, and it is given "
-                                  f"{count}", span)
+        self.parts_fit(ENUM_VALUE, f"the variant {variant} of {display_type(ty)}",
+                       info.associated_types, parts, span)
+
+    def struct_value(self, ty: Type, parts: list[Optional[Type]], span: Span) -> None:
+        """`ty` is a struct or a tuple with a field for each part."""
+        if not isinstance(ty, StructType):
+            self.fail(STRUCT_VALUE, f"a struct value of {display_type(ty)}, which is no "
+                                    f"struct", span)
+        self.parts_fit(STRUCT_VALUE, display_type(ty),
+                       [field_ty for _, field_ty in ty.fields], parts, span)
+
+    def parts_fit(self, rule: str, what: str, wanted: Sequence[Type],
+                  parts: list[Optional[Type]], span: Span) -> None:
+        """One part for each wanted type, of that type. A part whose type SLIR does not
+        hold (behind a `Global`) is not compared."""
+        if len(parts) != len(wanted):
+            self.fail(rule, f"{what} holds {len(wanted)} values, and it is given "
+                            f"{len(parts)}", span)
+        for index, (want, have) in enumerate(zip(wanted, parts, strict=True)):
+            if have is not None and have != want:
+                self.fail(rule, f"part {index} of {what} has the type {display_type(have)}, "
+                                f"and the value holds {display_type(want)} there", span)
 
     def place(self, place: p.Place, span: Span) -> _Typed:
         """The root and the type of `place`; each projection must fit the type of its base."""
@@ -346,8 +367,11 @@ class _Check:
             self.fail(CONSTANT_RANGE, f"{constant.value} is out of the range of "
                                       f"{display_type(constant.ty)}", span)
         if isinstance(constant, k.Aggregate):
+            types = [_constant_type(part) for part in constant.parts]
             if constant.variant is not None:
-                self.enum_variant(constant.ty, constant.variant, len(constant.parts), span)
+                self.enum_variant(constant.ty, constant.variant, types, span)
+            else:
+                self.struct_value(constant.ty, types, span)
             for part in constant.parts:
                 self.constant(part, span)
 
@@ -365,7 +389,11 @@ class _Check:
                 and not isinstance(self.place(value.place, span).ty, (EnumType, type(None))):
             self.fail(ENUM_VALUE, f"{show(value)} reads a value that is no enum", span)
         if isinstance(value, r.Aggregate) and isinstance(value.kind, r.AggVariant):
-            self.enum_variant(value.kind.ty, value.kind.variant, len(value.parts), span)
+            self.enum_variant(value.kind.ty, value.kind.variant,
+                              [self.operand_type(part, span) for part in value.parts], span)
+        if isinstance(value, r.Aggregate) and isinstance(value.kind, (r.AggStruct, r.AggTuple)):
+            self.struct_value(value.kind.ty,
+                              [self.operand_type(part, span) for part in value.parts], span)
 
     def cast(self, value: r.Cast, span: Span) -> None:
         """A cast joins two numeric types, or keeps one type. Its operand has a known type
@@ -379,12 +407,7 @@ class _Check:
 
     def operand_type(self, operand: p.Operand, span: Span) -> Optional[Type]:
         if isinstance(operand, p.Const):
-            constant = operand.constant
-            if isinstance(constant, (k.Int, k.Float)):
-                return constant.ty
-            if isinstance(constant, k.Str):
-                return BuiltinType.STRING
-            return BuiltinType.BOOL if isinstance(constant, k.Bool) else None
+            return _constant_type(operand.constant)
         ty = self.place(operand.place, span).ty
         return None if isinstance(ty, _Payload) else ty
 
@@ -538,6 +561,17 @@ _PLACES: dict[type, Callable[..., _Typed]] = {
     p.Downcast: _Check.downcast_place,
     p.Deref: _Check.deref_place,
 }
+
+
+def _constant_type(constant: k.Constant) -> Optional[Type]:
+    """The type of a constant; None for a `FnRef`, whose type SLIR does not hold."""
+    if isinstance(constant, (k.Int, k.Float, k.Aggregate)):
+        return constant.ty
+    if isinstance(constant, k.Str):
+        return BuiltinType.STRING
+    if isinstance(constant, k.Bool):
+        return BuiltinType.BOOL
+    return BuiltinType.BLANK if isinstance(constant, k.Blank) else None
 
 
 def _successors(term: tm.SlirTerminator) -> list[BlockId]:

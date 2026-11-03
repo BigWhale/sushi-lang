@@ -3,8 +3,9 @@
 An integer literal takes the value that typecheck wrote for it (ruling R-W), not the value
 that it spells. A `ConstRef` takes the value of the constant, and a string constant is a
 literal that owns no heap. The tests call the lowering functions over data; they do not run
-the compiler. A name of a struct, an enum or an array constant, and a name of a constant
-whose value its type cannot hold, stop the lowering of the body.
+the compiler. A struct value is an `Aggregate` with no variant, also as a payload value. A
+name of an array constant, and a name of a constant whose value its type cannot hold, stop
+the lowering of the body.
 """
 from __future__ import annotations
 
@@ -21,7 +22,9 @@ from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir.lower import Lowering
-from sushi_lang.semantics.typesys import ArrayType, BuiltinType
+from sushi_lang.semantics.typesys import (
+    ArrayType, BuiltinType, EnumType, EnumVariantInfo, StructType,
+)
 
 SPAN = Span(3, 5, 3, 12)
 U8 = BuiltinType.U8
@@ -87,3 +90,29 @@ def test_a_name_of_a_constant_with_no_constant_kind_stops(value: ConstantValue,
         _constant_of(value)
     assert caught.value.params == {"stage": "slir", "construct": construct}
     assert caught.value.span == SPAN
+
+
+POINT = StructType(name="Point", fields=(("x", I8), ("y", U8)))
+HOLDER = EnumType(name="Holder", variants=(
+    EnumVariantInfo(name="Some", associated_types=(POINT,)),
+    EnumVariantInfo(name="None", associated_types=())))
+
+
+def test_a_struct_value_is_an_aggregate_of_its_fields_in_order() -> None:
+    value = AggregateConstant([ScalarConstant(-1, I8), ScalarConstant(200, U8)], POINT)
+    assert _constant_of(value) == k.Aggregate(POINT, (k.Int(-1, I8), k.Int(200, U8)))
+
+
+def test_a_struct_value_in_a_payload_is_made_by_the_same_rule() -> None:
+    point = AggregateConstant([ScalarConstant(3, I8), ScalarConstant(4, U8)], POINT)
+    value = AggregateConstant([point], HOLDER, "Some")
+    assert _constant_of(value) == k.Aggregate(
+        HOLDER, (k.Aggregate(POINT, (k.Int(3, I8), k.Int(4, U8))),), "Some")
+
+
+def test_an_array_value_in_a_field_stops() -> None:
+    row = AggregateConstant([ScalarConstant(1, I8)], ArrayType(I8, 1))
+    rows = StructType(name="Rows", fields=(("row", ArrayType(I8, 1)),))
+    with pytest.raises(StageStop) as caught:
+        _constant_of(AggregateConstant([row], rows))
+    assert caught.value.params == {"stage": "slir", "construct": "aggregate constant"}

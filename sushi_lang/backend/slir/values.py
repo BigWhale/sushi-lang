@@ -94,7 +94,7 @@ def type_of_operand(state: FunctionState, operand: p.Operand) -> Type:
 def constant_value(state: FunctionState, constant: k.Constant) -> ir.Value:
     """An LLVM value of a constant. A string literal comes from the string constant seam,
     and it owns no heap (its owned flag is 0). A variant goes through the one converter of an
-    enum constant."""
+    enum constant. A struct stops (`emit, aggregate constant`) until the emit chunk of A5."""
     codegen = state.codegen
     if isinstance(constant, k.Int):
         return emit_int_constant(codegen, constant.ty, constant.value)
@@ -107,7 +107,7 @@ def constant_value(state: FunctionState, constant: k.Constant) -> ir.Value:
     if isinstance(constant, k.Aggregate) and constant.variant is not None:
         return enum_initializer(constant, codegen.types, _literal_constant(state), "",
                                 span=state.span, filename=state.filename)
-    state.stop(constant)
+    state.stop("aggregate constant" if isinstance(constant, k.Aggregate) else constant)
 
 
 def _literal_constant(state: FunctionState) -> Callable[[str, str], ir.Constant]:
@@ -127,7 +127,7 @@ def type_of_constant(state: FunctionState, constant: k.Constant) -> Type:
         return BuiltinType.STRING
     if isinstance(constant, k.Aggregate) and constant.variant is not None:
         return constant.ty
-    state.stop(constant)
+    state.stop("aggregate constant" if isinstance(constant, k.Aggregate) else constant)
 
 
 def _scalar(constant: k.Float | k.Bool | k.Blank) -> float | int:

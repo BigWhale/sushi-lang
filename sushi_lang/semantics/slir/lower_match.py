@@ -36,7 +36,8 @@ from sushi_lang.semantics.type_predicates import is_integer_type
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.slir.lower import Arrival, Block, Lowering, Value
+    from sushi_lang.semantics.slir.lower import Arrival, Block, Lowering
+    from sushi_lang.semantics.slir.lower_values import Value
 
 
 def match(low: Lowering, stmt: s.Match) -> None:

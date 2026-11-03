@@ -1,0 +1,102 @@
+unit test_slir_tuple_construction
+
+fn bump(_1: i32 @inout) -> i32 {
+    let _0: i32
+
+  bb0:
+    _1 = copy _1 + const 1_i32
+    _0 = copy _1
+    return
+}
+
+fn pair(_1: i32 @guaranteed) -> (i32, i32) {
+    let _0: (i32, i32)
+    let _2: i32
+
+  bb0:
+    StorageLive(_2)
+    _2 = copy _1 + const 1_i32
+    _0 = (copy _1, move _2)
+    StorageDead(_2)
+    return
+}
+
+fn second(_1: (i32, bool) @guaranteed) -> bool {
+    let _0: bool
+
+  bb0:
+    _0 = copy (_1.1)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: (i32, bool)                    // t
+    let _2: ~
+    let _3: bool
+    let _4: ~
+    let _5: (i32, i32)
+    let _6: ((i32, i32), i32)              // nested
+    let _7: ~
+    let _8: ~
+    let _9: i32                            // n
+    let _10: i32
+    let _11: i32
+    let _12: (i32, i32)                    // kept
+    let _13: ~
+    let _14: ~
+    let _15: (i32, i32)
+    let _16: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = (const 1_i32, const true)
+    StorageLive(_2)
+    _2 = call builtin println@(i32)(copy (_1.0) @guaranteed)
+    StorageDead(_2)
+    StorageLive(_3)
+    _3 = call @second(copy _1 @guaranteed)
+    StorageLive(_4)
+    _4 = call builtin println@(bool)(copy _3 @guaranteed)
+    StorageDead(_4)
+    StorageDead(_3)
+    StorageLive(_5)
+    _5 = (const 2_i32, const 3_i32)
+    StorageLive(_6)
+    _6 = (move _5, const 4_i32)
+    StorageDead(_5)
+    StorageLive(_7)
+    _7 = call builtin println@(i32)(copy ((_6.0).0) @guaranteed)
+    StorageDead(_7)
+    StorageLive(_8)
+    _8 = call builtin println@(i32)(copy ((_6.0).1) @guaranteed)
+    StorageDead(_8)
+    StorageLive(_9)
+    _9 = const 9_i32
+    StorageLive(_10)
+    _10 = copy _9
+    StorageLive(_11)
+    _11 = call @bump(copy _9 @inout)
+    StorageLive(_12)
+    _12 = (copy _10, move _11)
+    StorageDead(_11)
+    StorageDead(_10)
+    StorageLive(_13)
+    _13 = call builtin println@(i32)(copy (_12.0) @guaranteed)
+    StorageDead(_13)
+    StorageLive(_14)
+    _14 = call builtin println@(i32)(copy (_12.1) @guaranteed)
+    StorageDead(_14)
+    StorageLive(_15)
+    _15 = call @pair(const 4_i32 @guaranteed)
+    StorageLive(_16)
+    _16 = call builtin println@(i32)(copy (_15.1) @guaranteed)
+    StorageDead(_16)
+    StorageDead(_15)
+    _0 = const 0_i32
+    StorageDead(_12)
+    StorageDead(_9)
+    StorageDead(_6)
+    StorageDead(_1)
+    return
+}
