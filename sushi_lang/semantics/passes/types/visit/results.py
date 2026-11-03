@@ -32,6 +32,7 @@ from sushi_lang.semantics.passes.types.utils import reject_unpromised_arguments
 from sushi_lang.semantics.passes.types.visibility import name_is_contested, reject_private_type
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.nodes import Hole
+from sushi_lang.semantics.source_text import source_text
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.typesys import EnumType, Type
 from sushi_lang.semantics.written_types import written_name
@@ -77,14 +78,39 @@ def check_hole(validator: TypeValidator, node: Hole,
     (`Pair@(i32, i32)(1, 2)`) is CE6102 at the hole (ir.md 7.4). Every other hole stops the
     walk of its body."""
     if node.ast_class == "Call" and "CE6102" in node.codes:
-        er.emit_with(validator.reporter, er.ERR.CE6102, node.loc).help(
-            "write the type arguments on the type of the position, e.g. "
-            "`let Pair@(i32, i32) p = Pair(1, 2)`").emit()
+        _reject_construction_type_args(validator, node)
         return
     member = node.member
     if member is None or not _reject_member(validator, member.written, member.name,
                                             member.name_loc, expected):
         visit.stop_at(validator, node)
+
+
+def _reject_construction_type_args(validator: TypeValidator, node: Hole) -> None:
+    """CE6102 at a construction with written type arguments. The help moves them to the
+    type of the position, with the construction as the source writes it."""
+    report = er.emit_with(validator.reporter, er.ERR.CE6102, node.loc)
+    parts = _split_type_args(source_text(validator.reporter.body_source(), node.loc))
+    if parts is None:
+        report.help("write the type arguments on the type of the position").emit()
+        return
+    name, type_args, args = parts
+    report.help(f"write the type arguments on the type of the position, e.g. "
+                f"`let {name}{type_args} v = {name}{args}`").emit()
+
+
+def _split_type_args(text: Optional[str]) -> Optional[tuple[str, str, str]]:
+    """`Pair@(i32, i32)(1, 2)` as the name, the type arguments and the arguments, or None
+    when the text has no such shape."""
+    if text is None or "@(" not in text:
+        return None
+    name, _, rest = text.partition("@(")
+    depth = 1
+    for index, char in enumerate(rest):
+        depth += {"(": 1, ")": -1}.get(char, 0)
+        if depth == 0:
+            return name.strip(), "@(" + rest[:index + 1], rest[index + 1:].strip()
+    return None
 
 
 def _reject_member(validator: TypeValidator, written: str, member: str, loc: Span,

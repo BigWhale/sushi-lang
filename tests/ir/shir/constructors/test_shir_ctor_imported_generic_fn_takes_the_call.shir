@@ -1,0 +1,23 @@
+unit helpers/gen_crate
+
+ShirBody Crate (TemplateCheck("helpers/gen_crate.Crate"))
+  params : [(_0 "x": T, Owned)]
+  locals : []
+  block  :
+    Return(move LocalRef(_0))
+
+ShirBody Crate__i32
+  params : [(_0 "x": i32, Owned)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+unit test_shir_ctor_imported_generic_fn_takes_the_call
+
+ShirBody main
+  params : []
+  locals : [_0 "b": i32]
+  block  :
+    Assign(LocalRef(_0), Call(Named(GlobalRef(@Crate)), [(Lit(4), Owned)]), is_init: true)
+    ExprStmt(Call(BuiltinFn("println"), [LocalRef(_0)]))
+    Return(Lit(0))

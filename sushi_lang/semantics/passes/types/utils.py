@@ -1,10 +1,9 @@
 """Shared utilities for type validation.
 
 Port template: `reject_spread_args` calls `TypeValidator.validate_expression`, and that
-API is deleted. No pass reaches it today. Its callers are the AST struct construction
-(`calls/structs.py`, group A5) and the AST method-call ladder (`calls/methods.py`, group
-A10). A SHIR method call refuses a spread with `arguments.reject_misplaced_spread`. When
-A5 ports the struct template, it merges the two refusals into one.
+API is deleted. No pass reaches it today. Its one caller is the AST method-call ladder
+(`calls/methods.py`, group A10). A SHIR method call and a SHIR struct construction refuse
+a spread with `arguments.reject_misplaced_spread`, and A10 deletes this one.
 """
 from __future__ import annotations
 
@@ -638,9 +637,9 @@ def reject_named_args(validator: 'TypeValidator', node) -> None:
     """Refuse a named argument on a call that is not a struct construction (CE6104).
 
     One rule, read after the call is validated, because only then is the callee known.
-    A struct construction SPENDS its names -- the field matcher puts the arguments in
-    declaration order and clears them -- so names that are still here belong to a
-    callee that has no field names to match (#563).
+    A struct construction has no names left here: SHIR lowering puts a named
+    construction in declaration order, so names that are still here belong to a callee
+    that has no field names to match (#563).
     """
     names = getattr(node, "field_names", None)
     if not names:

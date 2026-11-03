@@ -998,6 +998,7 @@ tests/ir/typeck/statements/test_err_typeck_return_mismatch.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_alias_field_count.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_alias_field_type.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_alias_private.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_alias_private_named.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_call_form.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_field_count.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_field_type.sushi
@@ -1006,6 +1007,7 @@ tests/ir/typeck/structs/test_err_typeck_struct_named_field_type.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_nested_field.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_not_a_struct.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_repeated_field.sushi
+tests/ir/typeck/structs/test_err_typeck_struct_spread.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_type_args.sushi
 tests/ir/typeck/structs/test_err_typeck_struct_unknown_field.sushi
 tests/ir/typeck/tuples/test_err_typeck_tuple_borrow_part.sushi

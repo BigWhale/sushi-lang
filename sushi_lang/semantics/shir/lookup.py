@@ -11,8 +11,9 @@ type, so lowering reads the tables that the collect and namespaces passes made:
   type.
 - A named struct construction gives its fields in the declaration order, so lowering
   reads the field names of the struct declaration.
-- A bare call `S(...)` on a struct `S` constructs it, unless the unit declares a function
-  `S` (#1076), also when the scope pass resolved `S` to a function of another unit.
+- A bare call `S(...)` on a struct `S` constructs it, also when the scope pass resolved
+  `S` to a concrete function of another unit (#1076). A concrete function of the unit and
+  a generic function of the scope take the call.
 - A template as written is the body of its template check (ir.md 4.3). Its origin names
   the template with the identity that the check gives it, from the record that the
   collect pass filed for the declaration.
@@ -113,9 +114,15 @@ class DeclLookup:
         struct = self.structs.get(type_name) or self.generic_structs.get(type_name)
         return None if struct is None else tuple(name for name, _ty in struct.fields)
 
-    def constructs_struct(self, name: str) -> bool:
-        """True when the bare call `name(...)` constructs the struct `name` in this unit:
-        a struct or a generic struct of the name, and no function of the unit (#1076)."""
+    def constructs_struct(self, body: object, name: str) -> bool:
+        """True when the bare call `name(...)` in `body` constructs the struct `name`: a
+        struct or a generic struct of the name, no concrete function of the unit, and no
+        generic function in the scope of the body, its own or an imported one. The rungs
+        are those of the call ladder of the typecheck pass, in its order (#1076)."""
+        table = body_namespaces(body, self.namespaces) or self.namespaces.get(self.unit)
+        scope = None if table is None else table.scope
+        if self.generic_funcs.lookup(name, self.unit, scope) is not None:
+            return False
         structs = self.structs if name in self.structs else self.generic_structs
         return call_constructs_struct(name, structs, self.funcs, self.unit)
 

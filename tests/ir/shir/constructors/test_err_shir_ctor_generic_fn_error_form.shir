@@ -1,0 +1,22 @@
+unit helpers/gen_crate
+
+ShirBody Crate (TemplateCheck("helpers/gen_crate.Crate"))
+  params : [(_0 "x": T, Owned)]
+  locals : []
+  block  :
+    Return(move LocalRef(_0))
+
+ShirBody Crate__bool
+  params : [(_0 "x": bool, Owned)]
+  locals : []
+  block  :
+    Return(adopt LocalRef(_0))
+
+unit test_err_shir_ctor_generic_fn_error_form
+
+ShirBody main
+  params : []
+  locals : [_0 "c": Crate]
+  block  :
+    Assign(LocalRef(_0), Call(Named(GlobalRef(@Crate)), [Lit(true)]), is_init: true)
+    Return(Lit(0))

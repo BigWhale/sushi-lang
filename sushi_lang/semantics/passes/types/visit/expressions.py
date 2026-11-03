@@ -15,7 +15,7 @@ error is the diagnostic.
 A struct construction is an instance of the struct that its written type names: behind an
 alias, the struct that the namespace holds. Its fields are checked at the types of the
 fields (`calls/structs.py`). A private struct of another unit behind an alias is CE3005,
-and a type name that is no struct is CE2008, with CE6104 for a named argument. A name whose
+and CE6104 when it is named, as the old pipeline reports it. A type name that is no struct is CE2008, with CE6104 for a named argument. A name whose
 function the collect pass refused (CE1005) gives no second error, and the body holds that
 error (`refused_before`). A generic struct of the program, and a struct whose name the unit
 lost (D2), are not typed yet, and stop the walk of their body.
@@ -206,5 +206,14 @@ def _constructed_struct(validator: TypeValidator,
             visit.check_expr(validator, arg.value)
         return None
     if dot and reject_private_type(validator, name, node.decl_loc):
+        if node.named:
+            reject_named_argument(validator, _first_written_name(node, struct), node.loc)
         return None
     return struct
+
+
+def _first_written_name(node: e.StructInit, struct: StructType) -> str:
+    """The name of the field that a named construction writes first."""
+    if node.names is not None:
+        return node.names[0]
+    return struct.fields[node.written_order[0]][0]

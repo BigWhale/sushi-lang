@@ -9,8 +9,9 @@ call shape gives a construction through `_call` and `_dotted` there, and calls
 What a written name before a dot denotes decides each node, and lowering reads it from
 `Bindings` and from the declaration tables (`DeclLookup`), never from a type:
 
-- A struct name as the callee is a `StructInit`, also when the name is a function of
-  another unit and the unit declares no function of the name (#1076). It keeps
+- A struct name as the callee is a `StructInit`, also when the name is a concrete
+  function of another unit and no function of the unit or generic function of the scope
+  takes the call (#1076). It keeps
   `decl_loc`, where a diagnostic of its written type points, and `named`, true for a
   named construction. A named construction gives `fields` in the declaration order of
   the struct, and `written_order` keeps the order that the source writes, which is the

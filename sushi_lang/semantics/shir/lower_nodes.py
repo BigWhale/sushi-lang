@@ -396,9 +396,10 @@ def _call(lw: BodyLowerer, node: a.Call) -> e.ShirExpr:
 
     The written type arguments stand on the callee (`identity@(i32)(5)`), as written.
     A struct name as the callee is a construction (`StructInit`), and only a construction
-    takes a named argument. A function of another unit does not take the call from a
-    struct of its name (#1076): the call is a construction when the unit declares no
-    function of the name (`DeclLookup.constructs_struct`). A construction takes no written
+    takes a named argument. A concrete function of another unit does not take the call
+    from a struct of its name (#1076): the call is a construction when the unit declares no
+    concrete function of the name and no generic function of the name is in scope
+    (`DeclLookup.constructs_struct`). A construction takes no written
     type arguments, so `Pair@(i32, i32)(1, 2)` is an error hole: the language refuses it
     (CE6102, which the typecheck pass reports). A named argument on another callee is an
     error hole too (CE6104).
@@ -418,11 +419,11 @@ def _call(lw: BodyLowerer, node: a.Call) -> e.ShirExpr:
 
 def _constructed_type(lw: BodyLowerer, found: Optional[bd.Resolution]) -> Optional[str]:
     """The type name that a bare callee constructs, or None for a call: a type name, and a
-    name of a function of another unit that a struct of the unit takes (#1076)."""
+    name of a concrete function of another unit that a struct takes (#1076)."""
     if isinstance(found, bd.TypeName):
         return found.name
     if (isinstance(found, bd.Function) and lw.lookup is not None
-            and lw.lookup.constructs_struct(found.name)):
+            and lw.lookup.constructs_struct(lw.bindings.body, found.name)):
         return found.name
     return None
 

@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CW1001, CE2002, CE2427
+# EXPECT_STDERR_CONTAINS: "type mismatch: cannot assign bool to Crate"
+# EXPECT_DUMP_SHIR: test_err_shir_ctor_generic_fn_error_form.shir
+#
+# A flat import brings a generic function `Crate`, and the unit declares the struct
+# `Crate`. The generic function takes the call, so the errors are the errors of a call:
+# the value is a `bool` (CE2002), and the argument has no `nom` (CE2427). Lowering keeps a
+# `Call`, never a `StructInit`.
+
+use "helpers/gen_crate"
+
+struct Crate:
+    i32 weight
+
+fn main() i32:
+    let Crate c = Crate(true)
+    return 0

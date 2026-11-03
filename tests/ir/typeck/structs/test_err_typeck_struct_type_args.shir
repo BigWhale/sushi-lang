@@ -1,7 +1,7 @@
 unit test_err_typeck_struct_type_args
 
 ShirBody keep
-  params : [(_0 "p": Pair@(i32, i32), Guaranteed)]
+  params : [(_0 "p": Duo@(i32, i32), Guaranteed)]
   locals : []
   block  :
     Return(adopt LocalRef(_0))

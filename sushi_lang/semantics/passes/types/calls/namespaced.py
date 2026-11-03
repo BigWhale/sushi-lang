@@ -43,9 +43,13 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
         _validate_generic_call(validator, node, binding)
         return
 
+    if binding.kind == "struct":
+        er.raise_internal_error(
+            "CE0000", span=node.loc,
+            detail="a struct construction behind a dot is a StructInit on SHIR (ir.md 7.3)")
+
     if binding.kind != "function":
-        # A member that exists and is not callable: a constant, an enum, or a perk. A
-        # struct construction behind a dot is a `StructInit` on SHIR (ir.md 7.3).
+        # A member that exists and is not callable: a constant, an enum, or a perk.
         for arg in node.args:
             validator.validate_expression(arg)
         _reject_unknown_member(validator, node.receiver, node.method, node.loc)

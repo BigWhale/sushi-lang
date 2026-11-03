@@ -1,0 +1,10 @@
+unit units/plane
+
+unit test_err_typeck_struct_alias_private_named
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    ExprStmt(StructInit(@pl.Hidden, [Lit(true)], written_order: [0], named: true))
+    Return(Lit(0))

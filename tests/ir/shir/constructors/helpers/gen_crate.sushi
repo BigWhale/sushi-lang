@@ -1,0 +1,2 @@
+public fn Crate@(T)(nom T x) T:
+    return x

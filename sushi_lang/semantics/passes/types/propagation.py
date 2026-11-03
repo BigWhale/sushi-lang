@@ -359,9 +359,7 @@ def _propagate_generic_struct_type(validator: 'TypeValidator', node: Expr,
             # arguments solve it (#1150), and the position reports the mismatch.
             if not is_instance_of(struct_type, struct_name):
                 return
-            # Update the Call node's callee id to use the concrete type name
-            # This allows validate_struct_constructor to find the right struct
-            # e.g., Box -> Box<i32>
+            # The callee names the instance: Box -> Box<i32>.
             node.callee.id = struct_type.name
 
             _propagate_to_struct_args(validator, node, struct_type)

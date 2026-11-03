@@ -11,7 +11,7 @@ generic struct. The solver of a generic construction (`untyped_struct_instance`)
 answer that the early passes read.
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Sequence
+from typing import TYPE_CHECKING, NamedTuple, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -24,6 +24,7 @@ from ..arguments import check_arguments, reject_misplaced_spread
 from ..utils import intern_declared_wrapper, resolve_declared_type
 
 if TYPE_CHECKING:
+    from sushi_lang.semantics.generics.types import GenericStructType
     from .. import TypeValidator
 
 
@@ -167,11 +168,15 @@ def check_struct_fields(validator: 'TypeValidator', node: e.StructInit,
                         struct: StructType) -> None:
     """The fields of a construction of `struct` against the types of its fields.
 
-    A positional construction with a wrong count is CE2027 at the written type, and a field
+    A bloom argument is CE0120, and the fields are then not checked: a struct is never
+    variadic. A positional construction with a wrong count is CE2027 at the written type,
+    and a field
     that does not fit is CE2028, or CE2083 in a named construction. A named construction
     whose names are not the fields of the struct is CE2080, CE2081 or CE2082, and its
     fields are then checked with no type of their position.
     """
+    if any([reject_misplaced_spread(validator, arg) for arg in node.fields]):
+        return
     if node.names is not None:
         if not reject_field_names(validator, struct, node.names, node.decl_loc):
             er.raise_internal_error("CE0000", span=node.loc,
@@ -179,8 +184,7 @@ def check_struct_fields(validator: 'TypeValidator', node: e.StructInit,
                                            f"construction of '{struct.name}' whose names "
                                            f"are its fields")
         for arg in node.fields:
-            if not reject_misplaced_spread(validator, arg):
-                visit.check_expr(validator, arg.value)
+            visit.check_expr(validator, arg.value)
         return
     check_arguments(validator, display_type(struct),
                     [resolve_field_type(validator, ty) for _name, ty in struct.fields],
@@ -190,8 +194,8 @@ def check_struct_fields(validator: 'TypeValidator', node: e.StructInit,
                     field_names=[name for name, _ty in struct.fields])
 
 
-def reject_field_names(validator: 'TypeValidator', struct: Any, names: Sequence[str],
-                       loc: Optional[Span]) -> bool:
+def reject_field_names(validator: 'TypeValidator', struct: StructType | GenericStructType,
+                       names: Sequence[str], loc: Optional[Span]) -> bool:
     """The first fault of the written names of a named construction of `struct`: a name
     that the struct does not declare (CE2080), a repeated name (CE2081), or a missing
     field (CE2082). True when one was reported."""
