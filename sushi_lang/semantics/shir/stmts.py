@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, TypeAlias
 
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.shir.exprs import ShirExpr
 from sushi_lang.semantics.shir.ids import LocalId
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, ShirNode
@@ -34,8 +35,10 @@ class Discard:
 
 @dataclass(frozen=True, slots=True)
 class Nested:
-    """A nested destructure: `(a, b)` in `let ((a, b), c) = v`."""
+    """A nested destructure: `(a, b)` in `let ((a, b), c) = v`. `loc` is its span, where a
+    diagnostic of its level points."""
     targets: list[DestructureTarget]
+    loc: Span
 
 
 @dataclass(frozen=True, slots=True)

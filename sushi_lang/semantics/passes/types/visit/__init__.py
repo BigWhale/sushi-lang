@@ -13,9 +13,9 @@ the one dispatch of the SHIR passes (`shir/dispatch.py`), which the borrow pass 
 a class with no row is an internal error, and the arm of a construct that the pass does not
 type yet is `stop_at`, which stops the walk of the body with the stop code CE0155.
 
-`statements.py` walks a block and holds the statement arms, `expressions.py` the expression
-arms of the leaves and of a struct construction, `fields.py` the arms of a field read and of
-a tuple, `operators.py` the arms of the operators and the check of a condition, `calls.py`
+`statements.py` walks a block and holds the statement arms, `destructure.py` the arm of a
+destructure, `expressions.py` the expression arms of the leaves and of a struct
+construction, `fields.py` the arms of a field read and of a tuple, `operators.py` the arms of the operators and the check of a condition, `calls.py`
 the arms of a call, an interpolated string and a borrow, and `results.py` the arm of an enum
 construction. The pattern arms are in `passes/types/matching.py`. The arms of `??` and of
 `as` are `check_try` and `check_cast` of `passes/types/expressions.py`, because the callers
@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, NoReturn, Optional
 
 from sushi_lang.semantics.passes.types.visit import calls as ca
+from sushi_lang.semantics.passes.types.visit import destructure as ds
 from sushi_lang.semantics.passes.types.visit import expressions as ex
 from sushi_lang.semantics.passes.types.visit import fields as fd
 from sushi_lang.semantics.passes.types.visit import operators as op
@@ -96,8 +97,9 @@ def answer(validator: TypeValidator, node: Any, ty: Optional[Type],
            wraps: bool = False) -> Optional[Type]:
     """Write `ty` as the type row of the expression `node`, and answer it. The one writer
     of a type row: `check_expr`, the arm of a negation for its literal, which is one value
-    with its sign, and the arm of a cast for an integer literal directly under it. Those two
-    arms set `wraps`. The value row of an integer literal is written here too, at its type
+    with its sign, the arm of a cast for an integer literal directly under it, and the
+    tuple arm for a tuple that a destructure checks part by part (`fields.check_tuple_at`).
+    The arms of a negation and of a cast set `wraps`. The value row of an integer literal is written here too, at its type
     (`ex.held_value`, ir.md 8.5)."""
     if ty is not None:
         answers = validator.body_answers()
@@ -111,7 +113,7 @@ def answer(validator: TypeValidator, node: Any, ty: Optional[Type],
 ARMS: dict[type, Callable[..., Any]] = {
     # -- statements ------------------------------------------------------------------
     s.Assign: st.check_assign,
-    s.Destructure: stop_at,
+    s.Destructure: ds.check_destructure,
     s.ExprStmt: st.check_expr_stmt,
     s.Return: st.check_return,
     s.If: st.check_if,

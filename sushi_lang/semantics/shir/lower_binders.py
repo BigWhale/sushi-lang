@@ -80,7 +80,7 @@ def _targets(lw: BodyLowerer, targets: list[a.DestructureTarget]) -> list[s.Dest
 
 def _target(lw: BodyLowerer, target: a.DestructureTarget) -> s.DestructureTarget:
     if target.nested is not None:
-        return s.Nested(_targets(lw, target.nested))
+        return s.Nested(_targets(lw, target.nested), lw.span(target))
     if target.name is None:
         return s.Discard()
     local = lw.binder(target, target.name)
@@ -108,7 +108,7 @@ def _places(lw: BodyLowerer, targets: list[a.DestructureTarget],
 def _place(lw: BodyLowerer, target: a.DestructureTarget,
            rebinds: Iterator[a.Rebind]) -> s.DestructureTarget:
     if target.nested is not None:
-        return s.Nested(_places(lw, target.nested, rebinds))
+        return s.Nested(_places(lw, target.nested, rebinds), lw.span(target))
     rebind = next(rebinds)
     if getattr(rebind.value, "id", None) != target.name:
         er.raise_internal_error("CE0015", message="a rebind of a tuple rebind does not read "

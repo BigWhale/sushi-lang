@@ -9,11 +9,12 @@ unit lost (D2), and a base of a type that has no rule here yet, stop the walk.
 
 A tuple checks each part at the element type of its position, and answers the tuple of
 the part types. A `Borrow` in a part is CE2002 at the part (ruling R-I): a tuple holds
-values.
+values. A destructure gives a tuple what each target wants of its part
+(`check_tuple_at`), so a literal part takes the type of its binder or of its place.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, TypeAlias, Union
 
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
@@ -116,13 +117,34 @@ def _reject_unknown_field(validator: TypeValidator, node: e.Field, ty: Type,
     note_opaque(builder, ty).emit()
 
 
+#: What a position wants of a part of a tuple: a type, no type (None), or, for a part that
+#: is a tuple too, what it wants of each part of that tuple. A destructure gives the
+#: wants of its targets (ir.md 7.5).
+Want: TypeAlias = Union[Type, None, list["Want"]]
+
+
 def check_tuple_init(validator: TypeValidator, node: e.TupleInit,
                      expected: Optional[Type]) -> Optional[Type]:
     """The tuple of the part types, each part checked at the element type of its position;
     none after an error of a part."""
-    want = _position_elements(deref_type(expected), len(node.parts))
-    parts = [_check_part(validator, part, ty)
-             for part, ty in zip(node.parts, want, strict=True)]
+    wants: list[Want] = list(_position_elements(deref_type(expected), len(node.parts)))
+    return _tuple_of_parts(validator, node, wants)
+
+
+def check_tuple_at(validator: TypeValidator, node: e.ShirExpr,
+                   wants: list[Want]) -> Optional[Type]:
+    """The type of `node` at a position that wants `wants` of the parts of a tuple. A
+    tuple with one part for each want checks each part at its want, and any other value
+    is checked at no type."""
+    if isinstance(node, e.TupleInit) and len(node.parts) == len(wants):
+        return visit.answer(validator, node, _tuple_of_parts(validator, node, wants))
+    return visit.check_expr(validator, node)
+
+
+def _tuple_of_parts(validator: TypeValidator, node: e.TupleInit,
+                    wants: list[Want]) -> Optional[Type]:
+    parts = [_check_part(validator, part, want)
+             for part, want in zip(node.parts, wants, strict=True)]
     if any(ty is None for ty in parts):
         return None
     tuple_type = intern_tuple(validator.struct_table, validator.enum_table, parts)
@@ -139,12 +161,15 @@ def _position_elements(expected: Optional[Type], count: int) -> list[Optional[Ty
     return [None] * count
 
 
-def _check_part(validator: TypeValidator, part: e.ShirExpr,
-                want: Optional[Type]) -> Optional[Type]:
+def _check_part(validator: TypeValidator, part: e.ShirExpr, want: Want) -> Optional[Type]:
     """The type of one part with no `peek` or `poke`. A `Borrow` is CE2002 at the part
     (ruling R-I), against the element type of the position, or the type of the borrowed
     place where the position gives none."""
-    ty = visit.check_expr(validator, part, want)
+    if isinstance(want, list):
+        ty = check_tuple_at(validator, part, want)
+        want = None
+    else:
+        ty = visit.check_expr(validator, part, want)
     if ty is None:
         return None
     if isinstance(part, e.Borrow):

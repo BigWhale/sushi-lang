@@ -154,7 +154,7 @@ STATEMENT_PARTS: dict[str, tuple[str, ...]] = {
     "Bare": (),
     "Ref": ("mode",),
     "Discard": (),
-    "Nested": ("targets",),
+    "Nested": ("targets", "loc"),
     "Place": ("target",),
 }
 

@@ -106,7 +106,7 @@ def sample() -> Sample:
                  [lit(e.IntConst(2), 5, "two"), lit(e.IntConst(3), 5, "three")])
     outer = expr("outer_tuple", e.TupleInit, 5, [lit(e.IntConst(1), 5, "one"), inner])
     destructure = stmt("destructure", s.Destructure, 5,
-                       [LocalId(3), s.Nested([LocalId(4), s.Discard()])], outer)
+                       [LocalId(3), s.Nested([LocalId(4), s.Discard()], span(5))], outer)
     interp = expr("interp", e.Interp, 7, ["", local(5), "!"])
     println = expr("println_call", e.Call, 7, e.BuiltinFn("println"), [e.Arg(interp, None)])
     loop = stmt("loop", s.Loop, 6,

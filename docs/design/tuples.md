@@ -224,10 +224,11 @@ b := #rb1
   the two values, and each rebind moves a binder into a name that was moved out of. A
   rebind re-initializes the name, so nothing is destroyed and nothing is freed twice.
 - **The type of each place.** A plain `x := 7` types the literal from `x`. The hidden
-  binders have no written type, so the `Let` is marked (`Let.rebinds`), and the typecheck
-  pass stamps each hidden binder with the type of its place (`DestructureTarget.place_type`,
-  `stamp_rebind_places`) before it checks the `Let`. The binder then hands that type to the
-  element of a tuple literal, as a written binder type does, so
+  binders have no written type, so the `Let` is marked (`Let.rebinds`), and SHIR lowering
+  joins the split again: one `Destructure` with a `Place` for each place
+  (`docs/design/ir.md` 7.5). The typecheck pass gives each `Place` the type of its place
+  before it checks the value, and hands that type to the element of a tuple literal, as a
+  written binder type does, so
   `(small, big) := (200, 5000000000)` types `200` as a `u8`, and a value of the wrong
   type is **[CE2002](../error-catalog.md#ce2002)** at its place.
 - **The diagnostics name the element, not the hidden binder.** The borrow pass gives each

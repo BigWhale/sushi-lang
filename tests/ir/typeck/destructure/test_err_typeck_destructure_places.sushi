@@ -1,0 +1,30 @@
+# EXPECT_ERROR_CODES_EXACT: CE2002
+# EXPECT_STDERR_CONTAINS: "type mismatch: cannot assign string to i32."
+# EXPECT_STDERR_CONTAINS: "  |     (p.x, a) := ("one", 2)\n  `      -+-\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_destructure_places.shir
+#
+# A tuple rebind is one `Destructure` with a `Place` for each place: a local, a field and
+# a tuple element, also at a nested level. A place gives the part of a tuple literal its
+# type, so `200` is a `u8` and `5000000000` an `i64`. A value that is no tuple literal is
+# checked at no type. An element that its place does not fit is CE2002 at the place.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn pair() (i32, i32):
+    return (3, 4)
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    let i32 a = 0
+    let (i32, string) t = (5, "five")
+    let u8 small = 0
+    let i64 big = 0
+    (p.x, p.y) := (p.y, p.x)
+    (small, big) := (200, 5000000000)
+    ((p.x, a), t.0) := ((10, 20), 30)
+    (a, p.y) := pair()
+    println("{p.x} {p.y} {a} {t.0} {t.1} {small} {big}")
+    (p.x, a) := ("one", 2)
+    return a

@@ -548,8 +548,7 @@ class DestructureTarget:
     """One element of a `let` destructure: a binder, a `_`, or a nested destructure.
 
     A binder has a `name`, and `ty` is its written type or None for a bare binder. A `_`
-    has neither a name nor `nested`. The typecheck pass stamps `element_type`, and
-    `place_type` on a hidden binder of a destructuring rebind: the type of its place.
+    has neither a name nor `nested`.
     """
     name: Optional[str] = None
     ty: Optional[Type] = None
@@ -557,8 +556,6 @@ class DestructureTarget:
     name_span: Optional[Span] = None
     type_span: Optional[Span] = None
     loc: Optional[Span] = None
-    element_type: Optional[Type] = None
-    place_type: Optional[Type] = None
 
 
 def destructure_binders(targets: Optional[List[DestructureTarget]]):

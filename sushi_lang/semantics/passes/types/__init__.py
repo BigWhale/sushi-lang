@@ -175,9 +175,8 @@ class TypeValidator:
         self.in_synthesized_body = False
         self.variable_types: Dict[str, Type] = {}
         # The `let` names whose initializer was refused; a method call on one is not
-        # refused again (#1128). Only the AST port templates read and write it
-        # (`validate_let_destructure`, A5; `validate_method_call`, A10): the SHIR walk
-        # keeps `refused_locals`.
+        # refused again (#1128). Only the AST port template `validate_method_call` (A10)
+        # reads and writes it: the SHIR walk keeps `refused_locals`.
         self.refused_bindings: set[str] = set()
         # The ranges refused outside their two positions (#1165): each answers no type
         # after the refusal, so the position that holds it adds no second error.

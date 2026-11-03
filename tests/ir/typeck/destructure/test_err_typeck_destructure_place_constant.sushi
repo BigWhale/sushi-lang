@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2096
+# EXPECT_STDERR_CONTAINS: "cannot assign to a field of constant 'ORIGIN': constants are immutable."
+# EXPECT_STDERR_CONTAINS: "  |     (ORIGIN.x, b) := (1, 2)\n  `      ----+---\n"
+# EXPECT_DUMP_SHIR: test_err_typeck_destructure_place_constant.shir
+#
+# A place of a tuple rebind is checked as the target of a field write: a field of a
+# constant is CE2096 at the place.
+
+struct Point:
+    i32 x
+    i32 y
+
+const Point ORIGIN = Point(0, 0)
+
+fn main() i32:
+    let i32 b = 0
+    (ORIGIN.x, b) := (1, 2)
+    return b

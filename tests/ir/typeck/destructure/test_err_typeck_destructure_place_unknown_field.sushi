@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2106
+# EXPECT_STDERR_CONTAINS: "'Point' has no field 'z'."
+# EXPECT_STDERR_CONTAINS: "  |     (p.z, b) := (1, 2)\n  `       -+\n"
+# EXPECT_STDERR_CONTAINS: "= help: 'Point' declares 'x', 'y'"
+# EXPECT_DUMP_SHIR: test_err_typeck_destructure_place_unknown_field.shir
+#
+# A field place is checked as a field read: a name that the struct does not declare is
+# CE2106 at the member.
+
+struct Point:
+    i32 x
+    i32 y
+
+fn main() i32:
+    let Point p = Point(1, 2)
+    let i32 b = 0
+    (p.z, b) := (1, 2)
+    return b + p.x

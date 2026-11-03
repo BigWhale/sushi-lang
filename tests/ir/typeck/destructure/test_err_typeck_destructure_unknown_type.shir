@@ -1,0 +1,9 @@
+unit test_err_typeck_destructure_unknown_type
+
+ShirBody main
+  params : []
+  locals : [_1 "a": Foo, _2 "b": i32]
+  block  :
+    Destructure([_1, _2], TupleInit([Lit(1), Lit(2)]))
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
+    Return(LocalRef(_2))

@@ -1,0 +1,8 @@
+unit test_err_typeck_destructure_literal_range
+
+ShirBody main
+  params : []
+  locals : [_1 "a": u8, _2 "b": i32]
+  block  :
+    Destructure([_1, _2], TupleInit([Lit(300), Lit(1)]))
+    Return(Binary(+, LocalRef(_2), Cast(LocalRef(_1), i32)))

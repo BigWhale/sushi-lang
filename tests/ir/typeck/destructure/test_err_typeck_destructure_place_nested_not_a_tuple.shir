@@ -1,0 +1,11 @@
+unit test_err_typeck_destructure_place_nested_not_a_tuple
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32, _1 "b": i32, _2 "c": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(0), is_init: true)
+    Assign(LocalRef(_1), Lit(0), is_init: true)
+    Assign(LocalRef(_2), Lit(0), is_init: true)
+    Destructure([[Place(LocalRef(_0)), Place(LocalRef(_1))], Place(LocalRef(_2))], TupleInit([Lit(1), Lit(2)]))
+    Return(Binary(+, Binary(+, LocalRef(_0), LocalRef(_1)), LocalRef(_2)))
