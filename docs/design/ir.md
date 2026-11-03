@@ -8,7 +8,9 @@ yet stops the compile with CE0155. The numbers in sections 1 to 5 describe the t
 `cc4088ca`. This document is the DESIGN: what the two IRs are, why they have this shape, and what
 a migration must keep. The phases, the risks and the progress tracking are not part of this
 document; a migration plan comes from it. Nothing in the language changes: every behaviour
-test passes before and after, unchanged.
+test passes before and after, unchanged. There is ONE exception: the failure text of
+`expect` is `Runtime Error RE2029: expect failed at <file:line:col>: <msg>`, with exit code 1
+(8.8, 11).
 
 Amended on 2026-10-11 by the rulings on the migration plan: 6.3 (initializer bodies), 6.4
 (the gate reads the body modules), 7.4 (evaluation order, recorded values, `expect`), 10.3
@@ -712,6 +714,8 @@ than types:
 | the element type of each target of a `Destructure` | the statement's `shir_id`, per target |
 | the value that an integer literal holds (8.5), and the value of the constant that a `ConstRef` names | the `Lit`'s or the `ConstRef`'s `shir_id` |
 
+A pattern value is not a row: a `Literal` or an `IntRange` has no row of its own (7.8).
+
 **This is not the stamp channel returning.** Four differences, and each one is a reason a
 stamp went wrong (1.2):
 
@@ -1329,8 +1333,13 @@ that text (ruling R18). Lowering fills it from the source, and no pass fills it 
 is no answer of a pass (S5). The value comes from `value`, never from the text; the dump
 prints the value. Lowering has no types, so `typecheck` reads the bounds as values
 of the type at the position: `0..10` matches 0 to 9, and `0x80..=0xff` on an i8 matches -128
-to -1. A `Literal` integer is a value of that type in the same way. A bound is a literal and
-not an expression, so lowering does not call the constant evaluator for it, and a constant
+to -1. A `Literal` integer is a value of that type in the same way.
+**A pattern value has no `TypeckResults` row** (ruling R-AE). `typecheck` and SLIR lowering
+both ask the one pure function in `semantics/integer_patterns.py` (`literal_value`,
+`pattern_interval`). It reads the written constant of the SHIR pattern and the type of the
+scrutinee, which is a row already. Ruling R-W does not apply here: its reason is a context
+that lowering does not know, and the scrutinee type is known to both readers. A bound is a
+literal and not an expression, so lowering does not call the constant evaluator for it, and a constant
 keeps its spelling (a radix, a byte). `Variant` names its enum by the written name, the
 alias included: a name that is not an enum is an error of `typecheck`, not of lowering.
 `Tuple` mirrors `TuplePattern`, `Own` mirrors `OwnPattern`, and `Or` mirrors `OrPattern`:
@@ -2127,9 +2136,10 @@ the file name in a printf format string.
 The trap of `expect` is [RE2029](../error-catalog.md#re2029), and its text is
 `expect failed at %.*s: %.*s`. The first operand is the position of the call, a `Str`
 constant (`file:line:col`, with the file named as for an `assert`). The second operand is the
-message, which the failing block evaluates (7.4). The AST backend printed `ERROR: ` and the
-message, with no code and no position; the trap prints its code and the position, as the
-trap of an `assert` does. The exit code stays 1.
+message, which the failing block evaluates (7.4). The full line is
+`Runtime Error RE2029: expect failed at <file:line:col>: <msg>`, and the exit code is 1. The
+trap prints its code and the position, as the trap of an `assert` does. This text is final.
+It is the one user-visible change of the migration (11, rule 10).
 
 The trap after the last arm of a `match` is [RE2023](../error-catalog.md#re2023), and its
 text is `no match arm matched the value (expected %.*s)`. Its one operand is the source text
@@ -2145,7 +2155,7 @@ backstop of the checker, as on the AST backend.
 | `Binary(and/or)` | **two blocks.** Short-circuit is control flow, never an rvalue. The left operand goes into the place that takes the value; a `SwitchInt` on it goes to the join (`and` on a zero, `or` on any other value) or to the right block, which writes the same place and goes to the join. The temporaries of the right operand die in its block |
 | `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` that calls a declared conversion is a stop of the lowering for now (`slir, conversion`) |
 | `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field` |
-| `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |
+| `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`: lowering calls `literal_value` and `pattern_interval` over the written constant and the scrutinee type, and reads no row), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |
 | `Match` on a string | a chain of tests in source order (see below): each a `Call` of the intrinsic `eq` (8.6) into a `bool` local, and a `SwitchInt` on it |
 | `Match` on a tuple | a chain of tests in source order, each a `Call` to the value equality and a `SwitchInt` on its bool |
 | `Loop`, kind `While` | header block, `SwitchInt`, body, `Goto` header. The blocks are made in the order header, the blocks of the condition (an `and` or an `or` in it), body, the zero block (when the condition has a local, see below), exit |
@@ -2706,3 +2716,8 @@ The plan is written elsewhere; these are the design-level invariants it must hon
    two times), SHIR lowering gives the SHIR order by construction and the old order is not
    kept. A named struct construction takes the written order, and a repeat run takes the
    value first (7.4). `expect` keeps its lazy message (7.4).
+10. **One user-visible change.** Every run-time stop is one `Trap` that prints `Runtime
+   Error RExxxx: ...`, so `expect` has a code. The failure text of `expect` on an `Err` or a
+   `None` is `Runtime Error RE2029: expect failed at <file:line:col>: <msg>`, with exit
+   code 1 (8.8). It is the one exception to the rule that no behaviour changes. The
+   CHANGELOG states the change at the merge.
