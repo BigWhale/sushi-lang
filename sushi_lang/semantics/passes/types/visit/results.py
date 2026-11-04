@@ -49,6 +49,11 @@ WRAPPERS = ("Result", "Maybe")
 #: declaration, a jump outside a loop and a `self` in a static method.
 REPORTED_BEFORE = frozenset({"CE1001", "CE1002", "CE0144", "CE1003", "CE0134"})
 
+#: The codes of `REPORTED_BEFORE` that the collect pass reports to the program, not to the
+#: reporter of the unit. Lowering makes the hole only where that pass refused the node, and
+#: the check of the error holes at the end of the analysis holds the rest (ir.md 7.4).
+REPORTED_TO_THE_PROGRAM = frozenset({"CE0134"})
+
 
 def check_enum_init(validator: TypeValidator, node: e.EnumInit,
                     expected: Optional[Type]) -> Optional[Type]:
@@ -89,7 +94,8 @@ def check_hole(validator: TypeValidator, node: Hole,
     are reported too, and the body does not go on to the next stage. Every other hole
     stops the walk of its body."""
     if (node.codes and set(node.codes) <= REPORTED_BEFORE
-            and any(validator.reporter.errors_offered.get(code) for code in node.codes)):
+            and (set(node.codes) <= REPORTED_TO_THE_PROGRAM
+                 or any(validator.reporter.errors_offered.get(code) for code in node.codes))):
         validator.refused_before = True
         return
     if node.ast_class == "Call" and "CE6102" in node.codes:

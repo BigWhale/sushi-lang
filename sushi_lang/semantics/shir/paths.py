@@ -7,6 +7,8 @@ ONE predicate for two passes: `typecheck` asks it whether a body can reach its e
 
 A `return` leaves the function. With `leaves_round`, a `break` and a `continue` end a path
 too: they leave the round of their loop, which is the question of a join in a loop body.
+A `break` or a `continue` outside a loop (an error hole) ends the path for the statements
+after it in its block.
 An `if` ends the path when it has an `else` and each of its blocks ends it. A `match` ends
 it when it has an arm and each arm ends it, except a match of `uncovered`: its arms miss a
 value (CE2040, CE2074), and the arm that the author adds decides its path (#886). A loop can
@@ -53,9 +55,14 @@ def _ends(node: s.ShirStmt | ShirBlock, question: _Question) -> bool:
 def ends_the_path(statement: s.ShirStmt, *,
                   uncovered: Collection[ShirId] = frozenset()) -> bool:
     """Whether no statement after `statement` in its block can run: it returns on every
-    path, or it is a `break` or a `continue`."""
-    return (isinstance(statement, (s.Break, s.Continue))
+    path, or it is a `break` or a `continue`, inside a loop or not (the error hole of
+    CE1003)."""
+    return (isinstance(statement, (s.Break, s.Continue)) or _is_a_stray_jump(statement)
             or terminates(statement, uncovered=uncovered))
+
+
+def _is_a_stray_jump(statement: s.ShirStmt) -> bool:
+    return isinstance(statement, Hole) and statement.ast_class in ("Break", "Continue")
 
 
 def first_dead_statement(block: ShirBlock, body: ShirBody, *,

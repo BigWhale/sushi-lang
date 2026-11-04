@@ -1,0 +1,7 @@
+# A `break` outside a loop is CE1003, and it still ends the path, so the statement after
+# it is CE0140.
+# EXPECT_ERROR_CODES_EXACT: CE1003, CE0140
+# EXPECT_STDERR_CONTAINS: test_err_dead_after_a_break_outside_a_loop.sushi:7:5: error [CE0140]
+fn main() i32:
+    break
+    return 1

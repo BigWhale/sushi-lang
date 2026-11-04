@@ -612,6 +612,8 @@ tests/control_flow/conditions/test_if_result_basic.sushi
 tests/control_flow/conditions/test_if_result_else.sushi
 tests/control_flow/conditions/test_if_statements.sushi
 tests/control_flow/conditions/test_leak_is_ok_condition.sushi
+tests/control_flow/dead_code/test_err_dead_after_a_break_outside_a_loop.sushi
+tests/control_flow/dead_code/test_err_dead_after_a_continue_outside_a_loop.sushi
 tests/control_flow/dead_code/test_err_dead_after_break.sushi
 tests/control_flow/dead_code/test_err_dead_after_continue.sushi
 tests/control_flow/dead_code/test_err_dead_after_if_else.sushi
@@ -980,6 +982,8 @@ tests/extensions/statics/test_err_static_collides_with_a_variant.sushi
 tests/extensions/statics/test_err_static_declares_a_receiver.sushi
 tests/extensions/statics/test_err_static_in_a_perk_impl.sushi
 tests/extensions/statics/test_err_static_mentions_self.sushi
+tests/extensions/statics/test_err_static_mentions_self_then_dead.sushi
+tests/extensions/statics/test_err_static_mentions_self_then_mismatch.sushi
 tests/extensions/statics/test_err_static_on_an_array_target.sushi
 tests/extensions/statics/test_err_struct_has_no_static.sushi
 tests/extensions/statics/test_static_behind_an_alias.sushi
