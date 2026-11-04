@@ -19,7 +19,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 
-ARG_HITS = 134
+ARG_HITS = 117
 
 
 def unused_parameters() -> list[str]:

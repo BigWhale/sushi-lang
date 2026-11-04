@@ -496,7 +496,7 @@ def _new_list(codegen: 'LLVMCodegen', list_type: 'Type') -> ir.Value:
 
 def _append(codegen: 'LLVMCodegen', list_slot: ir.Value, item: ir.Value) -> None:
     from sushi_lang.backend.generics.list.methods_modify import emit_list_append
-    emit_list_append(codegen, list_slot, lambda: item)
+    emit_list_append(codegen, list_slot, item)
 
 
 def _emit_collect(codegen: 'LLVMCodegen', call: AdapterCall) -> ir.Value:

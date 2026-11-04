@@ -7,7 +7,7 @@ ShirBody main
     Assign(LocalRef(_0), adopt Call(BuiltinStatic(List@(string), "new"), []), is_init: true)
     Assign(LocalRef(_1), adopt Interp(["a", Lit(1), ""]), is_init: true)
     ExprStmt(Call(Builtin(LocalRef(_0), "push"), [(move LocalRef(_1), Owned)]))
-    Assign(LocalRef(_2), adopt Call(Builtin(LocalRef(_0), "insert"), [(adopt Lit(0), Owned), (adopt Interp(["b", Lit(2), ""]), Owned)]), is_init: true)
+    Assign(LocalRef(_2), adopt Call(Builtin(LocalRef(_0), "insert"), [(Lit(0), Guaranteed), (adopt Interp(["b", Lit(2), ""]), Owned)]), is_init: true)
     ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_2), "is_ok"), []), Guaranteed)]))
     Assign(LocalRef(_3), reject Call(Builtin(LocalRef(_0), "first"), []), is_init: true)
     ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_3), "is_some"), []), Guaranteed)]))

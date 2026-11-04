@@ -1,12 +1,21 @@
-"""Built-in extension methods for List<T> generic struct."""
+"""The built-in methods of `List@(T)`: one emitter for each method (ruling Q7).
+
+The SLIR emitter evaluates every operand before the family runs (docs/design/ir.md 11.9):
+the receiver gives the ADDRESS of the List, and each argument gives its value. So each
+emitter reads the length, the capacity and the data of the List after the last argument,
+when it runs.
+"""
 
 from types import MappingProxyType
-from typing import Any, Mapping
-from sushi_lang.semantics.ast import DotCall, MethodCall
-from sushi_lang.semantics.typesys import StructType
+from typing import Any, Mapping, Sequence
+
 import llvmlite.ir as ir
 
-from sushi_lang.backend.generics.container_table import ContainerMethod, emit_from_table
+from sushi_lang.backend.generics.container_table import (
+    ContainerMethod, emit_static_with_operands, emit_with_operands,
+)
+from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.typesys import StructType
 
 from .methods_simple import (
     emit_list_clone,
@@ -36,9 +45,6 @@ from .methods_destroy import (
 from .methods_debug import (
     emit_list_debug
 )
-from .methods_iter import (
-    emit_list_iter
-)
 from .methods_search import (
     emit_list_contains,
     emit_list_index_of,
@@ -46,42 +52,52 @@ from .methods_search import (
 )
 
 
+def _iter(*_operands: Any) -> ir.Value:
+    """The `iter()` producer takes no operands yet: the borrow pass stops its call."""
+    raise_internal_error("CE0000", detail="a call of iter() on a List reached the emitter")
 
-#: Every built-in `List@(T)` method and its emitter. The key set is the key set of
-#: `LIST_METHOD_ARITY`; `tests/unit/test_container_emitters_match_the_table.py` holds it.
+
+#: Every built-in `List@(T)` method and its emitter, over operands. The key set is the key
+#: set of `LIST_METHOD_ARITY`; `tests/unit/test_container_emitters_match_the_table.py`
+#: holds it.
 LIST_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
-    "new": ContainerMethod(lambda c, e, v, t: emit_list_new(c, t)),
-    "with_capacity": ContainerMethod(lambda c, e, v, t: emit_list_with_capacity(c, v, t)),
-    "len": ContainerMethod(lambda c, e, v, t: emit_list_len(c, v)),
-    "capacity": ContainerMethod(lambda c, e, v, t: emit_list_capacity(c, v)),
-    "is_empty": ContainerMethod(lambda c, e, v, t: emit_list_is_empty(c, v), answers_bool=True),
+    "new": ContainerMethod(lambda c, _v, t, _a: emit_list_new(c, t), static=True),
+    "with_capacity": ContainerMethod(
+        lambda c, _v, t, a: emit_list_with_capacity(c, c.utils.require_i32(a[0]), t),
+        static=True),
+    "len": ContainerMethod(lambda c, v, _t, _a: emit_list_len(c, v)),
+    "capacity": ContainerMethod(lambda c, v, _t, _a: emit_list_capacity(c, v)),
+    "is_empty": ContainerMethod(lambda c, v, _t, _a: emit_list_is_empty(c, v), answers_bool=True),
     "push": ContainerMethod(emit_list_push),
-    "pop": ContainerMethod(lambda c, e, v, t: emit_list_pop(c, v, t)),
+    "pop": ContainerMethod(lambda c, v, t, _a: emit_list_pop(c, v, t)),
     "get": ContainerMethod(emit_list_get),
-    "first": ContainerMethod(emit_list_end),
-    "last": ContainerMethod(emit_list_end),
-    "clear": ContainerMethod(lambda c, e, v, t: emit_list_clear(c, v, t)),
+    "first": ContainerMethod(lambda c, v, t, _a: emit_list_end(c, v, t, last=False)),
+    "last": ContainerMethod(lambda c, v, t, _a: emit_list_end(c, v, t, last=True)),
+    "clear": ContainerMethod(lambda c, v, t, _a: emit_list_clear(c, v, t)),
     "insert": ContainerMethod(emit_list_insert),
     "remove": ContainerMethod(emit_list_remove),
     "reserve": ContainerMethod(emit_list_reserve),
-    "shrink_to_fit": ContainerMethod(lambda c, e, v, t: emit_list_shrink_to_fit(c, v, t)),
-    "destroy": ContainerMethod(lambda c, e, v, t: emit_list_destroy(c, v, t)),
-    "free": ContainerMethod(lambda c, e, v, t: emit_list_free(c, v, t)),
-    "debug": ContainerMethod(lambda c, e, v, t: emit_list_debug(c, v, t)),
-    "iter": ContainerMethod(emit_list_iter),
-    "clone": ContainerMethod(lambda c, e, v, t: emit_list_clone(c, v, t)),
+    "shrink_to_fit": ContainerMethod(lambda c, v, t, _a: emit_list_shrink_to_fit(c, v, t)),
+    "destroy": ContainerMethod(lambda c, v, t, _a: emit_list_destroy(c, v, t)),
+    "free": ContainerMethod(lambda c, v, t, _a: emit_list_free(c, v, t)),
+    "debug": ContainerMethod(lambda c, v, t, _a: emit_list_debug(c, v, t)),
+    "iter": ContainerMethod(_iter),
+    "clone": ContainerMethod(lambda c, v, t, _a: emit_list_clone(c, v, t)),
     "contains": ContainerMethod(emit_list_contains, answers_bool=True),
     "index_of": ContainerMethod(emit_list_index_of),
     "index_of_from": ContainerMethod(emit_list_index_of_from),
 })
 
 
-def emit_list_method(
-    codegen: Any,
-    expr: MethodCall | DotCall,
-    receiver_value: ir.Value,
-    receiver_type: StructType,
-    to_i1: bool
-) -> ir.Value:
-    """Emit LLVM IR for List<T> method calls."""
-    return emit_from_table(LIST_EMITTERS, "CE0083", codegen, expr, receiver_value, receiver_type, to_i1)
+def emit_list_method(codegen: Any, name: str, address: ir.Value, list_type: StructType,
+                     args: Sequence[ir.Value]) -> ir.Value:
+    """The value of the method `name` on the List at `address`, with the values of its
+    arguments."""
+    return emit_with_operands(LIST_EMITTERS, "CE0083", codegen, name, address, list_type,
+                              args)
+
+
+def emit_list_static(codegen: Any, name: str, list_type: StructType,
+                     args: Sequence[ir.Value]) -> ir.Value:
+    """The List that the static `name` builds (`List.new`, `List.with_capacity`)."""
+    return emit_static_with_operands(LIST_EMITTERS, "CE0083", codegen, name, list_type, args)

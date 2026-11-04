@@ -9,9 +9,9 @@ its needle first (CE2100, CE2006), and an element and an index come after it: an
 a count is an i32 (CE2006), and an element has the type `T` (CE2006). The call answers the
 type of its row after each fault.
 
-The convention of each argument is the answer of `argument_conventions`: each argument of
-a method whose row `consumes_args` (`push`, `insert`) is a slot, which takes its value by
-position with no marker to compare (`Owned`). Each other argument borrows (`Guaranteed`),
+The convention of each argument is the answer of `argument_conventions`: the element of
+`push` and of `insert` is a slot, which takes its value by position with no marker to
+compare (`Owned`). Each other argument borrows (`Guaranteed`), the index of `insert` too,
 and a `nom` on it is CE2427.
 """
 from __future__ import annotations

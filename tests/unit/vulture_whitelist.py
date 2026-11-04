@@ -174,13 +174,13 @@ WHITELIST += (
     (_BORROW + "calls.py", "settle_receiver",
      _kept("B", "B10: the read-through receiver of or_err; C3: a lent iterator receiver")),
     (_BORROW + "writes.py", "maybe_reject_mutation",
-     _kept("B", "B1, B2, B4: a built-in method that changes its receiver")),
+     _kept("B", "B1, B4: a built-in method that changes its receiver")),
     (_BORROW + "reads.py", "constant_type", _ast_probe("A8")),
     (_BORROW + "calls.py", "_reject_refill_from_own_slot",
      _kept("B", "B1: the refill of an array whose element owns")),
     ("sushi_lang/semantics/method_effects.py", "refills",
      _kept("B", "B1: the refill of an array whose element owns")),
-    (_BORROW + "calls.py", "maybe_mark_container_insert", _kept("B", "B2, B4: containers")),
+    (_BORROW + "calls.py", "maybe_mark_container_insert", _kept("B", "B4: containers")),
     (_BORROW + "takes.py", "field_take", _kept("B", "B7: field take")),
     (_BORROW + "takes.py", "spend", _kept("B", "B7: field take")),
     (_BORROW + "bindings.py", "register_pattern_bindings",
@@ -218,8 +218,8 @@ def _family(group: str, what: str) -> str:
 
 
 WHITELIST += (
-    (_BACKEND + "generics/list/__init__.py", "emit_list_method",
-     _family("B2", "the List method family")),
+    (_BACKEND + "generics/list/methods_iter.py", "emit_list_iter",
+     _family("C3", "the iter() producer of a List")),
     (_BACKEND + "generics/maybe.py", "emit_maybe_signature_method",
      _family("B10", "the Maybe methods with a signature")),
     (_BACKEND + "generics/results.py", "emit_result_signature_method",

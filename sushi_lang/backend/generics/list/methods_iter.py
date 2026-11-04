@@ -4,7 +4,7 @@ from typing import Any
 import llvmlite.ir as ir
 from sushi_lang.semantics.ast import MethodCall
 from sushi_lang.semantics.typesys import StructType
-from .types import get_list_len_ptr, get_list_data_ptr, extract_element_type
+from .types import extract_element_type, list_slots
 from sushi_lang.internals.errors import raise_internal_error
 
 
@@ -36,11 +36,3 @@ def emit_list_iter(
 
     return emit_cursor_iterator(codegen, call, array_source(codegen, element_semantic_type),
                                 length, data, owned)
-
-
-def list_slots(codegen: Any, list_ptr: ir.Value) -> tuple[ir.Value, ir.Value]:
-    """The length and the data of a List at an address."""
-    b = codegen.builder
-    length = b.load(get_list_len_ptr(b, list_ptr), name="list_len")
-    data = b.load(get_list_data_ptr(b, list_ptr), name="list_data")
-    return length, data

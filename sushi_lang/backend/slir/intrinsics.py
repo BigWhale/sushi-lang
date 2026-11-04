@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Callable
 from llvmlite import ir
 
 from sushi_lang.backend.generics.hashmap.methods.core import emit_hashmap_new
-from sushi_lang.backend.generics.list.methods_simple import emit_list_new, emit_list_with_capacity
+from sushi_lang.backend.generics.list import emit_list_static
 from sushi_lang.backend.generics.own import emit_own_alloc
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import constant_value, operand_value, type_of_place
@@ -109,10 +109,15 @@ def _string_from_bytes(state: FunctionState, statement: st.Call) -> ir.Value:
                                       name="from_bytes")
 
 
-def _container_static(emit: Callable[..., ir.Value],
+#: The emitter of a container static: the codegen, the value of each operand, and the
+#: instance that the destination holds.
+_StaticEmitter = Callable[["LLVMCodegen", list[ir.Value], StructType], ir.Value]
+
+
+def _container_static(emit: _StaticEmitter,
                       count: int) -> Callable[[FunctionState, st.Call], ir.Value]:
-    """A static of a built-in container with `count` operands: its narrow emitter takes the
-    value of each operand and the instance that the destination holds."""
+    """A static of a built-in container with `count` operands: its emitter takes the value
+    of each operand and the instance that the destination holds."""
     def row(state: FunctionState, statement: st.Call) -> ir.Value:
         parts = operands(state, statement)
         if len(parts) != count:
@@ -120,16 +125,22 @@ def _container_static(emit: Callable[..., ir.Value],
         instance = type_of_place(state, statement.dest)
         if not isinstance(instance, StructType):
             state.fault(f"a static of a container builds the type {instance}")
-        return emit(state.codegen, *(value for value, _ in parts), instance)
+        return emit(state.codegen, [value for value, _ in parts], instance)
     return row
 
 
-def _list_with_capacity(codegen: LLVMCodegen, count: ir.Value, list_type: StructType) -> ir.Value:
-    return emit_list_with_capacity(codegen, codegen.utils.require_i32(count), list_type)
+def _list_static(name: str) -> _StaticEmitter:
+    """A static of `List@(T)`, through its row of the List table."""
+    return lambda codegen, values, list_type: emit_list_static(codegen, name, list_type,
+                                                               values)
 
 
-def _own_alloc(codegen: LLVMCodegen, value: ir.Value, own_type: StructType) -> ir.Value:
-    return emit_own_alloc(codegen, get_own_element_type(own_type), value)
+def _hashmap_new(codegen: LLVMCodegen, _values: list[ir.Value], map_type: StructType) -> ir.Value:
+    return emit_hashmap_new(codegen, map_type)
+
+
+def _own_alloc(codegen: LLVMCodegen, values: list[ir.Value], own_type: StructType) -> ir.Value:
+    return emit_own_alloc(codegen, get_own_element_type(own_type), values[0])
 
 
 #: One row for each intrinsic that the emitter handles, by the name of the intrinsic.
@@ -137,9 +148,9 @@ INTRINSICS: dict[str, Callable[[FunctionState, st.Call], ir.Value]] = {
     "f64.from_bits": _from_bits(ir.DoubleType()),
     "f32.from_bits": _from_bits(ir.FloatType()),
     "string.from_bytes": _string_from_bytes,
-    "List.new": _container_static(emit_list_new, 0),
-    "List.with_capacity": _container_static(_list_with_capacity, 1),
-    "HashMap.new": _container_static(emit_hashmap_new, 0),
+    "List.new": _container_static(_list_static("new"), 0),
+    "List.with_capacity": _container_static(_list_static("with_capacity"), 1),
+    "HashMap.new": _container_static(_hashmap_new, 0),
     "Own.alloc": _container_static(_own_alloc, 1),
     "eq": _eq,
     "interp": _interp,

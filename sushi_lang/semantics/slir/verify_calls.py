@@ -4,7 +4,9 @@ A call writes a place that is no view, reads each operand, and gives no copy of 
 value other than a `string` to an `Owned` argument. The conventions of a `Direct` callee
 are its declared parameters (`declared_params`), and the conventions of a static of a
 built-in container are the answer of `argument_conventions`. A call of a built-in method
-has a receiver operand.
+has a receiver operand. The receiver of a method of a container family with a receiver
+rule has the convention of `receiver_convention`, and each argument the convention of
+`argument_conventions`.
 """
 from __future__ import annotations
 
@@ -15,7 +17,9 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import Convention, declared_modes, receiver_mode
-from sushi_lang.semantics.method_effects import argument_conventions
+from sushi_lang.semantics.method_effects import (
+    RULED_EFFECT_FAMILIES, argument_conventions, receiver_convention,
+)
 from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
@@ -85,10 +89,11 @@ def check_call(check: Check, stmt: st.Call) -> None:
         _conventions_of(check, stmt, callee)
     elif isinstance(callee, st.Builtin) and isinstance(callee.method, Intrinsic):
         _static_conventions(check, stmt, callee.method.name)
-    elif isinstance(callee, st.Builtin) and isinstance(callee.method, BuiltinMethod) \
-            and not stmt.args:
-        check.fail(RECEIVER_OPERAND, f"the call of {callee.method.family}."
-                                     f"{callee.method.name} has no receiver", stmt.span)
+    elif isinstance(callee, st.Builtin) and isinstance(callee.method, BuiltinMethod):
+        if not stmt.args:
+            check.fail(RECEIVER_OPERAND, f"the call of {callee.method.family}."
+                                         f"{callee.method.name} has no receiver", stmt.span)
+        _method_conventions(check, stmt, callee.method)
 
 
 def _owned_copy(check: Check, operand: p.Copy, span: Span) -> None:
@@ -129,3 +134,22 @@ def _static_conventions(check: Check, stmt: st.Call, name: str) -> None:
         if have is not want:
             check.fail(CONVENTIONS, f"argument {index} of {name} is @{have.value}, and the "
                                     f"static takes it @{want.value}", stmt.span)
+
+
+def _method_conventions(check: Check, stmt: st.Call, method: BuiltinMethod) -> None:
+    """A method of a container family with a receiver rule (`RULED_EFFECT_FAMILIES`): the
+    receiver has the convention of `receiver_convention`, and each argument the convention
+    of `argument_conventions`. Any other family has no rule here."""
+    if method.family not in RULED_EFFECT_FAMILIES:
+        return
+    receiver = receiver_convention(method)
+    if receiver is None:
+        return
+    wanted = ((receiver,)
+              + argument_conventions(method.family, method.name, len(stmt.args) - 1))
+    name = f"{method.family}.{method.name}"
+    for index, ((_, have), want) in enumerate(zip(stmt.args, wanted, strict=True)):
+        if have is not want:
+            what = "the receiver" if index == 0 else f"argument {index - 1}"
+            check.fail(CONVENTIONS, f"{what} of {name} is @{have.value}, and the method takes "
+                                    f"it @{want.value}", stmt.span)

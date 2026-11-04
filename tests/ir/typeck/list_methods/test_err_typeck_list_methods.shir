@@ -6,7 +6,7 @@ ShirBody main
   block  :
     Assign(LocalRef(_0), Call(BuiltinStatic(List@(string), "with_capacity"), [(Lit(4), Guaranteed)]), is_init: true)
     ExprStmt(Call(Builtin(LocalRef(_0), "push"), [(Lit("a"), Owned)]))
-    Assign(LocalRef(_1), Call(Builtin(LocalRef(_0), "insert"), [(Lit(0), Owned), (Lit("b"), Owned)]), is_init: true)
+    Assign(LocalRef(_1), Call(Builtin(LocalRef(_0), "insert"), [(Lit(0), Guaranteed), (Lit("b"), Owned)]), is_init: true)
     ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_1), "is_ok"), []), Guaranteed)]))
     Assign(LocalRef(_2), Binary(+, Call(Builtin(LocalRef(_0), "len"), []), Call(Builtin(LocalRef(_0), "capacity"), [])), is_init: true)
     ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_0), "is_empty"), []), Guaranteed)]))

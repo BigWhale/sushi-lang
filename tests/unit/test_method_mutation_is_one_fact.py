@@ -124,7 +124,8 @@ def test_a_ruled_effect_family_writes_a_receiver_that_its_row_mutates():
 def test_the_list_family_writes_a_receiver_that_its_row_mutates():
     """The `List@(T)` family (group B2) has the rule of the array family: `push`,
     `insert`, `pop`, `clear`, ... take the receiver `Inout`, and each other method reads it.
-    A slot of `push` and of `insert` is `Owned`, and each other argument is `Guaranteed`."""
+    The slot of `push` and of `insert` is `Owned`, and each other argument is `Guaranteed`,
+    the index of `insert` too."""
     from sushi_lang.semantics import method_effects as me
     from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
     from sushi_lang.semantics.param_modes import Convention
@@ -137,9 +138,25 @@ def test_the_list_family_writes_a_receiver_that_its_row_mutates():
     assert {"push", "insert", "pop", "remove", "clear", "reserve", "free"} <= written
     assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
                if name not in written)
-    owned = {name for name, count in LIST_METHOD_ARITY.items() if count
-             and me.argument_conventions(me.LIST_FAMILY, name, count)[0] is Convention.OWNED}
-    assert owned == {"push", "insert"}
+    owned = {name: me.argument_conventions(me.LIST_FAMILY, name, count)
+             for name, count in LIST_METHOD_ARITY.items()
+             if Convention.OWNED in me.argument_conventions(me.LIST_FAMILY, name, count)}
+    assert owned == {"push": (Convention.OWNED,),
+                     "insert": (Convention.GUARANTEED, Convention.OWNED)}
+
+
+def test_the_array_slot_is_the_one_owned_argument_of_its_conventions():
+    """The `slot` of an array row and `argument_conventions` of the array family give one
+    answer: the slot is `Owned`, and each other argument (the index of `insert`) borrows."""
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.arrays import _ARRAY_METHODS
+
+    for name, spec in _ARRAY_METHODS.items():
+        conventions = me.argument_conventions(me.ARRAY_FAMILY, name, spec.arity)
+        owned = {index for index, convention in enumerate(conventions)
+                 if convention is Convention.OWNED}
+        assert owned == ({spec.slot} if spec.slot is not None else set()), name
 
 
 def test_a_get_out_answers_a_view_by_its_family_and_its_name():

@@ -4,6 +4,8 @@ from typing import Any
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 
+from sushi_lang.backend.generics.container_table import blank
+
 from .types import get_list_len_ptr, get_list_capacity_ptr, extract_element_type, get_list_data_ptr
 
 
@@ -34,7 +36,7 @@ def emit_list_destroy(codegen: Any, list_ptr: ir.Value, list_type: StructType) -
     codegen.builder.store(zero, capacity_ptr)
     codegen.builder.store(null_ptr, data_ptr_ptr)
 
-    return codegen.builder.load(list_alloca, name="destroyed_list")
+    return blank(codegen)
 
 
 def emit_list_free(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
@@ -64,4 +66,4 @@ def emit_list_free(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> i
     codegen.builder.store(zero, capacity_ptr)
     codegen.builder.store(null_ptr, data_ptr_ptr)
 
-    return codegen.builder.load(list_alloca, name="freed_list")
+    return blank(codegen)

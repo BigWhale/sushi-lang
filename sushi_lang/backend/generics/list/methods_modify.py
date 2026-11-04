@@ -1,35 +1,26 @@
 """List<T> modification methods: push(), pop(), get(), first(), last(), clear(), insert(), remove()."""
 
-from typing import Any, Callable
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 
-from .types import get_list_len_ptr, get_list_capacity_ptr, get_list_element_type, extract_element_type, get_list_data_ptr
-from sushi_lang.backend.types.arrays.bounds import emit_checked_maybe
+from .types import get_list_len_ptr, get_list_capacity_ptr, get_list_element_type, extract_element_type, get_list_data_ptr, list_slots
+from sushi_lang.backend.generics.container_table import blank
+from sushi_lang.backend.types.arrays.methods.safe_access import emit_array_get_maybe
 
 
-def emit_list_push(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.push(element) - append element with auto-growth."""
-    element_type = extract_element_type(list_type, codegen)
-
-    def element() -> ir.Value:
-        # The list stores the element shallowly and frees it on `.destroy()`/scope exit,
-        # so this is a consuming use: the seam decides whether the source hands
-        # ownership over, detaches with a copy, or is rejected outright.
-        from sushi_lang.backend.ownership import ConsumingUse, consume
-        value = codegen.expressions.emit_expr(expr.args[0])
-        return consume(codegen, expr.args[0], value, element_type,
-                       ConsumingUse.CONTAINER_INSERT)
-
-    emit_list_append(codegen, list_ptr, element)
-    return codegen.builder.load(list_ptr, name="updated_list")
+def emit_list_push(codegen: Any, list_ptr: ir.Value, _list_type: StructType,
+                   args: Sequence[ir.Value]) -> ir.Value:
+    """`list.push(element)`: the element goes last, after the growth. The element is
+    `Owned`: the List holds it from here."""
+    emit_list_append(codegen, list_ptr, args[0])
+    return blank(codegen)
 
 
-def emit_list_append(codegen: Any, list_ptr: ir.Value, element: Callable[[], ir.Value]) -> None:
-    """Grow the list at `list_ptr` to fit one more element, then store `element()` last.
+def emit_list_append(codegen: Any, list_ptr: ir.Value, element_value: ir.Value) -> None:
+    """Grow the list at `list_ptr` to fit one more element, then store `element_value` last.
 
-    `element` is emitted after the growth, so a push evaluates its argument there. The
-    list owns the element from here: the caller has settled its ownership.
+    The list owns the element from here: the caller has settled its ownership.
     """
     from sushi_lang.backend.expressions import memory
     from sushi_lang.backend import gep_utils
@@ -48,7 +39,6 @@ def emit_list_append(codegen: Any, list_ptr: ir.Value, element: Callable[[], ir.
         current_cap=current_cap, count=current_len, element_llvm_type=element_llvm_type,
         policy=memory.GrowPolicy.DOUBLE)
 
-    element_value = element()
     element_ptr = gep_utils.gep_array_element(codegen, data_ptr, current_len, "element_ptr")
     codegen.builder.store(element_value, element_ptr)
 
@@ -107,53 +97,23 @@ def emit_list_pop(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir
     return phi
 
 
-def emit_list_get(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.get(index) - safe element access."""
-    return _emit_list_view(codegen, list_ptr, list_type,
-                           lambda _len: codegen.expressions.emit_expr(expr.args[0]))
+def emit_list_get(codegen: Any, list_ptr: ir.Value, list_type: StructType,
+                  args: Sequence[ir.Value]) -> ir.Value:
+    """`list.get(index)`: the element as `Maybe@(T)`, or `Maybe.None` out of range."""
+    length, data = list_slots(codegen, list_ptr)
+    return emit_array_get_maybe(codegen, data, length, codegen.utils.require_i32(args[0]),
+                                extract_element_type(list_type, codegen))
 
 
-def emit_list_end(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.first() (`get(0)`) and list.last() (`get(len() - 1)`).
-
-    An empty list gives the index -1 for `last`, which the bounds check turns into
-    `Maybe.None()`.
-    """
-    if expr.method == "first":
-        return _emit_list_view(codegen, list_ptr, list_type,
-                               lambda _len: ir.Constant(codegen.types.i32, 0))
-    return _emit_list_view(
-        codegen, list_ptr, list_type,
-        lambda length: codegen.builder.sub(length, ir.Constant(codegen.types.i32, 1),
-                                           name="last_index"))
-
-
-def _emit_list_view(codegen: Any, list_ptr: ir.Value, list_type: StructType,
-                    index_of: Callable[[ir.Value], ir.Value]) -> ir.Value:
-    """The element at `index_of(len)` as `Maybe@(T)`, a borrowed view; None out of range."""
-    from sushi_lang.backend import gep_utils
-
-    element_type = extract_element_type(list_type, codegen)
-
-    list_alloca = list_ptr
-
-    len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
-
-    current_len = codegen.builder.load(len_ptr, name="current_len")
-    data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
-
-    index_value = index_of(current_len)
-
-    def read_element() -> ir.Value:
-        element_ptr = gep_utils.gep_array_element(codegen, data_ptr, index_value, "element_ptr")
-        return codegen.builder.load(element_ptr, name="element")
-
-    # `.get()` READS and does not detach (#242), so the list still frees the element and
-    # the returned `Maybe.Some(T)` carries a BORROW. `emit_list_pop` is the opposite: pop
-    # decrements `len`, so the element falls outside the destructor's walk and that Maybe
-    # is FRESH.
-    return emit_checked_maybe(codegen, index_value, current_len, element_type, read_element)
+def emit_list_end(codegen: Any, list_ptr: ir.Value, list_type: StructType, *,
+                  last: bool) -> ir.Value:
+    """`list.first()` is `get(0)`, and `list.last()` is `get(len() - 1)`. An empty list gives
+    the index -1 for `last`, which the bounds check turns into `Maybe.None()`."""
+    length, data = list_slots(codegen, list_ptr)
+    index = (codegen.builder.sub(length, ir.Constant(codegen.types.i32, 1), name="last_index")
+             if last else ir.Constant(codegen.types.i32, 0))
+    return emit_array_get_maybe(codegen, data, length, index,
+                                extract_element_type(list_type, codegen))
 
 
 def emit_list_clear(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
@@ -173,7 +133,7 @@ def emit_list_clear(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> 
     zero = ir.Constant(codegen.types.i32, 0)
     codegen.builder.store(zero, len_ptr)
 
-    return codegen.builder.load(list_alloca, name="cleared_list")
+    return blank(codegen)
 
 
 def _emit_destroy_elements_loop(codegen: Any, data_ptr: ir.Value, count: ir.Value, element_type: Any) -> None:
@@ -187,30 +147,23 @@ def _emit_destroy_elements_loop(codegen: Any, data_ptr: ir.Value, count: ir.Valu
     emit_container_walk(codegen, data_ptr, count, destroy, prefix="destroy")
 
 
-def emit_list_insert(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.insert(index, element) - insert element at position."""
+def emit_list_insert(codegen: Any, list_ptr: ir.Value, list_type: StructType,
+                     args: Sequence[ir.Value]) -> ir.Value:
+    """`list.insert(index, element)` as `Result@(~, StdError)`. A refused index still owns
+    the element, and the Err path destroys it (#869)."""
     from sushi_lang.backend.generics.container_shift import emit_descriptor_insert
-    from sushi_lang.backend.ownership import ConsumingUse, consume
 
-    element_type = extract_element_type(list_type, codegen)
     element_llvm_type = get_list_element_type(codegen, list_ptr.type.pointee)
-
-    # Both arguments are evaluated, and the element consumed, before the bounds check
-    # (#869): a refused index still owns the element, and the Err path destroys it.
-    index_value = codegen.expressions.emit_expr(expr.args[0])
-    element_value = codegen.expressions.emit_expr(expr.args[1])
-    element_value = consume(codegen, expr.args[1], element_value, element_type,
-                            ConsumingUse.CONTAINER_INSERT)
-    return emit_descriptor_insert(codegen, list_ptr, index_value, element_value,
-                                  element_type, element_llvm_type)
+    return emit_descriptor_insert(codegen, list_ptr, codegen.utils.require_i32(args[0]),
+                                  args[1], extract_element_type(list_type, codegen),
+                                  element_llvm_type)
 
 
-def emit_list_remove(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.remove(index) - remove element at position."""
+def emit_list_remove(codegen: Any, list_ptr: ir.Value, list_type: StructType,
+                     args: Sequence[ir.Value]) -> ir.Value:
+    """`list.remove(index)`: the element as `Maybe@(T)`; the List no longer holds it."""
     from sushi_lang.backend.generics.container_shift import emit_descriptor_remove
 
-    element_type = extract_element_type(list_type, codegen)
     element_llvm_type = get_list_element_type(codegen, list_ptr.type.pointee)
-    index_value = codegen.expressions.emit_expr(expr.args[0])
-    return emit_descriptor_remove(codegen, list_ptr, index_value, element_type,
-                                  element_llvm_type)
+    return emit_descriptor_remove(codegen, list_ptr, codegen.utils.require_i32(args[0]),
+                                  extract_element_type(list_type, codegen), element_llvm_type)

@@ -104,6 +104,13 @@ VIEW_ANSWERS: dict[str, frozenset[str]] = {
     LIST_FAMILY: frozenset({"get", "first", "last"}),
 }
 
+# The arguments of a storing method that only give a position, by family and method: the
+# index of `insert` borrows, and only the value is a slot (the `slot` of an array row).
+POSITION_ARGUMENTS: dict[tuple[str, str], frozenset[int]] = {
+    (ARRAY_FAMILY, "insert"): frozenset({0}),
+    (LIST_FAMILY, "insert"): frozenset({0}),
+}
+
 
 def answers_view(method: BuiltinMethod) -> bool:
     """Whether a call of `method` answers a view of what its receiver holds."""
@@ -137,13 +144,15 @@ def argument_conventions(family: str, method: str, count: int) -> tuple[Conventi
     """The convention of each of the `count` arguments of a call of `method` of the effect
     family `family`, a method or a static of `BUILTIN_STATICS` (docs/design/ir.md 8.3). A
     method whose row `consumes_args` takes each argument (`Owned`): a container insert, and
-    `Own.alloc`. Each other argument is a borrow (`Guaranteed`). A family that is not an
-    effect family is an internal error."""
+    `Own.alloc`, but an argument of `POSITION_ARGUMENTS`. Each other argument is a borrow
+    (`Guaranteed`). A family that is not an effect family is an internal error."""
     if family not in EFFECT_FAMILIES:
         raise_internal_error("CE0000", detail=f"the method family '{family}' has no argument "
                                               f"rule in `semantics/method_effects.py`")
     owned = effect_of(method).consumes_args
-    return (Convention.OWNED if owned else Convention.GUARANTEED,) * count
+    positions = POSITION_ARGUMENTS.get((family, method), frozenset())
+    return tuple(Convention.OWNED if owned and index not in positions
+                 else Convention.GUARANTEED for index in range(count))
 
 
 def callee_effect(method: str, family: Optional[str]) -> MethodEffect:

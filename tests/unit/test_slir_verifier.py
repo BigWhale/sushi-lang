@@ -428,6 +428,47 @@ def test_a_built_in_method_call_with_its_receiver_first_passes():
     ))
 
 
+LIST_I32 = StructType(name="List<i32>", fields=(("len", I32), ("capacity", I32),
+                                                 ("data", I32)))
+INOUT = Convention.INOUT
+
+
+def _list_method(name: str, *args: tuple[p.Operand, Convention]) -> SlirFunction:
+    """`_1 = list.<name>(args)` over the List `_2`, which the function does not own."""
+    call = st.Call(_local(1), st.Builtin(BuiltinMethod("list", name, nom_self=False), ()),
+                   args, BAD)
+    return _function([BLANK, BLANK, LIST_I32],
+                     _block(0, _ret(), call, _set(0, r.Use(p.Const(k.Blank())))),
+                     params=((2, INOUT),))
+
+
+FOUR = p.Const(k.Int(4, I32))
+
+
+@pytest.mark.parametrize("name, args", [
+    ("push", ((_copy(2), GUARANTEED), (FOUR, OWNED))),
+    ("push", ((_copy(2), INOUT), (FOUR, GUARANTEED))),
+    ("insert", ((_copy(2), INOUT), (FOUR, OWNED), (FOUR, OWNED))),
+    ("contains", ((_copy(2), GUARANTEED), (FOUR, OWNED))),
+    ("len", ((_copy(2), INOUT),)),
+])
+def test_a_list_method_with_another_convention_is_refused(name: str, args):
+    """The verifier reads the convention of the receiver of a List method from
+    `receiver_convention` and of each argument from `argument_conventions`, as typecheck
+    writes them (docs/design/ir.md 8.3, 8.13)."""
+    _refused(_list_method(name, *args), "declared conventions")
+
+
+@pytest.mark.parametrize("name, args", [
+    ("push", ((_copy(2), INOUT), (FOUR, OWNED))),
+    ("insert", ((_copy(2), INOUT), (FOUR, GUARANTEED), (FOUR, OWNED))),
+    ("contains", ((_copy(2), GUARANTEED), (FOUR, GUARANTEED))),
+    ("len", ((_copy(2), GUARANTEED),)),
+])
+def test_a_list_method_with_the_conventions_of_its_rows_passes(name: str, args):
+    _passes(_list_method(name, *args))
+
+
 def _static(name: str, *args: tuple[p.Operand, Convention]) -> st.Call:
     """`_1 = <name>(args)`: a static of a built-in container, an intrinsic of its name."""
     return st.Call(_local(1), st.Builtin(Intrinsic(name), tuple(I32 for _ in args)), args, BAD)

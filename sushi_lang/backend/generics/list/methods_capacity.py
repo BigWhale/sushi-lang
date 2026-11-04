@@ -1,45 +1,38 @@
 """List<T> capacity management methods: reserve(), shrink_to_fit()."""
 
-from typing import Any
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
+
+from sushi_lang.backend.generics.container_table import blank
 
 from .types import get_list_len_ptr, get_list_capacity_ptr, get_list_element_type, get_list_data_ptr
 
 
-def emit_list_reserve(codegen: Any, expr: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit LLVM IR for list.reserve(additional) - ensure capacity for more elements."""
+def emit_list_reserve(codegen: Any, list_ptr: ir.Value, _list_type: StructType,
+                      args: Sequence[ir.Value]) -> ir.Value:
+    """`list.reserve(additional)`: the capacity fits the length and `additional` more
+    elements, exactly."""
     from sushi_lang.backend.expressions import memory
 
-    list_llvm_type = list_ptr.type.pointee
-    element_llvm_type = get_list_element_type(codegen, list_llvm_type)
-
-    list_alloca = list_ptr
-
-    len_ptr = get_list_len_ptr(codegen.builder, list_alloca)
-    capacity_ptr = get_list_capacity_ptr(codegen.builder, list_alloca)
-    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_alloca)
+    element_llvm_type = get_list_element_type(codegen, list_ptr.type.pointee)
+    len_ptr = get_list_len_ptr(codegen.builder, list_ptr)
+    capacity_ptr = get_list_capacity_ptr(codegen.builder, list_ptr)
+    data_ptr_ptr = get_list_data_ptr(codegen.builder, list_ptr)
 
     current_len = codegen.builder.load(len_ptr, name="current_len")
     current_cap = codegen.builder.load(capacity_ptr, name="current_cap")
     data_ptr = codegen.builder.load(data_ptr_ptr, name="data_ptr")
 
-    additional = codegen.expressions.emit_expr(expr.args[0])
-
-    if additional.type != codegen.types.i32:
-        if additional.type.width > 32:
-            additional = codegen.builder.trunc(additional, codegen.types.i32, name="additional_i32")
-        elif additional.type.width < 32:
-            additional = codegen.builder.sext(additional, codegen.types.i32, name="additional_i32")
-
-    needed_cap = codegen.builder.add(current_len, additional, name="needed_cap")
+    needed_cap = codegen.builder.add(current_len, codegen.utils.require_i32(args[0]),
+                                     name="needed_cap")
 
     memory.emit_grow_to_fit(
         codegen, data_ptr=data_ptr, data_ptr_ptr=data_ptr_ptr, cap_ptr=capacity_ptr,
         current_cap=current_cap, count=needed_cap, element_llvm_type=element_llvm_type,
         policy=memory.GrowPolicy.EXACT)
 
-    return codegen.builder.load(list_alloca, name="updated_list")
+    return blank(codegen)
 
 
 def emit_list_shrink_to_fit(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
@@ -96,4 +89,4 @@ def emit_list_shrink_to_fit(codegen: Any, list_ptr: ir.Value, list_type: StructT
 
         codegen.builder.position_at_end(after_empty_check)
 
-    return codegen.builder.load(list_alloca, name="updated_list")
+    return blank(codegen)
