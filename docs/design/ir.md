@@ -88,7 +88,8 @@ view local); 7.9, 8.6, 8.12 and 8.13 (the borrow region is a row of `OwnershipRe
 7.3, 7.9, 8.9, 8.10 and 8.13 (a `peek` return copies its value into `_0`, and the caller
 holds a view local); 8.2, 8.3, 8.4, 8.6, 8.7, 8.9, 8.10 and 8.13 (a reference binding is an
 address local that a `Ref` writes one time); 8.2, 8.3, 8.6, 8.7 and 8.9 (`Clone` is the one
-deep copy, and `realise` and `err` lower as `expect` does).
+deep copy, and `realise` and `err` lower as `expect` does); 8.3 and 8.13 (the rows of
+`METHOD_EFFECTS` give the receiver and the argument conventions of each container method).
 
 ## The decisions, in one place
 
@@ -2398,13 +2399,15 @@ four sets (gate: `tests/unit/test_method_mutation_is_one_fact.py`):
 - **Only reads** (`RECEIVER_READ_FAMILIES`: `primitive`, `string`). No method of the family
   changes or consumes its receiver. The receiver is `Guaranteed`.
 - **Effect** (`EFFECT_FAMILIES`: `array`, `list`, `hashmap`, `own`). The rows of
-  `METHOD_EFFECTS` tell what a method does to its receiver. The group of each family writes
-  its convention, and puts the family in `RULED_EFFECT_FAMILIES`. Until then, a call stops
-  in `typecheck` or in `borrow`. For a family of `RULED_EFFECT_FAMILIES` (`array`, group
-  A6), the answer is per method: the receiver of a method whose row `mutates` (`push`,
-  `insert`, `pop`, `truncate`, `fill`, `swap`, ...) is `Inout`, a write of its place. The
-  receiver of each other method (`len`, `get`, `contains`, `s`, `clone`, ...) is
-  `Guaranteed`: a read.
+  `METHOD_EFFECTS` tell what a method does to its receiver and to its arguments, and they
+  give both conventions, per method, with ONE rule for the four families. The receiver of a
+  method whose row `mutates` (`push`, `insert`, `pop`, `truncate`, `fill`, `swap`, ...) is
+  `Inout`, a write of its place. The receiver of each other method (`len`, `get`,
+  `contains`, `s`, `clone`, ...) is `Guaranteed`: a read. An argument of a method whose row
+  `consumes_args` (a container insert: `push`, `insert`) is `Owned`, because the container
+  takes it by position with no marker. Each other argument is `Guaranteed`. Each family of
+  the set has this rule (`RULED_EFFECT_FAMILIES` holds the four), so the set is a
+  read-or-write partition of its methods, and no family of it stops for want of a rule.
 - **Consumes** (`CONSUMING_RECEIVER_FAMILIES`: `result`, `maybe`). The family has a
   `nom self` method, so the answer is per method. The receiver of a method that declares
   `nom self` (`map_err`, `or_err`) is `Owned`: a consuming use (7.9). The receiver of each
@@ -2424,9 +2427,14 @@ copy has one seam. The refusal of `.clone()` on a type that declares a resource 
 `typecheck`.
 
 One function gives the convention of a receiver: `receiver_convention`
-(`semantics/method_effects.py`). It answers None for a family of the effect set that is not
-in `RULED_EFFECT_FAMILIES` and for a family of the no-rule set, and a family in no set is an
-internal error. There is no default
+(`semantics/method_effects.py`). One function beside it gives the convention of each
+argument of a built-in method: `argument_conventions(method)`, from the same row of
+`METHOD_EFFECTS`. `typecheck` writes the argument rows of a `Builtin` call from it, as it
+writes them for a free call (7.3), and the verifier reads the same function for a `Builtin`
+callee (8.13). A container static of `BUILTIN_STATICS` has the mode of its argument in its
+row: `Own.alloc` takes its value `Owned`, and `List.with_capacity` takes its count
+`Guaranteed`. `receiver_convention` answers None for a family of the no-rule set, and a
+family in no set is an internal error. There is no default
 convention: the `borrow` pass stops at such a call
 (`borrow, Call(method <family>)`), and in SLIR lowering such a call is an internal error.
 The `borrow` pass reads a `Guaranteed` receiver. An `Owned` receiver is a consuming use
@@ -3092,7 +3100,9 @@ Runs after lowering, before the backend. It checks:
   legal
 - every argument `Convention` matches the callee's declared parameter, with one
   carve-out: the tail of a `var_arg` extern has no declared parameters, so the rule
-  applies to the declared prefix only
+  applies to the declared prefix only. For a `Builtin` callee of a container method, the
+  declared parameters are the answer of `receiver_convention` for the receiver and of
+  `argument_conventions` for each argument (8.3)
 - no `Copy` of an owning value into an `Owned` argument, except a `string` (7.9)
 - a call of a `BuiltinMethod` has a receiver operand, the first operand
 - no `Binary` carries `and` or `or` (8.9)
