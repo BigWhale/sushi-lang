@@ -84,7 +84,7 @@ family; a negated byte literal in an `i32` position), 7.9 (an array in `borrow`)
 array family takes the address of its receiver) and 8.9 (the lowering of an array value, an
 index, an element write, a slice and an array method). Amended on 2026-11-04 by ruling R-AS
 (the shapes of the ownership tier): 7.9, 8.2, 8.7, 8.9, 8.10 and 8.13 (a borrowed view is a
-view local).
+view local); 7.9, 8.6, 8.12 and 8.13 (the borrow region is a row of `OwnershipResults`).
 
 ## The decisions, in one place
 
@@ -1702,6 +1702,7 @@ it.
 | whether a producer makes a LENT or an OWNED iterator | the producer's `shir_id` |
 | whether a lent iterator's state goes to the heap, because the iterator leaves through a `peek` return | the producer's or adapter's `shir_id` |
 | whether a loop walks its iterator in place | the loop's `shir_id` |
+| the borrow region of a view: its owner set, and the `shir_id` of its last use on each path | the `LocalId` of the local that holds the view |
 
 **Ruling S6: one fact, one writer.** Before this ruling, `typecheck` and `borrow` both
 wrote the walk in place and the iterator state (1.2). Each of those facts is a question about ownership, and
@@ -1780,6 +1781,14 @@ The rows of `OwnershipResults`:
 - LENT or OWNED (a bool, true for LENT) and the heap decision of a lent iterator (a bool)
   are rows by the `shir_id` of the producer call or the lazy-adapter call.
 - The walk in place is a bool by the `shir_id` of the `Loop`.
+- The borrow REGION of a view is a row by the `LocalId` of the local that holds the view:
+  the owner set of the view, and the `shir_id` of the last use of the view on each path.
+  `borrow` is its one writer (S6): it keeps the owner set of a let-borrow already
+  (`record_owners`), and a let-borrow freezes each owner to the LAST use of the view. So the
+  region ends at the last use, and not at the exit of the scope of the view: a change of an
+  owner after the last use and before the end of the scope is legal, and a region that
+  ends at the scope exit would refuse a correct program. SLIR lowering writes the
+  `BeginBorrow` and the `EndBorrow` statements of the region from the row (8.6).
 
 `LiftResults` holds the symbol (a string) and the environment layout (`Capture(local,
 moves)` for each slot, in slot order), each by the `shir_id` of the `Lambda`.
@@ -2046,7 +2055,9 @@ class of the node, its position and the body.
 the `Ownership` of a consuming use as a word before the node (`move LocalRef(_0)`,
 `adopt Lit(2)`, `reject ...`), the name of the answer in lower case (not a SLIR operand,
 which is `Copy`, `Move` or `Const`); the conditionally moved locals
-on a `cond_moved : [_5]` line after the `locals` line; `iterator: lent` or
+on a `cond_moved : [_5]` line after the `locals` line; the borrow regions on a
+`regions : [_4: {_1, _2} until #17]` line after it, each view with its owner set and the
+`shir_id` of its last use on each path (`until #17, #23` for two paths); `iterator: lent` or
 `iterator: owned` and `heap: true` or `heap: false` after the arguments of an iterator
 call; `in_place: true` or `in_place: false` after the body of a `Loop`; and
 `symbol: "<symbol>"` and `env: [(adopt _4, Copy), ...]` after the fields of a `Lambda`,
@@ -2524,6 +2535,16 @@ its last use (`iteration.md`, ruling 10). Writing the region down is the same ar
 region can hold a SET of owners, as a `zip` of two lent iterators does: one `BeginBorrow`
 per owner, under one region.
 
+**Where the statements of a region stand.** The region row of `OwnershipResults` (7.9)
+decides them, and lowering derives nothing. At the statement that writes the view, lowering
+writes one `BeginBorrow` for each owner of the set, with the mode `peek`. It writes one
+`EndBorrow` for each of them after the statement of the last use of the view on each path,
+and at each exit that the region crosses: a `return`, a `break` or a `continue` out of the
+region, and the error path of a `Try`. A region does not end at the exit of the scope of
+the view: an owner can change after the last use and before the end of the scope. The
+emitter emits nothing for `BeginBorrow` and `EndBorrow`, as for `StorageLive`. The verifier
+reads them (8.13).
+
 `Builtin` is a call to a per-type emitter family (Q7). The backend expands it with the
 existing emitter, which receives LLVM values for the operands and no AST node.
 
@@ -2976,12 +2997,10 @@ That is the design in one screen.
 The backend has none of the concerns of the left column: each one went with the AST body
 emitter.
 
-Two rows of the right column are not built yet. The borrow-region row is not built: SLIR
-lowering writes no `BeginBorrow` and no `EndBorrow`, and it stops at a let-borrow with
-`slir, borrowed view` (Tier B, group B8). The iterator-state row is not built: SLIR lowering
-places no state local and no heap block for an iterator (Tier C, group C3). The verifier
-rule and the printer form of `BeginBorrow` and `EndBorrow` exist, and pytest tests them over
-SLIR built by hand.
+The borrow-region row comes from the region row of `OwnershipResults` (7.9): `borrow`
+decides the owner set and the last use of each view, and SLIR lowering writes the
+`BeginBorrow` and the `EndBorrow` statements from that row (8.6). The iterator-state row is
+not built: SLIR lowering places no state local and no heap block for an iterator (Tier C).
 
 What is NOT in this table: the 2,809 lines of monomorphization. Ruling Q1 leaves them
 where they are. Also not in the table: the per-type emitter families. Ruling Q7 keeps them.
@@ -3008,6 +3027,9 @@ Runs after lowering, before the backend. It checks:
   every path
 - `_0` holds a value on every path to a `return`
 - every `BeginBorrow` has exactly one matching `EndBorrow` on every path
+- a borrow region: no `Move`, no `Drop`, no write and no `Inout` argument of the place of
+  an owner while a region over it is open. A change of the owner after the `EndBorrow` is
+  legal
 - every argument `Convention` matches the callee's declared parameter, with one
   carve-out: the tail of a `var_arg` extern has no declared parameters, so the rule
   applies to the declared prefix only
@@ -3037,7 +3059,7 @@ Runs after lowering, before the backend. It checks:
   local would drop storage that the view does not own
 - a view local (8.2): a `Copy` writes it, and nothing writes it again. A view local of an
   owning type is never the place of a `Drop` or a `DropIfSet`, never `Move`d, and never the
-  operand of an `Owned` argument
+  operand of an `Owned` argument. Its owners stand in a region (8.6) at each read of it
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
@@ -3075,8 +3097,9 @@ module have a row: the group that first emits
 another `Direct` callee (an extern, a conversion, a function of a library) adds its row,
 with `var_arg` for a variadic extern. The comparison of the declared prefix alone is in the
 code already, for that day. The verifier does not check a shape that no lowering makes yet,
-and it refuses such a shape with the internal error CE0000 (the growth rule): a
-`BeginBorrow` or an `EndBorrow`, and a `Drop` or a `DropIfSet` of a place that is no local.
+and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` or a
+`DropIfSet` of a place that is no local. The region rules of `BeginBorrow` and `EndBorrow`
+are in `semantics/slir/verify_regions.py`.
 A projection of a `Global` is checked against the type that the `Global` carries. The negative case of each
 rule is a pytest test over a hand-built function (`tests/unit/test_slir_verifier.py`),
 because a correct lowering makes none.
