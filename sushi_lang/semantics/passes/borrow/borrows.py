@@ -158,11 +158,11 @@ def _conflict(checker: 'BorrowChecker', code: ErrorMessage, state: BorrowState,
 def register_implicit_borrow(checker: 'BorrowChecker', arg: e.ShirExpr) -> None:
     """Count an unmarked argument of an owning local as the shared borrow it now is.
 
-    A field read whose value owns a resource is a shared borrow of its ROOT owner by the
-    same rule: the callee reads storage that a `poke` of the owner can move. A plain field
-    is a copy. An element read comes with the element group.
+    A field read, an element read and a slice whose value owns a resource are a shared
+    borrow of their ROOT owner by the same rule: the callee reads storage that a `poke` of
+    the owner can move. A plain field and a plain element are a copy.
     """
-    walked = walk_place(arg, Step.MEMBER)
+    walked = walk_place(arg, Step.MEMBER | Step.INDEX)
     if walked.local is None:
         return
     state = checker.borrow_state.get(walked.local)

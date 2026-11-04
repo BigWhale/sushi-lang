@@ -202,6 +202,7 @@ tests/array/resize/test_err_array_resize_fixed.sushi
 tests/array/resize/test_err_array_resize_length_type.sushi
 tests/array/resize/test_err_array_resize_value_type.sushi
 tests/array/reverse/test_err_array_reverse_with_args.sushi
+tests/array/slices/test_err_slice_beside_poke_of_its_array.sushi
 tests/array/slices/test_err_slice_bound_not_i32.sushi
 tests/array/slices/test_err_slice_extend_from_own_slice.sushi
 tests/array/slices/test_err_slice_inline_element_write.sushi
