@@ -243,9 +243,10 @@ def _reaches(tree: ast.AST, names: set[str]) -> list[tuple[int, str]]:
 
 
 def _scanned_name(where: str) -> str:
-    """The function or method that a row names: a class prefix and a nested function drop."""
+    """The name of the function or method that a row names. A class prefix and a nested
+    function name are not part of it."""
     parts = where.split(".")
-    return parts[1] if parts[0][:1].isupper() and len(parts) > 1 else parts[0]
+    return parts[1] if len(parts) > 1 and parts[0] != parts[0].lower() else parts[0]
 
 
 def test_the_slir_emitter_names_no_port_template():
@@ -270,6 +271,7 @@ def test_a_method_row_is_scanned_by_its_own_name():
     assert _scanned_name("Box.run") == "run"
     assert _scanned_name("Box.run.inner") == "run"
     assert _scanned_name("emit_list_push.element") == "emit_list_push"
+    assert _scanned_name("_Steps.run") == "run"
 
 
 def test_an_owner_of_a_method_names_its_class(tmp_path):
