@@ -20,7 +20,6 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.operators import BinOp
-from sushi_lang.semantics.ranges import plan_range
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import lower_aggregate as agg
@@ -28,7 +27,7 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
-from sushi_lang.semantics.slir.lower_control import bound
+from sushi_lang.semantics.slir.lower_control import bound, i32, int_of, range_operands
 from sushi_lang.semantics.slir.lower_values import Value
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, Type, deref_type,
@@ -67,29 +66,8 @@ def array_init(low: Lowering, node: e.ArrayInit) -> Value:
             parts += [next(operands), next(operands)]
         else:
             runs.append(r.RunSequence(-1 if run.range.reverse else 1))
-            parts += _sequence(low, run.range, next(operands), next(operands))
+            parts += range_operands(low, run.range, next(operands), next(operands))
     return r.Aggregate(r.AggArray(ty, tuple(runs)), tuple(parts))
-
-
-def _sequence(low: Lowering, range_: e.Range, start: p.Operand,
-              end: p.Operand) -> list[p.Operand]:
-    """The first value and the count of a range (`semantics/ranges.py`): the count is
-    `end - start`, plus one when inclusive; the first value is `start`, or with `.rev()`
-    the last value, `end`, less one when exclusive. A count below zero fills nothing."""
-    low_value, high_value = _int(start), _int(end)
-    if low_value is not None and high_value is not None:
-        plan = plan_range(low_value, high_value, range_.inclusive, range_.reverse, range_.loc)
-        return [_i32(plan.first), _i32(plan.count)]
-    span = range_.loc
-    count = low.temporary(r.Binary("-", end, start), I32, span)
-    if range_.inclusive:
-        low.emit([st.Assign(p.Local(count), r.Binary("+", p.Copy(p.Local(count)), _i32(1)),
-                            span)])
-    first = start
-    if range_.reverse:
-        first = end if range_.inclusive else p.Copy(p.Local(
-            low.temporary(r.Binary("-", end, _i32(1)), I32, span)))
-    return [first, p.Copy(p.Local(count))]
 
 
 def element(low: Lowering, base: p.Place, node: e.Index) -> p.Place:
@@ -97,7 +75,7 @@ def element(low: Lowering, base: p.Place, node: e.Index) -> p.Place:
     index = bound(low, node.index)
     if not node.unchecked:
         length = _length(low, base, low.type_of(node.base), node.loc)
-        at, size = _int(index), _int(length)
+        at, size = int_of(index), int_of(length)
         if at is None or size is None or not 0 <= at < size:
             ok = _compare(low, "<", index, length, node.loc)
             _guard(low, ok, tm.Trap("RE2020", (index, length), node.loc), node.loc)
@@ -111,7 +89,7 @@ def view(low: Lowering, base: p.Place, node: e.Slice) -> p.Place:
     start = bound(low, node.start)
     end = _add(low, bound(low, node.end), node.inclusive, span)
     length = _length(low, base, low.type_of(node.base), span)
-    first, last, size = _int(start), _int(end), _int(length)
+    first, last, size = int_of(start), int_of(end), int_of(length)
     if first is None or last is None or size is None or not 0 <= first <= last <= size:
         end_ok = _compare(low, "<=", end, length, span)
         start_ok = _compare(low, "<=", start, end, span)
@@ -129,7 +107,7 @@ def _length(low: Lowering, base: p.Place, ty: Type, span: Span) -> p.Operand:
     local of the statement, which the trap reads too."""
     held = deref_type(ty)
     if isinstance(held, ArrayType):
-        return _i32(held.size)
+        return i32(held.size)
     return p.Copy(p.Local(low.temporary(r.Len(base), I32, span)))
 
 
@@ -142,7 +120,7 @@ def _compare(low: Lowering, op: BinOp, left: p.Operand, right: p.Operand,
 
 
 def _unsigned(low: Lowering, operand: p.Operand, span: Span) -> p.Operand:
-    value = _int(operand)
+    value = int_of(operand)
     if value is not None:
         return p.Const(k.Int(value % (1 << 32), U32))
     return _check_local(low, r.Cast(operand, U32), U32, span)
@@ -167,19 +145,9 @@ def _guard(low: Lowering, ok: p.Operand, trap: tm.Trap, span: Span) -> None:
 
 def _add(low: Lowering, operand: p.Operand, one: bool, span: Span) -> p.Operand:
     """`operand`, plus one when `one`: a constant stays a constant."""
-    value = _int(operand)
+    value = int_of(operand)
     if not one:
         return operand
     if value is not None:
-        return _i32(value + 1)
-    return p.Copy(p.Local(low.temporary(r.Binary("+", operand, _i32(1)), I32, span)))
-
-
-def _int(operand: p.Operand) -> int | None:
-    if isinstance(operand, p.Const) and isinstance(operand.constant, k.Int):
-        return operand.constant.value
-    return None
-
-
-def _i32(value: int) -> p.Const:
-    return p.Const(k.Int(value, I32))
+        return i32(value + 1)
+    return p.Copy(p.Local(low.temporary(r.Binary("+", operand, i32(1)), I32, span)))

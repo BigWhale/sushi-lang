@@ -264,7 +264,7 @@ def _counted(low: Lowering, stmt: s.Loop, source: s.Items, range_: e.Range) -> N
     (see `_while`), exit."""
     span = stmt.loc
     count, item = _range_formula(low, range_)
-    counter = low.temporary(r.Use(_i32(0)), BuiltinType.I32, span)
+    counter = low.temporary(r.Use(i32(0)), BuiltinType.I32, span)
     header = _enter_header(low, stmt)
     among, at_header = _header_state(low, stmt)
     low.placement.open_statement()
@@ -277,36 +277,43 @@ def _counted(low: Lowering, stmt: s.Loop, source: s.Items, range_: e.Range) -> N
     _rounds(low, stmt, (cond, local, span), body, step, done, exit_, (among, at_header),
             binds)
     step.statements.append(st.Assign(
-        p.Local(counter), r.Binary("+", p.Copy(p.Local(counter)), _i32(1)), span))
+        p.Local(counter), r.Binary("+", p.Copy(p.Local(counter)), i32(1)), span))
     step.terminator = tm.Goto(header.id, span)
 
 
 def _range_formula(low: Lowering, range_: e.Range
                    ) -> tuple[p.Operand, Callable[[p.Operand], r.Rvalue]]:
-    """The count of a range and the item at the counter (`semantics/ranges.py`). Each bound
-    is evaluated once, the start first. Two constant bounds give the count and the first
-    value of `plan_range`. Else the count is `end - start`, plus one when inclusive, and
-    a count below one walks nothing; the item is `start + k`, or `last - k` with `.rev()`,
-    where `last` is `end`, less one when exclusive."""
+    """The count of a range and the item at the counter (`semantics/ranges.py`): each bound
+    is evaluated once, the start first, then `range_operands`. The item is `first + k`, or
+    `first - k` with `.rev()`."""
     start, end = bound(low, range_.start), bound(low, range_.end)
-    if isinstance(start, p.Const) and isinstance(end, p.Const) and \
-            isinstance(start.constant, k.Int) and isinstance(end.constant, k.Int):
-        plan = plan_range(start.constant.value, end.constant.value, range_.inclusive,
-                          range_.reverse, range_.loc)
-        first = _i32(plan.first)
-        if range_.reverse:
-            return _i32(plan.count), lambda at: r.Binary("-", first, at)
-        return _i32(plan.count), lambda at: r.Binary("+", first, at)
+    first, count = range_operands(low, range_, start, end)
+    if range_.reverse:
+        return count, lambda at: r.Binary("-", first, at)
+    return count, lambda at: r.Binary("+", first, at)
+
+
+def range_operands(low: Lowering, range_: e.Range, start: p.Operand,
+                   end: p.Operand) -> tuple[p.Operand, p.Operand]:
+    """The first value and the count of a range with the bounds `start` and `end`
+    (`semantics/ranges.py`), for a counted loop and for a run of an array. Two constant bounds
+    give the first value and the count of `plan_range`. Else the count is `end - start`,
+    plus one when inclusive, and a count below one walks nothing; the first value is
+    `start`, or with `.rev()` the last value: `end`, less one when exclusive."""
+    low_value, high_value = int_of(start), int_of(end)
+    if low_value is not None and high_value is not None:
+        plan = plan_range(low_value, high_value, range_.inclusive, range_.reverse, range_.loc)
+        return i32(plan.first), i32(plan.count)
     span = range_.loc
     count = low.temporary(r.Binary("-", end, start), BuiltinType.I32, span)
     if range_.inclusive:
-        low.emit([st.Assign(p.Local(count), r.Binary("+", p.Copy(p.Local(count)), _i32(1)),
+        low.emit([st.Assign(p.Local(count), r.Binary("+", p.Copy(p.Local(count)), i32(1)),
                             span)])
-    if not range_.reverse:
-        return p.Copy(p.Local(count)), lambda at: r.Binary("+", start, at)
-    last = end if range_.inclusive else p.Copy(p.Local(
-        low.temporary(r.Binary("-", end, _i32(1)), BuiltinType.I32, span)))
-    return p.Copy(p.Local(count)), lambda at: r.Binary("-", last, at)
+    first = start
+    if range_.reverse:
+        first = end if range_.inclusive else p.Copy(p.Local(
+            low.temporary(r.Binary("-", end, i32(1)), BuiltinType.I32, span)))
+    return first, p.Copy(p.Local(count))
 
 
 def bound(low: Lowering, expr: e.ShirExpr) -> p.Operand:
@@ -318,8 +325,16 @@ def bound(low: Lowering, expr: e.ShirExpr) -> p.Operand:
     return p.Copy(p.Local(low.temporary(value, BuiltinType.I32, expr.loc)))
 
 
-def _i32(value: int) -> p.Const:
+def i32(value: int) -> p.Const:
+    """The operand of the `i32` constant `value`."""
     return p.Const(k.Int(value, BuiltinType.I32))
+
+
+def int_of(operand: p.Operand) -> int | None:
+    """The value of an integer constant operand, or None for any other operand."""
+    if isinstance(operand, p.Const) and isinstance(operand.constant, k.Int):
+        return operand.constant.value
+    return None
 
 
 def _enter_header(low: Lowering, stmt: s.Loop) -> Block:
