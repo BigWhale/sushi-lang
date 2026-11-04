@@ -86,7 +86,8 @@ index, an element write, a slice and an array method). Amended on 2026-11-04 by 
 (the shapes of the ownership tier): 7.9, 8.2, 8.7, 8.9, 8.10 and 8.13 (a borrowed view is a
 view local); 7.9, 8.6, 8.12 and 8.13 (the borrow region is a row of `OwnershipResults`);
 7.3, 7.9, 8.9, 8.10 and 8.13 (a `peek` return copies its value into `_0`, and the caller
-holds a view local).
+holds a view local); 8.2, 8.3, 8.4, 8.6, 8.7, 8.9, 8.10 and 8.13 (a reference binding is an
+address local that a `Ref` writes one time).
 
 ## The decisions, in one place
 
@@ -2192,6 +2193,16 @@ pointer local and a `Deref` at each read, gives the same answer with one more in
 at each read, and the value of a `string` or a `T[]` crosses by value in every other
 position.
 
+**An address local.** A reference binding points INTO a place: `let poke T x = <place>`,
+`let peek T x = <place>`, a `peek` or `poke` binder of a pattern, and `Own(poke x)`. Its
+local is an ADDRESS local. Its one write is `Ref(place, mode)` (8.7), before its first use,
+and every later use reads and writes it as an ordinary local (`copy _5`, `_5 = ...`): the
+emitter gives it the address of the place as its storage. Its type is the type of the
+place, as the type of the local of an `InGuaranteed` or an `Inout` parameter is. This is
+the rule of a `peek` or `poke` parameter (8.3): one rule for a parameter and a reference
+local. An address local never drops and never moves (8.10, rule 8), and its place stands in
+a region (8.6) for the whole life of the local.
+
 The printer writes the source name of a function and of a callee (`fn greet`,
 `call @decorate`), not the symbol (`test_spine_greet$greet`, `user_main`). The symbol is
 for the module and the link step.
@@ -2367,7 +2378,10 @@ An `InGuaranteed` or an `Inout` parameter is by address, and its local is the pl
 caller: lowering reads it and writes it as an ordinary local (`copy _1`, `_1 = ...`), and
 the convention tells the emitter that the local is an address. So a rebind through a
 `poke` parameter writes `_1` (8.10, rule 6). An argument with one of these conventions is
-the operand `copy <place>`, and the emitter passes the address of the place.
+the operand `copy <place>`, and the emitter passes the address of the place. An address
+local (8.2) follows the same rule: a `let peek` or a `peek` binder is read as an
+`InGuaranteed` parameter is, and a `let poke` or a `poke` binder is read and written as an
+`Inout` parameter is.
 
 A `Guaranteed` parameter is by value, and the emitter stores the incoming value into the
 entry slot of its local unchanged (`_open`, `backend/slir/emit.py`). So a borrowed `string`
@@ -2438,6 +2452,10 @@ disappears, and so does CE0129, the internal error that guarded it.
 
 `Downcast` exists because a `match` arm and a `??` both read an enum payload, and reading
 one is valid only under a known variant. The worked example in 8.11 is what found it.
+
+`Deref` stays in the set, and no lowering makes it: a by-address parameter (8.3) and an
+address local (8.2) are read and written as ordinary locals, and the emitter knows that
+their storage is an address.
 
 `Index` is a place, and its operand is an `i32`. An element never moves: a `Move` of a
 place that holds an `Index` is refused (8.13), because the array would be left PARTIALLY
@@ -2553,6 +2571,9 @@ writes one `BeginBorrow` for each owner of the set, with the mode `peek`. It wri
 and at each exit that the region crosses: a `return`, a `break` or a `continue` out of the
 region, and the error path of a `Try`. A region does not end at the exit of the scope of
 the view: an owner can change after the last use and before the end of the scope. The
+region of an address local (8.2) is the one exception: its `BeginBorrow` has the mode of its
+`Ref`, and its place is frozen for the whole life of the local, so its `EndBorrow` comes at
+each exit of the scope of the local. The
 emitter emits nothing for `BeginBorrow` and `EndBorrow`, as for `StorageLive`. The verifier
 reads them (8.13).
 
@@ -2665,6 +2686,9 @@ writes, or a view local that a `Copy` writes (8.2): it owns nothing, so drop pla
 it no drop, nothing moves it, no other statement writes it, and no statement copies it into
 an owning local (8.13).
 
+`Ref(place, mode)` writes an address local (8.2), and nothing else: the address of `place`
+with the mode `peek` or `poke`. It is the one write of that local.
+
 A closure and an iterator have one layout, four words. `AggKind` keeps them apart, because
 the backend reads the SEMANTIC type and never the layout to know which one it has
 (`iteration.md`, ruling 10).
@@ -2728,6 +2752,8 @@ backstop of the checker, as on the AST backend.
 | `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` that calls a declared conversion is a stop of the lowering for now (`slir, conversion`) |
 | `Try(e)` that reads through a borrowed owning wrapper (a `REJECT` row, 7.9) | `e` is a place, and nothing takes it: `Discriminant` of the place into a local and `SwitchInt` as above. The `Ok` block writes a view local (8.2) with a `Copy` of `Field(Downcast(place, Ok), 0)`. The `Err` block copies the error into the `Err` of `_0` with `Copy`, runs the drops of every scope that it leaves and returns: `borrow` refuses an owning error there (CE2411, `tests/borrow/try_on_a_borrowed_owning_result/`), so the error is plain |
 | a let-borrow (an `Assign` with `is_init` and a `REJECT` row, 7.9) | a view local (8.2), written with a `Copy` of the place |
+| a reference `let` (an `Assign` with `is_init` whose value is a `Borrow`, 7.5) | an address local (8.2): `_5 = ref poke <place>` (or `ref peek`), after a `BeginBorrow` of the place with the same mode. The `EndBorrow` comes at each exit of the scope of the local, because the place is frozen for the whole life of the local |
+| a `peek` or `poke` binder of a pattern, `Own(poke x)` included | an address local of the scope of the arm, written with the `Ref` of its payload place (for a variant, `Field(Downcast(place, variant), index)`), in a region over that place to each exit of the arm |
 | `Return` in a function with a `peek` return | `_0 = copy <place>`: the value goes to the caller as it is (`borrow-model.md` S10h): it crosses by value, as a plain borrow does (the 16-byte descriptor of a `string` or a `T[]`), and not as an address. The callee never drops `_0` |
 | a call of a function or a method with a `peek` return | the destination of the `Call` is a view local (8.2), in a region over the owner of each source argument (7.3, 7.9). One rule serves this answer and the view answer of a container call: the owner set has two sources |
 | `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field` |
@@ -2899,7 +2925,9 @@ locals, and the locals that own nothing, and nothing else:
 8. A view local (8.2) never drops, at an exit and at a rebind alike: it owns nothing, and
    its owner drops the value. It gets `StorageLive` and `StorageDead` by rule 1, and no
    flag. The `_0` of a function with a `peek` return holds a view too, and the callee never
-   drops it.
+   drops it. An address local (8.2) never drops either: its storage is the place of
+   another value. A write through a `poke` address local follows rule 6 through the
+   address, as a rebind through a `poke` parameter does.
 
 ### 8.11 A worked example
 
@@ -3077,6 +3105,9 @@ Runs after lowering, before the backend. It checks:
 - a view local (8.2): a `Copy` writes it, and nothing writes it again. A view local of an
   owning type is never the place of a `Drop` or a `DropIfSet`, never `Move`d, and never the
   operand of an `Owned` argument. Its owners stand in a region (8.6) at each read of it
+- an address local (8.2): a `Ref` writes it one time, before its first use, and a `Ref`
+  writes no other local. It is never the place of a `Drop` or a `DropIfSet` and never
+  `Move`d, and its place stands in a region (8.6) for the whole life of the local
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
