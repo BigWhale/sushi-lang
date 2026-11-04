@@ -482,10 +482,10 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
     The written type arguments stand on the callee, as on a direct call
     (`geo.nothing@(i32)()`). A struct that the namespace holds is a construction, named
     with the alias; with written type arguments (`geo.Box@(i32)(1)`) it is an error hole,
-    as in `_call`. A named argument on anything else is an error hole (CE6104). A name
-    that the namespace does not hold is an error hole too: the typecheck pass reads the
-    same table and refuses the call (CE2008). Anything else that the namespace holds under
-    the name is a hole.
+    as in `_call`. A name that the namespace does not hold is an error hole: the typecheck
+    pass reads the same table and refuses the call (CE2008), and then a named argument of
+    the call (CE6104). A named argument on anything else is an error hole (CE6104).
+    Anything else that the namespace holds under the name is a hole.
     """
     kind = None if lw.lookup is None else lw.lookup.member_kind(lw.bindings.body, alias,
                                                                 node.method)
@@ -494,11 +494,13 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
                            node.field_names, lw.span(node))
     if kind == "struct":
         return lw.error_hole(node, "CE6102")
-    if node.field_names is not None:
-        return lw.error_hole(node, "CE6104", named=node.field_names[0])
+    named = None if node.field_names is None else node.field_names[0]
     if kind is None and lw.lookup is not None:
-        return lw.error_hole(node, "CE2008",
+        codes = ("CE2008",) if named is None else ("CE2008", "CE6104")
+        return lw.error_hole(node, *codes, named=named,
                              member=UnknownMember(alias, node.method, lw.span(node)))
+    if named is not None:
+        return lw.error_hole(node, "CE6104", named=named)
     if kind not in CALLABLE_KINDS:
         return lw.hole(node)
     ident = lw.ident()

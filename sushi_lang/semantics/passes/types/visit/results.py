@@ -84,7 +84,7 @@ def check_hole(validator: TypeValidator, node: Hole,
     (`Pair@(i32, i32)(1, 2)`) is CE6102 at the hole, the `RangeExpr` hole of a slice
     with a reversed range is CE2122 at the range, the hole of a named argument is CE6104
     at the hole, and the hole of a name that a namespace does not hold is CE2008 at the
-    call (ir.md 7.4). An error hole whose error a pass before typecheck reported
+    call, then CE6104 when the call names an argument (ir.md 7.4). An error hole whose error a pass before typecheck reported
     (`REPORTED_BEFORE`: a name with no declaration, CE1001) has no answer: the walk goes on, so the later faults of the body
     are reported too, and the body does not go on to the next stage. Every other hole
     stops the walk of its body."""
@@ -95,13 +95,16 @@ def check_hole(validator: TypeValidator, node: Hole,
     if node.ast_class == "Call" and "CE6102" in node.codes:
         _reject_construction_type_args(validator, node)
         return
-    if "CE6104" in node.codes and node.named is not None:
-        reject_named_argument(validator, node.named, node.loc)
-        return
+    reported = False
     if "CE2008" in node.codes and "CE2045" not in node.codes and node.member is not None:
         alias = node.member.written
         reject_unknown_namespace_call(validator, alias, alias, node.member.name,
                                       node.member.name_loc)
+        reported = True
+    if "CE6104" in node.codes and node.named is not None:
+        reject_named_argument(validator, node.named, node.loc)
+        reported = True
+    if reported:
         return
     if node.ast_class == "RangeExpr" and "CE2122" in node.codes:
         er.emit_with(validator.reporter, er.ERR.CE2122, node.loc) \

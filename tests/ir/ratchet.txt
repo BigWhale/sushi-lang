@@ -2755,6 +2755,7 @@ tests/types/named_args/test_err_named_arg_on_a_builtin_method.sushi
 tests/types/named_args/test_err_named_arg_on_a_function.sushi
 tests/types/named_args/test_err_named_arg_on_a_generic_function.sushi
 tests/types/named_args/test_err_named_arg_on_a_method.sushi
+tests/types/named_args/test_err_named_arg_on_a_missing_member_behind_an_alias.sushi
 tests/types/named_args/test_err_named_arg_on_a_stdlib_function.sushi
 tests/types/named_args/test_err_named_arg_on_an_enum_variant.sushi
 tests/types/numeric_widths/test_err_mixed_divide.sushi
