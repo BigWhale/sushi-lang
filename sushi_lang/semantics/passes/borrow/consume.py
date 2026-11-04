@@ -356,11 +356,13 @@ def reject_slice_of_temporary(checker: 'BorrowChecker', value: e.ShirExpr) -> bo
 
     The temporary is freed at the end of the statement, and the binding lives on. Inside
     one statement a slice of a temporary is legal, so only the `let` asks. Storage that
-    a local or a constant keeps, at the end of field and element steps, is no temporary.
+    a local, a constant or a `var` keeps, at the end of field and element steps, is no
+    temporary.
     """
     if not isinstance(value, e.Slice):
         return False
-    if isinstance(walk_place(value, Step.MEMBER | Step.INDEX).node, (e.LocalRef, e.ConstRef)):
+    if isinstance(walk_place(value, Step.MEMBER | Step.INDEX).node,
+                  (e.LocalRef, e.ConstRef, e.StorageRef)):
         return False
     checker.err.emit_with(er.ERR.CE2437, value.loc) \
         .help("bind the array first, or copy the part with `.ss(start, count)`") \
