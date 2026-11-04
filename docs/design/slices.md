@@ -82,34 +82,37 @@ length, with the end as an exclusive end: `data[1..=3]` on an array of size 3 pr
 
 ## 4. Build choices
 
-- **The node.** A slice is an `IndexAccess` whose index is a `RangeExpr`.
-  `IndexAccess.is_slice` is the one predicate. Thus every walk that reads a place
-  (`walk_place`, `borrow_owner`, `reads_through_owner`) sees a slice as a read through its
-  array's owner, with no new arm.
-- **The type.** The typecheck pass checks the range with `validate_range_value` (CE2121,
-  CE2125) and stamps the `T[]` in `IndexAccess.inferred_element_type`, the field that holds
-  the type an index yields. `holds_a_range_value` (`semantics/ranges.py`) takes the index
-  as a legal position of a range, so a slice in a generic argument solves its type.
-- **The borrow pass.** `source_provenance` answers BORROWED for a slice, as for every
-  `IndexAccess`, and `read_type` answers the stamped `T[]`, which owns: so a consuming use
-  is CE2411. `bind` refuses a `let` of a slice of a temporary with CE2437
-  (`reject_slice_of_temporary`, `passes/borrow/consume.py`): the base of the slice is not
-  kept storage (`names_kept_storage`). `record_borrowed_binding` gives a slice of a `let`
-  of a slice the owners of that `let` too (`slice_owners`). `reject_readonly_write` refuses
-  a write whose receiver crosses a slice (`slice_on_path`, `passes/borrow/reads.py`), with
-  CE2426, before it reads the table of read-only receivers. An unmarked slice argument
-  takes a shared borrow of the owner of its array (`register_implicit_borrow`).
-- **The backend.** `emit_slice_address` (`backend/types/arrays/indexing.py`) emits the
-  descriptor into an `entry_alloca` slot through the `gep_utils` descriptor trio, after the
-  check `emit_slice_check` (`backend/types/arrays/bounds.py`). A read of a slice loads the
-  slot. `emit_element_pointer` answers the slot for a slice, so a method receiver, a chained
-  index and a `peek` argument reach it with no new path. The base array goes through the
-  address seam of an element access (`_array_slot`), so a temporary base is parked and
-  freed by its scope.
-- **No free.** The slice is BORROWED: its `let` is a borrow in `OwnershipResults`, as for
-  `let i32[] v = holder.items`, so drop placement gives it no drop. Nothing frees a slice.
-- **`dont_panic`.** `stamp_unchecked_indexes` does not stamp a slice, and the slice
-  emitter does not read the stamp. A marked body whose only `[]` is a slice removes no
+- **The node.** In the AST, a slice is an `IndexAccess` whose index is a `RangeExpr`, and
+  `IndexAccess.is_slice` is the one predicate. Lowering makes it the SHIR node `Slice`
+  (`lower_index`, `semantics/shir/lower_aggregates.py`), with the two bounds and the
+  `inclusive` flag. Every walk that reads a place (`walk_place`, `borrow_owner`) sees a
+  `Slice` as a read through the owner of its array.
+- **The type.** The typecheck arm `check_slice` (`passes/types/visit/arrays.py`) checks
+  each bound at `i32` through the one seam of an `i32` position (CE2121), refuses bounds
+  that the compiler can read and that go down (CE2125) and a string base (CE2122), and
+  answers `T[]` in the type row of the node. `holds_a_range_value` (`semantics/ranges.py`)
+  takes a slice index as a legal position of a range, so a slice in a generic argument
+  solves its type.
+- **The borrow pass.** `source_provenance` answers BORROWED for a slice, and its row is
+  `REJECT`: a consuming use is CE2411, and a `let` of it is a `let`-borrow of the owner of
+  its array. `bind` refuses a `let` of a slice of a temporary with CE2437
+  (`reject_slice_of_temporary`, `passes/borrow/consume.py`). `reject_readonly_write`
+  refuses a write whose receiver crosses a slice (`slice_on_path`,
+  `passes/borrow/reads.py`), with CE2426, before it reads the table of read-only
+  receivers. An unmarked slice argument takes a shared borrow of the owner of its array
+  (`register_implicit_borrow`), so a `poke` of that array in the same call is CE2407.
+- **SLIR and the backend.** SLIR lowering (`view`, `semantics/slir/lower_arrays.py`) puts
+  the bounds into locals of the statement, adds one to an inclusive end, and emits the
+  check `end <= len` and `start <= end` as unsigned compares, with `Trap("RE2028")` on the
+  failing edge. A check that the compiler can prove is left out. Then a `Slice` rvalue
+  writes a VIEW local (`docs/design/ir.md` 8.7). The emitter makes the descriptor with
+  `slice_value` (`backend/types/arrays/indexing.py`) through the `gep_utils` descriptor
+  trio. A method receiver, a chained index and a `peek` argument read the view local as
+  any other place.
+- **No free.** The slice is BORROWED: a view local owns nothing, so drop placement gives
+  it no drop. Nothing frees a slice.
+- **`dont_panic`.** `stamp_unchecked_indexes` does not stamp a slice, and SLIR lowering
+  does not read the mark for a slice. A marked body whose only `[]` is a slice removes no
   check, so the marker gets CW0004.
 
 ## 5. The tests

@@ -78,7 +78,11 @@ and emit): 8.9 (a match on a plain tuple is a chain of tests over the `Field` pa
 tuple pattern; a tuple that owns stops), 8.2 and 8.5 (the emitter builds a struct and a
 tuple from the value of each field and reads a field through a GEP of its index; a struct
 and a tuple constant go through the one converter of an aggregate constant, which the
-global of a `const` uses too; only an array value stops).
+global of a `const` uses too; only an array value stops). Amended on 2026-11-04 by group A6:
+7.3 (the typecheck of an array, an index, a slice, an element write and the array method
+family; a negated byte literal in an `i32` position), 7.9 (an array in `borrow`), 8.6 (the
+array family takes the address of its receiver) and 8.9 (the lowering of an array value, an
+index, an element write, a slice and an array method).
 
 ## The decisions, in one place
 
@@ -880,15 +884,17 @@ checked as a field read, and the value at the type of the field: a value that do
 fit is CE2002 at the statement. A write into a field of a constant, at any depth, is
 [CE2096](../error-catalog.md#ce2096) at the statement, and the value is then checked at no
 type. The rules of a write through a borrow and of a read-only place are rules of
-`borrow`. An `Assign` of an `Index`, of a `var` and of any other place that is not a
-`LocalRef` or a `Field` is not typed yet.
+`borrow`. An `Assign` of an `Index` is an element write (see "An array" below). An `Assign`
+of a `var` and of any other place that is not a `LocalRef`, a `Field` or an `Index` is not
+typed yet.
 
 **A destructure.** A `Destructure` first finds what each target wants (ruling R-D). A
 binder with a written type wants that type, and the written type is checked as the type of
 a `let` is checked ([CE2001](../error-catalog.md#ce2001)). A `Place` wants the type of its
 place. The place is a `LocalRef` or a `Field`, and it is checked as the target of a rebind
-or of a field write: a field of a constant is CE2096 at the place. A `Place` of any other
-place is not typed yet. A bare binder and a `_` want no type, and a `Nested` target wants
+or of a field write, and an `Index` as an element write: a field or an element of a constant
+is CE2096 at the place. A `Place` of any other place is not typed yet. A bare binder and a
+`_` want no type, and a `Nested` target wants
 what its targets want. Then the value is checked. A `TupleInit` with one part for each
 target checks each part at what its target wants, also at a nested level, so a literal takes
 the type of its binder or of its place: `let (u8 a, b) = (300, 1)` is
@@ -904,6 +910,39 @@ is CE2002 at the written type or at the place, with no note, and the binder is r
 the local of a `let` is refused. After an error of the value or of a level, a bare binder of
 that level has no type, so a later use of it adds no diagnostic. Whether a target owns or
 borrows its element is a rule of `borrow`.
+
+**An array.** The arm of an `ArrayInit` (`passes/types/visit/arrays.py`) gives the element
+type of its position (the `T` of a `T[N]` or a `T[]`, also under `peek` or `poke`) to each
+run. The value of a `Single` and of a `Repeat` is checked at that type, a range run is
+checked by the arm of a range, and a count is an `i32` position. ONE reader of the runs
+(`plan_runs`, `semantics/array_runs.py`) serves the arm and the AST constant evaluator: it
+reads each count and each range with the fold, and it reports
+[CE2017](../error-catalog.md#ce2017), [CE2019](../error-catalog.md#ce2019),
+[CE2020](../error-catalog.md#ce2020) and [CE2125](../error-catalog.md#ce2125). An element of
+another type than the first is [CE2013](../error-catalog.md#ce2013). A fixed literal answers
+`T[N]`, also after CE2013, so its position adds its own error as on `main`. A dynamic
+literal answers `T[]` only when its elements agree. An empty one answers the `T[]` of its
+position, else it is CE2111. A declared size that the literal does not fill is
+[CE2011](../error-catalog.md#ce2011) in a `let` and in a constant initializer. An `Index`
+answers the element type of its base, or `u8` for a `string`. A base that is no array is
+[CE2114](../error-catalog.md#ce2114), and a readable index out of the range of a `T[N]` is
+[CE2012](../error-catalog.md#ce2012) or [CE2056](../error-catalog.md#ce2056). A `Slice`
+answers `T[]`: a `string` base is [CE2122](../error-catalog.md#ce2122), and readable bounds
+that go down are CE2125. An element write (`a[i] := v`) checks the value at the element
+type. A byte of a `string` is [CE2113](../error-catalog.md#ce2113), and an element of a
+constant is CE2096. Every index, count and range bound goes through ONE seam of an `i32`
+position (`check_i32_operand` and `reject_non_i32`, `passes/types/arrays.py`). A bare byte
+literal, also under a `~` or a negation, takes `i32` from the position, and a negated byte
+literal below zero is [CE2073](../error-catalog.md#ce2073) for `u8` at the negation, as on
+`main`. Any other value gets no type from the position, and a type that is not `i32` is
+[CE2121](../error-catalog.md#ce2121), or [CE2006](../error-catalog.md#ce2006) for a method
+argument. The array method family has its arm in `FAMILY_ARMS` (`check_array_method`). It
+refuses, in this order: a method that changes a constant (CE2096, also behind an alias), a
+receiver of the wrong kind ([CE2023](../error-catalog.md#ce2023)), a wrong count
+([CE2009](../error-catalog.md#ce2009)), and then each argument by the rule of the row of the
+method in `_ARRAY_METHODS`. The call answers the type of its row after each fault. The slot
+argument of `push` and `insert` is `Owned`, because the slot takes it by position. Every
+other argument is `Guaranteed`, and a `nom` on it is [CE2427](../error-catalog.md#ce2427).
 
 **An initializer body.** Before the walk of the initializer body of a constant or a `var`
 (6.3), the constant evaluator reads the initializer at the declared type, with the reporter
@@ -952,7 +991,7 @@ family in ONE table, `FAMILY_ARMS` (`passes/types/visit/calls.py`), keyed by the
 the family in `METHOD_TYPE_REGISTRY`, and no arm compares a family name of its own (gate:
 `tests/unit/test_typecheck_family_arms_are_registry_rows.py`). While the migration is in
 progress, a family with no arm in the table stops the walk with `typecheck, Call(method
-<family>)`, on a receiver of any type (`Call(method list)`, `Call(method array)`), so each
+<family>)`, on a receiver of any type (`Call(method list)`, `Call(method own)`), so each
 group counts its own stops. A receiver that is not of a built-in type and that no family
 claims, and no extension method of a plain type answers (see below), stops the walk with
 the label of the call target (`Call(method)`, `Call(extension)`, `Call(stdlib method)`).
@@ -977,7 +1016,9 @@ default. The call still yields `~`, so a binding of another type is a mismatch t
 `main`. One table row holds the argument types and the return type of each method
 (`WrapperMethodRow`, `semantics/generics/maybe.py` and `results.py`). A method with a
 signature row (`map_err`, `or_err`, group B10) stops the walk with the label of its family,
-`typecheck, Call(method result)` or `Call(method maybe)`.
+`typecheck, Call(method result)` or `Call(method maybe)`. The `array` family has its arm too
+(see "An array" above). The hash of an array is the `array_hash` family, which a `Hashable`
+implementation overrides, and it stops the walk (`Call(method array_hash)`).
 
 **An extension method and a static.** A type is PLAIN when it is a primitive, or a struct
 or an enum that is no instance of a generic type and whose name the unit did not lose (D2,
@@ -1789,9 +1830,30 @@ note at the boundary. Then the field is read, the value is checked, a change of 
 invalidates each let-borrow of it (`check_owner_not_borrowed`, CE2412 at a later use), and
 the value is a consuming use. Each field of a `StructInit`, in the written order (R1), and
 each part of a `TupleInit` is a consuming use by its position, as each payload of an
-`EnumInit` is. A root that a later group checks (an `Index`, a `Slice`, a `StorageRef`, a
-`GlobalRef`) stops the walk with its class. A marked field take is B7's: a `Take`, and a `nom`
+`EnumInit` is. A root that a later group checks (a `StorageRef`, a `GlobalRef`) stops the
+walk with its class. A marked field take is B7's: a `Take`, and a `nom`
 argument of an owning field (`f(nom s.out)`, `borrow, Field take`), stop the walk.
+
+**An array in `borrow`.** Each `Single` element of an `ArrayInit` is a consuming use by its
+position. The value of a `Repeat` is read, then its count (R2), and a range run reads its
+bounds. An `Index` reads its base, then its index, and a `Slice` reads its base, then its
+bounds. A plain element is a copy (`ADOPT`). A slice is a BORROWED `T[]` view of the owner of
+its array: its row is `REJECT`, so a consuming use is [CE2411](../error-catalog.md#ce2411),
+and a `let` of it is a `let`-borrow of the owner. A `let` of a slice of a temporary is
+[CE2437](../error-catalog.md#ce2437). A `peek` of a slice is a shared borrow of the owner, a
+`poke` of it goes through the gate of a write ([CE2426](../error-catalog.md#ce2426)), and a
+`peek` or a `poke` of an element is [CE2404](../error-catalog.md#ce2404). An unmarked
+argument that reads a slice, or an element that owns, is a shared borrow of its root for the
+call, as an owning field is ([CE2407](../error-catalog.md#ce2407) beside a `poke` of the
+root). An element write has the gates of a field write. The receiver of an array method is
+read first. The pass takes no borrow for it. An `Inout` receiver is written after the
+arguments, through the one gate of a write and `check_owner_not_borrowed`, and a bulk copy
+that reads the array that it grows is [CE2430](../error-catalog.md#ce2430): the check sees
+through a slice to its array. A `destroy()` call as a statement marks the local destroyed,
+and a later use is [CE2406](../error-catalog.md#ce2406). An array whose element owns stops
+the walk (`borrow, ArrayInit owning`, `Index owning`, `Slice owning`, `Call(method array)
+owning`; group B1), and so does `iter()` on an array (`Call(method array) iterator`, C3),
+which makes a lent iterator.
 
 **A destructure in `borrow`.** The value is checked first. A value of plain elements is a
 consuming use, a copy (`ADOPT`), and SLIR lowering reads that one row (8.9). A `let`
@@ -2318,7 +2380,13 @@ partition (`receiver_convention`, 8.3). A family with no answer stops in `typech
 `borrow` first, so its call in lowering is the internal error CE0000, never a `Guaranteed`
 receiver by default. The printer writes the call as
 `builtin string.len(copy _1 @guaranteed)`. A method that answers a `string` writes it into a
-fresh owning local like any other call, and the drop placement drops it (8.10). The method
+fresh owning local like any other call, and the drop placement drops it (8.10). The emitter
+gives each family the value of each operand, in order (Q7). The `array` family takes the
+ADDRESS of its receiver instead, for an `Inout` receiver and a `Guaranteed` one alike: the
+storage of the place, or a new slot that holds a constant (`operand_address`). It reads
+the length, the capacity and the data of the array when it runs, after the last argument,
+so a receiver is read after an argument that changes it, and an element receiver is
+evaluated one time (11, rule 9). The method
 `expect` of a `Result` or a `Maybe` is the one exception: it lowers to no call, as an
 `assert` (8.9).
 
@@ -2452,10 +2520,11 @@ backstop of the checker, as on the AST backend.
 | `Range` as a value | an owned iterator over the range formula |
 | `Interp(parts)` | ONE `Builtin(Intrinsic("interp"), types)` call into a fresh owning local, with one `Guaranteed` operand for each part in order (an empty text part gives none). The backend expands it with the string-builder emitters (Q7), so the builder state stays out of SLIR |
 | `Lambda` | one `SlirFunction` cut from the body, and an `Aggregate(Closure, [FnRef, env...])` built from `LiftResults` (Q8); each captured operand is `Copy` or `Move` by `OwnershipResults` |
-| `ArrayInit(runs)` | `memcpy` for a plain element, one `copy_out` per slot for an owning one |
-| `Index` read | bounds compare, `SwitchInt`, `Trap("RE2020")` on the failing edge; no check when `unchecked` |
-| `Index` write (`arr[i] := v`) | the same bounds check; the target slot is a consuming position |
-| `Slice` | range compare, `SwitchInt`, `Trap("RE2028")` on the failing edge, then `Slice`; never unchecked |
+| `ArrayInit(runs)` | each value in the written order, as for a `StructInit` (a place that a later call can change goes into a temporary first), then ONE `Aggregate(AggArray)` with its runs (8.7): a run-time count is a part; a range with two constant bounds takes the count and the first value of `plan_range`. The emitter fills the slots: unrolled stores, a constant walk, a run-time walk, one `memset` for a repeated constant byte, and one constant for a `T[N]` of constant parts. A count below zero fills nothing (`semantics/slir/lower_arrays.py`, `backend/types/arrays/runs.py`) |
+| `Index` read | the index into a local of the statement, `Len` (or the constant `N` of a `T[N]`), the `u32` casts of the index and of the length, `<`, `SwitchInt`, `Trap("RE2020", [index, length])` on the failing edge; then the place `Index`. No check when `unchecked`, nor for a constant index of a `T[N]` that is in range |
+| `Index` write (`arr[i] := v`) | the value first (a value that is no constant goes into a temporary), then the index and the same bounds check, then the store into the place `Index` |
+| `Slice` | the bounds into locals of the statement (an inclusive end plus one), `end <= len` and `start <= end` as `u32` compares, `&`, `SwitchInt`, `Trap("RE2028", [start, end, length])` on the failing edge, then the `Slice` into a view local; never unchecked. A check that the constant bounds prove is left out |
+| a method of an array | a `Call` of `Builtin(BuiltinMethod)`: the receiver first (a `Copy` of its place, a constant, or a temporary of the statement), then each argument with the convention of its row (8.3). The emitter gives the family the address of the receiver (8.6), and one emitter of the family serves a `T[N]` and a `T[]` (`backend/types/arrays/dispatcher.py`) |
 | `Assert` | `SwitchInt(c, [(0, fail_bb)], otherwise: next_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2026", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state of the locals before the failing block. The blocks are made in the order fail, next. A condition local ends at the top of the two blocks, as for an `If` |
 | `expect(msg)` on a `Result` or a `Maybe` | the receiver into a place (a constant into a temporary), `Discriminant` into a local, and `SwitchInt(tag, [(success tag, next_bb)], otherwise: fail_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2029", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state before the failing block, and reads the payload through `Downcast` + `Field`: a `Copy` of a plain payload and a `Clone` of an owning one, because the receiver is a read (8.3); a new value as the receiver is a temporary that its statement drops. The blocks are made in the order fail, next |
 | `StructInit`, `TupleInit` | each field (each part) in the WRITTEN order (R1, 7.4), then ONE `Aggregate(Struct)` (`Aggregate(Tuple)`) of the instance type, with the parts in the declaration order. A new value goes into a temporary of the statement in that order. A place, or a constant, is read at the `Aggregate`. A place is copied into a temporary first when a later field in the written order can call a function, because the call can change the place through a `poke`; a literal, a name of a constant, a place, an operator and a construction over such values call none. A literal and a name of a constant never change, so they get no temporary |
