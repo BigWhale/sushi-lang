@@ -1,8 +1,8 @@
 """SHIR to SLIR: the facts of a function declaration that the lowering reads (ir.md 6.4).
 
-The symbol of the function, the kind of a body that is no free function, and the type of
-the return slot. They hold no state of the lowering, and `lower.py` reads them once for each
-body.
+The symbol of the function, the kind of a body that is no free function and no extension
+method, and the type of the return slot. They hold no state of the lowering, and `lower.py`
+reads them once for each body.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.semantics.ast import ExtendDef, FuncDef
 from sushi_lang.semantics.channel import channel_result, has_channel
+from sushi_lang.semantics.generics.name_mangling import extension_decl_symbol
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.shir.body import ShirBody
 from sushi_lang.semantics.slir.function import STAGE
@@ -22,22 +23,25 @@ from sushi_lang.semantics.unit_symbols import function_symbol
 
 
 def symbol_of(decl: object, home: Optional[str], body: ShirBody) -> str:
-    """The symbol of the function in its module (`function_symbol`). A body that is not a
-    free function stops with the name of its kind."""
+    """The symbol of the function in its module: `function_symbol` for a free function,
+    `extension_decl_symbol` for an extension method or a static. Any other body stops with
+    the name of its kind."""
+    if isinstance(decl, ExtendDef) and not decl.is_conversion:
+        return extension_decl_symbol(decl, home)
     if not isinstance(decl, FuncDef) or len(body.params) > len(decl.params):
         raise StageStop(STAGE, kind_of(decl, body), body.block.loc)
     return function_symbol(decl.name, home)
 
 
 def kind_of(decl: object, body: ShirBody) -> str:
-    """The kind of a body that is not a free function. A perk method is a `FuncDef` whose
-    body has a receiver before its declared parameters."""
+    """The kind of a body that is no free function and no extension method. A perk method
+    is a `FuncDef` whose body has a receiver before its declared parameters."""
     if isinstance(decl, FuncDef):
         return "perk method"
     if isinstance(decl, GenericFuncDef):
         return "generic instance"
     if isinstance(decl, ExtendDef):
-        return "conversion" if decl.is_conversion else "method"
+        return "conversion"
     er.raise_internal_error("CE0000", span=body.block.loc,
                             detail=f"a body of {type(decl).__name__} reached SLIR")
 

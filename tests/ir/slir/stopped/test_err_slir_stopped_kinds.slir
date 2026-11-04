@@ -1,6 +1,12 @@
 unit test_err_slir_stopped_kinds
 
-fn Dog.paws: stopped (slir, method)
+fn Dog.paws(_1: Dog @guaranteed) -> i32 {
+    let _0: i32
+
+  bb0:
+    _0 = const 4_i32
+    return
+}
 
 fn Small.as: stopped (slir, conversion)
 

@@ -2,9 +2,9 @@
 # EXPECT_STDERR_CONTAINS: "typecheck, Call"
 # EXPECT_DUMP_SLIR: test_err_slir_stopped_kinds.slir
 #
-# The SLIR lowering does not lower a generic instance, a conversion, a perk method or an
-# extension method yet. It stops each one with the name of its kind. The typecheck pass
-# stops `main` at the call of the generic function first, so the program stops there.
+# The SLIR lowering does not lower a generic instance, a conversion or a perk method yet.
+# It stops each one with the name of its kind. An extension method lowers. The typecheck
+# pass stops `main` at the call of the generic function first, so the program stops there.
 
 fn keep@(T)(nom T x) T:
     return x

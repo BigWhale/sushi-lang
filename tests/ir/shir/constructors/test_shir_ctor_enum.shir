@@ -2,29 +2,29 @@ unit test_shir_ctor_enum
 
 ShirBody area
   params : [(_0 "s": Shape, Guaranteed)]
-  locals : [_1 "out": i32, _2 "r", _3 "w", _4 "h"]
+  locals : [_1 "out": i32, _2 "r": i32, _3 "w": i32, _4 "h": i32]
   block  :
-    Assign(LocalRef(_1), Lit(0), is_init: true)
-    Match(LocalRef(_0), [Arm(Variant(@Shape, "Circle", [(_2, Bare)]), [Assign(LocalRef(_1), Binary(*, Binary(*, Lit(3), LocalRef(_2)), LocalRef(_2)), is_init: false)]), Arm(Variant(@Shape, "Rect", [(_3, Bare), (_4, Bare)]), [Assign(LocalRef(_1), Binary(*, LocalRef(_3), LocalRef(_4)), is_init: false)])], consumes: false)
-    Return(LocalRef(_1))
+    Assign(LocalRef(_1), adopt Lit(0), is_init: true)
+    Match(LocalRef(_0), [Arm(Variant(@Shape, "Circle", [(_2, Bare)]), [Assign(LocalRef(_1), adopt Binary(*, Binary(*, Lit(3), LocalRef(_2)), LocalRef(_2)), is_init: false)]), Arm(Variant(@Shape, "Rect", [(_3, Bare), (_4, Bare)]), [Assign(LocalRef(_1), adopt Binary(*, LocalRef(_3), LocalRef(_4)), is_init: false)])], consumes: false)
+    Return(adopt LocalRef(_1))
 
 ShirBody show
   params : [(_0 "s": Sign, Guaranteed)]
   locals : []
   block  :
-    Match(LocalRef(_0), [Arm(Variant(@Sign, "Plus", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("plus")]))]), Arm(Variant(@Sign, "Minus", []), [ExprStmt(Call(BuiltinFn("println"), [Lit("minus")]))])], consumes: false)
+    Match(LocalRef(_0), [Arm(Variant(@Sign, "Plus", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("plus"), Guaranteed)]))]), Arm(Variant(@Sign, "Minus", []), [ExprStmt(Call(Intrinsic("println"), [(Lit("minus"), Guaranteed)]))])], consumes: false)
 
 ShirBody main
   params : []
   locals : [_0 "c": Shape]
   block  :
-    Assign(LocalRef(_0), EnumInit(@Shape, "Circle", [Lit(2)]), is_init: true)
+    Assign(LocalRef(_0), adopt EnumInit(@Shape, "Circle", [adopt Lit(2)]), is_init: true)
     ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(LocalRef(_0), Guaranteed)]), Guaranteed)]))
-    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(EnumInit(@Shape, "Rect", [Lit(3), Lit(4)]), Guaranteed)]), Guaranteed)]))
-    ExprStmt(Call(Free(@show), [Call(Static(Sign, "flip"), [Lit(true)])]))
-    ExprStmt(Call(Named(GlobalRef(@show)), [EnumInit(@Sign, "Minus", [])]))
-    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
-    Return(Lit(0))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Free(@area), [(EnumInit(@Shape, "Rect", [adopt Lit(3), adopt Lit(4)]), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Free(@show), [(Call(Static(Sign, @Sign.flip), [(Lit(true), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Free(@show), [(EnumInit(@Sign, "Minus", []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))
 
 ShirBody Sign.flip
   params : [(_1 "up": bool, Guaranteed)]

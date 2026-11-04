@@ -46,9 +46,10 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import REGISTRY, Category
 from sushi_lang.internals.errors.runtime import printf_conversions
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.integer_width import fits_integer_type, integer_range
-from sushi_lang.semantics.param_modes import Convention, declared_modes
+from sushi_lang.semantics.param_modes import Convention, declared_modes, receiver_mode
 from sushi_lang.semantics.shir.callee import BuiltinMethod
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
@@ -66,7 +67,7 @@ from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
 from sushi_lang.semantics.unit_symbols import function_symbol
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.passes.collect.functions import FunctionTable
+    from sushi_lang.semantics.passes.collect.functions import ExtensionTable, FunctionTable
 
 TYPED_LOCALS = "typed locals"
 TYPED_PLACES = "typed places"
@@ -119,18 +120,34 @@ DeclaredLookup: TypeAlias = Callable[[st.Direct], Optional[DeclaredParams]]
 @dataclass(slots=True)
 class SlirVerifier:
     """The pipeline entry of the verifier: the SLIR stage of a unit gives it each function
-    that the lowering finished. The declared parameters come from the function table, at
-    each call, so a generic instance that a later body declares is found too."""
+    that the lowering finished. The declared parameters come from the function table and
+    the extension table, at each call, so a generic instance that a later body declares is
+    found too."""
 
-    def verify(self, function: SlirFunction, *, funcs: FunctionTable, drops: frozenset[str],
+    def verify(self, function: SlirFunction, *, funcs: FunctionTable,
+               extensions: ExtensionTable, drops: frozenset[str],
                filename: Optional[str]) -> None:
-        verify_function(function, drops=drops, declared=partial(declared_params, funcs),
+        verify_function(function, drops=drops,
+                        declared=partial(declared_params, funcs, extensions),
                         filename=filename)
 
 
-def declared_params(funcs: FunctionTable, callee: st.Direct) -> Optional[DeclaredParams]:
-    """The declared parameters of the function that `callee` names: the function of its
-    name in the unit whose symbol is the symbol of the callee."""
+def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
+                    callee: st.Direct) -> Optional[DeclaredParams]:
+    """The declared parameters of the function that `callee` names. A free function is the
+    function of its name in the unit whose symbol is the symbol of the callee. A method or
+    a static has the written name `<type>.<method>`: it is the extension of that name whose
+    symbol is the symbol of the callee, and an instance method has its receiver first."""
+    _, dot, method = callee.name.rpartition(".")
+    if dot:
+        for by_name in extensions.by_type.values():
+            for record in by_name.get(method, ()):
+                if method_symbol(record.target_type, method, record.unit_name) == callee.symbol:
+                    receiver = () if record.is_static else (
+                        receiver_mode(record.self_mode).convention,)
+                    return DeclaredParams(receiver + tuple(
+                        mode.convention for mode in declared_modes(record.params)))
+        return None
     for unit, own in funcs.by_unit.items():
         sig = own.get(callee.name)
         if sig is not None and function_symbol(callee.name, unit) == callee.symbol:

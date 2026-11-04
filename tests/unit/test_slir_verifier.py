@@ -15,7 +15,10 @@ from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.internals.errors.registry import REGISTRY, Category, ErrorMessage, Severity
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.param_modes import Convention
-from sushi_lang.semantics.passes.collect.functions import FuncSig, FunctionTable, Param
+from sushi_lang.semantics.generics.name_mangling import method_symbol
+from sushi_lang.semantics.passes.collect.functions import (
+    ExtensionMethod, ExtensionTable, FuncSig, FunctionTable, Param,
+)
 from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
@@ -598,13 +601,36 @@ def test_the_operands_of_an_unknown_rvalue_class_are_an_internal_error():
 
 
 def test_the_declared_parameters_of_a_callee_are_read_from_the_function_table_at_each_call():
-    funcs = FunctionTable()
+    funcs, extensions = FunctionTable(), ExtensionTable()
     callee = st.Direct(emitted_symbol("late", "unit"), "late")
-    assert declared_params(funcs, callee) is None
+    assert declared_params(funcs, extensions, callee) is None
     funcs.declare("late", FuncSig("late", params=[Param("x", STRING, None, None, 0, is_nom=True)],
                                   unit_name="unit"))
-    assert declared_params(funcs, callee) == DeclaredParams((OWNED,))
-    assert declared_params(funcs, st.Direct(emitted_symbol("late", "other"), "late")) is None
+    assert declared_params(funcs, extensions, callee) == DeclaredParams((OWNED,))
+    assert declared_params(funcs, extensions,
+                           st.Direct(emitted_symbol("late", "other"), "late")) is None
+
+
+def test_the_declared_parameters_of_a_method_are_its_receiver_then_its_parameters():
+    """A method or a static is the extension of the written name whose symbol is the symbol
+    of the callee: each of two units' private methods of one name is its own row (C5)."""
+    funcs, extensions = FunctionTable(), ExtensionTable()
+    by = [Param("by", I32, None, None, 0)]
+    extensions.add_method(ExtensionMethod(PAIR, "bump", params=by, self_mode="poke",
+                                          unit_name="one"))
+    extensions.add_method(ExtensionMethod(PAIR, "bump", params=[], unit_name="two"))
+    extensions.add_method(ExtensionMethod(PAIR, "at", params=by, unit_name="one",
+                                          is_static=True))
+    assert declared_params(funcs, extensions, st.Direct(method_symbol(PAIR, "bump", "one"),
+                                                        "Pair.bump")) \
+        == DeclaredParams((Convention.INOUT, GUARANTEED))
+    assert declared_params(funcs, extensions, st.Direct(method_symbol(PAIR, "bump", "two"),
+                                                        "Pair.bump")) \
+        == DeclaredParams((GUARANTEED,))
+    assert declared_params(funcs, extensions, st.Direct(method_symbol(PAIR, "at", "one"),
+                                                        "Pair.at")) == DeclaredParams((GUARANTEED,))
+    assert declared_params(funcs, extensions, st.Direct(method_symbol(PAIR, "bump", "three"),
+                                                        "Pair.bump")) is None
 
 
 # -- the rule of a cast (ir.md 8.7) ---------------------------------------------------------

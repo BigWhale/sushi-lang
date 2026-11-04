@@ -33,19 +33,20 @@ that must make the flag. So a walk records what it finds (`_Learned`) and goes o
 body is lowered again with what the walks found, until a walk finds nothing new.
 
 The construct of a stop is the SHIR class of the node, or one of these names: `generic
-instance`, `conversion`, `perk method` and `method` for the body of a monomorphized generic
-instance, of a conversion, of a perk method and of an extension method; `borrowed view` for
-a `reject` row, `borrowed rebind` for a rebind of a borrowed parameter that owns, `borrowed
-try` for a `??` over an owning wrapper that the body only reads, `conversion` also for a
-`??` that calls a declared conversion, `library function` for a callee whose declaring unit
+instance`, `conversion` and `perk method` for the body of a monomorphized generic instance,
+of a conversion and of a perk method; `borrowed view` for a `reject` row, `borrowed rebind`
+for a rebind of a borrowed parameter that owns, `borrowed try` for a `??` over an owning
+wrapper that the body only reads, `conversion` also for a `??` that calls a declared
+conversion, `library function` for a function, a method or a static whose declaring unit
 the typecheck row does not name, `bloom` for a bloom argument, `aggregate constant` for a
 name of an array constant, the stops of `lower_aggregate.py` (`StructInit owning`,
-`TupleInit owning`, `owning temporary`, `owning field write`, `StructInit reference field`),
-and `ConstRef out of range` for a name of a constant whose value its type cannot hold. The
-symbol, the unit and the return type of the function are facts of its declaration (ir.md
-6.4). The unit is the declaring unit; a function that has none (a lifted lambda, the
-instance of a template of a binary library) goes into the module of the unit that holds its
-body.
+`TupleInit owning`, `owning temporary`, `owning field write`, `StructInit reference
+field`), and `ConstRef out of range` for a name of a constant whose value its type cannot
+hold. The symbol, the unit and the return type of the function are facts of its declaration
+(ir.md 6.4); the body of an extension method or of a static takes the symbol of the method
+(`extension_decl_symbol`), and its receiver is `_1`. The unit is the declaring unit; a
+function that has none (a lifted lambda, the instance of a template of a binary library)
+goes into the module of the unit that holds its body.
 """
 from __future__ import annotations
 
@@ -56,6 +57,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span, display_filename
 from sushi_lang.semantics.drop_set import drop_type_names
+from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.integer_width import fits_integer_type
 from sushi_lang.semantics.method_effects import receiver_convention
 from sushi_lang.semantics.ownership import Ownership
@@ -64,7 +66,7 @@ from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer, ShirBody, ShirLocal, TemplateCheck
-from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic
+from sushi_lang.semantics.shir.callee import Builtin, Callee, Free, Intrinsic, Method, Static
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import ResolvedCall, TypeckResults
@@ -85,7 +87,7 @@ from sushi_lang.semantics.slir.lower_control import LoopFrame
 from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
 from sushi_lang.semantics.slir.lower_values import CallValue, ShortCircuit, Value
 from sushi_lang.semantics.slir.verify import SlirVerifier
-from sushi_lang.semantics.typesys import BuiltinType, Type, owns_resource
+from sushi_lang.semantics.typesys import BuiltinType, Type, deref_type, owns_resource
 from sushi_lang.semantics.unit_symbols import declaring_unit, function_symbol
 
 if TYPE_CHECKING:
@@ -129,7 +131,8 @@ class SlirStage:
             self.stops.slir_stopped(stop)
             self.slir.record(body.fn_id, SlirStopped(name, str(stop.params["construct"])))
             return
-        self.verifier.verify(function, funcs=tables.funcs, drops=drops, filename=filename)
+        self.verifier.verify(function, funcs=tables.funcs, extensions=tables.extensions,
+                             drops=drops, filename=filename)
         self.slir.record(body.fn_id, function)
 
 
@@ -477,22 +480,40 @@ class Lowering:
         if isinstance(resolved.callee, Builtin) and ctl.lowers_as_assert(resolved.callee.method):
             return ctl.expect(self, node, resolved.callee)
         callee = self.callee(node, resolved)
-        receiver = ((self.operand(resolved.callee.recv),
-                     _receiver_convention(resolved.callee, node.loc)),) \
-            if isinstance(resolved.callee, Builtin) else ()
-        return CallValue(callee, receiver + tuple(self.argument(node, index, arg)
-                                                  for index, arg in enumerate(node.args)))
+        return CallValue(callee, self.receiver(resolved.callee, node.loc)
+                         + tuple(self.argument(node, index, arg)
+                                 for index, arg in enumerate(node.args)))
+
+    def receiver(self, callee: Callee, span: Span) -> tuple[tuple[p.Operand, Convention], ...]:
+        """The receiver of a method call, the first operand: a built-in method with the
+        answer of the receiver partition, an extension method with the convention of its
+        `self`. Any other callee has none."""
+        if isinstance(callee, Builtin):
+            return ((self.operand(callee.recv), _receiver_convention(callee, span)),)
+        if isinstance(callee, Method):
+            return ((self.operand(callee.recv), callee.receiver),)
+        return ()
 
     def callee(self, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee:
-        """A free function by its symbol and its source name; an intrinsic with the display
-        type of each argument (L7); a built-in method by its family and its name, with no
-        types: the receiver is the first operand of the call (`receiver_convention`)."""
+        """A free function by its symbol and its source name; an extension method and a
+        static by their symbol and their written name `<type>.<method>`; an intrinsic with
+        the display type of each argument (L7); a built-in method by its family and its
+        name, with no types: the receiver is the first operand of the call
+        (`receiver_convention`)."""
         callee = resolved.callee
         if isinstance(callee, Free):
             if resolved.unit is None:
                 raise StageStop(STAGE, "library function", node.loc)
             name = self.decls.name_of(callee.decl).rpartition(".")[2]
             return st.Direct(function_symbol(name, resolved.unit), name)
+        if isinstance(callee, (Method, Static)):
+            if resolved.unit is None:
+                raise StageStop(STAGE, "library function", node.loc)
+            owner = (callee.ty if isinstance(callee, Static)
+                     else deref_type(self.type_of(callee.recv)))
+            name = self.decls.name_of(callee.decl)
+            return st.Direct(method_symbol(owner, name.rpartition(".")[2], resolved.unit),
+                             name)
         if isinstance(callee, Intrinsic):
             return st.Builtin(callee, tuple(self.display_type(node.shir_id, index, node.loc)
                                             for index in range(len(node.args))))
