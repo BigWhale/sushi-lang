@@ -730,6 +730,7 @@ the value of a pattern (7.8, ruling R-AE). That covers more than types:
 | the scrutinee type of a `Match`, and its integer type for literal and range arms | the `Match`'s `shir_id` |
 | the element type of each target of a `Destructure` | the statement's `shir_id`, per target |
 | the value that an integer literal holds (8.5), and the value of the constant that a `ConstRef` names | the `Lit`'s or the `ConstRef`'s `shir_id` |
+| the symbol of the global of the `var` that a `StorageRef` names (`global_symbol`) | the `StorageRef`'s `shir_id` |
 
 A pattern value is not a row: a `Literal` or an `IntRange` has no row of its own (7.8).
 
@@ -769,7 +770,10 @@ and the integer type of a `Match` (`MatchFacts`). The value row holds a value of
 evaluator (`ConstantValue`, `semantics/const_eval.py`), one shape for the two keys: the value
 that an integer literal holds at its type, and the value of the constant that a `ConstRef`
 names (from the constant table, Q5). An initializer has no value row: no stage reads one,
-because the backend makes the global of a constant from the evaluator (8.2).
+because the backend makes the global of a constant from the evaluator (8.2). The global row
+of a `StorageRef` holds the symbol of the global of its `var`, from the one derivation of a
+global symbol (`global_symbol`, `semantics/unit_symbols.py`): SLIR lowering names the
+`Global` place with it, and the backend names the global with it.
 
 The completeness check is `check_answers` in `semantics/shir/typeck_check.py`. It walks the
 body through the one walk of the SHIR tree (`semantics/shir/walk.py`). A missing answer is
@@ -2238,7 +2242,7 @@ lowering writes the answer as the convention of the first operand.
 
 ```
 Place    = Local(id: LocalId)
-         | Global(symbol: str)                # a unit-level `var`
+         | Global(symbol: str, ty: Type)      # a unit-level `var`, and its type
          | Field(Place, index: int)
          | Index(Place, Operand)              # an element of a `T[N]` or a `T[]`; a byte
                                               # (`u8`) of a `string`
@@ -2264,6 +2268,9 @@ moved. An element of an owning type is Tier B.
 `Global` is a place, never a value to move out of: a `var` is never moved out of, and
 `borrow` refuses a consuming use of one that owns a resource (`unit-storage.md`). The
 declaring unit's module defines the global, and every other module declares it external.
+A `Global` carries the declared type of its `var`, because no local of the function holds
+it: a projection of a `Global` is typed from it, as a projection of a local is typed from
+the type of the local.
 
 ### 8.5 Constants
 
@@ -2844,8 +2851,7 @@ Runs after lowering, before the backend. It checks:
   (8.5)
 - every `Trap` code is a registered RExxxx, with one operand for each printf conversion of
   its registry text, of the type that the conversion takes (8.8): `%d` an `i32`, `%.*s` a
-  `string`. A conversion of another kind, an operand whose type SLIR does not hold (a
-  `Global`), and a `Move` operand are refused
+  `string`. A conversion of another kind and a `Move` operand are refused
 - every statement and terminator carries a `Span` (G9)
 
 **As built.** The verifier is `semantics/slir/verify.py`. The SLIR stage gives it each
@@ -2874,8 +2880,8 @@ another `Direct` callee (an extern, a conversion, a function of a library) adds 
 with `var_arg` for a variadic extern. The comparison of the declared prefix alone is in the
 code already, for that day. The verifier does not check a shape that no lowering makes yet,
 and it refuses such a shape with the internal error CE0000 (the growth rule): a
-`BeginBorrow` or an `EndBorrow`, a projection of a `Global` (a `Global` has no type in
-SLIR), and a `Drop` or a `DropIfSet` of a place that is no local. The negative case of each
+`BeginBorrow` or an `EndBorrow`, and a `Drop` or a `DropIfSet` of a place that is no local.
+A projection of a `Global` is checked against the type that the `Global` carries. The negative case of each
 rule is a pytest test over a hand-built function (`tests/unit/test_slir_verifier.py`),
 because a correct lowering makes none.
 
