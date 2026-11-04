@@ -175,10 +175,15 @@ def check_storage_ref(validator: TypeValidator, node: e.StorageRef,
 
 def _record_constant_value(validator: TypeValidator, node: e.ConstRef,
                            record: Union[ConstSig, StdlibFunction]) -> None:
-    """The value row of `node`, or the stop at a constant with no value."""
+    """The value row of `node`. A constant with no value after an error of the program
+    (its initializer has one) gets no row: the walk goes on, and the body holds that error
+    (`refused_before`). With no error, a constant with no value stops."""
     value = validator.constant_value(record)
     if value is None:
-        visit.stop_with_no_value(node)
+        if not validator.errors_offered():
+            visit.stop_with_no_value(node)
+        validator.refused_before = True
+        return
     validator.body_answers().record_value(node.shir_id, value)
 
 
