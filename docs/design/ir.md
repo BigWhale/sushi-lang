@@ -2424,8 +2424,10 @@ through the pointer: the callee writes the place of the caller.
 
 **The receiver of a built-in method** (ruling R-V). The receiver is the first operand of the
 call (8.6). Its convention comes from ONE partition of the families of
-`METHOD_TYPE_REGISTRY`, in `semantics/method_effects.py`. Each family is in exactly one of
-four sets (gate: `tests/unit/test_method_mutation_is_one_fact.py`):
+`METHOD_TYPE_REGISTRY`, in `semantics/method_effects.py`. Each family that a `Builtin` call
+can name is in exactly one of four sets (gate:
+`tests/unit/test_method_mutation_is_one_fact.py`); `derived_clone` is not such a family
+(see below):
 
 - **Only reads** (`RECEIVER_READ_FAMILIES`: `primitive`, `string`). No method of the family
   changes or consumes its receiver. The receiver is `Guaranteed`.
@@ -2452,8 +2454,9 @@ four sets (gate: `tests/unit/test_method_mutation_is_one_fact.py`):
   shrink: the gate holds a pinned copy. A call of a method of such a family stops in
   `typecheck` or in `borrow`.
 
-The `derived_clone` family is in no set and has no row of `METHOD_FAMILIES`: `x.clone()`
-is never a `Builtin` call in SLIR, because it lowers to the rvalue `Clone` (8.7). One deep
+The `derived_clone` family is in no set of the partition (it leaves
+`NO_RECEIVER_RULE_FAMILIES`) and has no row of `METHOD_FAMILIES`: `x.clone()` is never a
+`Builtin` call in SLIR, because it lowers to the rvalue `Clone` (8.7). One deep
 copy has one seam. The refusal of `.clone()` on a type that declares a resource stays in
 `typecheck`.
 
