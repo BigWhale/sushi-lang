@@ -289,6 +289,11 @@ _add(ErrorMessage("CE0091", Severity.ERROR,
 # CE2095 from the finite-types pass, which stops the analysis before the derive pass runs. The
 # number is not reused.
 
+# CE0132 ("no write address for a fixed-array receiver of kind {node}") is retired. Only the
+# AST argument half of the array method family raised it. The SLIR emitter gives that family
+# the address of the receiver place, so no receiver is left with no address. The number is
+# not reused.
+
 _add(ErrorMessage("CE0137", Severity.ERROR,
     "lifted lambda name '{name}' is already registered",
     Category.INTERNAL,
@@ -358,7 +363,6 @@ _add(ErrorMessage("CE0094", Severity.ERROR,
 # number is not reused.
 
 
-# Expression Type Validation (CE0099-CE0100)
 # Struct errors
 _add(ErrorMessage("CE0004", Severity.ERROR,
     "duplicate struct '{name}'",

@@ -9,6 +9,10 @@ from sushi_lang.internals.errors.registry import (
 )
 
 
+# CE0100 ("unsupported expression type: {expr}") is retired. Only the AST templates of an
+# array literal, an index, a slice and `from` raised it; the SLIR emitter replaces them, and
+# a construct that it does not handle stops with CE0155. The number is not reused.
+
 # Function/header errors
 _add(ErrorMessage("CE0101", Severity.ERROR,
     "duplicate function '{name}'",
