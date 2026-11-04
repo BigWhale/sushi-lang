@@ -33,7 +33,8 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import CONTAINER_INSERT_METHODS, effect_of
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.places import Step, walk_place
-from sushi_lang.semantics.shir.exprs import ConstRef
+from sushi_lang.semantics.const_eval import is_integer_constant
+from sushi_lang.semantics.shir.exprs import ConstRef, IntConst, Lit, Unary
 from sushi_lang.semantics.typesys import (ArrayType, BuiltinType, DynamicArrayType,
                                           Type, deref_type)
 from .utils import validate_constant_array_index
@@ -103,44 +104,59 @@ REPEAT_COUNT = "a repeat count"
 RANGE_BOUND = "a range bound"
 
 
-def reject_non_i32(validator: 'TypeValidator', expr: Expr, got: Optional[Type], *,
+def check_i32_operand(validator: 'TypeValidator', node: 'ShirExpr') -> Optional[Type]:
+    """Check the value of an i32 position (an index, a count, a range bound) and answer its
+    type. A bare literal has its default, which is i32 for a number. A bare byte literal
+    (`a'x'`), also under a negation, takes i32 from the position. Any other value gets no
+    type from the position, so a literal that an i32 cannot hold is CE2070."""
+    from sushi_lang.semantics.passes.types import visit
+    expected = BuiltinType.I32 if _is_byte_literal(node) else None
+    return visit.check_expr(validator, node, expected)
+
+
+def _is_byte_literal(node: 'ShirExpr') -> bool:
+    while isinstance(node, Unary) and node.op in ("neg", "~"):
+        node = node.operand
+    return (isinstance(node, Lit) and isinstance(node.value, IntConst)
+            and node.value.byte_spelling is not None)
+
+
+def reject_non_i32(validator: 'TypeValidator', node: 'ShirExpr', got: Optional[Type], *,
                    position: Optional[str] = None, argument: Optional[int] = None) -> bool:
     """The one rule for an index, a count and a range bound: the value is an i32 (#870).
 
-    `got` is the type the caller's walk of `expr` answered. A bare literal is already an
-    i32, because that is its default when no position gives it a type. Any other type is
-    refused, and there is no implicit widening: the backend used to zero-extend a narrow
-    value, so `-1 as i8` counted 255. A method argument reads CE2006 at its `argument`
-    position; every other position reads CE2121, which names the `position` the caller
-    gives. Answers whether the value was refused.
-
-    A bare byte literal (`a'x'`) is a bare literal too: the position gives it i32.
+    `got` is the type of `node` (`check_i32_operand`). Any type other than i32 is refused,
+    and there is no implicit widening: the backend used to zero-extend a narrow value, so
+    `-1 as i8` counted 255. A method argument reads CE2006 at its `argument` position;
+    every other position reads CE2121, which names the `position` the caller gives.
+    Answers whether the value was refused.
     """
     if got is None or got == BuiltinType.I32:
         return False
-    from .propagation import (is_bare_numeric_literal, is_byte_literal,
-                              propagate_types_to_value, unwrap_type_preserving_unary)
-    literal = unwrap_type_preserving_unary(expr)
-    if is_byte_literal(literal) and is_bare_numeric_literal(literal):
-        propagate_types_to_value(validator, expr, BuiltinType.I32)
-        return False
-    emit_non_i32(validator, expr.loc, got, position=position, argument=argument)
-    return True
-
-
-def emit_non_i32(validator: 'TypeValidator', loc: Optional[Span], got: Type, *,
-                 position: Optional[str] = None, argument: Optional[int] = None) -> None:
-    """The diagnostic of a value of the type `got` in an i32 position: CE2006 at a method
-    argument, else CE2121. The AST rule and the typecheck pass over SHIR both emit it."""
     if argument is None:
-        report = er.emit_with(validator.reporter, er.ERR.CE2121, loc,
+        report = er.emit_with(validator.reporter, er.ERR.CE2121, node.loc,
                               position=position, got=display_type(got))
     else:
-        report = er.emit_with(validator.reporter, er.ERR.CE2006, loc, index=argument,
+        report = er.emit_with(validator.reporter, er.ERR.CE2006, node.loc, index=argument,
                               expected=display_type(BuiltinType.I32), got=display_type(got))
     if is_numeric_type(got):
         report = report.help("convert it with 'as i32'")
     report.emit()
+    return True
+
+
+def reject_index_out_of_range(validator: 'TypeValidator', index: 'ShirExpr',
+                              size: int) -> None:
+    """CE2056 for an index that the compiler can read and that is negative, CE2012 for one
+    past the end of a fixed array of `size` elements."""
+    read = validator.body_folder().scalar(index, BuiltinType.I32)
+    if read is None or not is_integer_constant(read):
+        return
+    value = int(read.value)
+    if value < 0:
+        er.emit(validator.reporter, er.ERR.CE2056, index.loc, index=value)
+    elif value >= size:
+        er.emit(validator.reporter, er.ERR.CE2012, index.loc, index=value, size=size)
 
 
 # --------------------------------------------------------------------- argument rules
@@ -594,8 +610,8 @@ def reject_write_to_constant(target: Optional[Expr], what: str, loc: Optional[Sp
                              validator: Optional['TypeValidator']) -> bool:
     """Reject a write that would reach a global constant (CE2096).
 
-    Two AST writers ask here: an in-place method and an indexed assignment. A field write
-    over SHIR asks `reject_write_into_constant`. The store would land in .rodata, which is
+    The AST writer of an in-place method asks here. A field write and an element write
+    over SHIR ask `reject_write_into_constant`. The store would land in .rodata, which is
     undefined behaviour rather than a diagnostic. A `poke self` method call does NOT come
     here: it takes an ADDRESS rather than storing, and CE2400 already says a constant
     has no frame slot to borrow.

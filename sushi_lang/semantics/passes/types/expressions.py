@@ -1,18 +1,11 @@
-"""Expression validation for type validation.
-
-Port templates: `validate_range_expression` call `TypeValidator.validate_expression`,
-and that API is deleted. No pass reaches them today. Group A7 (counted ranges) ports
-them to SHIR inputs before a SHIR pass calls them.
-"""
+"""Expression validation for type validation."""
 from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple, Optional, Tuple
 
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics import array_runs
 from sushi_lang.semantics.typesys import (
     BuiltinType, ArrayType, DynamicArrayType, EnumType, ForeignPtrType, StructType)
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.ast import ArrayLiteral, IndexAccess, RangeExpr
 from sushi_lang.semantics.conversions import find_conversion
 from sushi_lang.semantics.operators import EQUALITY_OPS
 from sushi_lang.semantics.type_predicates import (
@@ -22,11 +15,8 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir.exprs import IntConst, Lit, Unary
 from sushi_lang.semantics.shir.typeck import NoConversion, TryFacts
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
-from .arrays import (
-    ARRAY_INDEX, RANGE_BOUND, REPEAT_COUNT, STRING_INDEX, reject_non_i32)
 from .compatibility import is_valid_cast
 from .resolution import resolve_variable_type
-from .utils import validate_constant_array_index
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
@@ -36,111 +26,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.shir import exprs as e
     from sushi_lang.semantics.shir.exprs import Binary, ShirExpr
     from sushi_lang.semantics.typesys import Type
-
-
-def validate_array_literal(validator: 'TypeValidator', expr: ArrayLiteral) -> None:
-    """Validate array literal - all elements must have same type."""
-    if not expr.elements:
-        return
-
-    for element in expr.elements:
-        if isinstance(element.value, RangeExpr):
-            validate_range_expression(validator, element.value)
-        else:
-            validator.validate_expression(element.value)
-        if element.count is not None:
-            reject_non_i32(validator, element.count,
-                           validator.validate_expression(element.count),
-                           position=REPEAT_COUNT)
-
-    # CE2017 for a repeat count that is not a count, CE2019 for a range that yields nothing,
-    # and CE2020 for a range carrying a count. A `const` never arrives here with one, because
-    # its evaluator reads the same runs first and `validate_constant` returns on the error --
-    # so the two speakers cannot both fire for one literal. The result is discarded: this
-    # call is here to SPEAK, and every caller that needs the runs reads them itself.
-    array_runs.read_runs(
-        expr.elements,
-        array_runs.const_int_reader(validator.constant_evaluator()),
-        validator.reporter)
-
-    # Rows that disagree are measured against the row type their position stamped: a
-    # short row is CE2011 at that row, and not a CE2013 against the first row.
-    from .compatibility import reject_array_size_mismatch, short_rows
-    short = short_rows(validator, expr)
-    for row in short:
-        reject_array_size_mismatch(validator, row.resolved_type, row, row.loc)
-    if short:
-        return
-
-    # Check type consistency of all elements (CE2013). A range element compares as the i32
-    # it puts in a slot, and not as the Iterator@(i32) it types as (Ruling 4, #478).
-    from sushi_lang.semantics.passes.types.inference import infer_array_element_type
-
-    first_element_type = infer_array_element_type(validator, expr.elements[0].value)
-    if first_element_type is not None:
-        for element in expr.elements[1:]:
-            element_type = infer_array_element_type(validator, element.value)
-            if element_type is not None and element_type != first_element_type:
-                er.emit(validator.reporter, er.ERR.CE2013, element.value.loc,
-                       expected=display_type(first_element_type), got=display_type(element_type))
-
-
-def is_indexable(ty) -> bool:
-    """An array, or a string: `s[i]` reads its byte at offset i in place (#1091)."""
-    return isinstance(ty, (ArrayType, DynamicArrayType)) or ty == BuiltinType.STRING
-
-
-def validate_index_access(validator: 'TypeValidator', expr: IndexAccess) -> None:
-    """Validate array indexing - array must be array type, index must be int."""
-    validator.validate_expression(expr.array)
-    array_type = validator.infer_expression_type(expr.array)
-
-    if expr.is_slice:
-        validate_slice(validator, expr, array_type)
-        return
-
-    reject_non_i32(validator, expr.index, validator.validate_expression(expr.index),
-                   position=STRING_INDEX if array_type == BuiltinType.STRING else ARRAY_INDEX)
-
-    if array_type is not None and not is_indexable(array_type):
-        er.emit(validator.reporter, er.ERR.CE2114, expr.array.loc,
-                type=display_type(array_type))
-
-    if isinstance(array_type, ArrayType):
-        validate_constant_array_index(validator, expr.index, array_type.size)
-
-
-def validate_slice(validator: 'TypeValidator', expr: IndexAccess,
-                   array_type: Optional['Type']) -> None:
-    """`data[a..b]`: a borrowed view of a part of a `T[]` or a `T[N]` (#1226, S1-S3, S6).
-
-    The range is the index position of a range: its bounds are i32 and readable bounds
-    must go up (CE2125), as in a `foreach`. A reversed range has no slice, and a string
-    has no slice (S6), so the range is in no position of its own there (CE2122).
-    """
-    rng = expr.index
-    if not isinstance(rng, RangeExpr):
-        return
-    if rng.reverse:
-        _refuse_range_in_index(validator, rng, "a slice takes its range in order: write "
-                               "`data[a..b]`, and walk the view with an index that "
-                               "counts down")
-        return
-    if array_type == BuiltinType.STRING:
-        _refuse_range_in_index(validator, rng, "a string has no slice: copy the part with "
-                               "`s.s(a, b)`, or index one byte with `s[i]`")
-        return
-    validate_range_value(validator, rng)
-    if array_type is not None and not isinstance(array_type, (ArrayType, DynamicArrayType)):
-        er.emit(validator.reporter, er.ERR.CE2114, expr.array.loc,
-                type=display_type(array_type))
-
-
-def _refuse_range_in_index(validator: 'TypeValidator', expr: RangeExpr, help_text: str) -> None:
-    """CE2122 for a range in an index that cannot be a slice. The bounds are still checked."""
-    er.emit_with(validator.reporter, er.ERR.CE2122, expr.loc).help(help_text).emit()
-    validator.refused_ranges.add(id(expr))
-    validate_range_expression(validator, expr)
 
 
 def check_cast(validator: 'TypeValidator', node: 'e.Cast',
@@ -215,35 +100,6 @@ def _reject_self_conversion(validator: 'TypeValidator', node: 'e.Cast',
     diag.help("build the target value directly, for example with one of its "
               "variants").emit()
     return True
-
-
-def validate_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
-    """A range in a position that expects `Iterator@(i32)`: an owned iterator (#1259).
-
-    The bounds are i32, and readable bounds must go up, as in a `foreach`.
-    """
-    from sushi_lang.semantics.array_runs import const_int_reader
-    from sushi_lang.semantics.ranges import read_range, reject_a_range_that_goes_down
-    validate_range_expression(validator, expr)
-    reject_a_range_that_goes_down(
-        read_range(expr, const_int_reader(validator.constant_evaluator()),
-                   validator.reporter),
-        validator.reporter)
-
-
-def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
-    """Validate a range expression: each bound is an i32 (#870).
-
-    A bound that is not a number at all is the range's own refusal (CE2072). A number of
-    any other type is refused by the one i32-position rule.
-    """
-    walked = [(bound, validator.validate_expression(bound)) for bound in (expr.start, expr.end)]
-    for bound, bound_type in walked:
-        if bound_type is not None and not is_numeric_type(bound_type):
-            er.emit(validator.reporter, er.ERR.CE2072, bound.loc,
-                   got=display_type(bound_type), expected="integer type")
-            continue
-        reject_non_i32(validator, bound, bound_type, position=RANGE_BOUND)
 
 
 class _Arms(NamedTuple):

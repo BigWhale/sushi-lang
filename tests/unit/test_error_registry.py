@@ -173,7 +173,6 @@ def test_expect_error_code_directives_are_registered():
 # removes it here. P2.13 deleted the AST body emitter, which alone emitted the three
 # runtime traps; each one comes back with the SLIR Trap of its construct group.
 UNREFERENCED: set[str] = {
-    "CE2111",                                 # Tier A: new() and from([])
     "CE2094",                                 # Tier C: closures
     "RE2025",                                 # Tier D (D5): a null foreign return
 }

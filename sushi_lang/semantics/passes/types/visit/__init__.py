@@ -17,8 +17,9 @@ type yet is `stop_at`, which stops the walk of the body with the stop code CE015
 destructure, `expressions.py` the expression arms of the leaves and of a struct
 construction, `fields.py` the arms of a field read and of a tuple, `operators.py` the arms
 of the operators and the check of a condition, `calls.py` the arms of a call, an
-interpolated string and a borrow, `results.py` the arm of an enum construction, and
-`ranges.py` the arms of a range. The pattern arms are in `passes/types/matching.py`. The
+interpolated string and a borrow, `results.py` the arm of an enum construction,
+`ranges.py` the arms of a range, and `arrays.py` the arms of an array construction, an
+index and a slice. The pattern arms are in `passes/types/matching.py`. The
 arms of `??` and of `as` are `check_try` and `check_cast` of
 `passes/types/expressions.py`, because the callers of the conversion lookup are in that
 module. The AST inference visitor of `inference.py` is not part of this walk: it is the
@@ -29,6 +30,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, NoReturn, Optional
 
+from sushi_lang.semantics.passes.types.visit import arrays as ar
 from sushi_lang.semantics.passes.types.visit import calls as ca
 from sushi_lang.semantics.passes.types.visit import destructure as ds
 from sushi_lang.semantics.passes.types.visit import expressions as ex
@@ -135,8 +137,8 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.StorageRef: stop_at,
     e.GlobalRef: stop_at,
     e.Field: fd.check_field,
-    e.Index: stop_at,
-    e.Slice: stop_at,
+    e.Index: ar.check_index,
+    e.Slice: ar.check_slice,
     e.Call: ca.check_call,
     e.Unary: op.check_unary,
     e.Binary: op.check_binary,
@@ -148,7 +150,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.StructInit: ex.check_struct_init,
     e.EnumInit: rs.check_enum_init,
     e.TupleInit: fd.check_tuple_init,
-    e.ArrayInit: stop_at,
+    e.ArrayInit: ar.check_array_init,
     e.Range: rg.check_range,
     e.Interp: ca.check_interp,
 }

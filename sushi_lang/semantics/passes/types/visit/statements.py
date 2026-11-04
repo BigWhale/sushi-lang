@@ -9,9 +9,12 @@ An `Assign` of a local is a `let` (`is_init`) or a rebind; the value is checked 
 of the local. A `let` writes the type of its local, and a `let` that writes none is CE2007,
 except for a hidden local, which takes the type of its value. A `let` whose value does not
 fit keeps its written type, and the pass records the local as refused: a method call on it
-reports nothing more. An `Assign` of a `Field` is a field write: the value is checked at the
-type of the field, and a write into a field of a constant is CE2096. An `Assign` of any
-other place, and a reference `let`, are not typed yet. An expression statement drops its
+reports nothing more. A fixed literal of another size than the declared `T[N]` of a `let`
+or a constant is CE2011. An `Assign` of a `Field` is a field write, and an `Assign` of an
+`Index` an element write: the value is checked at the type of the field or the element. A
+write into a field or an element of a constant is CE2096, and a write into a byte of a
+string is CE2113. An `Assign` of any other place, and a reference `let`, are not typed
+yet. An expression statement drops its
 value, and a dropped `Result` of a value is CW2001. A `Return` of a body with a channel
 spells `Result.Ok(...)` or `Result.Err(...)` (CE2030), checked at the `Result` of the
 channel (CE2031, CE2039). A `Return` of a bare body checks its value at the declared return
@@ -41,6 +44,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arrays import reject_write_into_constant
@@ -56,6 +60,7 @@ from sushi_lang.semantics.passes.types.result_validation import (
 from sushi_lang.semantics.passes.types.statements import reject_unspelled_result
 from sushi_lang.semantics.passes.types.utils import (
     names_no_type, resolve_declared_type, validate_type_name)
+from sushi_lang.semantics.passes.types.visit.arrays import reject_wrong_size
 from sushi_lang.semantics.passes.types.visit.operators import check_condition
 from sushi_lang.semantics.passes.types.visit.ranges import check_range_iterable
 from sushi_lang.semantics.shir import exprs as e
@@ -65,7 +70,8 @@ from sushi_lang.semantics.shir.loop_kind import CountedRange, While
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.typeck import MatchFacts
 from sushi_lang.semantics.type_predicates import is_instance_of
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, ReferenceType, Type, deref_type
+from sushi_lang.semantics.typesys import (
+    ArrayType, BuiltinType, EnumType, ReferenceType, Type, deref_type)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -86,22 +92,36 @@ def check_block(validator: TypeValidator, block: ShirBlock) -> None:
 
 
 def check_assign(validator: TypeValidator, node: s.Assign) -> None:
-    """A `let`, a rebind of a local, or a field write. A write into a field of a constant
-    is CE2096, and its value is then checked at no type."""
+    """A `let`, a rebind of a local, a field write or an element write. A write into a
+    constant is CE2096, and a write into a byte of a string CE2113; the value is then
+    checked at no type."""
     target = node.target
     if node.is_init and isinstance(target, e.LocalRef):
         _check_let(validator, node, target)
         return
-    if node.is_init or not isinstance(target, (e.LocalRef, e.Field)):
+    if node.is_init or not isinstance(target, (e.LocalRef, e.Field, e.Index)):
         visit.stop_at(validator, node)
     ty = visit.check_expr(validator, target)
-    if isinstance(target, e.Field) and reject_write_into_constant(
-            validator, target, "assign to a field of", node.loc):
+    if reject_unwritable_place(validator, target, node.loc):
         visit.check_expr(validator, node.value)
         return
     got = visit.check_expr(validator, node.value, ty)
     if ty is not None:
         reject_mismatch(validator, got, ty, node.loc, None)
+
+
+def reject_unwritable_place(validator: TypeValidator, place: e.ShirExpr, loc: Span) -> bool:
+    """CE2113 for a byte of a string (at the place), and CE2096 for a field or an element
+    of a constant (at `loc`). The caller checks the place first. Answers whether a
+    diagnostic refused it."""
+    if isinstance(place, e.Index):
+        base = validator.body_answers().type_of(place.base.shir_id)
+        if deref_type(base) == BuiltinType.STRING:
+            er.emit(validator.reporter, er.ERR.CE2113, place.loc)
+            return True
+        return reject_write_into_constant(validator, place, "assign to an element of", loc)
+    return isinstance(place, e.Field) and reject_write_into_constant(
+        validator, place, "assign to a field of", loc)
 
 
 def _check_let(validator: TypeValidator, node: s.Assign, target: e.LocalRef) -> None:
@@ -131,8 +151,18 @@ def _check_let(validator: TypeValidator, node: s.Assign, target: e.LocalRef) -> 
     if refused:
         return
     if (reject_unhandled_result(validator, got, ty, node.value.loc)
+            or _reject_literal_size(validator, node.value, ty, node.value.loc)
             or reject_mismatch(validator, got, ty, node.value.loc, local.declared_loc)):
         validator.refused_locals.add(local.id)
+
+
+def _reject_literal_size(validator: TypeValidator, value: e.ShirExpr, declared: Type,
+                         span: Span) -> bool:
+    """CE2011 at `span` for a fixed literal that a `let` or a constant declares with
+    another size."""
+    return (isinstance(value, e.ArrayInit) and isinstance(value.kind, e.Fixed)
+            and isinstance(declared, ArrayType)
+            and reject_wrong_size(validator, value, declared, span))
 
 
 def check_expr_stmt(validator: TypeValidator, node: s.ExprStmt) -> None:
@@ -184,7 +214,9 @@ def _check_initializer(validator: TypeValidator, node: s.Return) -> None:
                                 detail="an initializer body with no declaration")
     const = facts.decl
     got = visit.check_expr(validator, node.value, const.ty)
-    if reject_mismatch(validator, got, const.ty, assignment_span(const), const.type_span):
+    span = assignment_span(const)
+    if (_reject_literal_size(validator, node.value, const.ty, span)
+            or reject_mismatch(validator, got, const.ty, span, const.type_span)):
         return
     if got is None or facts.empty:
         return

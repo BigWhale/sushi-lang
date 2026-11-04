@@ -71,17 +71,13 @@ def infer_index_access_type(validator: 'TypeValidator', expr: IndexAccess) -> Op
         if (not isinstance(array_type, (ArrayType, DynamicArrayType))
                 or getattr(expr.index, "reverse", False)):
             return None
-        slice_type = DynamicArrayType(base_type=array_type.base_type)
-        expr.inferred_element_type = slice_type
-        return slice_type
+        return DynamicArrayType(base_type=array_type.base_type)
 
     if isinstance(array_type, (ArrayType, DynamicArrayType)):
-        expr.inferred_element_type = array_type.base_type
         return array_type.base_type
 
     # A byte read on a string (#1091).
     if array_type == BuiltinType.STRING:
-        expr.inferred_element_type = BuiltinType.U8
         expr.reads_a_string_byte = True
         return BuiltinType.U8
 

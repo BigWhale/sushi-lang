@@ -82,7 +82,7 @@ EXPRESSION_PARTS: dict[str, tuple[str, ...]] = {
     "BuiltinFn": ("name",),
     "Arg": ("value", "marker", "bloom", "marker_loc"),
     "Fixed": (),
-    "Dynamic": (),
+    "Dynamic": ("new",),
     "Single": ("value",),
     "Repeat": ("value", "count"),
     "RangeRun": ("range",),

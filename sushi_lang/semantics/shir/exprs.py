@@ -298,7 +298,8 @@ class Fixed:
 
 @dataclass(frozen=True, slots=True)
 class Dynamic:
-    """`from([...])` or `new()`: a dynamic array."""
+    """`from([...])` or `new()`: a dynamic array. `new` is true for `new()`."""
+    new: bool = False
 
 
 ArrayKind: TypeAlias = Fixed | Dynamic

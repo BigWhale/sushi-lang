@@ -2,7 +2,7 @@
 
 Each target takes its element, and the path of the target keys its element type row: the
 index of the target, then the index in each `Nested` level. A bare binder takes the type
-of its element. A `Place` of a place that is not a local or a field stops with
+of its element. A `Place` of a place that is not a local, a field or an element stops with
 `typecheck, Destructure`. The tests run the arm over SHIR built by hand, with a stand-in
 for the pass; they do not run the compiler.
 """
@@ -58,13 +58,9 @@ def test_each_target_takes_its_element_by_its_path() -> None:
     assert answers.local_type(LocalId(2)) == BuiltinType.BOOL
 
 
-@pytest.mark.parametrize("place", [
-    e.Index(ShirId(3), SPAN, e.LocalRef(ShirId(4), SPAN, LocalId(0)),
-            e.Lit(ShirId(5), SPAN, e.IntConst(0)), False),
-    e.StorageRef(ShirId(3), SPAN, DeclId(0)),
-])
-def test_a_place_that_is_not_typed_yet_stops(place: e.ShirExpr) -> None:
+def test_a_place_that_is_not_typed_yet_stops() -> None:
     validator = _validator(OUTER)
+    place = e.StorageRef(ShirId(3), SPAN, DeclId(0))
     node = s.Destructure(ShirId(2), SPAN, [s.Place(place), LocalId(1)], _value())
     with pytest.raises(StageStop) as caught:
         visit.check(validator, node)

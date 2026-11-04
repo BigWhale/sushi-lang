@@ -882,9 +882,6 @@ class ArrayLiteral(Node):
 class IndexAccess(Node):
     array: "Expr"
     index: "Expr"
-    # The type the access yields, inferred by the typecheck pass: the element, or the
-    # `T[]` of a slice.
-    inferred_element_type: Optional["Type"] = None
     reads_a_string_byte: bool = False  # `s[i]` on a string (#1091), stamped by the typecheck pass
     # In the body of a `dont_panic` function, and not in a lambda there: the backend
     # emits no bounds check (docs/design/dont-panic.md). Stamped by the AST builder.

@@ -4,8 +4,9 @@
 First each target gives what it wants of its element: a binder its written type, which is
 checked as the type of a `let` is checked, a `Place` the type of its place, and a bare
 binder and a `_` no type. A `Nested` target wants what its targets want. A place is a
-local or a field, checked as the target of a rebind or of a field write: a field of a
-constant is CE2096 at the place, and any other place is not typed yet. Then the value is
+local, a field or an element, checked as the target of a rebind, of a field write or of an
+element write: a field or an element of a constant is CE2096 at the place, a byte of a
+string is CE2113, and any other place is not typed yet. Then the value is
 checked at the wants, so a literal part takes the type of its binder or of its place
 (`fields.check_tuple_at`). A `Result` value is CE2505.
 
@@ -26,8 +27,8 @@ from sushi_lang.semantics.generics.results import is_result_enum
 from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.passes.types import visit
-from sushi_lang.semantics.passes.types.arrays import reject_write_into_constant
 from sushi_lang.semantics.passes.types.compatibility import reject_mismatch
+from sushi_lang.semantics.passes.types.visit.statements import reject_unwritable_place
 from sushi_lang.semantics.passes.types.resolution import resolve_variable_type
 from sushi_lang.semantics.passes.types.utils import validate_type_name
 from sushi_lang.semantics.passes.types.visit.fields import Want, check_tuple_at
@@ -77,11 +78,10 @@ def _written_type(validator: TypeValidator, binder: LocalId) -> Optional[Type]:
 def _place_type(validator: TypeValidator, node: s.Destructure,
                 place: e.ShirExpr) -> Optional[Type]:
     """The type of a place with no `peek` or `poke`; None after an error of the place."""
-    if not isinstance(place, (e.LocalRef, e.Field)):
+    if not isinstance(place, (e.LocalRef, e.Field, e.Index)):
         visit.stop_at(validator, node)
     ty = visit.check_expr(validator, place)
-    if isinstance(place, e.Field) and reject_write_into_constant(
-            validator, place, "assign to a field of", place.loc):
+    if reject_unwritable_place(validator, place, place.loc):
         return None
     return None if ty is None else deref_type(ty)
 

@@ -8,15 +8,14 @@ them.
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
-from sushi_lang.internals.report import Reporter, Span
-from sushi_lang.semantics import array_runs
+from sushi_lang.internals.report import Span
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.typesys import Type, UnknownType, ArrayType, DynamicArrayType, ReferenceType, BorrowMode, IteratorType
-from sushi_lang.semantics.ast import Expr, ArrayLiteral, DynamicArrayNew, DynamicArrayFrom
+from sushi_lang.semantics.ast import Expr, DynamicArrayNew, DynamicArrayFrom
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
-from .inference import infer_array_element_type, infer_dynamic_array_from_type
+from .inference import infer_dynamic_array_from_type
 
 if TYPE_CHECKING:
     from . import TypeValidator
@@ -42,15 +41,6 @@ def reject_incompatible_assignment(validator: 'TypeValidator', declared_type: Op
     """
     if declared_type is None:
         return False
-
-    if isinstance(declared_type, ArrayType) and isinstance(value_expr, ArrayLiteral):
-        if reject_array_size_mismatch(validator, declared_type, value_expr, value_span):
-            return True
-
-    # CE2011 spoke at a short row (`validate_array_literal`); a CE2002 would pile on.
-    literal = value_expr.elements if isinstance(value_expr, DynamicArrayFrom) else value_expr
-    if short_rows(validator, literal):
-        return True
 
     if isinstance(declared_type, DynamicArrayType) and isinstance(value_expr, DynamicArrayNew):
         return False
@@ -90,82 +80,6 @@ def reject_mismatch(validator: 'TypeValidator', got: Optional[Type], expected: T
     return True
 
 
-def short_rows(validator: 'TypeValidator', literal: Expr) -> list[ArrayLiteral]:
-    """The rows of a literal whose rows DISAGREE that miss their stamped row size. Silent.
-
-    Rows that agree with each other and not with the declared type are one mismatch of
-    the whole literal (CE2002). Rows that disagree are measured one by one against the row
-    type their position stamped, so a short FIRST row is not the one the others are
-    compared with (CE2011 at that row, not CE2013 at each of the others). A measured row
-    of the right size is measured again one level down, because its own rows can agree
-    with each other and still miss the row type of their position.
-    """
-    if not isinstance(literal, ArrayLiteral) or len(literal.elements) < 2:
-        return []
-    row_types = [infer_array_element_type(validator, element.value)
-                 for element in literal.elements]
-    if all(ty == row_types[0] for ty in row_types):
-        return []
-    short: list[ArrayLiteral] = []
-    for element in literal.elements:
-        _measure_row(validator, element.value, short)
-    return short
-
-
-def _measure_row(validator: 'TypeValidator', row: Expr, short: list[ArrayLiteral]) -> None:
-    """Add `row` to `short` when it misses its stamped size; else measure its own rows."""
-    if not (isinstance(row, ArrayLiteral) and isinstance(row.resolved_type, ArrayType)):
-        return
-    runs = array_runs.read_runs(
-        row.elements, array_runs.const_int_reader(validator.constant_evaluator()),
-        Reporter())
-    if runs is None:
-        return
-    if array_runs.expanded_length(runs) != row.resolved_type.size:
-        short.append(row)
-        return
-    for element in row.elements:
-        _measure_row(validator, element.value, short)
-
-
-def reject_array_size_mismatch(validator: 'TypeValidator', declared_type: ArrayType,
-                               literal: ArrayLiteral, value_span: Optional[Span]) -> bool:
-    """CE2011: the EXPANDED element count must match the declared size.
-
-    A repeated element is written by length, so the compiler cannot know which run is
-    short -- either of them could be. It lists what it does know instead: every run with
-    the absolute span it fills. A reader who knows a boundary sees which run misses it.
-    """
-    runs = array_runs.read_runs(
-        literal.elements,
-        array_runs.const_int_reader(validator.constant_evaluator()),
-        Reporter())
-    if runs is None:
-        return True  # a bad count. CE2017 said so; a size report would pile on.
-
-    # A fixed array's length is part of its TYPE, so this caller needs a number (Ruling 3).
-    # The readable-length diagnostic speaks first and CE2011 stays silent after it, the way
-    # it already stays silent after CE2017.
-    got = array_runs.require_readable_length(runs, validator.reporter)
-    if got is None:
-        return True
-    if got == declared_type.size:
-        return False
-
-    b = er.emit_with(validator.reporter, er.ERR.CE2011, value_span,
-                     got=got, expected=declared_type.size)
-    if array_runs.has_run(literal.elements):
-        for number, run in enumerate(runs, start=1):
-            fills = (f"run {number} fills {run.start}..{run.end} "
-                     f"({run.count} element{'' if run.count == 1 else 's'})")
-            if run.loc is None:
-                b.note(fills)
-            else:
-                b.note_at(fills, run.loc)
-    b.emit()
-    return True
-
-
 def reject_return_mismatch(validator: 'TypeValidator', got: Optional[Type], expected: Type,
                            span: Optional[Span]) -> bool:
     """CE2003 when a returned value of the type `got` does not match the return type."""
@@ -195,7 +109,7 @@ def resolve_generic_type_ref(validator: 'TypeValidator', ty: Type) -> Type:
 
 def compare_resolved_types(validator: 'TypeValidator', actual: Type, expected: Type) -> bool:
     """Compare two resolved types (no GenericTypeRef or UnknownType resolution)."""
-    from sushi_lang.semantics.typesys import DynamicArrayType, ArrayType
+    from sushi_lang.semantics.typesys import DynamicArrayType
 
     if actual == expected:
         return True

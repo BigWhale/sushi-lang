@@ -2,9 +2,9 @@
 # EXPECT_DUMP_SHIR: test_err_shir_expr_slice_reversed.shir
 #
 # the SHIR dump of a slice with a reversed range. A `Slice` has no field for `.rev()`,
-# and the program has an error, so the index is an error hole that names its AST class
-# (`IndexAccess`) and the code that it stands for. The typecheck pass refuses the range
-# (CE2122) after the dump is written.
+# and the program has an error, so the range is an error hole that names its AST class
+# (`RangeExpr`) and the code that it stands for. The typecheck pass refuses the range
+# (CE2122) at the hole after the dump is written.
 
 fn main() i32:
     let i32[] xs = from([1, 2, 3])

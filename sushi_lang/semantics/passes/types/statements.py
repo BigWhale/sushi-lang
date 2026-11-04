@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.internals import errors as er
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, IteratorType
+from sushi_lang.semantics.typesys import EnumType, IteratorType
 from sushi_lang.semantics.ast import Let, Rebind, Foreach, DotCall, MethodCall, Name, MemberAccess, IndexAccess, RangeExpr
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.ownership import is_own_type
@@ -168,31 +168,6 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
         if stmt.target.external_var_ref is not None:
             er.emit(validator.reporter, er.ERR.CE5016, stmt.target.loc,
                     name=".".join(stmt.target.external_var_ref))
-            validator.validate_expression(stmt.value)
-            return
-
-        actual_type = validator.infer_expression_type(stmt.target)
-        if actual_type is None:
-            validator.validate_expression(stmt.value)
-            return
-
-    elif isinstance(stmt.target, IndexAccess):
-        # `arr[i] := v`. The index and the compile-time bounds are the read side's
-        # question, so validating the target answers both (CE2002, CE2012), and the
-        # inference stamps `inferred_element_type` for the backend to read.
-        validator.validate_expression(stmt.target)
-
-        # A string is immutable: `s[i]` reads a byte and never writes one (#1091).
-        if validator.infer_expression_type(stmt.target.array) == BuiltinType.STRING:
-            er.emit(validator.reporter, er.ERR.CE2113, stmt.target.loc)
-            validator.validate_expression(stmt.value)
-            return
-
-        # A constant lives in .rodata: the store is undefined behaviour, not a
-        # diagnostic, so it must never be emitted (CE2096).
-        from .arrays import reject_write_to_constant
-        if reject_write_to_constant(stmt.target.array, "assign to an element of",
-                                    stmt.loc, validator.reporter, validator):
             validator.validate_expression(stmt.value)
             return
 

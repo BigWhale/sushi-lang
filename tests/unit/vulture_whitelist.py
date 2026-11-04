@@ -143,9 +143,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "calls/user_defined.py", "validate_indirect_call", _port("C2")),
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
     (_TYPES + "calls/user_defined.py", "check_stdlib_function", _TIER_A),
-    (_TYPES + "statements.py", "validate_rebind_statement", _port("A6")),
-    (_TYPES + "expressions.py", "validate_array_literal", _port("A6")),
-    (_TYPES + "expressions.py", "validate_index_access", _port("A6")),
+    (_TYPES + "statements.py", "validate_rebind_statement", _port("A9")),
     (_TYPES + "calls/enums.py", "_refuse_untyped_constructor", _port("C1")),
     (_TYPES + "calls/structs.py", "_refuse_unsolved_struct_constructor", _port("C1")),
     (_TYPES + "calls/namespaced.py", "validate_namespaced_call", _port("A8")),
@@ -273,7 +271,6 @@ _FACTS = (
     ("walks_in_place", "passes/borrow/iterators.py", "C3",
      "the walk in place of a loop; tests/unit/test_walk_fields_have_one_writer.py reads its "
      "writer"),
-    ("inferred_element_type", _TYPES_PASS + "inference.py", "A6", "the type of an index access"),
     ("variadic_arg_types", _TYPES_PASS + "externals.py", "D5",
      "the promoted types of a C vararg call"),
     ("callee_method_type_args", _TYPES_PASS + "calls/methods.py", "C1",

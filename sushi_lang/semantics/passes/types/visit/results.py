@@ -74,11 +74,18 @@ def reject_unknown_variant(validator: TypeValidator, node: e.Call, target: e.Sta
 def check_hole(validator: TypeValidator, node: Hole,
                expected: Optional[Type] = None) -> None:
     """The error hole of a member of an enum that is no variant (`Sign.Nope`) is CE2045 at
-    the member, and the `Call` hole of written type arguments on a type name
-    (`Pair@(i32, i32)(1, 2)`) is CE6102 at the hole (ir.md 7.4). Every other hole stops the
+    the member, the `Call` hole of written type arguments on a type name
+    (`Pair@(i32, i32)(1, 2)`) is CE6102 at the hole, and the `RangeExpr` hole of a slice
+    with a reversed range is CE2122 at the range (ir.md 7.4). Every other hole stops the
     walk of its body."""
     if node.ast_class == "Call" and "CE6102" in node.codes:
         _reject_construction_type_args(validator, node)
+        return
+    if node.ast_class == "RangeExpr" and "CE2122" in node.codes:
+        er.emit_with(validator.reporter, er.ERR.CE2122, node.loc) \
+            .help("a slice takes its range in order: write `data[a..b]`, and walk the view "
+                  "with an index that counts down") \
+            .emit()
         return
     member = node.member
     if member is None or not _reject_member(validator, member.written, member.name,
