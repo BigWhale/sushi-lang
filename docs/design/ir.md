@@ -1092,13 +1092,15 @@ at the call, with a note at the receiver, through the one emitter
 (`reject_unhandled_channel_chain`, `calls/methods.py`). A static of a primitive type name
 (`f64.from_bits`, `string.from_bytes`) is the callee row `BuiltinStatic` (7.6), and its
 one argument goes through the one argument check at the type and the mode of its row of
-`PRIMITIVE_STATICS`. These calls still stop the walk with their label: a perk method (group
-C6), a receiver that is not plain and a static of a type that is not plain (C1: an instance
-of a generic type, an iterator, a `Result`, a `Maybe`, a type parameter; a method of an
-instance of a generic type, `extend Maybe@(i32)` included, is the copy of a template), a
-method with a method-level type parameter (C1), a method with a `peek` return (B8), a call
-through a field of a function type that no method of the struct names (C2), and a
-container static of `BUILTIN_STATICS` (B2, B4).
+`PRIMITIVE_STATICS`. A static of a built-in container (`List.new`, `List.with_capacity`,
+`HashMap.new`, `Own.alloc`) is the callee row `BuiltinStatic` too: its instance is the one
+that its position gives, and each argument goes through the one argument check at the
+convention of `argument_conventions` (8.3). These calls still stop the walk with their
+label: a perk method, a receiver that is not plain and a static of a type that is not plain
+(an instance of a generic type, an iterator, a `Result`, a `Maybe`, a type parameter; a
+method of an instance of a generic type, `extend Maybe@(i32)` included, is the copy of a
+template), a method with a method-level type parameter, a method with a `peek` return, and
+a call through a field of a function type that no method of the struct names.
 
 **A stdlib function.** A bare name that no function of the unit's scope takes is the
 function of a registry stdlib module that the unit imports, when one has it
@@ -1529,8 +1531,11 @@ A `BuiltinStatic` callee is a static of `BUILTIN_STATICS` (`semantics/statics.py
 statics of a primitive type name (`f64.from_bits`, `f32.from_bits`, `string.from_bytes`)
 are the rows of `PRIMITIVE_STATICS` (`calls/dotcall.py`): one parameter each, with its mode
 (`from_bytes` takes its `u8[]` with `nom`), and the type that it answers. `method` is the
-row of the family of `ty` (`primitive` for a float, `string` for `string`). A container
-static (`List.new`, `HashMap.new`, `Own.alloc`, `Iterator.new`) is a callee of Tier B or C.
+row of the family of `ty` (`primitive` for a float, `string` for `string`). A static of a
+built-in container (`List.new`, `List.with_capacity`, `HashMap.new`, `Own.alloc`) is the
+same row: `ty` is the instance that the call builds, which its position gives, and
+`method` is the row of the family of the container (`CONTAINER_STATIC_FAMILIES`).
+`Iterator.new` is a callee of Tier C.
 
 A `Stdlib` callee is a function of a registry stdlib module (`<math>`, `<time>`): a row of
 the signature table of the module (`stdlib_signature`, `semantics/stdlib_registry.py`), or
@@ -2352,8 +2357,9 @@ its AST argument half, with no caller, until the group of its construct gives it
 and `Move` both load the value: a `Move` emits no code of its own, because lowering placed
 every drop. `Drop` goes through the one destroy seam (`emit_value_destructor`). A string
 frees its buffer only when its owned flag is set. An enum goes to the destroy half of its
-lifecycle handler. A type of the `Drop` set calls the symbol of its `drop()` first, and
-then drops its owning fields (see the body of a `Drop` implementation above). `DropIfSet`
+lifecycle handler, and so do a `List@(T)`, a `HashMap@(K, V)` and an `Own@(T)`, which free
+what they hold and then their buffer. A type of the `Drop` set calls the symbol of its
+`drop()` first, and then drops its owning fields (see the body of a `Drop` implementation above). `DropIfSet`
 loads its flag and drops only while the flag is `true`.
 An enum is `{i32 tag, [K x i64] data}`: an `Aggregate` of a variant goes through the enum
 emitter with one value for each payload, which the emitter writes at the offsets of the
@@ -2667,7 +2673,13 @@ name, `Builtin(Intrinsic("f64.from_bits"), types)`, and its one operand has the 
 of its row: `f64.from_bits` and `f32.from_bits` read a `Guaranteed` integer and answer its
 bits as a float; `string.from_bytes` takes an `Owned` `u8[]`, and the buffer of the array
 becomes the buffer of the string, with no copy (#1091), so the array has no drop after the
-call.
+call. A `BuiltinStatic` callee of a built-in container lowers the same way
+(`Builtin(Intrinsic("List.new"), types)`), each operand with the convention of
+`argument_conventions`, and its destination is a fresh owning local that the drop
+placement drops (8.10). The emitter reads the instance that the static builds from the type
+of the destination. `List.new` and `List.with_capacity` go to the rows of the `List` table
+that are statics, with no receiver; `List.new` builds the empty container `{0, 0, null}`,
+`HashMap.new` allocates its first buckets, and `Own.alloc` takes its value `Owned`.
 
 The test of a string arm of a `match` lowers to the intrinsic `eq`, the value equality: two
 `Guaranteed` operands of one type, `types` holds that type for each operand, and the
@@ -2691,6 +2703,20 @@ so a receiver is read after an argument that changes it, and an element receiver
 evaluated one time (11, rule 9). Four methods are the exceptions, and each lowers to no
 call: `expect`, `realise` and `err` of a `Result` or a `Maybe` lower to a switch on the tag,
 as an `assert` does (8.9), and `clone` of any type lowers to the rvalue `Clone` (8.7).
+
+The `list` family takes the ADDRESS of its receiver in the same way. Its rows are
+`LIST_EMITTERS` (`backend/generics/list/`): each row takes the address of the List, the type
+of the List and the value of each argument (`emit_with_operands`,
+`backend/generics/container_table.py`), so `push`, `get`, `reserve`, `contains`, `index_of`
+and `index_of_from` read the List after an argument that changes it. No row evaluates an
+argument: the element of `push` and of `insert` is an `Owned` operand, an index is an `i32`
+value, and a needle is a `Guaranteed` operand. `first` and `last` hold their index rule in
+the emitter (`0`, and `len - 1`, which the bounds check of an empty List refuses). `get`,
+`first` and `last` answer a view (`answers_view`); over a plain element the destination is
+an ordinary local and the answer is a copy (8.9), and over an owning element lowering stops
+(`slir, owning view answer`) until the view local is built. The name of a static called on a
+List value (`xs.new()`) answers `~` and builds nothing. The `iter()` producer is a stop of
+`borrow`.
 
 A `Stdlib(decl, module)` callee of SHIR lowers to `Direct(symbol, name, module)`. `name` is
 the name of the function with no alias, and `module` is the `use` path of its module.
@@ -3218,8 +3244,9 @@ Runs after lowering, before the backend. It checks:
 entry (`SlirVerifier.verify`, `verify_function`) and the structure check, statement by
 statement. `verify_calls.py` holds the checks of a call: the conventions of a `Direct`
 callee (`declared_params`), the conventions of a container static (`argument_conventions`),
-the receiver operand of a built-in method, and no copy of an owning value other than a
-`string` into an `Owned` argument. `verify_flow.py` holds the dataflow of the moves and the
+the receiver operand of a built-in method, the conventions of a method of a family of
+`RULED_EFFECT_FAMILIES` (`receiver_convention` and `argument_conventions`), and no copy of
+an owning value other than a `string` into an `Owned` argument. `verify_flow.py` holds the dataflow of the moves and the
 drops. `verify_rules.py` holds the names of the rules, which the three others share. The
 SLIR stage gives the verifier each
 function that the lowering finished, on every compile, before the function meets the next
