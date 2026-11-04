@@ -1062,7 +1062,7 @@ not reach prints as lowering made it.
 | `StructInit` | `decl: DeclId`, `fields: [Arg]`, `written_order: [int]`, `names: [str] \| None`, `named: bool`, `decl_loc: Span`; `fields` in the declaration order; `named` is true for a named construction; `decl_loc` is where a diagnostic of the written type points |
 | `EnumInit` | `decl: DeclId`, `variant: str`, `payload: [Arg]`, `decl_loc: Span`; `decl_loc` is the span of the written type path (`geo.Sign`) |
 | `TupleInit` | `parts: [Expr]` |
-| `ArrayInit` | `kind: Fixed \| Dynamic`, `runs: [ArrayRun]` |
+| `ArrayInit` | `kind: Fixed \| Dynamic(new: bool)`, `runs: [ArrayRun]`; `new` is true for `new()` and false for `from([...])`, so a diagnostic names the form that the source writes |
 | `Range` | `start: Expr`, `end: Expr`, `inclusive: bool`, `reverse: bool` |
 | `Interp` | `parts: [Str \| Expr]`; kept whole so `typecheck` reports per part |
 
@@ -1214,7 +1214,11 @@ A C global of an `unsafe external` block is a `GlobalRef` with the written name 
 alias (`libc.environ`), as a C function is (`libc.abs`). A read and a write of it are the
 same node; `typecheck` refuses the write (CE5016). A type and a name that the namespace
 does not hold stay holes. Ruled 2026-10-12.
-`from([...])` and `new()` are an `ArrayInit` of the kind `Dynamic`, never a `Call`.
+`from([...])` and `new()` are an `ArrayInit` of the kind `Dynamic`, never a `Call`. The two
+have the same runs when `from([])` is empty, so `Dynamic.new` keeps the written form:
+the error of an empty array whose position gives no type names it
+([CE2111](../error-catalog.md#ce2111)). The element type of an empty array is the type
+row of the `ArrayInit` (#544): no other row holds it.
 
 **A readable value inside a body.** `typecheck` needs the value of some sub-expressions
 that the compiler can read: a divisor and a shift count, the operands of an overflow fold,
