@@ -520,6 +520,17 @@ class _Check:
                 self.fail(VIEW, f"the view {show(stmt.place)} is no T[]", stmt.span)
         else:
             self.not_a_view(stmt.place, stmt.span)
+            self.no_view_copy(stmt)
+
+    def no_view_copy(self, stmt: st.Assign) -> None:
+        """A view goes into no owning local: that local would drop storage it does not own."""
+        value = stmt.rvalue
+        if isinstance(value, r.Use) and isinstance(value.operand, p.Copy) \
+                and isinstance(value.operand.place, p.Local) \
+                and value.operand.place.id in self.views \
+                and isinstance(stmt.place, p.Local) and stmt.place.id in self.owning:
+            self.fail(VIEW, f"{show(stmt.place)} owns a copy of the view "
+                            f"{show(value.operand.place)}", stmt.span)
 
     def not_a_view(self, place: p.Place, span: Span) -> None:
         """Only a `Slice` writes a view."""

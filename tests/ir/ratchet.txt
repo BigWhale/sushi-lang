@@ -326,6 +326,7 @@ tests/array/slices/test_run_slice_end_past_length.sushi
 tests/array/slices/test_run_slice_inclusive_end_past_length.sushi
 tests/array/slices/test_run_slice_negative_start.sushi
 tests/array/slices/test_slice_dont_panic_body.sushi
+tests/array/slices/test_slice_of_a_var_as_argument.sushi
 tests/array/slices/test_warn_dont_panic_slice_only.sushi
 tests/array/starts_with/test_array_starts_with_basics.sushi
 tests/array/starts_with/test_array_starts_with_fixed_dynamic.sushi

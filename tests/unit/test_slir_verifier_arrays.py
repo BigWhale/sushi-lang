@@ -149,6 +149,13 @@ def test_a_move_of_a_view_is_refused():
         params=((1, GUARANTEED),)), VIEW)
 
 
+def test_a_copy_of_a_view_into_an_owning_local_is_refused():
+    _refused(_function([BLANK, NUMBERS, NUMBERS, NUMBERS], _block(
+        0, _ret(), _set(2, r.Slice(_local(1), _i32(0), _i32(1))),
+        _set(3, r.Use(_copy(2)), BAD), _drop(3), _done()),
+        params=((1, GUARANTEED),)), VIEW)
+
+
 def test_a_drop_of_a_view_is_refused():
     _refused(_function([BLANK, NUMBERS, NUMBERS], _block(
         0, _ret(), _set(2, r.Slice(_local(1), _i32(0), _i32(1))), st.Drop(_local(2), BAD),

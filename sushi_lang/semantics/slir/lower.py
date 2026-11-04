@@ -450,7 +450,8 @@ class Lowering:
         """The operand of `expr`, from its `Ownership` row and its shape (ir.md 7.9). A
         literal and a name of a constant are a constant with any other row: an `adopt` of a
         string constant takes a literal, which owns no heap. A read of a `var` goes into a
-        temporary of the statement, unless `in_place` reads it where it is."""
+        temporary of the statement, unless `in_place` reads it where it is. A slice of a
+        `var` is a view, which owns nothing: it gets no temporary."""
         row = self.answers.ownership.ownership_of(expr.shir_id)
         if row is Ownership.REJECT:
             raise StageStop(STAGE, "borrowed view", expr.loc)
@@ -460,7 +461,7 @@ class Lowering:
             if row is Ownership.MOVE:
                 return p.Move(place)
             root = walk_place(expr, Step.MEMBER | Step.INDEX).node
-            if in_place or not isinstance(root, e.StorageRef):
+            if in_place or isinstance(expr, e.Slice) or not isinstance(root, e.StorageRef):
                 return p.Copy(place)
             return p.Copy(p.Local(self.temporary(r.Use(p.Copy(place)), self.type_of(expr),
                                                  expr.loc)))
