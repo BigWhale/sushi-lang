@@ -96,8 +96,9 @@ def _reject_negated_byte(validator: 'TypeValidator', node: 'ShirExpr') -> None:
             and isinstance(node.operand.value, IntConst)):
         return
     const = node.operand.value
-    if const.value > 0:
-        er.emit(validator.reporter, er.ERR.CE2073, node.loc, literal=str(-const.value),
+    value = -const.value
+    if value < 0:
+        er.emit(validator.reporter, er.ERR.CE2073, node.loc, literal=str(value),
                 type=int_literal_default(const).value)
 
 
