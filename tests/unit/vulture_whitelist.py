@@ -348,6 +348,7 @@ TEST_WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("tests/unit/test_drop_invalidates_cache.py", "file_path", _READ_BY_CODE),
     ("tests/unit/test_drop_invalidates_cache.py", "public_symbols", _READ_BY_CODE),
     ("tests/unit/test_drop_invalidates_cache.py", "dependencies", _READ_BY_CODE),
+    ("tests/unit/test_array_method_table_is_total.py", "drop_type_names", _READ_BY_CODE),
     ("tests/unit/test_nori_colour.py", "isatty", "the colour decision asks the stream isatty()"),
     ("tests/unit/test_report_colour.py", "isatty", "the colour decision asks the stream isatty()"),
     ("tests/unit/test_nori_errors.py", "size", "tarfile reads TarInfo.size when it adds the member"),

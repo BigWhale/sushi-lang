@@ -1,0 +1,27 @@
+# EXPECT_ERROR_CODES_EXACT: CE2023
+# EXPECT_STDERR_CONTAINS: "dynamic array method receiver mismatch for 'push': expected dynamic array, got i32[3]"
+# EXPECT_DUMP_SHIR: test_err_typeck_array_methods.shir
+#
+# The array methods on plain elements answer the type of their row: `get`, `pop` and
+# `remove` a `Maybe@(T)`, `index_of` a `Maybe@(i32)`, `insert` a `Result@(~, StdError)`,
+# `s` and `ss` a fresh `T[]`. A slot argument (`push`, the value of `insert`) takes the
+# element type of its position, and so does the source of a bulk copy. A fixed array is
+# no receiver of a method that grows (CE2023).
+
+fn main() i32:
+    let u8[] bytes = from([1 as u8, 2 as u8])
+    let i32[3] fixed = [4, 5, 6]
+    bytes.push(3)
+    bytes.extend(from([4, 5]))
+    let bool put = bytes.insert(0, 9).is_ok()
+    let u8 popped = bytes.pop().realise(0)
+    let u8 removed = bytes.remove(1).realise(0)
+    let i32 at = fixed.index_of(5).realise(-1)
+    let u8[] part = bytes.s(0, 2)
+    let i32[] tail = fixed.ss(1, 2)
+    let bool found = fixed.contains(6) and bytes.starts_with(part)
+    let string text = bytes.to_string()
+    if (put and found):
+        println(text)
+    fixed.push(7)
+    return at + tail.len() + (popped as i32) + (removed as i32)

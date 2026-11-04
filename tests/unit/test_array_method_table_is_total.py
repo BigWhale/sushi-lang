@@ -6,14 +6,16 @@ a return-type chain of 15 -- and the three had already drifted: `to_string_check
 in two of them and its return type was patched in by a special case in `method_registry.py`.
 A set written more than once drifts again, so this gate makes the next drift a failure.
 
-Four questions, each a separate way the set can go wrong:
+Five questions, each a separate way the set can go wrong:
 
 1. the membership predicate answers from the table and from nothing else;
-2. every row says what its method ANSWERS, and the answer arrives -- measured at the END
-   state, through `ArrayMethodInferrer`, because seven rows are interned by that caller and
-   a check of the table alone would pass while the caller answered nothing;
-3. the backend's own `is_builtin_array_method` claims exactly the table's names;
-4. the backend's two dispatch `match` statements hold exactly one arm per name, and its
+2. every row says what its method ANSWERS, and the answer arrives -- measured through
+   `array_method_return_type`, the one reader that the typecheck arm of the family
+   (`check_array_method`) and the inference of the early passes both read;
+3. every row that takes its arguments into a slot names a real argument, and the modes of
+   the family are the slots of the table;
+4. the backend's own `is_builtin_array_method` claims exactly the table's names;
+5. the backend's two dispatch `match` statements hold exactly one arm per name, and its
    FIXED half holds exactly the names the table lets a fixed array receive.
 
 Each backend half is read out of the source, so a name added to one side and forgotten on
@@ -26,11 +28,16 @@ from pathlib import Path
 
 import pytest
 
+from sushi_lang.semantics.derived_methods import DerivedMethodTable
 from sushi_lang.semantics.passes.types.arrays import (
     _ARRAY_METHODS,
-    INTERNED_BY_THE_CALLER,
+    ARRAY_METHOD_MODES,
     Receiver,
+    array_method_return_type,
     is_builtin_array_method,
+)
+from sushi_lang.semantics.typesys import (
+    BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo,
 )
 
 
@@ -40,10 +47,30 @@ from sushi_lang.semantics.passes.types.arrays import (
 MEASURED_NAMES = 36
 MEASURED_FIXED_ARMS = 20
 
-# The nine whose answer is a `Maybe` the CALLER interns (`ArrayMethodInferrer`), and
-# which therefore carry the sentinel rather than a rule of their own.
-INTERNED_NAMES = {"get", "first", "last", "pop", "remove", "index_of", "index_of_from",
-                  "min", "max"}
+#: The rows whose answer is a `Maybe` that the reader interns.
+MAYBE_NAMES = {"get", "first", "last", "pop", "remove", "index_of", "index_of_from",
+               "min", "max"}
+
+
+class _Tables:
+    """The tables that the reader interns a `Maybe` and a `Result` into."""
+
+    def __init__(self):
+        std_error = EnumType(name="StdError",
+                             variants=(EnumVariantInfo(name="Error", associated_types=()),))
+        self.by_name = {"StdError": std_error}
+        self.order = list(self.by_name)
+        self.derived = DerivedMethodTable()
+        self.admits_opaque = False
+
+
+class _Validator:
+    """The two tables of the pass that the reader reads, and no other state."""
+
+    def __init__(self):
+        self.enum_table = _Tables()
+        self.struct_table = type("Structs", (), {"by_name": {}})()
+        self.drop_type_names: frozenset = frozenset()
 
 
 # --------------------------------------------------------------------------- the table
@@ -71,14 +98,34 @@ def test_every_row_is_complete(name):
     assert spec.arity >= 0
     assert isinstance(spec.receiver, Receiver)
     assert callable(spec.arguments)
-    assert spec.returns is not None
+    assert callable(spec.returns)
 
 
-def test_the_sentinel_is_used_by_exactly_the_interned_names():
-    """It may not spread: a row that carries it answers nothing of its own."""
-    carried = {name for name, spec in _ARRAY_METHODS.items()
-               if spec.returns is INTERNED_BY_THE_CALLER}
-    assert carried == INTERNED_NAMES
+def _bytes_answer(name):
+    """The answer of `name` on a `u8[]`, which every row takes as its receiver."""
+    return array_method_return_type(_Validator(), DynamicArrayType(BuiltinType.U8), name)
+
+
+@pytest.mark.parametrize("name", sorted(_ARRAY_METHODS))
+def test_every_answer_arrives(name):
+    """Measured at the END state, through the one reader: a row that the reader answers
+    nothing for would type its call as no value."""
+    assert _bytes_answer(name) is not None, name
+
+
+def test_the_maybe_rows_answer_a_maybe():
+    maybes = {name for name in _ARRAY_METHODS
+              if getattr(_bytes_answer(name), "generic_base", None) == "Maybe"}
+    assert maybes == MAYBE_NAMES
+
+
+def test_a_slot_names_a_real_argument_and_the_modes_are_the_slots():
+    slots = {name for name, spec in _ARRAY_METHODS.items() if spec.slot is not None}
+    assert slots == {"push", "insert"}
+    for name in slots:
+        spec = _ARRAY_METHODS[name]
+        assert 0 <= spec.slot < spec.arity, name
+    assert ARRAY_METHOD_MODES.slots == slots
 
 
 # ------------------------------------------------------------------------- the backend

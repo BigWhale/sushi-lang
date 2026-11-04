@@ -18,7 +18,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import (
-    MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
+    ARRAY_FAMILY, MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, ForeignPtrType, FunctionType,
     IteratorType, StructType)
@@ -1191,12 +1191,11 @@ def _check_receiver_mode(validator: 'TypeValidator', call: MethodCall, method) -
 # registry's and is written once; what stands here is the CHECK that follows it.
 
 
-@METHOD_TYPE_REGISTRY.validator("array")
+@METHOD_TYPE_REGISTRY.validator(ARRAY_FAMILY)
 @METHOD_TYPE_REGISTRY.validator("array_hash")
 def _validate_array_family(validator: 'TypeValidator', call: MethodCall,
                            receiver_type) -> None:
-    from sushi_lang.semantics.passes.types.arrays import validate_builtin_array_method
-    validate_builtin_array_method(call, receiver_type, validator.reporter, validator)
+    """The SHIR arm of the family checks the call (`arrays.py:check_array_method`)."""
 
 
 @METHOD_TYPE_REGISTRY.validator(STRING_FAMILY)

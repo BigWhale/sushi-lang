@@ -69,7 +69,8 @@ def effect_of(method: str) -> MethodEffect:
 # The built-in method families (`METHOD_TYPE_REGISTRY`) whose methods the table describes.
 # A row applies to a call only when one of these families answered it: `string.reverse()`
 # and a user extension named `push` are other methods with the same name.
-EFFECT_FAMILIES = frozenset({"array", "list", "hashmap", "own"})
+ARRAY_FAMILY = "array"
+EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, "list", "hashmap", "own"})
 
 PRIMITIVE_FAMILY = "primitive"
 STRING_FAMILY = "string"
@@ -82,6 +83,9 @@ MAYBE_FAMILY = "maybe"
 RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
 # Consumes: the family has a `nom self` method, so the answer is per method.
 CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY})
+# The effect families whose group wrote the receiver rule: a method whose row `mutates`
+# takes its receiver `Inout`, every other method reads it. The set can only grow.
+RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY})
 # No rule yet: the set can only shrink.
 NO_RECEIVER_RULE_FAMILIES = frozenset({
     "iterator", "foreign_ptr", "array_hash", "derived_hash", "derived_clone", "contract",
@@ -91,16 +95,21 @@ NO_RECEIVER_RULE_FAMILIES = frozenset({
 
 def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
     """The convention of the receiver of a call of `method`, or None when its family has
-    no receiver rule yet: a family of `EFFECT_FAMILIES` or of `NO_RECEIVER_RULE_FAMILIES`.
+    no receiver rule yet: a family of `EFFECT_FAMILIES` that is not in
+    `RULED_EFFECT_FAMILIES`, or a family of `NO_RECEIVER_RULE_FAMILIES`.
 
     A family of `RECEIVER_READ_FAMILIES` reads its receiver (`Guaranteed`). A method of a
     family of `CONSUMING_RECEIVER_FAMILIES` takes its receiver (`Owned`) when it declares
-    `nom self`, and reads it otherwise. A family in no set is an internal error.
+    `nom self`, and reads it otherwise. A method of a family of `RULED_EFFECT_FAMILIES`
+    writes its receiver (`Inout`) when its row `mutates`, and reads it otherwise. A family
+    in no set is an internal error.
     """
     if method.family in RECEIVER_READ_FAMILIES:
         return Convention.GUARANTEED
     if method.family in CONSUMING_RECEIVER_FAMILIES:
         return Convention.OWNED if method.nom_self else Convention.GUARANTEED
+    if method.family in RULED_EFFECT_FAMILIES:
+        return Convention.INOUT if effect_of(method.name).mutates else Convention.GUARANTEED
     if method.family in EFFECT_FAMILIES | NO_RECEIVER_RULE_FAMILIES:
         return None
     raise_internal_error("CE0000", detail=f"the method family '{method.family}' is in no "

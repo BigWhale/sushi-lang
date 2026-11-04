@@ -97,9 +97,28 @@ def test_a_read_family_gives_a_borrow_and_a_family_with_no_answer_gives_none():
     for name in me.RECEIVER_READ_FAMILIES:
         callee = METHOD_TYPE_REGISTRY.family(name).callee("probe")
         assert me.receiver_convention(callee) is Convention.GUARANTEED
-    for name in me.EFFECT_FAMILIES | me.NO_RECEIVER_RULE_FAMILIES:
+    for name in (me.EFFECT_FAMILIES - me.RULED_EFFECT_FAMILIES) | me.NO_RECEIVER_RULE_FAMILIES:
         callee = METHOD_TYPE_REGISTRY.family(name).callee("probe")
         assert me.receiver_convention(callee) is None, name
+
+
+def test_a_ruled_effect_family_writes_a_receiver_that_its_row_mutates():
+    """The array family (group A6): a method whose row `mutates` takes its receiver
+    `Inout`, and every other method of the family reads it (docs/design/ir.md 8.3)."""
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    assert me.RULED_EFFECT_FAMILIES == {"array"}
+    assert me.RULED_EFFECT_FAMILIES <= me.EFFECT_FAMILIES
+    family = METHOD_TYPE_REGISTRY.family("array")
+    answers = {name: me.receiver_convention(family.callee(name))
+               for name in arrays._ARRAY_METHODS}
+    written = {name for name, answer in answers.items() if answer is Convention.INOUT}
+    assert written == {name for name in arrays._ARRAY_METHODS if effect_of(name).mutates}
+    assert {"push", "insert", "pop", "fill", "swap", "extend"} <= written
+    assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
+               if name not in written)
 
 
 @pytest.mark.parametrize("family, arity", [

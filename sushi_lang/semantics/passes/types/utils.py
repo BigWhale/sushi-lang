@@ -26,7 +26,7 @@ from sushi_lang.semantics.passes.types.visibility import (
     reject_private_type)
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.ast import Param, Expr
+    from sushi_lang.semantics.ast import Param
     from . import TypeValidator
 
 
@@ -378,54 +378,6 @@ def reject_unknown_template_name(validator: 'TypeValidator', type_obj: Type,
         return True
     er.emit(validator.reporter, er.ERR.CE2001, span, name=name)
     return True
-
-
-def read_constant_index(validator: 'TypeValidator', expr: 'Expr') -> Optional[int]:
-    """The value of an index the compiler can read, or None.
-
-    A literal, a named constant and an expression of them (`-1`, `K`, `K + 1`) are read
-    through the one constant evaluator, silently (#1137). An index that names a local is
-    not read at all: a local of the same name shadows a constant, and the evaluator knows
-    no locals, so it would answer with the constant. An index of another type is CE2121's
-    fault, and this answers None for it.
-    """
-    from sushi_lang.semantics.ast import Name
-    from sushi_lang.semantics.ast_walk import walk_nodes
-    from sushi_lang.semantics.const_eval import ScalarConstant
-
-    names_a_local = False
-
-    def visit(node) -> bool:
-        nonlocal names_a_local
-        if isinstance(node, Name) and node.id in validator.variable_types:
-            names_a_local = True
-        return not names_a_local
-
-    walk_nodes(expr, visit)
-    if names_a_local:
-        return None
-    value = validator.constant_evaluator().evaluate(expr, BuiltinType.I32, expr.loc)
-    if not isinstance(value, ScalarConstant) or value.semantic_type != BuiltinType.I32:
-        return None
-    return value.value if isinstance(value.value, int) else None
-
-
-def validate_constant_array_index(validator: 'TypeValidator', expr: 'Expr',
-                                  array_size: int) -> None:
-    """Report an index the compiler can read that cannot be in range.
-
-    One reader and one pair of codes for every indexing form -- `a[i]`, `a.get(i)` --
-    so a new form cannot inherit half the rule.
-    """
-    index_value = read_constant_index(validator, expr)
-    if index_value is None:
-        return
-
-    if index_value < 0:
-        er.emit(validator.reporter, er.ERR.CE2056, expr.loc, index=index_value)
-    elif index_value >= array_size:
-        er.emit(validator.reporter, er.ERR.CE2012, expr.loc, index=index_value,
-                size=array_size)
 
 
 def intern_signature(validator: 'TypeValidator', *types) -> None:

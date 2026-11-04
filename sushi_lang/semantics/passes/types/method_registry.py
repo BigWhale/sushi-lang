@@ -49,7 +49,7 @@ from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY, OWN_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_ARITY, RESULT_METHOD_MODES
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import (
-    MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
+    ARRAY_FAMILY, MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.passes.types.arrays import ARRAY_METHOD_MODES
 from sushi_lang.semantics.foreign_memory import (
@@ -252,37 +252,15 @@ def arity_of_family(name: str) -> Mapping[str, int]:
 
 @dataclass
 class ArrayMethodInferrer:
-    """Type inferrer for array methods."""
+    """Type inferrer for array methods: the answer of the row of the method."""
     receiver_type: ArrayType | DynamicArrayType
     method_name: str
     validator: 'TypeValidator'
 
     def infer_return_type(self) -> Optional['Type']:
-        from sushi_lang.semantics.passes.types.arrays import is_builtin_array_method, get_builtin_array_method_return_type
-        from sushi_lang.semantics.generics.maybe import ensure_maybe_type_in_table
-        from sushi_lang.semantics.typesys import deref_type
-
-        actual_type = deref_type(self.receiver_type)
-
-        if is_builtin_array_method(self.method_name):
-            # `.get()`, `.first()` and `.last()` READ, and `.pop()` and `.remove()` REMOVE,
-            # but all five answer "there is no such element" the same way, so each is
-            # Maybe@(T) -- as `List@(T)` already was. A bare `T` had to invent a value for
-            # the empty case (#377). `.min()` and `.max()` have the same empty case.
-            if self.method_name in ("get", "first", "last", "pop", "remove", "min", "max"):
-                element_type = actual_type.base_type
-                maybe_type = ensure_maybe_type_in_table(self.validator.enum_table, element_type, struct_table=self.validator.struct_table.by_name)
-                return maybe_type
-
-            # `index_of` and `index_of_from` answer WHERE, so the Maybe carries the index
-            # and not the element -- the array Maybes whose payload is not `base_type`.
-            if self.method_name in ("index_of", "index_of_from"):
-                return ensure_maybe_type_in_table(self.validator.enum_table, BuiltinType.I32,
-                                                  struct_table=self.validator.struct_table.by_name)
-
-            return get_builtin_array_method_return_type(self.method_name, actual_type,
-                                                        self.validator)
-        return None
+        from sushi_lang.semantics.passes.types.arrays import array_method_return_type
+        return array_method_return_type(self.validator, self.receiver_type,
+                                        self.method_name)
 
 
 def string_method_return_type(validator: 'TypeValidator', method_name: str) -> Optional['Type']:
@@ -690,7 +668,7 @@ def _answers_primitive(receiver_type, method_name, derived_methods):
 
 
 METHOD_TYPE_REGISTRY.register(MethodFamily(
-    name="array", beats_perk=True, answers=_answers_array, modes=ARRAY_METHOD_MODES,
+    name=ARRAY_FAMILY, beats_perk=True, answers=_answers_array, modes=ARRAY_METHOD_MODES,
     infer=lambda rt, call, v: ArrayMethodInferrer(rt, call.method, v)))
 METHOD_TYPE_REGISTRY.register(MethodFamily(
     name=STRING_FAMILY, beats_perk=True, answers=_answers_string, arity=LazyStringArity(),

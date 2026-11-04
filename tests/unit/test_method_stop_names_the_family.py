@@ -17,7 +17,7 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.visit import calls
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.ids import LocalId, ShirId
-from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, StructType
+from sushi_lang.semantics.typesys import BuiltinType, IteratorType, StructType
 
 SPAN = Span(4, 5, 4, 20)
 
@@ -39,7 +39,7 @@ def _validator() -> SimpleNamespace:
 @pytest.mark.parametrize("receiver, method, label", [
     (StructType(name="List<i32>", fields=(), generic_base="List"), "len",
      "Call(method list)"),
-    (DynamicArrayType(BuiltinType.I32), "len", "Call(method array)"),
+    (IteratorType(BuiltinType.I32), "clone", "Call(method iterator)"),
 ])
 def test_a_family_with_no_arm_names_its_family(monkeypatch, receiver, method, label):
     monkeypatch.setattr(visit, "check_expr", lambda _validator, _node: receiver)

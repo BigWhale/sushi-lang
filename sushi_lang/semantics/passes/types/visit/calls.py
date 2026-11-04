@@ -58,12 +58,13 @@ from sushi_lang.semantics.generics.maybe import (
     MAYBE_METHOD_SIGNATURES, WrapperMethodRow, maybe_method_row, maybe_payload)
 from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES, result_method_row
 from sushi_lang.semantics.method_effects import (
-    MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
+    ARRAY_FAMILY, MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.param_modes import (
     CalleeKind, Convention, declared_modes, modes_for, param_mode, receiver_mode)
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
     Parameters, check_arguments, reject_misplaced_spread)
+from sushi_lang.semantics.passes.types.arrays import check_array_method
 from sushi_lang.semantics.passes.types.calls.dotcall import (
     MethodRung, reject_unknown_method, resolve_dotted)
 from sushi_lang.semantics.passes.types.calls.enums import reject_missing_variant
@@ -375,6 +376,7 @@ FamilyArm = Callable[['TypeValidator', e.Call, Type, str, MethodFamily], Optiona
 #: The arm of each built-in family that the pass types, keyed by the registry name of the
 #: family. A family that is not here stops the walk (`Call(method <family>)`).
 FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
+    ARRAY_FAMILY: check_array_method,
     PRIMITIVE_FAMILY: _check_primitive_method,
     STRING_FAMILY: _check_string_method,
     RESULT_FAMILY: _check_result_method,

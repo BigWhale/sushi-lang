@@ -67,8 +67,7 @@ def validate_list_method_with_validator(
     if call.method in _SEARCH_METHODS:
         from sushi_lang.semantics.passes.types.arrays import check_search_needle
         element_type = parse_list_types(list_type, validator)
-        if element_type is not None and check_search_needle(call, element_type, reporter,
-                                                            validator):
+        if element_type is not None and check_search_needle(validator, call, element_type):
             return
 
     index_arg = _INDEX_ARGUMENT.get(call.method)

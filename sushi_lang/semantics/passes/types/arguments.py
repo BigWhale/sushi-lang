@@ -103,16 +103,10 @@ def check_arguments(
     for index, (arg, expected) in enumerate(zip(args, params, strict=False), start=1):
         if reject_misplaced_spread(validator, arg):
             continue
-        actual = _argument_type(validator, arg, expected)
-        fits = False
-        if actual is not None and expected is not None:
-            others = also_accepts[index - 1] if index <= len(also_accepts) else ()
-            fits = (types_compatible(validator, actual, expected)
-                    or any(types_compatible(validator, actual, other) for other in others))
-            if not fits:
-                field = field_names[index - 1] if index <= len(field_names) else None
-                _emit_mismatch(validator, mismatch_code, callee_name, arg, index,
-                               expected, actual, others, field)
+        others = also_accepts[index - 1] if index <= len(also_accepts) else ()
+        field = field_names[index - 1] if index <= len(field_names) else None
+        fits = check_argument(validator, callee_name, arg, index, expected,
+                              mismatch_code=mismatch_code, others=others, field=field)
         if declared is not None and index <= len(declared.modes):
             mode = declared.modes[index - 1]
             if reject_nom_marker(validator, arg, mode, declared.names[index - 1]):
@@ -130,11 +124,44 @@ def check_arguments(
     return arity_ok
 
 
-def _argument_type(validator: 'TypeValidator', arg: e.Arg,
-                   expected: Optional[Type]) -> Optional[Type]:
-    """The type of an argument: its value checked at the type of its parameter, and a
-    borrow of that type when the argument is written `peek x` or `poke x`."""
-    ty = visit.check_expr(validator, arg.value, deref_type(expected))
+def record_conventions(validator: 'TypeValidator', declared: Parameters,
+                       args: Sequence[e.Arg], *, slot: Optional[int] = None) -> None:
+    """Give each argument of a call whose arguments a row checks one by one (an array
+    method) the convention of its declared mode, after the `nom` marker check (CE2427). A
+    container slot takes its argument by position, as a `nom` parameter does, and has no
+    marker to compare."""
+    answers = validator.body_answers()
+    for index, arg in enumerate(args):
+        if index == slot:
+            answers.record_convention(declared.call, index, ParamMode.NOM.convention)
+            continue
+        mode = declared.modes[index]
+        if not reject_nom_marker(validator, arg, mode, declared.names[index]):
+            answers.record_convention(declared.call, index, mode.convention)
+
+
+def check_argument(validator: 'TypeValidator', callee_name: str, arg: e.Arg, index: int,
+                   expected: Optional[Type], *, mismatch_code: er.ErrorMessage,
+                   others: Sequence[Type] = (), field: Optional[str] = None,
+                   typed_by_position: bool = True) -> bool:
+    """Check ONE argument at the type of the parameter that it fills, at the position
+    `index` (from 1), and answer whether it fits. A mismatch is `mismatch_code` at the
+    argument. `typed_by_position` False checks the value with no type from its position."""
+    position = deref_type(expected) if typed_by_position else None
+    actual = marked_type(arg, visit.check_expr(validator, arg.value, position))
+    if actual is None or expected is None:
+        return False
+    if (types_compatible(validator, actual, expected)
+            or any(types_compatible(validator, actual, other) for other in others)):
+        return True
+    _emit_mismatch(validator, mismatch_code, callee_name, arg, index, expected, actual,
+                   others, field)
+    return False
+
+
+def marked_type(arg: e.Arg, ty: Optional[Type]) -> Optional[Type]:
+    """The type of an argument whose value has the type `ty`: a borrow of that type when
+    the argument is written `peek x` or `poke x`."""
     borrow = None if arg.marker is None else _BORROWS.get(arg.marker)
     if ty is None or borrow is None:
         return ty
