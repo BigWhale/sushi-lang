@@ -91,7 +91,8 @@ address local that a `Ref` writes one time); 8.2, 8.3, 8.6, 8.7 and 8.9 (`Clone`
 deep copy, and `realise` and `err` lower as `expect` does); 8.3 and 8.13 (the rows of
 `METHOD_EFFECTS` give the receiver and the argument conventions of each container method);
 7.9 and 8.9 (a container get-out answers a view, by a row of `answers_view`); 7.9, 8.2,
-8.3, 8.10 and 8.13 (a `Guaranteed` parameter starts not owned, and a rebind makes it owned).
+8.3, 8.10 and 8.13 (a `Guaranteed` parameter starts not owned, and a rebind makes it owned);
+8.2 (the body of a `Drop` implementation is a method body, and the destroy seam calls it).
 
 ## The decisions, in one place
 
@@ -2248,10 +2249,19 @@ body of an extension method or of a static is a function like any other: its rec
 static has no receiver. Its symbol is `extension_decl_symbol` (8.6), and its name is the
 written name `<type>.<method>`.
 
+**The body of a `Drop` implementation.** `fn drop(poke self) ~` lowers as a method body: its
+receiver is `_1` with the convention `Inout`, its symbol is the perk symbol of
+`extension_symbol` (`semantics/generics/name_mangling.py`), and it has a `Direct` row in
+the function table (`funcs.by_unit`). No SLIR statement calls it. A `Drop(place)` of a type
+of the `Drop` set goes to the destroy seam, which calls that symbol FIRST and then drops the
+owning fields (`drops_of`, the one reader of the `Drop` set in the backend). The verifier
+needs no new rule for it. The body of every other perk method stops with `perk method`.
+
 While the migration is in progress, a construct that the lowering does not handle yet stops
 the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
 class, or one of these names: `generic instance`, `conversion` and `perk method` for the
-body of a monomorphized generic instance, of a conversion and of a perk method; `conversion` also for a
+body of a monomorphized generic instance, of a conversion and of a perk method other than
+the `drop` of a `Drop` implementation; `conversion` also for a
 `Try` that calls a declared conversion (today `typecheck` stops there first), `library
 function` for a free, a method or a static callee whose row names no declaring unit (a
 function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
@@ -2319,8 +2329,9 @@ its AST argument half, with no caller, until the group of its construct gives it
 `Str` constant comes from the string constant seam and owns no heap (owned flag 0). `Copy`
 and `Move` both load the value: a `Move` emits no code of its own, because lowering placed
 every drop. `Drop` goes through the one destroy seam (`emit_value_destructor`): a string
-frees its buffer only when its owned flag is set, and an enum goes to the destroy half of
-its lifecycle handler. `DropIfSet` loads its flag and drops only while the flag is `true`.
+frees its buffer only when its owned flag is set, an enum goes to the destroy half of
+its lifecycle handler, and a type of the `Drop` set calls the symbol of its `drop()` first
+and then drops its owning fields (see the body of a `Drop` implementation above). `DropIfSet` loads its flag and drops only while the flag is `true`.
 An enum is `{i32 tag, [K x i64] data}`: an `Aggregate` of a variant goes through the enum
 emitter with one value for each payload, which the emitter writes at the offsets of the
 layout authority (a constant `Aggregate` goes through the converter of 8.5), `Discriminant`
