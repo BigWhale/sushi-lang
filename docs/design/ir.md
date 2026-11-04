@@ -769,7 +769,10 @@ error type. The facts of a `Try` are one record (`TryFacts`), and so are the scr
 and the integer type of a `Match` (`MatchFacts`). The value row holds a value of the constant
 evaluator (`ConstantValue`, `semantics/const_eval.py`), one shape for the two keys: the value
 that an integer literal holds at its type, and the value of the constant that a `ConstRef`
-names (from the constant table, Q5). An initializer has no value row: no stage reads one,
+names (from the constant table, Q5). A `ConstRef` of a constant whose initializer has an
+error has no value row: the walk goes on (`refused_before`, 7.9). With no error in the
+program, a constant with no value stops (`ConstRef with no value`). An initializer has no
+value row: no stage reads one,
 because the backend makes the global of a constant from the evaluator (8.2). The global row
 of a `StorageRef` holds the symbol of the global of its `var`, from the one derivation of a
 global symbol (`global_symbol`, `semantics/unit_symbols.py`): SLIR lowering names the
@@ -1678,6 +1681,16 @@ later statements are reported, and the body does not go on to the next stage.
 A template check body runs the same three SHIR passes, at opaque type arguments, and stops
 there: it never lowers to SLIR (4.3).
 
+`typecheck` keeps one flag for the body that it walks, `refused_before`. A node whose error a
+pass before `typecheck` reported, or whose answer that error takes away, sets the flag, gets
+no answer, and the walk goes on: a `??` in a bare body (CE0131 of `collect`), a call of a
+method whose declaration `collect` refused, a construction of a name whose second
+declaration `collect` refused (CE1005, CE0006), an error hole of `REPORTED_BEFORE` (7.4), a `match` whose scrutinee has an error
+(7.8), and a name of a constant whose initializer has an error (7.3). A body with the flag
+gets no completeness check (`check_answers`) and does not go on to `lift` and `borrow`. The
+flag is a state of the walk of one body, not a row of `TypeckResults`: no later stage reads
+it.
+
 `OwnershipResults` is the second typed side table, and it obeys the four rules of 7.3:
 
 | Decision | Keyed by |
@@ -1692,6 +1705,13 @@ there: it never lowers to SLIR (4.3).
 wrote the walk in place and the iterator state (1.2). Each of those facts is a question about ownership, and
 `borrow` sees every input that `typecheck` sees. So `borrow` writes them, and `typecheck`
 writes nothing about them. A `Cursor` walk needs no state, because its `LoopKind` says so.
+
+**A named exception: the declared type of a constant.** The record of a constant or a `var`
+in the constant table (`ConstSig.const_type`) has two writers. `collect` writes the type as
+the source writes it, and `typecheck` writes the resolved type there when it checks the
+declaration (`_validate_constant`, `passes/types/constants.py`). The backend, the library
+manifest and every pass after `typecheck` read the resolved type. Phase 4 moves the resolve
+step into `collect`, and then `collect` is the one writer.
 
 `LiftResults` is the third typed side table, written by `lift` alone, under the same four
 rules:
@@ -2142,8 +2162,9 @@ index. No statement has an empty span (G9).
 the node modules (`ids.py`, `places.py`, `constants.py`, `rvalues.py`, `statements.py`,
 `terminators.py`, `function.py`), the lowering (`lower.py`, with the control-flow arms in
 `lower_control.py`, the arm of a `match` in `lower_match.py`, the arms of a struct and a
-tuple in `lower_aggregate.py`, a value before its place in `lower_values.py` and the facts of
-a declaration in `lower_signature.py`), the drop
+tuple in `lower_aggregate.py`, the arms of an array in `lower_arrays.py`, the arms of a call
+and of an interpolation in `lower_calls.py`, a value before its place in `lower_values.py`
+and the facts of a declaration in `lower_signature.py`), the drop
 placement of 8.10 (`drops.py`, the one module that builds a `Drop` or a `DropIfSet`; gate:
 `tests/unit/test_slir_drop_placement_is_one.py`), the verifier of 8.13 (`verify.py`) and
 the printer of `--dump-slir` (`printer.py`). Every class is a slotted dataclass, and every
@@ -2242,7 +2263,7 @@ layout authority (a constant `Aggregate` goes through the converter of 8.5), `Di
 reads the tag as an `i32`, and the place `Field(Downcast(p, v), i)` is the address of
 payload field `i` at the offset that the one layout authority gives
 (`TypeSizing.payload_field_offsets`). A struct and a tuple are an LLVM struct of their
-fields in the declaration order: an `Aggregate(Struct)` or an `Aggregate(Tuple)` goes
+fields in the declaration order: an `Aggregate(AggStruct)` or an `Aggregate(AggTuple)` goes
 through the struct emitter (`emit_struct_value`, `backend/types/structs.py`) with one value
 for each field, and the place `Field(p, i)` of a struct or a tuple is the GEP of field `i`.
 The emitter reads the semantic type of the place, never a layout match. One check holds
@@ -2675,7 +2696,7 @@ backstop of the checker, as on the AST backend.
 | a method of an array | a `Call` of `Builtin(BuiltinMethod)`: the receiver first (a `Copy` of its place, a constant, or a temporary of the statement), then each argument with the convention of its row (8.3). The emitter gives the family the address of the receiver (8.6), and one emitter of the family serves a `T[N]` and a `T[]` (`backend/types/arrays/dispatcher.py`) |
 | `Assert` | `SwitchInt(c, [(0, fail_bb)], otherwise: next_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2026", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state of the locals before the failing block. The blocks are made in the order fail, next. A condition local ends at the top of the two blocks, as for an `If` |
 | `expect(msg)` on a `Result` or a `Maybe` | the receiver into a place (a constant into a temporary), `Discriminant` into a local, and `SwitchInt(tag, [(success tag, next_bb)], otherwise: fail_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2029", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state before the failing block, and reads the payload through `Downcast` + `Field`: a `Copy` of a plain payload and a `Clone` of an owning one, because the receiver is a read (8.3); a new value as the receiver is a temporary that its statement drops. The blocks are made in the order fail, next |
-| `StructInit`, `TupleInit` | each field (each part) in the WRITTEN order (R1, 7.4), then ONE `Aggregate(Struct)` (`Aggregate(Tuple)`) of the instance type, with the parts in the declaration order. A new value goes into a temporary of the statement in that order. A place, or a constant, is read at the `Aggregate`. A place is copied into a temporary first when a later field in the written order can call a function, because the call can change the place through a `poke`; a literal, a name of a constant, a place, an operator and a construction over such values call none. A literal and a name of a constant never change, so they get no temporary |
+| `StructInit`, `TupleInit` | each field (each part) in the WRITTEN order (R1, 7.4), then ONE `Aggregate(AggStruct)` (`Aggregate(AggTuple)`) of the instance type, with the parts in the declaration order. A new value goes into a temporary of the statement in that order. A place, or a constant, is read at the `Aggregate`. A place is copied into a temporary first when a later field in the written order can call a function, because the call can change the place through a `poke`; a literal, a name of a constant, a place, an operator and a construction over such values call none. A literal and a name of a constant never change, so they get no temporary |
 | `Field` read | a place: `Copy` of `Field(place, index)`, with the index of the typecheck row; a field of a field is a projection of the projection. A base that is no place (a new value, a constant) goes into a temporary of the statement first, and the field is a `Copy` of the projection of the temporary; the statement drops the temporary at its end (rule 2) |
 | a field write (`p.x := v`) | the new value first, then the store into `Field(place, index)`. A new value that is `and` or `or` goes into a temporary first, because its left operand is written before its right operand reads the place (rule 6) |
 | `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. `borrow` stops on a value that owns (7.9), so each element is plain |
@@ -2975,7 +2996,7 @@ Runs after lowering, before the backend. It checks:
 - an enum value: a `Discriminant` reads a place of an enum type, and an `Aggregate` of a
   variant, an rvalue or a constant, names a variant of its enum type and gives one part for
   each value of its payload, of the type of that value
-- a struct value: an `Aggregate(Struct)` or an `Aggregate(Tuple)` rvalue, and a constant
+- a struct value: an `Aggregate(AggStruct)` or an `Aggregate(AggTuple)` rvalue, and a constant
   `Aggregate` with no variant and of no array type, is of a struct type and gives one part for each field, of the
   type of that field. One check of the parts serves an enum value and a struct value
 - an array value: an `Aggregate(AggArray)` is of a `T[N]` or a `T[]` type and gives the
@@ -2985,6 +3006,7 @@ Runs after lowering, before the backend. It checks:
   element type
 - a length and a slice: `Len` reads a `T[N]`, a `T[]` or a `string`, and `Slice` reads a
   `T[N]` or a `T[]` with two `i32` bounds
+- an index: the index of an `Index` place is an `i32`
 - a view: a local that a `Slice` writes is of a `T[]` type, no other statement writes it,
   and nothing moves or drops it. No statement copies a view into an owning local: that
   local would drop storage that the view does not own
