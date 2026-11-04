@@ -1384,7 +1384,14 @@ downstream matches on syntax or asks the receiver type again to find out which w
 applies.
 
 - `While` is the kind of every `Cond` source.
-- `CountedRange` is a range written as the iterable; `reverse` is in the `Range`.
+- `CountedRange` is a range written as the iterable, with a bare binder or `_`; `reverse`
+  is in the `Range`. The binder is an `i32` local. The `Range` has the type
+  `Iterator@(i32)` and the row "no value". Each bound is an i32 position: a bound that is
+  no number is CE2072, and a number of another type is CE2121. Readable bounds that go down
+  are CE2125 (`semantics/ranges.py`). A `peek` or `poke` binder over a range stops the walk
+  (`typecheck, Loop`). A `Range` in any other position is CE2122 and its bounds are checked
+  too, except in a position that expects an `Iterator@(T)`: there it is a value, which
+  stops the walk (`typecheck, Range`, the iterators group).
 - `Cursor` is a direct walk of contiguous elements: `xs.iter()` on `T[]`, `T[N]`,
   `List@(T)`, and a slice. `foreach(poke r in xs.iter())` is `Cursor` over an `Items`
   source with `by: Ref(Poke)`.
@@ -1699,8 +1706,11 @@ The first round is a DISCOVERY round: it reports no error, writes no row and rec
 exit, and it gives the facts that come round the back edge (the end of the body and each
 `Continue`). The second round starts from the entry joined with that back edge, and it
 reports and writes each row once. The code after the loop sees that fixed point joined
-with each `Break` path of the second round. A `Loop` with an `Items` source is the
-iterators group's (C3) and stops the walk. A `While` loop has no iterator, so it has no
+with each `Break` path of the second round. A `CountedRange` loop reads the bounds of its
+range once, at the entry, and declares its binder as a read-only view, as a bare binder of
+a match is: a write or a rebind of it is CE2414, with a note at the binder. Then it checks
+its body as a `Cond` loop does. A `Loop` with any other `Items` source is the iterators
+group's (C3) and stops the walk. A `While` loop has no iterator, so it has no
 walk-in-place row: that row is a fact of a `Protocol` or an `IteratorValue` walk alone.
 `walk_place` (`semantics/places.py`) reads a SHIR place through the adapter of its tree,
 with the same `Step` and `Walked` as the AST walk of the `scope` pass.
@@ -2326,8 +2336,8 @@ backstop of the checker, as on the AST backend.
 | `Match` on a string | a chain of tests in source order (see below): each a `Call` of the intrinsic `eq` (8.6) into a `bool` local, and a `SwitchInt` on it |
 | `Match` on a tuple | always a chain of tests in source order (see below). The parts of a tuple pattern are at the places `Field(place, index)` of the scrutinee, and each part is tested by the rule of its own kind: a literal, a range, a variant, a nested tuple; a binder and `_` test nothing. A tuple that owns stops the lowering (`Match owning`), because its drops are Tier B |
 | `Loop`, kind `While` | header block, `SwitchInt`, body, `Goto` header. The blocks are made in the order header, the blocks of the condition (an `and` or an `or` in it), body, the zero block (when the condition has a local, see below), exit |
-| `Break`, `Continue` | the drops of each scope of the loop body that it leaves (8.10, rule 2), then `Goto` the exit or the header |
-| `Loop`, kind `CountedRange` | counter local, header, compare, body, step, `Goto` header |
+| `Break`, `Continue` | the drops of each scope of the loop body that it leaves (8.10, rule 2), then `Goto` the exit, or for a `Continue` the next round: the header of a `While`, the step of a `CountedRange` |
+| `Loop`, kind `CountedRange` | in the scope of the loop statement: each bound one time, the start first, into an `i32` local (a constant stays a constant), the count `end - start` into a local (plus one when inclusive), and a counter local at 0. The header compares `counter < count` into a `bool` local and switches; a count below one walks nothing, so the count needs no clamp. The body writes the binder first: `start + counter`, or with `.rev()` `last - counter`, where `last` is `end` (less one, into a local, when exclusive). The step block adds one to the counter and goes to the header; the end of the body and a `Continue` go to the step. Two constant bounds take the count and the first value of `plan_range` (`semantics/ranges.py`) as constants. The zero edge goes to a block of its own as for a `While`. The blocks are made in the order header, body, step, the zero block, exit |
 | `Loop`, kind `Cursor` | `Len` into a local, then the `CountedRange` shape |
 | `Loop`, kind `HashMapCursor` | the one probe walk, over the counted `data[0..count)` range |
 | `Loop`, kind `Protocol` | the iterator in a hidden owning local (or an `Inout` place, for a walk in place); each round calls `next()`, `Discriminant`, `SwitchInt` |
