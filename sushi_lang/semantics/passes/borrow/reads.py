@@ -1,7 +1,8 @@
 """Expression shape probes, and the readers of what reads out of a live owner.
 
 `read_type` and `borrow_owner` read a SHIR node: the type of the value of a node, and the
-local that a borrow of a place is counted on and that a binding into the place freezes.
+owner (a local or a `var`) that a borrow of a place is counted on and that a binding into
+the place freezes.
 The other probes read the AST. They live together and share `unwrap_try` because a
 narrower copy that forgot the `??` is exactly how `outer.get(0)??.push(5)` went unstamped.
 
@@ -28,16 +29,17 @@ from sushi_lang.semantics.ast import (
     MethodCall,
     Name,
 )
+from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.places import Step, unwrap_try, walk_place
 from sushi_lang.semantics.ownership import is_get_out_container
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import Type
+from .state import BorrowState
 
 if TYPE_CHECKING:
-    from sushi_lang.semantics.shir.ids import LocalId
-
     from . import BorrowChecker
+    from .state import Owner
 
 # A read through an owner crosses every step: a field, an element, a call's receiver, a `??`.
 OWNER_STEPS = Step.MEMBER | Step.INDEX | Step.CALL | Step.TRY
@@ -60,12 +62,41 @@ def root_owner(expr: Optional[Expr]) -> Optional[str]:
     return root.id if root is not None else None
 
 
-def borrow_owner(node: object) -> Optional[LocalId]:
-    """The local that a borrow of the SHIR place `node` is counted on, and that a binding
-    into `node` freezes: the root local, under each field step, each element and slice
-    step, and each `??` that reads it. The pass tracks whole locals, not the places in
-    them."""
-    return walk_place(node, Step.MEMBER | Step.INDEX | Step.TRY).local
+def borrow_owner(checker: 'BorrowChecker', node: object) -> Optional[Owner]:
+    """The owner that a borrow of the SHIR place `node` is counted on, and that a binding
+    into `node` freezes: the root local, or the symbol of the global of the root `var`,
+    under each field step, each element and slice step, and each `??` that reads it. None
+    for a temporary. The pass tracks whole owners, not the places in them."""
+    walked = walk_place(node, Step.MEMBER | Step.INDEX | Step.TRY)
+    if isinstance(walked.node, e.StorageRef):
+        return storage_state(checker, walked.node).local
+    return walked.local
+
+
+def owner_state(checker: 'BorrowChecker', node: object) -> Optional[BorrowState]:
+    """The state of the owner that a borrow of `node` is counted on (`borrow_owner`)."""
+    owner = borrow_owner(checker, node)
+    return checker.borrow_state.get(owner) if owner is not None else None
+
+
+def storage_state(checker: 'BorrowChecker', node: e.StorageRef) -> BorrowState:
+    """The borrow state of the `var` that `node` names, keyed by the symbol of its global.
+
+    A `var` is no local of the body, so its state is made at its first borrow. It holds the
+    two counters of the statement and the `let`-borrows out of it; a `var` is never moved
+    out of (docs/design/unit-storage.md).
+    """
+    symbol = checker.answers().global_of(node.shir_id)
+    if symbol is None:
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail="a unit variable with no global reached the "
+                                       "borrow pass")
+    state = checker.borrow_state.get(symbol)
+    if state is None:
+        state = BorrowState(name=checker.decl_name(node.decl), local=symbol,
+                            var_type=read_type(checker, node), is_unit_var=True)
+        checker.borrow_state[symbol] = state
+    return state
 
 
 def chain_call_boundary(expr: object) -> Optional[Span]:

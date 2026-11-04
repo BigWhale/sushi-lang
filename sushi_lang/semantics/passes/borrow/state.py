@@ -1,4 +1,5 @@
-"""Per-variable borrow state, keyed by the `LocalId` of the local (docs/design/ir.md 7.2).
+"""Per-variable borrow state, keyed by the `LocalId` of the local (docs/design/ir.md 7.2),
+or by the symbol of the global of a `var`.
 
 A hidden local has no source name, so every fact is keyed by the id, and an owner or a
 binding that a fact names is a `LocalId` too. `name` is the source name, for a
@@ -39,14 +40,19 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.monomorphize.unroll import WrittenLet
 
 if TYPE_CHECKING:
+    from typing import TypeAlias
+
     from sushi_lang.semantics.shir.ids import LocalId
+
+    #: The key of a state: a local, or the symbol of the global of a `var`.
+    Owner: TypeAlias = LocalId | str
 
 
 @dataclass
 class BorrowState:
     """Tracks the borrow state of a single variable."""
     name: str
-    local: Optional[LocalId] = None     # the key of the state
+    local: Optional[Owner] = None       # the key of the state
     var_type: Optional[Type] = None
     poke_borrow_count: int = 0          # at most 1
     peek_borrow_count: int = 0          # unlimited
@@ -66,7 +72,7 @@ class BorrowState:
     moved_at_span: Optional[Span] = None      # where ownership was transferred away
     consumed_by_method: Optional[str] = None  # the `nom self` method that took it (R27)
     move_reported_by: Optional[LocalId] = None  # the iterator whose CE2412 reports the move
-    borrows_from: tuple[LocalId, ...] = ()    # the root owners a `let`-borrow reads out of
+    borrows_from: tuple[Owner, ...] = ()      # the root owners a `let`-borrow reads out of
     is_lent_iterator: bool = False            # a `let`-borrow that owns its iterator value
     lent_value: Optional[Expr] = None         # the value a lent iterator `let` was bound to
     views_storage_of: Optional[Expr] = None   # a foreach iterator: the container it walks
@@ -85,9 +91,9 @@ class BorrowState:
         return self.poke_borrow_count > 0 or self.peek_borrow_count > 0
 
 
-def record_owners(borrow_state: dict[LocalId, BorrowState], binding: BorrowState,
-                  owners: Iterable[LocalId], span: Optional[Span],
-                  frame: list[tuple[LocalId, LocalId]]) -> None:
+def record_owners(borrow_state: dict[Owner, BorrowState], binding: BorrowState,
+                  owners: Iterable[Owner], span: Optional[Span],
+                  frame: list[tuple[Owner, Owner]]) -> None:
     """Freeze each owner that `binding` reads out of, until `frame` is released.
 
     The one writer of `borrows_from` and of the owner's `binding_borrows`. An owner

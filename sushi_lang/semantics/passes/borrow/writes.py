@@ -147,7 +147,7 @@ def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike,
     if not changes_its_receiver(expr):
         return
     receiver = receiver if receiver is not None else expr.receiver
-    root = borrow_owner(receiver)
+    root = borrow_owner(checker, receiver)
     what = what or f"call `.{expr.method}()`"
     if reject_readonly_write(checker, root, expr.loc, what, receiver=receiver):
         return

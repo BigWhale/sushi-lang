@@ -224,7 +224,7 @@ class BindingScope:
     def freeze_owner(self, state: BorrowState, source: Expr, span: Optional[Span],
                      poke_span: Optional[Span] = None) -> None:
         """Give a reference binding the owner freeze a `let`-borrow gets (#242)."""
-        owner = borrow_owner(source)
+        owner = borrow_owner(self.checker, source)
         owner_state = self.checker.borrow_state.get(owner) if owner else None
         if owner is None or owner_state is None:
             return
@@ -263,7 +263,7 @@ def bind_let_reference(checker: 'BorrowChecker', stmt) -> None:
     check_expr(checker, stmt.value)
     is_poke = stmt.ty.is_poke()
     place = _own_payload_receiver(stmt.value) or stmt.value
-    owner = borrow_owner(place)
+    owner = borrow_owner(checker, place)
     state = BorrowState(name=stmt.name, var_type=stmt.ty, bound_at_span=stmt.loc,
                         declared_at_span=stmt.loc)
     checker.borrow_state[stmt.name] = state
@@ -585,7 +585,7 @@ def reject_a_second_reference(checker: 'BorrowChecker', place: Expr, marker: str
 
     A pattern binding and a `foreach` item both ask this before they bind (#1027).
     """
-    root = borrow_owner(place)
+    root = borrow_owner(checker, place)
     owner_state = checker.borrow_state.get(root) if root else None
     if owner_state is None:
         return False

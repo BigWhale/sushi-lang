@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.shir.stop import Stops
     from sushi_lang.semantics.shir.typeck import TypeckResults
     from sushi_lang.semantics.tables import SymbolTables
+    from .state import Owner
 
 class BorrowChecker:
     """The borrow pass over the SHIR bodies of one unit, one body at a time."""
@@ -94,10 +95,8 @@ class BorrowChecker:
         self.borrowed_return = False
         # The body of `main`, whose `string[] args` is a view of the process arguments.
         self.is_main = False
-        self.borrow_state: Dict[LocalId, BorrowState] = {}
-        self.active_borrows: Set[LocalId] = set()
-        # The state of each `var` that the body borrows, by the symbol of its global.
-        self.storage_states: Dict[str, BorrowState] = {}
+        self.borrow_state: Dict[Owner, BorrowState] = {}
+        self.active_borrows: Set[Owner] = set()
         # One frame per open block; `check_block` pops it, which is what gives a
         # `let`-borrow a LEXICAL lifetime. `active_borrows` clears per statement.
         self._scope_binding_borrows: list[list[tuple[LocalId, LocalId]]] = []
@@ -162,7 +161,6 @@ class BorrowChecker:
         self.is_main = self.shir.decls.name_of(body.fn_id) == "main"
         self.borrow_state = {}
         self.active_borrows = set()
-        self.storage_states = {}
         self._scope_binding_borrows = []
         self.block_locals = []
         self.loop_frames = []
@@ -188,8 +186,10 @@ class BorrowChecker:
             er.raise_internal_error("CE0000", detail="the borrow pass walks no SHIR body")
         return self.ownership
 
-    def name_of(self, local: LocalId) -> str:
-        """The source name of a local, for a diagnostic."""
+    def name_of(self, local: Owner) -> str:
+        """The source name of a local or of a `var`, for a diagnostic."""
+        if isinstance(local, str):
+            return self.borrow_state[local].name
         shir_local = self.locals.get(local)
         if shir_local is None or shir_local.name is None:
             return f"_{local.index}"

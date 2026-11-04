@@ -124,7 +124,7 @@ def lent_owners(checker: 'BorrowChecker', expr: Optional[Expr]) -> Optional[tupl
             return state.borrows_from
         return None
     if is_producer(source) and source.iterator_state == LENT:
-        return owners_through(checker, borrow_owner(source.receiver))
+        return owners_through(checker, borrow_owner(checker, source.receiver))
     if (isinstance(source, (MethodCall, DotCall)) and is_adapter(source)
             and source.iterator_state == LENT):
         return _adapter_owners(checker, source)

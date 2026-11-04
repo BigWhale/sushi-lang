@@ -331,7 +331,7 @@ def record_borrowed_binding(checker: 'BorrowChecker', node: s.Assign,
     dest.is_borrowed_binding = True
     dest.is_let_borrow = True
     dest.bound_at_span = node.loc
-    owner = borrow_owner(node.value)
+    owner = borrow_owner(checker, node.value)
     if owner is None:
         return
     record_owners(checker.borrow_state, dest, view_owners(checker, owner), node.loc,

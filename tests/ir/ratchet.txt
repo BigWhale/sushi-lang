@@ -2985,6 +2985,7 @@ tests/var/borrow/test_err_var_move_let.sushi
 tests/var/borrow/test_err_var_move_nom_arg.sushi
 tests/var/borrow/test_err_var_move_return.sushi
 tests/var/borrow/test_err_var_poke_constant_still_refused.sushi
+tests/var/borrow/test_err_var_slice_beside_poke.sushi
 tests/var/borrow/test_err_var_two_pokes_one_statement.sushi
 tests/var/borrow/test_var_plain_copies_out.sushi
 tests/var/initializer/test_err_const_init_names_var.sushi

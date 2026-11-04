@@ -108,7 +108,7 @@ def source_owners(checker: 'BorrowChecker',
         # A literal is storage the program keeps: it has no owner, and it is never freed.
         return (), None
     if names_kept_storage(checker, source):
-        owner = borrow_owner(source)
+        owner = borrow_owner(checker, source)
         return (owners_of_place(checker, owner) if owner is not None else ()), None
     return (), source
 
@@ -219,7 +219,7 @@ def _why_not_a_view(checker: 'BorrowChecker', returned: BodyReturn,
     if lent is not None:
         return _outside(checker, returned, lent)
     if names_kept_storage(checker, value):
-        owner = borrow_owner(value)
+        owner = borrow_owner(checker, value)
         if owner is None or owner in returned.sources:
             return None
         state = checker.borrow_state.get(owner)

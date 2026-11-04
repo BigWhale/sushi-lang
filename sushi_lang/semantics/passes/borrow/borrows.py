@@ -23,7 +23,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import BorrowMode
 from . import arms
 from .diagnostics import emit_use_after_move, temporary_spelled
-from .reads import borrow_owner, read_type
+from .reads import borrow_owner, read_type, storage_state
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -98,7 +98,7 @@ def _borrow_slice(checker: 'BorrowChecker', place: e.Slice, span: Optional[Span]
     the view and move storage that the array keeps.
     """
     arms.check(checker, place)
-    owner = borrow_owner(place)
+    owner = borrow_owner(checker, place)
     if is_poke:
         reject_readonly_write(checker, owner, span, "take a `poke` borrow", receiver=place)
         return
@@ -119,36 +119,6 @@ def borrow_of_constant(checker: 'BorrowChecker', place: e.ShirExpr, mode: Borrow
     reject_borrow_of_constant(checker.err, name, sig, root.loc, mode=mode.value,
                               no_frame_slot=sig is None)
     return True
-
-
-def storage_state(checker: 'BorrowChecker', node: e.StorageRef) -> BorrowState:
-    """The borrow state of the `var` that `node` names, keyed by the symbol of its global.
-
-    A `var` is no local of the body, so its state is made at its first borrow, and it holds
-    the two counters of the statement alone: a `var` is never moved out of, and a plain one
-    has no `let`-borrow (docs/design/unit-storage.md).
-    """
-    symbol = checker.answers().global_of(node.shir_id)
-    if symbol is None:
-        er.raise_internal_error("CE0000", span=node.loc,
-                                detail="a unit variable with no global reached the "
-                                       "borrow pass")
-    state = checker.storage_states.get(symbol)
-    if state is None:
-        state = BorrowState(name=checker.decl_name(node.decl),
-                            var_type=read_type(checker, node), is_unit_var=True)
-        checker.storage_states[symbol] = state
-    return state
-
-
-def owner_state(checker: 'BorrowChecker', place: e.ShirExpr) -> Optional[BorrowState]:
-    """The state that a borrow of `place` is counted on: the state of its root local or of
-    its root `var`, or None for a temporary."""
-    root = walk_place(place, Step.MEMBER | Step.INDEX | Step.TRY).node
-    if isinstance(root, e.StorageRef):
-        return storage_state(checker, root)
-    owner = borrow_owner(place)
-    return checker.borrow_state.get(owner) if owner is not None else None
 
 
 def acquire_borrow(checker: 'BorrowChecker', state: BorrowState, span: Optional[Span],
@@ -211,8 +181,7 @@ def register_implicit_borrow(checker: 'BorrowChecker', arg: e.ShirExpr) -> None:
 
 def clear_borrows(checker: 'BorrowChecker') -> None:
     """Clear all active borrows (called at the end of each statement)."""
-    states = [checker.borrow_state.get(local) for local in checker.active_borrows]
-    for state in [*states, *checker.storage_states.values()]:
+    for state in [checker.borrow_state.get(owner) for owner in checker.active_borrows]:
         if state is not None:
             state.poke_borrow_count = 0
             state.peek_borrow_count = 0

@@ -185,7 +185,7 @@ def _check_place_write(checker: 'BorrowChecker', node: s.Assign,
     _reject_readonly_place_write(checker, target, node.loc)
     arms.check(checker, node.value)
     # Replacing what the owner holds invalidates every binding reading out of it (#242).
-    check_owner_not_borrowed(checker, borrow_owner(target), node.loc, "assign",
+    check_owner_not_borrowed(checker, borrow_owner(checker, target), node.loc, "assign",
                              place=target)
     consume(checker, node.value)
 
@@ -203,7 +203,7 @@ def _reject_readonly_place_write(checker: 'BorrowChecker', target: e.Field | e.I
         what = "assign to a field"
     else:
         what = "assign to an array element"
-    reject_readonly_write(checker, borrow_owner(target), span, what, receiver=target.base)
+    reject_readonly_write(checker, borrow_owner(checker, target), span, what, receiver=target.base)
     arms.check(checker, target)
 
 
@@ -259,7 +259,7 @@ def _rebind_place(checker: 'BorrowChecker', place: e.ShirExpr) -> None:
     first."""
     if isinstance(place, (e.Field, e.Index)):
         _reject_readonly_place_write(checker, place, place.loc)
-        check_owner_not_borrowed(checker, borrow_owner(place), place.loc, "assign",
+        check_owner_not_borrowed(checker, borrow_owner(checker, place), place.loc, "assign",
                                  place=place)
         return
     if isinstance(place, e.StorageRef):

@@ -335,7 +335,7 @@ def emit_consume_of_read(checker: 'BorrowChecker', expr: e.ShirExpr,
     read spelled as the user wrote it."""
     text = spelled(checker, expr)
     diag = checker.err.emit_with(er.ERR.CE2411, expr.loc, name=text)
-    owner = borrow_owner(expr)
+    owner = borrow_owner(checker, expr)
     state = checker.borrow_state.get(owner) if owner is not None else None
     if state is not None and state.declared_at_span is not None:
         diag.note_at(f"'{state.name}' owns this value and still frees it",

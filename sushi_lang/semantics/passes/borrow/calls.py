@@ -30,14 +30,14 @@ from sushi_lang.semantics.shir.callee import (
 
 from . import arms
 from .borrows import (
-    BY_ADDRESS, LATER_ROOTS, acquire_borrow, borrow_of_constant, check_borrow, owner_state,
+    BY_ADDRESS, LATER_ROOTS, acquire_borrow, borrow_of_constant, check_borrow,
     register_implicit_borrow)
 from .iterators import take_lent_iterator
 from .consume import consume, consume_each, read_through_receiver, source_provenance
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, spelled
 from .expressions import stop_at_a_field_take, stop_at_owning_elements
 from .methods import CONTAINER_INSERT_METHODS
-from .reads import OWNER_STEPS, borrow_owner, called_on, read_type
+from .reads import OWNER_STEPS, borrow_owner, called_on, owner_state, read_type
 from .writes import check_owner_not_borrowed, reject_readonly_write
 from .state import BorrowState
 
@@ -154,7 +154,7 @@ def _write_receiver(checker: 'BorrowChecker', node: e.Call, callee: Method) -> b
     if isinstance(root, LATER_ROOTS):
         arms.stop_at(checker, root)
     what = f"call `.{_method_name(checker, callee)}()`"
-    owner = borrow_owner(receiver)
+    owner = borrow_owner(checker, receiver)
     if reject_readonly_write(checker, owner, node.loc, what, receiver=receiver):
         return False
     _borrow_owner_of(checker, receiver, is_poke=True)
@@ -166,7 +166,7 @@ def _change_receiver_owner(checker: 'BorrowChecker', node: e.Call, callee: Metho
     invalidated, after the arguments are read. A borrowed argument that reads one is read
     while the change runs (`reject_borrow_read_by_the_change`)."""
     what = f"call `.{_method_name(checker, callee)}()`"
-    check_owner_not_borrowed(checker, borrow_owner(callee.recv), node.loc, what,
+    check_owner_not_borrowed(checker, borrow_owner(checker, callee.recv), node.loc, what,
                              place=callee.recv)
 
 
@@ -244,7 +244,7 @@ def _write_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Buil
     receiver = callee.recv
     name = callee.method.name
     what = f"call `.{name}()`"
-    owner = borrow_owner(receiver)
+    owner = borrow_owner(checker, receiver)
     if not reject_readonly_write(checker, owner, node.loc, what, receiver=receiver):
         check_owner_not_borrowed(checker, owner, node.loc, what, place=receiver,
                                  moves_storage=effect_of(name).moves_storage)
@@ -363,7 +363,7 @@ def reject_borrow_read_by_the_change(checker: 'BorrowChecker', node: e.Call,
 def _arg_root(checker: 'BorrowChecker',
               value: e.ShirExpr) -> tuple[Optional[LocalId], Optional[BorrowState]]:
     """The local an argument reads out of, and its borrow state."""
-    local = borrow_owner(value)
+    local = borrow_owner(checker, value)
     if local is None:
         return None, None
     return local, checker.borrow_state.get(local)
