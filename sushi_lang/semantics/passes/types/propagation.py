@@ -35,64 +35,6 @@ def _is_negated_literal(expr: 'Expr') -> bool:
             and isinstance(expr.expr, (IntLit, FloatLit)))
 
 
-def is_bare_numeric_literal(expr: 'Expr') -> bool:
-    """A numeric literal that no context has typed yet."""
-    return isinstance(expr, (IntLit, FloatLit)) and expr.resolved_type is None
-
-
-def is_byte_literal(expr: 'Expr') -> bool:
-    """A byte literal (`a'x'`): an integer literal that defaults to u8."""
-    return isinstance(expr, IntLit) and expr.byte_spelling is not None
-
-
-def unwrap_type_preserving_unary(expr: 'Expr') -> 'Expr':
-    """The value under any run of unary operators that keep their operand's type."""
-    while isinstance(expr, UnaryOp) and expr.op in _TYPE_PRESERVING_UNARY:
-        expr = expr.expr
-    return expr
-
-
-def type_literal_from_sibling(validator: 'TypeValidator', first: 'Expr', second: 'Expr',
-                              infer) -> None:
-    """Stamp a bare numeric-literal operand with its concrete sibling's type.
-
-    The one rule for a pair of operands (a binary expression, the two arguments of
-    `min` / `max`): bareness is read THROUGH the unary operators that keep their operand's
-    type, two bare literals keep the default, and the operand node -- not the literal
-    under it -- is propagated, so a negated literal that does not fit is CE2073.
-
-    One exception for two bare literals: when exactly one is a byte literal (`a'x'`), the
-    other takes its u8, in either order, so `a'a' + 1` is a u8 and not a width mismatch.
-    """
-    first_lit = unwrap_type_preserving_unary(first)
-    second_lit = unwrap_type_preserving_unary(second)
-    if is_bare_numeric_literal(first_lit) and is_bare_numeric_literal(second_lit):
-        first_byte, second_byte = is_byte_literal(first_lit), is_byte_literal(second_lit)
-        if first_byte != second_byte:
-            propagate_types_to_value(validator, second if first_byte else first,
-                                     BuiltinType.U8)
-        return
-    literal = lone_bare_literal(first, second)
-    if literal is None:
-        return
-    sibling = second if literal is first else first
-    sibling_type = infer(sibling)
-    if isinstance(sibling_type, BuiltinType):
-        propagate_types_to_value(validator, literal, sibling_type)
-
-
-def lone_bare_literal(first: 'Expr', second: 'Expr') -> 'Optional[Expr]':
-    """The operand that is a bare numeric literal when the other operand is not one.
-
-    Bareness is read through the unary operators that keep their operand's type.
-    """
-    first_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(first))
-    second_bare = is_bare_numeric_literal(unwrap_type_preserving_unary(second))
-    if first_bare == second_bare:
-        return None
-    return first if first_bare else second
-
-
 def same_type_operands(expr: 'Expr') -> 'tuple[Expr, ...]':
     """The operands of an operator that have the type of the operator itself."""
     if isinstance(expr, BinaryOp):

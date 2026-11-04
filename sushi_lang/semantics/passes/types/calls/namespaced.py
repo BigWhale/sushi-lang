@@ -55,14 +55,6 @@ def validate_namespaced_call(validator: 'TypeValidator', node: 'DotCall') -> Non
         _reject_unknown_member(validator, node.receiver, node.method, node.loc)
         return
 
-    if producer == "stdlib":
-        from .user_defined import validate_stdlib_function
-        _stamp(node, binding)
-        _stamp_stdlib_param_modes(node, binding.record)
-        validate_stdlib_function(validator, node, (binding.provider.origin,
-                                                   binding.record))
-        return
-
     from sushi_lang.semantics.passes.types.visibility import reject_private_call
     if reject_private_call(validator, "function", binding.record, node.loc):
         return
@@ -319,18 +311,6 @@ def _stamp_param_modes(node, func_sig, validator=None) -> None:
     if func_sig is not None and validator is not None:
         from ..borrowed_returns import stamp_call_sources
         stamp_call_sources(validator, node, func_sig)
-
-
-def _stamp_stdlib_param_modes(node, stdlib_func) -> None:
-    """A registry stdlib function declares no mode: every argument is a borrow.
-
-    Its parameters are types, so the name a diagnostic quotes is the type's, as at
-    the flat call.
-    """
-    from sushi_lang.semantics.param_modes import CalleeKind, modes_for
-    params = getattr(stdlib_func, "params", None) or ()
-    node.callee_param_modes = modes_for(None, CalleeKind.STDLIB)
-    node.callee_param_names = tuple(p.name for p in params)
 
 
 def _written(receiver, name: str) -> str:

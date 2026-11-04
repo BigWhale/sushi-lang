@@ -142,7 +142,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "utils.py", "reject_named_args", _TIER_A),
     (_TYPES + "calls/user_defined.py", "validate_indirect_call", _port("C2")),
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
-    (_TYPES + "calls/user_defined.py", "check_stdlib_function", _TIER_A),
     (_TYPES + "statements.py", "validate_rebind_statement", _port("A9")),
     (_TYPES + "calls/enums.py", "_refuse_untyped_constructor", _port("C1")),
     (_TYPES + "calls/structs.py", "_refuse_unsolved_struct_constructor", _port("C1")),

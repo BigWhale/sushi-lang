@@ -115,10 +115,11 @@ def _recv() -> e.LocalRef:
      'BuiltinStatic(f64, "from_bits")'),
     (lambda d: c.Conversion(d.refer("to_app")), "Conversion(@to_app)"),
     (lambda d: c.Extern(d.refer("abs")), "Extern(@abs)"),
+    (lambda d: c.Stdlib(d.refer("m.sqrt"), "math"), "Stdlib(<math>, @m.sqrt)"),
     (lambda d: c.Intrinsic("print"), 'Intrinsic("print")'),
     (lambda d: c.Indirect(_recv()), "Indirect(LocalRef(_0))"),
 ], ids=["Free", "Method", "Static", "Builtin", "BuiltinStatic", "Conversion", "Extern",
-        "Intrinsic", "Indirect"])
+        "Stdlib", "Intrinsic", "Indirect"])
 def test_each_callee_prints_in_the_field_order_of_ir_md(make, text: str) -> None:
     decls = DeclNames()
     assert ShirPrinter(decls).show(make(decls)) == text

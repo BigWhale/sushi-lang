@@ -10,7 +10,8 @@ A `Call` answers what its callee yields. Its written target decides the callee:
   the function, or its bare return value (`call_yield`). The function decides that type,
   so the call answers it also when an argument does not fit, or when the function is
   private to another unit: a later fault of the value, such as an unhandled `Result`, is a
-  fault of its own.
+  fault of its own. A name that is a function of a registry stdlib module, bare or behind
+  an alias, is a call of that function (`Stdlib`, `calls/user_defined.py`).
 - `BuiltinFn` is `print` or `println` (`Intrinsic`): one argument with a string form, which
   the intrinsic reads (`Guaranteed`). Its display type is an answer.
 - `Dotted` is a method call. The receiver is typed first, and the ladder of the call
@@ -32,7 +33,8 @@ the channel of the method, or its bare return value.
 
 A plain type is a primitive, or a struct or an enum that is no instance of a generic type
 and whose name the unit did not lose. Every other target, and a call that another group
-types (a generic function, a stdlib function, a C function, a variadic function, a method
+types (a generic function, a function of a stdlib module other than `<math>` and
+`<time>`, a C function, a variadic function, a method
 or a static of a type that is not plain, a method or a static with a method-level type
 parameter, a method with a `peek` return, a perk method), stops the walk of its body.
 
@@ -71,7 +73,8 @@ from sushi_lang.semantics.passes.types.calls.enums import reject_missing_variant
 from sushi_lang.semantics.passes.types.calls.methods import (
     RESOLUTION_REPORTED, extension_call_result_type, resolve_extension_method)
 from sushi_lang.semantics.passes.types.calls.statics import reject_missing_static
-from sushi_lang.semantics.passes.types.calls.user_defined import own_concrete_function
+from sushi_lang.semantics.passes.types.calls.user_defined import (
+    check_stdlib_call, own_concrete_function)
 from sushi_lang.semantics.passes.types.method_registry import (
     MethodFamily, string_method_return_type)
 from sushi_lang.semantics.passes.types.expressions import top_level_contract
@@ -87,6 +90,7 @@ from sushi_lang.semantics.shir import dispatch, exprs as e
 from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic, Method, Static
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.statics import is_builtin_static
+from sushi_lang.semantics.stdlib_registry import StdlibFunction
 from sushi_lang.semantics.type_predicates import (
     generic_base_of, is_instance_of, is_string_convertible)
 from sushi_lang.semantics.typesys import (
@@ -125,6 +129,8 @@ def _check_free_call(validator: TypeValidator, node: e.Call,
     alias, dot, name = written.rpartition(".")
     sig = (_function_behind_alias(validator, node, alias, name) if dot
            else _function_of_scope(validator, node, ref, written))
+    if isinstance(sig, StdlibFunction):
+        return check_stdlib_call(validator, node, ref, sig)
     if sig is None:
         return None
     if reject_private_call(validator, "function", sig, ref.loc):
@@ -385,12 +391,13 @@ FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
 
 
 def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
-                       name: str) -> Optional[FuncSig]:
+                       name: str) -> Optional[FuncSig | StdlibFunction]:
     """The concrete function that a bare name calls in this unit, or None after its error.
 
-    A generic function, a stdlib function and `errno()` are not typed here, and their call
-    stops the walk of its body. A bare call that constructs a struct is a `StructInit`
-    (lowering, #1076), never a call.
+    A name that no function of the unit's scope takes is the function of a registry
+    stdlib module that the unit imports, when one has it. A generic function and `errno()`
+    are not typed here, and their call stops the walk of its body. A bare call that
+    constructs a struct is a `StructInit` (lowering, #1076), never a call.
     """
     own = own_concrete_function(validator.func_table, name, validator.current_unit_name)
     if ((own is None and validator.generic_sig(name) is not None)
@@ -398,8 +405,10 @@ def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
         visit.stop_at(validator, node)
     sig = validator.func_sig(name)
     if sig is None:
-        if (validator.func_table.lookup_stdlib_by_name(name, validator.scope) is not None
-                or name == ERRNO_FUNCTION):
+        stdlib = validator.func_table.lookup_stdlib_by_name(name, validator.scope)
+        if stdlib is not None:
+            return stdlib[1]
+        if name == ERRNO_FUNCTION:
             visit.stop_at(validator, node)
         reject_undefined_function(validator, name, ref.loc)
         return None
@@ -412,11 +421,12 @@ def _function_of_scope(validator: TypeValidator, node: e.Call, ref: e.GlobalRef,
 
 
 def _function_behind_alias(validator: TypeValidator, node: e.Call, alias: str,
-                           name: str) -> FuncSig:
-    """The function that `alias.name` names: what the namespace holds under the name."""
+                           name: str) -> FuncSig | StdlibFunction:
+    """The function that `alias.name` names: what the namespace holds under the name, a
+    function of a unit or of a registry stdlib module."""
     binding = validator.namespaces.lookup(alias, name)
     if (binding is None or binding.kind != "function"
-            or binding.provider.namespace_kind in ("extern", "stdlib")):
+            or binding.provider.namespace_kind == "extern"):
         visit.stop_at(validator, node)
     return binding.record
 

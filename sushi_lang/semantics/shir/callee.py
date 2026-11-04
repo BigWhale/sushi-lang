@@ -73,6 +73,14 @@ class Extern:
 
 
 @dataclass(frozen=True, slots=True)
+class Stdlib:
+    """A function of a registry stdlib module (`sqrt`, `m.sqrt`): its written name, and
+    the `use` path of its module (`math`)."""
+    decl: DeclId
+    module: str
+
+
+@dataclass(frozen=True, slots=True)
 class Intrinsic:
     """A function that the language gives: `print`, `println`."""
     name: str
@@ -85,5 +93,6 @@ class Indirect:
 
 
 Callee: TypeAlias = (
-    Free | Method | Static | Builtin | BuiltinStatic | Conversion | Extern | Intrinsic | Indirect
+    Free | Method | Static | Builtin | BuiltinStatic | Conversion | Extern | Stdlib | Intrinsic
+    | Indirect
 )

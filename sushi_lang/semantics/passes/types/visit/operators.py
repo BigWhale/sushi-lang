@@ -157,6 +157,16 @@ def _check_operands(validator: TypeValidator, node: e.Binary,
     position = _numeric(expected)
     left_at = _given(lhs, position) if node.op in _SAME_TYPE + SHIFT_OPS else None
     right_at = _given(rhs, position) if node.op in _SAME_TYPE else None
+    return check_operand_pair(validator, lhs, rhs, left_at, right_at)
+
+
+def check_operand_pair(validator: TypeValidator, lhs: e.ShirExpr, rhs: e.ShirExpr,
+                       left_at: Optional[Type] = None, right_at: Optional[Type] = None,
+                       ) -> tuple[Optional[Type], Optional[Type]]:
+    """The types of two values of one type, each checked at the type that its position
+    gives it, if any: a lone number literal takes the type of the other value, and of two
+    literals, a number beside a byte literal takes `u8`. The operands of a binary operator
+    and the two arguments of a `<math>` family (`min(x, 2)`) read it."""
     left_open = left_at is None and _literal_under(lhs) is not None
     right_open = right_at is None and _literal_under(rhs) is not None
     if left_open and right_open:

@@ -25,7 +25,7 @@ from sushi_lang.semantics.param_modes import (
     CalleeKind, Convention, ParamMode, effective_modes, receiver_mode,
 )
 from sushi_lang.semantics.shir import dispatch, exprs as e
-from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic, Method, Static
+from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic, Method, Static, Stdlib
 
 from . import arms
 from .borrows import (
@@ -58,8 +58,10 @@ def maybe_mark_container_insert(checker: 'BorrowChecker', expr: MethodLike) -> N
 
 
 def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
-    """A call of a free function or of `print`/`println`, with the convention of each
-    argument from the `TypeckResults` row of the call (docs/design/ir.md 8.3).
+    """A call of a free function, of a function of a registry stdlib module or of
+    `print`/`println`, with the convention of each argument from the `TypeckResults` row
+    of the call (docs/design/ir.md 8.3). A stdlib function borrows each argument, so the
+    call reads them.
 
     Each argument is read first: a `peek` or a `poke` argument borrows its place there, as
     the marker is written, so a borrow and a consuming use of one value in one call
@@ -82,7 +84,7 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     writes_receiver = False
     if isinstance(callee, Builtin):
         writes_receiver = _check_builtin_receiver(checker, node, callee)
-    elif not isinstance(callee, (Free, Intrinsic, Method, Static)):
+    elif not isinstance(callee, (Free, Intrinsic, Method, Static, Stdlib)):
         er.raise_internal_error(
             "CE0000", span=node.loc,
             detail=f"the typecheck pass gave the borrow pass a call with the callee "

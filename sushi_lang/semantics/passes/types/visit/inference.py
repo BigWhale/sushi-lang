@@ -42,21 +42,13 @@ _REGISTRY_TYPED_STDLIB_MODULES = ("time", "sys/env", "sys/process", "random", "i
 
 def math_call_return_type(validator: 'TypeValidator', name: str,
                           args) -> Optional[Type]:
-    """What a `<math>` call yields, from its signature row; None when `name` is no row.
-
-    The bare call and the call behind an alias both read this, so they cannot drift. A
-    row that answers a `Result`, a `Maybe` or a tuple names it as written, and it is
-    interned here, as the rows of the other registry modules are.
-    """
-    from sushi_lang.sushi_stdlib.src import math as math_module
-    if not math_module.is_builtin_math_function(name):
-        return None
-    arg_types = [validator.infer_expression_type(arg) for arg in args]
-    if name in math_module.MATH_FAMILIES and arg_types and arg_types[0] is None:
-        return None
-    declared = math_module.get_builtin_math_function_return_type(
-        name, [ty for ty in arg_types if ty is not None])
-    return validator.type_inference_visitor._materialize_wrapper(declared)
+    """What a `<math>` call of the early passes yields, from its signature row; None when
+    `name` is no row. The typecheck pass reads the same row and the same interning
+    (`calls/user_defined.py:check_stdlib_call`), so the two cannot drift."""
+    from sushi_lang.semantics.passes.types.calls.user_defined import stdlib_call_type
+    from sushi_lang.semantics.stdlib_registry import stdlib_row
+    row = stdlib_row("math", name, [validator.infer_expression_type(arg) for arg in args])
+    return None if row is None else stdlib_call_type(validator, row)
 
 
 class _InferenceRungs:
