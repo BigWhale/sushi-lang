@@ -11,15 +11,16 @@ generator used rather than spelled out here.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Sequence
 
 from llvmlite import ir
 
+from sushi_lang.backend.utils import require_builder
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
 from sushi_lang.semantics.generics.types import GenericTypeRef
-from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, UnknownType
+from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Type, UnknownType
 from sushi_lang.sushi_stdlib.src.signatures import Param, Signature
 
 if TYPE_CHECKING:
@@ -120,7 +121,7 @@ def llvm_function_type(sig: Signature) -> ir.FunctionType:
 
 def emit_registry_call(codegen: 'LLVMCodegen', expr, func_name: str, symbol: str,
                        sig: Signature, to_i1: bool) -> ir.Value:
-    """Emit one registry stdlib call, straight from its row.
+    """Emit one registry stdlib call of the AST, straight from its row.
 
     A `cstr` argument is marshalled through `emit_cstr_arg`, the one C-string seam, and
     is freed at scope exit like an FFI argument (#292); the callee takes `i8*` and frees
@@ -129,7 +130,6 @@ def emit_registry_call(codegen: 'LLVMCodegen', expr, func_name: str, symbol: str
     pointer -- and each is a BORROW: no callee here frees what it was handed.
     """
     from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg, emit_cstr_arg
-    from sushi_lang.backend.functions import declare_stdlib_function
 
     if len(expr.args) != sig.arity:
         # A compiler bug, not a user error: the layer's `validate_*_call` already
@@ -143,17 +143,48 @@ def emit_registry_call(codegen: 'LLVMCodegen', expr, func_name: str, symbol: str
             args.append(emit_cstr_arg(codegen, written))
         else:
             args.append(as_param_value(codegen, param, emit_borrowed_arg(codegen, written)))
+    result = emit_row_call(codegen, func_name, symbol, sig, args)
+    return codegen.utils.as_i1(result) if to_i1 else result
 
+
+def emit_stdlib_row(codegen: 'LLVMCodegen', module_path: str, func_name: str, symbol: str,
+                    args: Sequence[tuple[ir.Value, Type]]) -> ir.Value:
+    """Emit the call of a function of a registry stdlib module from the values and the
+    types of its operands (docs/design/ir.md 8.6). The row is the row of the call
+    (`stdlib_row`: a member of a family at the type of its first argument), and `symbol`
+    is the symbol that SLIR lowering derived for it. Each operand borrows. A `cstr`
+    parameter takes no operand yet: the group of the C-string argument ports it."""
+    from sushi_lang.semantics.stdlib_registry import stdlib_row
+
+    sig = stdlib_row(module_path, func_name, [ty for _, ty in args])
+    if sig is None:
+        raise_internal_error("CE0024", type=module_path, method=func_name)
+    if any(param.as_cstr for param in sig.params):
+        raise_internal_error("CE0000", detail=f"the C-string argument of '{func_name}' "
+                                              f"takes no operand yet")
+    return emit_row_call(codegen, func_name, symbol, sig, [value for value, _ in args])
+
+
+def emit_row_call(codegen: 'LLVMCodegen', func_name: str, symbol: str, sig: Signature,
+                  args: Sequence[ir.Value]) -> ir.Value:
+    """Declare the generated function of a row, call it with the values of its arguments,
+    and answer its value. A `bare_ok` row answers a bare status, and the call builds the
+    Result (`status_result.py`). A row that answers `~` answers an undefined `i32`."""
+    from sushi_lang.backend.functions import declare_stdlib_function
+
+    if len(args) != sig.arity:
+        raise_internal_error("CE0023", method=func_name, expected=sig.arity, got=len(args))
     function_type = llvm_function_type(sig)
     stdlib_func = declare_stdlib_function(codegen.module, symbol,
                                           function_type.return_type, list(function_type.args))
+    builder = require_builder(codegen)
     if isinstance(function_type.return_type, ir.VoidType):
-        codegen.builder.call(stdlib_func, args)
+        builder.call(stdlib_func, list(args))
         return ir.Constant(ir.IntType(32), ir.Undefined)
-    result = codegen.builder.call(stdlib_func, args, name=f"{func_name}_result")
+    result = builder.call(stdlib_func, list(args), name=f"{func_name}_result")
     if sig.bare_ok is not None:
         result = _result_from_bare_ok(codegen, sig, result)
-    return codegen.utils.as_i1(result) if to_i1 else result
+    return result
 
 
 def _result_from_bare_ok(codegen: 'LLVMCodegen', sig: Signature, value: ir.Value) -> ir.Value:

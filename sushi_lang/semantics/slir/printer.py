@@ -197,7 +197,7 @@ PRINTERS: dict[type, Render] = {
     r.Slice: lambda n: f"slice({show(n.place)}, {show(n.start)}, {show(n.end)})",
     r.Ref: lambda n: f"ref {_MODES[n.mode]} {show(n.place)}",
     # callees (ir.md 8.6)
-    st.Direct: lambda c: f"@{c.name}",
+    st.Direct: lambda c: f"@{c.name}" if c.module is None else f"@<{c.module}>.{c.name}",
     st.Builtin: _builtin,
     st.Indirect: lambda c: f"indirect({show(c.operand)})",
     st.BuiltinMethod: lambda m: f"{m.family}.{m.name}",

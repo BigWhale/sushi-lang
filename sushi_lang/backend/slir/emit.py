@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 from llvmlite import ir
 
 from sushi_lang.backend.destructors import emit_value_destructor
+from sushi_lang.backend.expressions.calls.stdlib import STDLIB_EMITTERS
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.slir.intrinsics import INTRINSICS
 from sushi_lang.backend.slir.methods import emit_method
@@ -22,7 +23,8 @@ from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.internals.errors import message_for, raise_internal_error
 from sushi_lang.internals.errors.runtime import printf_conversions
 from sushi_lang.backend.slir.values import (
-    operand_address, operand_value, place_address, rvalue_value, type_of_place,
+    operand_address, operand_value, place_address, rvalue_value, type_of_operand,
+    type_of_place,
 )
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
@@ -160,6 +162,9 @@ def _direct(state: FunctionState, statement: st.Call) -> None:
     direct = statement.callee
     if not isinstance(direct, st.Direct):
         state.fault(f"the row of a direct call got a {type(direct).__name__} callee")
+    if direct.module is not None:
+        _stdlib(state, statement, direct)
+        return
     llvm_fn = state.codegen.module.globals.get(direct.symbol)
     if not isinstance(llvm_fn, ir.Function):
         state.fault(f"the module declares no function '{direct.symbol}'")
@@ -169,6 +174,20 @@ def _direct(state: FunctionState, statement: st.Call) -> None:
         state.fault(f"the call of '{direct.symbol}' does not agree with its "
                     f"declaration {llvm_fn.function_type}")
     value = state.builder.call(llvm_fn, args)
+    state.builder.store(value, place_address(state, statement.dest))
+
+
+def _stdlib(state: FunctionState, statement: st.Call, direct: st.Direct) -> None:
+    """A function of a registry stdlib module, through the row of its module in
+    `STDLIB_EMITTERS`, with the value and the type of each operand. Each operand is
+    `Guaranteed` (the verifier checks it), and every operand is evaluated before the row
+    emits anything."""
+    emit = STDLIB_EMITTERS.get(direct.module or "")
+    if emit is None:
+        state.fault(f"no stdlib row emits the module '{direct.module}'")
+    args = [(operand_value(state, operand), type_of_operand(state, operand))
+            for operand, _ in statement.args]
+    value = emit(state.codegen, direct.name, direct.symbol, args)
     state.builder.store(value, place_address(state, statement.dest))
 
 

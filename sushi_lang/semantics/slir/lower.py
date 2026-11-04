@@ -71,7 +71,8 @@ from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer, ShirBody, ShirLocal, TemplateCheck
-from sushi_lang.semantics.shir.callee import Builtin, Callee, Free, Intrinsic, Method, Static
+from sushi_lang.semantics.shir.callee import (
+    Builtin, Callee, Free, Intrinsic, Method, Static, Stdlib)
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import ResolvedCall, TypeckResults
@@ -93,6 +94,7 @@ from sushi_lang.semantics.slir.lower_control import LoopFrame
 from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
 from sushi_lang.semantics.slir.lower_values import CallValue, ShortCircuit, Value
 from sushi_lang.semantics.slir.verify import SlirVerifier
+from sushi_lang.semantics.stdlib_registry import stdlib_symbol
 from sushi_lang.semantics.typesys import ArrayType, BuiltinType, Type, deref_type, owns_resource
 from sushi_lang.semantics.unit_symbols import declaring_unit, function_symbol
 
@@ -538,7 +540,9 @@ class Lowering:
 
     def callee(self, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee:
         """A free function by its symbol and its source name; an extension method and a
-        static by their symbol and their written name `<type>.<method>`; an intrinsic with
+        static by their symbol and their written name `<type>.<method>`; a function of a
+        registry stdlib module by the symbol of its generated function, its name and its
+        module (`stdlib_symbol`, at the type of its arguments); an intrinsic with
         the display type of each argument (L7); a built-in method by its family and its
         name, with no types: the receiver is the first operand of the call
         (`receiver_convention`)."""
@@ -556,6 +560,10 @@ class Lowering:
             name = self.decls.name_of(callee.decl)
             return st.Direct(method_symbol(owner, name.rpartition(".")[2], resolved.unit),
                              name)
+        if isinstance(callee, Stdlib):
+            name = self.decls.name_of(callee.decl).rpartition(".")[2]
+            types = [self.type_of(arg.value) for arg in node.args]
+            return st.Direct(stdlib_symbol(callee.module, name, types), name, callee.module)
         if isinstance(callee, Intrinsic):
             return st.Builtin(callee, tuple(self.display_type(node.shir_id, index, node.loc)
                                             for index in range(len(node.args))))

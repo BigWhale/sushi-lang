@@ -68,6 +68,7 @@ from sushi_lang.semantics.typesys import (
     StructType, Type, UnknownType, owns_resource,
 )
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
+from sushi_lang.semantics.stdlib_registry import stdlib_arity
 from sushi_lang.semantics.unit_symbols import function_symbol
 
 if TYPE_CHECKING:
@@ -145,7 +146,12 @@ def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
     """The declared parameters of the function that `callee` names. A free function is the
     function of its name in the unit whose symbol is the symbol of the callee. A method or
     a static has the written name `<type>.<method>`: it is the extension of that name whose
-    symbol is the symbol of the callee, and an instance method has its receiver first."""
+    symbol is the symbol of the callee, and an instance method has its receiver first. A
+    function of a registry stdlib module is the row of its module, and each of its
+    parameters borrows."""
+    if callee.module is not None:
+        arity = stdlib_arity(callee.module, callee.name)
+        return None if arity is None else DeclaredParams((Convention.GUARANTEED,) * arity)
     _, dot, method = callee.name.rpartition(".")
     if dot:
         for by_name in extensions.by_type.values():

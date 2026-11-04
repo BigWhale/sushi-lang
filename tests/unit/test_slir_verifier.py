@@ -27,7 +27,9 @@ from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
 from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
-from sushi_lang.semantics.slir.verify import DeclaredParams, declared_params, verify_function
+from sushi_lang.semantics.slir.verify import (
+    CONVENTIONS, DeclaredParams, declared_params, verify_function,
+)
 from sushi_lang.semantics.typesys import (
     ArrayType, BorrowMode, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo, StructType,
     Type, UnknownType,
@@ -641,6 +643,35 @@ def test_the_declared_parameters_of_a_method_are_its_receiver_then_its_parameter
                                                         "Pair.at")) == DeclaredParams((GUARANTEED,))
     assert declared_params(funcs, extensions, st.Direct(method_symbol(PAIR, "bump", "three"),
                                                         "Pair.bump")) is None
+
+
+def test_the_declared_parameters_of_a_stdlib_function_are_the_row_of_its_module():
+    """A function of a registry stdlib module borrows each argument. The count is the arity
+    of its row, and of its family for `min`; a name that the module has no row for is no
+    row, and so is a user function of the same name."""
+    funcs, extensions = FunctionTable(), ExtensionTable()
+    assert declared_params(funcs, extensions, st.Direct("sushi_sqrt", "sqrt", "math")) \
+        == DeclaredParams((GUARANTEED,))
+    assert declared_params(funcs, extensions, st.Direct("sushi_min_u8", "min", "math")) \
+        == DeclaredParams((GUARANTEED, GUARANTEED))
+    assert declared_params(funcs, extensions, st.Direct("sushi_now", "now", "time")) \
+        == DeclaredParams(())
+    assert declared_params(funcs, extensions, st.Direct("sushi_now", "now", "math")) is None
+    assert declared_params(funcs, extensions, st.Direct("sushi_sqrt", "sqrt")) is None
+
+
+def test_a_stdlib_call_with_an_owned_argument_is_refused():
+    """The rule of the conventions holds for a stdlib callee: its row borrows."""
+    callee = st.Direct("sushi_sqrt", "sqrt", "math")
+    call = st.Call(_local(1), callee, ((p.Const(k.Float(2.0, F64)), OWNED),), BAD)
+    function = _function([BLANK, F64], _block(0, _ret(), _live(1), call, _dead(1),
+                                              _set(0, r.Use(p.Const(k.Blank())))))
+    with pytest.raises(InternalCompilerError) as caught:
+        verify_function(function, drops=frozenset(), declared=lambda c: declared_params(
+            FunctionTable(), ExtensionTable(), c))
+    assert caught.value.code == "CE0158"
+    assert caught.value.params["rule"] == CONVENTIONS
+    assert caught.value.span == BAD
 
 
 # -- the rule of a cast (ir.md 8.7) ---------------------------------------------------------

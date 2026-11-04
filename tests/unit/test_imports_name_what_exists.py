@@ -33,7 +33,6 @@ _B = "backend/"
 
 #: (path under sushi_lang/, qualified function name) -> the group that ports it.
 PORT_TEMPLATES: dict[tuple[str, str], str] = {
-    (_B + "expressions/calls/stdlib/math.py", "emit_math_function"): "A14",
     (_B + "expressions/calls/stdlib/process.py", "_emit_run"): "D7",
     (_B + "expressions/calls/stdlib/process.py", "_emit_exit"): "D7",
     (_B + "expressions/calls/stdlib/signatures.py", "emit_registry_call"): "D7",
@@ -62,7 +61,6 @@ PORT_TEMPLATES: dict[tuple[str, str], str] = {
 
 #: The rows of `PORT_TEMPLATES` at the day of the pin. A row may leave both; none may join.
 PINNED_PORT_TEMPLATES: frozenset[tuple[str, str]] = frozenset({
-    (_B + "expressions/calls/stdlib/math.py", "emit_math_function"),
     (_B + "expressions/calls/stdlib/process.py", "_emit_run"),
     (_B + "expressions/calls/stdlib/process.py", "_emit_exit"),
     (_B + "expressions/calls/stdlib/signatures.py", "emit_registry_call"),

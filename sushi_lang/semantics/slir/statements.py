@@ -10,7 +10,7 @@ A `Builtin` callee names an emitter family: a row of `METHOD_TYPE_REGISTRY` (the
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import Optional, TypeAlias
 
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.param_modes import Convention
@@ -25,9 +25,12 @@ BuiltinName: TypeAlias = BuiltinMethod | Intrinsic
 
 @dataclass(frozen=True, slots=True)
 class Direct:
-    """A free function, a method, an extern or a conversion: its symbol, and its source name."""
+    """A free function, a method, an extern, a conversion or a function of a registry
+    stdlib module: its symbol, and its source name. `module` is the `use` path of the
+    stdlib module, and None for every other callee."""
     symbol: str
     name: str
+    module: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)
