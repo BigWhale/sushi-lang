@@ -1427,6 +1427,7 @@ Callee = Free(decl: DeclId)
        | BuiltinStatic(ty: Type, method: BuiltinMethod)   # List.new, HashMap.new, Iterator.new
        | Conversion(decl: DeclId)                # `e as B`, and `??` across two error types
        | Extern(decl: DeclId)
+       | Stdlib(decl: DeclId, module: str)      # a function of a registry stdlib module
        | Intrinsic(name: str)
        | Indirect(value: Expr)                   # a closure or a fn-typed local
 ```
@@ -1439,6 +1440,13 @@ mode table of `param_modes.py` is read per variant. Three AST call nodes collaps
 into one, and **which kind of callee it is has already been decided by `typecheck`**,
 which records it in `TypeckResults` against the call's `shir_id` (S5). The `Call` node
 carries only the syntactic `CallTarget` of 7.4.
+
+A `Stdlib` callee is a function of a registry stdlib module (`<math>`, `<time>`): a row of
+the signature table of the module (`stdlib_signature`, `semantics/stdlib_registry.py`), or
+a member of a `<math>` family (`abs`, `min`, `max`, `divmod`). `decl` names the written
+name, bare or behind an alias, and `module` is the `use` path of the module (`math`). It is
+the `CalleeKind.STDLIB` of `param_modes.py`: a registry row declares no mode, so each
+argument is a borrow (`Guaranteed`). The row of a `Stdlib` callee has no declaring unit.
 
 `BuiltinMethod` names a row of `METHOD_TYPE_REGISTRY`, so the iterator adapters, `or_err`,
 `map_err`, the container methods and the string methods are one variant. The row of a
@@ -2377,7 +2385,8 @@ StorageDead(LocalId)
 ```
 
 ```
-SlirCallee = Direct(symbol: str, name: str)              # free fn, method, extern, conversion
+SlirCallee = Direct(symbol: str, name: str, module: Optional[str])  # free fn, method, extern,
+                                                         # conversion, stdlib function
            | Builtin(method: BuiltinName, types: [Type])     # an emitter family (Q7)
            | Indirect(Operand)                           # a closure's fn_ptr
 
@@ -2426,6 +2435,14 @@ so a receiver is read after an argument that changes it, and an element receiver
 evaluated one time (11, rule 9). The method
 `expect` of a `Result` or a `Maybe` is the one exception: it lowers to no call, as an
 `assert` (8.9).
+
+A `Stdlib(decl, module)` callee of SHIR lowers to `Direct(symbol, name, module)`. `name` is
+the name of the function with no alias, and `module` is the `use` path of its module.
+`symbol` is the generated function of its row (`stdlib_symbol`,
+`semantics/stdlib_registry.py`, the one derivation): `sushi_<name>`, and
+`sushi_<name>_<type>` for a member of a `<math>` family, at the type of its first argument
+(#817). Every other `Direct` callee has no module. The printer writes the call as
+`call @<math>.sqrt(copy _1 @guaranteed)`.
 
 A `Method(recv, decl, receiver)` callee of SHIR lowers to `Direct(symbol, name)`, and a
 `Static(ty, decl)` callee too. `name` is the written name `<type>.<method>` of `decl`.
@@ -2905,8 +2922,11 @@ verifier reads at each call, so a generic instance that a later body declares is
 A `Direct` callee whose name is a written name `<type>.<method>` finds its row in the
 extension table instead: the record of that method whose `method_symbol` is the symbol of
 the callee, with the convention of its `self` first for an instance method
-(`declared_params`, `verify.py`). A `Direct` callee with no row there is CE0158. Today a
-free function and a method or a static of the build have a row: the group that first emits
+(`declared_params`, `verify.py`). A `Direct` callee with a module finds its row in the
+signature tables of the stdlib registry: each argument is `Guaranteed`, and the count is the
+arity of its row (`stdlib_arity`). A `Direct` callee with no row there is CE0158. Today a
+free function, a method or a static of the build and a function of a registry stdlib
+module have a row: the group that first emits
 another `Direct` callee (an extern, a conversion, a function of a library) adds its row,
 with `var_arg` for a variadic extern. The comparison of the declared prefix alone is in the
 code already, for that day. The verifier does not check a shape that no lowering makes yet,
