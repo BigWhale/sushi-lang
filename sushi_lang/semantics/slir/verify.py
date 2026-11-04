@@ -14,7 +14,10 @@ or of one type, an `Int` constant in the range of its type, a `SwitchInt` on an 
 on the local that a `Discriminant` of its block writes, a `Discriminant` of an enum, a
 variant (an rvalue or a constant) that its enum declares with each value of its payload, a
 struct or a tuple (an rvalue or a constant) with each field of its type, each part of the
-type of its payload value or of its field, the conventions of a `Direct` callee, a
+type of its payload value or of its field, an array (an rvalue or a constant) whose parts
+fit its runs and its element type, a `Len` of an array or a string, a `Slice` of an array
+with two `i32` bounds, a view (a local that a `Slice` writes) that nothing else writes,
+moves or drops, no `Move` of an element, the conventions of a `Direct` callee, a
 receiver operand for a call of a built-in method, no copy of an owning value
 other than a `string` into an `Owned` argument, and a registered `RExxxx` for a `Trap`, with
 one operand of the type that each printf conversion of its text takes. The type of a place
@@ -90,6 +93,10 @@ INTEGER_SWITCH = "an integer switch"
 TAG_SWITCH = "a switch on a tag"
 ENUM_VALUE = "an enum value"
 STRUCT_VALUE = "a struct value"
+ARRAY_VALUE = "an array value"
+LENGTH_SLICE = "a length and a slice"
+VIEW = "a view"
+ELEMENT_MOVE = "no move of an element"
 TRAP = "registered trap"
 SPANS = "spans"
 
@@ -189,6 +196,7 @@ class _Check:
     conventions: dict[LocalId, Convention] = field(default_factory=dict)
     owning: set[LocalId] = field(default_factory=set)
     guards: dict[LocalId, LocalId] = field(default_factory=dict)
+    views: set[LocalId] = field(default_factory=set)
 
     def fail(self, rule: str, detail: str, span: Optional[Span]) -> NoReturn:
         er.raise_internal_error(er.ERR.CE0158.code, span=span, filename=self.filename,
@@ -230,6 +238,10 @@ class _Check:
             if block.id in self.blocks:
                 self.fail(KNOWN_BLOCKS, f"two blocks have the id bb{block.id.index}", None)
             self.blocks[block.id] = block
+            self.views |= {stmt.place.id for stmt in block.statements
+                           if isinstance(stmt, st.Assign) and isinstance(stmt.rvalue, r.Slice)
+                           and isinstance(stmt.place, p.Local)}
+        self.owning -= self.views
         if function.entry not in self.blocks:
             self.fail(KNOWN_BLOCKS, f"the entry bb{function.entry.index} is no block of the "
                                     f"function", None)
@@ -375,6 +387,11 @@ class _Check:
         typed = self.place(operand.place, span)
         if isinstance(operand, p.Move) and isinstance(typed.root, p.Global):
             self.fail(GLOBAL_MOVE, f"{show(operand)} takes the value of a global", span)
+        if isinstance(operand, p.Move) and typed.indexes:
+            self.fail(ELEMENT_MOVE, f"{show(operand)} moves an element out of its array", span)
+        if isinstance(operand, p.Move) and typed.root == operand.place \
+                and isinstance(typed.root, p.Local) and typed.root.id in self.views:
+            self.fail(VIEW, f"{show(operand)} moves a view, which owns nothing", span)
 
     def constant(self, constant: k.Constant, span: Span) -> None:
         """An integer constant holds a value that its type can hold. A variant is a variant of
@@ -387,6 +404,9 @@ class _Check:
             types = [_constant_type(part) for part in constant.parts]
             if constant.variant is not None:
                 self.enum_variant(constant.ty, constant.variant, types, span)
+            elif isinstance(constant.ty, ArrayType):
+                self.parts_fit(ARRAY_VALUE, display_type(constant.ty),
+                               [constant.ty.base_type] * constant.ty.size, types, span)
             else:
                 self.struct_value(constant.ty, types, span)
             for part in constant.parts:
@@ -411,6 +431,63 @@ class _Check:
         if isinstance(value, r.Aggregate) and isinstance(value.kind, (r.AggStruct, r.AggTuple)):
             self.struct_value(value.kind.ty,
                               [self.operand_type(part, span) for part in value.parts], span)
+        if isinstance(value, r.Aggregate) and isinstance(value.kind, r.AggArray):
+            self.array_value(value.kind, value.parts, span)
+        if isinstance(value, (r.Len, r.Slice)):
+            self.length_or_slice(value, span)
+
+    def array_value(self, kind: r.AggArray, parts: Sequence[p.Operand], span: Span) -> None:
+        """The parts fit the runs: a value of the element type, an `i32` count, an `i32`
+        first value of a sequence of `i32` slots. The counts of a `T[N]` are constants
+        that add up to `N`."""
+        ty = kind.ty
+        if not isinstance(ty, (ArrayType, DynamicArrayType)):
+            self.fail(ARRAY_VALUE, f"an array value of {display_type(ty)}, which is no array",
+                      span)
+        widths = [r.run_width(run) for run in kind.runs]
+        if sum(widths) != len(parts):
+            self.fail(ARRAY_VALUE, f"the runs of {display_type(ty)} take {sum(widths)} parts, "
+                                   f"and the value gives {len(parts)}", span)
+        wanted: list[Type] = []
+        for run in kind.runs:
+            if isinstance(run, r.RunSequence) and ty.base_type != BuiltinType.I32:
+                self.fail(ARRAY_VALUE, f"a sequence fills {display_type(ty)}, whose element "
+                                       f"is no i32", span)
+            first = BuiltinType.I32 if isinstance(run, r.RunSequence) else ty.base_type
+            wanted += [first] if isinstance(run, r.RunOne) else [first, BuiltinType.I32]
+        self.parts_fit(ARRAY_VALUE, display_type(ty), wanted,
+                       [self.operand_type(part, span) for part in parts], span)
+        if isinstance(ty, ArrayType):
+            self.fixed_size(ty, kind.runs, parts, span)
+
+    def fixed_size(self, ty: ArrayType, runs: Sequence[r.ArrayRun],
+                   parts: Sequence[p.Operand], span: Span) -> None:
+        total, at = 0, 0
+        for run in runs:
+            if isinstance(run, r.RunOne):
+                total, at = total + 1, at + 1
+                continue
+            count = parts[at + 1]
+            if not (isinstance(count, p.Const) and isinstance(count.constant, k.Int)):
+                self.fail(ARRAY_VALUE, f"the count {show(count)} of a run of "
+                                       f"{display_type(ty)} is no constant", span)
+            total, at = total + max(count.constant.value, 0), at + 2
+        if total != ty.size:
+            self.fail(ARRAY_VALUE, f"the runs of {display_type(ty)} fill {total} slots", span)
+
+    def length_or_slice(self, value: r.Len | r.Slice, span: Span) -> None:
+        """`Len` reads an array or a string; `Slice` reads an array with two `i32` bounds."""
+        ty = self.place(value.place, span).ty
+        kinds: tuple[type, ...] = (ArrayType, DynamicArrayType)
+        if isinstance(value, r.Len) and ty == BuiltinType.STRING:
+            return
+        if ty is not None and not isinstance(ty, kinds):
+            self.fail(LENGTH_SLICE, f"{show(value)} reads a value that is no array", span)
+        if isinstance(value, r.Slice):
+            for bound in (value.start, value.end):
+                if self.operand_type(bound, span) not in (BuiltinType.I32, None):
+                    self.fail(LENGTH_SLICE, f"the bound {show(bound)} of {show(value)} is no "
+                                            f"i32", span)
 
     def cast(self, value: r.Cast, span: Span) -> None:
         """A cast joins two numeric types, or keeps one type. Its operand has a known type
@@ -431,9 +508,21 @@ class _Check:
     def assign(self, stmt: st.Assign) -> None:
         self.place(stmt.place, stmt.span)
         self.rvalue(stmt.rvalue, stmt.span)
+        if isinstance(stmt.rvalue, r.Slice):
+            ty = self.place(stmt.place, stmt.span).ty
+            if not isinstance(ty, DynamicArrayType):
+                self.fail(VIEW, f"the view {show(stmt.place)} is no T[]", stmt.span)
+        else:
+            self.not_a_view(stmt.place, stmt.span)
+
+    def not_a_view(self, place: p.Place, span: Span) -> None:
+        """Only a `Slice` writes a view."""
+        if isinstance(place, p.Local) and place.id in self.views:
+            self.fail(VIEW, f"{show(place)} is a view, and only a slice writes it", span)
 
     def call(self, stmt: st.Call) -> None:
         self.place(stmt.dest, stmt.span)
+        self.not_a_view(stmt.dest, stmt.span)
         callee = stmt.callee
         if isinstance(callee, st.Indirect):
             self.operand(callee.operand, stmt.span)
@@ -480,6 +569,9 @@ class _Check:
         return stmt.place.id
 
     def drop(self, stmt: st.Drop | st.DropIfSet) -> None:
+        if self.dropped(stmt) in self.views:
+            self.fail(VIEW, f"{show(stmt.place)} is a view, which owns nothing to drop",
+                      stmt.span)
         ty = self.type_of(self.dropped(stmt))
         if not owns_resource(ty, self.drops):
             self.fail(OWNING_DROP, f"{show(stmt.place)} has the type {display_type(ty)}, "
@@ -534,8 +626,13 @@ class _Check:
         return _Typed(base.root, parts[place.index], base.indexes)
 
     def index_place(self, place: p.Index, span: Span) -> _Typed:
+        """An element of an array, or a byte of a string, at an `i32` index."""
         base, ty = self.base(place, span)
         self.operand(place.index, span)
+        if self.operand_type(place.index, span) not in (BuiltinType.I32, None):
+            self.fail(TYPED_PLACES, f"{show(place)} has an index that is no i32", span)
+        if ty == BuiltinType.STRING:
+            return _Typed(base.root, BuiltinType.U8, (*base.indexes, place.index))
         if not isinstance(ty, (ArrayType, DynamicArrayType)):
             self.fail(TYPED_PLACES, f"{show(place)} indexes a value that is no array", span)
         return _Typed(base.root, ty.base_type, (*base.indexes, place.index))

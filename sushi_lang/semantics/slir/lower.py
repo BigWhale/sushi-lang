@@ -14,8 +14,9 @@ checks a body that the lowering finished, and `SlirProgram` keeps it for the emi
 The lowering handles the parameters, a `let`, a rebind, a call statement, a `return`, an
 `if`, a `match`, a `while` and a counted loop over a range with their `break` and
 `continue`, an `assert`, over literals, names of constants, locals, the operators, `and`
-and `or` as control flow, the construction of an enum variant, of a struct and of a tuple,
-a field read and write, a destructure, a call, an interpolation, a `??` and `expect`. The
+and `or` as control flow, the construction of an enum variant, of a struct, of a tuple and
+of an array of plain elements, a field read and write, an element read and write with its
+bounds check, a slice, a destructure, a call, an interpolation, a `??` and `expect`. The
 operand of a value is the answer of `borrow` and the shape of the value alone (ir.md 7.9):
 a `move` row gives `Move`; an `adopt` row gives
 `Copy` of a place, a constant for a literal or a name of a constant, and `Move` of the
@@ -38,11 +39,10 @@ of a conversion and of a perk method; `borrowed view` for a `reject` row, `borro
 for a rebind of a borrowed parameter that owns, `borrowed try` for a `??` over an owning
 wrapper that the body only reads, `conversion` also for a `??` that calls a declared
 conversion, `library function` for a function, a method or a static whose declaring unit
-the typecheck row does not name, `bloom` for a bloom argument, `aggregate constant` for a
-name of an array constant, the stops of `lower_aggregate.py` (`StructInit owning`,
-`TupleInit owning`, `owning temporary`, `owning field write`, `StructInit reference
-field`), and `ConstRef out of range` for a name of a constant whose value its type cannot
-hold. The symbol, the unit and the return type of the function are facts of its declaration
+the typecheck row does not name, `bloom` for a bloom argument, the stops of
+`lower_aggregate.py` (`StructInit owning`, `TupleInit owning`, `owning temporary`,
+`owning field write`, `StructInit reference field`), and `ConstRef out of range` for a name
+of a constant whose value its type cannot hold. The symbol, the unit and the return type of the function are facts of its declaration
 (ir.md 6.4); the body of an extension method or of a static takes the symbol of the method
 (`extension_decl_symbol`), and its receiver is `_1`. The unit is the declaring unit; a
 function that has none (a lifted lambda, the instance of a template of a binary library)
@@ -72,6 +72,7 @@ from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import ResolvedCall, TypeckResults
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import lower_aggregate as agg
+from sushi_lang.semantics.slir import lower_arrays as arrays
 from sushi_lang.semantics.slir import lower_control as ctl
 from sushi_lang.semantics.slir import lower_match
 from sushi_lang.semantics.slir import places as p
@@ -87,7 +88,7 @@ from sushi_lang.semantics.slir.lower_control import LoopFrame
 from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
 from sushi_lang.semantics.slir.lower_values import CallValue, ShortCircuit, Value
 from sushi_lang.semantics.slir.verify import SlirVerifier
-from sushi_lang.semantics.typesys import BuiltinType, Type, deref_type, owns_resource
+from sushi_lang.semantics.typesys import ArrayType, BuiltinType, Type, deref_type, owns_resource
 from sushi_lang.semantics.unit_symbols import declaring_unit, function_symbol
 
 if TYPE_CHECKING:
@@ -334,7 +335,7 @@ class Lowering:
 
     def assign(self, stmt: s.Assign) -> None:
         target = stmt.target
-        if isinstance(target, e.Field) and not stmt.is_init:
+        if isinstance(target, (e.Field, e.Index)) and not stmt.is_init:
             agg.field_write(self, stmt, target)
             return
         if not isinstance(target, e.LocalRef):
@@ -418,7 +419,8 @@ class Lowering:
         row = self.answers.ownership.ownership_of(expr.shir_id)
         if row is Ownership.REJECT:
             raise StageStop(STAGE, "borrowed view", expr.loc)
-        if isinstance(expr, e.LocalRef) or (isinstance(expr, e.Field) and row is not Ownership.MOVE):
+        if isinstance(expr, e.LocalRef) or (isinstance(expr, (e.Field, e.Index, e.Slice))
+                                            and row is not Ownership.MOVE):
             place = agg.place_of(self, expr)
             return p.Move(place) if row is Ownership.MOVE else p.Copy(place)
         if row is Ownership.MOVE:
@@ -432,18 +434,16 @@ class Lowering:
         return p.Move(p.Local(temp)) if row is Ownership.ADOPT else p.Copy(p.Local(temp))
 
     def constant(self, ref: e.ConstRef) -> k.Constant:
-        """The value of the constant that `ref` names, from its typecheck row. An array
-        value has no constant kind yet (A6). An integer that its type cannot hold
-        stops (`ConstRef out of range`): the constant evaluator does not wrap a bit pattern,
-        and it gives a value to an initializer with a range error."""
+        """The value of the constant that `ref` names, from its typecheck row. A value that its
+        type cannot hold stops (`ConstRef out of range`): the constant evaluator does not
+        wrap a bit pattern, and it gives a value to an initializer with a range error or with
+        a count of elements that its `T[N]` does not hold."""
         value = self.typeck.value_of(ref.shir_id)
         if value is None:
             er.raise_internal_error("CE0000", span=ref.loc,
                                     detail="a constant with no value reached SLIR")
         constant = k.of_value(value)
-        if constant is None:
-            raise StageStop(STAGE, "aggregate constant", ref.loc)
-        if isinstance(constant, k.Int) and not fits_integer_type(constant.value, constant.ty):
+        if not _holds(constant):
             dispatch.stop(STAGE, ref, state="out of range")
         return constant
 
@@ -580,6 +580,9 @@ _VALUES: dict[type, Callable[..., Value]] = {
     e.StructInit: agg.struct_init,
     e.TupleInit: agg.tuple_init,
     e.Field: agg.field,
+    e.Index: agg.field,
+    e.Slice: agg.field,
+    e.ArrayInit: arrays.array_init,
     e.Call: Lowering.call,
     e.Interp: Lowering.interp,
     e.Try: ctl.try_,
@@ -597,6 +600,18 @@ def _receiver_convention(callee: Builtin, span: Span) -> Convention:
             detail=f"a call of a method of the family '{callee.method.family}' reached "
                    f"SLIR, and no receiver convention is written for that family")
     return convention
+
+
+def _holds(constant: k.Constant) -> bool:
+    """Whether the type of `constant` holds it, at every depth: each integer is in the
+    range of its type, and each array has the length of its type."""
+    if isinstance(constant, k.Int):
+        return fits_integer_type(constant.value, constant.ty)
+    if not isinstance(constant, k.Aggregate):
+        return True
+    if isinstance(constant.ty, ArrayType) and len(constant.parts) != constant.ty.size:
+        return False
+    return all(_holds(part) for part in constant.parts)
 
 
 def _moves(value: r.Rvalue | CallValue) -> list[p.Place]:

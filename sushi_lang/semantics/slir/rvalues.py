@@ -32,8 +32,35 @@ class AggVariant:
 
 
 @dataclass(frozen=True, slots=True)
+class RunOne:
+    """One slot: one part, its value."""
+
+
+@dataclass(frozen=True, slots=True)
+class RunRepeat:
+    """Two parts: the value, then the count of its slots."""
+
+
+@dataclass(frozen=True, slots=True)
+class RunSequence:
+    """Two parts: the first value, then the count; slot k holds `first + step * k`."""
+    step: int
+
+
+ArrayRun: TypeAlias = RunOne | RunRepeat | RunSequence
+
+
+def run_width(run: ArrayRun) -> int:
+    """The count of the parts of `run`."""
+    return 1 if isinstance(run, RunOne) else 2
+
+
+@dataclass(frozen=True, slots=True)
 class AggArray:
+    """A `T[N]` or a `T[]` of the runs `runs`; the parts are the parts of each run, in
+    order (docs/design/ir.md 8.7)."""
     ty: Type
+    runs: tuple[ArrayRun, ...]
 
 
 @dataclass(frozen=True, slots=True)

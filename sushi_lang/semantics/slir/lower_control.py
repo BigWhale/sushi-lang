@@ -284,7 +284,7 @@ def _range_formula(low: Lowering, range_: e.Range
     value of `plan_range`. Else the count is `end - start`, plus one when inclusive, and
     a count below one walks nothing; the item is `start + k`, or `last - k` with `.rev()`,
     where `last` is `end`, less one when exclusive."""
-    start, end = _bound(low, range_.start), _bound(low, range_.end)
+    start, end = bound(low, range_.start), bound(low, range_.end)
     if isinstance(start, p.Const) and isinstance(end, p.Const) and \
             isinstance(start.constant, k.Int) and isinstance(end.constant, k.Int):
         plan = plan_range(start.constant.value, end.constant.value, range_.inclusive,
@@ -305,9 +305,9 @@ def _range_formula(low: Lowering, range_: e.Range
     return p.Copy(p.Local(count)), lambda at: r.Binary("-", last, at)
 
 
-def _bound(low: Lowering, expr: e.ShirExpr) -> p.Operand:
-    """A bound as a constant, or in a local of the loop statement, which the body cannot
-    change."""
+def bound(low: Lowering, expr: e.ShirExpr) -> p.Operand:
+    """An `i32` as a constant, or in a local of the statement that later code cannot
+    change: a bound of a counted loop, an index, a bound of a slice."""
     value = low.value(expr)
     if isinstance(value, r.Use) and isinstance(value.operand, p.Const):
         return value.operand

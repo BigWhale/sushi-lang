@@ -1,9 +1,10 @@
-"""SHIR to SLIR: the arms of a struct and a tuple (docs/design/ir.md 8.9).
+"""SHIR to SLIR: the arms of a struct and a tuple, and the place of a field or an element (docs/design/ir.md 8.9).
 
 A construction evaluates its fields in the written order (ruling R1), then builds ONE
 `Aggregate` with the parts in the declaration order. A field is a `Field` projection of a
-place; a base that is no place goes into a temporary of the statement first. A field write
-stores into the projection. A destructure gives one `Field` place for each target. Each arm
+place, an element an `Index` projection and a slice a view (`lower_arrays.py`); a base that
+is no place goes into a temporary of the statement first. A field write and an element
+write store into the projection. A destructure gives one `Field` place for each target. Each arm
 is a free function that takes the `Lowering` of `lower.py` first; the tables of `lower.py`
 name them. This module reads `lower.py` for its types only, so no import cycle exists at
 run time.
@@ -27,6 +28,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.nodes import ShirNode
+from sushi_lang.semantics.slir import lower_arrays as arrays
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
@@ -45,13 +47,13 @@ def struct_init(low: Lowering, node: e.StructInit) -> Value:
         if arg.bloom:
             raise StageStop(STAGE, "bloom", arg.value.loc)
     values = [arg.value for arg in node.fields]
-    return r.Aggregate(r.AggStruct(ty), _in_written_order(low, values, node.written_order))
+    return r.Aggregate(r.AggStruct(ty), in_written_order(low, values, node.written_order))
 
 
 def tuple_init(low: Lowering, node: e.TupleInit) -> Value:
     """`Aggregate(Tuple)` of the instance type, the parts in the written order."""
     ty = _instance(low, node)
-    return r.Aggregate(r.AggTuple(ty), _in_written_order(low, node.parts,
+    return r.Aggregate(r.AggTuple(ty), in_written_order(low, node.parts,
                                                          range(len(node.parts))))
 
 
@@ -68,7 +70,7 @@ def _instance(low: Lowering, node: e.StructInit | e.TupleInit) -> Type:
     return ty
 
 
-def _in_written_order(low: Lowering, values: Sequence[e.ShirExpr],
+def in_written_order(low: Lowering, values: Sequence[e.ShirExpr],
                       order: Sequence[int]) -> tuple[p.Operand, ...]:
     """The operand of each value, evaluated in `order`, in the declaration order. A place
     that a later value can change is copied into a temporary first."""
@@ -103,44 +105,59 @@ def _calls(expr: e.ShirExpr) -> bool:
     return True
 
 
-def place_of(low: Lowering, expr: e.LocalRef | e.Field) -> p.Place:
-    """The place of a local or a field, one `Field` projection for each member step of the
-    walk to its root. A root that is no place goes into a temporary of the statement; a
-    temporary that owns stops."""
-    walked = walk_place(expr, Step.MEMBER)
+def place_of(low: Lowering, expr: e.LocalRef | e.Field | e.Index | e.Slice) -> p.Place:
+    """The place of a local, a field, an element or a slice: one projection for each step
+    of the walk to its root, from the root out. A root that is no place goes into a
+    temporary of the statement; a temporary that owns stops at a field, and an array that
+    owns is dropped at the end of the statement, after its element is read."""
+    walked = walk_place(expr, Step.MEMBER | Step.INDEX)
     root: object = walked.node
-    steps = [cast(e.Field, member) for member in reversed(walked.path)]
+    steps = [cast(e.Field | e.Index | e.Slice, step) for step in reversed(walked.path)]
     place: p.Place
     if isinstance(root, e.LocalRef):
         place = p.Local(low.local_of(root.local, root.loc))
     elif isinstance(root, ShirNode) and steps:
         base = cast(e.ShirExpr, root)
         ty = low.type_of(base)
-        if low.owns(ty):
+        if low.owns(ty) and isinstance(steps[0], e.Field):
             raise StageStop(STAGE, "owning temporary", steps[0].loc)
         place = p.Local(low.temporary(low.value(base), ty, base.loc))
     else:
         er.raise_internal_error("CE0000", span=expr.loc, detail="a field of no value")
-    for member in steps:
-        index = low.typeck.field_index_of(member.shir_id)
-        if index is None:
-            er.raise_internal_error("CE0000", span=member.loc,
-                                    detail="a field with no index reached SLIR")
-        place = p.Field(place, index)
+    for step in steps:
+        if isinstance(step, e.Index):
+            place = arrays.element(low, place, step)
+        elif isinstance(step, e.Slice):
+            place = arrays.view(low, place, step)
+        else:
+            place = p.Field(place, _field_index(low, step))
     return place
+
+
+def _field_index(low: Lowering, member: e.Field) -> int:
+    index = low.typeck.field_index_of(member.shir_id)
+    if index is None:
+        er.raise_internal_error("CE0000", span=member.loc,
+                                detail="a field with no index reached SLIR")
+    return index
 
 
 def field(low: Lowering, node: e.Field) -> Value:
     return r.Use(low.operand(node))
 
 
-def field_write(low: Lowering, stmt: s.Assign, target: e.Field) -> None:
-    """`p.x := v`: the new value first, then the store into the projection. `and` and `or`
-    go into a temporary first, because the right operand reads the place again."""
+def field_write(low: Lowering, stmt: s.Assign, target: e.Field | e.Index) -> None:
+    """`p.x := v` and `a[i] := v`: the new value first, then the store into the projection.
+    `and` and `or` go into a temporary first, because the right operand reads the place
+    again. When the place holds an index, a value that is no constant goes into a
+    temporary first too: the index and its check come after the whole value."""
     if low.owns(low.type_of(target)):
         raise StageStop(STAGE, "owning field write", stmt.loc)
     value = low.value(stmt.value)
-    if isinstance(value, ShortCircuit):
+    indexed = any(isinstance(step, (e.Index, e.Slice))
+                  for step in walk_place(target, Step.MEMBER | Step.INDEX).path)
+    if isinstance(value, ShortCircuit) or (indexed and not (
+            isinstance(value, r.Use) and isinstance(value.operand, p.Const))):
         value = r.Use(p.Copy(p.Local(low.temporary(value, low.type_of(stmt.value),
                                                    stmt.value.loc))))
     low.write(place_of(low, target), value, stmt.loc)
@@ -178,7 +195,7 @@ def _bind(low: Lowering, targets: Sequence[s.DestructureTarget], source: p.Place
         if isinstance(target, s.Nested):
             _bind(low, target.targets, p.Field(source, index), span)
         elif isinstance(target, s.Place):
-            if not isinstance(target.target, (e.LocalRef, e.Field)):
+            if not isinstance(target.target, (e.LocalRef, e.Field, e.Index)):
                 dispatch.stop(STAGE, target.target)
             low.write(place_of(low, target.target), element, span)
         elif isinstance(target, ShirLocalId):

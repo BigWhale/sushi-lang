@@ -3,9 +3,9 @@
 An integer literal takes the value that typecheck wrote for it (ruling R-W), not the value
 that it spells. A `ConstRef` takes the value of the constant, and a string constant is a
 literal that owns no heap. The tests call the lowering functions over data; they do not run
-the compiler. A struct value is an `Aggregate` with no variant, also as a payload value. A
-name of an array constant, and a name of a constant whose value its type cannot hold, stop
-the lowering of the body.
+the compiler. A struct value and an array value are an `Aggregate` with no variant, also as
+a payload value or a field value. A name of a constant whose value its type cannot hold
+stops the lowering of the body.
 """
 from __future__ import annotations
 
@@ -80,15 +80,15 @@ def test_a_name_of_a_constant_takes_its_value_row() -> None:
         k.Str(b"Mostly Harmless")
 
 
-@pytest.mark.parametrize(("value", "construct"), [
-    (AggregateConstant([ScalarConstant(1, I8)], ArrayType(I8, 1)), "aggregate constant"),
-    (ScalarConstant(255, I8), "ConstRef out of range"),
-], ids=["aggregate", "out of range"])
-def test_a_name_of_a_constant_with_no_constant_kind_stops(value: ConstantValue,
-                                                          construct: str) -> None:
+@pytest.mark.parametrize("value", [
+    ScalarConstant(255, I8),
+    AggregateConstant([ScalarConstant(1, I8)], ArrayType(I8, 2)),
+    AggregateConstant([ScalarConstant(1, I8), ScalarConstant(300, I8)], ArrayType(I8, 2)),
+], ids=["out of range", "short array", "element out of range"])
+def test_a_name_of_a_constant_that_its_type_cannot_hold_stops(value: ConstantValue) -> None:
     with pytest.raises(StageStop) as caught:
         _constant_of(value)
-    assert caught.value.params == {"stage": "slir", "construct": construct}
+    assert caught.value.params == {"stage": "slir", "construct": "ConstRef out of range"}
     assert caught.value.span == SPAN
 
 
@@ -110,9 +110,8 @@ def test_a_struct_value_in_a_payload_is_made_by_the_same_rule() -> None:
         HOLDER, (k.Aggregate(POINT, (k.Int(3, I8), k.Int(4, U8))),), "Some")
 
 
-def test_an_array_value_in_a_field_stops() -> None:
+def test_an_array_value_in_a_field_is_made_by_the_same_rule() -> None:
     row = AggregateConstant([ScalarConstant(1, I8)], ArrayType(I8, 1))
     rows = StructType(name="Rows", fields=(("row", ArrayType(I8, 1)),))
-    with pytest.raises(StageStop) as caught:
-        _constant_of(AggregateConstant([row], rows))
-    assert caught.value.params == {"stage": "slir", "construct": "aggregate constant"}
+    assert _constant_of(AggregateConstant([row], rows)) == k.Aggregate(
+        rows, (k.Aggregate(ArrayType(I8, 1), (k.Int(1, I8),)),))

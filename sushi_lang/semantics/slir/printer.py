@@ -55,7 +55,7 @@ from sushi_lang.semantics.slir.function import (
 )
 from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
 from sushi_lang.semantics.type_predicates import generic_base_of
-from sushi_lang.semantics.typesys import BorrowMode, Type
+from sushi_lang.semantics.typesys import ArrayType, BorrowMode, Type
 
 #: The conventions of ir.md 8.3, as the header and an argument write them.
 CONVENTIONS: dict[Convention, str] = {
@@ -120,15 +120,33 @@ def _variant(ty: Type, variant: str, parts: Sequence[object]) -> str:
 def _constant_aggregate(c: k.Aggregate) -> str:
     if c.variant is not None:
         return _variant(c.ty, c.variant, c.parts)
+    if isinstance(c.ty, ArrayType):
+        return f"[{_each(c.parts)}]"
     return f"{_type(c.ty)}({_each(c.parts)})"
 
 
 def _aggregate(agg: r.Aggregate) -> str:
     if isinstance(agg.kind, r.AggVariant):
         return _variant(agg.kind.ty, agg.kind.variant, agg.parts)
-    head = show(agg.kind)
-    opening, closing = ("[", "]") if isinstance(agg.kind, r.AggArray) else ("(", ")")
-    return f"{head}{opening}{_each(agg.parts)}{closing}"
+    if isinstance(agg.kind, r.AggArray):
+        return f"[{', '.join(_runs(agg.kind.runs, agg.parts))}]"
+    return f"{show(agg.kind)}({_each(agg.parts)})"
+
+
+def _runs(runs: Sequence[r.ArrayRun], parts: Sequence[object]) -> list[str]:
+    """Each run of an array: `v`, `v; n`, or `seq(first, step; n)` (ir.md 8.7)."""
+    texts, at = [], 0
+    for run in runs:
+        width = r.run_width(run)
+        shown = [show(part) for part in parts[at:at + width]]
+        at += width
+        if isinstance(run, r.RunOne):
+            texts.append(shown[0])
+        elif isinstance(run, r.RunRepeat):
+            texts.append(f"{shown[0]}; {shown[1]}")
+        else:
+            texts.append(f"seq({shown[0]}, {run.step:+d}; {shown[1]})")
+    return texts
 
 
 def _switch(term: tm.SwitchInt) -> str:
