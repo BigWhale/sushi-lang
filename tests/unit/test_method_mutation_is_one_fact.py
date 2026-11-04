@@ -83,10 +83,10 @@ def test_the_no_rule_set_only_shrinks():
 def test_the_borrow_pass_and_slir_lowering_read_the_one_receiver_convention():
     from sushi_lang.semantics import method_effects
     from sushi_lang.semantics.passes.borrow import calls
-    from sushi_lang.semantics.slir import lower
+    from sushi_lang.semantics.slir import lower_calls
 
     assert calls.receiver_convention is method_effects.receiver_convention
-    assert lower.receiver_convention is method_effects.receiver_convention
+    assert lower_calls.receiver_convention is method_effects.receiver_convention
 
 
 def test_a_read_family_gives_a_borrow_and_a_family_with_no_answer_gives_none():
@@ -150,13 +150,13 @@ def test_slir_lowering_refuses_a_receiver_with_no_convention():
     from sushi_lang.semantics.shir import exprs as e
     from sushi_lang.semantics.shir.callee import Builtin
     from sushi_lang.semantics.shir.ids import LocalId, ShirId
-    from sushi_lang.semantics.slir import lower
+    from sushi_lang.semantics.slir import lower_calls
 
     span = Span(1, 1, 1, 2)
     recv = e.LocalRef(ShirId(1), span, LocalId(0))
     callee = Builtin(recv, METHOD_TYPE_REGISTRY.family("list").callee("len"))
     with pytest.raises(InternalCompilerError) as caught:
-        lower._receiver_convention(callee, span)
+        lower_calls._receiver_convention(callee, span)
     assert caught.value.code == "CE0000"
 
 
