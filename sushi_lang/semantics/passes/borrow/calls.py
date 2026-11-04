@@ -1,10 +1,11 @@
 """Call sites: which convention each argument has, and what that convention does.
 
 `check_call` is the arm of a SHIR call of a free function, of `print`/`println`, of a
-built-in method whose receiver the receiver partition reads, and of an extension method or
-a static, with the conventions that the typecheck pass gave (docs/design/ir.md 8.3). The
-other helpers read the AST of a built-in method call and of a call through a function
-field: the groups that check those calls port them to SHIR (Phase 3 to 5).
+built-in method whose receiver the receiver partition reads or writes, and of an extension
+method or a static, with the conventions that the typecheck pass gave (docs/design/ir.md
+8.3). The other helpers read the AST of a built-in method call and of a call through a
+function field: the groups that check those calls port them to SHIR (Phase 3 to 5). The
+refill of an array whose element owns (`_reject_refill_from_own_slot`) is B1's.
 """
 
 from __future__ import annotations
@@ -15,7 +16,8 @@ from sushi_lang.semantics.ast import (
     Call, CallLike, DotCall, Expr, IndexAccess, MemberAccess, MethodCall,
     MethodLike, Name,
 )
-from sushi_lang.semantics.method_effects import receiver_convention
+from sushi_lang.semantics.generics.iterators import produces_from_a_container
+from sushi_lang.semantics.method_effects import ARRAY_FAMILY, effect_of, receiver_convention
 from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.typesys import BorrowMode, FunctionType
@@ -32,8 +34,8 @@ from .borrows import (
 from .iterators import take_lent_iterator
 from .consume import consume, consume_each, read_through_receiver, source_provenance
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, spelled
-from .expressions import stop_at_a_field_take
-from .methods import CONTAINER_INSERT_METHODS, callee_effect
+from .expressions import stop_at_a_field_take, stop_at_owning_elements
+from .methods import CONTAINER_INSERT_METHODS
 from .reads import OWNER_STEPS, borrow_owner, called_on, read_type
 from .writes import check_owner_not_borrowed, reject_readonly_write
 from .state import BorrowState
@@ -77,8 +79,9 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     """
     resolved = checker.answers().callee_of(node.shir_id)
     callee = resolved.callee if resolved is not None else None
+    writes_receiver = False
     if isinstance(callee, Builtin):
-        _check_builtin_receiver(checker, node, callee)
+        writes_receiver = _check_builtin_receiver(checker, node, callee)
     elif not isinstance(callee, (Free, Intrinsic, Method, Static)):
         er.raise_internal_error(
             "CE0000", span=node.loc,
@@ -106,6 +109,8 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
         take_receiver(checker, node, callee)
     if changes_receiver:
         _change_receiver_owner(checker, node, callee)
+    if writes_receiver:
+        _write_builtin_receiver(checker, node, callee)
     reject_borrow_read_by_the_change(checker, node, conventions, unchanged)
     if isinstance(callee, Free):
         apply_destroy_effects(checker, node, callee)
@@ -198,17 +203,90 @@ def _method_name(checker: 'BorrowChecker', callee: Method) -> str:
     return checker.decl_name(callee.decl).rpartition(".")[2]
 
 
-def _check_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Builtin) -> None:
-    """The receiver of a built-in method call: a read of its place.
+def _check_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Builtin) -> bool:
+    """The receiver of a built-in method call: a read of its place. True when the call
+    writes it.
 
     A `Guaranteed` receiver (`receiver_convention`, docs/design/ir.md 8.3) is read and
-    stays the owner of its value. A family with no receiver rule stops the walk, and so
+    stays the owner of its value. An `Inout` receiver (a method of an array that changes
+    the array) is read too, and the call writes it after its arguments
+    (`_write_builtin_receiver`). A family with no receiver rule stops the walk, and so
     does an `Owned` receiver: B10 checks the `nom self` methods (`map_err`, `or_err`),
-    with the read-through of `or_err` and the method in the CE2405 note.
+    with the read-through of `or_err` and the method in the CE2405 note. An array whose
+    element owns stops (B1), and so does an iterator over an array (C3), which makes a
+    lent iterator.
     """
-    if receiver_convention(callee.method) is not Convention.GUARANTEED:
-        dispatch.stop_at_family(arms.STAGE, node, callee.method.family)
+    method = callee.method
+    convention = receiver_convention(method)
+    if convention not in (Convention.GUARANTEED, Convention.INOUT):
+        dispatch.stop_at_family(arms.STAGE, node, method.family)
+    if method.family == ARRAY_FAMILY:
+        stop_at_owning_elements(checker, node, read_type(checker, callee.recv),
+                                family=method.family)
+        if produces_from_a_container(method.family, method.name, len(node.args)):
+            dispatch.stop(arms.STAGE, node, family=method.family, state="iterator")
     arms.check(checker, callee.recv)
+    return convention is Convention.INOUT
+
+
+def _write_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Builtin) -> None:
+    """A built-in method that changes its receiver writes the place of the receiver, after
+    its arguments are read (docs/design/ir.md 8.3).
+
+    A receiver that does not reach the storage of a local, or that reaches it through a
+    read-only name, is refused by the one gate of a write (`reject_readonly_write`: CE2408,
+    CE2422, CE2426, CE2429, ...). Else each `let`-borrow of its owner is invalidated: a
+    read of one after the change is CE2412. A bulk copy may not read the array that it
+    grows (`reject_self_aliasing_copy`).
+    """
+    receiver = callee.recv
+    name = callee.method.name
+    what = f"call `.{name}()`"
+    owner = borrow_owner(receiver)
+    if not reject_readonly_write(checker, owner, node.loc, what, receiver=receiver):
+        check_owner_not_borrowed(checker, owner, node.loc, what, place=receiver,
+                                 moves_storage=effect_of(name).moves_storage)
+    reject_self_aliasing_copy(checker, node, callee)
+
+
+def reject_self_aliasing_copy(checker: 'BorrowChecker', node: e.Call, callee: Builtin) -> None:
+    """CE2430: a bulk write may not read the array it is writing.
+
+    Growing the destination may REALLOCATE its buffer, which leaves the source pointer
+    dangling in the middle of the copy. The check compares PLACES rather than values,
+    because `b.items.extend(b.items)` aliases exactly as `a.extend(a)` does, and a slice
+    reads the storage of its array (`a.extend(a[0..2])`).
+    """
+    if not effect_of(callee.method.name).bulk_writes or not node.args:
+        return
+    place = _place_of(callee.recv)
+    source = node.args[0].value
+    if place is None or place != _place_of(_viewed_array(source)):
+        return
+    checker.err.emit(er.ERR.CE2430, source.loc, name=spelled(checker, source),
+                     target=spelled(checker, callee.recv))
+
+
+def _viewed_array(value: e.ShirExpr) -> e.ShirExpr:
+    """The array a slice views: `a[0..2]` reads the storage of `a` (docs/design/slices.md).
+
+    Only slice steps are seen through; an element step names no storage a second
+    expression can share.
+    """
+    walked = walk_place(value, Step.INDEX)
+    if walked.node is not None and all(isinstance(step, e.Slice) for step in walked.path):
+        return walked.node
+    return value
+
+
+def _place_of(value: e.ShirExpr) -> Optional[tuple]:
+    """The storage that a value names: its root local and the name of each field, or None
+    when it names none. A call result, a literal and an element name no storage that a
+    second expression can share."""
+    walked = walk_place(value, Step.MEMBER)
+    if walked.local is None:
+        return None
+    return (walked.local, *(step.name for step in reversed(walked.path)))
 
 
 def _written_borrow(arg: e.Arg, convention: Convention) -> Optional[BorrowMode]:
@@ -296,42 +374,6 @@ def _borrowed_args(node: e.Call, conventions: Sequence[Convention]) -> list[e.Sh
             and arg.marker is not Convention.INOUT]
 
 
-def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: MethodLike) -> None:
-    """CE2430: a bulk write may not read the array it is writing.
-
-    Growing the destination may REALLOCATE its buffer, which leaves the source pointer
-    dangling in the middle of the copy. The check compares PLACES rather than values,
-    because `b.items.extend(b.items)` aliases exactly as `a.extend(a)` does. A refill
-    (`a.fill(a[0])`) is the same fault one slot down; see `_reject_refill_from_own_slot`.
-    The callee decides, never the name alone: a user extension named `extend` or `fill`
-    is not the built-in method and writes nothing.
-    """
-    effect = callee_effect(expr.method, expr.callee_builtin_family)
-    if effect.refills:
-        _reject_refill_from_own_slot(checker, expr)
-        return
-    if not effect.bulk_writes or not expr.args:
-        return
-    place = _place_of(expr.receiver)
-    if place is None or place != _place_of(_viewed_array(expr.args[0])):
-        return
-    checker.err.emit(er.ERR.CE2430, expr.args[0].loc, name=spelled(checker, expr.args[0]),
-                     target=place)
-
-
-def _viewed_array(expr: Expr) -> Expr:
-    """The array a slice views: `a[0..2]` reads the storage of `a` (docs/design/slices.md).
-
-    Only slice steps are seen through; an element step names no storage a second
-    expression can share.
-    """
-    walked = walk_place(expr, Step.INDEX)
-    if walked.node is not None and all(
-            isinstance(step, IndexAccess) and step.is_slice for step in walked.path):
-        return walked.node
-    return expr
-
-
 def _reject_refill_from_own_slot(checker: 'BorrowChecker', expr: MethodLike) -> None:
     """CE2430: a refill may not read a slot of the array it refills, when the slot owns.
 
@@ -372,19 +414,6 @@ def _slot_path(expr: Expr) -> Optional[tuple[str, ...]]:
         elif isinstance(step, (IndexAccess, MethodCall, DotCall)):
             steps.append(_ANY_SLOT)
     return tuple(steps)
-
-
-def _place_of(expr: Expr) -> Optional[str]:
-    """The storage an expression names, as a dotted path, or None when it names none.
-
-    A call result, a literal or an index names no storage a second expression can share.
-    """
-    walked = walk_place(expr, Step.MEMBER)
-    if walked.name is None:
-        return None
-    members = [step.member for step in reversed(walked.path)
-               if isinstance(step, MemberAccess)]
-    return ".".join([walked.name.id, *members])
 
 
 def maybe_mark_own_alloc_move(checker: 'BorrowChecker', expr: MethodLike) -> None:

@@ -1,0 +1,21 @@
+# EXPECT_ERROR_CODES_EXACT: CE2408
+# EXPECT_STDERR_CONTAINS: "cannot modify 'xs' through peek reference (read-only)"
+# EXPECT_STDERR_CONTAINS: "the write (call `.push()`) would change the borrowed value"
+# EXPECT_DUMP_SHIR: test_err_borrow_array_write_through_a_peek.shir
+#
+# A `poke` parameter takes a method that changes the array and an element write. A `peek`
+# parameter reads it: a read method is legal, and a method that changes it is CE2408.
+
+fn grow(poke i32[] xs) ~:
+    xs.push(1)
+    xs[0] := xs.len()
+
+fn read(peek i32[] xs) i32:
+    let i32 n = xs.len() + xs[0]
+    xs.push(n)
+    return n
+
+fn main() i32:
+    let i32[] a = from([1, 2])
+    grow(poke a)
+    return read(peek a)

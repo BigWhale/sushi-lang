@@ -1,0 +1,14 @@
+unit test_err_borrow_array_bulk_copy_of_itself
+
+ShirBody main
+  params : []
+  locals : [_0 "a": i32[], _1 "b": i32[], _2 "same": bool]
+  block  :
+    Assign(LocalRef(_0), adopt ArrayInit(Dynamic, [Single(adopt Lit(1)), Single(adopt Lit(2)), Single(adopt Lit(3))]), is_init: true)
+    Assign(LocalRef(_1), adopt ArrayInit(Dynamic, [Single(adopt Lit(4)), Single(adopt Lit(5))]), is_init: true)
+    ExprStmt(Call(Builtin(LocalRef(_0), "extend"), [(LocalRef(_1), Guaranteed)]))
+    ExprStmt(Call(Builtin(LocalRef(_0), "extend_range"), [(LocalRef(_1), Guaranteed), (Lit(0), Guaranteed), (Lit(1), Guaranteed)]))
+    Assign(LocalRef(_2), adopt Call(Builtin(LocalRef(_0), "starts_with"), [(LocalRef(_1), Guaranteed)]), is_init: true)
+    ExprStmt(Call(Builtin(LocalRef(_0), "extend"), [(Slice(LocalRef(_0), Lit(0), Lit(2), inclusive: false), Guaranteed)]))
+    If(LocalRef(_2), then: [Return(adopt Lit(1))])
+    Return(adopt Call(Builtin(LocalRef(_0), "len"), []))

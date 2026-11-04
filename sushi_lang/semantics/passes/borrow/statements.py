@@ -8,12 +8,12 @@ An `Assign` of a local is a `let` (`is_init`) or a rebind. A `let` BINDS: it dec
 local, then takes its value by the decision of a consuming use (`bind`). A rebind
 RE-INITIALIZES the local: it is refused through a view of another value's storage
 (`reject_readonly_write`), it takes its value as a consuming use, and every fact about the
-old value goes. A write of a field changes its root in place: it is refused through a
-read-only view of the root, and it takes its value as a consuming use. A destructure
-takes its value as a consuming use, declares its binders, and rebinds its places from left
-to right. A `return` hands its value to the caller, a consuming use. An expression
-statement reads its value. The `Assign` of an element is checked by the element group,
-and the `return` of a `peek` return by its own group: each stops the walk.
+old value goes. A write of a field or of an element changes its root in place: it is
+refused through a read-only view of the root, and it takes its value as a consuming use.
+A destructure takes its value as a consuming use, declares its binders, and rebinds its
+places from left to right. A `return` hands its value to the caller, a consuming use. An
+expression statement reads its value, and `x.destroy()` destroys the local `x`. The
+`return` of a `peek` return is checked by its own group: it stops the walk.
 
 An `if` checks each block from the state before it, and the paths that reach the code
 after it join. A `match` reads its scrutinee (`match nom r:` takes it), each arm declares
@@ -94,8 +94,8 @@ def check_block(checker: 'BorrowChecker', block: ShirBlock) -> None:
 
 
 def check_assign(checker: 'BorrowChecker', node: s.Assign) -> None:
-    if isinstance(node.target, e.Field):
-        _check_field_write(checker, node, node.target)
+    if isinstance(node.target, (e.Field, e.Index)):
+        _check_place_write(checker, node, node.target)
     elif not isinstance(node.target, e.LocalRef):
         arms.stop_at(checker, node)
     elif node.is_init:
@@ -169,10 +169,11 @@ def _reinitialize(checker: 'BorrowChecker', local: LocalId) -> None:
         reinitialize(state)
 
 
-def _check_field_write(checker: 'BorrowChecker', node: s.Assign, target: e.Field) -> None:
-    """`p.x := v`: a write of a field changes its root in place, and takes the value as a
-    consuming use."""
-    _reject_readonly_field_write(checker, target, node.loc)
+def _check_place_write(checker: 'BorrowChecker', node: s.Assign,
+                       target: e.Field | e.Index) -> None:
+    """`p.x := v` and `a[i] := v`: a write of a field or of an element changes its root in
+    place, and takes the value as a consuming use."""
+    _reject_readonly_place_write(checker, target, node.loc)
     arms.check(checker, node.value)
     # Replacing what the owner holds invalidates every binding reading out of it (#242).
     check_owner_not_borrowed(checker, borrow_owner(target), node.loc, "assign",
@@ -180,16 +181,20 @@ def _check_field_write(checker: 'BorrowChecker', node: s.Assign, target: e.Field
     consume(checker, node.value)
 
 
-def _reject_readonly_field_write(checker: 'BorrowChecker', target: e.Field,
+def _reject_readonly_place_write(checker: 'BorrowChecker', target: e.Field | e.Index,
                                  span: Optional[Span]) -> None:
-    """The gate of a write of a field, then the read of the field. A write is allowed
-    unless its root is a read-only view, where the store cannot reach what it writes, or
-    a temporary (CE2429). A root that a later group checks stops the walk."""
-    root = walk_place(target, Step.MEMBER).node
+    """The gate of a write of a field or of an element, then the read of the place. A write
+    is allowed unless its root is a read-only view, where the store cannot reach what it
+    writes, a temporary (CE2429), or a slice (CE2426). A root that a later group checks
+    stops the walk."""
+    root = walk_place(target, Step.MEMBER | Step.INDEX).node
     if isinstance(root, LATER_ROOTS):
         arms.stop_at(checker, root)
-    reject_readonly_write(checker, borrow_owner(target), span, "assign to a field",
-                          receiver=target.base)
+    if isinstance(target, e.Field):
+        what = "assign to a field"
+    else:
+        what = "assign to an array element"
+    reject_readonly_write(checker, borrow_owner(target), span, what, receiver=target.base)
     arms.check(checker, target)
 
 
@@ -240,10 +245,11 @@ def _declare_binder(checker: 'BorrowChecker', local: LocalId) -> None:
 
 
 def _rebind_place(checker: 'BorrowChecker', place: e.ShirExpr) -> None:
-    """A place of a rebind form takes its element: a local is rebound, and a field is
-    written. Typecheck gives a place of no other kind no answer, and stops first."""
-    if isinstance(place, e.Field):
-        _reject_readonly_field_write(checker, place, place.loc)
+    """A place of a rebind form takes its element: a local is rebound, and a field and an
+    element are written. Typecheck gives a place of no other kind no answer, and stops
+    first."""
+    if isinstance(place, (e.Field, e.Index)):
+        _reject_readonly_place_write(checker, place, place.loc)
         check_owner_not_borrowed(checker, borrow_owner(place), place.loc, "assign",
                                  place=place)
         return
@@ -266,8 +272,15 @@ def check_return(checker: 'BorrowChecker', node: s.Return) -> None:
 
 
 def check_expr_stmt(checker: 'BorrowChecker', node: s.ExprStmt) -> None:
-    """A value that the statement reads and drops."""
+    """A value that the statement reads and drops. `x.destroy()` releases what the local
+    `x` holds, so every later use of `x` is CE2406."""
     arms.check(checker, node.value)
+    value = node.value
+    if (isinstance(value, e.Call) and isinstance(value.target, e.Dotted)
+            and value.target.name == "destroy" and isinstance(value.target.recv, e.LocalRef)):
+        state = checker.borrow_state.get(value.target.recv.local)
+        if state is not None:
+            state.is_destroyed = True
     clear_borrows(checker)
 
 

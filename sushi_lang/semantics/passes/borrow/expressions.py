@@ -3,10 +3,13 @@
 A read of a local reports a use after a move (CE2405, CE2435), after a destroy (CE2406)
 and after a change of the owner of a `let`-borrow (CE2412). A literal and a constant read
 nothing that the body owns. An operator reads its operands, an interpolated string reads
-its holes, and a field reads its base. Each field of a struct construction, each part of a
-tuple and each payload of an enum construction is a consuming use, and so is the operand
-of a `??`: the pass decides its `Ownership` and writes the row (`consume.py`). A
-`Borrow` borrows its place for the statement.
+its holes, a field reads its base, and an element and a slice read their array and their
+index or bounds. Each field of a struct construction, each part of a tuple, each payload
+of an enum construction and each element of an array construction is a consuming use, and
+so is the operand of a `??`: the pass decides its `Ownership` and writes the row
+(`consume.py`). A `Borrow` borrows its place for the statement. An array whose element
+owns a resource is group B1's: each of its constructs stops the walk
+(`stop_at_owning_elements`).
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.typesys import Type
 
 from . import arms
 from .borrows import check_borrow as borrow_place
@@ -96,6 +100,60 @@ def check_field(checker: 'BorrowChecker', node: e.Field) -> None:
     """A field read reads its base, so a read of a field of a moved local is CE2405 at the
     local. The value is a borrow of the root: a position that takes it decides that."""
     arms.check(checker, node.base)
+
+
+def stop_at_owning_elements(checker: 'BorrowChecker', node: e.ShirExpr,
+                            array_type: Optional[Type], *,
+                            family: Optional[str] = None) -> None:
+    """An array whose element owns a resource is group B1's: the move and the drop of an
+    element need Tier B, so its construction, its element, its slice and its methods stop
+    the walk (`borrow, <construct> owning`). `family` names the family of a method call."""
+    element = checker.types.element_type(array_type)
+    if checker.types.type_class(element) is TypeClass.MOVE:
+        dispatch.stop(arms.STAGE, node, family=family, state="owning")
+
+
+def check_array_init(checker: 'BorrowChecker', node: e.ArrayInit) -> None:
+    """An array construction takes each element of a `Single` run by POSITION, in the
+    written order. A repeated value is read, then its count (ruling R2), and each slot
+    takes its own copy. A range run reads its bounds."""
+    stop_at_owning_elements(checker, node, read_type(checker, node))
+    for run in node.runs:
+        if isinstance(run, e.Single):
+            _take_by_position(checker, run.value)
+        elif isinstance(run, e.Repeat):
+            read_value(checker, run.value)
+            arms.check(checker, run.count)
+        else:
+            read_value(checker, run.range)
+
+
+def read_value(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
+    """Read a value. A range is no value of its own here: its bounds are read."""
+    if isinstance(value, e.Range):
+        arms.check(checker, value.start)
+        arms.check(checker, value.end)
+    else:
+        arms.check(checker, value)
+
+
+def check_index(checker: 'BorrowChecker', node: e.Index) -> None:
+    """An element read reads its array, then its index. The value is a borrow of the root
+    of the array, as a field is: a position that takes it decides that, and a plain
+    element is a copy."""
+    stop_at_owning_elements(checker, node, read_type(checker, node.base))
+    arms.check(checker, node.base)
+    arms.check(checker, node.index)
+
+
+def check_slice(checker: 'BorrowChecker', node: e.Slice) -> None:
+    """A slice reads its array, then its bounds. The value is a view of the storage of the
+    array (docs/design/slices.md): a `let` of it is a let-borrow of the root, and a
+    position that takes it over is refused (CE2411)."""
+    stop_at_owning_elements(checker, node, read_type(checker, node.base))
+    arms.check(checker, node.base)
+    arms.check(checker, node.start)
+    arms.check(checker, node.end)
 
 
 def check_struct_init(checker: 'BorrowChecker', node: e.StructInit) -> None:

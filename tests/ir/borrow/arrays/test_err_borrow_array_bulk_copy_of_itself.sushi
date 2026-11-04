@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE2430
+# EXPECT_STDERR_CONTAINS: "'a[0..2]' cannot be the source of a bulk write into 'a'"
+# EXPECT_DUMP_SHIR: test_err_borrow_array_bulk_copy_of_itself.shir
+#
+# A bulk copy reads its source as a borrow. A source that is another array is legal. A
+# source that reads the array that the copy grows, also through a slice, is CE2430: a
+# growth can move the storage that the source reads.
+
+fn main() i32:
+    let i32[] a = from([1, 2, 3])
+    let i32[] b = from([4, 5])
+    a.extend(b)
+    a.extend_range(b, 0, 1)
+    let bool same = a.starts_with(b)
+    a.extend(a[0..2])
+    if (same):
+        return 1
+    return a.len()

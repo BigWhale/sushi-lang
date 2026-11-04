@@ -62,12 +62,10 @@ def root_owner(expr: Optional[Expr]) -> Optional[str]:
 
 def borrow_owner(node: object) -> Optional[LocalId]:
     """The local that a borrow of the SHIR place `node` is counted on, and that a binding
-    into `node` freezes: the root local, under each field step and each `??` that reads
-    it. The pass tracks whole locals, not the places in them.
-
-    An element step comes with the group that checks an element.
-    """
-    return walk_place(node, Step.MEMBER | Step.TRY).local
+    into `node` freezes: the root local, under each field step, each element and slice
+    step, and each `??` that reads it. The pass tracks whole locals, not the places in
+    them."""
+    return walk_place(node, Step.MEMBER | Step.INDEX | Step.TRY).local
 
 
 def chain_call_boundary(expr: object) -> Optional[Span]:

@@ -4,7 +4,7 @@ ShirBody first
   params : [(_0 "xs": u8[], Guaranteed)]
   locals : []
   block  :
-    Return(Index(LocalRef(_0), Lit(0), unchecked: false))
+    Return(adopt Index(LocalRef(_0), Lit(0), unchecked: false))
 
 ShirBody main
   params : []

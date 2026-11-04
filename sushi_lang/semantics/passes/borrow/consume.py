@@ -14,8 +14,9 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr, IndexAccess, Lambda, Let, Name
+from sushi_lang.semantics.ast import Expr, Lambda, Let, Name
 from sushi_lang.semantics.ownership import Ownership, Provenance, TypeClass, classify
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer
@@ -28,7 +29,7 @@ from .diagnostics import (
     no_clone_reason,
     refuses_clone,
 )
-from .reads import borrow_owner, names_kept_storage, read_type
+from .reads import borrow_owner, read_type
 from .state import BorrowState, record_owners
 from .writes import check_owner_not_borrowed
 
@@ -69,9 +70,9 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
     The constant evaluator makes each value of an initializer body, so that value is FRESH,
     and a constant that the initializer names is read, not moved. In any other body, a local
     has the provenance of its state. A constant is storage that the program keeps (#726):
-    it is not FRESH, so a take of an owning one is refused. A field is storage that the
-    owner of its base keeps, so it is a read through that owner (BORROWED): a plain one is
-    a copy, and a take of an owning one is refused. `r??` yields what `r` holds,
+    it is not FRESH, so a take of an owning one is refused. A field, an element and a slice
+    are storage that the owner of their base keeps, so each is a read through that owner
+    (BORROWED): a plain one is a copy, and a take of an owning one is refused. `r??` yields what `r` holds,
     and the payload has the provenance of `r` (#548): a borrowed `r` keeps its owner, so
     the payload is a read through it; an owned `r` was SPENT by the `??` itself
     (`unwrap_place`), so nothing owns the payload now and the position adopts it.
@@ -83,7 +84,7 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
         return name_provenance(checker, node.local)
     if isinstance(node, e.ConstRef):
         return Provenance.OWNED
-    if isinstance(node, e.Field):
+    if isinstance(node, (e.Field, e.Index, e.Slice)):
         return Provenance.BORROWED
     if isinstance(node, e.Try) and isinstance(node.inner, e.LocalRef):
         if name_provenance(checker, node.inner.local) is Provenance.BORROWED:
@@ -300,6 +301,8 @@ def bind(checker: 'BorrowChecker', node: s.Assign, dest: BorrowState) -> None:
     the owner, so the owner is frozen while the binding lives.
     """
     value = node.value
+    if reject_slice_of_temporary(checker, value):
+        return
     provenance = source_provenance(checker, value)
     src_state = (checker.borrow_state.get(value.local)
                  if isinstance(value, e.LocalRef) else None)
@@ -330,11 +333,6 @@ def record_borrowed_binding(checker: 'BorrowChecker', node: s.Assign,
                   checker._scope_binding_borrows[-1])
 
 
-def is_slice(expr: Optional[Expr]) -> bool:
-    """Is `expr` a slice, `data[a..b]` (docs/design/slices.md)?"""
-    return isinstance(expr, IndexAccess) and expr.is_slice
-
-
 def view_owners(checker: 'BorrowChecker', owner) -> tuple:
     """The owners a binding that reads out of `owner` freezes: `owner`, and its owners.
 
@@ -348,15 +346,18 @@ def view_owners(checker: 'BorrowChecker', owner) -> tuple:
     return (owner,)
 
 
-def reject_slice_of_temporary(checker: 'BorrowChecker', expr: Expr) -> bool:
+def reject_slice_of_temporary(checker: 'BorrowChecker', value: e.ShirExpr) -> bool:
     """CE2437 for a `let` of a slice of a temporary array (S8). True when refused.
 
     The temporary is freed at the end of the statement, and the binding lives on. Inside
-    one statement a slice of a temporary is legal, so only the `let` asks.
+    one statement a slice of a temporary is legal, so only the `let` asks. Storage that
+    a local or a constant keeps, at the end of field and element steps, is no temporary.
     """
-    if not is_slice(expr) or names_kept_storage(checker, expr):
+    if not isinstance(value, e.Slice):
         return False
-    checker.err.emit_with(er.ERR.CE2437, expr.loc) \
+    if isinstance(walk_place(value, Step.MEMBER | Step.INDEX).node, (e.LocalRef, e.ConstRef)):
+        return False
+    checker.err.emit_with(er.ERR.CE2437, value.loc) \
         .help("bind the array first, or copy the part with `.ss(start, count)`") \
         .emit()
     return True

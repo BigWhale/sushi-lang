@@ -22,7 +22,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import BorrowMode
 from . import arms
 from .diagnostics import emit_use_after_move, spelled
-from .reads import read_type
+from .reads import borrow_owner, read_type
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -32,9 +32,9 @@ if TYPE_CHECKING:
 #: The mode of the borrow that a value passed by address takes (docs/design/ir.md 8.3).
 BY_ADDRESS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
 
-#: The roots of a place that a later group checks: an element and a slice (A6), a `var`
-#: (A9) and a function used as a value.
-LATER_ROOTS = (e.Index, e.Slice, e.StorageRef, e.GlobalRef)
+#: The roots of a place that a later group checks: a `var` (A9) and a function used as a
+#: value.
+LATER_ROOTS = (e.StorageRef, e.GlobalRef)
 
 
 def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
@@ -47,10 +47,15 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     `poke` is CE2400 at the name of the constant, bare or behind an alias. A stdlib
     constant has no record and no storage, so both modes are CE2400
     (`reject_borrow_of_constant`). A call result, a literal and a construction are
-    temporaries and have no address, and nor does a field of one: CE2404. A root that a
-    later group checks (`LATER_ROOTS`) stops the walk.
+    temporaries and have no address, and nor does a field of one: CE2404. An element has
+    no stable address either, because a growth of its array can move it: CE2404. A slice
+    is a view of its array (`_borrow_slice`). A root that a later group checks
+    (`LATER_ROOTS`) stops the walk.
     """
     is_poke = mode is BorrowMode.POKE
+    if isinstance(place, e.Slice):
+        _borrow_slice(checker, place, span, is_poke=is_poke)
+        return
     if borrow_of_constant(checker, place, mode):
         return
     root = walk_place(place, Step.MEMBER).node
@@ -78,6 +83,24 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
         check_owner_not_borrowed(checker, root.local, span, "take `poke`", place=place)
 
     acquire_borrow(checker, state, span, is_poke=is_poke)
+
+
+def _borrow_slice(checker: 'BorrowChecker', place: e.Slice, span: Optional[Span], *,
+                  is_poke: bool) -> None:
+    """`peek data[a..b]`: a pointer to the slice descriptor (docs/design/slices.md).
+
+    A `peek` reads the array: it is a shared borrow of the owner of the array, so a `poke`
+    of the same owner in one call is CE2407. A `poke` is refused (S4): a callee could grow
+    the view and move storage that the array keeps.
+    """
+    arms.check(checker, place)
+    owner = borrow_owner(place)
+    if is_poke:
+        reject_readonly_write(checker, owner, span, "take a `poke` borrow", receiver=place)
+        return
+    state = checker.borrow_state.get(owner) if owner is not None else None
+    if state is not None:
+        acquire_borrow(checker, state, span, is_poke=False)
 
 
 def borrow_of_constant(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode) -> bool:

@@ -1,8 +1,8 @@
 """The borrow arms of a field place, a field write and a destructure (docs/design/ir.md 7.9).
 
 A field read reads its base, and a borrow or a write of a field is counted on the root of
-the place. A root that a later group checks (an element, a slice, a `var`, a function used
-as a value) stops the walk with its own class. A destructure of a value that owns stops,
+the place. A root that a later group checks (a `var`, a function used as a value) stops
+the walk with its own class. A destructure of a value that owns stops,
 and so does a marked take of an owning field. The tests run the arms over SHIR built by
 hand, with a stand-in for the pass; they do not run the compiler.
 """
@@ -32,11 +32,7 @@ def _field(base: e.ShirExpr, name: str = "x") -> e.Field:
 
 def _roots() -> list:
     decls = DeclNames()
-    array = e.LocalRef(ShirId(10), SPAN, LocalId(0))
     return [
-        e.Index(ShirId(11), ROOT, array, e.Lit(ShirId(12), SPAN, e.IntConst(0, 10)), False),
-        e.Slice(ShirId(13), ROOT, array, e.Lit(ShirId(16), SPAN, e.IntConst(0, 10)),
-                e.Lit(ShirId(17), SPAN, e.IntConst(1, 10)), False),
         e.StorageRef(ShirId(14), ROOT, decls.refer("cursor")),
         e.GlobalRef(ShirId(15), ROOT, decls.refer("make")),
     ]
@@ -49,7 +45,7 @@ def test_the_table_checks_the_a5_constructs() -> None:
     assert arms.ARMS[s.Destructure] is statements.check_destructure
 
 
-@pytest.mark.parametrize("root", _roots(), ids=["index", "slice", "var", "fn value"])
+@pytest.mark.parametrize("root", _roots(), ids=["var", "fn value"])
 def test_a_borrow_of_a_field_of_a_later_root_stops_at_the_root(root: e.ShirExpr) -> None:
     """The stop comes before the arm reads the pass, so the stand-in is never read."""
     with pytest.raises(StageStop) as caught:
@@ -59,7 +55,7 @@ def test_a_borrow_of_a_field_of_a_later_root_stops_at_the_root(root: e.ShirExpr)
     assert caught.value.span == ROOT
 
 
-@pytest.mark.parametrize("root", _roots(), ids=["index", "slice", "var", "fn value"])
+@pytest.mark.parametrize("root", _roots(), ids=["var", "fn value"])
 def test_a_write_of_a_field_of_a_later_root_stops_at_the_root(root: e.ShirExpr) -> None:
     node = s.Assign(ShirId(1), SPAN, _field(root), e.Lit(ShirId(2), SPAN, e.IntConst(1, 10)),
                     False)
