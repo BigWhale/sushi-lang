@@ -17,7 +17,7 @@ from sushi_lang.semantics.ast import ConstDef, VarDef
 from sushi_lang.semantics.const_eval import allocates_nothing
 from sushi_lang.semantics.namespaces import in_body_scope
 from sushi_lang.semantics.type_predicates import holds_dynamic_array
-from sushi_lang.semantics.typesys import BuiltinType
+from sushi_lang.semantics.typesys import BuiltinType, Type
 
 from .utils import validate_type_name
 
@@ -27,9 +27,11 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class InitializerFacts:
-    """What the `Return` of an initializer body reads: the declaration, the value that the
-    constant evaluator gave it, and whether it is an empty container, which has no value."""
+    """What the `Return` of an initializer body reads: the declaration, its resolved type,
+    the value that the constant evaluator gave it, and whether it is an empty container,
+    which has no value."""
     decl: ConstDef
+    ty: Type
     value: Optional[ConstantValue]
     empty: bool
 
@@ -70,26 +72,25 @@ def _validate_constant(self, const: ConstDef) -> None:
         return
 
     # The declaration takes the type a `let` would: a `List@(T)` or a `Maybe@(T)`
-    # spelling is interned here, and the record every reader of the name consults
-    # follows the declaration. A generic enum's variant is evaluated against it (#551).
+    # spelling is interned here, into the record that every reader of the declared type
+    # reads. A generic enum's variant is evaluated against it (#551).
     from .resolution import resolve_variable_type
     resolved = resolve_variable_type(self, const.ty, const.type_span)
-    if resolved is not None and resolved != const.ty:
-        const.ty = resolved
-        sig = self.const_sig(const.name)
-        if sig is not None:
-            sig.const_type = resolved
+    sig = self.const_table.record_of(const, self.current_unit_name)
+    if resolved is not None and sig is not None:
+        sig.const_type = resolved
+    ty = resolved if resolved is not None else const.ty
 
     value = None
     empty = is_var and allocates_nothing(const.value)
     if not empty:
         offered = self.errors_offered()
-        value = self.constant_evaluator(self.reporter).evaluate(const.value, const.ty, const.loc)
+        value = self.constant_evaluator(self.reporter).evaluate(const.value, ty, const.loc)
         if self.errors_offered() != offered:
             return
 
     # The initializer is the SHIR body of the constant (docs/design/ir.md 6.3).
-    self.initializer = InitializerFacts(const, value, empty)
+    self.initializer = InitializerFacts(const, ty, value, empty)
     try:
         self.check_body(const)
     finally:

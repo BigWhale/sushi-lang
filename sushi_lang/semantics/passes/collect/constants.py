@@ -63,6 +63,16 @@ class ConstantTable(UnitOwnedSymbols[ConstSig]):
     reported_cycles: Set[FrozenSet[Tuple[Optional[str], str]]] = field(
         default_factory=set)
 
+    def record_of(self, decl: ConstDef, unit_name: Optional[str]) -> Optional[ConstSig]:
+        """The record of ONE declaration, in the unit that declared it.
+
+        Its `const_type` is the one home of the declared type: the `typecheck` pass writes
+        the resolved type there, and the backend and the library manifest read it there. A
+        compiled library's constant is a name of its library unit (`scope_unit`, #1120).
+        """
+        sig = self.declared(decl.name, decl.scope_unit or unit_name)
+        return sig if sig is not None and sig.decl is decl else None
+
 
 class ConstantCollector:
     """Collector for constant definitions."""

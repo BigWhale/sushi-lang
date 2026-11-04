@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.ast import ExtendWithDef
     from sushi_lang.semantics.passes.collect import FunctionTable, PerkImplementationTable, ConstantTable
     from sushi_lang.semantics.const_eval import ConstantValue
+    from sushi_lang.semantics.typesys import Type
 
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.report import Span
@@ -544,10 +545,10 @@ class LLVMCodegen:
             global_var.unnamed_addr = True  # Allow merging identical constants
         self.constants.declare(name, global_var, unit=unit_name)
 
-    def _emit_unit_variable(self, var: VarDef, unit_name: str | None,
+    def _emit_unit_variable(self, var: VarDef, ty: Type, unit_name: str | None,
                             defining: bool, filename: Optional[str]) -> None:
         """Define a `var`'s storage in its own unit's module; declare it everywhere else."""
-        ll_type = self.types.ll_type(var.ty)
+        ll_type = self.types.ll_type(ty)
         if var.link_symbol is not None or not defining:
             self._register_global_constant(var.name, ll_type, None, unit_name,
                                            symbol=global_symbol(var, unit_name), storage=True)
@@ -557,7 +558,7 @@ class LLVMCodegen:
             # The empty descriptor `{0, 0, null}` is the zero value of its type.
             initializer = ir.Constant(ll_type, None)
         else:
-            const_value = self._value_of_global(var, unit_name, filename)
+            const_value = self._value_of_global(var, ty, unit_name, filename)
             initializer = self._materialize_constant(
                 const_value, mangle_unit_symbol(unit_name, f".str_data.{var.name}"),
                 var.loc, filename)
@@ -577,21 +578,18 @@ class LLVMCodegen:
         for a literal array). The round makes a global or stops the compile; it never
         drops one (docs/design/ir.md 8.2).
         """
-        if const.ty is None:
-            raise_internal_error("CE0000", span=const.loc, filename=filename,
-                                 detail=f"the constant '{const.name}' has no type")
-
         # A compiled library's constant is a name of the library unit, and its
         # initializer reads that unit's scope (#1120).
         unit_name = const.scope_unit or unit_name
+        ty = self._declared_type(const, unit_name, filename)
 
         if isinstance(const, VarDef):
-            self._emit_unit_variable(const, unit_name, defining, filename)
+            self._emit_unit_variable(const, ty, unit_name, defining, filename)
             return
 
         # Materializing at the DECLARED type keeps a context-typed literal at its own
         # width: `const u8 MAX = 200` yields a u8 initializer, not an i32 one.
-        const_value = self._value_of_global(const, unit_name, filename)
+        const_value = self._value_of_global(const, ty, unit_name, filename)
 
         # A library constant's copy takes the symbol of the unit that declared it, so
         # it never takes the name of a function in the unit that holds the copy (#1101).
@@ -601,19 +599,28 @@ class LLVMCodegen:
             const.loc, filename)
 
         self._register_global_constant(
-            const.name, self.types.ll_type(const.ty), initializer, unit_name,
+            const.name, self.types.ll_type(ty), initializer, unit_name,
             symbol=global_symbol(const, unit_name))
+
+    def _declared_type(self, const: ConstDef, unit_name: str | None,
+                       filename: Optional[str]) -> Type:
+        """The declared type of a constant or a `var`, from its record in the constant table."""
+        sig = self.const_table.record_of(const, unit_name)
+        if sig is None or sig.const_type is None:
+            raise_internal_error("CE0000", span=const.loc, filename=filename,
+                                 detail=f"the constant '{const.name}' has no type")
+        return sig.const_type
 
     def _evaluate_constant_expression(self, expr, expected_type=None,
                                       unit_name=None) -> Optional["ConstantValue"]:
         """Evaluate a constant expression at compile time, as a value not an initializer."""
         return self.constant_evaluator(unit_name).evaluate(expr, expected_type, None)
 
-    def _value_of_global(self, const: ConstDef, unit_name: str | None,
+    def _value_of_global(self, const: ConstDef, ty: Type, unit_name: str | None,
                          filename: Optional[str]) -> "ConstantValue":
         """The value of the initializer of a constant or a `var`. A constant with no value (a
         function-typed constant) stops (`emit, constant with no value`)."""
-        value = self._evaluate_constant_expression(const.value, const.ty, unit_name)
+        value = self._evaluate_constant_expression(const.value, ty, unit_name)
         if value is None:
             stop("constant with no value", const.loc, filename)
         return value

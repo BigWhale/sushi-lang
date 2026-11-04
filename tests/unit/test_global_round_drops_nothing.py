@@ -24,10 +24,16 @@ SPAN = Span(3, 1, 3, 20)
 
 def _codegen(value) -> SimpleNamespace:
     """A stand-in for the codegen whose evaluator gives `value` for each initializer. The
-    round reads the value through the real `_value_of_global`."""
+    round reads the value through the real `_value_of_global`, and the declared type
+    through the real `_declared_type`, from a constant table that holds the stand-in's
+    type."""
     codegen = SimpleNamespace(_evaluate_constant_expression=lambda *_args: value,
-                              types=LLVMTypeSystem())
+                              types=LLVMTypeSystem(),
+                              const_table=SimpleNamespace(
+                                  record_of=lambda decl, _unit: SimpleNamespace(
+                                      const_type=decl.ty)))
     codegen._value_of_global = partial(LLVMCodegen._value_of_global, codegen)
+    codegen._declared_type = partial(LLVMCodegen._declared_type, codegen)
     return codegen
 
 
@@ -46,8 +52,8 @@ def test_a_constant_with_no_value_stops() -> None:
 
 def test_a_unit_variable_with_no_value_stops() -> None:
     with pytest.raises(StageStop) as caught:
-        LLVMCodegen._emit_unit_variable(_codegen(None), _const(), "u", True,  # type: ignore[arg-type]
-                                        "f.sushi")
+        LLVMCodegen._emit_unit_variable(_codegen(None), _const(),  # type: ignore[arg-type]
+                                        BuiltinType.I32, "u", True, "f.sushi")
     assert caught.value.params == {"stage": "emit", "construct": "constant with no value"}
 
 

@@ -214,10 +214,10 @@ def _check_initializer(validator: TypeValidator, node: s.Return) -> None:
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail="an initializer body with no declaration")
     const = facts.decl
-    got = visit.check_expr(validator, node.value, const.ty)
+    got = visit.check_expr(validator, node.value, facts.ty)
     span = assignment_span(const)
-    if (_reject_literal_size(validator, node.value, const.ty, span)
-            or reject_mismatch(validator, got, const.ty, span, const.type_span)):
+    if (_reject_literal_size(validator, node.value, facts.ty, span)
+            or reject_mismatch(validator, got, facts.ty, span, const.type_span)):
         return
     if got is None or facts.empty:
         return

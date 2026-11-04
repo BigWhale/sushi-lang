@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Iterator
 
+from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.library_templates import (
     doc_record, signature_record, type_string, with_doc,
 )
@@ -433,6 +434,7 @@ class LibraryManifestGenerator:
         """
         from sushi_lang.semantics.library_templates import slice_decl_source
 
+        constants = self.analyzer.tables.constants
         records = []
         for unit in own_units(units):
             if unit.ast is None:
@@ -440,10 +442,14 @@ class LibraryManifestGenerator:
             for decl in unit.ast.constants:
                 if not decl.is_public or isinstance(decl, VarDef) != variables:
                     continue
+                sig = constants.record_of(decl, unit.name)
+                if sig is None or sig.const_type is None:
+                    raise_internal_error("CE0000", span=decl.loc,
+                                         detail=f"the constant '{decl.name}' has no record")
                 record = {
                     "name": decl.name,
                     "unit": unit.name,
-                    "type": type_string(decl.ty),
+                    "type": type_string(sig.const_type),
                     "source": slice_decl_source(decl, self._source(unit)),
                 }
                 if variables:

@@ -62,7 +62,7 @@ def _initializer(monkeypatch, *, value, empty: bool) -> tuple[s.Return, TypeckRe
     decl = SimpleNamespace(ty=I32, type_span=SPAN, name_span=SPAN, value=None, loc=SPAN)
     ret = s.Return(ShirId(2), SPAN, _ref())
     answers = TypeckResults()
-    facts = InitializerFacts(decl, value, empty)  # type: ignore[arg-type]
+    facts = InitializerFacts(decl, I32, value, empty)  # type: ignore[arg-type]
     return ret, answers, _validator(value, answers=answers, initializer=facts)
 
 
