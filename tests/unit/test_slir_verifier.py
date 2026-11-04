@@ -428,6 +428,36 @@ def test_a_built_in_method_call_with_its_receiver_first_passes():
     ))
 
 
+def _static(name: str, *args: tuple[p.Operand, Convention]) -> st.Call:
+    """`_1 = <name>(args)`: a static of a built-in container, an intrinsic of its name."""
+    return st.Call(_local(1), st.Builtin(Intrinsic(name), tuple(I32 for _ in args)), args, BAD)
+
+
+def _static_function(call: st.Call) -> SlirFunction:
+    return _function([BLANK, BLANK], _block(0, _ret(), call, _set(0, r.Use(p.Const(k.Blank())))))
+
+
+@pytest.mark.parametrize("name, convention", [
+    ("Own.alloc", GUARANTEED), ("List.with_capacity", OWNED)])
+def test_a_static_of_a_container_with_another_convention_is_refused(name: str,
+                                                                     convention: Convention):
+    """The verifier reads the convention of each argument of a container static from
+    `argument_conventions`, as typecheck writes it (docs/design/ir.md 8.3, 8.13)."""
+    call = _static(name, (p.Const(k.Int(4, I32)), convention))
+    _refused(_static_function(call), "declared conventions")
+
+
+@pytest.mark.parametrize("name, convention", [
+    ("Own.alloc", OWNED), ("List.with_capacity", GUARANTEED)])
+def test_a_static_of_a_container_with_the_convention_of_its_row_passes(name: str,
+                                                                       convention: Convention):
+    _passes(_static_function(_static(name, (p.Const(k.Int(4, I32)), convention))))
+
+
+def test_a_static_of_a_primitive_type_name_has_no_container_rule():
+    _passes(_static_function(_static("string.from_bytes", (p.Const(k.Int(4, I32)), OWNED))))
+
+
 TAKE = {"unit$take": DeclaredParams((OWNED,))}
 
 

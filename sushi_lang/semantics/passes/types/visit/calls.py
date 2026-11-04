@@ -26,7 +26,8 @@ A `Call` answers what its callee yields. Its written target decides the callee:
   CE2045 (`visit/results.py:reject_unknown_variant`). A static method of a plain type is
   the callee row `Static`, and a type whose dot holds no static of the name is CE2102. A
   static of a primitive type name (`f64.from_bits`, `string.from_bytes`) is the callee
-  row `BuiltinStatic`, with the one parameter of its row of `PRIMITIVE_STATICS`.
+  row `BuiltinStatic`, with the one parameter of its row of `PRIMITIVE_STATICS`. A static
+  of a built-in container (`List.new`, `Own.alloc`) has the arm of `container_statics.py`.
 
 An extension method and a static resolve through `resolve_extension_method`, which
 chooses the one that the calling unit may call (R4 to R7, C3 to C5). The arguments go
@@ -87,6 +88,8 @@ from sushi_lang.semantics.passes.types.visibility import (
     name_is_contested, name_was_refused, out_of_scope_help, reject_ambiguous_name,
     reject_private_call, reject_private_kept_call, reject_private_type, type_is_contested,
     type_name_is_contested)
+from sushi_lang.semantics.passes.types.visit.container_statics import (
+    check_container_static, container_static_base)
 from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
 from sushi_lang.semantics.passes.types.visit.results import reject_unknown_variant
 from sushi_lang.semantics.shir import dispatch, exprs as e
@@ -123,6 +126,9 @@ def check_call(validator: TypeValidator, node: e.Call,
     if isinstance(target, e.Static):
         if reject_unknown_variant(validator, node, target, expected):
             return None
+        base = container_static_base(validator, target)
+        if base is not None:
+            return check_container_static(validator, node, target, base, expected)
         return _check_static_call(validator, node, target)
     visit.stop_at(validator, node)
 
@@ -215,8 +221,8 @@ def _check_static_call(validator: TypeValidator, node: e.Call,
     """`T.m(args)`: the static method `m` of the plain type `T` (#542).
 
     A type whose dot holds no static `m` is CE2102, and an enum CE2045. A static of a
-    primitive type name (`f64.from_bits`) is a `BuiltinStatic`. The static of a built-in
-    container (`List.new`) and a static of a type that is not plain stop the walk.
+    primitive type name (`f64.from_bits`) is a `BuiltinStatic`. `Iterator.new` and a static
+    of a type that is not plain stop the walk.
     """
     primitive = (PRIMITIVE_STATICS.get((target.ty.value, target.name))
                  if isinstance(target.ty, BuiltinType) else None)

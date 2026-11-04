@@ -243,7 +243,7 @@ def _spell_place(validator: 'TypeValidator', value: e.ShirExpr) -> Optional[str]
     return ".".join([root, *(field.name for field in reversed(walked.path))])
 
 
-def _mismatch_span(arg: e.Arg) -> Optional[Span]:
+def argument_span(arg: e.Arg) -> Optional[Span]:
     """Where a mismatch of an argument stands: a `peek x` or a `poke x` from its marker,
     any other argument at its value."""
     if arg.marker in _BORROWS and arg.marker_loc is not None:
@@ -255,7 +255,7 @@ def _emit_mismatch(validator: 'TypeValidator', code: er.ErrorMessage, callee_nam
                    arg: e.Arg, index: int, expected_ty: Type, actual_ty: Type,
                    others: Sequence[Type] = (), field: Optional[str] = None) -> None:
     """Report the mismatch, and say how to borrow when the parameter wants a borrow."""
-    diag = er.emit_with(validator.reporter, code, _mismatch_span(arg),
+    diag = er.emit_with(validator.reporter, code, argument_span(arg),
                         index=index, expected=display_type(expected_ty),
                         got=display_type(actual_ty),
                         **_callee_key(code, callee_name), **_field_key(code, field))

@@ -61,6 +61,11 @@ BUILTIN_STATICS: dict[str, frozenset[str]] = {
 }
 
 
+#: The method family of each built-in container whose statics the IR stages build, by the
+#: type name: the row of `METHOD_TYPE_REGISTRY` that the `BuiltinStatic` callee names.
+CONTAINER_STATIC_FAMILIES: dict[str, str] = {"List": "list", "HashMap": "hashmap", "Own": "own"}
+
+
 def is_builtin_static(type_name: Optional[str], method: str) -> bool:
     """Whether `<type_name>.<method>()` is one of the built-in statics."""
     if type_name is None:

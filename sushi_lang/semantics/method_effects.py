@@ -1,8 +1,9 @@
 """What a built-in container method does to its receiver and its arguments: ONE table.
 
-The borrow pass reads it for CE2412, CE2408 and CE2430, and the typecheck pass reads
-`mutates` to refuse an in-place method on a constant (CE2096). It sits outside both
-passes, so the typecheck pass never imports the borrow pass. The module also holds the
+The borrow pass reads it for CE2412, CE2408 and CE2430. The typecheck pass reads `mutates`
+to refuse an in-place method on a constant (CE2096), and `consumes_args` for the convention
+of an argument (`argument_conventions`). It sits outside both passes, so the typecheck pass
+never imports the borrow pass. The module also holds the
 partition of the method families by what a method does to its receiver, and the
 convention of a receiver (`receiver_convention`, docs/design/ir.md 8.3): the borrow pass
 and SLIR lowering read it.
@@ -34,6 +35,7 @@ _WRITES_IN_PLACE = MethodEffect(mutates=True)
 _INSERTS = MethodEffect(mutates=True, moves_storage=True, consumes_args=True)
 _BULK_WRITES = MethodEffect(mutates=True, moves_storage=True, bulk_writes=True)
 _REFILLS = MethodEffect(mutates=True, refills=True)
+_STORES = MethodEffect(consumes_args=True)
 _NO_EFFECT = MethodEffect()
 
 # Only the METHOD NAME is matched here. A caller that acts on `consumes_args` checks that
@@ -41,6 +43,7 @@ _NO_EFFECT = MethodEffect()
 METHOD_EFFECTS: dict[str, MethodEffect] = {
     "push": _INSERTS,
     "insert": _INSERTS,
+    "alloc": _STORES,
     "extend": _BULK_WRITES,
     "extend_range": _BULK_WRITES,
     "extend_str": _BULK_WRITES,
@@ -114,6 +117,19 @@ def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
         return None
     raise_internal_error("CE0000", detail=f"the method family '{method.family}' is in no "
                                           f"receiver set of `semantics/method_effects.py`")
+
+
+def argument_conventions(family: str, method: str, count: int) -> tuple[Convention, ...]:
+    """The convention of each of the `count` arguments of a call of `method` of the effect
+    family `family`, a method or a static of `BUILTIN_STATICS` (docs/design/ir.md 8.3). A
+    method whose row `consumes_args` takes each argument (`Owned`): a container insert, and
+    `Own.alloc`. Each other argument is a borrow (`Guaranteed`). A family that is not an
+    effect family is an internal error."""
+    if family not in EFFECT_FAMILIES:
+        raise_internal_error("CE0000", detail=f"the method family '{family}' has no argument "
+                                              f"rule in `semantics/method_effects.py`")
+    owned = effect_of(method).consumes_args
+    return (Convention.OWNED if owned else Convention.GUARANTEED,) * count
 
 
 def callee_effect(method: str, family: Optional[str]) -> MethodEffect:

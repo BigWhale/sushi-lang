@@ -1,0 +1,21 @@
+unit test_typeck_container_statics
+
+ShirBody hold
+  params : [(_0 "a": List@(i32), Guaranteed), (_1 "b": List@(string), Guaranteed), (_2 "c": HashMap@(i32, string), Guaranteed), (_3 "d": HashMap@(string, i32), Guaranteed), (_4 "e": Own@(string), Guaranteed), (_5 "depth": i32, Guaranteed)]
+  locals : []
+  block  :
+    If(Binary(==, LocalRef(_5), Lit(0)), then: [Return(adopt Lit(0))])
+    Return(adopt Call(Free(@hold), [(LocalRef(_0), Guaranteed), (LocalRef(_1), Guaranteed), (LocalRef(_2), Guaranteed), (LocalRef(_3), Guaranteed), (LocalRef(_4), Guaranteed), (Binary(-, LocalRef(_5), Lit(1)), Guaranteed)]))
+
+ShirBody main
+  params : []
+  locals : [_0 "a": List@(i32), _1 "b": List@(string), _2 "c": HashMap@(i32, string), _3 "d": HashMap@(string, i32), _4 "s": string, _5 "e": Own@(string)]
+  block  :
+    Assign(LocalRef(_0), adopt Call(BuiltinStatic(List@(i32), "new"), []), is_init: true)
+    Assign(LocalRef(_1), adopt Call(BuiltinStatic(List@(string), "with_capacity"), [(Lit(8), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_2), adopt Call(BuiltinStatic(HashMap@(i32, string), "new"), []), is_init: true)
+    Assign(LocalRef(_3), adopt Call(BuiltinStatic(HashMap@(string, i32), "new"), []), is_init: true)
+    Assign(LocalRef(_4), adopt Call(Builtin(Lit("Mostly "), "concat"), [(Lit("Harmless"), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_5), adopt Call(BuiltinStatic(Own@(string), "alloc"), [(move LocalRef(_4), Owned)]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Binary(+, Call(Free(@hold), [(LocalRef(_0), Guaranteed), (LocalRef(_1), Guaranteed), (LocalRef(_2), Guaranteed), (LocalRef(_3), Guaranteed), (LocalRef(_5), Guaranteed), (Lit(1), Guaranteed)]), Call(Free(@hold), [(Call(BuiltinStatic(List@(i32), "new"), []), Guaranteed), (Call(BuiltinStatic(List@(string), "with_capacity"), [(Lit(2), Guaranteed)]), Guaranteed), (Call(BuiltinStatic(HashMap@(i32, string), "new"), []), Guaranteed), (Call(BuiltinStatic(HashMap@(string, i32), "new"), []), Guaranteed), (Call(BuiltinStatic(Own@(string), "alloc"), [(adopt Call(Builtin(Lit("x"), "concat"), [(Lit("y"), Guaranteed)]), Owned)]), Guaranteed), (Lit(0), Guaranteed)])))

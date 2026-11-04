@@ -52,8 +52,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "io/files/stat.py reads each offset by name with getattr"),
     ("sushi_lang/internals/styling.py", "italic",
      "compiler/lib_info.py reads a style by name from _MARKS with getattr"),
-    ("sushi_lang/semantics/method_effects.py", "consumes_args",
-     "methods_where() reads a MethodEffect flag by name with getattr"),
     # -- protocols of another library ------------------------------------------------
     ("sushi_lang/internals/indenter.py", "*_type",
      "the Lark Indenter protocol reads these class attributes"),
@@ -183,7 +181,6 @@ WHITELIST += (
     ("sushi_lang/semantics/method_effects.py", "refills",
      _kept("B", "B1: the refill of an array whose element owns")),
     (_BORROW + "calls.py", "maybe_mark_container_insert", _kept("B", "B2, B4: containers")),
-    (_BORROW + "calls.py", "maybe_mark_own_alloc_move", _kept("B", "B5: Own")),
     (_BORROW + "takes.py", "field_take", _kept("B", "B7: field take")),
     (_BORROW + "takes.py", "spend", _kept("B", "B7: field take")),
     (_BORROW + "bindings.py", "register_pattern_bindings",

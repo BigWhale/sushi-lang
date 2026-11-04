@@ -2,8 +2,9 @@
 
 A call writes a place that is no view, reads each operand, and gives no copy of an owning
 value other than a `string` to an `Owned` argument. The conventions of a `Direct` callee
-are its declared parameters (`declared_params`), and a call of a built-in method has a
-receiver operand.
+are its declared parameters (`declared_params`), and the conventions of a static of a
+built-in container are the answer of `argument_conventions`. A call of a built-in method
+has a receiver operand.
 """
 from __future__ import annotations
 
@@ -14,11 +15,13 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import Convention, declared_modes, receiver_mode
-from sushi_lang.semantics.shir.callee import BuiltinMethod
+from sushi_lang.semantics.method_effects import argument_conventions
+from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.printer import show
 from sushi_lang.semantics.slir.verify_rules import CONVENTIONS, OWNED_COPY, RECEIVER_OPERAND
+from sushi_lang.semantics.statics import CONTAINER_STATIC_FAMILIES
 from sushi_lang.semantics.stdlib_registry import stdlib_arity
 from sushi_lang.semantics.typesys import BuiltinType, owns_resource
 from sushi_lang.semantics.unit_symbols import function_symbol
@@ -80,6 +83,8 @@ def check_call(check: Check, stmt: st.Call) -> None:
             _owned_copy(check, operand, stmt.span)
     if isinstance(callee, st.Direct):
         _conventions_of(check, stmt, callee)
+    elif isinstance(callee, st.Builtin) and isinstance(callee.method, Intrinsic):
+        _static_conventions(check, stmt, callee.method.name)
     elif isinstance(callee, st.Builtin) and isinstance(callee.method, BuiltinMethod) \
             and not stmt.args:
         check.fail(RECEIVER_OPERAND, f"the call of {callee.method.family}."
@@ -110,3 +115,17 @@ def _conventions_of(check: Check, stmt: st.Call, callee: st.Direct) -> None:
         if have is not want:
             check.fail(CONVENTIONS, f"argument {index} of @{callee.name} is @{have.value}, "
                                     f"and its parameter is @{want.value}", stmt.span)
+
+
+def _static_conventions(check: Check, stmt: st.Call, name: str) -> None:
+    """A static of a built-in container (`Own.alloc`): each argument has the convention
+    that `argument_conventions` gives it. Any other intrinsic has no rule here."""
+    owner, _, method = name.partition(".")
+    family = CONTAINER_STATIC_FAMILIES.get(owner)
+    if family is None:
+        return
+    wanted = argument_conventions(family, method, len(stmt.args))
+    for index, ((_, have), want) in enumerate(zip(stmt.args, wanted, strict=True)):
+        if have is not want:
+            check.fail(CONVENTIONS, f"argument {index} of {name} is @{have.value}, and the "
+                                    f"static takes it @{want.value}", stmt.span)

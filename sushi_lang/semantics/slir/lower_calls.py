@@ -27,6 +27,7 @@ from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.slir.lower_values import CallValue, Value
 from sushi_lang.semantics.stdlib_registry import stdlib_symbol
+from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.semantics.typesys import BuiltinType, Type, deref_type
 from sushi_lang.semantics.unit_symbols import function_symbol
 
@@ -66,8 +67,9 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
     static by their symbol and their written name `<type>.<method>`; a function of a
     registry stdlib module by the symbol of its generated function, its name and its
     module (`stdlib_symbol`, at the type of its arguments); an intrinsic with
-    the display type of each argument (L7); a static of a primitive type name as the
-    intrinsic of its written name, with the type of its argument; a built-in method by
+    the display type of each argument (L7); a static of a primitive type name or of a
+    built-in container as the intrinsic of its written name (`f64.from_bits`, `List.new`),
+    with the type of each argument; a built-in method by
     its family and its name, with no types: the receiver is the first operand of the
     call (`receiver_convention`)."""
     callee = resolved.callee
@@ -92,7 +94,8 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
         return st.Builtin(callee, tuple(display_type(low, node.shir_id, index, node.loc)
                                         for index in range(len(node.args))))
     if isinstance(callee, BuiltinStatic):
-        return st.Builtin(Intrinsic(f"{callee.ty}.{callee.method.name}"),
+        type_name = generic_base_of(callee.ty) or str(callee.ty)
+        return st.Builtin(Intrinsic(f"{type_name}.{callee.method.name}"),
                           tuple(low.type_of(arg.value) for arg in node.args))
     if isinstance(callee, Builtin):
         return st.Builtin(callee.method, ())

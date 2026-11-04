@@ -418,14 +418,6 @@ def _slot_path(expr: Expr) -> Optional[tuple[str, ...]]:
     return tuple(steps)
 
 
-def maybe_mark_own_alloc_move(checker: 'BorrowChecker', expr: MethodLike) -> None:
-    """`Own.alloc(x)` takes ownership of `x` -- the OWN_ALLOC consuming use."""
-    receiver = called_on(expr, "alloc")
-    if not (isinstance(receiver, Name) and receiver.id == "Own"):
-        return
-    consume_each(checker, expr.args)
-
-
 def apply_mode(checker: 'BorrowChecker', call: CallLike, arg: Expr, index: int,
                modes: Sequence[ParamMode], kind: CalleeKind) -> None:
     """Apply ONE declared parameter mode to the argument that lands on it.

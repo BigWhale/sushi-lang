@@ -17,7 +17,8 @@ type yet is `stop_at`, which stops the walk of the body with the stop code CE015
 destructure, `expressions.py` the expression arms of the leaves and of a struct
 construction, `fields.py` the arms of a field read and of a tuple, `operators.py` the arms
 of the operators and the check of a condition, `calls.py` the arms of a call, an
-interpolated string and a borrow, `results.py` the arm of an enum construction,
+interpolated string and a borrow, `container_statics.py` the arm of a static of a built-in
+container, `results.py` the arm of an enum construction,
 `ranges.py` the arms of a range, and `arrays.py` the arms of an array construction, an
 index and a slice. The pattern arms are in `passes/types/matching.py`. The
 arms of `??` and of `as` are `check_try` and `check_cast` of

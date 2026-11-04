@@ -110,22 +110,25 @@ def _is_byte_literal(node: 'ShirExpr') -> bool:
 
 
 def reject_non_i32(validator: 'TypeValidator', node: 'ShirExpr', got: Optional[Type], *,
-                   position: Optional[str] = None, argument: Optional[int] = None) -> bool:
+                   position: Optional[str] = None, argument: Optional[int] = None,
+                   span: Optional[Span] = None) -> bool:
     """The one rule for an index, a count and a range bound: the value is an i32 (#870).
 
     `got` is the type of `node` (`check_i32_operand`). Any type other than i32 is refused,
     and there is no implicit widening: the backend used to zero-extend a narrow value, so
     `-1 as i8` counted 255. A method argument reads CE2006 at its `argument` position;
-    every other position reads CE2121, which names the `position` the caller gives.
+    every other position reads CE2121, which names the `position` the caller gives. `span`
+    is where it stands when it is not the span of `node` (a marked argument).
     Answers whether the value was refused.
     """
     if got is None or got == BuiltinType.I32:
         return False
+    loc = node.loc if span is None else span
     if argument is None:
-        report = er.emit_with(validator.reporter, er.ERR.CE2121, node.loc,
+        report = er.emit_with(validator.reporter, er.ERR.CE2121, loc,
                               position=position, got=display_type(got))
     else:
-        report = er.emit_with(validator.reporter, er.ERR.CE2006, node.loc, index=argument,
+        report = er.emit_with(validator.reporter, er.ERR.CE2006, loc, index=argument,
                               expected=display_type(BuiltinType.I32), got=display_type(got))
     if is_numeric_type(got):
         report = report.help("convert it with 'as i32'")

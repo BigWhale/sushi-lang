@@ -1,19 +1,24 @@
-"""The calls of an `Intrinsic` callee: `interp`, `print`, `println`, `eq` and the statics of
-a primitive type name (docs/design/ir.md 8.6).
+"""The calls of an `Intrinsic` callee: `interp`, `print`, `println`, `eq`, the statics of
+a primitive type name and the statics of a built-in container (docs/design/ir.md 8.6).
 
 Each row gives the LLVM values of every operand to an emitter family of the backend (ruling
-Q7), and the family reads the type of each operand from the callee. Every operand is
+Q7), and the family reads the type of each operand from the callee. A static of a container
+reads the instance that it builds from the type of its destination. Every operand is
 evaluated before the family emits anything (ir.md 11.9). An operand is only read, except
-the array of `string.from_bytes`, which the string takes.
+the array of `string.from_bytes`, which the string takes, and the value of `Own.alloc`,
+which the allocation takes.
 """
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from llvmlite import ir
 
+from sushi_lang.backend.generics.hashmap.methods.core import emit_hashmap_new
+from sushi_lang.backend.generics.list.methods_simple import emit_list_new, emit_list_with_capacity
+from sushi_lang.backend.generics.own import emit_own_alloc
 from sushi_lang.backend.slir.state import FunctionState
-from sushi_lang.backend.slir.values import constant_value, operand_value
+from sushi_lang.backend.slir.values import constant_value, operand_value, type_of_place
 from sushi_lang.backend.types.arrays.addressing import as_array_address
 from sushi_lang.backend.types.arrays.indexing import array_data, array_length
 from sushi_lang.backend.types.contracts import emit_value_eq
@@ -21,7 +26,11 @@ from sushi_lang.backend.types.display import emit_interpolation
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.type_predicates import is_numeric_type
-from sushi_lang.semantics.typesys import BuiltinType, Type
+from sushi_lang.semantics.generics.own import get_own_element_type
+from sushi_lang.semantics.typesys import BuiltinType, StructType, Type
+
+if TYPE_CHECKING:
+    from sushi_lang.backend.codegen_llvm import LLVMCodegen
 
 
 def operands(state: FunctionState, statement: st.Call) -> list[tuple[ir.Value, Type]]:
@@ -100,11 +109,38 @@ def _string_from_bytes(state: FunctionState, statement: st.Call) -> ir.Value:
                                       name="from_bytes")
 
 
+def _container_static(emit: Callable[..., ir.Value],
+                      count: int) -> Callable[[FunctionState, st.Call], ir.Value]:
+    """A static of a built-in container with `count` operands: its narrow emitter takes the
+    value of each operand and the instance that the destination holds."""
+    def row(state: FunctionState, statement: st.Call) -> ir.Value:
+        parts = operands(state, statement)
+        if len(parts) != count:
+            state.fault(f"a static of a container with {len(parts)} values, not {count}")
+        instance = type_of_place(state, statement.dest)
+        if not isinstance(instance, StructType):
+            state.fault(f"a static of a container builds the type {instance}")
+        return emit(state.codegen, *(value for value, _ in parts), instance)
+    return row
+
+
+def _list_with_capacity(codegen: LLVMCodegen, count: ir.Value, list_type: StructType) -> ir.Value:
+    return emit_list_with_capacity(codegen, codegen.utils.require_i32(count), list_type)
+
+
+def _own_alloc(codegen: LLVMCodegen, value: ir.Value, own_type: StructType) -> ir.Value:
+    return emit_own_alloc(codegen, get_own_element_type(own_type), value)
+
+
 #: One row for each intrinsic that the emitter handles, by the name of the intrinsic.
 INTRINSICS: dict[str, Callable[[FunctionState, st.Call], ir.Value]] = {
     "f64.from_bits": _from_bits(ir.DoubleType()),
     "f32.from_bits": _from_bits(ir.FloatType()),
     "string.from_bytes": _string_from_bytes,
+    "List.new": _container_static(emit_list_new, 0),
+    "List.with_capacity": _container_static(_list_with_capacity, 1),
+    "HashMap.new": _container_static(emit_hashmap_new, 0),
+    "Own.alloc": _container_static(_own_alloc, 1),
     "eq": _eq,
     "interp": _interp,
     "print": _print,

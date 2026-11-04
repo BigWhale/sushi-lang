@@ -1,0 +1,23 @@
+# EXPECT_DUMP_SLIR: test_slir_container_statics.slir
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+#
+# A static of a built-in container lowers to the intrinsic of its written name, with the
+# type of each operand. Its answer is a fresh owning local, which drops at the end of its
+# scope; a temporary answer drops at the end of its statement. The value that `Own.alloc`
+# takes is a move, so it has no drop after the call.
+use <collections/hashmap>
+
+fn hold(List@(i32) a, HashMap@(string, i32[]) b, Own@(i32[]) c, i32 depth) i32:
+    if (depth == 0):
+        return 0
+    return hold(a, b, c, depth - 1)
+
+fn main() i32:
+    let List@(i32) a = List.new()
+    let HashMap@(string, i32[]) b = HashMap.new()
+    let i32[] xs = from([1, 2, 3])
+    let Own@(i32[]) c = Own.alloc(xs)
+    println("Mostly Harmless")
+    return hold(a, b, c, 1) + hold(List.with_capacity(4), HashMap.new(), Own.alloc(from([4])), 0)

@@ -51,7 +51,7 @@ from .methods_search import (
 #: `LIST_METHOD_ARITY`; `tests/unit/test_container_emitters_match_the_table.py` holds it.
 LIST_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
     "new": ContainerMethod(lambda c, e, v, t: emit_list_new(c, t)),
-    "with_capacity": ContainerMethod(lambda c, e, v, t: emit_list_with_capacity(c, e, t)),
+    "with_capacity": ContainerMethod(lambda c, e, v, t: emit_list_with_capacity(c, v, t)),
     "len": ContainerMethod(lambda c, e, v, t: emit_list_len(c, v)),
     "capacity": ContainerMethod(lambda c, e, v, t: emit_list_capacity(c, v)),
     "is_empty": ContainerMethod(lambda c, e, v, t: emit_list_is_empty(c, v), answers_bool=True),

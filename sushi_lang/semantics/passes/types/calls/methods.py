@@ -1,6 +1,6 @@
 """Method call validation.
 
-Port templates: `validate_method_call` (C3), `_validate_type_name_call` (B2, B4)
+Port templates: `validate_method_call` (C3), `_validate_type_name_call` (C3)
 and `_validate_iterator_new` (C3) call `TypeValidator.validate_expression`, and that API
 is deleted. No pass reaches them today. The group in brackets after each name ports them
 to SHIR inputs before a SHIR pass calls them. The order of the rungs is on SHIR already:
@@ -923,12 +923,11 @@ def validate_method_call(validator: 'TypeValidator', call: MethodCall) -> None:
 
 def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
                              type_name: str) -> None:
-    """A call written on a built-in generic's NAME: `List.new()`, `HashMap.new()`.
+    """A call written on the NAME of `Iterator`: `Iterator.new(nom x)`.
 
     There is no receiver here, so no family claims it; the count is still the family's
-    row, and a miscount is CE2009 (#799). Every other static goes through `passes/types/calls/statics.py`;
-    these two keep their narrow emitters because a container static has no `ExtendDef`
-    to converge onto (`docs/design/method-resolution.md`).
+    row, and a miscount is CE2009 (#799). The statics of `List`, `HashMap` and `Own` have
+    the arm of the SHIR typecheck pass (`visit/container_statics.py`).
     """
     # A static on a GATED generic obeys the scope like the type does: behind
     # an aliased import the bare name is refused, and the qualified form is
@@ -941,31 +940,13 @@ def _validate_type_name_call(validator: 'TypeValidator', call: MethodCall,
             return
 
     from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
-    family, statics = _CONTAINER_STATICS.get(type_name, ("", ()))
-    if call.method in statics:
-        if reject_builtin_miscount(validator.reporter, call.loc, call.method, len(call.args),
-                                   f"{type_name}.{call.method}", arity_of_family(family)):
-            return
-        if call.method in _CONTAINER_STATIC_COUNTS:
-            from sushi_lang.semantics.passes.types.arrays import reject_non_i32
-            count = call.args[0]
-            reject_non_i32(validator, count, validator.validate_expression(count), argument=1)
-        elif call.method == "alloc":
-            _validate_own_alloc_payload(validator, call)
-        elif type_name == ITERATOR_BASE:
-            _validate_iterator_new(validator, call)
-        stamp_builtin_modes(call, METHOD_TYPE_REGISTRY.family(family).modes)
-
-
-#: The statics a built-in container answers on its type NAME, and the family whose count
-#: row each one reads (`MethodFamily.arity`).
-_CONTAINER_STATICS = {"List": ("list", ("new", "with_capacity")),
-                      "HashMap": ("hashmap", ("new",)),
-                      "Own": ("own", ("alloc",)),
-                      ITERATOR_BASE: ("iterator", ("new",))}
-
-#: The container statics whose one argument is a count, an i32 position (#870).
-_CONTAINER_STATIC_COUNTS = frozenset({"with_capacity"})
+    if type_name != ITERATOR_BASE or call.method != "new":
+        return
+    if reject_builtin_miscount(validator.reporter, call.loc, call.method, len(call.args),
+                               f"{type_name}.{call.method}", arity_of_family("iterator")):
+        return
+    _validate_iterator_new(validator, call)
+    stamp_builtin_modes(call, METHOD_TYPE_REGISTRY.family("iterator").modes)
 
 
 def _validate_iterator_new(validator: 'TypeValidator', call: MethodCall) -> None:
@@ -1005,14 +986,6 @@ def iterator_new_type(validator: 'TypeValidator', call) -> Optional[IteratorType
         return None
     item = protocol_item_type(validator, argument_type)
     return IteratorType(element_type=item) if item is not None else None
-
-
-def _validate_own_alloc_payload(validator: 'TypeValidator', call: MethodCall) -> None:
-    """`Own.alloc(v)`: the payload is an argument like any other, against the stamped `T`."""
-    from sushi_lang.semantics.generics.own import own_payload_type
-    payload = own_payload_type(getattr(call, "resolved_struct_type", None))
-    check_arguments(validator, "Own.alloc", [payload], call.args, call.loc,
-                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
 
 
 def _validate_perk_method(validator: 'TypeValidator', call: MethodCall,
