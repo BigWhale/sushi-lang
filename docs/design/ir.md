@@ -2145,7 +2145,12 @@ four sets (gate: `tests/unit/test_method_mutation_is_one_fact.py`):
   changes or consumes its receiver. The receiver is `Guaranteed`.
 - **Effect** (`EFFECT_FAMILIES`: `array`, `list`, `hashmap`, `own`). The rows of
   `METHOD_EFFECTS` tell what a method does to its receiver. The group of each family writes
-  its convention. Until then, a call stops in `typecheck` or in `borrow`.
+  its convention, and puts the family in `RULED_EFFECT_FAMILIES`. Until then, a call stops
+  in `typecheck` or in `borrow`. For a family of `RULED_EFFECT_FAMILIES` (`array`, group
+  A6), the answer is per method: the receiver of a method whose row `mutates` (`push`,
+  `insert`, `pop`, `truncate`, `fill`, `swap`, ...) is `Inout`, a write of its place. The
+  receiver of each other method (`len`, `get`, `contains`, `s`, `clone`, ...) is
+  `Guaranteed`: a read.
 - **Consumes** (`CONSUMING_RECEIVER_FAMILIES`: `result`, `maybe`). The family has a
   `nom self` method, so the answer is per method. The receiver of a method that declares
   `nom self` (`map_err`, `or_err`) is `Owned`: a consuming use (7.9). The receiver of each
@@ -2160,8 +2165,9 @@ four sets (gate: `tests/unit/test_method_mutation_is_one_fact.py`):
   `typecheck` or in `borrow`.
 
 One function gives the convention of a receiver: `receiver_convention`
-(`semantics/method_effects.py`). It answers None for a family of the effect set and of
-the no-rule set, and a family in no set is an internal error. There is no default
+(`semantics/method_effects.py`). It answers None for a family of the effect set that is not
+in `RULED_EFFECT_FAMILIES` and for a family of the no-rule set, and a family in no set is an
+internal error. There is no default
 convention: the `borrow` pass stops at such a call
 (`borrow, Call(method <family>)`), and in SLIR lowering such a call is an internal error.
 The `borrow` pass reads a `Guaranteed` receiver. An `Owned` receiver is a consuming use
