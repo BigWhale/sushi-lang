@@ -2459,7 +2459,9 @@ can name is in exactly one of four sets (gate:
   `Inout`, a write of its place. The receiver of each other method (`len`, `get`,
   `contains`, `s`, `clone`, ...) is `Guaranteed`: a read. An argument of a method whose row
   `consumes_args` (a container insert: `push`, `insert`) is `Owned`, because the container
-  takes it by position with no marker. Each other argument is `Guaranteed`. Each family of
+  takes it by position with no marker. The index of `insert` on an array and on a `List`
+  only gives a position, so it is `Guaranteed`; only the value is `Owned`
+  (`POSITION_ARGUMENTS`). Each other argument is `Guaranteed`. Each family of
   the set has this rule (`RULED_EFFECT_FAMILIES` holds the four), so the set is a
   read-or-write partition of its methods, and no family of it stops for want of a rule.
 - **Consumes** (`CONSUMING_RECEIVER_FAMILIES`: `result`, `maybe`). The family has a
