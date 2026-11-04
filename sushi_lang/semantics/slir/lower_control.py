@@ -139,9 +139,13 @@ def condition(low: Lowering, expr: e.ShirExpr) -> tuple[p.Operand, Optional[Loca
 
 def _test(low: Lowering, value: Value, span: Span) -> tuple[p.Operand, Optional[LocalId]]:
     """The tail of `condition`, in the scope that the caller opened: `value` into a local
-    of its own unless it is a local or a constant, then the end of the scope."""
+    of its own unless it is a constant or a read of a place that outlives the scope, then
+    the end of the scope."""
     local: Optional[LocalId] = None
-    if isinstance(value, r.Use) and isinstance(value.operand, (p.Const, p.Copy)):
+    if isinstance(value, r.Use) and (isinstance(value.operand, p.Const) or (
+            isinstance(value.operand, p.Copy) and not any(
+                low.placement.ends_at_close(read)
+                for read in p.locals_read(value.operand.place)))):
         operand = value.operand
     else:
         local = low.temporary(value, BuiltinType.BOOL, span)

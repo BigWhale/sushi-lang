@@ -1417,6 +1417,7 @@ tests/ir/slir/constants/test_slir_const_string.sushi
 tests/ir/slir/control_flow/test_slir_and_or.sushi
 tests/ir/slir/control_flow/test_slir_and_or_rebind.sushi
 tests/ir/slir/control_flow/test_slir_break_flag.sushi
+tests/ir/slir/control_flow/test_slir_condition_reads_a_temporary.sushi
 tests/ir/slir/control_flow/test_slir_conditional_move.sushi
 tests/ir/slir/control_flow/test_slir_if.sushi
 tests/ir/slir/control_flow/test_slir_try_argument.sushi

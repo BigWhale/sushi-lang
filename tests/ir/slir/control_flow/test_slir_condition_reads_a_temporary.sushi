@@ -1,0 +1,32 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: const\ncall\nelement\n3\n
+#
+# A condition that reads a field or an element of a temporary that the condition itself
+# makes: a constant struct, a call result and a constant array. The switch reads the
+# value after the temporary ends, so the value goes into a local of its own first.
+
+struct Cfg:
+    i32 n
+    bool on
+
+const Cfg C = Cfg(1, true)
+const bool[3] B = [true, false, true]
+
+fn make(bool on) Cfg:
+    return Cfg(3, on)
+
+fn main() i32:
+    if (C.on):
+        println("const")
+    if (make(true).on):
+        println("call")
+    let i32 i = 2
+    if (B[i]):
+        println("element")
+    let i32 k = 0
+    while (make(k < 3).on):
+        k := k + 1
+    assert(C.on)
+    assert(make(true).on)
+    println("{k}")
+    return 0

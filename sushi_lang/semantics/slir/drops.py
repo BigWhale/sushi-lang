@@ -117,6 +117,10 @@ class DropPlacement:
         (a condition local, at the top of each block that its switch goes to)."""
         self._scopes[-1].locals.remove(local)
 
+    def ends_at_close(self, local: LocalId) -> bool:
+        """Whether the end of the newest scope ends the storage of `local`."""
+        return bool(self._scopes) and local in self._scopes[-1].locals
+
     def _add(self, scope: _Scope, local: LocalId, owning: bool) -> None:
         scope.locals.append(local)
         if owning:

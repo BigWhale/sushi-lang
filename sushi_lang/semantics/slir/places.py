@@ -72,3 +72,15 @@ class Const:
 
 
 Operand: TypeAlias = Copy | Move | Const
+
+
+def locals_read(place: Place) -> tuple[LocalId, ...]:
+    """The locals that a read of `place` reads: its root, and the local of each index."""
+    if isinstance(place, Local):
+        return (place.id,)
+    if isinstance(place, Global):
+        return ()
+    found = locals_read(place.base)
+    if isinstance(place, Index) and isinstance(place.index, (Copy, Move)):
+        found += locals_read(place.index.place)
+    return found
