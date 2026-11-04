@@ -1990,8 +1990,7 @@ the body only reads (a copy of it would drop its payload twice), `conversion` al
 `Try` that calls a declared conversion (today `typecheck` stops there first), `library
 function` for a free, a method or a static callee whose row names no declaring unit (a
 function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
-argument, `aggregate constant` for a `ConstRef` whose value is an array, also as a payload
-of an enum value or a field of a struct (group A6 gives its `Constant`), `Match owning` for
+argument, `Match owning` for
 a match on a tuple that owns (8.9), and `ConstRef out of range` for a `ConstRef` whose
 value its type cannot hold (8.5). The dump prints such a function as ONE line in place of
 its body, `fn <name>: stopped (slir, <construct>)`, so that a golden file shows the
@@ -2010,10 +2009,9 @@ global, and the dump shows no function for an initializer. A constant is an `int
 declared in each other module. A body reads a constant as a `Const` operand (8.5), and
 never reads its global. The round makes a global for each constant and each `var`, or it
 stops the compile; it never drops one. A struct value and an enum value go through the
-converter of 8.5. A value that holds an array, also in a payload or a field, has no SLIR
-constant yet, and its global stops with `emit, aggregate constant` at the declaration
-(group A6 gives its `Constant`). A constant that the evaluator gives
-no value (a function-typed constant, group C2) stops with `emit, constant with no value`.
+converter of 8.5, and so does an array value, also in a payload or a field. A constant
+that the evaluator gives no value (a function-typed constant, group C2) stops with
+`emit, constant with no value`.
 Every other fault of the round is an internal error: a constant with no type, a scalar of
 a type that has no LLVM constant, and a value that the converter of 8.5 cannot write.
 
@@ -2098,10 +2096,9 @@ terminator. Where one class holds two shapes, the stop names the shape, so that 
 stop-code census counts each one: `emit, Display print` for the print of a value that
 prints by its `Display` form, `emit, intrinsic <name>` for an intrinsic with no row
 of `INTRINSICS`, and `emit, <family> method` for a `BuiltinMethod` whose family has no row
-of `METHOD_FAMILIES`. The declaration round of a global stops with two names, at the span of
-the declaration: `emit, aggregate constant` and `emit, constant with no value` (see the
-initializer body above). Every stop of the stage goes through one function, `stop`
-(`backend/slir/state.py`). The stop
+of `METHOD_FAMILIES`. The declaration round of a global stops with one name, at the span of
+the declaration: `emit, constant with no value` (see the initializer body above). Every stop
+of the stage goes through one function, `stop` (`backend/slir/state.py`). The stop
 comes before any output: the incremental path builds the module of every unit before it
 writes the first object, so no object, no binary and no `.ll` text is written. This order
 serves the migration alone: when no shape stops the emitter, the path can again build and
@@ -2181,7 +2178,8 @@ lowering writes the answer as the convention of the first operand.
 Place    = Local(id: LocalId)
          | Global(symbol: str)                # a unit-level `var`
          | Field(Place, index: int)
-         | Index(Place, Operand)
+         | Index(Place, Operand)              # an element of a `T[N]` or a `T[]`; a byte
+                                              # (`u8`) of a `string`
          | Downcast(Place, variant: str)      # narrow an enum to one variant
          | Deref(Place)
 
@@ -2196,6 +2194,10 @@ disappears, and so does CE0129, the internal error that guarded it.
 
 `Downcast` exists because a `match` arm and a `??` both read an enum payload, and reading
 one is valid only under a known variant. The worked example in 8.11 is what found it.
+
+`Index` is a place, and its operand is an `i32`. An element never moves: a `Move` of a
+place that holds an `Index` is refused (8.13), because the array would be left PARTIALLY
+moved. An element of an owning type is Tier B.
 
 `Global` is a place, never a value to move out of: a `var` is never moved out of, and
 `borrow` refuses a consuming use of one that owns a resource (`unit-storage.md`). The
@@ -2252,11 +2254,12 @@ order; a payload value is made by the same rule. The printer writes it as the co
 the variant: `Sign::Plus`, `Shape::Circle(5_i32)`. A struct value is an `Aggregate` of its
 struct type with no variant, with one part for each field in the declaration order, and a
 field value is made by the same rule. The printer writes it as the construction of the
-struct: `Point(3_i32, 4_i32)`. The converter of an enum constant writes a struct value in a
-payload field by field, at the offsets of the layout authority. An array value, also as a
-payload or a field value, stops the lowering (`slir, aggregate constant`). The global of a
-constant with such a value stops the declaration round of the backend with
-`emit, aggregate constant` (8.2). The constant evaluator does not wrap
+struct: `Point(3_i32, 4_i32)`. An array value is an `Aggregate` of its `T[N]` type with no
+variant, with one part for each element in order, also as a payload or a field value. The
+printer writes it as an array literal: `[2_i32, 3_i32]`. The converter writes an array as
+one LLVM array constant of its elements. The converter of an enum constant writes a struct
+value and an array value in a payload element by element, at the offsets of the layout
+authority. The constant evaluator does not wrap
 a literal that spells bits (`const i8 B = 0xFF` holds 255), and it gives a value to an
 initializer with a range error. A value that its type cannot hold stops the lowering
 (`ConstRef out of range`), so lowering decides no value and the verifier rule holds.
@@ -2350,6 +2353,28 @@ Rvalue = Use(Operand)
 
 `Discriminant` was also found by the worked example: `SwitchInt` needs an integer, and a
 `match` or a `??` switches on a tag.
+
+**An array value.** The kind of an array is `AggArray(ty, runs)`. `ty` is the `T[N]` or the
+`T[]` of the value, and `runs` holds one run for each run of the `ArrayInit`, in order:
+
+```
+ArrayRun = RunOne                 # one part: the value of one slot
+         | RunRepeat              # two parts: the value, then the count
+         | RunSequence(step: int) # two parts: the first value, then the count;
+                                  # slot k holds first + step * k (an `i32` element)
+```
+
+The parts of the `Aggregate` are the parts of each run, in the order of the runs. A count is
+an `i32`. A count below zero fills no slot: the emitter reads it as zero. Each count of a
+`T[N]` is a constant, and the counts add up to `N`. A `T[]` with no run is the empty array,
+`{0, 0, null}`. A plain element copies, so the emitter fills the slots with stores, a walk
+or one `memset`, and a `T[N]` of constant parts with one store of its constant.
+
+`Len(place)` is the length of a `T[N]`, a `T[]` or a `string`, as an `i32`. `Slice(place,
+start, end)` reads a `T[N]` or a `T[]`: two `i32` operands, and `end` is exclusive. Its value
+is a `T[]` descriptor that views the storage of `place`. **A VIEW** is a local that a `Slice`
+writes: it owns nothing, so drop placement gives it no drop, nothing moves it, and no other
+statement writes it (8.13).
 
 A closure and an iterator have one layout, four words. `AggKind` keeps them apart, because
 the backend reads the SEMANTIC type and never the layout to know which one it has
@@ -2450,7 +2475,9 @@ block that only the switch reaches: an `If` with no `else` sends its zero edge t
 of its own that goes to the join, and a `While` sends its zero edge to a block of its own
 that goes to the exit, which a `Break` reaches too. Only a local that its own block writes
 and that the terminator of that block alone reads gets no storage marker: the local of a
-`Discriminant`, and the `bool` local of a test of a `match`.
+`Discriminant`, and the `bool` local of a test of a `match`. The locals of a bounds compare
+follow the same rule: the `u32` casts of the index and of the length, and the `bool` that
+the switch reads, are written and read in their own block alone.
 
 A construction, a field and a destructure of a value that owns stop the lowering: a
 `StructInit` or a `TupleInit` of a type that owns (`StructInit owning`, `TupleInit owning`),
@@ -2704,6 +2731,7 @@ Runs after lowering, before the backend. It checks:
 - no use of a place after a `Move` of it, on any path
 - no read and no `Move` of a local that holds no value on a path: before its first write,
   or after its `StorageLive` or its `StorageDead`
+- no `Move` of a place that holds an `Index`: an element never moves (8.4)
 - a `Move` of a sub-place (a `Field`, a `Downcast`) is a `Move` of its root local, and
   no local is ever PARTIALLY moved: lowering drops the sibling owning fields first (8.9,
   `Take`), or the sibling payloads of a pattern take, because an arm takes the variant
@@ -2730,8 +2758,17 @@ Runs after lowering, before the backend. It checks:
   variant, an rvalue or a constant, names a variant of its enum type and gives one part for
   each value of its payload, of the type of that value
 - a struct value: an `Aggregate(Struct)` or an `Aggregate(Tuple)` rvalue, and a constant
-  `Aggregate` with no variant, is of a struct type and gives one part for each field, of the
+  `Aggregate` with no variant and of no array type, is of a struct type and gives one part for each field, of the
   type of that field. One check of the parts serves an enum value and a struct value
+- an array value: an `Aggregate(AggArray)` is of a `T[N]` or a `T[]` type and gives the
+  parts of each run (8.7): a value of the element type, an `i32` count and an `i32` first
+  value of a sequence, whose element is an `i32`. The counts of a `T[N]` are constants that
+  add up to `N`. A constant `Aggregate` of a `T[N]` gives one part for each element, of the
+  element type
+- a length and a slice: `Len` reads a `T[N]`, a `T[]` or a `string`, and `Slice` reads a
+  `T[N]` or a `T[]` with two `i32` bounds
+- a view: a local that a `Slice` writes is of a `T[]` type, no other statement writes it,
+  and nothing moves or drops it
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
