@@ -92,7 +92,8 @@ deep copy, and `realise` and `err` lower as `expect` does); 8.3 and 8.13 (the ro
 `METHOD_EFFECTS` give the receiver and the argument conventions of each container method);
 7.9 and 8.9 (a container get-out answers a view, by a row of `answers_view`); 7.9, 8.2,
 8.3, 8.10 and 8.13 (a `Guaranteed` parameter starts not owned, and a rebind makes it owned);
-8.2 (the body of a `Drop` implementation is a method body, and the destroy seam calls it).
+8.2 (the body of a `Drop` implementation is a method body, and the destroy seam calls it);
+7.9, 8.3 and 8.9 (`or_err` and `??` over a borrowed `Maybe` lower as one named shape).
 
 ## The decisions, in one place
 
@@ -1773,7 +1774,8 @@ The rows of `OwnershipResults`:
   never goes to SLIR (8.2). `REJECT` is
   an error of `borrow`, except at two positions, where it is a borrowed view with no
   error: the value of an `Assign` with `is_init` (a let-borrow of the owner) and the
-  operand of a `Try` that reads through a borrowed owning wrapper. SLIR lowering gives a
+  operand of a `Try` that reads through a borrowed owning wrapper, directly or through an
+  `or_err` (the `REJECT` row is then on the receiver of the `or_err`, 8.3). SLIR lowering gives a
   borrowed view a `Copy` of its place into a VIEW local (8.2), which owns nothing: no drop,
   no move, and no `Owned` argument. The copy is shallow, and it is safe, because `borrow`
   freezes each owner while the view lives (CE2412). It is the copy that the AST backend
@@ -1835,8 +1837,8 @@ node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership
   in place;
 - each capture of a `Lambda`, from its environment layout in `LiftResults`.
 
-The receiver of a built-in method that declares `nom self` is a consuming use too (its arm
-is group B10's). Its convention is the answer of the receiver partition (8.3), and not a
+The receiver of a built-in method that declares `nom self` is a consuming use too (`or_err`
+and `map_err`, 8.3). Its convention is the answer of the receiver partition (8.3), and not a
 row of `TypeckResults`: the answer is a fact of the callee row (`BuiltinMethod.nom_self`).
 The `borrow` pass and SLIR lowering both read it through `receiver_convention`. The
 receiver of a `Method` callee whose `receiver` is `Owned` (a `nom self` extension method) is
@@ -2467,9 +2469,17 @@ family in no set is an internal error. There is no default
 convention: the `borrow` pass stops at such a call
 (`borrow, Call(method <family>)`), and in SLIR lowering such a call is an internal error.
 The `borrow` pass reads a `Guaranteed` receiver. An `Owned` receiver is a consuming use
-(7.9), and group B10 builds its arm with the read-through of `or_err`: until then the
-`borrow` pass stops at it, and `typecheck` stops at `map_err` and `or_err` first. SLIR
-lowering writes the answer as the convention of the first operand.
+(7.9). SLIR lowering writes the answer as the convention of the first operand.
+
+**`or_err` and `map_err`.** Over an owned receiver, `or_err` is an ordinary `Builtin` call
+with an `Owned` receiver, and the `??` after it is the ordinary `Try`. Over a borrowed
+`Maybe` whose payload owns, `m.or_err(nom e)??` reads THROUGH the `Maybe`: `borrow` takes
+the receiver as a borrowed view with no error only as the operand of a `??` (7.9), and
+refuses it in any other position ([CE2522](../error-catalog.md#ce2522)). A `Result` built
+from a borrowed payload would hold a view in an owning aggregate, so the pair `or_err` and
+`??` over a borrowed receiver lowers as ONE named shape with no call and no `Result` value
+(8.9). `map_err` always takes an `Owned` receiver: on a borrowed owning `Result` it is
+[CE2411](../error-catalog.md#ce2411), with the help `r.clone().map_err(f)`.
 
 ### 8.4 Places and operands
 
@@ -2802,6 +2812,7 @@ backstop of the checker, as on the AST backend.
 | `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` that calls a declared conversion is a stop of the lowering for now (`slir, conversion`) |
 | `Try(e)` that reads through a borrowed owning wrapper (a `REJECT` row, 7.9) | `e` is a place, and nothing takes it: `Discriminant` of the place into a local and `SwitchInt` as above. The `Ok` block writes a view local (8.2) with a `Copy` of `Field(Downcast(place, Ok), 0)`. The `Err` block copies the error into the `Err` of `_0` with `Copy`, runs the drops of every scope that it leaves and returns: `borrow` refuses an owning error there (CE2411, `tests/borrow/try_on_a_borrowed_owning_result/`), so the error is plain |
 | a let-borrow (an `Assign` with `is_init` and a `REJECT` row, 7.9) | a view local (8.2), written with a `Copy` of the place |
+| `Try(Call(or_err, [e]))` over a borrowed `Maybe` (a `REJECT` row on the receiver, 7.9) | ONE named shape, with no call and no `Result` value: `Discriminant` of the `Maybe` place into a local and `SwitchInt` on it. The `Some` block writes a view local (8.2) with a `Copy` of the payload projection `Field(Downcast(place, Some), 0)`. The `None` block builds `Err(e)` into `_0` with the `Move` of `e`, runs the drops of every scope that it leaves and returns. Over an owned receiver, `or_err` is an ordinary `Builtin` call with an `Owned` receiver, and `??` is the ordinary `Try` (8.3) |
 | a reference `let` (an `Assign` with `is_init` whose value is a `Borrow`, 7.5) | an address local (8.2): `_5 = ref poke <place>` (or `ref peek`), after a `BeginBorrow` of the place with the same mode. The `EndBorrow` comes at each exit of the scope of the local, because the place is frozen for the whole life of the local |
 | a `peek` or `poke` binder of a pattern, `Own(poke x)` included | an address local of the scope of the arm, written with the `Ref` of its payload place (for a variant, `Field(Downcast(place, variant), index)`), in a region over that place to each exit of the arm |
 | `Return` in a function with a `peek` return | `_0 = copy <place>`: the value goes to the caller as it is (`borrow-model.md` S10h): it crosses by value, as a plain borrow does (the 16-byte descriptor of a `string` or a `T[]`), and not as an address. The callee never drops `_0` |
