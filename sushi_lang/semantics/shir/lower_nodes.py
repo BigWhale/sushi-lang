@@ -496,9 +496,10 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
         return lw.error_hole(node, "CE6102")
     named = None if node.field_names is None else node.field_names[0]
     if kind is None and lw.lookup is not None:
-        codes = ("CE2008",) if named is None else ("CE2008", "CE6104")
-        return lw.error_hole(node, *codes, named=named,
-                             member=UnknownMember(alias, node.method, lw.span(node)))
+        member = UnknownMember(alias, node.method, lw.span(node))
+        if named is not None:
+            return lw.error_hole(node, "CE2008", "CE6104", member=member, named=named)
+        return lw.error_hole(node, "CE2008", member=member)
     if named is not None:
         return lw.error_hole(node, "CE6104", named=named)
     if kind not in CALLABLE_KINDS:
