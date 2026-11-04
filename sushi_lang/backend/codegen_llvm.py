@@ -1,6 +1,6 @@
 """LLVM backend orchestrator for the Sushi language compiler."""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, NoReturn, Optional
 
 from llvmlite import ir
 
@@ -631,8 +631,9 @@ class LLVMCodegen:
         enum value go through the one converter of an aggregate constant.
 
         A string is finished here rather than in the evaluator: its bytes need a module
-        to live in, and the evaluator has none, which is why `const_value_to_llvm` hands
-        back None for one.
+        to live in, and the evaluator has none. Any other scalar goes through the one
+        converter of a scalar constant (`scalar_initializer`), which writes an integer at the
+        width of its type.
         """
         from sushi_lang.semantics.typesys import BuiltinType
         from sushi_lang.semantics.const_eval import AggregateConstant
@@ -647,12 +648,14 @@ class LLVMCodegen:
         if value.semantic_type == BuiltinType.STRING:
             return self._constant_string_value(value.value, data_name)
 
-        from sushi_lang.backend.constants.llvm_values import const_value_to_llvm
-        scalar = const_value_to_llvm(value, self.types)
-        if scalar is None:
+        from sushi_lang.backend.constants.enum_initializers import scalar_initializer
+        from sushi_lang.semantics.slir.constants import of_scalar
+
+        def fault(detail: str) -> NoReturn:
             raise_internal_error("CE0000", span=span, filename=filename,
-                                 detail=f"a constant of {value.semantic_type} has no LLVM constant")
-        return scalar
+                                 detail=f"the constant {value}: {detail}")
+
+        return scalar_initializer(of_scalar(value), self.types, fault)
 
 
 
