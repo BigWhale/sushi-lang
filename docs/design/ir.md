@@ -1239,7 +1239,12 @@ body goes on, so the later faults of the body are reported too (a CE2002 after a
 the body does not go on to `lift` and `borrow`. The error hole of a named argument is
 [CE6104](../error-catalog.md#ce6104) at the hole, with its `named`, and the hole of a name
 that a namespace does not hold is [CE2008](../error-catalog.md#ce2008) at the call, with
-the closest name of the namespace as a help (`reject_unknown_namespace_call`). An error of the construct around the hole can come first, and the hole
+the closest name of the namespace as a help (`reject_unknown_namespace_call`). When that
+call names an argument too (`m.missing(a: 2)`), the hole has both codes, the `member` and
+the `named`, and `typecheck` reports CE2008 and then CE6104, the order of `main`. The
+collect pass reports CE0134 to the program and not to the reporter of the unit, so the hole
+of a `self` in a static walks on with no count of the unit (`REPORTED_TO_THE_PROGRAM`);
+the check of the error holes at the end of the analysis still holds it. An error of the construct around the hole can come first, and the hole
 accepts its code too: in a constant or a `var` initializer the constant evaluator refuses
 the first node that is not constant (CE0108), and the borrow of a slice in a `let peek` is
 refused as a borrow of a temporary (CE2404). A new case of this kind is added with its
@@ -1452,7 +1457,9 @@ function. With `leaves_round`, a `Break` and a `Continue` leave the round of the
 which is the question of a join in a loop body. An `If` ends the path when it has an
 `otherwise` and each of its blocks ends it. A `Loop` can run zero times or break, so it
 never ends the path, and an `Assert`, an `Expand` and every other statement go on to the
-next. A statement after a `Break` or a `Continue` of its block is dead too. Two statements
+next. A statement after a `Break` or a `Continue` of its block is dead too, and so is a
+statement after the error hole of a `break` or a `continue` outside a loop (CE1003, then
+CE0140, as `main` reports them). Two statements
 of two copies of an unrolled `expand` were not written one after the other, so the one does
 not make the other dead (`ExpandCopies.holding`, 7.2). A `Match` ends the path when it has
 an arm and each arm ends it. A match whose arms miss a value
@@ -1651,7 +1658,10 @@ type row of the local of a binder is the type of its position with no `peek` or 
 the mode is in the `PatBinding`, as the convention of a parameter holds its mode (4.1). The
 alternatives of `|` that bind one name share one local, so the local gets one row, from the
 first alternative, after CE2126 finds no difference. An arm whose pattern has an error
-does not walk its body. After the last arm, the one checker reads the rows of the arms.
+does not walk its body. After the last arm, the one checker reads the rows of the arms. A
+scrutinee with an error (its own, CE2048, or an enum name that the unit lost) gives the
+match no facts and no arm is read: the walk goes on after the match, so the faults of the
+later statements are reported, and the body does not go on to the next stage.
 
 ### 7.9 What each pass reads and writes
 
@@ -1913,7 +1923,9 @@ that reads an owning field is a shared borrow of the root for the call (CE2407 b
 `poke` of the root). A `peek` or a `poke` of a field borrows its root, with the rules of a
 borrow of a local (CE2403, CE2407, CE2408, CE2412); a field of a constant goes to
 `reject_borrow_of_constant` at the name of the constant, and a field of a temporary is
-CE2404. A field write goes through `reject_readonly_write` at the root, at the statement:
+CE2404. Its text spells each field after a root that a call of a function or a construction
+gives as `<expression>` (`make().x` is `<expression>.x`), the text of `main`
+(`temporary_spelled`). A field write goes through `reject_readonly_write` at the root, at the statement:
 CE2408, CE2414, CE2421, CE2422, CE2426, and CE2429 for a root past a call boundary, with a
 note at the boundary. Then the field is read, the value is checked, a change of the root
 invalidates each let-borrow of it (`check_owner_not_borrowed`, CE2412 at a later use), and
