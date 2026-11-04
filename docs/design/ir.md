@@ -73,7 +73,12 @@ change; a pattern value has no `TypeckResults` row). Amended on 2026-11-04 by gr
 (SLIR): 8.2 (the modules of the lowering), 8.5 (a constant `Aggregate` of a struct), 8.9 (the
 lowering of a struct and a tuple construction in the written order, of a field read and a
 field write, and of a destructure of plain values) and 8.13 (the rule of a struct value, and
-the part types of an enum value).
+the part types of an enum value). Amended on 2026-11-04 by group A5 (the match on a tuple,
+and emit): 8.9 (a match on a plain tuple is a chain of tests over the `Field` paths of each
+tuple pattern; a tuple that owns stops), 8.2 and 8.5 (the emitter builds a struct and a
+tuple from the value of each field and reads a field through a GEP of its index; a struct
+and a tuple constant go through the one converter of an aggregate constant, which the
+global of a `const` uses too; only an array value stops).
 
 ## The decisions, in one place
 
@@ -1916,9 +1921,10 @@ rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns, `borrowed try
 twice), `conversion` also for a `Try` that calls a declared conversion (today `typecheck`
 stops there first), `library function` for a free callee whose row names no declaring unit
 (a function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
-argument, `aggregate constant` for a `ConstRef` whose value is a struct or an array, also as
-a payload of an enum value (groups A5 and A6 give its `Constant`), and `ConstRef out of
-range` for a `ConstRef` whose value its type cannot hold (8.5). The dump prints such a
+argument, `aggregate constant` for a `ConstRef` whose value is an array, also as a payload
+of an enum value or a field of a struct (group A6 gives its `Constant`), `Match owning` for
+a match on a tuple that owns (8.9), and `ConstRef out of range` for a `ConstRef` whose value
+its type cannot hold (8.5). The dump prints such a
 function as ONE line in place of its body, `fn <name>: stopped (slir, <construct>)`, so that
 a golden file shows the progress of each function. The pipeline reports one stop after the
 analysis: a stop of `typecheck`, else of `lift`, else of `borrow`, else an error hole, else
@@ -1934,9 +1940,10 @@ global, and the dump shows no function for an initializer. A constant is an `int
 `.rodata` global in each module. A `var` is defined in the module of its unit, and
 declared in each other module. A body reads a constant as a `Const` operand (8.5), and
 never reads its global. The round makes a global for each constant and each `var`, or it
-stops the compile; it never drops one. A value of an enum whose payload holds a struct or
-an array has no SLIR constant yet, and its global stops with `emit, aggregate constant` at
-the declaration (groups A5 and A6 give its `Constant`). A constant that the evaluator gives
+stops the compile; it never drops one. A struct value and an enum value go through the
+converter of 8.5. A value that holds an array, also in a payload or a field, has no SLIR
+constant yet, and its global stops with `emit, aggregate constant` at the declaration
+(group A6 gives its `Constant`). A constant that the evaluator gives
 no value (a function-typed constant, group C2) stops with `emit, constant with no value`.
 Every other fault of the round is an internal error: a constant with no type, a scalar of
 a type that has no LLVM constant, and a value that the converter of 8.5 cannot write.
@@ -1982,14 +1989,19 @@ emitter with one value for each payload, which the emitter writes at the offsets
 layout authority (a constant `Aggregate` goes through the converter of 8.5), `Discriminant`
 reads the tag as an `i32`, and the place `Field(Downcast(p, v), i)` is the address of
 payload field `i` at the offset that the one layout authority gives
-(`TypeSizing.payload_field_offsets`). The emitter reads the semantic type of the place,
-never a layout match. One check holds each `Aggregate` of a variant: the variant is a
-variant of its enum, and the semantic type of each part is the type of its payload field
-(not only the LLVM type). A part that does not agree is an internal error. The check is one
-function (`checked_variant`, `backend/constants/enum_initializers.py`): the rvalue calls it,
-and the converter of 8.5 calls it for each variant of a constant, at every depth, so a
-constant in a body and the global of a `const` go through the same check. A `Builtin` call
-of an intrinsic goes through one row of `INTRINSICS` (`intrinsics.py`), which evaluates
+(`TypeSizing.payload_field_offsets`). A struct and a tuple are an LLVM struct of their
+fields in the declaration order: an `Aggregate(Struct)` or an `Aggregate(Tuple)` goes
+through the struct emitter (`emit_struct_value`, `backend/types/structs.py`) with one value
+for each field, and the place `Field(p, i)` of a struct or a tuple is the GEP of field `i`.
+The emitter reads the semantic type of the place, never a layout match. One check holds
+each `Aggregate`: a variant is a variant of its enum, a struct value is of a struct type
+with one part for each field, and the semantic type of each part is the type of its
+payload field or its field (not only the LLVM type). A part that does not agree is an
+internal error. The check is one function for each kind (`checked_variant`,
+`checked_struct`, `backend/constants/enum_initializers.py`): the rvalue calls it, and the
+converter of 8.5 calls it for each variant and each struct of a constant, at every depth,
+so a constant in a body and the global of a `const` go through the same check. A `Builtin`
+call of an intrinsic goes through one row of `INTRINSICS` (`intrinsics.py`), which evaluates
 every operand before the family emits (11.9): `interp` appends each part to one string
 builder (a string part as its bytes, any other part as its string form, `emit_value_fmt`)
 and answers a fresh owned string, also for one string part; `print` and `println` of a
@@ -2009,7 +2021,7 @@ either after the call (8.10).
 
 While the migration is in progress, a SLIR shape that the emitter does not handle yet
 stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
-example `emit, Indirect` or `emit, AggStruct`), at the span of its statement or
+example `emit, Indirect` or `emit, AggArray`), at the span of its statement or
 terminator. Where one class holds two shapes, the stop names the shape, so that the
 stop-code census counts each one: `emit, Display print` for the print of a value that
 prints by its `Display` form, `emit, intrinsic <name>` for an intrinsic with no row
@@ -2125,14 +2137,16 @@ Constant = Int(value: int, ty: Type)
 ```
 
 Produced by the constant evaluator on the AST (ruling Q5) and carried through unchanged.
-Only the backend turns one into an LLVM value. A scalar becomes an `ir.Constant`, and a
-`Str` comes from the string constant seam. An `Aggregate` of a variant becomes an
-`ir.Constant` through one converter (`enum_initializer`): the declaration round of the
-global of a `const` calls it too, with the `Constant` of the evaluator value (`of_value`).
-The converter first runs the one check of a variant (8.2) over the value, at every depth.
-Then it writes each payload value at the offset of the layout authority, so a constant and
-a run-time value of an enum have one layout. A value that the converter cannot write after
-the check is an internal error: the converter always gives an `ir.Constant`.
+Only the backend turns one into an LLVM value. A scalar becomes an `ir.Constant`
+(`scalar_initializer`), and a `Str` comes from the string constant seam. An `Aggregate`
+becomes an `ir.Constant` through one converter (`constant_initializer`): the declaration
+round of the global of a `const` calls it too, with the `Constant` of the evaluator value
+(`of_value`). The converter first runs the one check of a variant and of a struct (8.2)
+over the value, at every depth. A struct or a tuple is one constant for each field, in the
+declaration order; a string field is a constant string of the module. A variant writes each
+payload value at the offset of the layout authority, so a constant and a run-time value of
+an enum have one layout. A value that the converter cannot write after the check is an
+internal error: the converter always gives an `ir.Constant`.
 
 **The value that an integer literal holds.** `typecheck` decides it one time, and writes it
 as the value row of the literal (7.3, ruling R-W), beside the type of the literal: the one
@@ -2164,8 +2178,7 @@ struct: `Point(3_i32, 4_i32)`. The converter of an enum constant writes a struct
 payload field by field, at the offsets of the layout authority. An array value, also as a
 payload or a field value, stops the lowering (`slir, aggregate constant`). The global of a
 constant with such a value stops the declaration round of the backend with
-`emit, aggregate constant` (8.2). The emitter of a function stops there too at a struct
-constant, until the emit chunk of group A5 takes it. The constant evaluator does not wrap
+`emit, aggregate constant` (8.2). The constant evaluator does not wrap
 a literal that spells bits (`const i8 B = 0xFF` holds 255), and it gives a value to an
 initializer with a range error. A value that its type cannot hold stops the lowering
 (`ConstRef out of range`), so lowering decides no value and the verifier rule holds.
@@ -2311,7 +2324,7 @@ backstop of the checker, as on the AST backend.
 | `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field` |
 | `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`: lowering calls `literal_value` and `pattern_interval` over the written constant and the scrutinee type, and reads no row), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |
 | `Match` on a string | a chain of tests in source order (see below): each a `Call` of the intrinsic `eq` (8.6) into a `bool` local, and a `SwitchInt` on it |
-| `Match` on a tuple | a chain of tests in source order, each a `Call` to the value equality and a `SwitchInt` on its bool |
+| `Match` on a tuple | always a chain of tests in source order (see below). The parts of a tuple pattern are at the places `Field(place, index)` of the scrutinee, and each part is tested by the rule of its own kind: a literal, a range, a variant, a nested tuple; a binder and `_` test nothing. A tuple that owns stops the lowering (`Match owning`), because its drops are Tier B |
 | `Loop`, kind `While` | header block, `SwitchInt`, body, `Goto` header. The blocks are made in the order header, the blocks of the condition (an `and` or an `or` in it), body, the zero block (when the condition has a local, see below), exit |
 | `Break`, `Continue` | the drops of each scope of the loop body that it leaves (8.10, rule 2), then `Goto` the exit or the header |
 | `Loop`, kind `CountedRange` | counter local, header, compare, body, step, `Goto` header |
@@ -2366,8 +2379,10 @@ pattern, depth first and from left to right, and the binders that it writes, eac
 place. An `Or`, at any depth, gives one path for each alternative. The test of a variant is a
 `Discriminant` of its place into a local and a `SwitchInt` on that local with one case, the
 tag of the variant; the tests of its items follow, each at the place
-`Field(Downcast(place, variant), index)`. The test of a literal or of a range is the test
-above, on a `Copy` of its place, at the type of that place. A binder and `_` test nothing.
+`Field(Downcast(place, variant), index)`. A tuple pattern tests nothing itself; the tests of
+its parts follow, each at the place `Field(place, index)`. The test of a literal or of a
+range is the test above, on a `Copy` of its place, at the type of that place. A binder and
+`_` test nothing.
 In a chain, a failed test goes to the first test of the next path of its arm, else to the
 first test of the next arm; after the last arm it goes to the trap RE2023 (8.8). An arm with
 a path of no test (`_`, or an arm with a `_` alternative) has no test, and it is the last arm
