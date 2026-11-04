@@ -37,7 +37,8 @@ checker, and walks the body of the arm: a literal arm of a match on an integer o
 also gives each binder its type (`matching.check_pattern_arm`). An arm of an enum or a
 tuple match whose pattern has an error does not walk its body. After the last arm, the one
 checker reads the rows (`matching.check_match_exhaustiveness`). A scrutinee with an error,
-or whose enum name the unit lost, stops the walk (`Match`).
+or whose enum name the unit lost, has no arm to read: the match has no facts, the walk goes
+on after it, and the body does not go on to the next stage.
 """
 from __future__ import annotations
 
@@ -288,10 +289,11 @@ def check_assert(validator: TypeValidator, node: s.Assert) -> None:
 def check_match(validator: TypeValidator, node: s.Match) -> None:
     """A `match`: its facts, then the pattern and the body of each arm in the written
     order, then the coverage of the arms. An arm of an enum or a tuple match whose pattern
-    has an error does not walk its body."""
+    has an error does not walk its body. After an error of the scrutinee, no arm is read."""
     ty = matchable_type(validator, node, visit.check_expr(validator, node.scrutinee))
     if ty is None:
-        visit.stop_at(validator, node)
+        validator.refused_before = True
+        return
     kind = literal_kind(ty)
     validator.body_answers().record_match(
         node.shir_id, MatchFacts(ty, ty if kind == "integer" else None))

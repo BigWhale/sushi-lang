@@ -867,6 +867,7 @@ tests/enums/nested_payload_depth/test_nested_maybe_parameter_depth_32.sushi
 tests/enums/pattern_codes/test_err_match_arm_other_enum.sushi
 tests/enums/pattern_codes/test_err_match_nested_not_enum.sushi
 tests/enums/pattern_codes/test_err_match_nested_other_enum.sushi
+tests/enums/pattern_codes/test_err_match_on_an_error_then_another_fault.sushi
 tests/enums/pattern_codes/test_err_match_scrutinee_not_matchable.sushi
 tests/enums/untyped_constructor/test_err_untyped_unknown_variant.sushi
 tests/enums/variant_names/test_err_duplicate_variant.sushi
@@ -2452,6 +2453,7 @@ tests/stdlib/net/verbs/test_err_udp_prefixed_name_is_gone.sushi
 tests/stdlib/platform/test_platform_behind_alias.sushi
 tests/stdlib/platform/test_platform_constants.sushi
 tests/stdlib/slib/read_failure/test_err_slib_library_is_a_directory.sushi
+tests/stdlib/slib/verbs/test_err_slib_prefixed_names_are_gone.sushi
 tests/stdlib/sort/test_err_sort_fixed_array.sushi
 tests/stdlib/strings/join_list/test_err_join_list_scalar.sushi
 tests/stdlib/strings/refused_arguments/test_err_string_cap.sushi
