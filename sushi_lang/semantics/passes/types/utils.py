@@ -586,21 +586,6 @@ def reject_spread_args(validator: 'TypeValidator', args: List) -> bool:
     return found
 
 
-def reject_named_args(validator: 'TypeValidator', node) -> None:
-    """Refuse a named argument on a call that is not a struct construction (CE6104).
-
-    One rule, read after the call is validated, because only then is the callee known.
-    A struct construction has no names left here: SHIR lowering puts a named
-    construction in declaration order, so names that are still here belong to a callee
-    that has no field names to match (#563).
-    """
-    names = getattr(node, "field_names", None)
-    if not names:
-        return
-    reject_named_argument(validator, names[0], node.loc)
-    node.field_names = None
-
-
 def reject_named_argument(validator: 'TypeValidator', name: str, loc: Any) -> None:
     """CE6104 for the named argument `name` of a callee that is not a struct."""
     er.emit_with(validator.reporter, er.ERR.CE6104, loc, name=name) \

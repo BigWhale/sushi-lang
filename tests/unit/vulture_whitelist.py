@@ -139,10 +139,8 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     # -- the AST helpers of typecheck that the switch left with no caller (P2.3) -----
     # Each one moves to SHIR inputs in the typecheck stage of its construct group
     # in the migration plan, and that stage deletes the entry.
-    (_TYPES + "utils.py", "reject_named_args", _TIER_A),
     (_TYPES + "calls/user_defined.py", "validate_indirect_call", _port("C2")),
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
-    (_TYPES + "statements.py", "validate_rebind_statement", _port("A9")),
     (_TYPES + "calls/enums.py", "_refuse_untyped_constructor", _port("C1")),
     (_TYPES + "calls/structs.py", "_refuse_unsolved_struct_constructor", _port("C1")),
     (_TYPES + "calls/namespaced.py", "validate_namespaced_call", _port("A8")),

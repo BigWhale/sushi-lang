@@ -8,7 +8,7 @@ from sushi_lang.semantics.type_predicates import is_instance_of
 from sushi_lang.semantics.hidden_names import hidden_name
 from sushi_lang.internals import errors as er
 from sushi_lang.semantics.typesys import EnumType, IteratorType
-from sushi_lang.semantics.ast import Let, Rebind, Foreach, DotCall, MethodCall, Name, MemberAccess, IndexAccess, RangeExpr
+from sushi_lang.semantics.ast import Let, Foreach, DotCall, MethodCall, Name, MemberAccess, IndexAccess, RangeExpr
 from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.ownership import is_own_type
 from sushi_lang.semantics.places import Step, walk_place
@@ -128,78 +128,6 @@ def reject_unspelled_result(validator: 'TypeValidator', value) -> None:
     """
     er.emit_with(validator.reporter, er.ERR.CE2030, value.loc) \
         .help("wrap return value: return Result.Ok(value)").emit()
-
-
-def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
-    """Validate rebind statement type compatibility (CE2002)."""
-    from sushi_lang.semantics.ast import Name
-
-    actual_type = None
-
-    if isinstance(stmt.target, Name):
-        var_name = stmt.target.id
-        if var_name not in validator.variable_types:
-            # A unit variable is rebindable storage; another unit's private one is
-            # fenced here exactly as a read of it is (CE3005).
-            sig = validator.const_sig(var_name)
-            if sig is None or not sig.is_var:
-                validator.validate_expression(stmt.value)
-                return
-            from .visibility import reject_private_name
-            if reject_private_name(validator, "variable", sig, stmt.target.loc):
-                validator.validate_expression(stmt.value)
-                return
-            var_type = sig.const_type
-        else:
-            var_type = validator.variable_types[var_name]
-
-        # Unwrap reference types for validation
-        # When rebinding through a reference parameter, we check compatibility
-        # with the referenced type, not the reference wrapper
-        from sushi_lang.semantics.typesys import ReferenceType
-        actual_type = var_type
-        if isinstance(var_type, ReferenceType):
-            actual_type = var_type.referenced_type
-
-    elif isinstance(stmt.target, MemberAccess):
-        validator.validate_expression(stmt.target)
-
-        # An external variable is read-only from Sushi (#1090).
-        if stmt.target.external_var_ref is not None:
-            er.emit(validator.reporter, er.ERR.CE5016, stmt.target.loc,
-                    name=".".join(stmt.target.external_var_ref))
-            validator.validate_expression(stmt.value)
-            return
-
-        actual_type = validator.infer_expression_type(stmt.target)
-        if actual_type is None:
-            validator.validate_expression(stmt.value)
-            return
-
-    else:
-        validator.validate_expression(stmt.target)
-        validator.validate_expression(stmt.value)
-        return
-
-    if stmt.value:
-        from .propagation import propagate_types_to_value
-        propagate_types_to_value(validator, stmt.value, actual_type)
-
-    validator.validate_expression(stmt.value)
-
-    expr_type = validator.infer_expression_type(stmt.value)
-
-    if expr_type is None:
-        return
-
-    # `types_compatible` and NOT a bare `!=`: the two sides arrive at different
-    # resolution depths, and comparing directly makes "how far resolved is it?" part of
-    # type identity (#240). One type printed twice in a CE2002 is that failure's
-    # signature (#288).
-    from .compatibility import types_compatible
-    if not types_compatible(validator, expr_type, actual_type):
-        er.emit(validator.reporter, er.ERR.CE2002, stmt.loc,
-               expected=display_type(actual_type), got=display_type(expr_type))
 
 
 def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> None:

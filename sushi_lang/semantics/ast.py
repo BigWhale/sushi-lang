@@ -1082,8 +1082,6 @@ class MemberAccess(Node):
     receiver: "Expr"    # The struct expression (p in p.x)
     member: str
     namespace_ref: Optional["NamespaceRef"] = None  # a name read through an alias
-    # `libc.environ`: the (namespace, name) of an external variable (#1090).
-    external_var_ref: Optional[Tuple[str, str]] = None
     resolved_enum_type: Optional["Type"] = None  # a bare `Maybe.None`: the interned instance (#545)
     expected_type: Optional[Type] = None  # a generic fn behind an alias solves from it (#1017)
     member_span: Optional[Span] = None  # the `.member` postfix; `loc` is the whole read
