@@ -174,6 +174,7 @@ def test_expect_error_code_directives_are_registered():
 # runtime traps; each one comes back with the SLIR Trap of its construct group.
 UNREFERENCED: set[str] = {
     "CE2094",                                 # Tier C: closures
+    "CE5016",                                 # Tier D: a write to a C global
     "RE2025",                                 # Tier D (D5): a null foreign return
 }
 
