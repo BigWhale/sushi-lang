@@ -90,7 +90,8 @@ holds a view local); 8.2, 8.3, 8.4, 8.6, 8.7, 8.9, 8.10 and 8.13 (a reference bi
 address local that a `Ref` writes one time); 8.2, 8.3, 8.6, 8.7 and 8.9 (`Clone` is the one
 deep copy, and `realise` and `err` lower as `expect` does); 8.3 and 8.13 (the rows of
 `METHOD_EFFECTS` give the receiver and the argument conventions of each container method);
-7.9 and 8.9 (a container get-out answers a view, by a row of `answers_view`).
+7.9 and 8.9 (a container get-out answers a view, by a row of `answers_view`); 7.9, 8.2,
+8.3, 8.10 and 8.13 (a `Guaranteed` parameter starts not owned, and a rebind makes it owned).
 
 ## The decisions, in one place
 
@@ -2055,7 +2056,9 @@ has a row; a local moved and then rebound has a row only when an exit keeps it, 
 that exit sees the new value (moved, rebound and moved again has none; 8.10, rule 3); and
 a local moved on some paths before a rebind has a row, although each exit after
 it sees the local moved on every path, because the rebind drops the old value only on the
-paths that did not move it.
+paths that did not move it. A `Guaranteed` parameter that owns starts as a local that is
+moved on every path, because the callee does not own the value of the caller (8.10, rule
+5): a rebind on some paths and not on others gives it a row.
 
 **The completeness checks.** `check_ownership` runs when `borrow` ends a body with no
 error. It reads `TypeckResults` and `LiftResults` for the positions, and it needs an
@@ -2248,9 +2251,7 @@ written name `<type>.<method>`.
 While the migration is in progress, a construct that the lowering does not handle yet stops
 the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
 class, or one of these names: `generic instance`, `conversion` and `perk method` for the
-body of a monomorphized generic instance, of a conversion and of a perk method; `borrowed
-rebind` for a rebind of a `Guaranteed` or an
-`InGuaranteed` parameter that owns, `conversion` also for a
+body of a monomorphized generic instance, of a conversion and of a perk method; `conversion` also for a
 `Try` that calls a declared conversion (today `typecheck` stops there first), `library
 function` for a free, a method or a static callee whose row names no declaring unit (a
 function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
@@ -2395,10 +2396,18 @@ local (8.2) follows the same rule: a `let peek` or a `peek` binder is read as an
 A `Guaranteed` parameter is by value, and the emitter stores the incoming value into the
 entry slot of its local unchanged (`_open`, `backend/slir/emit.py`). So a borrowed `string`
 parameter keeps the `owned` bit of the caller's value, and the callee does not clear it.
-No code reads that bit in the callee: SLIR never drops a borrowed parameter (8.10, rule 5),
-and a rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns is a stop of the
-lowering (`slir, borrowed rebind`, 8.10, rule 6). The group that lowers that rebind rules
-what the callee owns after it, and it must not drop the value of the caller.
+No code reads that bit in the callee: SLIR never drops the value of the caller (8.10,
+rule 5).
+
+**The rebind of a borrowed parameter.** A `Guaranteed` parameter is storage of its own, and
+it is rebindable (`s := v`). It starts NOT OWNED: the callee owns nothing of the value of
+the caller. A rebind does not drop the old value when the callee does not own it, stores
+the new value, and makes the local owned. At each exit, an owned local drops. On the
+straight line the state of rule 3 (8.10) is exact; where a path that rebound the parameter
+and a path that did not meet at a join, the parameter gets a flag (rule 4). So the callee
+never drops the value of the caller and never copies it at the entry. An `InGuaranteed`
+parameter is a view, and `borrow` refuses its rebind. An `Inout` parameter keeps rule 6
+through the pointer: the callee writes the place of the caller.
 
 **The receiver of a built-in method** (ruling R-V). The receiver is the first operand of the
 call (8.6). Its convention comes from ONE partition of the families of
@@ -2924,7 +2933,7 @@ locals, and the locals that own nothing, and nothing else:
    of a rebind (rule 6) alike. Where the state is exact, the state decides, as in rule 3:
    a live local gets `Drop`, a moved one nothing. The flag is the local right after its
    local; the flag of a parameter comes after the last parameter, and it is set `true` at
-   the entry. The flag is set `true` right after the statement that declares its local,
+   the entry for an `Owned` parameter and `false` for a `Guaranteed` one (rule 5). The flag is set `true` right after the statement that declares its local,
    after the temporaries of the statement die, and right after the store of a rebind. It
    is set `false` right after the statement that moves its local, before the temporaries
    of the statement die, and before each jump to another block, so that each path into a
@@ -2937,8 +2946,12 @@ locals, and the locals that own nothing, and nothing else:
    The row is the answer of `borrow` at the exits of the scope of the local and at each
    rebind of it (7.9). A local with no row is moved on no path, or each exit and each
    rebind see it moved on every path, and rule 3 applies to it.
-5. A borrow never drops. `Guaranteed`, `InGuaranteed` and `Inout` parameters never drop;
-   an `Owned` parameter drops in the callee.
+5. A borrow never drops. `Guaranteed`, `InGuaranteed` and `Inout` parameters never drop
+   the value of the caller; an `Owned` parameter drops in the callee. A `Guaranteed`
+   parameter starts NOT OWNED, in the state "moved" of rule 3: a rebind of it (rule 6)
+   makes it owned, and from there it drops at each exit as a local does. Where a path that
+   rebound it meets a path that did not, it has a `cond_moved` row and a flag (rule 4),
+   which is set `false` at the entry.
 6. An `Assign` to an owning place that may hold a live value drops the OLD value, and the
    order is normative (4.6): compute the new value FIRST, then `Drop` the old, then store.
    The source may alias the value about to be freed. A rebind through a `poke` parameter
@@ -2948,8 +2961,9 @@ locals, and the locals that own nothing, and nothing else:
    unless it is a constant, and the store moves the temporary (`_2 = ...`, `Drop(_1)`,
    `_1 = move _2`). A new value that is `and` or `or` always goes into a temporary first,
    because its left operand is written before its right operand reads the old value. A
-   rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns is a stop of the
-   lowering (`slir, borrowed rebind`) until a group rules what the callee owns after it.
+   rebind of a `Guaranteed` parameter drops the old value only when the callee owns it
+   (rule 5): the first rebind drops nothing, because the old value is the caller's. A
+   rebind of an `InGuaranteed` parameter does not reach SLIR: `borrow` refuses it.
 7. The hidden iterator local of a `Protocol` or an `IteratorValue` loop, and the item that
    the loop owns, are owning locals of the loop scope under rules 1 to 4: the end, a
    `break`, a `return` and the `??` of a binder all reach a `Drop`. A walk in place has no
@@ -3164,7 +3178,10 @@ write over it, and to a `return`, the value is moved or dropped exactly one time
 `DropIfSet` is the drop of the paths where its flag is true, and the paths where its flag
 is false must have moved the local; so a flagged local can reach a plain `Drop` where its
 state is exact, and a `DropIfSet` where it is unknown (8.10, rule 4). A borrowed parameter
-never drops and never moves, and an `Inout` parameter holds a value again at the `return`.
+never drops and never moves the value of the caller, and an `Inout` parameter holds a value
+again at the `return`. A `Guaranteed` parameter starts in the state "moved" (8.10, rule
+5): a write over it makes it live, and from there the rule of the drops reads it as an
+owning local.
 A `Trap` ends the program and needs no drop. A read or a `Move` of a local in the state "no
 value" is refused, and so is a `return` on a path where `_0` holds no value. The declared
 parameters of a `Direct` callee come from the function table (`funcs.by_unit`), which the
