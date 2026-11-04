@@ -52,8 +52,10 @@ class Hole(ShirNode):
 
     An ERROR hole is the hole of a program that always has an error, and `codes` names the
     codes of that error (ir.md 7.4); a hole with no codes is no error hole. The error hole of
-    a member of a type that is no variant keeps that `member`.
+    a member of a type that is no variant, and of a name that a namespace does not hold,
+    keeps that `member`. The error hole of a named argument keeps the first name, `named`.
     """
     ast_class: str
     codes: tuple[str, ...] = ()
     member: Optional[UnknownMember] = None
+    named: Optional[str] = None

@@ -246,11 +246,13 @@ def _assert(pr: ShirPrinter, stmt: s.Assert) -> str:
 
 
 def _hole(pr: ShirPrinter, n: Hole) -> str:
-    """`<hole: C>`, or an error hole with its codes, and the member that it keeps."""
+    """`<hole: C>`, or an error hole with its codes, and the member or the first argument
+    name that it keeps."""
     if not n.codes:
         return f"<hole: {n.ast_class}>"
     member = "" if n.member is None else f", member: {pr.show(n.member)}"
-    return f"<hole: {n.ast_class}, error: {' | '.join(n.codes)}{member}>"
+    named = "" if n.named is None else f", named: {n.named}"
+    return f"<hole: {n.ast_class}, error: {' | '.join(n.codes)}{member}{named}>"
 
 
 # -- the origin of a body ------------------------------------------------------------

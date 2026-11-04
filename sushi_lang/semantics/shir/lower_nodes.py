@@ -216,7 +216,8 @@ class BodyLowerer:
         return self._record(node, ())
 
     def error_hole(self, node: Any, *codes: str,
-                   member: Optional[UnknownMember] = None) -> Hole:
+                   member: Optional[UnknownMember] = None,
+                   named: Optional[str] = None) -> Hole:
         """The hole of a program that always has an error. It never stops the compile.
 
         A name with no declaration is one: the error of the program (CE1001, CE1002 or
@@ -233,14 +234,17 @@ class BodyLowerer:
         (`check_error_holes`, ir.md 7.4). In a constant or a `var` initializer,
         the constant evaluator refuses the first node that is not constant (CE0108) before
         the typecheck pass reads the form, so there the hole accepts CE0108 too. The hole
-        of a member of a type that is no variant keeps the `member` that its CE2045 reads.
+        of a member of a type that is no variant keeps the `member` that its CE2045 reads,
+        the hole of a name that a namespace does not hold the `member` that its CE2008
+        reads, and the hole of a named argument the first name that its CE6104 reads.
         """
         return self._record(node, (*codes, "CE0108") if self.in_initializer else codes,
-                            member)
+                            member, named)
 
     def _record(self, node: Any, codes: tuple[str, ...],
-                member: Optional[UnknownMember] = None) -> Hole:
-        made = Hole(self.ident(), self.span(node), type(node).__name__, codes, member)
+                member: Optional[UnknownMember] = None,
+                named: Optional[str] = None) -> Hole:
+        made = Hole(self.ident(), self.span(node), type(node).__name__, codes, member, named)
         self.holes.append(made)
         return made
 
@@ -422,7 +426,7 @@ def _call(lw: BodyLowerer, node: a.Call) -> e.ShirExpr:
         return struct_init(lw, node, constructed, constructed, node.args, node.field_names,
                            lw.span(node.callee))
     if node.field_names is not None:
-        return lw.error_hole(node, "CE6104")
+        return lw.error_hole(node, "CE6104", named=node.field_names[0])
     ident = lw.ident()
     return e.Call(ident, lw.span(node), e.Named(lw.expr(node.callee), _type_args(node)),
                   _arguments(lw, node.args))
@@ -460,7 +464,7 @@ def _dotted(lw: BodyLowerer, node: a.DotCall | a.MethodCall) -> e.ShirExpr:
     if isinstance(found, bd.Namespace):
         return _qualified_call(lw, node, found.name)
     if node.field_names is not None:
-        return lw.error_hole(node, "CE6104")
+        return lw.error_hole(node, "CE6104", named=node.field_names[0])
     if _type_args(node):
         return lw.error_hole(node, "CE6102")
     ty = lw.type_before_dot(node.receiver)
@@ -491,9 +495,10 @@ def _qualified_call(lw: BodyLowerer, node: a.DotCall | a.MethodCall,
     if kind == "struct":
         return lw.error_hole(node, "CE6102")
     if node.field_names is not None:
-        return lw.error_hole(node, "CE6104")
+        return lw.error_hole(node, "CE6104", named=node.field_names[0])
     if kind is None and lw.lookup is not None:
-        return lw.error_hole(node, "CE2008")
+        return lw.error_hole(node, "CE2008",
+                             member=UnknownMember(alias, node.method, lw.span(node)))
     if kind not in CALLABLE_KINDS:
         return lw.hole(node)
     ident = lw.ident()
@@ -659,7 +664,8 @@ def _foreach(lw: BodyLowerer, node: a.Foreach) -> s.Loop:
     """
     ident = lw.ident()
     iterable = lw.expr(node.iterable)
-    source = s.Items(iterable, _loop_binder(lw, node), _item_mode(node.item_borrow))
+    source = s.Items(iterable, _loop_binder(lw, node),
+                     _item_mode(node.item_borrow, node.item_borrow_span))
     body = _loop_body(lw, node.body)
     if node.item_try_let is not None and node.item_type is not None:
         _write_type(lw, node.item_try_let, node.item_type)
@@ -692,8 +698,8 @@ def _write_type(lw: BodyLowerer, let: a.Let, ty: TypeRef) -> None:
             made.declared = ty
 
 
-def _item_mode(marker: Optional[str]) -> s.ItemMode:
-    return s.Bare() if marker is None else s.Ref(borrow_mode(marker))
+def _item_mode(marker: Optional[str], loc: Optional[Span]) -> s.ItemMode:
+    return s.Bare() if marker is None else s.Ref(borrow_mode(marker), loc)
 
 
 def _assert(lw: BodyLowerer, node: a.Assert) -> s.Assert:

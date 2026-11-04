@@ -85,8 +85,10 @@ class Bare:
 
 @dataclass(frozen=True, slots=True)
 class Ref:
-    """A `peek` or `poke` binder: it points into the item or the payload."""
+    """A `peek` or `poke` binder: it points into the item or the payload. `loc` is the span
+    of the written marker of a loop binder; a pattern binding has none."""
     mode: BorrowMode
+    loc: Optional[Span] = None
 
 
 ItemMode: TypeAlias = Bare | Ref

@@ -152,7 +152,7 @@ STATEMENT_PARTS: dict[str, tuple[str, ...]] = {
     "Cond": ("cond",),
     "Items": ("iterable", "binder", "by"),
     "Bare": (),
-    "Ref": ("mode",),
+    "Ref": ("mode", "loc"),
     "Discard": (),
     "Nested": ("targets", "loc"),
     "Place": ("target",),

@@ -1,0 +1,18 @@
+# EXPECT_ERROR_CODES_EXACT: CE6104, CE6104, CE2002, CW1001, CW1001
+# EXPECT_DUMP_SHIR: test_err_error_hole_named_argument.shir
+#
+# The error hole of a named argument keeps the first name that the call writes, and the
+# typecheck pass reports CE6104 from it at the call. The walk of the body goes on after
+# it, so the later fault of the body is reported too (docs/design/ir.md 7.4).
+
+fn diff(i32 a, i32 b) i32:
+    return a - b
+
+enum Shape:
+    Rect(i32, i32)
+
+fn main() i32:
+    println(diff(b: 1, a: 9))
+    let Shape s = Shape.Rect(w: 3, h: 4)
+    let string t = 5
+    return 0

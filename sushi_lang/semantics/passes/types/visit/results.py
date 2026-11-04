@@ -28,7 +28,9 @@ from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.call_facts import TypecheckCallFacts
 from sushi_lang.semantics.passes.types.calls.enums import (
     reject_missing_variant, validate_constructor_arguments)
-from sushi_lang.semantics.passes.types.utils import reject_unpromised_arguments
+from sushi_lang.semantics.passes.types.calls.namespaced import reject_unknown_namespace_call
+from sushi_lang.semantics.passes.types.utils import (
+    reject_named_argument, reject_unpromised_arguments)
 from sushi_lang.semantics.passes.types.visibility import name_is_contested, reject_private_type
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.nodes import Hole
@@ -42,6 +44,10 @@ if TYPE_CHECKING:
 
 #: The predefined generic enums whose variant takes the instance of its position.
 WRAPPERS = ("Result", "Maybe")
+
+#: The codes of an error hole whose error a pass before typecheck reports: a name with no
+#: declaration, a jump outside a loop and a `self` in a static method.
+REPORTED_BEFORE = frozenset({"CE1001", "CE1002", "CE0144", "CE1003", "CE0134"})
 
 
 def check_enum_init(validator: TypeValidator, node: e.EnumInit,
@@ -75,11 +81,27 @@ def check_hole(validator: TypeValidator, node: Hole,
                expected: Optional[Type] = None) -> None:
     """The error hole of a member of an enum that is no variant (`Sign.Nope`) is CE2045 at
     the member, the `Call` hole of written type arguments on a type name
-    (`Pair@(i32, i32)(1, 2)`) is CE6102 at the hole, and the `RangeExpr` hole of a slice
-    with a reversed range is CE2122 at the range (ir.md 7.4). Every other hole stops the
-    walk of its body."""
+    (`Pair@(i32, i32)(1, 2)`) is CE6102 at the hole, the `RangeExpr` hole of a slice
+    with a reversed range is CE2122 at the range, the hole of a named argument is CE6104
+    at the hole, and the hole of a name that a namespace does not hold is CE2008 at the
+    call (ir.md 7.4). An error hole whose error a pass before typecheck reported
+    (`REPORTED_BEFORE`: a name with no declaration, CE1001) has no answer: the walk goes on, so the later faults of the body
+    are reported too, and the body does not go on to the next stage. Every other hole
+    stops the walk of its body."""
+    if (node.codes and set(node.codes) <= REPORTED_BEFORE
+            and any(validator.reporter.errors_offered.get(code) for code in node.codes)):
+        validator.refused_before = True
+        return
     if node.ast_class == "Call" and "CE6102" in node.codes:
         _reject_construction_type_args(validator, node)
+        return
+    if "CE6104" in node.codes and node.named is not None:
+        reject_named_argument(validator, node.named, node.loc)
+        return
+    if "CE2008" in node.codes and "CE2045" not in node.codes and node.member is not None:
+        alias = node.member.written
+        reject_unknown_namespace_call(validator, alias, alias, node.member.name,
+                                      node.member.name_loc)
         return
     if node.ast_class == "RangeExpr" and "CE2122" in node.codes:
         er.emit_with(validator.reporter, er.ERR.CE2122, node.loc) \
