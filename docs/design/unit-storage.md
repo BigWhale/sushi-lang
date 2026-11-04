@@ -64,8 +64,9 @@ with it. Two consequences:
 
 ## The borrow checker: one storage class beside "local"
 
-A `var` gets a `BorrowState` at every function's entry (`is_unit_var`), so the rules that
-already exist apply to it with one addition:
+A `var` is a `StorageRef` of SHIR, and the borrow pass gives it a `BorrowState`
+(`is_unit_var`) at its first borrow in a body, keyed by the symbol of its global
+(`borrows.storage_state`), so the rules that already exist apply to it with one addition:
 
 - **Borrowable like a local.** `peek v` and `poke v` take its address; one `poke` at a
   time ([CE2403](../error-catalog.md#ce2403)); a `poke` beside a `peek` is [CE2407](../error-catalog.md#ce2407). `foreach(poke r in v.iter())` points
@@ -117,11 +118,14 @@ a value. A `var` is ONE storage, so:
 - a consumer of a BINARY library declares it under the manifest's `link_symbol`, and the
   library's bitcode carries the definition.
 
-The reads and writes reach it as a `Global` place of SLIR (`semantics/slir/places.py`). The
-AST body emitter and its two seams, `resolve_name_slot` and `namespaced_storage`, are
-deleted. Until group A9 of the migration (`docs/design/ir.md`), SLIR lowering has no row for a
-`var`: a program that names one stops with CE0155. The rule is the same in the new pipeline: a
-rebind, a `poke`, a field write and a mutating method all go through one place.
+The reads and writes reach it as a `Global` place of SLIR (`semantics/slir/places.py`),
+which carries the symbol of the global and the declared type of the `var`. The emitter finds
+the global in the module by its symbol (`backend/slir/values.py`, `global_address`). A
+rebind, a `poke`, a field write and a mutating method all go through that one place. A read
+of a `var` by value is copied into a temporary of its statement first, so a later call of
+the statement that changes the `var` does not change the value that was read. A `var` of a
+type that owns stops with CE0155 (`slir, StorageRef owning`) until its group of the
+migration (`docs/design/ir.md`, 8.9).
 
 ## Library manifest
 

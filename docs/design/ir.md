@@ -888,15 +888,15 @@ checked as a field read, and the value at the type of the field: a value that do
 fit is CE2002 at the statement. A write into a field of a constant, at any depth, is
 [CE2096](../error-catalog.md#ce2096) at the statement, and the value is then checked at no
 type. The rules of a write through a borrow and of a read-only place are rules of
-`borrow`. An `Assign` of an `Index` is an element write (see "An array" below). An `Assign`
-of a `var` and of any other place that is not a `LocalRef`, a `Field` or an `Index` is not
-typed yet.
+`borrow`. An `Assign` of an `Index` is an element write (see "An array" below), and an
+`Assign` of a `StorageRef` is a rebind of a `var` (see "A `var`" below). An `Assign` of any
+other place that is not a `LocalRef`, a `Field` or an `Index` is not typed yet.
 
 **A destructure.** A `Destructure` first finds what each target wants (ruling R-D). A
 binder with a written type wants that type, and the written type is checked as the type of
 a `let` is checked ([CE2001](../error-catalog.md#ce2001)). A `Place` wants the type of its
-place. The place is a `LocalRef` or a `Field`, and it is checked as the target of a rebind
-or of a field write, and an `Index` as an element write: a field or an element of a constant
+place. The place is a `LocalRef`, a `StorageRef` or a `Field`, and it is checked as the
+target of a rebind or of a field write, and an `Index` as an element write: a field or an element of a constant
 is CE2096 at the place. A `Place` of any other place is not typed yet. A bare binder and a
 `_` want no type, and a `Nested` target wants
 what its targets want. Then the value is checked. A `TupleInit` with one part for each
@@ -961,6 +961,17 @@ above; the pass writes no row for it. The `borrow` pass walks an initializer bod
 other body. The constant evaluator makes each value of an initializer, so each value there
 is a new value: the `Return` adopts its value, and a constant that the initializer names is
 read, not moved (7.9).
+
+**A `var`.** A `StorageRef` answers the declared type of its `var`, bare or behind an alias
+(`t.count`), from the record that the namespace table of the body holds
+(`NamespaceTable.constant_record`, the one lookup of a constant and a `var`). The pass
+writes the global row of the node: the symbol of the global of the `var`, from
+`global_symbol` (`semantics/unit_symbols.py`). Another unit's private `var` is
+[CE3005](../error-catalog.md#ce3005), bare or behind an alias, and a bare name that two
+imports bring is [CE3012](../error-catalog.md#ce3012), as for a constant. A rebind of a
+`var` checks its value at the type of the `var`, as a rebind of a local does: a value that
+does not fit is CE2002 at the statement. A `var` has an address, so a field write and an
+element write of it are checked as those of a local, with no CE2096.
 
 **A cast.** The arm of `as` (`check_cast`, `passes/types/expressions.py`) answers the
 target type. A cast between two numeric types, and a cast to the type of its operand, call
@@ -1766,7 +1777,7 @@ body, bare or behind an alias (`NamespaceTable.constant_record`), and asks the o
 and a `poke` is [CE2400](../error-catalog.md#ce2400) at the place. A stdlib constant
 (`PI`) has no record and no storage, so both modes are CE2400 there. The `scope` pass asks
 the gate only for a name that SHIR keeps as no `ConstRef`: a top-level function and a
-namespace. A take of a constant is a consuming use (CE2436, `consume.reject_move_of_constant`).
+namespace. A take of a constant is a consuming use (CE2436, `consume.reject_move_of_storage`).
 In an initializer body, the constant evaluator makes each value, so the provenance of each
 consuming use there is FRESH: the `Return` adopts its value, and `const string ALIAS =
 GREETING` is no take of `GREETING`. `typecheck` does not type a reference `let` yet, and
@@ -1834,7 +1845,7 @@ note at the boundary. Then the field is read, the value is checked, a change of 
 invalidates each let-borrow of it (`check_owner_not_borrowed`, CE2412 at a later use), and
 the value is a consuming use. Each field of a `StructInit`, in the written order (R1), and
 each part of a `TupleInit` is a consuming use by its position, as each payload of an
-`EnumInit` is. A root that a later group checks (a `StorageRef`, a `GlobalRef`) stops the
+`EnumInit` is. A root that a later group checks (a `GlobalRef`) stops the
 walk with its class. A marked field take is B7's: a `Take`, and a `nom`
 argument of an owning field (`f(nom s.out)`, `borrow, Field take`), stop the walk.
 
@@ -1859,13 +1870,30 @@ the walk (`borrow, ArrayInit owning`, `Index owning`, `Slice owning`, `Call(meth
 owning`; group B1), and so does `iter()` on an array (`Call(method array) iterator`, C3),
 which makes a lent iterator.
 
+**A `var` in `borrow`.** A `var` is storage that the program keeps for its whole run, with
+an address and no owner that can hand its value away (`unit-storage.md`). A read of a
+`StorageRef` reads nothing that the body owns: a `var` always holds its value. A consuming
+use of a `var` has the provenance `OWNED`: a plain `var` copies out (`ADOPT`), and a take
+of a `var` that owns is [CE2436](../error-catalog.md#ce2436) at the name, "a unit
+variable" (`consume.reject_move_of_storage`, the one rule of a constant and a `var`). A
+rebind of a `var` is legal in every body, and its value is a consuming use. A `peek` or a
+`poke` of a `var` or of its field, and a `peek self` or a `poke self` receiver in it, are
+counted for the statement on the state of the `var` (`borrows.storage_state`, keyed by the
+symbol of its global, made at its first borrow): two `poke` borrows of one `var` in one
+call are [CE2403](../error-catalog.md#ce2403), and a `peek` beside a `poke`
+[CE2407](../error-catalog.md#ce2407). An element of a `var` has no stable address (CE2404),
+as an element of a local. A write of a field or of an element of a `var` passes the gate of
+a write: the `var` is the root of the place, so no call boundary cuts it
+(`reads.chain_call_boundary`). A plain `var` has no `let`-borrow. The pass checks a `var`
+that owns too, and SLIR lowering stops at it (group D1).
+
 **A destructure in `borrow`.** The value is checked first. A value of plain elements is a
 consuming use, a copy (`ADOPT`), and SLIR lowering reads that one row (8.9). A `let`
 declares each binder, at any nesting level, as a local of its own. A rebind form then
 rebinds each place from left to right, at the span of the place: a `LocalRef` through the
 gates of a rebind of a local (CE2408, CE2414, CE2426 for a view of another value's storage;
-a by-value parameter is storage of its own and is rebindable), and a `Field` through the
-gates of a field write. A value that owns stops the walk (`borrow, Destructure`) after the
+a by-value parameter is storage of its own and is rebindable), a `StorageRef` with no gate
+(a `var` is storage of its own), and a `Field` through the gates of a field write. A value that owns stops the walk (`borrow, Destructure`) after the
 gates of the places: each binder owns or borrows an element of it, and Tier B checks that. So
 a rebind of a view is its error also when the value owns.
 
@@ -2072,7 +2100,9 @@ makes the global of each constant and each `var` from that value, in its declara
 (`unit_symbols.py`). This is the one path of a global: no SLIR function makes the value of a
 global, and the dump shows no function for an initializer. A constant is an `internal`
 `.rodata` global in each module. A `var` is defined in the module of its unit, and
-declared in each other module. A body reads a constant as a `Const` operand (8.5), and
+declared in each other module, so a body of any module reads and writes it by address: the
+emitter finds the global of a `Global` place by its symbol (`values.global_address`), and a
+symbol that the module does not hold is an internal error. A body reads a constant as a `Const` operand (8.5), and
 never reads its global. The round makes a global for each constant and each `var`, or it
 stops the compile; it never drops one. A struct value and an enum value go through the
 converter of 8.5, and so does an array value, also in a payload or a field. A constant
@@ -2538,6 +2568,7 @@ backstop of the checker, as on the AST backend.
 | `Field` read | a place: `Copy` of `Field(place, index)`, with the index of the typecheck row; a field of a field is a projection of the projection. A base that is no place (a new value, a constant) goes into a temporary of the statement first, and the field is a `Copy` of the projection of the temporary; the statement drops the temporary at its end (rule 2) |
 | a field write (`p.x := v`) | the new value first, then the store into `Field(place, index)`. A new value that is `and` or `or` goes into a temporary first, because its left operand is written before its right operand reads the place (rule 6) |
 | `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. `borrow` stops on a value that owns (7.9), so each element is plain |
+| `StorageRef` (a `var`) | the place `Global(symbol, ty)`: the symbol of the global row of typecheck, and the declared type of the `var`. A read by value goes into a temporary of the statement first, because any call of the statement can change a `var` (`counter + bump()` reads `counter` before the call); a by-address argument, a receiver and a value that its statement stores at once read the `Global` where it is. A rebind is an `Assign` into the `Global`, and a field write and an element write an `Assign` into its projection; a plain `var` drops nothing. A `var` that owns stops the lowering (`slir, StorageRef owning`, group D1) |
 | `Take` | `Move` of the field; the other owning fields of the receiver get `Drop`, and `drop()` does not run (`borrow-model.md` §10c) |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
 | a `string` argument to an `i8*` callee | an explicit conversion into an owning temp local, dropped by the rules of 8.10. The C-string marshalling becomes visible IR, still one lowering site, and `run()` stays the one exception |
