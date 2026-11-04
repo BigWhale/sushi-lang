@@ -45,6 +45,9 @@ _NOT_A_ROOT_WALK = {
     ("sushi_lang/semantics/passes/types/matching.py", "_bindings_of"),
     ("sushi_lang/semantics/passes/types/matching.py", "_item_signature"),
     ("sushi_lang/semantics/passes/types/matching.py", "_poke_bindings"),
+    # Every local that a read of a SLIR place reads: its root and the local of each index.
+    # A SLIR place is no expression, so `walk_place` does not read it.
+    ("sushi_lang/semantics/slir/places.py", "locals_read"),
 }
 
 
