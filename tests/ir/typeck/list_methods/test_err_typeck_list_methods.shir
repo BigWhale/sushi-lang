@@ -1,0 +1,29 @@
+unit test_err_typeck_list_methods
+
+ShirBody main
+  params : []
+  locals : [_0 "xs": List@(string), _1 "put": Result@(~, StdError), _2 "n": i32, _3 "copy": List@(string)]
+  block  :
+    Assign(LocalRef(_0), Call(BuiltinStatic(List@(string), "with_capacity"), [(Lit(4), Guaranteed)]), is_init: true)
+    ExprStmt(Call(Builtin(LocalRef(_0), "push"), [(Lit("a"), Owned)]))
+    Assign(LocalRef(_1), Call(Builtin(LocalRef(_0), "insert"), [(Lit(0), Owned), (Lit("b"), Owned)]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_1), "is_ok"), []), Guaranteed)]))
+    Assign(LocalRef(_2), Binary(+, Call(Builtin(LocalRef(_0), "len"), []), Call(Builtin(LocalRef(_0), "capacity"), [])), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_0), "is_empty"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Builtin(LocalRef(_0), "get"), [(Lit(1), Guaranteed)]), "is_some"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Builtin(LocalRef(_0), "first"), []), "is_some"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Builtin(LocalRef(_0), "last"), []), "is_none"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(LocalRef(_0), "contains"), [(Lit("a"), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Builtin(LocalRef(_0), "index_of"), [(Lit("b"), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Builtin(LocalRef(_0), "index_of_from"), [(Lit("a"), Guaranteed), (Lit(1), Guaranteed)]), "realise"), [(Unary(neg, Lit(1)), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Builtin(LocalRef(_0), "remove"), [(Lit(0), Guaranteed)]), "is_some"), []), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Builtin(LocalRef(_0), "pop"), []), "is_some"), []), Guaranteed)]))
+    Assign(LocalRef(_3), Call(Builtin(LocalRef(_0), "clone"), []), is_init: true)
+    ExprStmt(Call(Builtin(LocalRef(_0), "reserve"), [(Lit(8), Guaranteed)]))
+    ExprStmt(Call(Builtin(LocalRef(_0), "shrink_to_fit"), []))
+    ExprStmt(Call(Builtin(LocalRef(_0), "debug"), []))
+    ExprStmt(Call(Builtin(LocalRef(_0), "clear"), []))
+    ExprStmt(Call(Builtin(LocalRef(_3), "destroy"), []))
+    ExprStmt(Call(Builtin(LocalRef(_0), "free"), []))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Builtin(LocalRef(_0), "get"), [(Lit(true), Guaranteed)]), "is_some"), []), Guaranteed)]))
+    Return(LocalRef(_2))

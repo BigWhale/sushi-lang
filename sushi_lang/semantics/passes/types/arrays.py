@@ -632,7 +632,8 @@ def _record_conventions(validator: 'TypeValidator', node: e.Call, spec: ArraySpe
     count = len(node.args)
     declared = Parameters(node.shir_id, (ParamMode.BORROW,) * count,
                           [f"#{position}" for position in range(1, count + 1)])
-    record_conventions(validator, declared, node.args, slot=spec.slot)
+    record_conventions(validator, declared, node.args,
+                       slots=() if spec.slot is None else (spec.slot,))
 
 
 def array_method_return_type(validator: 'TypeValidator', array_type: ArrayReceiver,

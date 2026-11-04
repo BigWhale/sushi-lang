@@ -215,8 +215,8 @@ def _check_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Buil
     (`_write_builtin_receiver`). A family with no receiver rule stops the walk, and so
     does an `Owned` receiver: B10 checks the `nom self` methods (`map_err`, `or_err`),
     with the read-through of `or_err` and the method in the CE2405 note. An array whose
-    element owns stops (B1), and so does an iterator over an array (C3), which makes a
-    lent iterator.
+    element owns stops (B1), and so does an iterator over an array or a List (C3), which
+    makes a lent iterator.
     """
     method = callee.method
     convention = receiver_convention(method)
@@ -225,8 +225,8 @@ def _check_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Buil
     if method.family == ARRAY_FAMILY:
         stop_at_owning_elements(checker, node, read_type(checker, callee.recv),
                                 family=method.family)
-        if produces_from_a_container(method.family, method.name, len(node.args)):
-            dispatch.stop(arms.STAGE, node, family=method.family, state="iterator")
+    if produces_from_a_container(method.family, method.name, len(node.args)):
+        dispatch.stop(arms.STAGE, node, family=method.family, state="iterator")
     arms.check(checker, callee.recv)
     return convention is Convention.INOUT
 

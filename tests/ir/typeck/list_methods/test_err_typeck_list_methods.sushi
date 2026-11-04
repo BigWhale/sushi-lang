@@ -1,0 +1,34 @@
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_STDERR_CONTAINS: "argument type mismatch at position 1: expected i32, got bool"
+# EXPECT_DUMP_SHIR: test_err_typeck_list_methods.shir
+#
+# A method of `List@(T)` is a `Builtin` callee of the `list` family, and it answers the
+# type of its row. A slot of `push` and each argument of `insert` take their value by
+# position (`Owned`); each other argument borrows (`Guaranteed`). An index is an i32, an
+# element has the type `T`, and a search needle has the type `T` too. A wrong index
+# type is CE2006 at the argument.
+
+fn main() i32:
+    let List@(string) xs = List.with_capacity(4)
+    xs.push("a")
+    let Result@(~, StdError) put = xs.insert(0, "b")
+    println(put.is_ok())
+    let i32 n = xs.len() + xs.capacity()
+    println(xs.is_empty())
+    println(xs.get(1).is_some())
+    println(xs.first().is_some())
+    println(xs.last().is_none())
+    println(xs.contains("a"))
+    println(xs.index_of("b").realise(-1))
+    println(xs.index_of_from("a", 1).realise(-1))
+    println(xs.remove(0).is_some())
+    println(xs.pop().is_some())
+    let List@(string) copy = xs.clone()
+    xs.reserve(8)
+    xs.shrink_to_fit()
+    xs.debug()
+    xs.clear()
+    copy.destroy()
+    xs.free()
+    println(xs.get(true).is_some())
+    return n

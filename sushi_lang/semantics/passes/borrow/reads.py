@@ -1,17 +1,17 @@
 """Expression shape probes, and the readers of what reads out of a live owner.
 
-`read_type` and `borrow_owner` read a SHIR node: the type of the value of a node, and the
-owner (a local or a `var`) that a borrow of a place is counted on and that a binding into
-the place freezes.
+`read_type`, `borrow_owner` and `view_receiver` read a SHIR node: the type of the value of
+a node, the owner (a local or a `var`) that a borrow of a place is counted on and that a
+binding into the place freezes, and the receiver of a container get-out.
 The other probes read the AST. They live together and share `unwrap_try` because a
 narrower copy that forgot the `??` is exactly how `outer.get(0)??.push(5)` went unstamped.
 
 Port templates: the probes that read the AST take an AST node, and no SHIR pass has one.
 No pass reaches them today. The group that checks each construct ports its probes to SHIR
 inputs before a SHIR caller is connected: B7 a `nom` binder of a match (`root_owner`),
-B2 a container get-out (`called_on`, `reads_through_owner` with
-`is_bare_enum_constant`, `receiver_type`, `names_kept_storage`), A8 a constant
-(`constant_sig`, `constant_type`), and D1 a `var` (`unit_variables`).
+C3 and B8 the get-out of an iterable and of a `peek` return (`called_on`,
+`reads_through_owner` with `is_bare_enum_constant`, `receiver_type`, `names_kept_storage`),
+A8 a constant (`constant_sig`, `constant_type`), and D1 a `var` (`unit_variables`).
 """
 
 from __future__ import annotations
@@ -32,8 +32,10 @@ from sushi_lang.semantics.ast import (
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.places import Step, unwrap_try, walk_place
+from sushi_lang.semantics.method_effects import answers_view
 from sushi_lang.semantics.ownership import is_get_out_container
 from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir.callee import Builtin
 from sushi_lang.semantics.typesys import Type
 from .state import BorrowState
 
@@ -65,12 +67,26 @@ def root_owner(expr: Optional[Expr]) -> Optional[str]:
 def borrow_owner(checker: 'BorrowChecker', node: object) -> Optional[Owner]:
     """The owner that a borrow of the SHIR place `node` is counted on, and that a binding
     into `node` freezes: the root local, or the symbol of the global of the root `var`,
-    under each field step, each element and slice step, and each `??` that reads it. None
-    for a temporary. The pass tracks whole owners, not the places in them."""
-    walked = walk_place(node, Step.MEMBER | Step.INDEX | Step.TRY)
+    under each field step, each element and slice step, each `??` that reads it, and each
+    call whose answer is a view of its receiver (`view_receiver`). None for a temporary.
+    The pass tracks whole owners, not the places in them."""
+    walked = walk_place(node, Step.MEMBER | Step.INDEX | Step.TRY | Step.CALL,
+                        crosses_call=lambda call: view_receiver(checker, call) is not None)
     if isinstance(walked.node, e.StorageRef):
         return storage_state(checker, walked.node).local
     return walked.local
+
+
+def view_receiver(checker: 'BorrowChecker', node: object) -> Optional[e.ShirExpr]:
+    """The receiver of a call of a built-in method whose answer is a view of what the
+    receiver holds (`answers_view`: a container get-out), or None for any other node."""
+    if not isinstance(node, e.Call):
+        return None
+    resolved = checker.answers().callee_of(node.shir_id)
+    callee = resolved.callee if resolved is not None else None
+    if isinstance(callee, Builtin) and answers_view(callee.method):
+        return callee.recv
+    return None
 
 
 def owner_state(checker: 'BorrowChecker', node: object) -> Optional[BorrowState]:

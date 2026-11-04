@@ -20,10 +20,9 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
 from sushi_lang.semantics.generics.own import own_payload_type
 from sushi_lang.semantics.method_effects import argument_conventions
-from sushi_lang.semantics.param_modes import Convention, ParamMode
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
-    Parameters, argument_span, check_argument, marked_type, record_conventions)
+    argument_span, check_argument, marked_type, record_builtin_conventions)
 from sushi_lang.semantics.passes.types.arrays import reject_non_i32
 from sushi_lang.semantics.passes.types.calls.statics import spell_names
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
@@ -93,17 +92,12 @@ def _check_values(validator: TypeValidator, node: e.Call, name: str, instance: T
 
 
 def _record_conventions(validator: TypeValidator, node: e.Call, callee: BuiltinStatic) -> None:
-    """The convention of each argument, through the one writer of the argument rows
-    (`record_conventions`). A borrowed argument has no `nom` marker (CE2427), and the
-    argument that the static takes is a slot: it takes it by position, as a container
-    insert does, with no marker to compare."""
-    conventions = argument_conventions(callee.method.family, callee.method.name,
-                                       len(node.args))
-    slots = [index for index, convention in enumerate(conventions)
-             if convention is Convention.OWNED]
-    declared = Parameters(node.shir_id, (ParamMode.BORROW,) * len(node.args),
-                          [f"#{index + 1}" for index in range(len(node.args))])
-    record_conventions(validator, declared, node.args, slot=slots[0] if slots else None)
+    """The convention of each argument (`record_builtin_conventions`). A borrowed argument
+    has no `nom` marker (CE2427), and the argument that the static takes is a slot: it
+    takes it by position, as a container insert does, with no marker to compare."""
+    record_builtin_conventions(validator, node.shir_id, node.args,
+                               argument_conventions(callee.method.family,
+                                                    callee.method.name, len(node.args)))
 
 
 def _reject_no_position(validator: TypeValidator, node: e.Call, base: str, name: str) -> None:

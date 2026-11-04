@@ -37,8 +37,8 @@ def _validator() -> SimpleNamespace:
 
 
 @pytest.mark.parametrize("receiver, method, label", [
-    (StructType(name="List<i32>", fields=(), generic_base="List"), "len",
-     "Call(method list)"),
+    (StructType(name="HashMap<i32, i32>", fields=(), generic_base="HashMap"), "len",
+     "Call(method hashmap)"),
     (IteratorType(BuiltinType.I32), "clone", "Call(method iterator)"),
 ])
 def test_a_family_with_no_arm_names_its_family(monkeypatch, receiver, method, label):

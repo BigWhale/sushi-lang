@@ -109,7 +109,7 @@ def test_a_ruled_effect_family_writes_a_receiver_that_its_row_mutates():
     from sushi_lang.semantics.param_modes import Convention
     from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 
-    assert me.RULED_EFFECT_FAMILIES == {"array"}
+    assert me.RULED_EFFECT_FAMILIES == {"array", "list"}
     assert me.RULED_EFFECT_FAMILIES <= me.EFFECT_FAMILIES
     family = METHOD_TYPE_REGISTRY.family("array")
     answers = {name: me.receiver_convention(family.callee(name))
@@ -119,6 +119,42 @@ def test_a_ruled_effect_family_writes_a_receiver_that_its_row_mutates():
     assert {"push", "insert", "pop", "fill", "swap", "extend"} <= written
     assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
                if name not in written)
+
+
+def test_the_list_family_writes_a_receiver_that_its_row_mutates():
+    """The `List@(T)` family (group B2) has the rule of the array family: `push`,
+    `insert`, `pop`, `clear`, ... take the receiver `Inout`, and each other method reads it.
+    A slot of `push` and of `insert` is `Owned`, and each other argument is `Guaranteed`."""
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    family = METHOD_TYPE_REGISTRY.family(me.LIST_FAMILY)
+    answers = {name: me.receiver_convention(family.callee(name)) for name in LIST_METHOD_ARITY}
+    written = {name for name, answer in answers.items() if answer is Convention.INOUT}
+    assert written == {name for name in LIST_METHOD_ARITY if effect_of(name).mutates}
+    assert {"push", "insert", "pop", "remove", "clear", "reserve", "free"} <= written
+    assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
+               if name not in written)
+    owned = {name for name, count in LIST_METHOD_ARITY.items() if count
+             and me.argument_conventions(me.LIST_FAMILY, name, count)[0] is Convention.OWNED}
+    assert owned == {"push", "insert"}
+
+
+def test_a_get_out_answers_a_view_by_its_family_and_its_name():
+    """`get`, `first` and `last` of a List answer a view (`answers_view`, docs/design/ir.md
+    7.9). The same name of another family, and another method of the family, do not."""
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    family = METHOD_TYPE_REGISTRY.family(me.LIST_FAMILY)
+    views = {name for name in LIST_METHOD_ARITY if me.answers_view(family.callee(name))}
+    assert views == {"get", "first", "last"}
+    assert set(me.VIEW_ANSWERS) <= me.EFFECT_FAMILIES
+    for name in me.RECEIVER_READ_FAMILIES | {me.ARRAY_FAMILY}:
+        assert not me.answers_view(METHOD_TYPE_REGISTRY.family(name).callee("get"))
 
 
 @pytest.mark.parametrize("family, arity", [
@@ -154,7 +190,7 @@ def test_slir_lowering_refuses_a_receiver_with_no_convention():
 
     span = Span(1, 1, 1, 2)
     recv = e.LocalRef(ShirId(1), span, LocalId(0))
-    callee = Builtin(recv, METHOD_TYPE_REGISTRY.family("list").callee("len"))
+    callee = Builtin(recv, METHOD_TYPE_REGISTRY.family("hashmap").callee("len"))
     with pytest.raises(InternalCompilerError) as caught:
         lower_calls._receiver_convention(callee, span)
     assert caught.value.code == "CE0000"

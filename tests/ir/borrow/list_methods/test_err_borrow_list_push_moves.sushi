@@ -1,0 +1,17 @@
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: "cannot borrow moved variable 's'"
+# EXPECT_DUMP_SHIR: test_err_borrow_list_push_moves.shir
+#
+# A method of `List@(T)` that changes the List takes its receiver `Inout`, and a read
+# takes it `Guaranteed`. An argument of `push` is a consuming use: a later use of the
+# moved local is CE2405. The argument of a method can read the List that the method
+# changes.
+
+fn main() i32:
+    let List@(string) xs = List.new()
+    let string s = "n{1}"
+    xs.reserve(xs.len() + 2)
+    xs.push(s)
+    println(xs.len())
+    println(s)
+    return 0

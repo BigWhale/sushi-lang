@@ -29,7 +29,7 @@ from .diagnostics import (
     no_clone_reason,
     refuses_clone,
 )
-from .reads import borrow_owner, read_type
+from .reads import borrow_owner, read_type, view_receiver
 from .state import BorrowState, record_owners
 from .writes import check_owner_not_borrowed
 
@@ -73,7 +73,8 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
     keeps (#726): neither is FRESH, so a take of an owning one is refused. A field, an
     element and a slice are storage that the owner of their base keeps, so each is a read
     through that owner (BORROWED): a plain one is a copy, and a take of an owning one is
-    refused. `r??` yields what `r` holds,
+    refused. The answer of a container get-out (`answers_view`) is a view of what its
+    receiver holds, a read through the receiver too (BORROWED). `r??` yields what `r` holds,
     and the payload has the provenance of `r` (#548): a borrowed `r` keeps its owner, so
     the payload is a read through it; an owned `r` was SPENT by the `??` itself
     (`unwrap_place`), so nothing owns the payload now and the position adopts it.
@@ -85,7 +86,7 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
         return name_provenance(checker, node.local)
     if isinstance(node, (e.ConstRef, e.StorageRef)):
         return Provenance.OWNED
-    if isinstance(node, (e.Field, e.Index, e.Slice)):
+    if isinstance(node, (e.Field, e.Index, e.Slice)) or view_receiver(checker, node) is not None:
         return Provenance.BORROWED
     if isinstance(node, e.Try) and isinstance(node.inner, e.LocalRef):
         if name_provenance(checker, node.inner.local) is Provenance.BORROWED:

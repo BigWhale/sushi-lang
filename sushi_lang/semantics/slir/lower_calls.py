@@ -13,7 +13,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.name_mangling import method_symbol
-from sushi_lang.semantics.method_effects import receiver_convention
+from sushi_lang.semantics.method_effects import answers_view, receiver_convention
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import (
@@ -71,7 +71,8 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
     built-in container as the intrinsic of its written name (`f64.from_bits`, `List.new`),
     with the type of each argument; a built-in method by
     its family and its name, with no types: the receiver is the first operand of the
-    call (`receiver_convention`)."""
+    call (`receiver_convention`). A get-out whose answer owns is a view (`answers_view`),
+    and its view local is not built yet: it stops."""
     callee = resolved.callee
     if isinstance(callee, Free):
         if resolved.unit is None:
@@ -98,6 +99,8 @@ def callee(low: Lowering, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee
         return st.Builtin(Intrinsic(f"{type_name}.{callee.method.name}"),
                           tuple(low.type_of(arg.value) for arg in node.args))
     if isinstance(callee, Builtin):
+        if answers_view(callee.method) and low.owns(low.type_of(node)):
+            raise StageStop(STAGE, "owning view answer", node.loc)
         return st.Builtin(callee.method, ())
     raise StageStop(STAGE, type(callee).__name__, node.loc)
 

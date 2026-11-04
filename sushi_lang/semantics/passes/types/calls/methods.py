@@ -1283,8 +1283,7 @@ def _validate_hashmap_family(validator: 'TypeValidator', call: MethodCall,
 @METHOD_TYPE_REGISTRY.validator("list")
 def _validate_list_family(validator: 'TypeValidator', call: MethodCall,
                           receiver_type) -> None:
-    from sushi_lang.semantics.generics.list import validate_list_method_with_validator
-    validate_list_method_with_validator(call, receiver_type, validator.reporter, validator)
+    """The SHIR arm of the family checks the call (`visit/list_methods.py`)."""
 
 
 @METHOD_TYPE_REGISTRY.validator("foreign_ptr")

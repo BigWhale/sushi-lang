@@ -37,7 +37,7 @@ CE2027 and CE2028 or CE2083. The gate is
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Collection, Dict, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -126,19 +126,33 @@ def check_arguments(
 
 
 def record_conventions(validator: 'TypeValidator', declared: Parameters,
-                       args: Sequence[e.Arg], *, slot: Optional[int] = None) -> None:
+                       args: Sequence[e.Arg], *, slots: Collection[int] = ()) -> None:
     """Give each argument of a call whose arguments a row checks one by one (an array
     method) the convention of its declared mode, after the `nom` marker check (CE2427). A
     container slot takes its argument by position, as a `nom` parameter does, and has no
     marker to compare."""
     answers = validator.body_answers()
     for index, arg in enumerate(args):
-        if index == slot:
+        if index in slots:
             answers.record_convention(declared.call, index, ParamMode.NOM.convention)
             continue
         mode = declared.modes[index]
         if not reject_nom_marker(validator, arg, mode, declared.names[index]):
             answers.record_convention(declared.call, index, mode.convention)
+
+
+def record_builtin_conventions(validator: 'TypeValidator', call: ShirId,
+                               args: Sequence[e.Arg],
+                               conventions: Sequence[Convention]) -> None:
+    """Give each argument of a built-in method or of a container static the convention of
+    `argument_conventions` (docs/design/ir.md 8.3): an `Owned` argument is a slot, and each
+    other argument borrows, with the `nom` marker check (CE2427). A parameter has the name
+    of its position (`#1`)."""
+    declared = Parameters(call, (ParamMode.BORROW,) * len(args),
+                          [f"#{index + 1}" for index in range(len(args))])
+    record_conventions(validator, declared, args,
+                       slots=frozenset(index for index, convention in enumerate(conventions)
+                                       if convention is Convention.OWNED))
 
 
 def check_argument(validator: 'TypeValidator', callee_name: str, arg: e.Arg, index: int,

@@ -73,7 +73,8 @@ def effect_of(method: str) -> MethodEffect:
 # A row applies to a call only when one of these families answered it: `string.reverse()`
 # and a user extension named `push` are other methods with the same name.
 ARRAY_FAMILY = "array"
-EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, "list", "hashmap", "own"})
+LIST_FAMILY = "list"
+EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, "hashmap", "own"})
 
 PRIMITIVE_FAMILY = "primitive"
 STRING_FAMILY = "string"
@@ -88,12 +89,25 @@ RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
 CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY})
 # The effect families whose group wrote the receiver rule: a method whose row `mutates`
 # takes its receiver `Inout`, every other method reads it. The set can only grow.
-RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY})
+RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY})
 # No rule yet: the set can only shrink.
 NO_RECEIVER_RULE_FAMILIES = frozenset({
     "iterator", "foreign_ptr", "array_hash", "derived_hash", "derived_clone", "contract",
     "function",
 })
+
+
+# The methods whose answer is a view of what the receiver holds, by family: a container
+# get-out (docs/design/ir.md 7.9). The borrow pass reads the receiver as the owner of the
+# view, and SLIR lowering reads it for the destination of the answer.
+VIEW_ANSWERS: dict[str, frozenset[str]] = {
+    LIST_FAMILY: frozenset({"get", "first", "last"}),
+}
+
+
+def answers_view(method: BuiltinMethod) -> bool:
+    """Whether a call of `method` answers a view of what its receiver holds."""
+    return method.name in VIEW_ANSWERS.get(method.family, frozenset())
 
 
 def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
