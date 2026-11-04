@@ -4,7 +4,8 @@ A `ConstRef` of a constant that has no value stops with `typecheck, ConstRef wit
 and the `Return` of an initializer that fits and has no value, and is no empty container,
 stops with `typecheck, Return with no value`. A function-typed constant is such a case: the
 constant evaluator gives no value and reports nothing. The body is never dropped in silence.
-After an error of the initializer, that error is the diagnostic. The tests run the arms over
+After an error of the initializer, that error is the diagnostic, and the walk goes on
+(`refused_before`). The tests run the arms over
 SHIR built by hand, with a stand-in for the pass; they do not run the compiler.
 """
 from __future__ import annotations
@@ -30,9 +31,11 @@ SPAN = Span(4, 5, 4, 20)
 I32 = BuiltinType.I32
 
 
-def _validator(value, *, answers: TypeckResults, initializer=None) -> SimpleNamespace:
+def _validator(value, *, answers: TypeckResults, initializer=None,
+               errors: int = 0) -> SimpleNamespace:
     return SimpleNamespace(constant_value=lambda _record: value,
-                           body_answers=lambda: answers, initializer=initializer)
+                           body_answers=lambda: answers, initializer=initializer,
+                           errors_offered=lambda: errors, refused_before=False)
 
 
 def _ref() -> e.ConstRef:
@@ -45,6 +48,15 @@ def test_a_constant_with_no_value_stops() -> None:
         expressions._record_constant_value(validator, _ref(), object())  # type: ignore[arg-type]
     assert caught.value.params == {"stage": "typecheck", "construct": "ConstRef with no value"}
     assert caught.value.span == SPAN
+
+
+def test_a_constant_with_no_value_after_an_error_walks_on() -> None:
+    answers = TypeckResults()
+    ref = _ref()
+    validator = _validator(None, answers=answers, errors=1)
+    expressions._record_constant_value(validator, ref, object())  # type: ignore[arg-type]
+    assert validator.refused_before
+    assert answers.value_of(ref.shir_id) is None
 
 
 def test_a_constant_with_a_value_writes_its_row() -> None:
