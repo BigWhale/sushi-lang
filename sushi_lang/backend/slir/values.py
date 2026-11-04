@@ -9,7 +9,10 @@ An enum is `{i32 tag, [K x i64] data}`. The tag, a variant and the address of a 
 field come from the one layout authority (`TypeSizing.payload_field_offsets`, read through
 `enum_utils` and the enum emitter), at the semantic type of the place, never from a layout
 match. A struct and a tuple are an LLVM struct of their fields in the declaration order: a
-field is a GEP of its index, and a value is built by the struct emitter. An `Aggregate`, as
+field is a GEP of its index, and a value is built by the struct emitter. An element, a
+length and a slice of an array or a string go through the index family
+(`types/arrays/indexing.py`), and an array value through the run family
+(`types/arrays/runs.py`), each at the semantic type of its place. An `Aggregate`, as
 an rvalue and as a constant, goes through one check against the semantic types of its
 parts (`checked_variant`, `checked_struct`). The rvalue calls it and then the enum or the
 struct emitter; the constant goes through the one converter of an aggregate constant
@@ -35,18 +38,22 @@ from sushi_lang.backend.expressions.operators import (
     emit_unary_value, emit_xor,
 )
 from sushi_lang.backend.slir.state import FunctionState
+from sushi_lang.backend.types.arrays.indexing import array_length, element_address, slice_value
+from sushi_lang.backend.types.arrays.runs import emit_array_value
 from sushi_lang.backend.types.structs import emit_struct_value
 from sushi_lang.semantics.operators import ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, SHIFT_OPS
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.type_predicates import is_numeric_type
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, StructType, Type
+from sushi_lang.semantics.typesys import (
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, StructType, Type,
+)
 
 
 def place_address(state: FunctionState, place: p.Place) -> ir.Value:
-    """The address of a place: the storage of a local, a payload field of a variant, or a
-    field of a struct or a tuple."""
+    """The address of a place: the storage of a local, a payload field of a variant, a
+    field of a struct or a tuple, or an element of an array or a string."""
     match place:
         case p.Local(local):
             return state.storage_of(local)
@@ -60,6 +67,9 @@ def place_address(state: FunctionState, place: p.Place) -> ir.Value:
             _field_type(state, base, index)
             return gep_struct_field(state.codegen, place_address(state, base), index,
                                     builder=state.builder)
+        case p.Index(base, index):
+            return element_address(state.codegen, place_address(state, base),
+                                   type_of_place(state, base), operand_value(state, index))
     state.stop(place)
 
 
@@ -71,7 +81,19 @@ def type_of_place(state: FunctionState, place: p.Place) -> Type:
             return _payload_types(state, base, variant, index)[index]
         case p.Field(base, index):
             return _field_type(state, base, index)
+        case p.Index(base, _):
+            return _element_type(state, base)
     state.stop(place)
+
+
+def _element_type(state: FunctionState, base: p.Place) -> Type:
+    """The type of an element of the array, or of a byte of the string, in `base`."""
+    ty = type_of_place(state, base)
+    if ty == BuiltinType.STRING:
+        return BuiltinType.U8
+    if not isinstance(ty, (ArrayType, DynamicArrayType)):
+        state.fault(f"{base} of {ty} has no element")
+    return ty.base_type
 
 
 def _field_type(state: FunctionState, base: p.Place, index: int) -> Type:
@@ -213,9 +235,14 @@ def _scalar_type(state: FunctionState, rvalue: r.Rvalue, ty: Type) -> Type:
 
 
 def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
-    """An enum variant, a struct or a tuple. Any other kind of aggregate stops with its
-    class."""
+    """An enum variant, a struct, a tuple or an array. Any other kind of aggregate stops
+    with its class."""
     kind = rvalue.kind
+    if isinstance(kind, r.AggArray):
+        if not isinstance(kind.ty, (ArrayType, DynamicArrayType)):
+            state.fault(f"an array value of {kind.ty}")
+        return emit_array_value(state.codegen, kind.ty, kind.runs,
+                                [operand_value(state, part) for part in rvalue.parts])
     if not isinstance(kind, (r.AggVariant, r.AggStruct, r.AggTuple)):
         state.stop(kind)
     parts = [type_of_operand(state, part) for part in rvalue.parts]
@@ -235,6 +262,17 @@ def _discriminant(state: FunctionState, rvalue: r.Discriminant) -> ir.Value:
     return enum_utils.extract_enum_tag(state.codegen, value)
 
 
+def _len(state: FunctionState, rvalue: r.Len) -> ir.Value:
+    return array_length(state.codegen, place_address(state, rvalue.place),
+                        type_of_place(state, rvalue.place))
+
+
+def _slice(state: FunctionState, rvalue: r.Slice) -> ir.Value:
+    return slice_value(state.codegen, place_address(state, rvalue.place),
+                       type_of_place(state, rvalue.place), operand_value(state, rvalue.start),
+                       operand_value(state, rvalue.end))
+
+
 _RVALUES: dict[type, Callable[[FunctionState, Any], ir.Value]] = {
     r.Use: _use,
     r.Binary: _binary,
@@ -242,4 +280,6 @@ _RVALUES: dict[type, Callable[[FunctionState, Any], ir.Value]] = {
     r.Cast: _cast,
     r.Aggregate: _aggregate,
     r.Discriminant: _discriminant,
+    r.Len: _len,
+    r.Slice: _slice,
 }

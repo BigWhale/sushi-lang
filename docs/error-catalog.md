@@ -534,16 +534,6 @@ Maybe.Some variant has incorrect number of associated types.
 
 A method of Result@(T, E) or Maybe@(T) has no row of its family: the typecheck pass has no argument row for it, or the backend has no emitter for it. The family table names every method, so no program reaches this error.
 
-### CE0100 {#ce0100}
-
-**Error** · internal
-
-**Message:** `unsupported expression type: {expr}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Expression type not supported in this context.
-
 ### CE0101 {#ce0101}
 
 **Error** · function
@@ -1438,16 +1428,6 @@ HashMap keys must support equality comparison (==). This is required for collisi
 **Help:** `re-run with --traceback for the full Python traceback, then please report it`
 
 Array indices must be non-negative. Negative indices are not supported. The index is read as [CE2012](#ce2012) reads it: a literal (`a[-1]`), a named constant and an expression of them.
-
-### CE2057 {#ce2057}
-
-**Error** · type
-
-**Message:** `array index {index} out of bounds for array of size {size}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Array index exceeds array bounds. This error is caught at compile-time for constant indices.
 
 ### CE2058 {#ce2058}
 

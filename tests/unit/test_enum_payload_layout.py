@@ -11,8 +11,7 @@ from sushi_lang.backend.constants.enum_initializers import constant_of, enum_ini
 from sushi_lang.backend.expressions.enums import emit_enum_variant_value
 from sushi_lang.backend.types.core import LLVMTypeSystem
 from sushi_lang.backend.types.core.sizing import TypeSizing, align_up
-from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
-from sushi_lang.internals.report import Span
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.semantics.const_eval import AggregateConstant, ScalarConstant
 from sushi_lang.semantics.passes.collect import StructTable, EnumTable
 from sushi_lang.semantics.slir import constants as k
@@ -201,22 +200,20 @@ def test_a_global_with_a_struct_payload_writes_each_field_at_the_authority_offse
     assert [word.constant for word in words] == [1 | 2 << 32]
 
 
-@pytest.mark.parametrize("payload", [
-    AggregateConstant([_one(1), _one(2)], ArrayType(BuiltinType.I32, 2)),
-    AggregateConstant([AggregateConstant([_one(1)], ArrayType(BuiltinType.I32, 1))],
-                      StructType(name="Row", fields=(("row", ArrayType(BuiltinType.I32, 1)),))),
+@pytest.mark.parametrize("payload, words", [
+    (AggregateConstant([_one(1), _one(2)], ArrayType(BuiltinType.I32, 2)), [1 | 2 << 32]),
+    (AggregateConstant([AggregateConstant([_one(3)], ArrayType(BuiltinType.I32, 1))],
+                       StructType(name="Row", fields=(("row", ArrayType(BuiltinType.I32, 1)),))),
+     [3]),
 ], ids=["array", "array in a struct"])
-def test_a_global_with_no_constant_of_its_payload_stops(payload: AggregateConstant) -> None:
-    """The global of an enum value whose payload holds an array has no SLIR constant yet
-    (A6). Its declaration stops loudly; it never skips the global."""
+def test_a_global_with_an_array_payload_writes_each_element_at_its_stride(
+        payload: AggregateConstant, words: list[int]) -> None:
+    """An array value in a payload, also in a struct, is a SLIR constant (A6). The one
+    converter writes each element at its stride, inside the offset of the payload."""
     enum_type = _enum(EnumVariantInfo(name="A", associated_types=(payload.semantic_type,)))
-    value = AggregateConstant([payload], enum_type, "A")
-    span = Span(4, 1, 4, 30)
-    with pytest.raises(StageStop) as caught:
-        constant_of(value, span, "f.sushi")
-    assert caught.value.code == "CE0155"
-    assert caught.value.params == {"stage": "emit", "construct": "aggregate constant"}
-    assert caught.value.span == span
+    constant = constant_of(AggregateConstant([payload], enum_type, "A"), None, None)
+    written = enum_initializer(constant, LLVMTypeSystem(), None, "").constant[1].constant
+    assert [word.constant for word in written] == words
 
 
 def test_a_global_of_an_enum_value_is_its_slir_constant() -> None:

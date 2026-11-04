@@ -4,9 +4,9 @@ ShirBody main
   params : []
   locals : [_0 "p": Point, _1 "xs": i32[], _2 "a": i32]
   block  :
-    Assign(LocalRef(_0), StructInit(@Point, [Lit(1), Lit(2)], written_order: [0, 1]), is_init: true)
-    Assign(LocalRef(_1), ArrayInit(Dynamic, [Single(Lit(3)), Single(Lit(4))]), is_init: true)
-    Assign(LocalRef(_2), Lit(5), is_init: true)
-    Destructure([[Place(Field(LocalRef(_0), "x")), Place(LocalRef(_2))], Place(Index(LocalRef(_1), Lit(0), unchecked: false))], TupleInit([TupleInit([Lit(10), Lit(20)]), Lit(30)]))
-    ExprStmt(Call(BuiltinFn("println"), [Interp(["", Field(LocalRef(_0), "x"), " ", LocalRef(_2), " ", Index(LocalRef(_1), Lit(0), unchecked: false), ""])]))
-    Return(Lit(0))
+    Assign(LocalRef(_0), adopt StructInit(@Point, [adopt Lit(1), adopt Lit(2)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_1), adopt ArrayInit(Dynamic, [Single(adopt Lit(3)), Single(adopt Lit(4))]), is_init: true)
+    Assign(LocalRef(_2), adopt Lit(5), is_init: true)
+    Destructure([[Place(Field(LocalRef(_0), "x")), Place(LocalRef(_2))], Place(Index(LocalRef(_1), Lit(0), unchecked: false))], adopt TupleInit([adopt TupleInit([adopt Lit(10), adopt Lit(20)]), adopt Lit(30)]))
+    ExprStmt(Call(Intrinsic("println"), [(Interp(["", Field(LocalRef(_0), "x"), " ", LocalRef(_2), " ", Index(LocalRef(_1), Lit(0), unchecked: false), ""]), Guaranteed)]))
+    Return(adopt Lit(0))

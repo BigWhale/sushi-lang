@@ -3,61 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from llvmlite import ir
-from sushi_lang.semantics.ast import DynamicArrayNew, DynamicArrayFrom
-from sushi_lang.semantics.typesys import DynamicArrayType
 from sushi_lang.backend import gep_utils
-from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.allocas import entry_alloca
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
     from sushi_lang.semantics.typesys import Type
-
-
-def emit_dynamic_array_new(codegen: 'LLVMCodegen', expr: DynamicArrayNew) -> ir.Value:
-    """Emit the `new()` constructor: an empty `{len, cap, data}` descriptor, BY VALUE.
-
-    `new()` names no element type, so the typecheck pass stamps the one its position expects.
-    Returning a scalar placeholder instead made `new()` a value nowhere: a call argument and
-    `.realise(new())` were CE0017, a `Result.Ok(new())` payload aborted at scope exit, and a
-    rebind crashed outright (#460).
-    """
-    from ..utils import emit_empty_dynamic_array
-
-    array_type = expr.resolved_type
-    if not isinstance(array_type, DynamicArrayType):
-        raise_internal_error("CE0042", type=type(array_type).__name__)
-
-    return emit_empty_dynamic_array(codegen, codegen.types.ll_type(array_type.base_type))
-
-
-def emit_dynamic_array_from(codegen: 'LLVMCodegen', expr: DynamicArrayFrom) -> ir.Value:
-    """Emit from(array_literal) constructor for dynamic arrays.
-
-    The element type is the one the typecheck pass stamped: the position's declared type
-    (#544), else the type it inferred from the elements (#868). The LLVM layout cannot
-    tell a u32 from an i32, a float from an int, or a string from any other struct, so a
-    missing stamp is a gap in the typecheck pass and CE0042, never a guess.
-    """
-    from ..utils import create_dynamic_array_from_elements, emit_array_literal_elements
-
-    stamped = expr.resolved_type
-    if not isinstance(stamped, DynamicArrayType):
-        raise_internal_error("CE0042", type=type(stamped).__name__)
-    element_type = stamped.base_type
-
-    # Evaluate all element expressions, deep-copying heap-owning aliases so the new array
-    # and the source each own independent buffers (a bare-Name element aliases a live owner;
-    # a fresh temp is the sole owner and moved in).
-    elements = emit_array_literal_elements(codegen, expr.elements.elements, element_type)
-    element_llvm_type = codegen.types.ll_type(element_type)
-
-    # The DESCRIPTOR, by value -- what `ll_type(DynamicArrayType)` says a `T[]` is, and what
-    # every other type's `emit_expr` yields. Returning a pointer to it made this one
-    # expression disagree with `emit_expr` of a Name, so a value position took a pointer
-    # (#281, #283) and an address position took a value. The RECEIVER path is the one place
-    # that needs an address, and it takes one (`normalize_array_receiver`).
-    return create_dynamic_array_from_elements(codegen, element_llvm_type, elements)
 
 
 def emit_dynamic_array_len(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1: bool) -> ir.Value:

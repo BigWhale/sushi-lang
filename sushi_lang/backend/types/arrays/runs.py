@@ -1,49 +1,48 @@
-"""Filling an array from elements that fill more than one slot (#446, #478).
+"""An array value from the runs of an `Aggregate(AggArray)` (docs/design/ir.md 8.7; #446, #478).
 
-Two do: `value; count` is read once and stored `count` times, and `a..b` yields a sequence.
+The SLIR emitter gives the value of each part, and this module fills the slots. A run is one
+value, a repeated value with its count, or a sequence (`first + step * k`) with its count.
 The rule that shapes this module: **a long run is a loop, never a line of stores.** A 32768
 entry table written as 32768 stores grows the IR and the compile time with N, which is the
 cost the syntax exists to remove.
 
 **A readable count never pays for the run-time mechanism.** That is a rule and not a hope
 about the optimizer: llvmlite does not fold, so `builder.add` of two constants emits
-`add i32 3, 4` into the module, and at `--opt none` there is no second chance. Three tiers:
+`add i32 3, 4` into the module, and at `--opt none` there is no second chance. SLIR lowering
+gives a constant count, and the constant first value of a range with two constant bounds, as
+a constant. Three tiers:
 
 | what the compiler knows | what it emits |
 |---|---|
 | readable, `count <= UNROLL_LIMIT` | one `store` of a literal per slot. No arithmetic, no loop |
 | readable, `count > UNROLL_LIMIT` | one walk with a CONSTANT trip count |
-| not readable | the same walk, with computed `first`, `step` and `count` |
+| not readable | the same walk, with computed `first` and `count` |
 
 A repeated value that would take a walk is one `llvm.memset` when it is a constant and
-every byte of it is the same byte (`0`, `-1`, `0.0`, `7` as a `u8`).
+every byte of it is the same byte (`0`, `-1`, `0.0`, `7` as a `u8`). A `T[N]` whose every
+part is a constant is one constant.
 
 A CURSOR, not a constant start: a run-time count makes every later start a run-time value,
-and the cursor is shorter than the constant arithmetic it replaces. It is also why a
-run-time element may sit anywhere in a literal -- nothing depends on a compile-time
-position, and LLVM folds the adds when every count is constant.
-
-The semantic side of a run lives in `semantics/array_runs.py`, and this module reads its
-runs through the same seam so the two never disagree about a count.
+and the cursor is shorter than the constant arithmetic it replaces. A run-time count below
+zero fills nothing: it is read as zero (Ruling 2, #478).
 """
 from __future__ import annotations
 
 import struct
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional, Sequence
 
 from llvmlite import ir
 
 from sushi_lang.backend import gep_utils
 from sushi_lang.backend.generics.container_walk import emit_container_walk
-from sushi_lang.semantics import array_runs
+from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.internals.errors import raise_internal_error
+from sushi_lang.semantics.slir import rvalues as r
+from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.backend.ranges import EmittedRange
-    from sushi_lang.semantics.ast import ArrayElement
-    from sushi_lang.semantics.ranges import RangePlan
-    from sushi_lang.semantics.typesys import Type
 
 # Below this many slots a run costs less as plain stores than as a counted loop.
 UNROLL_LIMIT = 8
@@ -51,106 +50,59 @@ UNROLL_LIMIT = 8
 
 @dataclass(frozen=True)
 class EmittedRun:
-    """One run: how many slots it fills, and how to make the value for each slot.
-
-    Exactly one of `value`, `plan` and `span` says which kind it is: a repeated value, a
-    range the compiler could read, and a range it could not.
-    """
-    count: ir.Value                                  # a Constant when the count was readable
-    value: Optional[ir.Value] = None                 # a repeated value
-    plan: Optional['RangePlan'] = None               # a readable range
-    span: Optional['EmittedRange'] = None            # a run-time range
-    element_type: Optional['Type'] = None            # for the per-slot copy of an owning value
+    """One run: how many slots it fills, and the value of each slot. A repeated value has
+    `value`; a sequence has `first` and `step`, and slot k holds `first + step * k`."""
+    count: ir.Value                                  # a Constant when the count is readable
+    value: Optional[ir.Value] = None
+    first: Optional[ir.Value] = None
+    step: int = 1
 
 
-def read_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement']):
-    """The runs of a literal, or None when a count is not readable.
+def emit_array_value(codegen: 'LLVMCodegen', ty: ArrayType | DynamicArrayType,
+                     runs: Sequence[r.ArrayRun], parts: Sequence[ir.Value]) -> ir.Value:
+    """The value of an array of the runs `runs`, whose parts have the values `parts`: a
+    `T[N]` by value, or the `{len, cap, data}` descriptor of a fresh `T[]`."""
+    from sushi_lang.backend.types.arrays.utils import create_dynamic_array_from_elements
 
-    Silent: the typecheck pass already reported CE2017 for anything wrong here.
-    """
-    from sushi_lang.internals.report import Reporter
+    element = codegen.types.ll_type(ty.base_type)
+    emitted = _emitted_runs(codegen, runs, parts)
+    if isinstance(ty, DynamicArrayType):
+        return create_dynamic_array_from_elements(codegen, element, emitted)
+    array_type = ir.ArrayType(element, ty.size)
+    expanded = constant_values(emitted, element)
+    if expanded is not None:
+        return ir.Constant(array_type, expanded)
+    slot = entry_alloca(codegen.builder, array_type, "array_literal")
+    zero = ir.Constant(codegen.types.i32, 0)
+    fill_runs(codegen, codegen.builder.gep(slot, [zero, zero], name="array_data"), emitted,
+              element)
+    return codegen.builder.load(slot)
 
-    return array_runs.read_runs(
-        elements,
-        array_runs.const_int_reader(codegen.constant_evaluator()),
-        Reporter())
 
-
-def emit_runs(codegen: 'LLVMCodegen', elements: Sequence['ArrayElement'],
-              element_type) -> List[EmittedRun]:
-    """Emit ONE value per run, consumed as an array element.
-
-    A RANGE emits nothing when the compiler could read its bounds -- the plan carries the
-    values. Only an unreadable one calls `emit_range`, which is what keeps a readable range
-    off the run-time path (see the tier table above).
-
-    A repeated OWNING value emits once and is copied per slot in `fill_runs` (Ruling 7,
-    #478). It is a BORROW, so the source stays usable: a run has no single position, and
-    consuming means one value reaching one position.
-    """
-    from sushi_lang.backend.ownership import ConsumingUse, consume
-    from sushi_lang.backend.expressions.calls.utils import emit_borrowed_arg
-    from sushi_lang.backend.ranges import emit_range
-    from sushi_lang.backend.destructors import needs_cleanup
-    from sushi_lang.backend.expressions.memory import emit_held_operand
-
-    runs = read_runs(codegen, elements)
-    if runs is None:
-        runs = []
-
-    i32 = codegen.types.i32
+def _emitted_runs(codegen: 'LLVMCodegen', runs: Sequence[r.ArrayRun],
+                  parts: Sequence[ir.Value]) -> List[EmittedRun]:
+    """Each run with its values, in order; a run-time count is clamped to zero."""
     emitted: List[EmittedRun] = []
-    taken: List[tuple] = []
+    at = 0
     for run in runs:
-        if run.is_range:
-            if run.plan is not None:
-                emitted.append(EmittedRun(count=ir.Constant(i32, run.plan.count),
-                                          plan=run.plan))
-                continue
-            span = emit_range(codegen, run.value)
-            emitted.append(EmittedRun(count=span.count, span=span))
-            continue
-
-        if run.count is None:
-            count = codegen.utils.require_i32(codegen.expressions.emit_expr(run.count_expr))
-            count = _clamp_count(codegen, count)
+        if isinstance(run, r.RunOne):
+            emitted.append(EmittedRun(count=ir.Constant(codegen.types.i32, 1), value=parts[at]))
+        elif isinstance(run, r.RunRepeat):
+            emitted.append(EmittedRun(count=_clamp_count(codegen, parts[at + 1]),
+                                      value=parts[at]))
         else:
-            count = ir.Constant(i32, run.count)
-
-        if run.is_repeat:
-            # Ruling 7: a REPEATED value borrows, whatever its type. It has N slots to
-            # satisfy and one value, so there is no single position to consume into -- the
-            # rule `.fill()` already follows (#479). `emit_borrowed_arg` is the built-in
-            # borrow seam, and it gives an owning TEMPORARY an owner (#475).
-            value = emit_borrowed_arg(codegen, run.value, element_type)
-            owning = element_type is not None and needs_cleanup(codegen, element_type)
-        else:
-            # One value, one slot, one position. This still CONSUMES, after the last run
-            # is emitted: until then the value is held, so a `??` in a later element
-            # frees it once.
-            value = emit_held_operand(codegen, run.value, element_type)
-            taken.append((len(emitted), run.value))
-            owning = False
-
-        emitted.append(EmittedRun(count=count, value=value,
-                                  element_type=element_type if owning else None))
-    for index, source in taken:
-        run = emitted[index]
-        emitted[index] = replace(run, value=consume(codegen, source, run.value, element_type,
-                                                    ConsumingUse.ARRAY_ELEMENT))
+            emitted.append(EmittedRun(count=_clamp_count(codegen, parts[at + 1]),
+                                      first=parts[at], step=run.step))
+        at += r.run_width(run)
     return emitted
 
 
 def _clamp_count(codegen: 'LLVMCodegen', count: ir.Value) -> ir.Value:
-    """A run-time repeat count, narrowed to zero when it is negative.
+    """A run-time count, narrowed to zero when it is negative.
 
     `emit_container_walk` compares with an unsigned predicate, so -1 would read as four
     billion and the fill would run off the end of the buffer. The clamp removes that by
-    construction, the way `clamp_range` does for a copy.
-
-    A count of zero is already DATA rather than an error (Ruling 2, #478), so a negative one
-    reaching the same answer needs no rule of its own. Emitted only for a count that is not
-    already a constant -- a constant one the compiler can read is CE2017 long before here.
+    construction. A constant count is kept: typecheck refused one below one.
     """
     if isinstance(count, ir.Constant):
         return count
@@ -158,31 +110,6 @@ def _clamp_count(codegen: 'LLVMCodegen', count: ir.Value) -> ir.Value:
     b = codegen.builder
     zero = ir.Constant(codegen.types.i32, 0)
     return b.select(b.icmp_signed("<", count, zero), zero, count, name="run_count")
-
-
-def single_runs(values: Sequence[ir.Value]) -> List[EmittedRun]:
-    """Already-emitted values as runs of one slot each.
-
-    For a caller that never had a literal to read -- the variadic collector builds its
-    `T[]` from the trailing arguments -- so the array builders take one shape only.
-    """
-    from llvmlite import ir as _ir
-    one = _ir.Constant(_ir.IntType(32), 1)
-    return [EmittedRun(count=one, value=value) for value in values]
-
-
-def element_llvm_type(codegen: 'LLVMCodegen', emitted: Sequence[EmittedRun]) -> ir.Type:
-    """The LLVM type of a slot, read from the runs rather than guessed from a value.
-
-    A range run has no emitted value to read a type off, and it does not need one: a range
-    yields i32 (Ruling 4, #478). Every run in one literal fills the same slot type -- CE2013
-    saw to that -- so the first run that can answer, answers.
-    """
-    for run in emitted:
-        if run.value is not None:
-            return run.value.type
-        return codegen.types.i32
-    raise ValueError("no runs to read an element type from")
 
 
 def readable_total(emitted: Sequence[EmittedRun]) -> Optional[int]:
@@ -197,19 +124,18 @@ def readable_total(emitted: Sequence[EmittedRun]) -> Optional[int]:
 
 def constant_values(emitted: Sequence[EmittedRun],
                     element_llvm_type: ir.Type) -> Optional[List[ir.Value]]:
-    """One constant per slot, or None when any run must be stored at run time.
-
-    A readable RANGE qualifies as constant: the plan carries its values, so a literal of
-    ranges lands in an initializer rather than in a fill loop.
-    """
+    """One constant per slot, or None when any run must be stored at run time."""
     out: List[ir.Value] = []
     for run in emitted:
-        if run.plan is not None:
-            out.extend(ir.Constant(element_llvm_type, value) for value in run.plan.values())
-            continue
-        if run.value is None or not isinstance(run.value, ir.Constant):
-            return None
         if not isinstance(run.count, ir.Constant):
+            return None
+        if run.first is not None:
+            if not isinstance(run.first, ir.Constant):
+                return None
+            out.extend(ir.Constant(element_llvm_type, run.first.constant + run.step * index)
+                       for index in range(run.count.constant))
+            continue
+        if not isinstance(run.value, ir.Constant):
             return None
         out.extend([run.value] * run.count.constant)
     return out
@@ -236,24 +162,21 @@ def fill_runs(codegen: 'LLVMCodegen', data_ptr: ir.Value,
     for number, run in enumerate(emitted):
         base = gep_utils.gep_array_element(codegen, data_ptr, cursor, f"run{number}_base")
 
-        if run.plan is not None and run.plan.count <= UNROLL_LIMIT:
-            # Tier 1: literals. Byte for byte what a spelled-out literal emits.
-            for offset, value in enumerate(run.plan.values()):
-                slot = gep_utils.gep_array_element(codegen, base, ir.Constant(i32, offset))
-                codegen.builder.store(
-                    codegen.utils.cast_for_param(ir.Constant(i32, value), element_llvm_type),
-                    slot)
-        elif run.plan is not None:
-            # Tier 2: a walk with a CONSTANT trip count. `first` and `step` are constants,
-            # so the body is one `mul` and one `add` on the loop index.
-            _walk_range(codegen, base, run.count, ir.Constant(i32, run.plan.first),
-                        ir.Constant(i32, run.plan.step), element_llvm_type, number)
-        elif run.span is not None:
-            # Tier 3: the same walk, with everything computed.
-            _walk_range(codegen, base, run.count, run.span.first, run.span.step,
-                        element_llvm_type, number)
-        else:
+        if run.first is None:
             _fill_repeated(codegen, base, run, element_llvm_type, number)
+        elif (isinstance(run.first, ir.Constant) and isinstance(run.count, ir.Constant)
+              and run.count.constant <= UNROLL_LIMIT):
+            # Tier 1: literals. Byte for byte what a spelled-out literal emits.
+            for offset in range(run.count.constant):
+                slot = gep_utils.gep_array_element(codegen, base, ir.Constant(i32, offset))
+                value = ir.Constant(i32, run.first.constant + run.step * offset)
+                codegen.builder.store(codegen.utils.cast_for_param(value, element_llvm_type),
+                                      slot)
+        else:
+            # Tier 2 and 3: a walk. With a constant first value and count, the body is one
+            # `mul` and one `add` on the loop index.
+            _walk_range(codegen, base, run.count, run.first, ir.Constant(i32, run.step),
+                        element_llvm_type, number)
 
         cursor = codegen.builder.add(cursor, run.count, name=f"cursor{number}") \
             if not (isinstance(cursor, ir.Constant) and isinstance(run.count, ir.Constant)) \
@@ -273,22 +196,13 @@ def _walk_range(codegen: 'LLVMCodegen', base: ir.Value, count: ir.Value, first: 
 
 def _fill_repeated(codegen: 'LLVMCodegen', base: ir.Value, run: EmittedRun,
                    element_llvm_type: ir.Type, number: int) -> None:
-    """One value into every slot the run fills.
-
-    An OWNING element takes its own `copy_out` per slot (Ruling 7, #478) -- the sanctioned
-    deep-clone seam, the shape `.fill()` uses. There is no destroy step: a literal writes
-    into a FRESH buffer, so no slot holds anything yet.
-    """
-    from sushi_lang.backend.ownership import copy_out
-
+    """One plain value into every slot the run fills: stores, one `memset`, or a walk."""
+    if run.value is None:
+        raise_internal_error("CE0000", detail="a repeated run of an array has no value")
     value = codegen.utils.cast_for_param(run.value, element_llvm_type)
 
     def store_one(slot: ir.Value, _index: ir.Value) -> None:
-        held = value
-        if run.element_type is not None:
-            held = codegen.utils.cast_for_param(
-                copy_out(codegen, run.value, run.element_type), element_llvm_type)
-        codegen.builder.store(held, slot)
+        codegen.builder.store(value, slot)
 
     if isinstance(run.count, ir.Constant) and run.count.constant <= UNROLL_LIMIT:
         i32 = codegen.types.i32
@@ -297,7 +211,7 @@ def _fill_repeated(codegen: 'LLVMCodegen', base: ir.Value, run: EmittedRun,
             store_one(slot, ir.Constant(i32, offset))
         return
 
-    byte = None if run.element_type is not None else _repeated_byte(value)
+    byte = _repeated_byte(value)
     if byte is not None:
         from sushi_lang.backend.expressions.memory import emit_byte_size, emit_memset_bytes
         emit_memset_bytes(codegen, base, byte,
@@ -327,11 +241,3 @@ def _repeated_byte(value: ir.Value) -> Optional[int]:
     else:
         return None
     return raw[0] if raw == raw[:1] * len(raw) else None
-
-
-def fill_fixed_slot(codegen: 'LLVMCodegen', slot: ir.Value,
-                    emitted: Sequence[EmittedRun], element_llvm_type: ir.Type) -> None:
-    """The same fill against a fixed array's alloca, which needs the leading zero index."""
-    zero = ir.Constant(codegen.types.i32, 0)
-    data_ptr = codegen.builder.gep(slot, [zero, zero], name="array_data")
-    fill_runs(codegen, data_ptr, emitted, element_llvm_type)

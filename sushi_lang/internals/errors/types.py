@@ -238,14 +238,10 @@ _add(ErrorMessage("CE2058", Severity.ERROR,
     "HashMap@(K, V) key type '{key_type}' is not comparable (dynamic arrays cannot be HashMap keys)",
     Category.TYPE, "Dynamic arrays are not allowed as HashMap keys due to memory management constraints, at any depth of an array type: `i32[]`, `i32[2][]` and `i32[][2]` (a fixed array of dynamic rows) are all refused. Use fixed-size arrays instead (e.g., i32[3] instead of i32[]); a fixed array of fixed rows (`i32[2][2]`) is a key."))
 
-# Array indexing errors (CE2056-CE2057)
+# Array indexing errors (CE2056)
 _add(ErrorMessage("CE2056", Severity.ERROR,
     "array index {index} is negative (indices must be >= 0)",
     Category.TYPE, "Array indices must be non-negative. Negative indices are not supported. The index is read as CE2012 reads it: a literal (`a[-1]`), a named constant and an expression of them."))
-
-_add(ErrorMessage("CE2057", Severity.ERROR,
-    "array index {index} out of bounds for array of size {size}",
-    Category.TYPE, "Array index exceeds array bounds. This error is caught at compile-time for constant indices."))
 
 # Generic function call errors (CE2060-CE2069)
 _add(ErrorMessage("CE2060", Severity.ERROR,

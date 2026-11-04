@@ -13,7 +13,7 @@ from llvmlite import ir
 
 from sushi_lang.backend.constants.enum_initializers import constant_initializer, constant_of
 from sushi_lang.backend.types.core import LLVMTypeSystem
-from sushi_lang.internals.diagnostics import InternalCompilerError, StageStop
+from sushi_lang.internals.diagnostics import InternalCompilerError
 from sushi_lang.semantics.const_eval import AggregateConstant, ScalarConstant
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.typesys import (
@@ -64,14 +64,14 @@ def test_the_global_of_a_struct_value_is_its_slir_constant() -> None:
     assert constant_of(value, None, None) == _point(1, 2)
 
 
-def test_the_global_of_a_struct_with_an_array_field_stops() -> None:
-    """An array value has no SLIR constant yet (A6): the global stops loudly."""
-    row = StructType(name="Row", fields=(("row", ArrayType(I32, 1)),))
-    value = AggregateConstant([AggregateConstant([ScalarConstant(1, I32)], ArrayType(I32, 1))],
-                              row)
-    with pytest.raises(StageStop) as caught:
-        constant_of(value, None, None)
-    assert caught.value.params == {"stage": "emit", "construct": "aggregate constant"}
+def test_the_global_of_a_struct_with_an_array_field_is_one_constant_of_each_field() -> None:
+    """An array value is a SLIR constant (A6): the converter writes the array field as one
+    LLVM array constant of its elements."""
+    row = StructType(name="Row", fields=(("row", ArrayType(I32, 2)),))
+    value = AggregateConstant([AggregateConstant([ScalarConstant(1, I32), ScalarConstant(2, I32)],
+                                                 ArrayType(I32, 2))], row)
+    written = constant_initializer(constant_of(value, None, None), LLVMTypeSystem(), None, "")
+    assert [part.constant for part in written.constant[0].constant] == [1, 2]
 
 
 @pytest.mark.parametrize("constant", [

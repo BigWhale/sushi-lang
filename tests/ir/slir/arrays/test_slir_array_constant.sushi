@@ -1,0 +1,25 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n5\n5\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_array_constant.slir
+#
+# A name of an array constant is a constant `Aggregate` of its `T[N]` type, with one part
+# for each element (ir.md 8.5); a struct constant with an array field holds one in that
+# field. An index of a constant reads the element of a temporary that holds the constant.
+
+struct Grid:
+    i32[2] cells
+    i32 tag
+
+const i32[4] PRIMES = [2, 3, 5, 7]
+const Grid G = Grid([4, 5], 1)
+
+fn pick(i32[4] xs, i32 at) i32:
+    return xs[at]
+
+fn main() i32:
+    let i32 i = 3
+    println(PRIMES[i])
+    println(pick(PRIMES, 2))
+    println(G.cells[1])
+    return 0

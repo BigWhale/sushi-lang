@@ -30,7 +30,7 @@ from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
-from sushi_lang.semantics.slir.function import SlirFunction, SlirLocal
+from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
 from sushi_lang.semantics.slir.lower import RETURN_SLOT
 from sushi_lang.semantics.typesys import BuiltinType
 
@@ -51,7 +51,7 @@ def emit_function(codegen: LLVMCodegen, function: SlirFunction, *,
                                     f"'{function.symbol}' to define")
     entry = llvm_fn.append_basic_block(name="entry")
     state = FunctionState(codegen, function, llvm_fn, ir.IRBuilder(entry), filename)
-    state.blocks = {block.id: llvm_fn.append_basic_block(name=f"bb{block.id.index}")
+    state.blocks = {block.id: llvm_fn.append_basic_block(name=_block_name(block))
                     for block in function.blocks}
     saved = codegen.builder, codegen.func
     codegen.builder, codegen.func = state.builder, llvm_fn
@@ -68,6 +68,17 @@ def emit_function(codegen: LLVMCodegen, function: SlirFunction, *,
     finally:
         codegen.builder, codegen.func = saved
     return llvm_fn
+
+
+#: The name of the LLVM block that ends in a trap of a bounds check, after its number.
+_TRAP_BLOCKS = {"RE2020": "bounds_fail", "RE2028": "bounds_fail"}
+
+
+def _block_name(block: SlirBlock) -> str:
+    """`bb<n>`; the block of a bounds trap is `bb<n>_bounds_fail`, so the IR names it."""
+    term = block.terminator
+    suffix = _TRAP_BLOCKS.get(term.code) if isinstance(term, tm.Trap) else None
+    return f"bb{block.id.index}" if suffix is None else f"bb{block.id.index}_{suffix}"
 
 
 def _open(state: FunctionState) -> None:

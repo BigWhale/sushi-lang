@@ -78,7 +78,6 @@ def infer_index_access_type(validator: 'TypeValidator', expr: IndexAccess) -> Op
 
     # A byte read on a string (#1091).
     if array_type == BuiltinType.STRING:
-        expr.reads_a_string_byte = True
         return BuiltinType.U8
 
     return None

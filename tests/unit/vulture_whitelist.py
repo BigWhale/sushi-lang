@@ -248,8 +248,6 @@ WHITELIST += (
      _family("D4", "the i8* string argument")),
     (_BACKEND + "runtime/strings.py", "emit_cstr_to_owned_fat_pointer",
      _family("D5", "the string that an extern returns")),
-    (_BACKEND + "types/arrays/runs.py", "single_runs",
-     _family("D3", "the T[] of a variadic tail, built by the array builders")),
     (_BACKEND + "types/display.py", "emit_value_to_str",
      _family("A12", "the string form of a value through Display")),
 )
@@ -303,7 +301,7 @@ WHITELIST += (
 # ownership-conventions.md 3.1 define, and tests/unit/test_ownership_table.py pins. Each
 # one is kept for the group whose owning type brings the position back with its row.
 _CONSUMING_POSITIONS = {
-    "CALL_ARG": "B1", "LET": "B1", "RETURN": "B1", "ELEMENT_ASSIGN": "B1",
+    "CALL_ARG": "B1", "LET": "B1", "RETURN": "B1", "ELEMENT_ASSIGN": "B1", "ARRAY_ELEMENT": "B1",
     "STRUCT_FIELD": "B3", "ENUM_PAYLOAD": "B3", "MATCH_SCRUTINEE": "B7",
     "REBIND": "B9", "FIELD_ASSIGN": "B9",
 }

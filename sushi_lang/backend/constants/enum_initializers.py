@@ -1,13 +1,13 @@
-"""An aggregate constant as its LLVM initializer: a struct, a tuple and an enum variant (#551).
+"""An aggregate constant as its LLVM initializer: a struct, a tuple, an array and an enum variant (#551).
 
 The one converter of an aggregate constant: the SLIR emitter and the declaration round of a
 global both call `constant_initializer` with a SLIR `Constant` (the round makes one from
-the evaluator value through `constant_of`, over `constants.of_value`; a value with no SLIR
-constant yet, an array, stops with `emit, aggregate constant`). The converter first runs
-the one check of a variant (`checked_variant`) and of a struct (`checked_struct`) over the
-value, at every depth; the rvalues of the SLIR emitter call the same checks. So a value
-that it cannot write after the check is an internal error. A struct is one LLVM constant
-for each field, in the declaration order. An enum is its `{i32 tag, [K x i64] data}`
+the evaluator value through `constant_of`, over `constants.of_value`). The converter first
+runs the one check of a variant (`checked_variant`), of a struct (`checked_struct`) and of
+an array over the value, at every depth; the rvalues of the SLIR emitter call the same
+checks. So a value that it cannot write after the check is an internal error. A struct is
+one LLVM constant for each field, in the declaration order, and an array one for each
+element. An enum is its `{i32 tag, [K x i64] data}`
 initializer (`enum_initializer`). A payload-free variant is a tag over the zero value. A payload-carrying one is the tag plus its constant payloads, written into the
 data words at the offsets `TypeSizing.payload_field_offsets` gives -- the ONE layout
 authority, so a constant and a run-time construction cannot disagree about where a field
@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Callable, Dict, List, NoReturn, Optional, Sequ
 
 from llvmlite import ir
 
-from sushi_lang.backend.slir.state import stop
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.slir import constants as k
@@ -76,11 +75,11 @@ class _PayloadBytes:
 
 def constant_of(value: 'AggregateConstant', span: Optional[Span],
                 filename: Optional[str]) -> k.Aggregate:
-    """The SLIR constant of a struct or an enum value of the evaluator. An array value, also
-    in a payload or a field, has none yet (A6), and the global of it stops."""
+    """The SLIR constant of a struct, an enum or an array value of the evaluator."""
     constant = k.of_value(value)
     if not isinstance(constant, k.Aggregate):
-        stop("aggregate constant", span, filename)
+        raise_internal_error("CE0000", span=span, filename=filename,
+                             detail=f"the aggregate value {value} has a scalar constant")
     return constant
 
 
@@ -132,6 +131,9 @@ def _check_constant(constant: k.Constant, fault: Fault) -> None:
         parts = [semantic_type_of(part, fault) for part in constant.parts]
         if constant.variant is not None:
             checked_variant(constant.ty, constant.variant, parts, fault)
+        elif isinstance(constant.ty, ArrayType):
+            if parts != [constant.ty.base_type] * constant.ty.size:
+                fault(f"the elements of {constant.ty} are ({', '.join(map(str, parts))})")
         else:
             checked_struct(constant.ty, parts, fault)
         for part in constant.parts:
@@ -155,15 +157,16 @@ def constant_initializer(value: k.Aggregate, types, finish_string: Optional[Stri
                          data_name: str, *, span: Optional[Span] = None,
                          filename: Optional[str] = None) -> ir.Constant:
     """The LLVM constant of an aggregate constant: an enum variant through
-    `enum_initializer`, a struct or a tuple as one constant for each field. A string field
-    is the constant of `finish_string`, named `<data_name>.<index>`."""
+    `enum_initializer`, a struct or a tuple as one constant for each field, an array as one
+    constant for each element. A string part is the constant of `finish_string`, named
+    `<data_name>.<index>`."""
     if value.variant is not None:
         return enum_initializer(value, types, finish_string, data_name, span=span,
                                 filename=filename)
 
     def fault(detail: str) -> NoReturn:
         raise_internal_error("CE0000", span=span, filename=filename,
-                             detail=f"the struct constant {value}: {detail}")
+                             detail=f"the constant {value}: {detail}")
 
     _check_constant(value, fault)
     fields: List[ir.Constant] = []

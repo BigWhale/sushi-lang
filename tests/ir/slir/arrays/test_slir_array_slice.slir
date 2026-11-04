@@ -1,0 +1,132 @@
+unit test_slir_array_slice
+
+fn first(_1: i32[] @guaranteed) -> i32 {
+    let _0: i32
+    let _2: i32
+    let _3: u32
+    let _4: bool
+
+  bb0:
+    StorageLive(_2)
+    _2 = len(_1)
+    _3 = copy _2 as u32
+    _4 = const 0_u32 < copy _3
+    switchInt(copy _4) -> [0: bb1, otherwise: bb2]
+
+  bb1:
+    trap RE2020(const 0_i32, copy _2)
+
+  bb2:
+    _0 = copy (_1[const 0_i32])
+    StorageDead(_2)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: i32[]                          // d
+    let _2: i32[4]                         // a
+    let _3: i32                            // lo
+    let _4: i32
+    let _5: i32
+    let _6: u32
+    let _7: bool
+    let _8: u32
+    let _9: bool
+    let _10: bool
+    let _11: i32[]
+    let _12: i32
+    let _13: ~
+    let _14: i32[]
+    let _15: i32
+    let _16: ~
+    let _17: i32
+    let _18: u32
+    let _19: bool
+    let _20: bool
+    let _21: bool
+    let _22: i32[]
+    let _23: i32
+    let _24: u32
+    let _25: bool
+    let _26: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = [const 10_i32, const 20_i32, const 30_i32, const 40_i32, const 50_i32]
+    StorageLive(_2)
+    _2 = [const 1_i32, const 2_i32, const 3_i32, const 4_i32]
+    StorageLive(_3)
+    _3 = const 1_i32
+    StorageLive(_4)
+    _4 = copy _3
+    StorageLive(_5)
+    _5 = len(_1)
+    _6 = copy _5 as u32
+    _7 = const 4_u32 <= copy _6
+    _8 = copy _4 as u32
+    _9 = copy _8 <= const 4_u32
+    _10 = copy _7 & copy _9
+    switchInt(copy _10) -> [0: bb1, otherwise: bb2]
+
+  bb1:
+    trap RE2028(copy _4, const 4_i32, copy _5)
+
+  bb2:
+    StorageLive(_11)
+    _11 = slice(_1, copy _4, const 4_i32)
+    StorageLive(_12)
+    _12 = call @first(copy _11 @guaranteed)
+    StorageLive(_13)
+    _13 = call builtin println@(i32)(copy _12 @guaranteed)
+    StorageDead(_13)
+    StorageDead(_12)
+    StorageDead(_11)
+    StorageDead(_5)
+    StorageDead(_4)
+    StorageLive(_14)
+    _14 = slice(_2, const 2_i32, const 4_i32)
+    StorageLive(_15)
+    _15 = call @first(copy _14 @guaranteed)
+    StorageLive(_16)
+    _16 = call builtin println@(i32)(copy _15 @guaranteed)
+    StorageDead(_16)
+    StorageDead(_15)
+    StorageDead(_14)
+    StorageLive(_17)
+    _17 = len(_1)
+    _18 = copy _17 as u32
+    _19 = const 4_u32 <= copy _18
+    _20 = const 1_u32 <= const 4_u32
+    _21 = copy _19 & copy _20
+    switchInt(copy _21) -> [0: bb3, otherwise: bb4]
+
+  bb3:
+    trap RE2028(const 1_i32, const 4_i32, copy _17)
+
+  bb4:
+    StorageLive(_22)
+    _22 = slice(_1, const 1_i32, const 4_i32)
+    StorageLive(_23)
+    _23 = len(_22)
+    _24 = copy _23 as u32
+    _25 = const 2_u32 < copy _24
+    switchInt(copy _25) -> [0: bb5, otherwise: bb6]
+
+  bb5:
+    trap RE2020(const 2_i32, copy _23)
+
+  bb6:
+    StorageLive(_26)
+    _26 = call builtin println@(i32)(copy (_22[const 2_i32]) @guaranteed)
+    StorageDead(_26)
+    StorageDead(_23)
+    StorageDead(_22)
+    StorageDead(_17)
+    _0 = const 0_i32
+    StorageDead(_3)
+    StorageDead(_2)
+    Drop(_1)
+    StorageDead(_1)
+    return
+}

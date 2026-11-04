@@ -44,10 +44,6 @@ _ARRAYS = ("kept for A6: the array emitter family; the SLIR emitter calls it wit
 #: `path:qualname` -> why it stays: the later group that needs it, or its reflective reader.
 KEPT: dict[str, str] = {
     "sushi_lang/backend/types/arrays/dispatcher.py:emit_array_method": _ARRAYS,
-    "sushi_lang/backend/types/arrays/indexing.py:emit_index_access": _ARRAYS,
-    "sushi_lang/backend/types/arrays/literals.py:emit_array_literal": _ARRAYS,
-    "sushi_lang/backend/types/arrays/methods/core.py:emit_dynamic_array_new": _ARRAYS,
-    "sushi_lang/backend/types/arrays/methods/core.py:emit_dynamic_array_from": _ARRAYS,
     "sushi_lang/backend/generics/hashmap/__init__.py:emit_hashmap_method":
         "kept for B4: the HashMap method family; the SLIR emitter calls it with operands "
         "there, and its AST argument half goes then",
@@ -56,10 +52,6 @@ KEPT: dict[str, str] = {
 #: The rows of `KEPT` at the day of the pin. A row may leave both; none may join.
 PINNED_KEPT: frozenset[str] = frozenset({
     "sushi_lang/backend/types/arrays/dispatcher.py:emit_array_method",
-    "sushi_lang/backend/types/arrays/indexing.py:emit_index_access",
-    "sushi_lang/backend/types/arrays/literals.py:emit_array_literal",
-    "sushi_lang/backend/types/arrays/methods/core.py:emit_dynamic_array_new",
-    "sushi_lang/backend/types/arrays/methods/core.py:emit_dynamic_array_from",
     "sushi_lang/backend/generics/hashmap/__init__.py:emit_hashmap_method",
 })
 

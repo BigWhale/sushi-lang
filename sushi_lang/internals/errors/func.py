@@ -9,10 +9,6 @@ from sushi_lang.internals.errors.registry import (
 )
 
 
-_add(ErrorMessage("CE0100", Severity.ERROR,
-    "unsupported expression type: {expr}",
-    Category.INTERNAL, "Expression type not supported in this context."))
-
 # Function/header errors
 _add(ErrorMessage("CE0101", Severity.ERROR,
     "duplicate function '{name}'",

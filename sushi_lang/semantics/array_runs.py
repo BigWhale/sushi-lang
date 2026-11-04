@@ -62,7 +62,6 @@ class Run:
     start: Optional[int]        # None: a run-time count sits before this run
     loc: Optional[Span]
     plan: Optional["RangePlan"] = None   # set when `value` is a readable range
-    count_expr: Any = None               # set when `count` is None: the count to emit
     is_repeat: bool = False              # written `value; count`, so the value BORROWS
     is_range: bool = False               # a range: a SEQUENCE, not one value repeated
 
@@ -137,7 +136,6 @@ def plan_runs(elements: Sequence[Element], read_count: ReadCount, read_plan: Rea
             count = read
 
         runs.append(Run(value=element.value, count=count, start=start, loc=element.loc,
-                        count_expr=element.count if count is None else None,
                         is_repeat=element.count is not None))
         start = None if count is None or start is None else start + count
 

@@ -620,34 +620,22 @@ class LLVMCodegen:
 
     def _materialize_constant(self, value, data_name: str, span: Optional[Span],
                               filename: Optional[str]) -> ir.Constant:
-        """An evaluated constant as an LLVM initializer. A struct, a tuple and an enum value
-        go through the one converter of an aggregate constant, which stops (CE0155) on a
-        value it cannot convert yet (an array in a field or a payload).
+        """An evaluated constant as an LLVM initializer. A struct, a tuple, an array and an
+        enum value go through the one converter of an aggregate constant.
 
         A string is finished here rather than in the evaluator: its bytes need a module
         to live in, and the evaluator has none, which is why `const_value_to_llvm` hands
         back None for one.
         """
-        from sushi_lang.semantics.typesys import BuiltinType, StructType, EnumType
+        from sushi_lang.semantics.typesys import BuiltinType
         from sushi_lang.semantics.const_eval import AggregateConstant
 
-        # An aggregate asks its TYPE which kind it is, never the shape of the list: a
-        # struct's fields have types of their own, so `ArrayType(elements[0].type, ...)`
-        # would build a homogeneous array out of them and mis-type the initializer.
         if isinstance(value, AggregateConstant):
-            if isinstance(value.semantic_type, (StructType, EnumType)):
-                from sushi_lang.backend.constants.enum_initializers import (
-                    constant_initializer, constant_of)
-                return constant_initializer(constant_of(value, span, filename), self.types,
-                                            self._constant_string_value, data_name,
-                                            span=span, filename=filename)
-
-            elements = [self._materialize_constant(element, f"{data_name}.{i}", span, filename)
-                        for i, element in enumerate(value.elements)]
-            if not elements:
-                raise_internal_error("CE0000", span=span, filename=filename,
-                                     detail="an array constant with no element")
-            return ir.Constant(ir.ArrayType(elements[0].type, len(elements)), elements)
+            from sushi_lang.backend.constants.enum_initializers import (
+                constant_initializer, constant_of)
+            return constant_initializer(constant_of(value, span, filename), self.types,
+                                        self._constant_string_value, data_name,
+                                        span=span, filename=filename)
 
         if value.semantic_type == BuiltinType.STRING:
             return self._constant_string_value(value.value, data_name)

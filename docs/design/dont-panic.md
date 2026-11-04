@@ -241,8 +241,8 @@ the `sushi-omakase-api` and `sushi-omakase-front` repositories.
 
 ## 11. Build choices
 
-- **The stamp.** The stamp is one `bool` field on `IndexAccess`, `unchecked`, beside
-  `reads_a_string_byte` (`semantics/ast.py`). The AST builder sets it on each index node
+- **The stamp.** The stamp is one `bool` field on `IndexAccess`, `unchecked`
+  (`semantics/ast.py`). The AST builder sets it on each index node
   in a marked function. It stops at a `Lambda`. The monomorphizer copies the node with
   `copy.copy` (`generics/monomorphize/transformer.py`), so an instance keeps the stamp.
   The consumer parses the text of a source library again, so the stamp is set again there.
