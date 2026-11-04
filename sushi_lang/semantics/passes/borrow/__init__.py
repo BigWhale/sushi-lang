@@ -31,6 +31,7 @@ from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.namespaces import NamespaceTable, body_namespaces
 from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.shir.body import TemplateCheck
 from sushi_lang.semantics.shir.ownership_check import check_ownership
 from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, ReferenceType, Type
@@ -125,9 +126,13 @@ class BorrowChecker:
         self._enter(decl, body, tables)
         offered = sum(self.reporter.errors_offered.values())
         has_receiver = bool(body.params) and self.name_of(body.params[0].local) == "self"
+        # The check copy of a generic free function gives its parameters no span: the note
+        # of CE2411 names the type parameter there.
+        located = not (isinstance(body.origin, TemplateCheck)
+                       and isinstance(decl, GenericFuncDef))
         try:
             for param in body.params:
-                self._declare_param(param, has_receiver=has_receiver)
+                self._declare_param(param, has_receiver=has_receiver, located=located)
             self.block_locals.append([param.local for param in body.params])
             check_block(self, body.block)
             if not terminates(body.block):
@@ -218,7 +223,7 @@ class BorrowChecker:
         """Give a local of the body its state, at its declaration."""
         self.borrow_state[state.local] = state
 
-    def _declare_param(self, param: ShirParam, *, has_receiver: bool) -> None:
+    def _declare_param(self, param: ShirParam, *, has_receiver: bool, located: bool) -> None:
         """A parameter: every mode but `nom` is a borrow, in every kind of callable.
 
         A `peek` or a `poke` parameter keeps the reference type, which wires the rules of a
@@ -232,7 +237,7 @@ class BorrowChecker:
         is_borrow = param.convention is not Convention.OWNED
         receiver = name == "self" and has_receiver
         state = BorrowState(name=name, local=param.local, var_type=var_type,
-                            declared_at_span=param.loc,
+                            declared_at_span=param.loc if located else None,
                             is_method_receiver=receiver and is_borrow,
                             is_method_param=has_receiver and not receiver,
                             is_borrow_param=is_borrow)
