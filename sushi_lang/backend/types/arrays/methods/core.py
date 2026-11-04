@@ -11,20 +11,10 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.typesys import Type
 
 
-def emit_dynamic_array_len(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1: bool) -> ir.Value:
-    """Emit code to get the length of a dynamic array."""
-    len_ptr = gep_utils.gep_dynamic_array_len(codegen, array_value)
-    len_value = codegen.builder.load(len_ptr, name="array_len")
-
-    return codegen.utils.as_i1(len_value) if to_i1 else len_value
-
-
-def emit_dynamic_array_capacity(codegen: 'LLVMCodegen', array_value: ir.Value, to_i1: bool) -> ir.Value:
-    """Emit code to get the capacity of a dynamic array."""
+def emit_dynamic_array_capacity(codegen: 'LLVMCodegen', array_value: ir.Value) -> ir.Value:
+    """The capacity of the dynamic array at the address `array_value`."""
     cap_ptr = gep_utils.gep_dynamic_array_cap(codegen, array_value)
-    cap_value = codegen.builder.load(cap_ptr, name="array_capacity")
-
-    return codegen.utils.as_i1(cap_value) if to_i1 else cap_value
+    return codegen.builder.load(cap_ptr, name="array_capacity")
 
 
 def emit_dynamic_array_extend(codegen: 'LLVMCodegen', array_value: ir.Value,
@@ -115,8 +105,8 @@ def emit_dynamic_array_push(codegen: 'LLVMCodegen', array_value: ir.Value, array
     return ir.Constant(codegen.types.i32, 0)
 
 
-def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value, array_type: ir.LiteralStructType,
-                           element_semantic_type: 'Type', to_i1: bool) -> ir.Value:
+def emit_dynamic_array_pop(codegen: 'LLVMCodegen', array_value: ir.Value,
+                           element_semantic_type: 'Type') -> ir.Value:
     """Emit code to remove the last element from a dynamic array, as `Maybe@(T)`.
 
     A pop from an empty array has no element, so the empty branch answers `Maybe.None()`

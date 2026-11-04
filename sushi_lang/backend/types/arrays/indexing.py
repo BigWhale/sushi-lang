@@ -26,7 +26,7 @@ def element_address(codegen: 'LLVMCodegen', base: ir.Value, ty: Type,
     """The address of element `index` of the array or the string at `base`."""
     if isinstance(ty, ArrayType):
         return gep_utils.gep_fixed_array_element(codegen, base, index, "elem_ptr")
-    return gep_utils.gep_array_element(codegen, _data(codegen, base, ty), index, "elem_ptr")
+    return gep_utils.gep_array_element(codegen, array_data(codegen, base, ty), index, "elem_ptr")
 
 
 def array_length(codegen: 'LLVMCodegen', base: ir.Value, ty: Type) -> ir.Value:
@@ -50,13 +50,13 @@ def slice_value(codegen: 'LLVMCodegen', base: ir.Value, ty: Type, start: ir.Valu
 
     if not isinstance(ty, (ArrayType, DynamicArrayType)):
         raise_internal_error("CE0000", detail=f"a slice of {ty}, which is no array")
-    data = gep_utils.gep_array_element(codegen, _data(codegen, base, ty), start, "slice_data")
+    data = gep_utils.gep_array_element(codegen, array_data(codegen, base, ty), start, "slice_data")
     length = codegen.builder.sub(end, start, name="slice_len")
     return descriptor(codegen, codegen.types.ll_type(ty.base_type), length, length, data)
 
 
-def _data(codegen: 'LLVMCodegen', base: ir.Value, ty: Type) -> ir.Value:
-    """The address of the first element."""
+def array_data(codegen: 'LLVMCodegen', base: ir.Value, ty: Type) -> ir.Value:
+    """The address of the first element of the array or the string at `base`."""
     if isinstance(ty, ArrayType):
         zero = ir.Constant(codegen.types.i32, 0)
         return codegen.builder.gep(base, [zero, zero], name="first_elem")

@@ -33,6 +33,7 @@ from sushi_lang.backend.constants.enum_initializers import (
 from sushi_lang.backend.expressions.casts import emit_value_cast
 from sushi_lang.backend.expressions.enums import emit_enum_variant_value
 from sushi_lang.backend.gep_utils import gep_struct_field
+from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend.expressions.operators import (
     emit_arithmetic, emit_bitwise, emit_contract_relation, emit_number_comparison, emit_string_relation,
     emit_unary_value, emit_xor,
@@ -122,6 +123,20 @@ def operand_value(state: FunctionState, operand: p.Operand) -> ir.Value:
             return constant_value(state, constant)
         case p.Copy(place) | p.Move(place):
             return state.builder.load(place_address(state, place))
+
+
+def operand_address(state: FunctionState, operand: p.Operand) -> ir.Value:
+    """The address of an operand: the storage of its place, or a new entry-block slot that
+    holds its constant."""
+    match operand:
+        case p.Copy(place) | p.Move(place):
+            return place_address(state, place)
+        case p.Const(constant):
+            slot = entry_alloca(state.builder,
+                                state.codegen.types.ll_type(type_of_constant(state, constant)),
+                                "arg")
+            state.builder.store(constant_value(state, constant), slot)
+            return slot
 
 
 def type_of_operand(state: FunctionState, operand: p.Operand) -> Type:

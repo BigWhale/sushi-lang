@@ -1,4 +1,4 @@
-"""Array cloning and type conversion operations."""
+"""The conversions of a `u8[]` to a `string`: `to_string()` and `to_string_checked()`."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -6,21 +6,14 @@ from llvmlite import ir
 from sushi_lang.backend.constants import INT64_BIT_WIDTH
 from sushi_lang.backend.constants.llvm_values import ZERO_I8
 from sushi_lang.backend.memory.heap import emit_malloc
-from sushi_lang.semantics.ast import MethodCall
-from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.allocas import entry_alloca
 from sushi_lang.backend import gep_utils
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
-    from sushi_lang.semantics.typesys import Type
 
-def emit_byte_array_to_string(codegen: "LLVMCodegen", call: MethodCall, receiver_value: ir.Value,
-                               receiver_type: ir.LiteralStructType, _to_i1: bool) -> ir.Value:
-    """Emit LLVM IR for u8[] to_string() method (convert byte array to UTF-8 string)."""
-    if len(call.args) != 0:
-        raise_internal_error("CE0023", method="to_string", expected=0, got=len(call.args))
-
+def emit_byte_array_to_string(codegen: "LLVMCodegen", receiver_value: ir.Value) -> ir.Value:
+    """A fresh owned string with the bytes of the `u8[]` at the address `receiver_value`."""
     len_ptr = gep_utils.gep_dynamic_array_len(codegen, receiver_value, "")
     byte_count = codegen.builder.load(len_ptr)
 
@@ -51,12 +44,10 @@ def emit_byte_array_to_string(codegen: "LLVMCodegen", call: MethodCall, receiver
     return struct_complete
 
 
-def emit_byte_array_to_string_checked(codegen: "LLVMCodegen", call: MethodCall, receiver_value: ir.Value,
-                                      receiver_type: ir.LiteralStructType, _to_i1: bool) -> ir.Value:
-    """Emit u8[] to_string_checked() -> Result<string, StdError>."""
-    if len(call.args) != 0:
-        raise_internal_error("CE0023", method="to_string_checked", expected=0, got=len(call.args))
-
+def emit_byte_array_to_string_checked(codegen: "LLVMCodegen",
+                                      receiver_value: ir.Value) -> ir.Value:
+    """`Result.Ok` of a fresh owned string when the bytes of the `u8[]` at the address
+    `receiver_value` are valid UTF-8, else `Result.Err(StdError.Error)`."""
     from sushi_lang.semantics.typesys import BuiltinType
     from sushi_lang.semantics.generics.results import ensure_result_type_in_table
     from sushi_lang.backend.types.arrays.methods.utf8_validate import get_or_emit_utf8_validate
@@ -81,7 +72,7 @@ def emit_byte_array_to_string_checked(codegen: "LLVMCodegen", call: MethodCall, 
     codegen.builder.cbranch(is_valid, ok_bb, err_bb)
 
     codegen.builder.position_at_end(ok_bb)
-    string_value = emit_byte_array_to_string(codegen, call, receiver_value, receiver_type, _to_i1)
+    string_value = emit_byte_array_to_string(codegen, receiver_value)
     ok_value = ir.Constant(result_llvm_type, ir.Undefined)
     ok_value = codegen.builder.insert_value(
         ok_value, ir.Constant(codegen.types.i32, ok_index), 0, name="Result_Ok_tag")
@@ -105,22 +96,4 @@ def emit_byte_array_to_string_checked(codegen: "LLVMCodegen", call: MethodCall, 
     result_phi.add_incoming(ok_value, ok_end_bb)
     result_phi.add_incoming(err_value, err_bb)
     return result_phi
-
-
-def emit_dynamic_array_clone(codegen: "LLVMCodegen", call: MethodCall, receiver_value: ir.Value,
-                              receiver_type: ir.LiteralStructType, _to_i1: bool,
-                              element_semantic_type: "Type") -> ir.Value:
-    """Emit LLVM IR for dynamic array clone() method (deep copy)."""
-    if len(call.args) != 0:
-        raise_internal_error("CE0023", method="clone", expected=0, got=len(call.args))
-
-    from sushi_lang.backend.expressions.memory import clone_dynamic_array_value
-
-    source_array = codegen.builder.load(receiver_value, name="clone_source")
-
-    # The DESCRIPTOR by value, like every other `T[]` expression. Handing back a slot made
-    # `.clone()` the last emitter still disagreeing with the convention #281/#283 settled,
-    # so the seam that gives an unbound temporary an owner saw a pointer where a value
-    # belongs and built a slot one indirection too deep (#382).
-    return clone_dynamic_array_value(codegen, source_array, element_semantic_type)
 

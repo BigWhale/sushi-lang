@@ -755,16 +755,6 @@ The AST grew a statement or expression node the scope checker does not dispatch 
 
 A callable has an error channel only when its signature writes '| E' or returns an explicit Result@(T, E). See [the error-channel design](design/error-channel.md). A BARE function, method or lambda returns the value itself ([CE2091](#ce2091)), so a '??' has no Result return to propagate into. Handle the Result in the body with match or .realise(default), or write '| E' in the signature. For a written function or method body the collect pass emits it, so it fires once per declaration and covers templates nobody instantiates. A lambda takes its channel from its type, so the typecheck pass emits it there; a ?? inside a lambda whose type writes '| E' is legal in any body. 'main' is bare, so a ?? in main is this error too.
 
-### CE0132 {#ce0132}
-
-**Error** · internal
-
-**Message:** `no write address for a fixed-array receiver of kind {node}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-A mutating built-in on a fixed array -- fill, reverse -- routes its receiver through backend/types/arrays/fixed\_addressing.py::as\_fixed\_array\_address with writable=True, which resolves an address from the AST. The function still stands in the tree, but the SLIR emitter does not call it, and its helper `try_get_struct_alloca` is deleted; group A6 of the migration replaces it with an address from a SLIR place. A receiver that names no storage has no write address, and every such receiver already has a diagnostic: [CE2096](#ce2096) for a constant, and [CE2408](#ce2408), [CE2414](#ce2414), [CE2421](#ce2421), [CE2422](#ce2422), [CE2426](#ce2426) or [CE2429](#ce2429) for the read-only receivers. Reaching this means one of them did not fire, so it is a gap in that coverage and not a user error.
-
 ### CE0133 {#ce0133}
 
 **Error** · function

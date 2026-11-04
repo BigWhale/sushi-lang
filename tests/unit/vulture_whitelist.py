@@ -250,6 +250,12 @@ WHITELIST += (
      _family("D5", "the string that an extern returns")),
     (_BACKEND + "types/display.py", "emit_value_to_str",
      _family("A12", "the string form of a value through Display")),
+    (_BACKEND + "types/arrays/methods/iterators.py", "emit_*_array_iter",
+     _family("C3", "the iter() producer of an array")),
+    (_BACKEND + "types/arrays/methods/hashing.py", "emit_*_array_hash_direct",
+     "kept for C6: the array_hash family, the hash of an array that a Hashable "
+     "implementation overrides; the SLIR emitter calls it with the address of the receiver "
+     "there"),
 )
 
 # -- AST facts whose last reader P2.13 deleted ----------------------------------------

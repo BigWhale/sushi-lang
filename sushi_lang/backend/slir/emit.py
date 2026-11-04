@@ -22,8 +22,7 @@ from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.internals.errors import message_for, raise_internal_error
 from sushi_lang.internals.errors.runtime import printf_conversions
 from sushi_lang.backend.slir.values import (
-    type_of_constant, constant_value, operand_value, place_address, rvalue_value,
-    type_of_place,
+    operand_address, operand_value, place_address, rvalue_value, type_of_place,
 )
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
@@ -207,17 +206,9 @@ CALL_EMITTERS: dict[type, Callable[[FunctionState, st.Call], None]] = {
 def _argument(state: FunctionState, operand: p.Operand, convention: Convention) -> ir.Value:
     if not convention.by_address:
         return operand_value(state, operand)
-    if isinstance(operand, p.Copy):
-        return place_address(state, operand.place)
-    if isinstance(operand, p.Const):
-        codegen = state.codegen
-        value = constant_value(state, operand.constant)
-        slot = entry_alloca(
-            state.builder, codegen.types.ll_type(type_of_constant(state, operand.constant)),
-            "arg")
-        state.builder.store(value, slot)
-        return slot
-    state.fault(f"a {convention.value} argument is a move")
+    if isinstance(operand, p.Move):
+        state.fault(f"a {convention.value} argument is a move")
+    return operand_address(state, operand)
 
 
 # -- terminators -----------------------------------------------------------------------

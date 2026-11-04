@@ -289,19 +289,6 @@ _add(ErrorMessage("CE0091", Severity.ERROR,
 # CE2095 from the finite-types pass, which stops the analysis before the derive pass runs. The
 # number is not reused.
 
-_add(ErrorMessage("CE0132", Severity.ERROR,
-    "no write address for a fixed-array receiver of kind {node}",
-    Category.INTERNAL,
-    "A mutating built-in on a fixed array -- fill, reverse -- routes its receiver through "
-    "backend/types/arrays/fixed_addressing.py::as_fixed_array_address with writable=True, "
-    "which resolves an address from the AST. The function still stands in the tree, but "
-    "the SLIR emitter does not call it, and its helper `try_get_struct_alloca` is deleted; "
-    "group A6 of the migration replaces it with an address from a SLIR place. A receiver "
-    "that names no storage has no write address, and every such receiver already has a "
-    "diagnostic: CE2096 for a constant, and CE2408, CE2414, CE2421, CE2422, CE2426 or "
-    "CE2429 for the read-only receivers. Reaching this means one of them did not fire, so "
-    "it is a gap in that coverage and not a user error."))
-
 _add(ErrorMessage("CE0137", Severity.ERROR,
     "lifted lambda name '{name}' is already registered",
     Category.INTERNAL,

@@ -14,12 +14,13 @@ Five questions, each a separate way the set can go wrong:
    (`check_array_method`) and the inference of the early passes both read;
 3. every row that takes its arguments into a slot names a real argument, and the modes of
    the family are the slots of the table;
-4. the backend's own `is_builtin_array_method` claims exactly the table's names;
-5. the backend's two dispatch `match` statements hold exactly one arm per name, and its
-   FIXED half holds exactly the names the table lets a fixed array receive.
+4. the backend dispatcher (`emit_array_method`, which takes operands) holds one arm for
+   each name of the array family, and `NOT_EMITTED_YET` names each other row with its group;
+5. an arm reads the descriptor of a `T[]` (`_descriptor`) exactly when the table does not
+   let a fixed array receive the method.
 
-Each backend half is read out of the source, so a name added to one side and forgotten on
-the other is a failure and not a silent NotImplementedError at codegen.
+The dispatcher is read out of the source, so a name added to one side and forgotten on the
+other is a failure and not an internal error at codegen.
 """
 from __future__ import annotations
 
@@ -45,7 +46,15 @@ from sushi_lang.semantics.typesys import (
 # rule, so these are not asserted as a target -- they are the control that says the reader
 # below found something to read.
 MEASURED_NAMES = 36
-MEASURED_FIXED_ARMS = 20
+MEASURED_DESCRIPTOR_ARMS = 16
+
+#: The rows of the table that the array dispatcher does not emit, with the reason. The set
+#: may only get shorter. `hash` is the `array_hash` family, which a `Hashable`
+#: implementation overrides, and not a row of the `array` family.
+NOT_EMITTED_YET = {
+    "hash": "C6: the array_hash family",
+    "iter": "C3: the borrow pass stops at a lent iterator",
+}
 
 #: The rows whose answer is a `Maybe` that the reader interns.
 MAYBE_NAMES = {"get", "first", "last", "pop", "remove", "index_of", "index_of_from",
@@ -149,49 +158,39 @@ def _strings(node: ast.AST) -> set[str]:
             if isinstance(n, ast.Constant) and isinstance(n.value, str)}
 
 
-def backend_predicate_names() -> set[str]:
-    """The name set of `backend/types/arrays/dispatcher.py:is_builtin_array_method`."""
-    for node in ast.walk(_function("is_builtin_array_method")):
-        if isinstance(node, ast.Return) and node.value is not None:
-            return _strings(node.value)
-    raise AssertionError("the backend predicate returns nothing")
+def backend_dispatch_arms() -> dict[str, ast.match_case]:
+    """The arm of `emit_array_method` that each name reaches."""
+    matches = [node for node in ast.walk(_function("emit_array_method"))
+               if isinstance(node, ast.Match)]
+    assert len(matches) == 1, "emit_array_method holds one match for both kinds"
+    return {name: case for case in matches[0].cases for name in _strings(case.pattern)}
 
 
-def backend_dispatch_arms() -> list[set[str]]:
-    """The names each half of `emit_array_method` claims: the fixed half, then the dynamic."""
-    matches = [node for half in ("emit_fixed_array_method", "emit_dynamic_array_method")
-               for node in ast.walk(_function(half)) if isinstance(node, ast.Match)]
-    return [{value for case in node.cases for value in _strings(case.pattern)}
-            for node in matches]
+def _reads_the_descriptor(case: ast.match_case) -> bool:
+    return any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+               and node.func.id == "_descriptor"
+               for statement in case.body for node in ast.walk(statement))
 
 
 def test_the_backend_reader_found_something():
     """The control. A reader that answers an empty set passes every comparison below."""
     arms = backend_dispatch_arms()
-    assert len(backend_predicate_names()) == MEASURED_NAMES
-    assert len(arms) == 2, "emit_array_method holds one match per receiver kind"
-    assert len(arms[0]) == MEASURED_FIXED_ARMS
-    assert len(arms[1]) == MEASURED_NAMES
+    assert len(arms) == MEASURED_NAMES - len(NOT_EMITTED_YET)
+    assert sum(_reads_the_descriptor(case) for case in arms.values()) \
+        == MEASURED_DESCRIPTOR_ARMS
 
 
-def test_the_backend_predicate_claims_the_table():
-    assert backend_predicate_names() == set(_ARRAY_METHODS)
+def test_every_name_of_the_family_has_an_arm():
+    assert set(backend_dispatch_arms()) == set(_ARRAY_METHODS) - set(NOT_EMITTED_YET)
 
 
-def test_the_backend_predicate_agrees_when_it_is_called():
-    from sushi_lang.backend.types.arrays import is_builtin_array_method as backend_claims
-
-    for name in _ARRAY_METHODS:
-        assert backend_claims(name), name
-    assert not backend_claims("push_front")
+def test_the_rows_not_emitted_are_rows_of_the_table():
+    assert set(NOT_EMITTED_YET) <= set(_ARRAY_METHODS)
 
 
-def test_every_name_has_a_dynamic_emitter():
-    assert backend_dispatch_arms()[1] == set(_ARRAY_METHODS)
-
-
-def test_the_fixed_emitters_are_the_rows_a_fixed_array_receives():
-    """A `Receiver.ANY` row is the one a `T[N]` may call, so the two sets are one set."""
-    fixed_rows = {name for name, spec in _ARRAY_METHODS.items()
-                  if spec.receiver is Receiver.ANY}
-    assert backend_dispatch_arms()[0] == fixed_rows
+def test_an_arm_reads_the_descriptor_when_a_fixed_array_is_no_receiver():
+    """A `Receiver.ANY` row is the one a `T[N]` may call: its arm reads the data and the
+    length of either kind, and every other arm reads the descriptor of a `T[]`."""
+    for name, case in backend_dispatch_arms().items():
+        dynamic_only = _ARRAY_METHODS[name].receiver is not Receiver.ANY
+        assert _reads_the_descriptor(case) == dynamic_only, name

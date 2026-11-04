@@ -38,12 +38,8 @@ PLAIN_DECORATORS = frozenset({"dataclass", "property", "staticmethod", "classmet
                               "lru_cache", "cache", "overload", "unique", "setter"})
 _SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
-_ARRAYS = ("kept for A6: the array emitter family; the SLIR emitter calls it with operands "
-           "there, and its AST argument half goes then")
-
 #: `path:qualname` -> why it stays: the later group that needs it, or its reflective reader.
 KEPT: dict[str, str] = {
-    "sushi_lang/backend/types/arrays/dispatcher.py:emit_array_method": _ARRAYS,
     "sushi_lang/backend/generics/hashmap/__init__.py:emit_hashmap_method":
         "kept for B4: the HashMap method family; the SLIR emitter calls it with operands "
         "there, and its AST argument half goes then",
@@ -51,7 +47,6 @@ KEPT: dict[str, str] = {
 
 #: The rows of `KEPT` at the day of the pin. A row may leave both; none may join.
 PINNED_KEPT: frozenset[str] = frozenset({
-    "sushi_lang/backend/types/arrays/dispatcher.py:emit_array_method",
     "sushi_lang/backend/generics/hashmap/__init__.py:emit_hashmap_method",
 })
 

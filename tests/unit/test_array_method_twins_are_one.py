@@ -1,8 +1,9 @@
 """One operation on an array has one emitter, for both array kinds (#876).
 
 A fixed array and a dynamic array differ in where the element count comes from and in how
-the element pointer is found. The dispatcher knows both, so it gives `(data_ptr, count)` to
-ONE emitter for `fill`, `reverse` and `get`. Two copies of one emitter drift.
+the element pointer is found. The dispatcher reads both through one reader of the data and
+the length, and gives `(data_ptr, count)` to ONE emitter for `fill`, `reverse` and `get`,
+in ONE arm for both kinds. Two copies of one emitter drift.
 """
 from __future__ import annotations
 
@@ -31,7 +32,7 @@ ONE_EMITTER = {
     "eq_range": "emit_array_eq_range",
 }
 
-HALVES = ("emit_fixed_array_method", "emit_dynamic_array_method")
+DISPATCHER_FUNCTION = "emit_array_method"
 
 
 def _functions(path: Path) -> dict[str, ast.FunctionDef]:
@@ -65,26 +66,25 @@ def test_get_takes_no_to_i1():
     assert "to_i1" not in {a.arg for a in fn.args.args}
 
 
-def test_each_half_routes_through_the_one_emitter():
+def test_each_method_routes_through_the_one_emitter():
     functions = _functions(DISPATCHER)
-    for half in HALVES:
-        assert half in functions, f"the dispatcher declares no '{half}'"
-        cases = {}
-        for match in (n for n in ast.walk(functions[half]) if isinstance(n, ast.Match)):
-            for case in match.cases:
-                for value in (n.value for n in ast.walk(case.pattern)
-                              if isinstance(n, ast.Constant) and isinstance(n.value, str)):
-                    cases[value] = case
-        for method, emitter in ONE_EMITTER.items():
-            assert method in cases, f"{half}: no arm for '{method}'"
-            called = set().union(*(_called_names(s) for s in cases[method].body))
-            assert emitter in called, f"{half}: '{method}' does not call {emitter}"
-        get_called = set().union(*(_called_names(s) for s in cases["get"].body))
-        assert "_index_arg" in get_called, f"{half}: 'get' reads its index by hand"
+    assert DISPATCHER_FUNCTION in functions, f"the dispatcher declares no '{DISPATCHER_FUNCTION}'"
+    matches = [n for n in ast.walk(functions[DISPATCHER_FUNCTION]) if isinstance(n, ast.Match)]
+    assert len(matches) == 1, "the dispatcher holds one match for both kinds of array"
+    cases = {}
+    for case in matches[0].cases:
+        for value in (n.value for n in ast.walk(case.pattern)
+                      if isinstance(n, ast.Constant) and isinstance(n.value, str)):
+            cases[value] = case
+    for method, emitter in ONE_EMITTER.items():
+        assert method in cases, f"no arm for '{method}'"
+        called = set().union(*(_called_names(s) for s in cases[method].body))
+        assert emitter in called, f"'{method}' does not call {emitter}"
+    get_called = set().union(*(_called_names(s) for s in cases["get"].body))
+    assert "_index" in get_called, "'get' reads its index by hand"
 
 
 def test_the_dispatcher_ends_in_an_internal_error():
     source = DISPATCHER.read_text(encoding="utf-8")
     assert "NotImplementedError" not in source
-    for half in HALVES:
-        assert "raise_internal_error" in _called_names(_functions(DISPATCHER)[half])
+    assert "raise_internal_error" in _called_names(_functions(DISPATCHER)[DISPATCHER_FUNCTION])
