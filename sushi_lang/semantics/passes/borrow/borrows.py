@@ -22,7 +22,7 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import BorrowMode
 from . import arms
-from .diagnostics import emit_use_after_move, spelled
+from .diagnostics import emit_use_after_move, temporary_spelled
 from .reads import borrow_owner, read_type
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
@@ -66,7 +66,7 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
         acquire_borrow(checker, storage_state(checker, root), span, is_poke=is_poke)
         return
     if not isinstance(root, e.LocalRef):
-        checker.err.emit(er.ERR.CE2404, span, expr=spelled(checker, place))
+        checker.err.emit(er.ERR.CE2404, span, expr=temporary_spelled(checker, place))
         return
 
     state = checker.borrow_state.get(root.local)

@@ -10,6 +10,7 @@ from sushi_lang.semantics.ast import DotCall, Expr, MethodCall
 from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 from sushi_lang.semantics.generics.opaque import bound_hint, note_opaque
 from sushi_lang.semantics.generics.types import TypeParameter, substitute_type_params
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.source_text import source_text
 from sushi_lang.semantics.typesys import ReferenceType
@@ -389,3 +390,20 @@ NO_TEXT = "<expression>"
 def spelled(checker: 'BorrowChecker', node) -> str:
     """The source text of `node`, as the user wrote it (`semantics/source_text.py`)."""
     return source_text(checker.source, node.loc) or NO_TEXT
+
+
+def temporary_spelled(checker: 'BorrowChecker', place: e.ShirExpr) -> str:
+    """The text of a borrow of a temporary (CE2404): each field of the place, after a root
+    that a call of a function or a construction gives is the stand-in (`<expression>.x`).
+    An integer literal spells its value; any other root spells its source text."""
+    walked = walk_place(place, Step.MEMBER)
+    root = walked.node
+    if isinstance(root, e.Lit) and isinstance(root.value, e.IntConst):
+        text = str(root.value.value)
+    elif isinstance(root, e.Call) and isinstance(root.target, e.Dotted):
+        text = spelled(checker, root)
+    elif isinstance(root, (e.Lit, e.Call, e.StructInit, e.EnumInit, e.TupleInit, e.ArrayInit)):
+        text = NO_TEXT
+    else:
+        text = spelled(checker, root)
+    return ".".join([text, *(field.name for field in reversed(walked.path))])

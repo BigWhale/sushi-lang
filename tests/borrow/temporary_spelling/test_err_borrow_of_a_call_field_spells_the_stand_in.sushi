@@ -1,0 +1,26 @@
+# A field of a call result has no stable address (CE2404). The diagnostic spells the
+# result with the stand-in, then each field.
+# EXPECT_ERROR_CODES_EXACT: CE2404, CE2404
+# EXPECT_STDERR_CONTAINS: cannot borrow '<expression>.x'
+# EXPECT_STDERR_CONTAINS: cannot borrow '<expression>.a.x'
+struct Point:
+    i32 x
+    i32 y
+
+struct Seg:
+    Point a
+    i32 n
+
+fn make() Point:
+    return Point(1, 2)
+
+fn seg() Seg:
+    return Seg(Point(1, 2), 3)
+
+fn look(peek i32 v) i32:
+    return v
+
+fn main() i32:
+    println(look(peek make().x))
+    println(look(peek seg().a.x))
+    return 0
