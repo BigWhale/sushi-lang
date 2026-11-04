@@ -89,7 +89,8 @@ view local); 7.9, 8.6, 8.12 and 8.13 (the borrow region is a row of `OwnershipRe
 holds a view local); 8.2, 8.3, 8.4, 8.6, 8.7, 8.9, 8.10 and 8.13 (a reference binding is an
 address local that a `Ref` writes one time); 8.2, 8.3, 8.6, 8.7 and 8.9 (`Clone` is the one
 deep copy, and `realise` and `err` lower as `expect` does); 8.3 and 8.13 (the rows of
-`METHOD_EFFECTS` give the receiver and the argument conventions of each container method).
+`METHOD_EFFECTS` give the receiver and the argument conventions of each container method);
+7.9 and 8.9 (a container get-out answers a view, by a row of `answers_view`).
 
 ## The decisions, in one place
 
@@ -1802,6 +1803,14 @@ The rows of `OwnershipResults`:
   `BeginBorrow` and the `EndBorrow` statements of the region from the row (8.6). The
   answer of a call of a function or a method with a `peek` return is a view too: its owner
   set is the owner of each argument at a position of the source row of the call (7.3).
+- A container get-out is a borrow, and it answers a view BY NAME: `get`, `first` and
+  `last` of a `List`, `get` of a `HashMap` and `get` of an `Own`. The fact is ONE table row for each such method, `answers_view`, beside
+  `METHOD_EFFECTS` in `semantics/method_effects.py`. `borrow` reads it: the answer of the
+  call is a view, and its owner set is the receiver. SLIR lowering reads it: the destination
+  of the call is a view local (8.2) in a region (8.6). An answer of a plain element is a
+  plain copy, and it has no region. So a call answer that borrows is one rule with two
+  sources of the owner set: the receiver of a get-out, and the source arguments of a `peek`
+  return.
 
 `LiftResults` holds the symbol (a string) and the environment layout (`Capture(local,
 moves)` for each slot, in slot order), each by the `shir_id` of the `Lambda`.
@@ -2777,6 +2786,7 @@ backstop of the checker, as on the AST backend.
 | a `peek` or `poke` binder of a pattern, `Own(poke x)` included | an address local of the scope of the arm, written with the `Ref` of its payload place (for a variant, `Field(Downcast(place, variant), index)`), in a region over that place to each exit of the arm |
 | `Return` in a function with a `peek` return | `_0 = copy <place>`: the value goes to the caller as it is (`borrow-model.md` S10h): it crosses by value, as a plain borrow does (the 16-byte descriptor of a `string` or a `T[]`), and not as an address. The callee never drops `_0` |
 | a call of a function or a method with a `peek` return | the destination of the `Call` is a view local (8.2), in a region over the owner of each source argument (7.3, 7.9). One rule serves this answer and the view answer of a container call: the owner set has two sources |
+| a call of a method of `answers_view` (`get`, `first`, `last` of a `List`; `get` of a `HashMap` or an `Own`) | a `Call` of `Builtin(BuiltinMethod)`; its destination is a view local (8.2) in a region over the owner of the receiver (7.9). When the element is plain, the destination is an ordinary local, and the answer is a plain copy |
 | `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field` |
 | `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`: lowering calls `literal_value` and `pattern_interval` over the written constant and the scrutinee type, and reads no row), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |
 | `Match` on a string | a chain of tests in source order (see below): each a `Call` of the intrinsic `eq` (8.6) into a `bool` local, and a `SwitchInt` on it |
