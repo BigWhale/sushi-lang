@@ -33,6 +33,7 @@ from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscoun
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import effect_of
 from sushi_lang.semantics.param_modes import BuiltinModes, ParamMode
+from sushi_lang.semantics.passes.types.inference import int_literal_default
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.const_eval import is_integer_constant
 from sushi_lang.semantics.shir import exprs as e
@@ -81,8 +82,23 @@ def check_i32_operand(validator: 'TypeValidator', node: 'ShirExpr') -> Optional[
     (`a'x'`), also under a negation, takes i32 from the position. Any other value gets no
     type from the position, so a literal that an i32 cannot hold is CE2070."""
     from sushi_lang.semantics.passes.types import visit
-    expected = BuiltinType.I32 if _is_byte_literal(node) else None
-    return visit.check_expr(validator, node, expected)
+    if not _is_byte_literal(node):
+        return visit.check_expr(validator, node, None)
+    _reject_negated_byte(validator, node)
+    return visit.check_expr(validator, node, BuiltinType.I32)
+
+
+def _reject_negated_byte(validator: 'TypeValidator', node: 'ShirExpr') -> None:
+    """CE2073 at the negation of a byte literal whose value is below zero. A byte literal
+    is a `u8` value, so its negation is out of range for `u8`, also in a position that gives
+    it i32."""
+    if not (isinstance(node, Unary) and node.op == "neg" and isinstance(node.operand, Lit)
+            and isinstance(node.operand.value, IntConst)):
+        return
+    const = node.operand.value
+    if const.value > 0:
+        er.emit(validator.reporter, er.ERR.CE2073, node.loc, literal=str(-const.value),
+                type=int_literal_default(const).value)
 
 
 def _is_byte_literal(node: 'ShirExpr') -> bool:

@@ -103,6 +103,7 @@ tests/array/index_positions_are_i32/test_err_index_get_i8.sushi
 tests/array/index_positions_are_i32/test_err_index_get_u16.sushi
 tests/array/index_positions_are_i32/test_err_index_get_u8.sushi
 tests/array/index_positions_are_i32/test_err_index_i64.sushi
+tests/array/index_positions_are_i32/test_err_negated_byte_literal_index.sushi
 tests/array/index_positions_are_i32/test_err_range_bound_f64.sushi
 tests/array/index_positions_are_i32/test_err_range_bound_i64.sushi
 tests/array/index_positions_are_i32/test_err_range_bound_i8.sushi
