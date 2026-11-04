@@ -23,17 +23,9 @@ other than a `string` into an `Owned` argument, and a registered `RExxxx` for a 
 one operand of the type that each printf conversion of its text takes. The type of a place
 also gives its root local, so a `Move` of a projection is a `Move` of its root.
 
-Then a dataflow over the CFG gives each local, at each point, the set of states that the
-paths to that point can give it: uninit, live, moved or dropped, with the value of its drop
-flag for a local that a `DropIfSet` reads. A join takes the union. A read or a move of a
-local that a path moved is refused, and so is a read or a move of a local that holds no
-value on a path: before its first write, or after its `StorageLive` or its `StorageDead`.
-The `return` needs a value in `_0` on each path. An owning local must be moved or dropped
-exactly one time on each path from its write to the end of its storage, to a write over
-it, and to the `return`: a `DropIfSet` drops on the paths where its flag is true, and the
-paths where the flag is false must have moved the local. An `Owned` parameter is an owning
-local; a borrowed parameter never drops and never moves, and an `Inout` one holds a value
-again at the `return`. A `Trap` ends the program, so it needs no drop.
+Then the dataflow of `verify_flow.py` checks the moves and the drops of each local on
+each path. The checks of a call are in `verify_calls.py`, and the names of the rules in
+`verify_rules.py`.
 
 The verifier refuses a shape that no lowering makes yet, and that it does not check, with
 the internal error CE0000: a `BeginBorrow` or an `EndBorrow`, and a `Drop` or a `DropIfSet`
@@ -44,17 +36,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import TYPE_CHECKING, Callable, NoReturn, Optional, Sequence, TypeAlias, get_args
+from typing import TYPE_CHECKING, Callable, NoReturn, Optional, Sequence, get_args
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import REGISTRY, Category
 from sushi_lang.internals.errors.runtime import printf_conversions
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.integer_width import fits_integer_type, integer_range
-from sushi_lang.semantics.param_modes import Convention, declared_modes, receiver_mode
-from sushi_lang.semantics.shir.callee import BuiltinMethod
+from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -63,67 +53,30 @@ from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.printer import show
+from sushi_lang.semantics.slir.verify_calls import (
+    DeclaredLookup, DeclaredParams as DeclaredParams, check_call, declared_params,
+)
+from sushi_lang.semantics.slir.verify_flow import Flow, successors
+from sushi_lang.semantics.slir.verify_rules import CONVENTIONS as CONVENTIONS
+from sushi_lang.semantics.slir.verify_rules import (
+    ARRAY_VALUE, BOOL_FLAG, CONSTANT_RANGE, ELEMENT_MOVE, ENUM_VALUE, GLOBAL_MOVE,
+    INTEGER_SWITCH, KNOWN_BLOCKS, LENGTH_SLICE, NUMERIC_CAST, ONE_TERMINATOR, OWNING_DROP,
+    SHORT_CIRCUIT, SPANS, STRUCT_VALUE, TAG_SWITCH, TRAP, TYPED_LOCALS, TYPED_PLACES, VIEW,
+)
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, EnumType, PointerType, ReferenceType,
     StructType, Type, UnknownType, owns_resource,
 )
 from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
-from sushi_lang.semantics.stdlib_registry import stdlib_arity
-from sushi_lang.semantics.unit_symbols import function_symbol
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.collect.functions import ExtensionTable, FunctionTable
 
-TYPED_LOCALS = "typed locals"
-TYPED_PLACES = "typed places"
-USE_AFTER_MOVE = "no use after a move"
-IN_STORAGE = "no use of a local outside its storage"
-RETURN_SLOT = "a written return slot"
-GLOBAL_MOVE = "no move out of a global"
-ONE_TERMINATOR = "one terminator per block"
-KNOWN_BLOCKS = "known blocks"
-OWNING_DROP = "drop of an owning type"
-BOOL_FLAG = "bool drop flag"
-DROP_ONCE = "one drop or move on every path"
-CONVENTIONS = "declared conventions"
-RECEIVER_OPERAND = "a receiver operand"
-OWNED_COPY = "no copy of an owning value into an owned argument"
-SHORT_CIRCUIT = "no short circuit in a binary"
-NUMERIC_CAST = "a numeric cast"
-CONSTANT_RANGE = "a constant in range"
-INTEGER_SWITCH = "an integer switch"
-TAG_SWITCH = "a switch on a tag"
-ENUM_VALUE = "an enum value"
-STRUCT_VALUE = "a struct value"
-ARRAY_VALUE = "an array value"
-LENGTH_SLICE = "a length and a slice"
-VIEW = "a view"
-ELEMENT_MOVE = "no move of an element"
-TRAP = "registered trap"
-SPANS = "spans"
 
 _TERMINATORS = get_args(tm.SlirTerminator)
 
 #: The type of the operand that each printf conversion of a runtime text takes (ir.md 8.8).
 TRAP_OPERAND_TYPES: dict[str, Type] = {"%d": BuiltinType.I32, "%.*s": BuiltinType.STRING}
-
-# The state of a local on one path, and the value of its drop flag there.
-_UNINIT, _LIVE, _MOVED, _DROPPED = "uninit", "live", "moved", "dropped"
-_NO_FLAG, _UNSET, _TRUE, _FALSE, _UNKNOWN = "none", "unset", "true", "false", "unknown"
-_Config: TypeAlias = tuple[str, str]
-_State: TypeAlias = tuple[frozenset[_Config], ...]
-
-
-@dataclass(frozen=True, slots=True)
-class DeclaredParams:
-    """The convention of each declared parameter of a direct callee. The tail of a `var_arg`
-    extern declares no parameter, so the rule reads the declared prefix alone."""
-    conventions: tuple[Convention, ...]
-    var_arg: bool = False
-
-
-#: The declared parameters of a `Direct` callee, or None when the build declares none.
-DeclaredLookup: TypeAlias = Callable[[st.Direct], Optional[DeclaredParams]]
 
 
 @dataclass(slots=True)
@@ -141,40 +94,12 @@ class SlirVerifier:
                         filename=filename)
 
 
-def declared_params(funcs: FunctionTable, extensions: ExtensionTable,
-                    callee: st.Direct) -> Optional[DeclaredParams]:
-    """The declared parameters of the function that `callee` names. A free function is the
-    function of its name in the unit whose symbol is the symbol of the callee. A method or
-    a static has the written name `<type>.<method>`: it is the extension of that name whose
-    symbol is the symbol of the callee, and an instance method has its receiver first. A
-    function of a registry stdlib module is the row of its module, and each of its
-    parameters borrows."""
-    if callee.module is not None:
-        arity = stdlib_arity(callee.module, callee.name)
-        return None if arity is None else DeclaredParams((Convention.GUARANTEED,) * arity)
-    _, dot, method = callee.name.rpartition(".")
-    if dot:
-        for by_name in extensions.by_type.values():
-            for record in by_name.get(method, ()):
-                if method_symbol(record.target_type, method, record.unit_name) == callee.symbol:
-                    receiver = () if record.is_static else (
-                        receiver_mode(record.self_mode).convention,)
-                    return DeclaredParams(receiver + tuple(
-                        mode.convention for mode in declared_modes(record.params)))
-        return None
-    for unit, own in funcs.by_unit.items():
-        sig = own.get(callee.name)
-        if sig is not None and function_symbol(callee.name, unit) == callee.symbol:
-            return DeclaredParams(tuple(mode.convention for mode in declared_modes(sig.params)))
-    return None
-
-
 def verify_function(function: SlirFunction, *, drops: frozenset[str],
                     declared: DeclaredLookup, filename: Optional[str] = None) -> None:
     """CE0158 at the first rule of ir.md 8.13 that `function` breaks."""
-    check = _Check(function, drops, declared, filename)
+    check = Check(function, drops, declared, filename)
     check.structure()
-    _Flow(check).run()
+    Flow(check).run()
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,7 +117,7 @@ class _Typed:
 
 
 @dataclass(slots=True)
-class _Check:
+class Check:
     """The structure of one function, and the facts that the dataflow reads."""
     function: SlirFunction
     drops: frozenset[str]
@@ -274,7 +199,7 @@ class _Check:
             self.fail(ONE_TERMINATOR, f"{where} has no terminator", None)
         if not isinstance(term.span, Span):
             self.fail(SPANS, f"the terminator of {where} has no span", None)
-        for target in _successors(term):
+        for target in successors(term):
             if target not in self.blocks:
                 self.fail(KNOWN_BLOCKS, f"{where} goes to bb{target.index}, which is no block "
                                         f"of the function", term.span)
@@ -537,47 +462,6 @@ class _Check:
         if isinstance(place, p.Local) and place.id in self.views:
             self.fail(VIEW, f"{show(place)} is a view, and only a slice writes it", span)
 
-    def call(self, stmt: st.Call) -> None:
-        self.place(stmt.dest, stmt.span)
-        self.not_a_view(stmt.dest, stmt.span)
-        callee = stmt.callee
-        if isinstance(callee, st.Indirect):
-            self.operand(callee.operand, stmt.span)
-        for operand, convention in stmt.args:
-            self.operand(operand, stmt.span)
-            if convention.consumes and isinstance(operand, p.Copy):
-                self.owned_copy(operand, stmt.span)
-        if isinstance(callee, st.Direct):
-            self.conventions_of(stmt, callee)
-        elif isinstance(callee, st.Builtin) and isinstance(callee.method, BuiltinMethod) \
-                and not stmt.args:
-            self.fail(RECEIVER_OPERAND, f"the call of {callee.method.family}."
-                                        f"{callee.method.name} has no receiver", stmt.span)
-
-    def owned_copy(self, operand: p.Copy, span: Span) -> None:
-        """An `Owned` argument takes a copy of a plain value alone. A `string` is the one
-        owning type that may come as a copy: one bound from a literal owns no heap, and
-        `borrow` adopts it (ir.md 7.9)."""
-        ty = self.place(operand.place, span).ty
-        if ty is None or isinstance(ty, _Payload) or ty == BuiltinType.STRING:
-            return
-        if owns_resource(ty, self.drops):
-            self.fail(OWNED_COPY, f"{show(operand)} has the type {display_type(ty)}, which "
-                                  f"owns", span)
-
-    def conventions_of(self, stmt: st.Call, callee: st.Direct) -> None:
-        declared = self.declared(callee)
-        if declared is None:
-            self.fail(CONVENTIONS, f"the callee @{callee.name} has no declaration", stmt.span)
-        wanted, given = declared.conventions, tuple(c for _, c in stmt.args)
-        if len(given) < len(wanted) or (len(given) > len(wanted) and not declared.var_arg):
-            self.fail(CONVENTIONS, f"the call of @{callee.name} has {len(given)} arguments, "
-                                   f"and @{callee.name} declares {len(wanted)}", stmt.span)
-        for index, (have, want) in enumerate(zip(given[:len(wanted)], wanted, strict=True)):
-            if have is not want:
-                self.fail(CONVENTIONS, f"argument {index} of @{callee.name} is @{have.value}, "
-                                       f"and its parameter is @{want.value}", stmt.span)
-
     def dropped(self, stmt: st.Drop | st.DropIfSet) -> LocalId:
         """The local that a drop targets: a drop of any other place is not checked yet."""
         if not isinstance(stmt.place, p.Local):
@@ -672,22 +556,22 @@ class _Check:
 
 
 _STATEMENTS: dict[type, Callable[..., None]] = {
-    st.Assign: _Check.assign,
-    st.Call: _Check.call,
-    st.Drop: _Check.drop,
-    st.DropIfSet: _Check.drop_if_set,
-    st.BeginBorrow: _Check.borrow_region,
-    st.EndBorrow: _Check.borrow_region,
-    st.StorageLive: _Check.storage,
-    st.StorageDead: _Check.storage,
+    st.Assign: Check.assign,
+    st.Call: check_call,
+    st.Drop: Check.drop,
+    st.DropIfSet: Check.drop_if_set,
+    st.BeginBorrow: Check.borrow_region,
+    st.EndBorrow: Check.borrow_region,
+    st.StorageLive: Check.storage,
+    st.StorageDead: Check.storage,
 }
 
 _PLACES: dict[type, Callable[..., _Typed]] = {
-    p.Local: _Check.local_place,
-    p.Field: _Check.field_place,
-    p.Index: _Check.index_place,
-    p.Downcast: _Check.downcast_place,
-    p.Deref: _Check.deref_place,
+    p.Local: Check.local_place,
+    p.Field: Check.field_place,
+    p.Index: Check.index_place,
+    p.Downcast: Check.downcast_place,
+    p.Deref: Check.deref_place,
 }
 
 
@@ -700,212 +584,3 @@ def _constant_type(constant: k.Constant) -> Optional[Type]:
     if isinstance(constant, k.Bool):
         return BuiltinType.BOOL
     return BuiltinType.BLANK if isinstance(constant, k.Blank) else None
-
-
-def _successors(term: tm.SlirTerminator) -> list[BlockId]:
-    if isinstance(term, tm.Goto):
-        return [term.target]
-    if isinstance(term, tm.SwitchInt):
-        targets = [target for _, target in term.targets]
-        return targets if term.otherwise is None else [*targets, term.otherwise]
-    return []
-
-
-@dataclass(slots=True)
-class _Flow:
-    """The dataflow of the moves and the drops of one function (see the module docstring)."""
-    check: _Check
-    flagged: dict[LocalId, tuple[LocalId, ...]] = field(default_factory=dict)
-    report: bool = False
-
-    def run(self) -> None:
-        check = self.check
-        for local, flag in check.guards.items():
-            self.flagged[flag] = (*self.flagged.get(flag, ()), local)
-        start = tuple(frozenset({(_LIVE if local.id in check.conventions else _UNINIT,
-                                  _UNSET if local.id in check.guards else _NO_FLAG)})
-                      for local in check.function.locals)
-        entry = check.function.entry
-        states: dict[BlockId, _State] = {entry: start}
-        work = [entry]
-        while work:
-            block = check.blocks[work.pop()]
-            out = self.through(block, states[block.id])
-            for target in _successors(block.terminator):
-                old = states.get(target)
-                new = out if old is None else tuple(a | b for a, b in zip(old, out, strict=True))
-                if new != old:
-                    states[target] = new
-                    work.append(target)
-        self.report = True
-        for block in check.function.blocks:
-            if block.id in states:
-                self.through(block, states[block.id])
-
-    def through(self, block: SlirBlock, state: _State) -> _State:
-        configs = list(state)
-        for stmt in block.statements:
-            self.statement(configs, stmt)
-        self.terminator(configs, block.terminator)
-        return tuple(configs)
-
-    def violate(self, rule: str, detail: str, span: Optional[Span]) -> None:
-        if self.report:
-            self.check.fail(rule, detail, span)
-
-    # -- the transfer --------------------------------------------------------------------
-
-    def statement(self, configs: list[frozenset[_Config]], stmt: st.SlirStatement) -> None:
-        span = stmt.span
-        if isinstance(stmt, st.Assign):
-            for part in r.operands_of(stmt.rvalue):
-                self.operand(configs, part, span)
-            self.write(configs, stmt.place, span, stmt.rvalue)
-        elif isinstance(stmt, st.Call):
-            if isinstance(stmt.callee, st.Indirect):
-                self.operand(configs, stmt.callee.operand, span)
-            for operand, _ in stmt.args:
-                self.operand(configs, operand, span)
-            self.write(configs, stmt.dest, span, None)
-        elif isinstance(stmt, st.Drop):
-            self.drop(configs, self.check.dropped(stmt), span)
-        elif isinstance(stmt, st.DropIfSet):
-            self.drop_if_set(configs, self.check.dropped(stmt), stmt.flag, span)
-        elif isinstance(stmt, (st.StorageLive, st.StorageDead)):
-            self.storage(configs, stmt.local, span,
-                         "starts" if isinstance(stmt, st.StorageLive) else "ends")
-        else:
-            er.raise_internal_error("CE0000", span=span,
-                                    detail=f"the dataflow of the SLIR verifier has no row for "
-                                           f"the class {type(stmt).__name__}")
-
-    def terminator(self, configs: list[frozenset[_Config]], term: tm.SlirTerminator) -> None:
-        if isinstance(term, tm.SwitchInt):
-            self.operand(configs, term.operand, term.span)
-        elif isinstance(term, tm.Trap):
-            for arg in term.args:
-                self.operand(configs, arg, term.span)
-        elif isinstance(term, tm.Return):
-            self.leave(configs, term.span)
-
-    def operand(self, configs: list[frozenset[_Config]], part: p.Operand | p.Place,
-                span: Span) -> None:
-        if isinstance(part, p.Const):
-            return
-        if isinstance(part, p.Move):
-            self.move(configs, part.place, span)
-        elif isinstance(part, p.Copy):
-            self.read(configs, part.place, span)
-        else:
-            self.read(configs, part, span)
-
-    def root(self, configs: list[frozenset[_Config]], place: p.Place,
-             span: Span) -> Optional[LocalId]:
-        """The root local of `place`, after the read of each index in it."""
-        typed = self.check.place(place, span)
-        for index in typed.indexes:
-            self.operand(configs, index, span)
-        return typed.root.id if isinstance(typed.root, p.Local) else None
-
-    def read(self, configs: list[frozenset[_Config]], place: p.Place, span: Span) -> None:
-        local = self.root(configs, place, span)
-        if local is not None:
-            self.spent(configs, local, f"reads {show(place)}", span)
-
-    def spent(self, configs: list[frozenset[_Config]], local: LocalId, what: str,
-              span: Span) -> None:
-        states = {state for state, _ in configs[local.index]}
-        if _UNINIT in states:
-            self.violate(IN_STORAGE, f"{what} where _{local.index} holds no value", span)
-        if _MOVED in states:
-            self.violate(USE_AFTER_MOVE, f"{what} after a move of _{local.index}", span)
-        if _DROPPED in states:
-            self.violate(USE_AFTER_MOVE, f"{what} after a drop of _{local.index}", span)
-
-    def move(self, configs: list[frozenset[_Config]], place: p.Place, span: Span) -> None:
-        local = self.root(configs, place, span)
-        if local is None:
-            return
-        if self.borrowed(local) or self.check.conventions.get(local) is Convention.INOUT:
-            if local in self.check.owning:
-                self.violate(DROP_ONCE, f"moves the parameter _{local.index}, which the "
-                                        f"function does not own", span)
-        self.spent(configs, local, f"moves {show(place)}", span)
-        configs[local.index] = frozenset((_MOVED, flag) for _, flag in configs[local.index])
-
-    def write(self, configs: list[frozenset[_Config]], place: p.Place, span: Span,
-              value: Optional[r.Rvalue]) -> None:
-        if not isinstance(place, p.Local):
-            self.read(configs, place, span)
-            return
-        local = place.id
-        if local in self.check.owning and any(s == _LIVE for s, _ in configs[local.index]):
-            self.violate(DROP_ONCE, f"writes _{local.index} while it holds a value", span)
-        configs[local.index] = frozenset((_LIVE, flag) for _, flag in configs[local.index])
-        written = _UNKNOWN
-        if (isinstance(value, r.Use) and isinstance(value.operand, p.Const)
-                and isinstance(value.operand.constant, k.Bool)):
-            written = _TRUE if value.operand.constant.value else _FALSE
-        self.set_flag(configs, local, written)
-
-    def set_flag(self, configs: list[frozenset[_Config]], flag: LocalId, value: str) -> None:
-        for guarded in self.flagged.get(flag, ()):
-            configs[guarded.index] = frozenset((s, value) for s, _ in configs[guarded.index])
-
-    def drop(self, configs: list[frozenset[_Config]], local: LocalId, span: Span) -> None:
-        if self.borrowed(local):
-            self.violate(DROP_ONCE, f"drops the parameter _{local.index}, which the function "
-                                    f"borrows", span)
-        states = {s for s, _ in configs[local.index]}
-        if _MOVED in states:
-            self.violate(USE_AFTER_MOVE, f"drops _{local.index} after a move", span)
-        if _DROPPED in states:
-            self.violate(DROP_ONCE, f"drops _{local.index} two times", span)
-        if _UNINIT in states:
-            self.violate(DROP_ONCE, f"drops _{local.index}, which holds no value", span)
-        configs[local.index] = frozenset((_DROPPED, flag) for _, flag in configs[local.index])
-
-    def drop_if_set(self, configs: list[frozenset[_Config]], local: LocalId, flag: LocalId,
-                    span: Span) -> None:
-        after = set()
-        for state, value in configs[local.index]:
-            if value not in (_TRUE, _FALSE):
-                self.violate(DROP_ONCE, f"reads the flag _{flag.index} of _{local.index}, "
-                                        f"which holds no known value", span)
-            elif value == _TRUE and state != _LIVE:
-                self.violate(DROP_ONCE, f"the flag _{flag.index} is true where _{local.index} "
-                                        f"holds no value", span)
-            elif value == _FALSE and state == _LIVE:
-                self.violate(DROP_ONCE, f"the flag _{flag.index} is false where _{local.index} "
-                                        f"holds a value", span)
-            after.add((_DROPPED if state == _LIVE else state, value))
-        configs[local.index] = frozenset(after)
-
-    def storage(self, configs: list[frozenset[_Config]], local: LocalId, span: Span,
-                verb: str) -> None:
-        """`StorageLive` and `StorageDead`: each leaves the local with no value."""
-        if local in self.check.owning and any(s == _LIVE for s, _ in configs[local.index]):
-            self.violate(DROP_ONCE, f"{verb} the storage of _{local.index} while it holds a "
-                                    f"value", span)
-        configs[local.index] = frozenset((_UNINIT, flag) for _, flag in configs[local.index])
-        self.set_flag(configs, local, _UNSET)
-
-    def leave(self, configs: list[frozenset[_Config]], span: Span) -> None:
-        """The `return`: no owning local holds a value, except `_0` and an `Inout` parameter,
-        which must hold one. `_0` holds a value on every path."""
-        for local in sorted(self.check.owning):
-            if local.index == 0 or self.borrowed(local):
-                continue
-            states = {s for s, _ in configs[local.index]}
-            if self.check.conventions.get(local) is Convention.INOUT:
-                if states != {_LIVE}:
-                    self.violate(DROP_ONCE, f"returns while the inout parameter "
-                                            f"_{local.index} holds no value", span)
-            elif _LIVE in states:
-                self.violate(DROP_ONCE, f"returns while _{local.index} holds a value", span)
-        if any(state != _LIVE for state, _ in configs[0]):
-            self.violate(RETURN_SLOT, "returns before a write of _0", span)
-
-    def borrowed(self, local: LocalId) -> bool:
-        convention = self.check.conventions.get(local)
-        return convention is not None and convention.read_only
