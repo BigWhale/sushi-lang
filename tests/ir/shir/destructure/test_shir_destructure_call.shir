@@ -4,12 +4,12 @@ ShirBody split
   params : [(_0 "n": i32, Guaranteed)]
   locals : []
   block  :
-    Return(TupleInit([Binary(/, LocalRef(_0), Lit(10)), Binary(%, LocalRef(_0), Lit(10))]))
+    Return(adopt TupleInit([adopt Binary(/, LocalRef(_0), Lit(10)), adopt Binary(%, LocalRef(_0), Lit(10))]))
 
 ShirBody main
   params : []
   locals : [_1 "tens": i32, _2 "ones": i32]
   block  :
-    Destructure([_1, _2], Call(Named(GlobalRef(@split)), [Lit(42)]))
-    ExprStmt(Call(BuiltinFn("println"), [Binary(+, Binary(*, LocalRef(_1), Lit(10)), LocalRef(_2))]))
-    Return(Lit(0))
+    Destructure([_1, _2], adopt Call(Free(@split), [(Lit(42), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Binary(+, Binary(*, LocalRef(_1), Lit(10)), LocalRef(_2)), Guaranteed)]))
+    Return(adopt Lit(0))

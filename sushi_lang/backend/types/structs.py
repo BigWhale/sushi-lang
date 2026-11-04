@@ -1,4 +1,7 @@
-"""LLVM emission for the auto-derived struct hash() method."""
+"""The struct layout family: a struct value from its fields, and the auto-derived hash() and clone().
+
+A struct and a tuple are an LLVM struct of their fields in the declaration order.
+"""
 
 from typing import Any, Sequence
 from sushi_lang.semantics.typesys import StructType, Type
@@ -85,3 +88,13 @@ def _emit_struct_clone(target_type: Type) -> Any:
 
 
 register_clone_emitter_factory("struct", _emit_struct_clone)
+
+
+def emit_struct_value(codegen: Any, struct_type: StructType,
+                      values: Sequence[ir.Value]) -> ir.Value:
+    """A value of `struct_type` from the value of each field, in the declaration order."""
+    builder = require_builder(codegen)
+    value: ir.Value = ir.Constant(codegen.types.ll_type(struct_type), ir.Undefined)
+    for index, field_value in enumerate(values):
+        value = builder.insert_value(value, field_value, index)
+    return value

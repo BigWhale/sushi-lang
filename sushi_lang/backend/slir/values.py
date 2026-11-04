@@ -8,11 +8,13 @@ not an integer, a float, a `bool` or an enum comparison stops with the class of 
 An enum is `{i32 tag, [K x i64] data}`. The tag, a variant and the address of a payload
 field come from the one layout authority (`TypeSizing.payload_field_offsets`, read through
 `enum_utils` and the enum emitter), at the semantic type of the place, never from a layout
-match. An `Aggregate` of a variant, as an rvalue and as a constant, goes through one check
-of the variant against the semantic types of its payload (`checked_variant`). The rvalue
-calls it and then the enum emitter; the constant goes through the one converter of an enum
-constant (`enum_initializer`), which runs the check itself and which the global of a
-`const` reads too.
+match. A struct and a tuple are an LLVM struct of their fields in the declaration order: a
+field is a GEP of its index, and a value is built by the struct emitter. An `Aggregate`, as
+an rvalue and as a constant, goes through one check against the semantic types of its
+parts (`checked_variant`, `checked_struct`). The rvalue calls it and then the enum or the
+struct emitter; the constant goes through the one converter of an aggregate constant
+(`constant_initializer`), which runs the check itself and which the global of a `const`
+reads too.
 """
 from __future__ import annotations
 
@@ -22,26 +24,29 @@ from llvmlite import ir
 
 from sushi_lang.backend import enum_utils
 from sushi_lang.backend.constants.enum_initializers import (
-    checked_variant, enum_initializer, enum_of, variant_of,
+    checked_struct, checked_variant, constant_initializer, enum_of, scalar_initializer,
+    semantic_type_of, variant_of,
 )
 from sushi_lang.backend.expressions.casts import emit_value_cast
 from sushi_lang.backend.expressions.enums import emit_enum_variant_value
-from sushi_lang.backend.expressions.literals import emit_int_constant
+from sushi_lang.backend.gep_utils import gep_struct_field
 from sushi_lang.backend.expressions.operators import (
     emit_arithmetic, emit_bitwise, emit_contract_relation, emit_number_comparison, emit_string_relation,
     emit_unary_value, emit_xor,
 )
 from sushi_lang.backend.slir.state import FunctionState
+from sushi_lang.backend.types.structs import emit_struct_value
 from sushi_lang.semantics.operators import ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, SHIFT_OPS
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.type_predicates import is_numeric_type
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, StructType, Type
 
 
 def place_address(state: FunctionState, place: p.Place) -> ir.Value:
-    """The address of a place: the storage of a local, or a payload field of a variant."""
+    """The address of a place: the storage of a local, a payload field of a variant, or a
+    field of a struct or a tuple."""
     match place:
         case p.Local(local):
             return state.storage_of(local)
@@ -51,6 +56,10 @@ def place_address(state: FunctionState, place: p.Place) -> ir.Value:
             data = enum_utils.get_data_ptr(state.codegen, place_address(state, base))
             return enum_utils.variant_field_address(state.codegen, data, types[index],
                                                     offsets[index])
+        case p.Field(base, index):
+            _field_type(state, base, index)
+            return gep_struct_field(state.codegen, place_address(state, base), index,
+                                    builder=state.builder)
     state.stop(place)
 
 
@@ -60,7 +69,17 @@ def type_of_place(state: FunctionState, place: p.Place) -> Type:
             return state.type_of(local)
         case p.Field(p.Downcast(base, variant), index):
             return _payload_types(state, base, variant, index)[index]
+        case p.Field(base, index):
+            return _field_type(state, base, index)
     state.stop(place)
+
+
+def _field_type(state: FunctionState, base: p.Place, index: int) -> Type:
+    """The type of the field `index` of the struct or the tuple in `base`."""
+    ty = type_of_place(state, base)
+    if not isinstance(ty, StructType) or not 0 <= index < len(ty.fields):
+        state.fault(f"{base} of {ty} has no field {index}")
+    return ty.fields[index][1]
 
 
 def _payload_types(state: FunctionState, base: p.Place, variant: str,
@@ -93,21 +112,18 @@ def type_of_operand(state: FunctionState, operand: p.Operand) -> Type:
 
 def constant_value(state: FunctionState, constant: k.Constant) -> ir.Value:
     """An LLVM value of a constant. A string literal comes from the string constant seam,
-    and it owns no heap (its owned flag is 0). A variant goes through the one converter of an
-    enum constant. A struct stops (`emit, aggregate constant`) until the emit chunk of A5."""
+    and it owns no heap (its owned flag is 0). A struct, a tuple and a variant go through the
+    one converter of an aggregate constant."""
     codegen = state.codegen
-    if isinstance(constant, k.Int):
-        return emit_int_constant(codegen, constant.ty, constant.value)
-    if isinstance(constant, (k.Float, k.Bool, k.Blank)):
-        return ir.Constant(codegen.types.ll_type(type_of_constant(state, constant)),
-                           _scalar(constant))
     if isinstance(constant, k.Str):
         return codegen.runtime.strings.emit_string_literal(
             constant.value.decode("utf-8", "surrogatepass"))
-    if isinstance(constant, k.Aggregate) and constant.variant is not None:
-        return enum_initializer(constant, codegen.types, _literal_constant(state), "",
-                                span=state.span, filename=state.filename)
-    state.stop("aggregate constant" if isinstance(constant, k.Aggregate) else constant)
+    if isinstance(constant, k.Aggregate):
+        return constant_initializer(constant, codegen.types, _literal_constant(state), "",
+                                    span=state.span, filename=state.filename)
+    if isinstance(constant, k.FnRef):
+        state.stop(constant)
+    return scalar_initializer(constant, codegen.types, state.fault)
 
 
 def _literal_constant(state: FunctionState) -> Callable[[str, str], ir.Constant]:
@@ -117,25 +133,9 @@ def _literal_constant(state: FunctionState) -> Callable[[str, str], ir.Constant]
 
 
 def type_of_constant(state: FunctionState, constant: k.Constant) -> Type:
-    if isinstance(constant, (k.Int, k.Float)):
-        return constant.ty
-    if isinstance(constant, k.Bool):
-        return BuiltinType.BOOL
-    if isinstance(constant, k.Blank):
-        return BuiltinType.BLANK
-    if isinstance(constant, k.Str):
-        return BuiltinType.STRING
-    if isinstance(constant, k.Aggregate) and constant.variant is not None:
-        return constant.ty
-    state.stop("aggregate constant" if isinstance(constant, k.Aggregate) else constant)
-
-
-def _scalar(constant: k.Float | k.Bool | k.Blank) -> float | int:
-    if isinstance(constant, k.Float):
-        return float(constant.value)
-    if isinstance(constant, k.Bool):
-        return int(constant.value)
-    return 0
+    if isinstance(constant, k.FnRef):
+        state.stop(constant)
+    return semantic_type_of(constant, state.fault)
 
 
 def rvalue_value(state: FunctionState, rvalue: r.Rvalue) -> ir.Value:
@@ -213,15 +213,19 @@ def _scalar_type(state: FunctionState, rvalue: r.Rvalue, ty: Type) -> Type:
 
 
 def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
-    """An enum variant. Any other kind of aggregate stops with its class."""
+    """An enum variant, a struct or a tuple. Any other kind of aggregate stops with its
+    class."""
     kind = rvalue.kind
-    if not isinstance(kind, r.AggVariant):
+    if not isinstance(kind, (r.AggVariant, r.AggStruct, r.AggTuple)):
         state.stop(kind)
-    enum_type, info = checked_variant(kind.ty, kind.variant,
-                                      [type_of_operand(state, part) for part in rvalue.parts],
-                                      state.fault)
-    values = [operand_value(state, part) for part in rvalue.parts]
-    return emit_enum_variant_value(state.codegen, enum_type, info, values)
+    parts = [type_of_operand(state, part) for part in rvalue.parts]
+    if isinstance(kind, r.AggVariant):
+        enum_type, info = checked_variant(kind.ty, kind.variant, parts, state.fault)
+        values = [operand_value(state, part) for part in rvalue.parts]
+        return emit_enum_variant_value(state.codegen, enum_type, info, values)
+    struct_type = checked_struct(kind.ty, parts, state.fault)
+    return emit_struct_value(state.codegen, struct_type,
+                             [operand_value(state, part) for part in rvalue.parts])
 
 
 def _discriminant(state: FunctionState, rvalue: r.Discriminant) -> ir.Value:

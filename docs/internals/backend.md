@@ -206,8 +206,10 @@ integer to a float, `fptosi` or `fptoui` back, `zext` or `sext` to widen an inte
 the sign of the source), `trunc` to narrow it, and no instruction between two integers of
 one width.
 
-**Constants.** An integer is `emit_int_constant` (`backend/expressions/literals.py`), at
-the width of its type. A string is a private constant global (`StringConstantManager`,
+**Constants.** A scalar is `scalar_initializer` (`backend/constants/enum_initializers.py`):
+an integer at the width of its type. A struct, a tuple and an enum variant go through the
+one converter of an aggregate constant (`constant_initializer`, same module), which the
+SLIR emitter and the global of a `const` both call. A string is a private constant global (`StringConstantManager`,
 `backend/string_constants.py`, one global for each distinct text) and a fat pointer with
 owned = 0.
 

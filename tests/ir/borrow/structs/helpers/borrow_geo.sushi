@@ -1,0 +1,6 @@
+# The unit that `test_err_borrow_poke_field_of_an_alias_constant` binds behind an alias.
+public struct Vec:
+    i32 x
+    i32 y
+
+public const Vec ORIGIN = Vec(0, 7)

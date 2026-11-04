@@ -1,0 +1,24 @@
+unit helpers/borrow_geo
+
+ShirBody ORIGIN (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt StructInit(@Vec, [adopt Lit(0), adopt Lit(7)], written_order: [0, 1]))
+
+unit test_err_borrow_poke_field_of_an_alias_constant
+
+ShirBody inc
+  params : [(_0 "v": i32, Inout)]
+  locals : []
+  block  :
+    Assign(LocalRef(_0), adopt Binary(+, LocalRef(_0), Lit(1)), is_init: false)
+
+ShirBody main
+  params : []
+  locals : [_0 "seen": i32]
+  block  :
+    Assign(LocalRef(_0), adopt Field(ConstRef(@geo.ORIGIN), "y"), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_0), Guaranteed)]))
+    ExprStmt(Call(Free(@inc), [(Field(ConstRef(@geo.ORIGIN), "x"), Inout)]))
+    Return(adopt Lit(0))

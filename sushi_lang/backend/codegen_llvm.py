@@ -620,8 +620,9 @@ class LLVMCodegen:
 
     def _materialize_constant(self, value, data_name: str, span: Optional[Span],
                               filename: Optional[str]) -> ir.Constant:
-        """An evaluated constant as an LLVM initializer. An enum value goes through the one
-        converter of an enum constant, which stops (CE0155) on a value it cannot convert yet.
+        """An evaluated constant as an LLVM initializer. A struct, a tuple and an enum value
+        go through the one converter of an aggregate constant, which stops (CE0155) on a
+        value it cannot convert yet (an array in a field or a payload).
 
         A string is finished here rather than in the evaluator: its bytes need a module
         to live in, and the evaluator has none, which is why `const_value_to_llvm` hands
@@ -634,17 +635,12 @@ class LLVMCodegen:
         # struct's fields have types of their own, so `ArrayType(elements[0].type, ...)`
         # would build a homogeneous array out of them and mis-type the initializer.
         if isinstance(value, AggregateConstant):
-            if isinstance(value.semantic_type, StructType):
-                fields = [self._materialize_constant(field, f"{data_name}.{i}", span, filename)
-                          for i, field in enumerate(value.elements)]
-                return ir.Constant(self.types.ll_type(value.semantic_type), fields)
-
-            if isinstance(value.semantic_type, EnumType):
+            if isinstance(value.semantic_type, (StructType, EnumType)):
                 from sushi_lang.backend.constants.enum_initializers import (
-                    constant_of, enum_initializer)
-                return enum_initializer(constant_of(value, span, filename), self.types,
-                                        self._constant_string_value, data_name,
-                                        span=span, filename=filename)
+                    constant_initializer, constant_of)
+                return constant_initializer(constant_of(value, span, filename), self.types,
+                                            self._constant_string_value, data_name,
+                                            span=span, filename=filename)
 
             elements = [self._materialize_constant(element, f"{data_name}.{i}", span, filename)
                         for i, element in enumerate(value.elements)]

@@ -1,0 +1,13 @@
+# The unit that `test_slir_alias_constant_field` binds behind an alias: a struct constant
+# and a constant of a struct with struct fields.
+public struct Vec:
+    i32 x
+    i32 y
+
+public struct Seg:
+    Vec a
+    Vec b
+
+public const Vec ORIGIN = Vec(0, 7)
+
+public const Seg UNIT = Seg(Vec(1, 2), Vec(x: 3, y: 4))

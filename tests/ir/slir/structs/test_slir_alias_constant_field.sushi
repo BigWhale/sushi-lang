@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "7\n0 7\n10\n4\n7\n"
+# EXPECT_NO_LEAKS
+#
+# A field of a struct constant behind an alias is a field read (ruling R-J): the constant
+# goes into a temporary, and the field is a `Copy` of its projection. On main this program
+# is CE0056; the new pipeline compiles it and prints the fields, by design.
+
+use "helpers/slir_geo" as geo
+
+fn show(peek i32 v) ~:
+    println(v)
+
+fn main() i32:
+    println(geo.ORIGIN.y)
+    println("{geo.ORIGIN.x} {geo.ORIGIN.y}")
+    println(geo.UNIT.b.x + geo.ORIGIN.y)
+    let i32 h = geo.UNIT.b.y
+    println(h)
+    show(peek geo.ORIGIN.y)
+    return 0

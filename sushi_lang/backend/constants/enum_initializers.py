@@ -1,12 +1,14 @@
-"""An enum constant as its `{i32 tag, [K x i64] data}` initializer (#551).
+"""An aggregate constant as its LLVM initializer: a struct, a tuple and an enum variant (#551).
 
-The one converter of an enum constant: the SLIR emitter and the declaration round of a
-global both call `enum_initializer` with a SLIR `Constant` (the round makes one from the
-evaluator value through `constant_of`, over `constants.of_value`; a value with no SLIR
-constant yet stops with `emit, aggregate constant`). The converter first runs the one check
-of a variant (`checked_variant`, which the rvalue of the SLIR emitter calls too) over the
-value, at every depth, so a value that it cannot write after the check is an internal
-error. A payload-free variant is a tag over the zero value. A payload-carrying one is the tag plus its constant payloads, written into the
+The one converter of an aggregate constant: the SLIR emitter and the declaration round of a
+global both call `constant_initializer` with a SLIR `Constant` (the round makes one from
+the evaluator value through `constant_of`, over `constants.of_value`; a value with no SLIR
+constant yet, an array, stops with `emit, aggregate constant`). The converter first runs
+the one check of a variant (`checked_variant`) and of a struct (`checked_struct`) over the
+value, at every depth; the rvalues of the SLIR emitter call the same checks. So a value
+that it cannot write after the check is an internal error. A struct is one LLVM constant
+for each field, in the declaration order. An enum is its `{i32 tag, [K x i64] data}`
+initializer (`enum_initializer`). A payload-free variant is a tag over the zero value. A payload-carrying one is the tag plus its constant payloads, written into the
 data words at the offsets `TypeSizing.payload_field_offsets` gives -- the ONE layout
 authority, so a constant and a run-time construction cannot disagree about where a field
 sits. Each value is written at the declared type of its field. The bytes are
@@ -74,8 +76,8 @@ class _PayloadBytes:
 
 def constant_of(value: 'AggregateConstant', span: Optional[Span],
                 filename: Optional[str]) -> k.Aggregate:
-    """The SLIR constant of an enum value of the evaluator. An array value, also in a
-    payload, has none yet (A6), and the global of it stops."""
+    """The SLIR constant of a struct or an enum value of the evaluator. An array value, also
+    in a payload or a field, has none yet (A6), and the global of it stops."""
     constant = k.of_value(value)
     if not isinstance(constant, k.Aggregate):
         stop("aggregate constant", span, filename)
@@ -111,17 +113,32 @@ def checked_variant(ty: Type, variant: str, parts: Sequence[Type],
     return enum_type, info
 
 
+def checked_struct(ty: Type, parts: Sequence[Type], fault: Fault) -> StructType:
+    """The one check of an `Aggregate` of a struct or a tuple, as an rvalue and as a
+    constant: `ty` is a struct, and the semantic type of each part is the type of its
+    field."""
+    if not isinstance(ty, StructType):
+        fault(f"{ty} is no struct")
+    fields = tuple(field_type for _name, field_type in ty.fields)
+    if tuple(parts) != fields:
+        fault(f"the fields of {ty} are ({', '.join(map(str, fields))}), not "
+              f"({', '.join(map(str, parts))})")
+    return ty
+
+
 def _check_constant(constant: k.Constant, fault: Fault) -> None:
-    """The one check for each variant in a constant, at every depth."""
+    """The one check for each variant and each struct in a constant, at every depth."""
     if isinstance(constant, k.Aggregate):
+        parts = [semantic_type_of(part, fault) for part in constant.parts]
         if constant.variant is not None:
-            checked_variant(constant.ty, constant.variant,
-                            [_type_of(part, fault) for part in constant.parts], fault)
+            checked_variant(constant.ty, constant.variant, parts, fault)
+        else:
+            checked_struct(constant.ty, parts, fault)
         for part in constant.parts:
             _check_constant(part, fault)
 
 
-def _type_of(constant: k.Constant, fault: Fault) -> Type:
+def semantic_type_of(constant: k.Constant, fault: Fault) -> Type:
     """The semantic type of a constant."""
     if isinstance(constant, (k.Int, k.Float, k.Aggregate)):
         return constant.ty
@@ -132,6 +149,51 @@ def _type_of(constant: k.Constant, fault: Fault) -> Type:
     if isinstance(constant, k.Str):
         return BuiltinType.STRING
     fault(f"the constant {constant} has no type of a payload")
+
+
+def constant_initializer(value: k.Aggregate, types, finish_string: Optional[StringFinisher],
+                         data_name: str, *, span: Optional[Span] = None,
+                         filename: Optional[str] = None) -> ir.Constant:
+    """The LLVM constant of an aggregate constant: an enum variant through
+    `enum_initializer`, a struct or a tuple as one constant for each field. A string field
+    is the constant of `finish_string`, named `<data_name>.<index>`."""
+    if value.variant is not None:
+        return enum_initializer(value, types, finish_string, data_name, span=span,
+                                filename=filename)
+
+    def fault(detail: str) -> NoReturn:
+        raise_internal_error("CE0000", span=span, filename=filename,
+                             detail=f"the struct constant {value}: {detail}")
+
+    _check_constant(value, fault)
+    fields: List[ir.Constant] = []
+    for index, part in enumerate(value.parts):
+        name = f"{data_name}.{index}"
+        if isinstance(part, k.Aggregate):
+            fields.append(constant_initializer(part, types, finish_string, name, span=span,
+                                               filename=filename))
+        elif isinstance(part, k.Str):
+            if finish_string is None:
+                fault("a string field has no finisher")
+            fields.append(finish_string(part.value.decode("utf-8", "surrogatepass"), name))
+        else:
+            fields.append(scalar_initializer(part, types, fault))
+    return ir.Constant(types.ll_type(value.ty), fields)
+
+
+def scalar_initializer(constant: k.Constant, types, fault: Fault) -> ir.Constant:
+    """The LLVM constant of a scalar: an integer at the width of its type (its bits), a
+    float, a `bool` and `~`."""
+    if isinstance(constant, k.Int):
+        ll = types.ll_type(constant.ty)
+        return ir.Constant(ll, constant.value & ((1 << ll.width) - 1))
+    if isinstance(constant, k.Float):
+        return ir.Constant(types.ll_type(constant.ty), float(constant.value))
+    if isinstance(constant, k.Bool):
+        return ir.Constant(types.ll_type(BuiltinType.BOOL), int(constant.value))
+    if isinstance(constant, k.Blank):
+        return ir.Constant(types.ll_type(BuiltinType.BLANK), 0)
+    fault(f"the constant {constant} is no scalar")
 
 
 def enum_initializer(value: k.Aggregate, types,
