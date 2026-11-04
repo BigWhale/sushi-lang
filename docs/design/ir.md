@@ -932,52 +932,80 @@ has the target type, and the pass does not check its range: the cast keeps the b
 the type holds (`300 as u8` is 44). The fold reads that operand at the target type too
 (`fold._cast`). Any other operand of a cast gets no type from its position.
 
-**A method call.** A `Call` with a `Dotted` target types its receiver first, at no
-expected type. Then the ladder of the call (`resolve_dotted`, `passes/types/calls/dotcall.py`)
-finds the callee in one order: the family of `METHOD_TYPE_REGISTRY` that claims the
-receiver and the name (the claim puts a perk implementation before a family that yields
-to it), then a perk implementation, then an extension method of the name in any unit,
-and else nothing. A call that nothing answers is [CE2008](../error-catalog.md#ce2008),
-except when the collect pass refused an extension of that name on that type. A family
-answer is the callee row `Builtin(recv, BuiltinMethod)`, and only `MethodFamily.callee`
-makes the `BuiltinMethod`, so its family is always a row of the table (gate:
+**A method call.** A `Call` with a `Dotted` target types its receiver first, at no expected
+type. Then the ladder of the call (`resolve_dotted`, `passes/types/calls/dotcall.py`) finds
+the callee in one order: the family of `METHOD_TYPE_REGISTRY` that claims the receiver and
+the name (the claim puts a perk implementation before a family that yields to it), then a
+perk implementation, then an extension method of the name in any unit, and else nothing. A
+call that nothing answers is [CE2008](../error-catalog.md#ce2008), except when the collect
+pass refused an extension of that name on that type. A family answer is the callee row
+`Builtin(recv, BuiltinMethod)`, and only `MethodFamily.callee` makes the `BuiltinMethod`,
+so its family is always a row of the table (gate:
 `tests/unit/test_dotcall_ladder_is_one.py`). The AST ladder put its answer in a set of
 stamps on the call node. The SHIR ladder puts each fact in a row: the callee, the method
 type arguments and the declaring unit in `ResolvedCall`, the mode of each parameter in a
-convention row, the family in `BuiltinMethod`, and the type of the receiver in the type
-row of the receiver. The convention of the receiver has no row yet (8.3). The ladder runs
-for a receiver of every type. A family answer goes to the arm of its family in ONE table,
-`FAMILY_ARMS` (`passes/types/visit/calls.py`), keyed by the name of the family in
-`METHOD_TYPE_REGISTRY`, and no arm compares a family name of its own (gate:
+convention row, the family in `BuiltinMethod`, and the type of the receiver in the type row
+of the receiver. The convention of the receiver is a fact of the callee: the answer of the
+receiver partition for a `Builtin`, and the declared mode of `self` for a `Method` (8.3,
+7.6). The ladder runs for a receiver of every type. A family answer goes to the arm of its
+family in ONE table, `FAMILY_ARMS` (`passes/types/visit/calls.py`), keyed by the name of
+the family in `METHOD_TYPE_REGISTRY`, and no arm compares a family name of its own (gate:
 `tests/unit/test_typecheck_family_arms_are_registry_rows.py`). While the migration is in
-progress, a family with no arm in the table stops the walk with
-`typecheck, Call(method <family>)`, on a receiver of any type (`Call(method list)`,
-`Call(method array)`), so each group counts its own stops. A receiver that is not of a
-built-in type and that no family claims stops the walk with the label of the call target
-(`Call(method)`, `Call(extension)`, `Call(stdlib method)`), and so do a perk implementation
-and an extension method. The primitive family has its arm:
-a primitive method takes no argument (a wrong count is [CE2009](../error-catalog.md#ce2009)
-from the arity row of the family), and the call yields the type of its row in
-`PRIMITIVE_METHOD_RETURNS`. A wrong count does not stop the call from yielding that type.
-The `string` family has its arm too. A string method has the arguments of its row in
-`METHOD_SPECS` (a wrong count is [CE2009](../error-catalog.md#ce2009) from the arity row of
-the family, and a wrong argument type is [CE2006](../error-catalog.md#ce2006) from the one
-argument check), and the call yields the return type of its row. A wrong count skips the
-argument types. A method whose row answers a dynamic array (`split`, `to_bytes`) stops the
-walk with `typecheck, Call(method string array)`.
-The `result` and `maybe` families have their arms too. `is_ok`, `is_err`, `is_some` and
-`is_none` yield a `bool`, `realise` and `expect` yield the payload `T`, and `err` yields a
-`Maybe@(E)`. A wrong count is [CE2009](../error-catalog.md#ce2009) from the arity row of
-the family, and it skips the argument types. The one argument check reads the default of
-`realise` at the type `T` and the message of `expect` at `string`. A value of another type
-is [CE2503](../error-catalog.md#ce2503) at the argument, and each argument borrows. The
-call yields its type after either fault. `realise` on a `~` payload is
-[CE2506](../error-catalog.md#ce2506) at the call, and the pass does not check its default.
-The call still yields `~`, so a binding of another type is a mismatch too, as on `main`.
-One table row holds the argument types and the return type of each method
-(`WrapperMethodRow`, `semantics/generics/maybe.py` and `results.py`).
-A method with a signature row (`map_err`, `or_err`, group B10) stops the walk with the
-label of its family, `typecheck, Call(method result)` or `Call(method maybe)`.
+progress, a family with no arm in the table stops the walk with `typecheck, Call(method
+<family>)`, on a receiver of any type (`Call(method list)`, `Call(method array)`), so each
+group counts its own stops. A receiver that is not of a built-in type and that no family
+claims, and no extension method of a plain type answers (see below), stops the walk with
+the label of the call target (`Call(method)`, `Call(extension)`, `Call(stdlib method)`).
+The primitive family has its arm: a primitive method takes no argument (a wrong count is
+[CE2009](../error-catalog.md#ce2009) from the arity row of the family), and the call yields
+the type of its row in `PRIMITIVE_METHOD_RETURNS`. A wrong count does not stop the call
+from yielding that type. The `string` family has its arm too. A string method has the
+arguments of its row in `METHOD_SPECS` (a wrong count is
+[CE2009](../error-catalog.md#ce2009) from the arity row of the family, and a wrong argument
+type is [CE2006](../error-catalog.md#ce2006) from the one argument check), and the call
+yields the return type of its row. A wrong count skips the argument types. A method whose
+row answers a dynamic array (`split`, `to_bytes`) stops the walk with `typecheck,
+Call(method string array)`. The `result` and `maybe` families have their arms too. `is_ok`,
+`is_err`, `is_some` and `is_none` yield a `bool`, `realise` and `expect` yield the payload
+`T`, and `err` yields a `Maybe@(E)`. A wrong count is [CE2009](../error-catalog.md#ce2009)
+from the arity row of the family, and it skips the argument types. The one argument check
+reads the default of `realise` at the type `T` and the message of `expect` at `string`. A
+value of another type is [CE2503](../error-catalog.md#ce2503) at the argument, and each
+argument borrows. The call yields its type after either fault. `realise` on a `~` payload
+is [CE2506](../error-catalog.md#ce2506) at the call, and the pass does not check its
+default. The call still yields `~`, so a binding of another type is a mismatch too, as on
+`main`. One table row holds the argument types and the return type of each method
+(`WrapperMethodRow`, `semantics/generics/maybe.py` and `results.py`). A method with a
+signature row (`map_err`, `or_err`, group B10) stops the walk with the label of its family,
+`typecheck, Call(method result)` or `Call(method maybe)`.
+
+**An extension method and a static.** A type is PLAIN when it is a primitive, or a struct
+or an enum that is no instance of a generic type and whose name the unit did not lose (D2,
+`_is_plain`, `passes/types/visit/calls.py`). The extension rung of the ladder on a plain
+receiver resolves through `resolve_extension_method` with the span of the call, and the one
+choice of the visible declaration (`_choose_visible`) reports
+[CE3005](../error-catalog.md#ce3005), [CE3022](../error-catalog.md#ce3022) and
+[CE3023](../error-catalog.md#ce3023) at the call (R4 to R7, C3 to C5). The callee row is
+`Method(recv, decl, receiver)`, and `ResolvedCall.unit` is the declaring unit of the
+method. A plain struct or enum with no method of the name is CE2008 at the call; when the
+collect pass refused an extension of that name (`declaration_was_refused`), the call
+reports nothing more and the body holds that error. A `Static` target `T.m(...)` names a
+plain type, also behind an alias, where the type is the one that the namespace holds and a
+private type of another unit is CE3005. Its static resolves through
+`resolve_extension_method(static=True)`: instance against static is still the one filter
+there. A type with no static of the name is [CE2102](../error-catalog.md#ce2102), with the
+help that names an instance method of the name, and an enum is
+[CE2045](../error-catalog.md#ce2045). The callee row is `Static(ty, decl)`. Both kinds
+check their arguments with the one argument check, at the declared mode of each parameter
+(`CalleeKind.METHOD`, `CalleeKind.STATIC_METHOD`), and the call yields the `Result` of the
+channel of the method, or its bare return value, also after an error of an argument. A
+`self` in the body of a static is the error hole [CE0134](../error-catalog.md#ce0134) of
+lowering. These calls still stop the walk with their label: a perk method (group C6), a
+receiver that is not plain and a static of a type that is not plain (C1: an instance of a
+generic type, an array, an iterator, a `Result`, a `Maybe`, a type parameter), a method
+with a method-level type parameter (C1), a method with a `peek` return (B8), a call through
+a field of a function type that no method of the struct names (C2), and a static of
+`BUILTIN_STATICS` (B2, B4).
 
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
@@ -1362,8 +1390,9 @@ callee from it (8.6).
 
 The `decl` of a `Method` and of a `Static` callee is the id of the written name
 `<type>.<method>` (`DeclNames.refer`), with the type as `display_type` spells it: the name
-that lowering gives the body of the method. The written name and `ResolvedCall.unit` give
-the symbol of the method (`extension_symbol`). The `receiver` of a `Method` is the
+that lowering gives the body of the method. The type of the receiver (its type row, or
+`Static.ty`), the method of the written name and `ResolvedCall.unit` give the symbol of the
+method (`method_symbol`, 8.6). The `receiver` of a `Method` is the
 convention of its receiver: the declared mode of `self` (no mode is `Guaranteed`, `peek
 self` is `InGuaranteed`, `poke self` is `Inout`, `nom self` is `Owned`). It is a fact of
 the callee row and not a row of `TypeckResults`, as `BuiltinMethod.nom_self` is (8.3). A
@@ -1637,36 +1666,47 @@ walk ends with no stop, `check_lift` runs, and the body goes to `borrow`, which 
 no stage runs it: the closures group takes the symbol and the environment layout from it,
 and then deletes it.
 
-**The body half of `borrow`.** The declaration half of `borrow` reads the declaration of the
-body (a borrowed return), and the mode of each parameter is its `Convention` (8.3). The
+**The body half of `borrow`.** The declaration half of `borrow` reads the declaration of
+the body (a borrowed return), and the mode of each parameter is its `Convention` (8.3). The
 body half walks the body through ONE table of arms keyed on the SHIR class, with a row for
 each member of `ShirStmt` and `ShirExpr` (`passes/borrow/arms.py`, gate:
 `tests/unit/test_borrow_dispatch_is_total.py`). The lookup of an arm and the stop are the
 one dispatch of the SHIR passes (`semantics/shir/dispatch.py`), which `typecheck` reads
 too: a class with no row is an internal error at the span of the node, and the arm of a
 construct that the pass does not check yet stops the walk of its body with the stop code
-(`borrow, <class>`). A statement of a copy of an unrolled `expand` that ends the path,
-with more statements after it in its block, stops the walk too (`borrow, Expand`): the
-group of the copies decides the statements that no path reaches. A call of a built-in method
-has its arm when `receiver_convention` (8.3) gives its receiver the convention `Guaranteed`:
-each method of the primitive family and of the `string` family, and each method of the
-`result` and `maybe` families that does not declare `nom self`. The arm reads the receiver
-(a use after a move is CE2405), and the receiver stays with its owner. Then it reads each
-argument by its convention row, as a call of a free function does. A call of a method of
-another family, and a call with an `Owned` receiver, have no arm in the pass yet: each stops
-the walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages
-make this stop with the one helper `dispatch.stop_at_family`. The typecheck pass records
-only the callees `Free`, `Intrinsic` and `Builtin`, so a call with another callee in this
-pass is an internal error. The state of the walk
-(`BorrowState`, `FlowFacts`) is keyed by `LocalId`, because a hidden local has no source
-name, and a diagnostic names a local by the name of its `ShirLocal`. The pass decides the
-`Ownership` of each consuming use ONE time, with `classify()`, and one function writes the
-row (`consume.decide`, gate: `tests/unit/test_consuming_use_coverage.py`). The convention of
-a call argument is the row of `typecheck`, and `borrow` does not derive it again: the
-`nom` marker is compared against the declared mode by `typecheck` (CE2427). A `peek x` or a
-`poke x` argument borrows its place for the statement with the mode that the source
-writes, so a `poke` argument for a `peek` parameter keeps the `InGuaranteed` convention of
-the parameter and is still a `poke` borrow of its place (CE2408 for a read-only place).
+(`borrow, <class>`). A statement of a copy of an unrolled `expand` that ends the path, with
+more statements after it in its block, stops the walk too (`borrow, Expand`): the group of
+the copies decides the statements that no path reaches. A call of a built-in method has its
+arm when `receiver_convention` (8.3) gives its receiver the convention `Guaranteed`: each
+method of the primitive family and of the `string` family, and each method of the `result`
+and `maybe` families that does not declare `nom self`. The arm reads the receiver (a use
+after a move is CE2405), and the receiver stays with its owner. Then it reads each argument
+by its convention row, as a call of a free function does. A call of a method of another
+family, and a call with an `Owned` receiver, have no arm in the pass yet: each stops the
+walk with the family of its callee row (`borrow, Call(method <family>)`). Both stages make
+this stop with the one helper `dispatch.stop_at_family`. A `Static` callee is a call of its
+arguments. A `Method` callee reads its receiver by the convention of its `self`
+(`check_method_receiver`, `passes/borrow/calls.py`), after the entry of the call:
+`Guaranteed` is a read and the implicit shared borrow of the receiver; `InGuaranteed` is a
+read and a `peek` of its owner; `Inout` is the write gate and then a `poke` of its owner
+(`borrow_of_constant` refuses a constant, [CE2400](../error-catalog.md#ce2400), and
+`reject_readonly_write` refuses a read-only place and a temporary,
+[CE2429](../error-catalog.md#ce2429)), and after the arguments the change of the owner, so
+a view that the same call reads is [CE2412](../error-catalog.md#ce2412), "read by the call
+that changes it"; `Owned` takes the receiver after the arguments, a consuming use that
+names the method in [CE2435](../error-catalog.md#ce2435), with the help of
+[CE2411](../error-catalog.md#ce2411) to copy. The typecheck pass records only the callees
+`Free`, `Intrinsic`, `Builtin`, `Method` and `Static`, so a call with another callee in
+this pass is an internal error. The state of the walk (`BorrowState`, `FlowFacts`) is keyed
+by `LocalId`, because a hidden local has no source name, and a diagnostic names a local by
+the name of its `ShirLocal`. The pass decides the `Ownership` of each consuming use ONE
+time, with `classify()`, and one function writes the row (`consume.decide`, gate:
+`tests/unit/test_consuming_use_coverage.py`). The convention of a call argument is the row
+of `typecheck`, and `borrow` does not derive it again: the `nom` marker is compared against
+the declared mode by `typecheck` (CE2427). A `peek x` or a `poke x` argument borrows its
+place for the statement with the mode that the source writes, so a `poke` argument for a
+`peek` parameter keeps the `InGuaranteed` convention of the parameter and is still a `poke`
+borrow of its place (CE2408 for a read-only place).
 
 **A constant in `borrow`.** A constant is read-only storage that the program keeps: a
 `ConstRef` has an address and no state of the walk. A `peek` of it, a `poke` of it and the
@@ -1930,26 +1970,30 @@ finished, and that is not a template check (Q1), to the SLIR stage of its unit
 and `SlirProgram` keeps the outcome of each body, keyed by the `DeclId` of the body. The
 symbol, the unit and the return type of the function are facts of its declaration (6.4).
 The unit is the declaring unit. A function that has none (a lifted lambda, the instance of
-a template of a binary library) goes into the module of the unit that holds its body.
+a template of a binary library) goes into the module of the unit that holds its body. The
+body of an extension method or of a static is a function like any other: its receiver is
+`_1`, with the convention of its `self` (8.3), its declared parameters come after it, and a
+static has no receiver. Its symbol is `extension_decl_symbol` (8.6), and its name is the
+written name `<type>.<method>`.
 
 While the migration is in progress, a construct that the lowering does not handle yet stops
 the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
-class, or one of these names: `generic instance`, `conversion`, `perk method` and `method`
-for the body of a monomorphized generic instance, of a conversion, of a perk method and of
-an extension method; `borrowed view` for a `REJECT` row (7.9), `borrowed rebind` for a
-rebind of a `Guaranteed` or an `InGuaranteed` parameter that owns, `borrowed try` for a
-`Try` over an owning wrapper that the body only reads (a copy of it would drop its payload
-twice), `conversion` also for a `Try` that calls a declared conversion (today `typecheck`
-stops there first), `library function` for a free callee whose row names no declaring unit
-(a function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
+class, or one of these names: `generic instance`, `conversion` and `perk method` for the
+body of a monomorphized generic instance, of a conversion and of a perk method; `borrowed
+view` for a `REJECT` row (7.9), `borrowed rebind` for a rebind of a `Guaranteed` or an
+`InGuaranteed` parameter that owns, `borrowed try` for a `Try` over an owning wrapper that
+the body only reads (a copy of it would drop its payload twice), `conversion` also for a
+`Try` that calls a declared conversion (today `typecheck` stops there first), `library
+function` for a free, a method or a static callee whose row names no declaring unit (a
+function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
 argument, `aggregate constant` for a `ConstRef` whose value is an array, also as a payload
 of an enum value or a field of a struct (group A6 gives its `Constant`), `Match owning` for
-a match on a tuple that owns (8.9), and `ConstRef out of range` for a `ConstRef` whose value
-its type cannot hold (8.5). The dump prints such a
-function as ONE line in place of its body, `fn <name>: stopped (slir, <construct>)`, so that
-a golden file shows the progress of each function. The pipeline reports one stop after the
-analysis: a stop of `typecheck`, else of `lift`, else of `borrow`, else an error hole, else
-a stop of the lowering. When nothing stopped, the program goes on to the backend.
+a match on a tuple that owns (8.9), and `ConstRef out of range` for a `ConstRef` whose
+value its type cannot hold (8.5). The dump prints such a function as ONE line in place of
+its body, `fn <name>: stopped (slir, <construct>)`, so that a golden file shows the
+progress of each function. The pipeline reports one stop after the analysis: a stop of
+`typecheck`, else of `lift`, else of `borrow`, else an error hole, else a stop of the
+lowering. When nothing stopped, the program goes on to the backend.
 
 **An initializer body.** The SLIR stage does not lower the initializer body of a constant or
 a `var` (6.3). The body gives `typecheck` and `borrow` a SHIR node to check, and nothing
@@ -1978,22 +2022,25 @@ declarations of a module still come from the AST. Each body comes from the `Slir
 of the analysis, keyed by the `DeclId` of the body: `codegen_for` hands the SLIR of the
 program to the backend (`SlirBodies`), and a body that has no `SlirFunction` there is an
 internal error. There is no fallback to the AST body emitter. The emitter defines the LLVM
-function that the declaration round made for the symbol. One function derives the symbol
-of a body (`function_symbol`, `semantics/unit_symbols.py`): the definition, the callee of
-a `Direct` call, the declaration round and the verifier all read it. The body of `main` is
-`user_main`, and the C `main` that calls it stays a helper of the backend. Every local is a
-slot in the entry block (`entry_alloca`), except an `InGuaranteed` or an `Inout`
-parameter, whose local IS the incoming address (8.3); a value parameter is stored into its
-slot at the entry, and `return` loads `_0`. A signature that does not agree with the
-conventions or with the type of `_0` is an internal error. `StorageLive` and `StorageDead`
-emit nothing. An operator calls the value half of its emitter family, which takes LLVM
-values (Q7), and a comparison of two strings calls the string relation of that family. A
-comparison of two enums of one type calls the contract seam (`emit_contract_relation`,
+function that the declaration round made for the symbol. One function derives the symbol of
+a body (`function_symbol`, `semantics/unit_symbols.py`): the definition, the callee of a
+`Direct` call, the declaration round and the verifier all read it. The body of an extension
+method or of a static has its own one function, `extension_decl_symbol`
+(`semantics/generics/name_mangling.py`), over `method_symbol`, which the callee of a call
+and the verifier read too. The body of `main` is `user_main`, and the C `main` that calls
+it stays a helper of the backend. Every local is a slot in the entry block
+(`entry_alloca`), except an `InGuaranteed` or an `Inout` parameter, whose local IS the
+incoming address (8.3); a value parameter is stored into its slot at the entry, and
+`return` loads `_0`. A signature that does not agree with the conventions or with the type
+of `_0` is an internal error. `StorageLive` and `StorageDead` emit nothing. An operator
+calls the value half of its emitter family, which takes LLVM values (Q7), and a comparison
+of two strings calls the string relation of that family. A comparison of two enums of one
+type calls the contract seam (`emit_contract_relation`,
 `backend/expressions/operators.py`): `==` and `!=` read the `Eq` contract, the order
 operators read the `Ord` contract, an implementation of the perk first and else the derived
 one (`emit_value_eq`, `emit_value_compare`). The operand of any other operator is an
-integer, a float or a `bool`, and any other operand type stops the emitter.
-`SwitchInt` with `otherwise: None` goes to a block that holds `unreachable`.
+integer, a float or a `bool`, and any other operand type stops the emitter. `SwitchInt`
+with `otherwise: None` goes to a block that holds `unreachable`.
 
 Each family of the backend gets LLVM values and semantic types, never an AST node (Q7);
 where a family took an AST node, its value half is cut out. The AST body emitter is deleted:
@@ -2261,6 +2308,19 @@ receiver by default. The printer writes the call as
 fresh owning local like any other call, and the drop placement drops it (8.10). The method
 `expect` of a `Result` or a `Maybe` is the one exception: it lowers to no call, as an
 `assert` (8.9).
+
+A `Method(recv, decl, receiver)` callee of SHIR lowers to `Direct(symbol, name)`, and a
+`Static(ty, decl)` callee too. `name` is the written name `<type>.<method>` of `decl`.
+`symbol` is `method_symbol` of the type of the receiver (the type row of `recv` with no
+`peek` or `poke`, or `ty`), the method and `ResolvedCall.unit`, so two units' private
+methods of one name are two symbols (C5). A row with no declaring unit stops the lowering
+(`slir, library function`). The receiver of a `Method` is the FIRST operand of the call,
+with the convention `receiver` of the callee row, and the arguments come after it with the
+conventions of their rows. A `Static` has no receiver. The printer writes the call as `call
+@Counter.bump(copy _1 @inout, const 4_i32 @guaranteed)`. The emitter calls the function
+that the declaration round declared for the symbol (`emit_extension_method_decl`): the
+receiver of a `peek self` and a `poke self` method crosses by address, and every other
+receiver by value, as the convention says.
 
 ### 8.7 Rvalues
 
@@ -2685,20 +2745,23 @@ write over it, and to a `return`, the value is moved or dropped exactly one time
 is false must have moved the local; so a flagged local can reach a plain `Drop` where its
 state is exact, and a `DropIfSet` where it is unknown (8.10, rule 4). A borrowed parameter
 never drops and never moves, and an `Inout` parameter holds a value again at the `return`.
-A `Trap` ends the program and needs no drop. A read or a `Move` of a local in the state
-"no value" is refused, and so is a `return` on a path where `_0` holds no value. The
-declared parameters of a `Direct` callee come from the function table (`funcs.by_unit`),
-which the verifier reads at each call, so a generic instance that a later body declares is
-found too. A `Direct` callee with no row there is CE0158. Today only a free function of the
-build has a row: the group that first emits another `Direct` callee (an extern, a method, a
-conversion, a function of a library) adds its row, with `var_arg` for a variadic extern.
-The comparison of the declared prefix alone is in the code already, for that day. The
-verifier does not check a shape that no lowering makes yet, and it refuses such a shape
-with the internal error CE0000 (the growth rule): a `BeginBorrow` or an `EndBorrow`, a
-projection of a `Global` (a `Global` has no type in SLIR), and a `Drop` or a `DropIfSet`
-of a place that is no local. The negative case of each rule is a pytest test over a
-hand-built function (`tests/unit/test_slir_verifier.py`), because a correct lowering makes
-none.
+A `Trap` ends the program and needs no drop. A read or a `Move` of a local in the state "no
+value" is refused, and so is a `return` on a path where `_0` holds no value. The declared
+parameters of a `Direct` callee come from the function table (`funcs.by_unit`), which the
+verifier reads at each call, so a generic instance that a later body declares is found too.
+A `Direct` callee whose name is a written name `<type>.<method>` finds its row in the
+extension table instead: the record of that method whose `method_symbol` is the symbol of
+the callee, with the convention of its `self` first for an instance method
+(`declared_params`, `verify.py`). A `Direct` callee with no row there is CE0158. Today a
+free function and a method or a static of the build have a row: the group that first emits
+another `Direct` callee (an extern, a conversion, a function of a library) adds its row,
+with `var_arg` for a variadic extern. The comparison of the declared prefix alone is in the
+code already, for that day. The verifier does not check a shape that no lowering makes yet,
+and it refuses such a shape with the internal error CE0000 (the growth rule): a
+`BeginBorrow` or an `EndBorrow`, a projection of a `Global` (a `Global` has no type in
+SLIR), and a `Drop` or a `DropIfSet` of a place that is no local. The negative case of each
+rule is a pytest test over a hand-built function (`tests/unit/test_slir_verifier.py`),
+because a correct lowering makes none.
 
 This is where most of the 250 backend internal errors go. One gate, one message, one source
 location, asked once.
