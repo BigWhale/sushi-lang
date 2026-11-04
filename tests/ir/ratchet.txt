@@ -1715,6 +1715,7 @@ tests/literals/hex_literals/test_hex_literals_types.sushi
 tests/literals/integer_interpolation/test_signed_interpolation.sushi
 tests/literals/integer_interpolation/test_unsigned_interpolation.sushi
 tests/literals/integer_interpolation/test_unsigned_simple.sushi
+tests/literals/integer_interpolation/test_width_extremes_interpolation.sushi
 tests/literals/octal_literals/test_err_oct_c_style.sushi
 tests/literals/octal_literals/test_oct_literals_basic.sushi
 tests/literals/octal_literals/test_oct_literals_constants.sushi
@@ -2325,6 +2326,7 @@ tests/strings/basics/test_string_comparison.sushi
 tests/strings/basics/test_string_is_empty.sushi
 tests/strings/basics/test_string_literal.sushi
 tests/strings/basics/test_string_println.sushi
+tests/strings/bool_holes/test_bool_hole_peek_param_words.sushi
 tests/strings/bool_holes/test_bool_hole_prints_words.sushi
 tests/strings/bool_holes/test_const_bool_hole_prints_words.sushi
 tests/strings/byte_access/test_err_index_on_an_integer.sushi

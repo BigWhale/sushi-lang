@@ -1,0 +1,21 @@
+# Every integer width at its extreme value, and a byte literal, in holes and in print.
+# EXPECT_STDOUT_EXACT: "-128 -32768 -2147483648 -9223372036854775807\n255 65535 4294967295 18446744073709551615\nbyte 120 65 10\n-5 2.5 true\n"
+
+fn main() i32:
+    let i8 a = -128
+    let i16 b = -32768
+    let i32 c = -2147483648
+    let i64 d = -9223372036854775807
+    let u8 e = 255
+    let u16 f = 65535
+    let u32 g = 4294967295
+    let u64 h = 18446744073709551615
+    println("{a} {b} {c} {d}")
+    println("{e} {f} {g} {h}")
+    println("byte {a'x'} {a'A'} {a'\n'}")
+    let i8 n = -5
+    let f32 x = 2.5
+    let bool t = true
+    print("{n} {x} {t}")
+    print("\n")
+    return 0
