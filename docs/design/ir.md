@@ -1198,7 +1198,11 @@ CE2008, CE2045, CE1003; for a name with no declaration, the codes CE1001, CE1002
 The error hole of a member of a type that is no variant (`Sign.Nope`, `geo.Sign.Nope`) also
 carries the data of its message: `member: UnknownMember(written, name, name_loc)`, the
 written type with its alias, the member, and the span of `.member`. Lowering sets it from
-the source; no pass fills it (S5). Every other hole has `member: None`. `typecheck` reads it:
+the source; no pass fills it (S5). The error hole of a call of a name that the namespace
+does not hold (`m.nope(1)`, CE2008) carries a `member` too: the alias, the name and the span
+of the call. The error hole of a named argument (CE6104) carries `named`, the first name
+that the call writes (`dy` in `p.shifted(dy: 5, dx: 0)`). Every other hole has
+`member: None` and `named: None`. `typecheck` reads it:
 when the written type names an enum, the hole is [CE2045](../error-catalog.md#ce2045) at
 `name_loc`, and the diagnostic names the instance that the position gives to a generic
 enum, as for a `Static` call (7.3). A static of the name does not change it, because a
@@ -1385,12 +1389,15 @@ forwards the array operand itself, as a `Move`.
 
 ```
 LoopSource = Cond(cond: Expr)                                              # `while`
-           | Items(iterable: Expr, binder: LocalId | Discard, by: Bare | Ref(BorrowMode))
+           | Items(iterable: Expr, binder: LocalId | Discard, by: Bare | Ref(BorrowMode, loc))
                                                                            # `foreach`
 ```
 
 `LoopSource` is what the SOURCE says: a condition, or an iterable with its binder and the
-binder's written mode. The binder `_` is `Discard`, and `peek _` keeps its mode. A type
+binder's written mode. The binder `_` is `Discard`, and `peek _` keeps its mode. The
+`loc` of a `Ref` is the span of the written marker (`poke` in `foreach(poke q in ...)`),
+where [CE2423](../error-catalog.md#ce2423) points for a range, whose values have no
+storage; a `Ref` of a pattern binding has no `loc` (`None`). A type
 written on a plain binder is the `declared` type of its local. A type written on a `??`
 binder names the value that the `let` at the top of the body unwraps, so it is the
 `declared` type of the local of that `let`. Which WALK the iterable gets is `typecheck`'s answer (7.7), and it
@@ -1447,7 +1454,7 @@ Callee = Free(decl: DeclId)
        | Method(recv: Expr, decl: DeclId, receiver: Convention)  # extension or perk impl
        | Static(ty: Type, decl: DeclId)          # a user static: Vec.at(3, 4)
        | Builtin(recv: Expr, method: BuiltinMethod)
-       | BuiltinStatic(ty: Type, method: BuiltinMethod)   # List.new, HashMap.new, Iterator.new
+       | BuiltinStatic(ty: Type, method: BuiltinMethod)   # List.new, f64.from_bits, string.from_bytes
        | Conversion(decl: DeclId)                # `e as B`, and `??` across two error types
        | Extern(decl: DeclId)
        | Stdlib(decl: DeclId, module: str)      # a function of a registry stdlib module
@@ -1463,6 +1470,13 @@ mode table of `param_modes.py` is read per variant. Three AST call nodes collaps
 into one, and **which kind of callee it is has already been decided by `typecheck`**,
 which records it in `TypeckResults` against the call's `shir_id` (S5). The `Call` node
 carries only the syntactic `CallTarget` of 7.4.
+
+A `BuiltinStatic` callee is a static of `BUILTIN_STATICS` (`semantics/statics.py`). The
+statics of a primitive type name (`f64.from_bits`, `f32.from_bits`, `string.from_bytes`)
+are the rows of `PRIMITIVE_STATICS` (`calls/dotcall.py`): one parameter each, with its mode
+(`from_bytes` takes its `u8[]` with `nom`), and the type that it answers. `method` is the
+row of the family of `ty` (`primitive` for a float, `string` for `string`). A container
+static (`List.new`, `HashMap.new`, `Own.alloc`, `Iterator.new`) is a callee of Tier B or C.
 
 A `Stdlib` callee is a function of a registry stdlib module (`<math>`, `<time>`): a row of
 the signature table of the module (`stdlib_signature`, `semantics/stdlib_registry.py`), or
@@ -1787,8 +1801,10 @@ a view that the same call reads is [CE2412](../error-catalog.md#ce2412), "read b
 that changes it"; `Owned` takes the receiver after the arguments, a consuming use that
 names the method in [CE2435](../error-catalog.md#ce2435), with the help of
 [CE2411](../error-catalog.md#ce2411) to copy. A `Stdlib` callee is a call of its
-arguments, and each is `Guaranteed`, a read. The typecheck pass records only the callees
-`Free`, `Stdlib`, `Intrinsic`, `Builtin`, `Method` and `Static`, so a call with another
+arguments, and each is `Guaranteed`, a read. A `BuiltinStatic` callee is a call of its
+arguments with the convention of each row: `string.from_bytes` consumes its array. The
+typecheck pass records only the callees
+`Free`, `Stdlib`, `Intrinsic`, `Builtin`, `BuiltinStatic`, `Method` and `Static`, so a call with another
 callee in this pass is an internal error. The state of the walk (`BorrowState`, `FlowFacts`) is keyed
 by `LocalId`, because a hidden local has no source name, and a diagnostic names a local by
 the name of its `ShirLocal`. The pass decides the `Ownership` of each consuming use ONE
@@ -2415,7 +2431,8 @@ SlirCallee = Direct(symbol: str, name: str, module: Optional[str])  # free fn, m
            | Indirect(Operand)                           # a closure's fn_ptr
 
 BuiltinName = BuiltinMethod                              # a row of METHOD_TYPE_REGISTRY (7.6)
-            | Intrinsic(name: str)                       # `println`, `print`, `interp`, `eq`
+            | Intrinsic(name: str)                       # `println`, `print`, `interp`, `eq`,
+                                                         # a static `<type>.<name>`
 ```
 
 `DropIfSet` replaces the string-keyed drop-flag table of 1.4. The flag is an ordinary SLIR
@@ -2436,6 +2453,13 @@ An `Intrinsic` callee of SHIR (7.6) has no row of `METHOD_TYPE_REGISTRY`, so it 
 `Builtin(Intrinsic(name), types)`: `types` holds the type of each operand, and the
 printer writes it as `builtin println@(string)`. An interpolation lowers to the intrinsic
 `interp` (8.9).
+
+A `BuiltinStatic` callee of a primitive type name lowers to the intrinsic of its written
+name, `Builtin(Intrinsic("f64.from_bits"), types)`, and its one operand has the convention
+of its row: `f64.from_bits` and `f32.from_bits` read a `Guaranteed` integer and answer its
+bits as a float; `string.from_bytes` takes an `Owned` `u8[]`, and the buffer of the array
+becomes the buffer of the string, with no copy (#1091), so the array has no drop after the
+call.
 
 The test of a string arm of a `match` lowers to the intrinsic `eq`, the value equality: two
 `Guaranteed` operands of one type, `types` holds that type for each operand, and the
