@@ -50,7 +50,7 @@ PORT_TEMPLATES: dict[tuple[str, str], str] = {
     (_B + "generics/list/methods_search.py", "emit_list_index_of_from"): "B2",
     (_B + "generics/list/methods_simple.py", "emit_list_with_capacity"): "B2",
     (_B + "generics/own.py", "emit_builtin_own_method"): "B5",
-    (_B + "ranges.py", "emit_range"): "A7",
+    (_B + "ranges.py", "emit_range"): "A6 and C3",
     (_B + "runtime/closures.py", "emit_lambda"): "C2",
     (_B + "runtime/iterator_adapters.py", "emit_adapter_call"): "C3",
     (_B + "types/arrays/dispatcher.py", "_source_data_and_len"): "A6",

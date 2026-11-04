@@ -101,9 +101,9 @@ class _Test:
 @dataclass(frozen=True, slots=True)
 class _Path:
     """One way that a pattern matches: its tests in order, and the binders that it writes,
-    each with its place (ir.md 8.9)."""
+    each with the copy of its place (ir.md 8.9)."""
     tests: tuple[_Test, ...] = ()
-    binds: tuple[tuple[ShirLocalId, p.Place], ...] = ()
+    binds: tuple[tuple[ShirLocalId, r.Rvalue], ...] = ()
 
 
 def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding, operand: p.Operand,
@@ -116,7 +116,7 @@ def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding, operand: p.Op
         if not isinstance(pattern.by, Bare) or low.owns(ty):
             er.raise_internal_error("CE0000", detail="a binder that borrow does not check "
                                                      "reached SLIR")
-        return [_Path(binds=((pattern.local, _place(operand)),))]
+        return [_Path(binds=((pattern.local, r.Use(p.Copy(_place(operand)))),))]
     if isinstance(pattern, pt.Wildcard):
         return [_Path()]
     if isinstance(pattern, (pt.Literal, pt.IntRange)):

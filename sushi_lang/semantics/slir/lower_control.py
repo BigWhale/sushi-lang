@@ -1,11 +1,12 @@
 """SHIR to SLIR: the control-flow arms of the lowering (docs/design/ir.md 8.9, 8.10).
 
-The arms of `if`, `while`, `break`, `continue` and `assert`, the lowering of `expect` as an
-`assert`, the lowering of a condition, the statements of an arm with its binders, the join
-of the paths of a statement with the drop state of each path, the short-circuit `and` and
-`or`, and `??`. The arm of `match` is in `lower_match.py`. Each arm is a free function that
-takes the `Lowering` of `lower.py` first; the tables of `lower.py` name them. This module
-reads `lower.py` for its types only, so no import cycle exists at run time.
+The arms of `if`, `while`, a counted loop over a range, `break`, `continue` and `assert`,
+the lowering of `expect` as an `assert`, the lowering of a condition, the statements of an
+arm with its binders, the join of the paths of a statement with the drop state of each
+path, the short-circuit `and` and `or`, and `??`. The arm of `match` is in
+`lower_match.py`. Each arm is a free function that takes the `Lowering` of `lower.py`
+first; the tables of `lower.py` name them. This module reads `lower.py` for its types
+only, so no import cycle exists at run time.
 """
 from __future__ import annotations
 
@@ -16,13 +17,14 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.method_effects import MAYBE_FAMILY, RESULT_FAMILY
+from sushi_lang.semantics.ranges import plan_range
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.callee import Builtin, BuiltinMethod, Conversion
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
-from sushi_lang.semantics.shir.loop_kind import While
+from sushi_lang.semantics.shir.loop_kind import CountedRange, While
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
@@ -39,16 +41,17 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.slir.lower_values import ShortCircuit, Value
 
 
-#: The binders that one path of an arm writes, and the block that writes them: None for the
-#: block of the body.
-Binds: TypeAlias = tuple[Optional["Block"], tuple[tuple[ShirLocalId, p.Place], ...]]
+#: The binders that one path of an arm writes, each with its value, and the block that
+#: writes them: None for the block of the body.
+Binds: TypeAlias = tuple[Optional["Block"], tuple[tuple[ShirLocalId, r.Rvalue], ...]]
 
 
 @dataclass(slots=True)
 class LoopFrame:
-    """The loop that the walk is in: its header and exit blocks, the count of the scopes
-    outside its body, and the state of each `break` and of each path to the header."""
-    header: BlockId
+    """The loop that the walk is in: the block that a `continue` goes to (the header of a
+    `while`, the step of a counted loop), the exit block, the count of the scopes outside
+    its body, and the state of each `break` and of each path to the next round."""
+    next: BlockId
     exit: BlockId
     depth: int
     breaks: list[FlowState] = field(default_factory=list)
@@ -79,12 +82,12 @@ def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> Non
     idents: dict[ShirLocalId, LocalId] = {}
     for block, writes in binds:
         statements: list[st.SlirStatement] = []
-        for local, place in writes:
+        for local, value in writes:
             if local not in idents:
                 idents[local] = low.bind(local, span)[0]
                 low.placement.declare(idents[local], False)
             statements += [st.StorageLive(idents[local], span),
-                           st.Assign(p.Local(idents[local]), r.Use(p.Copy(place)), span)]
+                           st.Assign(p.Local(idents[local]), value, span)]
         if block is None:
             low.emit(statements)
         else:
@@ -131,15 +134,20 @@ def condition(low: Lowering, expr: e.ShirExpr) -> tuple[p.Operand, Optional[Loca
     inside the condition ends it, and the caller ends it at the top of each block that
     the switch goes to (L12)."""
     low.placement.open_statement()
-    value = low.value(expr)
+    return _test(low, low.value(expr), expr.loc)
+
+
+def _test(low: Lowering, value: Value, span: Span) -> tuple[p.Operand, Optional[LocalId]]:
+    """The tail of `condition`, in the scope that the caller opened: `value` into a local
+    of its own unless it is a local or a constant, then the end of the scope."""
     local: Optional[LocalId] = None
     if isinstance(value, r.Use) and isinstance(value.operand, (p.Const, p.Copy)):
         operand = value.operand
     else:
-        local = low.temporary(value, BuiltinType.BOOL, expr.loc)
+        local = low.temporary(value, BuiltinType.BOOL, span)
         low.placement.detach(local)
         operand = p.Copy(p.Local(local))
-    low.emit(low.placement.close_scope(expr.loc))
+    low.emit(low.placement.close_scope(span))
     return operand, local
 
 
@@ -217,34 +225,132 @@ def variant_of(ty: Type, variant: str, span: Span) -> tuple[int, tuple[Type, ...
 
 
 def loop(low: Lowering, stmt: s.Loop) -> None:
-    """A `while`: a header block that evaluates the condition and switches, the body,
-    which goes back to the header, and the exit block (ir.md 8.9). When a condition
-    local must end on the zero edge, that edge goes to a block of its own, which goes
-    to the exit, because a `break` goes to the exit too."""
+    """A `while` or a counted loop (ir.md 8.9), by the kind that typecheck gave it."""
     source = stmt.source
-    if not (isinstance(source, s.Cond)
-            and isinstance(low.typeck.loop_kind_of(stmt.shir_id), While)):
+    kind = low.typeck.loop_kind_of(stmt.shir_id)
+    if isinstance(source, s.Cond) and isinstance(kind, While):
+        _while(low, stmt, source)
+    elif (isinstance(source, s.Items) and isinstance(kind, CountedRange)
+          and isinstance(source.iterable, e.Range)):
+        _counted(low, stmt, source, source.iterable)
+    else:
         dispatch.stop(STAGE, stmt)
-    header = low.new_block()
-    low.jump(tm.Goto(header.id, stmt.loc))
-    low.block = header
-    among = low.placement.in_scope()
-    for kept in among:
-        if (stmt.shir_id, low.shir_of.get(kept)) in low.learned.unknown_at:
-            low.placement.mark_unknown(kept)
-    at_header = low.placement.state()
+
+
+def _while(low: Lowering, stmt: s.Loop, source: s.Cond) -> None:
+    """A header block that evaluates the condition and switches, the body, which goes back
+    to the header, and the exit block. When a condition local must end on the zero edge,
+    that edge goes to a block of its own, which goes to the exit, because a `break` goes to
+    the exit too."""
+    header = _enter_header(low, stmt)
+    among, at_header = _header_state(low, stmt)
     cond, local = condition(low, source.cond)
     body = low.new_block()
     done = None if local is None else low.new_block()
     exit_ = low.new_block()
+    _rounds(low, stmt, (cond, local, source.cond.loc), body, header, done, exit_,
+            (among, at_header), ())
+
+
+def _counted(low: Lowering, stmt: s.Loop, source: s.Items, range_: e.Range) -> None:
+    """The bounds, the count and the counter `k` at 0 in the scope of the loop statement,
+    then a header that compares `k` with the count, the body, which binds the item, a step
+    block that adds one to `k` and goes to the header, and the exit block. A `continue`
+    goes to the step. The blocks are made in the order header, body, step, the zero block
+    (see `_while`), exit."""
+    span = stmt.loc
+    count, item = _range_formula(low, range_)
+    counter = low.temporary(r.Use(_i32(0)), BuiltinType.I32, span)
+    header = _enter_header(low, stmt)
+    among, at_header = _header_state(low, stmt)
+    low.placement.open_statement()
+    cond, local = _test(low, r.Binary("<", p.Copy(p.Local(counter)), count), span)
+    body, step = low.new_block(), low.new_block()
+    done = None if local is None else low.new_block()
+    exit_ = low.new_block()
+    binds: tuple[Binds, ...] = () if isinstance(source.binder, s.Discard) else (
+        (None, ((source.binder, item(p.Copy(p.Local(counter)))),)),)
+    _rounds(low, stmt, (cond, local, span), body, step, done, exit_, (among, at_header),
+            binds)
+    step.statements.append(st.Assign(
+        p.Local(counter), r.Binary("+", p.Copy(p.Local(counter)), _i32(1)), span))
+    step.terminator = tm.Goto(header.id, span)
+
+
+def _range_formula(low: Lowering, range_: e.Range
+                   ) -> tuple[p.Operand, Callable[[p.Operand], r.Rvalue]]:
+    """The count of a range and the item at the counter (`semantics/ranges.py`). Each bound
+    is evaluated once, the start first. Two constant bounds give the count and the first
+    value of `plan_range`. Else the count is `end - start`, plus one when inclusive, and
+    a count below one walks nothing; the item is `start + k`, or `last - k` with `.rev()`,
+    where `last` is `end`, less one when exclusive."""
+    start, end = _bound(low, range_.start), _bound(low, range_.end)
+    if isinstance(start, p.Const) and isinstance(end, p.Const) and \
+            isinstance(start.constant, k.Int) and isinstance(end.constant, k.Int):
+        plan = plan_range(start.constant.value, end.constant.value, range_.inclusive,
+                          range_.reverse, range_.loc)
+        first = _i32(plan.first)
+        if range_.reverse:
+            return _i32(plan.count), lambda at: r.Binary("-", first, at)
+        return _i32(plan.count), lambda at: r.Binary("+", first, at)
+    span = range_.loc
+    count = low.temporary(r.Binary("-", end, start), BuiltinType.I32, span)
+    if range_.inclusive:
+        low.emit([st.Assign(p.Local(count), r.Binary("+", p.Copy(p.Local(count)), _i32(1)),
+                            span)])
+    if not range_.reverse:
+        return p.Copy(p.Local(count)), lambda at: r.Binary("+", start, at)
+    last = end if range_.inclusive else p.Copy(p.Local(
+        low.temporary(r.Binary("-", end, _i32(1)), BuiltinType.I32, span)))
+    return p.Copy(p.Local(count)), lambda at: r.Binary("-", last, at)
+
+
+def _bound(low: Lowering, expr: e.ShirExpr) -> p.Operand:
+    """A bound as a constant, or in a local of the loop statement, which the body cannot
+    change."""
+    value = low.value(expr)
+    if isinstance(value, r.Use) and isinstance(value.operand, p.Const):
+        return value.operand
+    return p.Copy(p.Local(low.temporary(value, BuiltinType.I32, expr.loc)))
+
+
+def _i32(value: int) -> p.Const:
+    return p.Const(k.Int(value, BuiltinType.I32))
+
+
+def _enter_header(low: Lowering, stmt: s.Loop) -> Block:
+    header = low.new_block()
+    low.jump(tm.Goto(header.id, stmt.loc))
+    low.block = header
+    return header
+
+
+def _header_state(low: Lowering, stmt: s.Loop) -> tuple[tuple[LocalId, ...], FlowState]:
+    """The locals in scope at the header, and their state there: a local whose state a
+    back edge changes is unknown at the header."""
+    among = low.placement.in_scope()
+    for kept in among:
+        if (stmt.shir_id, low.shir_of.get(kept)) in low.learned.unknown_at:
+            low.placement.mark_unknown(kept)
+    return among, low.placement.state()
+
+
+def _rounds(low: Lowering, stmt: s.Loop,
+            test: tuple[p.Operand, Optional[LocalId], Span], body: Block, next_: Block,
+            done: Optional[Block], exit_: Block,
+            header: tuple[tuple[LocalId, ...], FlowState], binds: Sequence[Binds]) -> None:
+    """The switch of the header, the body with its binders, which goes to `next_`, and the
+    exit, where the zero edge and each `break` meet."""
+    cond, local, span = test
+    among, at_header = header
     low.jump(tm.SwitchInt(cond, ((0, (done or exit_).id),), body.id, stmt.loc))
-    targets(local, (body,) if done is None else (body, done), source.cond.loc)
+    targets(local, (body,) if done is None else (body, done), span)
     after_cond = low.placement.state()
-    frame = LoopFrame(header.id, exit_.id, low.placement.depth())
+    frame = LoopFrame(next_.id, exit_.id, low.placement.depth())
     low.loops.append(frame)
-    for block, state in arm(low, body, stmt.body):
+    for block, state in arm(low, body, stmt.body, binds):
         if block is not None:
-            block.terminator = tm.Goto(header.id, stmt.loc)
+            block.terminator = tm.Goto(next_.id, stmt.loc)
         frame.continues.append(state)
     low.loops.pop()
     learn(low, at_header.changed_by(frame.continues, among), stmt.loc, stmt.shir_id)
@@ -269,7 +375,7 @@ def leave_round(low: Lowering, span: Span, *, breaks: bool) -> None:
     frame = low.loops[-1]
     low.emit(low.placement.exit_to(frame.depth, span))
     (frame.breaks if breaks else frame.continues).append(low.placement.state())
-    low.jump(tm.Goto(frame.exit if breaks else frame.header, span))
+    low.jump(tm.Goto(frame.exit if breaks else frame.next, span))
 
 
 def short_circuit(low: Lowering, place: p.Place, value: ShortCircuit) -> None:

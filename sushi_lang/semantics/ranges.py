@@ -18,8 +18,10 @@ and nothing is reported. The old rule took the direction from the values, so the
 `(n - 1)..=0` walked -1 and 0 when n was 0. The countdown is `(0..n).rev()` now, and it is
 empty when n is 0.
 
-The formula is stated twice, because it must be: here over Python integers, and in
-`backend/ranges.py` as IR for the bounds the compiler cannot read.
+The formula is stated twice, because it must be: here over Python integers, and as SLIR
+for the bounds the compiler cannot read (`semantics/slir/lower_control.py`, the counted
+loop of a `foreach`, which takes this plan for two constant bounds). `backend/ranges.py`
+states it as IR for an array element and for a range value, until their groups lower them.
 `tests/unit/test_range_plan_matrix.py` pins the Python half against a table.
 
 The bounds are read through a callback rather than by importing the evaluator, the way

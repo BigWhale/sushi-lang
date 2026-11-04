@@ -8,8 +8,9 @@ Same formula. A range always goes up, and `.rev()` walks the same values, last f
 
 The clamp is a `select`, so a range whose end is below its start has a count of zero and
 the walk does not start. `semantics/ranges.py` states the formula over Python integers and
-this module states it as IR. `foreach` over a range and an array-literal range element both
-call `emit_range`, so the two positions share one formula.
+this module states it as IR. An array-literal range element and a range value call
+`emit_range`; `foreach` over a range is a counted loop of SLIR lowering, which states the
+formula over SLIR operands.
 
 llvmlite does not fold, so a readable range must NEVER reach here from an array literal:
 `builder.add` of two constants emits `add i32 3, 4` into the module, and at `--opt none`

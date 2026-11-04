@@ -1,0 +1,17 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "4 3 2 \n3\n"
+# EXPECT_DUMP_SLIR: test_slir_range_readable.slir
+#
+# A range whose two bounds are constants takes its count and its first value from the
+# formula of `semantics/ranges.py` (ir.md 8.9): no instruction computes them. `.rev()` steps
+# down from the first value. The `_` binder binds nothing.
+
+fn main() i32:
+    foreach(i in (2..5).rev()):
+        print("{i} ")
+    println("")
+    let i32 count = 0
+    foreach(_ in 0..3):
+        count := count + 1
+    println(count)
+    return 0
