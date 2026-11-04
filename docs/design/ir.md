@@ -2589,8 +2589,8 @@ or one `memset`, and a `T[N]` of constant parts with one store of its constant.
 `Len(place)` is the length of a `T[N]`, a `T[]` or a `string`, as an `i32`. `Slice(place,
 start, end)` reads a `T[N]` or a `T[]`: two `i32` operands, and `end` is exclusive. Its value
 is a `T[]` descriptor that views the storage of `place`. **A VIEW** is a local that a `Slice`
-writes: it owns nothing, so drop placement gives it no drop, nothing moves it, and no other
-statement writes it (8.13).
+writes: it owns nothing, so drop placement gives it no drop, nothing moves it, no other
+statement writes it, and no statement copies it into an owning local (8.13).
 
 A closure and an iterator have one layout, four words. `AggKind` keeps them apart, because
 the backend reads the SEMANTIC type and never the layout to know which one it has
@@ -2679,7 +2679,7 @@ backstop of the checker, as on the AST backend.
 | `Field` read | a place: `Copy` of `Field(place, index)`, with the index of the typecheck row; a field of a field is a projection of the projection. A base that is no place (a new value, a constant) goes into a temporary of the statement first, and the field is a `Copy` of the projection of the temporary; the statement drops the temporary at its end (rule 2) |
 | a field write (`p.x := v`) | the new value first, then the store into `Field(place, index)`. A new value that is `and` or `or` goes into a temporary first, because its left operand is written before its right operand reads the place (rule 6) |
 | `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. `borrow` stops on a value that owns (7.9), so each element is plain |
-| `StorageRef` (a `var`) | the place `Global(symbol, ty)`: the symbol of the global row of typecheck, and the declared type of the `var`. A read by value goes into a temporary of the statement first, because any call of the statement can change a `var` (`counter + bump()` reads `counter` before the call); a by-address argument, a receiver and a value that its statement stores at once read the `Global` where it is. A rebind is an `Assign` into the `Global`, and a field write and an element write an `Assign` into its projection; a plain `var` drops nothing. A `var` that owns stops the lowering (`slir, StorageRef owning`, group D1) |
+| `StorageRef` (a `var`) | the place `Global(symbol, ty)`: the symbol of the global row of typecheck, and the declared type of the `var`. A read by value goes into a temporary of the statement first, because any call of the statement can change a `var` (`counter + bump()` reads `counter` before the call); a by-address argument, a receiver and a value that its statement stores at once read the `Global` where it is. A slice of a `var` is a view (8.7), which owns nothing: its read gets no temporary. A rebind is an `Assign` into the `Global`, and a field write and an element write an `Assign` into its projection; a plain `var` drops nothing. A `var` that owns stops the lowering (`slir, StorageRef owning`, group D1) |
 | `Take` | `Move` of the field; the other owning fields of the receiver get `Drop`, and `drop()` does not run (`borrow-model.md` §10c) |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
 | a `string` argument to an `i8*` callee | an explicit conversion into an owning temp local, dropped by the rules of 8.10. The C-string marshalling becomes visible IR, still one lowering site, and `run()` stays the one exception |
@@ -2986,7 +2986,8 @@ Runs after lowering, before the backend. It checks:
 - a length and a slice: `Len` reads a `T[N]`, a `T[]` or a `string`, and `Slice` reads a
   `T[N]` or a `T[]` with two `i32` bounds
 - a view: a local that a `Slice` writes is of a `T[]` type, no other statement writes it,
-  and nothing moves or drops it
+  and nothing moves or drops it. No statement copies a view into an owning local: that
+  local would drop storage that the view does not own
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
