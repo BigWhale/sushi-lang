@@ -3,7 +3,8 @@
 A `peek x` or a `poke x` argument (an `InGuaranteed` or an `Inout` argument,
 docs/design/ir.md 8.3) and a `Borrow` node borrow their place for the statement
 (`check_borrow`). An unmarked argument of an owning local is the shared borrow it now is
-(`register_implicit_borrow`). The counters clear at the end of each statement
+(`register_implicit_borrow`). A borrow of a place in a `var` is counted on the state of
+the `var` (`storage_state`). The counters clear at the end of each statement
 (`clear_borrows`).
 """
 
@@ -32,9 +33,8 @@ if TYPE_CHECKING:
 #: The mode of the borrow that a value passed by address takes (docs/design/ir.md 8.3).
 BY_ADDRESS = {Convention.IN_GUARANTEED: BorrowMode.PEEK, Convention.INOUT: BorrowMode.POKE}
 
-#: The roots of a place that a later group checks: a `var` (A9) and a function used as a
-#: value.
-LATER_ROOTS = (e.StorageRef, e.GlobalRef)
+#: The root of a place that a later group checks: a function used as a value.
+LATER_ROOTS = (e.GlobalRef,)
 
 
 def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
@@ -46,11 +46,12 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     has an address and no borrow state: a `peek` of it or of its field reads it, and a
     `poke` is CE2400 at the name of the constant, bare or behind an alias. A stdlib
     constant has no record and no storage, so both modes are CE2400
-    (`reject_borrow_of_constant`). A call result, a literal and a construction are
-    temporaries and have no address, and nor does a field of one: CE2404. An element has
-    no stable address either, because a growth of its array can move it: CE2404. A slice
-    is a view of its array (`_borrow_slice`). A root that a later group checks
-    (`LATER_ROOTS`) stops the walk.
+    (`reject_borrow_of_constant`). A `var` is storage with an address: a borrow of it or
+    of its field is counted on its state (`storage_state`). A call result, a literal and a
+    construction are temporaries and have no address, and nor does a field of one: CE2404.
+    An element has no stable address either, because a growth of its array can move it:
+    CE2404. A slice is a view of its array (`_borrow_slice`). A root that a later group
+    checks (`LATER_ROOTS`) stops the walk.
     """
     is_poke = mode is BorrowMode.POKE
     if isinstance(place, e.Slice):
@@ -61,6 +62,9 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     root = walk_place(place, Step.MEMBER).node
     if isinstance(root, LATER_ROOTS):
         arms.stop_at(checker, root)
+    if isinstance(root, e.StorageRef):
+        acquire_borrow(checker, storage_state(checker, root), span, is_poke=is_poke)
+        return
     if not isinstance(root, e.LocalRef):
         checker.err.emit(er.ERR.CE2404, span, expr=spelled(checker, place))
         return
@@ -115,6 +119,36 @@ def borrow_of_constant(checker: 'BorrowChecker', place: e.ShirExpr, mode: Borrow
     reject_borrow_of_constant(checker.err, name, sig, root.loc, mode=mode.value,
                               no_frame_slot=sig is None)
     return True
+
+
+def storage_state(checker: 'BorrowChecker', node: e.StorageRef) -> BorrowState:
+    """The borrow state of the `var` that `node` names, keyed by the symbol of its global.
+
+    A `var` is no local of the body, so its state is made at its first borrow, and it holds
+    the two counters of the statement alone: a `var` is never moved out of, and a plain one
+    has no `let`-borrow (docs/design/unit-storage.md).
+    """
+    symbol = checker.answers().global_of(node.shir_id)
+    if symbol is None:
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail="a unit variable with no global reached the "
+                                       "borrow pass")
+    state = checker.storage_states.get(symbol)
+    if state is None:
+        state = BorrowState(name=checker.decl_name(node.decl),
+                            var_type=read_type(checker, node), is_unit_var=True)
+        checker.storage_states[symbol] = state
+    return state
+
+
+def owner_state(checker: 'BorrowChecker', place: e.ShirExpr) -> Optional[BorrowState]:
+    """The state that a borrow of `place` is counted on: the state of its root local or of
+    its root `var`, or None for a temporary."""
+    root = walk_place(place, Step.MEMBER | Step.INDEX | Step.TRY).node
+    if isinstance(root, e.StorageRef):
+        return storage_state(checker, root)
+    owner = borrow_owner(place)
+    return checker.borrow_state.get(owner) if owner is not None else None
 
 
 def acquire_borrow(checker: 'BorrowChecker', state: BorrowState, span: Optional[Span],
@@ -177,8 +211,8 @@ def register_implicit_borrow(checker: 'BorrowChecker', arg: e.ShirExpr) -> None:
 
 def clear_borrows(checker: 'BorrowChecker') -> None:
     """Clear all active borrows (called at the end of each statement)."""
-    for local in checker.active_borrows:
-        state = checker.borrow_state.get(local)
+    states = [checker.borrow_state.get(local) for local in checker.active_borrows]
+    for state in [*states, *checker.storage_states.values()]:
         if state is not None:
             state.poke_borrow_count = 0
             state.peek_borrow_count = 0

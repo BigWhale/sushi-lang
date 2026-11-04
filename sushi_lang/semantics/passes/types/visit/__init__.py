@@ -134,7 +134,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.Lit: ex.check_lit,
     e.LocalRef: ex.check_local_ref,
     e.ConstRef: ex.check_const_ref,
-    e.StorageRef: stop_at,
+    e.StorageRef: ex.check_storage_ref,
     e.GlobalRef: stop_at,
     e.Field: fd.check_field,
     e.Index: ar.check_index,

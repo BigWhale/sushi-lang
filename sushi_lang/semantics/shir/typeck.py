@@ -15,7 +15,8 @@ its path, the index of the target and then its index in each `Nested` level.
 
 The value row holds a value of the constant evaluator, one shape for two keys: the value
 that an integer literal holds at its type (ir.md 8.5, ruling R-W), and the value of the
-constant that a `ConstRef` names. An initializer has no value row (ir.md 7.3).
+constant that a `ConstRef` names. An initializer has no value row (ir.md 7.3). The global
+row holds the symbol of the global of the `var` that a `StorageRef` names.
 """
 from __future__ import annotations
 
@@ -88,6 +89,7 @@ class TypeckResults(SideTable):
     _match_facts: dict[ShirId, MatchFacts] = row_table()
     _element_types: dict[tuple[ShirId, tuple[int, ...]], Type] = row_table()
     _values: dict[ShirId, ConstantValue] = row_table()
+    _globals: dict[ShirId, str] = row_table()
 
     # -- the read API: None when the table holds no answer ------------------------------
 
@@ -146,6 +148,10 @@ class TypeckResults(SideTable):
         """The value of an integer literal or of a `ConstRef`."""
         return self._values.get(node)
 
+    def global_of(self, node: ShirId) -> Optional[str]:
+        """The symbol of the global of the `var` that a `StorageRef` names."""
+        return self._globals.get(node)
+
     # -- the write API: the typecheck pass alone calls it --------------------------------
 
     def record_type(self, node: ShirId, ty: Type) -> None:
@@ -192,3 +198,6 @@ class TypeckResults(SideTable):
 
     def record_value(self, node: ShirId, value: ConstantValue) -> None:
         write_once(self._values, node, value, "typecheck", "value")
+
+    def record_global(self, node: ShirId, symbol: str) -> None:
+        write_once(self._globals, node, symbol, "typecheck", "global")

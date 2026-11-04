@@ -96,6 +96,8 @@ class BorrowChecker:
         self.is_main = False
         self.borrow_state: Dict[LocalId, BorrowState] = {}
         self.active_borrows: Set[LocalId] = set()
+        # The state of each `var` that the body borrows, by the symbol of its global.
+        self.storage_states: Dict[str, BorrowState] = {}
         # One frame per open block; `check_block` pops it, which is what gives a
         # `let`-borrow a LEXICAL lifetime. `active_borrows` clears per statement.
         self._scope_binding_borrows: list[list[tuple[LocalId, LocalId]]] = []
@@ -160,6 +162,7 @@ class BorrowChecker:
         self.is_main = self.shir.decls.name_of(body.fn_id) == "main"
         self.borrow_state = {}
         self.active_borrows = set()
+        self.storage_states = {}
         self._scope_binding_borrows = []
         self.block_locals = []
         self.loop_frames = []

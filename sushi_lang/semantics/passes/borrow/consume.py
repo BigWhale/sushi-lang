@@ -69,10 +69,11 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
 
     The constant evaluator makes each value of an initializer body, so that value is FRESH,
     and a constant that the initializer names is read, not moved. In any other body, a local
-    has the provenance of its state. A constant is storage that the program keeps (#726):
-    it is not FRESH, so a take of an owning one is refused. A field, an element and a slice
-    are storage that the owner of their base keeps, so each is a read through that owner
-    (BORROWED): a plain one is a copy, and a take of an owning one is refused. `r??` yields what `r` holds,
+    has the provenance of its state. A constant and a `var` are storage that the program
+    keeps (#726): neither is FRESH, so a take of an owning one is refused. A field, an
+    element and a slice are storage that the owner of their base keeps, so each is a read
+    through that owner (BORROWED): a plain one is a copy, and a take of an owning one is
+    refused. `r??` yields what `r` holds,
     and the payload has the provenance of `r` (#548): a borrowed `r` keeps its owner, so
     the payload is a read through it; an owned `r` was SPENT by the `??` itself
     (`unwrap_place`), so nothing owns the payload now and the position adopts it.
@@ -82,7 +83,7 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
         return Provenance.FRESH
     if isinstance(node, e.LocalRef):
         return name_provenance(checker, node.local)
-    if isinstance(node, e.ConstRef):
+    if isinstance(node, (e.ConstRef, e.StorageRef)):
         return Provenance.OWNED
     if isinstance(node, (e.Field, e.Index, e.Slice)):
         return Provenance.BORROWED
@@ -203,8 +204,8 @@ def consume(checker: 'BorrowChecker', node: e.ShirExpr,
     if isinstance(node, e.LocalRef):
         return consume_named(checker, node, provenance, node.loc, use_of_copy)
     decision = decide(checker, node, provenance, source_class(checker, node))
-    if isinstance(node, e.ConstRef):
-        reject_move_of_constant(checker, node, decision)
+    if isinstance(node, (e.ConstRef, e.StorageRef)):
+        reject_move_of_storage(checker, node, decision)
     elif decision is Ownership.REJECT:
         # A read through a live owner has no owner to mark moved, but it CAN be rejected
         # (#242): the owner keeps the value and still frees it.
@@ -218,18 +219,22 @@ def consume_each(checker: 'BorrowChecker', args) -> None:
         consume(checker, arg)
 
 
-def reject_move_of_constant(checker: 'BorrowChecker', node: e.ConstRef,
-                            decision: Ownership) -> bool:
-    """CE2436 for a take of a CONSTANT that would be a move. True when it was refused.
+def reject_move_of_storage(checker: 'BorrowChecker', node: e.ConstRef | e.StorageRef,
+                           decision: Ownership) -> bool:
+    """CE2436 for a take of a constant or a `var` that would be a move. True when it was
+    refused.
 
-    The `const` half of the unit-storage rule (#726): a constant is one object the program
-    keeps for its whole run, and it has no owner that can hand it away. A plain value
-    still copies out. A constant behind an alias is the same declaration (#1016).
+    The unit-storage rule (#726): a constant and a `var` are each one object the program
+    keeps for its whole run, and neither has an owner that can hand it away. A plain value
+    still copies out. A name behind an alias is the same declaration (#1016).
     """
     if decision is not Ownership.MOVE:
         return False
-    checker.err.emit(er.ERR.CE2436, node.loc, name=checker.decl_name(node.const_id),
-                     kind="a constant")
+    if isinstance(node, e.ConstRef):
+        name, kind = checker.decl_name(node.const_id), "a constant"
+    else:
+        name, kind = checker.decl_name(node.decl), "a unit variable"
+    checker.err.emit(er.ERR.CE2436, node.loc, name=name, kind=kind)
     return True
 
 
@@ -312,8 +317,8 @@ def bind(checker: 'BorrowChecker', node: s.Assign, dest: BorrowState) -> None:
         checker.err.emit(er.ERR.CE2410, value.loc, name=src_state.name)
         return
     decision = decide(checker, value, provenance, source_class(checker, value))
-    if isinstance(value, e.ConstRef):
-        reject_move_of_constant(checker, value, decision)
+    if isinstance(value, (e.ConstRef, e.StorageRef)):
+        reject_move_of_storage(checker, value, decision)
     elif decision is Ownership.MOVE and src_state is not None:
         _move_out(checker, src_state, value.loc)
     elif decision is Ownership.REJECT:

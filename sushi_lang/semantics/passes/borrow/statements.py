@@ -96,6 +96,8 @@ def check_block(checker: 'BorrowChecker', block: ShirBlock) -> None:
 def check_assign(checker: 'BorrowChecker', node: s.Assign) -> None:
     if isinstance(node.target, (e.Field, e.Index)):
         _check_place_write(checker, node, node.target)
+    elif isinstance(node.target, e.StorageRef):
+        _check_storage_rebind(checker, node)
     elif not isinstance(node.target, e.LocalRef):
         arms.stop_at(checker, node)
     elif node.is_init:
@@ -134,6 +136,13 @@ def _check_rebind(checker: 'BorrowChecker', node: s.Assign, local: LocalId) -> N
     check_owner_not_borrowed(checker, local, node.loc, "assign", place=node.target)
     consume(checker, node.value)
     _reinitialize(checker, local)
+
+
+def _check_storage_rebind(checker: 'BorrowChecker', node: s.Assign) -> None:
+    """`v := x` of a `var`: storage with an address of its own, so the rebind is legal in
+    every body, and the value is a consuming use."""
+    arms.check(checker, node.value)
+    consume(checker, node.value)
 
 
 def _reject_readonly_rebind(checker: 'BorrowChecker', target: e.LocalRef,
@@ -252,6 +261,8 @@ def _rebind_place(checker: 'BorrowChecker', place: e.ShirExpr) -> None:
         _reject_readonly_place_write(checker, place, place.loc)
         check_owner_not_borrowed(checker, borrow_owner(place), place.loc, "assign",
                                  place=place)
+        return
+    if isinstance(place, e.StorageRef):
         return
     if not isinstance(place, e.LocalRef):
         arms.stop_at(checker, place)

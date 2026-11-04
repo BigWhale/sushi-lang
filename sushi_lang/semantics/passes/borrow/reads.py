@@ -71,7 +71,8 @@ def borrow_owner(node: object) -> Optional[LocalId]:
 def chain_call_boundary(expr: object) -> Optional[Span]:
     """The boundary that keeps a write receiver from reaching a root, or None (#352).
 
-    A write receiver must reach its root -- a NAME, or the local of a SHIR place --
+    A write receiver must reach its root -- a NAME, or the local or the `var` of a SHIR
+    place --
     through member and index steps only. Whatever else the walk stops at (a method call, a `??`, a plain call, an
     inline constructor) yields a temporary copy, so a write receiver whose chain
     crosses it cannot reach the storage it appears to write. Deliberately inverted --
@@ -80,7 +81,7 @@ def chain_call_boundary(expr: object) -> Optional[Span]:
     of the CE2429 diagnostic.
     """
     end = walk_place(expr, Step.MEMBER | Step.INDEX).node
-    if end is None or isinstance(end, (Name, e.LocalRef)):
+    if end is None or isinstance(end, (Name, e.LocalRef, e.StorageRef)):
         return None
     return end.loc
 

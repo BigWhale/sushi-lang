@@ -29,7 +29,7 @@ from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic, Method, S
 
 from . import arms
 from .borrows import (
-    BY_ADDRESS, LATER_ROOTS, acquire_borrow, borrow_of_constant, check_borrow,
+    BY_ADDRESS, LATER_ROOTS, acquire_borrow, borrow_of_constant, check_borrow, owner_state,
     register_implicit_borrow)
 from .iterators import take_lent_iterator
 from .consume import consume, consume_each, read_through_receiver, source_provenance
@@ -170,10 +170,9 @@ def _change_receiver_owner(checker: 'BorrowChecker', node: e.Call, callee: Metho
 def _borrow_owner_of(checker: 'BorrowChecker', receiver: e.ShirExpr, *,
                      is_poke: bool) -> None:
     """The borrow of the owner of a receiver for the statement, when the owner is a local
-    that still holds its value. A receiver and an argument that reach one owner conflict
-    as two arguments do (CE2403, CE2407)."""
-    owner = borrow_owner(receiver)
-    state = checker.borrow_state.get(owner) if owner is not None else None
+    that still holds its value, or a `var`. A receiver and an argument that reach one owner
+    conflict as two arguments do (CE2403, CE2407)."""
+    state = owner_state(checker, receiver)
     if state is not None and not state.is_moved:
         acquire_borrow(checker, state, receiver.loc, is_poke=is_poke)
 

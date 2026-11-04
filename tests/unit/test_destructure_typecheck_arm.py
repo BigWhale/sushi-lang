@@ -60,7 +60,7 @@ def test_each_target_takes_its_element_by_its_path() -> None:
 
 def test_a_place_that_is_not_typed_yet_stops() -> None:
     validator = _validator(OUTER)
-    place = e.StorageRef(ShirId(3), SPAN, DeclId(0))
+    place = e.GlobalRef(ShirId(3), SPAN, DeclId(0))
     node = s.Destructure(ShirId(2), SPAN, [s.Place(place), LocalId(1)], _value())
     with pytest.raises(StageStop) as caught:
         visit.check(validator, node)

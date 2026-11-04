@@ -13,7 +13,8 @@ once (`walk.py`) and asks the table:
 - each hole of an `Interp` has a display type;
 - a `Match` has the type of its scrutinee;
 - each target of a `Destructure`, at each level, has an element type;
-- an integer literal and a `ConstRef` have a value.
+- an integer literal and a `ConstRef` have a value, and a `StorageRef` the symbol of its
+  global.
 
 A `ConstRef` of a constant with no value stops the walk (`ConstRef with no value`), so its
 body does not reach this check. An initializer needs no value row: a `var` of an empty
@@ -97,6 +98,11 @@ def _const_ref(answers: TypeckResults, node: e.ConstRef) -> Iterator[str]:
         yield "value"
 
 
+def _storage_ref(answers: TypeckResults, node: e.StorageRef) -> Iterator[str]:
+    if answers.global_of(node.shir_id) is None:
+        yield "global"
+
+
 def _loop(answers: TypeckResults, node: s.Loop) -> Iterator[str]:
     if answers.loop_kind_of(node.shir_id) is None:
         yield "loop kind"
@@ -136,6 +142,7 @@ NEEDS: dict[type, Needs] = {
     e.Interp: _interp,
     e.Lit: _lit,
     e.ConstRef: _const_ref,
+    e.StorageRef: _storage_ref,
     s.Loop: _loop,
     s.Match: _match,
     s.Destructure: _destructure,

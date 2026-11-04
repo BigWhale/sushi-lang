@@ -10,7 +10,7 @@ its default (`int_literal_default`). An integer literal holds a value at that ty
 (`held_value`, ir.md 8.5). A local answers the type that the table holds for it. A constant
 answers its declared type, and its value, from the constant table (Q5). A constant with no
 value stops the walk (`ConstRef with no value`): after an error of its initializer, that
-error is the diagnostic.
+error is the diagnostic. A `var` answers its declared type, and the symbol of its global.
 
 A struct construction is an instance of the struct that its written type names: behind an
 alias, the struct that the namespace holds. Its fields are checked at the types of the
@@ -41,6 +41,7 @@ from sushi_lang.semantics.passes.types.visit.calls import reject_undefined_funct
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.type_predicates import is_float_type, is_integer_type
 from sushi_lang.semantics.typesys import BuiltinType, StructType, Type
+from sushi_lang.semantics.unit_symbols import global_symbol
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -148,6 +149,27 @@ def check_const_ref(validator: TypeValidator, node: e.ConstRef,
     if record.const_type is None:
         return None
     _record_constant_value(validator, node, record)
+    return resolve_variable_type(validator, record.const_type, record.type_span)
+
+
+def check_storage_ref(validator: TypeValidator, node: e.StorageRef,
+                      _expected: Optional[Type]) -> Optional[Type]:
+    """The declared type of the `var`, and the symbol of its global. Another unit's private
+    `var` is CE3005, bare or behind an alias, and a bare name that two imports bring is
+    CE3012."""
+    written = validator.decl_name(node.decl)
+    record = constant_record(validator, written)
+    if not isinstance(record, ConstSig) or not record.is_var or record.decl is None:
+        er.raise_internal_error("CE0000", span=node.loc,
+                                detail=f"the unit variable '{written}' has no record")
+    if reject_private_name(validator, "variable", record, node.loc):
+        return None
+    if "." not in written and reject_ambiguous_name(validator, "variable", written, node.loc):
+        return None
+    if record.const_type is None:
+        return None
+    validator.body_answers().record_global(node.shir_id,
+                                           global_symbol(record.decl, record.unit_name))
     return resolve_variable_type(validator, record.const_type, record.type_span)
 
 

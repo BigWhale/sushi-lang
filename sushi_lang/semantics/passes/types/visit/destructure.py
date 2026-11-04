@@ -4,8 +4,8 @@
 First each target gives what it wants of its element: a binder its written type, which is
 checked as the type of a `let` is checked, a `Place` the type of its place, and a bare
 binder and a `_` no type. A `Nested` target wants what its targets want. A place is a
-local, a field or an element, checked as the target of a rebind, of a field write or of an
-element write: a field or an element of a constant is CE2096 at the place, a byte of a
+local, a `var`, a field or an element, checked as the target of a rebind, of a field write
+or of an element write: a field or an element of a constant is CE2096 at the place, a byte of a
 string is CE2113, and any other place is not typed yet. Then the value is
 checked at the wants, so a literal part takes the type of its binder or of its place
 (`fields.check_tuple_at`). A `Result` value is CE2505.
@@ -78,7 +78,7 @@ def _written_type(validator: TypeValidator, binder: LocalId) -> Optional[Type]:
 def _place_type(validator: TypeValidator, node: s.Destructure,
                 place: e.ShirExpr) -> Optional[Type]:
     """The type of a place with no `peek` or `poke`; None after an error of the place."""
-    if not isinstance(place, (e.LocalRef, e.Field, e.Index)):
+    if not isinstance(place, (e.LocalRef, e.StorageRef, e.Field, e.Index)):
         visit.stop_at(validator, node)
     ty = visit.check_expr(validator, place)
     if reject_unwritable_place(validator, place, place.loc):

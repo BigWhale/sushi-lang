@@ -1,0 +1,22 @@
+unit test_err_typeck_var_rebind_mismatch
+
+ShirBody counter (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt Lit(0))
+
+ShirBody origin (Initializer)
+  params : []
+  locals : []
+  block  :
+    Return(adopt StructInit(@Point, [adopt Lit(1), adopt Lit(2)], written_order: [0, 1]))
+
+ShirBody main
+  params : []
+  locals : []
+  block  :
+    Assign(StorageRef(@counter), Binary(+, StorageRef(@counter), Field(StorageRef(@origin), "y")), is_init: false)
+    Assign(Field(StorageRef(@origin), "x"), StorageRef(@counter), is_init: false)
+    Assign(StorageRef(@counter), Lit(true), is_init: false)
+    Return(Lit(0))

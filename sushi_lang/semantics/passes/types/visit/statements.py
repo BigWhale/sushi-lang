@@ -92,14 +92,14 @@ def check_block(validator: TypeValidator, block: ShirBlock) -> None:
 
 
 def check_assign(validator: TypeValidator, node: s.Assign) -> None:
-    """A `let`, a rebind of a local, a field write or an element write. A write into a
-    constant is CE2096, and a write into a byte of a string CE2113; the value is then
-    checked at no type."""
+    """A `let`, a rebind of a local or of a `var`, a field write or an element write. A
+    write into a constant is CE2096, and a write into a byte of a string CE2113; the value
+    is then checked at no type."""
     target = node.target
     if node.is_init and isinstance(target, e.LocalRef):
         _check_let(validator, node, target)
         return
-    if node.is_init or not isinstance(target, (e.LocalRef, e.Field, e.Index)):
+    if node.is_init or not isinstance(target, (e.LocalRef, e.StorageRef, e.Field, e.Index)):
         visit.stop_at(validator, node)
     ty = visit.check_expr(validator, target)
     if reject_unwritable_place(validator, target, node.loc):

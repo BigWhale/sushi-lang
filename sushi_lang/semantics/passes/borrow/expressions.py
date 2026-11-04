@@ -1,9 +1,9 @@
 """The expression arms of the borrow pass over SHIR (docs/design/ir.md 7.4, 7.9).
 
 A read of a local reports a use after a move (CE2405, CE2435), after a destroy (CE2406)
-and after a change of the owner of a `let`-borrow (CE2412). A literal and a constant read
-nothing that the body owns. An operator reads its operands, an interpolated string reads
-its holes, a field reads its base, and an element and a slice read their array and their
+and after a change of the owner of a `let`-borrow (CE2412). A literal, a constant and a
+`var` read nothing that the body owns. An operator reads its operands, an interpolated
+string reads its holes, a field reads its base, and an element and a slice read their array and their
 index or bounds. Each field of a struct construction, each part of a tuple, each payload
 of an enum construction and each element of an array construction is a consuming use, and
 so is the operand of a `??`: the pass decides its `Ownership` and writes the row
@@ -37,8 +37,9 @@ if TYPE_CHECKING:
     from . import BorrowChecker
 
 
-def check_leaf(_checker: 'BorrowChecker', _node: e.Lit | e.ConstRef) -> None:
-    """A literal or a constant: it reads nothing that the body owns."""
+def check_leaf(_checker: 'BorrowChecker', _node: e.Lit | e.ConstRef | e.StorageRef) -> None:
+    """A literal, a constant or a `var`: it reads nothing that the body owns, and a `var`
+    always holds its value."""
 
 
 def check_local_ref(checker: 'BorrowChecker', node: e.LocalRef) -> None:
