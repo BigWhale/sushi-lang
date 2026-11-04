@@ -82,7 +82,9 @@ global of a `const` uses too; only an array value stops). Amended on 2026-11-04 
 7.3 (the typecheck of an array, an index, a slice, an element write and the array method
 family; a negated byte literal in an `i32` position), 7.9 (an array in `borrow`), 8.6 (the
 array family takes the address of its receiver) and 8.9 (the lowering of an array value, an
-index, an element write, a slice and an array method).
+index, an element write, a slice and an array method). Amended on 2026-11-04 by ruling R-AS
+(the shapes of the ownership tier): 7.9, 8.2, 8.7, 8.9, 8.10 and 8.13 (a borrowed view is a
+view local).
 
 ## The decisions, in one place
 
@@ -1756,13 +1758,15 @@ The rows of `OwnershipResults`:
   never goes to SLIR (8.2). `REJECT` is
   an error of `borrow`, except at two positions, where it is a borrowed view with no
   error: the value of an `Assign` with `is_init` (a let-borrow of the owner) and the
-  operand of a `Try` that reads through a borrowed owning wrapper. SLIR lowering does not
-  lower a borrowed view yet: a `REJECT` row stops the body with `slir, borrowed view`
-  (8.2), and the operand that a borrowed view gets waits for a ruling. A `REJECT` row at
+  operand of a `Try` that reads through a borrowed owning wrapper. SLIR lowering gives a
+  borrowed view a `Copy` of its place into a VIEW local (8.2), which owns nothing: no drop,
+  no move, and no `Owned` argument. The copy is shallow, and it is safe, because `borrow`
+  freezes each owner while the view lives (CE2412). It is the copy that the AST backend
+  makes. A `REJECT` row at
   any other position of a body that `borrow` ended with no error is the internal error
   CE0157 of the completeness check. `ADOPT` never gives `Copy` of a fresh value: a fresh owning
-  temporary would then be dropped twice. (Ruled provisionally 2026-10-21, for a
-  confirmation before SHIR-to-SLIR lowering.) The key is the `shir_id`
+  temporary would then be dropped twice. (Ruled provisionally 2026-10-21; ruling R-AS of
+  2026-11-04 confirms the mapping and gives a borrowed view its view local.) The key is the `shir_id`
   of the consumed node. A capture has no node in the body, so its
   row has the key of the capture type in 7.3: the `shir_id` of the `Lambda` and the
   `LocalId` of the captured local.
@@ -2139,6 +2143,7 @@ SlirFunction
 SlirLocal
   id   : LocalId
   ty   : Type
+  view : bool                        # a borrowed view: no drop, no move (8.10, rule 8)
   name : str | None                  # the source name where there is one, for diagnostics
   loc  : Span | None
 
@@ -2149,6 +2154,21 @@ SlirBlock
 ```
 
 `locals[0]` is always the return slot, written `_0`.
+
+**A view local.** A local with `view` holds a borrowed VIEW: a shallow copy of a value that
+an owner keeps. Lowering writes it with a `Copy` of the place that it views, and nothing
+writes it again. Four sources make a view local: a `REJECT` row at a position of a borrowed
+view (7.9), a bare binder over an owning payload (8.9), the answer of a call that is a view
+(7.9), and the answer of a call of a function with a `peek` return (8.9). A field view of a
+`Destructure` that borrows (7.5) is a view local too. The local that a `Slice` writes is a
+view by the rule of 8.7. A view local owns nothing: drop placement gives it no `Drop`
+(8.10, rule 8), and the verifier refuses a `Drop` of it, a `Move` of it and an `Owned`
+argument of it (8.13). The shallow copy is safe, because `borrow` freezes each owner of the
+view while the view lives (CE2412). The printer writes `view` after the type: `let _5:
+string view` (and the source name after it, `// s`). The other option, a `Ref` into a
+pointer local and a `Deref` at each read, gives the same answer with one more indirection
+at each read, and the value of a `string` or a `T[]` crosses by value in every other
+position.
 
 The printer writes the source name of a function and of a callee (`fn greet`,
 `call @decorate`), not the symbol (`test_spine_greet$greet`, `user_main`). The symbol is
@@ -2185,9 +2205,8 @@ While the migration is in progress, a construct that the lowering does not handl
 the body with the stop code (`slir, <construct>`). The construct is the name of the SHIR
 class, or one of these names: `generic instance`, `conversion` and `perk method` for the
 body of a monomorphized generic instance, of a conversion and of a perk method; `borrowed
-view` for a `REJECT` row (7.9), `borrowed rebind` for a rebind of a `Guaranteed` or an
-`InGuaranteed` parameter that owns, `borrowed try` for a `Try` over an owning wrapper that
-the body only reads (a copy of it would drop its payload twice), `conversion` also for a
+rebind` for a rebind of a `Guaranteed` or an
+`InGuaranteed` parameter that owns, `conversion` also for a
 `Try` that calls a declared conversion (today `typecheck` stops there first), `library
 function` for a free, a method or a static callee whose row names no declaring unit (a
 function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
@@ -2610,8 +2629,9 @@ or one `memset`, and a `T[N]` of constant parts with one store of its constant.
 `Len(place)` is the length of a `T[N]`, a `T[]` or a `string`, as an `i32`. `Slice(place,
 start, end)` reads a `T[N]` or a `T[]`: two `i32` operands, and `end` is exclusive. Its value
 is a `T[]` descriptor that views the storage of `place`. **A VIEW** is a local that a `Slice`
-writes: it owns nothing, so drop placement gives it no drop, nothing moves it, no other
-statement writes it, and no statement copies it into an owning local (8.13).
+writes, or a view local that a `Copy` writes (8.2): it owns nothing, so drop placement gives
+it no drop, nothing moves it, no other statement writes it, and no statement copies it into
+an owning local (8.13).
 
 A closure and an iterator have one layout, four words. `AggKind` keeps them apart, because
 the backend reads the SEMANTIC type and never the layout to know which one it has
@@ -2674,6 +2694,8 @@ backstop of the checker, as on the AST backend.
 | `If(c, t, e)` | `SwitchInt(c, [(0, else_bb)], otherwise: then_bb)`; with no `else`, the zero edge goes to the join, or to a block of its own that goes to the join when the condition has a local (see below). The blocks are made in the order `then`, `else` or the zero block, join; with no `else` and no condition local, the join is the zero target. With an `else`, the join is made after the two arms, and no join is made when no block reaches it |
 | `Binary(and/or)` | **two blocks.** Short-circuit is control flow, never an rvalue. The left operand goes into the place that takes the value; a `SwitchInt` on it goes to the join (`and` on a zero, `or` on any other value) or to the right block, which writes the same place and goes to the join. The temporaries of the right operand die in its block |
 | `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` that calls a declared conversion is a stop of the lowering for now (`slir, conversion`) |
+| `Try(e)` that reads through a borrowed owning wrapper (a `REJECT` row, 7.9) | `e` is a place, and nothing takes it: `Discriminant` of the place into a local and `SwitchInt` as above. The `Ok` block writes a view local (8.2) with a `Copy` of `Field(Downcast(place, Ok), 0)`. The `Err` block copies the error into the `Err` of `_0` with `Copy`, runs the drops of every scope that it leaves and returns: `borrow` refuses an owning error there (CE2411, `tests/borrow/try_on_a_borrowed_owning_result/`), so the error is plain |
+| a let-borrow (an `Assign` with `is_init` and a `REJECT` row, 7.9) | a view local (8.2), written with a `Copy` of the place |
 | `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field` |
 | `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`: lowering calls `literal_value` and `pattern_interval` over the written constant and the scrutinee type, and reads no row), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |
 | `Match` on a string | a chain of tests in source order (see below): each a `Call` of the intrinsic `eq` (8.6) into a `bool` local, and a `SwitchInt` on it |
@@ -2745,9 +2767,9 @@ first test of the next arm; after the last arm it goes to the trap RE2023 (8.8).
 a path of no test (`_`, or an arm with a `_` alternative) has no test, and it is the last arm
 (CE2041, CE2118).
 
-The binders of an arm are locals of the scope of its body. Each one gets `StorageLive` and
-the `Copy` of its place: a binder is bare and its payload is plain, because `borrow` stops
-on any other binder (7.9). With one path, the block of the body writes the binders first.
+The binders of an arm are locals of the scope of its body. A bare binder gets `StorageLive`
+and the `Copy` of its place: over a plain payload it is an ordinary local, and over an
+owning payload it is a view local (8.2), which gets no drop. With one path, the block of the body writes the binders first.
 With two or more paths that write a binder, each path ends in a block of its own that writes
 the binders of that path and goes to the body. Each arm body is a scope of its own, and each
 arm starts from the state of the locals after the scrutinee. The arms that reach their end
@@ -2765,9 +2787,9 @@ were kept in SHIR only so that `typecheck` and `borrow` could report against the
 
 ### 8.10 Drop placement
 
-Seven rules. They encode the two drop regimes (a local moved on every path has no drop; a
-local moved on some paths has a drop flag), the rebind order of 4.6, and the loop's own
-locals, and nothing else:
+Eight rules. They encode the two drop regimes (a local moved on every path has no drop; a
+local moved on some paths has a drop flag), the rebind order of 4.6, the loop's own
+locals, and the locals that own nothing, and nothing else:
 
 1. Each local that is not `_0` or a parameter gets `StorageLive` right before its first
    write, and `StorageDead` at each exit of its scope: a temporary at each exit of its
@@ -2840,6 +2862,9 @@ locals, and nothing else:
    `break`, a `return` and the `??` of a binder all reach a `Drop`. A walk in place has no
    hidden local and drops nothing. A lent iterator is still dropped: it borrows its source
    and owns its value, and its `drop_fn` frees only what the state owns.
+8. A view local (8.2) never drops, at an exit and at a rebind alike: it owns nothing, and
+   its owner drops the value. It gets `StorageLive` and `StorageDead` by rule 1, and no
+   flag.
 
 ### 8.11 A worked example
 
@@ -3010,6 +3035,9 @@ Runs after lowering, before the backend. It checks:
 - a view: a local that a `Slice` writes is of a `T[]` type, no other statement writes it,
   and nothing moves or drops it. No statement copies a view into an owning local: that
   local would drop storage that the view does not own
+- a view local (8.2): a `Copy` writes it, and nothing writes it again. A view local of an
+  owning type is never the place of a `Drop` or a `DropIfSet`, never `Move`d, and never the
+  operand of an `Owned` argument
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
