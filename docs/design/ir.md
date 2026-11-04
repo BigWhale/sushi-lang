@@ -84,7 +84,9 @@ family; a negated byte literal in an `i32` position), 7.9 (an array in `borrow`)
 array family takes the address of its receiver) and 8.9 (the lowering of an array value, an
 index, an element write, a slice and an array method). Amended on 2026-11-04 by ruling R-AS
 (the shapes of the ownership tier): 7.9, 8.2, 8.7, 8.9, 8.10 and 8.13 (a borrowed view is a
-view local); 7.9, 8.6, 8.12 and 8.13 (the borrow region is a row of `OwnershipResults`).
+view local); 7.9, 8.6, 8.12 and 8.13 (the borrow region is a row of `OwnershipResults`);
+7.3, 7.9, 8.9, 8.10 and 8.13 (a `peek` return copies its value into `_0`, and the caller
+holds a view local).
 
 ## The decisions, in one place
 
@@ -733,6 +735,7 @@ the value of a pattern (7.8, ruling R-AE). That covers more than types:
 | the element type of each target of a `Destructure` | the statement's `shir_id`, per target |
 | the value that an integer literal holds (8.5), and the value of the constant that a `ConstRef` names | the `Lit`'s or the `ConstRef`'s `shir_id` |
 | the symbol of the global of the `var` that a `StorageRef` names (`global_symbol`) | the `StorageRef`'s `shir_id` |
+| the source positions of a call of a function or a method with a `peek` return: the arguments whose owners the answer borrows (`callee_borrows`) | the call's `shir_id` |
 
 A pattern value is not a row: a `Literal` or an `IntRange` has no row of its own (7.8).
 
@@ -778,7 +781,12 @@ value row: no stage reads one,
 because the backend makes the global of a constant from the evaluator (8.2). The global row
 of a `StorageRef` holds the symbol of the global of its `var`, from the one derivation of a
 global symbol (`global_symbol`, `semantics/unit_symbols.py`): SLIR lowering names the
-`Global` place with it, and the backend names the global with it.
+`Global` place with it, and the backend names the global with it. The source row of a call
+of a function or a method with a `peek` return (`borrow-model.md` S10h) holds the position
+of each argument in the source set of the declaration, and the receiver as the position
+`-1` (`RECEIVER_POSITION`, `semantics/borrowed_return.py`). It is an answer of `typecheck`,
+so it is a row and not the AST stamp `callee_borrows` (S5). `borrow` reads it: the answer of
+the call is a view of the owner of each source argument (7.9).
 
 The completeness check is `check_answers` in `semantics/shir/typeck_check.py`. It walks the
 body through the one walk of the SHIR tree (`semantics/shir/walk.py`). A missing answer is
@@ -1788,7 +1796,9 @@ The rows of `OwnershipResults`:
   region ends at the last use, and not at the exit of the scope of the view: a change of an
   owner after the last use and before the end of the scope is legal, and a region that
   ends at the scope exit would refuse a correct program. SLIR lowering writes the
-  `BeginBorrow` and the `EndBorrow` statements of the region from the row (8.6).
+  `BeginBorrow` and the `EndBorrow` statements of the region from the row (8.6). The
+  answer of a call of a function or a method with a `peek` return is a view too: its owner
+  set is the owner of each argument at a position of the source row of the call (7.3).
 
 `LiftResults` holds the symbol (a string) and the environment layout (`Capture(local,
 moves)` for each slot, in slot order), each by the `shir_id` of the `Lambda`.
@@ -2043,8 +2053,9 @@ walk, which makes no value; a heap decision for each lent one; and a walk-in-pla
 for each `Loop` of kind `Protocol` or `IteratorValue`. A `REJECT` row is legal only at
 the two positions of a borrowed view above. Two other calls get LENT from
 `borrow`, and the check does not ask for them yet, because no spine body holds them: the
-clone of a lent iterator (the iterators group, C3) and a borrowed call that answers an
-iterator (the `peek` return group, B8). Each group adds its call to the check. The conditionally moved locals have
+clone of a lent iterator and a borrowed call that answers an iterator (a call with a source
+row, 7.3, whose answer is an iterator). The check asks for each of them with the lowering
+of a lent iterator, which adds the call. The conditionally moved locals have
 no check, because no row is an answer. `check_lift` (`semantics/shir/lift_check.py`) runs
 when `lift` ends a body with no error, and it needs a symbol and an environment for each
 `Lambda`, a lambda in the body of a lambda too. A gap of either check is the internal error
@@ -2717,6 +2728,8 @@ backstop of the checker, as on the AST backend.
 | `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` that calls a declared conversion is a stop of the lowering for now (`slir, conversion`) |
 | `Try(e)` that reads through a borrowed owning wrapper (a `REJECT` row, 7.9) | `e` is a place, and nothing takes it: `Discriminant` of the place into a local and `SwitchInt` as above. The `Ok` block writes a view local (8.2) with a `Copy` of `Field(Downcast(place, Ok), 0)`. The `Err` block copies the error into the `Err` of `_0` with `Copy`, runs the drops of every scope that it leaves and returns: `borrow` refuses an owning error there (CE2411, `tests/borrow/try_on_a_borrowed_owning_result/`), so the error is plain |
 | a let-borrow (an `Assign` with `is_init` and a `REJECT` row, 7.9) | a view local (8.2), written with a `Copy` of the place |
+| `Return` in a function with a `peek` return | `_0 = copy <place>`: the value goes to the caller as it is (`borrow-model.md` S10h): it crosses by value, as a plain borrow does (the 16-byte descriptor of a `string` or a `T[]`), and not as an address. The callee never drops `_0` |
+| a call of a function or a method with a `peek` return | the destination of the `Call` is a view local (8.2), in a region over the owner of each source argument (7.3, 7.9). One rule serves this answer and the view answer of a container call: the owner set has two sources |
 | `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field` |
 | `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`: lowering calls `literal_value` and `pattern_interval` over the written constant and the scrutinee type, and reads no row), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |
 | `Match` on a string | a chain of tests in source order (see below): each a `Call` of the intrinsic `eq` (8.6) into a `bool` local, and a `SwitchInt` on it |
@@ -2885,7 +2898,8 @@ locals, and the locals that own nothing, and nothing else:
    and owns its value, and its `drop_fn` frees only what the state owns.
 8. A view local (8.2) never drops, at an exit and at a rebind alike: it owns nothing, and
    its owner drops the value. It gets `StorageLive` and `StorageDead` by rule 1, and no
-   flag.
+   flag. The `_0` of a function with a `peek` return holds a view too, and the callee never
+   drops it.
 
 ### 8.11 A worked example
 
@@ -3026,6 +3040,9 @@ Runs after lowering, before the backend. It checks:
 - every owning local reaches exactly one of: a `Drop`, a `DropIfSet`, or a `Move` on
   every path
 - `_0` holds a value on every path to a `return`
+- a `peek` return: a `Copy` of an owning value into `_0` only when the declaration of the
+  function returns `peek`, and then no `Drop` of `_0` in the function. This is the one
+  owning place that a view can be copied into
 - every `BeginBorrow` has exactly one matching `EndBorrow` on every path
 - a borrow region: no `Move`, no `Drop`, no write and no `Inout` argument of the place of
   an owner while a region over it is open. A change of the owner after the `EndBorrow` is
