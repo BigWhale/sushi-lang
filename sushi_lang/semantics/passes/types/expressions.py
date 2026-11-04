@@ -17,6 +17,7 @@ from sushi_lang.semantics.shir.typeck import NoConversion, TryFacts
 from sushi_lang.semantics.type_resolution import resolve_unknown_type
 from .compatibility import is_valid_cast
 from .resolution import resolve_variable_type
+from .utils import names_no_type
 from sushi_lang.semantics.generics.type_display import display_type
 
 if TYPE_CHECKING:
@@ -117,19 +118,23 @@ def check_try(validator: 'TypeValidator', node: 'e.Try',
     encloses the `??` (CE0131, CE2508), what the operand under it is (CE2507), whether
     the two failure arms name one type (CE2511), and the facts of the `??`, which are rows
     of the table. The channel comes first, so a `??` in a bare body gets CE0131 alone
-    (docs/design/error-conversion.md section 4). Two error types that a declared
-    conversion joins are not typed yet, and the walk of the body stops there.
+    (docs/design/error-conversion.md section 4). After CE0131 or CE2511, the `??` of a
+    `Result` still answers the value of its success arm, so the position reports its own
+    fault. Two error types that a declared conversion joins are not typed yet, and the
+    walk of the body stops there.
     """
     inner_type = visit.check_expr(validator, node.inner)
     channel = _enclosing_channel(validator, node)
-    if channel is None or inner_type is None:
+    if inner_type is None:
         return None
+    if channel is None:
+        return _success_value(inner_type)
     arms = _unwrapped_arms(validator, node, inner_type)
     if arms is None:
         return None
     agreed, conversion = _error_arms_agree(validator, node, arms, channel)
     if not agreed:
-        return None
+        return arms.value_type
     if conversion is not None:
         visit.stop_at(validator, node)
     answers = validator.body_answers()
@@ -137,6 +142,13 @@ def check_try(validator: 'TypeValidator', node: 'e.Try',
     answers.record_try(node.shir_id, TryFacts(arms.success_tag, arms.value_type,
                                               arms.error_type, channel))
     return arms.value_type
+
+
+def _success_value(inner_type: 'Type') -> Optional['Type']:
+    """The value of the success arm of a `Result@(T, E)`, or None for any other type."""
+    if isinstance(inner_type, EnumType) and is_instance_of(inner_type, "Result"):
+        return result_ok_err(inner_type)[0]
+    return None
 
 
 def _unwrapped_arms(validator: 'TypeValidator', node: 'e.Try',
@@ -321,12 +333,14 @@ def reject_non_numeric_arithmetic(validator: 'TypeValidator', op: str,
 
     The first bad operand is enough: `a - b` on two strings is one fault. A wrapper
     is told how to take its value out, because a missing '??' is the common way here.
+    A type that names no type (CE2001) is no second fault.
     """
     if len(operands) == 2 and is_string_plus(op, operands[0][1], operands[1][1]):
         return False
 
     for operand, operand_type in operands:
-        if operand_type is None or is_numeric_type(operand_type):
+        if (operand_type is None or is_numeric_type(operand_type)
+                or names_no_type(validator, operand_type)):
             continue
         report = er.emit_with(validator.reporter, er.ERR.CE2518, operand.loc,
                               op=op, type_name=display_type(operand_type))

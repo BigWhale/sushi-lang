@@ -75,7 +75,8 @@ def check_unary(validator: TypeValidator, node: e.Unary,
     if ty is None or _rejects_a_pointer(validator, node, ty):
         return None
     if node.op == "~":
-        return None if reject_non_integer_operands(validator, "~", [(operand, ty)]) else ty
+        reject_non_integer_operands(validator, "~", [(operand, ty)])
+        return ty
     if reject_non_numeric_arithmetic(validator, "-", [(operand, ty)]):
         return None
     return None if reject_overflow(validator, node, ty) else ty
@@ -129,14 +130,15 @@ def _check_arithmetic(validator: TypeValidator, node: e.Binary, left: Optional[T
 def _check_bitwise(validator: TypeValidator, node: e.Binary, left: Optional[Type],
                    right: Optional[Type]) -> Optional[Type]:
     """`& | ^` and the two shifts: integers, and a shift count that the compiler can read
-    fits the value."""
+    fits the value. A bitwise operator answers the type of its left operand also after an
+    error of its operands (CE2004, CE2510, CE2512), so the position reports its own fault."""
     if reject_non_integer_operands(validator, node.op, [(node.lhs, left), (node.rhs, right)]):
-        return None
+        return left
     if node.op in SHIFT_OPS:
-        refused = reject_impossible_shift_count(validator, node, left, right)
+        reject_impossible_shift_count(validator, node, left, right)
     else:
-        refused = reject_mixed_numeric_operands(validator, node.loc, left, right)
-    return None if refused or left is None or right is None else left
+        reject_mixed_numeric_operands(validator, node.loc, left, right)
+    return None if left is None or right is None else left
 
 
 def _check_operands(validator: TypeValidator, node: e.Binary,
