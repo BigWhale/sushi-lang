@@ -89,7 +89,7 @@ def _calls(expr: e.ShirExpr) -> bool:
     """Whether a value can call a function, which can change a place through a `poke`. A
     literal, a name of a constant, a place, an operator and a construction over such values
     call none."""
-    if isinstance(expr, (e.Lit, e.ConstRef, e.LocalRef)):
+    if isinstance(expr, (e.Lit, e.ConstRef, e.LocalRef, e.StorageRef)):
         return False
     if isinstance(expr, e.Field):
         return _calls(cast(e.ShirExpr, walk_place(expr, Step.MEMBER).node))
@@ -105,10 +105,11 @@ def _calls(expr: e.ShirExpr) -> bool:
     return True
 
 
-def place_of(low: Lowering, expr: e.LocalRef | e.Field | e.Index | e.Slice) -> p.Place:
-    """The place of a local, a field, an element or a slice: one projection for each step
-    of the walk to its root, from the root out. A root that is no place goes into a
-    temporary of the statement; a temporary that owns stops at a field, and an array that
+def place_of(low: Lowering,
+             expr: e.LocalRef | e.StorageRef | e.Field | e.Index | e.Slice) -> p.Place:
+    """The place of a local, a `var`, a field, an element or a slice: one projection for
+    each step of the walk to its root, from the root out. A root that is no place goes into
+    a temporary of the statement; a temporary that owns stops at a field, and an array that
     owns is dropped at the end of the statement, after its element is read."""
     walked = walk_place(expr, Step.MEMBER | Step.INDEX)
     root: object = walked.node
@@ -116,6 +117,8 @@ def place_of(low: Lowering, expr: e.LocalRef | e.Field | e.Index | e.Slice) -> p
     place: p.Place
     if isinstance(root, e.LocalRef):
         place = p.Local(low.local_of(root.local, root.loc))
+    elif isinstance(root, e.StorageRef):
+        place = low.global_place(root)
     elif isinstance(root, ShirNode) and steps:
         base = cast(e.ShirExpr, root)
         ty = low.type_of(base)
@@ -143,7 +146,9 @@ def _field_index(low: Lowering, member: e.Field) -> int:
 
 
 def field(low: Lowering, node: e.Field) -> Value:
-    return r.Use(low.operand(node))
+    """A value that its statement stores at once, so a place in a `var` is read where it
+    is."""
+    return r.Use(low.operand(node, in_place=True))
 
 
 def field_write(low: Lowering, stmt: s.Assign, target: e.Field | e.Index) -> None:
@@ -195,7 +200,7 @@ def _bind(low: Lowering, targets: Sequence[s.DestructureTarget], source: p.Place
         if isinstance(target, s.Nested):
             _bind(low, target.targets, p.Field(source, index), span)
         elif isinstance(target, s.Place):
-            if not isinstance(target.target, (e.LocalRef, e.Field, e.Index)):
+            if not isinstance(target.target, (e.LocalRef, e.StorageRef, e.Field, e.Index)):
                 dispatch.stop(STAGE, target.target)
             low.write(place_of(low, target.target), element, span)
         elif isinstance(target, ShirLocalId):

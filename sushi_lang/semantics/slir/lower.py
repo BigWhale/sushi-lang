@@ -24,7 +24,11 @@ temporary of a new value. A value with no row is read with `Copy`. A literal and
 of a constant take the value that typecheck wrote for them (ir.md 8.5). A new value goes
 into the place that takes it (the local of a `let`, `_0`), else into a temporary of its
 statement. The store that consumes a `move` operand marks its local moved, not the place
-where the operand is built. Drop placement (`drops.py`) places every drop, every flag write
+where the operand is built. A `var` is a `Global` place (`global_place`), and a `var` that
+owns stops (`StorageRef owning`). A read of a `var` by value goes into a temporary of the
+statement first, because any call of the statement can change a `var`; a by-address
+argument, a receiver and a value that its statement stores at once read it where it is.
+Drop placement (`drops.py`) places every drop, every flag write
 and every `StorageDead`, and joins the state of the locals at a join.
 
 A local whose state differs between the paths of a join gets a drop flag right after it
@@ -62,6 +66,7 @@ from sushi_lang.semantics.integer_width import fits_integer_type
 from sushi_lang.semantics.method_effects import receiver_convention
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
+from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
@@ -338,6 +343,9 @@ class Lowering:
         if isinstance(target, (e.Field, e.Index)) and not stmt.is_init:
             agg.field_write(self, stmt, target)
             return
+        if isinstance(target, e.StorageRef) and not stmt.is_init:
+            self.rebind_global(stmt, target)
+            return
         if not isinstance(target, e.LocalRef):
             dispatch.stop(STAGE, target)
         if stmt.is_init:
@@ -369,6 +377,30 @@ class Lowering:
         self.emit(self.placement.drop_old_value(ident, stmt.loc))
         self.write(p.Local(ident), value, stmt.loc)
         self.emit(self.placement.flag_stored(ident, stmt.loc))
+
+    def rebind_global(self, stmt: s.Assign, target: e.StorageRef) -> None:
+        """`v := x` of a `var`: the new value, then the store into its global. A plain
+        `var` drops nothing. `and` and `or` go into a temporary first, because the right
+        operand can read the `var` again."""
+        place = self.global_place(target)
+        value = self.value(stmt.value)
+        if isinstance(value, ShortCircuit):
+            value = r.Use(p.Copy(p.Local(self.temporary(value, self.type_of(stmt.value),
+                                                        stmt.value.loc))))
+        self.write(place, value, stmt.loc)
+
+    def global_place(self, ref: e.StorageRef) -> p.Global:
+        """The `Global` of the `var` that `ref` names, by the symbol of its typecheck row. A
+        `var` that owns stops (`StorageRef owning`): its rebind drops, and that is group
+        D1."""
+        symbol = self.typeck.global_of(ref.shir_id)
+        if symbol is None:
+            er.raise_internal_error("CE0000", span=ref.loc,
+                                    detail="a unit variable with no global reached SLIR")
+        ty = self.type_of(ref)
+        if self.owns(ty):
+            dispatch.stop(STAGE, ref, state="owning")
+        return p.Global(symbol, ty)
 
     def expr_stmt(self, stmt: s.ExprStmt) -> None:
         """A value that nobody reads still writes a destination local (L16)."""
@@ -412,17 +444,24 @@ class Lowering:
             dispatch.stop(STAGE, expr)
         return arm(self, expr)
 
-    def operand(self, expr: e.ShirExpr) -> p.Operand:
+    def operand(self, expr: e.ShirExpr, *, in_place: bool = False) -> p.Operand:
         """The operand of `expr`, from its `Ownership` row and its shape (ir.md 7.9). A
         literal and a name of a constant are a constant with any other row: an `adopt` of a
-        string constant takes a literal, which owns no heap."""
+        string constant takes a literal, which owns no heap. A read of a `var` goes into a
+        temporary of the statement, unless `in_place` reads it where it is."""
         row = self.answers.ownership.ownership_of(expr.shir_id)
         if row is Ownership.REJECT:
             raise StageStop(STAGE, "borrowed view", expr.loc)
-        if isinstance(expr, e.LocalRef) or (isinstance(expr, (e.Field, e.Index, e.Slice))
-                                            and row is not Ownership.MOVE):
+        if isinstance(expr, (e.LocalRef, e.StorageRef)) or (
+                isinstance(expr, (e.Field, e.Index, e.Slice)) and row is not Ownership.MOVE):
             place = agg.place_of(self, expr)
-            return p.Move(place) if row is Ownership.MOVE else p.Copy(place)
+            if row is Ownership.MOVE:
+                return p.Move(place)
+            root = walk_place(expr, Step.MEMBER | Step.INDEX).node
+            if in_place or not isinstance(root, e.StorageRef):
+                return p.Copy(place)
+            return p.Copy(p.Local(self.temporary(r.Use(p.Copy(place)), self.type_of(expr),
+                                                 expr.loc)))
         if row is Ownership.MOVE:
             er.raise_internal_error("CE0000", span=expr.loc,
                                     detail=f"a move row on a {type(expr).__name__}, which is no place")
@@ -447,8 +486,9 @@ class Lowering:
             dispatch.stop(STAGE, ref, state="out of range")
         return constant
 
-    def leaf(self, expr: e.Lit | e.LocalRef | e.ConstRef) -> Value:
-        return r.Use(self.operand(expr))
+    def leaf(self, expr: e.Lit | e.LocalRef | e.ConstRef | e.StorageRef) -> Value:
+        """A value that its statement stores at once, so a `var` is read where it is."""
+        return r.Use(self.operand(expr, in_place=True))
 
     def binary(self, node: e.Binary) -> Value:
         if node.op in ("and", "or"):
@@ -489,9 +529,11 @@ class Lowering:
         answer of the receiver partition, an extension method with the convention of its
         `self`. Any other callee has none."""
         if isinstance(callee, Builtin):
-            return ((self.operand(callee.recv), _receiver_convention(callee, span)),)
+            return ((self.operand(callee.recv, in_place=True),
+                     _receiver_convention(callee, span)),)
         if isinstance(callee, Method):
-            return ((self.operand(callee.recv), callee.receiver),)
+            return ((self.operand(callee.recv, in_place=callee.receiver.by_address),
+                     callee.receiver),)
         return ()
 
     def callee(self, node: e.Call, resolved: ResolvedCall) -> st.SlirCallee:
@@ -530,7 +572,7 @@ class Lowering:
         if convention is None:
             er.raise_internal_error("CE0000", span=arg.value.loc,
                                     detail="an argument with no convention reached SLIR")
-        return self.operand(arg.value), convention
+        return self.operand(arg.value, in_place=convention.by_address), convention
 
     def interp(self, node: e.Interp) -> Value:
         """ONE call of the intrinsic `interp`: a `Guaranteed` operand for each part, with
@@ -573,6 +615,7 @@ _VALUES: dict[type, Callable[..., Value]] = {
     e.Lit: Lowering.leaf,
     e.LocalRef: Lowering.leaf,
     e.ConstRef: Lowering.leaf,
+    e.StorageRef: Lowering.leaf,
     e.Binary: Lowering.binary,
     e.Unary: Lowering.unary,
     e.Cast: Lowering.cast,

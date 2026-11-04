@@ -11,6 +11,7 @@ from typing import TypeAlias
 
 from sushi_lang.semantics.slir.constants import Constant
 from sushi_lang.semantics.slir.ids import LocalId
+from sushi_lang.semantics.typesys import Type
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,8 +21,10 @@ class Local:
 
 @dataclass(frozen=True, slots=True)
 class Global:
-    """A unit-level `var`. It is never moved out of (docs/design/unit-storage.md)."""
+    """A unit-level `var`, and its declared type. It is never moved out of
+    (docs/design/unit-storage.md)."""
     symbol: str
+    ty: Type
 
 
 @dataclass(frozen=True, slots=True)

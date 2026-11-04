@@ -215,7 +215,7 @@ TRIPLE = ArrayType(base_type=I32, size=3)
 
 SHAPES: list[tuple[object, str]] = [
     # places and operands (ir.md 8.4, L8)
-    (p.Copy(p.Global("test$counter")), "copy @test$counter"),
+    (p.Copy(p.Global("test$counter", BuiltinType.I32)), "copy @test$counter"),
     (p.Move(p.Field(_local(3), 1)), "move (_3.1)"),
     (p.Copy(p.Index(_local(3), _copy(4))), "copy (_3[copy _4])"),
     (p.Copy(p.Deref(_local(2))), "copy (*_2)"),

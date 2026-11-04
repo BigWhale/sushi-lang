@@ -53,11 +53,14 @@ from sushi_lang.semantics.typesys import (
 
 
 def place_address(state: FunctionState, place: p.Place) -> ir.Value:
-    """The address of a place: the storage of a local, a payload field of a variant, a
-    field of a struct or a tuple, or an element of an array or a string."""
+    """The address of a place: the storage of a local, the global of a `var`, a payload
+    field of a variant, a field of a struct or a tuple, or an element of an array or a
+    string."""
     match place:
         case p.Local(local):
             return state.storage_of(local)
+        case p.Global(symbol):
+            return global_address(state, symbol)
         case p.Field(p.Downcast(base, variant), index):
             types = _payload_types(state, base, variant, index)
             offsets = state.codegen.types.payload_field_offsets(types)
@@ -74,10 +77,22 @@ def place_address(state: FunctionState, place: p.Place) -> ir.Value:
     state.stop(place)
 
 
+def global_address(state: FunctionState, symbol: str) -> ir.Value:
+    """The global of a `var` in the module. The declaration round makes it in every module:
+    the module of its unit defines it, and each other module declares it external (ir.md
+    8.2). A symbol that the module does not hold is an internal error."""
+    found = state.codegen.module.globals.get(symbol)
+    if not isinstance(found, ir.GlobalVariable):
+        state.fault(f"the module holds no global '{symbol}'")
+    return found
+
+
 def type_of_place(state: FunctionState, place: p.Place) -> Type:
     match place:
         case p.Local(local):
             return state.type_of(local)
+        case p.Global(_, ty):
+            return ty
         case p.Field(p.Downcast(base, variant), index):
             return _payload_types(state, base, variant, index)[index]
         case p.Field(base, index):

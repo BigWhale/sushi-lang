@@ -1,0 +1,3 @@
+# A unit whose storage the SLIR golden of a `var` reaches behind an alias.
+
+public var i32 count = 0

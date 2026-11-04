@@ -36,8 +36,9 @@ local; a borrowed parameter never drops and never moves, and an `Inout` one hold
 again at the `return`. A `Trap` ends the program, so it needs no drop.
 
 The verifier refuses a shape that no lowering makes yet, and that it does not check, with
-the internal error CE0000: a `BeginBorrow` or an `EndBorrow`, a projection of a `Global` (a
-`Global` has no type in SLIR), and a `Drop` or a `DropIfSet` of a place that is no local.
+the internal error CE0000: a `BeginBorrow` or an `EndBorrow`, and a `Drop` or a `DropIfSet`
+of a place that is no local. A projection of a `Global` is typed from the type that the
+`Global` carries.
 """
 from __future__ import annotations
 
@@ -178,10 +179,9 @@ class _Payload:
 
 @dataclass(frozen=True, slots=True)
 class _Typed:
-    """The root of a place, its type (None for a `Global`, whose type SLIR does not hold),
-    and the operand of each `Index` in it."""
+    """The root of a place, its type, and the operand of each `Index` in it."""
     root: p.Local | p.Global
-    ty: Optional[Type | _Payload]
+    ty: Type | _Payload
     indexes: tuple[p.Operand, ...] = ()
 
 
@@ -360,7 +360,7 @@ class _Check:
     def parts_fit(self, rule: str, what: str, wanted: Sequence[Type],
                   parts: list[Optional[Type]], span: Span) -> None:
         """One part for each wanted type, of that type. A part whose type SLIR does not
-        hold (behind a `Global`) is not compared."""
+        hold (a payload behind a `Downcast`, a `FnRef`) is not compared."""
         if len(parts) != len(wanted):
             self.fail(rule, f"{what} holds {len(wanted)} values, and it is given "
                             f"{len(parts)}", span)
@@ -372,7 +372,7 @@ class _Check:
     def place(self, place: p.Place, span: Span) -> _Typed:
         """The root and the type of `place`; each projection must fit the type of its base."""
         if isinstance(place, p.Global):
-            return _Typed(place, None)
+            return _Typed(place, place.ty)
         arm = _PLACES.get(type(place))
         if arm is None:
             er.raise_internal_error("CE0000", span=span,
@@ -491,7 +491,7 @@ class _Check:
 
     def cast(self, value: r.Cast, span: Span) -> None:
         """A cast joins two numeric types, or keeps one type. Its operand has a known type
-        in SLIR except behind a `Global` or a `Downcast`."""
+        in SLIR except behind a `Downcast`."""
         source = self.operand_type(value.operand, span)
         if source is None or source == value.target:
             return
@@ -604,11 +604,8 @@ class _Check:
 
     def base(self, place: p.Field | p.Index | p.Downcast | p.Deref,
              span: Span) -> tuple[_Typed, Type | _Payload]:
-        """The base of a projection and its type. Only a `Global` has no type in SLIR, so a
-        projection of one is not checked yet."""
+        """The base of a projection and its type."""
         base = self.place(place.base, span)
-        if base.ty is None:
-            self.not_checked(f"the projection {show(place)} of a global", span)
         return base, base.ty
 
     def field_place(self, place: p.Field, span: Span) -> _Typed:

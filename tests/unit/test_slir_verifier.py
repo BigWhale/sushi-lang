@@ -29,8 +29,8 @@ from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLoca
 from sushi_lang.semantics.slir.ids import BlockId, BorrowId, LocalId
 from sushi_lang.semantics.slir.verify import DeclaredParams, declared_params, verify_function
 from sushi_lang.semantics.typesys import (
-    BorrowMode, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo, StructType, Type,
-    UnknownType,
+    ArrayType, BorrowMode, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo, StructType,
+    Type, UnknownType,
 )
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 
@@ -232,7 +232,8 @@ def test_a_move_of_a_payload_moves_its_whole_local():
 
 def test_a_move_out_of_a_global_is_refused():
     _refused(_function([BLANK, STRING],
-                       _block(0, _ret(), _set(1, r.Use(p.Move(p.Global("unit$log"))), BAD),
+                       _block(0, _ret(), _set(1, r.Use(p.Move(p.Global("unit$log", STRING))),
+                                                  BAD),
                               _drop(1))),
              "no move out of a global")
 
@@ -508,7 +509,7 @@ def test_a_trap_that_moves_an_operand_is_refused():
     ("RE2026", (p.Const(k.Bool(True)), p.Const(k.text("")))),     # the position is a string
     ("RE2026", (p.Const(k.text("probe.sushi:7:5")),)),             # its text prints two values
     ("RE2026", ()),                                                 # a bare assert has two
-    ("RE2020", (p.Copy(p.Global("unit$g")), p.Const(k.Int(3, I32)))),  # no type to read
+    ("RE2020", (p.Copy(p.Global("unit$g", STRING)), p.Const(k.Int(3, I32)))),  # a string
 ])
 def test_a_trap_operand_of_the_wrong_type_for_its_conversion_is_refused(
         code: str, args: tuple[p.Operand, ...]):
@@ -556,16 +557,25 @@ def test_an_end_borrow_is_not_checked_yet():
 
 
 @pytest.mark.parametrize("projection", [
-    p.Field(p.Global("unit$pair"), 0),
-    p.Index(p.Global("unit$table"), p.Const(k.Int(0, I32))),
-    p.Downcast(p.Global("unit$cache"), "Some"),
-    p.Deref(p.Global("unit$cell")),
-], ids=["field", "index", "downcast", "deref"])
-def test_a_projection_of_a_global_is_not_checked_yet(projection: p.Place):
-    _not_checked(_function([BLANK, I32], _block(0, _ret(), _set(1, r.Use(p.Copy(projection)), BAD))))
+    p.Field(p.Global("unit$pair", PAIR), 1),
+    p.Index(p.Global("unit$table", ArrayType(base_type=I32, size=3)), p.Const(k.Int(0, I32))),
+], ids=["field", "index"])
+def test_a_projection_of_a_global_is_typed_from_the_global(projection: p.Place):
+    _passes(_function([BLANK, I32], _block(0, _ret(), _set(1, r.Use(p.Copy(projection))),
+                                           _set(0, r.Use(p.Const(k.Blank()))))))
 
 
-@pytest.mark.parametrize("target", [p.Field(_local(1), 0), p.Global("unit$log")],
+@pytest.mark.parametrize("projection", [
+    p.Field(p.Global("unit$count", I32), 0),
+    p.Index(p.Global("unit$pair", PAIR), p.Const(k.Int(0, I32))),
+    p.Field(p.Global("unit$pair", PAIR), 2),
+], ids=["field of an i32", "index of a struct", "no such field"])
+def test_a_projection_that_does_not_fit_the_type_of_the_global_is_refused(projection: p.Place):
+    _refused(_function([BLANK, I32], _block(0, _ret(), _set(1, r.Use(p.Copy(projection)), BAD))),
+             "typed places")
+
+
+@pytest.mark.parametrize("target", [p.Field(_local(1), 0), p.Global("unit$log", STRING)],
                          ids=["projection", "global"])
 def test_a_drop_of_a_place_that_is_no_local_is_not_checked_yet(target: p.Place):
     _not_checked(_function([BLANK, PAIR], _block(0, _ret(), st.Drop(target, BAD))))
