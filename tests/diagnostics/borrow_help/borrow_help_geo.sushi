@@ -1,0 +1,5 @@
+public struct Point:
+    i32 x
+    i32 y
+
+public const Point ORIGIN = Point(3, 4)

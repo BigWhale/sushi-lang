@@ -47,6 +47,7 @@ from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.ids import ShirId
+from sushi_lang.semantics.source_text import source_text
 from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, Type, deref_type
 
 from .compatibility import types_compatible
@@ -227,14 +228,19 @@ def _spell_place(validator: 'TypeValidator', value: e.ShirExpr) -> Optional[str]
 
     The help offers the argument back to the user, so it must be text the user could type.
     A local spells its name, and a field chain off a local spells the local and then each
-    field (`b.inner.label`), through the one place walk. Anything else has no spelling here
-    and is offered no help.
+    field (`b.inner.label`), through the one place walk. A constant or a unit variable
+    spells its root as the source writes it (`geo.ORIGIN.x`). Anything else has no spelling
+    here and is offered no help.
     """
     walked = walk_place(value, Step.MEMBER)
-    local = None if walked.local is None else validator.body_locals.get(walked.local)
-    if local is None or local.name is None:
+    if isinstance(walked.node, (e.ConstRef, e.StorageRef)):
+        root = source_text(validator.reporter.body_source(), walked.node.loc)
+    else:
+        local = None if walked.local is None else validator.body_locals.get(walked.local)
+        root = None if local is None else local.name
+    if root is None:
         return None
-    return ".".join([local.name, *(field.name for field in reversed(walked.path))])
+    return ".".join([root, *(field.name for field in reversed(walked.path))])
 
 
 def _mismatch_span(arg: e.Arg) -> Optional[Span]:
