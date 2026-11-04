@@ -46,12 +46,12 @@ _INDIRECT_CEILING = {
 }
 
 #: The modules that must reach the seam, one per converted copy. `visit/calls.py` is the
-#: call arm of the SHIR walk (docs/design/ir.md 7.3).
+#: call arm of the SHIR walk (docs/design/ir.md 7.3), and it checks the arguments of a
+#: static too (group A10).
 _CALLERS = (
     "visit/calls.py",
     "calls/methods.py",
     "calls/user_defined.py",
-    "calls/statics.py",
     "calls/enums.py",
     "calls/structs.py",
     "externals.py",

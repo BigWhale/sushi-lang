@@ -51,14 +51,9 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
     later group checks (`LATER_ROOTS`) stops the walk.
     """
     is_poke = mode is BorrowMode.POKE
-    root = walk_place(place, Step.MEMBER).node
-    if isinstance(root, e.ConstRef):
-        name = checker.decl_name(root.const_id).rpartition(".")[2]
-        record = checker.constant_record(root)
-        sig = record if isinstance(record, ConstSig) else None
-        reject_borrow_of_constant(checker.err, name, sig, root.loc, mode=mode.value,
-                                  no_frame_slot=sig is None)
+    if borrow_of_constant(checker, place, mode):
         return
+    root = walk_place(place, Step.MEMBER).node
     if isinstance(root, LATER_ROOTS):
         arms.stop_at(checker, root)
     if not isinstance(root, e.LocalRef):
@@ -83,6 +78,20 @@ def check_borrow(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode,
         check_owner_not_borrowed(checker, root.local, span, "take `poke`", place=place)
 
     acquire_borrow(checker, state, span, is_poke=is_poke)
+
+
+def borrow_of_constant(checker: 'BorrowChecker', place: e.ShirExpr, mode: BorrowMode) -> bool:
+    """Is the root of `place` a constant? A `peek` of it reads it, and a `poke` is CE2400
+    at the name of the constant (`reject_borrow_of_constant`). True when the root is one."""
+    root = walk_place(place, Step.MEMBER).node
+    if not isinstance(root, e.ConstRef):
+        return False
+    name = checker.decl_name(root.const_id).rpartition(".")[2]
+    record = checker.constant_record(root)
+    sig = record if isinstance(record, ConstSig) else None
+    reject_borrow_of_constant(checker.err, name, sig, root.loc, mode=mode.value,
+                              no_frame_slot=sig is None)
+    return True
 
 
 def acquire_borrow(checker: 'BorrowChecker', state: BorrowState, span: Optional[Span],

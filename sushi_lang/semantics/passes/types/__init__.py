@@ -175,7 +175,7 @@ class TypeValidator:
         self.in_synthesized_body = False
         self.variable_types: Dict[str, Type] = {}
         # The `let` names whose initializer was refused; a method call on one is not
-        # refused again (#1128). Only the AST port template `validate_method_call` (A10)
+        # refused again (#1128). Only the AST port template `validate_method_call` (C3)
         # reads and writes it: the SHIR walk keeps `refused_locals`.
         self.refused_bindings: set[str] = set()
         # The ranges refused outside their two positions (#1165): each answers no type
@@ -357,6 +357,14 @@ class TypeValidator:
         if self.shir is None:
             er.raise_internal_error("CE0000", detail="the typecheck pass has no SHIR program")
         return self.shir.decls.name_of(decl)
+
+    def method_decl(self, owner: Type, method: str) -> 'DeclId':
+        """The id of the written name `<type>.<method>` of a method that a call names: the
+        name that lowering gives the body of the method (docs/design/ir.md 7.6)."""
+        if self.shir is None:
+            er.raise_internal_error("CE0000", detail="the typecheck pass has no SHIR program")
+        from sushi_lang.semantics.generics.type_display import display_type
+        return self.shir.decls.refer(f"{display_type(owner)}.{method}")
 
     def _constant_value(self, decl: 'DeclId') -> Optional['ConstantValue']:
         """The value of a constant that a `ConstRef` names, from the constant table (Q5)."""

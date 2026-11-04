@@ -2,8 +2,9 @@
 
 Port template: `reject_spread_args` calls `TypeValidator.validate_expression`, and that
 API is deleted. No pass reaches it today. Its one caller is the AST method-call ladder
-(`calls/methods.py`, group A10). A SHIR method call and a SHIR struct construction refuse
-a spread with `arguments.reject_misplaced_spread`, and A10 deletes this one.
+(`calls/methods.py`), which the protocol `next()` call of group C3 reaches. A SHIR method
+call and a SHIR struct construction refuse a spread with
+`arguments.reject_misplaced_spread`, and C3 deletes this one.
 """
 from __future__ import annotations
 

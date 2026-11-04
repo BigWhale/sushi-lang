@@ -107,7 +107,8 @@ def _recv() -> e.LocalRef:
 
 @pytest.mark.parametrize("make, text", [
     (lambda d: c.Free(d.refer("f")), "Free(@f)"),
-    (lambda d: c.Method(_recv(), d.refer("m")), "Method(LocalRef(_0), @m)"),
+    (lambda d: c.Method(_recv(), d.refer("m"), Convention.GUARANTEED),
+     "Method(LocalRef(_0), @m, Guaranteed)"),
     (lambda d: c.Static(BuiltinType.I32, d.refer("at")), "Static(i32, @at)"),
     (lambda d: c.Builtin(_recv(), c.BuiltinMethod("string", "len", nom_self=False)), 'Builtin(LocalRef(_0), "len")'),
     (lambda d: c.BuiltinStatic(BuiltinType.F64, c.BuiltinMethod("float_bits", "from_bits", nom_self=False)),

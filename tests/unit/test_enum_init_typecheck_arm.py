@@ -4,7 +4,8 @@ A `Result` or a `Maybe` variant takes the instance of its position. A variant of
 that is not generic is an instance of that enum, also behind an alias. A wrapper variant
 whose position gives no instance, a variant of a generic enum of the program and a variant
 of an enum whose name the unit lost (D2) stop with `typecheck, EnumInit`. A `Static` call
-on an enum stops with `typecheck, Call(static)` while a unit declares a method of its name.
+on a generic enum stops with `typecheck, Call(static)` while a unit declares a method of its
+name (C1).
 The tests run the arm over SHIR built by hand, with a stand-in for the pass; they do not
 run the compiler.
 """
@@ -47,6 +48,7 @@ def _validator(written: str, *, lost: Optional[str] = None,
     return SimpleNamespace(
         answers=answers, body_answers=lambda: answers, decl_name=lambda _decl: written,
         enum_table=SimpleNamespace(by_name={"Sign": SIGN, "Maybe<i32>": MAYBE_I32}),
+        struct_table=SimpleNamespace(by_name={}),
         generic_enum_table=SimpleNamespace(by_name={"Maybe": object(), "Slot": SLOT}),
         namespaces=SimpleNamespace(lookup=lambda alias, name: bindings.get((alias, name))),
         visibility=_visibility(lost), current_unit_name="main", in_template_check=False,
@@ -96,7 +98,7 @@ def test_a_construction_that_is_not_typed_yet_stops(written: str, lost: Optional
         "stage": "typecheck", "construct": "EnumInit"}
 
 
-def test_a_static_call_on_an_enum_with_a_method_of_its_name_stops() -> None:
-    validator = _validator("Sign", methods=("flip",))
-    node = e.Call(ShirId(1), SPAN, e.Static(UnknownType("Sign"), "flip"), [])
+def test_a_static_call_on_a_generic_enum_with_a_method_of_its_name_stops() -> None:
+    validator = _validator("Slot", methods=("flip",))
+    node = e.Call(ShirId(1), SPAN, e.Static(UnknownType("Slot"), "flip"), [])
     assert _stop(validator, node) == {"stage": "typecheck", "construct": "Call(static)"}

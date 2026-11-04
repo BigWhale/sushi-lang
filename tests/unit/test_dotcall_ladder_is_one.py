@@ -23,7 +23,7 @@ import pytest
 
 from sushi_lang.semantics.ast import DotCall, MethodCall, Node
 from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
-from sushi_lang.semantics.shir.callee import BuiltinMethod
+from sushi_lang.semantics.shir.callee import BuiltinMethod, Method
 from sushi_lang.semantics.shir.typeck import ResolvedCall, TypeckResults
 
 PACKAGE = Path(__file__).resolve().parents[2] / "sushi_lang"
@@ -38,17 +38,18 @@ SHIR_HOMES = {
     "callee_extension_unit": (ResolvedCall, "unit"),
     "callee_param_modes": (TypeckResults, "convention_of"),
     "resolved_enum_type": (TypeckResults, "type_of"),
+    "callee_self_mode": (Method, "receiver"),
 }
 
 #: The facts whose SHIR home comes with a later chunk, and the chunk.
 LATER = {
-    "callee_self_mode": "A4, the convention of a `nom self` receiver (ir.md 8.3)",
-    "callee_param_names": "A10, read from the declaration that the callee row names",
-    "callee_param_types": "A10, read from the declaration that the callee row names",
-    "callee_variadic_at": "A10, read from the declaration that the callee row names",
     "iterator_next": "C3, the next() call of a protocol loop",
     "callee_borrows": "B8, the sources of a peek return",
 }
+
+#: The facts that need no SHIR home: the typecheck pass reads them from the declaration of
+#: the callee when it checks the arguments, and no later stage reads them.
+_READ_FROM_THE_DECLARATION = ("callee_param_names", "callee_param_types")
 
 #: What the AST half handed INTO the temporary node instead of reading back off it: the
 #: propagation stamp (#272) and the namespace stamp (#506). No rung copies them back.
@@ -111,7 +112,8 @@ def test_each_fact_of_the_stamp_set_has_a_shir_home():
     """A field that the temporary node and the DotCall both carry is a fact with a SHIR
     home, a fact of a later chunk, or no fact of a resolved method."""
     shared = (_field_names(MethodCall) & _field_names(DotCall)) - _field_names(Node)
-    accounted = (set(SHIR_HOMES) | set(LATER) | set(_CARRIED_IN)
+    accounted = (set(SHIR_HOMES) | set(LATER) | set(_READ_FROM_THE_DECLARATION)
+                 | set(_CARRIED_IN)
                  | set(_WRITTEN_ON_THE_DOTCALL) | set(_NOT_A_METHOD_STAMP))
     missing = sorted(shared - accounted)
     assert not missing, (

@@ -1,0 +1,42 @@
+unit test_err_borrow_nom_self_receiver_after_move
+
+ShirBody main
+  params : []
+  locals : [_0 "b": Bag, _1 "n": i32, _2 "s": string]
+  block  :
+    Assign(LocalRef(_0), adopt Call(Static(Bag, @Bag.named), [(adopt Lit("Mostly"), Owned)]), is_init: true)
+    ExprStmt(Call(Method(LocalRef(_0), @Bag.relabel, Inout), [(adopt Lit("Harmless"), Owned)]))
+    Assign(LocalRef(_1), adopt Binary(+, Call(Method(LocalRef(_0), @Bag.size, Guaranteed), []), Call(Method(LocalRef(_0), @Bag.seen, InGuaranteed), [])), is_init: true)
+    Assign(LocalRef(_2), adopt Call(Method(move LocalRef(_0), @Bag.finish, Owned), []), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))
+    Return(adopt Binary(+, LocalRef(_1), Call(Method(LocalRef(_0), @Bag.size, Guaranteed), [])))
+
+ShirBody Bag.named
+  params : [(_1 "label": string, Owned)]
+  locals : []
+  block  :
+    Return(adopt StructInit(@Bag, [move LocalRef(_1)], written_order: [0]))
+
+ShirBody Bag.size
+  params : [(_0 "self": Bag, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Call(Builtin(Field(LocalRef(_0), "label"), "len"), []))
+
+ShirBody Bag.seen
+  params : [(_0 "self": Bag, InGuaranteed)]
+  locals : []
+  block  :
+    Return(adopt Call(Builtin(Field(LocalRef(_0), "label"), "len"), []))
+
+ShirBody Bag.relabel
+  params : [(_0 "self": Bag, Inout), (_1 "label": string, Owned)]
+  locals : []
+  block  :
+    Assign(Field(LocalRef(_0), "label"), move LocalRef(_1), is_init: false)
+
+ShirBody Bag.finish
+  params : [(_0 "self": Bag, Owned)]
+  locals : []
+  block  :
+    Return(adopt Call(Builtin(Field(LocalRef(_0), "label"), "clone"), []))

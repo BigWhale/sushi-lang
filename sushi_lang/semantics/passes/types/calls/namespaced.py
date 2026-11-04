@@ -311,12 +311,11 @@ def _stamp_param_modes(node, func_sig, validator=None) -> None:
 
     A FUNCTION, not a method: the same answers the flat call reads from the resolver.
     """
-    from sushi_lang.semantics.param_modes import CalleeKind, modes_for, variadic_index
+    from sushi_lang.semantics.param_modes import CalleeKind, modes_for
     params = getattr(func_sig, "params", None) or ()
     node.callee_param_modes = modes_for(params, CalleeKind.FUNCTION)
     node.callee_param_names = tuple(p.name for p in params)
     node.callee_param_types = tuple(p.ty for p in params)
-    node.callee_variadic_at = variadic_index(func_sig)
     if func_sig is not None and validator is not None:
         from ..borrowed_returns import stamp_call_sources
         stamp_call_sources(validator, node, func_sig)
@@ -328,11 +327,10 @@ def _stamp_stdlib_param_modes(node, stdlib_func) -> None:
     Its parameters are types, so the name a diagnostic quotes is the type's, as at
     the flat call.
     """
-    from sushi_lang.semantics.param_modes import CalleeKind, modes_for, variadic_index
+    from sushi_lang.semantics.param_modes import CalleeKind, modes_for
     params = getattr(stdlib_func, "params", None) or ()
     node.callee_param_modes = modes_for(None, CalleeKind.STDLIB)
     node.callee_param_names = tuple(p.name for p in params)
-    node.callee_variadic_at = variadic_index(stdlib_func)
 
 
 def _written(receiver, name: str) -> str:

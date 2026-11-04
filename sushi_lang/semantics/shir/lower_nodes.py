@@ -225,7 +225,8 @@ class BodyLowerer:
         argument outside a struct construction (CE6104), written type arguments after a
         dot or on a struct construction (CE6102), a slice with a reversed range (CE2122),
         a call of a name that the namespace does not hold (CE2008), a member of a type
-        that is no variant (CE2045), and a `break` or a `continue` outside a loop (CE1003).
+        that is no variant (CE2045), a `break` or a `continue` outside a loop (CE1003), and
+        a `self` in a static method (CE0134).
 
         `codes` are the codes of that error. At the end of the analysis, on every compile,
         an error hole whose codes no error offered is a stop with CE0155
@@ -328,6 +329,8 @@ def _name(lw: BodyLowerer, node: a.Name) -> e.ShirExpr:
     loc = lw.span(node)
     match answer:
         case bd.Local(local):
+            if _names_no_receiver(lw, node, local):
+                return lw.error_hole(node, "CE0134")
             return e.LocalRef(lw.ident(), loc, local)
         case bd.Const(name):
             return e.ConstRef(lw.ident(), loc, lw.decls.refer(name))
@@ -338,6 +341,14 @@ def _name(lw: BodyLowerer, node: a.Name) -> e.ShirExpr:
         case bd.Unresolved():
             return lw.error_hole(node, "CE1001", "CE1002", "CE0144")
     return lw.hole(node)
+
+
+def _names_no_receiver(lw: BodyLowerer, node: a.Name, local: LocalId) -> bool:
+    """Is `node` the `self` of a static method? A static has no receiver, and the collect
+    pass refuses each mention of `self` in its body (CE0134)."""
+    decl = lw.bindings.body
+    return (isinstance(decl, a.ExtendDef) and decl.is_static and node.id == "self"
+            and local == lw.binder(decl, "self"))
 
 
 # -- operators --------------------------------------------------------------------

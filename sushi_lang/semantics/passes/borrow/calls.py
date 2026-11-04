@@ -1,10 +1,10 @@
 """Call sites: which convention each argument has, and what that convention does.
 
-`check_call` is the arm of a SHIR call of a free function, of `print`/`println` and of a
-built-in method whose receiver the receiver partition reads, with the conventions that the
-typecheck pass gave (docs/design/ir.md 8.3). The other helpers
-read the AST of a method call and of a call through a function field: the groups that check
-those calls port them to SHIR (Phase 3 to 5).
+`check_call` is the arm of a SHIR call of a free function, of `print`/`println`, of a
+built-in method whose receiver the receiver partition reads, and of an extension method or
+a static, with the conventions that the typecheck pass gave (docs/design/ir.md 8.3). The
+other helpers read the AST of a built-in method call and of a call through a function
+field: the groups that check those calls port them to SHIR (Phase 3 to 5).
 """
 
 from __future__ import annotations
@@ -23,16 +23,19 @@ from sushi_lang.semantics.param_modes import (
     CalleeKind, Convention, ParamMode, effective_modes, receiver_mode,
 )
 from sushi_lang.semantics.shir import dispatch, exprs as e
-from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic
+from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic, Method, Static
 
 from . import arms
-from .borrows import BY_ADDRESS, acquire_borrow, check_borrow, register_implicit_borrow
+from .borrows import (
+    BY_ADDRESS, LATER_ROOTS, acquire_borrow, borrow_of_constant, check_borrow,
+    register_implicit_borrow)
 from .iterators import take_lent_iterator
 from .consume import consume, consume_each, read_through_receiver, source_provenance
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, spelled
 from .expressions import stop_at_a_field_take
 from .methods import CONTAINER_INSERT_METHODS, callee_effect
 from .reads import OWNER_STEPS, borrow_owner, called_on, read_type
+from .writes import check_owner_not_borrowed, reject_readonly_write
 from .state import BorrowState
 
 if TYPE_CHECKING:
@@ -65,14 +68,18 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     and the pass decides its `Ownership`. A callee that destroys its `poke` parameter
     destroys the caller's value (#168). The `nom` marker is compared against the declared
     mode by the typecheck pass (CE2427). A built-in method reads its receiver first. A
-    family that has no arm yet stops the walk. The typecheck pass stops at every other
+    family that has no arm yet stops the walk. The receiver of an extension method has the
+    convention of its `self` (`check_method_receiver`): it is read after the call's entry,
+    so a `poke self` change is a change of this call. A `poke self` receiver changes its
+    owner, and a `nom self` receiver is taken, after the arguments, as an `Owned` argument
+    is. The typecheck pass stops at every other
     callee, so one in this pass is an internal error.
     """
     resolved = checker.answers().callee_of(node.shir_id)
     callee = resolved.callee if resolved is not None else None
     if isinstance(callee, Builtin):
         _check_builtin_receiver(checker, node, callee)
-    elif not isinstance(callee, (Free, Intrinsic)):
+    elif not isinstance(callee, (Free, Intrinsic, Method, Static)):
         er.raise_internal_error(
             "CE0000", span=node.loc,
             detail=f"the typecheck pass gave the borrow pass a call with the callee "
@@ -82,6 +89,8 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     conventions = [_convention_of(checker, node, position)
                    for position in range(len(node.args))]
     unchanged = unchanged_borrowed_roots(checker, node, conventions)
+    changes_receiver = (isinstance(callee, Method)
+                        and check_method_receiver(checker, node, callee))
     modes = [_written_borrow(arg, convention)
              for arg, convention in zip(node.args, conventions, strict=True)]
     for arg, mode in zip(node.args, modes, strict=True):
@@ -93,9 +102,100 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
     for arg, convention, mode in zip(node.args, conventions, modes, strict=True):
         if mode is None:
             apply_convention(checker, arg.value, convention)
+    if isinstance(callee, Method) and callee.receiver is Convention.OWNED:
+        take_receiver(checker, node, callee)
+    if changes_receiver:
+        _change_receiver_owner(checker, node, callee)
     reject_borrow_read_by_the_change(checker, node, conventions, unchanged)
     if isinstance(callee, Free):
         apply_destroy_effects(checker, node, callee)
+
+
+def check_method_receiver(checker: 'BorrowChecker', node: e.Call, callee: Method) -> bool:
+    """The receiver of an extension method, by the convention of its `self` (ir.md 8.3).
+
+    The receiver is read first: a use after a move is CE2405. A plain `self` is the shared
+    borrow of an unmarked argument, and a `peek self` a `peek` of its owner, for the
+    statement. A `poke self` writes its receiver (`_write_receiver`). A `nom self`
+    receiver is taken after the arguments (`take_receiver`). True when the call changes
+    the owner of its receiver: a `poke self` that the pass did not refuse.
+    """
+    receiver = callee.recv
+    arms.check(checker, receiver)
+    if callee.receiver is Convention.GUARANTEED:
+        register_implicit_borrow(checker, receiver)
+    elif callee.receiver is Convention.IN_GUARANTEED:
+        _borrow_owner_of(checker, receiver, is_poke=False)
+    elif callee.receiver is Convention.INOUT:
+        return _write_receiver(checker, node, callee)
+    return False
+
+
+def _write_receiver(checker: 'BorrowChecker', node: e.Call, callee: Method) -> bool:
+    """A `poke self` receiver: the call writes the place of its receiver (#327).
+
+    A `poke` of a constant is CE2400. A receiver that does not reach the storage of a
+    local, or that reaches it through a read-only name, is refused by the one gate of a
+    write (`reject_readonly_write`, CE2429 for a temporary). Else the receiver takes the
+    exclusive borrow of its owner for the statement. True when the write is not refused.
+    """
+    receiver = callee.recv
+    if borrow_of_constant(checker, receiver, BorrowMode.POKE):
+        return False
+    root = walk_place(receiver, Step.MEMBER).node
+    if isinstance(root, LATER_ROOTS):
+        arms.stop_at(checker, root)
+    what = f"call `.{_method_name(checker, callee)}()`"
+    owner = borrow_owner(receiver)
+    if reject_readonly_write(checker, owner, node.loc, what, receiver=receiver):
+        return False
+    _borrow_owner_of(checker, receiver, is_poke=True)
+    return True
+
+
+def _change_receiver_owner(checker: 'BorrowChecker', node: e.Call, callee: Method) -> None:
+    """The change of a `poke self` call: each `let`-borrow of the owner of the receiver is
+    invalidated, after the arguments are read. A borrowed argument that reads one is read
+    while the change runs (`reject_borrow_read_by_the_change`)."""
+    what = f"call `.{_method_name(checker, callee)}()`"
+    check_owner_not_borrowed(checker, borrow_owner(callee.recv), node.loc, what,
+                             place=callee.recv)
+
+
+def _borrow_owner_of(checker: 'BorrowChecker', receiver: e.ShirExpr, *,
+                     is_poke: bool) -> None:
+    """The borrow of the owner of a receiver for the statement, when the owner is a local
+    that still holds its value. A receiver and an argument that reach one owner conflict
+    as two arguments do (CE2403, CE2407)."""
+    owner = borrow_owner(receiver)
+    state = checker.borrow_state.get(owner) if owner is not None else None
+    if state is not None and not state.is_moved:
+        acquire_borrow(checker, state, receiver.loc, is_poke=is_poke)
+
+
+def take_receiver(checker: 'BorrowChecker', node: e.Call, callee: Method) -> None:
+    """A `nom self` receiver is a consuming use of what the method was called on.
+
+    The mode is a fact of the declaration, so nothing at the call says `nom`, and the
+    diagnostic names the method (ruling R27). The name is recorded on the state only when
+    this call is the move: a receiver that an earlier move took keeps the facts of that
+    move.
+    """
+    receiver = callee.recv
+    method = _method_name(checker, callee)
+    state = (checker.borrow_state.get(receiver.local)
+             if isinstance(receiver, e.LocalRef) else None)
+    already_moved = state is not None and state.is_moved
+    arguments = _arguments_text(checker, [arg.value for arg in node.args])
+    consume(checker, receiver, CopyUse(f"call '{method}' on the copy",
+                                       f".{method}({arguments})"))
+    if state is not None and state.is_moved and not already_moved:
+        state.consumed_by_method = method
+
+
+def _method_name(checker: 'BorrowChecker', callee: Method) -> str:
+    """The name of the method that a `Method` callee names (`<type>.<method>`)."""
+    return checker.decl_name(callee.decl).rpartition(".")[2]
 
 
 def _check_builtin_receiver(checker: 'BorrowChecker', node: e.Call, callee: Builtin) -> None:
@@ -194,20 +294,6 @@ def _borrowed_args(node: e.Call, conventions: Sequence[Convention]) -> list[e.Sh
     return [arg.value for arg, convention in zip(node.args, conventions, strict=True)
             if convention.read_only
             and arg.marker is not Convention.INOUT]
-
-
-def _borrowed_method_args(checker: 'BorrowChecker', expr: MethodLike) -> list[Expr]:
-    """A method-shaped call's arguments that land on a parameter that does not consume."""
-    modes = expr.callee_param_modes
-    if modes is not None:
-        variadic_at = expr.callee_variadic_at
-        return [arg for i, arg in enumerate(expr.args)
-                if (variadic_at is None or i < variadic_at)
-                and not checker.callee_modes.mode_at(modes, i, CalleeKind.METHOD).consumes]
-    if (called_on(expr, *CONTAINER_INSERT_METHODS) is not None
-            and checker.types.is_container(read_type(checker, expr.receiver))):
-        return []
-    return list(expr.args)
 
 
 def reject_self_aliasing_copy(checker: 'BorrowChecker', expr: MethodLike) -> None:
@@ -372,33 +458,6 @@ def reject_read_through_outside_try(checker: 'BorrowChecker', expr: MethodLike) 
                           maybe=display_type(expr.resolved_enum_type)) \
         .help(f"put the call under '??': `{receiver}.{expr.method}(...)??`, or take an "
               f"owned copy first: `{receiver}.clone().{expr.method}(...)`").emit()
-
-
-def settle_method_args(checker: 'BorrowChecker', expr: MethodLike) -> None:
-    """Apply the declared modes of an extension or perk method to its arguments.
-
-    The receiver is a borrow of its owner for the call, by the rule of an argument in
-    the same mode: a `poke self` is exclusive, a `peek self` is shared, and a plain one
-    is the implicit shared borrow of an unmarked argument. So a receiver and an argument
-    that reach the same owner conflict exactly as two arguments do (CE2407). The shared
-    receiver borrow is for a user extension or perk method: a built-in method declares
-    no receiver mode.
-    """
-    modes = expr.callee_param_modes
-    if modes is None:
-        return
-    self_mode = receiver_mode(expr.callee_self_mode)
-    if self_mode is ParamMode.POKE or (self_mode is ParamMode.PEEK
-                                       and expr.callee_builtin_family is None):
-        owner = borrow_owner(expr.receiver)
-        state = checker.borrow_state.get(owner) if owner is not None else None
-        if state is not None and not state.is_moved:
-            acquire_borrow(checker, state, expr.receiver.loc,
-                           is_poke=self_mode is ParamMode.POKE)
-    elif self_mode is ParamMode.BORROW and expr.callee_builtin_family is None:
-        register_implicit_borrow(checker, expr.receiver)
-    for i, arg in enumerate(expr.args):
-        apply_mode(checker, expr, arg, i, modes, CalleeKind.METHOD)
 
 
 def consume_indirect_args(checker: 'BorrowChecker', expr: DotCall) -> None:

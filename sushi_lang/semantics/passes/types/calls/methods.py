@@ -1,19 +1,21 @@
 """Method call validation.
 
-Port templates: `validate_method_call` (A10, C3), `_validate_type_name_call` (B2, B4)
+Port templates: `validate_method_call` (C3), `_validate_type_name_call` (B2, B4)
 and `_validate_iterator_new` (C3) call `TypeValidator.validate_expression`, and that API
 is deleted. No pass reaches them today. The group in brackets after each name ports them
 to SHIR inputs before a SHIR pass calls them. The order of the rungs is on SHIR already:
-`calls/dotcall.py:resolve_dotted`. No `WHITELIST` row can name `validate_method_call`:
+`calls/dotcall.py:resolve_dotted`, and the SHIR arms of an extension method and of a
+static are in `visit/calls.py`. No `WHITELIST` row can name `validate_method_call`:
 `statements.py:protocol_next_call` calls it, and the A7 port template
-`validate_foreach_statement` reaches that, so vulture never reports it. A10 deletes it, or
-C3 when it ports the protocol `next()` call.
+`validate_foreach_statement` reaches that, so vulture never reports it. C3 deletes it when
+it ports the protocol `next()` call.
 """
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.method_effects import (
     MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
@@ -249,7 +251,7 @@ class ResolvedMethod:
 
 def resolve_extension_method(validator: 'TypeValidator', receiver_type,
                              method_name: str, call=None, report: bool = True,
-                             static: bool = False):
+                             static: bool = False, site: Optional[Span] = None):
     """The three EXTENSION rungs, in the order every caller reads them.
 
     The extension table, then a `T[]` template instantiated at this call site, then a
@@ -268,7 +270,11 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
 
     Whatever a rung answers, the calling unit must be allowed to call it
     (`docs/design/extension-visibility.md`): `_choose_visible` reads the one predicate.
+    A refusal stands at `site`, else at the call. A SHIR call gives `site` and no AST
+    call, so the rungs that read the arguments of the call do not run.
     """
+    if site is None and call is not None:
+        site = call.loc
     records = validator.extension_table.declarations(receiver_type, method_name)
     templates = _uncut_templates(validator, receiver_type, method_name, records)
     method = None
@@ -277,7 +283,7 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
                     if bool(getattr(record, "is_static", False)) == static]
         if not matching:
             return None
-        chosen = _choose_visible(validator, receiver_type, method_name, matching, call,
+        chosen = _choose_visible(validator, receiver_type, method_name, matching, site,
                                  report)
         if not isinstance(chosen, GenericExtensionMethod):
             return chosen
@@ -310,7 +316,7 @@ def resolve_extension_method(validator: 'TypeValidator', receiver_type,
         return method
     if bool(getattr(method, "is_static", False)) != static:
         return None
-    return _choose_visible(validator, receiver_type, method_name, [method], call, report)
+    return _choose_visible(validator, receiver_type, method_name, [method], site, report)
 
 
 def _uncut_templates(validator: 'TypeValidator', receiver_type, method_name: str,
@@ -336,12 +342,12 @@ def _uncut_templates(validator: 'TypeValidator', receiver_type, method_name: str
 
 
 def _choose_visible(validator: 'TypeValidator', receiver_type, method_name: str,
-                    records: list, call, report: bool):
+                    records: list, site: Optional[Span], report: bool):
     """The one extension of `records` that the calling unit calls, or a refusal.
 
     An own extension wins (C3, C5). One visible extension answers. Two or more visible
     ones are CE3023 at the call (C4). No visible one is CE3022 or CE3005. A refusal is
-    reported only with `report` and a call to point at, and answers RESOLUTION_REPORTED,
+    reported only with `report` and a call site to point at, and answers RESOLUTION_REPORTED,
     so the caller adds no CE2008. A reader with no unit of its own takes the first.
     """
     from sushi_lang.semantics.passes.types.visibility import (
@@ -359,14 +365,12 @@ def _choose_visible(validator: 'TypeValidator', receiver_type, method_name: str,
         return own[0]
     if len(visible) == 1:
         return visible[0]
-    if not (report and call is not None):
+    if not (report and site is not None):
         return None
     if visible:
-        reject_ambiguous_extension(validator, receiver_type, method_name, visible,
-                                   call.loc)
+        reject_ambiguous_extension(validator, receiver_type, method_name, visible, site)
     else:
-        reject_unreachable_extension(validator, receiver_type, method_name, reaches,
-                                     call.loc)
+        reject_unreachable_extension(validator, receiver_type, method_name, reaches, site)
     return RESOLUTION_REPORTED
 
 
@@ -489,8 +493,8 @@ def _find_method_generic_template(validator: 'TypeValidator', receiver_type,
                 and not (t.target_key and t.target_key != target_key)]
 
     def choose(templates):
-        return _choose_visible(validator, receiver_type, method_name, templates, call,
-                               report)
+        return _choose_visible(validator, receiver_type, method_name, templates,
+                               call.loc if call is not None else None, report)
 
     table = validator.generic_extension_table
     if isinstance(receiver_type, DynamicArrayType):

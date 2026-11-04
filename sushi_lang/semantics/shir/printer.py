@@ -359,7 +359,8 @@ PRINTERS: dict[type, Render] = {
     b.CopyRange: lambda _pr, r: f"{r.start}..{r.stop}",
     # the callee that typecheck answers for a call (ir.md 7.6)
     c.Free: lambda pr, n: _node("Free", pr.decl(n.decl)),
-    c.Method: lambda pr, n: _node("Method", pr.show(n.recv), pr.decl(n.decl)),
+    c.Method: lambda pr, n: _node("Method", pr.show(n.recv), pr.decl(n.decl),
+                                  CONVENTIONS[n.receiver]),
     c.Static: lambda pr, n: _node("Static", _type(n.ty), pr.decl(n.decl)),
     c.Builtin: lambda pr, n: _node("Builtin", pr.show(n.recv), pr.show(n.method)),
     c.BuiltinStatic: lambda pr, n: _node("BuiltinStatic", _type(n.ty), pr.show(n.method)),

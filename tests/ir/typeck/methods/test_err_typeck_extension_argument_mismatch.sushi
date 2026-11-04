@@ -1,0 +1,16 @@
+# EXPECT_ERROR_CODES_EXACT: CE2006
+# EXPECT_STDERR_CONTAINS: "expected i32, got string"
+# EXPECT_DUMP_SHIR: test_err_typeck_extension_argument_mismatch.shir
+#
+# A method that a user extension answers is a `Method` callee: the receiver, the written
+# name of the method, and the convention of the receiver. Its arguments go through the one
+# argument check, so an argument of another type is CE2006 at the argument.
+
+extend i32 add(i32 n) i32:
+    return self + n
+
+fn main() i32:
+    let i32 x = 5
+    let i32 a = x.add(3)
+    let i32 b = x.add("three")
+    return a + b

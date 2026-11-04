@@ -219,19 +219,3 @@ class BuiltinModes:
         if row is not None:
             return row
         return (ParamMode.BORROW,) * count
-
-
-def variadic_index(sig) -> Optional[int]:
-    """Where the trailing arguments of a call to `sig` collect into a `...T` array.
-
-    A declared function marks its last parameter; a registry stdlib function marks
-    the whole signature. None when the callee is not variadic.
-    """
-    if sig is None:
-        return None
-    params = getattr(sig, "params", None) or ()
-    if params and getattr(params[-1], "is_variadic", False):
-        return len(params) - 1
-    if getattr(sig, "is_variadic", False):
-        return max(len(params) - 1, 0)
-    return None

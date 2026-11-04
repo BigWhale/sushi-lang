@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TypeAlias
 
+from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.exprs import ShirExpr
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.typesys import Type
@@ -33,9 +34,11 @@ class Free:
 
 @dataclass(frozen=True, slots=True)
 class Method:
-    """An extension method or a method of a perk implementation."""
+    """An extension method or a method of a perk implementation. `decl` names the written
+    name `<type>.<method>`, and `receiver` is the convention of the declared `self`."""
     recv: ShirExpr
     decl: DeclId
+    receiver: Convention
 
 
 @dataclass(frozen=True, slots=True)

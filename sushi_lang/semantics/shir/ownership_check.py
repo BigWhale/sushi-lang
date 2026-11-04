@@ -18,9 +18,10 @@ answers of `typecheck`:
   in place;
 - each capture of a `Lambda`, from its environment layout in `LiftResults`.
 
-The receiver of a method call is not on the list: `TypeckResults` has no convention row for
-a receiver yet. The first family with a `nom self` method (group A4: `or_err`, `map_err`)
-adds that row, and a `nom self` receiver joins the rule.
+The receiver of a `Method` callee whose `receiver` is `Owned` (a `nom self` extension method)
+is a consuming use too: the convention is a fact of the callee row. The receiver of a
+built-in method that declares `nom self` (group B10: `or_err`, `map_err`) joins the rule
+with the arm of B10.
 
 Two writers of LENT have no check yet, because no spine body holds them: the clone of a
 lent iterator (the iterators group, C3) and a borrowed call that answers an iterator (the
@@ -52,7 +53,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import ShirBody
-from sushi_lang.semantics.shir.callee import Builtin
+from sushi_lang.semantics.shir.callee import Builtin, Method
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import LocalId, ShirId
 from sushi_lang.semantics.shir.lift import LiftResults
@@ -73,6 +74,10 @@ def _value(node: s.Assign | s.Destructure | s.Return, _typeck: TypeckResults,
 
 def _call(node: e.Call, typeck: TypeckResults,
           _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
+    resolved = typeck.callee_of(node.shir_id)
+    callee = resolved.callee if resolved is not None else None
+    if isinstance(callee, Method) and callee.receiver is Convention.OWNED:
+        yield callee.recv
     for position, arg in enumerate(node.args):
         if arg.bloom or typeck.convention_of(node.shir_id, position) is Convention.OWNED:
             yield arg.value

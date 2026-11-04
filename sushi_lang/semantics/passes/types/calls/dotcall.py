@@ -72,8 +72,10 @@ def resolve_dotted(validator: 'TypeValidator', receiver_type: Type,
 def reject_unknown_method(validator: 'TypeValidator', receiver_type: Type, name: str,
                           loc: Span) -> None:
     """CE2008 for a method that no rung answers. When the collect pass refused an extension
-    of this name on this type, it reported that fault, and the call reports nothing."""
+    or a perk implementation of this name on this type, it reported that fault: the call
+    reports nothing, and the body holds that error (`refused_before`)."""
     if declaration_was_refused(validator, receiver_type, name):
+        validator.refused_before = True
         return
     er.emit(validator.reporter, er.ERR.CE2008, loc,
             name=f"{display_type(receiver_type)}.{name}")

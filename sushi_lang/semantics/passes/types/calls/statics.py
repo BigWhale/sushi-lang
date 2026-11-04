@@ -10,13 +10,12 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.type_predicates import generic_base_of
 from sushi_lang.internals import errors as er
+from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import Name
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.param_modes import CalleeKind, modes_for
-from ..visibility import name_is_contested
 from sushi_lang.semantics.statics import (builtin_type_named, is_builtin_static,
                                           solve_target_type_args, static_template)
-from sushi_lang.semantics.typesys import EnumType, StructType, Type
+from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -208,50 +207,6 @@ def resolve_static(validator: 'TypeValidator', call, report: bool = False):
     return resolved.method
 
 
-def validate_static_call(validator: 'TypeValidator', call) -> bool:
-    """Validate `Type.name(args)`. True when this path answered the node.
-
-    It answers the whole type-name receiver position for a struct and a primitive,
-    refusal included (CE2102). On an ENUM it steps aside when no static answered: a
-    name behind an enum's dot may still be a variant, and that path owns CE2045.
-    """
-    from sushi_lang.semantics.passes.types.arguments import check_arguments
-    from sushi_lang.semantics.passes.types.calls.methods import (
-        RESOLUTION_REPORTED, extension_call_result_type, resolve_method)
-
-    target = static_target_type(validator, call)
-    if target is None:
-        return _refuse_unstamped_generic(validator, call)
-
-    resolved = resolve_method(validator, target, call.method, call=call,
-                              report=True, static=True)
-    if resolved is RESOLUTION_REPORTED:
-        return True
-
-    if resolved is None:
-        return _refuse_missing_static(validator, call, target)
-
-    method = resolved.method
-    params = getattr(method, "params", None) or ()
-    # A static declares no receiver, so it asks a different mode question than a
-    # method does -- which is why `CalleeKind` names it separately (ruling R4).
-    call.callee_param_modes = modes_for(params, CalleeKind.STATIC_METHOD)
-    call.callee_param_names = tuple(p.name for p in params)
-    call.callee_param_types = tuple(p.ty for p in params)
-    call.callee_is_static = True
-    call.callee_static_target = target
-    call.callee_extension_unit = method.unit_name
-    from ..borrowed_returns import stamp_call_sources
-    stamp_call_sources(validator, call, method)
-
-    check_arguments(validator, f"{display_type(target)}.{call.method}",
-                    [p.ty for p in params], call.args, call.loc,
-                    mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009)
-
-    call.inferred_return_type = extension_call_result_type(validator, method)
-    return True
-
-
 def infer_static_call(validator: 'TypeValidator', call) -> Optional[Type]:
     """What a static call yields, or None when the node is not one."""
     from sushi_lang.semantics.passes.types.calls.methods import (
@@ -365,36 +320,22 @@ def _returns_the_target(declarations, base: str) -> bool:
     return False
 
 
-def _refuse_missing_static(validator: 'TypeValidator', call, target: Type) -> bool:
-    """CE2102 for a type whose dot holds no such member. True when it was emitted.
+def reject_missing_static(validator: 'TypeValidator', target: Type, method: str,
+                          loc: Span) -> None:
+    """CE2102 for a struct or a primitive whose dot holds no static `method`.
 
-    An enum is the one target that steps aside: its dot also holds variants, and the
-    variant path's CE2045 already names the type and the member and reads correctly.
+    An enum has its own refusal: its dot also holds variants, and CE2045 names both. A
+    help says when `method` is an instance method of the type, else how to declare the
+    static.
     """
-    if isinstance(target, EnumType) or _is_generic_enum(validator, call):
-        return False
-    # A type name this unit lost (#863) reads the winner's statics; the declaration's
-    # CE0004 / CE0006 already answered for the call.
-    if isinstance(target, StructType) and name_is_contested(validator, "struct",
-                                                              target.name):
-        return True
-
     from sushi_lang.semantics.passes.types.calls.methods import resolve_method
 
-    diag = er.emit_with(validator.reporter, er.ERR.CE2102, call.loc,
-                        type=display_type(target), method=call.method)
-    if resolve_method(validator, target, call.method) is not None:
-        diag.help(f"'{call.method}' is an instance method here: call it on a value "
+    diag = er.emit_with(validator.reporter, er.ERR.CE2102, loc,
+                        type=display_type(target), method=method)
+    if resolve_method(validator, target, method) is not None:
+        diag.help(f"'{method}' is an instance method here: call it on a value "
                   f"of '{display_type(target)}', not on the type name")
     else:
         diag.help(f"declare it as 'extend {display_type(target)} static "
-                  f"{call.method}(...)'")
+                  f"{method}(...)'")
     diag.emit()
-    return True
-
-
-def _is_generic_enum(validator: 'TypeValidator', call) -> bool:
-    """Whether the receiver names a generic ENUM whose instantiation is unstamped."""
-    receiver = call.receiver
-    return (isinstance(receiver, Name)
-            and receiver.id in validator.generic_enum_table.by_name)

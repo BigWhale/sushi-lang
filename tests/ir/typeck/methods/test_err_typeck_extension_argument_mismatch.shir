@@ -1,0 +1,16 @@
+unit test_err_typeck_extension_argument_mismatch
+
+ShirBody main
+  params : []
+  locals : [_0 "x": i32, _1 "a": i32, _2 "b": i32]
+  block  :
+    Assign(LocalRef(_0), Lit(5), is_init: true)
+    Assign(LocalRef(_1), Call(Method(LocalRef(_0), @i32.add, Guaranteed), [(Lit(3), Guaranteed)]), is_init: true)
+    Assign(LocalRef(_2), Call(Method(LocalRef(_0), @i32.add, Guaranteed), [Lit("three")]), is_init: true)
+    Return(Binary(+, LocalRef(_1), LocalRef(_2)))
+
+ShirBody i32.add
+  params : [(_0 "self": i32, Guaranteed), (_1 "n": i32, Guaranteed)]
+  locals : []
+  block  :
+    Return(adopt Binary(+, LocalRef(_0), LocalRef(_1)))
