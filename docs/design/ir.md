@@ -1063,6 +1063,29 @@ with a method-level type parameter (C1), a method with a `peek` return (B8), a c
 a field of a function type that no method of the struct names (C2), and a static of
 `BUILTIN_STATICS` (B2, B4).
 
+**A stdlib function.** A bare name that no function of the unit's scope takes is the
+function of a registry stdlib module that the unit imports, when one has it
+(`lookup_stdlib_by_name`), so the unit's own function of the name wins. Behind an alias
+it is what the namespace of the module holds. Both are the callee row `Stdlib(decl,
+module)` (`check_stdlib_call`, `passes/types/calls/user_defined.py`). A row of the
+signature table goes through the one argument check at the types of its row, and each
+argument borrows (a `nom` marker is [CE2427](../error-catalog.md#ce2427), and it names
+the parameter by the member of its type, `F64`, as `main` does). A member of a `<math>`
+family (`abs`, `min`, `max`, `divmod`) checks its two arguments as a pair, as the
+operands of a binary operator are checked (`check_operand_pair`,
+`passes/types/visit/operators.py`), so a lone literal takes the type of the other
+argument ([CE2073](../error-catalog.md#ce2073) when it does not fit). Then a wrong count
+is [CE2009](../error-catalog.md#ce2009) at the name and skips the argument types. An
+argument of a type outside the family is [CE2006](../error-catalog.md#ce2006), with the
+name of the family types in the text, and a second argument of another type than the
+first is CE2006 too. The call yields the return type of its row (`stdlib_row`,
+`semantics/stdlib_registry.py`, with the `Result`, the `Maybe` or the tuple that the row
+names interned), also after an error of an argument. A member of a family whose first
+argument has no row yields nothing, so the `let` that takes it says nothing more. The
+reference of the target answers the function type of the row, with the `Result` of the
+row as its channel. Only `<math>` and `<time>` are typed: a call of a function of any
+other registry module stops the walk (`Call(stdlib)`, Tier D).
+
 While the migration is in progress, the arm of a construct that the pass does not
 type yet stops the walk of its body with the stop code; the pass then goes on with the
 next body, so every unit is lowered and every earlier error is found.
@@ -1075,8 +1098,8 @@ error, so no stage prints a label that another stage would print in another way.
 are `Call(<kind>)`: `method` (a method that no built-in family claims and that no
 extension and no perk method of any unit names, for example a method of a type parameter), `extension` (a user extension or perk method), `stdlib method` (a `public extend`
 or perk method of a bundled Sushi-source stdlib unit), `static` (a user static),
-`builtin static` (a row of `BUILTIN_STATICS`), `stdlib` (a stdlib function, also behind an
-alias), `extern` (a C function, also behind an alias, and `errno`), `alias` (a function of a
+`builtin static` (a row of `BUILTIN_STATICS`), `stdlib` (a function of a registry stdlib
+module other than `<math>` and `<time>`, also behind an alias), `extern` (a C function, also behind an alias, and `errno`), `alias` (a function of a
 user unit behind a `use ... as` alias), `function` (a user function), `generic` (a generic
 function, or written type arguments), `fn value` (a call through a function value) and
 `builtin` (`print`, `println`). There is no
@@ -1763,9 +1786,10 @@ read and a `peek` of its owner; `Inout` is the write gate and then a `poke` of i
 a view that the same call reads is [CE2412](../error-catalog.md#ce2412), "read by the call
 that changes it"; `Owned` takes the receiver after the arguments, a consuming use that
 names the method in [CE2435](../error-catalog.md#ce2435), with the help of
-[CE2411](../error-catalog.md#ce2411) to copy. The typecheck pass records only the callees
-`Free`, `Intrinsic`, `Builtin`, `Method` and `Static`, so a call with another callee in
-this pass is an internal error. The state of the walk (`BorrowState`, `FlowFacts`) is keyed
+[CE2411](../error-catalog.md#ce2411) to copy. A `Stdlib` callee is a call of its
+arguments, and each is `Guaranteed`, a read. The typecheck pass records only the callees
+`Free`, `Stdlib`, `Intrinsic`, `Builtin`, `Method` and `Static`, so a call with another
+callee in this pass is an internal error. The state of the walk (`BorrowState`, `FlowFacts`) is keyed
 by `LocalId`, because a hidden local has no source name, and a diagnostic names a local by
 the name of its `ShirLocal`. The pass decides the `Ownership` of each consuming use ONE
 time, with `classify()`, and one function writes the row (`consume.decide`, gate:
@@ -2442,7 +2466,15 @@ the name of the function with no alias, and `module` is the `use` path of its mo
 `semantics/stdlib_registry.py`, the one derivation): `sushi_<name>`, and
 `sushi_<name>_<type>` for a member of a `<math>` family, at the type of its first argument
 (#817). Every other `Direct` callee has no module. The printer writes the call as
-`call @<math>.sqrt(copy _1 @guaranteed)`.
+`call @<math>.sqrt(copy _1 @guaranteed)`. The emitter gives a `Direct` callee with a
+module to the row of its module in `STDLIB_EMITTERS` with the value and the type of each
+operand (Q7); every operand is evaluated first. The `<math>` and `<time>` rows read the
+row of the call (`stdlib_row`), declare the generated function of the symbol from that
+row and call it (`emit_stdlib_row`, `backend/expressions/calls/stdlib/signatures.py`). A
+`<time>` sleep answers a bare status, and the call builds its `Result` from it
+(`status_result.py`: a negative status is `Result.Err`). A `cstr` parameter takes no
+operand yet: the row of another module keeps its AST arguments, and the group of the
+C-string argument ports it with `emit_cstr_arg` at the call site (Tier D).
 
 A `Method(recv, decl, receiver)` callee of SHIR lowers to `Direct(symbol, name)`, and a
 `Static(ty, decl)` callee too. `name` is the written name `<type>.<method>` of `decl`.

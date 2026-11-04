@@ -109,8 +109,9 @@ does for free) or that is simply better written in Sushi than in llvmlite calls.
   (`<sys/platform>`, under `src_sushi/_platform/`) is an entry in
   `PLATFORM_SOURCE_MODULES`; the compiler selects the host's file.
 
-The typecheck pass reads a function's return type from its registry record.
-Two readers still ask the `<math>` module directly
-(`is_builtin_math_function`, `get_builtin_math_function_return_type`), in
-`semantics/passes/types/visit/inference.py` and
-`semantics/passes/types/calls/namespaced.py`.
+The typecheck pass reads the row of a call from `stdlib_row`
+(`semantics/stdlib_registry.py`): the row of the signature table, or the row of a
+`<math>` family at the type of the first argument. SLIR lowering names the generated
+function with `stdlib_symbol`, and the verifier counts the parameters with
+`stdlib_arity`. The inference of the early passes reads the same row
+(`math_call_return_type`, `semantics/passes/types/visit/inference.py`).
