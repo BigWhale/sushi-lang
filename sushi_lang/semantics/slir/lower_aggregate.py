@@ -6,8 +6,9 @@ place, an element an `Index` projection and a slice a view (`lower_arrays.py`); 
 is no place goes into a temporary of the statement first. A field write and an element
 write store into the projection. A destructure gives one `Field` place for each target. Each arm
 is a free function that takes the `Lowering` of `lower.py` first; the tables of `lower.py`
-name them. This module reads `lower.py` for its types only, so no import cycle exists at
-run time.
+name them. This module reads `lower.py` for its types only. It and `lower_arrays.py` import
+each other as modules, and each reads the other only inside a function, so the cycle is
+safe at import time.
 
 Plain values alone: a construction of a type that owns, a field of a temporary that owns and
 a write of a field that owns stop (`StructInit owning`, `TupleInit owning`, `owning
