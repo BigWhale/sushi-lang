@@ -1,0 +1,15 @@
+# EXPECT_ERROR_CODES_EXACT: CE2414
+# EXPECT_STDERR_CONTAINS: "cannot write to binding 'i'"
+# EXPECT_DUMP_SHIR: test_err_borrow_range_binder.shir
+#
+# The binder of a counted loop is a read-only view, as a binder of a match is: a rebind of
+# it is CE2414, with a note at the binder. The bounds are reads, and a local of the body
+# may change a bound, because the loop reads each bound once.
+
+fn main() i32:
+    let i32 n = 3
+    foreach(j in 0..n):
+        n := n + j
+    foreach(i in 0..n):
+        i := i + 10
+    return n

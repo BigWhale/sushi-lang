@@ -20,8 +20,9 @@ after it join. A `match` reads its scrutinee (`match nom r:` takes it), each arm
 its bare binders, and its arms join as the blocks of an `if` do. A `while` loop checks its
 condition once, then its body in two rounds (`check_loop_body`): the paths of a
 `continue` and of the end of the body go round the back edge, and the paths of a `break`
-leave the loop. A loop over items is
-checked by the iterators group, and it stops the walk. The end of a block that the path
+leave the loop. A counted loop reads the bounds of its range once, and declares its binder
+as a read-only view before its body. A loop over any other iterable is checked by the
+iterators group, and it stops the walk. The end of a block that the path
 reaches, a `return`, a `break` and a `continue` are exits of the blocks that they leave
 (`flow.record_exit`), and a rebind is an exit of the old value of its local
 (`flow.record_rebind`).
@@ -38,6 +39,7 @@ from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
+from sushi_lang.semantics.shir.loop_kind import CountedRange
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.paths import terminates
 from sushi_lang.semantics.typesys import ReferenceType
@@ -345,10 +347,22 @@ def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
 
 def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:
     """`while (cond)`: the condition is read once, at the entry, then the body is checked
-    to its fixed point. A loop over items stops the walk: the iterators group checks it."""
-    if not isinstance(node.source, s.Cond):
+    to its fixed point. A counted loop reads the bounds of its range once, at the entry,
+    and its binder is a read-only view, as a bare binder of a match is. A loop over any
+    other iterable stops the walk: the iterators group checks it."""
+    source = node.source
+    if isinstance(source, s.Cond):
+        arms.check(checker, source.cond)
+    elif isinstance(checker.answers().loop_kind_of(node.shir_id), CountedRange) \
+            and isinstance(source.iterable, e.Range):
+        arms.check(checker, source.iterable.start)
+        arms.check(checker, source.iterable.end)
+        if not isinstance(source.binder, s.Discard):
+            binder = checker.locals.get(source.binder)
+            at = node.loc if binder is None or binder.loc is None else binder.loc
+            declare_bare_binders(checker, [(source.binder, at)])
+    else:
         arms.stop_at(checker, node)
-    arms.check(checker, node.source.cond)
     clear_borrows(checker)
     check_loop_body(checker, node.body)
 
