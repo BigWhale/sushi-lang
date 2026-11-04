@@ -32,6 +32,7 @@ ARRAY_VALUE = "an array value"
 LENGTH_SLICE = "a length and a slice"
 VIEW = "a view"
 ELEMENT_MOVE = "no move of an element"
+TYPED_PLACES = "typed places"
 
 
 def _i32(value: int) -> p.Const:
@@ -133,6 +134,14 @@ def test_a_length_or_a_slice_of_a_value_that_is_no_array_is_refused(value):
     _refused(_function([BLANK, NUMBERS, I32, STRING], _block(
         0, _ret(), _set(2, value, BAD), _done()),
         params=((1, GUARANTEED), (3, GUARANTEED))), LENGTH_SLICE)
+
+
+@pytest.mark.parametrize("ty", [BuiltinType.I64, U32], ids=["i64", "u32"])
+def test_an_element_at_an_index_that_is_no_i32_is_refused(ty):
+    element = p.Index(_local(1), _copy(2))
+    _refused(_function([BLANK, NUMBERS, ty, I32], _block(
+        0, _ret(), _set(3, r.Use(p.Copy(element)), BAD), _done()),
+        params=((1, GUARANTEED), (2, GUARANTEED))), TYPED_PLACES)
 
 
 def test_a_view_that_another_statement_writes_is_refused():
