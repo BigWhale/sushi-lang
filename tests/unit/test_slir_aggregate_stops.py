@@ -1,9 +1,9 @@
-"""SLIR lowering stops at a construction, a field and a write of a value that owns (docs/design/ir.md 8.9).
+"""SLIR lowering stops at a construction, a field, a write and a match of a value that owns (docs/design/ir.md 8.9).
 
-A struct or a tuple whose type owns, a field of a temporary that owns, and a write of a
-field that owns need a drop or a move that Tier B builds. The tests call the arms of
-`lower_aggregate.py` over data, before the arm evaluates a part; they do not run the
-compiler.
+A struct or a tuple whose type owns, a field of a temporary that owns, a write of a field
+that owns, and a match on a tuple that owns need a drop or a move that Tier B builds. The
+tests call the arms of `lower_aggregate.py` and `lower_match.py` over data, before the arm
+evaluates a part; they do not run the compiler.
 """
 from __future__ import annotations
 
@@ -18,8 +18,9 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import LocalId, ShirId
-from sushi_lang.semantics.shir.typeck import TypeckResults
+from sushi_lang.semantics.shir.typeck import MatchFacts, TypeckResults
 from sushi_lang.semantics.slir import lower_aggregate as agg
+from sushi_lang.semantics.slir import lower_match
 from sushi_lang.semantics.typesys import BorrowMode, BuiltinType, ReferenceType, StructType, Type
 
 SPAN = Span(4, 5, 4, 30)
@@ -92,3 +93,13 @@ def test_a_write_of_a_field_that_owns_stops() -> None:
     stmt = s.Assign(ShirId(4), SPAN, target, value, False)
     assert isinstance(target, e.Field)
     _stops(agg.field_write, "owning field write", _low(answers), stmt, target)
+
+
+def test_a_match_on_a_tuple_that_owns_stops() -> None:
+    answers = TypeckResults()
+    pair = StructType(name="$Tuple<i32, string>", fields=(("0", I32), ("1", STRING)),
+                      generic_base="$Tuple", generic_args=(I32, STRING))
+    scrutinee = _typed(answers, e.LocalRef(ShirId(2), SPAN, LocalId(1)), pair)
+    stmt = s.Match(ShirId(1), SPAN, scrutinee, [], False)
+    answers.record_match(stmt.shir_id, MatchFacts(pair, None))
+    _stops(lower_match.match, "Match owning", _low(answers, (pair,)), stmt)

@@ -1,7 +1,8 @@
 """SHIR to SLIR: the arm of `match` (docs/design/ir.md 8.9).
 
 A match on an integer, a string or an enum is ONE switch, or a chain of tests over the
-paths of each pattern. The arm is a free function that takes the `Lowering` of `lower.py`
+paths of each pattern. A match on a plain tuple is always a chain: the paths of a tuple
+pattern are the `Field` projections of its parts. The arm is a free function that takes the `Lowering` of `lower.py`
 first, and the table of `lower.py` names it. The statements of an arm with its binders and
 the join are the arms of `lower_control.py`. This module reads `lower.py` for its types
 only, so no import cycle exists at run time.
@@ -9,10 +10,11 @@ only, so no import cycle exists at run time.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
 from sushi_lang.semantics.integer_patterns import literal_value, pattern_interval
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir import dispatch
@@ -41,22 +43,29 @@ if TYPE_CHECKING:
 
 
 def match(low: Lowering, stmt: s.Match) -> None:
-    """A match on an integer, a string or an enum (ir.md 8.9): ONE switch when each path of
-    each arm tests at most a literal of an integer or a variant at the scrutinee, else a
-    chain of tests in source order. Each arm starts from the state after the scrutinee, and
-    the arms that reach their end meet at the join. A match on a tuple stops (A5)."""
+    """A match on an integer, a string, an enum or a plain tuple (ir.md 8.9): ONE switch
+    when each path of each arm tests at most a literal of an integer or a variant at the
+    scrutinee, else a chain of tests in source order. A match on a tuple is a chain. Each arm
+    starts from the state after the scrutinee, and the arms that reach their end meet at the
+    join. A tuple that owns stops (`Match owning`), because its drops are Tier B."""
     facts = low.typeck.match_facts_of(stmt.shir_id)
-    if facts is None or not (facts.integer is not None or facts.scrutinee == BuiltinType.STRING
-                             or isinstance(facts.scrutinee, EnumType)):
+    if facts is None:
         dispatch.stop(STAGE, stmt)
     enum = isinstance(facts.scrutinee, EnumType)
-    scrutinee = _scrutinee(low, stmt.scrutinee, place=enum)
+    tuple_ = is_tuple_type(facts.scrutinee)
+    if not (facts.integer is not None or facts.scrutinee == BuiltinType.STRING or enum
+            or tuple_):
+        dispatch.stop(STAGE, stmt)
+    if tuple_ and low.owns(facts.scrutinee):
+        dispatch.stop(STAGE, stmt, state="owning")
+    scrutinee = _scrutinee(low, stmt.scrutinee, place=enum or tuple_)
     low.emit(low.placement.flush())
     among, at_switch = low.placement.in_scope(), low.placement.state()
     arms = [_paths(low, case.pattern, scrutinee, facts.scrutinee) for case in stmt.arms]
-    if all(len(path.tests) <= 1 and all(test.operand == scrutinee and _case(test) is not None
-                                        for test in path.tests)
-           for paths in arms for path in paths):
+    if not tuple_ and all(len(path.tests) <= 1
+                          and all(test.operand == scrutinee and _case(test) is not None
+                                  for test in path.tests)
+                          for paths in arms for path in paths):
         arrivals = _one_switch(low, stmt, arms, scrutinee, enum, at_switch)
     else:
         arrivals = _chain(low, stmt, arms, at_switch)
@@ -100,8 +109,9 @@ class _Path:
 def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding, operand: p.Operand,
            ty: Type) -> list[_Path]:
     """The paths of `pattern` at `operand`: depth first and from left to right, one path for
-    each alternative of an `Or`. A binder is bare and its payload is plain, because `borrow`
-    stops on any other binder."""
+    each alternative of an `Or`. The items of a variant are at the `Field` projections of
+    its `Downcast`, the parts of a tuple at the `Field` projections of the tuple. A binder is
+    bare and its payload is plain, because `borrow` stops on any other binder."""
     if isinstance(pattern, pt.PatBinding):
         if not isinstance(pattern.by, Bare) or low.owns(ty):
             er.raise_internal_error("CE0000", detail="a binder that borrow does not check "
@@ -113,14 +123,25 @@ def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding, operand: p.Op
         return [_Path((_Test(pattern, operand, ty),))]
     if isinstance(pattern, pt.Or):
         return [path for alt in pattern.alternatives for path in _paths(low, alt, operand, ty)]
+    if isinstance(pattern, pt.Tuple):
+        return _product(low, [_Path()], pattern.elements, _place(operand), tuple_elements(ty))
     if not isinstance(pattern, pt.Variant):
         dispatch.stop(STAGE, pattern)
     payload = variant_of(ty, pattern.variant, pattern.loc)[1]
-    paths = [_Path((_Test(pattern, operand, ty),))]
-    for index, item in enumerate(pattern.items):
-        field = p.Field(p.Downcast(_place(operand), pattern.variant), index)
+    return _product(low, [_Path((_Test(pattern, operand, ty),))], pattern.items,
+                    p.Downcast(_place(operand), pattern.variant), payload)
+
+
+def _product(low: Lowering, paths: list[_Path], items: list[pt.ShirPattern | pt.PatBinding],
+             base: p.Place, types: Sequence[Type]) -> list[_Path]:
+    """Each path of `paths`, then the paths of each item at `Field(base, index)`, from left
+    to right: one path for each choice of a path of each item."""
+    if len(items) != len(types):
+        er.raise_internal_error("CE0000", detail="a pattern with another count of parts than "
+                                                 "its type reached SLIR")
+    for index, item in enumerate(items):
         paths = [_Path(head.tests + tail.tests, head.binds + tail.binds) for head in paths
-                 for tail in _paths(low, item, p.Copy(field), payload[index])]
+                 for tail in _paths(low, item, p.Copy(p.Field(base, index)), types[index])]
     return paths
 
 
