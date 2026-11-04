@@ -1333,7 +1333,7 @@ the body in the position of the trap (8.8).
 
 ```
 Callee = Free(decl: DeclId)
-       | Method(recv: Expr, decl: DeclId)        # extension or perk implementation
+       | Method(recv: Expr, decl: DeclId, receiver: Convention)  # extension or perk impl
        | Static(ty: Type, decl: DeclId)          # a user static: Vec.at(3, 4)
        | Builtin(recv: Expr, method: BuiltinMethod)
        | BuiltinStatic(ty: Type, method: BuiltinMethod)   # List.new, HashMap.new, Iterator.new
@@ -1359,6 +1359,15 @@ callee (`ResolvedCall.unit`, 7.3), because two units' private extensions of one 
 side by side (`extension-visibility.md`, C5). The row of a `Free` callee carries the
 declaring unit of the function too, and SLIR lowering makes the symbol of the `Direct`
 callee from it (8.6).
+
+The `decl` of a `Method` and of a `Static` callee is the id of the written name
+`<type>.<method>` (`DeclNames.refer`), with the type as `display_type` spells it: the name
+that lowering gives the body of the method. The written name and `ResolvedCall.unit` give
+the symbol of the method (`extension_symbol`). The `receiver` of a `Method` is the
+convention of its receiver: the declared mode of `self` (no mode is `Guaranteed`, `peek
+self` is `InGuaranteed`, `poke self` is `Inout`, `nom self` is `Owned`). It is a fact of
+the callee row and not a row of `TypeckResults`, as `BuiltinMethod.nom_self` is (8.3). A
+`Static` has no receiver.
 
 The emitter reads the answer: one row of `CALL_EMITTERS` (`backend/slir/emit.py`) for
 each callee kind, and no decision at emit time.
@@ -1602,7 +1611,9 @@ node and the answers of `typecheck` (`consuming_uses`, `semantics/shir/ownership
 The receiver of a built-in method that declares `nom self` is a consuming use too (its arm
 is group B10's). Its convention is the answer of the receiver partition (8.3), and not a
 row of `TypeckResults`: the answer is a fact of the callee row (`BuiltinMethod.nom_self`).
-The `borrow` pass and SLIR lowering both read it through `receiver_convention`.
+The `borrow` pass and SLIR lowering both read it through `receiver_convention`. The
+receiver of a `Method` callee whose `receiver` is `Owned` (a `nom self` extension method) is
+a consuming use, by the same fact of the callee row (7.6).
 
 **The order of the three passes.** Each SHIR pass gives the next one each body that it
 finished with no error, with the tables that `typecheck` read the body in: `typecheck`
