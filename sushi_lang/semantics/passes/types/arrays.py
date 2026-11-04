@@ -124,16 +124,23 @@ def reject_non_i32(validator: 'TypeValidator', expr: Expr, got: Optional[Type], 
     if is_byte_literal(literal) and is_bare_numeric_literal(literal):
         propagate_types_to_value(validator, expr, BuiltinType.I32)
         return False
+    emit_non_i32(validator, expr.loc, got, position=position, argument=argument)
+    return True
+
+
+def emit_non_i32(validator: 'TypeValidator', loc: Optional[Span], got: Type, *,
+                 position: Optional[str] = None, argument: Optional[int] = None) -> None:
+    """The diagnostic of a value of the type `got` in an i32 position: CE2006 at a method
+    argument, else CE2121. The AST rule and the typecheck pass over SHIR both emit it."""
     if argument is None:
-        report = er.emit_with(validator.reporter, er.ERR.CE2121, expr.loc,
+        report = er.emit_with(validator.reporter, er.ERR.CE2121, loc,
                               position=position, got=display_type(got))
     else:
-        report = er.emit_with(validator.reporter, er.ERR.CE2006, expr.loc, index=argument,
+        report = er.emit_with(validator.reporter, er.ERR.CE2006, loc, index=argument,
                               expected=display_type(BuiltinType.I32), got=display_type(got))
     if is_numeric_type(got):
         report = report.help("convert it with 'as i32'")
     report.emit()
-    return True
 
 
 # --------------------------------------------------------------------- argument rules

@@ -22,7 +22,9 @@ that has no value, and is no empty container, stops the walk.
 
 An `If` and a `Loop` with a `Cond` source check their condition (`check_condition`) and
 their blocks; an `elif` is an `If` in the `else` block. The kind of a `while` loop is
-`While` (ir.md 7.7). A loop over items is not typed yet. A `break` and a `continue` have
+`While` (ir.md 7.7). A loop over a range with a bare binder is `CountedRange`: its range is
+checked by `ranges.check_range_iterable`, and the binder is an i32. A loop over any other
+iterable is not typed yet. A `break` and a `continue` have
 no answer: the scope pass refuses one outside a loop.
 
 A `Match` checks its scrutinee (CE2048, `matching.matchable_type`) and writes its
@@ -55,10 +57,11 @@ from sushi_lang.semantics.passes.types.statements import reject_unspelled_result
 from sushi_lang.semantics.passes.types.utils import (
     names_no_type, resolve_declared_type, validate_type_name)
 from sushi_lang.semantics.passes.types.visit.operators import check_condition
+from sushi_lang.semantics.passes.types.visit.ranges import check_range_iterable
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer, ShirBody
-from sushi_lang.semantics.shir.loop_kind import While
+from sushi_lang.semantics.shir.loop_kind import CountedRange, While
 from sushi_lang.semantics.shir.nodes import ShirBlock
 from sushi_lang.semantics.shir.typeck import MatchFacts
 from sushi_lang.semantics.type_predicates import is_instance_of
@@ -214,11 +217,20 @@ def check_if(validator: TypeValidator, node: s.If) -> None:
 
 
 def check_loop(validator: TypeValidator, node: s.Loop) -> None:
-    """A `while` loop: its condition, its kind and its body."""
-    if not isinstance(node.source, s.Cond):
+    """A `while` loop or a counted loop: its source, its kind and its body. A counted loop
+    walks a range with a bare binder, which is an i32; `_` binds nothing."""
+    source = node.source
+    answers = validator.body_answers()
+    if isinstance(source, s.Cond):
+        check_condition(validator, source.cond)
+        answers.record_loop_kind(node.shir_id, While())
+    elif isinstance(source.iterable, e.Range) and isinstance(source.by, s.Bare):
+        check_range_iterable(validator, source.iterable)
+        if not isinstance(source.binder, s.Discard):
+            answers.record_local(source.binder, BuiltinType.I32)
+        answers.record_loop_kind(node.shir_id, CountedRange())
+    else:
         visit.stop_at(validator, node)
-    check_condition(validator, node.source.cond)
-    validator.body_answers().record_loop_kind(node.shir_id, While())
     check_block(validator, node.body)
 
 

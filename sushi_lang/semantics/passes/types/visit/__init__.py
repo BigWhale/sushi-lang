@@ -15,13 +15,15 @@ type yet is `stop_at`, which stops the walk of the body with the stop code CE015
 
 `statements.py` walks a block and holds the statement arms, `destructure.py` the arm of a
 destructure, `expressions.py` the expression arms of the leaves and of a struct
-construction, `fields.py` the arms of a field read and of a tuple, `operators.py` the arms of the operators and the check of a condition, `calls.py`
-the arms of a call, an interpolated string and a borrow, and `results.py` the arm of an enum
-construction. The pattern arms are in `passes/types/matching.py`. The arms of `??` and of
-`as` are `check_try` and `check_cast` of `passes/types/expressions.py`, because the callers
-of the conversion lookup are in that module. The AST inference visitor of `inference.py` is
-not part of this walk: it is the inference of the early passes (`ReadOnlyInferrer`), until
-they stop inferring. `helpers.py` holds the lambda and function-value helpers that it reads.
+construction, `fields.py` the arms of a field read and of a tuple, `operators.py` the arms
+of the operators and the check of a condition, `calls.py` the arms of a call, an
+interpolated string and a borrow, `results.py` the arm of an enum construction, and
+`ranges.py` the arms of a range. The pattern arms are in `passes/types/matching.py`. The
+arms of `??` and of `as` are `check_try` and `check_cast` of
+`passes/types/expressions.py`, because the callers of the conversion lookup are in that
+module. The AST inference visitor of `inference.py` is not part of this walk: it is the
+inference of the early passes (`ReadOnlyInferrer`), until they stop inferring.
+`helpers.py` holds the lambda and function-value helpers that it reads.
 """
 from __future__ import annotations
 
@@ -32,6 +34,7 @@ from sushi_lang.semantics.passes.types.visit import destructure as ds
 from sushi_lang.semantics.passes.types.visit import expressions as ex
 from sushi_lang.semantics.passes.types.visit import fields as fd
 from sushi_lang.semantics.passes.types.visit import operators as op
+from sushi_lang.semantics.passes.types.visit import ranges as rg
 from sushi_lang.semantics.passes.types.visit import results as rs
 from sushi_lang.semantics.passes.types.visit import statements as st
 from sushi_lang.semantics.passes.types import matching as mt
@@ -98,7 +101,8 @@ def answer(validator: TypeValidator, node: Any, ty: Optional[Type],
     """Write `ty` as the type row of the expression `node`, and answer it. The one writer
     of a type row: `check_expr`, the arm of a negation for its literal, which is one value
     with its sign, the arm of a cast for an integer literal directly under it, and the
-    tuple arm for a tuple that a destructure checks part by part (`fields.check_tuple_at`).
+    tuple arm for a tuple that a destructure checks part by part (`fields.check_tuple_at`),
+    and the range of a `foreach` (`ranges.check_range_iterable`).
     The arms of a negation and of a cast set `wraps`. The value row of an integer literal is written here too, at its type
     (`ex.held_value`, ir.md 8.5)."""
     if ty is not None:
@@ -145,7 +149,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.EnumInit: rs.check_enum_init,
     e.TupleInit: fd.check_tuple_init,
     e.ArrayInit: stop_at,
-    e.Range: stop_at,
+    e.Range: rg.check_range,
     e.Interp: ca.check_interp,
 }
 

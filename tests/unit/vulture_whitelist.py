@@ -114,9 +114,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("sushi_lang/semantics/shir/typeck.py", "record_capture",
      "kept for the closures group of Phase 5: the typecheck pass on SHIR writes the type "
      "of each capture"),
-    ("sushi_lang/semantics/shir/typeck.py", "record_range_value",
-     "kept for the range group of Phase 3: the typecheck pass on SHIR writes whether a "
-     "range is a value"),
     ("sushi_lang/semantics/shir/typeck.py", "capture_type",
      "kept for the closures group of Phase 5: lift and SLIR lowering read the type of each "
      "capture"),
@@ -147,7 +144,6 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "calls/user_defined.py", "validate_errno_call", _TIER_D),
     (_TYPES + "calls/user_defined.py", "check_stdlib_function", _TIER_A),
     (_TYPES + "statements.py", "validate_rebind_statement", _port("A6")),
-    (_TYPES + "expressions.py", "refuse_range_value", _port("A7")),
     (_TYPES + "expressions.py", "validate_array_literal", _port("A6")),
     (_TYPES + "expressions.py", "validate_index_access", _port("A6")),
     (_TYPES + "calls/enums.py", "_refuse_untyped_constructor", _port("C1")),
@@ -158,7 +154,7 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
     (_TYPES + "arguments.py", "reject_type_pack_value", _TIER_C),
     (_TYPES + "visit/helpers.py", "validate_fn_field_call_args", _port("C2")),
     (_TYPES + "signatures.py", "check_template_statements", _TIER_C),
-    (_TYPES + "statements.py", "validate_foreach_statement", _port("A7")),
+    (_TYPES + "statements.py", "validate_foreach_statement", _port("C3")),
     (_TYPES + "statements.py", "validate_expand_statement", _TIER_C),
 )
 
@@ -245,7 +241,7 @@ WHITELIST += (
     (_BACKEND + "runtime/iterator_adapters.py", "owned_parts",
      _family("C3", "the parts of an owned iterator that a loop destroys")),
     (_BACKEND + "runtime/iterators.py", "emit_range_iterator",
-     _family("A7", "a range as an Iterator@(i32) value")),
+     _family("C3", "a range as an Iterator@(i32) value")),
     (_BACKEND + "runtime/iterators.py", "emit_new_iterator",
      _family("C3", "Iterator.new over a next() type")),
     (_BACKEND + "runtime/strings.py", "emit_to_cstr",

@@ -228,18 +228,9 @@ def validate_rebind_statement(validator: 'TypeValidator', stmt: Rebind) -> None:
 
 
 def validate_foreach_statement(validator: 'TypeValidator', stmt: Foreach) -> None:
-    """Validate foreach statement: check iterator type and item variable."""
-    if isinstance(stmt.iterable, RangeExpr):
-        from .expressions import validate_range_expression
-        from sushi_lang.semantics.array_runs import const_int_reader
-        from sushi_lang.semantics.ranges import read_range, reject_a_range_that_goes_down
-        validate_range_expression(validator, stmt.iterable)
-        reject_a_range_that_goes_down(
-            read_range(stmt.iterable, const_int_reader(validator.constant_evaluator()),
-                       validator.reporter),
-            validator.reporter)
-    else:
-        validator.validate_expression(stmt.iterable)
+    """Validate foreach statement: check iterator type and item variable. A range is
+    checked by the typecheck pass over SHIR (`visit/ranges.py`)."""
+    validator.validate_expression(stmt.iterable)
     iterable_type = validator.infer_expression_type(stmt.iterable)
 
     if iterable_type is None:

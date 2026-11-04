@@ -231,22 +231,6 @@ def validate_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
         validator.reporter)
 
 
-def refuse_range_value(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
-    """CE2122: a range in a position that expects no `Iterator@(i32)`.
-
-    A `foreach` iterable and an array element validate their range directly, and a
-    position that expects `Iterator@(i32)` stamps it a value, so a range that reaches the
-    general dispatch unstamped is in any other position (#1165, #1259). The bounds are
-    still checked.
-    """
-    er.emit_with(validator.reporter, er.ERR.CE2122, expr.loc) \
-        .help("walk it with `foreach`, spell it into an array (`from([a..b])`), or give "
-              "it to a position of the type `Iterator@(i32)`") \
-        .emit()
-    validator.refused_ranges.add(id(expr))
-    validate_range_expression(validator, expr)
-
-
 def validate_range_expression(validator: 'TypeValidator', expr: 'RangeExpr') -> None:
     """Validate a range expression: each bound is an i32 (#870).
 
