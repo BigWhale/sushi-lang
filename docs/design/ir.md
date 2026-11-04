@@ -1055,10 +1055,11 @@ is [CE2506](../error-catalog.md#ce2506) at the call, and the pass does not check
 default. The call still yields `~`, so a binding of another type is a mismatch too, as on
 `main`. One table row holds the argument types and the return type of each method
 (`WrapperMethodRow`, `semantics/generics/maybe.py` and `results.py`). A method with a
-signature row (`map_err`, `or_err`, group B10) stops the walk with the label of its family,
-`typecheck, Call(method result)` or `Call(method maybe)`. The `array` family has its arm too
-(see "An array" above). The hash of an array is the `array_hash` family, which a `Hashable`
-implementation overrides, and it stops the walk (`Call(method array_hash)`).
+signature row (`map_err`, `or_err`) has a method-level type parameter, and the arm of its
+family checks it from that row. The receiver of each is `Owned` (8.3), and the read-through
+of `or_err` over a borrowed `Maybe` is a rule of `borrow` (8.3). The `array` family has its
+arm too (see "An array" above). The hash of an array is the `array_hash` family, which a
+`Hashable` implementation overrides, and it stops the walk (`Call(method array_hash)`).
 
 **An extension method and a static.** A type is PLAIN when it is a primitive, or a struct
 or an enum that is no instance of a generic type and whose name the unit did not lose (D2,
@@ -1772,18 +1773,23 @@ The rows of `OwnershipResults`:
   initializer body is the one exception: there each value is new, so a `ConstRef` of an
   owning constant gets `ADOPT` too, and no rule above applies, because an initializer body
   never goes to SLIR (8.2). `REJECT` is
-  an error of `borrow`, except at two positions, where it is a borrowed view with no
-  error: the value of an `Assign` with `is_init` (a let-borrow of the owner) and the
-  operand of a `Try` that reads through a borrowed owning wrapper, directly or through an
-  `or_err` (the `REJECT` row is then on the receiver of the `or_err`, 8.3). SLIR lowering gives a
-  borrowed view a `Copy` of its place into a VIEW local (8.2), which owns nothing: no drop,
-  no move, and no `Owned` argument. The copy is shallow, and it is safe, because `borrow`
-  freezes each owner while the view lives (CE2412). It is the copy that the AST backend
-  makes. A `REJECT` row at
-  any other position of a body that `borrow` ended with no error is the internal error
-  CE0157 of the completeness check. `ADOPT` never gives `Copy` of a fresh value: a fresh owning
-  temporary would then be dropped twice. (Ruled provisionally 2026-10-21; ruling R-AS of
-  2026-11-04 confirms the mapping and gives a borrowed view its view local.) The key is the `shir_id`
+  an error of `borrow`, except at three positions. There it is a borrowed view with no
+  error:
+  - the value of an `Assign` with `is_init`: a let-borrow of the owner;
+  - the value of the `let` form of a `Destructure`: each binder borrows its element (see
+    "A destructure in `borrow`" below);
+  - the operand of a `Try` that reads through a borrowed owning wrapper. The wrapper can be
+    read directly, or through an `or_err`. With an `or_err`, the `REJECT` row is on the
+    receiver of the `or_err` (8.3).
+
+  SLIR lowering gives a borrowed view a `Copy` of its place into a VIEW local (8.2). A view
+  local owns nothing: no drop, no move and no `Owned` argument. The copy is shallow. It is
+  safe, because `borrow` freezes each owner while the view lives (CE2412). It is the copy
+  that the AST backend makes. A `REJECT` row at any other position of a body that `borrow`
+  ended with no error is the internal error CE0157 of the completeness check. `ADOPT` never
+  gives `Copy` of a fresh value: a fresh owning temporary would then be dropped twice.
+  (Ruled provisionally 2026-10-21. Ruling R-AS of 2026-11-04 confirms the mapping and gives
+  a borrowed view its view local.) The key is the `shir_id`
   of the consumed node. A capture has no node in the body, so its
   row has the key of the capture type in 7.3: the `shir_id` of the `Lambda` and the
   `LocalId` of the captured local.
@@ -1797,24 +1803,28 @@ The rows of `OwnershipResults`:
 - LENT or OWNED (a bool, true for LENT) and the heap decision of a lent iterator (a bool)
   are rows by the `shir_id` of the producer call or the lazy-adapter call.
 - The walk in place is a bool by the `shir_id` of the `Loop`.
-- The borrow REGION of a view is a row by the `LocalId` of the local that holds the view:
-  the owner set of the view, and the `shir_id` of the last use of the view on each path.
-  `borrow` is its one writer (S6): it keeps the owner set of a let-borrow already
-  (`record_owners`), and a let-borrow freezes each owner to the LAST use of the view. So the
-  region ends at the last use, and not at the exit of the scope of the view: a change of an
-  owner after the last use and before the end of the scope is legal, and a region that
-  ends at the scope exit would refuse a correct program. SLIR lowering writes the
-  `BeginBorrow` and the `EndBorrow` statements of the region from the row (8.6). The
-  answer of a call of a function or a method with a `peek` return is a view too: its owner
-  set is the owner of each argument at a position of the source row of the call (7.3).
+- The borrow REGION of a view is a row by the `LocalId` of the local that holds the view.
+  The row holds the owner set of the view, and the `shir_id` of the last use of the view
+  on each path. `borrow` is its one writer (S6). It keeps the owner set of a let-borrow
+  already (`record_owners`). A let-borrow freezes each owner to the LAST use of the view,
+  so the region ends at the last use, and not at the exit of the scope of the view. A
+  change of an owner after the last use and before the end of the scope is legal. A region
+  that ends at the scope exit would refuse a correct program. SLIR lowering writes the
+  `BeginBorrow` and the `EndBorrow` statements of the region from the row (8.6).
+- The answer of a call of a function or a method with a `peek` return is a view too. Its
+  owner set is the owner of each argument at a position of the source row of the call
+  (7.3).
 - A container get-out is a borrow, and it answers a view BY NAME: `get`, `first` and
-  `last` of a `List`, `get` of a `HashMap` and `get` of an `Own`. The fact is ONE table row for each such method, `answers_view`, beside
-  `METHOD_EFFECTS` in `semantics/method_effects.py`. `borrow` reads it: the answer of the
-  call is a view, and its owner set is the receiver. SLIR lowering reads it: the destination
-  of the call is a view local (8.2) in a region (8.6). An answer of a plain element is a
-  plain copy, and it has no region. So a call answer that borrows is one rule with two
-  sources of the owner set: the receiver of a get-out, and the source arguments of a `peek`
-  return.
+  `last` of a `List`, `get` of a `HashMap` and `get` of an `Own`. The fact is ONE table
+  row for each such method, `answers_view`, beside `METHOD_EFFECTS` in
+  `semantics/method_effects.py`. `borrow` reads it: the answer of the call is a view, and
+  its owner set is the receiver. SLIR lowering reads it: the destination of the call is a
+  view local (8.2) in a region (8.6). The answer of a plain element is a plain copy, and it
+  has no region. So a call answer that borrows is one rule with two sources of the owner
+  set: the receiver of a get-out, and the source arguments of a `peek` return.
+- An address local (a reference binding, 8.2) has NO region row. Its place is frozen for
+  the whole life of the local, so SLIR lowering writes its region from the scope of the
+  local (8.6), and the `regions` line of the dump does not show it.
 
 `LiftResults` holds the symbol (a string) and the environment layout (`Capture(local,
 moves)` for each slot, in slot order), each by the `shir_id` of the `Lambda`.
@@ -1950,11 +1960,14 @@ read-only view of it (CE2414 for a write or a rebind, with a note at the name of
 variant, or at the tuple pattern, that binds it), and a position that takes it takes a
 copy (`ADOPT`). The alternatives of `|` share one local, and the first alternative gives
 the span of the note. A tuple literal as the scrutinee is checked as any `TupleInit`: each
-part of plain values is a copy. A `Match` with an arm that binds a name in another way
-stops the walk (`borrow, Match`): a `poke`, `peek` or `nom` binder (B7, B8), a bare binder
-of a payload or a part that owns (B3) and an `Own` (B5); so does a match on a tuple literal
-that owns, because the literal takes each part (ruling R24 keeps a match on a plain tuple
-in A5). A `Loop` with a
+part of plain values is a copy. A bare binder of a payload or a part that OWNS is a
+borrowed view of it: a let-borrow of the owner of the scrutinee, with a region row (see
+the rows above), and SLIR lowering gives it a view local (8.9). A `peek` or a `poke` binder
+is a reference binding: it borrows its payload place with its mode for the whole arm, and
+SLIR lowering gives it an address local (8.2). A `Match` with an arm that binds a name in
+another way stops the walk (`borrow, Match`): a `nom` binder and an `Own` pattern. So does
+a match on a tuple literal that owns, because the literal takes each part (ruling R24
+keeps a match on a plain tuple as above). A `Loop` with a
 `Cond` source reads its condition once, at the entry, and checks its body in two rounds.
 The first round is a DISCOVERY round: it reports no error, writes no row and records no
 exit, and it gives the facts that come round the back edge (the end of the body and each
@@ -1963,8 +1976,8 @@ reports and writes each row once. The code after the loop sees that fixed point 
 with each `Break` path of the second round. A `CountedRange` loop reads the bounds of its
 range once, at the entry, and declares its binder as a read-only view, as a bare binder of
 a match is: a write or a rebind of it is CE2414, with a note at the binder. Then it checks
-its body as a `Cond` loop does. A `Loop` with any other `Items` source is the iterators
-group's (C3) and stops the walk. A `While` loop has no iterator, so it has no
+its body as a `Cond` loop does. A `Loop` with any other `Items` source walks an iterator,
+and it stops the walk (`borrow, Loop`). A `While` loop has no iterator, so it has no
 walk-in-place row: that row is a fact of a `Protocol` or an `IteratorValue` walk alone.
 `walk_place` (`semantics/places.py`) reads a SHIR place through the adapter of its tree,
 with the same `Step` and `Walked` as the AST walk of the `scope` pass.
@@ -2012,8 +2025,8 @@ that reads the array that it grows is [CE2430](../error-catalog.md#ce2430): the 
 through a slice to its array. A `destroy()` call as a statement marks the local destroyed,
 and a later use is [CE2406](../error-catalog.md#ce2406). An array whose element owns stops
 the walk (`borrow, ArrayInit owning`, `Index owning`, `Slice owning`, `Call(method array)
-owning`; group B1), and so does `iter()` on an array (`Call(method array) iterator`, C3),
-which makes a lent iterator.
+owning`), and so does `iter()` on an array (`Call(method array) iterator`), which makes a
+lent iterator.
 
 **A `var` in `borrow`.** A `var` is storage that the program keeps for its whole run, with
 an address and no owner that can hand its value away (`unit-storage.md`). A read of a
@@ -2032,15 +2045,22 @@ a write: the `var` is the root of the place, so no call boundary cuts it
 (`reads.chain_call_boundary`). A plain `var` has no `let`-borrow. The pass checks a `var`
 that owns too, and SLIR lowering stops at it (group D1).
 
-**A destructure in `borrow`.** The value is checked first. A value of plain elements is a
-consuming use, a copy (`ADOPT`), and SLIR lowering reads that one row (8.9). A `let`
-declares each binder, at any nesting level, as a local of its own. A rebind form then
+**A destructure in `borrow`.** The value is checked first, as a consuming use. A value of
+plain elements is a copy (`ADOPT`). A value that owns is OWNED or BORROWED, by its
+provenance: a `Destructure` owns from an owned value and borrows from a borrow
+(`tuples.md`). An owned value (a new value, or a local that the body owns) gets `MOVE`: the
+destructure takes each part, and each binder owns its element. A borrowed value (a
+parameter, a field, a binder, a let-borrow) gets `REJECT` in the `let` form: each binder
+is a borrowed view of its element, with a region row over the owners of the value. SLIR
+lowering reads that one row (8.9). A `let` declares each binder, at any nesting level, as
+a local of its own. A rebind form then
 rebinds each place from left to right, at the span of the place: a `LocalRef` through the
 gates of a rebind of a local (CE2408, CE2414, CE2426 for a view of another value's storage;
 a by-value parameter is storage of its own and is rebindable), a `StorageRef` with no gate
-(a `var` is storage of its own), and a `Field` through the gates of a field write. A value that owns stops the walk (`borrow, Destructure`) after the
-gates of the places: each binder owns or borrows an element of it, and Tier B checks that. So
-a rebind of a view is its error also when the value owns.
+(a `var` is storage of its own), and a `Field` through the gates of a field write. Each
+place takes its part, so the rebind form consumes its value: a borrowed value that owns is
+the consuming use of a borrow ([CE2411](../error-catalog.md#ce2411)), after the gates of
+the places. So a rebind of a view is its error also when the value owns.
 
 **The conditionally moved locals.** The state of a local holds two facts: moved on SOME
 path (the join is a union, and a use after it is CE2405) and moved on EVERY path (the join
@@ -2069,7 +2089,7 @@ error. It reads `TypeckResults` and `LiftResults` for the positions, and it need
 container and each lazy adapter, except the iterable of a `Cursor` or a `HashMapCursor`
 walk, which makes no value; a heap decision for each lent one; and a walk-in-place answer
 for each `Loop` of kind `Protocol` or `IteratorValue`. A `REJECT` row is legal only at
-the two positions of a borrowed view above. Two other calls get LENT from
+the three positions of a borrowed view above. Two other calls get LENT from
 `borrow`, and the check does not ask for them yet, because no spine body holds them: the
 clone of a lent iterator and a borrowed call that answers an iterator (a call with a source
 row, 7.3, whose answer is an iterator). The check asks for each of them with the lowering
@@ -2199,16 +2219,16 @@ SlirBlock
 an owner keeps. Lowering writes it with a `Copy` of the place that it views, and nothing
 writes it again. Four sources make a view local: a `REJECT` row at a position of a borrowed
 view (7.9), a bare binder over an owning payload (8.9), the answer of a call that is a view
-(7.9), and the answer of a call of a function with a `peek` return (8.9). A field view of a
-`Destructure` that borrows (7.5) is a view local too. The local that a `Slice` writes is a
-view by the rule of 8.7. A view local owns nothing: drop placement gives it no `Drop`
-(8.10, rule 8), and the verifier refuses a `Drop` of it, a `Move` of it and an `Owned`
-argument of it (8.13). The shallow copy is safe, because `borrow` freezes each owner of the
-view while the view lives (CE2412). The printer writes `view` after the type: `let _5:
-string view` (and the source name after it, `// s`). The other option, a `Ref` into a
-pointer local and a `Deref` at each read, gives the same answer with one more indirection
-at each read, and the value of a `string` or a `T[]` crosses by value in every other
-position.
+(7.9), and the answer of a call of a function with a `peek` return (8.9). A binder of the
+`let` form of a `Destructure` that borrows (7.9, 8.9) is a view local too. The local that a
+`Slice` writes is a view by the rule of 8.7. A view local owns nothing: drop placement
+gives it no `Drop` (8.10, rule 8), and the verifier refuses a `Drop` of it, a `Move` of it
+and an `Owned` argument of it (8.13). The shallow copy is safe, because `borrow` freezes
+each owner of the view while the view lives (CE2412). The printer writes `view` after the
+type: `let _5: string view` (and the source name after it, `// s`). The other option, a
+`Ref` into a pointer local and a `Deref` at each read, gives the same answer with one more
+indirection at each read, and the value of a `string` or a `T[]` crosses by value in every
+other position.
 
 **An address local.** A reference binding points INTO a place: `let poke T x = <place>`,
 `let peek T x = <place>`, a `peek` or `poke` binder of a pattern, and `Own(poke x)`. Its
@@ -2232,24 +2252,24 @@ index. No statement has an empty span (G9).
 the node modules (`ids.py`, `places.py`, `constants.py`, `rvalues.py`, `statements.py`,
 `terminators.py`, `function.py`), the lowering (`lower.py`, with the control-flow arms in
 `lower_control.py`, the arm of a `match` in `lower_match.py`, the arms of a struct and a
-tuple in `lower_aggregate.py`, the arms of an array in `lower_arrays.py`, the arms of a call
-and of an interpolation in `lower_calls.py`, a value before its place in `lower_values.py`
-and the facts of a declaration in `lower_signature.py`), the drop
+tuple in `lower_aggregate.py`, the arms of an array in `lower_arrays.py`, the arms of a
+call and of an interpolation in `lower_calls.py`, a value before its place in
+`lower_values.py` and the facts of a declaration in `lower_signature.py`), the drop
 placement of 8.10 (`drops.py`, the one module that builds a `Drop` or a `DropIfSet`; gate:
-`tests/unit/test_slir_drop_placement_is_one.py`), the verifier of 8.13 (`verify.py`) and
-the printer of `--dump-slir` (`printer.py`). Every class is a slotted dataclass, and every
-statement and terminator has a required `span` (gate:
-`tests/unit/test_slir_nodes_are_slotted.py`). The borrow pass gives each body that it
-finished, and that is not a template check (Q1), to the SLIR stage of its unit
-(`SlirStage`). The stage makes one `SlirFunction` from the body and its three side tables,
-and `SlirProgram` keeps the outcome of each body, keyed by the `DeclId` of the body. The
-symbol, the unit and the return type of the function are facts of its declaration (6.4).
-The unit is the declaring unit. A function that has none (a lifted lambda, the instance of
-a template of a binary library) goes into the module of the unit that holds its body. The
-body of an extension method or of a static is a function like any other: its receiver is
-`_1`, with the convention of its `self` (8.3), its declared parameters come after it, and a
-static has no receiver. Its symbol is `extension_decl_symbol` (8.6), and its name is the
-written name `<type>.<method>`.
+`tests/unit/test_slir_drop_placement_is_one.py`), the verifier of 8.13 (`verify.py`,
+`verify_calls.py`, `verify_flow.py` and `verify_rules.py`) and the printer of `--dump-slir`
+(`printer.py`). Every class is a slotted dataclass, and every statement and terminator has
+a required `span` (gate: `tests/unit/test_slir_nodes_are_slotted.py`). The borrow pass
+gives each body that it finished, and that is not a template check (Q1), to the SLIR stage
+of its unit (`SlirStage`). The stage makes one `SlirFunction` from the body and its three
+side tables, and `SlirProgram` keeps the outcome of each body, keyed by the `DeclId` of the
+body. The symbol, the unit and the return type of the function are facts of its declaration
+(6.4). The unit is the declaring unit. A function that has none (a lifted lambda, the
+instance of a template of a binary library) goes into the module of the unit that holds its
+body. The body of an extension method or of a static is a function like any other: its
+receiver is `_1`, with the convention of its `self` (8.3), its declared parameters come
+after it, and a static has no receiver. Its symbol is `extension_decl_symbol` (8.6), and
+its name is the written name `<type>.<method>`.
 
 **The body of a `Drop` implementation.** `fn drop(poke self) ~` lowers as a method body: its
 receiver is `_1` with the convention `Inout`, its symbol is the perk symbol of
@@ -2330,10 +2350,11 @@ AST entry of each family that has a value half. A family that has no value half 
 its AST argument half, with no caller, until the group of its construct gives it operands. A
 `Str` constant comes from the string constant seam and owns no heap (owned flag 0). `Copy`
 and `Move` both load the value: a `Move` emits no code of its own, because lowering placed
-every drop. `Drop` goes through the one destroy seam (`emit_value_destructor`): a string
-frees its buffer only when its owned flag is set, an enum goes to the destroy half of
-its lifecycle handler, and a type of the `Drop` set calls the symbol of its `drop()` first
-and then drops its owning fields (see the body of a `Drop` implementation above). `DropIfSet` loads its flag and drops only while the flag is `true`.
+every drop. `Drop` goes through the one destroy seam (`emit_value_destructor`). A string
+frees its buffer only when its owned flag is set. An enum goes to the destroy half of its
+lifecycle handler. A type of the `Drop` set calls the symbol of its `drop()` first, and
+then drops its owning fields (see the body of a `Drop` implementation above). `DropIfSet`
+loads its flag and drops only while the flag is `true`.
 An enum is `{i32 tag, [K x i64] data}`: an `Aggregate` of a variant goes through the enum
 emitter with one value for each payload, which the emitter writes at the offsets of the
 layout authority (a constant `Aggregate` goes through the converter of 8.5), `Discriminant`
@@ -2431,7 +2452,7 @@ can name is in exactly one of four sets (gate:
 
 - **Only reads** (`RECEIVER_READ_FAMILIES`: `primitive`, `string`). No method of the family
   changes or consumes its receiver. The receiver is `Guaranteed`.
-- **Effect** (`EFFECT_FAMILIES`: `array`, `list`, `hashmap`, `own`). The rows of
+- **Read or write** (`EFFECT_FAMILIES`: `array`, `list`, `hashmap`, `own`). The rows of
   `METHOD_EFFECTS` tell what a method does to its receiver and to its arguments, and they
   give both conventions, per method, with ONE rule for the four families. The receiver of a
   method whose row `mutates` (`push`, `insert`, `pop`, `truncate`, `fill`, `swap`, ...) is
@@ -2462,17 +2483,17 @@ copy has one seam. The refusal of `.clone()` on a type that declares a resource 
 
 One function gives the convention of a receiver: `receiver_convention`
 (`semantics/method_effects.py`). One function beside it gives the convention of each
-argument of a built-in method: `argument_conventions(method)`, from the same row of
-`METHOD_EFFECTS`. `typecheck` writes the argument rows of a `Builtin` call from it, as it
-writes them for a free call (7.3), and the verifier reads the same function for a `Builtin`
-callee (8.13). A container static of `BUILTIN_STATICS` has the mode of its argument in its
-row: `Own.alloc` takes its value `Owned`, and `List.with_capacity` takes its count
-`Guaranteed`. `receiver_convention` answers None for a family of the no-rule set, and a
-family in no set is an internal error. There is no default
-convention: the `borrow` pass stops at such a call
-(`borrow, Call(method <family>)`), and in SLIR lowering such a call is an internal error.
-The `borrow` pass reads a `Guaranteed` receiver. An `Owned` receiver is a consuming use
-(7.9). SLIR lowering writes the answer as the convention of the first operand.
+argument of a built-in method or of a container static: `argument_conventions(family,
+method, count)`, from the same row of `METHOD_EFFECTS`. `typecheck` writes the argument
+rows of a `Builtin` call from it, as it writes them for a free call (7.3), and the verifier
+reads the same function for a `Builtin` callee (8.13). A container static of
+`BUILTIN_STATICS` has the mode of its argument in its row: `Own.alloc` takes its value
+`Owned`, and `List.with_capacity` takes its count `Guaranteed`. `receiver_convention`
+answers None for a family of the no-rule set, and a family in no set is an internal error.
+There is no default convention: the `borrow` pass stops at such a call (`borrow,
+Call(method <family>)`), and in SLIR lowering such a call is an internal error. The
+`borrow` pass reads a `Guaranteed` receiver. An `Owned` receiver is a consuming use (7.9).
+SLIR lowering writes the answer as the convention of the first operand.
 
 **`or_err` and `map_err`.** Over an owned receiver, `or_err` is an ordinary `Builtin` call
 with an `Owned` receiver, and the `??` after it is the ordinary `Try`. Over a borrowed
@@ -2848,7 +2869,7 @@ backstop of the checker, as on the AST backend.
 | `StructInit`, `TupleInit` | each field (each part) in the WRITTEN order (R1, 7.4), then ONE `Aggregate(AggStruct)` (`Aggregate(AggTuple)`) of the instance type, with the parts in the declaration order. A new value goes into a temporary of the statement in that order. A place, or a constant, is read at the `Aggregate`. A place is copied into a temporary first when a later field in the written order can call a function, because the call can change the place through a `poke`; a literal, a name of a constant, a place, an operator and a construction over such values call none. A literal and a name of a constant never change, so they get no temporary |
 | `Field` read | a place: `Copy` of `Field(place, index)`, with the index of the typecheck row; a field of a field is a projection of the projection. A base that is no place (a new value, a constant) goes into a temporary of the statement first, and the field is a `Copy` of the projection of the temporary; the statement drops the temporary at its end (rule 2) |
 | a field write (`p.x := v`) | the new value first, then the store into `Field(place, index)`. A new value that is `and` or `or` goes into a temporary first, because its left operand is written before its right operand reads the place (rule 6) |
-| `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. `borrow` stops on a value that owns (7.9), so each element is plain |
+| `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. Over a value that owns, the row of `borrow` (7.9) decides: an OWNED value (`MOVE`) gives each binder and each place the `Move` of its `Field` place, and a `_` over an owning part drops that part first, so the value is spent whole and gets no drop (8.13, "no local is ever partially moved"); a BORROWED value (`REJECT`, the `let` form) gives each binder a view local (8.2), written with the `Copy` of its `Field` place, in a region over the owners of the value. A plain element is a `Copy` in both cases |
 | `StorageRef` (a `var`) | the place `Global(symbol, ty)`: the symbol of the global row of typecheck, and the declared type of the `var`. A read by value goes into a temporary of the statement first, because any call of the statement can change a `var` (`counter + bump()` reads `counter` before the call); a by-address argument, a receiver and a value that its statement stores at once read the `Global` where it is. A slice of a `var` is a view (8.7), which owns nothing: its read gets no temporary. A rebind is an `Assign` into the `Global`, and a field write and an element write an `Assign` into its projection; a plain `var` drops nothing. A `var` that owns stops the lowering (`slir, StorageRef owning`, group D1) |
 | `Take` | `Move` of the field; the other owning fields of the receiver get `Drop`, and `drop()` does not run (`borrow-model.md` §10c) |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
@@ -2867,7 +2888,7 @@ and that the terminator of that block alone reads gets no storage marker: the lo
 follow the same rule: the `u32` casts of the index and of the length, and the `bool` that
 the switch reads, are written and read in their own block alone.
 
-A construction, a field and a destructure of a value that owns stop the lowering: a
+A construction and a field of a value that owns stop the lowering: a
 `StructInit` or a `TupleInit` of a type that owns (`StructInit owning`, `TupleInit owning`),
 a field of a temporary that owns (`owning temporary`), and a write of a field that owns
 (`owning field write`). Their drops and their moves are Tier B. A struct with a field of a
@@ -3191,7 +3212,14 @@ Runs after lowering, before the backend. It checks:
   `string`. A conversion of another kind and a `Move` operand are refused
 - every statement and terminator carries a `Span` (G9)
 
-**As built.** The verifier is `semantics/slir/verify.py`. The SLIR stage gives it each
+**As built.** The verifier is four modules of `semantics/slir/`. `verify.py` holds the
+entry (`SlirVerifier.verify`, `verify_function`) and the structure check, statement by
+statement. `verify_calls.py` holds the checks of a call: the conventions of a `Direct`
+callee (`declared_params`), the conventions of a container static (`argument_conventions`),
+the receiver operand of a built-in method, and no copy of an owning value other than a
+`string` into an `Owned` argument. `verify_flow.py` holds the dataflow of the moves and the
+drops. `verify_rules.py` holds the names of the rules, which the three others share. The
+SLIR stage gives the verifier each
 function that the lowering finished, on every compile, before the function meets the next
 stage. A failed rule is the internal error CE0158, at the span of the statement, with the
 name of the function and of the rule. The structure comes first, statement by statement;
@@ -3214,7 +3242,7 @@ verifier reads at each call, so a generic instance that a later body declares is
 A `Direct` callee whose name is a written name `<type>.<method>` finds its row in the
 extension table instead: the record of that method whose `method_symbol` is the symbol of
 the callee, with the convention of its `self` first for an instance method
-(`declared_params`, `verify.py`). A `Direct` callee with a module finds its row in the
+(`declared_params`, `verify_calls.py`). A `Direct` callee with a module finds its row in the
 signature tables of the stdlib registry: each argument is `Guaranteed`, and the count is the
 arity of its row (`stdlib_arity`). A `Direct` callee with no row there is CE0158. Today a
 free function, a method or a static of the build and a function of a registry stdlib
@@ -3224,7 +3252,7 @@ with `var_arg` for a variadic extern. The comparison of the declared prefix alon
 code already, for that day. The verifier does not check a shape that no lowering makes yet,
 and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` or a
 `DropIfSet` of a place that is no local. The region rules of `BeginBorrow` and `EndBorrow`
-are in `semantics/slir/verify_regions.py`.
+go into a verifier module of their own.
 A projection of a `Global` is checked against the type that the `Global` carries. The negative case of each
 rule is a pytest test over a hand-built function (`tests/unit/test_slir_verifier.py`),
 because a correct lowering makes none.
