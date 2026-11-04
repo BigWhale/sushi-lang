@@ -636,6 +636,7 @@ class LLVMCodegen:
         width of its type.
         """
         from sushi_lang.semantics.typesys import BuiltinType
+        from sushi_lang.semantics.type_predicates import BUILTIN_NUMERIC_TYPES
         from sushi_lang.semantics.const_eval import AggregateConstant
 
         if isinstance(value, AggregateConstant):
@@ -655,6 +656,8 @@ class LLVMCodegen:
             raise_internal_error("CE0000", span=span, filename=filename,
                                  detail=f"the constant {value}: {detail}")
 
+        if value.semantic_type not in (BuiltinType.BOOL, *BUILTIN_NUMERIC_TYPES):
+            fault(f"a constant of {value.semantic_type} has no LLVM constant")
         return scalar_initializer(of_scalar(value), self.types, fault)
 
 
