@@ -24,7 +24,9 @@ A `Call` answers what its callee yields. Its written target decides the callee:
   function type stops the walk.
 - `Static` is a call on a type name. On an enum whose dot holds no such member it is
   CE2045 (`visit/results.py:reject_unknown_variant`). A static method of a plain type is
-  the callee row `Static`, and a type whose dot holds no static of the name is CE2102.
+  the callee row `Static`, and a type whose dot holds no static of the name is CE2102. A
+  static of a primitive type name (`f64.from_bits`, `string.from_bytes`) is the callee
+  row `BuiltinStatic`, with the one parameter of its row of `PRIMITIVE_STATICS`.
 
 An extension method and a static resolve through `resolve_extension_method`, which
 chooses the one that the calling unit may call (R4 to R7, C3 to C5). The arguments go
@@ -62,21 +64,22 @@ from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES, resu
 from sushi_lang.semantics.method_effects import (
     ARRAY_FAMILY, MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.param_modes import (
-    CalleeKind, Convention, declared_modes, modes_for, param_mode, receiver_mode)
+    CalleeKind, Convention, ParamMode, declared_modes, modes_for, param_mode, receiver_mode)
 from sushi_lang.semantics.passes.types import visit
 from sushi_lang.semantics.passes.types.arguments import (
     Parameters, check_arguments, reject_misplaced_spread)
 from sushi_lang.semantics.passes.types.arrays import check_array_method
 from sushi_lang.semantics.passes.types.calls.dotcall import (
-    MethodRung, reject_unknown_method, resolve_dotted)
+    PRIMITIVE_STATICS, MethodRung, PrimitiveStatic, reject_unknown_method, resolve_dotted)
 from sushi_lang.semantics.passes.types.calls.enums import reject_missing_variant
 from sushi_lang.semantics.passes.types.calls.methods import (
-    RESOLUTION_REPORTED, extension_call_result_type, resolve_extension_method)
+    RESOLUTION_REPORTED, extension_call_result_type, reject_unhandled_channel_chain,
+    resolve_extension_method)
 from sushi_lang.semantics.passes.types.calls.statics import reject_missing_static
 from sushi_lang.semantics.passes.types.calls.user_defined import (
     check_stdlib_call, own_concrete_function)
 from sushi_lang.semantics.passes.types.method_registry import (
-    MethodFamily, string_method_return_type)
+    METHOD_TYPE_REGISTRY, MethodFamily, string_method_return_type)
 from sushi_lang.semantics.passes.types.expressions import top_level_contract
 from sushi_lang.semantics.passes.types.resolution import call_yield, resolve_variable_type
 from sushi_lang.semantics.passes.types.utils import names_no_type
@@ -87,15 +90,16 @@ from sushi_lang.semantics.passes.types.visibility import (
 from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
 from sushi_lang.semantics.passes.types.visit.results import reject_unknown_variant
 from sushi_lang.semantics.shir import dispatch, exprs as e
-from sushi_lang.semantics.shir.callee import Builtin, Free, Intrinsic, Method, Static
+from sushi_lang.semantics.shir.callee import (
+    Builtin, BuiltinStatic, Free, Intrinsic, Method, Static)
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.statics import is_builtin_static
 from sushi_lang.semantics.stdlib_registry import StdlibFunction
 from sushi_lang.semantics.type_predicates import (
     generic_base_of, is_instance_of, is_string_convertible)
 from sushi_lang.semantics.typesys import (
-    BuiltinType, DynamicArrayType, EnumType, FunctionType, ReferenceType, StructType, Type,
-    deref_type)
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, FunctionType, ReferenceType,
+    StructType, Type, deref_type, owns_resource)
 from sushi_lang.semantics.written_types import written_name
 
 if TYPE_CHECKING:
@@ -157,9 +161,13 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
 
     A family answer goes to the arm of the family in `FAMILY_ARMS`, and a family with no
     arm stops the walk with the label of the family, on a receiver of any type. A perk
-    implementation stops the walk (C6), and so does any other method of a receiver that is
-    not of a plain type. An extension method of a plain type is a `Method` callee. A method
-    that nothing answers on a local whose `let` the pass refused reports nothing more.
+    implementation stops the walk (C6), and so does any other method of a receiver that
+    takes no user method yet (`_takes_user_methods`). An extension method of a concrete
+    target is a `Method` callee. A method of a `T[]` that no concrete target declares is the
+    copy of a template (`extend T[]`, `xs.map(f)`), and it stops the walk before the copy is
+    made (C1); so does the copy of any other template.
+    A method that nothing answers on a local whose `let` the pass refused reports nothing
+    more.
     """
     refused = [reject_misplaced_spread(validator, arg) for arg in node.args]
     if any(refused):
@@ -176,14 +184,22 @@ def _check_method_call(validator: TypeValidator, node: e.Call,
         callee = Builtin(target.recv, answer.family.callee(target.name))
         validator.body_answers().record_callee(node.shir_id, ResolvedCall(callee))
         return arm(validator, node, receiver, target.name, answer.family)
-    if (answer.rung is MethodRung.PERK or not _is_plain(validator, receiver)
+    if answer.rung is not MethodRung.PERK and _rejects_a_chain(validator, node, target,
+                                                               receiver):
+        return None
+    if (answer.rung is MethodRung.PERK or not _takes_user_methods(validator, receiver)
             or _calls_a_function_field(validator, receiver, target.name)):
         visit.stop_at(validator, node)
     method = None
     if answer.rung is MethodRung.EXTENSION:
+        if (isinstance(receiver, DynamicArrayType)
+                and not validator.extension_table.declarations(receiver, target.name)):
+            visit.stop_at(validator, node)
         method = _user_method(validator, node, receiver, target.name, static=False)
         if method is RESOLUTION_REPORTED:
             return None
+        if getattr(method, "template_id", None) is not None:
+            visit.stop_at(validator, node)
     if method is None:
         if not (isinstance(target.recv, e.LocalRef)
                 and target.recv.local in validator.refused_locals):
@@ -198,9 +214,14 @@ def _check_static_call(validator: TypeValidator, node: e.Call,
                        target: e.Static) -> Optional[Type]:
     """`T.m(args)`: the static method `m` of the plain type `T` (#542).
 
-    A type whose dot holds no static `m` is CE2102, and an enum CE2045. The static of a
-    built-in container (`List.new`) and a static of a type that is not plain stop the walk.
+    A type whose dot holds no static `m` is CE2102, and an enum CE2045. A static of a
+    primitive type name (`f64.from_bits`) is a `BuiltinStatic`. The static of a built-in
+    container (`List.new`) and a static of a type that is not plain stop the walk.
     """
+    primitive = (PRIMITIVE_STATICS.get((target.ty.value, target.name))
+                 if isinstance(target.ty, BuiltinType) else None)
+    if primitive is not None:
+        return _check_primitive_static(validator, node, target, primitive)
     owner = _static_owner(validator, node, target)
     if owner is None:
         return None
@@ -215,6 +236,22 @@ def _check_static_call(validator: TypeValidator, node: e.Call,
         return None
     callee = Static(owner, validator.method_decl(owner, target.name))
     return _check_user_method(validator, node, owner, target.name, method, callee)
+
+
+def _check_primitive_static(validator: TypeValidator, node: e.Call, target: e.Static,
+                            static: PrimitiveStatic) -> Type:
+    """`f64.from_bits(bits)`, `f32.from_bits(bits)`, `string.from_bytes(nom b)`: the one
+    argument through the one argument check, with the mode of the row. A wrong count is
+    CE2009 and skips the argument. The call yields the type of the row after either fault."""
+    family = STRING_FAMILY if target.ty == BuiltinType.STRING else PRIMITIVE_FAMILY
+    callee = BuiltinStatic(target.ty, METHOD_TYPE_REGISTRY.family(family).callee(target.name))
+    validator.body_answers().record_callee(node.shir_id, ResolvedCall(callee))
+    mode = ParamMode.NOM if static.consumes else ParamMode.BORROW
+    check_arguments(validator, f"{target.ty.value}.{target.name}", [static.param], node.args,
+                    node.loc, mismatch_code=er.ERR.CE2006, arity_code=er.ERR.CE2009,
+                    declared=Parameters(node.shir_id, (mode,), [static.param_name]),
+                    stop_on_arity=True)
+    return static.returns
 
 
 def _static_owner(validator: TypeValidator, node: e.Call,
@@ -248,6 +285,45 @@ def _is_plain(validator: TypeValidator, ty: Type) -> bool:
         return True
     return (isinstance(ty, (StructType, EnumType)) and generic_base_of(ty) is None
             and not type_is_contested(validator, ty))
+
+
+def _rejects_a_chain(validator: TypeValidator, node: e.Call, target: e.Dotted,
+                     receiver: Type) -> bool:
+    """CE2515 for a method of the payload called on a `Result` or a `Maybe` that no method
+    of the wrapper answers (`xs.first_big().doubled()`). True when it was reported."""
+    if not (isinstance(receiver, EnumType)
+            and (is_instance_of(receiver, "Result") or is_instance_of(receiver, "Maybe"))):
+        return False
+    if resolve_extension_method(validator, receiver, target.name, report=False,
+                                site=node.loc) is not None:
+        return False
+    return reject_unhandled_channel_chain(validator, target.name, receiver, node.loc,
+                                          target.recv.loc, _called_name(validator,
+                                                                        target.recv))
+
+
+def _called_name(validator: TypeValidator, recv: e.ShirExpr) -> Optional[str]:
+    """The name after the dot of a receiver that is a call written with a dot (a method,
+    a static, a function behind an alias), for the help of CE2515. A bare call has none."""
+    if not isinstance(recv, e.Call):
+        return None
+    called = recv.target
+    if isinstance(called, (e.Dotted, e.Static)):
+        return called.name
+    if isinstance(called, e.Named) and isinstance(called.ref, e.GlobalRef):
+        _, dot, name = validator.decl_name(called.ref.decl).rpartition(".")
+        return name if dot else None
+    return None
+
+
+def _takes_user_methods(validator: TypeValidator, ty: Type) -> bool:
+    """A receiver whose extension methods the pass types: a plain type, and an array of a
+    plain element that owns nothing (`extend i32[]`). A method of an instance of a generic
+    type (`extend Maybe@(i32)`) is the copy of a template, and stops (C1)."""
+    if _is_plain(validator, ty):
+        return True
+    return (isinstance(ty, (ArrayType, DynamicArrayType)) and _is_plain(validator, ty.base_type)
+            and not owns_resource(ty.base_type, validator.drop_type_names))
 
 
 def _calls_a_function_field(validator: TypeValidator, receiver: Type, name: str) -> bool:

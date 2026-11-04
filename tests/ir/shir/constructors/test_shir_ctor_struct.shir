@@ -4,25 +4,25 @@ ShirBody calls (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit(0))
+    Return(adopt Lit(0))
 
 ShirBody count
   params : [(_0 "v": i32, Guaranteed)]
   locals : []
   block  :
-    Assign(StorageRef(@calls), Binary(+, StorageRef(@calls), Lit(1)), is_init: false)
-    Return(LocalRef(_0))
+    Assign(StorageRef(@calls), adopt Binary(+, StorageRef(@calls), Lit(1)), is_init: false)
+    Return(adopt LocalRef(_0))
 
 ShirBody main
   params : []
   locals : [_0 "a": Vec, _1 "b": Vec]
   block  :
-    Assign(LocalRef(_0), StructInit(@Vec, [Lit(3), Lit(4)], written_order: [0, 1]), is_init: true)
-    Assign(LocalRef(_1), StructInit(@Vec, [Call(Named(GlobalRef(@count)), [Lit(7)]), Call(Named(GlobalRef(@count)), [Lit(9)])], written_order: [1, 0]), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_0), "x")]))
-    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_0), "y")]))
-    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_1), "x")]))
-    ExprStmt(Call(BuiltinFn("println"), [Field(LocalRef(_1), "y")]))
-    ExprStmt(Call(BuiltinFn("println"), [StorageRef(@calls)]))
-    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
-    Return(Lit(0))
+    Assign(LocalRef(_0), adopt StructInit(@Vec, [adopt Lit(3), adopt Lit(4)], written_order: [0, 1]), is_init: true)
+    Assign(LocalRef(_1), adopt StructInit(@Vec, [adopt Call(Free(@count), [(Lit(7), Guaranteed)]), adopt Call(Free(@count), [(Lit(9), Guaranteed)])], written_order: [1, 0], named: true), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_0), "x"), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_0), "y"), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_1), "x"), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Field(LocalRef(_1), "y"), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(StorageRef(@calls), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

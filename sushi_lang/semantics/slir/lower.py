@@ -72,7 +72,7 @@ from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer, ShirBody, ShirLocal, TemplateCheck
 from sushi_lang.semantics.shir.callee import (
-    Builtin, Callee, Free, Intrinsic, Method, Static, Stdlib)
+    Builtin, BuiltinStatic, Callee, Free, Intrinsic, Method, Static, Stdlib)
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import ResolvedCall, TypeckResults
@@ -543,9 +543,10 @@ class Lowering:
         static by their symbol and their written name `<type>.<method>`; a function of a
         registry stdlib module by the symbol of its generated function, its name and its
         module (`stdlib_symbol`, at the type of its arguments); an intrinsic with
-        the display type of each argument (L7); a built-in method by its family and its
-        name, with no types: the receiver is the first operand of the call
-        (`receiver_convention`)."""
+        the display type of each argument (L7); a static of a primitive type name as the
+        intrinsic of its written name, with the type of its argument; a built-in method by
+        its family and its name, with no types: the receiver is the first operand of the
+        call (`receiver_convention`)."""
         callee = resolved.callee
         if isinstance(callee, Free):
             if resolved.unit is None:
@@ -567,6 +568,9 @@ class Lowering:
         if isinstance(callee, Intrinsic):
             return st.Builtin(callee, tuple(self.display_type(node.shir_id, index, node.loc)
                                             for index in range(len(node.args))))
+        if isinstance(callee, BuiltinStatic):
+            return st.Builtin(Intrinsic(f"{callee.ty}.{callee.method.name}"),
+                              tuple(self.type_of(arg.value) for arg in node.args))
         if isinstance(callee, Builtin):
             return st.Builtin(callee.method, ())
         raise StageStop(STAGE, type(callee).__name__, node.loc)

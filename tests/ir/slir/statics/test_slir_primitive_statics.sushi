@@ -1,0 +1,15 @@
+# EXPECT_DUMP_SLIR: test_slir_primitive_statics.slir
+# EXPECT_STDOUT_EXACT: "2.25 ok\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+#
+# A static of a primitive type name lowers to the intrinsic of its written name, with the
+# type of its operand. The array that `string.from_bytes` takes is a move, so it has no
+# drop after the call, and the string that it answers owns the buffer.
+
+fn main() i32:
+    let f32 w = 2.25
+    let u8[] bytes = from([a'o', a'k'])
+    let string s = string.from_bytes(nom bytes)
+    println("{f32.from_bits(w.to_bits())} {s}")
+    return 0

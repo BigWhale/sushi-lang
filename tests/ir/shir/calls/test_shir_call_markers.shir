@@ -4,25 +4,25 @@ ShirBody count (Initializer)
   params : []
   locals : []
   block  :
-    Return(Lit(0))
+    Return(adopt Lit(0))
 
 ShirBody size
   params : [(_0 "s": string, Guaranteed)]
   locals : []
   block  :
-    Return(Call(Dotted(LocalRef(_0), "len"), []))
+    Return(adopt Call(Builtin(LocalRef(_0), "len"), []))
 
 ShirBody look
   params : [(_0 "s": string, InGuaranteed)]
   locals : []
   block  :
-    Return(Call(Dotted(LocalRef(_0), "len"), []))
+    Return(adopt Call(Builtin(LocalRef(_0), "len"), []))
 
 ShirBody take
   params : [(_0 "s": string, Owned)]
   locals : []
   block  :
-    Return(Call(Dotted(LocalRef(_0), "len"), []))
+    Return(adopt Call(Builtin(LocalRef(_0), "len"), []))
 
 ShirBody bump
   params : [(_0 "n": i32, Inout)]
@@ -41,8 +41,8 @@ ShirBody markers
   locals : []
   block  :
     ExprStmt(Call(Free(@bump), [(StorageRef(@count), Inout)]))
-    ExprStmt(Call(Named(GlobalRef(@add)), [Call(Named(GlobalRef(@size)), [LocalRef(_0)]), Call(Named(GlobalRef(@look)), [(LocalRef(_0), InGuaranteed)])]))
-    Return(Call(Named(GlobalRef(@take)), [(LocalRef(_0), Owned)]))
+    ExprStmt(Call(Free(@add), [(Call(Free(@size), [(LocalRef(_0), Guaranteed)]), Guaranteed), (Call(Free(@look), [(LocalRef(_0), InGuaranteed)]), Guaranteed)]))
+    Return(adopt Call(Free(@take), [(move LocalRef(_0), Owned)]))
 
 ShirBody main
   params : []

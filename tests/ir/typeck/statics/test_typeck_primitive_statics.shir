@@ -1,0 +1,11 @@
+unit test_typeck_primitive_statics
+
+ShirBody main
+  params : []
+  locals : [_0 "v": f64, _1 "bytes": u8[]]
+  block  :
+    Assign(LocalRef(_0), adopt Lit(1.5), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(BuiltinStatic(f64, "from_bits"), [(Call(Builtin(LocalRef(_0), "to_bits"), []), Guaranteed)]), Guaranteed)]))
+    Assign(LocalRef(_1), adopt ArrayInit(Dynamic, [Single(adopt Lit(a'h')), Single(adopt Lit(a'i'))]), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(BuiltinStatic(string, "from_bytes"), [(move LocalRef(_1), Owned)]), Guaranteed)]))
+    Return(adopt Lit(0))

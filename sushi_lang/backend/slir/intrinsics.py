@@ -1,8 +1,10 @@
-"""The calls of an `Intrinsic` callee: `interp`, `print` and `println` (docs/design/ir.md 8.6).
+"""The calls of an `Intrinsic` callee: `interp`, `print`, `println`, `eq` and the statics of
+a primitive type name (docs/design/ir.md 8.6).
 
 Each row gives the LLVM values of every operand to an emitter family of the backend (ruling
 Q7), and the family reads the type of each operand from the callee. Every operand is
-evaluated before the family emits anything (ir.md 11.9). An operand is only read.
+evaluated before the family emits anything (ir.md 11.9). An operand is only read, except
+the array of `string.from_bytes`, which the string takes.
 """
 from __future__ import annotations
 
@@ -12,6 +14,8 @@ from llvmlite import ir
 
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import constant_value, operand_value
+from sushi_lang.backend.types.arrays.addressing import as_array_address
+from sushi_lang.backend.types.arrays.indexing import array_data, array_length
 from sushi_lang.backend.types.contracts import emit_value_eq
 from sushi_lang.backend.types.display import emit_interpolation
 from sushi_lang.semantics.slir import constants as k
@@ -69,8 +73,38 @@ def _eq(state: FunctionState, statement: st.Call) -> ir.Value:
     return state.builder.zext(answer, state.codegen.types.ll_type(BuiltinType.BOOL))
 
 
+def _from_bits(float_type: ir.Type) -> Callable[[FunctionState, st.Call], ir.Value]:
+    """`f64.from_bits(bits)` and `f32.from_bits(bits)`: the bits of the integer, read as a
+    float of the same width."""
+    def row(state: FunctionState, statement: st.Call) -> ir.Value:
+        parts = operands(state, statement)
+        if len(parts) != 1:
+            state.fault(f"a from_bits of {len(parts)} values")
+        return state.builder.bitcast(parts[0][0], float_type, name="from_bits")
+    return row
+
+
+def _string_from_bytes(state: FunctionState, statement: st.Call) -> ir.Value:
+    """`string.from_bytes(nom b)` (#1091): the buffer of the array becomes the buffer of
+    the string, with no copy. The string owns it (`owned` is 1)."""
+    parts = operands(state, statement)
+    if len(parts) != 1:
+        state.fault(f"a from_bytes of {len(parts)} values")
+    (value, ty), = parts
+    codegen = state.codegen
+    address = as_array_address(codegen, value)
+    string = ir.Constant(codegen.types.string_struct, ir.Undefined)
+    string = state.builder.insert_value(string, array_data(codegen, address, ty), 0)
+    string = state.builder.insert_value(string, array_length(codegen, address, ty), 1)
+    return state.builder.insert_value(string, ir.Constant(codegen.i8, 1), 2,
+                                      name="from_bytes")
+
+
 #: One row for each intrinsic that the emitter handles, by the name of the intrinsic.
 INTRINSICS: dict[str, Callable[[FunctionState, st.Call], ir.Value]] = {
+    "f64.from_bits": _from_bits(ir.DoubleType()),
+    "f32.from_bits": _from_bits(ir.FloatType()),
+    "string.from_bytes": _string_from_bytes,
     "eq": _eq,
     "interp": _interp,
     "print": _print,

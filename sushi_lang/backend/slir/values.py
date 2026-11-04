@@ -238,9 +238,10 @@ def _is_string_relation(state: FunctionState, rvalue: r.Binary) -> bool:
 
 
 def _is_contract_relation(state: FunctionState, rvalue: r.Binary) -> bool:
-    """A comparison of two enums of one type, which reads the derived or implemented contract."""
+    """A comparison of two enums or two structs of one type (a tuple is a struct), which
+    reads the derived or implemented contract."""
     left = type_of_operand(state, rvalue.left)
-    return (rvalue.op in COMPARISON_OPS and isinstance(left, EnumType)
+    return (rvalue.op in COMPARISON_OPS and isinstance(left, (EnumType, StructType))
             and left == type_of_operand(state, rvalue.right))
 
 

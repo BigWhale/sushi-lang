@@ -789,35 +789,43 @@ def _unhandled_channel_payload(receiver_type):
 
 def _reject_unhandled_channel_chain(validator: 'TypeValidator', call: MethodCall,
                                     receiver_type) -> bool:
+    """CE2515 for an AST method call (`reject_unhandled_channel_chain`)."""
+    from sushi_lang.semantics.ast import DotCall
+
+    receiver = call.receiver
+    called = receiver.method if isinstance(receiver, (MethodCall, DotCall)) else None
+    return reject_unhandled_channel_chain(validator, call.method, receiver_type, call.loc,
+                                          getattr(receiver, "loc", None), called)
+
+
+def reject_unhandled_channel_chain(validator: 'TypeValidator', method: str, receiver_type,
+                                   loc, receiver_loc, called: Optional[str]) -> bool:
     """CE2515, the resolution FALLBACK of ruling 5.
 
     Fires only when resolution missed on a Result/Maybe receiver AND the method exists
     on the payload type -- which is what tells an unhandled channel from a typo. The
     diagnostic is relational: the primary names the missing method, the note points at
-    the call that returned the wrapper, and the help spells the fix: `??` for a Result,
-    `.or_err(nom e)??` for a Maybe, because `??` takes a Result only.
+    the call that returned the wrapper (`receiver_loc`; `called` is its method name), and
+    the help spells the fix: `??` for a Result, `.or_err(nom e)??` for a Maybe, because
+    `??` takes a Result only.
     """
-    from sushi_lang.semantics.ast import DotCall
     from sushi_lang.semantics.type_predicates import is_instance_of
 
     payload = _unhandled_channel_payload(receiver_type)
-    if payload is None or not _method_exists_on(validator, payload, call.method):
+    if payload is None or not _method_exists_on(validator, payload, method):
         return False
 
-    diag = er.emit_with(validator.reporter, er.ERR.CE2515, call.loc,
-                        method=call.method, wrapper=display_type(receiver_type))
-    receiver = call.receiver
-    receiver_loc = getattr(receiver, "loc", None)
+    diag = er.emit_with(validator.reporter, er.ERR.CE2515, loc,
+                        method=method, wrapper=display_type(receiver_type))
     if receiver_loc is not None:
         diag.note_at("the unhandled channel comes from this call", receiver_loc)
-    called = receiver.method if isinstance(receiver, (MethodCall, DotCall)) else None
     if is_instance_of(receiver_type, "Maybe"):
-        fix = (f" -- e.g. '{called}().or_err(nom <error value>)??.{call.method}()'"
+        fix = (f" -- e.g. '{called}().or_err(nom <error value>)??.{method}()'"
                if called else "")
         diag.help("handle the Maybe first: match on it, '.realise(default)', or give it "
                   f"an error value and propagate with '.or_err(nom e)??'{fix}").emit()
         return True
-    fix = f" -- e.g. '{called}()??.{call.method}()'" if called else ""
+    fix = f" -- e.g. '{called}()??.{method}()'" if called else ""
     diag.help("handle the channel first: match on it, '.realise(default)', or "
               f"propagate with '??'{fix}").emit()
     return True
