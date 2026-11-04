@@ -87,7 +87,8 @@ index, an element write, a slice and an array method). Amended on 2026-11-04 by 
 view local); 7.9, 8.6, 8.12 and 8.13 (the borrow region is a row of `OwnershipResults`);
 7.3, 7.9, 8.9, 8.10 and 8.13 (a `peek` return copies its value into `_0`, and the caller
 holds a view local); 8.2, 8.3, 8.4, 8.6, 8.7, 8.9, 8.10 and 8.13 (a reference binding is an
-address local that a `Ref` writes one time).
+address local that a `Ref` writes one time); 8.2, 8.3, 8.6, 8.7 and 8.9 (`Clone` is the one
+deep copy, and `realise` and `err` lower as `expect` does).
 
 ## The decisions, in one place
 
@@ -2337,12 +2338,10 @@ receiver is the first operand, and every operand is evaluated before the family 
 family keeps its emitters and gives them the operand values (Q7). The primitive family, the
 `string` family, the `result` family and the `maybe` family have a row. A family with no row
 stops. Each operand of a call of the `result` or the `maybe` family is `Guaranteed` (8.3);
-any other convention is an internal error. So the family copies the value that it answers
-when that value owns heap (`copy_out`): `realise` copies the payload on the success path and
-the default on the other path, and `err` copies the error into the `Some`. Each copy is made
-on its own path only, because on the other path the payload field holds the bytes of the
-other variant. The caller keeps the receiver and the default, and drops a temporary of
-either after the call (8.10).
+any other convention is an internal error. `realise` and `err` reach no family: they lower
+as `expect` does, to a switch on the tag (8.9), and the copy of an owning value is a `Clone`
+on its own path. The `Clone` rvalue has ONE emit arm, over `copy_out` (the one deep-clone
+entry of `backend/ownership.py`), and no family calls `copy_out` for `realise` or `err`.
 
 While the migration is in progress, a SLIR shape that the emitter does not handle yet
 stops the compile with the stop code (`emit, <class>`, the name of the SLIR class, for
@@ -2413,11 +2412,16 @@ four sets (gate: `tests/unit/test_method_mutation_is_one_fact.py`):
   `expect`) is `Guaranteed`: a read. The source of the answer is the `self_mode` of the
   signature row of the method. `BuiltinModes` reads it, and `MethodFamily.callee` writes it
   into the callee (`BuiltinMethod.nom_self`). So `realise` and `expect` read a named
-  wrapper, as on `main`: the wrapper stays usable after the call, and the emitter copies an
-  owning payload out of it.
+  wrapper, as on `main`: the wrapper stays usable after the call, and the lowering copies an
+  owning payload out of it with a `Clone` (8.9).
 - **No rule yet** (`NO_RECEIVER_RULE_FAMILIES`): each other family. The set can only
   shrink: the gate holds a pinned copy. A call of a method of such a family stops in
   `typecheck` or in `borrow`.
+
+The `derived_clone` family is in no set and has no row of `METHOD_FAMILIES`: `x.clone()`
+is never a `Builtin` call in SLIR, because it lowers to the rvalue `Clone` (8.7). One deep
+copy has one seam. The refusal of `.clone()` on a type that declares a resource stays in
+`typecheck`.
 
 One function gives the convention of a receiver: `receiver_convention`
 (`semantics/method_effects.py`). It answers None for a family of the effect set that is not
@@ -2611,9 +2615,9 @@ ADDRESS of its receiver instead, for an `Inout` receiver and a `Guaranteed` one 
 storage of the place, or a new slot that holds a constant (`operand_address`). It reads
 the length, the capacity and the data of the array when it runs, after the last argument,
 so a receiver is read after an argument that changes it, and an element receiver is
-evaluated one time (11, rule 9). The method
-`expect` of a `Result` or a `Maybe` is the one exception: it lowers to no call, as an
-`assert` (8.9).
+evaluated one time (11, rule 9). Four methods are the exceptions, and each lowers to no
+call: `expect`, `realise` and `err` of a `Result` or a `Maybe` lower to a switch on the tag,
+as an `assert` does (8.9), and `clone` of any type lowers to the rvalue `Clone` (8.7).
 
 A `Stdlib(decl, module)` callee of SHIR lowers to `Direct(symbol, name, module)`. `name` is
 the name of the function with no alias, and `module` is the `use` path of its module.
@@ -2685,6 +2689,15 @@ is a `T[]` descriptor that views the storage of `place`. **A VIEW** is a local t
 writes, or a view local that a `Copy` writes (8.2): it owns nothing, so drop placement gives
 it no drop, nothing moves it, no other statement writes it, and no statement copies it into
 an owning local (8.13).
+
+**`Clone(operand)`** is the ONE deep copy (ruling R-AC). Every copy of an owning value that
+a read receiver answers is a `Clone`, and `x.clone()` of every type lowers to
+`Clone(copy x)`. Its operand comes from the shape of the receiver: a receiver that is a
+place gives `Clone(copy <projection>)`, a copy of the projection of the place. A receiver
+that is a temporary gives no `Clone`: the value is a `Move` of the projection of the
+temporary, because the temporary is spent whole (an enum payload has no sibling): the move
+of the projection moves the temporary on that path (8.10, rule 3), so it gets no drop
+there. The emitter has one arm for `Clone`, over `copy_out` (8.2).
 
 `Ref(place, mode)` writes an address local (8.2), and nothing else: the address of `place`
 with the mode `peek` or `poke`. It is the one write of that local.
@@ -2777,7 +2790,9 @@ backstop of the checker, as on the AST backend.
 | `Slice` | the bounds into locals of the statement (an inclusive end plus one), `end <= len` and `start <= end` as `u32` compares, `&`, `SwitchInt`, `Trap("RE2028", [start, end, length])` on the failing edge, then the `Slice` into a view local; never unchecked. A check that the constant bounds prove is left out |
 | a method of an array | a `Call` of `Builtin(BuiltinMethod)`: the receiver first (a `Copy` of its place, a constant, or a temporary of the statement), then each argument with the convention of its row (8.3). The emitter gives the family the address of the receiver (8.6), and one emitter of the family serves a `T[N]` and a `T[]` (`backend/types/arrays/dispatcher.py`) |
 | `Assert` | `SwitchInt(c, [(0, fail_bb)], otherwise: next_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2026", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state of the locals before the failing block. The blocks are made in the order fail, next. A condition local ends at the top of the two blocks, as for an `If` |
-| `expect(msg)` on a `Result` or a `Maybe` | the receiver into a place (a constant into a temporary), `Discriminant` into a local, and `SwitchInt(tag, [(success tag, next_bb)], otherwise: fail_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2029", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state before the failing block, and reads the payload through `Downcast` + `Field`: a `Copy` of a plain payload and a `Clone` of an owning one, because the receiver is a read (8.3); a new value as the receiver is a temporary that its statement drops. The blocks are made in the order fail, next |
+| `expect(msg)` on a `Result` or a `Maybe` | the receiver into a place (a constant into a temporary), `Discriminant` into a local, and `SwitchInt(tag, [(success tag, next_bb)], otherwise: fail_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2029", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state before the failing block, and reads the payload through `Downcast` + `Field`: a `Copy` of a plain payload. An owning payload of a receiver that is a place is a `Clone(copy <projection>)`, because the receiver is a read (8.3); of a receiver that is a temporary it is a `Move` of the projection, which moves the temporary (8.7). A new value as the receiver is a temporary of its statement, which drops it where it is not moved. The blocks are made in the order fail, next |
+| `realise(default)` on a `Result` or a `Maybe`, and `err()` on a `Result` | lowered as `expect` is: the receiver into a place, `Discriminant` into a local and `SwitchInt` on the tag; no call. `realise` writes the payload on the success path (`Downcast` + `Field`) and the default on the other path; `err` writes `Some` of the error on the `Err` path and `None` on the other path. A plain value is a `Copy`. An owning value of a receiver that is a place is a `Clone(copy <projection>)`, and of a receiver that is a temporary a `Move` of the projection, which moves the temporary on that path (8.7). The default of `realise` is a `Move` of its temporary, or a `Clone` of a place. Each copy stands on its own path, because on the other path the payload field holds the bytes of the other variant |
+| `x.clone()`, of any type | the rvalue `Clone(copy x)` (8.7); no call |
 | `StructInit`, `TupleInit` | each field (each part) in the WRITTEN order (R1, 7.4), then ONE `Aggregate(AggStruct)` (`Aggregate(AggTuple)`) of the instance type, with the parts in the declaration order. A new value goes into a temporary of the statement in that order. A place, or a constant, is read at the `Aggregate`. A place is copied into a temporary first when a later field in the written order can call a function, because the call can change the place through a `poke`; a literal, a name of a constant, a place, an operator and a construction over such values call none. A literal and a name of a constant never change, so they get no temporary |
 | `Field` read | a place: `Copy` of `Field(place, index)`, with the index of the typecheck row; a field of a field is a projection of the projection. A base that is no place (a new value, a constant) goes into a temporary of the statement first, and the field is a `Copy` of the projection of the temporary; the statement drops the temporary at its end (rule 2) |
 | a field write (`p.x := v`) | the new value first, then the store into `Field(place, index)`. A new value that is `and` or `or` goes into a temporary first, because its left operand is written before its right operand reads the place (rule 6) |
