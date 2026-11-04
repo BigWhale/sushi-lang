@@ -100,7 +100,7 @@ class BorrowChecker:
         self.active_borrows: Set[Owner] = set()
         # One frame per open block; `check_block` pops it, which is what gives a
         # `let`-borrow a LEXICAL lifetime. `active_borrows` clears per statement.
-        self._scope_binding_borrows: list[list[tuple[LocalId, LocalId]]] = []
+        self._scope_binding_borrows: list[list[tuple[Owner, Owner]]] = []
         # The locals that each open block declared, the parameters in the first: an exit
         # of a block is an exit of each of them (`flow.record_exit`).
         self.block_locals: list[list[LocalId]] = []
