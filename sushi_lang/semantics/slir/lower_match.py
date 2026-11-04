@@ -2,10 +2,10 @@
 
 A match on an integer, a string or an enum is ONE switch, or a chain of tests over the
 paths of each pattern. A match on a plain tuple is always a chain: the paths of a tuple
-pattern are the `Field` projections of its parts. The arm is a free function that takes the `Lowering` of `lower.py`
-first, and the table of `lower.py` names it. The statements of an arm with its binders and
-the join are the arms of `lower_control.py`. This module reads `lower.py` for its types
-only, so no import cycle exists at run time.
+pattern are the `Field` projections of its parts. The arm is a free function that takes
+the `Lowering` of `lower.py` first, and the table of `lower.py` names it. The statements
+of an arm with its binders and the join are the arms of `lower_control.py`. This module
+reads `lower.py` for its types only, so no import cycle exists at run time.
 """
 from __future__ import annotations
 
