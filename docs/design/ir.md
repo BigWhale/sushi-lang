@@ -806,7 +806,12 @@ and with no error in its body. A call is the one exception: its callee decides i
 a call of a function that the pass finds answers what the function yields also when the
 call has an error of its own: a wrong count, an argument that does not fit, a wrong marker,
 or a function that is private to another unit (CE3005, where the pass checks no argument).
-A later fault of that value (an unhandled `Result`) is a fault of its own. A call of a name
+A later fault of that value (an unhandled `Result`) is a fault of its own. Three operators
+answer after an error of their own too, because the error does not change the type of the
+value: a `??` of a `Result` answers its success value after CE0131 and CE2511, and a bitwise
+operator answers the type of its left operand after CE2004, CE2510 and CE2512. So `let string
+s = f()??` in a body with no channel is CE0131 and CE2002, as on main. An arithmetic operand
+whose type names no type (CE2001) is no second fault (CE2518). A call of a name
 that no function takes (CE2008) or that two imports bring (CE3012) answers nothing. The
 display type of a hole of an `Interp` and of the argument of `print` is the type of the
 value with no `peek` or `poke`. A `??` in a body with no channel has no answer and no
@@ -1056,12 +1061,23 @@ check their arguments with the one argument check, at the declared mode of each 
 (`CalleeKind.METHOD`, `CalleeKind.STATIC_METHOD`), and the call yields the `Result` of the
 channel of the method, or its bare return value, also after an error of an argument. A
 `self` in the body of a static is the error hole [CE0134](../error-catalog.md#ce0134) of
-lowering. These calls still stop the walk with their label: a perk method (group C6), a
-receiver that is not plain and a static of a type that is not plain (C1: an instance of a
-generic type, an array, an iterator, a `Result`, a `Maybe`, a type parameter), a method
-with a method-level type parameter (C1), a method with a `peek` return (B8), a call through
-a field of a function type that no method of the struct names (C2), and a static of
-`BUILTIN_STATICS` (B2, B4).
+lowering. An array of a plain element that owns nothing (`i32[]`, `u8[3]`) takes the
+extension methods of a concrete target (`extend i32[] total()`) as a plain type does
+(`_takes_user_methods`). A method of a `T[]` that no concrete target declares is the copy
+of a template (`extend T[]`, `xs.map(f)`): the walk stops before the copy is cut, so a copy
+never runs ahead of its group. A payload method on a `Result` or a `Maybe` that no method of
+the wrapper answers (`xs.first_big().doubled()`) is [CE2515](../error-catalog.md#ce2515)
+at the call, with a note at the receiver, through the one emitter
+(`reject_unhandled_channel_chain`, `calls/methods.py`). A static of a primitive type name
+(`f64.from_bits`, `string.from_bytes`) is the callee row `BuiltinStatic` (7.6), and its
+one argument goes through the one argument check at the type and the mode of its row of
+`PRIMITIVE_STATICS`. These calls still stop the walk with their label: a perk method (group
+C6), a receiver that is not plain and a static of a type that is not plain (C1: an instance
+of a generic type, an iterator, a `Result`, a `Maybe`, a type parameter; a method of an
+instance of a generic type, `extend Maybe@(i32)` included, is the copy of a template), a
+method with a method-level type parameter (C1), a method with a `peek` return (B8), a call
+through a field of a function type that no method of the struct names (C2), and a
+container static of `BUILTIN_STATICS` (B2, B4).
 
 **A stdlib function.** A bare name that no function of the unit's scope takes is the
 function of a registry stdlib module that the unit imports, when one has it
@@ -1216,7 +1232,14 @@ source writes it (`let Pair@(i32, i32) v = Pair(1, 2)`), from the text of the ho
 other hole of CE6102 is a `DotCall` or a
 `MethodCall` hole, which a later group types, and it stops the walk of its body. At
 the end of the analysis, an error hole whose code no diagnostic reported is an internal
-error, CE0155. An error of the construct around the hole can come first, and the hole
+error, CE0155. The error hole of a name with no declaration, of a jump outside a loop and of
+a `self` in a static is the error of a pass before `typecheck` (`REPORTED_BEFORE`,
+`visit/results.py`): when that error is reported, the hole has no answer and the walk of the
+body goes on, so the later faults of the body are reported too (a CE2002 after a CE1001);
+the body does not go on to `lift` and `borrow`. The error hole of a named argument is
+[CE6104](../error-catalog.md#ce6104) at the hole, with its `named`, and the hole of a name
+that a namespace does not hold is [CE2008](../error-catalog.md#ce2008) at the call, with
+the closest name of the namespace as a help (`reject_unknown_namespace_call`). An error of the construct around the hole can come first, and the hole
 accepts its code too: in a constant or a `var` initializer the constant evaluator refuses
 the first node that is not constant (CE0108), and the borrow of a slice in a `let peek` is
 refused as a borrow of a temporary (CE2404). A new case of this kind is added with its
@@ -1392,6 +1415,9 @@ LoopSource = Cond(cond: Expr)                                              # `wh
            | Items(iterable: Expr, binder: LocalId | Discard, by: Bare | Ref(BorrowMode, loc))
                                                                            # `foreach`
 ```
+
+`typecheck` reports CE2423 for a `Ref` binder over a range after the check of the range, and
+does not walk the body of that loop, as on main.
 
 `LoopSource` is what the SOURCE says: a condition, or an iterable with its binder and the
 binder's written mode. The binder `_` is `Discard`, and `peek _` keeps its mode. The
@@ -2180,8 +2206,8 @@ incoming address (8.3); a value parameter is stored into its slot at the entry, 
 `return` loads `_0`. A signature that does not agree with the conventions or with the type
 of `_0` is an internal error. `StorageLive` and `StorageDead` emit nothing. An operator
 calls the value half of its emitter family, which takes LLVM values (Q7), and a comparison
-of two strings calls the string relation of that family. A comparison of two enums of one
-type calls the contract seam (`emit_contract_relation`,
+of two strings calls the string relation of that family. A comparison of two enums or two
+structs of one type (a tuple is a struct) calls the contract seam (`emit_contract_relation`,
 `backend/expressions/operators.py`): `==` and `!=` read the `Eq` contract, the order
 operators read the `Ord` contract, an implementation of the perk first and else the derived
 one (`emit_value_eq`, `emit_value_compare`). The operand of any other operator is an
