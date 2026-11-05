@@ -470,6 +470,46 @@ def test_a_list_method_with_the_conventions_of_its_rows_passes(name: str, args):
     _passes(_list_method(name, *args))
 
 
+MAP_I32 = StructType(name="HashMap<i32, i32>", fields=(("buckets", I32), ("size", I32),
+                                                       ("capacity", I32), ("tombstones", I32)))
+
+
+def _map_method(name: str, *args: tuple[p.Operand, Convention]) -> SlirFunction:
+    """`_1 = hashmap.<name>(args)` over the map `_2`, which the function does not own."""
+    call = st.Call(_local(1), st.Builtin(BuiltinMethod("hashmap", name, nom_self=False), ()),
+                   args, BAD)
+    return _function([BLANK, BLANK, MAP_I32],
+                     _block(0, _ret(), call, _set(0, r.Use(p.Const(k.Blank())))),
+                     params=((2, INOUT),))
+
+
+@pytest.mark.parametrize("name, args", [
+    ("insert", ((_copy(2), GUARANTEED), (FOUR, OWNED), (FOUR, OWNED))),
+    ("insert", ((_copy(2), INOUT), (FOUR, GUARANTEED), (FOUR, OWNED))),
+    ("insert", ((_copy(2), INOUT), (FOUR, OWNED), (FOUR, GUARANTEED))),
+    ("get", ((_copy(2), GUARANTEED), (FOUR, OWNED))),
+    ("remove", ((_copy(2), GUARANTEED), (FOUR, GUARANTEED))),
+    ("free", ((_copy(2), GUARANTEED),)),
+    ("len", ((_copy(2), INOUT),)),
+])
+def test_a_map_method_with_another_convention_is_refused(name: str, args):
+    """The rule of a List method holds for a HashMap method: the receiver from
+    `receiver_convention`, each argument from `argument_conventions` (ir.md 8.3, 8.13)."""
+    _refused(_map_method(name, *args), "declared conventions")
+
+
+@pytest.mark.parametrize("name, args", [
+    ("insert", ((_copy(2), INOUT), (FOUR, OWNED), (FOUR, OWNED))),
+    ("get", ((_copy(2), GUARANTEED), (FOUR, GUARANTEED))),
+    ("remove", ((_copy(2), INOUT), (FOUR, GUARANTEED))),
+    ("contains_key", ((_copy(2), GUARANTEED), (FOUR, GUARANTEED))),
+    ("free", ((_copy(2), INOUT),)),
+    ("len", ((_copy(2), GUARANTEED),)),
+])
+def test_a_map_method_with_the_conventions_of_its_rows_passes(name: str, args):
+    _passes(_map_method(name, *args))
+
+
 def _static(name: str, *args: tuple[p.Operand, Convention]) -> st.Call:
     """`_1 = <name>(args)`: a static of a built-in container, an intrinsic of its name."""
     return st.Call(_local(1), st.Builtin(Intrinsic(name), tuple(I32 for _ in args)), args, BAD)

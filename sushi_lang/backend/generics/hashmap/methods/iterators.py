@@ -1,5 +1,8 @@
 """The four HashMap<K, V> iterators: `keys()`, `values()`, `entries()`, `pairs()`.
 
+The borrow pass stops their calls (C3), so the rows of `HASHMAP_EMITTERS` that name them
+take no operands yet, and `_emit_bucket_iterator` keeps its AST argument half until then.
+
 Each walks the buckets, `{Entry<K, V>[] buckets, i32 size, i32 capacity, i32 tombstones}`,
 and steps over a bucket that holds no entry. The cursor is the bucket index, the capacity
 and the bucket data; `backend/runtime/iterators.py` makes the value of it (#1259).
@@ -17,30 +20,6 @@ from sushi_lang.internals.errors import raise_internal_error
 # The fields of a HashMap and of its bucket descriptor.
 _BUCKETS, _CAPACITY = 0, 2
 _KEY, _VALUE, _STATE = 0, 1, 2
-
-
-def emit_hashmap_keys(codegen: Any, call: MethodCall, hashmap_value: ir.Value,
-                      hashmap_type: StructType) -> ir.Value:
-    """Emit HashMap<K, V>.keys() -> Iterator<peek K>"""
-    return _emit_bucket_iterator(codegen, call, hashmap_value, hashmap_type)
-
-
-def emit_hashmap_values(codegen: Any, call: MethodCall, hashmap_value: ir.Value,
-                        hashmap_type: StructType) -> ir.Value:
-    """Emit HashMap<K, V>.values() -> Iterator<peek V>"""
-    return _emit_bucket_iterator(codegen, call, hashmap_value, hashmap_type)
-
-
-def emit_hashmap_entries(codegen: Any, call: MethodCall, hashmap_value: ir.Value,
-                         hashmap_type: StructType) -> ir.Value:
-    """Emit HashMap<K, V>.entries() -> Iterator<peek Entry<K, V>>"""
-    return _emit_bucket_iterator(codegen, call, hashmap_value, hashmap_type)
-
-
-def emit_hashmap_pairs(codegen: Any, call: MethodCall, hashmap_value: ir.Value,
-                       hashmap_type: StructType) -> ir.Value:
-    """Emit HashMap<K, V>.pairs() -> Iterator<(peek K, peek V)>"""
-    return _emit_bucket_iterator(codegen, call, hashmap_value, hashmap_type)
 
 
 def bucket_item_type(codegen: Any, hashmap_type: StructType, method: str) -> Type:

@@ -1,15 +1,9 @@
-"""The ir-free half of HashMap<K, V>: method validation and type-table plumbing.
-
-Port templates: `_validate_hashmap_insert` and `_validate_hashmap_key_method` call
-`TypeValidator.validate_expression`, and that API is deleted. No pass reaches them
-today. Group B4 (`HashMap@(K, V)`) ports them to SHIR inputs before a SHIR pass calls
-them.
-"""
+"""The ir-free half of HashMap<K, V>: the method rows, the key rule and the type-table
+plumbing. The typecheck arm of the family is `passes/types/visit/hashmap_methods.py`."""
 
 from types import MappingProxyType
 from typing import Any, Literal, Mapping, Optional, TYPE_CHECKING, overload
 from sushi_lang.semantics.generics.interned import interned_name
-from sushi_lang.semantics.ast import MethodCall, Call
 from sushi_lang.semantics.method_effects import CONTAINER_INSERT_METHODS
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.typesys import StructType, Type, BuiltinType
@@ -23,7 +17,7 @@ if TYPE_CHECKING:
 
 
 #: Every built-in `HashMap@(K, V)` method and the number of arguments it takes. The count
-#: is checked in the typecheck pass (CE2009) before the check below runs; `new` is the
+#: is checked in the typecheck pass (CE2009) before the arguments are read; `new` is the
 #: static `HashMap.new()`, and the same row answers it.
 HASHMAP_METHOD_ARITY: Mapping[str, int] = MappingProxyType({
     "new": 0, "insert": 2, "get": 1, "contains_key": 1, "remove": 1,
@@ -43,25 +37,6 @@ HASHMAP_METHOD_MODES = BuiltinModes(
 def is_builtin_hashmap_method(method_name: str) -> bool:
     """Check if a method name is a builtin HashMap<K, V> method."""
     return method_name in HASHMAP_METHOD_ARITY
-
-
-def validate_hashmap_method_with_validator(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any,
-    validator: Any
-) -> None:
-    """Validate a HashMap<K, V> method call whose count is correct: the argument types."""
-    if call.method not in HASHMAP_METHOD_ARITY:
-        raise_internal_error("CE0085", method=call.method)
-    if call.method == "insert":
-        _validate_hashmap_insert(call, hashmap_type, reporter, validator)
-    elif call.method in _KEY_METHODS:
-        _validate_hashmap_key_method(call, hashmap_type, reporter, validator)
-
-
-#: The methods whose one argument is a key.
-_KEY_METHODS = frozenset({"get", "contains_key", "remove"})
 
 
 @overload
@@ -165,73 +140,6 @@ def _key_supports_equality(key_type: Type, validator: Any,
     return contract_of(key_type, EQ, resolve=resolve,
                        overridden=override_of(validator.derived_methods, EQ),
                        refused=refused)[0]
-
-
-def _validate_hashmap_insert(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any,
-    validator: Any
-) -> None:
-    """Validate HashMap<K, V>.insert(key, value) method call."""
-    from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
-    from sushi_lang.semantics.passes.types.compatibility import types_compatible
-
-    key_type, value_type = parse_hashmap_types(hashmap_type, validator)
-    if key_type is None or value_type is None:
-        for arg in call.args:
-            validator.validate_expression(arg)
-        return
-
-    expected_types = [key_type, value_type]
-    for i, (arg, expected_ty) in enumerate(zip(call.args, expected_types, strict=False)):
-        propagate_types_to_value(validator, arg, expected_ty)
-
-        if isinstance(arg, Call) and hasattr(arg.callee, 'id') and isinstance(expected_ty, StructType):
-            struct_name = arg.callee.id
-            if struct_name in validator.generic_struct_table.by_name:
-                arg.callee.id = expected_ty.name
-
-        validator.validate_expression(arg)
-
-        if expected_ty is not None:
-            arg_type = validator.infer_expression_type(arg)
-            if arg_type is not None and not types_compatible(validator, arg_type, expected_ty):
-                er.emit(reporter, er.ERR.CE2006, arg.loc,
-                       index=i+1, expected=display_type(expected_ty), got=display_type(arg_type))
-
-
-def _validate_hashmap_key_method(
-    call: MethodCall,
-    hashmap_type: StructType,
-    reporter: Any,
-    validator: Any,
-) -> None:
-    """Validate HashMap<K, V> methods that take a key argument (get, contains_key, remove)."""
-    from sushi_lang.semantics.passes.types.propagation import propagate_types_to_value
-    from sushi_lang.semantics.passes.types.compatibility import types_compatible
-
-    key_type, _ = parse_hashmap_types(hashmap_type, validator)
-    if key_type is None:
-        validator.validate_expression(call.args[0])
-        return
-
-    arg = call.args[0]
-
-    propagate_types_to_value(validator, arg, key_type)
-
-    if isinstance(arg, Call) and hasattr(arg.callee, 'id') and isinstance(key_type, StructType):
-        struct_name = arg.callee.id
-        if struct_name in validator.generic_struct_table.by_name:
-            arg.callee.id = key_type.name
-
-    validator.validate_expression(arg)
-
-    if key_type is not None:
-        arg_type = validator.infer_expression_type(arg)
-        if arg_type is not None and not types_compatible(validator, arg_type, key_type):
-            er.emit(reporter, er.ERR.CE2006, arg.loc,
-                   index=1, expected=display_type(key_type), got=display_type(arg_type))
 
 
 def hashmap_generic_struct() -> 'GenericStructType':

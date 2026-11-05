@@ -39,16 +39,10 @@ PLAIN_DECORATORS = frozenset({"dataclass", "property", "staticmethod", "classmet
 _SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 #: `path:qualname` -> why it stays: the later group that needs it, or its reflective reader.
-KEPT: dict[str, str] = {
-    "sushi_lang/backend/generics/hashmap/__init__.py:emit_hashmap_method":
-        "kept for B4: the HashMap method family; the SLIR emitter calls it with operands "
-        "there, and its AST argument half goes then",
-}
+KEPT: dict[str, str] = {}
 
 #: The rows of `KEPT` at the day of the pin. A row may leave both; none may join.
-PINNED_KEPT: frozenset[str] = frozenset({
-    "sushi_lang/backend/generics/hashmap/__init__.py:emit_hashmap_method",
-})
+PINNED_KEPT: frozenset[str] = frozenset()
 
 
 @dataclass(eq=False)

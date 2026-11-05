@@ -4,10 +4,9 @@ Each container package (`List@(T)`, `HashMap@(K, V)`) builds one table at import
 dispatcher looks the method up here. The key set of each table is the key set of the
 semantic arity table; `tests/unit/test_container_emitters_match_the_table.py` holds it.
 
-The rows of the `List@(T)` table take operands (ruling Q7): the SLIR emitter evaluates
-every operand first, and the row gets the address of the receiver, the receiver type and
-the value of each argument (`emit_with_operands`). The rows of the `HashMap@(K, V)` table
-still take the AST call (`emit_from_table`).
+The rows take operands (ruling Q7): the SLIR emitter evaluates every operand first, and
+the row gets the address of the receiver, the receiver type and the value of each argument
+(`emit_with_operands`).
 """
 from __future__ import annotations
 
@@ -16,7 +15,6 @@ from typing import Any, Callable, Mapping, NamedTuple, Optional, Sequence
 import llvmlite.ir as ir
 
 from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import BuiltinType, StructType
 
 
@@ -24,10 +22,8 @@ class ContainerMethod(NamedTuple):
     """One row of a container's emitter table: the emitter, whether it answers a `bool`,
     and whether it is a static (`List.new`), which builds a value and has no receiver.
 
-    A row with operands takes `(codegen, receiver_address, receiver_type, argument_values)`;
-    the receiver address of a static is None. A row of the AST half takes `(codegen, expr,
-    receiver_value, receiver_type)`. A `bool` answer is converted to the shape the caller
-    asks for after the call.
+    A row takes `(codegen, receiver_address, receiver_type, argument_values)`; the receiver
+    address of a static is None. A `bool` answer is an `i8` after the call.
     """
 
     emit: Callable[[Any, Any, Any, Any], ir.Value]
@@ -72,22 +68,3 @@ def _row(table: Mapping[str, ContainerMethod], missing_code: str,
     if row is None:
         raise_internal_error(missing_code, method=name)
     return row
-
-
-def emit_from_table(
-    table: Mapping[str, ContainerMethod],
-    missing_code: str,
-    codegen: Any,
-    expr: MethodCall | DotCall,
-    receiver_value: Any,
-    receiver_type: StructType,
-    to_i1: bool,
-) -> ir.Value:
-    """Look up the row of `expr.method` in `table`, call its emitter, and shape a `bool`."""
-    row = table.get(expr.method)
-    if row is None:
-        raise_internal_error(missing_code, method=expr.method)
-    result = row.emit(codegen, expr, receiver_value, receiver_type)
-    if row.answers_bool:
-        result = codegen.utils.bool_answer(result, to_i1)
-    return result

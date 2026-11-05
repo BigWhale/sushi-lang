@@ -1,7 +1,6 @@
 """HashMap<K, V> mutation method implementations."""
 
-from typing import Any
-from sushi_lang.semantics.ast import MethodCall
+from typing import Any, Sequence
 from sushi_lang.semantics.typesys import StructType
 import llvmlite.ir as ir
 from ..types import HashMapFields, get_entry_type, get_hashmap_field_ptrs, emit_key_hash_i32, ENTRY_OCCUPIED, ENTRY_TOMBSTONE
@@ -12,7 +11,7 @@ from sushi_lang.backend.constants import (
     ENTRY_STATE_INDICES,
 )
 from sushi_lang.semantics.generics.hashmap import parse_hashmap_types
-from ..probe import emit_find_key, emit_lookup_key, emit_lookup_maybe, emit_probe_loop, ProbeSlot
+from ..probe import emit_find_key, emit_lookup_maybe, emit_probe_loop, lookup_key, ProbeSlot
 from sushi_lang.backend.types.contracts import emit_value_eq
 from ..utils import (
     emit_insert_entry,
@@ -30,11 +29,12 @@ from sushi_lang.backend.destructors import destroy_old_value
 
 def emit_hashmap_insert(
     codegen: Any,
-    expr: MethodCall,
     hashmap_value: ir.Value,
-    hashmap_type: StructType
+    hashmap_type: StructType,
+    args: Sequence[ir.Value],
 ) -> ir.Value:
-    """Emit HashMap<K, V>.insert(K key, V value) -> ~"""
+    """Emit HashMap<K, V>.insert(K key, V value) -> ~. The key and the value are `Owned`
+    operands, and the map stores each shallowly: it owns both from here on."""
     builder = codegen.builder
 
     key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
@@ -43,20 +43,9 @@ def emit_hashmap_insert(
 
     one_i32 = ir.Constant(codegen.types.i32, 1)
 
-    if len(expr.args) != 2:
-        raise_internal_error("CE0023", method="insert", expected=2, got=len(expr.args))
-
-    # BOTH the key and the value are stored shallowly, so the map takes ownership of each
-    # and frees them on `.free()`/scope exit -- two consuming uses, not one. The key was
-    # the half that got overlooked, so a heap-owning key (a string bound out of a split()
-    # array, say) was freed by its own RAII and by the map.
-    from sushi_lang.backend.ownership import ConsumingUse, consume
-    key_value = consume(codegen, expr.args[0],
-                        codegen.expressions.emit_expr(expr.args[0]),
-                        key_type, ConsumingUse.CONTAINER_INSERT)
-    value_value = consume(codegen, expr.args[1],
-                          codegen.expressions.emit_expr(expr.args[1]),
-                          value_type, ConsumingUse.CONTAINER_INSERT)
+    if len(args) != 2:
+        raise_internal_error("CE0023", method="insert", expected=2, got=len(args))
+    key_value, value_value = args
 
     # Get pointers to HashMap fields
     # hashmap_value should be a POINTER to the HashMap struct (like array_value for arrays)
@@ -182,16 +171,16 @@ def emit_hashmap_insert(
 
 def emit_hashmap_remove(
     codegen: Any,
-    expr: MethodCall,
     hashmap_value: ir.Value,
-    hashmap_type: StructType
+    hashmap_type: StructType,
+    args: Sequence[ir.Value],
 ) -> ir.Value:
     """Emit HashMap<K, V>.remove(K key) -> Maybe<V>"""
     builder = codegen.builder
 
     key_type, value_type = parse_hashmap_types(hashmap_type, codegen, on_missing="raise")
     one_i32 = ir.Constant(codegen.types.i32, 1)
-    key_value = emit_lookup_key(codegen, expr, key_type, "remove")
+    key_value = lookup_key(args, "remove")
 
     fields = get_hashmap_field_ptrs(codegen, hashmap_value)
     size_ptr, capacity_ptr = fields.size, fields.capacity

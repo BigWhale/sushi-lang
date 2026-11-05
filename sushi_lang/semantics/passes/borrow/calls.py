@@ -29,11 +29,10 @@ from .borrows import (
     BY_ADDRESS, LATER_ROOTS, acquire_borrow, borrow_of_constant, check_borrow,
     register_implicit_borrow)
 from .iterators import take_lent_iterator
-from .consume import consume, consume_each, read_through_receiver, source_provenance
+from .consume import consume, read_through_receiver, source_provenance
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, spelled
 from .expressions import stop_at_a_field_take
-from .methods import CONTAINER_INSERT_METHODS
-from .reads import OWNER_STEPS, borrow_owner, called_on, owner_state, read_type
+from .reads import OWNER_STEPS, borrow_owner, owner_state, read_type
 from .writes import check_owner_not_borrowed, reject_readonly_write
 from .state import BorrowState
 
@@ -41,17 +40,6 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId
 
     from . import BorrowChecker
-
-
-def maybe_mark_container_insert(checker: 'BorrowChecker', expr: MethodLike) -> None:
-    """`l.push(x)` / `m.insert(k, v)` takes ownership -- the CONTAINER_INSERT use."""
-    receiver = called_on(expr, *CONTAINER_INSERT_METHODS)
-    # `read_type` is the ONE walker for read-through-an-owner shapes. A narrower twin
-    # here did not unwrap TryExpr, so `outer.get(0)??.push(5)` went unstamped and the
-    # seam reported CE0129.
-    if receiver is None or not checker.types.is_container(read_type(checker, receiver)):
-        return
-    consume_each(checker, expr.args)
 
 
 def check_call(checker: 'BorrowChecker', node: e.Call) -> None:

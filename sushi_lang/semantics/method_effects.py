@@ -74,7 +74,8 @@ def effect_of(method: str) -> MethodEffect:
 # and a user extension named `push` are other methods with the same name.
 ARRAY_FAMILY = "array"
 LIST_FAMILY = "list"
-EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, "hashmap", "own"})
+HASHMAP_FAMILY = "hashmap"
+EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY, "own"})
 
 PRIMITIVE_FAMILY = "primitive"
 STRING_FAMILY = "string"
@@ -89,7 +90,7 @@ RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
 CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY})
 # The effect families whose group wrote the receiver rule: a method whose row `mutates`
 # takes its receiver `Inout`, every other method reads it. The set can only grow.
-RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY})
+RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY})
 # No rule yet: the set can only shrink.
 NO_RECEIVER_RULE_FAMILIES = frozenset({
     "iterator", "foreign_ptr", "array_hash", "derived_hash", "contract", "function",
@@ -105,6 +106,7 @@ CLONE_FAMILY = "derived_clone"
 VIEW_ANSWERS: dict[str, frozenset[str]] = {
     ARRAY_FAMILY: frozenset({"get", "first", "last"}),
     LIST_FAMILY: frozenset({"get", "first", "last"}),
+    HASHMAP_FAMILY: frozenset({"get"}),
 }
 
 # The arguments of a storing method that only give a position, by family and method: the
@@ -156,13 +158,6 @@ def argument_conventions(family: str, method: str, count: int) -> tuple[Conventi
     positions = POSITION_ARGUMENTS.get((family, method), frozenset())
     return tuple(Convention.OWNED if owned and index not in positions
                  else Convention.GUARANTEED for index in range(count))
-
-
-def callee_effect(method: str, family: Optional[str]) -> MethodEffect:
-    """The effect of a call whose callee the typecheck pass stamped as `family`."""
-    if family not in EFFECT_FAMILIES:
-        return _NO_EFFECT
-    return effect_of(method)
 
 
 def methods_where(flag: str) -> frozenset[str]:

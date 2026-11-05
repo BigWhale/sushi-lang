@@ -217,12 +217,6 @@ def consume(checker: 'BorrowChecker', node: e.ShirExpr,
     return decision
 
 
-def consume_each(checker: 'BorrowChecker', args) -> None:
-    """Consume every argument of an ownership sink."""
-    for arg in args:
-        consume(checker, arg)
-
-
 def reject_move_of_storage(checker: 'BorrowChecker', node: e.ConstRef | e.StorageRef,
                            decision: Ownership) -> bool:
     """CE2436 for a take of a constant or a `var` that would be a move. True when it was

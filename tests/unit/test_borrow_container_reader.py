@@ -29,13 +29,6 @@ def test_hashmap_element_is_its_value_argument():
     assert TypeQueries(SymbolTables()).element_type(MAP_TO_POINT) is POINT
 
 
-def test_containers_are_known_by_their_base():
-    queries = TypeQueries(SymbolTables())
-    assert queries.is_container(LIST_OF_POINT)
-    assert queries.is_container(MAP_TO_POINT)
-    assert not queries.is_container(POINT)
-
-
 def test_no_second_reader_in_the_borrow_pass():
     tree = ast.parse(inspect.getsource(borrow_types))
     names = {n.name for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.ClassDef))}

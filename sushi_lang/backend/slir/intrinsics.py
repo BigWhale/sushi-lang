@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Callable
 
 from llvmlite import ir
 
-from sushi_lang.backend.generics.hashmap.methods.core import emit_hashmap_new
+from sushi_lang.backend.generics.hashmap import emit_hashmap_static
 from sushi_lang.backend.generics.list import emit_list_static
 from sushi_lang.backend.generics.own import emit_own_alloc
 from sushi_lang.backend.slir.state import FunctionState
@@ -135,8 +135,10 @@ def _list_static(name: str) -> _StaticEmitter:
                                                                values)
 
 
-def _hashmap_new(codegen: LLVMCodegen, _values: list[ir.Value], map_type: StructType) -> ir.Value:
-    return emit_hashmap_new(codegen, map_type)
+def _hashmap_static(name: str) -> _StaticEmitter:
+    """A static of `HashMap@(K, V)`, through its row of the HashMap table."""
+    return lambda codegen, values, map_type: emit_hashmap_static(codegen, name, map_type,
+                                                                 values)
 
 
 def _own_alloc(codegen: LLVMCodegen, values: list[ir.Value], own_type: StructType) -> ir.Value:
@@ -150,7 +152,7 @@ INTRINSICS: dict[str, Callable[[FunctionState, st.Call], ir.Value]] = {
     "string.from_bytes": _string_from_bytes,
     "List.new": _container_static(_list_static("new"), 0),
     "List.with_capacity": _container_static(_list_static("with_capacity"), 1),
-    "HashMap.new": _container_static(_hashmap_new, 0),
+    "HashMap.new": _container_static(_hashmap_static("new"), 0),
     "Own.alloc": _container_static(_own_alloc, 1),
     "eq": _eq,
     "interp": _interp,

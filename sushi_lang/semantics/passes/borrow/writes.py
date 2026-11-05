@@ -7,15 +7,13 @@ from typing import Callable, Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.errors.registry import ErrorMessage
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr, MemberAccess, MethodLike
+from sushi_lang.semantics.ast import Expr, MemberAccess
 from sushi_lang.semantics.places import Step, walk_place
-from sushi_lang.semantics.param_modes import ParamMode, receiver_mode
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.typesys import ReferenceType
 
 from .diagnostics import parameter_escape, spelled, write_escape
-from .methods import MethodEffect, callee_effect
-from .reads import borrow_owner, chain_call_boundary, slice_on_path
+from .reads import chain_call_boundary, slice_on_path
 from .state import BorrowState
 
 if TYPE_CHECKING:
@@ -120,41 +118,6 @@ READONLY_RECEIVERS: tuple[ReadOnlyReceiver, ...] = (
         refuses_a_rebind=True,
     ),
 )
-
-
-def _effect(expr: MethodLike) -> MethodEffect:
-    """The method-effect row of the callee: a built-in family's row, or none."""
-    return callee_effect(expr.method, expr.callee_builtin_family)
-
-
-def changes_its_receiver(expr: MethodLike) -> bool:
-    """Does this call change the value it is called on?"""
-    # The CALLEE decides, never the name alone: a built-in of a family the effect table
-    # describes, or a `poke self` method (#327). The typecheck pass stamps both on the
-    # node, so this pass never re-resolves.
-    return (_effect(expr).mutates
-            or receiver_mode(expr.callee_self_mode) is ParamMode.POKE)
-
-
-def maybe_reject_mutation(checker: 'BorrowChecker', expr: MethodLike,
-                          receiver: Optional[Expr] = None,
-                          what: Optional[str] = None) -> None:
-    """Reject `c.push(x)` while a `let`-borrow binding reads out of `c` (#242).
-
-    `receiver` replaces the call's own receiver: a `foreach` that walks a value in place
-    calls `next()` on the walked place, not on its hidden slot (#1258).
-    """
-    if not changes_its_receiver(expr):
-        return
-    receiver = receiver if receiver is not None else expr.receiver
-    root = borrow_owner(checker, receiver)
-    what = what or f"call `.{expr.method}()`"
-    if reject_readonly_write(checker, root, expr.loc, what, receiver=receiver):
-        return
-    # A `poke self` method the table does not carry is taken to move storage.
-    effect = _effect(expr)
-    check_owner_not_borrowed(checker, root, expr.loc, what, place=receiver,
-                             moves_storage=effect.moves_storage or not effect.mutates)
 
 
 def reject_readonly_write(checker: 'BorrowChecker', local: Optional[LocalId],
