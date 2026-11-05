@@ -1038,7 +1038,7 @@ family in ONE table, `FAMILY_ARMS` (`passes/types/visit/calls.py`), keyed by the
 the family in `METHOD_TYPE_REGISTRY`, and no arm compares a family name of its own (gate:
 `tests/unit/test_typecheck_family_arms_are_registry_rows.py`). While the migration is in
 progress, a family with no arm in the table stops the walk with `typecheck, Call(method
-<family>)`, on a receiver of any type (`Call(method list)`, `Call(method own)`), so each
+<family>)`, on a receiver of any type (`Call(method iterator)`), so each
 group counts its own stops. A receiver that is not of a built-in type and that no family
 claims, and no extension method of a plain type answers (see below), stops the walk with
 the label of the call target (`Call(method)`, `Call(extension)`, `Call(stdlib method)`).
@@ -1067,7 +1067,12 @@ type of `x`. A type that holds a resource has no copy
 ([CE2431](../error-catalog.md#ce2431), with the `.share()` help;
 [CE4018](../error-catalog.md#ce4018) for an opaque type parameter), and a wrong count is
 [CE2009](../error-catalog.md#ce2009). The call yields its type after either fault. The arms of
-the `List` and the `HashMap` family ask the same rule (`reject_uncloneable`). The arm of the
+the `List`, the `HashMap` and the `Own` family ask the same rule (`reject_uncloneable`). The
+arm of the `Own` family (`check_own_method`, `passes/types/visit/own_methods.py`) checks a
+`clone` of an `Own` whose payload holds a resource first, then the count, then the value
+of `alloc` called on an `Own` value at the type `T` ([CE2006](../error-catalog.md#ce2006)),
+and the call yields the type of its row (`OwnMethodInferrer`): `T` for `get`, the
+`Own@(T)` for `clone` and `alloc`, `~` for `destroy`. The arm of the
 `HashMap` family (`check_hashmap_method`, `passes/types/visit/hashmap_methods.py`) checks
 the count first, then the key of `insert`, `get`, `contains_key` and `remove` at the type
 `K` and the value of `insert` at the type `V` ([CE2006](../error-catalog.md#ce2006)), and
@@ -2058,8 +2063,15 @@ part of plain values is a copy. A bare binder of a payload or a part that OWNS i
 borrowed view of it: a let-borrow of the owner of the scrutinee, with a region row (see
 the rows above), and SLIR lowering gives it a view local (8.9). A `peek` or a `poke` binder
 is a reference binding: it borrows its payload place with its mode for the whole arm, and
-SLIR lowering gives it an address local (8.2). A `Match` with an arm that binds a name in
-another way stops the walk (`borrow, Match`): a `nom` binder and an `Own` pattern. A tuple
+SLIR lowering gives it an address local (8.2). An `Own(...)` pattern binds the binders of
+its pointee in the same way: a bare binder is a view (or a copy of a plain pointee) with
+the note at the name of the variant or the tuple pattern that holds the `Own`, and
+`Own(peek h)` or `Own(poke h)` is a reference binding of the pointee, which keeps its
+reference type: a write through a `peek` one is [CE2408](../error-catalog.md#ce2408), and
+it freezes the owners of the scrutinee to its last use whatever the type of the pointee
+([CE2412](../error-catalog.md#ce2412)). A `Match` with an arm that binds a name in another
+way stops the walk (`borrow, Match`): a `nom` binder, and a `peek` or `poke` binder of a
+variant payload or of a tuple part. A tuple
 literal that owns, as the scrutinee, builds NO tuple (ruling 3 of `tuples.md`): each part
 is a root of its own, which the match reads; a part is a consuming use only when the match
 consumes (`match nom (a, b):` takes each part), and a binder of a part views that part, so
@@ -2586,9 +2598,10 @@ can name is in exactly one of four sets (gate:
   only gives a position, so it is `Guaranteed`; only the value is `Owned`
   (`POSITION_ARGUMENTS`). `insert` on a `HashMap` takes its key and its value `Owned`,
   because the map stores both. Each other argument is `Guaranteed`, the key of a lookup
-  too. A family of the set that its group built is in `RULED_EFFECT_FAMILIES` (`array`,
-  `list`, `hashmap`), and its methods are a read-or-write partition. A call of a method of
-  a family of the set that is not in it yet (`own`) stops in `typecheck`.
+  too. `alloc` of an `Own` takes its value `Owned`, and `destroy` writes its receiver.
+  A family of the set that its group built is in `RULED_EFFECT_FAMILIES`, and its methods
+  are a read-or-write partition. All four families are in it (`array`, `list`, `hashmap`,
+  `own`), so no call of an effect family stops for want of a receiver rule.
 - **Consumes** (`CONSUMING_RECEIVER_FAMILIES`: `result`, `maybe`). The family has a
   `nom self` method, so the answer is per method. The receiver of a method that declares
   `nom self` (`map_err`, `or_err`) is `Owned`: a consuming use (7.9). The receiver of each
@@ -2890,6 +2903,16 @@ drops each entry and keeps no buckets, and `rehash` moves each entry into new bu
 `HashMap.new` goes to the static row of the table. The producers `keys`, `values`,
 `entries` and `pairs` are a stop of `borrow`.
 
+The `own` family takes the ADDRESS of its receiver too. Its rows are `OWN_EMITTERS`
+(`backend/generics/own.py`). `get` loads the payload out of the heap block, a shallow copy
+that SLIR holds in a view local of the `Own` when the payload owns (`answers_view`).
+`destroy` destroys the payload, frees the block and writes a null pointer into the
+receiver, so the drop at the exit of its scope, or at a rebind, finds nothing to free (the
+destroy half of the lifecycle handler skips a null pointer). `alloc` called on an `Own`
+value makes a new block, as `Own.alloc` does. `.clone()` is the rvalue `Clone` (8.7), whose
+lifecycle handler copies the payload into a new block. `destroy` on a temporary is refused
+in `borrow` ([CE2429](../error-catalog.md#ce2429)), because the write would land on a copy.
+
 A `Stdlib(decl, module)` callee of SHIR lowers to `Direct(symbol, name, module)`. `name` is
 the name of the function with no alias, and `module` is the `use` path of its module.
 `symbol` is the generated function of its row (`stdlib_symbol`,
@@ -3047,7 +3070,7 @@ backstop of the checker, as on the AST backend.
 | `Return` in a function with a `peek` return | `_0 = copy <place>`: the value goes to the caller as it is (`borrow-model.md` S10h): it crosses by value, as a plain borrow does (the 16-byte descriptor of a `string` or a `T[]`), and not as an address. The callee never drops `_0` |
 | a call of a function or a method with a `peek` return | the destination of the `Call` is a view local (8.2), in a region over the owner of each source argument (7.3, 7.9). One rule serves this answer and the view answer of a container call: the owner set has two sources |
 | a call of a method of `answers_view` (`get`, `first`, `last` of a `List`; `get` of a `HashMap` or an `Own`) | a `Call` of `Builtin(BuiltinMethod)`; its destination is a view local (8.2) in a region over the owner of the receiver (7.9). When the element is plain, the destination is an ordinary local, and the answer is a plain copy |
-| `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field` |
+| `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field`. An `Own(...)` item tests nothing: its pointee is at `Deref(Field(place, 0))`, and a test or a binder inside it reads that place |
 | `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`: lowering calls `literal_value` and `pattern_interval` over the written constant and the scrutinee type, and reads no row), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |
 | `Match` on a string | a chain of tests in source order (see below): each a `Call` of the intrinsic `eq` (8.6) into a `bool` local, and a `SwitchInt` on it |
 | `Match` on a tuple | always a chain of tests in source order (see below). The parts of a tuple pattern are at the places `Field(place, index)` of the scrutinee, and each part is tested by the rule of its own kind: a literal, a range, a variant, a nested tuple; a binder and `_` test nothing. A place that owns is read where it is, and a new value is a temporary of the match statement, which drops it at its end. A tuple LITERAL that owns builds no tuple (ruling 3 of `tuples.md`): each part is evaluated once, from left to right, as a scrutinee of its own (a place is read where it is, a new value and a part that the match takes go into a temporary of the statement), and the parts of a tuple pattern are at the operand of each part |
