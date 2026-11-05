@@ -33,7 +33,7 @@ from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.drops import FlowState
 from sushi_lang.semantics.slir.function import STAGE
-from sushi_lang.semantics.slir.ids import BlockId
+from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.lower_control import Binds, arm, meet, variant_of
 from sushi_lang.semantics.type_predicates import is_integer_type
 from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
@@ -48,7 +48,9 @@ def match(low: Lowering, stmt: s.Match) -> None:
     when each path of each arm tests at most a literal of an integer or a variant at the
     scrutinee, else a chain of tests in source order. A match on a tuple is a chain. Each arm
     starts from the state after the scrutinee, and the arms that reach their end meet at the
-    join. A bare binder of an owning payload is a view local (`lower_views.bind_view`)."""
+    join. A bare binder of an owning payload is a view local (`lower_views.bind_view`), and
+    a `nom` binder of one moves it out of a temporary of the scrutinee: each arm that takes
+    nothing out of that temporary drops it at its end."""
     facts = low.typeck.match_facts_of(stmt.shir_id)
     if facts is None:
         dispatch.stop(STAGE, stmt)
@@ -65,15 +67,26 @@ def match(low: Lowering, stmt: s.Match) -> None:
     low.emit(low.placement.flush())
     among, at_switch = low.placement.in_scope(), low.placement.state()
     arms = [_paths(low, case.pattern, scrutinee, facts.scrutinee) for case in stmt.arms]
+    taken = [_taken(paths) for paths in arms]
+    drops = [tuple(sorted(set().union(*taken) - own, key=lambda local: local.index))
+             for own in taken]
     if not tuple_ and not isinstance(scrutinee, tuple) and all(
             len(path.tests) <= 1 and all(test.operand == scrutinee and _case(test) is not None
                                          for test in path.tests)
             for paths in arms for path in paths):
-        arrivals = _one_switch(low, stmt, arms, scrutinee, enum, at_switch)
+        arrivals = _one_switch(low, stmt, arms, scrutinee, enum, at_switch, drops)
     else:
-        arrivals = _chain(low, stmt, arms, at_switch)
+        arrivals = _chain(low, stmt, arms, at_switch, drops)
     if arrivals:
         meet(low, low.new_block(), arrivals, among, stmt.loc)
+
+
+def _taken(paths: list[_Path]) -> set[LocalId]:
+    """The temporaries of the scrutinee that an arm takes: the root of each `nom` binder
+    of an owning payload (ir.md 8.9)."""
+    roots = {p.root_of(value.operand.place) for path in paths for _, value in path.binds
+             if isinstance(value, r.Use) and isinstance(value.operand, p.Move)}
+    return {root.id for root in roots if isinstance(root, p.Local)}
 
 
 def _scrutinee(low: Lowering, expr: e.ShirExpr, *, place: bool) -> p.Operand:
@@ -116,7 +129,8 @@ def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding,
     its `Downcast`, the parts of a tuple at the `Field` projections of the tuple, or at the
     operand of each part of a tuple literal that owns, which builds no tuple. The pointee of
     an `Own(...)` is at the `Deref` of the pointer field of the `Own@(T)`. A bare binder
-    copies its place, and a `peek` or `poke` binder writes the `Ref` of it."""
+    copies its place, a `nom` binder of an owning payload moves it, and a `peek` or `poke`
+    binder writes the `Ref` of it."""
     if isinstance(operand, tuple):
         if isinstance(pattern, pt.Tuple):
             return _product(low, [_Path()], pattern.elements, operand, tuple_elements(ty))
@@ -129,6 +143,8 @@ def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding,
     if isinstance(pattern, pt.PatBinding):
         if isinstance(pattern.by, Ref):
             return [_Path(binds=((pattern.local, r.Ref(_place(operand), pattern.by.mode)),))]
+        if isinstance(pattern.by, pt.Nom) and low.owns(ty):
+            return [_Path(binds=((pattern.local, r.Use(p.Move(_place(operand)))),))]
         if not isinstance(pattern.by, Bare):
             er.raise_internal_error("CE0000", detail="a binder that borrow does not check "
                                                      "reached SLIR")
@@ -220,7 +236,8 @@ def _binds(paths: list[_Path], blocks: list[Block]) -> list[Binds]:
 
 
 def _one_switch(low: Lowering, stmt: s.Match, arms: list[list[_Path]], scrutinee: p.Operand,
-                enum: bool, at_switch: FlowState) -> list[Arrival]:
+                enum: bool, at_switch: FlowState,
+                drops: list[tuple[LocalId, ...]]) -> list[Arrival]:
     """`switchInt(v, [(case, arm)...], otherwise: _ arm)`: a case for each path, at the tag
     of its variant or at the value of its literal; `otherwise` is None when the arms cover
     the type. The switch of an enum reads the tag of the scrutinee, from a local with no
@@ -242,15 +259,16 @@ def _one_switch(low: Lowering, stmt: s.Match, arms: list[list[_Path]], scrutinee
                   for index, path in enumerate(paths)]
     low.jump(tm.SwitchInt(scrutinee, tuple(cases), otherwise, stmt.loc))
     arrivals: list[Arrival] = []
-    for case, paths, (binds, block) in zip(stmt.arms, arms, entries, strict=True):
+    for case, paths, (binds, block), dropped in zip(stmt.arms, arms, entries, drops,
+                                                    strict=True):
         low.placement.restore(at_switch)
         arrivals += arm(low, block, case.body, _binds(paths, binds), case.pattern.loc,
-                        branch=stmt)
+                        branch=stmt, drops=dropped)
     return arrivals
 
 
 def _chain(low: Lowering, stmt: s.Match, arms: list[list[_Path]],
-           at_switch: FlowState) -> list[Arrival]:
+           at_switch: FlowState, drops: list[tuple[LocalId, ...]]) -> list[Arrival]:
     """The tests of each path of each arm in source order. A failed test goes to the first
     test of the next path of its arm, else to the first test of the next arm; after the last
     arm, to the trap RE2023, which names that arm (ir.md 8.8)."""
@@ -261,7 +279,7 @@ def _chain(low: Lowering, stmt: s.Match, arms: list[list[_Path]],
         if catch is not None:
             low.placement.restore(at_switch)
             return arrivals + arm(low, entry, case.body, [(None, catch.binds)],
-                                  case.pattern.loc, branch=stmt)
+                                  case.pattern.loc, branch=stmt, drops=drops[index])
         counts = [[2 if isinstance(test.pattern, pt.IntRange) else 1 for test in path.tests]
                   for path in paths]
         steps = [entry, *(low.new_block() for _ in range(sum(map(sum, counts)) - 1))]
@@ -281,7 +299,7 @@ def _chain(low: Lowering, stmt: s.Match, arms: list[list[_Path]],
                 "RE2023", (p.Const(k.text(_spell(low, case.pattern))),), stmt.loc)
         low.placement.restore(at_switch)
         arrivals += arm(low, body, case.body, _binds(paths, binds), case.pattern.loc,
-                        branch=stmt)
+                        branch=stmt, drops=drops[index])
         entry = missed
     return arrivals
 

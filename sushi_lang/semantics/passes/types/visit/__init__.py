@@ -145,7 +145,7 @@ ARMS: dict[type, Callable[..., Any]] = {
     e.Binary: op.check_binary,
     e.Cast: check_cast,
     e.Borrow: ca.check_borrow,
-    e.Take: stop_at,
+    e.Take: fd.check_take,
     e.Try: check_try,
     e.Lambda: stop_at,
     e.StructInit: ex.check_struct_init,

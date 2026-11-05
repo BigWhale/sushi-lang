@@ -59,10 +59,12 @@ class LoopFrame:
 
 
 def arm(low: Lowering, block: Block, body: ShirBlock, binds: Sequence[Binds] = (),
-        span: Optional[Span] = None, branch: Optional[ShirNode] = None) -> list[Arrival]:
+        span: Optional[Span] = None, branch: Optional[ShirNode] = None,
+        drops: Sequence[LocalId] = ()) -> list[Arrival]:
     """The statements of `body` in a scope of their own, from `block` on, after the binders
     of a match arm and the end of each region that the arm of `branch` ends at its top. The
-    answer is the edge into the join when the path reaches the end of `body`."""
+    answer is the edge into the join when the path reaches the end of `body`. At that end,
+    each temporary of `drops` drops: another arm takes it, so every arm leaves it moved."""
     low.block = block
     low.placement.open_scope()
     _bind(low, block, binds, span or body.loc)
@@ -75,19 +77,30 @@ def arm(low: Lowering, block: Block, body: ShirBlock, binds: Sequence[Binds] = (
         return []
     low.emit(low.placement.flush())
     low.emit(low.placement.close_scope(body.loc))
+    for local in drops:
+        low.emit(low.placement.drop_on_path(local, body.loc))
     return [(low.block, low.placement.state())]
 
 
 def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> None:
-    """Each binder is a local of the scope of the arm, a binder of an owning payload a view
-    local, and a `peek` or `poke` binder an address local. A path writes its binders in its own block, which goes to the body, or in the
-    body block when it is the one path."""
+    """Each binder is a local of the scope of the arm, a bare binder of an owning payload a
+    view local, a `peek` or `poke` binder an address local, and a `nom` binder an owning
+    local written with the `Move` of its payload: the arm takes the variant whole, so the
+    root moves one time for all of them. A path writes its binders in its own block, which
+    goes to the body, or in the body block when it is the one path."""
     idents: dict[ShirLocalId, LocalId] = {}
     for block, writes in binds:
         statements: list[st.SlirStatement] = []
+        taken: list[LocalId] = []
         for local, value in writes:
             if isinstance(value, r.Ref):
                 statements += views.bind_address(low, local, value, span)
+                continue
+            if isinstance(value, r.Use) and isinstance(value.operand, p.Move):
+                statements += _bind_taken(low, local, value, span)
+                held = p.root_of(value.operand.place)
+                if isinstance(held, p.Local) and held.id not in taken:
+                    taken.append(held.id)
                 continue
             if views.binds_a_view(low, local):
                 statements += views.bind_view(low, local, value, span)
@@ -97,11 +110,25 @@ def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> Non
                 low.placement.declare(idents[local], False)
             statements += [st.StorageLive(idents[local], span),
                            st.Assign(p.Local(idents[local]), value, span)]
+        for ident in taken:
+            low.placement.move(ident, span)
         if block is None:
             low.emit(statements)
         else:
             block.statements.extend(statements)
             block.terminator = tm.Goto(body.id, span)
+
+
+def _bind_taken(low: Lowering, local: ShirLocalId, value: r.Use,
+                span: Span) -> list[st.SlirStatement]:
+    """A `nom` binder: an owning local of the arm, with its flag after its write."""
+    ident, ty = low.bind(local, span)
+    owning = low.owns(ty)
+    if owning:
+        low.give_flag(ident)
+    low.placement.declare(ident, owning)
+    return [st.StorageLive(ident, span), st.Assign(p.Local(ident), value, span),
+            *low.placement.flag_declared(ident, span)]
 
 
 def meet(low: Lowering, join: Block, arrivals: list[Arrival], among: tuple[LocalId, ...],

@@ -46,12 +46,15 @@ _NOT_A_ROOT_WALK = {
     ("sushi_lang/semantics/passes/types/matching.py", "_item_signature"),
     ("sushi_lang/semantics/passes/types/matching.py", "_poke_bindings"),
     ("sushi_lang/semantics/passes/borrow/bindings.py", "bare_binders"),
+    ("sushi_lang/semantics/passes/borrow/pattern_takes.py", "taken_binders"),
     ("sushi_lang/semantics/slir/lower_match.py", "_paths"),
     # Every local that a read of a SLIR place reads: its root and the local of each index.
     # A SLIR place is no expression, so `walk_place` does not read it.
     ("sushi_lang/semantics/slir/places.py", "locals_read"),
     # The root of a SLIR place, for the same reason.
     ("sushi_lang/semantics/slir/places.py", "root_of"),
+    # Whether one SLIR place is a projection of another, for the same reason.
+    ("sushi_lang/semantics/slir/verify_flow.py", "_within"),
 }
 
 

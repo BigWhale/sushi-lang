@@ -34,8 +34,9 @@ producer and each lazy adapter has LENT or OWNED, except the iterable of a direc
 (`Cursor`, `HashMapCursor`), which makes no value; each lent one has its heap decision;
 each `Loop` of kind `Protocol` or `IteratorValue` has its walk in place. The conditionally
 moved locals have no check: no row for a local is the answer "moved on no path, or on
-every path". REJECT is an error of `borrow`, except at three positions, where it is a
-borrowed view with no error: the value of a `let` (a let-borrow of the owner), the
+every path". REJECT is an error of `borrow`, except at four positions, where it is a
+borrowed view with no error: the value of a `let` (a let-borrow of the owner), the value
+of a destructure (each binder views its element), the
 operand of a `??` that reads through a borrowed owning wrapper, and the receiver of an
 `or_err` that is the operand of a `??`. The wrapper is a local that holds a borrow: a
 parameter with no `nom`, a local of a reference type, or a let-borrow. The receiver of the
@@ -216,15 +217,17 @@ def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
 
 def borrowed_views(body: ShirBody, typeck: TypeckResults,
                    ownership: OwnershipResults) -> set[ShirId]:
-    """The three positions where a REJECT row is a borrowed view and no error: the value of
-    a `let`, the operand of a `??` that reads through a borrowed wrapper, and the receiver
-    of a read-through `or_err` that is the operand of a `??`. A REJECT row comes only for a
+    """The positions where a REJECT row is a borrowed view and no error: the value of a
+    `let` and of a destructure, the operand of a `??` that reads through a borrowed wrapper,
+    and the receiver of a read-through `or_err` that is the operand of a `??`. A rebind
+    form takes each owning element, so `borrow` refuses its borrowed value (CE2411) at each
+    place of one; a value of a rebind form with no such place is read. A REJECT row comes only for a
     wrapper that owns, so the operand of the `??` is a local that holds a borrow, or a `??`
     over one (a nested `??`)."""
     borrowed = _borrowed_locals(body, typeck, ownership)
     views: set[ShirId] = set()
     for _path, value in walk(body.block, "block"):
-        if isinstance(value, s.Assign) and value.is_init:
+        if (isinstance(value, s.Assign) and value.is_init) or isinstance(value, s.Destructure):
             views.add(value.value.shir_id)
         elif isinstance(value, e.Try) and walk_place(value.inner, Step.TRY).local in borrowed:
             views.add(value.inner.shir_id)

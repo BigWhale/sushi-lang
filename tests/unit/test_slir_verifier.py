@@ -1243,6 +1243,71 @@ def test_a_drop_of_a_field_of_a_global_is_not_checked_yet():
         0, _ret(), st.Drop(p.Field(p.Global("unit$named", NAMED), 0), BAD))))
 
 
+# -- one take of two or more parts of one root (ir.md 8.13) -------------------------------
+
+TWO = StructType(name="$Tuple<string, string>", fields=(("0", STRING), ("1", STRING)))
+
+
+def _two(index: int) -> list[st.SlirStatement]:
+    """`_index = (<new string>, <new string>)`, over the temporaries `_index + 1` and
+    `_index + 2`."""
+    return [_live(index + 1), _text(index + 1), _live(index + 2), _text(index + 2),
+            _live(index), _set(index, r.Aggregate(r.AggTuple(TWO),
+                                                   (_move(index + 1), _move(index + 2)))),
+            _dead(index + 2), _dead(index + 1)]
+
+
+def _part(root: int, index: int) -> p.Move:
+    return p.Move(p.Field(_local(root), index))
+
+
+def _take_both(*moves: st.SlirStatement, after: tuple[st.SlirStatement, ...] = ()
+               ) -> SlirFunction:
+    """`_1` is a pair of new strings; `_4` and `_5` take its parts."""
+    return _function([BLANK, TWO, STRING, STRING, STRING, STRING], _block(
+        0, _ret(), *_two(1), _live(4), _live(5), *moves, *after,
+        _drop(5), _dead(5), _drop(4), _dead(4), _dead(1),
+        _set(0, r.Use(p.Const(k.Blank())))))
+
+
+def test_two_moves_of_the_disjoint_parts_of_one_root_in_one_block_pass():
+    _passes(_take_both(_set(4, r.Use(_part(1, 0))), _set(5, r.Use(_part(1, 1)))))
+
+
+def test_a_second_move_of_the_same_part_is_refused():
+    _refused(_take_both(_set(4, r.Use(_part(1, 0))), _set(5, r.Use(_part(1, 0)), BAD)),
+             "no use after a move")
+
+
+def test_a_move_of_a_part_of_a_moved_part_is_refused():
+    nested = StructType(name="$Tuple<$Tuple<string, string>, string>",
+                        fields=(("0", TWO), ("1", STRING)))
+    _refused(_function([BLANK, nested, TWO, STRING, STRING, STRING, TWO, STRING], _block(
+        0, _ret(), *_two(2), _live(5), _text(5), _live(1),
+        _set(1, r.Aggregate(r.AggTuple(nested), (_move(2), _move(5)))), _dead(5), _dead(2),
+        _live(6), _set(6, r.Use(_part(1, 0))),
+        _live(7), _set(7, r.Use(p.Move(p.Field(p.Field(_local(1), 0), 1))), BAD))),
+        "no use after a move")
+
+
+def test_a_read_of_the_root_between_two_part_moves_is_refused():
+    function = _function([BLANK, TWO, STRING, STRING, STRING, STRING, STRING], _block(
+        0, _ret(), *_two(1), _live(4), _live(5), _set(4, r.Use(_part(1, 0))),
+        _live(6), _set(6, r.Use(p.Copy(p.Field(_local(1), 1))), BAD),
+        _set(5, r.Use(_part(1, 1)))))
+    _refused(function, "no use after a move")
+
+
+def test_a_part_move_in_a_later_block_is_refused():
+    function = _function([BLANK, TWO, STRING, STRING, STRING, STRING],
+                         _block(0, _goto(1), *_two(1), _live(4), _live(5),
+                                _set(4, r.Use(_part(1, 0)))),
+                         _block(1, _ret(), _set(5, r.Use(_part(1, 1)), BAD),
+                                _drop(5), _dead(5), _drop(4), _dead(4), _dead(1),
+                                _set(0, r.Use(p.Const(k.Blank())))))
+    _refused(function, "no use after a move")
+
+
 def test_a_repeat_run_that_moves_its_value_is_refused():
     repeat = r.Aggregate(r.AggArray(STRINGS, (r.RunRepeat(),)),
                          (_move(2), p.Const(k.Int(2, I32))))

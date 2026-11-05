@@ -173,11 +173,8 @@ WHITELIST += (
     (_BORROW + "flow.py", "LoopFlow", _kept("C", "C3: iterators, a view of a loop")),
     (_BORROW + "calls.py", "settle_receiver", _kept("C", "C3: a lent iterator receiver")),
     (_BORROW + "reads.py", "constant_type", _ast_probe("A8")),
-    (_BORROW + "takes.py", "field_take", _kept("B", "B7: field take")),
-    (_BORROW + "takes.py", "spend", _kept("B", "B7: field take")),
     (_BORROW + "bindings.py", "register_pattern_bindings",
-     _kept("B", "B7, B8: the binder modes of a match")),
-    (_BORROW + "bindings.py", "reject_partial_take", _kept("B", "B7: pattern take")),
+     _kept("B", "B8: the reference binders of a match")),
     (_BORROW + "bindings.py", "bind_let_reference", _kept("B", "B8: reference let")),
     (_BORROW + "borrowed_returns.py", "body_return", _kept("B", "B8: peek returns")),
     (_BORROW + "borrowed_returns.py", "settle_borrowed_call", _kept("B", "B8: peek returns")),
@@ -290,7 +287,7 @@ WHITELIST += (
 # one is kept for the group whose owning type brings the position back with its row.
 _CONSUMING_POSITIONS = {
     "CALL_ARG": "B1", "LET": "B1", "RETURN": "B1", "ELEMENT_ASSIGN": "B1", "ARRAY_ELEMENT": "B1",
-    "STRUCT_FIELD": "Task 75", "ENUM_PAYLOAD": "Task 75", "MATCH_SCRUTINEE": "B7",
+    "STRUCT_FIELD": "Task 75", "ENUM_PAYLOAD": "Task 75", "MATCH_SCRUTINEE": "Task 75",
     "REBIND": "B9", "FIELD_ASSIGN": "B9",
 }
 WHITELIST += tuple(
@@ -337,7 +334,6 @@ TEST_WHITELIST: tuple[tuple[str, str, str], ...] = (
     ("tests/unit/test_drop_invalidates_cache.py", "public_symbols", _READ_BY_CODE),
     ("tests/unit/test_drop_invalidates_cache.py", "dependencies", _READ_BY_CODE),
     ("tests/unit/test_array_method_table_is_total.py", "drop_type_names", _READ_BY_CODE),
-    ("tests/unit/test_field_borrow_arm.py", "typecheck_failed", _READ_BY_CODE),
     ("tests/unit/test_nori_colour.py", "isatty", "the colour decision asks the stream isatty()"),
     ("tests/unit/test_report_colour.py", "isatty", "the colour decision asks the stream isatty()"),
     ("tests/unit/test_nori_errors.py", "size", "tarfile reads TarInfo.size when it adds the member"),

@@ -47,15 +47,15 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     """`let T v = <borrowed value>`: a view local, written in its region (ir.md 8.9). A view
     whose owner is a temporary keeps it: the temporary is a hidden owner local of the block,
     and the region is over it. A view of a constant has no owner and no region: a constant
-    never changes."""
-    value = stmt.value
+    never changes. A `Take` here is no field take: it is its place."""
+    value = stmt.value.place if isinstance(stmt.value, e.Take) else stmt.value
     region = low.answers.ownership.region_of(target.local)
     if region is None:
         er.raise_internal_error("CE0000", span=stmt.loc,
                                 detail="a borrowed let with no borrow region reached SLIR")
     constant = isinstance(walk_place(value, Step.MEMBER | Step.INDEX).node, e.ConstRef)
     if not region.owners and not constant:
-        low.holder = _held(low, value)
+        low.holder = held_root(low, value)
     written: r.Use | CallValue
     held: tuple[p.Place, ...]
     try:
@@ -72,7 +72,7 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
             dispatch.stop(STAGE, value, state="borrowed")
     finally:
         low.holder = None
-    owners = ([_owner(low, owner, stmt) for owner in region.owners] if region.owners
+    owners = ([_owner(low, owner, stmt.loc) for owner in region.owners] if region.owners
               else [] if constant else list(held))
     ident, _ = low.bind(target.local, stmt.loc, view=True)
     low.placement.declare(ident, False)
@@ -81,7 +81,7 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     low.write(p.Local(ident), written, stmt.loc)
 
 
-def _held(low: Lowering, value: e.ShirExpr) -> ShirId:
+def held_root(low: Lowering, value: e.ShirExpr) -> ShirId:
     """The node whose value a view of a `let` reads when no local owns it: the root of its
     place, through each `??`, the receiver of each get-out and the receiver of each
     read-through `or_err` (a `reject` row at its receiver)."""
@@ -100,11 +100,11 @@ def _held(low: Lowering, value: e.ShirExpr) -> ShirId:
     return node.shir_id
 
 
-def _owner(low: Lowering, owner: ShirLocalId | str, stmt: s.Assign) -> p.Place:
+def _owner(low: Lowering, owner: ShirLocalId | str, span: Span) -> p.Place:
     """The place of an owner of a region row: a local. A `var` that owns stops in SLIR."""
     if isinstance(owner, str):
-        raise StageStop(STAGE, "StorageRef owning", stmt.loc)
-    return p.Local(low.local_of(owner, stmt.loc))
+        raise StageStop(STAGE, "StorageRef owning", span)
+    return p.Local(low.local_of(owner, span))
 
 
 def binds_a_view(low: Lowering, local: ShirLocalId) -> bool:
@@ -130,6 +130,24 @@ def bind_view(low: Lowering, local: ShirLocalId, value: r.Rvalue,
         statements += low.placement.begin_region(
             ident, [p.root_of(value.operand.place)], frozenset(region.until), span)
     return statements + [st.Assign(p.Local(ident), value, span)]
+
+
+def bind_part_view(low: Lowering, local: ShirLocalId, read: p.Copy, root: p.Place,
+                   span: Span) -> None:
+    """A binder of an owning part of a borrowed value (ir.md 8.9): a view local of the
+    block, written with the `Copy` of its part place, in a region over the owners of its
+    region row, or over the `root` of the place when no local owns the value."""
+    region = low.answers.ownership.region_of(local)
+    if region is None:
+        er.raise_internal_error("CE0000", span=span,
+                                detail="a view binder of a destructure with no borrow region "
+                                       "reached SLIR")
+    owners = [_owner(low, owner, span) for owner in region.owners] or [root]
+    ident, _ = low.bind(local, span, view=True)
+    low.placement.declare(ident, False)
+    low.emit([st.StorageLive(ident, span)])
+    low.emit(low.placement.begin_region(ident, owners, frozenset(region.until), span))
+    low.emit([st.Assign(p.Local(ident), r.Use(read), span)])
 
 
 def bind_address(low: Lowering, local: ShirLocalId, value: r.Ref,

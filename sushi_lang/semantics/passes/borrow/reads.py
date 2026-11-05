@@ -61,26 +61,32 @@ def called_on(expr: Optional[Expr], *methods: str) -> Optional[Expr]:
     return expr.receiver
 
 
-def root_owner(expr: Optional[Expr]) -> Optional[str]:
-    """The named local a read-through-an-owner expression ultimately reads out of."""
-    root = walk_place(expr, OWNER_STEPS).name
-    return root.id if root is not None else None
-
-
 def borrow_owner(checker: 'BorrowChecker', node: object) -> Optional[Owner]:
     """The owner that a borrow of the SHIR place `node` is counted on, and that a binding
     into `node` freezes: the root local, or the symbol of the global of the root `var`,
     under each field step, each element and slice step, each `??` that reads it, and each
     call whose answer is a view of its receiver (`view_receiver`) or that reads its
     receiver through (`read_through_call`). None for a temporary.
-    The pass tracks whole owners, not the places in them."""
-    walked = walk_place(node, Step.MEMBER | Step.INDEX | Step.TRY | Step.CALL,
-                        crosses_call=lambda call: (view_receiver(checker, call) is not None
-                                                   or read_through_call(checker, call)
-                                                   is not None))
+    The pass tracks whole owners, not the places in them. A `Take` that is no field take
+    is its place."""
+    walked = _owner_walk(checker, node)
     if isinstance(walked.node, e.StorageRef):
         return storage_state(checker, walked.node).local
     return walked.local
+
+
+def names_an_owner(checker: 'BorrowChecker', node: object) -> bool:
+    """Whether the walk of `borrow_owner` ends at a name: a local, a constant or a `var`."""
+    return isinstance(_owner_walk(checker, node).node, (e.LocalRef, e.ConstRef, e.StorageRef))
+
+
+def _owner_walk(checker: 'BorrowChecker', node: object):
+    if isinstance(node, e.Take):
+        node = node.place
+    return walk_place(node, Step.MEMBER | Step.INDEX | Step.TRY | Step.CALL,
+                      crosses_call=lambda call: (view_receiver(checker, call) is not None
+                                                 or read_through_call(checker, call)
+                                                 is not None))
 
 
 def view_receiver(checker: 'BorrowChecker', node: object) -> Optional[e.ShirExpr]:

@@ -31,6 +31,7 @@ from .diagnostics import (
 )
 from .reads import borrow_owner, read_through_call, read_type, unknown, view_receiver
 from .state import BorrowState, record_owners
+from .takes import field_take, take
 from .writes import check_owner_not_borrowed
 
 if TYPE_CHECKING:
@@ -79,10 +80,17 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
     the payload is a read through it; an owned `r` was SPENT by the `??` itself
     (`unwrap_place`), so nothing owns the payload now and the position adopts it. A `??`
     over a `??` that reads through, and over a read-through `or_err`, reads through too
-    (`reads_through`). Anything else makes a new value.
+    (`reads_through`). A marked field take is the one read through an owner that is not
+    a borrow: the owner is a local this function holds, and the take spends it; any other
+    `Take` is its place, and the marker is inert (`takes.field_take`). Anything else makes
+    a new value.
     """
     if isinstance(checker.body.origin, Initializer):
         return Provenance.FRESH
+    if isinstance(node, e.Take):
+        if field_take(checker, node.place) is not None:
+            return Provenance.OWNED
+        return source_provenance(checker, node.place)
     if isinstance(node, e.LocalRef):
         return name_provenance(checker, node.local)
     if isinstance(node, (e.ConstRef, e.StorageRef)):
@@ -104,18 +112,19 @@ def source_class(checker: 'BorrowChecker', node: e.ShirExpr) -> TypeClass:
 
 
 def decide(checker: 'BorrowChecker', node: e.ShirExpr, provenance: Provenance,
-           type_class: TypeClass) -> Ownership:
+           type_class: TypeClass, write: bool = True) -> Ownership:
     """The `Ownership` of the consuming use `node`, from `classify()`, written ONE time as a
     row of the `OwnershipResults` of the body. The one writer of the row.
 
     A discovery round of a loop decides and writes nothing: the round after it decides
     from the facts of the fixed point, and so does a body with an error of typecheck. An
     unknown value is adopted: it moves nothing and is no error (docs/design/ir.md 7.9).
+    With no `write`, the decision is no row: the root that a field take spends.
     """
     if unknown(checker, node):
         return Ownership.ADOPT
     decision = classify(provenance, type_class)
-    if not checker.discovery_rounds and not checker.typecheck_failed:
+    if write and not checker.discovery_rounds and not checker.typecheck_failed:
         checker.table().record_ownership(node.shir_id, decision)
     return decision
 
@@ -209,6 +218,8 @@ def consume(checker: 'BorrowChecker', node: e.ShirExpr,
     `use_of_copy` is what the position does with the copy that the CE2411 escape takes:
     `x.clone() as T`, `r.clone().map_err(f)`.
     """
+    if isinstance(node, e.Take):
+        return _consume_take(checker, node, use_of_copy)
     provenance = source_provenance(checker, node)
     if isinstance(node, e.LocalRef):
         return consume_named(checker, node, provenance, node.loc, use_of_copy)
@@ -220,6 +231,26 @@ def consume(checker: 'BorrowChecker', node: e.ShirExpr,
         # (#242): the owner keeps the value and still frees it.
         emit_consume_of_read(checker, node, use_of_copy)
     return decision
+
+
+def consume_marked(checker: 'BorrowChecker', node: e.ShirExpr) -> Ownership:
+    """A consuming use that carries a written `nom` marker: a field take
+    (`takes.field_take`), or else an ordinary consuming use."""
+    root = field_take(checker, node)
+    if root is not None:
+        return take(checker, node, root, node)
+    return consume(checker, node)
+
+
+def _consume_take(checker: 'BorrowChecker', node: e.Take,
+                  use_of_copy: Optional[CopyUse]) -> Ownership:
+    """A `Take` at a consuming use: a field take, or its place with the same decision
+    (the marker is inert)."""
+    root = field_take(checker, node.place)
+    if root is not None:
+        return take(checker, node, root, node.place)
+    decide(checker, node, source_provenance(checker, node), source_class(checker, node))
+    return consume(checker, node.place, use_of_copy)
 
 
 def reject_move_of_storage(checker: 'BorrowChecker', node: e.ConstRef | e.StorageRef,
@@ -242,13 +273,13 @@ def reject_move_of_storage(checker: 'BorrowChecker', node: e.ConstRef | e.Storag
 
 
 def consume_named(checker: 'BorrowChecker', node: e.LocalRef, provenance: Provenance,
-                  use_span: Optional[Span],
-                  use_of_copy: Optional[CopyUse] = None) -> Ownership:
+                  use_span: Optional[Span], use_of_copy: Optional[CopyUse] = None,
+                  write: bool = True) -> Ownership:
     """Decide a consuming use of a local, and apply the decision to the local."""
     state = checker.borrow_state.get(node.local)
     ty = state.var_type if state is not None else checker.local_type(node.local)
     decision = decide(checker, node, provenance,
-                      checker.types.type_class_of_source(state, ty))
+                      checker.types.type_class_of_source(state, ty), write)
     if state is None:
         return decision
 
@@ -306,9 +337,18 @@ def bind(checker: 'BorrowChecker', node: s.Assign, dest: BorrowState) -> None:
 
     A `let` takes the decision of a consuming use: an owned local moves into the binding,
     a new value is adopted, and a read of a borrow makes the binding a `let`-borrow of
-    the owner, so the owner is frozen while the binding lives.
+    the owner, so the owner is frozen while the binding lives. A marked field take hands
+    the field to the binding and spends its receiver; any other `Take` binds its place,
+    with the same decision on the `Take`.
     """
     value = node.value
+    if isinstance(value, e.Take):
+        root = field_take(checker, value.place)
+        if root is not None:
+            take(checker, value, root, value.place)
+            return
+        decide(checker, value, source_provenance(checker, value), source_class(checker, value))
+        value = value.place
     if reject_slice_of_temporary(checker, value):
         return
     provenance = source_provenance(checker, value)

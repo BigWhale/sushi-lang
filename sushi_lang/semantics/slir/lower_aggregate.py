@@ -11,8 +11,8 @@ each other as modules, and each reads the other only inside a function, so the c
 safe at import time.
 
 A construction moves each owning part. A write of an owning field or element drops the old
-part between the new value and the store (`part_write`). `borrow` stops on a destructure of
-a value that owns. A struct with a field of a reference type is CE2415 at its declaration,
+part between the new value and the store (`part_write`). A destructure of a value that owns
+is the arm of `lower_takes.py`. A struct with a field of a reference type is CE2415 at its declaration,
 so its construction stops (`StructInit reference field`).
 """
 from __future__ import annotations
@@ -181,7 +181,7 @@ def part_write(low: Lowering, stmt: s.Assign, target: e.Field | e.Index) -> None
     place = place_of(low, target)
     if not isinstance(place, (p.Field, p.Index)):
         er.raise_internal_error("CE0000", span=stmt.loc, detail="a part write of no part")
-    low.emit(low.placement.drop_old_part(place, stmt.loc))
+    low.emit(low.placement.drop_part(place, stmt.loc))
     low.write(place, value, stmt.loc)
 
 
@@ -192,8 +192,9 @@ def destructure(low: Lowering, stmt: s.Destructure) -> None:
     new local of the block, and a place is rebound."""
     ty = low.type_of(stmt.value)
     if low.owns(ty):
-        er.raise_internal_error("CE0000", span=stmt.loc,
-                                detail="a destructure of a value that owns reached SLIR")
+        from sushi_lang.semantics.slir import lower_takes as takes
+        takes.destructure(low, stmt)
+        return
     if isinstance(stmt.value, (e.LocalRef, e.Field)) and not _rebinds(stmt.targets):
         operand = low.operand(stmt.value)
         if isinstance(operand, p.Const):

@@ -18,18 +18,14 @@ from typing import Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.param_modes import Convention
-from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.shir import dispatch
 
 from . import arms
 from .borrows import check_borrow as borrow_place
-from .consume import consume, name_provenance, unwrap_place
+from .consume import consume, consume_marked, unwrap_place
 from .diagnostics import CopyUse, emit_use_after_move, emit_use_of_invalidated_borrow
 from .flow import record_exit
-from .reads import read_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId
@@ -145,11 +141,9 @@ def check_slice(checker: 'BorrowChecker', node: e.Slice) -> None:
 
 def check_struct_init(checker: 'BorrowChecker', node: e.StructInit) -> None:
     """A construction consumes each field by POSITION, in the order that the source writes
-    the fields (ruling R1)."""
+    the fields (ruling R1). A `nom` field of a local that the body owns is a take."""
     for position in node.written_order:
-        arg = node.fields[position]
-        stop_at_a_field_take(checker, arg)
-        _take_by_position(checker, arg.value)
+        _take_arg(checker, node.fields[position])
 
 
 def check_tuple_init(checker: 'BorrowChecker', node: e.TupleInit) -> None:
@@ -161,8 +155,7 @@ def check_tuple_init(checker: 'BorrowChecker', node: e.TupleInit) -> None:
 def check_enum_init(checker: 'BorrowChecker', node: e.EnumInit) -> None:
     """A construction consumes each payload by POSITION, marked or not (#134)."""
     for arg in node.payload:
-        stop_at_a_field_take(checker, arg)
-        _take_by_position(checker, arg.value)
+        _take_arg(checker, arg)
 
 
 def _take_by_position(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
@@ -170,19 +163,19 @@ def _take_by_position(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
     consume(checker, value)
 
 
-def stop_at_a_field_take(checker: 'BorrowChecker', arg: e.Arg) -> None:
-    """A `nom` argument of an owning field, one step off a local that the body OWNS, is a
-    marked field take (`f(nom s.out)`), which spends its root: group B7 checks it, so it
-    stops the walk (`borrow, Field take`). The marker on a plain field is inert, and the
-    field is a copy. A take through a borrow is no take: it is the consuming use of a
-    borrow (CE2411), as on `main`."""
-    value = walk_place(arg.value, Step.TRY).node
-    if (arg.marker is Convention.OWNED and isinstance(value, e.Field)
-            and isinstance(value.base, e.LocalRef)
-            and checker.borrow_state.get(value.base.local) is not None
-            and name_provenance(checker, value.base.local) is Provenance.OWNED
-            and checker.types.type_class(read_type(checker, value)) is TypeClass.MOVE):
-        dispatch.stop(arms.STAGE, value, state="take")
+def _take_arg(checker: 'BorrowChecker', arg: e.Arg) -> None:
+    """A field or a payload that a construction takes by position: a `nom` one is a take."""
+    arms.check(checker, arg.value)
+    if arg.marker is Convention.OWNED:
+        consume_marked(checker, arg.value)
+    else:
+        consume(checker, arg.value)
+
+
+def check_take(checker: 'BorrowChecker', node: e.Take) -> None:
+    """`nom s.out`: its place is read. The position that takes it decides whether it is a
+    take (`consume.py`)."""
+    arms.check(checker, node.place)
 
 
 def check_try(checker: 'BorrowChecker', node: e.Try) -> None:

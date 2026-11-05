@@ -5,8 +5,8 @@ A literal arm binds no name. A `Variant` and a `Tuple` bind the local of each ba
 of the payload or of the part (`declare_bare_binders`, docs/design/ir.md 7.9); a binder of a
 payload that owns is a borrowed view of the scrutinee, with a borrow region. A `peek` or
 `poke` binder of the pointee of an `Own(...)` is a reference to it (`declare_references`).
-The registration of any other `poke`, `peek` or `nom` binder reads the AST still: later
-groups port it.
+A `nom` binder takes its payload (`pattern_takes.py`). The registration of any other `poke`
+or `peek` binder reads the AST still: a later group ports it.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import Iterable, Optional, TYPE_CHECKING
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ast import (
-    DotCall, Expr, LiteralPattern, MethodCall, Name, NomBinding, OrPattern, Pattern,
+    DotCall, Expr, LiteralPattern, MethodCall, Name, OrPattern, Pattern,
     RangePattern, RefBinding, TuplePattern,
 )
 from sushi_lang.semantics.constant_borrow import READ_ONLY_MODE
@@ -27,7 +27,7 @@ from sushi_lang.semantics.shir.stmts import Bare, Ref
 from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, Type
 
 from .diagnostics import spelled
-from .reads import borrow_owner, names_kept_storage, root_owner
+from .reads import borrow_owner, names_kept_storage
 from sushi_lang.semantics.param_modes import borrow_mode
 from .regions import note_binder
 from .state import BorrowState, record_owners
@@ -55,8 +55,9 @@ def bare_binders(pattern: p.ShirPattern | p.PatBinding,
     """The bare binders of a pattern, each with the span of the variant name or of the tuple
     pattern that holds it, in the written order. An `Own(...)` binds the binders of its
     pointee, with the span of the pattern that holds the `Own`, and a `peek` or `poke`
-    binder of the pointee is a reference (`own_references`). None when the pattern holds a
-    form of a later group: any other `poke`, `peek` or `nom` binder.
+    binder of the pointee is a reference (`own_references`), and a `nom` binder takes its
+    payload (`pattern_takes.py`). None when the pattern holds a form of a later group: any
+    other `poke` or `peek` binder.
 
     The alternatives of `|` bind one local for each name (CE2126), so the first alternative
     gives the binders, and each alternative must hold no form of a later group.
@@ -64,6 +65,8 @@ def bare_binders(pattern: p.ShirPattern | p.PatBinding,
     if isinstance(pattern, (p.Wildcard, p.Literal, p.IntRange)):
         return []
     if isinstance(pattern, p.PatBinding):
+        if isinstance(pattern.by, p.Nom):
+            return []
         if not isinstance(pattern.by, Bare) or at is None:
             return None
         return [(pattern.local, at)]
@@ -203,15 +206,6 @@ class BindingScope:
         """Bind an element or payload BY VALUE -- a read-only view (CE2414)."""
         self.register(BorrowState(name=name, var_type=ty,
                                   is_borrowed_binding=True, bound_at_span=span))
-
-    def bind_owned(self, name: str, ty: Optional[Type], span: Optional[Span]) -> None:
-        """Bind a payload the arm TAKES: `Variant(nom x)` (ruling R11).
-
-        Not `is_borrowed_binding`: the arm owns this value, so it may be written and it
-        may be given away. A move on some paths of the arm earns a run-time drop flag
-        exactly as a local's does.
-        """
-        self.register(BorrowState(name=name, var_type=ty, declared_at_span=span))
 
     def bind_item(self, name: str, ty: Optional[Type], span: Optional[Span]) -> None:
         """Bind the item a `next()` protocol iterator answered: the iteration OWNS it.
@@ -444,13 +438,6 @@ def _register_item(checker: 'BorrowChecker', scope: BindingScope, item: object,
             pass                      # a discard, a literal and a range bind nothing
         case str():
             scope.bind_value(item, ty, span)
-        case NomBinding():
-            # `Variant(nom x)` (ruling R11): the arm TAKES the payload, which it may only
-            # do out of a scrutinee the match owns. A take out of an `Own(...)` cell never
-            # reaches here: the AST builder refuses it.
-            if kind is ScrutineeKind.BORROWED:
-                _reject_take_from_a_borrow(checker, item, scrutinee)
-            scope.bind_owned(item.name, ty, item.loc or span)
         case RefBinding():
             # `Variant(poke x)` (#300): a REFERENCE into the scrutinee's storage. The
             # scrutinee is frozen for the arm -- rebinding it would change the variant tag
@@ -467,106 +454,6 @@ def _register_item(checker: 'BorrowChecker', scope: BindingScope, item: object,
             # (CE2126), so the first one registers them for the arm.
             _register_item(checker, scope, item.alternatives[0], ty, scrutinee, kind,
                            item.loc or span)
-
-
-def _reject_take_from_a_borrow(checker: 'BorrowChecker', binding: NomBinding,
-                               scrutinee: Optional[Expr]) -> None:
-    """Report CE2432: a `nom` binding under a match that only borrows its scrutinee."""
-    text = spelled(checker, scrutinee) if scrutinee is not None else "r"
-    diag = checker.err.emit_with(er.ERR.CE2432, binding.loc, name=binding.name)
-    owner = root_owner(scrutinee) if scrutinee is not None else None
-    state = checker.borrow_state.get(owner) if owner is not None else None
-    if state is not None and state.declared_at_span is not None:
-        diag.note_at(f"'{owner}' owns this value and still frees it",
-                     state.declared_at_span)
-    if owner is None and scrutinee is not None:
-        # The scrutinee reads through a temporary that no name owns. `match nom` cannot
-        # hand it over, because it consumes a borrow (CE2411).
-        diag.help("a temporary still owns this value and frees it at scope exit; drop "
-                  "the marker and call `.clone()` on the binding to keep a copy")
-    else:
-        diag.help(f"hand the value to the match -- `match nom {text}:` -- and it may be "
-                  f"taken here; drop the marker to read through the borrow instead")
-    diag.emit()
-
-
-def reject_partial_take(checker: 'BorrowChecker', pattern: object,
-                        scrutinee_type: Optional[Type]) -> None:
-    """Report CE2433: an arm that takes one owning payload must take them all.
-
-    All-or-nothing per arm and per scrutinee, for the reason the code's text states:
-    what suppresses the match's free is the WHOLE scrutinee, so a payload left behind in
-    a taking arm is freed by nobody. Each element of a tuple-literal scrutinee is its own
-    scrutinee (ruling 3 of the tuple design), and the caller asks once for each. With `|`
-    alternatives, each path through them is one way the arm can match, and each path
-    takes the rule.
-    """
-    for taken, left in _survey_paths(checker, pattern, scrutinee_type, None):
-        if taken and left:
-            _report_partial_take(checker, taken, left)
-            return
-
-
-def _report_partial_take(checker: 'BorrowChecker', taken: tuple, left: tuple) -> None:
-    """CE2433 at the first owning position a taking path leaves behind."""
-    name, span = left[0]
-    diag = checker.err.emit_with(er.ERR.CE2433, span, name=name)
-    taken_name, taken_span = taken[0]
-    if taken_span is not None:
-        diag.note_at(f"'{taken_name}' is taken here, which moves the whole variant",
-                     taken_span)
-    diag.help(f"mark '{name}' `nom` as well, or drop the `nom` from '{taken_name}' and "
-              f"read both through the borrow")
-    diag.emit()
-
-
-# One way an arm can match: the bindings it takes, and the owning positions it leaves.
-_Path = tuple[tuple, tuple]
-
-
-def _survey_paths(checker: 'BorrowChecker', item: object, ty: Optional[Type],
-                  span: Optional[Span]) -> list[_Path]:
-    """The taking bindings and the OWNING positions left behind, for each path.
-
-    A pattern with no `|` alternatives has one path. Two paths that take and leave the
-    same positions are one path.
-    """
-    if isinstance(item, OrPattern):
-        return _unique([path for alternative in item.alternatives
-                        for path in _survey_paths(checker, alternative, ty, span)])
-    if isinstance(item, (Pattern, TuplePattern)):
-        inner_span = (item.variant_name_span or item.loc
-                      if isinstance(item, Pattern) else item.loc)
-        paths: list[_Path] = [((), ())]
-        for sub, sub_type in _sub_items(checker, item, ty):
-            paths = _unique([(taken + sub_taken, left + sub_left)
-                             for taken, left in paths
-                             for sub_taken, sub_left in _survey_paths(
-                                 checker, sub, sub_type, inner_span)])
-        return paths
-    if isinstance(item, NomBinding):
-        return [(((item.name, item.loc or span),), ())]
-    if isinstance(item, (LiteralPattern, RangePattern)) or span is None:
-        return [((), ())]
-    # Everything else keeps the payload where it is: a bare binding, a `poke` / `peek`
-    # reference into it, an `Own(...)` unwrap, and a `_` discard, which is the same slot
-    # with no name.
-    if checker.types.type_class(ty) is not TypeClass.MOVE:
-        return [((), ())]
-    name = getattr(item, "name", None) or (item if isinstance(item, str) else "_")
-    return [((), ((name, getattr(item, "loc", None) or span),))]
-
-
-def _unique(paths: list[_Path]) -> list[_Path]:
-    """The paths in order, each one time. Positions compare by name and by span."""
-    seen: set = set()
-    kept: list[_Path] = []
-    for path in paths:
-        key = tuple(tuple((name, id(where)) for name, where in half) for half in path)
-        if key not in seen:
-            seen.add(key)
-            kept.append(path)
-    return kept
 
 
 def _bind_payload_ref(checker: 'BorrowChecker', scope: BindingScope, name: str,

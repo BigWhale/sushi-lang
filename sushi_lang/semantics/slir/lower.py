@@ -17,7 +17,8 @@ The lowering handles the parameters, a `let`, a rebind, a call statement, a `ret
 and `or` as control flow, the construction of an enum variant, of a struct, of a tuple and
 of an array, a field read and write, an element read and write with its bounds check, a
 slice, a destructure, a call, an interpolation, a `??`, `clone`, `expect`, `realise` and
-`err` (`lower_copies.py`), and a borrowed view in a view local with its region. The
+`err` (`lower_copies.py`), a borrowed view in a view local with its region, and a take of an
+owning value (`lower_takes.py`). The
 operand of a value is the answer of `borrow` and the shape of the value alone (ir.md 7.9):
 a `move` row gives `Move`; an `adopt` row gives
 `Copy` of a place, a constant for a literal or a name of a constant, and `Move` of the
@@ -79,6 +80,7 @@ from sushi_lang.semantics.slir import lower_calls as calls
 from sushi_lang.semantics.slir import lower_control as ctl
 from sushi_lang.semantics.slir import lower_match
 from sushi_lang.semantics.slir import lower_rebind as rebinds
+from sushi_lang.semantics.slir import lower_takes as takes
 from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -442,6 +444,8 @@ class Lowering:
                 return p.Copy(place)
             return p.Copy(p.Local(self.temporary(r.Use(p.Copy(place)), self.type_of(expr),
                                                  expr.loc)))
+        if row is Ownership.MOVE and isinstance(expr, e.Field):
+            return takes.take_field(self, expr)
         if row is Ownership.MOVE:
             er.raise_internal_error("CE0000", span=expr.loc,
                                     detail=f"a move row on a {type(expr).__name__}, which is no place")
@@ -524,6 +528,7 @@ _VALUES: dict[type, Callable[..., Value]] = {
     e.Call: calls.call,
     e.Interp: calls.interp,
     e.Try: ctl.try_,
+    e.Take: takes.take_value,
 }
 
 
@@ -547,10 +552,10 @@ def _moves(value: r.Rvalue | CallValue) -> list[p.Place]:
 
 
 def _root(place: p.Place) -> LocalId:
-    """The local that a move takes: a local, or the payload of a variant of a local
-    (`move ((_3 as Ok).0)`), which moves the whole local."""
-    if isinstance(place, p.Field) and isinstance(place.base, p.Downcast):
-        place = place.base.base
-    if not isinstance(place, p.Local):
+    """The local that a move takes: a local, or a part of a local (the payload of a
+    variant, `move ((_3 as Ok).0)`, or a field that a take moves), which moves the whole
+    local."""
+    root = p.root_of(place)
+    if not isinstance(root, p.Local):
         er.raise_internal_error("CE0000", detail=f"SLIR lowering moves out of {place}")
-    return place.id
+    return root.id

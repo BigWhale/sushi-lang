@@ -35,7 +35,7 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 
-from sushi_lang.semantics.ownership import TypeClass
+from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
@@ -49,8 +49,13 @@ from . import arms
 from .bindings import (
     bare_binders, declare_bare_binders, declare_references, own_references,
     release_binding_borrow)
+from .pattern_takes import (
+    declare_taken_binders, owns_scrutinee, reject_partial_take, reject_take_from_a_borrow,
+    taken_binders)
 from .borrows import LATER_ROOTS, clear_borrows
-from .consume import bind, binds_a_bare_literal_string, consume, view_owners
+from .consume import (
+    bind, binds_a_bare_literal_string, consume, decide, source_provenance, view_owners)
+from .diagnostics import emit_consume_of_borrow, spelled
 from .expressions import reject_a_use_after_the_change
 from .flow import (
     FlowFacts,
@@ -62,8 +67,8 @@ from .flow import (
     snapshot_flow,
 )
 from .reads import borrow_owner, read_type
-from .regions import note_view
-from .state import BorrowState
+from .regions import note_part_view, note_view
+from .state import BorrowState, record_owners
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
 if TYPE_CHECKING:
@@ -72,8 +77,10 @@ if TYPE_CHECKING:
     from . import BorrowChecker
 
 
-def check_block(checker: 'BorrowChecker', block: ShirBlock) -> None:
-    """Check a block, releasing the `let`-borrows it opened on the way out.
+def check_block(checker: 'BorrowChecker', block: ShirBlock,
+                declared: Sequence[LocalId] = ()) -> None:
+    """Check a block, releasing the `let`-borrows it opened on the way out. `declared` are
+    the locals of the block that come before its statements: the `nom` binders of an arm.
 
     A statement of an unrolled `expand` copy that ends every path, with more statements
     after it, leaves the rest of the block on no path (ir.md 7.2): the group of the
@@ -81,7 +88,7 @@ def check_block(checker: 'BorrowChecker', block: ShirBlock) -> None:
     """
     copies = checker.body.copies if checker.body is not None else None
     checker._scope_binding_borrows.append([])
-    checker.block_locals.append([])
+    checker.block_locals.append(list(declared))
     checker.statement_at.append((block, 0))
     try:
         for index, statement in enumerate(block.statements):
@@ -216,57 +223,97 @@ def _reject_readonly_place_write(checker: 'BorrowChecker', target: e.Field | e.I
 
 
 def check_destructure(checker: 'BorrowChecker', node: s.Destructure) -> None:
-    """`let (a, b) = v` and `(a, b) := v` of plain values (docs/design/ir.md 7.5).
+    """`let (a, b) = v` and `(a, b) := v` (docs/design/ir.md 7.5, 7.9).
 
-    The value is checked first, and it is a consuming use: a plain value is a copy. A `let`
-    declares each binder as a local of its own, at any nesting level. A rebind form then
-    rebinds each place from left to right, through the gates of a rebind of a local or of
-    a write of a field, at the span of the place. A value that owns stops the walk after
-    the gates of the places: each binder owns or borrows an element of it, and a later
-    group checks that.
+    The value is checked first, and it is a consuming use. A value of plain elements is a
+    copy. A value that owns is OWNED or BORROWED, by its provenance: an owned value (a new
+    value, or a local that the body owns) is taken whole, and each binder owns its element.
+    A borrowed value in the `let` form makes each binder a borrowed view of its element,
+    which freezes the owners of the value while it lives; a binder of an owning element has
+    a borrow region. A `let` declares each binder as a local of its own, at any nesting
+    level. A rebind form then rebinds each place from left to right, through the gates of
+    a rebind of a local or of a write of a field, at the span of the place; from a borrowed
+    value, each place of an owning element is the consuming use of a borrow (CE2411).
     """
     arms.check(checker, node.value)
-    owns = checker.types.type_class(read_type(checker, node.value)) is TypeClass.MOVE
-    if not owns:
-        consume(checker, node.value)
     targets = _targets(node.targets)
-    for target in targets:
+    owns = checker.types.type_class(read_type(checker, node.value)) is TypeClass.MOVE
+    borrowed = owns and source_provenance(checker, node.value) is Provenance.BORROWED
+    if borrowed:
+        decide(checker, node.value, Provenance.BORROWED, TypeClass.MOVE)
+    else:
+        consume(checker, node.value)
+    for path, target in targets:
         if isinstance(target, s.Place):
             _rebind_place(checker, target.target)
-    if owns:
-        arms.stop_at(checker, node)
-    for target in targets:
+            if borrowed:
+                _reject_take_of_a_part(checker, node, path, target.target)
+    owners = view_owners_of_value(checker, node.value) if borrowed else None
+    for _path, target in targets:
         if not isinstance(target, s.Place):
-            _declare_binder(checker, target)
+            _declare_binder(checker, target, node, owners)
     clear_borrows(checker)
 
 
-def _targets(targets: Sequence[s.DestructureTarget]) -> list[LocalId | s.Place]:
+def _targets(targets: Sequence[s.DestructureTarget], prefix: tuple[int, ...] = ()
+             ) -> list[tuple[tuple[int, ...], LocalId | s.Place]]:
     """The binders and the places of a destructure, from left to right, at any nesting
-    level. A `_` binds nothing."""
-    found: list[LocalId | s.Place] = []
-    for target in targets:
+    level, each with its path. A `_` binds nothing."""
+    found: list[tuple[tuple[int, ...], LocalId | s.Place]] = []
+    for index, target in enumerate(targets):
         if isinstance(target, s.Nested):
-            found.extend(_targets(target.targets))
+            found.extend(_targets(target.targets, (*prefix, index)))
         elif not isinstance(target, s.Discard):
-            found.append(target)
+            found.append(((*prefix, index), target))
     return found
+
+
+def view_owners_of_value(checker: 'BorrowChecker', value: e.ShirExpr) -> tuple:
+    """The owners that each binder of a borrowed value freezes."""
+    owner = borrow_owner(checker, value)
+    return () if owner is None else view_owners(checker, owner)
+
+
+def _reject_take_of_a_part(checker: 'BorrowChecker', node: s.Destructure,
+                           path: tuple[int, ...], place: e.ShirExpr) -> None:
+    """CE2411 at a place of a rebind form that takes an owning element of a borrowed value:
+    the element is named as the value and its path (`p.0`), as for `a := p.0`."""
+    element = checker.answers().element_type_of(node.shir_id, path)
+    if checker.types.type_class(element) is not TypeClass.MOVE:
+        return
+    name = ".".join([spelled(checker, node.value), *map(str, path)])
+    emit_consume_of_borrow(checker, name, place.loc,
+                           BorrowState(name=name, var_type=element, bound_at_span=node.loc))
 
 
 def declare_binders(checker: 'BorrowChecker', node: s.Destructure) -> None:
     """Declare each binder of a destructure that has a type, and walk nothing: the
     destructure is unknown in a body with an error of typecheck (docs/design/ir.md 7.9)."""
-    for target in _targets(node.targets):
+    for _path, target in _targets(node.targets):
         if not isinstance(target, s.Place) and checker.local_type(target) is not None:
-            _declare_binder(checker, target)
+            _declare_binder(checker, target, node, None)
 
 
-def _declare_binder(checker: 'BorrowChecker', local: LocalId) -> None:
+def _declare_binder(checker: 'BorrowChecker', local: LocalId, node: s.Destructure,
+                    owners: Optional[tuple]) -> None:
+    """A binder of a destructure: a local of its own, or with `owners` a borrowed view of
+    its element, which freezes those owners; a view of an owning element has a borrow
+    region from the destructure on."""
     shir_local = checker.locals.get(local)
-    checker.declare(BorrowState(name=checker.name_of(local), local=local,
-                                var_type=checker.local_type(local),
-                                declared_at_span=shir_local.loc if shir_local else None))
+    ty = checker.local_type(local)
+    state = BorrowState(name=checker.name_of(local), local=local, var_type=ty,
+                        declared_at_span=shir_local.loc if shir_local else None)
+    checker.declare(state)
     checker.block_locals[-1].append(local)
+    if owners is None:
+        return
+    state.is_borrowed_binding = True
+    state.is_let_borrow = True
+    state.bound_at_span = node.loc
+    record_owners(checker.borrow_state, state, owners, node.loc,
+                  checker._scope_binding_borrows[-1])
+    if checker.types.type_class(ty) is TypeClass.MOVE:
+        note_part_view(checker, state)
 
 
 def _rebind_place(checker: 'BorrowChecker', place: e.ShirExpr) -> None:
@@ -325,11 +372,11 @@ def check_assert(checker: 'BorrowChecker', node: s.Assert) -> None:
 
 
 def join_exclusive_paths(checker: 'BorrowChecker', blocks: Sequence[ShirBlock | None],
-                         enter: Optional[Callable[[int], None]] = None) -> None:
+                         enter: Optional[Callable[[int], Sequence[LocalId]]] = None) -> None:
     """Check exclusive blocks, each from the state before them; the paths that reach the
     code after them JOIN. `None` is a path that skips every block. `enter` runs at the
     start of each path, with the index of its block: an arm of a match declares its
-    binders there.
+    binders there, and answers the binders that are locals of its block.
 
     A local is moved after the join when it is moved on ANY path, and moved on every path
     when it is moved on each one. Only the paths that reach the code after the blocks
@@ -343,9 +390,8 @@ def join_exclusive_paths(checker: 'BorrowChecker', blocks: Sequence[ShirBlock | 
         if block is None:
             paths.append(entry)
             continue
-        if enter is not None:
-            enter(index)
-        check_block(checker, block)
+        declared = enter(index) if enter is not None else ()
+        check_block(checker, block, declared)
         if not terminates(block, leaves_round=True):
             paths.append(snapshot_flow(checker))
     restore_flow(checker, FlowFacts.join(paths))
@@ -362,10 +408,12 @@ def check_if(checker: 'BorrowChecker', node: s.If) -> None:
 def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
     """A match reads its scrutinee, and `match nom r:` takes it over, a consuming use. The
     arms are exclusive paths, and they join as the blocks of an `if` do. The arms cover
-    each value (the typecheck pass), so no path skips them. Each arm declares its bare
-    binders and the reference binders of its `Own(...)` patterns before its body. A match
-    with a binder of another kind stops the walk: later groups check it. A tuple literal
-    that owns, as the scrutinee, builds no tuple, and each part is a root of its own."""
+    each value (the typecheck pass), so no path skips them. Each arm declares its binders
+    before its body: the bare binders, the reference binders of its `Own(...)` patterns,
+    and the `nom` binders, which take their payload out of a scrutinee that the match owns
+    (`pattern_takes.py`). A match with a `peek` or `poke` binder of another kind stops the
+    walk: a later group checks it. A tuple literal that owns, as the scrutinee, builds no
+    tuple, and each part is a root of its own."""
     binders = [bare_binders(arm.pattern) for arm in node.arms]
     if any(found is None for found in binders):
         arms.stop_at(checker, node)
@@ -379,11 +427,39 @@ def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
               for arm in node.arms for local, root in _binder_roots(node, arm.pattern, roots)}
     clear_borrows(checker)
 
-    def enter(index: int) -> None:
-        body = node.arms[index].body
-        declare_bare_binders(checker, binders[index] or (), owners, body)
-        declare_references(checker, references[index], owners, body)
+    def enter(index: int) -> Sequence[LocalId]:
+        arm = node.arms[index]
+        for root, item in _positions(node, arm.pattern, roots):
+            reject_partial_take(checker, item, read_type(checker, root))
+            if not owns_scrutinee(checker, node, root):
+                for local in taken_binders(item):
+                    reject_take_from_a_borrow(checker, local, root)
+        declare_bare_binders(checker, binders[index] or (), owners, arm.body)
+        declare_references(checker, references[index], owners, arm.body)
+        return declare_taken_binders(checker, taken_binders(arm.pattern))
     join_exclusive_paths(checker, [arm.body for arm in node.arms], enter=enter)
+
+
+def _positions(node: s.Match, pattern: p.ShirPattern, roots: tuple[e.ShirExpr, ...]
+               ) -> list[tuple[e.ShirExpr, p.ShirPattern | p.PatBinding]]:
+    """Each scrutinee that an arm reads, with the item of the pattern at it: the scrutinee
+    and the whole pattern, or each part of an in-place tuple literal with the item at its
+    position (the alternatives of `|` give each part the alternatives of its own position).
+    A pattern with no variant and no tuple takes nothing, and has no position."""
+    alternatives = pattern.alternatives if isinstance(pattern, p.Or) else [pattern]
+    if not any(isinstance(alt, (p.Variant, p.Tuple)) for alt in alternatives):
+        return []
+    if not roots:
+        return [(node.scrutinee, pattern)]
+    tuples = [alt for alt in alternatives if isinstance(alt, p.Tuple)]
+    positions: list[tuple[e.ShirExpr, p.ShirPattern | p.PatBinding]] = []
+    for index, root in enumerate(roots):
+        items = [alt.elements[index] for alt in tuples if index < len(alt.elements)]
+        if len(items) == 1:
+            positions.append((root, items[0]))
+        elif items:
+            positions.append((root, p.Or(pattern.shir_id, pattern.loc, items)))
+    return positions
 
 
 def in_place_roots(checker: 'BorrowChecker', node: s.Match) -> tuple[e.ShirExpr, ...]:

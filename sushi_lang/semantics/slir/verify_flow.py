@@ -11,7 +11,9 @@ each path from its write to the end of its storage, to a write over it, and to t
 flag is false must have moved the local. An `Owned` parameter is an owning local; a
 borrowed parameter never drops and never moves, and an `Inout` one holds a value again at
 the `return`. A `Trap` ends the program, so it needs no drop. The `Drop` of an element reads
-its root local, which must hold a value, and does not change its state.
+its root local, which must hold a value, and does not change its state. A `Move` of a part
+moves its root; a later `Move` of a disjoint part of that root in the same block is the same
+take (`parts`), and a write, the storage or a drop of the root ends it.
 
 The structure check of `verify.py` runs first and gives the dataflow its facts (`Check`).
 """
@@ -60,6 +62,7 @@ class Flow:
     check: Check
     flagged: dict[LocalId, tuple[LocalId, ...]] = field(default_factory=dict)
     report: bool = False
+    parts: dict[LocalId, list[p.Place]] = field(default_factory=dict)
 
     def run(self) -> None:
         check = self.check
@@ -87,6 +90,7 @@ class Flow:
 
     def through(self, block: SlirBlock, state: _State) -> _State:
         configs = list(state)
+        self.parts.clear()
         for stmt in block.statements:
             self.statement(configs, stmt)
         self.terminator(configs, block.terminator)
@@ -179,8 +183,22 @@ class Flow:
             if local in self.check.owning:
                 self.violate(DROP_ONCE, f"moves the parameter _{local.index}, which the "
                                         f"function does not own", span)
+        if self.another_part(configs, local, place):
+            self.parts[local].append(place)
+            return
         self.spent(configs, local, f"moves {show(place)}", span)
         configs[local.index] = frozenset((_MOVED, flag) for _, flag in configs[local.index])
+        if place != p.Local(local):
+            self.parts[local] = [place]
+
+    def another_part(self, configs: list[frozenset[_Config]], local: LocalId,
+                     place: p.Place) -> bool:
+        """Whether `place` is a part of `local` that one take moves after another part of
+        it, earlier in this block: the parts are disjoint (ir.md 8.13)."""
+        taken = self.parts.get(local)
+        return (taken is not None and all(s == _MOVED for s, _ in configs[local.index])
+                and all(not _within(one, place) and not _within(place, one)
+                        for one in taken))
 
     def write(self, configs: list[frozenset[_Config]], place: p.Place, span: Span,
               value: Optional[r.Rvalue]) -> None:
@@ -188,6 +206,7 @@ class Flow:
             self.read(configs, place, span)
             return
         local = place.id
+        self.parts.pop(local, None)
         if local in self.check.owning and any(s == _LIVE for s, _ in configs[local.index]):
             self.violate(DROP_ONCE, f"writes _{local.index} while it holds a value", span)
         configs[local.index] = frozenset((_LIVE, flag) for _, flag in configs[local.index])
@@ -202,6 +221,7 @@ class Flow:
             configs[guarded.index] = frozenset((s, value) for s, _ in configs[guarded.index])
 
     def drop(self, configs: list[frozenset[_Config]], local: LocalId, span: Span) -> None:
+        self.parts.pop(local, None)
         if self.borrowed(local):
             self.violate(DROP_ONCE, f"drops the parameter _{local.index}, which the function "
                                     f"borrows", span)
@@ -216,6 +236,7 @@ class Flow:
 
     def drop_if_set(self, configs: list[frozenset[_Config]], local: LocalId, flag: LocalId,
                     span: Span) -> None:
+        self.parts.pop(local, None)
         after = set()
         for state, value in configs[local.index]:
             if value not in (_TRUE, _FALSE):
@@ -233,6 +254,7 @@ class Flow:
     def storage(self, configs: list[frozenset[_Config]], local: LocalId, span: Span,
                 verb: str) -> None:
         """`StorageLive` and `StorageDead`: each leaves the local with no value."""
+        self.parts.pop(local, None)
         if local in self.check.owning and any(s == _LIVE for s, _ in configs[local.index]):
             self.violate(DROP_ONCE, f"{verb} the storage of _{local.index} while it holds a "
                                     f"value", span)
@@ -258,3 +280,13 @@ class Flow:
     def borrowed(self, local: LocalId) -> bool:
         convention = self.check.conventions.get(local)
         return convention is not None and convention.read_only
+
+
+def _within(outer: p.Place, place: p.Place) -> bool:
+    """Whether `place` is `outer` or a projection of it."""
+    while True:
+        if place == outer:
+            return True
+        if not isinstance(place, (p.Field, p.Index, p.Downcast, p.Deref)):
+            return False
+        place = place.base

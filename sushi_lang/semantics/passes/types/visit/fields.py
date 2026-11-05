@@ -55,6 +55,13 @@ def check_field(validator: TypeValidator, node: e.Field,
     return None
 
 
+def check_take(validator: TypeValidator, node: e.Take,
+               expected: Optional[Type]) -> Optional[Type]:
+    """`nom s.out` in a `let` or a `return`: the type of its place. Whether the place is a
+    take is a rule of the borrow pass (docs/design/ir.md 7.4)."""
+    return visit.check_expr(validator, node.place, expected)
+
+
 def _field_names_of(ty: Optional[Type]) -> Optional[list[str]]:
     """The fields of a type, or None when the pass has no rule for the type yet.
 

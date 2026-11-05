@@ -7,6 +7,6 @@ ShirBody main
     Assign(LocalRef(_0), adopt StructInit(@Named, [adopt Lit("Mostly Harmless")], written_order: [0]), is_init: true)
     Assign(LocalRef(_1), reject Field(LocalRef(_0), "name"), is_init: true)
     Assign(LocalRef(_2), adopt Lit(0), is_init: true)
-    Destructure([Place(LocalRef(_1)), Place(LocalRef(_2))], TupleInit([adopt Lit("towel"), adopt Lit(2)]))
+    Destructure([Place(LocalRef(_1)), Place(LocalRef(_2))], adopt TupleInit([adopt Lit("towel"), adopt Lit(2)]))
     ExprStmt(Call(Intrinsic("println"), [(LocalRef(_1), Guaranteed)]))
-    Return(LocalRef(_2))
+    Return(adopt LocalRef(_2))

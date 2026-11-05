@@ -43,6 +43,15 @@ def note_view(checker: 'BorrowChecker', node: s.Assign, state: 'BorrowState') ->
     checker.views.setdefault(state.local, (state.borrows_from, block, index))
 
 
+def note_part_view(checker: 'BorrowChecker', state: 'BorrowState') -> None:
+    """Keep the view that a binder of a destructure of a borrowed value makes: its last
+    uses are read after the destructure, the statement that the walk is in."""
+    if state.local is None or not checker.statement_at:
+        return
+    block, index = checker.statement_at[-1]
+    checker.views.setdefault(state.local, (state.borrows_from, block, index))
+
+
 def note_binder(checker: 'BorrowChecker', state: 'BorrowState', body: ShirBlock) -> None:
     """Keep the view that a bare binder of an owning payload makes, with its owners and the
     statements of its arm `body`."""

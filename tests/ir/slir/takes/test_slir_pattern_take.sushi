@@ -1,0 +1,33 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "took a1 b1\nnone\nkept w2\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_pattern_take.slir
+#
+# A `nom` binder is an owning local of its arm, written with the `Move` of its payload
+# place: the arm takes the variant whole, so two `nom` binders of one path move two
+# disjoint parts of the scrutinee. The scrutinee of `match nom r:` moves into a temporary of
+# the match statement. An arm that takes nothing drops that temporary at its end, so every
+# arm that reaches the join leaves it moved.
+
+enum Shape:
+    Pair(string, string)
+    Named(string)
+    Empty
+
+fn word(string s, i32 k) string:
+    return "{s}{k}"
+
+fn main() i32:
+    let Shape r = Shape.Pair(word("a", 1), word("b", 1))
+    match nom r:
+        Shape.Pair(nom x, nom y) -> println("took {x} {y}")
+        Shape.Named(nom s) -> println("took {s}")
+        Shape.Empty -> println("empty")
+    match Shape.Empty:
+        Shape.Named(nom s) -> println("took {s}")
+        _ -> println("none")
+    match Shape.Named(word("w", 2)):
+        Shape.Named(s) -> println("kept {s}")
+        Shape.Pair(nom x, nom y) -> println("took {x} {y}")
+        Shape.Empty -> println("empty")
+    return 0

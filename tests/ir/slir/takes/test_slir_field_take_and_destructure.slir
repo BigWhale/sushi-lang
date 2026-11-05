@@ -1,0 +1,117 @@
+unit test_slir_field_take_and_destructure
+
+fn make(_1: i32 @guaranteed) -> (string, string[], i32) {
+    let _0: (string, string[], i32)
+    let _2: string
+    let _3: string[]
+
+  bb0:
+    StorageLive(_2)
+    _2 = call builtin interp@(string, i32)(const "left " @guaranteed, copy _1 @guaranteed)
+    StorageLive(_3)
+    _3 = [const "a", const "b"]
+    _0 = (move _2, move _3, const 3_i32)
+    StorageDead(_3)
+    StorageDead(_2)
+    return
+}
+
+fn show(_1: (string, string) @in_guaranteed) -> ~ {
+    let _0: ~
+    let _2: string view                    // first
+    let _3: string view                    // last
+    let _4: string
+    let _5: ~
+
+  bb0:
+    StorageLive(_2)
+    BeginBorrow(b0, _1, peek)
+    _2 = copy (_1.0)
+    StorageLive(_3)
+    BeginBorrow(b1, _1, peek)
+    _3 = copy (_1.1)
+    StorageLive(_4)
+    _4 = call builtin interp@(string, string, string)(copy _2 @guaranteed, const " " @guaranteed, copy _3 @guaranteed)
+    StorageLive(_5)
+    _5 = call builtin println@(string)(copy _4 @guaranteed)
+    EndBorrow(b1)
+    EndBorrow(b0)
+    StorageDead(_5)
+    Drop(_4)
+    StorageDead(_4)
+    _0 = const ~
+    StorageDead(_3)
+    StorageDead(_2)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: string                         // seed
+    let _2: string
+    let _3: string
+    let _4: string[]
+    let _5: Crew                           // c
+    let _6: string                         // name
+    let _7: ~
+    let _8: (string, string[], i32)
+    let _9: i32                            // n
+    let _10: string                        // left
+    let _11: string
+    let _12: ~
+    let _13: (string, string)              // zaphod
+    let _14: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = const "f"
+    StorageLive(_2)
+    _2 = call builtin interp@(string, string)(copy _1 @guaranteed, const "ord" @guaranteed)
+    StorageLive(_3)
+    _3 = call builtin interp@(string, string)(copy _1 @guaranteed, const "hog" @guaranteed)
+    StorageLive(_4)
+    _4 = [move _3]
+    StorageLive(_5)
+    _5 = Crew(move _2, move _4, const 1_i32)
+    StorageDead(_4)
+    StorageDead(_3)
+    StorageDead(_2)
+    Drop((_5.1))
+    StorageLive(_6)
+    _6 = move (_5.0)
+    StorageLive(_7)
+    _7 = call builtin println@(string)(copy _6 @guaranteed)
+    StorageDead(_7)
+    StorageLive(_8)
+    _8 = call @make(const 1_i32 @guaranteed)
+    StorageLive(_9)
+    _9 = copy (_8.2)
+    Drop((_8.1))
+    StorageLive(_10)
+    _10 = move (_8.0)
+    StorageDead(_8)
+    StorageLive(_11)
+    _11 = call builtin interp@(string, string, i32)(copy _10 @guaranteed, const " " @guaranteed, copy _9 @guaranteed)
+    StorageLive(_12)
+    _12 = call builtin println@(string)(copy _11 @guaranteed)
+    StorageDead(_12)
+    Drop(_11)
+    StorageDead(_11)
+    StorageLive(_13)
+    _13 = (const "zaphod", const "beeblebrox")
+    StorageLive(_14)
+    _14 = call @show(copy _13 @in_guaranteed)
+    StorageDead(_14)
+    _0 = const 0_i32
+    Drop(_13)
+    StorageDead(_13)
+    Drop(_10)
+    StorageDead(_10)
+    StorageDead(_9)
+    Drop(_6)
+    StorageDead(_6)
+    StorageDead(_5)
+    Drop(_1)
+    StorageDead(_1)
+    return
+}

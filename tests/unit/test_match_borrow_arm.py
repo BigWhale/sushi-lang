@@ -2,9 +2,10 @@
 
 A literal arm binds no name: `_`, a literal, a range, and an `Or` of them. A `Variant`
 and a `Tuple` bind the local of each bare `PatBinding` in them, with the span of the
-variant name or of the tuple pattern that holds it. A `poke`, `peek` or `nom` binder and an
-`Own` are the patterns of later groups: a match with one of them stops the walk with
-`borrow, Match`. The tests run
+variant name or of the tuple pattern that holds it. A `nom` binder is no bare binder: the
+arm takes its payload (`pattern_takes.taken_binders`). A `poke` or `peek` binder of a
+variant payload or of a tuple part is the pattern of a later group: a match with one stops
+the walk with `borrow, Match`. The tests run
 the arm over SHIR built by hand, with a stand-in for the pass; they do not run the
 compiler.
 """
@@ -16,6 +17,7 @@ from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.passes.borrow import arms, statements
 from sushi_lang.semantics.passes.borrow.bindings import bare_binders
+from sushi_lang.semantics.passes.borrow.pattern_takes import taken_binders
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
@@ -91,14 +93,22 @@ def test_a_tuple_binds_each_bare_part_at_the_tuple_pattern() -> None:
 @pytest.mark.parametrize("pattern", [
     _variant(s.Ref(BorrowMode.POKE)),
     _variant(s.Ref(BorrowMode.PEEK)),
-    _variant(p.Nom()),
-    _variant(items=[_variant(p.Nom(), local=2)]),
-    p.Tuple(ShirId(41), SPAN, [_lit(1), p.PatBinding(LocalId(2), p.Nom())]),
     p.Own(ShirId(43), SPAN, p.PatBinding(LocalId(2), s.Bare())),
-    p.Or(ShirId(44), SPAN, [_variant(), _variant(p.Nom())]),
-], ids=["poke", "peek", "nom", "nested-nom", "tuple-with-nom", "own", "or-with-nom"])
+], ids=["poke", "peek", "own"])
 def test_a_pattern_of_a_later_group_has_no_bare_binders(pattern: p.ShirPattern) -> None:
     assert bare_binders(pattern) is None
+
+
+@pytest.mark.parametrize("pattern, taken", [
+    (_variant(p.Nom()), [LocalId(1)]),
+    (_variant(items=[_variant(p.Nom(), local=2)]), [LocalId(2)]),
+    (p.Tuple(ShirId(41), SPAN, [_lit(1), p.PatBinding(LocalId(2), p.Nom())]), [LocalId(2)]),
+    (p.Or(ShirId(44), SPAN, [_variant(p.Nom()), _variant(p.Nom())]), [LocalId(1)]),
+], ids=["nom", "nested-nom", "tuple-with-nom", "or-with-nom"])
+def test_a_nom_binder_is_taken_and_is_no_bare_binder(pattern: p.ShirPattern,
+                                                     taken: list[LocalId]) -> None:
+    assert bare_binders(pattern) == []
+    assert taken_binders(pattern) == taken
 
 
 def test_the_table_checks_a_match() -> None:
