@@ -1,7 +1,8 @@
 """SHIR to SLIR: the takes of an owning value (docs/design/ir.md 8.9, 8.13).
 
-A marked field take drops each other owning field of its receiver, then moves the field:
-the receiver is spent whole, and its own `drop()` does not run. A `Take` with no `move` row
+A marked field take moves the field and drops each other owning field of its receiver right
+before the statement that consumes the take: the receiver is spent whole, and its own
+`drop()` does not run. A `Take` with no `move` row
 is its place, and the marker is inert there. A destructure of an owning value reads the row
 of `borrow`: an OWNED value gives each binder and each place of a plain part the `Copy` of
 it first, then drops each owning part that `_` discards, then gives each binder and each
@@ -51,8 +52,10 @@ def take_value(low: Lowering, node: e.Take) -> Value:
 
 
 def take_field(low: Lowering, place: e.ShirExpr) -> p.Move:
-    """The field take of `place`, one step off a local: the `Drop` of each other owning
-    field of the local, then the `Move` of the field, which spends the whole local."""
+    """The field take of `place`, one step off a local: the `Move` of the field, which spends
+    the whole local. The `Drop` of each other owning field of the local waits in `takes`
+    for the statement that consumes the `Move` (`Lowering.write`), so an exit before it
+    drops the local whole."""
     if not (isinstance(place, e.Field) and isinstance(place.base, e.LocalRef)):
         er.raise_internal_error("CE0000", span=place.loc,
                                 detail="a field take of no field of a local reached SLIR")
@@ -62,10 +65,10 @@ def take_field(low: Lowering, place: e.ShirExpr) -> p.Move:
     if not isinstance(receiver, StructType) or index is None:
         er.raise_internal_error("CE0000", span=place.loc,
                                 detail="a field take of no struct field reached SLIR")
-    for other, (_name, ty) in enumerate(receiver.fields):
-        if other != index and low.owns(ty):
-            low.emit(low.placement.drop_part(p.Field(root, other), place.loc))
-    return p.Move(p.Field(root, index))
+    taken = p.Field(root, index)
+    low.takes[taken] = tuple(p.Field(root, other) for other, (_name, ty)
+                             in enumerate(receiver.fields) if other != index and low.owns(ty))
+    return p.Move(taken)
 
 
 def destructure(low: Lowering, stmt: s.Destructure) -> None:

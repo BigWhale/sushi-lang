@@ -2873,6 +2873,7 @@ tests/references/double_borrow_spelling/test_err_double_borrow_spelling.sushi
 tests/references/field_take/test_err_field_take_nested_chain.sushi
 tests/references/field_take/test_err_field_take_spends_the_receiver.sushi
 tests/references/field_take/test_err_field_take_through_a_borrow.sushi
+tests/references/field_take/test_run_field_take_before_an_exit.sushi
 tests/references/field_take/test_run_field_take_enum_payload.sushi
 tests/references/field_take/test_run_field_take_fixed_owning.sushi
 tests/references/field_take/test_run_field_take_hashmap.sushi

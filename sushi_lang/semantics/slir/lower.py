@@ -225,6 +225,7 @@ class Lowering:
     holder: Optional[ShirId] = None
     found_flags: set[ShirLocalId] = field(default_factory=set)
     found_unknown: set[tuple[ShirId, ShirLocalId]] = field(default_factory=set)
+    takes: dict[p.Place, tuple[p.Field, ...]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.block = self.blocks[0]
@@ -386,7 +387,8 @@ class Lowering:
 
     def write(self, place: p.Place, value: Value, span: Span) -> None:
         """Store `value` into `place`. The store is the statement that consumes each `move`
-        operand of the value, so it marks the local of each one moved (ir.md 8.10, rule 3)."""
+        operand of the value, so it marks the local of each one moved (ir.md 8.10, rule 3),
+        and the parts that a field take leaves (`takes`) drop right before it (ir.md 8.9)."""
         if isinstance(value, ShortCircuit):
             ctl.short_circuit(self, place, value)
             return
@@ -395,6 +397,9 @@ class Lowering:
                 er.raise_internal_error("CE0000", span=span,
                                         detail="a view into an owning place reached SLIR")
             value = value.value
+        for moved in _moves(value):
+            for part in self.takes.pop(moved, ()):
+                self.emit(self.placement.drop_part(part, span))
         if isinstance(value, CallValue):
             self.emit([st.Call(place, value.callee, value.args, span)])
         else:

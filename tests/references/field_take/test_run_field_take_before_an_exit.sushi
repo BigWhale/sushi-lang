@@ -1,0 +1,42 @@
+# A field take in an argument, and a `??` in a later argument of the same call. The drops of
+# the other owning fields stand right before the call, so the error path of the `??` finds
+# the receiver whole and drops it one time; the Ok path takes the field and drops the rest.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ab1 7\nab3 7\n1 9 1 9\n"
+
+struct Wrap:
+    string out
+    string rest
+
+fn eat2(nom string a, i32 b) ~:
+    println("{a} {b}")
+
+fn pick(nom string a, i32 b) string:
+    return "{a} {b}"
+
+fn g(i32 n) i32 | StdError:
+    if (n > 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(7)
+
+fn run(i32 n) i32 | StdError:
+    let string base = "ab"
+    let Wrap w = Wrap("{base}1", "{base}2")
+    eat2(nom w.out, g(n)??)
+    return Result.Ok(1)
+
+fn keep(i32 n) i32 | StdError:
+    let string base = "ab"
+    let Wrap w = Wrap("{base}3", "{base}4")
+    let string s = pick(nom w.out, g(n)??)
+    println(s)
+    return Result.Ok(1)
+
+fn main() i32:
+    let i32 a = run(0).realise(9)
+    let i32 b = run(1).realise(9)
+    let i32 c = keep(0).realise(9)
+    let i32 d = keep(1).realise(9)
+    println("{a} {b} {c} {d}")
+    return 0
