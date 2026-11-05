@@ -34,15 +34,16 @@ TABLE = SideTable(
     writer="semantics/passes/borrow/",
     read_api=frozenset({
         "ownership_of", "capture_ownership_of", "is_conditionally_moved",
-        "conditionally_moved", "lent_of", "lent_on_heap", "in_place_of",
+        "conditionally_moved", "lent_of", "lent_on_heap", "in_place_of", "region_of",
+        "regions",
     }),
     write_api=frozenset({
         "record_ownership", "record_capture_ownership", "record_conditional_move",
-        "record_lent", "record_lent_on_heap", "record_in_place",
+        "record_lent", "record_lent_on_heap", "record_in_place", "record_region",
     }),
     tables=frozenset({
         "_ownerships", "_capture_ownerships", "_conditional_moves", "_lent_iterators",
-        "_lent_on_heap", "_in_place_walks",
+        "_lent_on_heap", "_in_place_walks", "_regions",
     }),
 )
 

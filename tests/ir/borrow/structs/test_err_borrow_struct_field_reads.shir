@@ -46,6 +46,7 @@ ShirBody shift
 ShirBody origin
   params : []
   locals : [_0 "x": i32, _1 "p": Point, _2 "s": Seg, _3 "name": string]
+  regions : [_3: {} until #25]
   block  :
     Assign(LocalRef(_0), adopt Field(ConstRef(@ORIGIN), "x"), is_init: true)
     Assign(LocalRef(_1), adopt ConstRef(@ORIGIN), is_init: true)

@@ -3,6 +3,7 @@ unit test_err_borrow_let_borrow_across_a_branch
 ShirBody look
   params : [(_0 "text": string, Guaranteed), (_1 "loud": bool, Guaranteed)]
   locals : [_2 "view": string]
+  regions : [_2: {_0} until #7, #11]
   block  :
     Assign(LocalRef(_2), reject LocalRef(_0), is_init: true)
     If(LocalRef(_1), then: [ExprStmt(Call(Intrinsic("println"), [(LocalRef(_2), Guaranteed)]))], otherwise: [ExprStmt(Call(Intrinsic("println"), [(Interp(["", LocalRef(_2), "."]), Guaranteed)]))])

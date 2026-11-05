@@ -59,6 +59,7 @@ from .flow import (
     snapshot_flow,
 )
 from .reads import borrow_owner, read_type
+from .regions import note_view
 from .state import BorrowState
 from .writes import check_owner_not_borrowed, reject_readonly_write
 
@@ -78,8 +79,10 @@ def check_block(checker: 'BorrowChecker', block: ShirBlock) -> None:
     copies = checker.body.copies if checker.body is not None else None
     checker._scope_binding_borrows.append([])
     checker.block_locals.append([])
+    checker.statement_at.append((block, 0))
     try:
         for index, statement in enumerate(block.statements):
+            checker.statement_at[-1] = (block, index)
             arms.check(checker, statement)
             if (copies is not None and copies.holding(block.shir_id, index)
                     and index + 1 < len(block.statements)
@@ -89,6 +92,7 @@ def check_block(checker: 'BorrowChecker', block: ShirBlock) -> None:
             record_exit(checker, len(checker.block_locals) - 1)
     finally:
         checker.block_locals.pop()
+        checker.statement_at.pop()
         for owner, binding in checker._scope_binding_borrows.pop():
             release_binding_borrow(checker.borrow_state.get(owner), binding)
 
@@ -121,6 +125,7 @@ def _check_let(checker: 'BorrowChecker', node: s.Assign, local: LocalId) -> None
     checker.declare(state)
     arms.check(checker, node.value)
     bind(checker, node, state)
+    note_view(checker, node, state)
     # The local is in its scope from here: an exit in its value comes before it.
     checker.block_locals[-1].append(local)
 

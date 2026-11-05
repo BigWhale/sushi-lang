@@ -28,7 +28,8 @@ The rules of the text, from the example of ir.md 8.11:
 - The answers of `borrow` and `lift` print in place, from their tables (ir.md 7.9), where a
   row exists: the `Ownership` of a consuming use as a word before the node (`move`,
   `adopt`, `reject`, the name of the answer in lower case), the conditionally moved locals on a
-  `cond_moved` line after the `locals` line, `iterator: lent` or `iterator: owned` and
+  `cond_moved` line after the `locals` line, the borrow region of each view on a `regions`
+  line after it, `iterator: lent` or `iterator: owned` and
   `heap: <bool>` after the arguments of an iterator call, `in_place: <bool>` after the body
   of a loop, and `symbol: "<symbol>"` and `env: [(<ownership> _<n>, Copy | Move), ...]`
   after the fields of a lambda. With no row, the text is the text of the written form.
@@ -57,7 +58,7 @@ from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
 from sushi_lang.semantics.shir.lift import Capture, LiftResults
 from sushi_lang.semantics.shir.nodes import Hole, ShirBlock, TypeRef, UnknownMember
-from sushi_lang.semantics.shir.ownership import OwnershipResults
+from sushi_lang.semantics.shir.ownership import OwnershipResults, Region
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.walk import walk
 from sushi_lang.semantics.typesys import BorrowMode
@@ -116,6 +117,14 @@ def _node(kind: str, *fields: str) -> str:
 
 def _local(local: LocalId) -> str:
     return f"_{local.index}"
+
+
+def _region(view: LocalId, region: Region) -> str:
+    """`_4: {_1, _2} until #17, #23`: a view, its owners, and its last use on each path."""
+    owners = ", ".join(owner if isinstance(owner, str) else _local(owner)
+                       for owner in region.owners)
+    return (f"{_local(view)}: {{{owners}}} until "
+            f"{', '.join(f'#{use.index}' for use in region.until)}")
 
 
 def _flag(name: str, value: bool) -> str:
@@ -392,7 +401,8 @@ def print_body(body: b.ShirBody, decls: DeclNames, answers: Optional[TypeckResul
     `locals` holds every local of the body, the parameters too (ir.md 7.2): the line of a
     parameter takes its name from there, and the `locals` line shows the others. The type
     of a local is the answer of `typecheck` in `answers`, else the type as written. The
-    conditionally moved locals of `ownership`, if any, follow on their own line.
+    conditionally moved locals of `ownership` and the borrow regions, if any, follow on
+    their own lines.
     """
     pr = ShirPrinter(decls, answers, ownership, lift)
 
@@ -417,6 +427,9 @@ def print_body(body: b.ShirBody, decls: DeclNames, answers: Optional[TypeckResul
     moved = () if ownership is None else ownership.conditionally_moved()
     if moved:
         lines.append(f"  cond_moved : [{', '.join(_local(local) for local in moved)}]")
+    regions = () if ownership is None else ownership.regions()
+    if regions:
+        lines.append(f"  regions : [{', '.join(_region(view, row) for view, row in regions)}]")
     if body.block.statements:
         lines.append("  block  :")
         lines.extend(f"    {pr.show(stmt)}" for stmt in body.block.statements)

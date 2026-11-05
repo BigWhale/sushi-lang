@@ -17,7 +17,8 @@ A construct that the pass does not check yet stops the walk of its body with the
 CE0155 (`borrow, <class>`), and the pass records the stop. The body of a constant or `var`
 initializer is walked as any other body: the constant evaluator makes its value, so a
 constant that it names is read, not moved (`consume.source_provenance`). A body that the
-walk finished with no error writes its conditionally moved locals, has its table
+walk finished with no error writes its conditionally moved locals and the region of each
+view (`regions.py`), has its table
 checked (`check_ownership`, CE0157), and goes to the stage after the pass, the SLIR
 lowering (`slir/lower.py`).
 """
@@ -43,6 +44,7 @@ from .consume import binds_a_bare_literal_string
 from .destroy_effects import compute_destroy_effects
 from .flow import FlowFacts, LoopFrame, record_exit, terminates
 from .methods import MUTATING_METHODS
+from .regions import write_regions
 from .state import BorrowState
 from .statements import check_block
 from .types import TypeQueries
@@ -53,6 +55,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.shir.body import ShirBody, ShirLocal, ShirParam
     from sushi_lang.semantics.shir.ids import DeclId, LocalId
     from sushi_lang.semantics.shir.lowering import LoweredProgram
+    from sushi_lang.semantics.shir.nodes import ShirBlock
     from sushi_lang.semantics.shir.ownership import OwnershipResults
     from sushi_lang.semantics.shir.stop import Stops
     from sushi_lang.semantics.shir.typeck import TypeckResults
@@ -112,6 +115,10 @@ class BorrowChecker:
         # that an exit of their scope sees not moved on every path.
         self.moved_locals: Set[LocalId] = set()
         self.kept_at_an_exit: Set[LocalId] = set()
+        # The statement that the walk is in, one entry for each open block, and each view
+        # that a `let` made, with its owners and its statement (`regions.py`).
+        self.statement_at: list[tuple[ShirBlock, int]] = []
+        self.views: Dict[LocalId, tuple[tuple[Owner, ...], ShirBlock, int]] = {}
 
     def check_body(self, decl: object, body: ShirBody, *, tables: SymbolTables,
                    filename: Optional[str]) -> None:
@@ -148,6 +155,7 @@ class BorrowChecker:
         ownership = self.shir.ownership_table_of(body)
         for local in sorted(self.moved_locals & self.kept_at_an_exit):
             ownership.record_conditional_move(local)
+        write_regions(self.views, ownership)
         check_ownership(body, self.shir.typeck_of(body), self.shir.lift_table_of(body),
                         ownership, self.shir.decls)
         if not isinstance(body.origin, TemplateCheck):
@@ -172,6 +180,8 @@ class BorrowChecker:
         self.discovery_rounds = 0
         self.moved_locals = set()
         self.kept_at_an_exit = set()
+        self.statement_at = []
+        self.views = {}
 
     def _leave(self) -> None:
         self.body = self.typeck = self.ownership = None

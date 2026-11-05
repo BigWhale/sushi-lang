@@ -9,6 +9,7 @@ ShirBody keep
 ShirBody look
   params : [(_0 "text": string, Guaranteed), (_1 "kept": Result@(string, StdError), Guaranteed)]
   locals : [_2 "view": string, _3 "got": string]
+  regions : [_2: {_0} until #8, _3: {_1} until #11]
   block  :
     Assign(LocalRef(_2), reject LocalRef(_0), is_init: true)
     Assign(LocalRef(_3), reject Try(reject LocalRef(_1)), is_init: true)

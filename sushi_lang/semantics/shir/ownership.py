@@ -18,16 +18,33 @@ The rows and their keys:
 - LENT or OWNED for an iterator producer or a lazy adapter, by the `shir_id` of the call;
 - whether the state of a lent iterator goes to the heap, because the iterator leaves
   through a `peek` return, by the same key;
-- whether a loop walks its iterator in place, by the `shir_id` of the `Loop`.
+- whether a loop walks its iterator in place, by the `shir_id` of the `Loop`;
+- the borrow region of a view, by the `LocalId` of the local that holds the view: its owner
+  set, and the `shir_id` of the statement of its last use on each path (ir.md 8.6).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.shir.ids import LocalId, ShirId
 from sushi_lang.semantics.shir.side_table import SideTable, row_table, write_once
+
+if TYPE_CHECKING:
+    from typing import TypeAlias
+
+    #: An owner of a view: a local, or the symbol of the global of a `var`.
+    Owner: TypeAlias = LocalId | str
+
+
+@dataclass(frozen=True, slots=True)
+class Region:
+    """The borrow region of a view: each owner that it freezes, and the statement of its
+    last use on each path."""
+    owners: tuple[Owner, ...]
+    until: tuple[ShirId, ...]
+
 
 @dataclass(slots=True)
 class OwnershipResults(SideTable):
@@ -38,6 +55,7 @@ class OwnershipResults(SideTable):
     _lent_iterators: dict[ShirId, bool] = row_table()
     _lent_on_heap: dict[ShirId, bool] = row_table()
     _in_place_walks: dict[ShirId, bool] = row_table()
+    _regions: dict[LocalId, Region] = row_table()
 
     # -- the read API ----------------------------------------------------------------
 
@@ -69,6 +87,14 @@ class OwnershipResults(SideTable):
         """Whether a loop walks its iterator in place, or None."""
         return self._in_place_walks.get(loop)
 
+    def region_of(self, view: LocalId) -> Optional[Region]:
+        """The borrow region of the view that `view` holds, or None."""
+        return self._regions.get(view)
+
+    def regions(self) -> tuple[tuple[LocalId, Region], ...]:
+        """The borrow regions of the body, in the order of the view locals."""
+        return tuple(sorted(self._regions.items(), key=lambda item: item[0]))
+
     # -- the write API: the borrow pass alone calls it ---------------------------------
 
     def record_ownership(self, use: ShirId, ownership: Ownership) -> None:
@@ -89,3 +115,6 @@ class OwnershipResults(SideTable):
 
     def record_in_place(self, loop: ShirId, in_place: bool) -> None:
         write_once(self._in_place_walks, loop, in_place, "borrow", "walk in place")
+
+    def record_region(self, view: LocalId, region: Region) -> None:
+        write_once(self._regions, view, region, "borrow", "borrow region")
