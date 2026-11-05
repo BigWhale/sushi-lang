@@ -27,7 +27,8 @@ also gives its root local, so a `Move` of a projection is a `Move` of its root.
 Then `verify_regions.py` checks the view locals and the borrow regions, and the dataflow of
 `verify_flow.py` checks the moves and the drops of each local on each path. A view local
 owns nothing, so the rule of the drops does not read it. The checks of a call are in
-`verify_calls.py`, and the names of the rules in `verify_rules.py`.
+`verify_calls.py`, the checks of an array value, a length and a slice in `verify_arrays.py`,
+and the names of the rules in `verify_rules.py`.
 
 The verifier refuses a shape that no lowering makes yet, and that it does not check, with
 the internal error CE0000: a `Drop` or a `DropIfSet` of a place that is no local. A projection of a `Global` is typed from the type that the
@@ -57,12 +58,13 @@ from sushi_lang.semantics.slir.printer import show
 from sushi_lang.semantics.slir.verify_calls import (
     DeclaredLookup, DeclaredParams as DeclaredParams, check_call, declared_params,
 )
+from sushi_lang.semantics.slir.verify_arrays import array_value, length_or_slice
 from sushi_lang.semantics.slir.verify_flow import Flow, successors
 from sushi_lang.semantics.slir.verify_regions import check_regions
 from sushi_lang.semantics.slir.verify_rules import CONVENTIONS as CONVENTIONS
 from sushi_lang.semantics.slir.verify_rules import (
     ARRAY_VALUE, BOOL_FLAG, CONSTANT_RANGE, ELEMENT_MOVE, ENUM_VALUE, GLOBAL_MOVE,
-    INTEGER_SWITCH, KNOWN_BLOCKS, LENGTH_SLICE, NUMERIC_CAST, ONE_TERMINATOR, OWNING_DROP,
+    INTEGER_SWITCH, KNOWN_BLOCKS, NUMERIC_CAST, ONE_TERMINATOR, OWNING_DROP,
     SHORT_CIRCUIT, SPANS, STRUCT_VALUE, TAG_SWITCH, TRAP, TYPED_LOCALS, TYPED_PLACES, VIEW,
 )
 from sushi_lang.semantics.typesys import (
@@ -366,62 +368,9 @@ class Check:
             self.struct_value(value.kind.ty,
                               [self.operand_type(part, span) for part in value.parts], span)
         if isinstance(value, r.Aggregate) and isinstance(value.kind, r.AggArray):
-            self.array_value(value.kind, value.parts, span)
+            array_value(self, value.kind, value.parts, span)
         if isinstance(value, (r.Len, r.Slice)):
-            self.length_or_slice(value, span)
-
-    def array_value(self, kind: r.AggArray, parts: Sequence[p.Operand], span: Span) -> None:
-        """The parts fit the runs: a value of the element type, an `i32` count, an `i32`
-        first value of a sequence of `i32` slots. The counts of a `T[N]` are constants
-        that add up to `N`."""
-        ty = kind.ty
-        if not isinstance(ty, (ArrayType, DynamicArrayType)):
-            self.fail(ARRAY_VALUE, f"an array value of {display_type(ty)}, which is no array",
-                      span)
-        widths = [r.run_width(run) for run in kind.runs]
-        if sum(widths) != len(parts):
-            self.fail(ARRAY_VALUE, f"the runs of {display_type(ty)} take {sum(widths)} parts, "
-                                   f"and the value gives {len(parts)}", span)
-        wanted: list[Type] = []
-        for run in kind.runs:
-            if isinstance(run, r.RunSequence) and ty.base_type != BuiltinType.I32:
-                self.fail(ARRAY_VALUE, f"a sequence fills {display_type(ty)}, whose element "
-                                       f"is no i32", span)
-            first = BuiltinType.I32 if isinstance(run, r.RunSequence) else ty.base_type
-            wanted += [first] if isinstance(run, r.RunOne) else [first, BuiltinType.I32]
-        self.parts_fit(ARRAY_VALUE, display_type(ty), wanted,
-                       [self.operand_type(part, span) for part in parts], span)
-        if isinstance(ty, ArrayType):
-            self.fixed_size(ty, kind.runs, parts, span)
-
-    def fixed_size(self, ty: ArrayType, runs: Sequence[r.ArrayRun],
-                   parts: Sequence[p.Operand], span: Span) -> None:
-        total, at = 0, 0
-        for run in runs:
-            if isinstance(run, r.RunOne):
-                total, at = total + 1, at + 1
-                continue
-            count = parts[at + 1]
-            if not (isinstance(count, p.Const) and isinstance(count.constant, k.Int)):
-                self.fail(ARRAY_VALUE, f"the count {show(count)} of a run of "
-                                       f"{display_type(ty)} is no constant", span)
-            total, at = total + max(count.constant.value, 0), at + 2
-        if total != ty.size:
-            self.fail(ARRAY_VALUE, f"the runs of {display_type(ty)} fill {total} slots", span)
-
-    def length_or_slice(self, value: r.Len | r.Slice, span: Span) -> None:
-        """`Len` reads an array or a string; `Slice` reads an array with two `i32` bounds."""
-        ty = self.place(value.place, span).ty
-        kinds: tuple[type, ...] = (ArrayType, DynamicArrayType)
-        if isinstance(value, r.Len) and ty == BuiltinType.STRING:
-            return
-        if ty is not None and not isinstance(ty, kinds):
-            self.fail(LENGTH_SLICE, f"{show(value)} reads a value that is no array", span)
-        if isinstance(value, r.Slice):
-            for bound in (value.start, value.end):
-                if self.operand_type(bound, span) not in (BuiltinType.I32, None):
-                    self.fail(LENGTH_SLICE, f"the bound {show(bound)} of {show(value)} is no "
-                                            f"i32", span)
+            length_or_slice(self, value, span)
 
     def cast(self, value: r.Cast, span: Span) -> None:
         """A cast joins two numeric types, or keeps one type. Its operand has a known type
