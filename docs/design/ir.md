@@ -99,7 +99,12 @@ Amended on 2026-11-05 (the owning structs, enums and tuples, and the one deep co
 `result` and the `maybe` family answers a `bool`), 8.9 (a construction moves each owning
 part; the read and the write of an owning field; `x.clone()` of a temporary is the
 temporary; `realise` and `err` drop a temporary on the path that does not take it) and 8.10
-(rule 3: the drop on such a path).
+(rule 3: the drop on such a path). Amended on 2026-11-05 by group B7 (the takes): 7.9 (a
+marked field take, a `nom` binder with CE2432 and CE2433, a destructure of an owning value,
+and the CE2411 of each owning place of a rebind form over a borrowed value), 8.9 (the
+lowering of a `Take`, of a destructure of an owning value, and of a `nom` binder), 8.10
+(rule 3: the drop of a temporary on an arm that takes nothing) and 8.13 (one take moves
+two or more disjoint parts of one root in one block).
 
 ## The decisions, in one place
 
@@ -1819,8 +1824,9 @@ The rows of `OwnershipResults`:
   an error of `borrow`, except at three positions. There it is a borrowed view with no
   error:
   - the value of an `Assign` with `is_init`: a let-borrow of the owner;
-  - the value of the `let` form of a `Destructure`: each binder borrows its element (see
-    "A destructure in `borrow`" below);
+  - the value of a `Destructure`: in the `let` form each binder borrows its element (see
+    "A destructure in `borrow`" below); a rebind form refuses each place of an owning
+    element (CE2411), so with no error it copies plain elements alone;
   - the operand of a `Try` that reads through a borrowed owning wrapper. The wrapper can be
     read directly, or through an `or_err`. With an `or_err`, the `REJECT` row is on the
     receiver of the `or_err` (8.3).
@@ -1964,7 +1970,8 @@ names it with `nom` gives no CE2405. A local with no type is PLAIN for `classify
 of it never moves it. Two divergences from the old pipeline follow. `typecheck` types no arm
 of a `match` whose scrutinee has an error (7.8), so each node of its arms is unknown, and
 `borrow` gives no diagnostic in them. A stop of `borrow` ends the walk of such a body too
-(for example a `match` with a `nom` binder, which the group of the pattern takes checks), so a diagnostic in the construct of the stop or after it does not
+(for example a `match` with a `poke` binder of a variant payload, which the group of the
+reference binders checks), so a diagnostic in the construct of the stop or after it does not
 come; the pipeline never reports the stop, because the program has an error. The pass writes no row of such a body,
 as in the discovery round of a loop: the `OwnershipResults` of the body stay empty, the pass
 does not check them, and the body never goes to the SLIR lowering.
@@ -2078,9 +2085,20 @@ the note at the name of the variant or the tuple pattern that holds the `Own`, a
 `Own(peek h)` or `Own(poke h)` is a reference binding of the pointee, which keeps its
 reference type: a write through a `peek` one is [CE2408](../error-catalog.md#ce2408), and
 it freezes the owners of the scrutinee to its last use whatever the type of the pointee
-([CE2412](../error-catalog.md#ce2412)). A `Match` with an arm that binds a name in another
-way stops the walk (`borrow, Match`): a `nom` binder, and a `peek` or `poke` binder of a
-variant payload or of a tuple part. A tuple
+([CE2412](../error-catalog.md#ce2412)). A `nom` binder TAKES its payload
+(`passes/borrow/pattern_takes.py`): it is an owned local of the arm, with no region, so a
+later use after a move of it is CE2405 and a move of it on some paths of the arm gives it a
+`cond_moved` row. The match must own the scrutinee: a temporary (a FRESH value), or
+`match nom r:`; a `nom` binder under any other match is
+[CE2432](../error-catalog.md#ce2432) at the binder, with a note at the owner of the
+scrutinee, and a help that names `match nom` (or a `.clone()`, when no name owns the
+scrutinee, a get-out of a temporary). An arm that takes one owning payload takes the variant
+whole, so a path that takes one and leaves another owning position (a bare binder, a
+reference binder, an `Own(...)` or a `_`) is [CE2433](../error-catalog.md#ce2433) at the
+position that it leaves, with a note at the taken binder. Each part of an in-place tuple
+literal is a scrutinee of its own for both rules. `Own(nom x)` is refused by the AST
+builder ([CE2434](../error-catalog.md#ce2434)). A `Match` with a `peek` or `poke` binder
+of a variant payload or of a tuple part stops the walk (`borrow, Match`). A tuple
 literal that owns, as the scrutinee, builds NO tuple (ruling 3 of `tuples.md`): each part
 is a root of its own, which the match reads; a part is a consuming use only when the match
 consumes (`match nom (a, b):` takes each part), and a binder of a part views that part, so
@@ -2121,8 +2139,18 @@ invalidates each let-borrow of it (`check_owner_not_borrowed`, CE2412 at a later
 the value is a consuming use. Each field of a `StructInit`, in the written order (R1), and
 each part of a `TupleInit` is a consuming use by its position, as each payload of an
 `EnumInit` is. A root that a later group checks (a `GlobalRef`) stops the
-walk with its class. A marked field take is B7's: a `Take`, and a `nom`
-argument of an owning field (`f(nom s.out)`, `borrow, Field take`), stop the walk.
+walk with its class.
+
+**A marked field take in `borrow`.** A `Take` (`nom s.out` in a `let`, a `return` or the
+value of a destructure) and a `nom` argument on a field (`f(nom s.out)`, a `nom` field of a
+construction) are a take when the field is ONE step off a local that the body OWNS and the
+field owns (`passes/borrow/takes.py`). The take has a `move` row (on the `Take`, or on the
+`Field` of the argument) and spends the WHOLE receiver: a consuming use of the local with
+no row of its own, so a later mention is CE2405, a live borrow of the local in the
+statement is CE2401, and a take on some paths gives the local a `cond_moved` row. Any other
+`Take` is its place, and the marker is inert: the `Take` gets the decision of its place,
+which a position decides as for the place alone (a chain `nom a.b.c` and a take through a
+borrow read through an owner: a let-borrow in a `let`, CE2411 at a consuming use).
 
 **An array in `borrow`.** Each `Single` element of an `ArrayInit` is a consuming use by its
 position. The value of a `Repeat` is read, then its count (R2), and a range run reads its
@@ -2174,19 +2202,24 @@ that owns too, and SLIR lowering stops at it (group D1).
 **A destructure in `borrow`.** The value is checked first, as a consuming use. A value of
 plain elements is a copy (`ADOPT`). A value that owns is OWNED or BORROWED, by its
 provenance: a `Destructure` owns from an owned value and borrows from a borrow
-(`tuples.md`). An owned value (a new value, or a local that the body owns) gets `MOVE`: the
-destructure takes each part, and each binder owns its element. A borrowed value (a
-parameter, a field, a binder, a let-borrow) gets `REJECT` in the `let` form: each binder
-is a borrowed view of its element, with a region row over the owners of the value. SLIR
-lowering reads that one row (8.9). A `let` declares each binder, at any nesting level, as
-a local of its own. A rebind form then
+(`tuples.md`). An owned value (a new value, or a local that the body owns) gets `MOVE` (a
+new value `ADOPT`): the destructure takes each part, and each binder owns its element. A
+borrowed value (a parameter, a field, a binder, a let-borrow) gets `REJECT`, with no error:
+in the `let` form each binder is a borrowed view of its element, which freezes the owners
+of the value while it lives (CE2412, CE2411 for a consuming use of it, CE2414 for a write),
+and a binder of an owning element has a region row (its last uses are read after the
+destructure). SLIR lowering reads that one row (8.9). A `let` declares each binder, at any
+nesting level, as a local of its own. A rebind form then
 rebinds each place from left to right, at the span of the place: a `LocalRef` through the
 gates of a rebind of a local (CE2408, CE2414, CE2426 for a view of another value's storage;
 a by-value parameter is storage of its own and is rebindable), a `StorageRef` with no gate
 (a `var` is storage of its own), and a `Field` through the gates of a field write. Each
-place takes its part, so the rebind form consumes its value: a borrowed value that owns is
-the consuming use of a borrow ([CE2411](../error-catalog.md#ce2411)), after the gates of
-the places. So a rebind of a view is its error also when the value owns.
+place takes its part, so a place of an owning element of a borrowed value is the consuming
+use of a borrow ([CE2411](../error-catalog.md#ce2411)), right after the gates of that
+place: one diagnostic for each such place, at the place, which names the element as the
+value and its path (`p.0`), with a note at the destructure, as for `a := p.0` (the text of
+`main`). A place of a plain element copies it. So a rebind of a view is its error also when
+the value owns.
 
 **The conditionally moved locals.** The state of a local holds two facts: moved on SOME
 path (the join is a union, and a use after it is CE2405) and moved on EVERY path (the join
@@ -3127,9 +3160,9 @@ backstop of the checker, as on the AST backend.
 | `StructInit`, `TupleInit` | each field (each part) in the WRITTEN order (R1, 7.4), then ONE `Aggregate(AggStruct)` (`Aggregate(AggTuple)`) of the instance type, with the parts in the declaration order. A new value goes into a temporary of the statement in that order. A place, or a constant, is read at the `Aggregate`. A place is copied into a temporary first when a later field in the written order can call a function, because the call can change the place through a `poke`; a literal, a name of a constant, a place, an operator and a construction over such values call none. A literal and a name of a constant never change, so they get no temporary. A part that owns is a `Move`: of a local by the `move` row of `borrow`, or of the temporary of a new value; a constant stays a constant. A place of an owning part is never copied into a temporary |
 | `Field` read | a place: `Copy` of `Field(place, index)`, with the index of the typecheck row; a field of a field is a projection of the projection. A base that is no place (a new value, a constant) goes into a temporary of the statement first, and the field is a `Copy` of the projection of the temporary; the statement drops the temporary at its end (rule 2). An owning field in a `let` is a view local (8.2) in a region over the root of the place, and a view of a temporary keeps the temporary in a hidden owner local of the block; in a borrowed position (a `Guaranteed` argument, a part of an interpolation) an owning field is a `Copy` of the place |
 | a field write (`p.x := v`) | the new value first, then the store into `Field(place, index)`. A new value that is `and` or `or` goes into a temporary first, because its left operand is written before its right operand reads the place (rule 6). Over an owning field, rule 6 of 8.10: the new value goes into a temporary unless it is a constant, then `Drop(Field(place, index))` of the old field before the store, which moves the temporary (`part_write`) |
-| `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. Over a value that owns, the row of `borrow` (7.9) decides: an OWNED value (`MOVE`) gives each binder and each place the `Move` of its `Field` place, and a `_` over an owning part drops that part first, so the value is spent whole and gets no drop (8.13, "no local is ever partially moved"); a BORROWED value (`REJECT`, the `let` form) gives each binder a view local (8.2), written with the `Copy` of its `Field` place, in a region over the owners of the value. A plain element is a `Copy` in both cases |
+| `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. Over a value that owns, the row of `borrow` (7.9) decides (`semantics/slir/lower_takes.py`). An OWNED value (`MOVE` or `ADOPT`): the place of each `Place` target is evaluated first, from left to right (its indexes and their checks), then each binder and each place of a plain element takes the `Copy` of its `Field` place, then each `_` over an owning part drops that part, then each binder and each place of an owning element takes the `Move` of its `Field` place: a local drops its old value first (rule 6), and a field or an element drops its old part. So the moves of the parts of the one root stand last in one block (8.13), and the value is spent whole and gets no drop (8.13, "no local is ever partially moved"). A destructure that moves no part keeps the value whole in its temporary, which drops at the end of the statement. An owning binder gets its flag after its write. A BORROWED value (`REJECT`) is read where it is (a view of a temporary keeps the temporary in a hidden owner local of the block, as a `let` does), and each binder of an owning element is a view local (8.2), written with the `Copy` of its `Field` place, in a region over the owners of its region row, or over that hidden owner. A plain element is a `Copy` in both cases. A rebind form over an owning `Guaranteed` parameter stops (`borrowed rebind`), as its rebind does |
 | `StorageRef` (a `var`) | the place `Global(symbol, ty)`: the symbol of the global row of typecheck, and the declared type of the `var`. A read by value goes into a temporary of the statement first, because any call of the statement can change a `var` (`counter + bump()` reads `counter` before the call); a by-address argument, a receiver and a value that its statement stores at once read the `Global` where it is. A slice of a `var` is a view (8.7), which owns nothing: its read gets no temporary. A rebind is an `Assign` into the `Global`, and a field write and an element write an `Assign` into its projection; a plain `var` drops nothing. A `var` that owns stops the lowering (`slir, StorageRef owning`, group D1) |
-| `Take` | `Move` of the field; the other owning fields of the receiver get `Drop`, and `drop()` does not run (`borrow-model.md` §10c) |
+| `Take` | with a `move` row (on the `Take`, or on the `Field` of a `nom` argument): first `Drop(Field(local, i))` of each other owning field of the receiver, then the `Move` of `Field(local, index)`, which spends the whole local (8.13): it gets no drop, so `drop()` does not run (`borrow-model.md` §10c; `semantics/slir/lower_takes.py`). A `Take` with any other row is its place |
 | a variadic tail | folded into one synthesized owned array argument (7.4) |
 | a `string` argument to an `i8*` callee | an explicit conversion into an owning temp local, dropped by the rules of 8.10. The C-string marshalling becomes visible IR, still one lowering site, and `run()` stays the one exception |
 
@@ -3175,8 +3208,16 @@ and the `Copy` of its place: over a plain payload it is an ordinary local, and o
 owning payload it is a view local (8.2), which gets no drop: its region is over the root of
 the place of the scrutinee (the temporary of a new value, or the part of a tuple
 literal), from the write of the binder to the last uses of the region row of `borrow`, and
-a binder with no last use has no region. A view local has ONE write, so an arm whose two or
-more paths write a binder of an owning payload stops (`Match owning alternatives`). With one path, the block of the body writes the binders first.
+a binder with no last use has no region. A `nom` binder of an owning payload is an owning
+local of the scope of the arm, written with the `Move` of its place, and its flag follows
+its write; the arm takes the variant whole, so its root (a temporary of the match statement)
+is moved one time for all the `nom` binders of the path (8.13). A `nom` binder of a plain
+payload is a `Copy`. An arm that takes nothing out of a temporary that another arm takes
+drops that temporary at its end, after the exit of its scope (`drop_on_path`), so the arms
+that reach the join leave it moved; an arm that leaves by a `return`, a `break` or a
+`continue` drops it by its state. A view local has ONE write, and an owning local of a
+binder has one too, so an arm whose two or more paths write a binder of an owning payload
+stops (`Match owning alternatives`). With one path, the block of the body writes the binders first.
 With two or more paths that write a binder, each path ends in a block of its own that writes
 the binders of that path and goes to the body. Each arm body is a scope of its own, and each
 arm starts from the state of the locals after the scrutinee. The arms that reach their end
@@ -3216,9 +3257,11 @@ locals, and the locals that own nothing, and nothing else:
    the statement that consumes the operand (the call or the store), never where the
    operand is built: an exit between the two (the error path of a `Try` in a later
    argument) still drops the local. The same holds for a temporary that is read with
-   `Move`, and a move of a projection (`move ((_3 as Ok).0)`) moves its local. Where one
-   path of `realise` or `err` moves a projection of a temporary, the other path drops the
-   temporary and marks it moved (`drop_on_path`), so the paths meet with one state. The
+   `Move`, and a move of a projection (`move ((_3 as Ok).0)`, a field take `move (_3.0)`)
+   moves its local. Where one path of `realise` or `err` moves a projection of a temporary,
+   the other path drops the temporary and marks it moved (`drop_on_path`), so the paths
+   meet with one state, and so does an arm of a match that takes nothing out of a
+   temporary that a `nom` binder of another arm takes (8.9). The
    declaration of a local and each rebind of it mark it live. At an exit, a live local gets
    `Drop` and a moved local gets nothing; at a rebind, a live old value drops and a moved
    one drops nothing (rule 6). While every path that reaches a point gives a local one
