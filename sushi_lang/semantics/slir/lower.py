@@ -388,7 +388,9 @@ class Lowering:
     def write(self, place: p.Place, value: Value, span: Span) -> None:
         """Store `value` into `place`. The store is the statement that consumes each `move`
         operand of the value, so it marks the local of each one moved (ir.md 8.10, rule 3),
-        and the parts that a field take leaves (`takes`) drop right before it (ir.md 8.9)."""
+        and the parts that a field take leaves (`takes`) drop right before it (ir.md 8.9).
+        Two takes of one root move the root one time, and a part that a take of the value
+        moves does not drop."""
         if isinstance(value, ShortCircuit):
             ctl.short_circuit(self, place, value)
             return
@@ -397,15 +399,17 @@ class Lowering:
                 er.raise_internal_error("CE0000", span=span,
                                         detail="a view into an owning place reached SLIR")
             value = value.value
-        for moved in _moves(value):
-            for part in self.takes.pop(moved, ()):
+        moves = _moves(value)
+        left = dict.fromkeys(part for moved in moves for part in self.takes.pop(moved, ()))
+        for part in left:
+            if part not in moves:
                 self.emit(self.placement.drop_part(part, span))
         if isinstance(value, CallValue):
             self.emit([st.Call(place, value.callee, value.args, span)])
         else:
             self.emit([st.Assign(place, value, span)])
-        for moved in _moves(value):
-            self.placement.move(_root(moved), span)
+        for root in dict.fromkeys(_root(moved) for moved in moves):
+            self.placement.move(root, span)
 
     def temporary(self, value: Value, ty: Type, span: Span, held: bool = False) -> LocalId:
         """A new temporary of the statement that holds `value`, or with `held` a hidden
