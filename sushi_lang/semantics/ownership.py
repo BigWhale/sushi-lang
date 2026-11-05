@@ -25,8 +25,6 @@ from sushi_lang.semantics.typesys import (
 class ConsumingUse(Enum):
     """Every position that takes ownership of a value. A CLOSED set."""
 
-    REBIND = "rebind"                    # x := <source>
-    FIELD_ASSIGN = "field_assign"        # obj.field := <source>
     STRUCT_FIELD = "struct_field"        # S(field: <source>)
     ENUM_PAYLOAD = "enum_payload"        # E.Variant(<source>), incl. Result.Ok / Maybe.Some
     CAPTURE = "capture"                  # a lambda's captured environment slot

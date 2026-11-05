@@ -282,7 +282,6 @@ WHITELIST += (
 # one is kept for the group whose owning type brings the position back with its row.
 _CONSUMING_POSITIONS = {
     "STRUCT_FIELD": "Task 75", "ENUM_PAYLOAD": "Task 75", "MATCH_SCRUTINEE": "Task 75",
-    "REBIND": "Task 75", "FIELD_ASSIGN": "Task 75",
 }
 WHITELIST += tuple(
     (_SEMANTICS + "ownership.py", member,
