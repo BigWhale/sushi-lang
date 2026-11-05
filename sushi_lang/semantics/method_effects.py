@@ -129,8 +129,7 @@ def answers_view(method: BuiltinMethod) -> bool:
 
 def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
     """The convention of the receiver of a call of `method`, or None when its family has
-    no receiver rule yet: a family of `EFFECT_FAMILIES` that is not in
-    `RULED_EFFECT_FAMILIES`, or a family of `NO_RECEIVER_RULE_FAMILIES`.
+    no receiver rule yet: a family of `NO_RECEIVER_RULE_FAMILIES`.
 
     A family of `RECEIVER_READ_FAMILIES` reads its receiver (`Guaranteed`), but
     `concat_in_place` of the string family writes it (`Inout`). A method of a
@@ -147,7 +146,7 @@ def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
         return Convention.OWNED if method.nom_self else Convention.GUARANTEED
     if method.family in RULED_EFFECT_FAMILIES:
         return Convention.INOUT if effect_of(method.name).mutates else Convention.GUARANTEED
-    if method.family in EFFECT_FAMILIES | NO_RECEIVER_RULE_FAMILIES:
+    if method.family in NO_RECEIVER_RULE_FAMILIES:
         return None
     raise_internal_error("CE0000", detail=f"the method family '{method.family}' is in no "
                                           f"receiver set of `semantics/method_effects.py`")
