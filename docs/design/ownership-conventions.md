@@ -62,7 +62,6 @@ class ConsumingUse(Enum):
     ENUM_PAYLOAD      # E.Variant(<source>), incl. Result.Ok / Maybe.Some
     ARRAY_ELEMENT     # from([<source>, ...]) and [<source>, ...]
     ELEMENT_ASSIGN    # arr[i] := <source>
-    CONTAINER_INSERT  # List.push/.insert, HashMap.insert (key AND value), T[].push
     RETURN            # return Result.Ok(<source>)
     CAPTURE           # a lambda's captured environment slot
     OWN_ALLOC         # Own.alloc(<source>)

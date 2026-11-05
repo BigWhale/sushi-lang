@@ -216,7 +216,7 @@ tables below are a map; each module's docstring holds the full rule.
 | A dynamic-array descriptor field (`{len, cap, data}`) | `backend/gep_utils.py` |
 | A bounds check, and the Some/None merge | `backend/types/arrays/bounds.py` |
 | The emitter of a stdlib call (`STDLIB_EMITTERS`) | `backend/expressions/calls/stdlib/__init__.py` |
-| A container method's emitter (`emit_from_table`) | `backend/generics/container_table.py` |
+| A container method's emitter (`emit_with_operands`) | `backend/generics/container_table.py` |
 | The counted walk over a container; the HashMap probe loop | `backend/generics/container_walk.py`, `backend/generics/hashmap/probe.py` |
 | A `Maybe` value (`emit_maybe_some`, `emit_maybe_none`) | `backend/generics/maybe.py` |
 | The hash of one held value (`emit_value_hash`) | `backend/types/value_hash.py` |

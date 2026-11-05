@@ -1066,8 +1066,15 @@ family has its arm too: `x.clone()` of a struct or an enum takes no argument and
 type of `x`. A type that holds a resource has no copy
 ([CE2431](../error-catalog.md#ce2431), with the `.share()` help;
 [CE4018](../error-catalog.md#ce4018) for an opaque type parameter), and a wrong count is
-[CE2009](../error-catalog.md#ce2009). The call yields its type after either fault. The arm of
-the `List` family asks the same rule (`reject_uncloneable`). A method with a
+[CE2009](../error-catalog.md#ce2009). The call yields its type after either fault. The arms of
+the `List` and the `HashMap` family ask the same rule (`reject_uncloneable`). The arm of the
+`HashMap` family (`check_hashmap_method`, `passes/types/visit/hashmap_methods.py`) checks
+the count first, then the key of `insert`, `get`, `contains_key` and `remove` at the type
+`K` and the value of `insert` at the type `V` ([CE2006](../error-catalog.md#ce2006)), and
+the call yields the type of its row (`HashMapMethodInferrer`) after each fault. The key
+rules of a map ([CE2054](../error-catalog.md#ce2054),
+[CE2055](../error-catalog.md#ce2055), [CE2058](../error-catalog.md#ce2058)) are a rule of
+its written type (`reject_unusable_key`), and never of a call or of `HashMap.new()`. A method with a
 signature row (`map_err`, `or_err`) has a method-level type parameter, and the arm of its
 family checks it from that row. The receiver of each is `Owned` (8.3), and the read-through
 of `or_err` over a borrowed `Maybe` is a rule of `borrow` (8.3). The `array` family has its
@@ -2566,9 +2573,11 @@ can name is in exactly one of four sets (gate:
   `consumes_args` (a container insert: `push`, `insert`) is `Owned`, because the container
   takes it by position with no marker. The index of `insert` on an array and on a `List`
   only gives a position, so it is `Guaranteed`; only the value is `Owned`
-  (`POSITION_ARGUMENTS`). Each other argument is `Guaranteed`. Each family of
-  the set has this rule (`RULED_EFFECT_FAMILIES` holds the four), so the set is a
-  read-or-write partition of its methods, and no family of it stops for want of a rule.
+  (`POSITION_ARGUMENTS`). `insert` on a `HashMap` takes its key and its value `Owned`,
+  because the map stores both. Each other argument is `Guaranteed`, the key of a lookup
+  too. A family of the set that its group built is in `RULED_EFFECT_FAMILIES` (`array`,
+  `list`, `hashmap`), and its methods are a read-or-write partition. A call of a method of
+  a family of the set that is not in it yet (`own`) stops in `typecheck`.
 - **Consumes** (`CONSUMING_RECEIVER_FAMILIES`: `result`, `maybe`). The family has a
   `nom self` method, so the answer is per method. The receiver of a method that declares
   `nom self` (`map_err`, `or_err`) is `Owned`: a consuming use (7.9). The receiver of each
@@ -2852,6 +2861,21 @@ an ordinary local and the answer is a copy (8.9), and over an owning element the
 a view (8.2) of the receiver. The name of a static called on a
 List value (`xs.new()`) answers `~` and builds nothing. The `iter()` producer is a stop of
 `borrow`.
+
+The `hashmap` family takes the ADDRESS of its receiver in the same way. Its rows are
+`HASHMAP_EMITTERS` (`backend/generics/hashmap/`), over operands (`emit_with_operands`): the
+key and the value of `insert` are `Owned` operands that the map stores as they are, and the
+key of `get`, `contains_key` and `remove` is a `Guaranteed` value. Each lookup and each
+insert walks the buckets through the one probe loop (`emit_probe_loop`,
+`backend/generics/hashmap/probe.py`) after the last argument, so an argument that changes
+the map comes first (11, rule 9). An insert of a key that the map holds drops the old key
+and the old value of the entry, and then stores the two new ones. `get` answers a view
+(`answers_view`): the entry stays in the map, and over an owning value the destination is
+a view local of the map. `remove` moves the value out into a fresh `Maybe`, which owns it,
+and drops the key of the entry. `free` drops each entry and keeps an empty map, `destroy`
+drops each entry and keeps no buckets, and `rehash` moves each entry into new buckets.
+`HashMap.new` goes to the static row of the table. The producers `keys`, `values`,
+`entries` and `pairs` are a stop of `borrow`.
 
 A `Stdlib(decl, module)` callee of SHIR lowers to `Direct(symbol, name, module)`. `name` is
 the name of the function with no alias, and `module` is the `use` path of its module.

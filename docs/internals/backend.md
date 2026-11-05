@@ -223,14 +223,15 @@ internal error, never a widening.
 
 ### The method families
 
-A container method has its row in `LIST_EMITTERS` or `HASHMAP_EMITTERS` (`emit_from_table`,
-`backend/generics/container_table.py`), a stdlib call its row in `STDLIB_EMITTERS`
+A container method has its row in `LIST_EMITTERS` or `HASHMAP_EMITTERS`
+(`emit_with_operands`, `backend/generics/container_table.py`), a stdlib call its row in `STDLIB_EMITTERS`
 (`backend/expressions/calls/stdlib/__init__.py`), and a built-in array method its row in
 `backend/types/arrays/`. An extension method symbol comes from `extension_symbol`
-(`semantics/generics/name_mangling.py`), for example `Pair__i32_string_swapped`. These
-families still take AST nodes: each one gets operands from SLIR in the group that brings
-its construct back (`docs/design/ir.md` Q7). The primitive family and the string family already take
-operands (`backend/slir/methods.py`, `METHOD_FAMILIES`). The emitter stops on a `BuiltinMethod`
+(`semantics/generics/name_mangling.py`), for example `Pair__i32_string_swapped`. A
+family with no row of `METHOD_FAMILIES` still takes AST nodes: it gets operands from SLIR
+in the group that brings its construct back (`docs/design/ir.md` Q7). The primitive, the string, the array, the
+List and the HashMap family already take operands (`backend/slir/methods.py`,
+`METHOD_FAMILIES`). The emitter stops on a `BuiltinMethod`
 callee of any other family until then.
 
 ## Memory management
