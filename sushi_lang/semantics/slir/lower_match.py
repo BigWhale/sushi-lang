@@ -90,11 +90,12 @@ def _taken(paths: list[_Path]) -> set[LocalId]:
 
 
 def _scrutinee(low: Lowering, expr: e.ShirExpr, *, place: bool) -> p.Operand:
-    """The operand that each test reads. A place (a local, a field, an element, a part of
-    a `var` when a test needs a place) is read where it is, so a `poke` binder writes it,
-    and so is a constant when no test needs a place. A new value, a constant of
-    an enum, and a local that the match takes (`match nom r:`), go into a temporary of the
-    match statement, which drops it at its end."""
+    """The operand that each test reads. A place (a local, a field, an element, and a part
+    of a `var` when a test needs a place) is read where it is, so a `poke` binder writes
+    it. A literal or a constant is read as a constant when no test needs a place. A
+    constant where a test needs a place (a constant of an enum), a local that the match
+    takes (`match nom r:`), and a new value go into a temporary of the match statement,
+    which drops it at its end."""
     value: Value
     if isinstance(expr, (e.LocalRef, e.Field, e.Index, e.Lit, e.ConstRef)):
         operand = low.operand(expr, in_place=place)
