@@ -21,19 +21,16 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Mapping, Optional
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.errors import raise_internal_error
-from sushi_lang.semantics.generics.builtin_methods import reject_builtin_miscount
-from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY, parse_list_types
-from sushi_lang.semantics.generics.type_display import display_type
-from sushi_lang.semantics.method_effects import LIST_FAMILY, argument_conventions
+from sushi_lang.semantics.generics.list import parse_list_types
 from sushi_lang.semantics.passes.types.arguments import (
-    argument_span, check_argument, marked_type, record_builtin_conventions)
+    argument_span, check_argument, marked_type)
 from sushi_lang.semantics.passes.types.arrays import (
     check_i32_operand, check_search_needle, reject_non_i32)
-from sushi_lang.semantics.passes.types.calls.methods import reject_uncloneable
 from sushi_lang.semantics.passes.types.method_registry import ListMethodInferrer, MethodFamily
+from sushi_lang.semantics.passes.types.visit.container_methods import (
+    ContainerArm, check_container_method)
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.typesys import StructType, Type
+from sushi_lang.semantics.typesys import Type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.passes.types import TypeValidator
@@ -84,19 +81,9 @@ def check_list_method(validator: TypeValidator, node: e.Call, receiver: Type, na
                       family: MethodFamily) -> Optional[Type]:
     """The arm of the `list` family: check one call against its row, give each argument
     its convention, and answer the type of the row (see the module docstring)."""
-    if name not in LIST_METHOD_ARITY:
-        raise_internal_error("CE0083", method=name)
-    element = parse_list_types(receiver, validator) if isinstance(receiver, StructType) else None
-    if element is None:
-        raise_internal_error("CE0000", span=node.loc,
-                             detail="the list family answered a receiver that is no List")
-    answer = ListMethodInferrer(receiver, name, validator).infer_return_type()
-    if name == "clone" and reject_uncloneable(validator, node, receiver):
-        return answer
-    if reject_builtin_miscount(validator.reporter, node.loc, name, len(node.args),
-                               f"{display_type(receiver)}.{name}", family.arity):
-        return answer
-    _check_arguments(validator, node, element, name)
-    record_builtin_conventions(validator, node.shir_id, node.args,
-                               argument_conventions(LIST_FAMILY, name, len(node.args)))
-    return answer
+    return check_container_method(
+        validator, node, receiver, name, family, _LIST,
+        lambda element: _check_arguments(validator, node, element, name))
+
+
+_LIST = ContainerArm("CE0083", "List", ListMethodInferrer, parse_list_types)
