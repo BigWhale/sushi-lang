@@ -16,11 +16,12 @@ the same set, a region begins one time and ends one time on a path, and no regio
 at a `return`. A `Trap` ends the program, so it closes nothing. While a region over an owner
 is open, no statement writes that owner, moves it, drops it or gives it to an `Inout`
 argument, at its root or at a projection of it. A change of the owner after the `EndBorrow`
-is legal.
+is legal. An address local is the place of a `Drop` as a whole only at a rebind through
+it: the next statement of its block writes the local (8.10, rules 6 and 8).
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Iterator, NoReturn, Optional
+from typing import TYPE_CHECKING, Callable, Iterator, NoReturn, Optional, Sequence
 
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.param_modes import Convention
@@ -209,12 +210,13 @@ def _view_locals(function: SlirFunction, views: set[LocalId], fail: Fail) -> Non
 def _address_locals(function: SlirFunction, addresses: frozenset[LocalId],
                     fail: Fail) -> dict[LocalId, p.Place]:
     """One `Ref` writes each address local, and it writes the local itself, not a part of
-    it. The local is never dropped as a whole and never moved, at its root or at a part:
-    a write of an owning part drops the old part through the address (rule 6). Answers the
-    root of the place of the `Ref` of each address local."""
+    it. The local is never moved, at its root or at a part, and never dropped as a whole
+    but at a rebind through it, where the next statement writes it: a write of an owning
+    part drops the old part through the address (rule 6). Answers the root of the place
+    of the `Ref` of each address local."""
     refs: dict[LocalId, p.Place] = {}
     for block in function.blocks:
-        for stmt in block.statements:
+        for at, stmt in enumerate(block.statements):
             if isinstance(stmt, st.Assign) and isinstance(stmt.rvalue, r.Ref):
                 if not isinstance(stmt.place, p.Local):
                     fail(ADDRESS_LOCAL, f"a Ref writes {show(stmt.place)}, which is no local",
@@ -223,14 +225,22 @@ def _address_locals(function: SlirFunction, addresses: frozenset[LocalId],
                     fail(ADDRESS_LOCAL, f"{show(stmt.place)} is written by two Refs",
                          stmt.span)
                 refs[stmt.place.id] = p.root_of(stmt.rvalue.place)
+            following = block.statements[at + 1:at + 2]
             for place, what in _spends(stmt):
                 local = p.root_of(place)
-                whole = what == "drops" and isinstance(place, p.Local)
+                whole = what == "drops" and isinstance(place, p.Local) and not (
+                    isinstance(stmt, st.Drop) and _writes(following, place))
                 if isinstance(local, p.Local) and local.id in addresses and (
                         whole or what == "moves"):
                     fail(ADDRESS_LOCAL, f"{what} the address local {show(place)}, which owns "
                                         f"nothing", stmt.span)
     return refs
+
+
+def _writes(statements: Sequence[st.SlirStatement], place: p.Local) -> bool:
+    """Whether the one statement of `statements` writes `place` with no `Ref`."""
+    return any(isinstance(stmt, st.Assign) and stmt.place == place
+               and not isinstance(stmt.rvalue, r.Ref) for stmt in statements)
 
 
 def _written(stmt: st.SlirStatement) -> Optional[p.Local]:

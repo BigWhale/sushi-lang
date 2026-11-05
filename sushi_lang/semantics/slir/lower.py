@@ -11,7 +11,8 @@ dump), and the analysis goes on with the next body. The verifier (`verify.py`, i
 checks a body that the lowering finished, and `SlirProgram` keeps it for the emitter
 (`backend/slir/`).
 
-The lowering handles the parameters, a `let`, a rebind, a call statement, a `return`, an
+The lowering handles the parameters, a `let`, a rebind (`lower_rebind.py`, the concat
+peephole included), a call statement, a `return`, an
 `if`, a `match`, a `while` and a counted loop over a range with their `break` and
 `continue`, an `assert`, over literals, names of constants, locals, the operators, `and`
 and `or` as control flow, the construction of an enum variant, of a struct, of a tuple and
@@ -41,8 +42,7 @@ body is lowered again with what the walks found, until a walk finds nothing new.
 
 The construct of a stop is the SHIR class of the node, or one of these names: `generic
 instance`, `conversion` and `perk method` for the body of a monomorphized generic instance,
-of a conversion and of a perk method; `borrowed rebind`
-for a rebind of a borrowed parameter that owns, `conversion` also for a `??` that calls a
+of a conversion and of a perk method; `conversion` also for a `??` that calls a
 declared conversion,
 `library function` for a function, a method or a static whose declaring unit the typecheck
 row does not name, `bloom` for a bloom argument, `StructInit reference field`

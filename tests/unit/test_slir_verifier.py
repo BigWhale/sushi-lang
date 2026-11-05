@@ -1242,6 +1242,86 @@ def test_a_move_of_an_address_local_is_refused():
         _drop(1), _dead(1), _set(0, r.Use(p.Const(k.Blank()))))), "an address local")
 
 
+def _poke_rebinds(*middle: st.SlirStatement) -> SlirFunction:
+    """`_3 = ref poke (_1.0)` over the owning field of the owned `Named` `_1`, in the region
+    `b0` over `_1`, then a new string in `_4`, then `middle`, then the end of the region and
+    the drop of `_1`."""
+    return _function([BLANK, NAMED, STRING, STRING, STRING], _block(
+        0, _ret(), *_named(1), _live(3),
+        st.BeginBorrow(BorrowId(0), _local(1), BorrowMode.POKE, SPAN),
+        _set(3, r.Ref(p.Field(_local(1), 0), BorrowMode.POKE)),
+        _live(4), _text(4), *middle, _dead(4),
+        st.EndBorrow(BorrowId(0), SPAN), _dead(3), _drop(1), _dead(1),
+        _set(0, r.Use(p.Const(k.Blank())))))
+
+
+def test_a_rebind_through_an_address_local_drops_the_old_value_and_passes():
+    """Rule 6 through the address: the new value first, then the `Drop` of the local, then
+    the store into it (ir.md 8.10, rule 8)."""
+    _passes(_poke_rebinds(_drop(3), _set(3, r.Use(_move(4)))))
+
+
+def test_a_drop_of_an_address_local_that_no_write_of_it_follows_is_refused():
+    _refused(_poke_rebinds(_drop(3, BAD), _live(2), _text(2), _set(3, r.Use(_move(4))),
+                           _drop(2), _dead(2)), "an address local")
+
+
+# -- a Guaranteed parameter that owns (ir.md 8.3, 8.10 rule 5) -----------------------------
+
+def test_a_rebind_of_a_borrowed_parameter_drops_nothing_and_its_new_value_drops_at_the_return():
+    _passes(_function([BLANK, STRING, STRING], _block(
+        0, _ret(), _live(2), _text(2), _set(1, r.Use(_move(2))), _dead(2), _drop(1),
+        _set(0, r.Use(p.Const(k.Blank())))), params=((1, GUARANTEED),)))
+
+
+def test_a_borrowed_parameter_rebound_on_one_path_drops_with_its_flag_at_the_join():
+    _passes(_function(
+        [BLANK, STRING, BOOL, BOOL, STRING],
+        _block(0, _switch(2, 2, 1), _live(3), _flag(3, False)),
+        _block(1, _goto(2), _live(4), _text(4), _set(1, r.Use(_move(4))), _dead(4),
+               _flag(3, True)),
+        _block(2, _ret(), _set(0, r.Use(p.Const(k.Blank()))),
+               st.DropIfSet(_local(1), LocalId(3), SPAN), _dead(3)),
+        params=((1, GUARANTEED), (2, GUARANTEED)),
+    ))
+
+
+def test_a_rebound_borrowed_parameter_that_the_return_keeps_is_refused():
+    _refused(_function([BLANK, STRING, STRING], _block(
+        0, _ret(BAD), _live(2), _text(2), _set(1, r.Use(_move(2))), _dead(2),
+        _set(0, r.Use(p.Const(k.Blank())))), params=((1, GUARANTEED),)),
+        "one drop or move on every path")
+
+
+def test_a_second_rebind_of_a_borrowed_parameter_that_drops_nothing_is_refused():
+    _refused(_function([BLANK, STRING, STRING], _block(
+        0, _ret(), _live(2), _text(2), _set(1, r.Use(_move(2))), _dead(2), _live(2),
+        _text(2), _set(1, r.Use(_move(2)), BAD), _dead(2), _drop(1),
+        _set(0, r.Use(p.Const(k.Blank())))), params=((1, GUARANTEED),)),
+        "one drop or move on every path")
+
+
+# -- the concat peephole (ir.md 8.3, 8.9, 8.13) ----------------------------------------
+
+def _concat_in_place(receiver: Convention) -> SlirFunction:
+    """`_2 = string.concat_in_place(copy _1 @receiver, const "!" @guaranteed)` over the
+    owned string `_1`."""
+    method = BuiltinMethod("string", "concat_in_place", nom_self=False)
+    call = st.Call(_local(2), st.Builtin(method, ()),
+                   ((_copy(1), receiver), (p.Const(k.Str(b"!")), GUARANTEED)), BAD)
+    return _function([BLANK, STRING, BLANK], _block(
+        0, _ret(), _live(1), _text(1), _live(2), call, _dead(2), _drop(1), _dead(1),
+        _set(0, r.Use(p.Const(k.Blank())))))
+
+
+def test_the_concat_peephole_with_an_inout_receiver_passes():
+    _passes(_concat_in_place(Convention.INOUT))
+
+
+def test_the_concat_peephole_with_a_guaranteed_receiver_is_refused():
+    _refused(_concat_in_place(GUARANTEED), CONVENTIONS)
+
+
 # -- a peek return (ir.md 8.2, 8.13) ---------------------------------------------------
 
 def _view_return(function: SlirFunction) -> SlirFunction:

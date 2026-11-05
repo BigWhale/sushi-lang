@@ -87,6 +87,9 @@ MAYBE_FAMILY = "maybe"
 # family is in exactly one of the four sets below (ruling R-V, docs/design/ir.md 8.3).
 # Only reads: no method of the family changes or consumes its receiver.
 RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
+# The one row of the string family that writes its receiver: the call of the concat
+# peephole. Only SLIR lowering makes it, and no program can name it (docs/design/ir.md 8.9).
+CONCAT_IN_PLACE = "concat_in_place"
 # Consumes: the family has a `nom self` method, so the answer is per method.
 CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY})
 # The effect families whose group wrote the receiver rule: a method whose row `mutates`
@@ -129,12 +132,15 @@ def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
     no receiver rule yet: a family of `EFFECT_FAMILIES` that is not in
     `RULED_EFFECT_FAMILIES`, or a family of `NO_RECEIVER_RULE_FAMILIES`.
 
-    A family of `RECEIVER_READ_FAMILIES` reads its receiver (`Guaranteed`). A method of a
+    A family of `RECEIVER_READ_FAMILIES` reads its receiver (`Guaranteed`), but
+    `concat_in_place` of the string family writes it (`Inout`). A method of a
     family of `CONSUMING_RECEIVER_FAMILIES` takes its receiver (`Owned`) when it declares
     `nom self`, and reads it otherwise. A method of a family of `RULED_EFFECT_FAMILIES`
     writes its receiver (`Inout`) when its row `mutates`, and reads it otherwise. The clone
     family reads its receiver. Any other family in no set is an internal error.
     """
+    if method.family == STRING_FAMILY and method.name == CONCAT_IN_PLACE:
+        return Convention.INOUT
     if method.family in RECEIVER_READ_FAMILIES or method.family == CLONE_FAMILY:
         return Convention.GUARANTEED
     if method.family in CONSUMING_RECEIVER_FAMILIES:

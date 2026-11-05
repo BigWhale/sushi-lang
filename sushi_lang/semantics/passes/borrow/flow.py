@@ -7,7 +7,9 @@ records each local of the scope that is not moved on every path there
 (`record_exit`). A rebind drops the old value of its local, so it is an exit of that value
 (`record_rebind`). A local that is moved on some path and that an exit sees not moved on
 every path is CONDITIONALLY moved: SLIR lowering gives it a drop flag (docs/design/ir.md
-8.10, rule 4). A local that each exit sees moved on every path gets no drop (rule 3).
+8.10, rule 4). A local that each exit sees moved on every path gets no drop (rule 3). A
+by-value parameter that owns holds the value of the caller until a rebind, so for an exit
+it is moved where no rebind came before (rule 5).
 """
 
 from __future__ import annotations
@@ -44,6 +46,8 @@ class FlowFacts:
     destroyed: frozenset[LocalId] = frozenset()
     owns_no_heap: frozenset[LocalId] = frozenset()
     moved_on_every_path: frozenset[LocalId] = frozenset()
+    caller_value: frozenset[LocalId] = frozenset()
+    caller_value_on_every_path: frozenset[LocalId] = frozenset()
     # Tuples, not frozensets: `Span` is an unfrozen dataclass and so unhashable. The span
     # must travel with the flag, or CE2405, CE2435 and CE2412 render with no location.
     # A `moved_at` entry is (name, where it moved, the `nom self` method that took it).
@@ -57,6 +61,9 @@ class FlowFacts:
             destroyed=self.destroyed | other.destroyed,
             owns_no_heap=self.owns_no_heap & other.owns_no_heap,
             moved_on_every_path=self.moved_on_every_path & other.moved_on_every_path,
+            caller_value=self.caller_value | other.caller_value,
+            caller_value_on_every_path=(self.caller_value_on_every_path
+                                        & other.caller_value_on_every_path),
             moved_at=_union_by_name(self.moved_at, other.moved_at),
             invalidation=_union_by_name(self.invalidation, other.invalidation),
         )
@@ -75,6 +82,8 @@ class FlowFacts:
             destroyed=self.destroyed - names,
             owns_no_heap=self.owns_no_heap - names,
             moved_on_every_path=self.moved_on_every_path - names,
+            caller_value=self.caller_value - names,
+            caller_value_on_every_path=self.caller_value_on_every_path - names,
             moved_at=tuple(e for e in self.moved_at if e[0] not in names),
             invalidation=tuple(e for e in self.invalidation if e[0] not in names),
         )
@@ -113,6 +122,8 @@ def reinitialize(state: BorrowState) -> None:
     """
     state.is_moved = False
     state.is_moved_on_every_path = False
+    state.holds_caller_value = False
+    state.holds_caller_value_on_every_path = False
     state.moved_at_span = None
     state.consumed_by_method = None
     state.move_reported_by = None
@@ -158,6 +169,9 @@ def snapshot_flow(checker: 'BorrowChecker') -> FlowFacts:
         destroyed=frozenset(n for n, s in states if s.is_destroyed),
         owns_no_heap=frozenset(n for n, s in states if s.owns_no_heap),
         moved_on_every_path=frozenset(n for n, s in states if s.is_moved_on_every_path),
+        caller_value=frozenset(n for n, s in states if s.holds_caller_value),
+        caller_value_on_every_path=frozenset(n for n, s in states
+                                             if s.holds_caller_value_on_every_path),
         moved_at=tuple((n, s.moved_at_span, s.consumed_by_method)
                        for n, s in states if s.is_moved),
         invalidation=tuple((n, s.invalidated_at, s.invalidated_by)
@@ -172,6 +186,8 @@ def restore_flow(checker: 'BorrowChecker', facts: FlowFacts) -> None:
     for name, state in checker.borrow_state.items():
         state.is_moved = name in facts.moved
         state.is_moved_on_every_path = name in facts.moved_on_every_path
+        state.holds_caller_value = name in facts.caller_value
+        state.holds_caller_value_on_every_path = name in facts.caller_value_on_every_path
         state.moved_at_span, state.consumed_by_method = moved_at.get(name, (None, None))
         state.is_destroyed = name in facts.destroyed
         state.owns_no_heap = name in facts.owns_no_heap
@@ -194,6 +210,8 @@ def record_exit(checker: 'BorrowChecker', first_block: int = 0) -> None:
             state = checker.borrow_state.get(local)
             if state is not None and not state.is_moved_on_every_path:
                 checker.kept_at_an_exit.add(local)
+            if state is not None:
+                _caller_value_on_some_paths(checker, state)
 
 
 def record_rebind(checker: 'BorrowChecker', local: LocalId) -> None:
@@ -205,3 +223,15 @@ def record_rebind(checker: 'BorrowChecker', local: LocalId) -> None:
     state = checker.borrow_state.get(local)
     if state is not None and state.is_moved and not state.is_moved_on_every_path:
         checker.kept_at_an_exit.add(local)
+    if state is not None:
+        _caller_value_on_some_paths(checker, state)
+
+
+def _caller_value_on_some_paths(checker: 'BorrowChecker', state: BorrowState) -> None:
+    """A by-value parameter that holds the value of the caller on some paths and a value
+    of its own on others is conditionally moved: only a drop flag tells the exit or the
+    rebind whether to drop it (docs/design/ir.md 8.10, rule 5)."""
+    if state.holds_caller_value and not state.holds_caller_value_on_every_path \
+            and state.local is not None:
+        checker.moved_locals.add(state.local)
+        checker.kept_at_an_exit.add(state.local)

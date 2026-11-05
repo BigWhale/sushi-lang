@@ -6,7 +6,9 @@ are its declared parameters (`declared_params`), and the conventions of a static
 built-in container are the answer of `argument_conventions`. A call of a built-in method
 has a receiver operand. The receiver of a method of a container family with a receiver
 rule, or of `Result` or `Maybe`, has the convention of `receiver_convention`, and each
-argument the convention of `argument_conventions`, or of the mode of its row.
+argument the convention of `argument_conventions`, or of the mode of its row. The call of
+the concat peephole (`concat_in_place`) has an `Inout` receiver and one `Guaranteed`
+argument.
 """
 from __future__ import annotations
 
@@ -20,8 +22,8 @@ from sushi_lang.semantics.param_modes import Convention, declared_modes, receive
 from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_MODES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_MODES
 from sushi_lang.semantics.method_effects import (
-    MAYBE_FAMILY, RESULT_FAMILY, RULED_EFFECT_FAMILIES, argument_conventions,
-    receiver_convention,
+    CONCAT_IN_PLACE, MAYBE_FAMILY, RESULT_FAMILY, RULED_EFFECT_FAMILIES, STRING_FAMILY,
+    argument_conventions, receiver_convention,
 )
 from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
@@ -152,20 +154,27 @@ def _method_conventions(check: Check, stmt: st.Call, method: BuiltinMethod) -> N
     receiver has the convention of `receiver_convention`, and each argument the convention
     of `argument_conventions`. A method of `Result` or `Maybe` (`WRAPPER_MODES`): the
     receiver has the convention of `receiver_convention`, and each argument the convention
-    of the mode of its row. Any other family has no rule here."""
+    of the mode of its row. `concat_in_place` of the string family: the receiver has the
+    convention of `receiver_convention`, and its one argument is `Guaranteed`. Any other
+    family has no rule here."""
     count = len(stmt.args) - 1
+    name = f"{method.family}.{method.name}"
     if method.family in RULED_EFFECT_FAMILIES:
         arguments = argument_conventions(method.family, method.name, count)
     elif method.family in WRAPPER_MODES:
         modes = WRAPPER_MODES[method.family].of(method.name, count) or ()
         arguments = tuple(mode.convention for mode in modes)
+    elif method.family == STRING_FAMILY and method.name == CONCAT_IN_PLACE:
+        if count != 1:
+            check.fail(CONVENTIONS, f"the call of {name} has {count} arguments, and it "
+                                    f"takes 1", stmt.span)
+        arguments = (Convention.GUARANTEED,)
     else:
         return
     receiver = receiver_convention(method)
     if receiver is None:
         return
     wanted = (receiver,) + arguments
-    name = f"{method.family}.{method.name}"
     for index, ((_, have), want) in enumerate(zip(stmt.args, wanted, strict=True)):
         if have is not want:
             what = "the receiver" if index == 0 else f"argument {index - 1}"

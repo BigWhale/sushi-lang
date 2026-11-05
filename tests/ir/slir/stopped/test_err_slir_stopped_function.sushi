@@ -1,19 +1,20 @@
 # EXPECT_ERROR_CODES_EXACT: CE0155
-# EXPECT_STDERR_CONTAINS: "slir, borrowed rebind"
+# EXPECT_STDERR_CONTAINS: "slir, StorageRef owning"
 # EXPECT_DUMP_SLIR: test_err_slir_stopped_function.slir
 #
-# The SLIR lowering finishes `answer`, and it stops in `rename` at the rebind of a
-# borrowed parameter that owns, which it does not lower yet. The dump prints the SLIR of
-# `answer` and of `main` in full, and one line for `rename`. A stop of the SLIR lowering
-# comes before the stop of the next stage, so the program stops at `slir, borrowed rebind`.
+# The SLIR lowering finishes `answer`, and it stops in `rename` at the rebind of a `var`
+# that owns, which it does not lower yet. The dump prints the SLIR of `answer` and of
+# `main` in full, and one line for `rename`. A stop of the SLIR lowering comes before the
+# stop of the next stage, so the program stops at `slir, StorageRef owning`.
+
+var string NAME = "Ford"
 
 fn answer() i32:
     return 42
 
-fn rename(string name) ~:
+fn rename() ~:
     if (answer() == 42):
-        name := "Mostly Harmless"
-    println(name)
+        NAME := "Mostly Harmless"
 
 fn main() i32:
     return 0

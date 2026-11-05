@@ -31,6 +31,20 @@ def string_method_function_type(spec: MethodSpec) -> ir.FunctionType:
     return ir.FunctionType(return_type, param_types)
 
 
+def emit_string_append(codegen: 'LLVMCodegen', address: ir.Value, piece: ir.Value) -> None:
+    """`s := s.concat(x)`, the concat peephole (docs/design/ir.md 8.9): `string_append` of
+    the value at `address` and of `piece`, into `address`. It grows a buffer that the
+    string owns in place, and copies one that it does not own."""
+    from sushi_lang.backend.functions import declare_stdlib_function
+
+    require_builder(codegen)
+    old = codegen.builder.load(address, name="appended_to")
+    append = declare_stdlib_function(codegen.module, "string_append", old.type,
+                                     [old.type, old.type])
+    codegen.builder.store(codegen.builder.call(append, [old, piece], name="appended"),
+                          address)
+
+
 def emit_stdlib_string_call(
     codegen: 'LLVMCodegen',
     method: str,

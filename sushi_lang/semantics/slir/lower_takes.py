@@ -16,7 +16,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Sequence, cast
 
 from sushi_lang.internals import errors as er
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.tuples import tuple_elements
 from sushi_lang.semantics.ownership import Ownership
@@ -29,7 +28,6 @@ from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
-from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.slir.lower_values import Value
 from sushi_lang.semantics.typesys import StructType, Type
 
@@ -169,14 +167,13 @@ def _binder(low: Lowering, local: ShirLocalId, read: p.Copy | p.Move, span: Span
 def _rebind(low: Lowering, place: p.Place, read: p.Copy | p.Move, span: Span) -> None:
     """A place of a rebind form takes its element: a local drops its old value first and is
     live again (rule 6), a field or an element drops its old part first. A plain one is
-    written. A borrowed parameter that owns stops (`borrowed rebind`), as its rebind does."""
+    written. A by-value parameter that holds the value of the caller drops nothing, and an
+    address local drops the old value at its address (rules 5 and 8)."""
     if not isinstance(read, p.Move):
         low.write(place, r.Use(read), span)
         return
     if isinstance(place, p.Local):
         ident = place.id
-        if low.placement.is_borrowed(ident) or low.placement.is_address(ident):
-            raise StageStop(STAGE, "borrowed rebind", span)
         low.emit(low.placement.drop_old_value(ident, span))
         low.emit([st.Assign(place, r.Use(read), span)])
         low.emit(low.placement.flag_stored(ident, span))

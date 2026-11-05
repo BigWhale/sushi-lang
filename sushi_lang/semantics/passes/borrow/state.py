@@ -58,6 +58,10 @@ class BorrowState:
     peek_borrow_count: int = 0          # unlimited
     is_moved: bool = False              # moved on some path
     is_moved_on_every_path: bool = False
+    # A by-value parameter that owns holds the value of the caller until a rebind: it is
+    # moved for the exits, on some path and on every path (docs/design/ir.md 7.9).
+    holds_caller_value: bool = False
+    holds_caller_value_on_every_path: bool = False
     is_destroyed: bool = False          # released by an explicit `.destroy()`
     is_argv_view: bool = False          # main's `string[] args`; moving it frees argv
     is_unit_var: bool = False           # a `var`: borrowable, never moved out of (CE2436)

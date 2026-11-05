@@ -33,6 +33,7 @@ from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Reporter
 from sushi_lang.semantics.error_reporter import PassErrorReporter
 from sushi_lang.semantics.namespaces import NamespaceTable, body_namespaces
+from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.passes.collect.functions import GenericFuncDef
 from sushi_lang.semantics.shir.body import TemplateCheck
@@ -267,6 +268,11 @@ class BorrowChecker:
         # main's `string[] args` is a borrowed view of process argv (the runtime owns and
         # frees it): a by-value move of it is CE2410 (N2).
         state.is_argv_view = self.is_main and _is_argv_view(ty)
+        # A by-value parameter that owns holds the value of the caller until a rebind
+        # (docs/design/ir.md 8.10, rule 5).
+        caller = (param.convention is Convention.GUARANTEED
+                  and self.types.type_class(ty) is TypeClass.MOVE)
+        state.holds_caller_value = state.holds_caller_value_on_every_path = caller
         self.declare(state)
 
 

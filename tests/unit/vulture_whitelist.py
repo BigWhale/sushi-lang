@@ -283,7 +283,7 @@ WHITELIST += (
 _CONSUMING_POSITIONS = {
     "CALL_ARG": "B1", "LET": "B1", "RETURN": "B1", "ELEMENT_ASSIGN": "B1", "ARRAY_ELEMENT": "B1",
     "STRUCT_FIELD": "Task 75", "ENUM_PAYLOAD": "Task 75", "MATCH_SCRUTINEE": "Task 75",
-    "REBIND": "B9", "FIELD_ASSIGN": "B9",
+    "REBIND": "Task 75", "FIELD_ASSIGN": "Task 75",
 }
 WHITELIST += tuple(
     (_SEMANTICS + "ownership.py", member,

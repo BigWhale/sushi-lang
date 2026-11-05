@@ -8,7 +8,7 @@ fn answer() -> i32 {
     return
 }
 
-fn rename: stopped (slir, borrowed rebind)
+fn rename: stopped (slir, StorageRef owning)
 
 fn main() -> i32 {
     let _0: i32

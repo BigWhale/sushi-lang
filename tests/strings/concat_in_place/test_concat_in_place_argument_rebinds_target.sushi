@@ -1,0 +1,28 @@
+# D6: `s := s.concat(x)` evaluates its argument first, then appends to `s` in place. When
+# the argument rebinds `s` through a `poke`, the append reads the new value of `s`: the old
+# value is dropped once, by the rebind in the argument. When the argument is `s` itself, the
+# append reads the bytes that it grows.
+# EXPECT_IR_HOLDS: by_poke @string_append(
+# EXPECT_IR_HOLDS: by_self @string_append(
+# EXPECT_STDOUT_EXACT: "other+tail\nMostlyMostly\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS
+
+fn swap_in(poke string s) string:
+    s := "other".concat("")
+    return "+tail".concat("")
+
+fn by_poke() string:
+    let string s = "start".concat("")
+    s := s.concat(swap_in(poke s))
+    return s
+
+fn by_self() string:
+    let string s = "Mostly".concat("")
+    s := s.concat(s)
+    return s
+
+fn main() i32:
+    println(by_poke())
+    println(by_self())
+    return 0

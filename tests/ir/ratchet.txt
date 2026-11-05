@@ -1576,6 +1576,7 @@ tests/ir/borrow/past_typecheck/test_err_borrow_match_arm_beside_an_arm_error.sus
 tests/ir/borrow/past_typecheck/test_err_borrow_past_a_type_error.sushi
 tests/ir/borrow/past_typecheck/test_err_borrow_unknown_call_moves_nothing.sushi
 tests/ir/borrow/ranges/test_err_borrow_range_binder.sushi
+tests/ir/borrow/rebind/test_borrow_borrowed_param_row.sushi
 tests/ir/borrow/regions/test_borrow_peek_return.sushi
 tests/ir/borrow/regions/test_borrow_view_regions.sushi
 tests/ir/borrow/straight/test_err_borrow_beside_a_poke_of_a_constant.sushi
@@ -1722,6 +1723,8 @@ tests/ir/slir/own/test_slir_own_methods.sushi
 tests/ir/slir/owned_param/test_slir_owned_param.sushi
 tests/ir/slir/ranges/test_slir_range_counted.sushi
 tests/ir/slir/ranges/test_slir_range_readable.sushi
+tests/ir/slir/rebind/test_slir_borrowed_param_rebind.sushi
+tests/ir/slir/rebind/test_slir_concat_in_place.sushi
 tests/ir/slir/references/test_slir_peek_return.sushi
 tests/ir/slir/references/test_slir_reference_bindings.sushi
 tests/ir/slir/result_return/test_slir_result_return.sushi
@@ -2166,11 +2169,13 @@ tests/literals/underscores/test_err_oct_double.sushi
 tests/literals/underscores/test_float_underscores.sushi
 tests/literals/underscores/test_underscore_positions.sushi
 tests/memory/binding_rebind/test_binding_rebind_clone_escape.sushi
+tests/memory/binding_rebind/test_binding_rebind_poke_escape.sushi
 tests/memory/binding_rebind/test_err_let_borrow_rebind.sushi
 tests/memory/binding_rebind/test_err_let_element_rebind.sushi
 tests/memory/binding_rebind/test_err_let_peek_rebind.sushi
 tests/memory/binding_rebind/test_err_match_binding_rebind.sushi
 tests/memory/binding_rebind/test_err_match_binding_rebind_plain.sushi
+tests/memory/binding_rebind/test_let_poke_rebind.sushi
 tests/memory/binding_views/test_err_match_binding_field_write.sushi
 tests/memory/binding_views/test_err_match_binding_poke_borrow.sushi
 tests/memory/borrow_move_conflict/test_err_borrow_then_move_one_statement.sushi
@@ -2393,6 +2398,7 @@ tests/memory/param_modes/test_err_argv_by_value_move.sushi
 tests/memory/param_modes/test_err_nom_marker_extra.sushi
 tests/memory/param_modes/test_err_nom_marker_missing.sushi
 tests/memory/param_modes/test_param_mode_matrix.sushi
+tests/memory/param_modes/test_rebind_borrow_param.sushi
 tests/memory/param_modes/test_run_nom_hashmap.sushi
 tests/memory/param_modes/test_run_nom_own.sushi
 tests/memory/param_modes/test_run_peek_own.sushi
@@ -3029,6 +3035,7 @@ tests/references/write_after_owner_change/test_err_poke_field_write_after_rebind
 tests/references/write_after_owner_change/test_err_poke_index_write_after_rebind.sushi
 tests/references/write_after_owner_change/test_err_poke_method_write_after_rebind.sushi
 tests/references/write_after_owner_change/test_err_poke_pattern_write_after_rebind.sushi
+tests/references/write_after_owner_change/test_poke_write_before_owner_change.sushi
 tests/stdlib/ascii/hex_value/test_ascii_hex_value_table.sushi
 tests/stdlib/ascii/is_ascii_alnum/test_ascii_alnum_table.sushi
 tests/stdlib/ascii/is_ascii_alpha/test_ascii_alpha_table.sushi
@@ -3230,6 +3237,7 @@ tests/strings/byte_access/test_err_string_from_bytes_then_use.sushi
 tests/strings/byte_access/test_err_string_index_not_i32.sushi
 tests/strings/byte_access/test_err_string_index_write.sushi
 tests/strings/byte_access/test_string_index_of_an_owned_string.sushi
+tests/strings/concat_in_place/test_concat_in_place_argument_rebinds_target.sushi
 tests/strings/interpolation/test_interpolation_arithmetic.sushi
 tests/strings/interpolation/test_interpolation_basic.sushi
 tests/strings/interpolation/test_interpolation_bool.sushi

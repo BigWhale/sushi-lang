@@ -164,8 +164,8 @@ def bind_address(low: Lowering, local: ShirLocalId, value: r.Ref,
     if region is None:
         er.raise_internal_error("CE0000", span=span,
                                 detail="a reference binder with no borrow region reached SLIR")
-    ident, _ = low.bind(local, span)
-    low.placement.address(ident)
+    ident, ty = low.bind(local, span)
+    low.placement.address(ident, low.owns(ty))
     statements: list[st.SlirStatement] = [st.StorageLive(ident, span)]
     if region.until:
         statements += low.placement.begin_region(
@@ -183,8 +183,8 @@ def let_reference(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
         er.raise_internal_error("CE0000", span=stmt.loc,
                                 detail="a reference let with no borrow region reached SLIR")
     place = reference_place(low, borrow.place)
-    ident, _ = low.bind(target.local, stmt.loc)
-    low.placement.address(ident)
+    ident, ty = low.bind(target.local, stmt.loc)
+    low.placement.address(ident, low.owns(ty))
     low.emit([st.StorageLive(ident, stmt.loc)])
     low.emit(low.placement.begin_region(ident, [p.root_of(place)], frozenset(region.until),
                                         stmt.loc, borrow.mode))

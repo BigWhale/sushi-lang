@@ -8,9 +8,11 @@ before its first write, or after its `StorageLive` or its `StorageDead`. The `re
 a value in `_0` on each path. An owning local must be moved or dropped exactly one time on
 each path from its write to the end of its storage, to a write over it, and to the
 `return`: a `DropIfSet` drops on the paths where its flag is true, and the paths where the
-flag is false must have moved the local. An `Owned` parameter is an owning local; a
-borrowed parameter never drops and never moves, and an `Inout` one holds a value again at
-the `return`. A `Trap` ends the program, so it needs no drop. The `Drop` of an element reads
+flag is false must have moved the local. An `Owned` parameter is an owning local; an
+`InGuaranteed` parameter never drops and never moves, and an `Inout` one holds a value
+again at the `return`. A `Guaranteed` parameter that owns starts lent: it holds the value of
+the caller, which it reads and never drops or moves; a write gives it a value of its own,
+and from there it is an owning local (rule 5). A `Trap` ends the program, so it needs no drop. The `Drop` of an element reads
 its root local, which must hold a value, and does not change its state. A `Move` of a part
 moves its root; a later `Move` of a disjoint part of that root in the same block is the same
 take (`parts`), and a write, the storage or a drop of the root ends it.
@@ -41,7 +43,7 @@ if TYPE_CHECKING:
     from sushi_lang.semantics.slir.verify import Check
 
 # The state of a local on one path, and the value of its drop flag there.
-_UNINIT, _LIVE, _MOVED, _DROPPED = "uninit", "live", "moved", "dropped"
+_UNINIT, _LIVE, _MOVED, _DROPPED, _LENT = "uninit", "live", "moved", "dropped", "lent"
 _NO_FLAG, _UNSET, _TRUE, _FALSE, _UNKNOWN = "none", "unset", "true", "false", "unknown"
 _Config: TypeAlias = tuple[str, str]
 _State: TypeAlias = tuple[frozenset[_Config], ...]
@@ -68,7 +70,7 @@ class Flow:
         check = self.check
         for local, flag in check.guards.items():
             self.flagged[flag] = (*self.flagged.get(flag, ()), local)
-        start = tuple(frozenset({(_LIVE if local.id in check.conventions else _UNINIT,
+        start = tuple(frozenset({(self.entry_state(local.id),
                                   _UNSET if local.id in check.guards else _NO_FLAG)})
                       for local in check.function.locals)
         entry = check.function.entry
@@ -95,6 +97,16 @@ class Flow:
             self.statement(configs, stmt)
         self.terminator(configs, block.terminator)
         return tuple(configs)
+
+    def entry_state(self, local: LocalId) -> str:
+        """A parameter holds a value at the entry: a `Guaranteed` one that owns holds the
+        value of the caller (lent). Any other local holds none."""
+        convention = self.check.conventions.get(local)
+        if convention is None:
+            return _UNINIT
+        if convention is Convention.GUARANTEED and local in self.check.owning:
+            return _LENT
+        return _LIVE
 
     def violate(self, rule: str, detail: str, span: Optional[Span]) -> None:
         if self.report:
@@ -179,7 +191,8 @@ class Flow:
         local = self.root(configs, place, span)
         if local is None:
             return
-        if self.borrowed(local) or self.check.conventions.get(local) is Convention.INOUT:
+        convention = self.check.conventions.get(local)
+        if convention is not None and not convention.consumes:
             if local in self.check.owning:
                 self.violate(DROP_ONCE, f"moves the parameter _{local.index}, which the "
                                         f"function does not own", span)
@@ -222,10 +235,10 @@ class Flow:
 
     def drop(self, configs: list[frozenset[_Config]], local: LocalId, span: Span) -> None:
         self.parts.pop(local, None)
-        if self.borrowed(local):
+        states = {s for s, _ in configs[local.index]}
+        if self.borrowed(local) or _LENT in states:
             self.violate(DROP_ONCE, f"drops the parameter _{local.index}, which the function "
                                     f"borrows", span)
-        states = {s for s, _ in configs[local.index]}
         if _MOVED in states:
             self.violate(USE_AFTER_MOVE, f"drops _{local.index} after a move", span)
         if _DROPPED in states:
@@ -263,7 +276,8 @@ class Flow:
 
     def leave(self, configs: list[frozenset[_Config]], span: Span) -> None:
         """The `return`: no owning local holds a value, except `_0` and an `Inout` parameter,
-        which must hold one. `_0` holds a value on every path."""
+        which must hold one, and a `Guaranteed` parameter that holds the value of the caller.
+        `_0` holds a value on every path."""
         for local in sorted(self.check.owning):
             if local.index == 0 or self.borrowed(local):
                 continue
@@ -278,8 +292,9 @@ class Flow:
             self.violate(RETURN_SLOT, "returns before a write of _0", span)
 
     def borrowed(self, local: LocalId) -> bool:
-        convention = self.check.conventions.get(local)
-        return convention is not None and convention.read_only
+        """Whether `local` is an `InGuaranteed` parameter: a view of the place of the
+        caller."""
+        return self.check.conventions.get(local) is Convention.IN_GUARANTEED
 
 
 def _within(outer: p.Place, place: p.Place) -> bool:

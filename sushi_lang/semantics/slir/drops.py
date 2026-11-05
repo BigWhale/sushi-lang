@@ -8,10 +8,12 @@ a rebind, and the join of the paths that meet at a block. It answers with the st
 that a scope exit, a jump or a rebind needs. ONE method, `_exit`, places the statements
 of every exit: for each local of the scopes that the path leaves, the newest declaration
 first, its drop, then the `StorageDead` of its flag, then its own `StorageDead`. A function
-exit then drops each `Owned` parameter that owns. A borrowed parameter never drops
-(rule 5). The old value of a rebind drops when it may be live (rule 6), and the old value
-of an owning field or element at its write always drops, as does each owning part that a
-take leaves behind.
+exit then drops each `Owned` parameter that owns, and each `Guaranteed` one that a rebind
+gave a value of its own: such a parameter starts moved, because it holds the value of the
+caller (rule 5). An `InGuaranteed` parameter never drops. The old value of a rebind drops
+when it may be live (rule 6), and the old value of an owning field or element at its write
+always drops, as does each owning part that a take leaves behind. A rebind through an
+owning address local drops the old value at its address (rule 8).
 
 The state of a local is live, moved or unknown. A move marks it moved, and a declaration or
 a rebind marks it live. A join keeps a state that every path gives; a local whose state
@@ -99,23 +101,28 @@ class DropPlacement:
     _unknown: set[LocalId] = field(default_factory=set)
     _flags: dict[LocalId, LocalId] = field(default_factory=dict)
     _pending: dict[LocalId, Span] = field(default_factory=dict)
-    _owned_params: list[LocalId] = field(default_factory=list)
+    _owning_params: list[LocalId] = field(default_factory=list)
     _borrowed: set[LocalId] = field(default_factory=set)
     _never_moved: set[LocalId] = field(default_factory=set)
     _addresses: set[LocalId] = field(default_factory=set)
+    _owning_addresses: set[LocalId] = field(default_factory=set)
     _open: list[OpenRegion] = field(default_factory=list)
     _borrows: int = 0
 
     def parameter(self, local: LocalId, convention: Convention, owning: bool) -> None:
-        """A parameter: an `Owned` one is an owning local of the function (L15)."""
+        """A parameter: an `Owned` one is an owning local of the function (L15). A
+        `Guaranteed` one that owns holds the value of the caller, so it starts moved, and a
+        rebind gives it a value of its own (rule 5). An `InGuaranteed` one is a view."""
         if owning:
             self._owning.add(local)
         if not convention.consumes:
             self._never_moved.add(local)
-        if convention.read_only:
+        if convention is Convention.IN_GUARANTEED:
             self._borrowed.add(local)
-        elif convention.consumes and owning:
-            self._owned_params.append(local)
+        elif owning and convention in (Convention.OWNED, Convention.GUARANTEED):
+            self._owning_params.append(local)
+            if convention is Convention.GUARANTEED:
+                self._moved.add(local)
 
     def flag(self, local: LocalId, flag: LocalId) -> None:
         """`flag` is the drop flag of `local` (rule 4)."""
@@ -137,15 +144,15 @@ class DropPlacement:
             er.raise_internal_error("CE0000", detail="a SLIR local outside every block")
         self._add(blocks[-1], local, owning)
 
-    def address(self, local: LocalId) -> None:
+    def address(self, local: LocalId, owning: bool) -> None:
         """An address local of the newest block (ir.md 8.2): its storage is the place of
-        another value, so it never drops and never moves (rule 8)."""
+        another value, so it never drops at an exit and never moves (rule 8). A rebind
+        through it drops the old value at its address when its type owns."""
         self.declare(local, False)
         self._addresses.add(local)
         self._never_moved.add(local)
-
-    def is_address(self, local: LocalId) -> bool:
-        return local in self._addresses
+        if owning:
+            self._owning_addresses.add(local)
 
     def temporary(self, local: LocalId, owning: bool) -> None:
         """A temporary of the statement that lowering is in. It is live."""
@@ -167,10 +174,6 @@ class DropPlacement:
         if owning:
             self._owning.add(local)
 
-    def is_borrowed(self, local: LocalId) -> bool:
-        """Whether `local` is a parameter that borrows the caller's value (rule 5)."""
-        return local in self._borrowed
-
     def move(self, local: LocalId, span: Span) -> None:
         """A move out of `local`. A second move, a move of a local that may be moved, or a
         move of a parameter that the function does not own is an internal error: `borrow`
@@ -185,14 +188,26 @@ class DropPlacement:
 
     def holds_live_value(self, local: LocalId) -> bool:
         """Whether a write to `local` may drop its old value first (rule 6)."""
-        return local in self._owning and local not in self._moved
+        return local in self._owning_addresses or (local in self._owning
+                                                   and local not in self._moved)
+
+    def holds_own_value(self, local: LocalId) -> bool:
+        """Whether `local` holds a value of its own on every path here: a live owning
+        local, an `Inout` parameter, or an owning address local (the concat peephole,
+        ir.md 8.9)."""
+        return local in self._owning_addresses or (
+            local in self._owning and local not in self._borrowed
+            and local not in self._moved and local not in self._unknown)
 
     def drop_old_value(self, local: LocalId, span: Span) -> list[st.SlirStatement]:
-        """The drop of the old value of a rebind, if it may be live; the new value is live."""
+        """The drop of the old value of a rebind, if it may be live; the new value is live.
+        An owning address local drops the old value at its address (rule 8)."""
         if local in self._borrowed and local in self._owning:
             er.raise_internal_error(
                 "CE0000", span=span,
                 detail=f"SLIR lowering rebinds _{local.index}, a borrow that it does not own")
+        if local in self._addresses:
+            return [st.Drop(p.Local(local), span)] if local in self._owning_addresses else []
         dropped = self._drop(local, span)
         self._moved.discard(local)
         self._unknown.discard(local)
@@ -223,11 +238,12 @@ class DropPlacement:
     # -- drop flags (rule 4, L13) --------------------------------------------------------
 
     def flag_declared(self, local: LocalId, span: Span) -> list[st.SlirStatement]:
-        """After the statement that declares `local`: its flag is live and `true`."""
+        """After the statement that declares `local`: its flag is live, and `true`, but
+        `false` for a parameter that holds the value of the caller (rule 4)."""
         flag = self._flags.get(local)
         if flag is None:
             return []
-        return [st.StorageLive(flag, span), _set(flag, True, span)]
+        return [st.StorageLive(flag, span), _set(flag, local not in self._moved, span)]
 
     def flag_stored(self, local: LocalId, span: Span) -> list[st.SlirStatement]:
         """After the store of a rebind: the flag of `local` is `true` again."""
@@ -256,10 +272,10 @@ class DropPlacement:
         self._pending.clear()
 
     def in_scope(self) -> tuple[LocalId, ...]:
-        """The owning locals that a join compares: each owned parameter and each owning
-        local of the open scopes, in declaration order."""
+        """The owning locals that a join compares: each parameter that can own its value
+        and each owning local of the open scopes, in declaration order."""
         locals_ = [local for scope in self._scopes for local in scope.locals]
-        return tuple(local for local in [*self._owned_params, *locals_] if local in self._owning)
+        return tuple(local for local in [*self._owning_params, *locals_] if local in self._owning)
 
     def join(self, states: Sequence[FlowState], among: Sequence[LocalId]) -> tuple[LocalId, ...]:
         """The state after the paths `states` meet: for each local of `among`, the state
@@ -349,10 +365,11 @@ class DropPlacement:
         self._scopes.pop()
 
     def exit_function(self, span: Span) -> list[st.SlirStatement]:
-        """A `return`: the exit of every scope, the newest first, then of each `Owned`
-        parameter. The scopes stay, because the statement that returns closes them."""
+        """A `return`: the exit of every scope, the newest first, then of each parameter
+        that can own its value, by its state. The scopes stay, because the statement that
+        returns closes them."""
         statements = self._exit(self._scopes, span)
-        for local in reversed(self._owned_params):
+        for local in reversed(self._owning_params):
             statements.extend(self._drop(local, span))
             if local in self._flags:
                 statements.append(st.StorageDead(self._flags[local], span))

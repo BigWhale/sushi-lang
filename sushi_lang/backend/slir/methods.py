@@ -11,7 +11,9 @@ from typing import Any, Callable
 
 from llvmlite import ir
 
-from sushi_lang.backend.expressions.calls.stdlib.strings import emit_stdlib_string_call
+from sushi_lang.backend.expressions.calls.stdlib.strings import (
+    emit_stdlib_string_call, emit_string_append)
+from sushi_lang.backend.generics.container_table import blank
 from sushi_lang.backend.generics.hashmap import emit_hashmap_method
 from sushi_lang.backend.generics.list import emit_list_method
 from sushi_lang.backend.generics.maybe import (
@@ -24,8 +26,8 @@ from sushi_lang.backend.slir.values import (
     operand_address, operand_value, type_of_operand, type_of_place)
 from sushi_lang.backend.types.arrays import emit_array_method
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY, OWN_FAMILY, PRIMITIVE_FAMILY,
-    RESULT_FAMILY, STRING_FAMILY,
+    ARRAY_FAMILY, CONCAT_IN_PLACE, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY, OWN_FAMILY,
+    PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY,
 )
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.callee import BuiltinMethod
@@ -54,11 +56,28 @@ def _primitive(state: FunctionState, method: BuiltinMethod,
 
 
 def _string(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
-    """A method of `string`, through the one emitter of the string family."""
+    """A method of `string`, through the one emitter of the string family. The row
+    `concat_in_place` is the concat peephole (`_concat_in_place`)."""
     if not statement.args:
         state.fault(f"the call of '{method.name}' has no receiver")
+    if method.name == CONCAT_IN_PLACE:
+        return _concat_in_place(state, statement)
     values = [operand_value(state, operand) for operand, _ in statement.args]
     return emit_stdlib_string_call(state.codegen, method.name, values[0], values[1:])
+
+
+def _concat_in_place(state: FunctionState, statement: st.Call) -> ir.Value:
+    """`s := s.concat(x)` (docs/design/ir.md 8.9): the value of the argument, then the
+    append of the string family into the address of the `Inout` receiver. The call answers
+    `~`."""
+    if len(statement.args) != 2:
+        state.fault(f"the call of '{CONCAT_IN_PLACE}' has {len(statement.args)} operands")
+    (receiver, convention), (argument, _) = statement.args
+    if convention is not Convention.INOUT:
+        state.fault(f"the receiver of '{CONCAT_IN_PLACE}' is {convention.value}, not inout")
+    piece = operand_value(state, argument)
+    emit_string_append(state.codegen, operand_address(state, receiver), piece)
+    return blank(state.codegen)
 
 
 def _array(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
