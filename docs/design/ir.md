@@ -1826,7 +1826,10 @@ The rows of `OwnershipResults`:
   the view. A use in a loop that does not hold the `let` is a use of the whole loop, because
   the next round can use the view again. A use in an arm of an `if` or a `match` gives the
   last uses of that arm, and a use in the condition alone gives the `if` or the `match`
-  itself. A view that no statement uses has its `let` as its last use.
+  itself. A view that no statement uses has its `let` as its last use. A bare binder of
+  an owning payload is a view too (see "Control flow in `borrow`"): its row holds the owners
+  of its root, and its last uses are read in the statements of its arm. A binder that no
+  statement of its arm uses has NO last use, and SLIR lowering gives it no region.
 - The answer of a call of a function or a method with a `peek` return is a view too. Its
   owner set is the owner of each argument at a position of the source row of the call
   (7.3).
@@ -1918,8 +1921,7 @@ names it with `nom` gives no CE2405. A local with no type is PLAIN for `classify
 of it never moves it. Two divergences from the old pipeline follow. `typecheck` types no arm
 of a `match` whose scrutinee has an error (7.8), so each node of its arms is unknown, and
 `borrow` gives no diagnostic in them. A stop of `borrow` ends the walk of such a body too
-(for example a `match` with a bare binder of a payload that owns, which the group of the
-owning matches checks), so a diagnostic in the construct of the stop or after it does not
+(for example a `match` with a `nom` binder, which the group of the pattern takes checks), so a diagnostic in the construct of the stop or after it does not
 come; the pipeline never reports the stop, because the program has an error. The pass writes no row of such a body,
 as in the discovery round of a loop: the `OwnershipResults` of the body stay empty, the pass
 does not check them, and the body never goes to the SLIR lowering.
@@ -2027,9 +2029,11 @@ borrowed view of it: a let-borrow of the owner of the scrutinee, with a region r
 the rows above), and SLIR lowering gives it a view local (8.9). A `peek` or a `poke` binder
 is a reference binding: it borrows its payload place with its mode for the whole arm, and
 SLIR lowering gives it an address local (8.2). A `Match` with an arm that binds a name in
-another way stops the walk (`borrow, Match`): a `nom` binder and an `Own` pattern. So does
-a match on a tuple literal that owns, because the literal takes each part (ruling R24
-keeps a match on a plain tuple as above). A `Loop` with a
+another way stops the walk (`borrow, Match`): a `nom` binder and an `Own` pattern. A tuple
+literal that owns, as the scrutinee, builds NO tuple (ruling 3 of `tuples.md`): each part
+is a root of its own, which the match reads; a part is a consuming use only when the match
+consumes (`match nom (a, b):` takes each part), and a binder of a part views that part, so
+its owners are the owners of the part. A tuple literal of plain parts is checked as above. A `Loop` with a
 `Cond` source reads its condition once, at the entry, and checks its body in two rounds.
 The first round is a DISCOVERY round: it reports no error, writes no row and records no
 exit, and it gives the facts that come round the back edge (the end of the body and each
@@ -2292,7 +2296,12 @@ writes it again. Four sources make a view local: a `REJECT` row at a position of
 view (7.9), a bare binder over an owning payload (8.9), the answer of a call that is a view
 (7.9), and the answer of a call of a function with a `peek` return (8.9). A binder of the
 `let` form of a `Destructure` that borrows (7.9, 8.9) is a view local too. The local that a
-`Slice` writes is a view by the rule of 8.7. A view local owns nothing: drop placement
+`Slice` writes is a view by the rule of 8.7. A view of a `let` whose owner is a
+TEMPORARY (`let string s = make().name`, `let Maybe@(string) m = make().get(0)`) keeps the
+temporary: the root of the place that it reads (through the receiver of each get-out) goes
+into a HIDDEN OWNER local of the block of the `let`, a local with no source name that owns
+the value and drops at each exit of the block (8.10, rule 2). The region of the view is
+over that local. A view local owns nothing: drop placement
 gives it no `Drop` (8.10, rule 8), and the verifier refuses a `Drop` of it, a `Move` of it
 and an `Owned` argument of it (8.13). The shallow copy is safe, because `borrow` freezes
 each owner of the view while the view lives (CE2412). The printer writes `view` after the
@@ -2328,7 +2337,7 @@ call and of an interpolation in `lower_calls.py`, a value before its place in
 `lower_values.py`, the view locals and their regions in `lower_views.py` and the facts of a
 declaration in `lower_signature.py`), the drop
 placement of 8.10 (`drops.py`, the one module that builds a `Drop` or a `DropIfSet`, the
-drop of the old element of an element write included; gate:
+drop of the old part of a field write or an element write included; gate:
 `tests/unit/test_slir_drop_placement_is_one.py`), the verifier of 8.13 (`verify.py`,
 `verify_calls.py`, `verify_arrays.py`, `verify_flow.py`, `verify_regions.py` and
 `verify_rules.py`) and the
@@ -2362,10 +2371,8 @@ the `drop` of a `Drop` implementation; `conversion` also for a
 `Try` that calls a declared conversion (today `typecheck` stops there first), `library
 function` for a free, a method or a static callee whose row names no declaring unit (a
 function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
-argument, `Match owning` for
-a match on a tuple that owns (8.9), `view of a temporary` for a borrowed `let` whose owner
-is a temporary (`let Maybe@(string) m = make().get(0)`: the temporary drops at the end of
-the statement, and the view would outlive it), `view into an owning place` for a view that
+argument, `Match owning alternatives` for an arm with two or more paths that write a
+binder of an owning payload (a view local has one write, 8.13), `view into an owning place` for a view that
 a local that owns would take (a `??` over a `??` of a borrowed wrapper, whose `let`
 `borrow` adopts), and `ConstRef out of range` for a `ConstRef` whose value its type cannot
 hold (8.5). The dump prints such a function as ONE line in place of
@@ -2617,9 +2624,11 @@ their storage is an address.
 `Index` is a place, and its operand is an `i32`. An element never moves: a `Move` of a
 place that holds an `Index` is refused (8.13), because the array would be left PARTIALLY
 moved. An element of an owning type is dropped where it is: the write of an owning element
-drops the old element with `Drop(Index(place, i))` (8.10, rule 6). A `Drop` of an element is
-the one `Drop` of a place that is no local. It reads the root local of the place, and it
-does not change the state of that local: the array still holds a value in each slot.
+drops the old element with `Drop(Index(place, i))` (8.10, rule 6), and the write of an
+owning field drops the old field with `Drop(Field(place, i))`. A `Drop` of a PART (a place
+whose outer projection is a `Field` or an `Index`) is the one `Drop` of a place that is no
+local. It reads the root local of the place, and it does not change the state of that
+local: the struct still holds a value in each field, the array in each slot.
 
 `Global` is a place, never a value to move out of: a `var` is never moved out of, and
 `borrow` refuses a consuming use of one that owns a resource (`unit-storage.md`). The
@@ -2981,7 +2990,7 @@ backstop of the checker, as on the AST backend.
 | `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field` |
 | `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`: lowering calls `literal_value` and `pattern_interval` over the written constant and the scrutinee type, and reads no row), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |
 | `Match` on a string | a chain of tests in source order (see below): each a `Call` of the intrinsic `eq` (8.6) into a `bool` local, and a `SwitchInt` on it |
-| `Match` on a tuple | always a chain of tests in source order (see below). The parts of a tuple pattern are at the places `Field(place, index)` of the scrutinee, and each part is tested by the rule of its own kind: a literal, a range, a variant, a nested tuple; a binder and `_` test nothing. A tuple that owns stops the lowering (`Match owning`), because its drops are Tier B |
+| `Match` on a tuple | always a chain of tests in source order (see below). The parts of a tuple pattern are at the places `Field(place, index)` of the scrutinee, and each part is tested by the rule of its own kind: a literal, a range, a variant, a nested tuple; a binder and `_` test nothing. A place that owns is read where it is, and a new value is a temporary of the match statement, which drops it at its end. A tuple LITERAL that owns builds no tuple (ruling 3 of `tuples.md`): each part is evaluated once, from left to right, as a scrutinee of its own (a place is read where it is, a new value and a part that the match takes go into a temporary of the statement), and the parts of a tuple pattern are at the operand of each part |
 | `Loop`, kind `While` | header block, `SwitchInt`, body, `Goto` header. The blocks are made in the order header, the blocks of the condition (an `and` or an `or` in it), body, the zero block (when the condition has a local, see below), exit |
 | `Break`, `Continue` | the drops of each scope of the loop body that it leaves (8.10, rule 2), then `Goto` the exit, or for a `Continue` the next round: the header of a `While`, the step of a `CountedRange` |
 | `Loop`, kind `CountedRange` | in the scope of the loop statement: each bound one time, the start first, into an `i32` local (a constant stays a constant), the count `end - start` into a local (plus one when inclusive), and a counter local at 0. The header compares `counter < count` into a `bool` local and switches; a count below one walks nothing, so the count needs no clamp. The body writes the binder first: `start + counter`, or with `.rev()` `last - counter`, where `last` is `end` (less one, into a local, when exclusive). The step block adds one to the counter and goes to the header; the end of the body and a `Continue` go to the step. Two constant bounds take the count and the first value of `plan_range` (`semantics/ranges.py`) as constants. The zero edge goes to a block of its own as for a `While`. The blocks are made in the order header, body, step, the zero block, exit |
@@ -2995,7 +3004,7 @@ backstop of the checker, as on the AST backend.
 | `Lambda` | one `SlirFunction` cut from the body, and an `Aggregate(Closure, [FnRef, env...])` built from `LiftResults` (Q8); each captured operand is `Copy` or `Move` by `OwnershipResults` |
 | `ArrayInit(runs)` | each value in the written order, as for a `StructInit` (a place that a later call can change goes into a temporary first), then ONE `Aggregate(AggArray)` with its runs (8.7): a run-time count is a part; a range with two constant bounds takes the count and the first value of `plan_range`. The emitter fills the slots: unrolled stores, a constant walk, a run-time walk, one `memset` for a repeated constant byte, and one constant for a `T[N]` of constant parts. A count below zero fills nothing (`semantics/slir/lower_arrays.py`, `backend/types/arrays/runs.py`). Over an owning element, a `Single` value is a `Move` or a constant, and a repeated value is a `Copy`: a place of an owning value stays where it is (a temporary would drop a copy that it does not own), and a new value is a temporary of the statement, which drops it at its end. The emitter writes a copy of the repeated value into each slot over `copy_out` |
 | `Index` read | the index into a local of the statement, `Len` (or the constant `N` of a `T[N]`), the `u32` casts of the index and of the length, `<`, `SwitchInt`, `Trap("RE2020", [index, length])` on the failing edge; then the place `Index`. No check when `unchecked`, nor for a constant index of a `T[N]` that is in range. An owning element in a `let` is a view local (8.2) in a region over the array; in a borrowed position (a `Guaranteed` argument, a part of an interpolation) it is a `Copy` of the place |
-| `Index` write (`arr[i] := v`) | the value first (a value that is no constant goes into a temporary), then the index and the same bounds check, then the store into the place `Index`. Over an owning element, rule 6 of 8.10: then `Drop(Index(place, i))` of the old element before the store, which moves the temporary (`element_write`, the drop from `drops.py`) |
+| `Index` write (`arr[i] := v`) | the value first (a value that is no constant goes into a temporary), then the index and the same bounds check, then the store into the place `Index`. Over an owning element, rule 6 of 8.10: then `Drop(Index(place, i))` of the old element before the store, which moves the temporary (`part_write`, the drop from `drops.py`) |
 | `Slice` | the bounds into locals of the statement (an inclusive end plus one), `end <= len` and `start <= end` as `u32` compares, `&`, `SwitchInt`, `Trap("RE2028", [start, end, length])` on the failing edge, then the `Slice` into a view local; never unchecked. A check that the constant bounds prove is left out |
 | a method of an array | a `Call` of `Builtin(BuiltinMethod)`: the receiver first (a `Copy` of its place, a constant, or a temporary of the statement), then each argument with the convention of its row (8.3). The emitter gives the family the address of the receiver (8.6), and one emitter of the family serves a `T[N]` and a `T[]` (`backend/types/arrays/dispatcher.py`) |
 | `Assert` | `SwitchInt(c, [(0, fail_bb)], otherwise: next_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2026", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state of the locals before the failing block. The blocks are made in the order fail, next. A condition local ends at the top of the two blocks, as for an `If` |
@@ -3024,15 +3033,12 @@ and that the terminator of that block alone reads gets no storage marker: the lo
 follow the same rule: the `u32` casts of the index and of the length, and the `bool` that
 the switch reads, are written and read in their own block alone.
 
-A construction and a field of a value that owns stop the lowering: a
-`StructInit` or a `TupleInit` of a type that owns (`StructInit owning`, `TupleInit owning`),
-a field of a temporary that owns (`owning temporary`), and a write of a field that owns
-(`owning field write`). Their drops and their moves are Tier B. A struct with a field of a
+A struct with a field of a
 reference type is [CE2415](../error-catalog.md#ce2415) at its declaration, and a body that
 constructs one still reaches SLIR, so the construction stops (`StructInit reference field`).
 
-A `Match` evaluates its scrutinee in the scope of the match statement. A place is read with
-`Copy` in each test. A new value, and a scrutinee that the match takes (`consumes`), go into a
+A `Match` evaluates its scrutinee in the scope of the match statement. A place (a local, a
+field, an element) is read where it is, with `Copy` in each test. A new value, and a scrutinee that the match takes (`consumes`), go into a
 temporary of the statement: each test reads the temporary, and the statement drops it at its
 end, or at the exit of an arm (a `return`, a `break`, a `continue`). A constant of an enum
 goes into a temporary too, because a `Discriminant` reads a place.
@@ -3053,7 +3059,11 @@ a path of no test (`_`, or an arm with a `_` alternative) has no test, and it is
 
 The binders of an arm are locals of the scope of its body. A bare binder gets `StorageLive`
 and the `Copy` of its place: over a plain payload it is an ordinary local, and over an
-owning payload it is a view local (8.2), which gets no drop. With one path, the block of the body writes the binders first.
+owning payload it is a view local (8.2), which gets no drop: its region is over the root of
+the place of the scrutinee (the temporary of a new value, or the part of a tuple
+literal), from the write of the binder to the last uses of the region row of `borrow`, and
+a binder with no last use has no region. A view local has ONE write, so an arm whose two or
+more paths write a binder of an owning payload stops (`Match owning alternatives`). With one path, the block of the body writes the binders first.
 With two or more paths that write a binder, each path ends in a block of its own that writes
 the binders of that path and goes to the body. Each arm body is a scope of its own, and each
 arm starts from the state of the locals after the scrutinee. The arms that reach their end
@@ -3146,10 +3156,11 @@ locals, and the locals that own nothing, and nothing else:
    rebind of a `Guaranteed` parameter drops the old value only when the callee owns it
    (rule 5): the first rebind drops nothing, because the old value is the caller's. A
    rebind of an `InGuaranteed` parameter does not reach SLIR: `borrow` refuses it. The
-   write of an owning element (`a[i] := v`) follows the same order: the new value into a
-   temporary, unless it is a constant; then the index and its bounds check; then
-   `Drop(Index(a, i))`; then the store, which moves the temporary. An element always holds
-   a value, so the old element always drops.
+   write of an owning field or element (`p.x := v`, `a[i] := v`) follows the same order:
+   the new value into a temporary, unless it is a constant; then each index of the place
+   and its bounds check; then `Drop(Field(p, i))` or `Drop(Index(a, i))`; then the store,
+   which moves the temporary. A field and an element always hold a value, so the old part
+   always drops.
 7. The hidden iterator local of a `Protocol` or an `IteratorValue` loop, and the item that
    the loop owns, are owning locals of the loop scope under rules 1 to 4: the end, a
    `break`, a `return` and the `??` of a binder all reach a `Drop`. A walk in place has no
@@ -3290,10 +3301,11 @@ Runs after lowering, before the backend. It checks:
 - no read and no `Move` of a local that holds no value on a path: before its first write,
   or after its `StorageLive` or its `StorageDead`
 - no `Move` of a place that holds an `Index`: an element never moves (8.4)
-- a `Drop` of an element (a place whose outer projection is an `Index`): its root is a
-  local that holds a value on every path, and the element type owns. It does not change the
-  state of the root. A `Drop` of any other place that is no local, and a `DropIfSet` of a
-  place that is no local, are not checked yet (CE0000)
+- a `Drop` of a part (a place whose outer projection is a `Field` or an `Index`): its root
+  is a local that is no view and that holds a value on every path, and the type of the part
+  owns. It does not change the state of the root. A `Drop` of any other place that is no
+  local, a `Drop` of a part of a global, and a `DropIfSet` of a place that is no local, are
+  not checked yet (CE0000)
 - a `Move` of a sub-place (a `Field`, a `Downcast`) is a `Move` of its root local, and
   no local is ever PARTIALLY moved: lowering drops the sibling owning fields first (8.9,
   `Take`), or the sibling payloads of a pattern take, because an arm takes the variant
@@ -3364,8 +3376,8 @@ the receiver operand of a built-in method, the conventions of a method of a fami
 `RULED_EFFECT_FAMILIES` (`receiver_convention` and `argument_conventions`), and no copy of
 an owning value other than a `string` into an `Owned` argument. `verify_arrays.py` holds the
 checks of an array value (the parts of each run, and no `Move` of a repeated value), of a
-length and a slice, and of the `Drop` of an element (an owning type, off a local; the
-dataflow reads its root). `verify_flow.py` holds the dataflow of the moves and the
+length and a slice, and of the `Drop` of a part (an owning type, off a local that is no
+view; the dataflow reads its root). `verify_flow.py` holds the dataflow of the moves and the
 drops. `verify_regions.py` holds the rules of a view local and of a borrow region (rules
 `a view local`, `a borrow region` and `no change of an owner in its region`): a dataflow
 gives each block the set of open regions at its top, every path into a block brings the
