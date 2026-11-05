@@ -294,8 +294,7 @@ class TypeValidator:
         in its body is checked for completeness, and its body goes to the next stage, the
         lift pass, with the tables that the body was read in. A node that has an error has
         no answer, so a body with an error is not checked: it goes to the lift pass marked
-        `typecheck_failed` when its header and its path faults have no error
-        (docs/design/ir.md 7.9). `offered` is the count of the errors before the header of
+        `typecheck_failed` when its header has no error (docs/design/ir.md 7.9). `offered` is the count of the errors before the header of
         a function or a method, so that a body whose header has an error (an unknown
         parameter type) does not go on.
         The answer is the body when the walk reached its end, and None after a stop.
@@ -332,15 +331,13 @@ class TypeValidator:
             self.body_locals = {}
             self.refused_locals = set()
             self.uncovered_matches = set()
-        walked = self.errors_offered()
         if path_faults is not None:
             path_faults(body, uncovered)
-        if walk_failed:
-            if not header_failed and self.errors_offered() == walked:
-                self.next_stage(decl, body, tables=self.tables, filename=filename,
-                                typecheck_failed=True)
+        if header_failed:
             return body
-        if self.errors_offered() != offered:
+        if walk_failed or self.errors_offered() != offered:
+            self.next_stage(decl, body, tables=self.tables, filename=filename,
+                            typecheck_failed=True)
             return body
         check_answers(body, answers, self.shir.decls)
         self.next_stage(decl, body, tables=self.tables, filename=filename)
