@@ -3359,11 +3359,13 @@ locals, and the locals that own nothing, and nothing else:
    local that the scope exit frees. A statement is the owning scope of its temporaries: a
    temporary that nothing moves drops at the end of its statement, the newest first, and
    on the path of a `return` its drop comes before the drops of the enclosing scopes.
-   This is a stated change from the AST backend (ruling R-AU) in two cases: a discarded
-   call result (`xs.pop()` as a statement), which the AST backend kept to the exit of the
-   scope, and a temporary receiver of a method call in an interpolation hole
-   (`println("{mk().is_some()}")`), which the AST backend dropped before the print. SLIR
-   lowering drops both at the end of the statement. The receiver of `realise` and of `err`
+   This is a stated change from the AST backend (ruling R-AU) in three cases. The AST
+   backend kept a discarded call result (`xs.pop()` as a statement) to the exit of the
+   scope. It dropped the temporary receiver of a method call in an interpolation with one
+   hole (`println("{mk().is_some()}")`) before the print. It kept the temporary receiver
+   of a method call in a `let` initializer (`let i32 x = mk(3).ident() + mk(4).ident()`),
+   and in an interpolation with two holes or more, to the exit of the scope. SLIR lowering
+   drops each of them at the end of the statement. The receiver of `realise` and of `err`
    is no such temporary: the call takes it, so it drops at the read on each path that moves
    nothing out of it (8.9), before the rest of the statement runs.
 3. A local that is moved at an exit gets no drop at all. SLIR lowering tracks the state of
