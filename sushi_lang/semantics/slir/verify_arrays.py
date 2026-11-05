@@ -1,8 +1,9 @@
-"""The checks of an array value, a length and a slice in the SLIR verifier (docs/design/ir.md 8.13).
+"""The checks of an array value, a length, a slice and the drop of an element in the SLIR verifier (docs/design/ir.md 8.13).
 
 An `Aggregate(AggArray)` gives the parts of each run: a value of the element type, an
-`i32` count, and an `i32` first value of a sequence of `i32` slots. The counts of a `T[N]`
-are constants that add up to `N`. `Len` reads an array or a string, and `Slice` reads an
+`i32` count, and an `i32` first value of a sequence of `i32` slots. The value of a repeat
+run is a borrow, never a `Move`. The counts of a `T[N]` are constants that add up to `N`. A
+`Drop` of an element is of an owning type, off a local. `Len` reads an array or a string, and `Slice` reads an
 array with two `i32` bounds. Each check is a free function that takes the `Check` of
 `verify.py` first.
 """
@@ -15,9 +16,12 @@ from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
+from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.printer import show
-from sushi_lang.semantics.slir.verify_rules import ARRAY_VALUE, LENGTH_SLICE
-from sushi_lang.semantics.typesys import ArrayType, BuiltinType, DynamicArrayType, Type
+from sushi_lang.semantics.slir.verify_rules import ARRAY_VALUE, LENGTH_SLICE, OWNING_DROP
+from sushi_lang.semantics.typesys import (
+    ArrayType, BuiltinType, DynamicArrayType, Type, owns_resource,
+)
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.slir.verify import Check
@@ -25,8 +29,8 @@ if TYPE_CHECKING:
 
 def array_value(check: Check, kind: r.AggArray, parts: Sequence[p.Operand], span: Span) -> None:
     """The parts fit the runs: a value of the element type, an `i32` count, an `i32`
-    first value of a sequence of `i32` slots. The counts of a `T[N]` are constants
-    that add up to `N`."""
+    first value of a sequence of `i32` slots. The value of a repeat run is a borrow, never
+    a `Move`. The counts of a `T[N]` are constants that add up to `N`."""
     ty = kind.ty
     if not isinstance(ty, (ArrayType, DynamicArrayType)):
         check.fail(ARRAY_VALUE, f"an array value of {display_type(ty)}, which is no array",
@@ -36,7 +40,12 @@ def array_value(check: Check, kind: r.AggArray, parts: Sequence[p.Operand], span
         check.fail(ARRAY_VALUE, f"the runs of {display_type(ty)} take {sum(widths)} parts, "
                                 f"and the value gives {len(parts)}", span)
     wanted: list[Type] = []
+    at = 0
     for run in kind.runs:
+        if isinstance(run, r.RunRepeat) and isinstance(parts[at], p.Move):
+            check.fail(ARRAY_VALUE, f"a repeat run of {display_type(ty)} moves its value "
+                                    f"{show(parts[at])}, which it borrows", span)
+        at += r.run_width(run)
         if isinstance(run, r.RunSequence) and ty.base_type != BuiltinType.I32:
             check.fail(ARRAY_VALUE, f"a sequence fills {display_type(ty)}, whose element "
                                     f"is no i32", span)
@@ -77,3 +86,15 @@ def length_or_slice(check: Check, value: r.Len | r.Slice, span: Span) -> None:
             if check.operand_type(bound, span) not in (BuiltinType.I32, None):
                 check.fail(LENGTH_SLICE, f"the bound {show(bound)} of {show(value)} is no "
                                          f"i32", span)
+
+
+def element_drop(check: Check, stmt: st.Drop) -> None:
+    """The `Drop` of an element: the old value at the write of an owning element (ir.md
+    8.10, rule 6). Its root is a local, and its type owns. The dataflow reads the root,
+    which must hold a value, and does not change its state."""
+    if not isinstance(check.place(stmt.place, stmt.span).root, p.Local):
+        check.not_checked(f"a drop of {show(stmt.place)}, an element of a global", stmt.span)
+    ty = check.operand_type(p.Copy(stmt.place), stmt.span)
+    if ty is None or not owns_resource(ty, check.drops):
+        check.fail(OWNING_DROP, f"{show(stmt.place)} has the type {display_type(ty)}, "
+                                f"which owns nothing", stmt.span)

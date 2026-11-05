@@ -101,6 +101,7 @@ NO_RECEIVER_RULE_FAMILIES = frozenset({
 # get-out (docs/design/ir.md 7.9). The borrow pass reads the receiver as the owner of the
 # view, and SLIR lowering reads it for the destination of the answer.
 VIEW_ANSWERS: dict[str, frozenset[str]] = {
+    ARRAY_FAMILY: frozenset({"get", "first", "last"}),
     LIST_FAMILY: frozenset({"get", "first", "last"}),
 }
 

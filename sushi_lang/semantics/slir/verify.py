@@ -17,7 +17,8 @@ struct or a tuple (an rvalue or a constant) with each field of its type, each pa
 type of its payload value or of its field, an array (an rvalue or a constant) whose parts
 fit its runs and its element type, a `Len` of an array or a string, a `Slice` of an array
 with two `i32` bounds, a view (a local that a `Slice` writes) that nothing else writes,
-moves or drops, a typed place for each `BeginBorrow`, no `Move` of an element, the
+moves or drops, a typed place for each `BeginBorrow`, no `Move` of an element, a `Drop` of an
+element only of an owning type, no `Move` of the value of a repeat run, the
 conventions of a `Direct` callee, a
 receiver operand for a call of a built-in method, no copy of an owning value
 other than a `string` into an `Owned` argument, and a registered `RExxxx` for a `Trap`, with
@@ -31,7 +32,8 @@ owns nothing, so the rule of the drops does not read it. The checks of a call ar
 and the names of the rules in `verify_rules.py`.
 
 The verifier refuses a shape that no lowering makes yet, and that it does not check, with
-the internal error CE0000: a `Drop` or a `DropIfSet` of a place that is no local. A projection of a `Global` is typed from the type that the
+the internal error CE0000: a `Drop` of a place that is no local and no element, and a
+`DropIfSet` of a place that is no local. A projection of a `Global` is typed from the type that the
 `Global` carries.
 """
 from __future__ import annotations
@@ -58,7 +60,9 @@ from sushi_lang.semantics.slir.printer import show
 from sushi_lang.semantics.slir.verify_calls import (
     DeclaredLookup, DeclaredParams as DeclaredParams, check_call, declared_params,
 )
-from sushi_lang.semantics.slir.verify_arrays import array_value, length_or_slice
+from sushi_lang.semantics.slir.verify_arrays import (
+    array_value, element_drop, length_or_slice,
+)
 from sushi_lang.semantics.slir.verify_flow import Flow, successors
 from sushi_lang.semantics.slir.verify_regions import check_regions
 from sushi_lang.semantics.slir.verify_rules import CONVENTIONS as CONVENTIONS
@@ -422,6 +426,9 @@ class Check:
         return stmt.place.id
 
     def drop(self, stmt: st.Drop | st.DropIfSet) -> None:
+        if isinstance(stmt, st.Drop) and isinstance(stmt.place, p.Index):
+            element_drop(self, stmt)
+            return
         if self.dropped(stmt) in self.views:
             self.fail(VIEW, f"{show(stmt.place)} is a view, which owns nothing to drop",
                       stmt.span)

@@ -10,7 +10,8 @@ each path from its write to the end of its storage, to a write over it, and to t
 `return`: a `DropIfSet` drops on the paths where its flag is true, and the paths where the
 flag is false must have moved the local. An `Owned` parameter is an owning local; a
 borrowed parameter never drops and never moves, and an `Inout` one holds a value again at
-the `return`. A `Trap` ends the program, so it needs no drop.
+the `return`. A `Trap` ends the program, so it needs no drop. The `Drop` of an element reads
+its root local, which must hold a value, and does not change its state.
 
 The structure check of `verify.py` runs first and gives the dataflow its facts (`Check`).
 """
@@ -109,6 +110,8 @@ class Flow:
             for operand, _ in stmt.args:
                 self.operand(configs, operand, span)
             self.write(configs, stmt.dest, span, None)
+        elif isinstance(stmt, st.Drop) and isinstance(stmt.place, p.Index):
+            self.read(configs, stmt.place, span)
         elif isinstance(stmt, st.Drop):
             self.drop(configs, self.check.dropped(stmt), span)
         elif isinstance(stmt, st.DropIfSet):

@@ -20,7 +20,8 @@ a constant. Three tiers:
 
 A repeated value that would take a walk is one `llvm.memset` when it is a constant and
 every byte of it is the same byte (`0`, `-1`, `0.0`, `7` as a `u8`). A `T[N]` whose every
-part is a constant is one constant.
+part is a constant is one constant. A repeated value of an owning element is a borrow: each
+slot takes its own `copy_out`, the deep-clone seam (Ruling 7, #478).
 
 A CURSOR, not a constant start: a run-time count makes every later start a run-time value,
 and the cursor is shorter than the constant arithmetic it replaces. A run-time count below
@@ -43,6 +44,7 @@ from sushi_lang.semantics.typesys import ArrayType, DynamicArrayType
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
+    from sushi_lang.semantics.typesys import Type
 
 # Below this many slots a run costs less as plain stores than as a counted loop.
 UNROLL_LIMIT = 8
@@ -56,6 +58,7 @@ class EmittedRun:
     value: Optional[ir.Value] = None
     first: Optional[ir.Value] = None
     step: int = 1
+    owning: Optional['Type'] = None                  # the element type of an owning value
 
 
 def emit_array_value(codegen: 'LLVMCodegen', ty: ArrayType | DynamicArrayType,
@@ -64,8 +67,11 @@ def emit_array_value(codegen: 'LLVMCodegen', ty: ArrayType | DynamicArrayType,
     `T[N]` by value, or the `{len, cap, data}` descriptor of a fresh `T[]`."""
     from sushi_lang.backend.types.arrays.utils import create_dynamic_array_from_elements
 
+    from sushi_lang.backend.destructors import needs_cleanup
+
     element = codegen.types.ll_type(ty.base_type)
-    emitted = _emitted_runs(codegen, runs, parts)
+    owning = ty.base_type if needs_cleanup(codegen, ty.base_type) else None
+    emitted = _emitted_runs(codegen, runs, parts, owning)
     if isinstance(ty, DynamicArrayType):
         return create_dynamic_array_from_elements(codegen, element, emitted)
     array_type = ir.ArrayType(element, ty.size)
@@ -80,8 +86,9 @@ def emit_array_value(codegen: 'LLVMCodegen', ty: ArrayType | DynamicArrayType,
 
 
 def _emitted_runs(codegen: 'LLVMCodegen', runs: Sequence[r.ArrayRun],
-                  parts: Sequence[ir.Value]) -> List[EmittedRun]:
-    """Each run with its values, in order; a run-time count is clamped to zero."""
+                  parts: Sequence[ir.Value], owning: Optional['Type']) -> List[EmittedRun]:
+    """Each run with its values, in order; a run-time count is clamped to zero. A repeated
+    value of the owning element type `owning` is copied into each slot."""
     emitted: List[EmittedRun] = []
     at = 0
     for run in runs:
@@ -89,7 +96,7 @@ def _emitted_runs(codegen: 'LLVMCodegen', runs: Sequence[r.ArrayRun],
             emitted.append(EmittedRun(count=ir.Constant(codegen.types.i32, 1), value=parts[at]))
         elif isinstance(run, r.RunRepeat):
             emitted.append(EmittedRun(count=_clamp_count(codegen, parts[at + 1]),
-                                      value=parts[at]))
+                                      value=parts[at], owning=owning))
         else:
             emitted.append(EmittedRun(count=_clamp_count(codegen, parts[at + 1]),
                                       first=parts[at], step=run.step))
@@ -135,7 +142,7 @@ def constant_values(emitted: Sequence[EmittedRun],
             out.extend(ir.Constant(element_llvm_type, run.first.constant + run.step * index)
                        for index in range(run.count.constant))
             continue
-        if not isinstance(run.value, ir.Constant):
+        if not isinstance(run.value, ir.Constant) or run.owning is not None:
             return None
         out.extend([run.value] * run.count.constant)
     return out
@@ -196,13 +203,20 @@ def _walk_range(codegen: 'LLVMCodegen', base: ir.Value, count: ir.Value, first: 
 
 def _fill_repeated(codegen: 'LLVMCodegen', base: ir.Value, run: EmittedRun,
                    element_llvm_type: ir.Type, number: int) -> None:
-    """One plain value into every slot the run fills: stores, one `memset`, or a walk."""
+    """One value into every slot the run fills: stores, one `memset`, or a walk. An owning
+    value takes its own `copy_out` per slot; the buffer is fresh, so no slot holds a value
+    to destroy first."""
+    from sushi_lang.backend.ownership import copy_out
+
     if run.value is None:
         raise_internal_error("CE0000", detail="a repeated run of an array has no value")
     value = codegen.utils.cast_for_param(run.value, element_llvm_type)
+    owning = run.owning
 
     def store_one(slot: ir.Value, _index: ir.Value) -> None:
-        codegen.builder.store(value, slot)
+        held = value if owning is None else codegen.utils.cast_for_param(
+            copy_out(codegen, run.value, owning), element_llvm_type)
+        codegen.builder.store(held, slot)
 
     if isinstance(run.count, ir.Constant) and run.count.constant <= UNROLL_LIMIT:
         i32 = codegen.types.i32
@@ -211,7 +225,7 @@ def _fill_repeated(codegen: 'LLVMCodegen', base: ir.Value, run: EmittedRun,
             store_one(slot, ir.Constant(i32, offset))
         return
 
-    byte = _repeated_byte(value)
+    byte = None if owning is not None else _repeated_byte(value)
     if byte is not None:
         from sushi_lang.backend.expressions.memory import emit_byte_size, emit_memset_bytes
         emit_memset_bytes(codegen, base, byte,

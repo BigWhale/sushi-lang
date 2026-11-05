@@ -1,0 +1,21 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Ford Ford Ford 3\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_owning_elements.slir
+#
+# An array of an owning element (ir.md 8.7, 8.10). A `Single` value moves into its slot. A
+# repeat run borrows its value, a `Copy`, and the emitter copies it into each slot. The
+# write of an element takes the new value into a temporary, checks the index, drops the old
+# element and moves the temporary into the slot. An element read in a `let` is a view local
+# in a region over the array. `push` takes its element `Owned`. The array drops at the end
+# of its block.
+
+fn main() i32:
+    let string name = "Ford".s(0, 4)
+    let string[] xs = from([name, "Arthur".s(0, 6)])
+    let string[3] row = [xs[0]; 3]
+    xs[1] := "Zaphod".s(0, 6)
+    let string first = row[0]
+    xs.push(first.clone())
+    println("{first} {row[1]} {xs[2]} {xs.len()}")
+    return 0

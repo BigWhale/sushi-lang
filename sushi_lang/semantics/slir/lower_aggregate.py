@@ -10,8 +10,8 @@ name them. This module reads `lower.py` for its types only. It and `lower_arrays
 each other as modules, and each reads the other only inside a function, so the cycle is
 safe at import time.
 
-Plain values alone: a construction of a type that owns, a field of a temporary that owns and
-a write of a field that owns stop (`StructInit owning`, `TupleInit owning`, `owning
+A construction of a type that owns, a field of a temporary that owns and a write of a field
+that owns stop (`StructInit owning`, `TupleInit owning`, `owning
 temporary`, `owning field write`), because their drops and their moves are Tier B. `borrow`
 stops on a destructure of a value that owns. A struct with a field of a reference type is
 CE2415 at its declaration, so its construction stops (`StructInit reference field`).
@@ -74,12 +74,15 @@ def _instance(low: Lowering, node: e.StructInit | e.TupleInit) -> Type:
 def in_written_order(low: Lowering, values: Sequence[e.ShirExpr],
                       order: Sequence[int]) -> tuple[p.Operand, ...]:
     """The operand of each value, evaluated in `order`, in the declaration order. A place
-    that a later value can change is copied into a temporary first."""
+    of a plain value that a later value can change is copied into a temporary first. A place
+    of an owning value (the borrowed value of a repeat run) stays where it is: a temporary
+    would drop a copy that it does not own."""
     operands: dict[int, p.Operand] = {}
     for at, index in enumerate(order):
         value = values[index]
         operand = low.operand(value)
-        if isinstance(operand, p.Copy) and any(_calls(values[later]) for later in order[at + 1:]):
+        if (isinstance(operand, p.Copy) and not low.owns(low.type_of(value))
+                and any(_calls(values[later]) for later in order[at + 1:])):
             operand = p.Copy(p.Local(low.temporary(r.Use(operand), low.type_of(value),
                                                    value.loc)))
         operands[index] = operand
@@ -156,8 +159,12 @@ def field_write(low: Lowering, stmt: s.Assign, target: e.Field | e.Index) -> Non
     """`p.x := v` and `a[i] := v`: the new value first, then the store into the projection.
     `and` and `or` go into a temporary first, because the right operand reads the place
     again. When the place holds an index, a value that is no constant goes into a
-    temporary first too: the index and its check come after the whole value."""
+    temporary first too: the index and its check come after the whole value. A write of an
+    owning element drops the old element (`lower_arrays.element_write`)."""
     if low.owns(low.type_of(target)):
+        if isinstance(target, e.Index):
+            arrays.element_write(low, stmt, target)
+            return
         raise StageStop(STAGE, "owning field write", stmt.loc)
     value = low.value(stmt.value)
     indexed = any(isinstance(step, (e.Index, e.Slice))

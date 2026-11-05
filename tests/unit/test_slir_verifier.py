@@ -1014,3 +1014,47 @@ def test_a_drop_of_a_local_after_a_move_of_its_field_is_refused():
                _drop(1, BAD), _set(0, r.Use(p.Const(k.Blank())))),
         params=((1, OWNED),),
     ), "no use after a move")
+
+
+# -- the element of an owning array (ir.md 8.10 rule 6, 8.13) ---------------------------
+
+STRINGS = DynamicArrayType(STRING)
+ZERO = p.Const(k.Int(0, I32))
+
+
+def _strings(index: int) -> st.Assign:
+    """`_index = []`: an empty `string[]`, which owns its buffer."""
+    return _set(index, r.Aggregate(r.AggArray(STRINGS, ()), ()))
+
+
+def test_the_write_of_an_owning_element_drops_the_old_element_and_passes():
+    _passes(_function([BLANK, STRINGS, STRING], _block(
+        0, _ret(), _live(1), _strings(1), _live(2), _text(2),
+        st.Drop(p.Index(_local(1), ZERO), SPAN),
+        st.Assign(p.Index(_local(1), ZERO), r.Use(_move(2)), SPAN), _dead(2),
+        _drop(1), _dead(1), _set(0, r.Use(p.Const(k.Blank()))))))
+
+
+def test_a_drop_of_a_plain_element_is_refused():
+    plain = DynamicArrayType(I32)
+    _refused(_function([BLANK, plain], _block(
+        0, _ret(), _live(1), _set(1, r.Aggregate(r.AggArray(plain, ()), ())),
+        st.Drop(p.Index(_local(1), ZERO), BAD))), "drop of an owning type")
+
+
+def test_a_drop_of_an_element_after_a_move_of_its_array_is_refused():
+    _refused(_function([BLANK, STRINGS, STRINGS], _block(
+        0, _ret(), _live(1), _strings(1), _live(2), _set(2, r.Use(_move(1))),
+        st.Drop(p.Index(_local(1), ZERO), BAD))), "no use after a move")
+
+
+def test_a_drop_of_an_element_of_a_global_is_not_checked_yet():
+    _not_checked(_function([BLANK], _block(
+        0, _ret(), st.Drop(p.Index(p.Global("unit$names", STRINGS), ZERO), BAD))))
+
+
+def test_a_repeat_run_that_moves_its_value_is_refused():
+    repeat = r.Aggregate(r.AggArray(STRINGS, (r.RunRepeat(),)),
+                         (_move(2), p.Const(k.Int(2, I32))))
+    _refused(_function([BLANK, STRINGS, STRING], _block(
+        0, _ret(), _live(2), _text(2), _live(1), _set(1, repeat, BAD))), "an array value")

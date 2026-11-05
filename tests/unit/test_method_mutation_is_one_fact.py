@@ -160,17 +160,20 @@ def test_the_array_slot_is_the_one_owned_argument_of_its_conventions():
 
 
 def test_a_get_out_answers_a_view_by_its_family_and_its_name():
-    """`get`, `first` and `last` of a List answer a view (`answers_view`, docs/design/ir.md
-    7.9). The same name of another family, and another method of the family, do not."""
+    """`get`, `first` and `last` of a List and of an array answer a view (`answers_view`,
+    docs/design/ir.md 7.9). The same name of another family, and another method of the
+    family, do not."""
     from sushi_lang.semantics import method_effects as me
     from sushi_lang.semantics.generics.list import LIST_METHOD_ARITY
     from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 
-    family = METHOD_TYPE_REGISTRY.family(me.LIST_FAMILY)
-    views = {name for name in LIST_METHOD_ARITY if me.answers_view(family.callee(name))}
-    assert views == {"get", "first", "last"}
+    for family_name, names in ((me.LIST_FAMILY, LIST_METHOD_ARITY),
+                               (me.ARRAY_FAMILY, arrays.ARRAY_METHOD_ARITY)):
+        family = METHOD_TYPE_REGISTRY.family(family_name)
+        views = {name for name in names if me.answers_view(family.callee(name))}
+        assert views == {"get", "first", "last"}
     assert set(me.VIEW_ANSWERS) <= me.EFFECT_FAMILIES
-    for name in me.RECEIVER_READ_FAMILIES | {me.ARRAY_FAMILY}:
+    for name in me.RECEIVER_READ_FAMILIES:
         assert not me.answers_view(METHOD_TYPE_REGISTRY.family(name).callee("get"))
 
 
