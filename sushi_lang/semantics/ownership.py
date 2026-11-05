@@ -25,15 +25,10 @@ from sushi_lang.semantics.typesys import (
 class ConsumingUse(Enum):
     """Every position that takes ownership of a value. A CLOSED set."""
 
-    CALL_ARG = "call_arg"                # f(x), constructor calls, indirect calls, bloom
-    LET = "let"                          # let T x = <source>, and a `next()` foreach slot
     REBIND = "rebind"                    # x := <source>
     FIELD_ASSIGN = "field_assign"        # obj.field := <source>
     STRUCT_FIELD = "struct_field"        # S(field: <source>)
     ENUM_PAYLOAD = "enum_payload"        # E.Variant(<source>), incl. Result.Ok / Maybe.Some
-    ARRAY_ELEMENT = "array_element"      # from([<source>, ...]) and [<source>, ...]
-    ELEMENT_ASSIGN = "element_assign"    # arr[i] := <source>
-    RETURN = "return"                    # return Result.Ok(<source>)
     CAPTURE = "capture"                  # a lambda's captured environment slot
     MATCH_SCRUTINEE = "match_scrutinee"  # match nom <source>: -- ruling R11
     RECEIVER = "receiver"                # h.close() on a `nom self` method -- ruling R25,

@@ -281,7 +281,6 @@ WHITELIST += (
 # ownership-conventions.md 3.1 define, and tests/unit/test_ownership_table.py pins. Each
 # one is kept for the group whose owning type brings the position back with its row.
 _CONSUMING_POSITIONS = {
-    "CALL_ARG": "B1", "LET": "B1", "RETURN": "B1", "ELEMENT_ASSIGN": "B1", "ARRAY_ELEMENT": "B1",
     "STRUCT_FIELD": "Task 75", "ENUM_PAYLOAD": "Task 75", "MATCH_SCRUTINEE": "Task 75",
     "REBIND": "Task 75", "FIELD_ASSIGN": "Task 75",
 }
