@@ -171,7 +171,6 @@ WHITELIST += (
     (_BORROW + "flow.py", "invalidation_of", _kept("C", "C3: iterators, a view of a loop")),
     (_BORROW + "flow.py", "LoopFlow", _kept("C", "C3: iterators, a view of a loop")),
     (_BORROW + "calls.py", "settle_receiver", _kept("C", "C3: a lent iterator receiver")),
-    (_BORROW + "reads.py", "constant_type", _ast_probe("A8")),
     (_BORROW + "calls.py", "consume_indirect_args", _kept("C", "C2: closures")),
     (_BORROW + "consume.py", "reconcile_closure_bind", _kept("C", "C2: closures")),
     (_BORROW + "bindings.py", "BindingScope", _kept("C", "C3: iterators, the scope of a loop")),

@@ -8,10 +8,9 @@ narrower copy that forgot the `??` is exactly how `outer.get(0)??.push(5)` went 
 
 Port templates: the probes that read the AST take an AST node, and no SHIR pass has one.
 No pass reaches them today. The group that checks each construct ports its probes to SHIR
-inputs before a SHIR caller is connected: B7 a `nom` binder of a match (`root_owner`),
-C3 the get-out of an iterable (`called_on`,
+inputs before a SHIR caller is connected: C3 the get-out of an iterable (`called_on`,
 `reads_through_owner` with `is_bare_enum_constant`, `receiver_type`, `names_kept_storage`),
-A8 a constant (`constant_sig`, `constant_type`), and D1 a `var` (`unit_variables`).
+and D1 a `var` (`unit_variables`).
 """
 
 from __future__ import annotations
@@ -273,34 +272,6 @@ def read_type(checker: 'BorrowChecker', node: object) -> Optional[Type]:
     if isinstance(node, e.ExprNode):
         return checker.answers().type_of(node.shir_id)
     return None
-
-
-def constant_sig(checker: 'BorrowChecker', name: str):
-    """The record a bare name reaches in the constant table, a `const` or a `var`.
-
-    The lookup is SCOPED and never `by_name`: the flat view holds one record per name
-    over the whole program and is first-wins, so it answers with another unit's
-    declaration of the same name (#685, `docs/design/unit-namespaces.md` section 9).
-    A name that two imports offer reaches no record: CE3012 refused it, and the first
-    candidate is not the one the user chose.
-    """
-    sig = checker.tables.constants.lookup(name, checker.unit_name, checker.scope)
-    if sig is None or checker.tables.visibility.is_ambiguous(
-            "variable" if sig.is_var else "constant", name, checker.unit_name,
-            checker.scope):
-        return None
-    return sig
-
-
-def constant_type(checker: 'BorrowChecker', name: str) -> Optional[Type]:
-    """The declared type of a CONSTANT or a unit variable, for a bare name that is no local.
-
-    A constant lives in `.rodata` and can never be moved out of, so an index into one
-    is a read through an owner like any other. Without its type the read answered "no
-    type", the class came back PLAIN, and the consuming use passed a check the backend
-    then answered with CE0129 (#498).
-    """
-    return getattr(constant_sig(checker, name), "const_type", None)
 
 
 def unit_variables(checker: 'BorrowChecker'):
