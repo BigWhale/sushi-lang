@@ -1888,11 +1888,12 @@ walk reported an error, or set the flag `refused_before`, when its header and it
 faults have no error. It marks the body `typecheck_failed`, and `lift` gives it to `borrow`
 with the mark. `borrow` walks such a body with one more rule: a node with no answer is
 UNKNOWN. An error hole is unknown, and so is a node that misses an answer that the
-completeness check asks for: an expression with no type, a `Loop` with no kind, a `Match`
-with no type of its scrutinee, a `Destructure` with no element type, and the other rows of
-`NEEDS`. A `Call` with a callee is known: an argument of it with no convention is unknown on
-its own (`misses_an_answer` and `KNOWN_WITH`, `shir/typeck_check.py`). An unknown node has
-no arm:
+completeness check asks for: an expression with no type, a `Destructure` with no element
+type, and the other rows of `NEEDS`. A `Call` with a callee is known: an argument of it with
+no convention is unknown on its own. A `Match` and a `Loop` are known, because `borrow` reads
+no answer of their own: their scrutinee and their condition are unknown on their own, and
+each arm and each body is walked (`misses_an_answer` and `KNOWN_WITH`,
+`shir/typeck_check.py`). An unknown node has no arm:
 
 - an unknown expression is a read of each expression that it holds (`walk.parts`), each
   through its own arm. A function name that it holds reads nothing. The expression itself
@@ -1914,8 +1915,12 @@ its answers, also in the statement of the error of `typecheck`, and never a diag
 reads an answer that `typecheck` did not give. What `borrow` assumes in an unknown part: no
 local moves there, and no view starts there. So a use of a name after an unknown call that
 names it with `nom` gives no CE2405. A local with no type is PLAIN for `classify()`, so a use
-of it never moves it. A stop of `borrow` ends the walk of such a body too; the pipeline
-never reports it, because the program has an error. The pass writes no row of such a body,
+of it never moves it. Two divergences from the old pipeline follow. `typecheck` types no arm
+of a `match` whose scrutinee has an error (7.8), so each node of its arms is unknown, and
+`borrow` gives no diagnostic in them. A stop of `borrow` ends the walk of such a body too
+(for example a `match` with a bare binder of a payload that owns, which the group of the
+owning matches checks), so a diagnostic in the construct of the stop or after it does not
+come; the pipeline never reports the stop, because the program has an error. The pass writes no row of such a body,
 as in the discovery round of a loop: the `OwnershipResults` of the body stay empty, the pass
 does not check them, and the body never goes to the SLIR lowering.
 
