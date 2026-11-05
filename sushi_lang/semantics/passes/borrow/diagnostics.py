@@ -396,18 +396,9 @@ def read_spelled(checker: 'BorrowChecker', expr: e.ShirExpr) -> str:
     """The text of a read through an owner: its source text, where a root that makes a new
     value takes its short form (`head(...)`, `[...]`, `from([...])`, `new()`). The root is
     at the end of the chain of fields, elements, method receivers and `??` operands."""
-    root = expr
-    while True:
-        if isinstance(root, (e.Field, e.Index, e.Slice)):
-            root = root.base
-        elif isinstance(root, e.Try):
-            root = root.inner
-        elif isinstance(root, e.Call) and isinstance(root.target, e.Dotted):
-            root = root.target.recv
-        else:
-            break
-    short = _short_temporary(checker, root)
-    if short is None:
+    root = walk_place(expr, Step.MEMBER | Step.INDEX | Step.CALL | Step.TRY).node
+    short = _short_temporary(checker, root) if isinstance(root, e.ExprNode) else None
+    if root is None or short is None:
         return spelled(checker, expr)
     rest = source_text(checker.source, Span(root.loc.end_line, root.loc.end_col,
                                             expr.loc.end_line, expr.loc.end_col))
