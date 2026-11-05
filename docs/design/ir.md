@@ -3312,29 +3312,29 @@ a path of no test (`_`, or an arm with a `_` alternative) has no test, and it is
 The binders of an arm are locals of the scope of its body. A bare binder gets `StorageLive`
 and the `Copy` of its place: over a plain payload it is an ordinary local, and over an
 owning payload it is a view local (8.2), which gets no drop: its region is over the root of
-the place of the scrutinee (the temporary of a new value, or the part of a tuple
-literal), from the write of the binder to the last uses of the region row of `borrow`, and
-a binder with no last use has no region. A `nom` binder of an owning payload is an owning
-local of the scope of the arm, written with the `Move` of its place, and its flag follows
-its write; the arm takes the variant whole, so its root (a temporary of the match statement)
-is moved one time for all the `nom` binders of the path (8.13). A path writes its other
-binders first and its `nom` binders last, so no binder reads a part of the root after the
-take (8.13). A `nom` binder of a plain payload is a `Copy`. An arm that takes nothing out of a temporary that another arm takes
-drops that temporary at its end, after the exit of its scope (`drop_on_path`), so the arms
-that reach the join leave it moved; an arm that leaves by a `return`, a `break` or a
-`continue` drops it by its state. A view local has ONE write, and an owning local of a
-binder has one too, so an arm whose two or more paths write a binder of an owning payload
-stops (`Match owning alternatives`). With one path, the block of the body writes the binders first.
-With two or more paths that write a binder, each path ends in a block of its own that writes
-the binders of that path and goes to the body. Each arm body is a scope of its own, and each
-arm starts from the state of the locals after the scrutinee. The arms that reach their end
-meet at the join, as the blocks of an `If` do. The first test is in the block of the
-scrutinee. The blocks are made in source order: for each arm of a chain, the blocks of its
-tests after the first, the blocks of its paths that write binders, the block of its body,
-then the block where its last test fails (the first test of the next arm, or the trap); the
-blocks inside the body of an arm come after these. With one switch, for each arm in source
-order, the blocks of its paths that write binders, then the block of the arm. The join is
-made after the arms, and no join is made when no arm reaches it.
+the place of the scrutinee (the temporary of a new value, or the part of a tuple literal),
+from the write of the binder to the last uses of the region row of `borrow`, and a binder
+with no last use has no region. A `nom` binder of an owning payload is an owning local of
+the scope of the arm, written with the `Move` of its place, and its flag follows its write;
+the arm takes the variant whole, so its root (a temporary of the match statement) is moved
+one time for all the `nom` binders of the path (8.13). A path writes its other binders first
+and its `nom` binders last, so no binder reads a part of the root after the take (8.13). A
+`nom` binder of a plain payload is a `Copy`. An arm that takes nothing out of a temporary
+that another arm takes drops that temporary at its end, after the exit of its scope
+(`drop_on_path`), so the arms that reach the join leave it moved; an arm that leaves by a
+`return`, a `break` or a `continue` drops it by its state. A view local has ONE write, and
+an owning local of a binder has one too, so an arm whose two or more paths write a binder of
+an owning payload stops (`Match owning alternatives`). With one path, the block of the body
+writes the binders first. With two or more paths that write a binder, each path ends in a
+block of its own that writes the binders of that path and goes to the body. Each arm body is
+a scope of its own, and each arm starts from the state of the locals after the scrutinee.
+The arms that reach their end meet at the join, as the blocks of an `If` do. The first test
+is in the block of the scrutinee. The blocks are made in source order: for each arm of a
+chain, the blocks of its tests after the first, the blocks of its paths that write binders,
+the block of its body, then the block where its last test fails (the first test of the next
+arm, or the trap); the blocks inside the body of an arm come after these. With one switch,
+for each arm in source order, the blocks of its paths that write binders, then the block of
+the arm. The join is made after the arms, and no join is made when no arm reaches it.
 
 Four SHIR nodes vanish at this boundary: `Try`, `Interp`, `Destructure` and `Take`. They
 were kept in SHIR only so that `typecheck` and `borrow` could report against the source
