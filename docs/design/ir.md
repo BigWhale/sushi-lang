@@ -1966,17 +1966,17 @@ finished with no error, with the tables that `typecheck` read the body in: `type
 gives it to `lift`, and `lift` gives it to `borrow`. An error in the header of a function
 or a method (the type of a parameter, the return type, the channel) is an error of its
 body for `typecheck`, so such a body does not go to `lift` either: a parameter with an
-unknown type would reach SLIR as a local with no type. In the same way, `typecheck` checks
-the path faults of a function or a method (CE0140 and CE0107) before it gives the body to
-`lift`, so a body with one of them meets no later stage. A body whose walk in `typecheck`
-reported an error goes on, as the next paragraph tells. A stop of a pass ends the walk of
+unknown type would reach SLIR as a local with no type. `typecheck` checks the path faults
+of a function or a method (CE0140 and CE0107) before it gives the body to `lift`. A body
+with a path fault goes on, marked as the next paragraph tells, so that `borrow` reports its
+errors too. A body whose walk in `typecheck` reported an error goes on in the same way. A stop of a pass ends the walk of
 its body, and the next pass does not get the body. The body of a template check is read
 in the overlay of its check, and an error of `borrow` there refuses the template as an
 error of `typecheck` does.
 
 **A body with an error of `typecheck` (ruling R-AR).** `typecheck` gives `lift` a body whose
-walk reported an error, or set the flag `refused_before`, when its header and its path
-faults have no error. It marks the body `typecheck_failed`, and `lift` gives it to `borrow`
+walk or path faults reported an error, or whose walk set the flag `refused_before`, when its
+header has no error. It marks the body `typecheck_failed`, and `lift` gives it to `borrow`
 with the mark. `borrow` walks such a body with one more rule: a node with no answer is
 UNKNOWN. An error hole is unknown, and so is a node that misses an answer that the
 completeness check asks for: an expression with no type, a `Destructure` with no element
