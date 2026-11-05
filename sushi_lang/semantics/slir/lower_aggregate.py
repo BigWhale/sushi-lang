@@ -29,6 +29,7 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.nodes import ShirNode
 from sushi_lang.semantics.slir import lower_arrays as arrays
+from sushi_lang.semantics.slir import lower_rebind as rebinds
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
@@ -119,7 +120,7 @@ def place_of(low: Lowering,
     if isinstance(root, e.LocalRef):
         place = p.Local(low.local_of(root.local, root.loc))
     elif isinstance(root, e.StorageRef):
-        place = low.global_place(root)
+        place = rebinds.global_place(low, root)
     elif isinstance(root, ShirNode) and steps:
         base = cast(e.ShirExpr, root)
         place = p.Local(low.temporary(low.value(base), low.type_of(base), base.loc,

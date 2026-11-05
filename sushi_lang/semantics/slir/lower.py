@@ -25,8 +25,8 @@ temporary of a new value. A value with no row is read with `Copy`. A literal and
 of a constant take the value that typecheck wrote for them (ir.md 8.5). A new value goes
 into the place that takes it (the local of a `let`, `_0`), else into a temporary of its
 statement. The store that consumes a `move` operand marks its local moved, not the place
-where the operand is built. A `var` is a `Global` place (`global_place`), and a `var` that
-owns stops (`StorageRef owning`). A read of a `var` by value goes into a temporary of the
+where the operand is built. A `var` is a `Global` place (`lower_rebind.global_place`), and a
+`var` that owns stops (`StorageRef owning`). A read of a `var` by value goes into a temporary of the
 statement first, because any call of the statement can change a `var`; a by-address
 argument, a receiver and a value that its statement stores at once read it where it is.
 Drop placement (`drops.py`) places every drop, every flag write
@@ -78,6 +78,7 @@ from sushi_lang.semantics.slir import lower_arrays as arrays
 from sushi_lang.semantics.slir import lower_calls as calls
 from sushi_lang.semantics.slir import lower_control as ctl
 from sushi_lang.semantics.slir import lower_match
+from sushi_lang.semantics.slir import lower_rebind as rebinds
 from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -350,7 +351,7 @@ class Lowering:
             agg.field_write(self, stmt, target)
             return
         if isinstance(target, e.StorageRef) and not stmt.is_init:
-            self.rebind_global(stmt, target)
+            rebinds.rebind_global(self, stmt, target)
             return
         if not isinstance(target, e.LocalRef):
             dispatch.stop(STAGE, target)
@@ -366,50 +367,7 @@ class Lowering:
             self.write(p.Local(ident), value, stmt.loc)
             self.declared = ident
         else:
-            self.rebind(stmt, target)
-
-    def rebind(self, stmt: s.Assign, target: e.LocalRef) -> None:
-        """A rebind: the new value first, then the drop of the old one, then the store, then
-        the flag (rules 4 and 6). An old value that a move took drops nothing. A new value
-        that may still read the old one (a live owning value, `and`, `or`) goes into a
-        temporary first."""
-        ident = self.local_of(target.local, target.loc)
-        owning = self.owns(self.locals[ident.index].ty)
-        if owning and (self.placement.is_borrowed(ident) or self.placement.is_address(ident)):
-            raise StageStop(STAGE, "borrowed rebind", stmt.loc)
-        value = self.value(stmt.value)
-        if isinstance(value, ShortCircuit) or (self.placement.holds_live_value(ident) and not (
-                isinstance(value, r.Use) and isinstance(value.operand, p.Const))):
-            ty = self.type_of(stmt.value)
-            temp = p.Local(self.temporary(value, ty, stmt.value.loc))
-            value = r.Use(p.Move(temp) if self.owns(ty) else p.Copy(temp))
-        self.emit(self.placement.drop_old_value(ident, stmt.loc))
-        self.write(p.Local(ident), value, stmt.loc)
-        self.emit(self.placement.flag_stored(ident, stmt.loc))
-
-    def rebind_global(self, stmt: s.Assign, target: e.StorageRef) -> None:
-        """`v := x` of a `var`: the new value, then the store into its global. A plain
-        `var` drops nothing. `and` and `or` go into a temporary first, because the right
-        operand can read the `var` again."""
-        place = self.global_place(target)
-        value = self.value(stmt.value)
-        if isinstance(value, ShortCircuit):
-            value = r.Use(p.Copy(p.Local(self.temporary(value, self.type_of(stmt.value),
-                                                        stmt.value.loc))))
-        self.write(place, value, stmt.loc)
-
-    def global_place(self, ref: e.StorageRef) -> p.Global:
-        """The `Global` of the `var` that `ref` names, by the symbol of its typecheck row. A
-        `var` that owns stops (`StorageRef owning`): its rebind drops, and that is group
-        D1."""
-        symbol = self.typeck.global_of(ref.shir_id)
-        if symbol is None:
-            er.raise_internal_error("CE0000", span=ref.loc,
-                                    detail="a unit variable with no global reached SLIR")
-        ty = self.type_of(ref)
-        if self.owns(ty):
-            dispatch.stop(STAGE, ref, state="owning")
-        return p.Global(symbol, ty)
+            rebinds.rebind(self, stmt, target)
 
     def expr_stmt(self, stmt: s.ExprStmt) -> None:
         """A value that nobody reads still writes a destination local (L16)."""
