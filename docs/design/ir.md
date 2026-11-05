@@ -3413,7 +3413,11 @@ Runs after lowering, before the backend. It checks:
   carve-out: the tail of a `var_arg` extern has no declared parameters, so the rule
   applies to the declared prefix only. For a `Builtin` callee of a container method, the
   declared parameters are the answer of `receiver_convention` for the receiver and of
-  `argument_conventions` for each argument (8.3)
+  `argument_conventions` for each argument (8.3). For a `Builtin` callee of a `Result` or a
+  `Maybe` method, they are the answer of `receiver_convention` for the receiver and the
+  mode of the row of the method for each argument: `map_err` and `or_err` take the
+  receiver `Owned`, the error value of `or_err` is `Owned`, and the function of `map_err`
+  is `Guaranteed`
 - no `Copy` of an owning value into an `Owned` argument, except a `string` (7.9)
 - a call of a `BuiltinMethod` has a receiver operand, the first operand
 - no `Binary` carries `and` or `or` (8.9)
