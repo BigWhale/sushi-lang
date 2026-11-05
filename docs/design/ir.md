@@ -2600,7 +2600,10 @@ their storage is an address.
 
 `Index` is a place, and its operand is an `i32`. An element never moves: a `Move` of a
 place that holds an `Index` is refused (8.13), because the array would be left PARTIALLY
-moved. An element of an owning type is Tier B.
+moved. An element of an owning type is dropped where it is: the write of an owning element
+drops the old element with `Drop(Index(place, i))` (8.10, rule 6). A `Drop` of an element is
+the one `Drop` of a place that is no local. It reads the root local of the place, and it
+does not change the state of that local: the array still holds a value in each slot.
 
 `Global` is a place, never a value to move out of: a `var` is never moved out of, and
 `borrow` refuses a consuming use of one that owns a resource (`unit-storage.md`). The
@@ -2696,6 +2699,9 @@ BuiltinName = BuiltinMethod                              # a row of METHOD_TYPE_
 
 `DropIfSet` replaces the string-keyed drop-flag table of 1.4. The flag is an ordinary SLIR
 local of type `bool`. It is visible, testable and optimizable.
+
+The place of a `Drop` is a local, or an element of an owning type (8.4). The place of a
+`DropIfSet` is a local.
 
 `BeginBorrow` / `EndBorrow` make a borrow REGION explicit.
 [CE2412](../error-catalog.md#ce2412), a change of an owner while a `let`-borrow is alive,
@@ -2856,7 +2862,12 @@ The parts of the `Aggregate` are the parts of each run, in the order of the runs
 an `i32`. A count below zero fills no slot: the emitter reads it as zero. Each count of a
 `T[N]` is a constant, and the counts add up to `N`. A `T[]` with no run is the empty array,
 `{0, 0, null}`. A plain element copies, so the emitter fills the slots with stores, a walk
-or one `memset`, and a `T[N]` of constant parts with one store of its constant.
+or one `memset`, and a `T[N]` of constant parts with one store of its constant. Over an
+owning element, the part of a `RunOne` is a `Move` or a constant: the slot takes the value.
+The value part of a `RunRepeat` is a `Copy` or a constant, never a `Move`: the run BORROWS
+its value, and the emitter writes a deep copy of it into each slot, over `copy_out` (the
+seam of the `Clone` arm). A value that is a new value is a temporary of the statement, which
+drops it at the end of the statement.
 
 `Len(place)` is the length of a `T[N]`, a `T[]` or a `string`, as an `i32`. `Slice(place,
 start, end)` reads a `T[N]` or a `T[]`: two `i32` operands, and `end` is exclusive. Its value
@@ -3113,7 +3124,11 @@ locals, and the locals that own nothing, and nothing else:
    because its left operand is written before its right operand reads the old value. A
    rebind of a `Guaranteed` parameter drops the old value only when the callee owns it
    (rule 5): the first rebind drops nothing, because the old value is the caller's. A
-   rebind of an `InGuaranteed` parameter does not reach SLIR: `borrow` refuses it.
+   rebind of an `InGuaranteed` parameter does not reach SLIR: `borrow` refuses it. The
+   write of an owning element (`a[i] := v`) follows the same order: the new value into a
+   temporary, unless it is a constant; then the index and its bounds check; then
+   `Drop(Index(a, i))`; then the store, which moves the temporary. An element always holds
+   a value, so the old element always drops.
 7. The hidden iterator local of a `Protocol` or an `IteratorValue` loop, and the item that
    the loop owns, are owning locals of the loop scope under rules 1 to 4: the end, a
    `break`, a `return` and the `??` of a binder all reach a `Drop`. A walk in place has no
@@ -3254,6 +3269,10 @@ Runs after lowering, before the backend. It checks:
 - no read and no `Move` of a local that holds no value on a path: before its first write,
   or after its `StorageLive` or its `StorageDead`
 - no `Move` of a place that holds an `Index`: an element never moves (8.4)
+- a `Drop` of an element (a place whose outer projection is an `Index`): its root is a
+  local that holds a value on every path, and the element type owns. It does not change the
+  state of the root. A `Drop` of any other place that is no local, and a `DropIfSet` of a
+  place that is no local, are not checked yet (CE0000)
 - a `Move` of a sub-place (a `Field`, a `Downcast`) is a `Move` of its root local, and
   no local is ever PARTIALLY moved: lowering drops the sibling owning fields first (8.9,
   `Take`), or the sibling payloads of a pattern take, because an arm takes the variant
@@ -3292,8 +3311,8 @@ Runs after lowering, before the backend. It checks:
   type of that field. One check of the parts serves an enum value and a struct value
 - an array value: an `Aggregate(AggArray)` is of a `T[N]` or a `T[]` type and gives the
   parts of each run (8.7): a value of the element type, an `i32` count and an `i32` first
-  value of a sequence, whose element is an `i32`. The counts of a `T[N]` are constants that
-  add up to `N`. A constant `Aggregate` of a `T[N]` gives one part for each element, of the
+  value of a sequence, whose element is an `i32`. The value of a `RunRepeat` is never a
+  `Move`: the run borrows it. The counts of a `T[N]` are constants that add up to `N`. A constant `Aggregate` of a `T[N]` gives one part for each element, of the
   element type
 - a length and a slice: `Len` reads a `T[N]`, a `T[]` or a `string`, and `Slice` reads a
   `T[N]` or a `T[]` with two `i32` bounds
