@@ -1827,7 +1827,11 @@ The rows of `OwnershipResults`:
   The row holds the owner set of the view, and the `shir_id` of the last use of the view
   on each path. `borrow` is its one writer (S6). It keeps the owner set of a let-borrow
   already (`record_owners`). A let-borrow freezes each owner to the LAST use of the view,
-  so the region ends at the last use, and not at the exit of the scope of the view. A
+  so the region ends at the last use, and not at the exit of the scope of the view. When a
+  later part of the statement of the last use changes an owner (the `Drop` of the old part
+  of a write, which comes after its new value by rule 6 of 8.10; a `poke` argument after
+  the argument that reads the view), the region ends right AFTER the evaluation of the last
+  use, before that change, and not at the end of the statement. A
   change of an owner after the last use and before the end of the scope is legal. A region
   that ends at the scope exit would refuse a correct program. SLIR lowering writes the
   `BeginBorrow` and the `EndBorrow` statements of the region from the row (8.6). The
@@ -2755,8 +2759,13 @@ decides them, and lowering derives nothing. At the statement that writes the vie
 writes one `BeginBorrow` for each owner of the set, with the mode `peek`. It writes one
 `EndBorrow` for each of them after the statement of the last use of the view on each path,
 and at each exit that the region crosses: a `return`, a `break` or a `continue` out of the
-region, and the error path of a `Try`. A region does not end at the exit of the scope of
-the view: an owner can change after the last use and before the end of the scope. The
+region, and the error path of a `Try`. When a later part of the statement of the last use
+changes an owner (the `Drop` of the old part of a write, which comes after the new value by
+rule 6 of 8.10; a `poke` argument, an `Inout` receiver or a `Move` after the argument that
+reads the view), the `EndBorrow` comes right after the evaluation of the last use, before
+the SLIR statement that makes that change, and not after the statement. A region does not
+end at the exit of the scope of the view: an owner can change after the last use and
+before the end of the scope. The
 region of an address local (8.2) is the one exception: its `BeginBorrow` has the mode of its
 `Ref`, and its place is frozen for the whole life of the local, so its `EndBorrow` comes at
 each exit of the scope of the local. The
