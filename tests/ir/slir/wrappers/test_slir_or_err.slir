@@ -93,10 +93,10 @@ fn first(_1: Maybe@(string) @guaranteed, _2: string @guaranteed) -> Result@(i32,
     switchInt(copy _6) -> [0: bb1, 1: bb2, otherwise: unreachable]
 
   bb1:
+    Drop(_5)
     StorageLive(_7)
     BeginBorrow(b0, _1, peek)
     _7 = copy ((_1 as Some).0)
-    Drop(_5)
     StorageDead(_5)
     StorageLive(_8)
     _8 = call builtin string.len(copy _7 @guaranteed)

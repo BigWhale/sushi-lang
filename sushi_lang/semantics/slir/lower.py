@@ -92,7 +92,7 @@ from sushi_lang.semantics.slir.function import (
 )
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.lower_control import LoopFrame
-from sushi_lang.semantics.slir.lower_signature import return_type_of, symbol_of
+from sushi_lang.semantics.slir.lower_signature import drop_impl_of, return_type_of, symbol_of
 from sushi_lang.semantics.slir.lower_values import CallValue, ShortCircuit, Value, ViewValue
 from sushi_lang.semantics.slir.verify import SlirVerifier
 from sushi_lang.semantics.typesys import ArrayType, BuiltinType, Type, owns_resource
@@ -186,7 +186,7 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     if isinstance(body.origin, TemplateCheck):
         er.raise_internal_error("CE0000", detail=f"the template check '{name}' reached SLIR")
     home = declaring_unit(decl, unit)
-    symbol = symbol_of(decl, home, body)
+    symbol = symbol_of(decl, home, body, drop_impl_of(decl, tables.perk_impls, drops))
     ret = return_type_of(decl, tables, body)
     borrows = getattr(decl, "borrowed_return", None) is not None
     shir_locals = {local.id: local for local in body.locals}

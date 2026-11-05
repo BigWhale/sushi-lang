@@ -6,7 +6,8 @@ are no call either: each is a switch on the tag of the receiver. The value that 
 reads out of its receiver comes from the shape of the receiver (`Source`): a plain value is
 a `Copy`. An owning value of a place is a `Clone` of a copy of its projection. An owning
 value of a temporary is a `Move` of the projection, which spends the temporary on that
-path, and the temporary drops on the other path. The default of `realise` has the same
+path. An owning temporary drops at the read on each path that does not move out of it, as
+the receiver of a `nom self` method. The default of `realise` has the same
 shapes. Each arm is a free function that takes the `Lowering` of `lower.py` first. This
 module reads `lower.py` for its types only.
 """
@@ -105,8 +106,8 @@ def expect(low: Lowering, node: e.Call, callee: Builtin) -> Value:
 
 def realise(low: Lowering, node: e.Call, callee: Builtin) -> Value:
     """`realise(default)`: the receiver, then the default, then a switch on the tag. The
-    success path writes the payload, and the other path writes the default. A temporary that
-    one path takes drops on the other path."""
+    success path writes the payload, and the other path writes the default. A temporary
+    drops on each path that does not take it."""
     ty, answer = low.type_of(callee.recv), low.type_of(node)
     receiver = _wrapper(low, callee.recv, ty)
     wrapper = receiver.operand.place
@@ -122,18 +123,21 @@ def realise(low: Lowering, node: e.Call, callee: Builtin) -> Value:
     low.write(p.Local(result),
               _read(low, receiver, p.Field(p.Downcast(wrapper, success), 0), payload[0]),
               node.loc)
-    arrivals = [_leave(low, [default] if default.spent else [], node.loc)]
+    spent = [origin for origin, taken in ((default, False), (receiver, takes))
+             if origin.spent and not taken]
+    arrivals = [_leave(low, spent, node.loc)]
     low.placement.restore(at_switch)
     low.block = other
     low.write(p.Local(result), _read(low, default, None, answer), node.loc)
-    arrivals.append(_leave(low, [receiver] if takes else [], node.loc))
+    arrivals.append(_leave(low, [receiver] if receiver.spent else [], node.loc))
     ctl.meet(low, low.new_block(), arrivals, among, node.loc)
     return _answer(low, result, answer)
 
 
 def err(low: Lowering, node: e.Call, callee: Builtin) -> Value:
     """`err()` of a `Result`: `Some` of the error on the `Err` path, and `None` on the other
-    path. A copy of the error is a temporary of its path, which the `Some` takes."""
+    path. A copy of the error is a temporary of its path, which the `Some` takes. A
+    temporary drops on each path that does not take it."""
     ty, answer = low.type_of(callee.recv), low.type_of(node)
     receiver = _wrapper(low, callee.recv, ty)
     wrapper = receiver.operand.place
@@ -149,11 +153,11 @@ def err(low: Lowering, node: e.Call, callee: Builtin) -> Value:
     low.write(p.Local(result), r.Aggregate(r.AggVariant(answer, "Some"), (error,)), node.loc)
     low.emit(low.placement.flush())
     low.emit(low.placement.close_scope(node.loc))
-    arrivals = [_leave(low, [], node.loc)]
+    arrivals = [_leave(low, [receiver] if receiver.spent and not takes else [], node.loc)]
     low.placement.restore(at_switch)
     low.block = other
     low.write(p.Local(result), r.Aggregate(r.AggVariant(answer, "None"), ()), node.loc)
-    arrivals.append(_leave(low, [receiver] if takes else [], node.loc))
+    arrivals.append(_leave(low, [receiver] if receiver.spent else [], node.loc))
     ctl.meet(low, low.new_block(), arrivals, among, node.loc)
     return _answer(low, result, answer)
 

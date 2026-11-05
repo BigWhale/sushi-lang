@@ -516,6 +516,8 @@ def try_(low: Lowering, node: e.Try) -> Value:
     low.finish(r.Aggregate(r.AggVariant(facts.returns, error_variant), (error,)), node.loc)
     low.placement.restore(at_switch)
     low.block = ok_block
+    if through is not None and isinstance(error, p.Move) and isinstance(error.place, p.Local):
+        low.emit(low.placement.drop_on_path(error.place.id, node.loc))
     value = r.Use(take(p.Field(p.Downcast(wrapper, ok), 0)))
     return views.view_of(value, value.operand) if borrowed else value
 

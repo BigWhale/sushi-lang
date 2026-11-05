@@ -225,6 +225,7 @@ tests/array/index_positions_are_i32/test_err_repeat_count_i8.sushi
 tests/array/index_positions_are_i32/test_err_slice_start_i8.sushi
 tests/array/index_positions_are_i32/test_err_truncate_u8.sushi
 tests/array/index_positions_are_i32/test_index_positions_as_i32.sushi
+tests/array/insert_remove/test_arr_insert_drop_element.sushi
 tests/array/insert_remove/test_arr_insert_nested_rows.sushi
 tests/array/insert_remove/test_err_arr_insert_arity.sushi
 tests/array/insert_remove/test_err_arr_insert_borrow_param.sushi
@@ -274,6 +275,8 @@ tests/array/nested/borrow/test_err_nested_consume_inner_row.sushi
 tests/array/nested/borrow/test_err_nested_mutate_while_row_borrowed.sushi
 tests/array/nested/borrow/test_err_nested_push_through_borrow_param.sushi
 tests/array/nested/borrow/test_err_nested_write_through_peek_root.sushi
+tests/array/nested/cleanup/test_run_nested_drop_fixed_shapes_overwrite.sushi
+tests/array/nested/cleanup/test_run_nested_drop_loop_and_propagation.sushi
 tests/array/nested/cleanup/test_run_nested_owning_rows_every_path.sushi
 tests/array/nested/cleanup/test_run_nested_owning_rows_scope_exit.sushi
 tests/array/nested/constants/test_err_const_dynamic_inside_fixed.sushi
@@ -1699,6 +1702,7 @@ tests/ir/slir/control_flow/test_slir_try_let.sushi
 tests/ir/slir/control_flow/test_slir_while_break_continue.sushi
 tests/ir/slir/control_flow/test_slir_while_short_circuit.sushi
 tests/ir/slir/conventions/test_slir_conventions.sushi
+tests/ir/slir/drop/test_slir_drop_impl.sushi
 tests/ir/slir/enums/test_slir_enum_chain.sushi
 tests/ir/slir/enums/test_slir_enum_constant.sushi
 tests/ir/slir/enums/test_slir_enum_switch.sushi
@@ -1952,6 +1956,11 @@ tests/libs/bare_functions/test_lib_source_bare_and_channel.sushi
 tests/libs/bento_package/test_lib_bento_package.sushi
 tests/libs/binary_constants/test_err_lib_binary_const_clash.sushi
 tests/libs/binary_constants/test_err_lib_binary_private_const.sushi
+tests/libs/binary_drop/test_err_lib_binary_drop_foreign_generic_target.sushi
+tests/libs/binary_drop/test_err_lib_binary_drop_foreign_target.sushi
+tests/libs/binary_drop/test_err_lib_binary_drop_use_after_nom.sushi
+tests/libs/binary_drop/test_err_lib_source_drop_use_after_nom.sushi
+tests/libs/binary_drop/test_lib_source_drop_runs.sushi
 tests/libs/byte_literal_const/test_lib_binary_byte_const.sushi
 tests/libs/byte_literal_const/test_lib_source_byte_const.sushi
 tests/libs/consumer_generics/test_err_lib_generic_struct_constraint.sushi
@@ -2275,6 +2284,19 @@ tests/memory/drop/test_err_drop_clone_nested.sushi
 tests/memory/drop/test_err_drop_consume_borrowed_field_help.sushi
 tests/memory/drop/test_err_drop_foreign_unit.sushi
 tests/memory/drop/test_err_drop_generic_clone.sushi
+tests/memory/drop/test_run_drop_branch.sushi
+tests/memory/drop/test_run_drop_cross_unit_use.sushi
+tests/memory/drop/test_run_drop_in_array.sushi
+tests/memory/drop/test_run_drop_in_list.sushi
+tests/memory/drop/test_run_drop_nested_field.sushi
+tests/memory/drop/test_run_drop_not_after_move.sushi
+tests/memory/drop/test_run_drop_order.sushi
+tests/memory/drop/test_run_drop_runs_at_scope_exit.sushi
+tests/memory/drop_order_exits/test_run_drop_order_on_break.sushi
+tests/memory/drop_order_exits/test_run_drop_order_on_continue.sushi
+tests/memory/drop_order_exits/test_run_drop_order_on_return.sushi
+tests/memory/drop_order_exits/test_run_drop_order_on_try.sushi
+tests/memory/drop_order_exits/test_run_drop_order_own_beside_struct.sushi
 tests/memory/drop_order_exits/test_run_enum_payload_on_return.sushi
 tests/memory/drop_order_exits/test_run_fixed_owning_on_return.sushi
 tests/memory/drop_order_exits/test_run_hashmap_loop_exits.sushi
@@ -2381,8 +2403,10 @@ tests/memory/own/test_own_struct.sushi
 tests/memory/own/test_run_own_get_chained_field.sushi
 tests/memory/own_function_field/test_err_own_alloc_payload_mismatch.sushi
 tests/memory/own_function_field/test_err_own_alloc_payload_operand.sushi
+tests/memory/own_nested_scope/test_run_own_drop_at_block_exit.sushi
 tests/memory/own_nested_scope/test_run_own_in_if_block.sushi
 tests/memory/own_nested_scope/test_run_own_in_while_body.sushi
+tests/memory/own_nested_scope/test_warn_own_shadow_keeps_outer.sushi
 tests/memory/own_pattern/test_err_own_pattern_mismatch.sushi
 tests/memory/own_pattern/test_err_own_pattern_non_own.sushi
 tests/memory/own_pattern/test_own_pattern_nested.sushi
@@ -2974,7 +2998,10 @@ tests/references/pattern_modes/test_err_pattern_own_nom.sushi
 tests/references/pattern_modes/test_err_pattern_partial_take.sushi
 tests/references/pattern_modes/test_err_pattern_use_after_match_nom.sushi
 tests/references/pattern_modes/test_err_pattern_write_through_borrow.sushi
+tests/references/pattern_modes/test_run_pattern_borrow_unchanged.sushi
 tests/references/pattern_modes/test_run_pattern_list_and_array.sushi
+tests/references/pattern_modes/test_run_pattern_nom_corners.sushi
+tests/references/pattern_modes/test_run_pattern_nom_drop_once.sushi
 tests/references/pattern_modes/test_run_pattern_nom_enum_payload.sushi
 tests/references/pattern_modes/test_run_pattern_nom_fixed_owning.sushi
 tests/references/pattern_modes/test_run_pattern_nom_hashmap.sushi
@@ -2983,6 +3010,7 @@ tests/references/pattern_modes/test_run_pattern_nom_own.sushi
 tests/references/pattern_modes/test_run_pattern_nom_struct.sushi
 tests/references/pattern_modes/test_run_pattern_nom_temporary.sushi
 tests/references/pattern_modes/test_run_pattern_poke_temporary.sushi
+tests/references/pattern_modes/test_run_pattern_untaken_drops.sushi
 tests/references/pattern_ref_place/test_err_pattern_peek_place_owner_changed.sushi
 tests/references/pattern_ref_place/test_err_pattern_poke_not_a_place.sushi
 tests/references/pattern_ref_place/test_err_pattern_poke_of_a_constant_place.sushi
@@ -3339,6 +3367,7 @@ tests/tuples/leaks/test_tuple_leak_match_nested_payload.sushi
 tests/tuples/leaks/test_tuple_leak_match_nom_named.sushi
 tests/tuples/leaks/test_tuple_leak_match_nom_temporary.sushi
 tests/tuples/leaks/test_tuple_leak_match_runtime_flag.sushi
+tests/tuples/leaks/test_tuple_leak_scope_exit.sushi
 tests/tuples/leaks/test_tuple_leak_take.sushi
 tests/tuples/literal_and_index/test_tuple_field_take.sushi
 tests/tuples/literal_and_index/test_tuple_index_read.sushi

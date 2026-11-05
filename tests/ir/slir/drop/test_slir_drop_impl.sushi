@@ -1,0 +1,35 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "eat 2\ndrop b 2\ndrop a 1\n-1\nMostly Harmless\ndrop a 1\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_drop_impl.slir
+#
+# The body of `extend T with Drop:` is a method body: its receiver is `_1 @inout` and its
+# symbol is the perk symbol of the target. No statement calls it: `Drop(_n)` of a value of
+# the type goes to the destroy seam, which calls `drop()` first. A value moved into a
+# function drops in the callee. `realise` over a temporary whose error owns drops the
+# temporary on the path that does not take it, at the read.
+struct Res:
+    string name
+    i32 id
+
+extend Res with Drop:
+    fn drop(poke self) ~:
+        self.id := self.id + 0
+        println("drop {self.name}")
+
+error Bad:
+    Gone(Res)
+
+fn eat(nom Res r) ~:
+    println("eat {r.id}")
+
+fn fail() i32 | Bad:
+    return Result.Err(Bad.Gone(Res("a {1}", 1)))
+
+fn main() i32:
+    let Res a = Res("a {1}", 1)
+    let Res b = Res("b {2}", 2)
+    eat(nom b)
+    println(fail().realise(-1))
+    println("Mostly Harmless")
+    return a.id - 1

@@ -262,9 +262,9 @@ def receiver_of(low: Lowering, call: e.ShirExpr) -> e.ShirExpr:
 def read_through(low: Lowering, inner: e.ShirExpr) -> Optional[tuple[p.Place, p.Operand]]:
     """The operand of a `??` that is `m.or_err(nom e)` over a borrowed `Maybe` (a `reject`
     row at the receiver, ir.md 8.9): the place of the `Maybe`, read where it is (`wrapper`),
-    and the error operand, evaluated after it. A named error goes into a temporary of the
-    statement, so the `None` path moves the temporary and the `Some` path drops it. None
-    for any other operand."""
+    and the error operand, evaluated after it. A named error and a field take go into a
+    temporary of the statement, so the `None` path moves the temporary and the `Some` path
+    drops it at the top of its block. None for any other operand."""
     if not isinstance(inner, e.Call):
         return None
     resolved = low.typeck.callee_of(inner.shir_id)
@@ -276,7 +276,7 @@ def read_through(low: Lowering, inner: e.ShirExpr) -> Optional[tuple[p.Place, p.
     place, _borrowed = wrapper(low, receiver)
     value = inner.args[0].value
     error = low.operand(value)
-    if isinstance(error, p.Move) and isinstance(value, e.LocalRef):
+    if isinstance(error, p.Move) and isinstance(value, (e.LocalRef, e.Field)):
         error = p.Move(p.Local(low.temporary(r.Use(error), low.type_of(value), value.loc)))
     return place, error
 

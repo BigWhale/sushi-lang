@@ -215,8 +215,8 @@ class DropPlacement:
         return dropped
 
     def drop_on_path(self, local: LocalId, span: Span) -> list[st.SlirStatement]:
-        """The drop of the temporary `local` on a path that does not take it, where another
-        path moves out of it (`realise`, `err`): on each path it ends moved."""
+        """The drop of the temporary `local` on a path that does not take it (`realise`,
+        `err`, a read-through `or_err`): on each path it ends moved."""
         dropped = self._drop(local, span)
         self._moved.add(local)
         return dropped
