@@ -2,8 +2,8 @@
 `METHOD_TYPE_REGISTRY` that the emitter handles (docs/design/ir.md 8.6).
 
 The receiver is the first operand. Each family keeps its emitters and takes the values of
-the operands (ruling Q7); the array, the List and the HashMap family take the address of
-their receiver. Every operand is evaluated before the family emits anything.
+the operands (ruling Q7); the array, the List, the HashMap and the Own family take the
+address of their receiver. Every operand is evaluated before the family emits anything.
 """
 from __future__ import annotations
 
@@ -15,13 +15,14 @@ from sushi_lang.backend.expressions.calls.stdlib.strings import emit_stdlib_stri
 from sushi_lang.backend.generics.hashmap import emit_hashmap_method
 from sushi_lang.backend.generics.list import emit_list_method
 from sushi_lang.backend.generics.maybe import emit_builtin_maybe_method
+from sushi_lang.backend.generics.own import emit_own_method
 from sushi_lang.backend.generics.results import emit_builtin_result_method
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import operand_address, operand_value, type_of_operand
 from sushi_lang.backend.types.arrays import emit_array_method
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY,
-    STRING_FAMILY,
+    ARRAY_FAMILY, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY, OWN_FAMILY, PRIMITIVE_FAMILY,
+    RESULT_FAMILY, STRING_FAMILY,
 )
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.callee import BuiltinMethod
@@ -83,10 +84,10 @@ _MethodRow = Callable[[FunctionState, BuiltinMethod, st.Call], ir.Value]
 
 
 def _container(base: str, emit: _ContainerEmitter) -> _MethodRow:
-    """The row of a built-in container family (`List@(T)`, `HashMap@(K, V)`): the ADDRESS
-    of the receiver, an `Inout` receiver and a `Guaranteed` one alike, then the value of
-    each argument. The family reads the state of the container when it runs, after the
-    last argument (docs/design/ir.md 8.6)."""
+    """The row of a built-in container family (`List@(T)`, `HashMap@(K, V)`, `Own@(T)`):
+    the ADDRESS of the receiver, an `Inout` receiver and a `Guaranteed` one alike, then
+    the value of each argument. The family reads the state of the container when it runs,
+    after the last argument (docs/design/ir.md 8.6)."""
     def row(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
         if not statement.args:
             state.fault(f"the call of '{method.name}' has no receiver")
@@ -129,6 +130,7 @@ METHOD_FAMILIES: dict[str, _MethodRow] = {
     ARRAY_FAMILY: _array,
     LIST_FAMILY: _container("List", emit_list_method),
     HASHMAP_FAMILY: _container("HashMap", emit_hashmap_method),
+    OWN_FAMILY: _container("Own", emit_own_method),
     PRIMITIVE_FAMILY: _primitive,
     STRING_FAMILY: _string,
     RESULT_FAMILY: _wrapper(emit_builtin_result_method),

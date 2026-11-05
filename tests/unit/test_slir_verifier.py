@@ -32,8 +32,8 @@ from sushi_lang.semantics.slir.verify import (
     CONVENTIONS, DeclaredParams, declared_params, verify_function,
 )
 from sushi_lang.semantics.typesys import (
-    ArrayType, BorrowMode, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo, StructType,
-    Type, UnknownType,
+    ArrayType, BorrowMode, BuiltinType, DynamicArrayType, EnumType, EnumVariantInfo,
+    PointerType, StructType, Type, UnknownType,
 )
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 
@@ -508,6 +508,40 @@ def test_a_map_method_with_another_convention_is_refused(name: str, args):
 ])
 def test_a_map_method_with_the_conventions_of_its_rows_passes(name: str, args):
     _passes(_map_method(name, *args))
+
+
+OWN_STRING = StructType(name="Own<string>", fields=(("value", PointerType(STRING)),),
+                        generic_base="Own")
+
+
+def _own_method(name: str, *args: tuple[p.Operand, Convention]) -> SlirFunction:
+    """`_1 = own.<name>(args)` over the `Own@(string)` `_2`, which the function does not
+    own."""
+    answer = STRING if name == "get" else BLANK
+    call = st.Call(_local(1), st.Builtin(BuiltinMethod("own", name, nom_self=False), ()),
+                   args, BAD)
+    return _function([BLANK, answer, OWN_STRING],
+                     _block(0, _ret(), call, _set(0, r.Use(p.Const(k.Blank())))),
+                     params=((2, INOUT),))
+
+
+@pytest.mark.parametrize("name, args", [
+    ("get", ((_copy(2), INOUT),)),
+    ("destroy", ((_copy(2), GUARANTEED),)),
+    ("alloc", ((_copy(2), GUARANTEED), (p.Const(k.Str(b"x")), GUARANTEED))),
+])
+def test_an_own_method_with_another_convention_is_refused(name: str, args):
+    """The rule of a List method holds for an `Own@(T)` method: `destroy` writes its
+    receiver, `get` reads it, and the value of `alloc` is `Owned` (ir.md 8.3, 8.13)."""
+    _refused(_own_method(name, *args), "declared conventions")
+
+
+@pytest.mark.parametrize("name, args", [
+    ("destroy", ((_copy(2), INOUT),)),
+    ("alloc", ((_copy(2), GUARANTEED), (p.Const(k.Str(b"x")), OWNED))),
+])
+def test_an_own_method_with_the_conventions_of_its_rows_passes(name: str, args):
+    _passes(_own_method(name, *args))
 
 
 def _static(name: str, *args: tuple[p.Operand, Convention]) -> st.Call:
@@ -1129,6 +1163,45 @@ def test_a_drop_of_a_field_of_a_view_is_refused():
         st.Drop(p.Field(_local(3), 0), BAD)))
     locals_ = tuple(replace(local, view=local.id == LocalId(3)) for local in function.locals)
     _refused(replace(function, locals=locals_), "a view local")
+
+
+# -- the address local (ir.md 8.2, 8.13) ------------------------------------------------
+
+def _poke_writes_field(*extra: st.SlirStatement) -> SlirFunction:
+    """`_3 = ref poke _1` over the owned `Named` `_1`, then a write of the owning field of
+    `_3` through the address (rule 6), then `extra`, then the drop of `_1`."""
+    return _function([BLANK, NAMED, STRING, NAMED, STRING], _block(
+        0, _ret(), *_named(1), _live(3), _set(3, r.Ref(_local(1), BorrowMode.POKE)),
+        _live(4), _text(4), st.Drop(p.Field(_local(3), 0), SPAN),
+        st.Assign(p.Field(_local(3), 0), r.Use(_move(4)), SPAN), _dead(4), *extra,
+        _dead(3), _drop(1), _dead(1), _set(0, r.Use(p.Const(k.Blank())))))
+
+
+def test_an_address_local_that_writes_an_owning_part_through_its_address_passes():
+    """An address local owns nothing: no drop at the end of its storage."""
+    _passes(_poke_writes_field())
+
+
+def test_an_address_local_written_by_two_refs_is_refused():
+    _refused(_poke_writes_field(_set(3, r.Ref(_local(1), BorrowMode.POKE), BAD)),
+             "an address local")
+
+
+def test_a_ref_into_a_part_of_a_local_is_refused():
+    _refused(_poke_writes_field(st.Assign(p.Field(_local(3), 0),
+                                          r.Ref(_local(1), BorrowMode.PEEK), BAD)),
+             "an address local")
+
+
+def test_a_drop_of_an_address_local_is_refused():
+    _refused(_poke_writes_field(st.Drop(_local(3), BAD)), "an address local")
+
+
+def test_a_move_of_an_address_local_is_refused():
+    _refused(_function([BLANK, NAMED, STRING, NAMED, NAMED], _block(
+        0, _ret(), *_named(1), _live(3), _set(3, r.Ref(_local(1), BorrowMode.POKE)),
+        _live(4), _set(4, r.Use(_move(3)), BAD), _drop(4), _dead(4), _dead(3),
+        _drop(1), _dead(1), _set(0, r.Use(p.Const(k.Blank()))))), "an address local")
 
 
 def test_a_drop_of_a_field_of_a_global_is_not_checked_yet():

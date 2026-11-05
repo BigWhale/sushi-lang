@@ -219,8 +219,6 @@ WHITELIST += (
      _family("B10", "the Maybe methods with a signature")),
     (_BACKEND + "generics/results.py", "emit_result_signature_method",
      _family("B10", "the Result methods with a signature")),
-    (_BACKEND + "generics/own.py", "emit_builtin_own_method",
-     _family("B5", "the Own method family")),
     (_BACKEND + "runtime/closures.py", "materialize_function_ref",
      _family("C2", "a named function as a function value")),
     (_BACKEND + "runtime/closures.py", "emit_lambda",

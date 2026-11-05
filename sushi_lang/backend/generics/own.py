@@ -1,16 +1,26 @@
-"""Built-in extension methods for Own<T> generic struct."""
+"""The emitters of the built-in `Own@(T)` methods, with operands (docs/design/ir.md 8.6).
 
-from typing import Any
-from sushi_lang.semantics.ast import DotCall, MethodCall
-from sushi_lang.semantics.typesys import StructType, Type
+An `Own@(T)` is `{T*}`: one heap block that holds the payload. `get` loads the payload, a
+shallow copy that SLIR holds in a view local when the payload owns; `destroy` destroys the
+payload, frees the block and writes a null pointer, so the drop at the scope exit and the
+drop of a rebind do nothing. `.clone()` is the rvalue `Clone` (`copy_out`), never a method.
+"""
+from __future__ import annotations
+
+from typing import Any, Callable, Mapping, Sequence
+
 import llvmlite.ir as ir
-from sushi_lang.internals.errors import raise_internal_error
+
+from sushi_lang.backend.destructors import emit_value_destructor
+from sushi_lang.backend.gep_utils import gep_struct_field
 from sushi_lang.backend.memory.heap import emit_malloc
+from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.own import get_own_element_type
+from sushi_lang.semantics.typesys import StructType, Type
 
 
 def emit_own_alloc(codegen: Any, element_type: Type, value: ir.Value) -> ir.Value:
-    """Emit Own<T>.alloc(value) -> Own<T>"""
+    """`Own.alloc(value)`: a new heap block that holds `value`, as an `Own@(T)`."""
     element_llvm_type = codegen.types.ll_type(element_type)
     size_bytes = codegen.types.get_type_size_bytes(element_type)
 
@@ -32,65 +42,45 @@ def emit_own_alloc(codegen: Any, element_type: Type, value: ir.Value) -> ir.Valu
     return own_value
 
 
-def emit_own_get(codegen: Any, own_value: ir.Value, element_type: Type) -> ir.Value:
-    """Emit Own<T>.get() -> T"""
-    ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr")
-
-    return codegen.builder.load(ptr, name="own_value")
+def _pointer(codegen: Any, address: ir.Value) -> ir.Value:
+    """The address of the pointer field of the `Own@(T)` at `address`."""
+    return gep_struct_field(codegen, address, 0, builder=codegen.builder)
 
 
-def emit_own_destroy(codegen: Any, own_value: ir.Value) -> ir.Value:
-    """Emit Own<T>.destroy() -> ~ for a TEMPORARY (non-Name) receiver."""
-    ptr = codegen.builder.extract_value(own_value, 0, name="own_ptr_to_free")
+def _get(codegen: Any, address: ir.Value, _own_type: StructType,
+         _args: Sequence[ir.Value]) -> ir.Value:
+    return codegen.builder.load(codegen.builder.load(_pointer(codegen, address)),
+                                name="own_value")
 
-    void_ptr = codegen.builder.bitcast(ptr, ir.PointerType(codegen.types.i8))
 
-    free_func = codegen.get_free_func()
-    codegen.builder.call(free_func, [void_ptr])
-
+def _destroy(codegen: Any, address: ir.Value, own_type: StructType,
+             _args: Sequence[ir.Value]) -> ir.Value:
+    emit_value_destructor(codegen, address, own_type)
+    field = _pointer(codegen, address)
+    codegen.builder.store(ir.Constant(field.type.pointee, None), field)
     return ir.Constant(codegen.types.i32, 0)
 
 
-def emit_builtin_own_method(
-    codegen: Any,
-    call: MethodCall | DotCall,
-    own_value: ir.Value,
-    own_type: StructType
-) -> ir.Value:
-    """Emit LLVM code for Own<T> built-in methods."""
-    element_type = get_own_element_type(own_type)
-
-    if call.method == "alloc":
-        arg = call.args[0]
-        arg_value = codegen.expressions.emit_expr(arg)
-        # `Own.alloc` takes ownership: the new Own becomes the sole owner of the pointee.
-        # This position used to move a bare owning Name and do nothing else -- no copy
-        # branch at all, so a borrowed binding or a field read was silently aliased.
-        from sushi_lang.backend.ownership import ConsumingUse, consume
-        arg_value = consume(codegen, arg, arg_value, element_type, ConsumingUse.OWN_ALLOC)
-        return emit_own_alloc(codegen, element_type, arg_value)
-    elif call.method == "get":
-        return emit_own_get(codegen, own_value, element_type)
-    elif call.method == "clone":
-        # The escape from CE2411 (#242): an `Own@(T).get()` deref BORROWS. Routed through
-        # the seam's `copy_out`, so a clone duplicates exactly what `emit_own_destroy`
-        # frees.
-        from sushi_lang.backend.ownership import copy_out
-        return copy_out(codegen, own_value, own_type)
-    elif call.method == "destroy":
-        from sushi_lang.semantics.ast import Name
-        if isinstance(call.receiver, Name):
-            var_name = call.receiver.id
-            # find_local_slot is the ASSERTIVE form: a miss is CE0055, never None
-            # (the semantic passes already accepted the name), so there is no
-            # not-found branch here (11b).
-            slot = codegen.memory.find_local_slot(var_name)
-            from sushi_lang.backend.destructors import emit_value_destructor
-            emit_value_destructor(codegen, slot, own_type)
-            codegen.dynamic_arrays.mark_own_destroyed(var_name)
-            return ir.Constant(codegen.types.i32, 0)
-        return emit_own_destroy(codegen, own_value)
-    else:
-        raise_internal_error("CE0080", method=call.method)
+def _alloc(codegen: Any, _address: ir.Value, own_type: StructType,
+           args: Sequence[ir.Value]) -> ir.Value:
+    return emit_own_alloc(codegen, get_own_element_type(own_type), args[0])
 
 
+_OwnEmitter = Callable[[Any, ir.Value, StructType, Sequence[ir.Value]], ir.Value]
+
+#: One row for each method of `Own@(T)` that the emitter calls; `clone` is the rvalue.
+OWN_EMITTERS: Mapping[str, _OwnEmitter] = {
+    "get": _get,
+    "destroy": _destroy,
+    "alloc": _alloc,
+}
+
+
+def emit_own_method(codegen: Any, name: str, address: ir.Value, own_type: StructType,
+                    args: Sequence[ir.Value]) -> ir.Value:
+    """The value of the method `name` on the `Own@(T)` at `address`, with the values of its
+    arguments."""
+    emit = OWN_EMITTERS.get(name)
+    if emit is None:
+        raise_internal_error("CE0080", method=name)
+    return emit(codegen, address, own_type, args)

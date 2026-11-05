@@ -134,12 +134,13 @@ def _tuple(lw: BodyLowerer, node: a.TuplePattern, _owner: Optional[a.Node]) -> I
 
 
 def _own(lw: BodyLowerer, node: a.OwnPattern, _owner: Optional[a.Node]) -> Item:
-    """`Own(x)`. The mode of `Own(poke x)` is a field of the `Own` pattern in the AST."""
+    """`Own(x)`. The mode of `Own(poke x)` and the span of `poke x` are fields of the `Own`
+    pattern in the AST."""
     ident = lw.ident()
     if node.inner_borrow is None:
         inner = item(lw, node.inner_pattern, node)
     else:
-        mode = s.Ref(borrow_mode(node.inner_borrow))
+        mode = s.Ref(borrow_mode(node.inner_borrow), node.inner_borrow_span)
         inner = _named(lw, cast(str, node.inner_pattern), node, mode, lw.span(node))
     return p.Own(ident, lw.span(node), inner)
 

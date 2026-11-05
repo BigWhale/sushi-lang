@@ -3,8 +3,9 @@
 A literal arm binds no name. A `Variant` and a `Tuple` bind the local of each bare
 `PatBinding` in them (`bare_binders`), and each arm declares its binders as read-only views
 of the payload or of the part (`declare_bare_binders`, docs/design/ir.md 7.9); a binder of a
-payload that owns is a borrowed view of the scrutinee, with a borrow region. The
-registration of a `poke`, `peek` or `nom` binder and of an `Own` reads the AST still: later
+payload that owns is a borrowed view of the scrutinee, with a borrow region. A `peek` or
+`poke` binder of the pointee of an `Own(...)` is a reference to it (`declare_references`).
+The registration of any other `poke`, `peek` or `nom` binder reads the AST still: later
 groups port it.
 """
 
@@ -22,8 +23,8 @@ from sushi_lang.semantics.constant_borrow import READ_ONLY_MODE
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import patterns as p
-from sushi_lang.semantics.shir.stmts import Bare
-from sushi_lang.semantics.typesys import ReferenceType, Type
+from sushi_lang.semantics.shir.stmts import Bare, Ref
+from sushi_lang.semantics.typesys import BorrowMode, ReferenceType, Type
 
 from .diagnostics import spelled
 from .reads import borrow_owner, names_kept_storage, root_owner
@@ -52,8 +53,10 @@ def release_binding_borrow(owner_state: Optional[BorrowState], binding: str) -> 
 def bare_binders(pattern: p.ShirPattern | p.PatBinding,
                  at: Optional[Span] = None) -> Optional[list[tuple[LocalId, Span]]]:
     """The bare binders of a pattern, each with the span of the variant name or of the tuple
-    pattern that holds it, in the written order. None when the pattern holds a form of a
-    later group: a `poke`, `peek` or `nom` binder, or an `Own`.
+    pattern that holds it, in the written order. An `Own(...)` binds the binders of its
+    pointee, with the span of the pattern that holds the `Own`, and a `peek` or `poke`
+    binder of the pointee is a reference (`own_references`). None when the pattern holds a
+    form of a later group: any other `poke`, `peek` or `nom` binder.
 
     The alternatives of `|` bind one local for each name (CE2126), so the first alternative
     gives the binders, and each alternative must hold no form of a later group.
@@ -74,6 +77,10 @@ def bare_binders(pattern: p.ShirPattern | p.PatBinding,
                 return None
             found.extend(inner)
         return found
+    if isinstance(pattern, p.Own):
+        if isinstance(pattern.inner, p.PatBinding) and isinstance(pattern.inner.by, Ref):
+            return []
+        return bare_binders(pattern.inner, at)
     if isinstance(pattern, p.Or):
         alternatives = [bare_binders(item, at) for item in pattern.alternatives]
         if any(binders is None for binders in alternatives):
@@ -101,6 +108,45 @@ def declare_bare_binders(checker: 'BorrowChecker', binders: Iterable[tuple[Local
             record_owners(checker.borrow_state, state, (owners or {}).get(local, ()), at,
                           checker._scope_binding_borrows[-1])
             note_binder(checker, state, body)
+
+
+def own_references(pattern: p.ShirPattern | p.PatBinding, at: Optional[Span] = None
+                   ) -> list[tuple[LocalId, BorrowMode, Span]]:
+    """Each `peek` or `poke` binder of the pointee of an `Own(...)` in a pattern, with its
+    mode and the span of `poke x`, in the written order. The first alternative of `|` gives
+    them (CE2126)."""
+    if isinstance(pattern, p.Own):
+        inner = pattern.inner
+        if isinstance(inner, p.PatBinding):
+            return ([(inner.local, inner.by.mode, inner.by.loc or at or pattern.loc)]
+                    if isinstance(inner.by, Ref) else [])
+        return own_references(inner, at)
+    if isinstance(pattern, p.Variant):
+        return [ref for item in pattern.items for ref in own_references(item,
+                                                                       pattern.variant_loc)]
+    if isinstance(pattern, p.Tuple):
+        return [ref for item in pattern.elements for ref in own_references(item, pattern.loc)]
+    if isinstance(pattern, p.Or):
+        return own_references(pattern.alternatives[0], at)
+    return []
+
+
+def declare_references(checker: 'BorrowChecker',
+                       references: Iterable[tuple[LocalId, BorrowMode, Span]],
+                       owners: dict[LocalId, tuple[Owner, ...]], body: ShirBlock) -> None:
+    """Declare each reference binder of an arm: a `peek` or `poke` reference to the pointee
+    of an `Own(...)`, which keeps its reference type, so a write through a `peek` one is
+    CE2408. It freezes the `owners` of the scrutinee to its last use in the arm (CE2412),
+    whatever the type of the pointee, and it has a borrow region over the arm `body`."""
+    for local, mode, at in references:
+        ty = checker.local_type(local)
+        state = BorrowState(name=checker.name_of(local), local=local,
+                            var_type=ReferenceType(ty, mode) if ty is not None else None,
+                            is_borrow_param=True, declared_at_span=at, bound_at_span=at)
+        checker.declare(state)
+        record_owners(checker.borrow_state, state, owners.get(local, ()), at,
+                      checker._scope_binding_borrows[-1])
+        note_binder(checker, state, body)
 
 
 def walks_a_temporary(checker: 'BorrowChecker', iterable: Expr) -> bool:
@@ -359,7 +405,6 @@ class ScrutineeKind(Enum):
 
     BORROWED = auto()       # a match that only borrows its scrutinee
     OWNED = auto()          # a match that owns it: a temporary, or `match nom r:`
-    OWN_PAYLOAD = auto()    # the heap cell of an `Own(...)` pattern
 
 
 def register_pattern_bindings(checker: 'BorrowChecker', scope: BindingScope,
@@ -422,8 +467,6 @@ def _register_item(checker: 'BorrowChecker', scope: BindingScope, item: object,
             # (CE2126), so the first one registers them for the arm.
             _register_item(checker, scope, item.alternatives[0], ty, scrutinee, kind,
                            item.loc or span)
-        case _:
-            _register_own_pattern(checker, scope, item, ty, span, scrutinee)
 
 
 def _reject_take_from_a_borrow(checker: 'BorrowChecker', binding: NomBinding,
@@ -526,28 +569,6 @@ def _unique(paths: list[_Path]) -> list[_Path]:
     return kept
 
 
-def _register_own_pattern(checker: 'BorrowChecker', scope: BindingScope, binding,
-                          payload_type: Optional[Type], span: Optional[Span],
-                          scrutinee: Optional[Expr]) -> None:
-    """Register the inner binding of an `Own(...)` pattern."""
-    inner = getattr(binding, "inner_pattern", None)
-    inner_borrow = getattr(binding, "inner_borrow", None)
-    pointee = checker.types.own_payload(payload_type)
-
-    if isinstance(inner, (Pattern, TuplePattern, OrPattern, LiteralPattern, RangePattern)):
-        _register_item(checker, scope, inner, pointee, scrutinee,
-                       ScrutineeKind.OWN_PAYLOAD, span)
-    elif isinstance(inner, str) and inner != "_":
-        if inner_borrow is None:
-            scope.bind_value(inner, pointee, span)
-        else:
-            # `Own(poke x)` (#300): a REFERENCE to the pointee, and the owner is frozen
-            # for the arm like a `let`-borrow's (#242).
-            borrow_span = getattr(binding, "inner_borrow_span", None) or span
-            _bind_payload_ref(checker, scope, inner, pointee, inner_borrow,
-                              borrow_span, scrutinee, ScrutineeKind.OWN_PAYLOAD)
-
-
 def _bind_payload_ref(checker: 'BorrowChecker', scope: BindingScope, name: str,
                       ty: Optional[Type], marker: str, span: Optional[Span],
                       scrutinee: Optional[Expr], kind: ScrutineeKind) -> None:
@@ -556,8 +577,7 @@ def _bind_payload_ref(checker: 'BorrowChecker', scope: BindingScope, name: str,
     Under a borrowed match the scrutinee must be a PLACE, the places a `let peek` /
     `let poke` takes (#788): the pointer aims into its storage, and the owner, the
     root of the place, is frozen for the arm. A temporary the match owns is parked in
-    a slot for the whole statement (ruling R11), and an `Own(...)` pointee lives in
-    its heap cell, so neither needs a place.
+    a slot for the whole statement (ruling R11), so it needs no place.
     """
     if kind is ScrutineeKind.BORROWED and scrutinee is not None \
             and not _is_a_place(scrutinee):

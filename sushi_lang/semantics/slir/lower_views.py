@@ -129,6 +129,25 @@ def bind_view(low: Lowering, local: ShirLocalId, value: r.Rvalue,
     return statements + [st.Assign(p.Local(ident), value, span)]
 
 
+def bind_address(low: Lowering, local: ShirLocalId, value: r.Ref,
+                 span: Span) -> list[st.SlirStatement]:
+    """A `peek` or `poke` binder of the pointee of an `Own(...)` (ir.md 8.2): an address
+    local of the arm, written with the `Ref` of its payload place, in a region over the root
+    of that place with the mode of the `Ref`, to the last uses of the region row of
+    `borrow`. A binder with no use has no region."""
+    region = low.answers.ownership.region_of(local)
+    if region is None:
+        er.raise_internal_error("CE0000", span=span,
+                                detail="a reference binder with no borrow region reached SLIR")
+    ident, _ = low.bind(local, span)
+    low.placement.address(ident)
+    statements: list[st.SlirStatement] = [st.StorageLive(ident, span)]
+    if region.until:
+        statements += low.placement.begin_region(
+            ident, [p.root_of(value.place)], frozenset(region.until), span, value.mode)
+    return statements + [st.Assign(p.Local(ident), value, span)]
+
+
 def view_of(value: r.Use | CallValue, read: p.Operand) -> ViewValue:
     """A view of what `read` reads, over the root of its place. A constant has no owner, so
     a view of one is an internal error."""

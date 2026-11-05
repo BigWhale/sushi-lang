@@ -1268,8 +1268,7 @@ def _solve_builtin_instance(validator: 'TypeValidator', call: MethodCall, receiv
 @METHOD_TYPE_REGISTRY.validator("own")
 def _validate_own_family(validator: 'TypeValidator', call: MethodCall,
                          receiver_type) -> None:
-    from sushi_lang.semantics.generics.own import validate_own_method_with_validator
-    validate_own_method_with_validator(call, receiver_type, validator.reporter, validator)
+    """The SHIR arm of the family checks the call (`visit/own_methods.py`)."""
 
 
 @METHOD_TYPE_REGISTRY.validator("hashmap")

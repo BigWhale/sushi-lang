@@ -35,7 +35,6 @@ class ConsumingUse(Enum):
     ELEMENT_ASSIGN = "element_assign"    # arr[i] := <source>
     RETURN = "return"                    # return Result.Ok(<source>)
     CAPTURE = "capture"                  # a lambda's captured environment slot
-    OWN_ALLOC = "own_alloc"              # Own.alloc(<source>)
     MATCH_SCRUTINEE = "match_scrutinee"  # match nom <source>: -- ruling R11
     RECEIVER = "receiver"                # h.close() on a `nom self` method -- ruling R25,
                                          # and the operand of `e as T` (a conversion takes

@@ -15,7 +15,9 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.shir.ids import DeclId
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
-from sushi_lang.semantics.slir.statements import SlirStatement
+from sushi_lang.semantics.slir.places import Local
+from sushi_lang.semantics.slir.rvalues import Ref
+from sushi_lang.semantics.slir.statements import Assign, SlirStatement
 from sushi_lang.semantics.slir.terminators import SlirTerminator
 from sushi_lang.semantics.typesys import Type
 
@@ -55,6 +57,14 @@ class SlirFunction:
     locals: tuple[SlirLocal, ...]
     blocks: tuple[SlirBlock, ...]
     entry: BlockId
+
+
+def address_locals(function: SlirFunction) -> frozenset[LocalId]:
+    """The address locals of `function` (ir.md 8.2): each local that a `Ref` writes. Its
+    storage is the place of another value, so it owns nothing."""
+    return frozenset(stmt.place.id for block in function.blocks for stmt in block.statements
+                     if isinstance(stmt, Assign) and isinstance(stmt.rvalue, Ref)
+                     and isinstance(stmt.place, Local))
 
 
 @dataclass(frozen=True, slots=True)

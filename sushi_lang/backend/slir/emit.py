@@ -1,8 +1,9 @@
 """One `SlirFunction` into the LLVM function that the declaration round made for its symbol.
 
 Every local is a slot in the entry block (`entry_alloca`, the one seam), except a `peek`
-or a `poke` parameter: its local IS the incoming address (docs/design/ir.md 8.3). A value
-parameter is stored into its slot at the entry. `_0` is the return slot, and `return`
+or a `poke` parameter: its local IS the incoming address (docs/design/ir.md 8.3). An
+address local, which a `Ref` writes, has a slot of a pointer, and its storage is the
+address in that slot (8.2). A value parameter is stored into its slot at the entry. `_0` is the return slot, and `return`
 loads it. Each SLIR block is one LLVM block, in the order of the function. A statement
 class or a terminator class that the emitter does not handle yet stops the compile
 (`emit, <class>`). `StorageLive`, `StorageDead`, `BeginBorrow` and `EndBorrow` emit
@@ -31,9 +32,11 @@ from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.passes.types.calls.user_defined import TYPED_STDLIB_MODULES
 from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
 from sushi_lang.semantics.slir import places as p
+from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
-from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, SlirLocal
+from sushi_lang.semantics.slir.function import (
+    SlirBlock, SlirFunction, SlirLocal, address_locals)
 from sushi_lang.semantics.slir.lower import RETURN_SLOT
 from sushi_lang.semantics.typesys import BuiltinType
 
@@ -94,9 +97,14 @@ def _open(state: FunctionState) -> None:
                     f"SLIR header")
     params = {local: (index, convention)
               for index, (local, convention) in enumerate(function.params)}
+    addresses = address_locals(function)
     for local in function.locals:
         ll = _ll(state, local)
         param = params.get(local.id)
+        if local.id in addresses:
+            state.addresses[local.id] = entry_alloca(state.builder, ll.as_pointer(),
+                                                     _name(local))
+            continue
         if param is None:
             state.storage[local.id] = entry_alloca(state.builder, ll, _name(local))
             continue
@@ -112,6 +120,15 @@ def _open(state: FunctionState) -> None:
         state.storage[local.id] = slot
 
 
+def _write_address(state: FunctionState, place: p.Place, ref: r.Ref) -> None:
+    """`_n = ref <mode> <place>`: the address of the place goes into the slot of the
+    address local `_n`, which is its storage from here on (ir.md 8.2)."""
+    slot = state.addresses.get(place.id) if isinstance(place, p.Local) else None
+    if slot is None:
+        state.fault(f"a Ref writes {place}, which is no address local")
+    state.builder.store(place_address(state, ref.place), slot)
+
+
 def _ll(state: FunctionState, local: SlirLocal) -> ir.Type:
     return state.codegen.types.ll_type(local.ty)
 
@@ -125,7 +142,9 @@ def _name(local: SlirLocal) -> str:
 def _statement(state: FunctionState, statement: st.SlirStatement) -> None:
     """`StorageLive` and `StorageDead` emit nothing: the emitter keeps every local in one
     slot for the whole function. A borrow region is a fact for the verifier alone."""
-    if isinstance(statement, st.Assign):
+    if isinstance(statement, st.Assign) and isinstance(statement.rvalue, r.Ref):
+        _write_address(state, statement.place, statement.rvalue)
+    elif isinstance(statement, st.Assign):
         value = rvalue_value(state, statement.rvalue)
         state.builder.store(value, place_address(state, statement.place))
     elif isinstance(statement, st.Call):

@@ -75,7 +75,8 @@ def effect_of(method: str) -> MethodEffect:
 ARRAY_FAMILY = "array"
 LIST_FAMILY = "list"
 HASHMAP_FAMILY = "hashmap"
-EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY, "own"})
+OWN_FAMILY = "own"
+EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY, OWN_FAMILY})
 
 PRIMITIVE_FAMILY = "primitive"
 STRING_FAMILY = "string"
@@ -90,7 +91,7 @@ RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
 CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY})
 # The effect families whose group wrote the receiver rule: a method whose row `mutates`
 # takes its receiver `Inout`, every other method reads it. The set can only grow.
-RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY})
+RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY, HASHMAP_FAMILY, OWN_FAMILY})
 # No rule yet: the set can only shrink.
 NO_RECEIVER_RULE_FAMILIES = frozenset({
     "iterator", "foreign_ptr", "array_hash", "derived_hash", "contract", "function",
@@ -107,6 +108,7 @@ VIEW_ANSWERS: dict[str, frozenset[str]] = {
     ARRAY_FAMILY: frozenset({"get", "first", "last"}),
     LIST_FAMILY: frozenset({"get", "first", "last"}),
     HASHMAP_FAMILY: frozenset({"get"}),
+    OWN_FAMILY: frozenset({"get"}),
 }
 
 # The arguments of a storing method that only give a position, by family and method: the

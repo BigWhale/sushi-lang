@@ -79,13 +79,16 @@ def arm(low: Lowering, block: Block, body: ShirBlock, binds: Sequence[Binds] = (
 
 
 def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> None:
-    """Each binder is a local of the scope of the arm, and a binder of an owning payload a
-    view local. A path writes its binders in its own block, which goes to the body, or in the
+    """Each binder is a local of the scope of the arm, a binder of an owning payload a view
+    local, and a `peek` or `poke` binder an address local. A path writes its binders in its own block, which goes to the body, or in the
     body block when it is the one path."""
     idents: dict[ShirLocalId, LocalId] = {}
     for block, writes in binds:
         statements: list[st.SlirStatement] = []
         for local, value in writes:
+            if isinstance(value, r.Ref):
+                statements += views.bind_address(low, local, value, span)
+                continue
             if views.binds_a_view(low, local):
                 statements += views.bind_view(low, local, value, span)
                 continue

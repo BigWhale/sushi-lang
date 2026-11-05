@@ -46,7 +46,9 @@ from sushi_lang.semantics.shir.paths import terminates
 from sushi_lang.semantics.typesys import ReferenceType
 
 from . import arms
-from .bindings import bare_binders, declare_bare_binders, release_binding_borrow
+from .bindings import (
+    bare_binders, declare_bare_binders, declare_references, own_references,
+    release_binding_borrow)
 from .borrows import LATER_ROOTS, clear_borrows
 from .consume import bind, binds_a_bare_literal_string, consume, view_owners
 from .expressions import reject_a_use_after_the_change
@@ -361,13 +363,13 @@ def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
     """A match reads its scrutinee, and `match nom r:` takes it over, a consuming use. The
     arms are exclusive paths, and they join as the blocks of an `if` do. The arms cover
     each value (the typecheck pass), so no path skips them. Each arm declares its bare
-    binders of plain payloads and plain tuple parts before its body. A match with a binder
-    of another kind, with a bare binder of a payload or part that owns, or with a tuple
-    literal that owns as its scrutinee, stops the walk: later groups check it. A tuple
-    literal of plain parts is checked as any tuple: each part is a copy."""
+    binders and the reference binders of its `Own(...)` patterns before its body. A match
+    with a binder of another kind stops the walk: later groups check it. A tuple literal
+    that owns, as the scrutinee, builds no tuple, and each part is a root of its own."""
     binders = [bare_binders(arm.pattern) for arm in node.arms]
     if any(found is None for found in binders):
         arms.stop_at(checker, node)
+    references = [own_references(arm.pattern) for arm in node.arms]
     roots = in_place_roots(checker, node)
     for root in roots or (node.scrutinee,):
         arms.check(checker, root)
@@ -376,9 +378,12 @@ def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
     owners = {local: _view_owners_of(checker, node, root)
               for arm in node.arms for local, root in _binder_roots(node, arm.pattern, roots)}
     clear_borrows(checker)
-    join_exclusive_paths(checker, [arm.body for arm in node.arms],
-                         enter=lambda index: declare_bare_binders(
-                             checker, binders[index] or (), owners, node.arms[index].body))
+
+    def enter(index: int) -> None:
+        body = node.arms[index].body
+        declare_bare_binders(checker, binders[index] or (), owners, body)
+        declare_references(checker, references[index], owners, body)
+    join_exclusive_paths(checker, [arm.body for arm in node.arms], enter=enter)
 
 
 def in_place_roots(checker: 'BorrowChecker', node: s.Match) -> tuple[e.ShirExpr, ...]:
@@ -400,8 +405,15 @@ def _binder_roots(node: s.Match, pattern: p.ShirPattern, roots: tuple[e.ShirExpr
         pattern = pattern.alternatives[0]
     if roots and isinstance(pattern, p.Tuple):
         return [(local, root) for root, item in zip(roots, pattern.elements, strict=True)
-                for local, _at in bare_binders(item, pattern.loc) or ()]
-    return [(local, node.scrutinee) for local, _at in bare_binders(pattern) or ()]
+                for local in _arm_binders(item, pattern.loc)]
+    return [(local, node.scrutinee) for local in _arm_binders(pattern, None)]
+
+
+def _arm_binders(pattern: p.ShirPattern | p.PatBinding, at: Optional[Span]
+                   ) -> list[LocalId]:
+    """The bare binders and the `Own(...)` reference binders of a pattern."""
+    return ([local for local, _at in bare_binders(pattern, at) or ()]
+            + [local for local, _mode, _at in own_references(pattern, at)])
 
 
 def _view_owners_of(checker: 'BorrowChecker', node: s.Match, root: e.ShirExpr) -> tuple:

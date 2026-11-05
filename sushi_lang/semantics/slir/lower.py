@@ -375,7 +375,7 @@ class Lowering:
         temporary first."""
         ident = self.local_of(target.local, target.loc)
         owning = self.owns(self.locals[ident.index].ty)
-        if owning and self.placement.is_borrowed(ident):
+        if owning and (self.placement.is_borrowed(ident) or self.placement.is_address(ident)):
             raise StageStop(STAGE, "borrowed rebind", stmt.loc)
         value = self.value(stmt.value)
         if isinstance(value, ShortCircuit) or (self.placement.holds_live_value(ident) and not (

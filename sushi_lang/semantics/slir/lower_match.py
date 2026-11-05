@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Optional, Sequence
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.generics.own import own_payload_type
 from sushi_lang.semantics.generics.tuples import is_tuple_type, tuple_elements
 from sushi_lang.semantics.integer_patterns import literal_value, pattern_interval
 from sushi_lang.semantics.param_modes import Convention
@@ -24,7 +25,7 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.callee import Intrinsic
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.spelling import spell_pattern
-from sushi_lang.semantics.shir.stmts import Bare
+from sushi_lang.semantics.shir.stmts import Bare, Ref
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
@@ -113,8 +114,9 @@ def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding,
     """The paths of `pattern` at `operand`: depth first and from left to right, one path for
     each alternative of an `Or`. The items of a variant are at the `Field` projections of
     its `Downcast`, the parts of a tuple at the `Field` projections of the tuple, or at the
-    operand of each part of a tuple literal that owns, which builds no tuple. A binder is
-    bare, because `borrow` stops on any other binder."""
+    operand of each part of a tuple literal that owns, which builds no tuple. The pointee of
+    an `Own(...)` is at the `Deref` of the pointer field of the `Own@(T)`. A bare binder
+    copies its place, and a `peek` or `poke` binder writes the `Ref` of it."""
     if isinstance(operand, tuple):
         if isinstance(pattern, pt.Tuple):
             return _product(low, [_Path()], pattern.elements, operand, tuple_elements(ty))
@@ -125,10 +127,19 @@ def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding,
             return [_Path()]
         er.raise_internal_error("CE0000", detail="a pattern of a tuple literal is no tuple")
     if isinstance(pattern, pt.PatBinding):
+        if isinstance(pattern.by, Ref):
+            return [_Path(binds=((pattern.local, r.Ref(_place(operand), pattern.by.mode)),))]
         if not isinstance(pattern.by, Bare):
             er.raise_internal_error("CE0000", detail="a binder that borrow does not check "
                                                      "reached SLIR")
         return [_Path(binds=((pattern.local, r.Use(p.Copy(_place(operand)))),))]
+    if isinstance(pattern, pt.Own):
+        pointee = own_payload_type(ty)
+        if pointee is None:
+            er.raise_internal_error("CE0000", detail="an Own pattern of a value that is no "
+                                                     "Own reached SLIR")
+        return _paths(low, pattern.inner, p.Copy(p.Deref(p.Field(_place(operand), 0))),
+                      pointee)
     if isinstance(pattern, pt.Wildcard):
         return [_Path()]
     if isinstance(pattern, (pt.Literal, pt.IntRange)):

@@ -63,8 +63,8 @@ from sushi_lang.semantics.generics.maybe import (
     MAYBE_METHOD_SIGNATURES, WrapperMethodRow, maybe_method_row, maybe_payload)
 from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES, result_method_row
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, CLONE_FAMILY, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY, PRIMITIVE_FAMILY,
-    RESULT_FAMILY, STRING_FAMILY)
+    ARRAY_FAMILY, CLONE_FAMILY, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY, OWN_FAMILY,
+    PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
 from sushi_lang.semantics.param_modes import (
     CalleeKind, Convention, ParamMode, declared_modes, modes_for, param_mode, receiver_mode)
 from sushi_lang.semantics.passes.types import visit
@@ -94,6 +94,7 @@ from sushi_lang.semantics.passes.types.visit.container_statics import (
 from sushi_lang.semantics.passes.types.visit.helpers import function_type_of_sig
 from sushi_lang.semantics.passes.types.visit.hashmap_methods import check_hashmap_method
 from sushi_lang.semantics.passes.types.visit.list_methods import check_list_method
+from sushi_lang.semantics.passes.types.visit.own_methods import check_own_method
 from sushi_lang.semantics.passes.types.visit.results import reject_unknown_variant
 from sushi_lang.semantics.shir import dispatch, exprs as e
 from sushi_lang.semantics.shir.callee import (
@@ -481,6 +482,7 @@ FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
     ARRAY_FAMILY: check_array_method,
     LIST_FAMILY: check_list_method,
     HASHMAP_FAMILY: check_hashmap_method,
+    OWN_FAMILY: check_own_method,
     PRIMITIVE_FAMILY: _check_primitive_method,
     STRING_FAMILY: _check_string_method,
     RESULT_FAMILY: _check_result_method,

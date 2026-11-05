@@ -101,6 +101,7 @@ class DropPlacement:
     _owned_params: list[LocalId] = field(default_factory=list)
     _borrowed: set[LocalId] = field(default_factory=set)
     _never_moved: set[LocalId] = field(default_factory=set)
+    _addresses: set[LocalId] = field(default_factory=set)
     _open: list[OpenRegion] = field(default_factory=list)
     _borrows: int = 0
 
@@ -134,6 +135,16 @@ class DropPlacement:
         if not blocks:
             er.raise_internal_error("CE0000", detail="a SLIR local outside every block")
         self._add(blocks[-1], local, owning)
+
+    def address(self, local: LocalId) -> None:
+        """An address local of the newest block (ir.md 8.2): its storage is the place of
+        another value, so it never drops and never moves (rule 8)."""
+        self.declare(local, False)
+        self._addresses.add(local)
+        self._never_moved.add(local)
+
+    def is_address(self, local: LocalId) -> bool:
+        return local in self._addresses
 
     def temporary(self, local: LocalId, owning: bool) -> None:
         """A temporary of the statement that lowering is in. It is live."""
@@ -280,13 +291,14 @@ class DropPlacement:
     # -- borrow regions (ir.md 8.6) ------------------------------------------------------
 
     def begin_region(self, view: LocalId, owners: Sequence[p.Place], until: frozenset[ShirId],
-                     span: Span) -> list[st.SlirStatement]:
-        """The region of `view`: one `BeginBorrow` for each owner."""
+                     span: Span, mode: BorrowMode = BorrowMode.PEEK
+                     ) -> list[st.SlirStatement]:
+        """The region of `view`: one `BeginBorrow` for each owner, with the mode `mode`."""
         ids = tuple(BorrowId(self._borrows + at) for at in range(len(owners)))
         self._borrows += len(owners)
         self._open.append(OpenRegion(view, ids, until, tuple(p.root_of(owner)
                                                               for owner in owners)))
-        return [st.BeginBorrow(ident, owner, BorrowMode.PEEK, span)
+        return [st.BeginBorrow(ident, owner, mode, span)
                 for ident, owner in zip(ids, owners, strict=True)]
 
     def open_regions(self) -> tuple[OpenRegion, ...]:

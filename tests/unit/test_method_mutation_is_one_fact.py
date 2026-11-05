@@ -111,7 +111,7 @@ def test_a_ruled_effect_family_writes_a_receiver_that_its_row_mutates():
     from sushi_lang.semantics.param_modes import Convention
     from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
 
-    assert me.RULED_EFFECT_FAMILIES == {"array", "list", "hashmap"}
+    assert me.RULED_EFFECT_FAMILIES == {"array", "list", "hashmap", "own"}
     assert me.RULED_EFFECT_FAMILIES <= me.EFFECT_FAMILIES
     family = METHOD_TYPE_REGISTRY.family("array")
     answers = {name: me.receiver_convention(family.callee(name))
@@ -167,6 +167,29 @@ def test_the_hashmap_family_writes_a_receiver_that_its_row_mutates():
              for name, count in HASHMAP_METHOD_ARITY.items()
              if Convention.OWNED in me.argument_conventions(me.HASHMAP_FAMILY, name, count)}
     assert owned == {"insert": (Convention.OWNED, Convention.OWNED)}
+
+
+def test_the_own_family_writes_a_receiver_that_its_row_mutates():
+    """The `Own@(T)` family (group B5) has the rule of the List family: `destroy` takes the
+    receiver `Inout`, and `get`, `clone` and `alloc` read it. `alloc` takes its value
+    `Owned`; `get` answers a view of the payload."""
+    from sushi_lang.semantics import method_effects as me
+    from sushi_lang.semantics.generics.own import OWN_METHOD_ARITY
+    from sushi_lang.semantics.param_modes import Convention
+    from sushi_lang.semantics.passes.types.method_registry import METHOD_TYPE_REGISTRY
+
+    family = METHOD_TYPE_REGISTRY.family(me.OWN_FAMILY)
+    answers = {name: me.receiver_convention(family.callee(name)) for name in OWN_METHOD_ARITY}
+    written = {name for name, answer in answers.items() if answer is Convention.INOUT}
+    assert written == {"destroy"}
+    assert all(answer is Convention.GUARANTEED for name, answer in answers.items()
+               if name not in written)
+    owned = {name: me.argument_conventions(me.OWN_FAMILY, name, count)
+             for name, count in OWN_METHOD_ARITY.items()
+             if Convention.OWNED in me.argument_conventions(me.OWN_FAMILY, name, count)}
+    assert owned == {"alloc": (Convention.OWNED,)}
+    assert {name for name in OWN_METHOD_ARITY if me.answers_view(family.callee(name))} \
+        == {"get"}
 
 
 def test_the_array_slot_is_the_one_owned_argument_of_its_conventions():
@@ -234,7 +257,7 @@ def test_slir_lowering_refuses_a_receiver_with_no_convention():
 
     span = Span(1, 1, 1, 2)
     recv = e.LocalRef(ShirId(1), span, LocalId(0))
-    callee = Builtin(recv, METHOD_TYPE_REGISTRY.family("own").callee("get"))
+    callee = Builtin(recv, METHOD_TYPE_REGISTRY.family("iterator").callee("map"))
     with pytest.raises(InternalCompilerError) as caught:
         lower_calls._receiver_convention(callee, span)
     assert caught.value.code == "CE0000"

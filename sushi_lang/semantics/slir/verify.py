@@ -54,7 +54,7 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir import terminators as tm
-from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction
+from sushi_lang.semantics.slir.function import SlirBlock, SlirFunction, address_locals
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
 from sushi_lang.semantics.slir.printer import show
 from sushi_lang.semantics.slir.verify_calls import (
@@ -181,7 +181,7 @@ class Check:
             self.views |= {stmt.place.id for stmt in block.statements
                            if isinstance(stmt, st.Assign) and isinstance(stmt.rvalue, r.Slice)
                            and isinstance(stmt.place, p.Local)}
-        self.owning -= self.views
+        self.owning -= self.views | address_locals(function)
         if function.entry not in self.blocks:
             self.fail(KNOWN_BLOCKS, f"the entry bb{function.entry.index} is no block of the "
                                     f"function", None)

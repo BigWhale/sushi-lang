@@ -49,14 +49,14 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.type_predicates import is_numeric_type
 from sushi_lang.semantics.typesys import (
-    ArrayType, BuiltinType, DynamicArrayType, EnumType, StructType, Type,
+    ArrayType, BuiltinType, DynamicArrayType, EnumType, PointerType, StructType, Type,
 )
 
 
 def place_address(state: FunctionState, place: p.Place) -> ir.Value:
     """The address of a place: the storage of a local, the global of a `var`, a payload
-    field of a variant, a field of a struct or a tuple, or an element of an array or a
-    string."""
+    field of a variant, a field of a struct or a tuple, an element of an array or a
+    string, or the pointee of a pointer (the payload of an `Own@(T)`)."""
     match place:
         case p.Local(local):
             return state.storage_of(local)
@@ -75,6 +75,9 @@ def place_address(state: FunctionState, place: p.Place) -> ir.Value:
         case p.Index(base, index):
             return element_address(state.codegen, place_address(state, base),
                                    type_of_place(state, base), operand_value(state, index))
+        case p.Deref(base):
+            _pointee_type(state, base)
+            return state.builder.load(place_address(state, base))
     state.stop(place)
 
 
@@ -100,7 +103,17 @@ def type_of_place(state: FunctionState, place: p.Place) -> Type:
             return _field_type(state, base, index)
         case p.Index(base, _):
             return _element_type(state, base)
+        case p.Deref(base):
+            return _pointee_type(state, base)
     state.stop(place)
+
+
+def _pointee_type(state: FunctionState, base: p.Place) -> Type:
+    """The type that the pointer in `base` points to: the payload of an `Own@(T)`."""
+    ty = type_of_place(state, base)
+    if not isinstance(ty, PointerType):
+        state.fault(f"{base} of {ty} is no pointer")
+    return ty.pointee_type
 
 
 def _element_type(state: FunctionState, base: p.Place) -> Type:

@@ -470,8 +470,8 @@ class OwnMethodInferrer:
                 return None
         if self.method_name == "destroy":
             return BuiltinType.BLANK
-        if self.method_name == "clone":
-            # A fresh Own@(T) over a copied payload -- the receiver's own type (#242).
+        if self.method_name in ("clone", "alloc"):
+            # A fresh Own@(T): a copied payload (#242), or the argument of `alloc`.
             return self.receiver_type
         return None
 

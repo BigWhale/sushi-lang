@@ -30,9 +30,10 @@ def stop(construct: str, span: Optional[Span], filename: Optional[str]) -> NoRet
 class FunctionState:
     """One function while the emitter fills it: the codegen, the LLVM function and its
     builder, the storage of each local (an entry-block slot, or the incoming address of a
-    `peek` or a `poke` parameter), the LLVM block of each SLIR block, and the span of the
-    statement or the terminator that the emitter is on. Every function of the emitter
-    after the stage entry takes the state, and reads the codegen here."""
+    `peek` or a `poke` parameter), the slot that holds the address of each address local,
+    the LLVM block of each SLIR block, and the span of the statement or the terminator that
+    the emitter is on. Every function of the emitter after the stage entry takes the state,
+    and reads the codegen here."""
     codegen: LLVMCodegen
     function: SlirFunction
     llvm_fn: ir.Function
@@ -40,6 +41,7 @@ class FunctionState:
     filename: Optional[str]
     span: Optional[Span] = None
     storage: dict[LocalId, ir.Value] = field(default_factory=dict)
+    addresses: dict[LocalId, ir.Value] = field(default_factory=dict)
     blocks: dict[BlockId, ir.Block] = field(default_factory=dict)
 
     def stop(self, shape: object) -> NoReturn:
@@ -54,7 +56,11 @@ class FunctionState:
         return self.function.locals[local.index].ty
 
     def storage_of(self, local: LocalId) -> ir.Value:
-        """The address of the value of `local`."""
+        """The address of the value of `local`. The storage of an address local is the
+        address that its `Ref` wrote into its slot."""
+        slot = self.addresses.get(local)
+        if slot is not None:
+            return self.builder.load(slot)
         address = self.storage.get(local)
         if address is None:
             self.fault(f"_{local.index} has no storage")
