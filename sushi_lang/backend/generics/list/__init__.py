@@ -14,11 +14,11 @@ import llvmlite.ir as ir
 from sushi_lang.backend.generics.container_table import (
     ContainerMethod, emit_static_with_operands, emit_with_operands,
 )
+from sushi_lang.backend.ownership import copy_out
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.typesys import StructType
 
 from .methods_simple import (
-    emit_list_clone,
     emit_list_new,
     emit_list_with_capacity,
     emit_list_len,
@@ -82,7 +82,7 @@ LIST_EMITTERS: Mapping[str, ContainerMethod] = MappingProxyType({
     "free": ContainerMethod(lambda c, v, t, _a: emit_list_free(c, v, t)),
     "debug": ContainerMethod(lambda c, v, t, _a: emit_list_debug(c, v, t)),
     "iter": ContainerMethod(_iter),
-    "clone": ContainerMethod(lambda c, v, t, _a: emit_list_clone(c, v, t)),
+    "clone": ContainerMethod(lambda c, v, t, _a: copy_out(c, v, t)),
     "contains": ContainerMethod(emit_list_contains, answers_bool=True),
     "index_of": ContainerMethod(emit_list_index_of),
     "index_of_from": ContainerMethod(emit_list_index_of_from),

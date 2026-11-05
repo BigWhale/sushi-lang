@@ -78,9 +78,3 @@ def emit_list_is_empty(codegen: Any, list_ptr: ir.Value) -> ir.Value:
     is_zero = codegen.builder.icmp_signed('==', len_value, zero, name="is_empty")
 
     return codegen.builder.zext(is_zero, codegen.types.i8)
-
-
-def emit_list_clone(codegen: Any, list_ptr: ir.Value, list_type: StructType) -> ir.Value:
-    """Emit `list.clone()` -- an independent `List@(T)` with its own buffer and elements."""
-    from sushi_lang.backend.ownership import copy_out
-    return copy_out(codegen, list_ptr, list_type)
