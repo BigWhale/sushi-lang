@@ -41,8 +41,8 @@ body is lowered again with what the walks found, until a walk finds nothing new.
 The construct of a stop is the SHIR class of the node, or one of these names: `generic
 instance`, `conversion` and `perk method` for the body of a monomorphized generic instance,
 of a conversion and of a perk method; `borrowed rebind`
-for a rebind of a borrowed parameter that owns, `view into an owning place` for a view that
-a local that owns would take, `conversion` also for a `??` that calls a declared conversion,
+for a rebind of a borrowed parameter that owns, `conversion` also for a `??` that calls a
+declared conversion,
 `library function` for a function, a method or a static whose declaring unit the typecheck
 row does not name, `bloom` for a bloom argument, `StructInit reference field`
 (`lower_aggregate.py`), `Match owning alternatives` (`lower_match.py`), and `ConstRef out of range` for a name
@@ -432,7 +432,8 @@ class Lowering:
             return
         if isinstance(value, ViewValue):
             if not (isinstance(place, p.Local) and self.locals[place.id.index].view):
-                raise StageStop(STAGE, "view into an owning place", span)
+                er.raise_internal_error("CE0000", span=span,
+                                        detail="a view into an owning place reached SLIR")
             value = value.value
         if isinstance(value, CallValue):
             self.emit([st.Call(place, value.callee, value.args, span)])

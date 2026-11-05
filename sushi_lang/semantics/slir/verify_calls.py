@@ -5,8 +5,8 @@ value other than a `string` to an `Owned` argument. The conventions of a `Direct
 are its declared parameters (`declared_params`), and the conventions of a static of a
 built-in container are the answer of `argument_conventions`. A call of a built-in method
 has a receiver operand. The receiver of a method of a container family with a receiver
-rule has the convention of `receiver_convention`, and each argument the convention of
-`argument_conventions`.
+rule, or of `Result` or `Maybe`, has the convention of `receiver_convention`, and each
+argument the convention of `argument_conventions`, or of the mode of its row.
 """
 from __future__ import annotations
 
@@ -17,9 +17,13 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.name_mangling import method_symbol
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.param_modes import Convention, declared_modes, receiver_mode
+from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_MODES
+from sushi_lang.semantics.generics.results import RESULT_METHOD_MODES
 from sushi_lang.semantics.method_effects import (
-    RULED_EFFECT_FAMILIES, argument_conventions, receiver_convention,
+    MAYBE_FAMILY, RESULT_FAMILY, RULED_EFFECT_FAMILIES, argument_conventions,
+    receiver_convention,
 )
+from sushi_lang.semantics.param_modes import BuiltinModes
 from sushi_lang.semantics.shir.callee import BuiltinMethod, Intrinsic
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
@@ -136,17 +140,31 @@ def _static_conventions(check: Check, stmt: st.Call, name: str) -> None:
                                     f"static takes it @{want.value}", stmt.span)
 
 
+#: The table of the parameter modes of each family of `Result` and `Maybe` methods.
+WRAPPER_MODES: dict[str, BuiltinModes] = {
+    MAYBE_FAMILY: MAYBE_METHOD_MODES,
+    RESULT_FAMILY: RESULT_METHOD_MODES,
+}
+
+
 def _method_conventions(check: Check, stmt: st.Call, method: BuiltinMethod) -> None:
     """A method of a container family with a receiver rule (`RULED_EFFECT_FAMILIES`): the
     receiver has the convention of `receiver_convention`, and each argument the convention
-    of `argument_conventions`. Any other family has no rule here."""
-    if method.family not in RULED_EFFECT_FAMILIES:
+    of `argument_conventions`. A method of `Result` or `Maybe` (`WRAPPER_MODES`): the
+    receiver has the convention of `receiver_convention`, and each argument the convention
+    of the mode of its row. Any other family has no rule here."""
+    count = len(stmt.args) - 1
+    if method.family in RULED_EFFECT_FAMILIES:
+        arguments = argument_conventions(method.family, method.name, count)
+    elif method.family in WRAPPER_MODES:
+        modes = WRAPPER_MODES[method.family].of(method.name, count) or ()
+        arguments = tuple(mode.convention for mode in modes)
+    else:
         return
     receiver = receiver_convention(method)
     if receiver is None:
         return
-    wanted = ((receiver,)
-              + argument_conventions(method.family, method.name, len(stmt.args) - 1))
+    wanted = (receiver,) + arguments
     name = f"{method.family}.{method.name}"
     for index, ((_, have), want) in enumerate(zip(stmt.args, wanted, strict=True)):
         if have is not want:

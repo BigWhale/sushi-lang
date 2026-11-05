@@ -21,9 +21,8 @@ answers of `typecheck`:
 - each capture of a `Lambda`, from its environment layout in `LiftResults`.
 
 The receiver of a `Method` callee whose `receiver` is `Owned` (a `nom self` extension method)
-is a consuming use too: the convention is a fact of the callee row. The receiver of a
-built-in method that declares `nom self` (group B10: `or_err`, `map_err`) joins the rule
-with the arm of B10.
+and the receiver of a built-in method that declares `nom self` (`or_err`, `map_err`) are
+consuming uses too: the convention is a fact of the callee row.
 
 Two writers of LENT have no check yet, because no spine body holds them: the clone of a
 lent iterator (the iterators group, C3) and a borrowed call that answers an iterator (the
@@ -35,11 +34,12 @@ producer and each lazy adapter has LENT or OWNED, except the iterable of a direc
 (`Cursor`, `HashMapCursor`), which makes no value; each lent one has its heap decision;
 each `Loop` of kind `Protocol` or `IteratorValue` has its walk in place. The conditionally
 moved locals have no check: no row for a local is the answer "moved on no path, or on
-every path". REJECT is an error of `borrow`, except at two positions, where it is a
-borrowed view with no error: the value of a `let` (a let-borrow of the owner) and the
-operand of a `??` that reads through a borrowed owning wrapper. That operand is a local
-that holds a borrow: a parameter with no `nom`, a local of a reference type, or a
-let-borrow. A REJECT row at any other
+every path". REJECT is an error of `borrow`, except at three positions, where it is a
+borrowed view with no error: the value of a `let` (a let-borrow of the owner), the
+operand of a `??` that reads through a borrowed owning wrapper, and the receiver of an
+`or_err` that is the operand of a `??`. The wrapper is a local that holds a borrow: a
+parameter with no `nom`, a local of a reference type, or a let-borrow. The receiver of the
+`or_err` is a view by the shape of the call. A REJECT row at any other
 position of a body that `borrow` ended with no error is a gap too. A gap is the internal
 error CE0157, which names the pass and the table.
 """
@@ -47,7 +47,9 @@ from __future__ import annotations
 
 from typing import Any, Callable, Iterator, TypeAlias
 
+from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
 from sushi_lang.semantics.generics.iterators import is_lazy_adapter, produces_from_a_container
+from sushi_lang.semantics.method_effects import receiver_convention
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.places import Step, walk_place
@@ -64,7 +66,7 @@ from sushi_lang.semantics.shir.ownership import OwnershipResults
 from sushi_lang.semantics.shir.side_table import MissingAnswer, raise_first_gap
 from sushi_lang.semantics.shir.typeck import TypeckResults
 from sushi_lang.semantics.shir.walk import walk
-from sushi_lang.semantics.typesys import ReferenceType
+from sushi_lang.semantics.typesys import ReferenceType, deref_type
 
 Consumed: TypeAlias = Callable[[Any, TypeckResults, OwnershipResults], Iterator[e.ShirExpr]]
 
@@ -78,7 +80,9 @@ def _call(node: e.Call, typeck: TypeckResults,
           _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
     resolved = typeck.callee_of(node.shir_id)
     callee = resolved.callee if resolved is not None else None
-    if isinstance(callee, Method) and callee.receiver is Convention.OWNED:
+    if ((isinstance(callee, Method) and callee.receiver is Convention.OWNED)
+            or (isinstance(callee, Builtin)
+                and receiver_convention(callee.method) is Convention.OWNED)):
         yield callee.recv
     for position, arg in enumerate(node.args):
         if arg.bloom or typeck.convention_of(node.shir_id, position) is Convention.OWNED:
@@ -212,10 +216,11 @@ def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
 
 def borrowed_views(body: ShirBody, typeck: TypeckResults,
                    ownership: OwnershipResults) -> set[ShirId]:
-    """The two positions where a REJECT row is a borrowed view and no error: the value of a
-    `let`, and the operand of a `??` that reads through a borrowed wrapper. A REJECT row
-    comes only for a wrapper that owns, so the operand is a local that holds a borrow, or a
-    `??` over one (a nested `??`)."""
+    """The three positions where a REJECT row is a borrowed view and no error: the value of
+    a `let`, the operand of a `??` that reads through a borrowed wrapper, and the receiver
+    of a read-through `or_err` that is the operand of a `??`. A REJECT row comes only for a
+    wrapper that owns, so the operand of the `??` is a local that holds a borrow, or a `??`
+    over one (a nested `??`)."""
     borrowed = _borrowed_locals(body, typeck, ownership)
     views: set[ShirId] = set()
     for _path, value in walk(body.block, "block"):
@@ -223,7 +228,23 @@ def borrowed_views(body: ShirBody, typeck: TypeckResults,
             views.add(value.value.shir_id)
         elif isinstance(value, e.Try) and walk_place(value.inner, Step.TRY).local in borrowed:
             views.add(value.inner.shir_id)
+        elif isinstance(value, e.Try):
+            receiver = _read_through_receiver(value.inner, typeck)
+            if receiver is not None:
+                views.add(receiver.shir_id)
     return views
+
+
+def _read_through_receiver(operand: e.ShirExpr, typeck: TypeckResults) -> e.ShirExpr | None:
+    """The receiver of `operand` when it is a call of a built-in method that reads a
+    borrowed receiver through (`reads_borrow_through`: `or_err`), else None."""
+    resolved = typeck.callee_of(operand.shir_id) if isinstance(operand, e.Call) else None
+    if resolved is None or not isinstance(resolved.callee, Builtin):
+        return None
+    receiver = resolved.callee.recv
+    signature = builtin_signature_of(deref_type(typeck.type_of(receiver.shir_id)),
+                                     resolved.callee.method.name)
+    return receiver if signature is not None and signature.reads_borrow_through else None
 
 
 def missing_ownership(body: ShirBody, typeck: TypeckResults, lift: LiftResults,

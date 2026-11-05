@@ -55,7 +55,7 @@ from .writes import READONLY_RECEIVERS
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir import exprs as e
     from sushi_lang.semantics.shir.body import ShirBody, ShirLocal, ShirParam
-    from sushi_lang.semantics.shir.ids import DeclId, LocalId
+    from sushi_lang.semantics.shir.ids import DeclId, LocalId, ShirId
     from sushi_lang.semantics.shir.lowering import LoweredProgram
     from sushi_lang.semantics.shir.nodes import ShirBlock
     from sushi_lang.semantics.shir.ownership import OwnershipResults
@@ -121,6 +121,9 @@ class BorrowChecker:
         # that a `let` made, with its owners and its statement (`regions.py`).
         self.statement_at: list[tuple[ShirBlock, int]] = []
         self.views: Dict[LocalId, tuple[tuple[Owner, ...], ShirBlock, int]] = {}
+        # The operand of each `??` that the walk entered: a read-through `or_err` stands
+        # there and nowhere else (CE2522).
+        self.try_operands: Set[ShirId] = set()
         # True when the walk of the body in typecheck reported an error.
         self.typecheck_failed = False
 
@@ -189,6 +192,7 @@ class BorrowChecker:
         self.kept_at_an_exit = set()
         self.statement_at = []
         self.views = {}
+        self.try_operands = set()
 
     def _leave(self) -> None:
         self.body = self.typeck = self.ownership = None

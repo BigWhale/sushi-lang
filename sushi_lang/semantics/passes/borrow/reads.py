@@ -33,12 +33,13 @@ from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.places import Step, unwrap_try, walk_place
 from sushi_lang.semantics.method_effects import answers_view
-from sushi_lang.semantics.ownership import is_get_out_container
+from sushi_lang.semantics.generics.builtin_signatures import builtin_signature_of
+from sushi_lang.semantics.ownership import TypeClass, is_get_out_container
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir.callee import Builtin
 from sushi_lang.semantics.shir.nodes import ShirNode
 from sushi_lang.semantics.shir.typeck_check import misses_an_answer
-from sushi_lang.semantics.typesys import Type
+from sushi_lang.semantics.typesys import Type, deref_type
 from .state import BorrowState
 
 if TYPE_CHECKING:
@@ -70,10 +71,13 @@ def borrow_owner(checker: 'BorrowChecker', node: object) -> Optional[Owner]:
     """The owner that a borrow of the SHIR place `node` is counted on, and that a binding
     into `node` freezes: the root local, or the symbol of the global of the root `var`,
     under each field step, each element and slice step, each `??` that reads it, and each
-    call whose answer is a view of its receiver (`view_receiver`). None for a temporary.
+    call whose answer is a view of its receiver (`view_receiver`) or that reads its
+    receiver through (`read_through_call`). None for a temporary.
     The pass tracks whole owners, not the places in them."""
     walked = walk_place(node, Step.MEMBER | Step.INDEX | Step.TRY | Step.CALL,
-                        crosses_call=lambda call: view_receiver(checker, call) is not None)
+                        crosses_call=lambda call: (view_receiver(checker, call) is not None
+                                                   or read_through_call(checker, call)
+                                                   is not None))
     if isinstance(walked.node, e.StorageRef):
         return storage_state(checker, walked.node).local
     return walked.local
@@ -89,6 +93,27 @@ def view_receiver(checker: 'BorrowChecker', node: object) -> Optional[e.ShirExpr
     if isinstance(callee, Builtin) and answers_view(callee.method):
         return callee.recv
     return None
+
+
+def read_through_call(checker: 'BorrowChecker', node: object) -> Optional[e.ShirExpr]:
+    """The receiver of a call of a built-in method that reads a borrowed receiver through
+    (`reads_borrow_through`: `or_err`), when the receiver is a wrapper that owns, or None.
+
+    The question is about the shape of the call and the type of its receiver. Who owns the
+    receiver is the question of the caller (`consume.read_through_receiver`).
+    """
+    if not isinstance(node, e.Call):
+        return None
+    resolved = checker.answers().callee_of(node.shir_id)
+    callee = resolved.callee if resolved is not None else None
+    if not isinstance(callee, Builtin):
+        return None
+    receiver_type = deref_type(read_type(checker, callee.recv))
+    signature = builtin_signature_of(receiver_type, callee.method.name)
+    if (signature is None or not signature.reads_borrow_through
+            or checker.types.type_class(receiver_type) is not TypeClass.MOVE):
+        return None
+    return callee.recv
 
 
 def owner_state(checker: 'BorrowChecker', node: object) -> Optional[BorrowState]:

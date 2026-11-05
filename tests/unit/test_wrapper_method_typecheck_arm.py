@@ -2,10 +2,9 @@
 
 The arm of each family is a row of `FAMILY_ARMS`. A test method (`is_ok`, `is_err`,
 `is_some`, `is_none`) yields a bool, and the call keeps its `Builtin` callee row. A method
-with a signature row (`map_err`, `or_err`) is not typed yet: it stops with the label of its
-family. That stop is temporary, so this test reads the rows and the label as data, and the
-group that types them changes it in one place. The tests run the arm over SHIR built by
-hand, with a stand-in for the pass; they do not run the compiler.
+with a signature row (`map_err`, `or_err`) goes to the one arm of a signature method
+(`visit/signature_methods.py`) with its row. The tests run the arm over SHIR built by hand,
+with a stand-in for the pass; they do not run the compiler.
 """
 from __future__ import annotations
 
@@ -13,7 +12,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_SIGNATURES
 from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES
@@ -79,19 +77,25 @@ def test_a_test_method_yields_a_bool_and_keeps_its_callee(monkeypatch, receiver,
         Builtin(call.target.recv, BuiltinMethod(family, method, nom_self=False)))  # type: ignore[union-attr]
 
 
-def test_the_rows_with_a_signature_are_the_untyped_rows():
+def test_the_rows_with_a_signature_are_map_err_and_or_err():
     assert set(RESULT_METHOD_SIGNATURES) == {"map_err"}
     assert set(MAYBE_METHOD_SIGNATURES) == {"or_err"}
 
 
-@pytest.mark.parametrize("receiver, method, label", [
-    (RESULT, "map_err", "Call(method result)"),
-    (MAYBE, "or_err", "Call(method maybe)"),
+@pytest.mark.parametrize("receiver, method, family, rows", [
+    (RESULT, "map_err", RESULT_FAMILY, RESULT_METHOD_SIGNATURES),
+    (MAYBE, "or_err", MAYBE_FAMILY, MAYBE_METHOD_SIGNATURES),
 ])
-def test_a_row_with_a_signature_stops_with_the_label_of_its_family(monkeypatch, receiver,
-                                                                    method, label):
+def test_a_row_with_a_signature_goes_to_the_signature_arm(monkeypatch, receiver, method,
+                                                         family, rows):
+    seen = []
     monkeypatch.setattr(visit, "check_expr", lambda _validator, _node: receiver)
-    with pytest.raises(StageStop) as caught:
-        calls.check_call(_validator(TypeckResults()), _call(method), None)  # type: ignore[arg-type]
-    assert caught.value.params == {"stage": "typecheck", "construct": label}
-    assert caught.value.span == SPAN
+    monkeypatch.setattr(calls, "check_signature_method",
+                        lambda _validator, _node, recv, name, fam, signature:
+                        seen.append((recv, name, fam.name, signature)) or I32)
+    answers = TypeckResults()
+    call = _call(method)
+    assert calls.check_call(_validator(answers), call, None) == I32  # type: ignore[arg-type]
+    assert seen == [(receiver, method, family, rows[method])]
+    assert answers.callee_of(call.shir_id) == ResolvedCall(
+        Builtin(call.target.recv, BuiltinMethod(family, method, nom_self=True)))  # type: ignore[union-attr]

@@ -83,14 +83,17 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
 
 def _held(low: Lowering, value: e.ShirExpr) -> ShirId:
     """The node whose value a view of a `let` reads when no local owns it: the root of its
-    place, through the receiver of each get-out."""
-    node = walk_place(value, Step.MEMBER | Step.INDEX).node
-    while isinstance(node, e.Call):
-        resolved = low.typeck.callee_of(node.shir_id)
-        if resolved is None or not (isinstance(resolved.callee, Builtin)
-                                    and answers_view(resolved.callee.method)):
-            break
-        node = walk_place(resolved.callee.recv, Step.MEMBER | Step.INDEX).node
+    place, through each `??`, the receiver of each get-out and the receiver of each
+    read-through `or_err` (a `reject` row at its receiver)."""
+    def crosses(call: e.ShirExpr) -> bool:
+        resolved = low.typeck.callee_of(call.shir_id)
+        return resolved is not None and isinstance(resolved.callee, Builtin) and (
+            answers_view(resolved.callee.method)
+            or low.answers.ownership.ownership_of(resolved.callee.recv.shir_id)
+            is Ownership.REJECT)
+
+    node = walk_place(value, Step.MEMBER | Step.INDEX | Step.TRY | Step.CALL,
+                      crosses_call=crosses).node
     if not isinstance(node, ShirNode) or isinstance(node, (e.LocalRef, e.StorageRef)):
         er.raise_internal_error("CE0000", span=value.loc,
                                 detail="a borrowed let of a temporary with no root")
@@ -170,6 +173,37 @@ def wrapper(low: Lowering, inner: e.ShirExpr) -> tuple[p.Place, bool]:
         return lowered.value.operand.place, True
     return p.Local(low.temporary(lowered, low.type_of(inner), inner.loc)), isinstance(
         lowered, ViewValue)
+
+
+def receiver_of(low: Lowering, call: e.ShirExpr) -> e.ShirExpr:
+    """The receiver of a call of a built-in method. Any other node is an internal error."""
+    resolved = low.typeck.callee_of(call.shir_id) if isinstance(call, e.Call) else None
+    if resolved is None or not isinstance(resolved.callee, Builtin):
+        er.raise_internal_error("CE0000", span=call.loc,
+                                detail="a built-in receiver of a node that is no method call")
+    return resolved.callee.recv
+
+
+def read_through(low: Lowering, inner: e.ShirExpr) -> Optional[tuple[p.Place, p.Operand]]:
+    """The operand of a `??` that is `m.or_err(nom e)` over a borrowed `Maybe` (a `reject`
+    row at the receiver, ir.md 8.9): the place of the `Maybe`, read where it is (`wrapper`),
+    and the error operand, evaluated after it. A named error goes into a temporary of the
+    statement, so the `None` path moves the temporary and the `Some` path drops it. None
+    for any other operand."""
+    if not isinstance(inner, e.Call):
+        return None
+    resolved = low.typeck.callee_of(inner.shir_id)
+    if resolved is None or not isinstance(resolved.callee, Builtin):
+        return None
+    receiver = resolved.callee.recv
+    if low.answers.ownership.ownership_of(receiver.shir_id) is not Ownership.REJECT:
+        return None
+    place, _borrowed = wrapper(low, receiver)
+    value = inner.args[0].value
+    error = low.operand(value)
+    if isinstance(error, p.Move) and isinstance(value, e.LocalRef):
+        error = p.Move(p.Local(low.temporary(r.Use(error), low.type_of(value), value.loc)))
+    return place, error
 
 
 def after(low: Lowering, stmt: s.ShirStmt) -> list[st.SlirStatement]:

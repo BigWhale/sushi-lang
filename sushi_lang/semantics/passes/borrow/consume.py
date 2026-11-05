@@ -14,7 +14,7 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.ast import Expr, Lambda, Let, Name
+from sushi_lang.semantics.ast import Lambda, Let, Name
 from sushi_lang.semantics.ownership import Ownership, Provenance, TypeClass, classify
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
@@ -29,7 +29,7 @@ from .diagnostics import (
     no_clone_reason,
     refuses_clone,
 )
-from .reads import borrow_owner, read_type, unknown, view_receiver
+from .reads import borrow_owner, read_through_call, read_type, unknown, view_receiver
 from .state import BorrowState, record_owners
 from .writes import check_owner_not_borrowed
 
@@ -77,8 +77,9 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
     receiver holds, a read through the receiver too (BORROWED). `r??` yields what `r` holds,
     and the payload has the provenance of `r` (#548): a borrowed `r` keeps its owner, so
     the payload is a read through it; an owned `r` was SPENT by the `??` itself
-    (`unwrap_place`), so nothing owns the payload now and the position adopts it.
-    Anything else makes a new value.
+    (`unwrap_place`), so nothing owns the payload now and the position adopts it. A `??`
+    over a `??` that reads through, and over a read-through `or_err`, reads through too
+    (`reads_through`). Anything else makes a new value.
     """
     if isinstance(checker.body.origin, Initializer):
         return Provenance.FRESH
@@ -88,9 +89,8 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
         return Provenance.OWNED
     if isinstance(node, (e.Field, e.Index, e.Slice)) or view_receiver(checker, node) is not None:
         return Provenance.BORROWED
-    if isinstance(node, e.Try) and isinstance(node.inner, e.LocalRef):
-        if name_provenance(checker, node.inner.local) is Provenance.BORROWED:
-            return Provenance.BORROWED
+    if isinstance(node, e.Try) and reads_through(checker, node.inner):
+        return Provenance.BORROWED
     return Provenance.FRESH
 
 
@@ -120,23 +120,28 @@ def decide(checker: 'BorrowChecker', node: e.ShirExpr, provenance: Provenance,
     return decision
 
 
-def read_through_receiver(checker: 'BorrowChecker', expr: Expr) -> Optional[Expr]:
-    """The receiver of a built-in call that reads a borrowed receiver through, or None.
+def read_through_receiver(checker: 'BorrowChecker', node: e.ShirExpr) -> Optional[e.ShirExpr]:
+    """The receiver of a call that reads a borrowed receiver through, or None.
 
     `m.or_err(nom e)` takes `nom self`, but a BORROWED `m` whose payload owns a resource
     is read through, as `??` reads through a borrowed wrapper
-    (docs/design/error-conversion.md section 4). The answer then carries the borrow. A
-    receiver that owns nothing is copied, so it is not read through. Under a `??` the call
-    is transparent (`places.try_operand`), so this asks about the call itself.
+    (docs/design/error-conversion.md section 4, docs/design/ir.md 8.3). A receiver that
+    owns nothing is copied, and an owned one is taken, so neither is read through.
     """
-    from sushi_lang.semantics.generics.builtin_signatures import read_through_receiver_of
-    receiver = read_through_receiver_of(expr)
-    if receiver is None:
-        return None
-    if checker.types.type_class(getattr(expr, "resolved_enum_type", None)) \
-            is not TypeClass.MOVE:
+    receiver = read_through_call(checker, node)
+    if receiver is None or source_provenance(checker, receiver) is not Provenance.BORROWED:
         return None
     return receiver
+
+
+def reads_through(checker: 'BorrowChecker', operand: e.ShirExpr) -> bool:
+    """Does a `??` over `operand` read a borrowed wrapper through? The operand is a local
+    that holds a borrow, a `??` that reads through (a nested `??`), or a read-through
+    `or_err` (`read_through_receiver`)."""
+    root = walk_place(operand, Step.TRY).node
+    if isinstance(root, e.LocalRef):
+        return name_provenance(checker, root.local) is Provenance.BORROWED
+    return read_through_receiver(checker, root) is not None
 
 
 def unwrap_place(checker: 'BorrowChecker', node: e.Try) -> None:

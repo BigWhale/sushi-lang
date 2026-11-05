@@ -164,6 +164,17 @@ def check_argument(validator: 'TypeValidator', callee_name: str, arg: e.Arg, ind
     argument. `typed_by_position` False checks the value with no type from its position."""
     position = deref_type(expected) if typed_by_position else None
     actual = marked_type(arg, visit.check_expr(validator, arg.value, position))
+    return compare_argument(validator, callee_name, arg, index, actual, expected,
+                            mismatch_code=mismatch_code, others=others, field=field)
+
+
+def compare_argument(validator: 'TypeValidator', callee_name: str, arg: e.Arg, index: int,
+                     actual: Optional[Type], expected: Optional[Type], *,
+                     mismatch_code: er.ErrorMessage, others: Sequence[Type] = (),
+                     field: Optional[str] = None) -> bool:
+    """Compare ONE argument that the pass typed, `actual`, with the type of the parameter
+    that it fills, and answer whether it fits. A mismatch is `mismatch_code` at the
+    argument. A call whose parameter types its arguments solve types them first."""
     if actual is None or expected is None:
         return False
     if (types_compatible(validator, actual, expected)

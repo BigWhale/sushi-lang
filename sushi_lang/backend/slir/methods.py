@@ -14,11 +14,14 @@ from llvmlite import ir
 from sushi_lang.backend.expressions.calls.stdlib.strings import emit_stdlib_string_call
 from sushi_lang.backend.generics.hashmap import emit_hashmap_method
 from sushi_lang.backend.generics.list import emit_list_method
-from sushi_lang.backend.generics.maybe import emit_builtin_maybe_method
+from sushi_lang.backend.generics.maybe import (
+    emit_builtin_maybe_method, emit_maybe_signature_method)
 from sushi_lang.backend.generics.own import emit_own_method
-from sushi_lang.backend.generics.results import emit_builtin_result_method
+from sushi_lang.backend.generics.results import (
+    emit_builtin_result_method, emit_result_signature_method)
 from sushi_lang.backend.slir.state import FunctionState
-from sushi_lang.backend.slir.values import operand_address, operand_value, type_of_operand
+from sushi_lang.backend.slir.values import (
+    operand_address, operand_value, type_of_operand, type_of_place)
 from sushi_lang.backend.types.arrays import emit_array_method
 from sushi_lang.semantics.method_effects import (
     ARRAY_FAMILY, HASHMAP_FAMILY, LIST_FAMILY, MAYBE_FAMILY, OWN_FAMILY, PRIMITIVE_FAMILY,
@@ -102,26 +105,43 @@ def _container(base: str, emit: _ContainerEmitter) -> _MethodRow:
     return row
 
 
-#: The emitter of the `result` or the `maybe` family: the codegen, the method name and the
-#: value of the receiver.
+#: The emitter of a method of the `result` or the `maybe` family that reads its receiver:
+#: the codegen, the method name and the value of the receiver.
 _WrapperEmitter = Callable[[Any, str, ir.Value], ir.Value]
 
+#: The emitter of a method of the `result` or the `maybe` family with a signature row
+#: (`map_err`, `or_err`): the codegen, the method name, the value and the type of the
+#: receiver, the value and the type of the argument, and the type of the answer.
+_SignatureEmitter = Callable[[Any, str, ir.Value, EnumType, ir.Value, Any, EnumType],
+                             ir.Value]
 
-def _wrapper(emit: _WrapperEmitter) -> _MethodRow:
-    """The row of the `result` or the `maybe` family, over its emitter `emit`. Every
-    operand is `Guaranteed` (ir.md 8.3), and each method of the row takes no argument and
-    answers a `bool`."""
+
+def _wrapper(emit: _WrapperEmitter, emit_signature: _SignatureEmitter) -> _MethodRow:
+    """The row of the `result` or the `maybe` family. A method that reads its receiver
+    takes no argument, its one operand is `Guaranteed` (ir.md 8.3), and it answers a
+    `bool`. A method that takes its receiver (`nom self`: `map_err`, `or_err`) has an
+    `Owned` receiver and one argument, and it answers the type of the destination."""
     def row(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
-        if len(statement.args) != 1:
+        operands = 2 if method.nom_self else 1
+        if len(statement.args) != operands:
             state.fault(f"the call of '{method.name}' has {len(statement.args)} operands")
-        for operand, convention in statement.args:
-            if convention is not Convention.GUARANTEED:
-                state.fault(f"the operand {operand} of '{method.name}' is "
-                            f"{convention.value}, not guaranteed")
-        receiver_type = type_of_operand(state, statement.args[0][0])
+        receiver, convention = statement.args[0]
+        wanted = Convention.OWNED if method.nom_self else Convention.GUARANTEED
+        if convention is not wanted:
+            state.fault(f"the receiver {receiver} of '{method.name}' is "
+                        f"{convention.value}, not {wanted.value}")
+        receiver_type = type_of_operand(state, receiver)
         if not isinstance(receiver_type, EnumType):
             state.fault(f"the receiver of '{method.name}' has the type {receiver_type}")
-        return emit(state.codegen, method.name, operand_value(state, statement.args[0][0]))
+        if not method.nom_self:
+            return emit(state.codegen, method.name, operand_value(state, receiver))
+        argument = statement.args[1][0]
+        answer_type = type_of_place(state, statement.dest)
+        if not isinstance(answer_type, EnumType):
+            state.fault(f"the answer of '{method.name}' has the type {answer_type}")
+        values = [operand_value(state, operand) for operand, _ in statement.args]
+        return emit_signature(state.codegen, method.name, values[0], receiver_type,
+                              values[1], type_of_operand(state, argument), answer_type)
     return row
 
 
@@ -133,8 +153,8 @@ METHOD_FAMILIES: dict[str, _MethodRow] = {
     OWN_FAMILY: _container("Own", emit_own_method),
     PRIMITIVE_FAMILY: _primitive,
     STRING_FAMILY: _string,
-    RESULT_FAMILY: _wrapper(emit_builtin_result_method),
-    MAYBE_FAMILY: _wrapper(emit_builtin_maybe_method),
+    RESULT_FAMILY: _wrapper(emit_builtin_result_method, emit_result_signature_method),
+    MAYBE_FAMILY: _wrapper(emit_builtin_maybe_method, emit_maybe_signature_method),
 }
 
 

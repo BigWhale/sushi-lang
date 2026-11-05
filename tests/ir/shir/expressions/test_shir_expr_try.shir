@@ -18,17 +18,17 @@ ShirBody first
   params : [(_0 "xs": i32[], Guaranteed)]
   locals : []
   block  :
-    Return(EnumInit(@Result, "Ok", [Try(Call(Dotted(Call(Dotted(LocalRef(_0), "get"), [Lit(0)]), "or_err"), [(EnumInit(@ParseError, "Empty", []), Owned)]))]))
+    Return(adopt EnumInit(@Result, "Ok", [adopt Try(adopt Call(Builtin(adopt Call(Builtin(LocalRef(_0), "get"), [(Lit(0), Guaranteed)]), "or_err"), [(adopt EnumInit(@ParseError, "Empty", []), Owned)]))]))
 
 ShirBody main
   params : []
   locals : [_0 "full": i32[], _1 "none": i32[]]
   block  :
-    ExprStmt(Call(Intrinsic("println"), [(Call(Dotted(Call(Named(GlobalRef(@bump)), [Lit("x")]), "realise"), [Lit(0)]), Guaranteed)]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@bump)), [Lit("")]), "realise"), [Lit(0)])]))
-    Assign(LocalRef(_0), ArrayInit(Dynamic, [Single(Lit(7))]), is_init: true)
-    Assign(LocalRef(_1), ArrayInit(Dynamic, []), is_init: true)
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@first)), [LocalRef(_0)]), "realise"), [Lit(0)])]))
-    ExprStmt(Call(BuiltinFn("println"), [Call(Dotted(Call(Named(GlobalRef(@first)), [LocalRef(_1)]), "realise"), [Lit(0)])]))
-    ExprStmt(Call(BuiltinFn("println"), [Lit("Mostly Harmless")]))
-    Return(Lit(0))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@bump), [(Lit("x"), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@bump), [(Lit(""), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    Assign(LocalRef(_0), adopt ArrayInit(Dynamic, [Single(adopt Lit(7))]), is_init: true)
+    Assign(LocalRef(_1), adopt ArrayInit(Dynamic, []), is_init: true)
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@first), [(LocalRef(_0), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Call(Builtin(Call(Free(@first), [(LocalRef(_1), Guaranteed)]), "realise"), [(Lit(0), Guaranteed)]), Guaranteed)]))
+    ExprStmt(Call(Intrinsic("println"), [(Lit("Mostly Harmless"), Guaranteed)]))
+    Return(adopt Lit(0))

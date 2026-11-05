@@ -38,7 +38,7 @@ from sushi_lang.semantics.typesys import (
 from sushi_lang.semantics.unit_symbols import emitted_symbol
 
 from tests.unit.test_slir_printer import (
-    RESULT_STRING, _decorate, _greet, _main, _shout,
+    RESULT_STRING, _decorate, _greet, _main, _result, _shout,
 )
 
 SPAN = Span(1, 1, 1, 9)
@@ -542,6 +542,40 @@ def test_an_own_method_with_another_convention_is_refused(name: str, args):
 ])
 def test_an_own_method_with_the_conventions_of_its_rows_passes(name: str, args):
     _passes(_own_method(name, *args))
+
+
+def _wrapper_method(family: str, name: str,
+                    *args: tuple[p.Operand, Convention]) -> SlirFunction:
+    """`_1 = <family>.<name>(args)` over the plain `Result@(i32, StdError)` `_2`: a
+    `nom self` method takes it, and any other method reads it."""
+    call = st.Call(_local(1), st.Builtin(BuiltinMethod(family, name,
+                                                       nom_self=name in ("map_err", "or_err")),
+                                         ()), args, BAD)
+    return _function([BLANK, _result(I32), _result(I32)],
+                     _block(0, _ret(), call, _set(0, r.Use(p.Const(k.Blank())))),
+                     params=((2, OWNED),))
+
+
+@pytest.mark.parametrize("family, name, args", [
+    ("result", "map_err", ((_copy(2), GUARANTEED), (p.Const(k.Blank()), GUARANTEED))),
+    ("maybe", "or_err", ((p.Move(_local(2)), OWNED), (p.Const(k.Blank()), GUARANTEED))),
+    ("result", "is_ok", ((p.Move(_local(2)), OWNED),)),
+])
+def test_a_wrapper_method_with_another_convention_is_refused(family: str, name: str, args):
+    """The rule of a List method holds for a method of `Result` and `Maybe`: `map_err` and
+    `or_err` take their receiver `@owned`, `is_ok` reads it, and the error value of
+    `or_err` is `@owned` (ir.md 8.3, 8.13)."""
+    _refused(_wrapper_method(family, name, *args), "declared conventions")
+
+
+@pytest.mark.parametrize("family, name, args", [
+    ("result", "map_err", ((p.Move(_local(2)), OWNED), (p.Const(k.Blank()), GUARANTEED))),
+    ("maybe", "or_err", ((p.Move(_local(2)), OWNED), (p.Const(k.Blank()), OWNED))),
+    ("result", "is_ok", ((_copy(2), GUARANTEED),)),
+])
+def test_a_wrapper_method_with_the_conventions_of_its_rows_passes(family: str, name: str,
+                                                                  args):
+    _passes(_wrapper_method(family, name, *args))
 
 
 def _static(name: str, *args: tuple[p.Operand, Convention]) -> st.Call:

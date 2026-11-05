@@ -1,8 +1,7 @@
 """Built-in extension methods for Result<T, E> generic enum type."""
 
 from typing import Any
-from sushi_lang.semantics.ast import DotCall, MethodCall
-from sushi_lang.semantics.typesys import EnumType
+from sushi_lang.semantics.typesys import EnumType, FunctionType, Type
 import llvmlite.ir as ir
 from sushi_lang.internals.errors import raise_internal_error
 
@@ -26,28 +25,33 @@ def emit_builtin_result_method(
 
 def emit_result_signature_method(
     codegen: Any,
-    call: MethodCall | DotCall,
+    method: str,
     result_value: ir.Value,
     result_type: EnumType,
-    args: list[ir.Value],
+    argument: ir.Value,
+    argument_type: Type,
+    answer_type: EnumType,
 ) -> ir.Value:
-    """Emit a `Result@(T, E)` method that has a signature (design 8.3).
-
-    The caller settled the receiver and the arguments by their stamped modes. The return
-    type is the stamp of the typecheck pass, because a method-level type parameter makes
-    it depend on an argument.
-    """
-    if call.method == "map_err":
-        return _emit_result_map_err(codegen, call, result_value, result_type, args[0])
-    raise_internal_error("CE0094", method=call.method)
+    """A `Result@(T, E)` method that has a signature (docs/design/ir.md 8.3, 8.6), over
+    the value of its receiver and of its argument. The method takes its receiver
+    (`Owned`). The answer type is the type of the destination of the call, because a
+    method-level type parameter makes it depend on the argument."""
+    if method == "map_err":
+        if not isinstance(argument_type, FunctionType):
+            raise_internal_error(
+                "CE0015", message="the argument of 'map_err' is no function value")
+        return _emit_result_map_err(codegen, result_value, result_type, argument,
+                                    argument_type, answer_type)
+    raise_internal_error("CE0094", method=method)
 
 
 def _emit_result_map_err(
     codegen: Any,
-    call: MethodCall | DotCall,
     result_value: ir.Value,
     result_type: EnumType,
     function_value: ir.Value,
+    function_type: FunctionType,
+    answer_type: EnumType,
 ) -> ir.Value:
     """Emit `r.map_err(f)`: `Ok(v)` gives `Ok(v)`, and `Err(e)` gives `Err(f(e))`.
 
@@ -57,17 +61,12 @@ def _emit_result_map_err(
     """
     from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check
     from sushi_lang.backend.generics.result_builder import (
-        build_err_from_return_type, build_ok_variant, stamped_result_return)
+        build_err_from_return_type, build_ok_variant)
     from sushi_lang.backend.memory.allocas import entry_alloca
     from sushi_lang.backend.runtime.closures import emit_indirect_call
     from sushi_lang.semantics.generics.results import result_ok_err
-    from sushi_lang.semantics.typesys import BuiltinType, FunctionType
+    from sushi_lang.semantics.typesys import BuiltinType
 
-    answer_type = stamped_result_return(call)
-    function_type = (call.callee_param_types or (None,))[0]
-    if not isinstance(function_type, FunctionType):
-        raise_internal_error(
-            "CE0015", message="'map_err' has no stamped function parameter type")
     ok_type, err_type = result_ok_err(result_type)
     ok_index = result_type.get_variant_index("Ok")
     if ok_index is None:
@@ -94,4 +93,3 @@ def _emit_result_map_err(
                           answer_slot)
 
     return builder.load(answer_slot, name="map_err_value")
-

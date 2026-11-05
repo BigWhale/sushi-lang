@@ -1,0 +1,263 @@
+unit test_slir_or_err
+
+fn make(_1: i32 @guaranteed) -> Maybe@(string) {
+    let _0: Maybe@(string)
+    let _2: bool
+
+  bb0:
+    StorageLive(_2)
+    _2 = copy _1 > const 0_i32
+    switchInt(copy _2) -> [0: bb2, otherwise: bb1]
+
+  bb1:
+    StorageDead(_2)
+    _0 = Maybe::Some(const "Mostly Harmless")
+    return
+
+  bb2:
+    StorageDead(_2)
+    goto -> bb3
+
+  bb3:
+    _0 = Maybe::None
+    return
+}
+
+fn show(_1: Result@(string, BadInput) @guaranteed) -> ~ {
+    let _0: ~
+    let _2: i32
+    let _3: string view                    // s
+    let _4: string
+    let _5: ~
+    let _6: BadInput view                  // e
+    let _7: string
+    let _8: ~
+
+  bb0:
+    _2 = discriminant(_1)
+    switchInt(copy _2) -> [0: bb1, 1: bb2, otherwise: unreachable]
+
+  bb1:
+    StorageLive(_3)
+    BeginBorrow(b0, _1, peek)
+    _3 = copy ((_1 as Ok).0)
+    StorageLive(_4)
+    _4 = call builtin interp@(string, string)(const "ok " @guaranteed, copy _3 @guaranteed)
+    StorageLive(_5)
+    _5 = call builtin println@(string)(copy _4 @guaranteed)
+    EndBorrow(b0)
+    StorageDead(_5)
+    Drop(_4)
+    StorageDead(_4)
+    StorageDead(_3)
+    goto -> bb3
+
+  bb2:
+    StorageLive(_6)
+    BeginBorrow(b1, _1, peek)
+    _6 = copy ((_1 as Err).0)
+    StorageLive(_7)
+    _7 = call builtin interp@(string, BadInput)(const "err " @guaranteed, copy _6 @guaranteed)
+    StorageLive(_8)
+    _8 = call builtin println@(string)(copy _7 @guaranteed)
+    EndBorrow(b1)
+    StorageDead(_8)
+    Drop(_7)
+    StorageDead(_7)
+    StorageDead(_6)
+    goto -> bb3
+
+  bb3:
+    _0 = const ~
+    return
+}
+
+fn first(_1: Maybe@(string) @guaranteed, _2: string @guaranteed) -> Result@(i32, BadInput) {
+    let _0: Result@(i32, BadInput)
+    let _3: string
+    let _4: BadInput                       // e
+    let _5: BadInput
+    let _6: i32
+    let _7: string view                    // s
+    let _8: i32
+
+  bb0:
+    StorageLive(_3)
+    _3 = clone(copy _2)
+    StorageLive(_4)
+    _4 = BadInput::Missing(move _3)
+    StorageDead(_3)
+    StorageLive(_5)
+    _5 = move _4
+    _6 = discriminant(_1)
+    switchInt(copy _6) -> [0: bb1, 1: bb2, otherwise: unreachable]
+
+  bb1:
+    StorageLive(_7)
+    BeginBorrow(b0, _1, peek)
+    _7 = copy ((_1 as Some).0)
+    Drop(_5)
+    StorageDead(_5)
+    StorageLive(_8)
+    _8 = call builtin string.len(copy _7 @guaranteed)
+    _0 = Result::Ok(move _8)
+    EndBorrow(b0)
+    StorageDead(_8)
+    StorageDead(_7)
+    StorageDead(_4)
+    return
+
+  bb2:
+    _0 = Result::Err(move _5)
+    StorageDead(_5)
+    StorageDead(_4)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: Maybe@(string)
+    let _2: BadInput
+    let _3: Result@(string, BadInput)
+    let _4: ~
+    let _5: Maybe@(string)
+    let _6: BadInput
+    let _7: Result@(string, BadInput)
+    let _8: ~
+    let _9: Maybe@(string)                 // a
+    let _10: Maybe@(string)                // b
+    let _11: Result@(i32, BadInput)
+    let _12: i32
+    let _13: i32                           // n
+    let _14: string
+    let _15: ~
+    let _16: BadInput view                 // e
+    let _17: string
+    let _18: ~
+    let _19: Result@(i32, BadInput)
+    let _20: i32
+    let _21: i32                           // n
+    let _22: string
+    let _23: ~
+    let _24: BadInput view                 // e
+    let _25: string
+    let _26: ~
+    let _27: bool
+    let _28: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = call @make(const 1_i32 @guaranteed)
+    StorageLive(_2)
+    _2 = BadInput::Missing(const "none")
+    StorageLive(_3)
+    _3 = call builtin maybe.or_err(move _1 @owned, move _2 @owned)
+    StorageLive(_4)
+    _4 = call @show(copy _3 @guaranteed)
+    StorageDead(_4)
+    Drop(_3)
+    StorageDead(_3)
+    StorageDead(_2)
+    StorageDead(_1)
+    StorageLive(_5)
+    _5 = call @make(const 0_i32 @guaranteed)
+    StorageLive(_6)
+    _6 = BadInput::Missing(const "one")
+    StorageLive(_7)
+    _7 = call builtin maybe.or_err(move _5 @owned, move _6 @owned)
+    StorageLive(_8)
+    _8 = call @show(copy _7 @guaranteed)
+    StorageDead(_8)
+    Drop(_7)
+    StorageDead(_7)
+    StorageDead(_6)
+    StorageDead(_5)
+    StorageLive(_9)
+    _9 = call @make(const 1_i32 @guaranteed)
+    StorageLive(_10)
+    _10 = call @make(const 0_i32 @guaranteed)
+    StorageLive(_11)
+    _11 = call @first(copy _9 @guaranteed, const "zero" @guaranteed)
+    _12 = discriminant(_11)
+    switchInt(copy _12) -> [0: bb1, 1: bb2, otherwise: unreachable]
+
+  bb1:
+    StorageLive(_13)
+    _13 = copy ((_11 as Ok).0)
+    StorageLive(_14)
+    _14 = call builtin interp@(string, i32)(const "ok " @guaranteed, copy _13 @guaranteed)
+    StorageLive(_15)
+    _15 = call builtin println@(string)(copy _14 @guaranteed)
+    StorageDead(_15)
+    Drop(_14)
+    StorageDead(_14)
+    StorageDead(_13)
+    goto -> bb3
+
+  bb2:
+    StorageLive(_16)
+    BeginBorrow(b0, _11, peek)
+    _16 = copy ((_11 as Err).0)
+    StorageLive(_17)
+    _17 = call builtin interp@(string, BadInput)(const "err " @guaranteed, copy _16 @guaranteed)
+    StorageLive(_18)
+    _18 = call builtin println@(string)(copy _17 @guaranteed)
+    EndBorrow(b0)
+    StorageDead(_18)
+    Drop(_17)
+    StorageDead(_17)
+    StorageDead(_16)
+    goto -> bb3
+
+  bb3:
+    Drop(_11)
+    StorageDead(_11)
+    StorageLive(_19)
+    _19 = call @first(copy _10 @guaranteed, const "two" @guaranteed)
+    _20 = discriminant(_19)
+    switchInt(copy _20) -> [0: bb4, 1: bb5, otherwise: unreachable]
+
+  bb4:
+    StorageLive(_21)
+    _21 = copy ((_19 as Ok).0)
+    StorageLive(_22)
+    _22 = call builtin interp@(string, i32)(const "ok " @guaranteed, copy _21 @guaranteed)
+    StorageLive(_23)
+    _23 = call builtin println@(string)(copy _22 @guaranteed)
+    StorageDead(_23)
+    Drop(_22)
+    StorageDead(_22)
+    StorageDead(_21)
+    goto -> bb6
+
+  bb5:
+    StorageLive(_24)
+    BeginBorrow(b1, _19, peek)
+    _24 = copy ((_19 as Err).0)
+    StorageLive(_25)
+    _25 = call builtin interp@(string, BadInput)(const "err " @guaranteed, copy _24 @guaranteed)
+    StorageLive(_26)
+    _26 = call builtin println@(string)(copy _25 @guaranteed)
+    EndBorrow(b1)
+    StorageDead(_26)
+    Drop(_25)
+    StorageDead(_25)
+    StorageDead(_24)
+    goto -> bb6
+
+  bb6:
+    Drop(_19)
+    StorageDead(_19)
+    StorageLive(_27)
+    _27 = call builtin maybe.is_some(copy _9 @guaranteed)
+    StorageLive(_28)
+    _28 = call builtin println@(bool)(copy _27 @guaranteed)
+    StorageDead(_28)
+    StorageDead(_27)
+    _0 = const 0_i32
+    Drop(_10)
+    StorageDead(_10)
+    Drop(_9)
+    StorageDead(_9)
+    return
+}

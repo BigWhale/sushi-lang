@@ -34,7 +34,7 @@ from sushi_lang.semantics.slir import terminators as tm
 from sushi_lang.semantics.slir.drops import FlowState
 from sushi_lang.semantics.slir.function import STAGE
 from sushi_lang.semantics.slir.ids import BlockId, LocalId
-from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type
+from sushi_lang.semantics.typesys import BuiltinType, EnumType, Type, deref_type
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.slir.lower import Arrival, Block, Lowering
@@ -454,7 +454,11 @@ def try_(low: Lowering, node: e.Try) -> Value:
     the value; each store moves the temporary. A `??` that calls a declared conversion
     stops (`slir, conversion`). A `??` over a borrowed owning wrapper (a `reject` row at its
     operand) takes nothing: it switches on the wrapper where it is, the `Err` block copies the
-    error, which is plain, and the payload is a view of the wrapper (ir.md 8.9)."""
+    error, which is plain, and the payload is a view of the wrapper. A `??` over
+    `m.or_err(nom e)` with a borrowed `Maybe` (a `reject` row at the receiver) is ONE shape
+    with no call and no `Result` value: it switches on the `Maybe` where it is, the `None`
+    block builds `Err(e)` with the move of `e`, and the payload is a view of the `Maybe`
+    (ir.md 8.9)."""
     facts = low.typeck.try_facts_of(node.shir_id)
     choice = low.typeck.conversion_of(node.shir_id)
     if isinstance(choice, Conversion):
@@ -464,7 +468,16 @@ def try_(low: Lowering, node: e.Try) -> Value:
                                 detail="a ?? with no facts reached SLIR")
     ty = low.type_of(node.inner)
     (ok_tag, ok), (err_tag, err) = _arms(ty, facts.success_tag, node.loc)
-    wrapper, borrowed = views.wrapper(low, node.inner)
+    error_variant = err
+    through = views.read_through(low, node.inner)
+    if through is not None:
+        wrapper, error = through
+        (ok_tag, ok), (err_tag, _none) = _maybe_arms(low.type_of(views.receiver_of(
+            low, node.inner)), node.loc)
+        borrowed = True
+    else:
+        wrapper, borrowed = views.wrapper(low, node.inner)
+        error = (p.Copy if borrowed else p.Move)(p.Field(p.Downcast(wrapper, err), 0))
     take = p.Copy if borrowed else p.Move
     tag = low.new_local(BuiltinType.I32, None, None)
     low.emit([st.Assign(p.Local(tag), r.Discriminant(wrapper), node.loc)])
@@ -473,12 +486,21 @@ def try_(low: Lowering, node: e.Try) -> Value:
     low.jump(tm.SwitchInt(p.Copy(p.Local(tag)), targets, None, node.loc))
     at_switch = low.placement.state()
     low.block = err_block
-    payload = take(p.Field(p.Downcast(wrapper, err), 0))
-    low.finish(r.Aggregate(r.AggVariant(facts.returns, err), (payload,)), node.loc)
+    low.finish(r.Aggregate(r.AggVariant(facts.returns, error_variant), (error,)), node.loc)
     low.placement.restore(at_switch)
     low.block = ok_block
     value = r.Use(take(p.Field(p.Downcast(wrapper, ok), 0)))
     return views.view_of(value, value.operand) if borrowed else value
+
+
+def _maybe_arms(ty: Type, span: Span) -> tuple[tuple[int, str], tuple[int, str]]:
+    """The tag and the name of the `Some` variant and of the `None` variant of a `Maybe`."""
+    maybe = deref_type(ty)
+    some = maybe.get_variant_index("Some") if isinstance(maybe, EnumType) else None
+    if not isinstance(maybe, EnumType) or some is None or len(maybe.variants) != 2:
+        er.raise_internal_error("CE0000", span=span,
+                                detail="a read-through or_err over no Maybe reached SLIR")
+    return (some, "Some"), (1 - some, maybe.variants[1 - some].name)
 
 
 def _arms(ty: Type, success: int, span: Span) -> tuple[tuple[int, str], tuple[int, str]]:

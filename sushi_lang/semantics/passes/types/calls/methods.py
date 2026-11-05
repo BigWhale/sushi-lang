@@ -1188,81 +1188,27 @@ def _validate_string_family(validator: 'TypeValidator', call: MethodCall,
 @METHOD_TYPE_REGISTRY.validator(RESULT_FAMILY)
 def _validate_result_family(validator: 'TypeValidator', call: MethodCall,
                             receiver_type) -> None:
-    """A method with no signature row checks only its count, read before this hook runs."""
-    from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES
-    signature = RESULT_METHOD_SIGNATURES.get(call.method)
-    if signature is not None:
-        _validate_builtin_signature(validator, call, receiver_type, signature)
+    """The SHIR arm of the family checks the call (`visit/calls.py:_check_result_method`)."""
 
 
 @METHOD_TYPE_REGISTRY.validator(MAYBE_FAMILY)
 def _validate_maybe_family(validator: 'TypeValidator', call: MethodCall,
                            receiver_type) -> None:
-    """A method with no signature row checks only its count, read before this hook runs."""
-    from sushi_lang.semantics.generics.maybe import MAYBE_METHOD_SIGNATURES
-    signature = MAYBE_METHOD_SIGNATURES.get(call.method)
-    if signature is not None:
-        _validate_builtin_signature(validator, call, receiver_type, signature)
-
-
-def _validate_builtin_signature(validator: 'TypeValidator', call: MethodCall,
-                                receiver_type, signature) -> None:
-    """A built-in method with a method-level type parameter (design 8.3).
-
-    It takes the steps of a user method: the receiver mode and the parameter modes are
-    stamped for the borrow pass and the backend, and the arguments go through the one
-    argument check. Between the two, the arguments solve the method-level type
-    parameters, and E3 judges each one in an `E` position at this call, which is the
-    instance.
-    """
-    from sushi_lang.semantics.passes.types.calls.builtin_signature import (
-        instance_return_type)
-
-    # The borrow pass and the backend read the receiver type from this stamp.
-    call.resolved_enum_type = receiver_type
-    solved: list = []
-
-    def solve():
-        instance = _solve_builtin_instance(validator, call, receiver_type, signature)
-        if instance is not None:
-            solved.append(instance)
-        return instance
-
-    _run_method_steps(validator, call, receiver_type, signature, stop_on_arity=False,
-                      solve=solve)
-    if solved:
-        call.inferred_return_type = instance_return_type(validator, solved[0])
+    """The SHIR arm of the family checks the call (`visit/calls.py:_check_maybe_method`)."""
 
 
 def _solve_builtin_instance(validator: 'TypeValidator', call: MethodCall, receiver_type,
                             signature):
-    """The instance this call names, or None after the fault is reported.
-
-    A type parameter the arguments leave unsolved is CE2063; a solved one in an `E`
-    position that is not an error type is refused by E3.
-    """
-    from sushi_lang.semantics.error_types import reject_non_error_type
+    """The instance this call names, or None after the fault is reported
+    (`settle_builtin_instance`)."""
+    from sushi_lang.semantics.generics.pack_inference import infer_call_arg_type
     from sushi_lang.semantics.passes.types.calls.builtin_signature import (
-        solve_builtin_call)
+        settle_builtin_instance)
 
-    instance, unsolved = solve_builtin_call(validator, signature, receiver_type, call)
-    if instance is None:
-        if unsolved:
-            names = ", ".join(f"'{n}'" for n in unsolved)
-            er.emit_with(validator.reporter, er.ERR.CE2063, call.loc,
-                         plural="s" if len(unsolved) > 1 else "",
-                         names=names, method=call.method) \
-                .help(_unsolved_margs_help(call.args, len(unsolved))).emit()
-        return None
-
-    structs = validator.struct_table.by_name
-    enums = validator.enum_table.by_name
-    refused = [name for name in signature.error_parameters
-               if reject_non_error_type(validator.reporter, instance.substitution[name],
-                                        call.loc, structs, enums)]
-    if refused:
-        return None
-    return instance
+    return settle_builtin_instance(
+        validator, signature, receiver_type,
+        [infer_call_arg_type(validator, arg) for arg in call.args], call.loc, call.method,
+        lambda count: _unsolved_margs_help(call.args, count))
 
 
 @METHOD_TYPE_REGISTRY.validator("own")

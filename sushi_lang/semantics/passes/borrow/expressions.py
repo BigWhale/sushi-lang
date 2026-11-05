@@ -188,7 +188,8 @@ def stop_at_a_field_take(checker: 'BorrowChecker', arg: e.Arg) -> None:
 def check_try(checker: 'BorrowChecker', node: e.Try) -> None:
     """`r??` is a consuming position of its own: an owned wrapper is spent here (#548), and
     a use of `r` after it is CE2405. Its error path returns, so it is an exit of each block
-    (`flow.record_exit`)."""
+    (`flow.record_exit`). Its operand is the one position of a read-through `or_err`."""
+    checker.try_operands.add(node.inner.shir_id)
     arms.check(checker, node.inner)
     unwrap_place(checker, node)
     record_exit(checker)

@@ -96,6 +96,7 @@ from sushi_lang.semantics.passes.types.visit.hashmap_methods import check_hashma
 from sushi_lang.semantics.passes.types.visit.list_methods import check_list_method
 from sushi_lang.semantics.passes.types.visit.own_methods import check_own_method
 from sushi_lang.semantics.passes.types.visit.results import reject_unknown_variant
+from sushi_lang.semantics.passes.types.visit.signature_methods import check_signature_method
 from sushi_lang.semantics.shir import dispatch, exprs as e
 from sushi_lang.semantics.shir.callee import (
     Builtin, BuiltinStatic, Free, Intrinsic, Method, Static)
@@ -422,10 +423,11 @@ def _check_builtin_arguments(validator: TypeValidator, node: e.Call, name: str,
 
 def _check_result_method(validator: TypeValidator, node: e.Call, receiver: Type,
                          name: str, family: MethodFamily) -> Optional[Type]:
-    """A method of `Result@(T, E)`. A method with a signature row (`map_err`) stops the
-    walk with the label of the family, as it is not typed yet."""
-    if name in RESULT_METHOD_SIGNATURES:
-        dispatch.stop_at_family(visit.STAGE, node, family.name)
+    """A method of `Result@(T, E)`. A method with a signature row (`map_err`) has the arm
+    of `visit/signature_methods.py`."""
+    signature = RESULT_METHOD_SIGNATURES.get(name)
+    if signature is not None:
+        return check_signature_method(validator, node, receiver, name, family, signature)
     row = result_method_row(receiver, name, validator.enum_table,
                             validator.struct_table.by_name)
     return _check_wrapper_method(validator, node, receiver, name, family, row)
@@ -433,10 +435,11 @@ def _check_result_method(validator: TypeValidator, node: e.Call, receiver: Type,
 
 def _check_maybe_method(validator: TypeValidator, node: e.Call, receiver: Type,
                         name: str, family: MethodFamily) -> Optional[Type]:
-    """A method of `Maybe@(T)`. A method with a signature row (`or_err`) stops the walk
-    with the label of the family, as it is not typed yet."""
-    if name in MAYBE_METHOD_SIGNATURES:
-        dispatch.stop_at_family(visit.STAGE, node, family.name)
+    """A method of `Maybe@(T)`. A method with a signature row (`or_err`) has the arm of
+    `visit/signature_methods.py`."""
+    signature = MAYBE_METHOD_SIGNATURES.get(name)
+    if signature is not None:
+        return check_signature_method(validator, node, receiver, name, family, signature)
     row = maybe_method_row(maybe_payload(receiver), name)
     return _check_wrapper_method(validator, node, receiver, name, family, row)
 

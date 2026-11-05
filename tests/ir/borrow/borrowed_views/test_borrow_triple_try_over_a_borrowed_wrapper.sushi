@@ -1,7 +1,8 @@
-# EXPECT_ERROR_CODES_EXACT: CE0155
-#
-# Three `??` levels over a borrowed wrapper are a correct program too. The program stops
-# with the stop code of the stages after `borrow`, and never with CE0157.
+# Three `??` levels over a borrowed wrapper are a correct program too. Each level
+# reads the wrapper through, and the payload is a view of it.
+# EXPECT_STDOUT_EXACT: "Mostly Harmless\n"
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
 
 fn pick(Result@(Result@(Result@(string, StdError), StdError), StdError) r) i32 | StdError:
     let string got = r??????
