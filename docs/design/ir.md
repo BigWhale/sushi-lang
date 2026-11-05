@@ -1107,6 +1107,13 @@ of `or_err` over a borrowed `Maybe` is a rule of `borrow` (8.3). The `array` fam
 arm too (see "An array" above). The hash of an array is the `array_hash` family, which a
 `Hashable` implementation overrides, and it stops the walk (`Call(method array_hash)`).
 
+**A reference `let`.** The local of `let peek T x = <place>` and of `let poke T x = <place>`
+gets the type of its place (8.2), and the `Borrow` value is checked at that type: a place
+of another type is [CE2002](../error-catalog.md#ce2002). A value that is no place (a call,
+a literal, a slice, a `get()` of no `Own`) is [CE2404](../error-catalog.md#ce2404). A place
+is a local, a `var` or a constant, a field or an element of one, or the pointee of an `Own`
+(`o.get()`, `places.is_get_call`, which `typecheck`, `borrow` and SLIR lowering read).
+
 **An extension method and a static.** A type is PLAIN when it is a primitive, or a struct
 or an enum that is no instance of a generic type and whose name the unit did not lose (D2,
 `_is_plain`, `passes/types/visit/calls.py`). The extension rung of the ladder on a plain
@@ -1145,8 +1152,22 @@ convention of `argument_conventions` (8.3). These calls still stop the walk with
 label: a perk method, a receiver that is not plain and a static of a type that is not plain
 (an instance of a generic type, an iterator, a `Result`, a `Maybe`, a type parameter; a
 method of an instance of a generic type, `extend Maybe@(i32)` included, is the copy of a
-template), a method with a method-level type parameter, a method with a `peek` return, and
-a call through a field of a function type that no method of the struct names.
+template), a method with a method-level type parameter, and a call through a field of a
+function type that no method of the struct names.
+
+**A `peek` return.** A free function, an extension method and a static with a `peek T`
+return (`borrow-model.md` S10h) are typed as any other callee of their kind: the type of
+the call is `T`, or the `Result` of `peek T | E`. The arm also writes the source row of the
+call (`record_call_sources`, `passes/types/borrowed_returns.py`): the position of each
+argument in the source set of the declaration, and -1 for the receiver. The source set is
+the one answer of `semantics/borrowed_return.py` (`sources_in`): a borrowed `self`, and
+each parameter with no `nom` whose type owns a resource, with each type parameter as a
+type that owns. The faults of a declaration are reported at the declaration, one time for a
+template: an empty source set is [CE2438](../error-catalog.md#ce2438), and an `E` that owns
+a resource is [CE2442](../error-catalog.md#ce2442). The AST builder refuses a `peek` return
+on a lambda and on a perk method (CE2439) and on a `nom self` method (CE2440). A function
+with a `peek` return named as a value is [CE2441](../error-catalog.md#ce2441); a function
+value stops the walk (`typecheck, GlobalRef`), so that check comes with the function values.
 
 **A stdlib function.** A bare name that no function of the unit's scope takes is the
 function of a registry stdlib module that the unit imports, when one has it
@@ -2108,8 +2129,10 @@ whole, so a path that takes one and leaves another owning position (a bare binde
 reference binder, an `Own(...)` or a `_`) is [CE2433](../error-catalog.md#ce2433) at the
 position that it leaves, with a note at the taken binder. Each part of an in-place tuple
 literal is a scrutinee of its own for both rules. `Own(nom x)` is refused by the AST
-builder ([CE2434](../error-catalog.md#ce2434)). A `Match` with a `peek` or `poke` binder
-of a variant payload or of a tuple part stops the walk (`borrow, Match`). A tuple
+builder ([CE2434](../error-catalog.md#ce2434)). A `peek` or `poke` binder of a variant
+payload or of a tuple part is a reference binding of its payload place (see "A reference in
+`borrow`" below). The owners that the binders of an arm freeze are released at the end of
+the arm, so a second match on the same owner is no second borrow. A tuple
 literal that owns, as the scrutinee, builds NO tuple (ruling 3 of `tuples.md`): each part
 is a root of its own, which the match reads; a part is a consuming use only when the match
 consumes (`match nom (a, b):` takes each part), and a binder of a part views that part, so
@@ -2209,6 +2232,47 @@ as an element of a local. A write of a field or of an element of a `var` passes 
 a write: the `var` is the root of the place, so no call boundary cuts it
 (`reads.chain_call_boundary`). A plain `var` has no `let`-borrow. The pass checks a `var`
 that owns too, and SLIR lowering stops at it (group D1).
+
+**A reference in `borrow`.** A reference `let` and a `peek` or `poke` binder of a pattern
+point INTO a place (`passes/borrow/references.py`). The state of the local keeps the
+reference type: a write through a `peek` one is [CE2408](../error-catalog.md#ce2408), and a
+consuming use of either is [CE2411](../error-catalog.md#ce2411). The place is read, and a
+constant root goes to `reject_borrow_of_constant` (a `peek` binds, a `poke` is
+[CE2400](../error-catalog.md#ce2400)). The gates come before the freeze of the owner: a
+`poke` through a `peek` root is CE2408, with a note at the root; a `poke` passes the write
+gate of the root (`reject_readonly_write`, with the receiver `o` for `o.get()`); a second
+reference of one owner is [CE2403](../error-catalog.md#ce2403) or
+[CE2407](../error-catalog.md#ce2407), with a note at the other binding; and a `poke`
+changes each let-borrow of the owner (CE2412 at a later use of it). Then the owner is frozen
+(`record_owners`), and the local has a region row to its last use. A binder of a match that
+only borrows a root that is no place is CE2404: a root that a name keeps through a `??`, a
+get-out or an `or_err` is borrowed. The binders of one pattern are siblings, and their
+region is over the arm. A `poke` of a `var` changes the `var` for each let-borrow of it. An
+extension receiver is read before the arguments and takes its borrow after them, so a
+`poke` receiver beside a `peek` argument of the same owner is CE2407 at the receiver, with
+the note at the argument. A `while` loop reads each local of its condition again at the
+back edge of the round that reports, so a view that the condition reads and whose owner
+the body changes is CE2412 there.
+
+**A `peek` return in `borrow`.** The declaration half reads the borrowed return of the body
+and its source set by local (`passes/borrow/borrowed_returns.py`). A `return` in the body
+hands a VIEW to the caller: the value, or the payload of `Result.Ok(...)`, must be a borrow
+whose owner is a source, else it is [CE2443](../error-catalog.md#ce2443) with a note at the
+`peek` of the declaration. The owner of a place is its root; a `let` of a view is judged by
+its owners, and the answer of another call with a `peek` return by the owners of its
+sources. The refused shapes are a borrow of a local, of a parameter that is not a source, of
+a temporary, and an owned value. The value gets an `ADOPT` row, and nothing moves.
+`Result.Err(...)` is an ordinary return. A monomorphized copy of a template does not judge a
+value that owns nothing: the template check judged it. At a CALL, the answer is a view:
+its provenance is `BORROWED`, a `??` over it reads through, and a position that takes it
+over is CE2411. A `let` of it is a let-borrow of the owner of each source argument (the
+owners of a source that is the answer of a call with a `peek` return are the owners of its
+sources; a literal has none), with a region row. A `let` of a plain answer is a copy, and it
+still freezes those owners. A bare binder of a match over the answer views the same owners,
+and a `nom` binder there is CE2432. A source argument that is a temporary is legal in one
+statement, and a `let` of the answer is [CE2444](../error-catalog.md#ce2444), with a note at
+the temporary. A call with a `peek` return that answers an iterator makes a lent iterator;
+the lowering of a lent iterator adds it.
 
 **A destructure in `borrow`.** The value is checked first, as a consuming use. A value of
 plain elements is a copy (`ADOPT`). A value that owns is OWNED or BORROWED, by its
@@ -3151,7 +3215,7 @@ backstop of the checker, as on the AST backend.
 | a reference `let` (an `Assign` with `is_init` whose value is a `Borrow`, 7.5) | an address local (8.2): `_5 = ref poke <place>` (or `ref peek`), after a `BeginBorrow` of the root of the place with the same mode, to the last uses of its region row (7.9). A constant is first copied into a hidden local of the block that drops nothing, and the `Ref` reads that local |
 | a `peek` or `poke` binder of a pattern, `Own(poke x)` included | an address local of the scope of the arm, written with the `Ref` of its payload place (for a variant, `Field(Downcast(place, variant), index)`; for the pointee of an `Own(...)`, `Deref(Field(place, 0))`), in a region over the root of that place, with the mode of the `Ref`, to the last uses of its region row (7.9) |
 | `Return` in a function with a `peek` return | `_0 = copy <place>`: the value goes to the caller as it is (`borrow-model.md` S10h): it crosses by value, as a plain borrow does (the 16-byte descriptor of a `string` or a `T[]`), and not as an address. The callee never drops `_0` |
-| a call of a function or a method with a `peek` return | the destination of the `Call` is a view local (8.2), in a region over the owner of each source argument (7.3, 7.9). One rule serves this answer and the view answer of a container call: the owner set has two sources |
+| a call of a function or a method with a `peek` return | the destination of the `Call` is a view local (8.2), in a region over the owner of each source argument (7.3, 7.9): a `let` reads the owners of its region row, and a temporary the root of the operand of each source argument. A source that is a constant has no owner, so a `let` of the answer of a call whose sources are literals has no `BeginBorrow`. One rule serves this answer and the view answer of a container call: the owner set has two sources. A `peek` return of a plain type answers an ordinary local |
 | a call of a method of `answers_view` (`get`, `first`, `last` of a `List`; `get` of a `HashMap` or an `Own`) | a `Call` of `Builtin(BuiltinMethod)`; its destination is a view local (8.2) in a region over the owner of the receiver (7.9). When the element is plain, the destination is an ordinary local, and the answer is a plain copy |
 | `Match` on an enum | when each arm is `_`, or a variant (or an `Or` of variants) whose items are binders or `_`: ONE `Discriminant` of the scrutinee into a local and ONE `SwitchInt` on it. Each variant of an arm is one case of that arm, at its tag, and `otherwise` is the `_` arm, or `None` when the arms cover the enum. Else a chain of tests in source order (see below). A binder reads its payload value through `Downcast` + `Field`. An `Own(...)` item tests nothing: its pointee is at `Deref(Field(place, 0))`, and a test or a binder inside it reads that place |
 | `Match` on an integer | with only literal arms: ONE `SwitchInt` on the value. Each literal alternative of an arm is one case of that arm, at the value that the type of the scrutinee reads (`semantics/integer_patterns.py`: lowering calls `literal_value` and `pattern_interval` over the written constant and the scrutinee type, and reads no row), and `otherwise` is the `_` arm, or `None` when the arms cover the type. With a range arm: a chain of tests in source order (see below). A literal is a `SwitchInt` on the value with one case; a range is two compares, `>=` its low bound and `<=` its high bound, each into a `bool` local and a `SwitchInt` on it |

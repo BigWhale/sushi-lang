@@ -353,8 +353,9 @@ escape.
 
 ### 8.1 How the binding is typed
 
-`register_pattern_bindings` (`semantics/passes/borrow/bindings.py`) stamps each `match` binding's
-`var_type` from the variant the typecheck pass resolved, and the `foreach` binding is stamped from
+The borrow pass gives each `match` binding (`bindings.declare_bare_binders`,
+`references.declare_reference_binders`) the type that the typecheck pass resolved for its
+local, and the `foreach` binding is stamped from
 the container's element type, so `owns_resource` has a type to answer on. A write through a
 binding is **[CE2414](../error-catalog.md#ce2414)**, and a consuming use of an owning binding is **[CE2411](../error-catalog.md#ce2411)**.
 

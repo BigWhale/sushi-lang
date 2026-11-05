@@ -1381,7 +1381,7 @@ let poke i32 r = x       # a pointer into x's slot, block-scoped
 r := r + 1               # x is 43
 ```
 
-`bind_let_reference` (`passes/borrow/bindings.py`) registers the binding with its full
+`check_let_reference` (`passes/borrow/references.py`) registers the binding with its full
 `ReferenceType`, freezes the owner ([CE2412](../error-catalog.md#ce2412) on a later mutation), and refuses a second
 `poke` of the same owner ([CE2403](../error-catalog.md#ce2403)) or a `peek`/`poke` mix ([CE2407](../error-catalog.md#ce2407)). A write through a
 `peek` binding is [CE2408](../error-catalog.md#ce2408).

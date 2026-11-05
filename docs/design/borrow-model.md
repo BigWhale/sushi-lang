@@ -556,8 +556,8 @@ borrowed wrapper (§10d). `longer(a, b)` freezes `a` and `b` even when the funct
 only from `a`: to avoid that, the caller gives `b` with `nom`, or the function takes a plain
 value. A plain answer (an `i32` from a template at `T = i32`) is a copy, and it still freezes
 the owners, because the source set is the same at every type argument. The typecheck pass
-stamps where the sources stand on the call (`callee_borrows`), and the borrow pass reads the
-owners there.
+writes where the sources stand in the call (the source row of `TypeckResults`,
+`docs/design/ir.md` 7.3), and the borrow pass reads the owners there.
 
 **A temporary source.** When an argument in the source set is a temporary (a call result, a
 `from([...])`), the answer is legal inside that one statement: an argument, the iterable of a

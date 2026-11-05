@@ -99,8 +99,8 @@ binding or out of a `peek` owner; [CE2411](../error-catalog.md#ce2411) on a cons
 as in mechanism 3, and the binding is released at block exit. Two rules are its own:
 one `poke` binding of an owner at a time (**[CE2403](../error-catalog.md#ce2403)**), and a `peek` beside a live `poke`,
 or the reverse, is **[CE2407](../error-catalog.md#ce2407)** — the two codes `acquire_borrow` gives an argument list,
-here at the binding instead of the statement. `bind_let_reference` in
-`passes/borrow/bindings.py` is the one seam.
+here at the binding instead of the statement. `check_let_reference` in
+`passes/borrow/references.py` is the one seam.
 
 **4 — the pattern value binding** is compiled as a copy of the payload, so a write through
 it could never reach the owner. The copy is SHALLOW: it holds the owner's descriptor and
