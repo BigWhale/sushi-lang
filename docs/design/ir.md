@@ -3653,7 +3653,10 @@ Runs after lowering, before the backend. It checks:
   `peek` return is the exception: it is written one time on each path to a `return` (the
   rule of the written return slot). A view local of an
   owning type is never the place of a `Drop` or a `DropIfSet`, never `Move`d, and never the
-  operand of an `Owned` argument. Its owners stand in a region (8.6) at each read of it
+  operand of an `Owned` argument. Its owners stand in a region (8.6) at each read of it.
+  The regions of a view local are the `BeginBorrow`s that stand right before the statement
+  that writes it, in the same block: lowering emits them there. A view local with no such
+  `BeginBorrow` reads a value that no local owns, and has no region
 - an address local (8.2): ONE `Ref` writes it, and a `Ref` writes a local, never a part of
   one. It is never the place of a `DropIfSet` as a whole and never `Move`d, at its root or
   at a part; the write of an owning part drops the old part through the address (8.10,
@@ -3683,7 +3686,8 @@ checks of an array value (the parts of each run, and no `Move` of a repeated val
 length and a slice, and of the `Drop` of a part (an owning type, off a local that is no
 view; the dataflow reads its root). `verify_flow.py` holds the dataflow of the moves and the
 drops. `verify_regions.py` holds the rules of a view local and of a borrow region (rules
-`a view local`, `a borrow region` and `no change of an owner in its region`): a dataflow
+`a view local`, `a borrow region` and `no change of an owner in its region`; the read of a
+view local outside its regions is `a view local`): a dataflow
 gives each block the set of open regions at its top, every path into a block brings the
 same set, and a `Trap` closes nothing; a write, a `Move`, a drop or an `Inout` argument of
 an owner counts at its root and at each projection of it. It runs after the structure check
