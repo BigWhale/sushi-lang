@@ -393,7 +393,8 @@ def emit_declared_drop(codegen: LLVMCodegen, value_ptr: ir.Value,
     The receiver is `poke self`, so it arrives by pointer and `value_ptr` is already
     the right shape. The method was emitted through the extension path, so its symbol
     is the extension symbol -- one authority for the name, shared with the declaration
-    and every ordinary call site.
+    and every ordinary call site. A type of the `Drop` set with no declared `drop` symbol
+    is an internal error: a silent return would leak the resource with no diagnostic.
     """
     from sushi_lang.backend.ownership import drops_of
 
@@ -401,10 +402,13 @@ def emit_declared_drop(codegen: LLVMCodegen, value_ptr: ir.Value,
     if name is None or name not in drops_of(codegen):
         return
 
+    from sushi_lang.internals.errors import raise_internal_error
     from sushi_lang.semantics.generics.name_mangling import extension_symbol
-    fn = codegen.funcs.lookup(extension_symbol(name, "drop"), codegen.emitting_unit)
+    symbol = extension_symbol(name, "drop")
+    fn = codegen.funcs.lookup(symbol, codegen.emitting_unit)
     if fn is None:
-        return
+        raise_internal_error("CE0000", detail=f"the type '{name}' implements Drop, and no "
+                                              f"function '{symbol}' is declared")
     codegen.builder.call(fn, [value_ptr])
 
 
