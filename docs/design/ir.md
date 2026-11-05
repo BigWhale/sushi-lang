@@ -3317,8 +3317,9 @@ literal), from the write of the binder to the last uses of the region row of `bo
 a binder with no last use has no region. A `nom` binder of an owning payload is an owning
 local of the scope of the arm, written with the `Move` of its place, and its flag follows
 its write; the arm takes the variant whole, so its root (a temporary of the match statement)
-is moved one time for all the `nom` binders of the path (8.13). A `nom` binder of a plain
-payload is a `Copy`. An arm that takes nothing out of a temporary that another arm takes
+is moved one time for all the `nom` binders of the path (8.13). A path writes its other
+binders first and its `nom` binders last, so no binder reads a part of the root after the
+take (8.13). A `nom` binder of a plain payload is a `Copy`. An arm that takes nothing out of a temporary that another arm takes
 drops that temporary at its end, after the exit of its scope (`drop_on_path`), so the arms
 that reach the join leave it moved; an arm that leaves by a `return`, a `break` or a
 `continue` drops it by its state. A view local has ONE write, and an owning local of a
