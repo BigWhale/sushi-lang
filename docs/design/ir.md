@@ -2080,10 +2080,19 @@ read first. The pass takes no borrow for it. An `Inout` receiver is written afte
 arguments, through the one gate of a write and `check_owner_not_borrowed`, and a bulk copy
 that reads the array that it grows is [CE2430](../error-catalog.md#ce2430): the check sees
 through a slice to its array. A `destroy()` call as a statement marks the local destroyed,
-and a later use is [CE2406](../error-catalog.md#ce2406). An array whose element owns stops
-the walk (`borrow, ArrayInit owning`, `Index owning`, `Slice owning`, `Call(method array)
-owning`), and so does `iter()` on an array (`Call(method array) iterator`), which makes a
-lent iterator.
+and a later use is [CE2406](../error-catalog.md#ce2406). An array whose element owns has
+the same arms. A `Single` element moves a local and adopts a new value, and an element or a
+field of another owner there is [CE2411](../error-catalog.md#ce2411). A repeated value is a
+borrow, so a later use of it is legal. An element of an owning array is a read through its
+root, as a slice is: a position that takes it refuses it (CE2411), a `let` of it is a
+`let`-borrow of the root with its region row, and a change of the root while the binding
+lives is [CE2412](../error-catalog.md#ce2412). The element of `push` and the value of
+`insert` are consuming uses (`argument_conventions`). `get`, `first` and `last` of an array
+answer a view of the receiver (`answers_view`), as those of a List do. A refill (`fill`)
+whose argument reads a slot of the owning array that it refills is CE2430
+(`reject_refill_from_own_slot`): an index and a get-out read as any slot, so `xs.fill(xs[0])`
+is refused. `iter()` on an array stops the walk (`Call(method array) iterator`), because it
+makes a lent iterator.
 
 **A `var` in `borrow`.** A `var` is storage that the program keeps for its whole run, with
 an address and no owner that can hand its value away (`unit-storage.md`). A read of a
@@ -2313,9 +2322,11 @@ tuple in `lower_aggregate.py`, the arms of an array in `lower_arrays.py`, the ar
 call and of an interpolation in `lower_calls.py`, a value before its place in
 `lower_values.py`, the view locals and their regions in `lower_views.py` and the facts of a
 declaration in `lower_signature.py`), the drop
-placement of 8.10 (`drops.py`, the one module that builds a `Drop` or a `DropIfSet`; gate:
+placement of 8.10 (`drops.py`, the one module that builds a `Drop` or a `DropIfSet`, the
+drop of the old element of an element write included; gate:
 `tests/unit/test_slir_drop_placement_is_one.py`), the verifier of 8.13 (`verify.py`,
-`verify_calls.py`, `verify_flow.py`, `verify_regions.py` and `verify_rules.py`) and the
+`verify_calls.py`, `verify_arrays.py`, `verify_flow.py`, `verify_regions.py` and
+`verify_rules.py`) and the
 printer of `--dump-slir`
 (`printer.py`). Every class is a slotted dataclass, and every statement and terminator has
 a required `span` (gate: `tests/unit/test_slir_nodes_are_slotted.py`). The borrow pass
@@ -2782,7 +2793,12 @@ ADDRESS of its receiver instead, for an `Inout` receiver and a `Guaranteed` one 
 storage of the place, or a new slot that holds a constant (`operand_address`). It reads
 the length, the capacity and the data of the array when it runs, after the last argument,
 so a receiver is read after an argument that changes it, and an element receiver is
-evaluated one time (11, rule 9). Four methods are the exceptions, and each lowers to no
+evaluated one time (11, rule 9). `get`, `first` and `last` of an array answer a view
+(`answers_view`): over an owning element the answer goes into a view local of the receiver,
+as for a List. `pop` and `remove` move the element out into a fresh `Maybe`, which owns it.
+The bulk copies (`extend`, `extend_range`, `s`, `ss`), `fill` and `resize` borrow their
+source and write a copy of an owning element into each slot over `copy_out`; `truncate` and
+`clear` drop each slot that they remove. Four methods are the exceptions, and each lowers to no
 call: `expect`, `realise` and `err` of a `Result` or a `Maybe` lower to a switch on the tag,
 as an `assert` does (8.9), and `clone` of any type lowers to the rvalue `Clone` (8.7).
 
@@ -2972,9 +2988,9 @@ backstop of the checker, as on the AST backend.
 | `Range` as a value | an owned iterator over the range formula |
 | `Interp(parts)` | ONE `Builtin(Intrinsic("interp"), types)` call into a fresh owning local, with one `Guaranteed` operand for each part in order (an empty text part gives none). The backend expands it with the string-builder emitters (Q7), so the builder state stays out of SLIR |
 | `Lambda` | one `SlirFunction` cut from the body, and an `Aggregate(Closure, [FnRef, env...])` built from `LiftResults` (Q8); each captured operand is `Copy` or `Move` by `OwnershipResults` |
-| `ArrayInit(runs)` | each value in the written order, as for a `StructInit` (a place that a later call can change goes into a temporary first), then ONE `Aggregate(AggArray)` with its runs (8.7): a run-time count is a part; a range with two constant bounds takes the count and the first value of `plan_range`. The emitter fills the slots: unrolled stores, a constant walk, a run-time walk, one `memset` for a repeated constant byte, and one constant for a `T[N]` of constant parts. A count below zero fills nothing (`semantics/slir/lower_arrays.py`, `backend/types/arrays/runs.py`) |
-| `Index` read | the index into a local of the statement, `Len` (or the constant `N` of a `T[N]`), the `u32` casts of the index and of the length, `<`, `SwitchInt`, `Trap("RE2020", [index, length])` on the failing edge; then the place `Index`. No check when `unchecked`, nor for a constant index of a `T[N]` that is in range |
-| `Index` write (`arr[i] := v`) | the value first (a value that is no constant goes into a temporary), then the index and the same bounds check, then the store into the place `Index` |
+| `ArrayInit(runs)` | each value in the written order, as for a `StructInit` (a place that a later call can change goes into a temporary first), then ONE `Aggregate(AggArray)` with its runs (8.7): a run-time count is a part; a range with two constant bounds takes the count and the first value of `plan_range`. The emitter fills the slots: unrolled stores, a constant walk, a run-time walk, one `memset` for a repeated constant byte, and one constant for a `T[N]` of constant parts. A count below zero fills nothing (`semantics/slir/lower_arrays.py`, `backend/types/arrays/runs.py`). Over an owning element, a `Single` value is a `Move` or a constant, and a repeated value is a `Copy`: a place of an owning value stays where it is (a temporary would drop a copy that it does not own), and a new value is a temporary of the statement, which drops it at its end. The emitter writes a copy of the repeated value into each slot over `copy_out` |
+| `Index` read | the index into a local of the statement, `Len` (or the constant `N` of a `T[N]`), the `u32` casts of the index and of the length, `<`, `SwitchInt`, `Trap("RE2020", [index, length])` on the failing edge; then the place `Index`. No check when `unchecked`, nor for a constant index of a `T[N]` that is in range. An owning element in a `let` is a view local (8.2) in a region over the array; in a borrowed position (a `Guaranteed` argument, a part of an interpolation) it is a `Copy` of the place |
+| `Index` write (`arr[i] := v`) | the value first (a value that is no constant goes into a temporary), then the index and the same bounds check, then the store into the place `Index`. Over an owning element, rule 6 of 8.10: then `Drop(Index(place, i))` of the old element before the store, which moves the temporary (`element_write`, the drop from `drops.py`) |
 | `Slice` | the bounds into locals of the statement (an inclusive end plus one), `end <= len` and `start <= end` as `u32` compares, `&`, `SwitchInt`, `Trap("RE2028", [start, end, length])` on the failing edge, then the `Slice` into a view local; never unchecked. A check that the constant bounds prove is left out |
 | a method of an array | a `Call` of `Builtin(BuiltinMethod)`: the receiver first (a `Copy` of its place, a constant, or a temporary of the statement), then each argument with the convention of its row (8.3). The emitter gives the family the address of the receiver (8.6), and one emitter of the family serves a `T[N]` and a `T[]` (`backend/types/arrays/dispatcher.py`) |
 | `Assert` | `SwitchInt(c, [(0, fail_bb)], otherwise: next_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2026", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state of the locals before the failing block. The blocks are made in the order fail, next. A condition local ends at the top of the two blocks, as for an `If` |
@@ -3335,20 +3351,23 @@ Runs after lowering, before the backend. It checks:
   `string`. A conversion of another kind and a `Move` operand are refused
 - every statement and terminator carries a `Span` (G9)
 
-**As built.** The verifier is five modules of `semantics/slir/`. `verify.py` holds the
+**As built.** The verifier is six modules of `semantics/slir/`. `verify.py` holds the
 entry (`SlirVerifier.verify`, `verify_function`) and the structure check, statement by
 statement. `verify_calls.py` holds the checks of a call: the conventions of a `Direct`
 callee (`declared_params`), the conventions of a container static (`argument_conventions`),
 the receiver operand of a built-in method, the conventions of a method of a family of
 `RULED_EFFECT_FAMILIES` (`receiver_convention` and `argument_conventions`), and no copy of
-an owning value other than a `string` into an `Owned` argument. `verify_flow.py` holds the dataflow of the moves and the
+an owning value other than a `string` into an `Owned` argument. `verify_arrays.py` holds the
+checks of an array value (the parts of each run, and no `Move` of a repeated value), of a
+length and a slice, and of the `Drop` of an element (an owning type, off a local; the
+dataflow reads its root). `verify_flow.py` holds the dataflow of the moves and the
 drops. `verify_regions.py` holds the rules of a view local and of a borrow region (rules
 `a view local`, `a borrow region` and `no change of an owner in its region`): a dataflow
 gives each block the set of open regions at its top, every path into a block brings the
 same set, and a `Trap` closes nothing; a write, a `Move`, a drop or an `Inout` argument of
 an owner counts at its root and at each projection of it. It runs after the structure check
 and before the dataflow of the moves and the drops, which does not read a view local.
-`verify_rules.py` holds the names of the rules, which the four others share. The
+`verify_rules.py` holds the names of the rules, which the five others share. The
 SLIR stage gives the verifier each
 function that the lowering finished, on every compile, before the function meets the next
 stage. A failed rule is the internal error CE0158, at the span of the statement, with the
@@ -3380,8 +3399,9 @@ module have a row: the group that first emits
 another `Direct` callee (an extern, a conversion, a function of a library) adds its row,
 with `var_arg` for a variadic extern. The comparison of the declared prefix alone is in the
 code already, for that day. The verifier does not check a shape that no lowering makes yet,
-and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` or a
-`DropIfSet` of a place that is no local.
+and it refuses such a shape with the internal error CE0000 (the growth rule): a `Drop` of a
+place that is no local and no element of a local, and a `DropIfSet` of a place that is no
+local.
 A projection of a `Global` is checked against the type that the `Global` carries. The negative case of each
 rule is a pytest test over a hand-built function (`tests/unit/test_slir_verifier.py`, and
 `tests/unit/test_slir_verify_regions.py` for the views and the regions), because a correct
