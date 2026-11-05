@@ -10,7 +10,7 @@ of every exit: for each local of the scopes that the path leaves, the newest dec
 first, its drop, then the `StorageDead` of its flag, then its own `StorageDead`. A function
 exit then drops each `Owned` parameter that owns. A borrowed parameter never drops
 (rule 5). The old value of a rebind drops when it may be live (rule 6), and the old value
-of an owning element at its write always drops.
+of an owning field or element at its write always drops.
 
 The state of a local is live, moved or unknown. A move marks it moved, and a declaration or
 a rebind marks it live. A join keeps a state that every path gives; a local whose state
@@ -181,9 +181,9 @@ class DropPlacement:
         self._pending.pop(local, None)
         return dropped
 
-    def drop_old_element(self, place: p.Index, span: Span) -> list[st.SlirStatement]:
-        """The drop of the old value at the write of an owning element (rule 6). An element
-        always holds a value, so it always drops; the root keeps its state."""
+    def drop_old_part(self, place: p.Field | p.Index, span: Span) -> list[st.SlirStatement]:
+        """The drop of the old value at the write of an owning field or element (rule 6). A
+        part always holds a value, so it always drops; the root keeps its state."""
         return [st.Drop(place, span)]
 
     def _drop(self, local: LocalId, span: Span) -> list[st.SlirStatement]:

@@ -11,7 +11,9 @@ answers of `typecheck`:
 - each field of a `StructInit`, each payload of an `EnumInit`, each part of a
   `TupleInit`, and the value of each `Single` run of an `ArrayInit` (a repeated value is
   a borrow, and each slot takes its own copy);
-- the scrutinee of a `Match` that consumes (`match nom r:`);
+- the scrutinee of a `Match` that consumes (`match nom r:`); a tuple literal there gives
+  each part, and its parts are no consuming use when the match does not consume: a tuple
+  literal that owns builds no tuple, and each part is a root (ruling 3 of tuples.md);
 - the operand of a `Try`, and the operand of every `Cast`: a conversion takes it as
   `nom self`, and an identity cast moves it (a plain operand gets ADOPT);
 - the iterable of a `Loop` over an iterator value or a `next()` type that does not walk
@@ -101,7 +103,9 @@ def _runs(node: e.ArrayInit, _typeck: TypeckResults,
 
 def _scrutinee(node: s.Match, _typeck: TypeckResults,
                _ownership: OwnershipResults) -> Iterator[e.ShirExpr]:
-    if node.consumes:
+    if node.consumes and isinstance(node.scrutinee, e.TupleInit):
+        yield from node.scrutinee.parts
+    elif node.consumes:
         yield node.scrutinee
 
 
@@ -148,9 +152,12 @@ def consuming_uses(body: ShirBody, typeck: TypeckResults,
                    ownership: OwnershipResults) -> list[e.ShirExpr]:
     """Each consuming use of `body` that is a node, in the order of the walk."""
     found: list[e.ShirExpr] = []
+    scrutinees = {value.scrutinee.shir_id for _path, value in walk(body.block, "block")
+                  if isinstance(value, s.Match) and isinstance(value.scrutinee, e.TupleInit)}
     for _path, value in walk(body.block, "block"):
         consumed = CONSUMED.get(type(value))
-        if consumed is not None:
+        if consumed is not None and not (isinstance(value, e.TupleInit)
+                                         and value.shir_id in scrutinees):
             found.extend(consumed(value, typeck, ownership))
     return found
 

@@ -1,0 +1,37 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "named\nnamed n1\nelement n2\nfirst\n1\n"
+#
+# A match on an owning field or element reads it where it is: the match takes no copy of
+# it, so nothing is freed two times. A bare binder views the payload in place.
+
+enum Shape:
+    Named(string)
+    Dot
+
+struct Holder:
+    Shape shape
+    i32 n
+
+fn mk(string base) Shape:
+    return Shape.Named("{base}3")
+
+fn main() i32:
+    let string base = "n"
+    let Holder h = Holder(Shape.Named("{base}1"), 1)
+    match h.shape:
+        Shape.Named(_) -> println("named")
+        Shape.Dot -> println("dot")
+    match h.shape:
+        Shape.Named(s) -> println("named {s}")
+        Shape.Dot -> println("dot")
+    let Holder[] hs = from([Holder(Shape.Named("{base}2"), 2)])
+    match hs[0].shape:
+        Shape.Named(s) -> println("element {s}")
+        Shape.Dot -> println("dot")
+    let Shape[] shapes = from([mk(base)])
+    match shapes[0]:
+        Shape.Named(_) -> println("first")
+        Shape.Dot -> println("dot")
+    println(h.n)
+    return 0

@@ -38,6 +38,7 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.ownership import TypeClass
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import exprs as e
+from sushi_lang.semantics.shir import patterns as p
 from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.loop_kind import CountedRange
 from sushi_lang.semantics.shir.nodes import ShirBlock
@@ -47,7 +48,7 @@ from sushi_lang.semantics.typesys import ReferenceType
 from . import arms
 from .bindings import bare_binders, declare_bare_binders, release_binding_borrow
 from .borrows import LATER_ROOTS, clear_borrows
-from .consume import bind, binds_a_bare_literal_string, consume
+from .consume import bind, binds_a_bare_literal_string, consume, view_owners
 from .expressions import reject_a_use_after_the_change
 from .flow import (
     FlowFacts,
@@ -367,19 +368,46 @@ def check_match(checker: 'BorrowChecker', node: s.Match) -> None:
     binders = [bare_binders(arm.pattern) for arm in node.arms]
     if any(found is None for found in binders):
         arms.stop_at(checker, node)
-    if any(checker.types.type_class(checker.local_type(local)) is TypeClass.MOVE
-           for found in binders for local, _at in found or ()):
-        arms.stop_at(checker, node)
-    if (isinstance(node.scrutinee, e.TupleInit) and checker.types.type_class(
-            read_type(checker, node.scrutinee)) is TypeClass.MOVE):
-        arms.stop_at(checker, node)
-    arms.check(checker, node.scrutinee)
-    if node.consumes:
-        consume(checker, node.scrutinee)
+    roots = in_place_roots(checker, node)
+    for root in roots or (node.scrutinee,):
+        arms.check(checker, root)
+        if node.consumes:
+            consume(checker, root)
+    owners = {local: _view_owners_of(checker, node, root)
+              for arm in node.arms for local, root in _binder_roots(node, arm.pattern, roots)}
     clear_borrows(checker)
     join_exclusive_paths(checker, [arm.body for arm in node.arms],
-                         enter=lambda index: declare_bare_binders(checker,
-                                                                  binders[index] or ()))
+                         enter=lambda index: declare_bare_binders(
+                             checker, binders[index] or (), owners, node.arms[index].body))
+
+
+def in_place_roots(checker: 'BorrowChecker', node: s.Match) -> tuple[e.ShirExpr, ...]:
+    """The parts of a tuple literal that owns, as the scrutinee: the match builds no tuple,
+    and each part is a root of its own (ruling 3 of docs/design/tuples.md). None for any
+    other scrutinee."""
+    scrutinee = node.scrutinee
+    if isinstance(scrutinee, e.TupleInit) and checker.types.type_class(
+            read_type(checker, scrutinee)) is TypeClass.MOVE:
+        return tuple(scrutinee.parts)
+    return ()
+
+
+def _binder_roots(node: s.Match, pattern: p.ShirPattern, roots: tuple[e.ShirExpr, ...]
+                  ) -> list[tuple[LocalId, e.ShirExpr]]:
+    """Each bare binder of an arm with the root that it views: the part of an in-place
+    tuple literal that holds it, else the scrutinee."""
+    if isinstance(pattern, p.Or):
+        pattern = pattern.alternatives[0]
+    if roots and isinstance(pattern, p.Tuple):
+        return [(local, root) for root, item in zip(roots, pattern.elements, strict=True)
+                for local, _at in bare_binders(item, pattern.loc) or ()]
+    return [(local, node.scrutinee) for local, _at in bare_binders(pattern) or ()]
+
+
+def _view_owners_of(checker: 'BorrowChecker', node: s.Match, root: e.ShirExpr) -> tuple:
+    """The owners that a binder freezes: none when the match takes its root."""
+    owner = None if node.consumes else borrow_owner(checker, root)
+    return () if owner is None else view_owners(checker, owner)
 
 
 def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:

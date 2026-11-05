@@ -10,11 +10,10 @@ name them. This module reads `lower.py` for its types only. It and `lower_arrays
 each other as modules, and each reads the other only inside a function, so the cycle is
 safe at import time.
 
-A construction of a type that owns, a field of a temporary that owns and a write of a field
-that owns stop (`StructInit owning`, `TupleInit owning`, `owning
-temporary`, `owning field write`), because their drops and their moves are Tier B. `borrow`
-stops on a destructure of a value that owns. A struct with a field of a reference type is
-CE2415 at its declaration, so its construction stops (`StructInit reference field`).
+A construction moves each owning part. A write of an owning field or element drops the old
+part between the new value and the store (`part_write`). `borrow` stops on a destructure of
+a value that owns. A struct with a field of a reference type is CE2415 at its declaration,
+so its construction stops (`StructInit reference field`).
 """
 from __future__ import annotations
 
@@ -63,8 +62,6 @@ def _instance(low: Lowering, node: e.StructInit | e.TupleInit) -> Type:
     if ty is None:
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail=f"a {type(node).__name__} with no type reached SLIR")
-    if low.owns(ty):
-        dispatch.stop(STAGE, node, state="owning")
     if isinstance(ty, StructType) and any(isinstance(field_ty, ReferenceType)
                                           for _, field_ty in ty.fields):
         dispatch.stop(STAGE, node, state="reference field")
@@ -113,8 +110,8 @@ def place_of(low: Lowering,
              expr: e.LocalRef | e.StorageRef | e.Field | e.Index | e.Slice) -> p.Place:
     """The place of a local, a `var`, a field, an element or a slice: one projection for
     each step of the walk to its root, from the root out. A root that is no place goes into
-    a temporary of the statement; a temporary that owns stops at a field, and an array that
-    owns is dropped at the end of the statement, after its element is read."""
+    a temporary of the statement, which drops it at its end, after its part is read; the
+    root that a view of a `let` keeps goes into a hidden owner local (`lower_views.py`)."""
     walked = walk_place(expr, Step.MEMBER | Step.INDEX)
     root: object = walked.node
     steps = [cast(e.Field | e.Index | e.Slice, step) for step in reversed(walked.path)]
@@ -125,10 +122,8 @@ def place_of(low: Lowering,
         place = low.global_place(root)
     elif isinstance(root, ShirNode) and steps:
         base = cast(e.ShirExpr, root)
-        ty = low.type_of(base)
-        if low.owns(ty) and isinstance(steps[0], e.Field):
-            raise StageStop(STAGE, "owning temporary", steps[0].loc)
-        place = p.Local(low.temporary(low.value(base), ty, base.loc))
+        place = p.Local(low.temporary(low.value(base), low.type_of(base), base.loc,
+                                      held=base.shir_id == low.holder))
     else:
         er.raise_internal_error("CE0000", span=expr.loc, detail="a field of no value")
     for step in steps:
@@ -160,12 +155,10 @@ def field_write(low: Lowering, stmt: s.Assign, target: e.Field | e.Index) -> Non
     `and` and `or` go into a temporary first, because the right operand reads the place
     again. When the place holds an index, a value that is no constant goes into a
     temporary first too: the index and its check come after the whole value. A write of an
-    owning element drops the old element (`lower_arrays.element_write`)."""
+    owning field or element drops the old value (`part_write`)."""
     if low.owns(low.type_of(target)):
-        if isinstance(target, e.Index):
-            arrays.element_write(low, stmt, target)
-            return
-        raise StageStop(STAGE, "owning field write", stmt.loc)
+        part_write(low, stmt, target)
+        return
     value = low.value(stmt.value)
     indexed = any(isinstance(step, (e.Index, e.Slice))
                   for step in walk_place(target, Step.MEMBER | Step.INDEX).path)
@@ -174,6 +167,21 @@ def field_write(low: Lowering, stmt: s.Assign, target: e.Field | e.Index) -> Non
         value = r.Use(p.Copy(p.Local(low.temporary(value, low.type_of(stmt.value),
                                                    stmt.value.loc))))
     low.write(place_of(low, target), value, stmt.loc)
+
+
+def part_write(low: Lowering, stmt: s.Assign, target: e.Field | e.Index) -> None:
+    """`p.x := v` and `a[i] := v` of an owning part (ir.md 8.10, rule 6): the new value
+    first, in a temporary unless it is a constant, then each index and its check, then the
+    `Drop` of the old part, which always holds a value, then the store."""
+    value = low.value(stmt.value)
+    if not (isinstance(value, r.Use) and isinstance(value.operand, p.Const)):
+        value = r.Use(p.Move(p.Local(low.temporary(value, low.type_of(stmt.value),
+                                                   stmt.value.loc))))
+    place = place_of(low, target)
+    if not isinstance(place, (p.Field, p.Index)):
+        er.raise_internal_error("CE0000", span=stmt.loc, detail="a part write of no part")
+    low.emit(low.placement.drop_old_part(place, stmt.loc))
+    low.write(place, value, stmt.loc)
 
 
 def destructure(low: Lowering, stmt: s.Destructure) -> None:

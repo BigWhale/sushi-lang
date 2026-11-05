@@ -180,7 +180,7 @@ WHITELIST += (
     (_BORROW + "takes.py", "field_take", _kept("B", "B7: field take")),
     (_BORROW + "takes.py", "spend", _kept("B", "B7: field take")),
     (_BORROW + "bindings.py", "register_pattern_bindings",
-     _kept("B", "B3, B7, B8: owning payloads and the binder modes of a match")),
+     _kept("B", "B7, B8: the binder modes of a match")),
     (_BORROW + "bindings.py", "reject_partial_take", _kept("B", "B7: pattern take")),
     (_BORROW + "bindings.py", "bind_let_reference", _kept("B", "B8: reference let")),
     (_BORROW + "borrowed_returns.py", "body_return", _kept("B", "B8: peek returns")),
@@ -298,7 +298,7 @@ WHITELIST += (
 # one is kept for the group whose owning type brings the position back with its row.
 _CONSUMING_POSITIONS = {
     "CALL_ARG": "B1", "LET": "B1", "RETURN": "B1", "ELEMENT_ASSIGN": "B1", "ARRAY_ELEMENT": "B1",
-    "STRUCT_FIELD": "B3", "ENUM_PAYLOAD": "B3", "MATCH_SCRUTINEE": "B7",
+    "STRUCT_FIELD": "Task 75", "ENUM_PAYLOAD": "Task 75", "MATCH_SCRUTINEE": "B7",
     "REBIND": "B9", "FIELD_ASSIGN": "B9",
 }
 WHITELIST += tuple(

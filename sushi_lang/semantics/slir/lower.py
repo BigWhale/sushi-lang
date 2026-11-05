@@ -15,9 +15,9 @@ The lowering handles the parameters, a `let`, a rebind, a call statement, a `ret
 `if`, a `match`, a `while` and a counted loop over a range with their `break` and
 `continue`, an `assert`, over literals, names of constants, locals, the operators, `and`
 and `or` as control flow, the construction of an enum variant, of a struct, of a tuple and
-of an array of plain elements, a field read and write, an element read and write with its
-bounds check, a slice, a destructure, a call, an interpolation, a `??` and `expect`, and
-a borrowed view in a view local with its region (`lower_views.py`). The
+of an array, a field read and write, an element read and write with its bounds check, a
+slice, a destructure, a call, an interpolation, a `??` and `expect`, and a borrowed view in
+a view local with its region (`lower_views.py`). The
 operand of a value is the answer of `borrow` and the shape of the value alone (ir.md 7.9):
 a `move` row gives `Move`; an `adopt` row gives
 `Copy` of a place, a constant for a literal or a name of a constant, and `Move` of the
@@ -41,12 +41,11 @@ body is lowered again with what the walks found, until a walk finds nothing new.
 The construct of a stop is the SHIR class of the node, or one of these names: `generic
 instance`, `conversion` and `perk method` for the body of a monomorphized generic instance,
 of a conversion and of a perk method; `borrowed rebind`
-for a rebind of a borrowed parameter that owns, `view of a temporary` for a borrowed `let`
-whose owner is a temporary, `view into an owning place` for a view that a local that owns
-would take, `conversion` also for a `??` that calls a declared conversion, `library function` for a function, a method or a static whose declaring unit
-the typecheck row does not name, `bloom` for a bloom argument, the stops of
-`lower_aggregate.py` (`StructInit owning`, `TupleInit owning`, `owning temporary`,
-`owning field write`, `StructInit reference field`), and `ConstRef out of range` for a name
+for a rebind of a borrowed parameter that owns, `view into an owning place` for a view that
+a local that owns would take, `conversion` also for a `??` that calls a declared conversion,
+`library function` for a function, a method or a static whose declaring unit the typecheck
+row does not name, `bloom` for a bloom argument, `StructInit reference field`
+(`lower_aggregate.py`), `Match owning alternatives` (`lower_match.py`), and `ConstRef out of range` for a name
 of a constant whose value its type cannot hold. The symbol, the unit and the return type of the function are facts of its declaration
 (ir.md 6.4); the body of an extension method or of a static takes the symbol of the method
 (`extension_decl_symbol`), and its receiver is `_1`. The unit is the declaring unit; a
@@ -220,6 +219,7 @@ class Lowering:
     placement: DropPlacement = field(default_factory=DropPlacement)
     loops: list[LoopFrame] = field(default_factory=list)
     declared: Optional[LocalId] = None
+    holder: Optional[ShirId] = None
     found_flags: set[ShirLocalId] = field(default_factory=set)
     found_unknown: set[tuple[ShirId, ShirLocalId]] = field(default_factory=set)
 
@@ -440,12 +440,14 @@ class Lowering:
         for moved in _moves(value):
             self.placement.move(_root(moved), span)
 
-    def temporary(self, value: Value, ty: Type, span: Span) -> LocalId:
-        """A new temporary of the statement that holds `value`. A view goes into a view
-        local, in a region over its owners that ends with the storage of the temporary."""
+    def temporary(self, value: Value, ty: Type, span: Span, held: bool = False) -> LocalId:
+        """A new temporary of the statement that holds `value`, or with `held` a hidden
+        owner local of the block. A view goes into a view local, in a region over its owners
+        that ends with the storage of the temporary."""
         view = isinstance(value, ViewValue)
         ident = self.new_local(ty, None, None, view)
-        self.placement.temporary(ident, self.owns(ty) and not view)
+        (self.placement.declare if held else self.placement.temporary)(
+            ident, self.owns(ty) and not view)
         self.emit([st.StorageLive(ident, span)])
         if isinstance(value, ViewValue):
             self.emit(self.placement.begin_region(ident, value.owners, frozenset(), span))
@@ -487,7 +489,8 @@ class Lowering:
             return p.Const(k.of_literal(expr, self.typeck))
         if isinstance(expr, e.ConstRef):
             return p.Const(self.constant(expr))
-        temp = self.temporary(self.value(expr), self.type_of(expr), expr.loc)
+        temp = self.temporary(self.value(expr), self.type_of(expr), expr.loc,
+                              held=expr.shir_id == self.holder)
         return p.Move(p.Local(temp)) if row is Ownership.ADOPT else p.Copy(p.Local(temp))
 
     def constant(self, ref: e.ConstRef) -> k.Constant:

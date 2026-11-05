@@ -61,7 +61,7 @@ from sushi_lang.semantics.slir.verify_calls import (
     DeclaredLookup, DeclaredParams as DeclaredParams, check_call, declared_params,
 )
 from sushi_lang.semantics.slir.verify_arrays import (
-    array_value, element_drop, length_or_slice,
+    array_value, length_or_slice, part_drop,
 )
 from sushi_lang.semantics.slir.verify_flow import Flow, successors
 from sushi_lang.semantics.slir.verify_regions import check_regions
@@ -426,8 +426,8 @@ class Check:
         return stmt.place.id
 
     def drop(self, stmt: st.Drop | st.DropIfSet) -> None:
-        if isinstance(stmt, st.Drop) and isinstance(stmt.place, p.Index):
-            element_drop(self, stmt)
+        if isinstance(stmt, st.Drop) and isinstance(stmt.place, (p.Field, p.Index)):
+            part_drop(self, stmt)
             return
         if self.dropped(stmt) in self.views:
             self.fail(VIEW, f"{show(stmt.place)} is a view, which owns nothing to drop",

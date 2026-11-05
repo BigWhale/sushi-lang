@@ -4,7 +4,7 @@ A literal arm binds no name: `_`, a literal, a range, and an `Or` of them. A `Va
 and a `Tuple` bind the local of each bare `PatBinding` in them, with the span of the
 variant name or of the tuple pattern that holds it. A `poke`, `peek` or `nom` binder and an
 `Own` are the patterns of later groups: a match with one of them stops the walk with
-`borrow, Match`, and so does a match on a tuple literal that owns. The tests run
+`borrow, Match`. The tests run
 the arm over SHIR built by hand, with a stand-in for the pass; they do not run the
 compiler.
 """
@@ -22,8 +22,7 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.decls import DeclNames
 from sushi_lang.semantics.shir.ids import LocalId, ShirId
 from sushi_lang.semantics.shir.nodes import ShirBlock
-from sushi_lang.semantics.ownership import TypeClass
-from sushi_lang.semantics.typesys import BorrowMode, BuiltinType
+from sushi_lang.semantics.typesys import BorrowMode
 
 SPAN = Span(4, 5, 4, 20)
 NAME = Span(4, 11, 4, 15)
@@ -116,63 +115,3 @@ def test_a_match_with_a_binder_of_a_later_group_stops_with_borrow_match() -> Non
         statements.check_match(object(), node)  # type: ignore[arg-type]
     assert caught.value.params == {"stage": "borrow", "construct": "Match"}
     assert caught.value.span == SPAN
-
-
-class _Types:
-    """The stand-in of the type queries: a `string` owns, an `i32` is plain."""
-
-    def type_class(self, ty: object) -> TypeClass:
-        return TypeClass.MOVE if ty == BuiltinType.STRING else TypeClass.PLAIN
-
-
-class _Checker:
-    """The stand-in of the pass: the type row of each local, and no state."""
-    types = _Types()
-
-    def __init__(self, ty: object) -> None:
-        self.ty = ty
-
-    def local_type(self, _local: LocalId) -> object:
-        return self.ty
-
-
-def test_a_bare_binder_of_a_payload_that_owns_stops_with_borrow_match() -> None:
-    """The stop comes before the arm reads the scrutinee, so the stand-in has no state."""
-    scrutinee = e.LocalRef(ShirId(2), SPAN, LocalId(0))
-    node = s.Match(ShirId(1), SPAN, scrutinee,
-                   [_arm(_variant()), _arm(p.Wildcard(ShirId(20), SPAN))], False)
-    with pytest.raises(StageStop) as caught:
-        statements.check_match(_Checker(BuiltinType.STRING), node)  # type: ignore[arg-type]
-    assert caught.value.params == {"stage": "borrow", "construct": "Match"}
-
-
-class _TupleTypes:
-    """The stand-in of the type queries: a tuple of a `string` owns."""
-
-    def type_class(self, ty: object) -> TypeClass:
-        return TypeClass.MOVE if ty == "owning tuple" else TypeClass.PLAIN
-
-
-class _TupleChecker:
-    """The stand-in of the pass: the type row of the scrutinee, and no state."""
-    types = _TupleTypes()
-
-    def local_type(self, _local: LocalId) -> object:
-        return BuiltinType.INT32
-
-    def answers(self) -> "_TupleChecker":
-        return self
-
-    def type_of(self, _shir_id: ShirId) -> object:
-        return "owning tuple"
-
-
-def test_a_match_on_a_tuple_literal_that_owns_stops_with_borrow_match() -> None:
-    """The stop comes before the arm reads the scrutinee: a tuple literal takes each part, and
-    a part that owns is a move that a later group checks."""
-    scrutinee = e.TupleInit(ShirId(2), SPAN, [e.LocalRef(ShirId(3), SPAN, LocalId(0)),
-                                              e.LocalRef(ShirId(4), SPAN, LocalId(1))])
-    node = s.Match(ShirId(1), SPAN, scrutinee, [_arm(p.Wildcard(ShirId(20), SPAN))], False)
-    with pytest.raises(StageStop) as caught:
-        statements.check_match(_TupleChecker(), node)  # type: ignore[arg-type]
-    assert caught.value.params == {"stage": "borrow", "construct": "Match"}

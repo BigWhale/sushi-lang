@@ -11,7 +11,8 @@ The statements are read backwards from the end of the block of the view. A use i
 that does not hold the `let` is a use of the whole loop: the next round can use the view
 again. A use in an arm of an `if` or a `match` gives the last uses of that arm, and an arm
 with no use ends the region at its top (SLIR lowering). A view that no statement uses ends
-its region at its `let`.
+its region at its `let`. A bare binder of an owning payload makes a view too: its uses
+are read in its arm, and a binder that no statement uses has no last use.
 """
 
 from __future__ import annotations
@@ -42,6 +43,13 @@ def note_view(checker: 'BorrowChecker', node: s.Assign, state: 'BorrowState') ->
     checker.views.setdefault(state.local, (state.borrows_from, block, index))
 
 
+def note_binder(checker: 'BorrowChecker', state: 'BorrowState', body: ShirBlock) -> None:
+    """Keep the view that a bare binder of an owning payload makes, with its owners and the
+    statements of its arm `body`."""
+    if state.local is not None:
+        checker.views.setdefault(state.local, (state.borrows_from, body, -1))
+
+
 def write_regions(views: dict[LocalId, tuple[tuple[Owner, ...], ShirBlock, int]],
                   table: OwnershipResults) -> None:
     """One region row for each view of the body, in `table`."""
@@ -51,9 +59,12 @@ def write_regions(views: dict[LocalId, tuple[tuple[Owner, ...], ShirBlock, int]]
 
 def last_uses(block: ShirBlock, index: int, view: LocalId) -> tuple[ShirId, ...]:
     """The statements of the last uses of `view`, which the statement `index` of `block`
-    declares."""
+    declares, or which a binder of the arm `block` declares (`index` -1): a binder that no
+    statement uses has none."""
     anchors, _ = _scan(block.statements[index + 1:], view)
-    return tuple(sorted(anchors)) or (block.statements[index].shir_id,)
+    if anchors or index < 0:
+        return tuple(sorted(anchors))
+    return (block.statements[index].shir_id,)
 
 
 def _scan(statements: Iterable[s.ShirStmt], view: LocalId) -> tuple[set[ShirId], bool]:

@@ -252,6 +252,9 @@ def _unary(state: FunctionState, rvalue: r.Unary) -> ir.Value:
 
 
 def _cast(state: FunctionState, rvalue: r.Cast) -> ir.Value:
+    """A numeric cast, or the identity cast of a value of any type, which is the value."""
+    if type_of_operand(state, rvalue.operand) == rvalue.target:
+        return operand_value(state, rvalue.operand)
     source = _scalar_type(state, rvalue, type_of_operand(state, rvalue.operand))
     _scalar_type(state, rvalue, rvalue.target)
     return emit_value_cast(state.codegen, operand_value(state, rvalue.operand), source,

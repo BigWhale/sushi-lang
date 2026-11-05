@@ -1,0 +1,42 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "abxy 1\nz! z?\nas\nr3 r2 r3+ r2+\n"
+#
+# A write of an owning field computes the new value first, then drops the old field, then
+# stores: the new value may read the old one. The same holds through a `poke` parameter, for
+# a nested field, for a field of an element, and in a loop with a `break`.
+
+struct Holder:
+    string name
+    i32 n
+
+struct Inner:
+    string label
+
+struct Outer:
+    Inner inner
+    string name
+
+fn rename(poke Outer o, string s) ~:
+    o.name := s.concat("!")
+    o.inner.label := "{s}?"
+
+fn main() i32:
+    let string base = "a"
+    let Holder p = Holder("{base}b", 1)
+    p.name := p.name.concat("x")
+    p.name := "{p.name}y"
+    println("{p.name} {p.n}")
+    let Outer o = Outer(Inner("{base}1"), "{base}2")
+    rename(poke o, "z")
+    println("{o.name} {o.inner.label}")
+    let Outer[] rows = from([Outer(Inner("r"), "{base}r"), Outer(Inner("q"), "{base}q")])
+    rows[0].name := "{base}s"
+    println(rows[0].name)
+    foreach(i in 0..5):
+        rows[i % 2].name := "r{i}"
+        rows[i % 2].inner.label := rows[i % 2].name.concat("+")
+        if (i == 3):
+            break
+    println("{rows[1].name} {rows[0].name} {rows[1].inner.label} {rows[0].inner.label}")
+    return 0

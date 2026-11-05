@@ -7,6 +7,7 @@ They call a Python function over data; they do not run the compiler.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Mapping, Optional, get_args
 
 import pytest
@@ -638,7 +639,7 @@ def test_a_projection_that_does_not_fit_the_type_of_the_global_is_refused(projec
              "typed places")
 
 
-@pytest.mark.parametrize("target", [p.Field(_local(1), 0), p.Global("unit$log", STRING)],
+@pytest.mark.parametrize("target", [p.Downcast(_local(1), "Some"), p.Global("unit$log", STRING)],
                          ids=["projection", "global"])
 def test_a_drop_of_a_place_that_is_no_local_is_not_checked_yet(target: p.Place):
     _not_checked(_function([BLANK, PAIR], _block(0, _ret(), st.Drop(target, BAD))))
@@ -1051,6 +1052,48 @@ def test_a_drop_of_an_element_after_a_move_of_its_array_is_refused():
 def test_a_drop_of_an_element_of_a_global_is_not_checked_yet():
     _not_checked(_function([BLANK], _block(
         0, _ret(), st.Drop(p.Index(p.Global("unit$names", STRINGS), ZERO), BAD))))
+
+
+# -- the field of an owning struct (ir.md 8.10 rule 6, 8.13) -----------------------------
+
+def _named(index: int) -> list[st.SlirStatement]:
+    """`_index = Named(<new string>, 1)`, over the temporary `_index + 1`."""
+    return [_live(index + 1), _text(index + 1), _live(index),
+            _set(index, r.Aggregate(r.AggStruct(NAMED),
+                                    (_move(index + 1), p.Const(k.Int(1, I32))))),
+            _dead(index + 1)]
+
+
+def test_the_write_of_an_owning_field_drops_the_old_field_and_passes():
+    _passes(_function([BLANK, NAMED, STRING, STRING], _block(
+        0, _ret(), *_named(1), _live(3), _text(3),
+        st.Drop(p.Field(_local(1), 0), SPAN),
+        st.Assign(p.Field(_local(1), 0), r.Use(_move(3)), SPAN), _dead(3),
+        _drop(1), _dead(1), _set(0, r.Use(p.Const(k.Blank()))))))
+
+
+def test_a_drop_of_a_plain_field_is_refused():
+    _refused(_function([BLANK, NAMED, STRING], _block(
+        0, _ret(), *_named(1), st.Drop(p.Field(_local(1), 1), BAD))), "drop of an owning type")
+
+
+def test_a_drop_of_a_field_after_a_move_of_its_struct_is_refused():
+    _refused(_function([BLANK, NAMED, STRING, NAMED], _block(
+        0, _ret(), *_named(1), _live(3), _set(3, r.Use(_move(1))),
+        st.Drop(p.Field(_local(1), 0), BAD))), "no use after a move")
+
+
+def test_a_drop_of_a_field_of_a_view_is_refused():
+    function = _function([BLANK, NAMED, STRING, NAMED], _block(
+        0, _ret(), *_named(1), _live(3), _set(3, r.Use(_copy(1))),
+        st.Drop(p.Field(_local(3), 0), BAD)))
+    locals_ = tuple(replace(local, view=local.id == LocalId(3)) for local in function.locals)
+    _refused(replace(function, locals=locals_), "a view local")
+
+
+def test_a_drop_of_a_field_of_a_global_is_not_checked_yet():
+    _not_checked(_function([BLANK], _block(
+        0, _ret(), st.Drop(p.Field(p.Global("unit$named", NAMED), 0), BAD))))
 
 
 def test_a_repeat_run_that_moves_its_value_is_refused():

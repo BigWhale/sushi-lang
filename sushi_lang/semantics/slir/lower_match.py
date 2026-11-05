@@ -47,7 +47,7 @@ def match(low: Lowering, stmt: s.Match) -> None:
     when each path of each arm tests at most a literal of an integer or a variant at the
     scrutinee, else a chain of tests in source order. A match on a tuple is a chain. Each arm
     starts from the state after the scrutinee, and the arms that reach their end meet at the
-    join. A tuple that owns stops (`Match owning`), because its drops are Tier B."""
+    join. A bare binder of an owning payload is a view local (`lower_views.bind_view`)."""
     facts = low.typeck.match_facts_of(stmt.shir_id)
     if facts is None:
         dispatch.stop(STAGE, stmt)
@@ -56,16 +56,18 @@ def match(low: Lowering, stmt: s.Match) -> None:
     if not (facts.integer is not None or facts.scrutinee == BuiltinType.STRING or enum
             or tuple_):
         dispatch.stop(STAGE, stmt)
-    if tuple_ and low.owns(facts.scrutinee):
-        dispatch.stop(STAGE, stmt, state="owning")
-    scrutinee = _scrutinee(low, stmt.scrutinee, place=enum or tuple_)
+    scrutinee: p.Operand | tuple[p.Operand, ...]
+    if tuple_ and isinstance(stmt.scrutinee, e.TupleInit) and low.owns(facts.scrutinee):
+        scrutinee = tuple(_scrutinee(low, part, place=True) for part in stmt.scrutinee.parts)
+    else:
+        scrutinee = _scrutinee(low, stmt.scrutinee, place=enum or tuple_)
     low.emit(low.placement.flush())
     among, at_switch = low.placement.in_scope(), low.placement.state()
     arms = [_paths(low, case.pattern, scrutinee, facts.scrutinee) for case in stmt.arms]
-    if not tuple_ and all(len(path.tests) <= 1
-                          and all(test.operand == scrutinee and _case(test) is not None
-                                  for test in path.tests)
-                          for paths in arms for path in paths):
+    if not tuple_ and not isinstance(scrutinee, tuple) and all(
+            len(path.tests) <= 1 and all(test.operand == scrutinee and _case(test) is not None
+                                         for test in path.tests)
+            for paths in arms for path in paths):
         arrivals = _one_switch(low, stmt, arms, scrutinee, enum, at_switch)
     else:
         arrivals = _chain(low, stmt, arms, at_switch)
@@ -74,12 +76,12 @@ def match(low: Lowering, stmt: s.Match) -> None:
 
 
 def _scrutinee(low: Lowering, expr: e.ShirExpr, *, place: bool) -> p.Operand:
-    """The operand that each test reads. A place is read where it is, and so is a constant
-    when no test needs a place. A new value, a constant of an enum, and a local that the
-    match takes (`match nom r:`), go into a temporary of the match statement, which drops it
-    at its end."""
+    """The operand that each test reads. A place (a local, a field, an element) is read
+    where it is, and so is a constant when no test needs a place. A new value, a constant of
+    an enum, and a local that the match takes (`match nom r:`), go into a temporary of the
+    match statement, which drops it at its end."""
     value: Value
-    if isinstance(expr, (e.LocalRef, e.Lit, e.ConstRef)):
+    if isinstance(expr, (e.LocalRef, e.Field, e.Index, e.Lit, e.ConstRef)):
         operand = low.operand(expr)
         if isinstance(operand, p.Copy) or (isinstance(operand, p.Const) and not place):
             return operand
@@ -106,14 +108,24 @@ class _Path:
     binds: tuple[tuple[ShirLocalId, r.Rvalue], ...] = ()
 
 
-def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding, operand: p.Operand,
-           ty: Type) -> list[_Path]:
+def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding,
+           operand: p.Operand | tuple[p.Operand, ...], ty: Type) -> list[_Path]:
     """The paths of `pattern` at `operand`: depth first and from left to right, one path for
     each alternative of an `Or`. The items of a variant are at the `Field` projections of
-    its `Downcast`, the parts of a tuple at the `Field` projections of the tuple. A binder is
-    bare and its payload is plain, because `borrow` stops on any other binder."""
+    its `Downcast`, the parts of a tuple at the `Field` projections of the tuple, or at the
+    operand of each part of a tuple literal that owns, which builds no tuple. A binder is
+    bare, because `borrow` stops on any other binder."""
+    if isinstance(operand, tuple):
+        if isinstance(pattern, pt.Tuple):
+            return _product(low, [_Path()], pattern.elements, operand, tuple_elements(ty))
+        if isinstance(pattern, pt.Or):
+            return [path for alt in pattern.alternatives
+                    for path in _paths(low, alt, operand, ty)]
+        if isinstance(pattern, pt.Wildcard):
+            return [_Path()]
+        er.raise_internal_error("CE0000", detail="a pattern of a tuple literal is no tuple")
     if isinstance(pattern, pt.PatBinding):
-        if not isinstance(pattern.by, Bare) or low.owns(ty):
+        if not isinstance(pattern.by, Bare):
             er.raise_internal_error("CE0000", detail="a binder that borrow does not check "
                                                      "reached SLIR")
         return [_Path(binds=((pattern.local, r.Use(p.Copy(_place(operand)))),))]
@@ -124,24 +136,31 @@ def _paths(low: Lowering, pattern: pt.ShirPattern | pt.PatBinding, operand: p.Op
     if isinstance(pattern, pt.Or):
         return [path for alt in pattern.alternatives for path in _paths(low, alt, operand, ty)]
     if isinstance(pattern, pt.Tuple):
-        return _product(low, [_Path()], pattern.elements, _place(operand), tuple_elements(ty))
+        return _product(low, [_Path()], pattern.elements, _fields(_place(operand), ty),
+                        tuple_elements(ty))
     if not isinstance(pattern, pt.Variant):
         dispatch.stop(STAGE, pattern)
     payload = variant_of(ty, pattern.variant, pattern.loc)[1]
+    base = p.Downcast(_place(operand), pattern.variant)
     return _product(low, [_Path((_Test(pattern, operand, ty),))], pattern.items,
-                    p.Downcast(_place(operand), pattern.variant), payload)
+                    tuple(p.Copy(p.Field(base, index)) for index in range(len(payload))),
+                    payload)
+
+
+def _fields(base: p.Place, ty: Type) -> tuple[p.Operand, ...]:
+    return tuple(p.Copy(p.Field(base, index)) for index in range(len(tuple_elements(ty))))
 
 
 def _product(low: Lowering, paths: list[_Path], items: list[pt.ShirPattern | pt.PatBinding],
-             base: p.Place, types: Sequence[Type]) -> list[_Path]:
-    """Each path of `paths`, then the paths of each item at `Field(base, index)`, from left
-    to right: one path for each choice of a path of each item."""
-    if len(items) != len(types):
+             operands: Sequence[p.Operand], types: Sequence[Type]) -> list[_Path]:
+    """Each path of `paths`, then the paths of each item at its operand, from left to
+    right: one path for each choice of a path of each item."""
+    if not len(items) == len(operands) == len(types):
         er.raise_internal_error("CE0000", detail="a pattern with another count of parts than "
                                                  "its type reached SLIR")
-    for index, item in enumerate(items):
+    for item, operand, ty in zip(items, operands, types, strict=True):
         paths = [_Path(head.tests + tail.tests, head.binds + tail.binds) for head in paths
-                 for tail in _paths(low, item, p.Copy(p.Field(base, index)), types[index])]
+                 for tail in _paths(low, item, operand, ty)]
     return paths
 
 
@@ -171,11 +190,15 @@ def _switch_case(test: _Test) -> int:
     return case
 
 
-def _bind_blocks(low: Lowering, paths: list[_Path]) -> list[Block]:
+def _bind_blocks(low: Lowering, stmt: s.Match, paths: list[_Path]) -> list[Block]:
     """A block for each path of an arm when two or more paths write a binder: each one
-    writes the binders of its path and goes to the body."""
+    writes the binders of its path and goes to the body. A view local has one write, so
+    two paths that write a binder of an owning payload stop (`Match owning alternatives`)."""
     if len(paths) < 2 or not any(path.binds for path in paths):
         return []
+    if any(low.owns(low.typeck.local_type(local) or BuiltinType.BLANK)
+           for path in paths for local, _ in path.binds):
+        dispatch.stop(STAGE, stmt, state="owning alternatives")
     return [low.new_block() for _ in paths]
 
 
@@ -197,7 +220,7 @@ def _one_switch(low: Lowering, stmt: s.Match, arms: list[list[_Path]], scrutinee
         scrutinee = p.Copy(p.Local(tag))
     entries = []
     for paths in arms:
-        entries.append((_bind_blocks(low, paths), low.new_block()))
+        entries.append((_bind_blocks(low, stmt, paths), low.new_block()))
     cases: list[tuple[int, BlockId]] = []
     otherwise: Optional[BlockId] = None
     for paths, (binds, block) in zip(arms, entries, strict=True):
@@ -231,7 +254,7 @@ def _chain(low: Lowering, stmt: s.Match, arms: list[list[_Path]],
         counts = [[2 if isinstance(test.pattern, pt.IntRange) else 1 for test in path.tests]
                   for path in paths]
         steps = [entry, *(low.new_block() for _ in range(sum(map(sum, counts)) - 1))]
-        binds = _bind_blocks(low, paths)
+        binds = _bind_blocks(low, stmt, paths)
         body, missed = low.new_block(), low.new_block()
         start = 0
         for at, (path, sizes) in enumerate(zip(paths, counts, strict=True)):

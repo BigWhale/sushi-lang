@@ -1,0 +1,25 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "a! b!\nc! d!\nstop 2\na!\na!e!\n"
+#
+# A tuple literal that owns, as the scrutinee, builds no tuple: each part is a root of its
+# own. A named part is borrowed and stays usable after the match, a temporary part is owned
+# by the match and dropped at its end, and `match nom` takes each part.
+
+fn word(string s) string:
+    return "{s}!"
+
+fn main() i32:
+    let string a = word("a")
+    let string b = word("b")
+    match (a, b):
+        (x, y) -> println("{x} {y}")
+    match (word("c"), word("d")):
+        (x, y) -> println("{x} {y}")
+    match (word("stop"), 2):
+        ("go!", _) -> println("go")
+        (_, n) -> println("stop {n}")
+    println(a)
+    match nom (a, word("e")):
+        (x, y) -> println("{x}{y}")
+    return 0

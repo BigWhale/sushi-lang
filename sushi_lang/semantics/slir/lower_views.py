@@ -19,11 +19,14 @@ from typing import TYPE_CHECKING, Optional
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
+from sushi_lang.internals.report import Span
+from sushi_lang.semantics.method_effects import answers_view
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.places import Step, walk_place
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
+from sushi_lang.semantics.shir.callee import Builtin
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.nodes import ShirBlock, ShirNode
@@ -42,28 +45,35 @@ if TYPE_CHECKING:
 
 def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     """`let T v = <borrowed value>`: a view local, written in its region (ir.md 8.9). A view
-    whose owner is a temporary would outlive it: it stops (`view of a temporary`). A view of
-    a constant has no owner and no region: a constant never changes."""
+    whose owner is a temporary keeps it: the temporary is a hidden owner local of the block,
+    and the region is over it. A view of a constant has no owner and no region: a constant
+    never changes."""
     value = stmt.value
-    written: r.Use | CallValue
-    if isinstance(value, (e.LocalRef, e.Field, e.Index, e.Slice)):
-        written = r.Use(p.Copy(agg.place_of(low, value)))
-    elif isinstance(value, (e.Call, e.Try)):
-        lowered = low.value(value)
-        if not isinstance(lowered, ViewValue):
-            er.raise_internal_error("CE0000", span=value.loc,
-                                    detail="a borrowed let of a value that is no view")
-        written = lowered.value
-    else:
-        dispatch.stop(STAGE, value, state="borrowed")
     region = low.answers.ownership.region_of(target.local)
     if region is None:
         er.raise_internal_error("CE0000", span=stmt.loc,
                                 detail="a borrowed let with no borrow region reached SLIR")
     constant = isinstance(walk_place(value, Step.MEMBER | Step.INDEX).node, e.ConstRef)
     if not region.owners and not constant:
-        raise StageStop(STAGE, "view of a temporary", stmt.loc)
-    owners = [_owner(low, owner, stmt) for owner in region.owners]
+        low.holder = _held(low, value)
+    written: r.Use | CallValue
+    held: tuple[p.Place, ...]
+    try:
+        if isinstance(value, (e.LocalRef, e.Field, e.Index, e.Slice)):
+            read = p.Copy(agg.place_of(low, value))
+            written, held = r.Use(read), (p.root_of(read.place),)
+        elif isinstance(value, (e.Call, e.Try)):
+            lowered = low.value(value)
+            if not isinstance(lowered, ViewValue):
+                er.raise_internal_error("CE0000", span=value.loc,
+                                        detail="a borrowed let of a value that is no view")
+            written, held = lowered.value, lowered.owners
+        else:
+            dispatch.stop(STAGE, value, state="borrowed")
+    finally:
+        low.holder = None
+    owners = ([_owner(low, owner, stmt) for owner in region.owners] if region.owners
+              else [] if constant else list(held))
     ident, _ = low.bind(target.local, stmt.loc, view=True)
     low.placement.declare(ident, False)
     low.emit([st.StorageLive(ident, stmt.loc)])
@@ -71,11 +81,52 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     low.write(p.Local(ident), written, stmt.loc)
 
 
+def _held(low: Lowering, value: e.ShirExpr) -> ShirId:
+    """The node whose value a view of a `let` reads when no local owns it: the root of its
+    place, through the receiver of each get-out."""
+    node = walk_place(value, Step.MEMBER | Step.INDEX).node
+    while isinstance(node, e.Call):
+        resolved = low.typeck.callee_of(node.shir_id)
+        if resolved is None or not (isinstance(resolved.callee, Builtin)
+                                    and answers_view(resolved.callee.method)):
+            break
+        node = walk_place(resolved.callee.recv, Step.MEMBER | Step.INDEX).node
+    if not isinstance(node, ShirNode) or isinstance(node, (e.LocalRef, e.StorageRef)):
+        er.raise_internal_error("CE0000", span=value.loc,
+                                detail="a borrowed let of a temporary with no root")
+    return node.shir_id
+
+
 def _owner(low: Lowering, owner: ShirLocalId | str, stmt: s.Assign) -> p.Place:
     """The place of an owner of a region row: a local. A `var` that owns stops in SLIR."""
     if isinstance(owner, str):
         raise StageStop(STAGE, "StorageRef owning", stmt.loc)
     return p.Local(low.local_of(owner, stmt.loc))
+
+
+def binds_a_view(low: Lowering, local: ShirLocalId) -> bool:
+    """Whether a bare binder of a pattern binds a payload that owns: a view local."""
+    ty = low.typeck.local_type(local)
+    return ty is not None and low.owns(ty)
+
+
+def bind_view(low: Lowering, local: ShirLocalId, value: r.Rvalue,
+              span: Span) -> list[st.SlirStatement]:
+    """A bare binder of an owning payload (ir.md 8.9): a view local of the arm, written with
+    the `Copy` of its payload place, in a region over the root of that place to the last
+    uses of the region row of `borrow`. A binder with no use has no region."""
+    region = low.answers.ownership.region_of(local)
+    if region is None or not (isinstance(value, r.Use) and isinstance(value.operand, p.Copy)):
+        er.raise_internal_error("CE0000", span=span,
+                                detail="a binder of an owning payload with no borrow region "
+                                       "reached SLIR")
+    ident, _ = low.bind(local, span, view=True)
+    low.placement.declare(ident, False)
+    statements: list[st.SlirStatement] = [st.StorageLive(ident, span)]
+    if region.until:
+        statements += low.placement.begin_region(
+            ident, [p.root_of(value.operand.place)], frozenset(region.until), span)
+    return statements + [st.Assign(p.Local(ident), value, span)]
 
 
 def view_of(value: r.Use | CallValue, read: p.Operand) -> ViewValue:

@@ -1,0 +1,25 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "abx\nab\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_owning_parts.slir
+#
+# A construction moves each owning part. A write of an owning field computes the new value
+# into a temporary, drops the old field with a `Drop` of its `Field` place, then stores. A
+# `let` that views a field of a temporary keeps the temporary in a hidden owner local of
+# the block, which drops at the block end; the region of the view is over it.
+
+struct Holder:
+    string name
+    i32 n
+
+fn make(string base) Holder:
+    return Holder("{base}b", 1)
+
+fn main() i32:
+    let string base = "a"
+    let Holder p = Holder("{base}b", 1)
+    p.name := p.name.concat("x")
+    println(p.name)
+    let string s = make(base).name
+    println(s)
+    return 0

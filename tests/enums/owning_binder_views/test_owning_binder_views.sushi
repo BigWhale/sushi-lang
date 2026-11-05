@@ -1,0 +1,61 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "got q! 2\nnone\nq! q!\n0 q!\n1 q!\nfalse\none n!\nnested n!\n2\n0\n"
+#
+# A bare binder of an owning payload views the payload in place, with a borrow region to its
+# last use in the arm: the scrutinee may change after that use. A temporary scrutinee is
+# owned by the match and dropped at its end, also on a `return` out of an arm.
+
+enum Shape:
+    Named(string)
+    Dot
+
+fn find(bool hit) Maybe@(string):
+    let string base = "q"
+    if (hit):
+        return Maybe.Some("{base}!")
+    return Maybe.None
+
+fn mk(bool named) Shape:
+    let string base = "n"
+    if (named):
+        return Shape.Named("{base}!")
+    return Shape.Dot
+
+fn pick(bool hit) i32:
+    match find(hit):
+        Maybe.Some(s) -> return s.len()
+        Maybe.None -> return 0
+
+fn main() i32:
+    let Maybe@(string) m = find(true)
+    match m:
+        Maybe.Some(s) -> println("got {s} {s.len()}")
+        Maybe.None -> println("none")
+    match find(false):
+        Maybe.Some(s) -> println("got {s}")
+        Maybe.None -> println("none")
+    let Maybe@(string) other = find(true)
+    match m:
+        Maybe.Some(s) ->
+            match other:
+                Maybe.Some(t) -> println("{s} {t}")
+                Maybe.None -> println(s)
+            foreach(i in 0..2):
+                println("{i} {s}")
+            m := Maybe.None
+        Maybe.None -> println("none")
+    println(m.is_some())
+    let (Shape, i32) t = (mk(true), 1)
+    match t:
+        (Shape.Named(s), 1) -> println("one {s}")
+        (Shape.Named(s), _) -> println("other {s}")
+        (Shape.Dot, _) -> println("dot")
+    let Maybe@(Shape) ms = Maybe.Some(mk(true))
+    match ms:
+        Maybe.Some(Shape.Named(s)) -> println("nested {s}")
+        Maybe.Some(Shape.Dot) -> println("dot")
+        Maybe.None -> println("none")
+    println(pick(true))
+    println(pick(false))
+    return 0

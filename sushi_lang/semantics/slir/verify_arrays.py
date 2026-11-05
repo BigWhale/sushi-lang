@@ -1,9 +1,9 @@
-"""The checks of an array value, a length, a slice and the drop of an element in the SLIR verifier (docs/design/ir.md 8.13).
+"""The checks of an array value, a length, a slice and the drop of a part in the SLIR verifier (docs/design/ir.md 8.13).
 
 An `Aggregate(AggArray)` gives the parts of each run: a value of the element type, an
 `i32` count, and an `i32` first value of a sequence of `i32` slots. The value of a repeat
 run is a borrow, never a `Move`. The counts of a `T[N]` are constants that add up to `N`. A
-`Drop` of an element is of an owning type, off a local. `Len` reads an array or a string, and `Slice` reads an
+`Drop` of a field or an element is of an owning type, off a local that is no view. `Len` reads an array or a string, and `Slice` reads an
 array with two `i32` bounds. Each check is a free function that takes the `Check` of
 `verify.py` first.
 """
@@ -18,7 +18,7 @@ from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import rvalues as r
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.slir.printer import show
-from sushi_lang.semantics.slir.verify_rules import ARRAY_VALUE, LENGTH_SLICE, OWNING_DROP
+from sushi_lang.semantics.slir.verify_rules import ARRAY_VALUE, LENGTH_SLICE, OWNING_DROP, VIEW
 from sushi_lang.semantics.typesys import (
     ArrayType, BuiltinType, DynamicArrayType, Type, owns_resource,
 )
@@ -88,12 +88,16 @@ def length_or_slice(check: Check, value: r.Len | r.Slice, span: Span) -> None:
                                          f"i32", span)
 
 
-def element_drop(check: Check, stmt: st.Drop) -> None:
-    """The `Drop` of an element: the old value at the write of an owning element (ir.md
-    8.10, rule 6). Its root is a local, and its type owns. The dataflow reads the root,
-    which must hold a value, and does not change its state."""
-    if not isinstance(check.place(stmt.place, stmt.span).root, p.Local):
-        check.not_checked(f"a drop of {show(stmt.place)}, an element of a global", stmt.span)
+def part_drop(check: Check, stmt: st.Drop) -> None:
+    """The `Drop` of a field or an element: the old value at the write of an owning part
+    (ir.md 8.10, rule 6). Its root is a local that is no view, and its type owns. The
+    dataflow reads the root, which must hold a value, and does not change its state."""
+    root = check.place(stmt.place, stmt.span).root
+    if not isinstance(root, p.Local):
+        check.not_checked(f"a drop of {show(stmt.place)}, a part of a global", stmt.span)
+    if root.id in check.views:
+        check.fail(VIEW, f"{show(stmt.place)} is a part of a view, which owns nothing to drop",
+                   stmt.span)
     ty = check.operand_type(p.Copy(stmt.place), stmt.span)
     if ty is None or not owns_resource(ty, check.drops):
         check.fail(OWNING_DROP, f"{show(stmt.place)} has the type {display_type(ty)}, "

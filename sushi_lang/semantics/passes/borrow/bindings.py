@@ -2,7 +2,8 @@
 
 A literal arm binds no name. A `Variant` and a `Tuple` bind the local of each bare
 `PatBinding` in them (`bare_binders`), and each arm declares its binders as read-only views
-of the payload or of the part (`declare_bare_binders`, docs/design/ir.md 7.9). The
+of the payload or of the part (`declare_bare_binders`, docs/design/ir.md 7.9); a binder of a
+payload that owns is a borrowed view of the scrutinee, with a borrow region. The
 registration of a `poke`, `peek` or `nom` binder and of an `Own` reads the AST still: later
 groups port it.
 """
@@ -27,12 +28,15 @@ from sushi_lang.semantics.typesys import ReferenceType, Type
 from .diagnostics import spelled
 from .reads import borrow_owner, names_kept_storage, root_owner
 from sushi_lang.semantics.param_modes import borrow_mode
+from .regions import note_binder
 from .state import BorrowState, record_owners
 
 if TYPE_CHECKING:
     from sushi_lang.semantics.shir.ids import LocalId
+    from sushi_lang.semantics.shir.nodes import ShirBlock
 
     from . import BorrowChecker
+    from .state import Owner
 
 from sushi_lang.semantics.generics.iterators import CONTAINER_ITERATORS
 
@@ -78,17 +82,25 @@ def bare_binders(pattern: p.ShirPattern | p.PatBinding,
     return None
 
 
-def declare_bare_binders(checker: 'BorrowChecker',
-                         binders: Iterable[tuple[LocalId, Span]]) -> None:
+def declare_bare_binders(checker: 'BorrowChecker', binders: Iterable[tuple[LocalId, Span]],
+                         owners: Optional[dict[LocalId, tuple[Owner, ...]]] = None,
+                         body: Optional[ShirBlock] = None) -> None:
     """Declare each binder of an arm as a read-only view of its payload (CE2414).
 
     The note of CE2414 points at the name of the variant or at the tuple pattern that binds
-    it, as on `main`.
+    it, as on `main`. A binder of a payload that owns views the storage of its root: it
+    freezes the `owners` of the binder while it lives (CE2412), and it has a borrow region
+    over the statements of `body`, the arm (docs/design/ir.md 7.9).
     """
     for local, at in binders:
-        checker.declare(BorrowState(name=checker.name_of(local), local=local,
-                                    var_type=checker.local_type(local),
-                                    is_borrowed_binding=True, bound_at_span=at))
+        ty = checker.local_type(local)
+        state = BorrowState(name=checker.name_of(local), local=local, var_type=ty,
+                            is_borrowed_binding=True, bound_at_span=at)
+        checker.declare(state)
+        if body is not None and checker.types.type_class(ty) is TypeClass.MOVE:
+            record_owners(checker.borrow_state, state, (owners or {}).get(local, ()), at,
+                          checker._scope_binding_borrows[-1])
+            note_binder(checker, state, body)
 
 
 def walks_a_temporary(checker: 'BorrowChecker', iterable: Expr) -> bool:
@@ -387,7 +399,6 @@ def _register_item(checker: 'BorrowChecker', scope: BindingScope, item: object,
             pass                      # a discard, a literal and a range bind nothing
         case str():
             scope.bind_value(item, ty, span)
-            freeze_for_a_view(checker, scope, item, ty, span, scrutinee, kind)
         case NomBinding():
             # `Variant(nom x)` (ruling R11): the arm TAKES the payload, which it may only
             # do out of a scrutinee the match owns. A take out of an `Own(...)` cell never
@@ -413,23 +424,6 @@ def _register_item(checker: 'BorrowChecker', scope: BindingScope, item: object,
                            item.loc or span)
         case _:
             _register_own_pattern(checker, scope, item, ty, span, scrutinee)
-
-
-def freeze_for_a_view(checker: 'BorrowChecker', scope: BindingScope, name: str,
-                       ty: Optional[Type], span: Optional[Span],
-                       scrutinee: Optional[Expr], kind: ScrutineeKind) -> None:
-    """A bare binding of an owning payload or element views the owner's storage.
-
-    The copy is shallow, so the owner is frozen for the arm or the loop exactly as for a
-    `let`-borrow: a change to the owner while the binding is still used is CE2412 (#888,
-    #919). A plain value is a copy, and a scrutinee the match owns has no other owner to
-    change.
-    """
-    if kind is not ScrutineeKind.BORROWED or scrutinee is None:
-        return
-    if checker.types.type_class(ty) is not TypeClass.MOVE:
-        return
-    scope.freeze_owner(checker.borrow_state[name], scrutinee, span)
 
 
 def _reject_take_from_a_borrow(checker: 'BorrowChecker', binding: NomBinding,

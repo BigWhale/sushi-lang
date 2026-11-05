@@ -17,6 +17,7 @@ from typing import Optional, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.ownership import Provenance, TypeClass
 from sushi_lang.semantics.param_modes import Convention
 from sushi_lang.semantics.places import Step, walk_place
@@ -26,7 +27,7 @@ from sushi_lang.semantics.shir import dispatch
 from . import arms
 from .borrows import check_borrow as borrow_place
 from .consume import consume, name_provenance, unwrap_place
-from .diagnostics import emit_use_after_move, emit_use_of_invalidated_borrow
+from .diagnostics import CopyUse, emit_use_after_move, emit_use_of_invalidated_borrow
 from .flow import record_exit
 from .reads import read_type
 
@@ -81,12 +82,12 @@ def check_binary(checker: 'BorrowChecker', node: e.Binary) -> None:
 
 
 def check_cast(checker: 'BorrowChecker', node: e.Cast) -> None:
-    """A cast reads its operand and takes a plain one by value (ADOPT). A cast of an owning
-    operand is a move that no group checks yet: it stops."""
+    """A cast reads its operand and takes it by POSITION: a plain one by value (ADOPT), and
+    an owning one, the identity cast `a as string`, as any consuming use (a move of a local,
+    CE2411 for a field). The escape of CE2411 casts the copy."""
     arms.check(checker, node.operand)
-    if checker.types.type_class(read_type(checker, node.operand)) is TypeClass.MOVE:
-        arms.stop_at(checker, node)
-    consume(checker, node.operand)
+    target = display_type(checker.answers().type_of(node.shir_id))
+    consume(checker, node.operand, CopyUse("cast the copy", f" as {target}"))
 
 
 def check_interp(checker: 'BorrowChecker', node: e.Interp) -> None:

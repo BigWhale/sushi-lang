@@ -7,7 +7,7 @@ A range is a sequence: two constant bounds give its first value and its count as
 the place `Index(place, i)`, and a slice is a `Slice` in a VIEW local, which owns nothing.
 A value of an owning element: a `Single` value moves into its slot, and a repeated value is
 a borrow that the emitter copies into each slot. A write of an owning element drops the old
-element after the new value and the check of the index (`element_write`).
+element after the new value and the check of the index (`lower_aggregate.part_write`).
 Each index and each bound goes into a local of the statement first, so a later call cannot
 change it between the check and the access. A checked index compares the index and the
 length as `u32` and goes to the trap RE2020 on the failing edge; a slice checks
@@ -24,7 +24,6 @@ from sushi_lang.internals.report import Span
 from sushi_lang.semantics.generics.type_display import display_type
 from sushi_lang.semantics.operators import BinOp
 from sushi_lang.semantics.shir import exprs as e
-from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import lower_aggregate as agg
 from sushi_lang.semantics.slir import places as p
@@ -72,21 +71,6 @@ def array_init(low: Lowering, node: e.ArrayInit) -> Value:
             runs.append(r.RunSequence(-1 if run.range.reverse else 1))
             parts += range_operands(low, run.range, next(operands), next(operands))
     return r.Aggregate(r.AggArray(ty, tuple(runs)), tuple(parts))
-
-
-def element_write(low: Lowering, stmt: s.Assign, target: e.Index) -> None:
-    """`a[i] := v` of an owning element (ir.md 8.10, rule 6): the new value first, in a
-    temporary unless it is a constant, then the index and its check, then the `Drop` of the
-    old element, which always holds a value, then the store."""
-    value = low.value(stmt.value)
-    if not (isinstance(value, r.Use) and isinstance(value.operand, p.Const)):
-        value = r.Use(p.Move(p.Local(low.temporary(value, low.type_of(stmt.value),
-                                                   stmt.value.loc))))
-    place = agg.place_of(low, target)
-    if not isinstance(place, p.Index):
-        er.raise_internal_error("CE0000", span=stmt.loc, detail="an element write of no element")
-    low.emit(low.placement.drop_old_element(place, stmt.loc))
-    low.write(place, value, stmt.loc)
 
 
 def element(low: Lowering, base: p.Place, node: e.Index) -> p.Place:

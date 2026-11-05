@@ -1,0 +1,15 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ab\nac\n"
+#
+# The identity cast of an owning value takes its operand by position: a local moves into the
+# result, and a new value is adopted.
+
+fn main() i32:
+    let string base = "a"
+    let string a = "{base}b"
+    let string b = a as string
+    println(b)
+    let string c = "{base}c" as string
+    println(c)
+    return 0
