@@ -188,11 +188,12 @@ def lower_function(decl: object, answers: BodyTables, *, decls: DeclNames, name:
     home = declaring_unit(decl, unit)
     symbol = symbol_of(decl, home, body)
     ret = return_type_of(decl, tables, body)
+    borrows = getattr(decl, "borrowed_return", None) is not None
     shir_locals = {local.id: local for local in body.locals}
     learned = _Learned()
     while True:
         lowering = Lowering(answers, decls, drops, shir_locals, learned, label)
-        lowering.new_local(ret, None, None)
+        lowering.new_local(ret, None, None, view=borrows and lowering.owns(ret))
         params = lowering.parameters()
         lowering.lower_block(ret)
         found = _Learned(learned.flags | lowering.found_flags,
@@ -466,7 +467,8 @@ class Lowering:
             return p.Const(self.constant(expr))
         temp = self.temporary(self.value(expr), self.type_of(expr), expr.loc,
                               held=expr.shir_id == self.holder)
-        return p.Move(p.Local(temp)) if row is Ownership.ADOPT else p.Copy(p.Local(temp))
+        moves = row is Ownership.ADOPT and not self.locals[temp.index].view
+        return p.Move(p.Local(temp)) if moves else p.Copy(p.Local(temp))
 
     def constant(self, ref: e.ConstRef) -> k.Constant:
         """The value of the constant that `ref` names, from its typecheck row. A value that its

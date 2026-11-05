@@ -1242,6 +1242,55 @@ def test_a_move_of_an_address_local_is_refused():
         _drop(1), _dead(1), _set(0, r.Use(p.Const(k.Blank()))))), "an address local")
 
 
+# -- a peek return (ir.md 8.2, 8.13) ---------------------------------------------------
+
+def _view_return(function: SlirFunction) -> SlirFunction:
+    """`function` with `_0` a view local: the declaration returns `peek`."""
+    locals_ = tuple(replace(local, view=local.id == LocalId(0)) for local in function.locals)
+    return replace(function, locals=locals_)
+
+
+def _returns_param(*extra: st.SlirStatement, span: Span = SPAN) -> SlirFunction:
+    """`_0 = copy _1` of the borrowed `string[]` parameter `_1`, then `extra`."""
+    return _function([STRINGS, STRINGS], _block(0, _ret(), _set(0, r.Use(_copy(1)), span),
+                                                *extra), params=((1, GUARANTEED),))
+
+
+def test_a_copy_of_an_owning_parameter_into_a_view_return_slot_passes():
+    _passes(_view_return(_returns_param()))
+
+
+def test_a_copy_of_an_owning_parameter_into_an_owning_return_slot_is_refused():
+    _refused(_returns_param(span=BAD), "a peek return")
+
+
+def test_a_copy_of_an_owning_payload_into_an_owning_return_slot_is_refused():
+    result = EnumType(name="Result<string[], i32>", variants=(
+        EnumVariantInfo(name="Ok", associated_types=(STRINGS,)),
+        EnumVariantInfo(name="Err", associated_types=(I32,))))
+    _refused(_function([result, STRINGS], _block(0, _ret(), _set(
+        0, r.Aggregate(r.AggVariant(result, "Ok"), (_copy(1),)), BAD)),
+        params=((1, GUARANTEED),)), "a peek return")
+
+
+def test_a_copy_of_a_string_into_an_owning_return_slot_passes():
+    _passes(_function([STRING, STRING], _block(0, _ret(), _set(0, r.Use(_copy(1)))),
+                      params=((1, GUARANTEED),)))
+
+
+def test_a_view_return_slot_written_on_each_of_two_paths_passes():
+    _passes(_view_return(_function(
+        [STRINGS, STRINGS, STRINGS, BOOL],
+        _block(0, _switch(3, 1, 2), _live(3), _flag(3, True)),
+        _block(1, _ret(), _set(0, r.Use(_copy(1)))),
+        _block(2, _ret(), _set(0, r.Use(_copy(2)))),
+        params=((1, GUARANTEED), (2, GUARANTEED)))))
+
+
+def test_a_drop_of_a_view_return_slot_is_refused():
+    _refused(_view_return(_returns_param(_drop(0, BAD))), "a view local")
+
+
 def test_a_drop_of_a_field_of_a_global_is_not_checked_yet():
     _not_checked(_function([BLANK], _block(
         0, _ret(), st.Drop(p.Field(p.Global("unit$named", NAMED), 0), BAD))))

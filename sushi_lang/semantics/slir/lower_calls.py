@@ -3,7 +3,8 @@
 A call is ONE `Call` of its callee: the receiver of a method first, then each argument with
 the convention of its typecheck row. `clone`, and `expect`, `realise` and `err` of a
 `Result` or a `Maybe`, are no call (`lower_copies.py`). A get-out whose answer owns (`answers_view`) answers a
-view of its receiver (`lower_views.py`). Each arm is a free function that takes the `Lowering`
+view of its receiver, and a call with a `peek` return whose answer owns answers a view of its
+source arguments (`lower_views.py`). Each arm is a free function that takes the `Lowering`
 of `lower.py` first; the tables of `lower.py` name them. This module reads `lower.py` for
 its types only.
 """
@@ -52,6 +53,9 @@ def call(low: Lowering, node: e.Call) -> Value:
     if (isinstance(resolved.callee, Builtin) and answers_view(resolved.callee.method)
             and low.owns(low.type_of(node))):
         return views.view_of(value, value.args[0][0])
+    sources = low.typeck.sources_of(node.shir_id)
+    if sources is not None and low.owns(low.type_of(node)):
+        return views.view_of_sources(value, sources, isinstance(resolved.callee, Method))
     return value
 
 

@@ -34,17 +34,19 @@ TABLE = SideTable(
         "type_of", "local_type", "capture_type", "callee_of", "convention_of", "instance_of",
         "field_index_of", "loop_kind_of", "range_value_of", "conversion_of", "try_facts_of",
         "display_type_of", "match_facts_of", "element_type_of", "value_of", "global_of",
+        "sources_of",
     }),
     write_api=frozenset({
         "record_type", "record_local", "record_capture", "record_callee", "record_convention",
         "record_instance", "record_field_index", "record_loop_kind", "record_range_value",
         "record_conversion", "record_try", "record_display", "record_match", "record_element",
-        "record_value", "record_global",
+        "record_value", "record_global", "record_sources",
     }),
     tables=frozenset({
         "_node_types", "_local_types", "_capture_types", "_callees", "_arg_conventions",
         "_instance_types", "_field_indices", "_loop_kinds", "_range_values", "_conversions",
         "_try_facts", "_display_types", "_match_facts", "_element_types", "_values", "_globals",
+        "_source_rows",
     }),
 )
 

@@ -1,0 +1,28 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "2\n7\n3\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SHIR: test_borrow_peek_return.shir
+#
+# A call of a callable with a `peek` return has the source row of typecheck: the position
+# of each source argument, and -1 for the receiver (ir.md 7.3). Its answer is a view of the
+# owner of each source argument: a `let` of it has a region row, and its `return` in the
+# body is adopted as it is (ir.md 7.9). A plain answer is a copy, and it still freezes the
+# owner of its source.
+struct Store:
+    i32[] data
+
+extend Store front(i32 n) peek i32[]:
+    return self.data[0..n]
+
+fn first(peek i32[] xs) peek i32:
+    return xs[0]
+
+fn main() i32:
+    let Store s = Store(from([7, 8, 9]))
+    let i32[] f = s.front(2)
+    println(f.len())
+    let i32 x = first(peek s.data)
+    println(x)
+    s.data.push(1)
+    println(s.front(3).len())
+    return 0

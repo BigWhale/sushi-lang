@@ -11,9 +11,9 @@ RE-INITIALIZES the local: it is refused through a view of another value's storag
 old value goes. A write of a field or of an element changes its root in place: it is
 refused through a read-only view of the root, and it takes its value as a consuming use.
 A destructure takes its value as a consuming use, declares its binders, and rebinds its
-places from left to right. A `return` hands its value to the caller, a consuming use. An
-expression statement reads its value, and `x.destroy()` destroys the local `x`. The
-`return` of a `peek` return is checked by its own group: it stops the walk.
+places from left to right. A `return` hands its value to the caller, a consuming use; the
+`return` of a `peek` return hands a view (`borrowed_returns.py`). An expression statement
+reads its value, and `x.destroy()` destroys the local `x`.
 
 An `if` checks each block from the state before it, and the paths that reach the code
 after it join. A `match` reads its scrutinee (`match nom r:` takes it), each arm declares
@@ -53,9 +53,10 @@ from .bindings import (
 from .pattern_takes import (
     declare_taken_binders, owns_scrutinee, reject_partial_take, reject_take_from_a_borrow,
     taken_binders)
+from .borrowed_returns import check_borrowed_return
 from .borrows import LATER_ROOTS, clear_borrows
 from .consume import (
-    bind, binds_a_bare_literal_string, consume, decide, source_provenance, view_owners)
+    bind, binds_a_bare_literal_string, consume, decide, source_provenance, value_owners)
 from .diagnostics import emit_consume_of_borrow, spelled
 from .expressions import reject_a_use_after_the_change
 from .flow import (
@@ -278,8 +279,7 @@ def _targets(targets: Sequence[s.DestructureTarget], prefix: tuple[int, ...] = (
 
 def view_owners_of_value(checker: 'BorrowChecker', value: e.ShirExpr) -> tuple:
     """The owners that each binder of a borrowed value freezes."""
-    owner = borrow_owner(checker, value)
-    return () if owner is None else view_owners(checker, owner)
+    return value_owners(checker, value)
 
 
 def _reject_take_of_a_part(checker: 'BorrowChecker', node: s.Destructure,
@@ -343,12 +343,13 @@ def _rebind_place(checker: 'BorrowChecker', place: e.ShirExpr) -> None:
 
 
 def check_return(checker: 'BorrowChecker', node: s.Return) -> None:
-    """A `return` hands its value to the caller: a consuming use."""
-    if checker.borrowed_return:
-        # A `peek` body hands a VIEW to the caller (#1229): its group checks it.
-        arms.stop_at(checker, node)
-    arms.check(checker, node.value)
-    consume(checker, node.value)
+    """A `return` hands its value to the caller: a consuming use. A `peek` body hands a
+    VIEW to the caller, and the value must be a borrow of a source (`borrowed_returns.py`)."""
+    if checker.borrowed_return is not None:
+        check_borrowed_return(checker, node.value)
+    else:
+        arms.check(checker, node.value)
+        consume(checker, node.value)
     clear_borrows(checker)
     record_exit(checker)
 
@@ -509,8 +510,7 @@ def _arm_binders(pattern: p.ShirPattern | p.PatBinding, at: Optional[Span]
 
 def _view_owners_of(checker: 'BorrowChecker', node: s.Match, root: e.ShirExpr) -> tuple:
     """The owners that a binder freezes: none when the match takes its root."""
-    owner = None if node.consumes else borrow_owner(checker, root)
-    return () if owner is None else view_owners(checker, owner)
+    return () if node.consumes else value_owners(checker, root)
 
 
 def check_loop(checker: 'BorrowChecker', node: s.Loop) -> None:

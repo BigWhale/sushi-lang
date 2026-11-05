@@ -1,0 +1,52 @@
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "Mostly\nHarmless\n2\n-1\nshort\n15\n"
+# EXPECT_NO_LEAKS
+# EXPECT_DUMP_SLIR: test_slir_peek_return.slir
+#
+# A function with a `peek` return writes its `_0`, a view local, with a `Copy` of a place
+# of a source, one time on each path, and never drops it (ir.md 8.2, 8.9). In `peek T | E`
+# the `Ok` holds the view. The answer of the call is a view local in a region over the
+# owner of each source argument: a `let` holds it to its last use, and a temporary to the
+# end of its statement. A `??` over the answer reads the view through.
+error Short:
+    Missing
+
+struct Bag:
+    string name
+
+extend Bag label() peek string:
+    return self.name
+
+fn longer(string a, string b) peek string:
+    if (a.len() >= b.len()):
+        return a
+    return b
+
+fn head(i32[] xs, i32 n) peek i32[] | Short:
+    if (n > xs.len()):
+        return Result.Err(Short.Missing)
+    return Result.Ok(xs[0..n])
+
+fn count(i32[] xs, i32 n) i32 | Short:
+    let i32[] part = head(xs, n)??
+    return Result.Ok(part.len())
+
+fn make() Bag:
+    return Bag("Mostly Harmless")
+
+fn main() i32:
+    let string s = "Mostly"
+    let string t = "Harmless"
+    let string w = longer(s, t)
+    println(s)
+    println(w)
+    s := "x"
+    let i32[] data = from([1, 2, 3])
+    println(count(data, 2).realise(-1))
+    println(count(data, 9).realise(-1))
+    match head(data, 5):
+        Result.Ok(v) -> println(v.len())
+        Result.Err(_) -> println("short")
+    data.push(4)
+    println(make().label().len())
+    return 0

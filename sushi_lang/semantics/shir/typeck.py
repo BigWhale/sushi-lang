@@ -16,7 +16,9 @@ its path, the index of the target and then its index in each `Nested` level.
 The value row holds a value of the constant evaluator, one shape for two keys: the value
 that an integer literal holds at its type (ir.md 8.5, ruling R-W), and the value of the
 constant that a `ConstRef` names. An initializer has no value row (ir.md 7.3). The global
-row holds the symbol of the global of the `var` that a `StorageRef` names.
+row holds the symbol of the global of the `var` that a `StorageRef` names. The source row
+of a call of a callable with a `peek` return holds the position of each argument in the
+source set of the declaration, and -1 for the receiver (`RECEIVER_POSITION`).
 """
 from __future__ import annotations
 
@@ -90,6 +92,7 @@ class TypeckResults(SideTable):
     _element_types: dict[tuple[ShirId, tuple[int, ...]], Type] = row_table()
     _values: dict[ShirId, ConstantValue] = row_table()
     _globals: dict[ShirId, str] = row_table()
+    _source_rows: dict[ShirId, tuple[int, ...]] = row_table()
 
     # -- the read API: None when the table holds no answer ------------------------------
 
@@ -152,6 +155,11 @@ class TypeckResults(SideTable):
         """The symbol of the global of the `var` that a `StorageRef` names."""
         return self._globals.get(node)
 
+    def sources_of(self, call: ShirId) -> Optional[tuple[int, ...]]:
+        """The source positions of a call of a callable with a `peek` return: the index of
+        each argument in the source set, and -1 for the receiver. None for any other call."""
+        return self._source_rows.get(call)
+
     # -- the write API: the typecheck pass alone calls it --------------------------------
 
     def record_type(self, node: ShirId, ty: Type) -> None:
@@ -201,3 +209,6 @@ class TypeckResults(SideTable):
 
     def record_global(self, node: ShirId, symbol: str) -> None:
         write_once(self._globals, node, symbol, "typecheck", "global")
+
+    def record_sources(self, call: ShirId, positions: tuple[int, ...]) -> None:
+        write_once(self._source_rows, call, positions, "typecheck", "sources")

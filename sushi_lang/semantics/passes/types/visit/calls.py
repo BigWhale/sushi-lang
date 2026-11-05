@@ -39,7 +39,8 @@ and whose name the unit did not lose. Every other target, and a call that anothe
 types (a generic function, a function of a stdlib module other than `<math>` and
 `<time>`, a C function, a variadic function, a method
 or a static of a type that is not plain, a method or a static with a method-level type
-parameter, a method with a `peek` return, a perk method), stops the walk of its body.
+parameter, a perk method), stops the walk of its body. A call of a function or a method
+with a `peek` return has the source row of the call (`record_call_sources`).
 
 An `Interp` is a `string`, and each hole has a string form; the display type of each hole
 is an answer. A `Borrow` (`peek x`, `poke x` outside a call argument) is a value of a
@@ -78,6 +79,7 @@ from sushi_lang.semantics.passes.types.calls.methods import (
     RESOLUTION_REPORTED, extension_call_result_type, reject_uncloneable,
     reject_unhandled_channel_chain, resolve_extension_method)
 from sushi_lang.semantics.passes.types.calls.statics import reject_missing_static
+from sushi_lang.semantics.passes.types.borrowed_returns import record_call_sources
 from sushi_lang.semantics.passes.types.calls.user_defined import (
     check_stdlib_call, own_concrete_function)
 from sushi_lang.semantics.passes.types.method_registry import (
@@ -150,11 +152,11 @@ def _check_free_call(validator: TypeValidator, node: e.Call,
         return None
     if reject_private_call(validator, "function", sig, ref.loc):
         return call_yield(validator, sig.ret_type, sig.err_type)
-    if (sig.borrowed_return is not None
-            or any(p.is_variadic or p.is_pack or p.ty is None for p in sig.params)):
+    if any(p.is_variadic or p.is_pack or p.ty is None for p in sig.params):
         visit.stop_at(validator, node)
     answers = validator.body_answers()
     answers.record_callee(node.shir_id, ResolvedCall(Free(ref.decl), unit=sig.unit_name))
+    record_call_sources(validator, node, sig)
     function_type = function_type_of_sig(sig)
     if function_type is not None:
         visit.answer(validator, ref, function_type)
@@ -362,11 +364,10 @@ def _check_user_method(validator: TypeValidator, node: e.Call, owner: Type, name
     """The arguments of an extension method or a static through the one argument check,
     with the declared mode of each parameter. The call yields the `Result` of the channel
     of the method, or its bare return value, also after an error of an argument. A method
-    with a `peek` return stops the walk (B8)."""
-    if method.borrowed_return is not None:
-        visit.stop_at(validator, node)
+    with a `peek` return has the source row of the call."""
     validator.body_answers().record_callee(
         node.shir_id, ResolvedCall(callee, unit=method.unit_name))
+    record_call_sources(validator, node, method)
     params = [_parameter_type(validator, param) for param in method.params]
     kind = CalleeKind.STATIC_METHOD if isinstance(callee, Static) else CalleeKind.METHOD
     declared = Parameters(node.shir_id, modes_for(method.params, kind),

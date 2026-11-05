@@ -68,7 +68,7 @@ from sushi_lang.semantics.slir.verify_regions import check_regions
 from sushi_lang.semantics.slir.verify_rules import CONVENTIONS as CONVENTIONS
 from sushi_lang.semantics.slir.verify_rules import (
     ARRAY_VALUE, BOOL_FLAG, CONSTANT_RANGE, ELEMENT_MOVE, ENUM_VALUE, GLOBAL_MOVE,
-    INTEGER_SWITCH, KNOWN_BLOCKS, NUMERIC_CAST, ONE_TERMINATOR, OWNING_DROP,
+    INTEGER_SWITCH, KNOWN_BLOCKS, NUMERIC_CAST, ONE_TERMINATOR, OWNING_DROP, PEEK_RETURN,
     SHORT_CIRCUIT, SPANS, STRUCT_VALUE, TAG_SWITCH, TRAP, TYPED_LOCALS, TYPED_PLACES, VIEW,
 )
 from sushi_lang.semantics.typesys import (
@@ -402,6 +402,7 @@ class Check:
         else:
             self.not_a_view(stmt.place, stmt.span)
             self.no_view_copy(stmt)
+            self.no_copy_into_return_slot(stmt)
 
     def no_view_copy(self, stmt: st.Assign) -> None:
         """A view goes into no owning local: that local would drop storage it does not own."""
@@ -412,6 +413,24 @@ class Check:
                 and isinstance(stmt.place, p.Local) and stmt.place.id in self.owning:
             self.fail(VIEW, f"{show(stmt.place)} owns a copy of the view "
                             f"{show(value.operand.place)}", stmt.span)
+
+    def no_copy_into_return_slot(self, stmt: st.Assign) -> None:
+        """A `Copy` of an owning value goes into `_0` only when `_0` is a view: the
+        declaration returns `peek`. A `string` is the carve-out of `OWNED_COPY`: a string
+        bound from a literal is adopted, and it owns no heap."""
+        if stmt.place != p.Local(LocalId(0)) or self.function.locals[0].view:
+            return
+        value = stmt.rvalue
+        parts = (value.operand,) if isinstance(value, r.Use) else (
+            value.parts if isinstance(value, r.Aggregate) else ())
+        for part in parts:
+            if isinstance(part, p.Copy):
+                ty = self.operand_type(part, stmt.span)
+                if (ty is not None and ty != BuiltinType.STRING
+                        and owns_resource(ty, self.drops)):
+                    self.fail(PEEK_RETURN, f"_0 takes a copy of the owning value "
+                                           f"{show(part.place)}, and the function does not "
+                                           f"return peek", stmt.span)
 
     def not_a_view(self, place: p.Place, span: Span) -> None:
         """Only a `Slice` writes a view."""

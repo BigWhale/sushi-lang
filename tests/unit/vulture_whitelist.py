@@ -119,8 +119,8 @@ WHITELIST: tuple[tuple[str, str, str], ...] = (
      "kept for the closures group C2: the borrow pass on SHIR writes the ownership of each "
      "capture"),
     ("sushi_lang/semantics/shir/ownership.py", "record_lent*",
-     "kept for the iterators group C3 and the peek return group B8: the borrow pass on "
-     "SHIR writes the lent or owned state and the heap decision of an iterator"),
+     "kept for the iterators group C3: the borrow pass on SHIR writes the lent or owned "
+     "state and the heap decision of an iterator, also of one that a peek return answers"),
     ("sushi_lang/semantics/shir/ownership.py", "record_in_place",
      "kept for the iterators group C3: the borrow pass on SHIR writes the walk in place of "
      "a loop over an iterator value or a next() type"),
@@ -172,12 +172,6 @@ WHITELIST += (
     (_BORROW + "flow.py", "LoopFlow", _kept("C", "C3: iterators, a view of a loop")),
     (_BORROW + "calls.py", "settle_receiver", _kept("C", "C3: a lent iterator receiver")),
     (_BORROW + "reads.py", "constant_type", _ast_probe("A8")),
-    (_BORROW + "borrowed_returns.py", "body_return", _kept("B", "B8: peek returns")),
-    (_BORROW + "borrowed_returns.py", "settle_borrowed_call", _kept("B", "B8: peek returns")),
-    (_BORROW + "borrowed_returns.py", "reject_view_of_temporary",
-     _kept("B", "B8: peek returns")),
-    (_BORROW + "borrowed_returns.py", "check_borrowed_return",
-     _kept("B", "B8: peek returns")),
     (_BORROW + "calls.py", "consume_indirect_args", _kept("C", "C2: closures")),
     (_BORROW + "consume.py", "reconcile_closure_bind", _kept("C", "C2: closures")),
     (_BORROW + "bindings.py", "BindingScope", _kept("C", "C3: iterators, the scope of a loop")),
@@ -185,6 +179,10 @@ WHITELIST += (
     (_BORROW + "bindings.py", "bind_iterator", _kept("C", "C3: iterators")),
     (_BORROW + "bindings.py", "bind_lent_walk", _kept("C", "C3: iterators")),
     (_BORROW + "iterators.py", "settle_walk", _kept("C", "C3: iterators")),
+    (_BORROW + "iterators.py", "is_lent_name",
+     _kept("C", "C3: a lent iterator that leaves through a peek return")),
+    (_BORROW + "state.py", "lent_value",
+     _kept("C", "C3: a lent iterator that leaves through a peek return")),
     (_BORROW + "iterators.py", "settle_iterator_source", _kept("C", "C3: iterators")),
     (_BORROW + "diagnostics.py", "emit_change_under_iterator", _kept("C", "C3: iterators")),
     (_BORROW + "reads.py", "unit_variables", _ast_probe("D1")),

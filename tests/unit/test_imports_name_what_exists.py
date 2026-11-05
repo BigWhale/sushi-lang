@@ -43,8 +43,6 @@ PORT_TEMPLATES: dict[tuple[str, str], str] = {
     (_B + "runtime/iterator_adapters.py", "emit_adapter_call"): "C3",
     (_B + "types/arrays/methods/iterators.py", "emit_dynamic_array_iter.owned"): "C3",
     (_B + "types/arrays/methods/iterators.py", "emit_fixed_array_iter.owned"): "C3",
-    # The AST helpers of the borrow pass that the switch left with no caller (P2.6a).
-    ("semantics/passes/borrow/borrowed_returns.py", "check_borrowed_return"): "B8",
 }
 
 #: The rows of `PORT_TEMPLATES` at the day of the pin. A row may leave both; none may join.
@@ -59,7 +57,6 @@ PINNED_PORT_TEMPLATES: frozenset[tuple[str, str]] = frozenset({
     (_B + "runtime/iterator_adapters.py", "emit_adapter_call"),
     (_B + "types/arrays/methods/iterators.py", "emit_dynamic_array_iter.owned"),
     (_B + "types/arrays/methods/iterators.py", "emit_fixed_array_iter.owned"),
-    ("semantics/passes/borrow/borrowed_returns.py", "check_borrowed_return"),
 })
 
 

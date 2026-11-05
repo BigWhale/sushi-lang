@@ -39,12 +39,12 @@ SHIR_HOMES = {
     "callee_param_modes": (TypeckResults, "convention_of"),
     "resolved_enum_type": (TypeckResults, "type_of"),
     "callee_self_mode": (Method, "receiver"),
+    "callee_borrows": (TypeckResults, "sources_of"),
 }
 
 #: The facts whose SHIR home comes with a later chunk, and the chunk.
 LATER = {
     "iterator_next": "C3, the next() call of a protocol loop",
-    "callee_borrows": "B8, the sources of a peek return",
 }
 
 #: The facts that need no SHIR home: the typecheck pass reads them from the declaration of

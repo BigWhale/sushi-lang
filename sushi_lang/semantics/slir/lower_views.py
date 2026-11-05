@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Optional
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
+from sushi_lang.semantics.borrowed_return import RECEIVER_POSITION
 from sushi_lang.semantics.method_effects import answers_view
 from sushi_lang.semantics.ownership import Ownership
 from sushi_lang.semantics.places import Step, is_get_call, walk_place
@@ -47,14 +48,17 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     """`let T v = <borrowed value>`: a view local, written in its region (ir.md 8.9). A view
     whose owner is a temporary keeps it: the temporary is a hidden owner local of the block,
     and the region is over it. A view of a constant has no owner and no region: a constant
-    never changes. A `Take` here is no field take: it is its place."""
+    never changes. The answer of a call with a `peek` return is in a region over the owners
+    of its region row; a source that is a literal has none. A `Take` here is no field take: it is its place."""
     value = stmt.value.place if isinstance(stmt.value, e.Take) else stmt.value
     region = low.answers.ownership.region_of(target.local)
     if region is None:
         er.raise_internal_error("CE0000", span=stmt.loc,
                                 detail="a borrowed let with no borrow region reached SLIR")
     constant = isinstance(walk_place(value, Step.MEMBER | Step.INDEX).node, e.ConstRef)
-    if not region.owners and not constant:
+    called = walk_place(value, Step.TRY).node
+    borrowed = isinstance(called, e.Call) and low.typeck.sources_of(called.shir_id) is not None
+    if not region.owners and not constant and not borrowed:
         low.holder = held_root(low, value)
     written: r.Use | CallValue
     held: tuple[p.Place, ...]
@@ -73,7 +77,7 @@ def let_view(low: Lowering, stmt: s.Assign, target: e.LocalRef) -> None:
     finally:
         low.holder = None
     owners = ([_owner(low, owner, stmt.loc) for owner in region.owners] if region.owners
-              else [] if constant else list(held))
+              else [] if constant or borrowed else list(held))
     ident, _ = low.bind(target.local, stmt.loc, view=True)
     low.placement.declare(ident, False)
     low.emit([st.StorageLive(ident, stmt.loc)])
@@ -208,6 +212,18 @@ def reference_place(low: Lowering, expr: e.ShirExpr) -> p.Place:
         else:
             place = agg.project(low, place, [step])
     return place
+
+
+def view_of_sources(value: CallValue, sources: tuple[int, ...], method: bool) -> ViewValue:
+    """The answer of a call with a `peek` return (ir.md 8.9): a view over the root of the
+    operand of each argument at a position of the source row, the receiver of a method
+    first. A constant has no owner."""
+    offset = 1 if method else 0
+    operands = [value.args[0 if position == RECEIVER_POSITION else position + offset][0]
+                for position in sources]
+    owners = [p.root_of(operand.place) for operand in operands
+              if isinstance(operand, (p.Copy, p.Move))]
+    return ViewValue(value, tuple(dict.fromkeys(owners)))
 
 
 def view_of(value: r.Use | CallValue, read: p.Operand) -> ViewValue:

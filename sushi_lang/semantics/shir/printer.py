@@ -166,14 +166,17 @@ def _arg(pr: ShirPrinter, arg: e.Arg, convention: Optional[Convention] = None) -
 
 
 def _call(pr: ShirPrinter, call: e.Call) -> str:
-    """The resolved callee in place of the target, each argument with its convention, and
-    the state of the iterator that the call makes."""
+    """The resolved callee in place of the target, each argument with its convention, the
+    source row of a `peek` return, and the state of the iterator that the call makes."""
     answers = pr.answers
     resolved = None if answers is None else answers.callee_of(call.shir_id)
     target = pr.show(call.target if resolved is None else resolved.callee)
     args = (_arg(pr, arg, None if answers is None else answers.convention_of(call.shir_id, i))
             for i, arg in enumerate(call.args))
-    return _node("Call", target, "[" + ", ".join(args) + "]", *_iterator_state(pr, call))
+    sources = None if answers is None else answers.sources_of(call.shir_id)
+    borrows = None if sources is None else "[" + ", ".join(map(str, sources)) + "]"
+    return _node("Call", target, "[" + ", ".join(args) + "]", *_optional("borrows", borrows),
+                 *_iterator_state(pr, call))
 
 
 def _iterator_state(pr: ShirPrinter, call: e.Call) -> tuple[str, ...]:

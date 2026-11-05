@@ -22,6 +22,7 @@ from sushi_lang.semantics.shir import stmts as s
 from sushi_lang.semantics.shir.body import Initializer
 from sushi_lang.semantics.typesys import BuiltinType, FunctionType, ReferenceType
 
+from .borrowed_returns import borrowed_call, call_owners, reject_view_of_temporary
 from .diagnostics import (
     CopyUse,
     emit_consume_of_borrow,
@@ -75,7 +76,8 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
     element and a slice are storage that the owner of their base keeps, so each is a read
     through that owner (BORROWED): a plain one is a copy, and a take of an owning one is
     refused. The answer of a container get-out (`answers_view`) is a view of what its
-    receiver holds, a read through the receiver too (BORROWED). `r??` yields what `r` holds,
+    receiver holds, a read through the receiver too (BORROWED), and so is the answer of a
+    call with a `peek` return, a `??` over one included (`borrowed_returns.py`). `r??` yields what `r` holds,
     and the payload has the provenance of `r` (#548): a borrowed `r` keeps its owner, so
     the payload is a read through it; an owned `r` was SPENT by the `??` itself
     (`unwrap_place`), so nothing owns the payload now and the position adopts it. A `??`
@@ -95,6 +97,8 @@ def source_provenance(checker: 'BorrowChecker', node: e.ShirExpr) -> Provenance:
         return name_provenance(checker, node.local)
     if isinstance(node, (e.ConstRef, e.StorageRef)):
         return Provenance.OWNED
+    if borrowed_call(checker, node) is not None:
+        return Provenance.BORROWED
     if isinstance(node, (e.Field, e.Index, e.Slice)) or view_receiver(checker, node) is not None:
         return Provenance.BORROWED
     if isinstance(node, e.Try) and reads_through(checker, node.inner):
@@ -145,12 +149,13 @@ def read_through_receiver(checker: 'BorrowChecker', node: e.ShirExpr) -> Optiona
 
 def reads_through(checker: 'BorrowChecker', operand: e.ShirExpr) -> bool:
     """Does a `??` over `operand` read a borrowed wrapper through? The operand is a local
-    that holds a borrow, a `??` that reads through (a nested `??`), or a read-through
-    `or_err` (`read_through_receiver`)."""
+    that holds a borrow, a `??` that reads through (a nested `??`), the answer of a call
+    with a `peek` return, or a read-through `or_err` (`read_through_receiver`)."""
     root = walk_place(operand, Step.TRY).node
     if isinstance(root, e.LocalRef):
         return name_provenance(checker, root.local) is Provenance.BORROWED
-    return read_through_receiver(checker, root) is not None
+    return (borrowed_call(checker, root) is not None
+            or read_through_receiver(checker, root) is not None)
 
 
 def unwrap_place(checker: 'BorrowChecker', node: e.Try) -> None:
@@ -349,7 +354,7 @@ def bind(checker: 'BorrowChecker', node: s.Assign, dest: BorrowState) -> None:
             return
         decide(checker, value, source_provenance(checker, value), source_class(checker, value))
         value = value.place
-    if reject_slice_of_temporary(checker, value):
+    if reject_slice_of_temporary(checker, value) or reject_view_of_temporary(checker, value):
         return
     provenance = source_provenance(checker, value)
     src_state = (checker.borrow_state.get(value.local)
@@ -366,6 +371,11 @@ def bind(checker: 'BorrowChecker', node: s.Assign, dest: BorrowState) -> None:
         _move_out(checker, src_state, value.loc)
     elif decision is Ownership.REJECT:
         record_borrowed_binding(checker, node, dest)
+    elif borrowed_call(checker, value) is not None:
+        # A plain answer is a copy, and it still freezes the owners of its sources: the
+        # source set of a template is the same at every type argument (#1229).
+        record_owners(checker.borrow_state, dest, value_owners(checker, value), node.loc,
+                      checker._scope_binding_borrows[-1])
 
 
 def record_borrowed_binding(checker: 'BorrowChecker', node: s.Assign,
@@ -374,11 +384,18 @@ def record_borrowed_binding(checker: 'BorrowChecker', node: s.Assign,
     dest.is_borrowed_binding = True
     dest.is_let_borrow = True
     dest.bound_at_span = node.loc
-    owner = borrow_owner(checker, node.value)
-    if owner is None:
-        return
-    record_owners(checker.borrow_state, dest, view_owners(checker, owner), node.loc,
+    record_owners(checker.borrow_state, dest, value_owners(checker, node.value), node.loc,
                   checker._scope_binding_borrows[-1])
+
+
+def value_owners(checker: 'BorrowChecker', value: e.ShirExpr) -> tuple:
+    """The owners that a view of `value` freezes: the owners of the sources of a borrowed
+    call (`borrowed_returns.call_owners`), else the owner of the place and its owners."""
+    call = borrowed_call(checker, value)
+    if call is not None:
+        return call_owners(checker, call)[0]
+    owner = borrow_owner(checker, value)
+    return () if owner is None else view_owners(checker, owner)
 
 
 def view_owners(checker: 'BorrowChecker', owner) -> tuple:

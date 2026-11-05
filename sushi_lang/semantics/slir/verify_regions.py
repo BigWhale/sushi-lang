@@ -1,8 +1,10 @@
 """The region rules and the view-local rules of the SLIR verifier (docs/design/ir.md 8.6, 8.13).
 
 A view local (8.2) is written by one statement: a `Copy` of a place, or a call whose answer
-is a view. It is never the place of a `Drop` or a `DropIfSet`, never `Move`d and never the
-operand of an `Owned` argument, at its root or at a projection of it. One `Ref` writes an
+is a view. The `_0` of a function with a `peek` return is a view local too, and it is written
+one time on each path to a `return` (the dataflow of `verify_flow.py`). A view local is never
+the place of a `Drop` or a `DropIfSet`, never `Move`d and never the operand of an `Owned`
+argument, at its root or at a projection of it. One `Ref` writes an
 address local (8.2), and it is never dropped as a whole and never moved. The `Ref` comes
 before each use of the address local on every path (a dataflow: a block knows the address
 locals that each path into it wrote), and at each use a region over the root of the place of
@@ -190,7 +192,7 @@ def _view_locals(function: SlirFunction, views: set[LocalId], fail: Fail) -> Non
     for block in function.blocks:
         for stmt in block.statements:
             target = _written(stmt)
-            if target is not None and target.id in views:
+            if target is not None and target.id in views and target.id.index != 0:
                 if target.id in written:
                     fail(VIEW_LOCAL, f"{show(target)} is written two times", stmt.span)
                 written.add(target.id)

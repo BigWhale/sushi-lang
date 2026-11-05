@@ -5,7 +5,7 @@ The lift pass gives the pass each body that typecheck and lift finished with no 
 with its `TypeckResults` (`check_body`), and each body whose walk in typecheck reported an
 error. In such a body a node with no answer is UNKNOWN (`reads.unknown`): it has no arm, and
 the pass writes no row of the body. The DECLARATION half reads the declaration of the
-body: the mode of each parameter, the receiver, a borrowed return. The BODY half walks the
+body: the mode of each parameter, the receiver, a borrowed return and its source set. The BODY half walks the
 SHIR body through one table of arms keyed on the SHIR class (`arms.py`), and writes each
 answer as a row of the `OwnershipResults` of the body. The state of the walk is keyed by
 `LocalId`, and a diagnostic names a local by the source name of its `ShirLocal`.
@@ -41,6 +41,7 @@ from sushi_lang.semantics.typesys import BuiltinType, DynamicArrayType, Referenc
 
 # The table of arms first: the arm modules import it, and it imports them.
 from . import arms  # noqa: F401
+from .borrowed_returns import BodyReturn, body_return
 from .borrows import BY_ADDRESS
 from .consume import binds_a_bare_literal_string
 from .destroy_effects import compute_destroy_effects
@@ -97,8 +98,8 @@ class BorrowChecker:
         self.locals: Dict[LocalId, ShirLocal] = {}
         # The text of the file of the body, for the source text of a node.
         self.source: Optional[str] = None
-        # A `peek` return: the pass does not check its `return` yet.
-        self.borrowed_return = False
+        # The `peek` return of the body, with its source set (`borrowed_returns.py`).
+        self.borrowed_return: Optional[BodyReturn] = None
         # The body of `main`, whose `string[] args` is a view of the process arguments.
         self.is_main = False
         self.borrow_state: Dict[Owner, BorrowState] = {}
@@ -180,7 +181,7 @@ class BorrowChecker:
         self.ownership = self.shir.ownership_table_of(body)
         self.locals = {local.id: local for local in body.locals}
         self.source = self.reporter.body_source()
-        self.borrowed_return = getattr(decl, "borrowed_return", None) is not None
+        self.borrowed_return = body_return(self, decl, body)
         self.is_main = self.shir.decls.name_of(body.fn_id) == "main"
         self.borrow_state = {}
         self.active_borrows = set()

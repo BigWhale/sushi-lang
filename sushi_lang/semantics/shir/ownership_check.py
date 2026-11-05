@@ -26,8 +26,8 @@ and the receiver of a built-in method that declares `nom self` (`or_err`, `map_e
 consuming uses too: the convention is a fact of the callee row.
 
 Two writers of LENT have no check yet, because no spine body holds them: the clone of a
-lent iterator (the iterators group, C3) and a borrowed call that answers an iterator (the
-`peek` return group, B8). Each group adds its call to `_makes_an_iterator`.
+lent iterator and a call with a `peek` return that answers an iterator. The iterators group
+(C3) adds each call to `_makes_an_iterator`.
 
 When the `borrow` pass ends on a body with no error, the check walks the body once and
 asks the table: each consuming use and each capture has an `Ownership`; each iterator
@@ -38,7 +38,8 @@ moved locals have no check: no row for a local is the answer "moved on no path, 
 every path". REJECT is an error of `borrow`, except at four positions, where it is a
 borrowed view with no error: the value of a `let` (a let-borrow of the owner), the value
 of a destructure (each binder views its element), the
-operand of a `??` that reads through a borrowed owning wrapper, and the receiver of an
+operand of a `??` that reads through a borrowed owning wrapper or through the answer of a
+call with a `peek` return, and the receiver of an
 `or_err` that is the operand of a `??`. The wrapper is a local that holds a borrow: a
 parameter with no `nom`, a local of a reference type, or a let-borrow. The receiver of the
 `or_err` is a view by the shape of the call. A REJECT row at any other
@@ -220,8 +221,9 @@ def _borrowed_locals(body: ShirBody, typeck: TypeckResults,
 def borrowed_views(body: ShirBody, typeck: TypeckResults,
                    ownership: OwnershipResults) -> set[ShirId]:
     """The positions where a REJECT row is a borrowed view and no error: the value of a
-    `let` and of a destructure, the operand of a `??` that reads through a borrowed wrapper,
-    and the receiver of a read-through `or_err` that is the operand of a `??`. A rebind
+    `let` and of a destructure, the operand of a `??` that reads through a borrowed wrapper
+    or through the answer of a call with a `peek` return, and the receiver of a
+    read-through `or_err` that is the operand of a `??`. A rebind
     form takes each owning element, so `borrow` refuses its borrowed value (CE2411) at each
     place of one; a value of a rebind form with no such place is read. A REJECT row comes only for a
     wrapper that owns, so the operand of the `??` is a local that holds a borrow, or a `??`
@@ -231,13 +233,20 @@ def borrowed_views(body: ShirBody, typeck: TypeckResults,
     for _path, value in walk(body.block, "block"):
         if (isinstance(value, s.Assign) and value.is_init) or isinstance(value, s.Destructure):
             views.add(value.value.shir_id)
-        elif isinstance(value, e.Try) and walk_place(value.inner, Step.TRY).local in borrowed:
+        elif isinstance(value, e.Try) and (
+                walk_place(value.inner, Step.TRY).local in borrowed
+                or _borrowed_call(walk_place(value.inner, Step.TRY).node, typeck)):
             views.add(value.inner.shir_id)
         elif isinstance(value, e.Try):
             receiver = _read_through_receiver(value.inner, typeck)
             if receiver is not None:
                 views.add(receiver.shir_id)
     return views
+
+
+def _borrowed_call(node: object, typeck: TypeckResults) -> bool:
+    """Whether `node` is a call of a callable with a `peek` return: its answer is a view."""
+    return isinstance(node, e.Call) and typeck.sources_of(node.shir_id) is not None
 
 
 def _read_through_receiver(operand: e.ShirExpr, typeck: TypeckResults) -> e.ShirExpr | None:
