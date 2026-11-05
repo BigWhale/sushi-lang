@@ -111,7 +111,11 @@ address local comes before each use, and a region is open at each use). Amended 
 2026-11-05 by group B8.3 (the `peek` return): 7.9 (a `REJECT` row at the operand of a `??`
 over the answer of a call with a `peek` return; `ADOPT` on a view gives `Copy`; the dump
 prints the source row), 8.2 and 8.13 (the `_0` of a `peek` return is a view local, written
-one time on each path to a `return`).
+one time on each path to a `return`). Amended on 2026-11-05 by group B9 (the rebind of an
+owning place): 8.3, 8.9 and 8.13 (the concat peephole is the `concat_in_place` row of the
+string family, which takes its receiver `Inout`), 8.13 (the `Drop` of the old value at a
+rebind through a `poke` address local; a `Guaranteed` parameter that owns holds the value of
+the caller until a write).
 
 ## The decisions, in one place
 
@@ -2710,7 +2714,11 @@ can name is in exactly one of four sets (gate:
 (see below):
 
 - **Only reads** (`RECEIVER_READ_FAMILIES`: `primitive`, `string`). No method of the family
-  changes or consumes its receiver. The receiver is `Guaranteed`.
+  changes or consumes its receiver. The receiver is `Guaranteed`. One row of the string
+  family is the exception: `concat_in_place` (`CONCAT_IN_PLACE`), the call of the concat
+  peephole (8.9). Only SLIR lowering makes it, and no program can name it: it is no method
+  of `METHOD_TYPE_REGISTRY`. It writes its receiver (`Inout`) and reads its one argument
+  (`Guaranteed`).
 - **Read or write** (`EFFECT_FAMILIES`: `array`, `list`, `hashmap`, `own`). The rows of
   `METHOD_EFFECTS` tell what a method does to its receiver and to its arguments, and they
   give both conventions, per method, with ONE rule for the four families. The receiver of a
@@ -3234,6 +3242,7 @@ backstop of the checker, as on the AST backend.
 | `Lambda` | one `SlirFunction` cut from the body, and an `Aggregate(Closure, [FnRef, env...])` built from `LiftResults` (Q8); each captured operand is `Copy` or `Move` by `OwnershipResults` |
 | `ArrayInit(runs)` | each value in the written order, as for a `StructInit` (a place that a later call can change goes into a temporary first), then ONE `Aggregate(AggArray)` with its runs (8.7): a run-time count is a part; a range with two constant bounds takes the count and the first value of `plan_range`. The emitter fills the slots: unrolled stores, a constant walk, a run-time walk, one `memset` for a repeated constant byte, and one constant for a `T[N]` of constant parts. A count below zero fills nothing (`semantics/slir/lower_arrays.py`, `backend/types/arrays/runs.py`). Over an owning element, a `Single` value is a `Move` or a constant, and a repeated value is a `Copy`: a place of an owning value stays where it is (a temporary would drop a copy that it does not own), and a new value is a temporary of the statement, which drops it at its end. The emitter writes a copy of the repeated value into each slot over `copy_out` |
 | `Index` read | the index into a local of the statement, `Len` (or the constant `N` of a `T[N]`), the `u32` casts of the index and of the length, `<`, `SwitchInt`, `Trap("RE2020", [index, length])` on the failing edge; then the place `Index`. No check when `unchecked`, nor for a constant index of a `T[N]` that is in range. An owning element in a `let` is a view local (8.2) in a region over the array; in a borrowed position (a `Guaranteed` argument, a part of an interpolation) it is a `Copy` of the place |
+| the concat peephole: a rebind `s := s.concat(x)` of a local whose old value the function holds, where the receiver of `concat` is the local itself | `Call(Builtin(string.concat_in_place), [(copy s @inout), (x @guaranteed)])` into a `~` temporary, and NO `Drop` of the old value: the emitter grows the buffer of `s` in place when `s` owns it, and copies it when `s` does not (`string_append`). The argument is evaluated first, and the call reads `s` after it: when the argument rebinds `s` through a `poke`, the append reads the new value of `s` (D6). The local must hold a value of its own on the straight line: a live local, an `Inout` parameter or a `poke` address local. A local whose state is unknown or moved (a `Guaranteed` parameter before its first rebind) takes the general path (rule 6 of 8.10), and so does a local over which a borrow region is open at the rebind, and a field or an element target (`semantics/slir/lower_rebind.py`) |
 | `Index` write (`arr[i] := v`) | the value first (a value that is no constant goes into a temporary), then the index and the same bounds check, then the store into the place `Index`. Over an owning element, rule 6 of 8.10: then `Drop(Index(place, i))` of the old element before the store, which moves the temporary (`part_write`, the drop from `drops.py`) |
 | `Slice` | the bounds into locals of the statement (an inclusive end plus one), `end <= len` and `start <= end` as `u32` compares, `&`, `SwitchInt`, `Trap("RE2028", [start, end, length])` on the failing edge, then the `Slice` into a view local; never unchecked. A check that the constant bounds prove is left out |
 | a method of an array | a `Call` of `Builtin(BuiltinMethod)`: the receiver first (a `Copy` of its place, a constant, or a temporary of the statement), then each argument with the convention of its row (8.3). The emitter gives the family the address of the receiver (8.6), and one emitter of the family serves a `T[N]` and a `T[]` (`backend/types/arrays/dispatcher.py`) |
@@ -3564,7 +3573,9 @@ Runs after lowering, before the backend. It checks:
 - every block ends in exactly one terminator, and every `BlockId` exists
 - every `Drop` targets an owning type
 - every owning local reaches exactly one of: a `Drop`, a `DropIfSet`, or a `Move` on
-  every path
+  every path. A `Guaranteed` parameter that owns starts with the value of the caller
+  (8.10, rule 5): it is read, and nothing drops it or moves it while it holds that value;
+  a write gives it a value of its own, and from there the rule holds for it
 - `_0` holds a value on every path to a `return`
 - a `peek` return: a `Copy` of an owning value other than a `string` into `_0`, as the
   value or as a part of an aggregate, only when `_0` is a view local, that is, when the
@@ -3584,7 +3595,8 @@ Runs after lowering, before the backend. It checks:
   `Maybe` method, they are the answer of `receiver_convention` for the receiver and the
   mode of the row of the method for each argument: `map_err` and `or_err` take the
   receiver `Owned`, the error value of `or_err` is `Owned`, and the function of `map_err`
-  is `Guaranteed`
+  is `Guaranteed`. For the `concat_in_place` row of the string family (8.3, 8.9), the
+  receiver is `Inout` and the one argument is `Guaranteed`
 - no `Copy` of an owning value into an `Owned` argument, except a `string` (7.9)
 - a call of a `BuiltinMethod` has a receiver operand, the first operand
 - no `Binary` carries `and` or `or` (8.9)
@@ -3615,10 +3627,12 @@ Runs after lowering, before the backend. It checks:
   owning type is never the place of a `Drop` or a `DropIfSet`, never `Move`d, and never the
   operand of an `Owned` argument. Its owners stand in a region (8.6) at each read of it
 - an address local (8.2): ONE `Ref` writes it, and a `Ref` writes a local, never a part of
-  one. It is never the place of a `Drop` or a `DropIfSet` as a whole and never `Move`d, at
-  its root or at a part; the write of an owning part drops the old part through the
-  address (8.10, rule 6). Its `Ref` comes before each use of it on every path, and at
-  each use a region over the root of the place of its `Ref` is open (8.6)
+  one. It is never the place of a `DropIfSet` as a whole and never `Move`d, at its root or
+  at a part; the write of an owning part drops the old part through the address (8.10,
+  rule 6). It is the place of a `Drop` as a whole only at a rebind through it: the next
+  statement of the block writes the local (8.10, rules 6 and 8). Its `Ref` comes before
+  each use of it on every path, and at each use a region over the root of the place of its
+  `Ref` is open (8.6)
 - a numeric cast: every `Cast` goes between two numeric types, or casts a value to its own
   type (a conversion is a call, never a `Cast`)
 - a constant in range: every `Int` constant holds a value in the range of its integer type
