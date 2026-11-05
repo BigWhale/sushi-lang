@@ -188,17 +188,25 @@ def changes(stmt: st.SlirStatement) -> Iterator[tuple[p.Place, str]]:
                 yield operand.place, "gives to an inout argument"
 
 
+def _copied(value: r.Rvalue, slot: bool) -> bool:
+    """A view local is written by a `Copy`; the `_0` of a `peek` return also by an aggregate
+    (ir.md 8.13)."""
+    if isinstance(value, r.Use):
+        return isinstance(value.operand, p.Copy)
+    return slot and isinstance(value, r.Aggregate)
+
+
 def _view_locals(function: SlirFunction, views: set[LocalId], fail: Fail) -> None:
     written: set[LocalId] = set()
     for block in function.blocks:
         for stmt in block.statements:
             target = _written(stmt)
-            if target is not None and target.id in views and target.id.index != 0:
+            if target is not None and target.id in views:
                 if target.id in written:
                     fail(VIEW_LOCAL, f"{show(target)} is written two times", stmt.span)
-                written.add(target.id)
-                if isinstance(stmt, st.Assign) and not (
-                        isinstance(stmt.rvalue, r.Use) and isinstance(stmt.rvalue.operand, p.Copy)):
+                if target.id.index != 0:
+                    written.add(target.id)
+                if isinstance(stmt, st.Assign) and not _copied(stmt.rvalue, target.id.index == 0):
                     fail(VIEW_LOCAL, f"{show(target)} is written by no copy", stmt.span)
             for place, what in _spends(stmt):
                 local = p.root_of(place)

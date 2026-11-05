@@ -1371,6 +1371,12 @@ def test_a_drop_of_a_view_return_slot_is_refused():
     _refused(_view_return(_returns_param(_drop(0, BAD))), "a view local")
 
 
+def test_a_move_into_a_view_return_slot_is_refused():
+    _refused(_view_return(_function([STRING, STRING], _block(
+        0, _ret(), _live(1), _text(1), _set(0, r.Use(_move(1)), BAD), _dead(1)))),
+        "a view local")
+
+
 def test_a_drop_of_a_field_of_a_global_is_not_checked_yet():
     _not_checked(_function([BLANK], _block(
         0, _ret(), st.Drop(p.Field(p.Global("unit$named", NAMED), 0), BAD))))

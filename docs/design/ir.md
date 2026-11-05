@@ -3590,7 +3590,8 @@ Runs after lowering, before the backend. It checks:
   declaration of the function returns `peek`; and then no `Drop` of `_0` in the function.
   This is the one owning place that a view can be copied into. A `string` is the carve-out
   of the `Owned` argument: a string bound directly from a literal gets `ADOPT` and owns no
-  heap (7.9)
+  heap (7.9). So the verifier passes a `Copy` of a `string` into a `_0` that is no view
+  local, and `borrow` refuses the return of a borrowed string (CE2411)
 - every `BeginBorrow` has exactly one matching `EndBorrow` on every path
 - a borrow region: no `Move`, no `Drop`, no write and no `Inout` argument of the place of
   an owner while a region over it is open. A change of the owner after the `EndBorrow` is
