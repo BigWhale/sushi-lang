@@ -1,9 +1,10 @@
 # The Sushi IR: SHIR and SLIR
 
-**Status: ACCEPTED, and BUILT in part.** Measured against the tree on 2026-10-11, at
-`cc4088ca`, and ruled on the same day. Every design question has a ruling. SHIR and SLIR
-exist on the branch `feat/ir-shir-slir`: Phases 0, 1 and 2 of the migration are done (the
-spine), and Phase 3 (Tier A, plain values) is open. A construct that a stage does not handle
+**Status: ACCEPTED, and BUILT in part.** The design was measured against the tree on
+2026-10-11, at `cc4088ca`, and ruled on the same day. Every design question has a ruling.
+SHIR and SLIR exist on the branch `feat/ir-shir-slir`. Phases 0 to 4 of the migration are
+done: the spine, Tier A (plain values) and Tier B (ownership), closed at Gate 4. Phase 5
+(Tier C: generics, closures, iterators) is next. A construct that a stage does not handle
 yet stops the compile with CE0155. The numbers in sections 1 to 5 describe the tree at
 `cc4088ca`. This document is the DESIGN: what the two IRs are, why they have this shape, and what
 a migration must keep. The phases, the risks and the progress tracking are not part of this
@@ -1809,8 +1810,9 @@ writes nothing about them. A `Cursor` walk needs no state, because its `LoopKind
 in the constant table (`ConstSig.const_type`) has two writers. `collect` writes the type as
 the source writes it, and `typecheck` writes the resolved type there when it checks the
 declaration (`_validate_constant`, `passes/types/constants.py`). The backend, the library
-manifest and every pass after `typecheck` read the resolved type. Phase 4 moves the resolve
-step into `collect`, and then `collect` is the one writer.
+manifest and every pass after `typecheck` read the resolved type. The resolve step is in
+`typecheck` at the end of Phase 4. When a later phase moves it into `collect`, `collect`
+is the one writer.
 
 `LiftResults` is the third typed side table, written by `lift` alone, under the same four
 rules:
