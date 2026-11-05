@@ -12,6 +12,7 @@ from typing import Any, Callable, Mapping, Sequence
 import llvmlite.ir as ir
 
 from sushi_lang.backend.destructors import emit_value_destructor
+from sushi_lang.backend.generics.container_table import blank
 from sushi_lang.backend.gep_utils import gep_struct_field
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.internals.errors import raise_internal_error
@@ -58,7 +59,7 @@ def _destroy(codegen: Any, address: ir.Value, own_type: StructType,
     emit_value_destructor(codegen, address, own_type)
     field = _pointer(codegen, address)
     codegen.builder.store(ir.Constant(field.type.pointee, None), field)
-    return ir.Constant(codegen.types.i32, 0)
+    return blank(codegen)
 
 
 def _alloc(codegen: Any, _address: ir.Value, own_type: StructType,

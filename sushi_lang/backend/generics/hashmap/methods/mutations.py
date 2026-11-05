@@ -19,6 +19,7 @@ from ..utils import (
     emit_init_buckets_empty,
     emit_entry_state_check,
 )
+from sushi_lang.backend.generics.container_table import blank
 from sushi_lang.backend.generics.container_walk import emit_container_walk
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.backend.memory.heap import emit_malloc
@@ -166,7 +167,7 @@ def emit_hashmap_insert(
 
     builder.position_at_end(insert_done_bb)
 
-    return ir.Constant(codegen.types.i32, 0)
+    return blank(codegen)
 
 
 def emit_hashmap_remove(
@@ -310,7 +311,7 @@ def emit_hashmap_rehash(
 
     emit_hashmap_resize_to_capacity(codegen, hashmap_value, hashmap_type, capacity)
 
-    return ir.Constant(codegen.types.i32, 0)
+    return blank(codegen)
 
 
 def emit_hashmap_free(
@@ -340,7 +341,7 @@ def emit_hashmap_free(
     builder.store(zero_i32, fields.tombstones)
     builder.store(new_bucket_ptr, fields.buckets_data)
 
-    return ir.Constant(codegen.types.i32, 0)
+    return blank(codegen)
 
 
 def emit_hashmap_destroy(
@@ -360,7 +361,7 @@ def emit_hashmap_destroy(
     builder.store(zero_i32, fields.tombstones)
     builder.store(ir.Constant(ir.PointerType(entry_type), None), fields.buckets_data)
 
-    return ir.Constant(codegen.types.i32, 0)
+    return blank(codegen)
 
 
 def _release_buckets(
