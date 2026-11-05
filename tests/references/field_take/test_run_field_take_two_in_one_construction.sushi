@@ -1,0 +1,43 @@
+# Two field takes of one receiver in one struct construction, as in one call: the receiver
+# moves one time, and the other owning field drops right before the construction. A `??`
+# in a later field of the same construction finds the receiver whole on its error path and
+# drops it one time.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_NO_LEAKS: true
+# EXPECT_STDOUT_EXACT: "ab3 ab1 0\nab5 ab6 7\nab3 ab1 0\n1 9\n"
+
+struct Three:
+    string a
+    string b
+    string c
+
+struct Pair:
+    string x
+    string y
+
+struct Pk:
+    string x
+    string y
+    i32 k
+
+fn g(i32 n) i32 | StdError:
+    if (n > 0):
+        return Result.Err(StdError.Error)
+    return Result.Ok(7)
+
+fn run(i32 n) i32 | StdError:
+    let string base = "ab"
+    let Three w = Three("{base}1", "{base}2", "{base}3")
+    let i32 k = 0
+    let Pair p = Pair(nom w.c, nom w.a)
+    println("{p.x} {p.y} {k}")
+    let Three v = Three("{base}4", "{base}5", "{base}6")
+    let Pk t = Pk(nom v.b, nom v.c, g(n)??)
+    println("{t.x} {t.y} {t.k}")
+    return Result.Ok(1)
+
+fn main() i32:
+    let i32 a = run(0).realise(9)
+    let i32 b = run(1).realise(9)
+    println("{a} {b}")
+    return 0

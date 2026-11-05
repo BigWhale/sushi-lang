@@ -13,7 +13,7 @@ of the root. A `Borrow` borrows its place for the statement.
 """
 
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, Sequence, TYPE_CHECKING
 
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.report import Span
@@ -140,10 +140,11 @@ def check_slice(checker: 'BorrowChecker', node: e.Slice) -> None:
 
 
 def check_struct_init(checker: 'BorrowChecker', node: e.StructInit) -> None:
-    """A construction consumes each field by POSITION, in the order that the source writes
-    the fields (ruling R1). A `nom` field of a local that the body owns is a take."""
-    for position in node.written_order:
-        _take_arg(checker, node.fields[position])
+    """A construction reads each field, then consumes each by POSITION, in the order that
+    the source writes the fields (ruling R1), as a call does with its arguments. A `nom`
+    field of a local that the body owns is a take, so two takes of one local in one
+    construction are one take (docs/design/ir.md 8.9, `Take`)."""
+    _take_args(checker, [node.fields[position] for position in node.written_order])
 
 
 def check_tuple_init(checker: 'BorrowChecker', node: e.TupleInit) -> None:
@@ -153,9 +154,9 @@ def check_tuple_init(checker: 'BorrowChecker', node: e.TupleInit) -> None:
 
 
 def check_enum_init(checker: 'BorrowChecker', node: e.EnumInit) -> None:
-    """A construction consumes each payload by POSITION, marked or not (#134)."""
-    for arg in node.payload:
-        _take_arg(checker, arg)
+    """A construction consumes each payload by POSITION, marked or not (#134), after it
+    reads them all."""
+    _take_args(checker, node.payload)
 
 
 def _take_by_position(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
@@ -163,13 +164,16 @@ def _take_by_position(checker: 'BorrowChecker', value: e.ShirExpr) -> None:
     consume(checker, value)
 
 
-def _take_arg(checker: 'BorrowChecker', arg: e.Arg) -> None:
-    """A field or a payload that a construction takes by position: a `nom` one is a take."""
-    arms.check(checker, arg.value)
-    if arg.marker is Convention.OWNED:
-        consume_marked(checker, arg.value)
-    else:
-        consume(checker, arg.value)
+def _take_args(checker: 'BorrowChecker', args: Sequence[e.Arg]) -> None:
+    """The fields or the payloads that a construction takes by position: each is read
+    first, then each is consumed, and a `nom` one is a take."""
+    for arg in args:
+        arms.check(checker, arg.value)
+    for arg in args:
+        if arg.marker is Convention.OWNED:
+            consume_marked(checker, arg.value)
+        else:
+            consume(checker, arg.value)
 
 
 def check_take(checker: 'BorrowChecker', node: e.Take) -> None:

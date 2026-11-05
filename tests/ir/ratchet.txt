@@ -2961,6 +2961,7 @@ tests/references/field_take/test_run_field_take_own.sushi
 tests/references/field_take/test_run_field_take_plain_field_copies.sushi
 tests/references/field_take/test_run_field_take_return_dynamic_array.sushi
 tests/references/field_take/test_run_field_take_two_in_one_call.sushi
+tests/references/field_take/test_run_field_take_two_in_one_construction.sushi
 tests/references/foreach_ref_items/test_err_foreach_poke_constant.sushi
 tests/references/foreach_ref_items/test_err_foreach_ref_range.sushi
 tests/references/let_bindings/test_err_let_borrow_destroy.sushi
