@@ -94,6 +94,12 @@ deep copy, and `realise` and `err` lower as `expect` does); 8.3 and 8.13 (the ro
 8.3, 8.10 and 8.13 (a `Guaranteed` parameter starts not owned, and a rebind makes it owned);
 8.2 (the body of a `Drop` implementation is a method body, and the destroy seam calls it);
 7.9, 8.3 and 8.9 (`or_err` and `??` over a borrowed `Maybe` lower as one named shape).
+Amended on 2026-11-05 (the owning structs, enums and tuples, and the one deep copy): 7.3
+(the arm of the derived `clone`), 7.9 (`.clone()` reads its receiver), 8.2 (a row of the
+`result` and the `maybe` family answers a `bool`), 8.9 (a construction moves each owning
+part; the read and the write of an owning field; `x.clone()` of a temporary is the
+temporary; `realise` and `err` drop a temporary on the path that does not take it) and 8.10
+(rule 3: the drop on such a path).
 
 ## The decisions, in one place
 
@@ -1055,7 +1061,13 @@ argument borrows. The call yields its type after either fault. `realise` on a `~
 is [CE2506](../error-catalog.md#ce2506) at the call, and the pass does not check its
 default. The call still yields `~`, so a binding of another type is a mismatch too, as on
 `main`. One table row holds the argument types and the return type of each method
-(`WrapperMethodRow`, `semantics/generics/maybe.py` and `results.py`). A method with a
+(`WrapperMethodRow`, `semantics/generics/maybe.py` and `results.py`). The derived `clone`
+family has its arm too: `x.clone()` of a struct or an enum takes no argument and yields the
+type of `x`. A type that holds a resource has no copy
+([CE2431](../error-catalog.md#ce2431), with the `.share()` help;
+[CE4018](../error-catalog.md#ce4018) for an opaque type parameter), and a wrong count is
+[CE2009](../error-catalog.md#ce2009). The call yields its type after either fault. The arm of
+the `List` family asks the same rule (`reject_uncloneable`). A method with a
 signature row (`map_err`, `or_err`) has a method-level type parameter, and the arm of its
 family checks it from that row. The receiver of each is `Owned` (8.3), and the read-through
 of `or_err` over a borrowed `Maybe` is a rule of `borrow` (8.3). The `array` family has its
@@ -1948,8 +1960,9 @@ construct that the pass does not check yet stops the walk of its body with the s
 more statements after it in its block, stops the walk too (`borrow, Expand`): the group of
 the copies decides the statements that no path reaches. A call of a built-in method has its
 arm when `receiver_convention` (8.3) gives its receiver the convention `Guaranteed`: each
-method of the primitive family and of the `string` family, and each method of the `result`
-and `maybe` families that does not declare `nom self`. The arm reads the receiver (a use
+method of the primitive family and of the `string` family, the derived `clone` of a struct
+or an enum, and each method of the `result` and `maybe` families that does not declare
+`nom self`. The arm reads the receiver (a use
 after a move is CE2405), and the receiver stays with its owner. Then it reads each argument
 by its convention row, as a call of a free function does. A call of a method of another
 family, and a call with an `Owned` receiver, have no arm in the pass yet: each stops the
@@ -2470,7 +2483,8 @@ receiver is the first operand, and every operand is evaluated before the family 
 family keeps its emitters and gives them the operand values (Q7). The primitive family, the
 `string` family, the `result` family and the `maybe` family have a row. A family with no row
 stops. Each operand of a call of the `result` or the `maybe` family is `Guaranteed` (8.3);
-any other convention is an internal error. `realise` and `err` reach no family: they lower
+any other convention is an internal error. Each method that the row of the family emits
+(`is_ok`, `is_err`, `is_some`, `is_none`) takes only the receiver and answers a `bool`. `realise` and `err` reach no family: they lower
 as `expect` does, to a switch on the tag (8.9), and the copy of an owning value is a `Clone`
 on its own path. The `Clone` rvalue has ONE emit arm, over `copy_out` (the one deep-clone
 entry of `backend/ownership.py`), and no family calls `copy_out` for `realise` or `err`.
@@ -3009,11 +3023,11 @@ backstop of the checker, as on the AST backend.
 | a method of an array | a `Call` of `Builtin(BuiltinMethod)`: the receiver first (a `Copy` of its place, a constant, or a temporary of the statement), then each argument with the convention of its row (8.3). The emitter gives the family the address of the receiver (8.6), and one emitter of the family serves a `T[N]` and a `T[]` (`backend/types/arrays/dispatcher.py`) |
 | `Assert` | `SwitchInt(c, [(0, fail_bb)], otherwise: next_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2026", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state of the locals before the failing block. The blocks are made in the order fail, next. A condition local ends at the top of the two blocks, as for an `If` |
 | `expect(msg)` on a `Result` or a `Maybe` | the receiver into a place (a constant into a temporary), `Discriminant` into a local, and `SwitchInt(tag, [(success tag, next_bb)], otherwise: fail_bb)`. The failing block evaluates the message in a scope of its own and ends in `Trap("RE2029", [position, message])` (8.8); its temporaries get no drop. The next block goes on with the state before the failing block, and reads the payload through `Downcast` + `Field`: a `Copy` of a plain payload. An owning payload of a receiver that is a place is a `Clone(copy <projection>)`, because the receiver is a read (8.3); of a receiver that is a temporary it is a `Move` of the projection, which moves the temporary (8.7). A new value as the receiver is a temporary of its statement, which drops it where it is not moved. The blocks are made in the order fail, next |
-| `realise(default)` on a `Result` or a `Maybe`, and `err()` on a `Result` | lowered as `expect` is: the receiver into a place, `Discriminant` into a local and `SwitchInt` on the tag; no call. `realise` writes the payload on the success path (`Downcast` + `Field`) and the default on the other path; `err` writes `Some` of the error on the `Err` path and `None` on the other path. A plain value is a `Copy`. An owning value of a receiver that is a place is a `Clone(copy <projection>)`, and of a receiver that is a temporary a `Move` of the projection, which moves the temporary on that path (8.7). The default of `realise` is a `Move` of its temporary, or a `Clone` of a place. Each copy stands on its own path, because on the other path the payload field holds the bytes of the other variant |
-| `x.clone()`, of any type | the rvalue `Clone(copy x)` (8.7); no call |
-| `StructInit`, `TupleInit` | each field (each part) in the WRITTEN order (R1, 7.4), then ONE `Aggregate(AggStruct)` (`Aggregate(AggTuple)`) of the instance type, with the parts in the declaration order. A new value goes into a temporary of the statement in that order. A place, or a constant, is read at the `Aggregate`. A place is copied into a temporary first when a later field in the written order can call a function, because the call can change the place through a `poke`; a literal, a name of a constant, a place, an operator and a construction over such values call none. A literal and a name of a constant never change, so they get no temporary |
-| `Field` read | a place: `Copy` of `Field(place, index)`, with the index of the typecheck row; a field of a field is a projection of the projection. A base that is no place (a new value, a constant) goes into a temporary of the statement first, and the field is a `Copy` of the projection of the temporary; the statement drops the temporary at its end (rule 2) |
-| a field write (`p.x := v`) | the new value first, then the store into `Field(place, index)`. A new value that is `and` or `or` goes into a temporary first, because its left operand is written before its right operand reads the place (rule 6) |
+| `realise(default)` on a `Result` or a `Maybe`, and `err()` on a `Result` | lowered as `expect` is: the receiver into a place, `Discriminant` into a local and `SwitchInt` on the tag; no call. `realise` writes the payload on the success path (`Downcast` + `Field`) and the default on the other path; `err` writes `Some` of the error on the `Err` path and `None` on the other path. A plain value is a `Copy`. An owning value of a receiver that is a place is a `Clone(copy <projection>)`, and of a receiver that is a temporary a `Move` of the projection, which moves the temporary on that path (8.7). The default of `realise` is a `Move` of its temporary, or a `Clone` of a place. Each copy stands on its own path, because on the other path the payload field holds the bytes of the other variant. A temporary that one path takes (the receiver on the success path of `realise` and on the `Err` path of `err`, the default on the other path of `realise`) drops on the other path, so the paths meet with it moved (8.10, rule 3). Each path writes one temporary of the statement, which is the value of the call. A copy of an error goes into a temporary of its path, which the `Some` takes |
+| `x.clone()`, of any type | the rvalue `Clone(copy x)` (8.7) of a place, of a constant and of a view (a get-out goes into a view local first); no call. A receiver that is a temporary is the copy itself: `make().clone()` is the value of `make()`, and a chain `a.clone().clone()` makes one `Clone` (`semantics/slir/lower_copies.py`) |
+| `StructInit`, `TupleInit` | each field (each part) in the WRITTEN order (R1, 7.4), then ONE `Aggregate(AggStruct)` (`Aggregate(AggTuple)`) of the instance type, with the parts in the declaration order. A new value goes into a temporary of the statement in that order. A place, or a constant, is read at the `Aggregate`. A place is copied into a temporary first when a later field in the written order can call a function, because the call can change the place through a `poke`; a literal, a name of a constant, a place, an operator and a construction over such values call none. A literal and a name of a constant never change, so they get no temporary. A part that owns is a `Move`: of a local by the `move` row of `borrow`, or of the temporary of a new value; a constant stays a constant. A place of an owning part is never copied into a temporary |
+| `Field` read | a place: `Copy` of `Field(place, index)`, with the index of the typecheck row; a field of a field is a projection of the projection. A base that is no place (a new value, a constant) goes into a temporary of the statement first, and the field is a `Copy` of the projection of the temporary; the statement drops the temporary at its end (rule 2). An owning field in a `let` is a view local (8.2) in a region over the root of the place, and a view of a temporary keeps the temporary in a hidden owner local of the block; in a borrowed position (a `Guaranteed` argument, a part of an interpolation) an owning field is a `Copy` of the place |
+| a field write (`p.x := v`) | the new value first, then the store into `Field(place, index)`. A new value that is `and` or `or` goes into a temporary first, because its left operand is written before its right operand reads the place (rule 6). Over an owning field, rule 6 of 8.10: the new value goes into a temporary unless it is a constant, then `Drop(Field(place, index))` of the old field before the store, which moves the temporary (`part_write`) |
 | `Destructure` | one `Field` place per target, at its path: a binder is a new local of the block, written with the `Copy` of its element. A `let` form reads a place of the value where it is; any other value goes into a temporary of the statement first. For `Place` targets the value always goes into a temporary first, then each place from left to right is rebound (rule 6 of 8.10): a local, or a field, as a field write. `_` writes nothing. Over a value that owns, the row of `borrow` (7.9) decides: an OWNED value (`MOVE`) gives each binder and each place the `Move` of its `Field` place, and a `_` over an owning part drops that part first, so the value is spent whole and gets no drop (8.13, "no local is ever partially moved"); a BORROWED value (`REJECT`, the `let` form) gives each binder a view local (8.2), written with the `Copy` of its `Field` place, in a region over the owners of the value. A plain element is a `Copy` in both cases |
 | `StorageRef` (a `var`) | the place `Global(symbol, ty)`: the symbol of the global row of typecheck, and the declared type of the `var`. A read by value goes into a temporary of the statement first, because any call of the statement can change a `var` (`counter + bump()` reads `counter` before the call); a by-address argument, a receiver and a value that its statement stores at once read the `Global` where it is. A slice of a `var` is a view (8.7), which owns nothing: its read gets no temporary. A rebind is an `Assign` into the `Global`, and a field write and an element write an `Assign` into its projection; a plain `var` drops nothing. A `var` that owns stops the lowering (`slir, StorageRef owning`, group D1) |
 | `Take` | `Move` of the field; the other owning fields of the receiver get `Drop`, and `drop()` does not run (`borrow-model.md` §10c) |
@@ -3103,8 +3117,10 @@ locals, and the locals that own nothing, and nothing else:
    the statement that consumes the operand (the call or the store), never where the
    operand is built: an exit between the two (the error path of a `Try` in a later
    argument) still drops the local. The same holds for a temporary that is read with
-   `Move`, and a move of a projection (`move ((_3 as Ok).0)`) moves its local;
-   its declaration and each rebind of it mark it live. At an exit, a live local gets
+   `Move`, and a move of a projection (`move ((_3 as Ok).0)`) moves its local. Where one
+   path of `realise` or `err` moves a projection of a temporary, the other path drops the
+   temporary and marks it moved (`drop_on_path`), so the paths meet with one state. The
+   declaration of a local and each rebind of it mark it live. At an exit, a live local gets
    `Drop` and a moved local gets nothing; at a rebind, a live old value drops and a moved
    one drops nothing (rule 6). While every path that reaches a point gives a local one
    state, that state decides, and no row is read: on the straight line the state is
