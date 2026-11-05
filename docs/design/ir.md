@@ -3425,7 +3425,13 @@ Runs after lowering, before the backend. It checks:
   no local is ever PARTIALLY moved: lowering drops the sibling owning fields first (8.9,
   `Take`), or the sibling payloads of a pattern take, because an arm takes the variant
   whole (`borrow-model.md` S10b); a `Try` payload has no sibling. So the root is spent
-  whole, and the owning-local rule below reads the root
+  whole, and the owning-local rule below reads the root. One take can move two or more
+  parts of one root: the binders of a `Destructure` of an owned value, and two or more
+  `nom` binders of one path of a pattern. So a `Move` of a sub-place of a root that a
+  `Move` of another sub-place moved EARLIER IN THE SAME BLOCK is legal when neither place
+  is a projection of the other (the parts are disjoint). A write, a `StorageLive`, a
+  `StorageDead` or a `Drop` of the root ends that permission, and so does the end of the
+  block. Any other read or move of the root after a part move is a use after a move
 - no `Move` out of a `Global`
 - every block ends in exactly one terminator, and every `BlockId` exists
 - every `Drop` targets an owning type
