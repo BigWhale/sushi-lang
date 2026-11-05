@@ -3393,6 +3393,7 @@ tests/tuples/match_patterns/test_err_tuple_pattern_poke_in_payload.sushi
 tests/tuples/match_patterns/test_err_tuple_pattern_struct_scrutinee.sushi
 tests/tuples/match_patterns/test_tuple_match_binding_modes.sushi
 tests/tuples/match_patterns/test_tuple_match_literal_in_payload.sushi
+tests/tuples/match_patterns/test_tuple_match_literal_scrutinee.sushi
 tests/tuples/match_patterns/test_tuple_match_nested_enum_exhaustive.sushi
 tests/tuples/match_patterns/test_tuple_match_nested_in_enum.sushi
 tests/tuples/match_patterns/test_tuple_match_nested_in_tuple.sushi
@@ -3583,6 +3584,7 @@ tests/types/match_literals/test_match_literal_basics.sushi
 tests/types/match_literals/test_match_literal_u8_dispatch.sushi
 tests/types/match_literals/test_match_literal_widths.sushi
 tests/types/match_literals/test_match_string_basics.sushi
+tests/types/match_literals/test_match_string_binding_modes.sushi
 tests/types/match_literals/test_match_string_bytes.sushi
 tests/types/match_literals/test_match_string_nested.sushi
 tests/types/member_read_enum/test_err_maybe_field_read.sushi
