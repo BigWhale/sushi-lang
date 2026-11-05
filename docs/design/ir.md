@@ -3356,6 +3356,11 @@ locals, and the locals that own nothing, and nothing else:
    local that the scope exit frees. A statement is the owning scope of its temporaries: a
    temporary that nothing moves drops at the end of its statement, the newest first, and
    on the path of a `return` its drop comes before the drops of the enclosing scopes.
+   This is a stated change from the AST backend (ruling R-AU) in two cases: a discarded
+   call result (`xs.pop()` as a statement), which the AST backend kept to the exit of the
+   scope, and a temporary receiver of a method call in an interpolation hole
+   (`println("{mk().is_some()}")`), which the AST backend dropped before the print. SLIR
+   lowering drops both at the end of the statement.
 3. A local that is moved at an exit gets no drop at all. SLIR lowering tracks the state of
    each owning local along its own walk, and the `move` rows of `borrow` are the ONLY
    source of a move: lowering never classifies a use again. A `move` row at a `LocalRef`
