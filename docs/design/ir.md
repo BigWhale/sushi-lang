@@ -3668,6 +3668,8 @@ Runs after lowering, before the backend. It checks:
 - every `Trap` code is a registered RExxxx, with one operand for each printf conversion of
   its registry text, of the type that the conversion takes (8.8): `%d` an `i32`, `%.*s` a
   `string`. A conversion of another kind and a `Move` operand are refused
+- a drop flag: the flag of a `DropIfSet` is a `bool` local, and each local has one flag
+  only: every `DropIfSet` of a local names the same flag
 - every statement and terminator carries a `Span` (G9)
 
 **As built.** The verifier is six modules of `semantics/slir/`. `verify.py` holds the
