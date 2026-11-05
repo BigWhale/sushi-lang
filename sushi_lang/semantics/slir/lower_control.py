@@ -86,13 +86,14 @@ def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> Non
     """Each binder is a local of the scope of the arm, a bare binder of an owning payload a
     view local, a `peek` or `poke` binder an address local, and a `nom` binder an owning
     local written with the `Move` of its payload: the arm takes the variant whole, so the
-    root moves one time for all of them. A path writes its binders in its own block, which
-    goes to the body, or in the body block when it is the one path."""
+    root moves one time for all of them. A path writes its other binders before its `nom`
+    binders, because no part of the root is read after the take. A path writes its binders
+    in its own block, which goes to the body, or in the body block when it is the one path."""
     idents: dict[ShirLocalId, LocalId] = {}
     for block, writes in binds:
         statements: list[st.SlirStatement] = []
         taken: list[LocalId] = []
-        for local, value in writes:
+        for local, value in sorted(writes, key=lambda write: _takes(write[1])):
             if isinstance(value, r.Ref):
                 statements += views.bind_address(low, local, value, span)
                 continue
@@ -117,6 +118,10 @@ def _bind(low: Lowering, body: Block, binds: Sequence[Binds], span: Span) -> Non
         else:
             block.statements.extend(statements)
             block.terminator = tm.Goto(body.id, span)
+
+
+def _takes(value: r.Rvalue) -> bool:
+    return isinstance(value, r.Use) and isinstance(value.operand, p.Move)
 
 
 def _bind_taken(low: Lowering, local: ShirLocalId, value: r.Use,
