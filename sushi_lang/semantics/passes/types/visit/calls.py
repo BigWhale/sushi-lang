@@ -63,7 +63,8 @@ from sushi_lang.semantics.generics.maybe import (
     MAYBE_METHOD_SIGNATURES, WrapperMethodRow, maybe_method_row, maybe_payload)
 from sushi_lang.semantics.generics.results import RESULT_METHOD_SIGNATURES, result_method_row
 from sushi_lang.semantics.method_effects import (
-    ARRAY_FAMILY, LIST_FAMILY, MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY, STRING_FAMILY)
+    ARRAY_FAMILY, CLONE_FAMILY, LIST_FAMILY, MAYBE_FAMILY, PRIMITIVE_FAMILY, RESULT_FAMILY,
+    STRING_FAMILY)
 from sushi_lang.semantics.param_modes import (
     CalleeKind, Convention, ParamMode, declared_modes, modes_for, param_mode, receiver_mode)
 from sushi_lang.semantics.passes.types import visit
@@ -74,8 +75,8 @@ from sushi_lang.semantics.passes.types.calls.dotcall import (
     PRIMITIVE_STATICS, MethodRung, PrimitiveStatic, reject_unknown_method, resolve_dotted)
 from sushi_lang.semantics.passes.types.calls.enums import reject_missing_variant
 from sushi_lang.semantics.passes.types.calls.methods import (
-    RESOLUTION_REPORTED, extension_call_result_type, reject_unhandled_channel_chain,
-    resolve_extension_method)
+    RESOLUTION_REPORTED, extension_call_result_type, reject_uncloneable,
+    reject_unhandled_channel_chain, resolve_extension_method)
 from sushi_lang.semantics.passes.types.calls.statics import reject_missing_static
 from sushi_lang.semantics.passes.types.calls.user_defined import (
     check_stdlib_call, own_concrete_function)
@@ -460,6 +461,17 @@ def _check_wrapper_method(validator: TypeValidator, node: e.Call, receiver: Type
     return row.returns
 
 
+def _check_derived_clone(validator: TypeValidator, node: e.Call, receiver: Type,
+                         name: str, family: MethodFamily) -> Type:
+    """`x.clone()` of a struct or an enum yields the type of `x` and takes no argument. A
+    type that holds a resource has no copy (CE2431, CE4018 for an opaque type parameter),
+    and a wrong count is CE2009. The call yields its type after either fault."""
+    if not reject_uncloneable(validator, node, receiver):
+        reject_builtin_miscount(validator.reporter, node.loc, name, len(node.args),
+                                f"{display_type(receiver)}.{name}", family.arity)
+    return receiver
+
+
 FamilyArm = Callable[['TypeValidator', e.Call, Type, str, MethodFamily], Optional[Type]]
 
 #: The arm of each built-in family that the pass types, keyed by the registry name of the
@@ -471,6 +483,7 @@ FAMILY_ARMS: Mapping[str, FamilyArm] = MappingProxyType({
     STRING_FAMILY: _check_string_method,
     RESULT_FAMILY: _check_result_method,
     MAYBE_FAMILY: _check_maybe_method,
+    CLONE_FAMILY: _check_derived_clone,
 })
 
 

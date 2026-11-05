@@ -1,0 +1,130 @@
+unit test_slir_clone_shapes
+
+fn make() -> Holder {
+    let _0: Holder
+    let _1: string                         // base
+    let _2: string
+
+  bb0:
+    StorageLive(_1)
+    _1 = const "c"
+    StorageLive(_2)
+    _2 = call builtin interp@(string, string)(copy _1 @guaranteed, const "d" @guaranteed)
+    _0 = Holder(move _2, const 1_i32)
+    StorageDead(_2)
+    Drop(_1)
+    StorageDead(_1)
+    return
+}
+
+fn main() -> i32 {
+    let _0: i32
+    let _1: string                         // base
+    let _2: string
+    let _3: Holder                         // h
+    let _4: Holder                         // c
+    let _5: string
+    let _6: ~
+    let _7: string                         // s
+    let _8: ~
+    let _9: Holder                         // t
+    let _10: ~
+    let _11: List@(Holder)                 // l
+    let _12: Holder
+    let _13: ~
+    let _14: Maybe@(Holder) view
+    let _15: Maybe@(Holder)                // got
+    let _16: i32
+    let _17: Holder view                   // x
+    let _18: ~
+    let _19: ~
+    let _20: string                        // lit
+    let _21: ~
+
+  bb0:
+    StorageLive(_1)
+    _1 = const "a"
+    StorageLive(_2)
+    _2 = call builtin interp@(string, string)(copy _1 @guaranteed, const "b" @guaranteed)
+    StorageLive(_3)
+    _3 = Holder(move _2, const 2_i32)
+    StorageDead(_2)
+    StorageLive(_4)
+    _4 = clone(copy _3)
+    StorageLive(_5)
+    _5 = call builtin interp@(string, string, i32)(copy (_4.0) @guaranteed, const " " @guaranteed, copy (_4.1) @guaranteed)
+    StorageLive(_6)
+    _6 = call builtin println@(string)(copy _5 @guaranteed)
+    StorageDead(_6)
+    Drop(_5)
+    StorageDead(_5)
+    StorageLive(_7)
+    _7 = clone(copy (_3.0))
+    StorageLive(_8)
+    _8 = call builtin println@(string)(copy _7 @guaranteed)
+    StorageDead(_8)
+    StorageLive(_9)
+    _9 = call @make()
+    StorageLive(_10)
+    _10 = call builtin println@(string)(copy (_9.0) @guaranteed)
+    StorageDead(_10)
+    StorageLive(_11)
+    _11 = call builtin List.new()
+    StorageLive(_12)
+    _12 = clone(copy _3)
+    StorageLive(_13)
+    _13 = call builtin list.push(copy _11 @inout, move _12 @owned)
+    StorageDead(_13)
+    StorageDead(_12)
+    StorageLive(_14)
+    BeginBorrow(b0, _11, peek)
+    _14 = call builtin list.get(copy _11 @guaranteed, const 0_i32 @guaranteed)
+    StorageLive(_15)
+    _15 = clone(copy _14)
+    EndBorrow(b0)
+    StorageDead(_14)
+    _16 = discriminant(_15)
+    switchInt(copy _16) -> [0: bb1, 1: bb2, otherwise: unreachable]
+
+  bb1:
+    StorageLive(_17)
+    BeginBorrow(b1, _15, peek)
+    _17 = copy ((_15 as Some).0)
+    StorageLive(_18)
+    _18 = call builtin println@(string)(copy (_17.0) @guaranteed)
+    EndBorrow(b1)
+    StorageDead(_18)
+    StorageDead(_17)
+    goto -> bb3
+
+  bb2:
+    StorageLive(_19)
+    _19 = call builtin println@(string)(const "none" @guaranteed)
+    StorageDead(_19)
+    goto -> bb3
+
+  bb3:
+    StorageLive(_20)
+    _20 = clone(const "lit")
+    StorageLive(_21)
+    _21 = call builtin println@(string)(copy _20 @guaranteed)
+    StorageDead(_21)
+    _0 = const 0_i32
+    Drop(_20)
+    StorageDead(_20)
+    Drop(_15)
+    StorageDead(_15)
+    Drop(_11)
+    StorageDead(_11)
+    Drop(_9)
+    StorageDead(_9)
+    Drop(_7)
+    StorageDead(_7)
+    Drop(_4)
+    StorageDead(_4)
+    Drop(_3)
+    StorageDead(_3)
+    Drop(_1)
+    StorageDead(_1)
+    return
+}

@@ -181,6 +181,13 @@ class DropPlacement:
         self._pending.pop(local, None)
         return dropped
 
+    def drop_on_path(self, local: LocalId, span: Span) -> list[st.SlirStatement]:
+        """The drop of the temporary `local` on a path that does not take it, where another
+        path moves out of it (`realise`, `err`): on each path it ends moved."""
+        dropped = self._drop(local, span)
+        self._moved.add(local)
+        return dropped
+
     def drop_old_part(self, place: p.Field | p.Index, span: Span) -> list[st.SlirStatement]:
         """The drop of the old value at the write of an owning field or element (rule 6). A
         part always holds a value, so it always drops; the root keeps its state."""

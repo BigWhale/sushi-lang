@@ -16,8 +16,8 @@ The lowering handles the parameters, a `let`, a rebind, a call statement, a `ret
 `continue`, an `assert`, over literals, names of constants, locals, the operators, `and`
 and `or` as control flow, the construction of an enum variant, of a struct, of a tuple and
 of an array, a field read and write, an element read and write with its bounds check, a
-slice, a destructure, a call, an interpolation, a `??` and `expect`, and a borrowed view in
-a view local with its region (`lower_views.py`). The
+slice, a destructure, a call, an interpolation, a `??`, `clone`, `expect`, `realise` and
+`err` (`lower_copies.py`), and a borrowed view in a view local with its region. The
 operand of a value is the answer of `borrow` and the shape of the value alone (ir.md 7.9):
 a `move` row gives `Move`; an `adopt` row gives
 `Copy` of a place, a constant for a literal or a name of a constant, and `Move` of the

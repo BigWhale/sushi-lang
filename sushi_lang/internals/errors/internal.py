@@ -117,9 +117,9 @@ _add(ErrorMessage("CE0035", Severity.ERROR,
     "enum '{enum}' missing required variant '{variant}'",
     Category.INTERNAL, "Expected enum variant not found in enum definition."))
 
-_add(ErrorMessage("CE0036", Severity.ERROR,
-    "enum variant '{variant}' has wrong number of associated types: expected {expected}, got {got}",
-    Category.INTERNAL, "Enum variant associated type count mismatch - monomorphization failure."))
+# CE0036 ("enum variant has wrong number of associated types") is retired. The `realise`
+# emitter raised it; SLIR lowering makes a switch on the tag of `realise` now. The number is
+# not reused.
 
 
 _add(ErrorMessage("CE0040", Severity.ERROR,

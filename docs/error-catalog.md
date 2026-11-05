@@ -224,16 +224,6 @@ Type mismatch: expected struct type but got different type.
 
 Expected enum variant not found in enum definition.
 
-### CE0036 {#ce0036}
-
-**Error** · internal
-
-**Message:** `enum variant '{variant}' has wrong number of associated types: expected {expected}, got {got}`
-
-**Help:** `re-run with --traceback for the full Python traceback, then please report it`
-
-Enum variant associated type count mismatch - monomorphization failure.
-
 ### CE0040 {#ce0040}
 
 **Error** · internal

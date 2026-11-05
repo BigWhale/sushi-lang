@@ -34,6 +34,7 @@ from sushi_lang.backend.expressions.casts import emit_value_cast
 from sushi_lang.backend.expressions.enums import emit_enum_variant_value
 from sushi_lang.backend.gep_utils import gep_struct_field
 from sushi_lang.backend.memory.allocas import entry_alloca
+from sushi_lang.backend.ownership import copy_out
 from sushi_lang.backend.expressions.operators import (
     emit_arithmetic, emit_bitwise, emit_contract_relation, emit_number_comparison, emit_string_relation,
     emit_unary_value, emit_xor,
@@ -289,6 +290,12 @@ def _aggregate(state: FunctionState, rvalue: r.Aggregate) -> ir.Value:
                              [operand_value(state, part) for part in rvalue.parts])
 
 
+def _clone(state: FunctionState, rvalue: r.Clone) -> ir.Value:
+    """The one deep copy (ir.md 8.7): `copy_out` of the operand at its semantic type."""
+    return copy_out(state.codegen, operand_value(state, rvalue.operand),
+                    type_of_operand(state, rvalue.operand))
+
+
 def _discriminant(state: FunctionState, rvalue: r.Discriminant) -> ir.Value:
     """The tag of the enum in a place, as an `i32`."""
     enum_of(type_of_place(state, rvalue.place), state.fault)
@@ -314,6 +321,7 @@ _RVALUES: dict[type, Callable[[FunctionState, Any], ir.Value]] = {
     r.Cast: _cast,
     r.Aggregate: _aggregate,
     r.Discriminant: _discriminant,
+    r.Clone: _clone,
     r.Len: _len,
     r.Slice: _slice,
 }

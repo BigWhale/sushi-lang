@@ -7,18 +7,24 @@ fn main() -> i32 {
     let _3: u8                             // lo
     let _4: Result@((i32, i32), MathError)
     let _5: (i32, i32)
-    let _6: (i32, i32)                     // qr
-    let _7: i64
-    let _8: Result@(i32, StdError)
-    let _9: i32                            // slept
-    let _10: i64
-    let _11: i64
-    let _12: Result@(i32, StdError)
-    let _13: i32                           // failed
-    let _14: string
-    let _15: ~
-    let _16: string
-    let _17: ~
+    let _6: (i32, i32)
+    let _7: i32
+    let _8: (i32, i32)                     // qr
+    let _9: i64
+    let _10: Result@(i32, StdError)
+    let _11: i32
+    let _12: i32
+    let _13: i32                           // slept
+    let _14: i64
+    let _15: i64
+    let _16: Result@(i32, StdError)
+    let _17: i32
+    let _18: i32
+    let _19: i32                           // failed
+    let _20: string
+    let _21: ~
+    let _22: string
+    let _23: ~
 
   bb0:
     StorageLive(_1)
@@ -32,46 +38,88 @@ fn main() -> i32 {
     StorageLive(_5)
     _5 = (const 0_i32, const 0_i32)
     StorageLive(_6)
-    _6 = call builtin result.realise(copy _4 @guaranteed, copy _5 @guaranteed)
+    _7 = discriminant(_4)
+    switchInt(copy _7) -> [0: bb1, otherwise: bb2]
+
+  bb1:
+    _6 = copy ((_4 as Ok).0)
+    goto -> bb3
+
+  bb2:
+    _6 = copy _5
+    goto -> bb3
+
+  bb3:
+    StorageLive(_8)
+    _8 = copy _6
+    StorageDead(_6)
     StorageDead(_5)
     StorageDead(_4)
-    StorageLive(_7)
-    _7 = const 0_i64 as i64
-    StorageLive(_8)
-    _8 = call @<time>.msleep(copy _7 @guaranteed)
     StorageLive(_9)
-    _9 = call builtin result.realise(copy _8 @guaranteed, const 9_i32 @guaranteed)
-    StorageDead(_8)
-    StorageDead(_7)
+    _9 = const 0_i64 as i64
     StorageLive(_10)
-    _10 = neg const 1_i64
+    _10 = call @<time>.msleep(copy _9 @guaranteed)
     StorageLive(_11)
-    _11 = move _10 as i64
-    StorageLive(_12)
-    _12 = call @<time>.msleep(copy _11 @guaranteed)
+    _12 = discriminant(_10)
+    switchInt(copy _12) -> [0: bb4, otherwise: bb5]
+
+  bb4:
+    _11 = copy ((_10 as Ok).0)
+    goto -> bb6
+
+  bb5:
+    _11 = const 9_i32
+    goto -> bb6
+
+  bb6:
     StorageLive(_13)
-    _13 = call builtin result.realise(copy _12 @guaranteed, const 9_i32 @guaranteed)
-    StorageDead(_12)
+    _13 = copy _11
     StorageDead(_11)
     StorageDead(_10)
-    StorageLive(_14)
-    _14 = call builtin interp@(f64, string, u8, string, i32)(copy _1 @guaranteed, const " " @guaranteed, copy _3 @guaranteed, const " " @guaranteed, copy (_6.0) @guaranteed)
-    StorageLive(_15)
-    _15 = call builtin println@(string)(copy _14 @guaranteed)
-    StorageDead(_15)
-    Drop(_14)
-    StorageDead(_14)
-    StorageLive(_16)
-    _16 = call builtin interp@(i32, string, i32)(copy _9 @guaranteed, const " " @guaranteed, copy _13 @guaranteed)
-    StorageLive(_17)
-    _17 = call builtin println@(string)(copy _16 @guaranteed)
-    StorageDead(_17)
-    Drop(_16)
-    StorageDead(_16)
-    _0 = const 0_i32
-    StorageDead(_13)
     StorageDead(_9)
-    StorageDead(_6)
+    StorageLive(_14)
+    _14 = neg const 1_i64
+    StorageLive(_15)
+    _15 = move _14 as i64
+    StorageLive(_16)
+    _16 = call @<time>.msleep(copy _15 @guaranteed)
+    StorageLive(_17)
+    _18 = discriminant(_16)
+    switchInt(copy _18) -> [0: bb7, otherwise: bb8]
+
+  bb7:
+    _17 = copy ((_16 as Ok).0)
+    goto -> bb9
+
+  bb8:
+    _17 = const 9_i32
+    goto -> bb9
+
+  bb9:
+    StorageLive(_19)
+    _19 = copy _17
+    StorageDead(_17)
+    StorageDead(_16)
+    StorageDead(_15)
+    StorageDead(_14)
+    StorageLive(_20)
+    _20 = call builtin interp@(f64, string, u8, string, i32)(copy _1 @guaranteed, const " " @guaranteed, copy _3 @guaranteed, const " " @guaranteed, copy (_8.0) @guaranteed)
+    StorageLive(_21)
+    _21 = call builtin println@(string)(copy _20 @guaranteed)
+    StorageDead(_21)
+    Drop(_20)
+    StorageDead(_20)
+    StorageLive(_22)
+    _22 = call builtin interp@(i32, string, i32)(copy _13 @guaranteed, const " " @guaranteed, copy _19 @guaranteed)
+    StorageLive(_23)
+    _23 = call builtin println@(string)(copy _22 @guaranteed)
+    StorageDead(_23)
+    Drop(_22)
+    StorageDead(_22)
+    _0 = const 0_i32
+    StorageDead(_19)
+    StorageDead(_13)
+    StorageDead(_8)
     StorageDead(_3)
     StorageDead(_2)
     StorageDead(_1)

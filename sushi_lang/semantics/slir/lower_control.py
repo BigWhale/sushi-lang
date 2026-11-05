@@ -1,10 +1,10 @@
 """SHIR to SLIR: the control-flow arms of the lowering (docs/design/ir.md 8.9, 8.10).
 
 The arms of `if`, `while`, a counted loop over a range, `break`, `continue` and `assert`,
-the lowering of `expect` as an `assert`, the lowering of a condition, the statements of an
-arm with its binders, the join of the paths of a statement with the drop state of each
-path, the short-circuit `and` and `or`, and `??`. The arm of `match` is in
-`lower_match.py`. Each arm is a free function that takes the `Lowering` of `lower.py`
+the failing path of an `assert` and of an `expect`, the lowering of a condition, the
+statements of an arm with its binders, the join of the paths of a statement with the drop
+state of each path, the short-circuit `and` and `or`, and `??`. The arm of `match` is in
+`lower_match.py`, and `expect` is in `lower_copies.py`. Each arm is a free function that takes the `Lowering` of `lower.py`
 first; the tables of `lower.py` name them. This module reads `lower.py` for its types
 only, so no import cycle exists at run time.
 """
@@ -16,12 +16,11 @@ from typing import TYPE_CHECKING, Callable, Optional, Sequence, TypeAlias
 from sushi_lang.internals import errors as er
 from sushi_lang.internals.diagnostics import StageStop
 from sushi_lang.internals.report import Span
-from sushi_lang.semantics.method_effects import MAYBE_FAMILY, RESULT_FAMILY
 from sushi_lang.semantics.ranges import plan_range
 from sushi_lang.semantics.shir import dispatch
 from sushi_lang.semantics.shir import exprs as e
 from sushi_lang.semantics.shir import stmts as s
-from sushi_lang.semantics.shir.callee import Builtin, BuiltinMethod, Conversion
+from sushi_lang.semantics.shir.callee import Conversion
 from sushi_lang.semantics.shir.ids import LocalId as ShirLocalId
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.loop_kind import CountedRange, While
@@ -202,7 +201,7 @@ def assert_(low: Lowering, stmt: s.Assert) -> None:
     fail, next_ = low.new_block(), low.new_block()
     low.jump(tm.SwitchInt(cond, ((0, fail.id),), next_.id, stmt.loc))
     targets(local, (fail, next_), stmt.cond.loc)
-    _trap_path(low, fail, next_, stmt.loc,
+    trap_path(low, fail, next_, stmt.loc,
                lambda at: tm.Trap("RE2026", _assert_operands(low, stmt, at), stmt.loc))
 
 
@@ -213,7 +212,7 @@ def _assert_operands(low: Lowering, stmt: s.Assert, at: str) -> tuple[p.Operand,
     return p.Const(k.text(f"{at}: ")), low.operand(stmt.message)
 
 
-def _trap_path(low: Lowering, fail: Block, next_: Block, span: Span,
+def trap_path(low: Lowering, fail: Block, next_: Block, span: Span,
                trap: Callable[[str], tm.Trap]) -> None:
     """The failing block of an `assert` or an `expect` (ir.md 8.9): it makes the trap from
     the position `file:line:col` (the file of the body, as a diagnostic names it) and
@@ -466,34 +465,3 @@ def _arms(ty: Type, success: int, span: Span) -> tuple[tuple[int, str], tuple[in
         er.raise_internal_error("CE0000", span=span, detail="a ?? over no Result reached SLIR")
     return (success, ty.variants[success].name), (1 - success, ty.variants[1 - success].name)
 
-
-#: The variant of a `Result` or a `Maybe` that `expect` answers the payload of.
-_SUCCESS = {RESULT_FAMILY: "Ok", MAYBE_FAMILY: "Some"}
-
-
-def lowers_as_assert(method: BuiltinMethod) -> bool:
-    """`expect` of a `Result` or a `Maybe` is no call: it keeps its lazy message (ir.md 7.4)."""
-    return method.name == "expect" and method.family in _SUCCESS
-
-
-def expect(low: Lowering, node: e.Call, callee: Builtin) -> Value:
-    """`expect(msg)` as an `assert` (ir.md 8.9): a switch on the tag of the receiver. The
-    failing block evaluates the message and ends in the trap RE2029, which reads the position
-    of the call and the message, and drops nothing. The next block reads the payload: a copy
-    of a plain payload and a clone of an owning one, because the receiver is a read (ir.md
-    8.3). A constant receiver goes into a temporary, because a `Discriminant` reads a place."""
-    ty = low.type_of(callee.recv)
-    receiver = low.operand(callee.recv)
-    if isinstance(receiver, p.Const):
-        receiver = p.Copy(p.Local(low.temporary(r.Use(receiver), ty, callee.recv.loc)))
-    success = _SUCCESS[callee.method.family]
-    tag, payload = variant_of(ty, success, node.loc)
-    found = low.new_local(BuiltinType.I32, None, None)
-    low.emit([st.Assign(p.Local(found), r.Discriminant(receiver.place), node.loc)])
-    fail, next_ = low.new_block(), low.new_block()
-    low.jump(tm.SwitchInt(p.Copy(p.Local(found)), ((tag, next_.id),), fail.id, node.loc))
-    (message,) = node.args
-    _trap_path(low, fail, next_, node.loc, lambda at: tm.Trap(
-        "RE2029", (p.Const(k.text(at)), low.operand(message.value)), node.loc))
-    value = p.Copy(p.Field(p.Downcast(receiver.place, success), 0))
-    return r.Clone(value) if low.owns(payload[0]) else r.Use(value)

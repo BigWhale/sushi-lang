@@ -968,6 +968,7 @@ tests/enums/enum_match/test_enum_result_err_pattern.sushi
 tests/enums/enum_match/test_enum_wildcard_arms.sushi
 tests/enums/enum_match/test_err_nonexhaustive_data.sushi
 tests/enums/enum_match/test_err_nonexhaustive_unit.sushi
+tests/enums/enum_ownership/test_clone_owning_enum.sushi
 tests/enums/enum_ownership/test_enum_list_push_destroy.sushi
 tests/enums/enum_ownership/test_enum_raii_multi_scope.sushi
 tests/enums/enum_ownership/test_enum_raii_string_field.sushi
@@ -1436,6 +1437,7 @@ tests/generics/user_generic_enum/test_user_generic_minimal.sushi
 tests/generics/user_generic_struct/test_user_generic_struct_collect.sushi
 tests/io/file_struct/test_err_console_cannot_be_closed.sushi
 tests/io/file_struct/test_err_field_held_handle_cannot_be_closed.sushi
+tests/io/file_struct/test_err_file_clone.sushi
 tests/io/file_struct/test_err_read_after_close.sushi
 tests/io/file_struct/test_err_second_close.sushi
 tests/ir/borrow/arrays/test_err_borrow_array_bulk_copy_of_itself.sushi
@@ -1587,6 +1589,7 @@ tests/ir/slir/enums/test_slir_enum_chain.sushi
 tests/ir/slir/enums/test_slir_enum_constant.sushi
 tests/ir/slir/enums/test_slir_enum_switch.sushi
 tests/ir/slir/enums/test_slir_expect.sushi
+tests/ir/slir/enums/test_slir_expect_owning.sushi
 tests/ir/slir/enums/test_slir_wrapper_methods.sushi
 tests/ir/slir/interp/test_slir_interp.sushi
 tests/ir/slir/let_rebind/test_slir_let_rebind.sushi
@@ -1613,6 +1616,7 @@ tests/ir/slir/stdlib/test_slir_stdlib_calls.sushi
 tests/ir/slir/stopped/test_err_slir_stopped_function.sushi
 tests/ir/slir/stopped/test_err_slir_stopped_kinds.sushi
 tests/ir/slir/structs/test_slir_alias_constant_field.sushi
+tests/ir/slir/structs/test_slir_clone_shapes.sushi
 tests/ir/slir/structs/test_slir_owning_parts.sushi
 tests/ir/slir/structs/test_slir_struct_constant.sushi
 tests/ir/slir/structs/test_slir_struct_construction.sushi
@@ -2056,13 +2060,17 @@ tests/memory/borrowed_read_at_sink/test_field_array_copy_at_rebind.sushi
 tests/memory/borrowed_read_at_sink/test_field_array_copy_at_return.sushi
 tests/memory/borrowed_read_at_sink/test_field_list_copy_at_call.sushi
 tests/memory/borrowed_read_at_sink/test_field_list_copy_at_let.sushi
+tests/memory/borrowed_read_at_sink/test_memberaccess_copy_keeps_owner.sushi
 tests/memory/clone/test_array_clone_owning_elements.sushi
 tests/memory/clone/test_array_clone_owning_enum_elements.sushi
 tests/memory/clone/test_clone_bind_through_ref.sushi
+tests/memory/clone/test_clone_discarded_no_leak.sushi
 tests/memory/clone/test_clone_fixed_array.sushi
+tests/memory/clone/test_clone_receiver_shapes.sushi
 tests/memory/clone/test_clone_through_ref.sushi
 tests/memory/clone/test_enum_payload_clone_arg.sushi
 tests/memory/clone_of_resource/test_err_clone_list_of_file.sushi
+tests/memory/clone_of_resource/test_err_clone_struct_holding_list_of_file.sushi
 tests/memory/conditional_moves/test_cond_move_array.sushi
 tests/memory/conditional_moves/test_cond_move_before_a_rebind.sushi
 tests/memory/conditional_moves/test_cond_move_if_in_loop.sushi
@@ -2080,6 +2088,7 @@ tests/memory/consume_matrix/test_consume_callarg_owned_array.sushi
 tests/memory/consume_matrix/test_consume_enumctor_owned_array.sushi
 tests/memory/consume_matrix/test_consume_fieldassign_owned_array.sushi
 tests/memory/consume_matrix/test_consume_let_owned_array.sushi
+tests/memory/consume_matrix/test_consume_listpush_cloned_field.sushi
 tests/memory/consume_matrix/test_consume_maybe_owned_array.sushi
 tests/memory/consume_matrix/test_consume_rebind_owned_array.sushi
 tests/memory/consume_matrix/test_consume_return_owned_array.sushi
@@ -2110,6 +2119,8 @@ tests/memory/consume_matrix/test_err_consume_structctor_match_binding_array.sush
 tests/memory/consume_matrix/test_err_consume_structctor_match_binding_enum.sushi
 tests/memory/consume_matrix/test_field_rebind_owning_array.sushi
 tests/memory/container_field_cleanup/test_run_issue181_list_string_struct_field.sushi
+tests/memory/drop/test_err_drop_clone.sushi
+tests/memory/drop/test_err_drop_clone_nested.sushi
 tests/memory/drop/test_err_drop_consume_borrowed_field_help.sushi
 tests/memory/drop/test_err_drop_foreign_unit.sushi
 tests/memory/drop/test_err_drop_generic_clone.sushi
@@ -2158,6 +2169,7 @@ tests/memory/method_receiver/test_err_self_mutating_method.sushi
 tests/memory/method_receiver/test_err_self_owning_field_return.sushi
 tests/memory/method_receiver/test_err_self_owning_field_write.sushi
 tests/memory/method_receiver/test_err_self_poke_borrow.sushi
+tests/memory/method_receiver/test_method_param_borrows_ok.sushi
 tests/memory/method_receiver/test_return_self_clone_string.sushi
 tests/memory/method_receiver/test_self_read_only_ok.sushi
 tests/memory/move_semantics/test_err_container_insert_use_after_move.sushi
@@ -2177,6 +2189,7 @@ tests/memory/move_semantics/test_move_borrow_not_consumed.sushi
 tests/memory/move_semantics/test_move_clone_keeps_source.sushi
 tests/memory/move_semantics/test_move_enum_param.sushi
 tests/memory/move_semantics/test_move_semantics_types.sushi
+tests/memory/move_semantics/test_move_struct_clone_keeps_source.sushi
 tests/memory/move_semantics/test_move_struct_into_array_literal.sushi
 tests/memory/move_semantics/test_move_struct_into_constructor.sushi
 tests/memory/move_semantics/test_move_struct_param.sushi
@@ -2195,6 +2208,7 @@ tests/memory/owning_field_write/test_owning_field_write_drops_old.sushi
 tests/memory/owning_temp_receiver/test_construction_owning_receiver.sushi
 tests/memory/owning_temp_receiver/test_realise_owning_struct_receiver.sushi
 tests/memory/owning_temp_receiver/test_try_owning_struct_receiver.sushi
+tests/memory/owning_temp_receiver/test_tryexpr_receiver_owning_temp.sushi
 tests/memory/param_modes/test_err_argv_by_value_move.sushi
 tests/memory/param_modes/test_err_nom_marker_extra.sushi
 tests/memory/param_modes/test_err_nom_marker_missing.sushi
@@ -2230,6 +2244,8 @@ tests/memory/raii/test_raii_simple_leak_check.sushi
 tests/memory/raii/test_raii_struct_early_return.sushi
 tests/memory/raii/test_raii_struct_rebind.sushi
 tests/memory/raii/test_recursive_struct_dyn_array_leak.sushi
+tests/memory/realise_expect/test_expect_owning_payload.sushi
+tests/memory/realise_expect/test_realise_err_temporary_spent.sushi
 tests/memory/realise_expect/test_realise_owning_default_no_double_free.sushi
 tests/memory/realise_expect/test_realise_owning_receiver_no_double_free.sushi
 tests/memory/realise_expect/test_run_issue199_getout_realise_owning_struct.sushi
@@ -2912,6 +2928,7 @@ tests/strings/method_arguments/test_err_string_methods_arg_count.sushi
 tests/strings/method_arguments/test_err_string_methods_arg_types.sushi
 tests/strings/method_arguments/test_err_string_methods_args.sushi
 tests/strings/method_arguments/test_err_string_methods_types.sushi
+tests/strings/ownership/test_string_raii_struct_field_cloned.sushi
 tests/strings/print_to_str_temporary/test_interpolation_number_early_exit.sushi
 tests/strings/print_to_str_temporary/test_interpolation_to_str_early_exit.sushi
 tests/strings/print_to_str_temporary/test_let_to_str_before_early_exit.sushi
@@ -2935,6 +2952,7 @@ tests/strings/string_temporary_cleanup/test_run_issue295_print_frame_early_exit_
 tests/strings/to_str_on_string/test_to_str_of_literal_local.sushi
 tests/tuples/channel_returns/test_tuple_channel_return.sushi
 tests/tuples/derived_contracts/test_err_tuple_compare_mixed.sushi
+tests/tuples/derived_contracts/test_tuple_display_and_clone.sushi
 tests/tuples/derived_contracts/test_tuple_equality_and_order.sushi
 tests/tuples/destructure_owns/test_tuple_binder_type_counts_as_a_use.sushi
 tests/tuples/exhaustiveness/test_err_tuple_dead_arm_after_wild.sushi
@@ -3029,6 +3047,7 @@ tests/types/blank_type/test_err_blank_parameter.sushi
 tests/types/blank_type/test_err_blank_realise.sushi
 tests/types/blank_type/test_err_blank_return_empty_ok.sushi
 tests/types/blank_type/test_err_blank_variable.sushi
+tests/types/builtin_method_return_type/test_err_issue239_clone_return_type.sushi
 tests/types/builtin_method_return_type/test_err_issue239_primitive_return_type.sushi
 tests/types/builtin_method_return_type/test_err_issue239_string_builtin_return_type.sushi
 tests/types/builtin_method_return_type/test_err_issue239_to_bits_width.sushi
@@ -3049,6 +3068,7 @@ tests/types/casts/test_run_cast_float_to_uint.sushi
 tests/types/casts/test_run_cast_uint_to_float.sushi
 tests/types/casts/test_run_cast_unsigned_widen.sushi
 tests/types/casts/test_run_fmt_cast_signedness.sushi
+tests/types/chained_clone/test_run_chained_clone_on_a_maybe.sushi
 tests/types/container_hash/test_err_hash_struct_with_hashmap_field.sushi
 tests/types/declared_types/test_err_enum_payload_names_nothing.sushi
 tests/types/declared_types/test_err_struct_field_names_nothing.sushi
@@ -3328,6 +3348,8 @@ tests/types/result_maybe/test_err_result_single_arg_annotation.sushi
 tests/types/result_maybe/test_maybe_types.sushi
 tests/types/result_maybe/test_result_types.sushi
 tests/types/result_maybe/test_run_maybe_realise_nested_ctor.sushi
+tests/types/structs/test_clone_owning_struct.sushi
+tests/types/structs/test_clone_plain_struct.sushi
 tests/types/structs/test_err_move_struct_constructor_use_after.sushi
 tests/types/structs/test_err_struct_duplicate_field.sushi
 tests/types/structs/test_err_struct_dynarr_use_after_move.sushi

@@ -1,7 +1,8 @@
 """SHIR to SLIR: the arms of a call and of an interpolation (docs/design/ir.md 8.3, 8.9).
 
 A call is ONE `Call` of its callee: the receiver of a method first, then each argument with
-the convention of its typecheck row. A get-out whose answer owns (`answers_view`) answers a
+the convention of its typecheck row. `clone`, and `expect`, `realise` and `err` of a
+`Result` or a `Maybe`, are no call (`lower_copies.py`). A get-out whose answer owns (`answers_view`) answers a
 view of its receiver (`lower_views.py`). Each arm is a free function that takes the `Lowering`
 of `lower.py` first; the tables of `lower.py` name them. This module reads `lower.py` for
 its types only.
@@ -22,7 +23,7 @@ from sushi_lang.semantics.shir.callee import (
 from sushi_lang.semantics.shir.ids import ShirId
 from sushi_lang.semantics.shir.typeck import ResolvedCall
 from sushi_lang.semantics.slir import constants as k
-from sushi_lang.semantics.slir import lower_control as ctl
+from sushi_lang.semantics.slir import lower_copies as copies
 from sushi_lang.semantics.slir import lower_views as views
 from sushi_lang.semantics.slir import places as p
 from sushi_lang.semantics.slir import statements as st
@@ -42,8 +43,8 @@ def call(low: Lowering, node: e.Call) -> Value:
     if resolved is None:
         er.raise_internal_error("CE0000", span=node.loc,
                                 detail="a call with no callee reached SLIR")
-    if isinstance(resolved.callee, Builtin) and ctl.lowers_as_assert(resolved.callee.method):
-        return ctl.expect(low, node, resolved.callee)
+    if isinstance(resolved.callee, Builtin) and copies.lowers_inline(resolved.callee.method):
+        return copies.lower(low, node, resolved.callee)
     target = callee(low, node, resolved)
     value = CallValue(target, receiver(low, resolved.callee, node.loc)
                       + tuple(argument(low, node, index, arg)

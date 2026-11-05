@@ -1,6 +1,6 @@
 """Built-in extension methods for Maybe<T> generic enum type."""
 
-from typing import Any, Optional, Sequence, TYPE_CHECKING, cast
+from typing import Any, Optional, TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from sushi_lang.backend.codegen_llvm import LLVMCodegen
@@ -16,19 +16,16 @@ def emit_builtin_maybe_method(
     codegen: Any,
     method: str,
     maybe_value: ir.Value,
-    maybe_type: EnumType,
-    args: Sequence[ir.Value],
 ) -> ir.Value:
-    """A method of `Maybe@(T)` that reads its receiver, over the values of its operands
-    (docs/design/ir.md 8.6). `expect` lowers as an assert and is no call."""
-    from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check, emit_enum_realise
+    """A method of `Maybe@(T)` that reads its receiver, over the value of its receiver
+    (docs/design/ir.md 8.6). `expect` and `realise` are no call: SLIR lowering makes a
+    switch on the tag of each one."""
+    from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check
 
     if method == "is_some":
         return codegen.utils.as_i8(emit_enum_tag_check(codegen, maybe_value, 0, "is_some"))
     if method == "is_none":
         return codegen.utils.as_i8(emit_enum_tag_check(codegen, maybe_value, 1, "is_none"))
-    if method == "realise":
-        return emit_enum_realise(codegen, maybe_value, maybe_type, "Some", args)
     raise_internal_error("CE0094", method=method)
 
 

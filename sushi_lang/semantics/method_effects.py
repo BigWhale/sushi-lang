@@ -81,8 +81,8 @@ STRING_FAMILY = "string"
 RESULT_FAMILY = "result"
 MAYBE_FAMILY = "maybe"
 
-# The receiver of a built-in method: each family of `METHOD_TYPE_REGISTRY` is in exactly
-# one of the four sets below (ruling R-V, docs/design/ir.md 8.3).
+# The receiver of a built-in method: each family of `METHOD_TYPE_REGISTRY` but the clone
+# family is in exactly one of the four sets below (ruling R-V, docs/design/ir.md 8.3).
 # Only reads: no method of the family changes or consumes its receiver.
 RECEIVER_READ_FAMILIES = frozenset({PRIMITIVE_FAMILY, STRING_FAMILY})
 # Consumes: the family has a `nom self` method, so the answer is per method.
@@ -92,9 +92,11 @@ CONSUMING_RECEIVER_FAMILIES = frozenset({RESULT_FAMILY, MAYBE_FAMILY})
 RULED_EFFECT_FAMILIES = frozenset({ARRAY_FAMILY, LIST_FAMILY})
 # No rule yet: the set can only shrink.
 NO_RECEIVER_RULE_FAMILIES = frozenset({
-    "iterator", "foreign_ptr", "array_hash", "derived_hash", "derived_clone", "contract",
-    "function",
+    "iterator", "foreign_ptr", "array_hash", "derived_hash", "contract", "function",
 })
+# The derived `clone` of a struct and an enum is in no set: SLIR lowering makes the rvalue
+# `Clone` of every `.clone()`, which reads its receiver (docs/design/ir.md 8.3, 8.7).
+CLONE_FAMILY = "derived_clone"
 
 
 # The methods whose answer is a view of what the receiver holds, by family: a container
@@ -126,10 +128,10 @@ def receiver_convention(method: BuiltinMethod) -> Optional[Convention]:
     A family of `RECEIVER_READ_FAMILIES` reads its receiver (`Guaranteed`). A method of a
     family of `CONSUMING_RECEIVER_FAMILIES` takes its receiver (`Owned`) when it declares
     `nom self`, and reads it otherwise. A method of a family of `RULED_EFFECT_FAMILIES`
-    writes its receiver (`Inout`) when its row `mutates`, and reads it otherwise. A family
-    in no set is an internal error.
+    writes its receiver (`Inout`) when its row `mutates`, and reads it otherwise. The clone
+    family reads its receiver. Any other family in no set is an internal error.
     """
-    if method.family in RECEIVER_READ_FAMILIES:
+    if method.family in RECEIVER_READ_FAMILIES or method.family == CLONE_FAMILY:
         return Convention.GUARANTEED
     if method.family in CONSUMING_RECEIVER_FAMILIES:
         return Convention.OWNED if method.nom_self else Convention.GUARANTEED

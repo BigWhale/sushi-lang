@@ -1,6 +1,6 @@
 """Built-in extension methods for Result<T, E> generic enum type."""
 
-from typing import Any, Sequence
+from typing import Any
 from sushi_lang.semantics.ast import DotCall, MethodCall
 from sushi_lang.semantics.typesys import EnumType
 import llvmlite.ir as ir
@@ -11,21 +11,16 @@ def emit_builtin_result_method(
     codegen: Any,
     method: str,
     result_value: ir.Value,
-    result_type: EnumType,
-    args: Sequence[ir.Value],
 ) -> ir.Value:
-    """A method of `Result@(T, E)` that reads its receiver, over the values of its operands
-    (docs/design/ir.md 8.6). `expect` lowers as an assert and is no call."""
-    from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check, emit_enum_realise
+    """A method of `Result@(T, E)` that reads its receiver, over the value of its receiver
+    (docs/design/ir.md 8.6). `expect`, `realise` and `err` are no call: SLIR lowering makes
+    a switch on the tag of each one."""
+    from sushi_lang.backend.generics.enum_methods_base import emit_enum_tag_check
 
     if method == "is_ok":
         return codegen.utils.as_i8(emit_enum_tag_check(codegen, result_value, 0, "is_ok"))
     if method == "is_err":
         return codegen.utils.as_i8(emit_enum_tag_check(codegen, result_value, 1, "is_err"))
-    if method == "realise":
-        return emit_enum_realise(codegen, result_value, result_type, "Ok", args)
-    if method == "err":
-        return _emit_result_err(codegen, result_value, result_type)
     raise_internal_error("CE0094", method=method)
 
 
@@ -100,42 +95,3 @@ def _emit_result_map_err(
 
     return builder.load(answer_slot, name="map_err_value")
 
-
-def _emit_result_err(
-    codegen: Any,
-    result_value: ir.Value,
-    result_type: EnumType
-) -> ir.Value:
-    """`result.err()`: `Some` of the error, or `None`. The receiver is a read, so an
-    owning error is copied out on the `Err` path, and only there."""
-    from sushi_lang.backend.destructors import needs_cleanup, resolve_named_type
-    from sushi_lang.backend.generics.maybe import (
-        emit_maybe_none, emit_maybe_some, get_maybe_enum_type)
-    from sushi_lang.backend.ownership import copy_out
-
-    err_variant = result_type.get_variant("Err")
-    if err_variant is None:
-        raise_internal_error("CE0089", enum=result_type.name)
-    if len(err_variant.associated_types) != 1:
-        raise_internal_error("CE0090", got=len(err_variant.associated_types))
-    e_type = err_variant.associated_types[0]
-    builder = codegen.builder
-
-    is_ok, error_value = codegen.functions.extract_value_from_result_enum(
-        result_value, codegen.types.ll_type(e_type), e_type
-    )
-    with builder.if_else(is_ok) as (ok_path, err_path):
-        with ok_path:
-            none_value = emit_maybe_none(codegen, e_type)
-            ok_block = builder.block
-        with err_path:
-            owned_type = resolve_named_type(codegen, e_type)
-            if needs_cleanup(codegen, owned_type):
-                error_value = copy_out(codegen, error_value, owned_type)
-            some_value = emit_maybe_some(codegen, e_type, error_value)
-            err_block = builder.block
-
-    phi = builder.phi(get_maybe_enum_type(codegen, e_type), name="err_result")
-    phi.add_incoming(none_value, ok_block)
-    phi.add_incoming(some_value, err_block)
-    return phi

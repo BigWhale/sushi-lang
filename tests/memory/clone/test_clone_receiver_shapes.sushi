@@ -1,0 +1,51 @@
+# `.clone()` of each shape of receiver: a temporary, a local, a field, an element, a field
+# of a temporary, a get-out of a List, a chain, an argument, and a clone in a loop with a
+# `break`. Each copy is deep, and each source stays usable.
+# EXPECT_RUNTIME_EXIT: 0
+# EXPECT_STDOUT_EXACT: "cd\nab\nxy\ncd\nab 1\n2\nab\nab\n3\n3\nab\n"
+# EXPECT_NO_LEAKS
+
+struct Holder:
+    string name
+    i32[] xs
+
+fn make() Holder:
+    let string base = "c"
+    return Holder("{base}d", from([1]))
+
+fn eat(nom Holder h) i32:
+    return h.xs.len()
+
+fn main() i32:
+    let string base = "a"
+    let Holder h = Holder("{base}b", from([1, 2]))
+    println(make().clone().name)
+    let Holder c = h.clone()
+    c.name := "{base}x"
+    println(h.name)
+    let Holder[] hs = from([Holder("{base}y", from([3]))])
+    let string e = hs[0].name.clone()
+    println("x{e.s(1, 2)}")
+    println(make().name.clone())
+    let List@(Holder) l = List.new()
+    l.push(h.clone().clone())
+    match l.get(0).clone():
+        Maybe.Some(x) -> println("{x.name} {x.xs[0]}")
+        Maybe.None -> println("none")
+    println(eat(nom h.clone()))
+    println(h.name)
+    let i32 i = 0
+    while (true):
+        let Holder k = h.clone()
+        if (i == 2):
+            println(k.name)
+            break
+        l.push(k)
+        i := i + 1
+    println(l.len())
+    let string[] names = from(["{base}b", "q"])
+    let string[] copy = names.clone()
+    names.push("r")
+    println(names.len())
+    println(copy[0].clone())
+    return 0

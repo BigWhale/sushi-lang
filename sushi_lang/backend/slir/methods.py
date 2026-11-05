@@ -7,7 +7,7 @@ is evaluated before the family emits anything.
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence
+from typing import Any, Callable
 
 from llvmlite import ir
 
@@ -91,18 +91,18 @@ def _list(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir
 _MethodRow = Callable[[FunctionState, BuiltinMethod, st.Call], ir.Value]
 
 
-#: The emitter of the `result` or the `maybe` family: the codegen, the method name, the
-#: value and the type of the receiver, and the values of the arguments.
-_WrapperEmitter = Callable[[Any, str, ir.Value, EnumType, Sequence[ir.Value]], ir.Value]
+#: The emitter of the `result` or the `maybe` family: the codegen, the method name and the
+#: value of the receiver.
+_WrapperEmitter = Callable[[Any, str, ir.Value], ir.Value]
 
 
 def _wrapper(emit: _WrapperEmitter) -> _MethodRow:
     """The row of the `result` or the `maybe` family, over its emitter `emit`. Every
-    operand is `Guaranteed` (ir.md 8.3), so the family copies an owning value that it
-    answers."""
+    operand is `Guaranteed` (ir.md 8.3), and each method of the row takes no argument and
+    answers a `bool`."""
     def row(state: FunctionState, method: BuiltinMethod, statement: st.Call) -> ir.Value:
-        if not statement.args:
-            state.fault(f"the call of '{method.name}' has no receiver")
+        if len(statement.args) != 1:
+            state.fault(f"the call of '{method.name}' has {len(statement.args)} operands")
         for operand, convention in statement.args:
             if convention is not Convention.GUARANTEED:
                 state.fault(f"the operand {operand} of '{method.name}' is "
@@ -110,8 +110,7 @@ def _wrapper(emit: _WrapperEmitter) -> _MethodRow:
         receiver_type = type_of_operand(state, statement.args[0][0])
         if not isinstance(receiver_type, EnumType):
             state.fault(f"the receiver of '{method.name}' has the type {receiver_type}")
-        values = [operand_value(state, operand) for operand, _ in statement.args]
-        return emit(state.codegen, method.name, values[0], receiver_type, values[1:])
+        return emit(state.codegen, method.name, operand_value(state, statement.args[0][0]))
     return row
 
 

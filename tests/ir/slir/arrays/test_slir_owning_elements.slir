@@ -64,7 +64,7 @@ fn main() -> i32 {
     BeginBorrow(b0, _7, peek)
     _12 = copy (_7[const 0_i32])
     StorageLive(_13)
-    _13 = call builtin string.clone(copy _12 @guaranteed)
+    _13 = clone(copy _12)
     StorageLive(_14)
     _14 = call builtin array.push(copy _3 @inout, move _13 @owned)
     StorageDead(_14)

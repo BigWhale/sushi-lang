@@ -55,8 +55,10 @@ fn main() -> i32 {
     let _12: Result@(i32, StdError)
     let _13: i32
     let _14: i32
-    let _15: ~
+    let _15: i32
     let _16: i32
+    let _17: ~
+    let _18: i32
 
   bb0:
     StorageLive(_1)
@@ -109,17 +111,31 @@ fn main() -> i32 {
     StorageLive(_13)
     _13 = neg const 1_i32
     StorageLive(_14)
-    _14 = call builtin result.realise(copy _12 @guaranteed, copy _13 @guaranteed)
-    StorageLive(_15)
-    _15 = call builtin println@(i32)(copy _14 @guaranteed)
-    StorageDead(_15)
+    _15 = discriminant(_12)
+    switchInt(copy _15) -> [0: bb4, otherwise: bb5]
+
+  bb4:
+    _14 = copy ((_12 as Ok).0)
+    goto -> bb6
+
+  bb5:
+    _14 = copy _13
+    goto -> bb6
+
+  bb6:
+    StorageLive(_16)
+    _16 = copy _14
+    StorageLive(_17)
+    _17 = call builtin println@(i32)(copy _16 @guaranteed)
+    StorageDead(_17)
+    StorageDead(_16)
     StorageDead(_14)
     StorageDead(_13)
     StorageDead(_12)
-    StorageLive(_16)
-    _16 = call builtin list.len(copy _1 @guaranteed)
-    _0 = copy _16 - const 2_i32
-    StorageDead(_16)
+    StorageLive(_18)
+    _18 = call builtin list.len(copy _1 @guaranteed)
+    _0 = copy _18 - const 2_i32
+    StorageDead(_18)
     Drop(_11)
     StorageDead(_11)
     StorageDead(_7)
