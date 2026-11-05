@@ -17,6 +17,7 @@ from sushi_lang.backend.gep_utils import gep_struct_field
 from sushi_lang.backend.memory.heap import emit_malloc
 from sushi_lang.internals.errors import raise_internal_error
 from sushi_lang.semantics.generics.own import get_own_element_type
+from sushi_lang.semantics.statics import BUILTIN_STATICS
 from sushi_lang.semantics.typesys import StructType, Type
 
 
@@ -85,3 +86,11 @@ def emit_own_method(codegen: Any, name: str, address: ir.Value, own_type: Struct
     if emit is None:
         raise_internal_error("CE0080", method=name)
     return emit(codegen, address, own_type, args)
+
+
+def emit_own_static(codegen: Any, name: str, own_type: StructType,
+                    args: Sequence[ir.Value]) -> ir.Value:
+    """The `Own@(T)` that the static `name` builds (`Own.alloc`), through its row."""
+    if name not in BUILTIN_STATICS["Own"]:
+        raise_internal_error("CE0000", detail=f"the static '{name}' of {own_type} is a method")
+    return emit_own_method(codegen, name, None, own_type, args)

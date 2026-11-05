@@ -16,7 +16,7 @@ from llvmlite import ir
 
 from sushi_lang.backend.generics.hashmap import emit_hashmap_static
 from sushi_lang.backend.generics.list import emit_list_static
-from sushi_lang.backend.generics.own import emit_own_alloc
+from sushi_lang.backend.generics.own import emit_own_static
 from sushi_lang.backend.slir.state import FunctionState
 from sushi_lang.backend.slir.values import constant_value, operand_value, type_of_place
 from sushi_lang.backend.types.arrays.addressing import as_array_address
@@ -26,7 +26,6 @@ from sushi_lang.backend.types.display import emit_interpolation
 from sushi_lang.semantics.slir import constants as k
 from sushi_lang.semantics.slir import statements as st
 from sushi_lang.semantics.type_predicates import is_numeric_type
-from sushi_lang.semantics.generics.own import get_own_element_type
 from sushi_lang.semantics.typesys import BuiltinType, StructType, Type
 
 if TYPE_CHECKING:
@@ -141,8 +140,9 @@ def _hashmap_static(name: str) -> _StaticEmitter:
                                                                  values)
 
 
-def _own_alloc(codegen: LLVMCodegen, values: list[ir.Value], own_type: StructType) -> ir.Value:
-    return emit_own_alloc(codegen, get_own_element_type(own_type), values[0])
+def _own_static(name: str) -> _StaticEmitter:
+    """A static of `Own@(T)`, through its row of the Own table."""
+    return lambda codegen, values, own_type: emit_own_static(codegen, name, own_type, values)
 
 
 #: One row for each intrinsic that the emitter handles, by the name of the intrinsic.
@@ -153,7 +153,7 @@ INTRINSICS: dict[str, Callable[[FunctionState, st.Call], ir.Value]] = {
     "List.new": _container_static(_list_static("new"), 0),
     "List.with_capacity": _container_static(_list_static("with_capacity"), 1),
     "HashMap.new": _container_static(_hashmap_static("new"), 0),
-    "Own.alloc": _container_static(_own_alloc, 1),
+    "Own.alloc": _container_static(_own_static("alloc"), 1),
     "eq": _eq,
     "interp": _interp,
     "print": _print,
