@@ -1080,8 +1080,17 @@ the call yields the type of its row (`HashMapMethodInferrer`) after each fault. 
 rules of a map ([CE2054](../error-catalog.md#ce2054),
 [CE2055](../error-catalog.md#ce2055), [CE2058](../error-catalog.md#ce2058)) are a rule of
 its written type (`reject_unusable_key`), and never of a call or of `HashMap.new()`. A method with a
-signature row (`map_err`, `or_err`) has a method-level type parameter, and the arm of its
-family checks it from that row. The receiver of each is `Owned` (8.3), and the read-through
+signature row (`map_err`, `or_err`) has a method-level type parameter, and one arm checks it
+from that row (`check_signature_method`, `passes/types/visit/signature_methods.py`), in the
+order of `main`: a wrong count is [CE2009](../error-catalog.md#ce2009) and the call answers
+nothing more; then the argument is typed with no type from its position, and its type
+solves the instance through the solver that the AST half shares
+(`settle_builtin_instance`): an unsolved type parameter is
+[CE2063](../error-catalog.md#ce2063), and a solved one in an `E` position that is no error
+type is [CE2084](../error-catalog.md#ce2084); then the argument is compared with the
+parameter of the instance ([CE2006](../error-catalog.md#ce2006), `compare_argument`) and its
+`nom` marker with the declared mode ([CE2427](../error-catalog.md#ce2427)). The call answers
+the `Result` of the instance. The receiver of each is `Owned` (8.3), and the read-through
 of `or_err` over a borrowed `Maybe` is a rule of `borrow` (8.3). The `array` family has its
 arm too (see "An array" above). The hash of an array is the `array_hash` family, which a
 `Hashable` implementation overrides, and it stops the walk (`Call(method array_hash)`).
@@ -2419,9 +2428,7 @@ the `drop` of a `Drop` implementation; `conversion` also for a
 function` for a free, a method or a static callee whose row names no declaring unit (a
 function of a binary library, whose symbol is its `link_symbol`), `bloom` for a bloom
 argument, `Match owning alternatives` for an arm with two or more paths that write a
-binder of an owning payload (a view local has one write, 8.13), `view into an owning place` for a view that
-a local that owns would take (a `??` over a `??` of a borrowed wrapper, whose `let`
-`borrow` adopts), and `ConstRef out of range` for a `ConstRef` whose value its type cannot
+binder of an owning payload (a view local has one write, 8.13), and `ConstRef out of range` for a `ConstRef` whose value its type cannot
 hold (8.5). The dump prints such a function as ONE line in place of
 its body, `fn <name>: stopped (slir, <construct>)`, so that a golden file shows the
 progress of each function. The pipeline reports one stop after the analysis: a stop of
@@ -2644,6 +2651,29 @@ from a borrowed payload would hold a view in an owning aggregate, so the pair `o
 `??` over a borrowed receiver lowers as ONE named shape with no call and no `Result` value
 (8.9). `map_err` always takes an `Owned` receiver: on a borrowed owning `Result` it is
 [CE2411](../error-catalog.md#ce2411), with the help `r.clone().map_err(f)`.
+
+As built. `borrow` reads the `Owned` receiver of a built-in method first, and takes it
+after the arguments (`_take_builtin_receiver`, `passes/borrow/calls.py`), as it takes the
+`nom self` receiver of an extension method (`take_receiver`): a named owning receiver
+moves, and a later mention is [CE2435](../error-catalog.md#ce2435), which names the method;
+a plain one is copied (`ADOPT`). The read-through is a fact of the shape of the call and of
+its receiver: `read_through_call` (`passes/borrow/reads.py`) answers the receiver of a call
+whose signature row `reads_borrow_through` and whose receiver type owns, and
+`read_through_receiver` (`passes/borrow/consume.py`) adds that the receiver is `BORROWED`.
+Such a receiver gets its `REJECT` row with no error. The operand of each `??` that the walk
+entered is in `try_operands`, and a read-through call outside that set is CE2522. A `??`
+over a read-through `or_err`, and a `??` over a `??` that reads through, have the
+provenance `BORROWED` (`reads_through`), so the `let` of the payload is a view, and the
+walk to its owner crosses the `or_err` (`borrow_owner`). The completeness check takes the
+`Owned` receiver of a built-in method as a consuming use, and the receiver of a
+read-through `or_err` under a `??` as a borrowed view. In SLIR, an owned `or_err` or
+`map_err` is a `Builtin` call with an `@owned` receiver, and the emitter row of the
+`result` and the `maybe` family (`backend/slir/methods.py`) gives the value and the type of
+the receiver and of the argument, and the type of the destination, to
+`emit_maybe_signature_method` and `emit_result_signature_method`. On the `Some` path of an
+`or_err`, the emitter destroys the error value. A `map_err` whose argument is a function
+value stops in `typecheck` until the closures group (`typecheck, GlobalRef`,
+`typecheck, Lambda`).
 
 ### 8.4 Places and operands
 
@@ -3064,7 +3094,7 @@ backstop of the checker, as on the AST backend.
 | `Try(e)` | evaluate `e` into a temporary; `Discriminant` into a local; `SwitchInt` with `otherwise: None`; the `Ok` block moves the payload (`Downcast` + `Field`) into the place that takes the value; the `Err` block builds the `Err` into `_0`, runs the drops of every scope that it leaves and returns. A `Try` that calls a declared conversion is a stop of the lowering for now (`slir, conversion`) |
 | `Try(e)` that reads through a borrowed owning wrapper (a `REJECT` row, 7.9) | `e` is a place, and nothing takes it: `Discriminant` of the place into a local and `SwitchInt` as above. The `Ok` block writes a view local (8.2) with a `Copy` of `Field(Downcast(place, Ok), 0)`. The `Err` block copies the error into the `Err` of `_0` with `Copy`, runs the drops of every scope that it leaves and returns: `borrow` refuses an owning error there (CE2411, `tests/borrow/try_on_a_borrowed_owning_result/`), so the error is plain |
 | a let-borrow (an `Assign` with `is_init` and a `REJECT` row, 7.9) | a view local (8.2), written with a `Copy` of the place |
-| `Try(Call(or_err, [e]))` over a borrowed `Maybe` (a `REJECT` row on the receiver, 7.9) | ONE named shape, with no call and no `Result` value: `Discriminant` of the `Maybe` place into a local and `SwitchInt` on it. The `Some` block writes a view local (8.2) with a `Copy` of the payload projection `Field(Downcast(place, Some), 0)`. The `None` block builds `Err(e)` into `_0` with the `Move` of `e`, runs the drops of every scope that it leaves and returns. Over an owned receiver, `or_err` is an ordinary `Builtin` call with an `Owned` receiver, and `??` is the ordinary `Try` (8.3) |
+| `Try(Call(or_err, [e]))` over a borrowed `Maybe` (a `REJECT` row on the receiver, 7.9) | ONE named shape, with no call and no `Result` value: `Discriminant` of the `Maybe` place into a local and `SwitchInt` on it. The `Some` block writes a view local (8.2) with a `Copy` of the payload projection `Field(Downcast(place, Some), 0)`. The `None` block builds `Err(e)` into `_0` with the `Move` of `e`, runs the drops of every scope that it leaves and returns. The `Maybe` place is read first (`wrapper`: a get-out receiver goes into a view temporary), then `e`, before the switch; a named `e` goes into a temporary of the statement, so the `None` path moves the temporary and the `Some` path drops it at the end of the statement. When the `Maybe` is a get-out of a temporary container, the `let` of the payload keeps the container in a hidden owner local of the block: the walk to it crosses each `??`, each get-out and each read-through `or_err`. Over an owned receiver, `or_err` is an ordinary `Builtin` call with an `Owned` receiver, and `??` is the ordinary `Try` (8.3) |
 | a reference `let` (an `Assign` with `is_init` whose value is a `Borrow`, 7.5) | an address local (8.2): `_5 = ref poke <place>` (or `ref peek`), after a `BeginBorrow` of the place with the same mode. The `EndBorrow` comes at each exit of the scope of the local, because the place is frozen for the whole life of the local |
 | a `peek` or `poke` binder of a pattern, `Own(poke x)` included | an address local of the scope of the arm, written with the `Ref` of its payload place (for a variant, `Field(Downcast(place, variant), index)`; for the pointee of an `Own(...)`, `Deref(Field(place, 0))`), in a region over the root of that place, with the mode of the `Ref`, to the last uses of its region row (7.9) |
 | `Return` in a function with a `peek` return | `_0 = copy <place>`: the value goes to the caller as it is (`borrow-model.md` S10h): it crosses by value, as a plain borrow does (the 16-byte descriptor of a `string` or a `T[]`), and not as an address. The callee never drops `_0` |
