@@ -1,0 +1,11 @@
+# A call with two `nom` arguments of one local moves it two times: CE2405 at the second
+# argument.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: cannot borrow moved variable 't'
+fn two(nom string a, nom string b) ~:
+    println("{a}{b}")
+
+fn main() i32:
+    let string t = "abc".clone()
+    two(nom t, nom t)
+    return 0

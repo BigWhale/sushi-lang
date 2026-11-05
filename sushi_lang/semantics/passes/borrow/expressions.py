@@ -23,7 +23,7 @@ from sushi_lang.semantics.shir import exprs as e
 
 from . import arms
 from .borrows import check_borrow as borrow_place
-from .consume import consume, consume_marked, unwrap_place
+from .consume import StatementTakes, consume, consume_once, unwrap_place
 from .diagnostics import CopyUse, emit_use_after_move, emit_use_of_invalidated_borrow
 from .flow import record_exit
 
@@ -169,11 +169,9 @@ def _take_args(checker: 'BorrowChecker', args: Sequence[e.Arg]) -> None:
     first, then each is consumed, and a `nom` one is a take."""
     for arg in args:
         arms.check(checker, arg.value)
+    taken: StatementTakes = {}
     for arg in args:
-        if arg.marker is Convention.OWNED:
-            consume_marked(checker, arg.value)
-        else:
-            consume(checker, arg.value)
+        consume_once(checker, arg.value, arg.marker is Convention.OWNED, taken)
 
 
 def check_take(checker: 'BorrowChecker', node: e.Take) -> None:

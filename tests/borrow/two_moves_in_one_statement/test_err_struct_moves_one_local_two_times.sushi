@@ -1,0 +1,13 @@
+# A struct construction takes each field by position, so a local in two fields moves two
+# times: CE2405 at the second field.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: cannot borrow moved variable 't'
+struct P:
+    string a
+    string b
+
+fn main() i32:
+    let string t = "abc".clone()
+    let P p = P(t, t)
+    println("{p.a} {p.b}")
+    return 0

@@ -1,0 +1,13 @@
+# An enum construction takes each payload by position, so a local in two payloads moves
+# two times: CE2405 at the second payload.
+# EXPECT_ERROR_CODES_EXACT: CE2405
+# EXPECT_STDERR_CONTAINS: cannot borrow moved variable 't'
+enum E:
+    Two(string, string)
+
+fn main() i32:
+    let string t = "abc".clone()
+    let E p = E.Two(t, t)
+    match p:
+        E.Two(a, b) -> println("{a} {b}")
+    return 0

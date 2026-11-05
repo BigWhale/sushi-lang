@@ -30,7 +30,7 @@ from .borrows import (
     BY_ADDRESS, LATER_ROOTS, acquire_borrow, borrow_of_constant, check_borrow,
     register_implicit_borrow)
 from .iterators import take_lent_iterator
-from .consume import consume, consume_marked, decide, read_through_receiver
+from .consume import StatementTakes, consume, consume_once, decide, read_through_receiver
 from .diagnostics import CopyUse, emit_use_of_invalidated_borrow, spelled
 from .reads import OWNER_STEPS, borrow_owner, owner_state, read_through_call, read_type
 from .writes import check_owner_not_borrowed, reject_readonly_write
@@ -92,9 +92,10 @@ def check_call(checker: 'BorrowChecker', node: e.Call) -> None:
             check_borrow(checker, arg.value, mode, arg.marker_loc or arg.value.loc)
     changes_receiver = (isinstance(callee, Method)
                         and check_method_receiver(checker, node, callee))
+    taken: StatementTakes = {}
     for arg, convention, mode in zip(node.args, conventions, modes, strict=True):
-        if mode is None and convention is Convention.OWNED and arg.marker is Convention.OWNED:
-            consume_marked(checker, arg.value)
+        if mode is None and convention is Convention.OWNED:
+            consume_once(checker, arg.value, arg.marker is Convention.OWNED, taken)
         elif mode is None:
             apply_convention(checker, arg.value, convention)
     if isinstance(callee, Method) and callee.receiver is Convention.OWNED:

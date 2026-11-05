@@ -27,6 +27,7 @@ from .diagnostics import (
     CopyUse,
     emit_consume_of_borrow,
     emit_consume_of_read,
+    emit_use_after_move,
     no_clone_reason,
     refuses_clone,
 )
@@ -245,6 +246,37 @@ def consume_marked(checker: 'BorrowChecker', node: e.ShirExpr) -> Ownership:
     if root is not None:
         return take(checker, node, root, node)
     return consume(checker, node)
+
+
+#: The parts of each local that the consuming uses of one statement moved: a field name,
+#: or None for the whole local.
+StatementTakes = dict[object, set[Optional[str]]]
+
+
+def consume_once(checker: 'BorrowChecker', value: e.ShirExpr, marked: bool,
+                 taken: StatementTakes) -> None:
+    """A consuming use of a statement that reads all its values first (a call, a
+    construction): `consume_marked` for a `nom` value, else `consume`. A second move of
+    the same local, or of the same field, in the statement is CE2405 at the second value,
+    as a use after a move. Takes of DISJOINT fields of one local are one take
+    (docs/design/ir.md 8.9, `Take`)."""
+    place = value.place if isinstance(value, e.Take) else value
+    root = field_take(checker, place) if marked else None
+    part = place.name if root is not None and isinstance(place, e.Field) else None
+    if root is None and isinstance(value, e.LocalRef):
+        root = value
+    seen = taken.get(root.local) if root is not None else None
+    state = checker.borrow_state.get(root.local) if root is not None else None
+    if seen is not None and state is not None and (part is None or None in seen
+                                                    or part in seen):
+        emit_use_after_move(checker, state.name, value.loc, state)
+        return
+    if marked:
+        consume_marked(checker, value)
+    else:
+        consume(checker, value)
+    if root is not None and state is not None and state.is_moved:
+        taken.setdefault(root.local, set()).add(part)
 
 
 def _consume_take(checker: 'BorrowChecker', node: e.Take,
